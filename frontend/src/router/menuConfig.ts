@@ -1,0 +1,86 @@
+/**
+ * メニュー定義（単一ソース）
+ * 新規ルート追加時はここに1件追加し、管理画面で「ルート定義から取り込み」を実行すると menus テーブルに反映される
+ */
+export interface MenuConfigItem {
+  code: string
+  name: string
+  path?: string
+  icon?: string
+  parentCode?: string
+  sortOrder: number
+}
+
+/** 全メニュー定義（親→子の順で並べる） */
+export const menuConfig: MenuConfigItem[] = [
+  { code: 'DASHBOARD', name: 'ダッシュボード', path: '/dashboard', icon: 'HomeFilled', sortOrder: 0 },
+  { code: 'ERP', name: 'ERP', icon: 'Management', sortOrder: 1 },
+  { code: 'ERP_SALES', name: '販売管理', path: '/erp/sales', icon: 'Sell', parentCode: 'ERP', sortOrder: 1 },
+  { code: 'ERP_SALES_HOME', name: '販売ホーム', path: '/erp/sales', parentCode: 'ERP_SALES', sortOrder: 0 },
+  { code: 'ERP_SALES_QUOTATION', name: '見積管理', path: '/erp/sales/quotation', parentCode: 'ERP_SALES', sortOrder: 1 },
+  { code: 'ERP_SALES_ORDERS', name: '受注一覧', path: '/erp/sales/orders', parentCode: 'ERP_SALES', sortOrder: 2 },
+  { code: 'ERP_SALES_EDI', name: 'EDI取込', path: '/erp/sales/edi-import', parentCode: 'ERP_SALES', sortOrder: 3 },
+  { code: 'ERP_SALES_SHIPPING', name: '出荷指示', path: '/erp/sales/shipping', parentCode: 'ERP_SALES', sortOrder: 4 },
+  { code: 'ERP_SALES_RECORDING', name: '売上計上', path: '/erp/sales/recording', parentCode: 'ERP_SALES', sortOrder: 5 },
+  { code: 'ERP_SALES_RETURNS', name: '返品管理(RMA)', path: '/erp/sales/returns', parentCode: 'ERP_SALES', sortOrder: 6 },
+  { code: 'ERP_PURCHASE', name: '購買管理', path: '/erp/purchase', icon: 'ShoppingCart', parentCode: 'ERP', sortOrder: 2 },
+  { code: 'ERP_PURCHASE_HOME', name: '購買ホーム', path: '/erp/purchase', parentCode: 'ERP_PURCHASE', sortOrder: 0 },
+  { code: 'ERP_PURCHASE_ORDERS', name: '発注一覧', path: '/erp/purchase/orders', parentCode: 'ERP_PURCHASE', sortOrder: 1 },
+  { code: 'ERP_PURCHASE_RFQ', name: '見積依頼(RFQ)', path: '/erp/purchase/rfq', parentCode: 'ERP_PURCHASE', sortOrder: 2 },
+  { code: 'ERP_PURCHASE_ARRIVAL', name: '入荷予定管理', path: '/erp/purchase/arrival', parentCode: 'ERP_PURCHASE', sortOrder: 3 },
+  { code: 'ERP_PURCHASE_RECEIPT', name: '受入登録', path: '/erp/purchase/receipt', parentCode: 'ERP_PURCHASE', sortOrder: 4 },
+  { code: 'ERP_PURCHASE_INVOICE', name: '請求書照合', path: '/erp/purchase/invoice-matching', parentCode: 'ERP_PURCHASE', sortOrder: 5 },
+  { code: 'ERP_INVENTORY', name: '在庫管理', path: '/erp/inventory', icon: 'Box', parentCode: 'ERP', sortOrder: 3 },
+  { code: 'ERP_INVENTORY_HOME', name: '在庫ホーム', path: '/erp/inventory', parentCode: 'ERP_INVENTORY', sortOrder: 0 },
+  { code: 'ERP_INVENTORY_LIST', name: '在庫照会', path: '/erp/inventory/list', parentCode: 'ERP_INVENTORY', sortOrder: 1 },
+  { code: 'ERP_INVENTORY_TX', name: '入出庫履歴', path: '/erp/inventory/transactions', parentCode: 'ERP_INVENTORY', sortOrder: 2 },
+  { code: 'ERP_INVENTORY_MOVEMENT', name: '入出庫移動', path: '/erp/inventory/movement', parentCode: 'ERP_INVENTORY', sortOrder: 3 },
+  { code: 'ERP_INVENTORY_STOCKTAKING', name: '棚卸管理', path: '/erp/inventory/stocktaking', parentCode: 'ERP_INVENTORY', sortOrder: 4 },
+  { code: 'ERP_INVENTORY_DEAD', name: '長期滞留在庫分析', path: '/erp/inventory/dead-stock', parentCode: 'ERP_INVENTORY', sortOrder: 5 },
+  { code: 'ERP_INVENTORY_ABC', name: 'ABC分析', path: '/erp/inventory/abc-analysis', parentCode: 'ERP_INVENTORY', sortOrder: 6 },
+  { code: 'ERP_COSTING', name: '原価・会計', path: '/erp/costing', icon: 'Coin', parentCode: 'ERP', sortOrder: 4 },
+  { code: 'ERP_COSTING_HOME', name: '原価・会計ホーム', path: '/erp/costing', parentCode: 'ERP_COSTING', sortOrder: 0 },
+  { code: 'ERP_COSTING_STANDARD', name: '標準原価計算', path: '/erp/costing/standard', parentCode: 'ERP_COSTING', sortOrder: 1 },
+  { code: 'ERP_COSTING_ACTUAL', name: '実際原価計算', path: '/erp/costing/actual', parentCode: 'ERP_COSTING', sortOrder: 2 },
+  { code: 'ERP_COSTING_VARIANCE', name: '原価差異分析', path: '/erp/costing/variance', parentCode: 'ERP_COSTING', sortOrder: 3 },
+  { code: 'ERP_COSTING_BILLING', name: '請求管理(AR)', path: '/erp/costing/billing', parentCode: 'ERP_COSTING', sortOrder: 4 },
+  { code: 'ERP_COSTING_PAYMENT', name: '支払管理(AP)', path: '/erp/costing/payment', parentCode: 'ERP_COSTING', sortOrder: 5 },
+  { code: 'ERP_ORDER', name: '受注管理', path: '/erp/order', icon: 'Document', parentCode: 'ERP', sortOrder: 5 },
+  { code: 'ERP_ORDER_HOME', name: '受注ホーム', path: '/erp/order', parentCode: 'ERP_ORDER', sortOrder: 0 },
+  { code: 'ERP_ORDER_MONTHLY', name: '月別受注', path: '/erp/order/monthly', parentCode: 'ERP_ORDER', sortOrder: 1 },
+  { code: 'ERP_ORDER_DAILY', name: '日別受注', path: '/erp/order/daily', parentCode: 'ERP_ORDER', sortOrder: 2 },
+  { code: 'ERP_ORDER_DASHBOARD', name: '受注ダッシュボード', path: '/erp/order/dashboard', parentCode: 'ERP_ORDER', sortOrder: 3 },
+  { code: 'ERP_ORDER_KPI', name: 'KPIダッシュボード', path: '/erp/order/kpi', parentCode: 'ERP_ORDER', sortOrder: 4 },
+  { code: 'ERP_ORDER_DAILY_HIST', name: '日別受注履歴', path: '/erp/order/daily-history', parentCode: 'ERP_ORDER', sortOrder: 5 },
+  { code: 'ERP_ORDER_CUSTOMER_HIST', name: '顧客別受注履歴', path: '/erp/order/customer-history', parentCode: 'ERP_ORDER', sortOrder: 6 },
+  { code: 'ERP_ORDER_DEST_HIST', name: '納入先別受注履歴', path: '/erp/order/destination-history', parentCode: 'ERP_ORDER', sortOrder: 7 },
+  { code: 'ERP_ORDER_COMPARISON', name: '受注履歴比較', path: '/erp/order/comparison', parentCode: 'ERP_ORDER', sortOrder: 8 },
+  { code: 'ERP_ORDER_PRINT', name: '受注印刷', path: '/erp/order/print', parentCode: 'ERP_ORDER', sortOrder: 9 },
+  { code: 'ERP_SUPPLIER', name: '仕入先管理', path: '/erp/supplier', icon: 'User', parentCode: 'ERP', sortOrder: 6 },
+  { code: 'APS', name: 'APS', icon: 'DataAnalysis', sortOrder: 2 },
+  { code: 'APS_PLANNING', name: '生産計画', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },
+  { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
+  { code: 'MES', name: 'MES', icon: 'Monitor', sortOrder: 3 },
+  { code: 'MES_EXECUTION', name: '製造実行', path: '/mes/execution', parentCode: 'MES', sortOrder: 1 },
+  { code: 'MES_QUALITY', name: '品質管理', path: '/mes/quality', parentCode: 'MES', sortOrder: 2 },
+  { code: 'MASTER', name: 'マスタ管理', icon: 'Collection', sortOrder: 4 },
+  { code: 'MASTER_LIST', name: 'マスタ', parentCode: 'MASTER', sortOrder: 1 },
+  { code: 'MASTER_PRODUCT', name: '製品マスタ', path: '/master/product', parentCode: 'MASTER_LIST', sortOrder: 1 },
+  { code: 'MASTER_MATERIAL', name: '材料マスタ', path: '/master/material', parentCode: 'MASTER_LIST', sortOrder: 2 },
+  { code: 'MASTER_SUPPLIER', name: '仕入先マスタ', path: '/master/supplier', parentCode: 'MASTER_LIST', sortOrder: 3 },
+  { code: 'MASTER_PROCESS_ROUTE', name: '工程ルートマスタ', path: '/master/process-route', parentCode: 'MASTER_LIST', sortOrder: 4 },
+  { code: 'MASTER_BOM', name: 'BOM', path: '/master/bom', parentCode: 'MASTER', sortOrder: 2 },
+  { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
+  { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },
+  { code: 'SYSTEM_HOME', name: 'システムホーム', path: '/system', parentCode: 'SYSTEM_USER', sortOrder: 0 },
+  { code: 'SYSTEM_USERS', name: 'ユーザー管理', path: '/system/users', parentCode: 'SYSTEM_USER', sortOrder: 1 },
+  { code: 'SYSTEM_ORG', name: '組織・部門管理', path: '/system/organization', parentCode: 'SYSTEM_USER', sortOrder: 2 },
+  { code: 'SYSTEM_ROLE', name: '権限・ロール管理', path: '/system/roles', parentCode: 'SYSTEM_USER', sortOrder: 3 },
+  { code: 'SYSTEM_SETTINGS', name: 'システム設定', icon: 'Tools', parentCode: 'SYSTEM', sortOrder: 2 },
+  { code: 'SYSTEM_NUMBERING', name: '採番ルール管理', path: '/system/numbering', parentCode: 'SYSTEM_SETTINGS', sortOrder: 1 },
+  { code: 'SYSTEM_WORKFLOW', name: 'ワークフロー設定', path: '/system/workflow', parentCode: 'SYSTEM_SETTINGS', sortOrder: 2 },
+  { code: 'SYSTEM_NOTIFICATION', name: '通知センター', path: '/system/notification', parentCode: 'SYSTEM_SETTINGS', sortOrder: 3 },
+  { code: 'SYSTEM_LOGS', name: 'システムログ', path: '/system/logs', parentCode: 'SYSTEM_SETTINGS', sortOrder: 4 },
+  { code: 'SYSTEM_DATA', name: 'データ管理', path: '/system/data', parentCode: 'SYSTEM_SETTINGS', sortOrder: 5 },
+  { code: 'SYSTEM_MENUS', name: 'メニュー管理', path: '/system/menus', parentCode: 'SYSTEM_SETTINGS', sortOrder: 6 },
+]

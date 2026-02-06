@@ -1,0 +1,41 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.pyo": true,
+    "**/*.pyd": true,
+    "**/.Python": true,
+    "**/pip-log.txt": true,
+    "**/pip-delete-this-directory.txt": true,
+    "**/.mypy_cache": true,
+    "**/.pytest_cache": true,
+    "**/.ruff_cache": true,
+    "**/.coverage": true,
+    "**/.tox": true,
+    "**/.venv": true,
+    "**/venv": true,
+    "**/ENV": true,
+    "**/env": true,
+    "**/node_modules": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/logs": true,
+    "**/*.log": true
+  },
+  "search.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/node_modules": true,
+    "**/venv": true,
+    "**/.venv": true,
+    "**/logs": true
+  },
+  "files.watcherExclude": {
+    "**/__pycache__/**": true,
+    "**/node_modules/**": true,
+    "**/venv/**": true,
+    "**/.venv/**": true,
+    "**/logs/**": true
+  }
+}
+
