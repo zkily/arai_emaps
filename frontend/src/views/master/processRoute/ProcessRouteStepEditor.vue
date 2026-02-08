@@ -48,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getRouteInfo, getRouteSteps, deleteRouteStep, updateStepOrder } from '@/api/master/processRouterMaster'
@@ -59,7 +59,10 @@ import RouteStepDialog from './ProcessRouteStepDialog.vue'
 const route = useRoute()
 const router = useRouter()
 const routeCd = String(route.params.route_cd ?? '')
-const productCd = ref(String(route.query.product_cd ?? ''))
+const queryProduct = route.query.product_cd
+const productCd = ref(
+  typeof queryProduct === 'string' ? queryProduct : Array.isArray(queryProduct) ? (queryProduct[0] ?? '') : ''
+)
 const productOptions = ref<{ cd: string; name: string }[]>([])
 const routeInfo = ref<RouteItem | null>(null)
 const stepList = ref<RouteStepItem[]>([])
@@ -69,10 +72,16 @@ const stepDialogMode = ref<'add' | 'edit'>('add')
 const stepInitialData = ref<Partial<RouteStepItem> | undefined>(undefined)
 
 const fetchData = async () => {
+  if (!routeCd) {
+    stepList.value = []
+    return
+  }
   if (!productCd.value) {
     routeInfo.value = await getRouteInfo(routeCd).catch(() => null)
     stepList.value = []
-    productOptions.value = await getProductMasterOptions()
+    if (!productOptions.value.length) {
+      productOptions.value = await getProductMasterOptions()
+    }
     return
   }
   try {
@@ -132,8 +141,15 @@ const handleSaveOrder = async () => {
 }
 
 onMounted(async () => {
+  if (!routeCd) {
+    ElMessage.warning('ルートが指定されていません')
+    router.replace('/master/process-route')
+    return
+  }
   await loadProductOptions()
-  if (!productCd.value && productOptions.value.length) productCd.value = productOptions.value[0]?.cd ?? ''
+  if (!productCd.value && productOptions.value.length) {
+    productCd.value = productOptions.value[0]?.cd ?? ''
+  }
   await fetchData()
 })
 </script>
@@ -187,6 +203,16 @@ onMounted(async () => {
   color: #2980b9;
   margin-left: 10px;
   font-weight: 500;
+}
+
+.product-info {
+  font-size: 0.95rem;
+  color: #27ae60;
+  margin-left: 8px;
+}
+
+.product-select {
+  margin-right: 8px;
 }
 
 .header-buttons {

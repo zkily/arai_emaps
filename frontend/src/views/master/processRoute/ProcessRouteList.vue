@@ -63,7 +63,7 @@
           <el-table-column label="🛠️ 操作" width="300" align="center">
             <template #default="{ row }">
               <div class="action-buttons-table">
-                <el-button size="small" icon="Edit" @click="openStepProductDialog(row)" plain>ステップ編集</el-button>
+                <el-button size="small" icon="Edit" @click="goToSteps(row)" plain>ステップ編集</el-button>
                 <el-button size="small" icon="EditPen" @click="openEditDialog(row)">編集</el-button>
                 <el-button size="small" type="danger" icon="Delete" @click="handleDelete(row)">削除</el-button>
               </div>
@@ -85,17 +85,6 @@
       </div>
 
       <RouteEditDialog v-model:visible="showDialog" :mode="dialogMode" :initial-data="editData" @saved="fetchList" />
-
-      <!-- ステップ編集用：製品選択 -->
-      <el-dialog v-model="showProductDialog" title="製品を選択" width="400px">
-        <el-select v-model="stepProductCd" placeholder="製品を選択" filterable style="width: 100%">
-          <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd}｜${p.name}`" :value="p.cd" />
-        </el-select>
-        <template #footer>
-          <el-button @click="showProductDialog = false">キャンセル</el-button>
-          <el-button type="primary" @click="goToSteps" :disabled="!stepProductCd">ステップ編集へ</el-button>
-        </template>
-      </el-dialog>
     </div>
   </transition>
 </template>
@@ -105,31 +94,17 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { fetchRoutes, deleteRoute } from '@/api/master/processRouterMaster'
-import { getProductMasterOptions } from '@/api/options'
 import type { RouteItem } from '@/types/master'
 import RouteEditDialog from './ProcessRouteEditDialog.vue'
 
 const router = useRouter()
-const showProductDialog = ref(false)
-const stepProductCd = ref('')
-const productOptions = ref<{ cd: string; name: string }[]>([])
-const stepRouteRow = ref<RouteItem | null>(null)
 
-const openStepProductDialog = async (row: RouteItem) => {
-  stepRouteRow.value = row
-  stepProductCd.value = ''
-  productOptions.value = await getProductMasterOptions()
-  showProductDialog.value = true
-}
-
-const goToSteps = () => {
-  if (!stepRouteRow.value?.route_cd || !stepProductCd.value) return
+/** ステップ編集へ（直接 ProcessRouteStepEditor へ遷移。製品は遷移先で選択） */
+const goToSteps = (row: RouteItem) => {
   router.push({
     name: 'RouteStepList',
-    params: { route_cd: stepRouteRow.value.route_cd },
-    query: { product_cd: stepProductCd.value }
+    params: { route_cd: row.route_cd }
   })
-  showProductDialog.value = false
 }
 
 const filters = ref({ keyword: '' })
