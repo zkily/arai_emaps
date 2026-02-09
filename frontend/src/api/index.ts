@@ -3,7 +3,6 @@
  */
 export { default as request } from './request'
 export * from './auth'
-export * from './order'
 export * from './options'
 export * from './erp'
 export * as systemApi from './system'

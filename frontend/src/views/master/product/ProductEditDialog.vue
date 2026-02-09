@@ -164,7 +164,7 @@
             <el-col :md="12">
               <el-form-item label="納入先">
                 <el-select
-                  v-model="form.delivery_destination_cd"
+                  v-model="form.destination_cd"
                   filterable
                   placeholder="例:N38|(株)INOAC吉良"
                 >
@@ -327,7 +327,7 @@ const defaultForm: Product = {
   unit_per_box: 0,
   dimensions: '',
   weight: 0,
-  delivery_destination_cd: '',
+  destination_cd: '',
   vehicle_model: '',
   material_cd: '',
   cut_length: 0,

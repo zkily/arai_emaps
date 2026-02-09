@@ -9,43 +9,42 @@
             <el-icon class="title-icon">
               <Box />
             </el-icon>
-            材料マスタ管理
+            {{ t('master.material.title') }}
           </h1>
-          <p class="subtitle">材料の登録・編集・仕入先管理を行います</p>
+          <p class="subtitle">{{ t('master.material.subtitle') }}</p>
         </div>
         <div class="header-stats">
           <div class="stat-card">
             <div class="stat-number">{{ materialList.length }}</div>
-            <div class="stat-label">総材料数</div>
+            <div class="stat-label">{{ t('master.material.totalMaterials') }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-number">{{ activeCount }}</div>
-            <div class="stat-label">有効材料</div>
+            <div class="stat-label">{{ t('master.material.activeMaterials') }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-number">{{ lowStockCount }}</div>
-            <div class="stat-label">終息材料</div>
+            <div class="stat-label">{{ t('master.material.lowStock') }}</div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 功能操作区 -->
     <div class="action-section">
       <div class="filter-header">
         <div class="filter-title">
           <el-icon class="filter-icon">
             <Filter />
           </el-icon>
-          <span>検索・絞り込み</span>
+          <span>{{ t('master.material.searchFilter') }}</span>
         </div>
         <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">クリア</el-button>
+          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">{{ t('master.material.clear') }}</el-button>
           <el-button text @click="showColumnSettings" :icon="Setting" class="column-settings-btn"
-            >列設定</el-button
+            >{{ t('master.material.columnSettings') }}</el-button
           >
           <el-button text @click="showPrintSettings" :icon="Printer" class="print-btn"
-            >印刷</el-button
+            >{{ t('master.material.print') }}</el-button
           >
           <el-button
             type="warning"
@@ -53,7 +52,7 @@
             :icon="Printer"
             class="qr-code-btn"
           >
-            QRコード印刷
+            {{ t('master.material.qrPrint') }}
           </el-button>
           <el-button
             type="success"
@@ -62,27 +61,25 @@
             :disabled="filteredList.length === 0"
             class="export-csv-btn"
           >
-            CSV出力
+            {{ t('master.material.csvExport') }}
           </el-button>
           <el-button type="primary" @click="openForm()" :icon="Plus" class="add-material-btn"
-            >材料追加</el-button
+            >{{ t('master.material.addMaterial') }}</el-button
           >
         </div>
       </div>
 
-      <!-- 筛选区 -->
       <div class="filters-grid">
-        <!-- 搜索 -->
         <div class="filter-item search-item">
           <label class="filter-label">
             <el-icon>
               <Search />
             </el-icon>
-            キーワード検索
+            {{ t('master.material.keywordSearch') }}
           </label>
           <el-input
             v-model="filters.keyword"
-            placeholder="材料CD・材料名・仕入先・規格"
+            :placeholder="t('master.material.placeholder')"
             clearable
             @input="handleFilter"
             class="filter-input"
@@ -748,6 +745,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Box,
@@ -773,6 +771,8 @@ import {
   exportMaterialToCSV,
 } from '@/api/master/materialMaster'
 import type { Material as MaterialOrigin } from '@/types/master'
+
+const { t } = useI18n()
 
 // Material タイプを拡張し、statusLoading フィールドを追加
 interface Material extends MaterialOrigin {

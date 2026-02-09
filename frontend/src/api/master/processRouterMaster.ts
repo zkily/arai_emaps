@@ -53,27 +53,25 @@ export function deleteRoute(id: number): Promise<{ message: string }> {
   return request.delete(`/api/master/process-routes/${id}`) as Promise<{ message: string }>
 }
 
-/** ルートのステップ一覧取得（製品CD必須） */
-export function getRouteSteps(routeCd: string, productCd: string): Promise<RouteStepItem[]> {
+/** ルートのステップ一覧取得 */
+export function getRouteSteps(routeCd: string): Promise<RouteStepItem[]> {
   return request.get(
-    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps`,
-    { params: { productCd } }
+    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps`
   ) as Promise<RouteStepItem[]>
 }
 
 /** ステップ順序一括更新 */
 export function updateStepOrder(
   routeCd: string,
-  productCd: string,
   orderData: Array<{ id: number; step_no: number }>
 ): Promise<{ message: string }> {
   return request.put(
-    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps/order?productCd=${encodeURIComponent(productCd)}`,
+    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps/order`,
     orderData
   ) as Promise<{ message: string }>
 }
 
-/** ステップ追加（data に product_cd 必須） */
+/** ステップ追加 */
 export function createRouteStep(routeCd: string, data: Partial<RouteStepItem>): Promise<RouteStepItem> {
   return request.post(
     `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps`,
@@ -87,8 +85,8 @@ export function updateRouteStep(stepId: number, data: Partial<RouteStepItem>): P
 }
 
 /** ステップ削除 */
-export function deleteRouteStep(routeCd: string, productCd: string, stepId: number): Promise<{ message: string }> {
+export function deleteRouteStep(routeCd: string, stepId: number): Promise<{ message: string }> {
   return request.delete(
-    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps/${stepId}?productCd=${encodeURIComponent(productCd)}`
+    `/api/master/process-routes/by-cd/${encodeURIComponent(routeCd)}/steps/${stepId}`
   ) as Promise<{ message: string }>
 }

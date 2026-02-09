@@ -141,15 +141,26 @@ const statsCards = computed(() => [
   }
 ])
 
-// 機能モジュール - 庫内オペレーション
-const warehouseModules = [
+// 機能モジュール - 在庫・ロケーション管理
+const locationModules = [
   {
     path: '/erp/inventory/list',
     title: '在庫照会',
-    description: '品目別・倉庫別・ロケ別・ロット別・期限切れ警告',
+    description: 'リアルタイム在庫照会・有効在庫照会',
     icon: markRaw(List),
     gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
   },
+  {
+    path: '/erp/inventory/location',
+    title: 'ロケーション管理',
+    description: 'マルチ倉庫・ロケーション管理',
+    icon: markRaw(Setting),
+    gradient: 'linear-gradient(135deg, #667eea, #764ba2)'
+  }
+]
+
+// 機能モジュール - 入出庫・移動管理
+const transactionModules = [
   {
     path: '/erp/inventory/transactions',
     title: '入出庫履歴',
@@ -160,25 +171,32 @@ const warehouseModules = [
   {
     path: '/erp/inventory/movement',
     title: '入出庫移動',
-    description: '倉庫間移動・良品/不良品区分変更・セット品組立/分解',
+    description: '倉庫間移動・セット品組立/分解',
     icon: markRaw(Box),
     gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)'
   },
   {
-    path: '/erp/inventory/stocktaking',
-    title: '棚卸管理',
-    description: '一斉棚卸/循環棚卸・棚卸票発行・差異修正承認',
-    icon: markRaw(Setting),
-    gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)'
+    path: '/erp/inventory/lot-trace',
+    title: 'ロット・トレーサビリティ',
+    description: '正展開（製品→材料）・逆展開（材料→製品）',
+    icon: markRaw(DataAnalysis),
+    gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)'
   }
 ]
 
-// 機能モジュール - 在庫分析・最適化
-const analysisModules = [
+// 機能モジュール - 棚卸管理
+const stocktakingModules = [
+  {
+    path: '/erp/inventory/stocktaking',
+    title: '棚卸管理',
+    description: '一斉棚卸/循環棚卸・棚卸票発行・差異修正',
+    icon: markRaw(Setting),
+    gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)'
+  },
   {
     path: '/erp/inventory/dead-stock',
-    title: '長期滞留在庫分析',
-    description: '死蔵品(Dead Stock)リストアップ',
+    title: '滞留在庫アラート',
+    description: 'デッドストック(Dead Stock)リストアップ',
     icon: markRaw(Warning),
     gradient: 'linear-gradient(135deg, #f56c6c, #f78989)'
   },
@@ -192,7 +210,7 @@ const analysisModules = [
 ]
 
 // 全機能モジュール
-const modules = [...warehouseModules, ...analysisModules]
+const modules = [...locationModules, ...transactionModules, ...stocktakingModules]
 
 // 获取预警类型样式
 const getAlertType = (type: string) => {

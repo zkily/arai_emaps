@@ -8,14 +8,14 @@
             <el-icon class="title-icon">
               <Box />
             </el-icon>
-            製品マスタ管理
+            {{ t('master.product.title') }}
           </h1>
-          <p class="subtitle">製品情報の登録・編集・管理を行います</p>
+          <p class="subtitle">{{ t('master.product.subtitle') }}</p>
         </div>
         <div class="header-stats">
           <div class="stat-card">
             <div class="stat-number">{{ allProducts?.length || 0 }}</div>
-            <div class="stat-label">総製品数</div>
+            <div class="stat-label">{{ t('master.product.totalProducts') }}</div>
           </div>
           <div class="stat-card" v-for="(count, type) in productTypeStats" :key="type">
             <div class="stat-number">{{ count }}</div>
@@ -33,13 +33,13 @@
           <el-icon class="filter-icon">
             <Filter />
           </el-icon>
-          <span>検索・絞り込み</span>
+          <span>{{ t('master.product.searchFilter') }}</span>
           <div class="filter-inline-summary" v-if="productList.length || hasActiveFilters">
             <div class="summary-text">
               <el-icon class="summary-icon">
                 <InfoFilled />
               </el-icon>
-              <span>{{ productList.length }}件中を表示</span>
+              <span>{{ t('master.product.showingCount', { n: productList.length }) }}</span>
             </div>
             <div class="active-filters" v-if="hasActiveFilters">
               <el-tag
@@ -49,7 +49,7 @@
                 type="primary"
                 size="small"
               >
-                検索: {{ filters.keyword }}
+                {{ t('master.product.searchLabel') }}: {{ filters.keyword }}
               </el-tag>
               <el-tag
                 v-if="filters.category"
@@ -58,7 +58,7 @@
                 type="warning"
                 size="small"
               >
-                カテゴリ: {{ filters.category }}
+                {{ t('master.product.categoryLabel') }}: {{ filters.category }}
               </el-tag>
               <el-tag
                 v-if="filters.location_cd"
@@ -67,14 +67,14 @@
                 type="info"
                 size="small"
               >
-                保管場所: {{ filters.location_cd }}
+                {{ t('master.product.locationLabel') }}: {{ filters.location_cd }}
               </el-tag>
             </div>
           </div>
         </div>
         <div class="filter-actions">
           <el-button text @click="handleReset" :icon="Refresh" class="clear-btn">
-            リセット
+            {{ t('master.product.reset') }}
           </el-button>
           <el-button
             type="info"
@@ -82,10 +82,10 @@
             :icon="Setting"
             class="column-selector-btn"
           >
-            列表示設定
+            {{ t('master.product.columnSettings') }}
           </el-button>
           <el-button type="success" @click="handleExport" :icon="Download" class="export-btn">
-            エクスポート
+            {{ t('master.product.export') }}
           </el-button>
           <el-button
             type="success"
@@ -276,7 +276,7 @@
         label="品番"
         min-width="120"
         align="center"
-        v-if="visibleColumns.part_number"
+        v-show="visibleColumns.part_number"
       >
         <template #default="{ row }">
           {{ row.part_number || '—' }}
@@ -284,49 +284,49 @@
       </el-table-column>
       <el-table-column label="納入先CD" min-width="120">
         <template #default="{ row }">
-          {{ row.delivery_destination_cd || '—' }}
+          {{ row.destination_cd || '—' }}
         </template>
       </el-table-column>
       <el-table-column
         prop="product_type"
         label="製品種別"
         width="100"
-        v-if="visibleColumns.product_type"
+        v-show="visibleColumns.product_type"
       />
       <el-table-column
         prop="category"
         label="カテゴリ"
         min-width="101"
         align="center"
-        v-if="visibleColumns.category"
+        v-show="visibleColumns.category"
       />
       <el-table-column
         prop="box_type"
         label="箱種"
         min-width="101"
         align="center"
-        v-if="visibleColumns.box_type"
+        v-show="visibleColumns.box_type"
       />
       <el-table-column
         prop="unit_per_box"
         label="入数"
         width="70"
         align="center"
-        v-if="visibleColumns.unit_per_box"
+        v-show="visibleColumns.unit_per_box"
       />
       <el-table-column
         prop="process_count"
         label="工程数"
         width="68"
         align="center"
-        v-if="visibleColumns.process_count"
+        v-show="visibleColumns.process_count"
       />
       <el-table-column
         prop="location_cd"
         label="保管場所"
         min-width="120"
         align="center"
-        v-if="visibleColumns.location_cd"
+        v-show="visibleColumns.location_cd"
       >
         <template #default="{ row }">
           {{ row.location_cd || '—' }}
@@ -337,7 +337,7 @@
         label="使用開始日"
         width="120"
         align="center"
-        v-if="visibleColumns.start_use_date"
+        v-show="visibleColumns.start_use_date"
       >
         <template #default="{ row }">
           {{ row.start_use_date ? formatJapanDate(row.start_use_date) : '—' }}
@@ -348,7 +348,7 @@
         label="状態"
         width="90"
         align="center"
-        v-if="visibleColumns.status"
+        v-show="visibleColumns.status"
       >
         <template #default="{ row }">
           <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
@@ -361,7 +361,7 @@
         label="対応車種"
         min-width="120"
         align="center"
-        v-if="visibleColumns.vehicle_model"
+        v-show="visibleColumns.vehicle_model"
       >
         <template #default="{ row }">
           {{ row.vehicle_model || '—' }}
@@ -372,7 +372,7 @@
         label="サイズ"
         min-width="120"
         align="center"
-        v-if="visibleColumns.dimensions"
+        v-show="visibleColumns.dimensions"
       >
         <template #default="{ row }">
           {{ row.dimensions || '—' }}
@@ -383,7 +383,7 @@
         label="重量(kg)"
         width="100"
         align="center"
-        v-if="visibleColumns.weight"
+        v-show="visibleColumns.weight"
       >
         <template #default="{ row }">
           {{ row.weight ? row.weight.toFixed(2) : '—' }}
@@ -394,7 +394,7 @@
         label="リードタイム"
         width="100"
         align="center"
-        v-if="visibleColumns.lead_time"
+        v-show="visibleColumns.lead_time"
       >
         <template #default="{ row }">
           {{ row.lead_time ? `${row.lead_time}日` : '—' }}
@@ -405,7 +405,7 @@
         label="ロットサイズ"
         width="100"
         align="center"
-        v-if="visibleColumns.lot_size"
+        v-show="visibleColumns.lot_size"
       >
         <template #default="{ row }">
           {{ row.lot_size || '—' }}
@@ -416,7 +416,7 @@
         label="優先度"
         width="80"
         align="center"
-        v-if="visibleColumns.priority"
+        v-show="visibleColumns.priority"
       >
         <template #default="{ row }">
           <el-tag
@@ -432,7 +432,7 @@
         label="切断長さ(mm)"
         width="120"
         align="center"
-        v-if="visibleColumns.cut_length"
+        v-show="visibleColumns.cut_length"
       >
         <template #default="{ row }">
           {{ row.cut_length ? row.cut_length.toFixed(2) : '—' }}
@@ -443,7 +443,7 @@
         label="面取り長さ(mm)"
         width="130"
         align="center"
-        v-if="visibleColumns.chamfer_length"
+        v-show="visibleColumns.chamfer_length"
       >
         <template #default="{ row }">
           {{ row.chamfer_length ? row.chamfer_length.toFixed(2) : '—' }}
@@ -454,7 +454,7 @@
         label="展開長さ(mm)"
         width="130"
         align="center"
-        v-if="visibleColumns.developed_length"
+        v-show="visibleColumns.developed_length"
       >
         <template #default="{ row }">
           {{ row.developed_length ? row.developed_length.toFixed(2) : '—' }}
@@ -465,7 +465,7 @@
         label="取り数"
         width="80"
         align="center"
-        v-if="visibleColumns.take_count"
+        v-show="visibleColumns.take_count"
       >
         <template #default="{ row }">
           {{ row.take_count || '—' }}
@@ -476,7 +476,7 @@
         label="端材長さ(mm)"
         width="130"
         align="center"
-        v-if="visibleColumns.scrap_length"
+        v-show="visibleColumns.scrap_length"
       >
         <template #default="{ row }">
           {{ row.scrap_length ? row.scrap_length.toFixed(2) : '—' }}
@@ -487,7 +487,7 @@
         label="安全在庫日数"
         width="120"
         align="center"
-        v-if="visibleColumns.safety_days"
+        v-show="visibleColumns.safety_days"
       >
         <template #default="{ row }">
           {{ row.safety_days ? `${row.safety_days}日` : '—' }}
@@ -498,7 +498,7 @@
         label="販売単価"
         width="100"
         align="center"
-        v-if="visibleColumns.unit_price"
+        v-show="visibleColumns.unit_price"
       >
         <template #default="{ row }">
           {{ row.unit_price ? `¥${row.unit_price.toFixed(2)}` : '—' }}
@@ -509,7 +509,7 @@
         label="別名"
         min-width="120"
         align="center"
-        v-if="visibleColumns.product_alias"
+        v-show="visibleColumns.product_alias"
       >
         <template #default="{ row }">
           {{ row.product_alias || '—' }}
@@ -520,7 +520,7 @@
         label="多段階工程"
         width="120"
         align="center"
-        v-if="visibleColumns.is_multistage"
+        v-show="visibleColumns.is_multistage"
       >
         <template #default="{ row }">
           <el-tag :type="row.is_multistage ? 'success' : 'info'" size="small">
@@ -533,7 +533,7 @@
         label="備考"
         min-width="150"
         align="center"
-        v-if="visibleColumns.note"
+        v-show="visibleColumns.note"
         show-overflow-tooltip
       >
         <template #default="{ row }">
@@ -545,7 +545,7 @@
         label="作成日時"
         width="150"
         align="center"
-        v-if="visibleColumns.created_at"
+        v-show="visibleColumns.created_at"
       >
         <template #default="{ row }">
           {{ row.created_at ? formatDateTime(row.created_at) : '—' }}
@@ -556,7 +556,7 @@
         label="更新日時"
         width="150"
         align="center"
-        v-if="visibleColumns.updated_at"
+        v-show="visibleColumns.updated_at"
       >
         <template #default="{ row }">
           {{ row.updated_at ? formatDateTime(row.updated_at) : '—' }}
@@ -661,6 +661,7 @@
  * - 支持导出Excel
  */
 import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Box,
@@ -679,6 +680,8 @@ import { getProductMasterOptions, getMaterialOptions, getRouteOptions } from '@/
 import ProductEditDialog from './ProductEditDialog.vue'
 import type { Product, OptionItem } from '@/types/master'
 import * as XLSX from 'xlsx'
+
+const { t } = useI18n()
 
 // 筛选条件
 const filters = reactive({

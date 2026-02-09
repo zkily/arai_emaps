@@ -1,49 +1,57 @@
 <template>
   <div class="route-step-editor">
+    <!-- Compact Header -->
     <div class="page-header">
       <div class="header-content">
         <div class="title-section">
-          <el-button type="default" icon="ArrowLeft" @click="router.back()" class="back-btn">戻る</el-button>
-          <h1 class="main-title">
-            🛠️ ルートステップ編集
-            <span class="route-info">{{ routeInfo?.route_name ?? '' }}（{{ routeInfo?.route_cd ?? '' }}）</span>
-            <span class="product-info" v-if="productCd">／製品: {{ productCd }}</span>
-          </h1>
+          <el-button type="default" icon="ArrowLeft" @click="router.back()" class="back-btn" size="small">戻る</el-button>
+          <div class="title-info">
+            <h1 class="main-title">🛠️ ルートステップ編集</h1>
+            <span class="route-badge">{{ routeInfo?.route_name ?? '' }} ({{ routeInfo?.route_cd ?? '' }})</span>
+          </div>
         </div>
         <div class="header-buttons">
-          <el-select v-model="productCd" placeholder="製品を選択" filterable class="product-select" @change="fetchData"
-            style="min-width: 220px">
-            <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd}｜${p.name}`" :value="p.cd" />
-          </el-select>
-          <el-button type="primary" icon="Plus" @click="handleAddStep" class="add-btn" :disabled="!productCd">ステップ追加</el-button>
-          <el-button type="success" icon="DocumentChecked" :loading="saving" @click="handleSaveOrder" class="save-btn" :disabled="!productCd">
-            💾 順序保存
-          </el-button>
+          <el-button type="primary" icon="Plus" @click="handleAddStep" class="add-btn" size="small">➕ ステップ追加</el-button>
+          <el-button type="success" :loading="saving" @click="handleSaveOrder" class="save-btn" :disabled="!stepList.length" size="small">💾 順序保存</el-button>
         </div>
       </div>
     </div>
 
-    <el-card class="table-card" v-if="productCd">
-      <el-table :data="stepList" border stripe highlight-current-row class="modern-table">
-        <el-table-column label="🔢 順番" prop="step_no" width="80" align="center" />
-        <el-table-column label="🏭 工程" prop="process_name" min-width="100" />
-        <el-table-column label="設備ID" prop="machine_id" width="100" />
-        <el-table-column label="標準サイクル(s)" prop="standard_cycle_time" width="130" align="right" />
-        <el-table-column label="段取り(s)" prop="setup_time" width="100" align="right" />
-        <el-table-column label="📝 備考" prop="remarks" min-width="120" />
-        <el-table-column label="操作" width="180" align="center">
+    <!-- Data Table -->
+    <div class="table-section" v-if="routeCd">
+      <el-table :data="stepList" border stripe highlight-current-row class="modern-table"
+        :header-cell-style="{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', fontWeight: '600', fontSize: '12px', padding: '6px 10px' }"
+        :cell-style="{ padding: '5px 8px', fontSize: '12px' }">
+        <el-table-column label="順番" prop="step_no" width="70" align="center">
+          <template #default="{ row }"><span class="step-number">{{ row.step_no }}</span></template>
+        </el-table-column>
+        <el-table-column label="工程" prop="process_name" min-width="100">
+          <template #default="{ row }"><span class="process-name">{{ row.process_name }}</span></template>
+        </el-table-column>
+        <el-table-column label="歩留率(%)" prop="yield_percent" width="90" align="right">
+          <template #default="{ row }"><span class="number-cell">{{ row.yield_percent }}</span></template>
+        </el-table-column>
+        <el-table-column label="サイクル(s)" prop="cycle_sec" width="100" align="right">
+          <template #default="{ row }"><span class="number-cell">{{ row.cycle_sec }}</span></template>
+        </el-table-column>
+        <el-table-column label="備考" prop="remarks" min-width="120" show-overflow-tooltip />
+        <el-table-column label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
-            <div class="action-buttons-table">
-              <el-button size="small" type="primary" icon="Edit" @click="handleEdit(row)">編集</el-button>
-              <el-button size="small" type="danger" icon="Delete" @click="handleDelete(row)">削除</el-button>
+            <div class="action-buttons">
+              <el-button size="small" type="primary" plain @click="handleEdit(row)" class="action-btn">✏️ 編集</el-button>
+              <el-button size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">🗑️</el-button>
             </div>
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+    </div>
 
-    <RouteStepDialog v-model:visible="showStepDialog" :route-cd="routeCd" :product-cd="productCd"
-      :mode="stepDialogMode" :initial-data="stepInitialData" @saved="fetchData" />
+    <!-- Footer Info -->
+    <div class="footer-section" v-if="stepList.length">
+      <div class="result-info"><el-icon>📊</el-icon><span>ステップ数: <strong>{{ stepList.length }}</strong></span></div>
+    </div>
+
+    <RouteStepDialog v-model:visible="showStepDialog" :route-cd="routeCd" :mode="stepDialogMode" :initial-data="stepInitialData" @saved="fetchData" />
   </div>
 </template>
 
@@ -52,238 +60,83 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { getRouteInfo, getRouteSteps, deleteRouteStep, updateStepOrder } from '@/api/master/processRouterMaster'
-import { getProductMasterOptions } from '@/api/options'
 import type { RouteStepItem, RouteItem } from '@/types/master'
 import RouteStepDialog from './ProcessRouteStepDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const routeCd = String(route.params.route_cd ?? '')
-const queryProduct = route.query.product_cd
-const productCd = ref(
-  typeof queryProduct === 'string' ? queryProduct : Array.isArray(queryProduct) ? (queryProduct[0] ?? '') : ''
-)
-const productOptions = ref<{ cd: string; name: string }[]>([])
 const routeInfo = ref<RouteItem | null>(null)
 const stepList = ref<RouteStepItem[]>([])
-
 const showStepDialog = ref(false)
 const stepDialogMode = ref<'add' | 'edit'>('add')
 const stepInitialData = ref<Partial<RouteStepItem> | undefined>(undefined)
-
-const fetchData = async () => {
-  if (!routeCd) {
-    stepList.value = []
-    return
-  }
-  if (!productCd.value) {
-    routeInfo.value = await getRouteInfo(routeCd).catch(() => null)
-    stepList.value = []
-    if (!productOptions.value.length) {
-      productOptions.value = await getProductMasterOptions()
-    }
-    return
-  }
-  try {
-    routeInfo.value = await getRouteInfo(routeCd)
-    stepList.value = await getRouteSteps(routeCd, productCd.value)
-  } catch (err: unknown) {
-    const msg = (err && typeof err === 'object' && 'message' in err) ? String((err as { message: string }).message) : 'データ取得失敗'
-    console.error('RouteStepEditor fetchData error:', err)
-    ElMessage.error(msg)
-  }
-}
-
-const loadProductOptions = async () => {
-  if (!productOptions.value.length) productOptions.value = await getProductMasterOptions()
-}
-
-const handleAddStep = () => {
-  stepDialogMode.value = 'add'
-  stepInitialData.value = undefined
-  showStepDialog.value = true
-}
-
-const handleEdit = (row: RouteStepItem) => {
-  stepDialogMode.value = 'edit'
-  stepInitialData.value = { ...row }
-  showStepDialog.value = true
-}
-
-const handleDelete = async (row: RouteStepItem) => {
-  try {
-    await ElMessageBox.confirm('このステップを削除してもよろしいですか？', '⚠️ 確認', { type: 'warning' })
-    if (row.id == null || !productCd.value) return
-    await deleteRouteStep(routeCd, productCd.value, row.id)
-    ElMessage.success('✅ 削除成功')
-    fetchData()
-  } catch {
-    // キャンセル等は無視
-  }
-}
-
 const saving = ref(false)
 
-const handleSaveOrder = async () => {
-  if (!productCd.value) return
-  saving.value = true
-  try {
-    const orderData = stepList.value.map(s => ({ id: s.id!, step_no: s.step_no }))
-    await updateStepOrder(routeCd, productCd.value, orderData)
-    ElMessage.success('順序を保存しました')
-    fetchData()
-  } catch (err: unknown) {
-    const msg = (err && typeof err === 'object' && 'message' in err) ? String((err as { message: string }).message) : '保存失敗'
-    ElMessage.error(msg)
-  } finally {
-    saving.value = false
-  }
+const fetchData = async () => {
+  if (!routeCd) { stepList.value = []; return }
+  try { routeInfo.value = await getRouteInfo(routeCd); stepList.value = await getRouteSteps(routeCd) }
+  catch (e: unknown) { ElMessage.error((e && typeof e === 'object' && 'message' in e) ? String((e as { message: string }).message) : 'データ取得失敗') }
 }
 
-onMounted(async () => {
-  if (!routeCd) {
-    ElMessage.warning('ルートが指定されていません')
-    router.replace('/master/process-route')
-    return
-  }
-  await loadProductOptions()
-  if (!productCd.value && productOptions.value.length) {
-    productCd.value = productOptions.value[0]?.cd ?? ''
-  }
-  await fetchData()
-})
+const handleAddStep = () => { stepDialogMode.value = 'add'; stepInitialData.value = undefined; showStepDialog.value = true }
+const handleEdit = (row: RouteStepItem) => { stepDialogMode.value = 'edit'; stepInitialData.value = { ...row }; showStepDialog.value = true }
+
+const handleDelete = async (row: RouteStepItem) => {
+  try { await ElMessageBox.confirm('ステップを削除しますか？', '確認', { type: 'warning' }); if (row.id == null) return; await deleteRouteStep(routeCd, row.id); ElMessage.success('削除成功'); fetchData() }
+  catch { /* cancelled */ }
+}
+
+const handleSaveOrder = async () => {
+  if (!stepList.value.length) return; saving.value = true
+  try { await updateStepOrder(routeCd, stepList.value.map(s => ({ id: s.id!, step_no: s.step_no }))); ElMessage.success('順序を保存'); fetchData() }
+  catch (e: unknown) { ElMessage.error((e && typeof e === 'object' && 'message' in e) ? String((e as { message: string }).message) : '保存失敗') }
+  finally { saving.value = false }
+}
+
+onMounted(async () => { if (!routeCd) { ElMessage.warning('ルート未指定'); router.replace('/master/process-route'); return }; await fetchData() })
 </script>
 
 <style scoped>
-.route-step-editor {
-  padding: 20px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  min-height: 100vh;
+.route-step-editor { padding: 12px 16px; background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%); min-height: 100vh; }
+
+.page-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 12px 18px; margin-bottom: 12px; box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3); }
+.header-content { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.title-section { display: flex; align-items: center; gap: 14px; }
+.back-btn { border-radius: 8px; font-weight: 500; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; }
+.back-btn:hover { background: rgba(255,255,255,0.25); }
+.title-info { display: flex; flex-direction: column; gap: 2px; }
+.main-title { font-size: 1.25rem; font-weight: 700; margin: 0; color: #fff; }
+.route-badge { font-size: 0.8rem; color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.15); padding: 2px 10px; border-radius: 12px; }
+.header-buttons { display: flex; gap: 8px; }
+.add-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; font-weight: 600; color: #fff; }
+.add-btn:hover { background: rgba(255,255,255,0.25); }
+.save-btn { border-radius: 8px; font-weight: 600; }
+
+.table-section { background: #fff; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 12px; }
+.modern-table { width: 100%; }
+.step-number { font-weight: 700; color: #667eea; background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%); padding: 2px 10px; border-radius: 10px; font-size: 12px; }
+.process-name { font-weight: 500; color: #1e293b; }
+.number-cell { font-family: 'Consolas', monospace; font-weight: 500; color: #374151; }
+.action-buttons { display: flex; gap: 4px; justify-content: center; }
+.action-btn { padding: 3px 8px; font-size: 11px; border-radius: 6px; }
+
+.footer-section { background: #fff; border-radius: 10px; padding: 8px 16px; display: flex; align-items: center; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+.result-info { display: flex; align-items: center; gap: 6px; color: #64748b; font-size: 0.85rem; }
+.result-info strong { color: #667eea; font-weight: 700; }
+
+@media (max-width: 768px) {
+  .route-step-editor { padding: 8px; }
+  .page-header { padding: 10px 12px; }
+  .header-content { flex-direction: column; align-items: stretch; gap: 10px; }
+  .title-section { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .header-buttons { width: 100%; }
+  .header-buttons > * { flex: 1; }
+  .main-title { font-size: 1.1rem; }
+  .action-buttons { flex-direction: column; gap: 3px; }
+  .action-btn { width: 100%; }
 }
 
-.page-header {
-  background: white;
-  border-radius: 20px;
-  padding: 32px;
-  margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.header-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.title-section {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-}
-
-.back-btn {
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.main-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0;
-  color: #2c3e50;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.route-info {
-  font-size: 1.1rem;
-  color: #2980b9;
-  margin-left: 10px;
-  font-weight: 500;
-}
-
-.product-info {
-  font-size: 0.95rem;
-  color: #27ae60;
-  margin-left: 8px;
-}
-
-.product-select {
-  margin-right: 8px;
-}
-
-.header-buttons {
-  display: flex;
-  gap: 12px;
-}
-
-.add-btn {
-  background: linear-gradient(135deg, #27ae60 0%, #2980b9 100%);
-  border: none;
-  border-radius: 12px;
-  padding: 10px 20px;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(41, 128, 185, 0.18);
-  transition: all 0.3s;
-  color: #fff;
-}
-
-.add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(41, 128, 185, 0.23);
-}
-
-.save-btn {
-  border-radius: 12px;
-  font-weight: 600;
-}
-
-.table-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: none;
-  margin-bottom: 16px;
-}
-
-.modern-table {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.action-buttons-table {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-@media (max-width:1200px) {
-  .header-content { flex-direction: column; align-items: flex-start; gap: 20px; }
-  .header-buttons { align-self: stretch; justify-content: flex-end; }
-}
-
-@media (max-width:768px) {
-  .route-step-editor { padding: 12px; }
-  .page-header { padding: 18px 10px; }
-  .main-title { font-size: 1.5rem; }
-  .header-content { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .header-buttons { width: 100%; justify-content: stretch; gap: 10px; }
-  .add-btn, .save-btn { width: 100%; min-width: 0; padding: 10px 0; }
-}
-
-@media (max-width:480px) {
-  .main-title { font-size: 1.2rem; flex-direction: column; align-items: flex-start; gap: 8px; }
-}
-
-:deep(.el-table th) {
-  background-color: #f8fafc;
-  color: #2d3748;
-  font-weight: 600;
-}
-
-:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background-color: #f7fafc;
-}
+:deep(.el-table) { --el-table-border-color: #e2e8f0; --el-table-row-hover-bg-color: #f0f4ff; }
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) { background-color: #fafbfc; }
 </style>

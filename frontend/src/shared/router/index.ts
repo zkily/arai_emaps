@@ -44,6 +44,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/sales/recording', name: 'SalesRecording', component: () => import('@/views/erp/sales/shipping/SalesRecording.vue'), meta: { title: '売上計上', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/returns', name: 'ReturnsList', component: () => import('@/views/erp/sales/returns/ReturnsList.vue'), meta: { title: '返品管理(RMA)', group: '販売管理', requiresAuth: true } },
 
+      // ========== ERP - 受注管理 (Order Management) ==========
+      { path: 'erp/order', name: 'Order', component: () => import('@/views/erp/Order.vue'), meta: { title: '受注管理', group: '受注管理', requiresAuth: true } },
+      { path: 'erp/order/monthly', name: 'OrderMonthlyList', component: () => import('@/views/erp/order/OrderMonthlyList.vue'), meta: { title: '月受注管理', group: '受注管理 > 月受注管理', requiresAuth: true } },
+
       // ========== ERP - 購買管理 (Procurement / MM) ==========
       { path: 'erp/purchase', name: 'Purchase', component: () => import('@/views/erp/Purchase.vue'), meta: { title: '購買管理', group: '購買管理', requiresAuth: true } },
       { path: 'erp/purchase/orders', name: 'PurchaseOrderList', component: () => import('@/views/erp/purchase/PurchaseOrderList.vue'), meta: { title: '発注一覧', group: '購買管理', requiresAuth: true } },
@@ -69,36 +73,27 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/costing/billing', name: 'Billing', component: () => import('@/views/erp/costing/finance/Billing.vue'), meta: { title: '請求管理(AR)', group: '債権債務', requiresAuth: true } },
       { path: 'erp/costing/payment', name: 'Payment', component: () => import('@/views/erp/costing/finance/Payment.vue'), meta: { title: '支払管理(AP)', group: '債権債務', requiresAuth: true } },
 
-      // ========== ERP - マスタ ==========
-      { path: 'erp/supplier', name: 'SupplierList', component: () => import('@/views/erp/supplier/SupplierList.vue'), meta: { title: '仕入先管理', group: 'マスタ', requiresAuth: true } },
-
-      // ========== ERP - 受注管理モジュール ==========
-      { path: 'erp/order', name: 'OrderHome', component: () => import('@/views/erp/order/OrderHome.vue'), meta: { title: '受注管理', group: '受注管理', requiresAuth: true } },
-      { path: 'erp/order/monthly', name: 'OrderMonthlyList', component: () => import('@/views/erp/order/OrderMonthlyList.vue'), meta: { title: '月別受注管理', group: '受注管理', requiresAuth: true } },
-      { path: 'erp/order/daily', name: 'OrderDailyList', component: () => import('@/views/erp/order/OrderDailyList.vue'), meta: { title: '日別受注管理', group: '受注管理', requiresAuth: true } },
-      { path: 'erp/order/dashboard', name: 'OrderDashboardPage', component: () => import('@/views/erp/order/OrderDashboardPage.vue'), meta: { title: '受注ダッシュボード', group: '受注管理', requiresAuth: true } },
-      { path: 'erp/order/kpi', name: 'OrderKpiDashboard', component: () => import('@/views/erp/order/OrderKpiDashboard.vue'), meta: { title: 'KPIダッシュボード', group: '受注管理', requiresAuth: true } },
-      { path: 'erp/order/daily-history', name: 'OrderDailyHistoryPage', component: () => import('@/views/erp/order/OrderDailyHistoryPage.vue'), meta: { title: '日別受注履歴', group: '受注履歴', requiresAuth: true } },
-      { path: 'erp/order/customer-history', name: 'OrderCustomerHistory', component: () => import('@/views/erp/order/OrderCustomerHistory.vue'), meta: { title: '顧客別受注履歴', group: '受注履歴', requiresAuth: true } },
-      { path: 'erp/order/destination-history', name: 'OrderDestinationHistory', component: () => import('@/views/erp/order/OrderDestinationHistory.vue'), meta: { title: '納入先別受注履歴', group: '受注履歴', requiresAuth: true } },
-      { path: 'erp/order/comparison', name: 'OrderHistoryComparison', component: () => import('@/views/erp/order/OrderHistoryComparison.vue'), meta: { title: '受注履歴比較', group: '受注履歴', requiresAuth: true } },
-      { path: 'erp/order/print', name: 'OrderDailyPrintPage', component: () => import('@/views/erp/order/OrderDailyPrintPage.vue'), meta: { title: '受注印刷', group: '受注管理', requiresAuth: true } },
-
       // ========== APS モジュール ==========
-      { path: 'aps/planning', name: 'Planning', component: () => import('@/modules/aps/views/Planning.vue'), meta: { title: '生産計画', requiresAuth: true } },
-      { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/modules/aps/views/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
+      { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '生産計画', requiresAuth: true } },
+      { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
 
       // ========== MES モジュール ==========
-      { path: 'mes/execution', name: 'Execution', component: () => import('@/modules/mes/views/Execution.vue'), meta: { title: '製造実行', requiresAuth: true } },
-      { path: 'mes/quality', name: 'Quality', component: () => import('@/modules/mes/views/Quality.vue'), meta: { title: '品質管理', requiresAuth: true } },
+      { path: 'mes/execution', name: 'Execution', component: () => import('@/views/mes/Execution.vue'), meta: { title: '製造実行', requiresAuth: true } },
+      { path: 'mes/quality', name: 'Quality', component: () => import('@/views/mes/Quality.vue'), meta: { title: '品質管理', requiresAuth: true } },
 
       // ========== マスタ管理 ==========
-      { path: 'master', redirect: { name: 'ProductList' } },
+      { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },
       { path: 'master/product', name: 'ProductList', component: () => import('@/views/master/product/ProductList.vue'), meta: { title: '製品マスタ', requiresAuth: true } },
       { path: 'master/material', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', requiresAuth: true } },
       { path: 'master/supplier', name: 'SupplierList', component: () => import('@/views/master/supplier/SupplierList.vue'), meta: { title: '仕入先マスタ', requiresAuth: true } },
+      { path: 'master/process', name: 'ProcessList', component: () => import('@/views/master/process/ProcessList.vue'), meta: { title: '工程マスタ', requiresAuth: true } },
       { path: 'master/process-route', name: 'ProcessRouteList', component: () => import('@/views/master/processRoute/ProcessRouteList.vue'), meta: { title: '工程ルートマスタ', requiresAuth: true } },
       { path: 'master/process-route/:route_cd/steps', name: 'RouteStepList', component: () => import('@/views/master/processRoute/ProcessRouteStepEditor.vue'), meta: { title: 'ルートステップ編集', requiresAuth: true } },
+      { path: 'master/customer', name: 'CustomerList', component: () => import('@/views/master/customer/CustomerList.vue'), meta: { title: '顧客マスタ', requiresAuth: true } },
+      { path: 'master/carrier', name: 'CarrierList', component: () => import('@/views/master/carrier/CarrierList.vue'), meta: { title: '運送便マスタ', requiresAuth: true } },
+      { path: 'master/machine', name: 'MachineList', component: () => import('@/views/master/machine/MachineList.vue'), meta: { title: '設備マスタ', requiresAuth: true } },
+      { path: 'master/destination', name: 'DestinationList', component: () => import('@/views/master/destination/DestinationList.vue'), meta: { title: '納入先マスタ', requiresAuth: true } },
+      { path: 'master/destination/holiday', name: 'DestinationHoliday', component: () => import('@/views/master/destination/DestinationHoliday.vue'), meta: { title: '納入先休日設定', requiresAuth: true } },
       { path: 'master/bom', name: 'Bom', component: () => import('@/views/master/Bom.vue'), meta: { title: 'BOM', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========

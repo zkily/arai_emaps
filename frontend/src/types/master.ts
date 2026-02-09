@@ -10,7 +10,7 @@ export interface Product {
   start_use_date?: string | Date | null
   category?: string
   department_id?: number | null
-  delivery_destination_cd?: string
+  destination_cd?: string
   process_count?: number
   lead_time?: number
   lot_size?: number
@@ -123,17 +123,109 @@ export interface RouteInfo {
   is_default?: boolean
 }
 
-/** 工程ルートステップ（製品別） */
+/** 顧客マスタ */
+export interface CustomerItem {
+  id?: number
+  customer_cd: string
+  customer_name: string
+  phone?: string
+  address?: string
+  customer_type?: string
+  status?: number
+  created_at?: string
+  updated_at?: string
+}
+
+/** 納入先マスタ */
+export interface DestinationItem {
+  id?: number
+  destination_cd: string
+  destination_name: string
+  customer_cd?: string
+  carrier_cd?: string
+  delivery_lead_time?: number
+  issue_type?: string
+  phone?: string
+  address?: string
+  status?: number
+  picked_id?: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** 納入先休日 */
+export interface DestinationHolidayItem {
+  id?: number
+  destination_cd: string
+  holiday_date: string
+  created_at?: string
+}
+
+/** 納入先臨時出勤日 */
+export interface DestinationWorkdayItem {
+  id?: number
+  destination_cd: string
+  work_date: string
+  reason?: string
+  created_at?: string
+}
+
+/** 工程マスタ */
+export interface ProcessItem {
+  id?: number
+  process_cd: string
+  process_name: string
+  short_name?: string
+  category?: string
+  is_outsource?: boolean
+  default_cycle_sec?: number
+  default_yield?: number
+  capacity_unit?: string
+  remark?: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** 設備マスタ */
+export interface MachineItem {
+  id?: number
+  machine_cd: string
+  machine_name: string
+  machine_type?: string
+  status?: string
+  available_from?: string
+  available_to?: string
+  calendar_id?: number
+  efficiency?: number
+  note?: string
+  created_at?: string
+  updated_at?: string
+}
+
+/** 運送便マスタ */
+export interface CarrierItem {
+  id?: number
+  carrier_cd: string
+  carrier_name: string
+  contact_person?: string
+  phone?: string
+  shipping_time?: string
+  report_no?: string
+  note?: string
+  status?: number
+  created_at?: string
+  updated_at?: string
+}
+
+/** 工程ルートステップ */
 export interface RouteStepItem {
   id?: number
-  product_cd: string
   route_cd: string
   step_no: number
   process_cd: string
   process_name?: string
-  machine_id?: string
-  standard_cycle_time?: number
-  setup_time?: number
+  yield_percent?: number
+  cycle_sec?: number
   remarks?: string
   created_at?: string
   updated_at?: string

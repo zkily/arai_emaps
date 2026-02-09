@@ -14,7 +14,7 @@ class ProductBase(BaseModel):
     start_use_date: Optional[date] = None
     category: Optional[str] = None
     department_id: Optional[int] = None
-    delivery_destination_cd: Optional[str] = None
+    destination_cd: Optional[str] = None
     process_count: int = 1
     lead_time: Optional[int] = None
     lot_size: int = 1
@@ -50,6 +50,38 @@ class ProductUpdate(ProductBase):
 
 
 class ProductResponse(ProductBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 工程マスタ ==========
+
+class ProcessBase(BaseModel):
+    process_cd: str
+    process_name: str
+    short_name: Optional[str] = None
+    category: Optional[str] = None
+    is_outsource: bool = False
+    default_cycle_sec: float = 0.0
+    default_yield: float = 1.0  # 0〜1
+    capacity_unit: str = "pcs"  # pcs, kg, m
+    remark: Optional[str] = None
+
+
+class ProcessCreate(ProcessBase):
+    pass
+
+
+class ProcessUpdate(ProcessBase):
+    process_cd: Optional[str] = None
+    process_name: Optional[str] = None
+
+
+class ProcessResponse(ProcessBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -173,16 +205,14 @@ class ProcessRouteResponse(ProcessRouteBase):
         from_attributes = True
 
 
-# ========== 工程ルートステップ（製品別） ==========
+# ========== 工程ルートステップ ==========
 
 class ProcessRouteStepBase(BaseModel):
-    product_cd: str
     route_cd: str
     step_no: int
     process_cd: str
-    machine_id: Optional[str] = None
-    standard_cycle_time: Optional[float] = None
-    setup_time: Optional[float] = None
+    yield_percent: Optional[float] = 100.0
+    cycle_sec: Optional[float] = 0.0
     remarks: Optional[str] = None
 
 
@@ -200,6 +230,167 @@ class ProcessRouteStepResponse(ProcessRouteStepBase):
     process_name: Optional[str] = None  # 表示用
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 納入先マスタ ==========
+
+class DestinationBase(BaseModel):
+    destination_cd: str
+    destination_name: str
+    customer_cd: Optional[str] = None
+    carrier_cd: Optional[str] = None
+    delivery_lead_time: int = 0
+    issue_type: Optional[str] = "自動"
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    status: int = 1
+
+
+class DestinationCreate(DestinationBase):
+    pass
+
+
+class DestinationUpdate(DestinationBase):
+    destination_cd: Optional[str] = None
+    destination_name: Optional[str] = None
+
+
+class DestinationResponse(DestinationBase):
+    id: int
+    picked_id: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 顧客マスタ ==========
+
+class CustomerBase(BaseModel):
+    customer_cd: str
+    customer_name: str
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    customer_type: Optional[str] = None
+    status: int = 1
+
+
+class CustomerCreate(CustomerBase):
+    pass
+
+
+class CustomerUpdate(BaseModel):
+    customer_cd: Optional[str] = None
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    customer_type: Optional[str] = None
+    status: Optional[int] = None
+
+
+class CustomerResponse(CustomerBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 運送便マスタ ==========
+
+class CarrierBase(BaseModel):
+    carrier_cd: str
+    carrier_name: str
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    shipping_time: Optional[str] = None  # "HH:mm" or "HH:mm:ss"
+    report_no: Optional[str] = None
+    note: Optional[str] = None
+    status: int = 1
+
+
+class CarrierCreate(CarrierBase):
+    pass
+
+
+class CarrierUpdate(BaseModel):
+    carrier_cd: Optional[str] = None
+    carrier_name: Optional[str] = None
+    contact_person: Optional[str] = None
+    phone: Optional[str] = None
+    shipping_time: Optional[str] = None
+    report_no: Optional[str] = None
+    note: Optional[str] = None
+    status: Optional[int] = None
+
+
+class CarrierResponse(CarrierBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 設備マスタ ==========
+
+class MachineBase(BaseModel):
+    machine_cd: str
+    machine_name: str
+    machine_type: Optional[str] = None
+    status: str = "active"
+    available_from: Optional[str] = None  # "HH:mm:ss"
+    available_to: Optional[str] = None
+    calendar_id: Optional[int] = None
+    efficiency: float = 100.0
+    note: Optional[str] = None
+
+
+class MachineCreate(MachineBase):
+    pass
+
+
+class MachineUpdate(BaseModel):
+    machine_cd: Optional[str] = None
+    machine_name: Optional[str] = None
+    machine_type: Optional[str] = None
+    status: Optional[str] = None
+    available_from: Optional[str] = None
+    available_to: Optional[str] = None
+    calendar_id: Optional[int] = None
+    efficiency: Optional[float] = None
+    note: Optional[str] = None
+
+
+class MachineResponse(MachineBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ========== 納入先休日 ==========
+
+class DestinationHolidayBase(BaseModel):
+    destination_cd: str
+    holiday_date: date
+
+
+class DestinationHolidayCreate(DestinationHolidayBase):
+    pass
+
+
+class DestinationHolidayResponse(DestinationHolidayBase):
+    id: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

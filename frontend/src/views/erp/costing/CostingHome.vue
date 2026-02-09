@@ -50,6 +50,34 @@
       </router-link>
     </div>
 
+    <div class="section-title">固定資産管理</div>
+    <div class="module-grid">
+      <router-link v-for="module in assetModules" :key="module.path" :to="module.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: module.gradient }">
+          <el-icon :size="32"><component :is="module.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ module.title }}</h3>
+          <p class="module-desc">{{ module.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <div class="section-title">会計連携</div>
+    <div class="module-grid">
+      <router-link v-for="module in accountingModules" :key="module.path" :to="module.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: module.gradient }">
+          <el-icon :size="32"><component :is="module.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ module.title }}</h3>
+          <p class="module-desc">{{ module.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
     <div class="section-title">債権債務（AR/AP）</div>
     <div class="module-grid">
       <router-link v-for="module in financeModules" :key="module.path" :to="module.path" class="module-card modern-card">
@@ -81,6 +109,18 @@ const costModules = ref([
   { path: '/erp/costing/standard', title: '標準原価計算', description: '積み上げ計算（材料費＋加工費＋経費）', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', icon: markRaw(Document) },
   { path: '/erp/costing/actual', title: '実際原価計算', description: '実績工数・実績材料費に基づく原価配賦', gradient: 'linear-gradient(135deg, #f093fb, #f5576c)', icon: markRaw(DataAnalysis) },
   { path: '/erp/costing/variance', title: '原価差異分析', description: '価格差異、数量差異、操業度差異の可視化', gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)', icon: markRaw(DataAnalysis) },
+  { path: '/erp/costing/allocation', title: '配賦計算', description: '労務費・製造経費・光熱費の製品別配賦', gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)', icon: markRaw(Money) },
+  { path: '/erp/costing/wip', title: '仕掛品(WIP)評価', description: '月末時点の工程内在庫の評価額算出', gradient: 'linear-gradient(135deg, #ffecd2, #fcb69f)', icon: markRaw(DataAnalysis) },
+])
+
+const assetModules = ref([
+  { path: '/erp/costing/equipment', title: '設備台帳', description: '固定資産管理・設備情報・メンテナンス履歴', gradient: 'linear-gradient(135deg, #667eea, #764ba2)', icon: markRaw(Document) },
+  { path: '/erp/costing/depreciation', title: '減価償却計算', description: '定額法/定率法自動計算・製造原価連携', gradient: 'linear-gradient(135deg, #e6a23c, #ebb563)', icon: markRaw(DataAnalysis) },
+])
+
+const accountingModules = ref([
+  { path: '/erp/costing/journal', title: '自動仕訳生成', description: '売上・仕入・移動・製造振替の自動仕訳', gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)', icon: markRaw(Document) },
+  { path: '/erp/costing/accounting-export', title: '会計ソフト出力', description: '弥生会計・勘定奉行・freee等への出力', gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)', icon: markRaw(CreditCard) },
 ])
 
 const financeModules = ref([

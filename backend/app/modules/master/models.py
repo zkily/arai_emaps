@@ -1,7 +1,7 @@
 """
 製品マスタ データベースモデル（products テーブル）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, Text, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Boolean, Text, Numeric, Float  # Date used by DestinationHoliday; Time by Carrier
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -18,7 +18,7 @@ class Product(Base):
     start_use_date = Column(Date)
     category = Column(String(50))
     department_id = Column(Integer)
-    delivery_destination_cd = Column(String(50))
+    destination_cd = Column(String(50))
     process_count = Column(Integer, default=1)
     lead_time = Column(Integer)
     lot_size = Column(Integer, default=1)
@@ -108,6 +108,24 @@ class Supplier(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class Process(Base):
+    """工程マスタ（processes）"""
+    __tablename__ = "processes"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    process_cd = Column(String(20), unique=True, nullable=False, index=True)
+    process_name = Column(String(60), nullable=False)
+    short_name = Column(String(20))
+    category = Column(String(20), index=True)
+    is_outsource = Column(Integer, default=0)  # 0=社内, 1=外注
+    default_cycle_sec = Column(Float, default=0.0)
+    default_yield = Column(Numeric(5, 3), default=1.000)
+    capacity_unit = Column(String(10), default="pcs")  # pcs, kg, m
+    remark = Column(String(255))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class ProcessRoute(Base):
     """工程ルートヘッダ（process_routes）"""
     __tablename__ = "process_routes"
@@ -124,17 +142,105 @@ class ProcessRoute(Base):
 
 
 class ProcessRouteStep(Base):
-    """製品別工程ルートステップ（process_route_steps）"""
+    """工程ルートステップ（process_route_steps）"""
     __tablename__ = "process_route_steps"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    product_cd = Column(String(50), nullable=False, index=True)
-    route_cd = Column(String(50), nullable=False, index=True)
+    route_cd = Column(String(15), nullable=False, index=True)
     step_no = Column(Integer, nullable=False)
-    process_cd = Column(String(50), nullable=False)
-    machine_id = Column(String(50))
-    standard_cycle_time = Column(Numeric(10, 2))
-    setup_time = Column(Numeric(10, 2))
+    process_cd = Column(String(20), nullable=False)
+    yield_percent = Column(Numeric(5, 2), default=100.00)
+    cycle_sec = Column(Numeric(5, 2), default=0.00)
     remarks = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class Destination(Base):
+    """納入先マスタ（destinations）"""
+    __tablename__ = "destinations"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    destination_cd = Column(String(50), unique=True, nullable=False, index=True)
+    destination_name = Column(String(100), nullable=False)
+    customer_cd = Column(String(50))
+    carrier_cd = Column(String(50))
+    delivery_lead_time = Column(Integer, default=0)
+    issue_type = Column(String(2), default="自動")
+    phone = Column(String(20))
+    address = Column(String(255))
+    status = Column(Integer, default=1)  # 1=有効, 0=無効
+    picked_id = Column(String(50))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class DestinationHoliday(Base):
+    """納入先休日（destination_holidays）"""
+    __tablename__ = "destination_holidays"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    destination_cd = Column(String(50), nullable=False, index=True)
+    holiday_date = Column(Date, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+
+
+class DestinationWorkday(Base):
+    """納入先臨時出勤日（destination_workdays）"""
+    __tablename__ = "destination_workdays"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    destination_cd = Column(String(50), nullable=False, index=True)
+    work_date = Column(Date, nullable=False)
+    reason = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+
+
+class Customer(Base):
+    """顧客マスタ（customers）"""
+    __tablename__ = "customers"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    customer_cd = Column(String(50), unique=True, nullable=False, index=True)
+    customer_name = Column(String(100), nullable=False)
+    phone = Column(String(20))
+    address = Column(String(255))
+    customer_type = Column(String(50))
+    status = Column(Integer, default=1)  # 1=有効, 0=無効
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class Carrier(Base):
+    """運送便マスタ（carriers）"""
+    __tablename__ = "carriers"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    carrier_cd = Column(String(50), unique=True, nullable=False, index=True)
+    carrier_name = Column(String(100), nullable=False)
+    contact_person = Column(String(100))
+    phone = Column(String(20))
+    shipping_time = Column(Time)
+    report_no = Column(String(50))
+    note = Column(Text)
+    status = Column(Integer, default=1)  # 1=有効, 0=無効
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class Machine(Base):
+    """設備マスタ（machines）"""
+    __tablename__ = "machines"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    machine_cd = Column(String(50), unique=True, nullable=False, index=True)
+    machine_name = Column(String(100), nullable=False)
+    machine_type = Column(String(50))
+    status = Column(String(20), default="active")  # active / inactive / maintenance
+    available_from = Column(Time, default=None)
+    available_to = Column(Time, default=None)
+    calendar_id = Column(Integer)
+    efficiency = Column(Numeric(5, 2), default=100.00)
+    note = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

@@ -14,7 +14,7 @@ CREATE TABLE `products`  (
   `start_use_date` date NULL DEFAULT NULL COMMENT '使用開始日',
   `category` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT 'カテゴリ（例：センサー、ケースなど）',
   `department_id` int NULL DEFAULT NULL COMMENT '所属部門ID（外部キー）',
-  `delivery_destination_cd` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '納入先CD（外部キー）',
+  `destination_cd` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '納入先CD（外部キー）',
   `process_count` int NULL DEFAULT 1 COMMENT '工程数（標準の製造工程数）',
   `lead_time` int NULL DEFAULT NULL COMMENT 'リードタイム（日数）',
   `lot_size` int NULL DEFAULT 1 COMMENT 'ロットサイズ（まとめて作る単位）',

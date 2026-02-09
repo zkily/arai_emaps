@@ -1,87 +1,115 @@
 <template>
   <transition name="fade-slide" mode="out-in">
     <div class="route-master-container" v-if="true">
+      <!-- Compact Header -->
       <div class="page-header">
         <div class="header-content">
           <div class="title-section">
-            <h1 class="main-title">
-              <el-icon class="title-icon">🛠️</el-icon>
-              工程ルート管理
-            </h1>
-            <p class="subtitle">工程ルートの登録・編集・管理を行います</p>
-          </div>
-          <div class="header-stats">
-            <div class="stat-card">
-              <div class="stat-number">{{ routeList.length }}</div>
-              <div class="stat-label">総ルート数</div>
+            <div class="title-row">
+              <span class="title-icon">🛠️</span>
+              <h1 class="main-title">{{ t('master.processRoute.title') }}</h1>
+              <div class="stat-badge">
+                <span class="stat-number">{{ routeList.length }}</span>
+                <span class="stat-label">{{ t('master.common.items') }}</span>
+              </div>
             </div>
+            <p class="subtitle">{{ t('master.processRoute.subtitle') }}</p>
           </div>
+          <el-button type="primary" icon="Plus" @click="openAddDialog" class="add-btn">
+            <span class="btn-icon">➕</span> {{ t('master.processRoute.addRoute') }}
+          </el-button>
         </div>
       </div>
 
-      <div class="action-section">
-        <div class="filter-header">
-          <div class="filter-title">
-            <el-icon class="filter-icon">🔍</el-icon>
-            <span>検索・絞り込み</span>
+      <!-- Compact Search Section -->
+      <div class="search-section">
+        <div class="search-row">
+          <div class="search-input-wrapper">
+            <el-icon class="search-icon">🔍</el-icon>
+            <el-input 
+              v-model="filters.keyword" 
+              :placeholder="t('master.processRoute.searchPlaceholder')" 
+              clearable 
+              @keyup.enter="fetchList"
+              class="search-input"
+            />
           </div>
-          <div class="filter-actions">
-            <el-button type="primary" @click="openAddDialog" class="add-btn">工程ルート追加</el-button>
-          </div>
-        </div>
-        <div class="filters-grid">
-          <div class="filter-item search-item">
-            <label class="filter-label">
-              <el-icon>🔍</el-icon>
-              キーワード検索
-            </label>
-            <el-input v-model="filters.keyword" placeholder="コード／名称で検索" clearable @keyup.enter="fetchList"
-              class="filter-input">
-              <template #suffix>
-                <el-icon v-if="filters.keyword" class="search-active">🔍</el-icon>
-              </template>
-            </el-input>
-          </div>
+          <el-button type="primary" @click="fetchList" class="search-btn">{{ t('master.common.search') }}</el-button>
         </div>
       </div>
 
-      <el-card class="table-card">
-        <el-table :data="routeList" border stripe highlight-current-row v-loading="loading" class="modern-table">
-          <el-table-column label="🆔 ルートCD" prop="route_cd" width="110" align="center" />
-          <el-table-column label="📛 ルート名称" prop="route_name" min-width="80" />
-          <el-table-column label="📝 説明" prop="description" min-width="160" />
-          <el-table-column label="使用" prop="is_active" width="80" align="center">
+      <!-- Data Table -->
+      <div class="table-section">
+        <el-table 
+          :data="routeList" 
+          border 
+          stripe 
+          highlight-current-row 
+          v-loading="loading" 
+          class="modern-table"
+          :header-cell-style="{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: '#fff', fontWeight: '600', fontSize: '13px', padding: '8px 12px' }"
+          :cell-style="{ padding: '6px 10px', fontSize: '13px' }"
+        >
+          <el-table-column :label="t('master.processRoute.routeCD')" prop="route_cd" width="110" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.is_active !== false ? 'success' : 'info'">{{ row.is_active !== false ? '有効' : '無効' }}</el-tag>
+              <span class="code-cell">{{ row.route_cd }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="✅ デフォルト" prop="is_default" width="100" align="center">
+          <el-table-column :label="t('master.processRoute.routeName')" prop="route_name" min-width="120">
             <template #default="{ row }">
-              <el-tag type="success" v-if="row.is_default">✔</el-tag>
+              <span class="name-cell">{{ row.route_name }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="🛠️ 操作" width="300" align="center">
+          <el-table-column :label="t('master.processRoute.description')" prop="description" min-width="180" show-overflow-tooltip />
+          <el-table-column :label="t('master.processRoute.inUse')" prop="is_active" width="70" align="center">
             <template #default="{ row }">
-              <div class="action-buttons-table">
-                <el-button size="small" icon="Edit" @click="goToSteps(row)" plain>ステップ編集</el-button>
-                <el-button size="small" icon="EditPen" @click="openEditDialog(row)">編集</el-button>
-                <el-button size="small" type="danger" icon="Delete" @click="handleDelete(row)">削除</el-button>
+              <el-tag :type="row.is_active !== false ? 'success' : 'info'" size="small" effect="plain" class="status-tag">
+                {{ row.is_active !== false ? t('master.common.active') : t('master.common.inactive') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('master.processRoute.default')" prop="is_default" width="85" align="center">
+            <template #default="{ row }">
+              <el-icon v-if="row.is_default" class="default-icon">✅</el-icon>
+              <span v-else class="empty-default">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('master.common.actions')" width="240" align="center" fixed="right">
+            <template #default="{ row }">
+              <div class="action-buttons">
+                <el-button size="small" type="primary" plain @click="goToSteps(row)" class="action-btn">
+                  📋 {{ t('master.processRoute.steps') }}
+                </el-button>
+                <el-button size="small" type="warning" plain @click="openEditDialog(row)" class="action-btn">
+                  ✏️ {{ t('master.common.edit') }}
+                </el-button>
+                <el-button size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">
+                  🗑️
+                </el-button>
               </div>
             </template>
           </el-table-column>
         </el-table>
-      </el-card>
-
-      <div class="result-section">
-        <div class="result-info">
-          表示件数: {{ routeList.length }}
-        </div>
       </div>
 
-      <div class="pagination-wrapper" v-if="pagination.total > pagination.pageSize">
-        <el-pagination v-model:current-page="pagination.currentPage" v-model:page-size="pagination.pageSize"
-          :page-sizes="[20, 50, 100, 200]" :total="pagination.total" layout="total, sizes, prev, pager, next, jumper"
-          @size-change="fetchList" @current-change="fetchList" />
+      <!-- Footer Info -->
+      <div class="footer-section">
+        <div class="result-info">
+          <el-icon>📊</el-icon>
+          <span>{{ t('master.processRoute.displayCountShort', { n: routeList.length }) }}</span>
+        </div>
+        <el-pagination 
+          v-if="pagination.total > pagination.pageSize"
+          v-model:current-page="pagination.currentPage" 
+          v-model:page-size="pagination.pageSize"
+          :page-sizes="[20, 50, 100, 200]" 
+          :total="pagination.total" 
+          layout="sizes, prev, pager, next"
+          @size-change="fetchList" 
+          @current-change="fetchList"
+          class="compact-pagination"
+          small
+        />
       </div>
 
       <RouteEditDialog v-model:visible="showDialog" :mode="dialogMode" :initial-data="editData" @saved="fetchList" />
@@ -92,11 +120,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { fetchRoutes, deleteRoute } from '@/api/master/processRouterMaster'
 import type { RouteItem } from '@/types/master'
 import RouteEditDialog from './ProcessRouteEditDialog.vue'
 
+const { t } = useI18n()
 const router = useRouter()
 
 /** ステップ編集へ（直接 ProcessRouteStepEditor へ遷移。製品は遷移先で選択） */
@@ -131,7 +161,7 @@ const fetchList = async () => {
     routeList.value = result?.data?.list ?? result?.list ?? []
     pagination.value.total = result?.data?.total ?? result?.total ?? 0
   } catch {
-    ElMessage.error('工程ルート取得失敗')
+    ElMessage.error(t('master.common.loadError'))
   } finally {
     loading.value = false
   }
@@ -151,10 +181,10 @@ const openEditDialog = (row: RouteItem) => {
 
 const handleDelete = async (row: RouteItem) => {
   try {
-    await ElMessageBox.confirm('このルートを削除してもよろしいですか？', '確認', { type: 'warning' })
+    await ElMessageBox.confirm(t('master.processRoute.confirmDelete'), t('common.confirm'), { type: 'warning' })
     if (row.id == null) return
     await deleteRoute(row.id)
-    ElMessage.success('削除成功')
+    ElMessage.success(t('master.common.deleteSuccess'))
     fetchList()
   } catch {
     // cancelled
@@ -166,243 +196,314 @@ onMounted(fetchList)
 
 <style scoped>
 .route-master-container {
-  padding: 20px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
   min-height: 100vh;
 }
 
+/* Header */
 .page-header {
-  background: white;
-  border-radius: 20px;
-  padding: 32px;
-  margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 14px 20px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-}
-
-.title-section {
-  flex: 1;
-}
-
-.main-title {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0 0 8px;
-  color: #2c3e50;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.title-icon {
-  font-size: 1.8rem;
-  color: #2980b9;
-}
-
-.subtitle {
-  color: #7f8c8d;
-  margin: 0;
-  font-size: 1rem;
-}
-
-.header-stats {
-  display: flex;
   gap: 16px;
 }
 
-.stat-card {
-  background: linear-gradient(135deg, #2980b9 0%, #27ae60 100%);
-  color: white;
-  padding: 20px;
-  border-radius: 16px;
-  text-align: center;
-  min-width: 120px;
-  box-shadow: 0 4px 15px rgba(41, 128, 185, 0.2);
+.title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-icon {
+  font-size: 1.5rem;
+}
+
+.main-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.stat-badge {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
 }
 
 .stat-number {
-  font-size: 2rem;
+  font-size: 1.1rem;
   font-weight: 700;
+  color: #fff;
 }
 
 .stat-label {
-  font-size: 0.9rem;
-  opacity: 0.9;
-  margin-top: 4px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.action-section {
-  background: white;
-  border-radius: 20px;
-  margin-bottom: 24px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  overflow: hidden;
-}
-
-.filter-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 32px;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid #e2e8f0;
-}
-
-.filter-title {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 1.2rem;
-  font-weight: 600;
-  color: #2d3748;
-}
-
-.filter-icon {
-  font-size: 1.3rem;
-  color: #2980b9;
-}
-
-.filter-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
+.subtitle {
+  color: rgba(255, 255, 255, 0.85);
+  margin: 4px 0 0;
+  font-size: 0.85rem;
 }
 
 .add-btn {
-  background: linear-gradient(135deg, #27ae60 0%, #2980b9 100%);
-  border: none;
-  border-radius: 12px;
-  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 10px;
+  padding: 8px 16px;
   font-weight: 600;
-  box-shadow: 0 4px 15px rgba(41, 128, 185, 0.18);
+  color: #fff;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .add-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(41, 128, 185, 0.23);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 
-.filters-grid {
-  display: grid;
-  grid-template-columns: 2fr;
-  gap: 24px;
-  padding: 32px;
-  background: white;
+.btn-icon {
+  font-size: 0.9rem;
 }
 
-.filter-item {
+/* Search Section */
+.search-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.search-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
-.search-item {
-  grid-column: span 1;
-}
-
-.filter-label {
+.search-input-wrapper {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: #4a5568;
-  margin-bottom: 4px;
-}
-
-.filter-label .el-icon {
-  font-size: 1rem;
-  color: #2980b9;
-}
-
-.filter-input {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 0 12px;
+  border: 1px solid #e2e8f0;
   transition: all 0.3s;
 }
 
-.search-active {
-  color: #27ae60;
-  animation: pulse 2s infinite;
+.search-input-wrapper:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+.search-icon {
+  color: #94a3b8;
 }
 
-.table-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+.search-input :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  background: transparent;
+}
+
+.search-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-  margin-bottom: 16px;
-}
-
-.modern-table {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.action-buttons-table {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-.result-section {
-  background: white;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  text-align: center;
-}
-
-.result-info {
-  color: #7f8c8d;
-  font-size: 0.9rem;
-}
-
-@media (max-width:1200px) {
-  .header-content { flex-direction: column; align-items: flex-start; gap: 20px; }
-  .header-stats { align-self: stretch; justify-content: space-around; }
-  .filters-grid { grid-template-columns: 1fr; gap: 20px; }
-  .search-item { grid-column: span 1; }
-}
-
-@media (max-width:768px) {
-  .route-master-container { padding: 12px; }
-  .page-header { padding: 18px 10px; }
-  .main-title { font-size: 1.5rem; }
-  .filter-header { flex-direction: column; gap: 16px; align-items: stretch; padding: 16px 10px; }
-  .filter-actions>* { flex: 1; }
-  .filters-grid { grid-template-columns: 1fr; gap: 14px; padding: 14px 8px; }
-  .search-item { grid-column: span 1; }
-  .stat-card { min-width: auto; flex: 1; }
-}
-
-@media (max-width:480px) {
-  .main-title { font-size: 1.2rem; flex-direction: column; align-items: flex-start; gap: 8px; }
-}
-
-:deep(.el-table th) {
-  background-color: #f8fafc;
-  color: #2d3748;
+  border-radius: 8px;
+  padding: 8px 20px;
   font-weight: 600;
 }
 
+/* Table Section */
+.table-section {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.modern-table {
+  width: 100%;
+}
+
+.code-cell {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-weight: 600;
+  color: #667eea;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.name-cell {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.status-tag {
+  border-radius: 12px;
+  font-size: 11px;
+  padding: 2px 8px;
+}
+
+.default-icon {
+  color: #10b981;
+  font-size: 1rem;
+}
+
+.empty-default {
+  color: #cbd5e1;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.action-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+}
+
+/* Footer */
+.footer-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.result-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.result-info strong {
+  color: #667eea;
+  font-weight: 700;
+}
+
+.compact-pagination {
+  --el-pagination-button-height: 28px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .route-master-container {
+    padding: 8px;
+  }
+  .page-header {
+    padding: 12px;
+  }
+  .main-title {
+    font-size: 1.2rem;
+  }
+  .title-row {
+    flex-wrap: wrap;
+  }
+  .search-section {
+    padding: 8px 12px;
+  }
+  .search-row {
+    flex-direction: column;
+  }
+  .search-input-wrapper {
+    width: 100%;
+  }
+  .search-btn {
+    width: 100%;
+  }
+  .footer-section {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .action-buttons {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .action-btn {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-badge {
+    display: none;
+  }
+  .main-title {
+    font-size: 1.1rem;
+  }
+}
+
+/* Table Styles Override */
+:deep(.el-table) {
+  --el-table-border-color: #e2e8f0;
+  --el-table-row-hover-bg-color: #f0f4ff;
+}
+
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background-color: #f7fafc;
+  background-color: #fafbfc;
 }
 
 :deep(.el-tag) {
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: 500;
+}
+
+/* Transition */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-slide-enter-from,
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 </style>

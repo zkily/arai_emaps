@@ -184,7 +184,32 @@ const orderModules = [
   }
 ]
 
-// 機能モジュール - 受入・在庫化
+// 機能モジュール - 外注加工管理
+const subcontractModules = [
+  {
+    path: '/erp/purchase/subcontract-order',
+    title: '外注加工指示',
+    description: '外注加工指示書発行・加工費単価管理',
+    icon: markRaw(Tickets),
+    gradient: 'linear-gradient(135deg, #f093fb, #f5576c)'
+  },
+  {
+    path: '/erp/purchase/material-supply',
+    title: '有償/無償支給管理',
+    description: '自社材料を外注先に送る処理',
+    icon: markRaw(Van),
+    gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)'
+  },
+  {
+    path: '/erp/purchase/subcontract-inventory',
+    title: '外注先在庫管理',
+    description: '外注先にある自社資産の把握',
+    icon: markRaw(DataAnalysis),
+    gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)'
+  }
+]
+
+// 機能モジュール - 受入・検収管理
 const receivingModules = [
   {
     path: '/erp/purchase/arrival',
@@ -196,36 +221,46 @@ const receivingModules = [
   {
     path: '/erp/purchase/receipt',
     title: '受入登録',
-    description: '現品票(QR)発行・受入検査・良品/不良振分',
+    description: '現品票(QR)発行・良品/不良振分',
     icon: markRaw(Van),
     gradient: 'linear-gradient(135deg, #67c23a, #85ce61)'
+  },
+  {
+    path: '/erp/purchase/inspection',
+    title: '受入検査',
+    description: '良品/不良/保留判定・ロット番号付与',
+    icon: markRaw(Document),
+    gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)'
   }
 ]
 
-// 機能モジュール - 精算
-const settlementModules = [
+// 機能モジュール - 債務管理
+const payableModules = [
   {
     path: '/erp/purchase/invoice-matching',
     title: '請求書照合',
-    description: '発注・受入・請求3点照合・支払依頼',
+    description: '発注・受入・請求3点照合',
     icon: markRaw(DataAnalysis),
     gradient: 'linear-gradient(135deg, #f56c6c, #f78989)'
-  }
-]
-
-// 機能モジュール - マスタ
-const masterModules = [
+  },
   {
-    path: '/erp/supplier',
-    title: '仕入先管理',
-    description: '仕入先マスタ',
+    path: '/erp/purchase/payment-schedule',
+    title: '支払予定表',
+    description: '支払予定管理・資金繰り計画',
+    icon: markRaw(Clock),
+    gradient: 'linear-gradient(135deg, #fa709a, #fee140)'
+  },
+  {
+    path: '/erp/purchase/bank-transfer',
+    title: 'FBデータ作成',
+    description: '全銀フォーマット出力・銀行振込',
     icon: markRaw(User),
     gradient: 'linear-gradient(135deg, #9254de, #b37feb)'
   }
 ]
 
 // 全機能モジュール
-const modules = [...orderModules, ...receivingModules, ...settlementModules, ...masterModules]
+const modules = [...orderModules, ...subcontractModules, ...receivingModules, ...payableModules]
 
 // 查看订单
 const viewOrder = (row: PurchaseOrder) => {

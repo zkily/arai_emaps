@@ -7,24 +7,24 @@
           <el-icon :size="28"><User /></el-icon>
         </div>
         <div class="header-text">
-          <h1>ユーザー管理</h1>
-          <p class="subtitle">アカウント管理・権限設定・セキュリティ</p>
+          <h1>{{ t('systemUser.user.title') }}</h1>
+          <p class="subtitle">{{ t('systemUser.user.subtitle') }}</p>
         </div>
       </div>
       <div class="header-stats">
         <div class="stat-item">
           <span class="stat-value">{{ pagination.total }}</span>
-          <span class="stat-label">総ユーザー</span>
+          <span class="stat-label">{{ t('systemUser.user.totalUsers') }}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
           <span class="stat-value active">{{ activeUserCount }}</span>
-          <span class="stat-label">有効</span>
+          <span class="stat-label">{{ t('systemUser.user.active') }}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
           <span class="stat-value locked">{{ lockedUserCount }}</span>
-          <span class="stat-label">ロック中</span>
+          <span class="stat-label">{{ t('systemUser.user.locked') }}</span>
         </div>
       </div>
     </div>
@@ -33,34 +33,34 @@
     <div class="filter-card">
       <div class="filter-grid">
         <div class="filter-item">
-          <label>キーワード</label>
+          <label>{{ t('systemUser.user.keyword') }}</label>
           <el-input 
             v-model="searchForm.keyword" 
-            placeholder="ユーザー名・氏名・メールで検索" 
+            :placeholder="t('systemUser.user.keywordPlaceholder')" 
             clearable 
             :prefix-icon="Search"
             size="default"
           />
         </div>
         <div class="filter-item">
-          <label>部門</label>
-          <el-select v-model="searchForm.department_id" placeholder="すべて" clearable size="default" style="width: 100%">
+          <label>{{ t('systemUser.user.department') }}</label>
+          <el-select v-model="searchForm.department_id" :placeholder="t('systemUser.user.all')" clearable size="default" style="width: 100%">
             <el-option v-for="d in departmentOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </div>
         <div class="filter-item">
-          <label>ステータス</label>
-          <el-select v-model="searchForm.status" placeholder="すべて" clearable size="default">
-            <el-option label="有効" value="active" />
-            <el-option label="ロック中" value="locked" />
+          <label>{{ t('systemUser.user.status') }}</label>
+          <el-select v-model="searchForm.status" :placeholder="t('systemUser.user.all')" clearable size="default">
+            <el-option :label="t('systemUser.user.statusActive')" value="active" />
+            <el-option :label="t('systemUser.user.statusLocked')" value="locked" />
           </el-select>
         </div>
       </div>
       <div class="toolbar-actions">
         <el-button type="primary" :icon="Plus" @click="handleAdd" class="btn-add">
-          <span>新規登録</span>
+          <span>{{ t('systemUser.user.addUser') }}</span>
         </el-button>
-        <el-button :icon="Printer" @click="handlePrint" class="btn-print">印刷</el-button>
+        <el-button :icon="Printer" @click="handlePrint" class="btn-print">{{ t('systemUser.user.print') }}</el-button>
       </div>
     </div>
 
@@ -74,12 +74,12 @@
         border
         size="default"
       >
-        <el-table-column prop="id" label="ID" width="80" align="center">
+        <el-table-column prop="id" :label="t('systemUser.user.id')" width="80" align="center">
           <template #default="{ row }">
             <span class="id-badge">{{ row.id }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="username" label="ユーザー名" width="130" align="center">
+        <el-table-column prop="username" :label="t('systemUser.user.username')" width="130" align="center">
           <template #default="{ row }">
             <div class="user-cell">
               <div class="avatar-mini">{{ row.username.charAt(0).toUpperCase() }}</div>
@@ -87,26 +87,26 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="full_name" label="氏名" width="100" align="center"/>
-        <el-table-column prop="email" label="メールアドレス" width="220">
+        <el-table-column prop="full_name" :label="t('systemUser.user.fullName')" width="100" align="center"/>
+        <el-table-column prop="email" :label="t('systemUser.user.email')" width="220">
           <template #default="{ row }">
             <span class="email-text">{{ row.email }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="department" label="部門" width="250" align="center">
+        <el-table-column prop="department" :label="t('systemUser.user.department')" width="250" align="center">
           <template #default="{ row }">
             <span class="dept-badge" v-if="row.department">{{ row.department }}</span>
             <span class="text-muted" v-else>—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="role" label="ロール" width="130" align="center">
+        <el-table-column prop="role" :label="t('systemUser.user.role')" width="130" align="center">
           <template #default="{ row }">
             <el-tag :type="getRoleType(row.role)" size="small" effect="dark" class="role-tag">
               {{ getRoleLabel(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="ステータス" width="110" align="center">
+        <el-table-column prop="status" :label="t('systemUser.user.statusCol')" width="110" align="center">
           <template #default="{ row }">
             <div class="status-indicator" :class="row.status">
               <span class="status-dot"></span>
@@ -114,9 +114,9 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="two_factor" label="2FA" width="70" align="center">
+        <el-table-column prop="two_factor" :label="t('systemUser.user.twoFA')" width="70" align="center">
           <template #default="{ row }">
-            <el-tooltip :content="row.two_factor ? '2FA有効' : '2FA無効'" placement="top">
+            <el-tooltip :content="row.two_factor ? t('systemUser.user.twoFAOn') : t('systemUser.user.twoFAOff')" placement="top">
               <div class="tfa-indicator" :class="{ enabled: row.two_factor }">
                 <el-icon :size="16">
                   <component :is="row.two_factor ? CircleCheck : CircleClose" />
@@ -125,18 +125,18 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column prop="last_login" label="最終ログイン" min-width="180" align="center">
+        <el-table-column prop="last_login" :label="t('systemUser.user.lastLogin')" min-width="180" align="center">
           <template #default="{ row }">
             <span class="login-time">{{ row.last_login || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="170" fixed="right" align="center">
+        <el-table-column :label="t('systemUser.user.actions')" width="170" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-cell">
-              <el-tooltip content="編集" placement="top">
+              <el-tooltip :content="t('systemUser.user.edit')" placement="top">
                 <el-button size="small" type="primary" circle :icon="Edit" @click="handleEdit(row)" />
               </el-tooltip>
-              <el-tooltip :content="row.status === 'locked' ? 'ロック解除' : 'ロック'" placement="top">
+              <el-tooltip :content="row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')" placement="top">
                 <el-button 
                   v-if="row.status === 'locked' || row.id !== userStore.user?.id"
                   size="small" 
@@ -147,7 +147,7 @@
                 />
                 <el-button v-else size="small" circle :icon="Lock" disabled class="btn-disabled" />
               </el-tooltip>
-              <el-tooltip content="パスワード再設定" placement="top">
+              <el-tooltip :content="t('systemUser.user.resetPwd')" placement="top">
                 <el-button size="small" type="info" circle :icon="Key" @click="handleResetPassword(row)" />
               </el-tooltip>
             </div>
@@ -157,7 +157,7 @@
 
       <div class="table-footer">
         <div class="footer-info">
-          表示: <strong>{{ userList.length }}</strong> / {{ pagination.total }} 件
+          {{ t('systemUser.user.displayCount', { shown: userList.length, total: pagination.total }) }}
         </div>
         <el-pagination
           v-model:current-page="pagination.page"
@@ -183,38 +183,38 @@
       :close-on-click-modal="false"
     >
       <el-form :model="userForm" :rules="formRules" ref="formRef" label-width="100px" label-position="left">
-        <el-form-item label="ユーザー名" prop="username">
-          <el-input v-model="userForm.username" placeholder="ユーザー名を入力" :disabled="isEdit" />
+        <el-form-item :label="t('systemUser.user.formUsername')" prop="username">
+          <el-input v-model="userForm.username" :placeholder="t('systemUser.user.formUsernamePlaceholder')" :disabled="isEdit" />
         </el-form-item>
-        <el-form-item label="氏名" prop="full_name">
-          <el-input v-model="userForm.full_name" placeholder="氏名を入力" />
+        <el-form-item :label="t('systemUser.user.formFullName')" prop="full_name">
+          <el-input v-model="userForm.full_name" :placeholder="t('systemUser.user.formFullNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="メール" prop="email">
-          <el-input v-model="userForm.email" type="email" placeholder="メールアドレスを入力" />
+        <el-form-item :label="t('systemUser.user.formEmail')" prop="email">
+          <el-input v-model="userForm.email" type="email" :placeholder="t('systemUser.user.formEmailPlaceholder')" />
         </el-form-item>
-        <el-form-item label="部門" prop="department_id">
-          <el-select v-model="userForm.department_id" placeholder="部門を選択" clearable style="width: 100%">
+        <el-form-item :label="t('systemUser.user.formDept')" prop="department_id">
+          <el-select v-model="userForm.department_id" :placeholder="t('systemUser.user.formDeptPlaceholder')" clearable style="width: 100%">
             <el-option v-for="org in departmentOptions" :key="org.id" :label="org.name" :value="org.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="ロール" prop="role_id">
-          <el-select v-model="userForm.role_id" placeholder="ロールを選択" style="width: 100%">
+        <el-form-item :label="t('systemUser.user.formRole')" prop="role_id">
+          <el-select v-model="userForm.role_id" :placeholder="t('systemUser.user.formRolePlaceholder')" style="width: 100%">
             <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="二要素認証">
-          <el-switch v-model="userForm.two_factor_enabled" active-text="有効" inactive-text="無効" />
+        <el-form-item :label="t('systemUser.user.form2FA')">
+          <el-switch v-model="userForm.two_factor_enabled" :active-text="t('systemUser.user.form2FAOn')" :inactive-text="t('systemUser.user.form2FAOff')" />
         </el-form-item>
-        <el-form-item label="パスワード" prop="password" v-if="!isEdit">
-          <el-input v-model="userForm.password" type="password" show-password placeholder="8文字以上" />
+        <el-form-item :label="t('systemUser.user.formPassword')" prop="password" v-if="!isEdit">
+          <el-input v-model="userForm.password" type="password" show-password :placeholder="t('systemUser.user.formPasswordPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">キャンセル</el-button>
+          <el-button @click="dialogVisible = false">{{ t('systemUser.user.cancel') }}</el-button>
           <el-button type="primary" @click="handleSubmit" :loading="submitting">
             <el-icon v-if="!submitting"><Check /></el-icon>
-            保存
+            {{ t('systemUser.user.save') }}
           </el-button>
         </div>
       </template>
@@ -223,7 +223,7 @@
     <!-- パスワード再設定ダイアログ -->
     <el-dialog
       v-model="resetPwdVisible"
-      title="パスワード再設定"
+      :title="t('systemUser.user.resetPwdTitle')"
       width="420px"
       destroy-on-close
       :close-on-click-modal="false"
@@ -236,30 +236,30 @@
         label-width="140px"
         label-position="left"
       >
-        <el-form-item label="新しいパスワード" prop="new_password">
+        <el-form-item :label="t('systemUser.user.newPassword')" prop="new_password">
           <el-input
             v-model="resetPwdForm.new_password"
             type="password"
             show-password
-            placeholder="8文字以上"
+            :placeholder="t('systemUser.user.formPasswordPlaceholder')"
             autocomplete="new-password"
           />
         </el-form-item>
-        <el-form-item label="パスワード（確認）" prop="confirm_password">
+        <el-form-item :label="t('systemUser.user.confirmPassword')" prop="confirm_password">
           <el-input
             v-model="resetPwdForm.confirm_password"
             type="password"
             show-password
-            placeholder="同じパスワードを再入力"
+            :placeholder="t('systemUser.user.confirmPasswordPlaceholder')"
             autocomplete="new-password"
           />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="resetPwdVisible = false">キャンセル</el-button>
+          <el-button @click="resetPwdVisible = false">{{ t('systemUser.user.cancel') }}</el-button>
           <el-button type="primary" @click="handleResetPasswordSubmit" :loading="resetPwdSubmitting">
-            更新
+            {{ t('systemUser.user.update') }}
           </el-button>
         </div>
       </template>
@@ -269,6 +269,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Printer, CircleCheck, CircleClose, User, Edit, Lock, Unlock, Key, Check } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -276,6 +277,7 @@ import * as systemApi from '@/api/system'
 import type { UserListItem, PaginatedUserResponse } from '@/api/system'
 import { useUserStore } from '@/modules/auth/stores/user'
 
+const { t } = useI18n()
 const userStore = useUserStore()
 
 // Computed stats for header
@@ -287,17 +289,18 @@ const tableRowClassName = ({ row }: { row: UserListItem }) => {
   return row.status === 'locked' ? 'row-locked' : ''
 }
 
-// Role label mapping（管理者・一般ユーザー・マネージャー・作業者・ゲスト・閲覧者）
+// Role label mapping（i18n）
 const getRoleLabel = (role: string) => {
-  const labels: Record<string, string> = {
-    admin: '管理者',
-    user: '一般ユーザー',
-    manager: 'マネージャー',
-    worker: '作業者',
-    guest: 'ゲスト',
-    viewer: '閲覧者',
+  const keyMap: Record<string, string> = {
+    admin: 'roleAdmin',
+    user: 'roleUser',
+    manager: 'roleManager',
+    worker: 'roleWorker',
+    guest: 'roleGuest',
+    viewer: 'roleViewer',
   }
-  return labels[role] || role
+  const key = keyMap[role]
+  return key ? t(`systemUser.user.${key}`) : role
 }
 const loading = ref(false)
 const submitting = ref(false)
@@ -312,21 +315,21 @@ const resetPwdFormRef = ref<FormInstance>()
 const resetPwdSubmitting = ref(false)
 const validateConfirmPassword = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
   if (value !== resetPwdForm.new_password) {
-    callback(new Error('パスワードが一致しません'))
+    callback(new Error(t('systemUser.user.validationPasswordMismatch')))
   } else {
     callback()
   }
 }
-const resetPwdRules: FormRules = {
+const resetPwdRules = computed<FormRules>(() => ({
   new_password: [
-    { required: true, message: '新しいパスワードを入力してください', trigger: 'blur' },
-    { min: 8, message: '8文字以上で入力してください', trigger: 'blur' },
+    { required: true, message: t('systemUser.user.validationNewPassword'), trigger: 'blur' },
+    { min: 8, message: t('systemUser.user.validationNewPasswordMin'), trigger: 'blur' },
   ],
   confirm_password: [
-    { required: true, message: '確認用パスワードを入力してください', trigger: 'blur' },
+    { required: true, message: t('systemUser.user.validationConfirmPassword'), trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' },
   ],
-}
+}))
 
 const searchForm = reactive({
   keyword: '',
@@ -355,18 +358,18 @@ const roleOptions = ref<{ id: number; name: string }[]>([])
 const departmentOptions = ref<{ id: number; name: string }[]>([])
 
 const formRules = computed<FormRules>(() => ({
-  username: [{ required: true, message: 'ユーザー名を入力してください', trigger: 'blur' }],
-  full_name: [{ required: true, message: '氏名を入力してください', trigger: 'blur' }],
+  username: [{ required: true, message: t('systemUser.user.validationUsername'), trigger: 'blur' }],
+  full_name: [{ required: true, message: t('systemUser.user.validationFullName'), trigger: 'blur' }],
   email: [
-    { required: true, message: 'メールを入力してください', trigger: 'blur' },
-    { type: 'email', message: '有効なメールアドレスを入力してください', trigger: 'blur' },
+    { required: true, message: t('systemUser.user.validationEmail'), trigger: 'blur' },
+    { type: 'email', message: t('systemUser.user.validationEmailInvalid'), trigger: 'blur' },
   ],
-  role_id: [{ required: true, message: 'ロールを選択してください', trigger: 'change' }],
-  ...(isEdit.value ? {} : { password: [{ required: true, message: 'パスワードを入力してください（8文字以上）', trigger: 'blur' }] }),
+  role_id: [{ required: true, message: t('systemUser.user.validationRole'), trigger: 'change' }],
+  ...(isEdit.value ? {} : { password: [{ required: true, message: t('systemUser.user.validationPassword'), trigger: 'blur' }] }),
 }))
 
 const userList = ref<UserListItem[]>([])
-const dialogTitle = computed(() => (isEdit.value ? 'ユーザー編集' : 'ユーザー新規登録'))
+const dialogTitle = computed(() => (isEdit.value ? t('systemUser.user.formEditTitle') : t('systemUser.user.formAddTitle')))
 
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 const getRoleType = (role: string): TagType => {
@@ -381,8 +384,9 @@ const getRoleType = (role: string): TagType => {
   return types[role] || 'info'
 }
 const getStatusLabel = (status: string) => {
-  const labels: Record<string, string> = { active: '有効', locked: 'ロック中', inactive: '無効' }
-  return labels[status] || status
+  const keyMap: Record<string, string> = { active: 'statusActive', locked: 'statusLocked', inactive: 'statusInactive' }
+  const key = keyMap[status]
+  return key ? t(`systemUser.user.${key}`) : status
 }
 
 async function fetchUsers() {
@@ -398,7 +402,7 @@ async function fetchUsers() {
     userList.value = res.items ?? []
     pagination.total = res.total ?? 0
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || 'ユーザー一覧の取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.user.msgListError'))
   } finally {
     loading.value = false
   }
@@ -444,19 +448,19 @@ const handleAdd = () => {
   })
 }
 
-const roleCodeToName: Record<string, string> = {
-  admin: '管理者',
-  user: '一般ユーザー',
-  manager: 'マネージャー',
-  worker: '作業者',
-  guest: 'ゲスト',
-  viewer: '閲覧者',
-}
+const roleCodeToName = computed(() => ({
+  admin: t('systemUser.user.roleAdmin'),
+  user: t('systemUser.user.roleUser'),
+  manager: t('systemUser.user.roleManager'),
+  worker: t('systemUser.user.roleWorker'),
+  guest: t('systemUser.user.roleGuest'),
+  viewer: t('systemUser.user.roleViewer'),
+}))
 
 const handleEdit = async (row: UserListItem) => {
   isEdit.value = true
   await loadOptions()
-  const roleName = roleCodeToName[row.role] || row.role
+  const roleName = roleCodeToName.value[row.role] || row.role
   const matchedRole = roleOptions.value.find((r) => r.name === roleName)
   Object.assign(userForm, {
     id: row.id,
@@ -475,21 +479,25 @@ const handleEdit = async (row: UserListItem) => {
 
 const handleToggleLock = async (row: UserListItem) => {
   if (row.status !== 'locked' && row.id === userStore.user?.id) {
-    ElMessage.warning('自分自身をロックすることはできません。')
+    ElMessage.warning(t('systemUser.user.msgCannotLockSelf'))
     return
   }
-  const action = row.status === 'locked' ? 'ロック解除' : 'ロック'
+  const actionKey = row.status === 'locked' ? 'unlock' : 'lock'
+  const action = row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')
   try {
-    await ElMessageBox.confirm(`${row.full_name || row.username} を${action}しますか？`, '確認', { type: 'warning' })
+    const msg = row.status === 'locked'
+      ? t('systemUser.user.msgUnlockConfirm', { name: row.full_name || row.username })
+      : t('systemUser.user.msgLockConfirm', { name: row.full_name || row.username })
+    await ElMessageBox.confirm(msg, t('common.confirm'), { type: 'warning' })
     if (row.status === 'locked') {
       await systemApi.unlockUser(row.id)
     } else {
       await systemApi.lockUser(row.id)
     }
-    ElMessage.success(`${action}しました`)
+    ElMessage.success(t('systemUser.user.msgLockSuccess', { action }))
     fetchUsers()
   } catch (e: unknown) {
-    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || `${action}に失敗しました`)
+    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || t('systemUser.user.msgResetError'))
   }
 }
 
@@ -507,10 +515,10 @@ const handleResetPasswordSubmit = async () => {
   resetPwdSubmitting.value = true
   try {
     await systemApi.resetUserPassword(resetPwdUserId.value, { new_password: resetPwdForm.new_password })
-    ElMessage.success('パスワードを更新しました')
+    ElMessage.success(t('systemUser.user.msgResetSuccess'))
     resetPwdVisible.value = false
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || 'パスワードの更新に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.user.msgResetError'))
   } finally {
     resetPwdSubmitting.value = false
   }
@@ -519,15 +527,29 @@ const handleResetPasswordSubmit = async () => {
 const handlePrint = () => {
   const rows = userList.value
   const roleLabels: Record<string, string> = {
-    admin: '管理者',
-    user: '一般ユーザー',
-    manager: 'マネージャー',
-    worker: '作業者',
-    guest: 'ゲスト',
-    viewer: '閲覧者',
+    admin: t('systemUser.user.roleAdmin'),
+    user: t('systemUser.user.roleUser'),
+    manager: t('systemUser.user.roleManager'),
+    worker: t('systemUser.user.roleWorker'),
+    guest: t('systemUser.user.roleGuest'),
+    viewer: t('systemUser.user.roleViewer'),
   }
-  const statusLabels: Record<string, string> = { active: '有効', locked: 'ロック中', inactive: '無効' }
-  const headers = ['ID', 'ユーザー名', '氏名', 'メールアドレス', '部門', 'ロール', 'ステータス', '2FA', '最終ログイン']
+  const statusLabels: Record<string, string> = {
+    active: t('systemUser.user.statusActive'),
+    locked: t('systemUser.user.statusLocked'),
+    inactive: t('systemUser.user.statusInactive'),
+  }
+  const headers = [
+    t('systemUser.user.id'),
+    t('systemUser.user.username'),
+    t('systemUser.user.fullName'),
+    t('systemUser.user.email'),
+    t('systemUser.user.department'),
+    t('systemUser.user.role'),
+    t('systemUser.user.statusCol'),
+    t('systemUser.user.twoFA'),
+    t('systemUser.user.lastLogin'),
+  ]
   const body = rows.map((r) => [
     r.id,
     r.username,
@@ -536,7 +558,7 @@ const handlePrint = () => {
     r.department || '—',
     roleLabels[r.role] || r.role,
     statusLabels[r.status] || r.status,
-    r.two_factor ? '有効' : '—',
+    r.two_factor ? t('systemUser.user.form2FAOn') : '—',
     r.last_login || '—',
   ])
   const tableRows = body.map((cells) => `<tr>${cells.map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`).join('')
@@ -546,7 +568,7 @@ const handlePrint = () => {
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ユーザー一覧</title>
+  <title>${escapeHtml(t('systemUser.user.printTitle'))}</title>
   <style>
     @page { size: A4 landscape; margin: 12mm; }
     body { margin: 0; font-family: sans-serif; }
@@ -556,8 +578,8 @@ const handlePrint = () => {
   </style>
 </head>
 <body>
-  <h2>ユーザー一覧</h2>
-  <p>印刷日時: ${new Date().toLocaleString('ja-JP')} &nbsp; 件数: ${rows.length}件</p>
+  <h2>${escapeHtml(t('systemUser.user.printTitle'))}</h2>
+  <p>${t('systemUser.user.printDateCount', { date: new Date().toLocaleString(), n: rows.length })}</p>
   <table>
     <thead>${headerRow}</thead>
     <tbody>${tableRows}</tbody>
@@ -566,7 +588,7 @@ const handlePrint = () => {
 </html>`
   const w = window.open('', '_blank')
   if (!w) {
-    ElMessage.warning('ポップアップがブロックされています。印刷を許可してください。')
+    ElMessage.warning(t('systemUser.user.popupBlocked'))
     return
   }
   w.document.write(html)
@@ -615,7 +637,7 @@ const handleSubmit = async () => {
         role_id: roleId,
         two_factor_enabled: userForm.two_factor_enabled,
       })
-      ElMessage.success('更新しました')
+      ElMessage.success(t('systemUser.user.msgSaveSuccess'))
     } else {
       await systemApi.createUser({
         username: userForm.username,
@@ -626,12 +648,12 @@ const handleSubmit = async () => {
         two_factor_enabled: userForm.two_factor_enabled,
         password: userForm.password,
       })
-      ElMessage.success('登録しました')
+      ElMessage.success(t('systemUser.user.msgCreateSuccess'))
     }
     dialogVisible.value = false
     fetchUsers()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '保存に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.user.msgSaveFailed'))
   } finally {
     submitting.value = false
   }

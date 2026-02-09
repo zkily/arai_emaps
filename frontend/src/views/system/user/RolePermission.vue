@@ -7,19 +7,19 @@
           <el-icon :size="28"><Key /></el-icon>
         </div>
         <div class="header-text">
-          <h1>権限・ロール管理</h1>
-          <p class="subtitle">RBAC・メニュー権限・操作権限・データ範囲</p>
+          <h1>{{ t('systemUser.role.title') }}</h1>
+          <p class="subtitle">{{ t('systemUser.role.subtitle') }}</p>
         </div>
       </div>
       <div class="header-stats">
         <div class="stat-item">
           <span class="stat-value">{{ roleList.length }}</span>
-          <span class="stat-label">ロール数</span>
+          <span class="stat-label">{{ t('systemUser.role.roleCount') }}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
           <span class="stat-value highlight">{{ totalUserCount }}</span>
-          <span class="stat-label">総ユーザー</span>
+          <span class="stat-label">{{ t('systemUser.role.totalUsers') }}</span>
         </div>
       </div>
     </div>
@@ -31,10 +31,10 @@
         <div class="panel-header">
           <div class="panel-title">
             <el-icon><List /></el-icon>
-            <span>ロール一覧</span>
+            <span>{{ t('systemUser.role.roleList') }}</span>
           </div>
           <el-button type="primary" size="small" :icon="Plus" @click="handleAddRole" class="btn-add-sm">
-            追加
+            {{ t('systemUser.role.add') }}
           </el-button>
         </div>
         <div class="panel-body">
@@ -47,7 +47,7 @@
             :row-class-name="roleRowClassName"
             :header-cell-style="{ background: '#f8fafc', color: '#475569', fontWeight: '600', fontSize: '12px', padding: '8px 6px' }"
           >
-            <el-table-column prop="name" label="ロール名" min-width="90">
+            <el-table-column prop="name" :label="t('systemUser.role.roleName')" min-width="90">
               <template #default="{ row }">
                 <div class="role-name-cell">
                   <div class="role-avatar" :style="{ background: getRoleColor(row.name) }">
@@ -55,23 +55,23 @@
                   </div>
                   <div class="role-info">
                     <span class="role-name">{{ row.name }}</span>
-                    <span class="role-badge" v-if="row.is_system">システム</span>
+                    <span class="role-badge" v-if="row.is_system">{{ t('systemUser.role.systemRole') }}</span>
                   </div>
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="user_count" label="ユーザー" width="80" align="center">
+            <el-table-column prop="user_count" :label="t('systemUser.role.users')" width="80" align="center">
               <template #default="{ row }">
                 <span class="user-count-badge">{{ row.user_count }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="85" align="center">
+            <el-table-column :label="t('systemUser.role.actions')" width="85" align="center">
               <template #default="{ row }">
                 <div class="action-cell">
-                  <el-tooltip content="編集" placement="top">
+                  <el-tooltip :content="t('systemUser.role.edit')" placement="top">
                     <el-button size="small" type="primary" circle :icon="Edit" @click.stop="handleEditRole(row)" />
                   </el-tooltip>
-                  <el-tooltip :content="row.is_system ? 'システムロールは削除不可' : '削除'" placement="top">
+                  <el-tooltip :content="row.is_system ? t('systemUser.role.systemRoleNoDelete') : t('systemUser.role.delete')" placement="top">
                     <el-button 
                       size="small" 
                       type="danger" 
@@ -95,8 +95,8 @@
           <div class="panel-title">
             <el-icon><Setting /></el-icon>
             <span v-if="selectedRole">{{ selectedRole.name }}</span>
-            <span v-else class="text-muted">ロールを選択</span>
-            <span class="panel-subtitle" v-if="selectedRole">権限設定</span>
+            <span v-else class="text-muted">{{ t('systemUser.role.selectRole') }}</span>
+            <span class="panel-subtitle" v-if="selectedRole">{{ t('systemUser.role.permissionSettings') }}</span>
           </div>
           <el-button 
             v-if="selectedRole" 
@@ -105,7 +105,7 @@
             :loading="saveLoading"
             :icon="Check"
           >
-            保存
+            {{ t('systemUser.role.save') }}
           </el-button>
         </div>
 
@@ -116,7 +116,7 @@
               <template #label>
                 <div class="tab-label">
                   <el-icon><Menu /></el-icon>
-                  <span>メニュー権限</span>
+                  <span>{{ t('systemUser.role.menuPermission') }}</span>
                 </div>
               </template>
               <div class="tab-content">
@@ -139,13 +139,13 @@
               <template #label>
                 <div class="tab-label">
                   <el-icon><Operation /></el-icon>
-                  <span>操作権限</span>
+                  <span>{{ t('systemUser.role.operationPermission') }}</span>
                 </div>
               </template>
               <div class="tab-content">
                 <div class="operation-hint">
                   <el-icon><InfoFilled /></el-icon>
-                  各モジュールで「新規・編集・削除・出力・承認」の可否を設定
+                  {{ t('systemUser.role.operationHint') }}
                 </div>
                 <el-table 
                   :data="operationPermissions" 
@@ -153,32 +153,32 @@
                   border
                   :header-cell-style="{ background: '#f8fafc', color: '#475569', fontWeight: '600', fontSize: '12px', padding: '8px' }"
                 >
-                  <el-table-column prop="module" label="モジュール" width="130">
+                  <el-table-column prop="module" :label="t('systemUser.role.module')" width="130">
                     <template #default="{ row }">
                       <span class="module-name">{{ row.module }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="新規" width="65" align="center">
+                  <el-table-column :label="t('systemUser.role.create')" width="65" align="center">
                     <template #default="{ row }">
                       <el-checkbox v-model="row.can_create" class="check-primary" />
                     </template>
                   </el-table-column>
-                  <el-table-column label="編集" width="65" align="center">
+                  <el-table-column :label="t('systemUser.role.edit')" width="65" align="center">
                     <template #default="{ row }">
                       <el-checkbox v-model="row.can_edit" class="check-info" />
                     </template>
                   </el-table-column>
-                  <el-table-column label="削除" width="65" align="center">
+                  <el-table-column :label="t('systemUser.role.delete')" width="65" align="center">
                     <template #default="{ row }">
                       <el-checkbox v-model="row.can_delete" class="check-danger" />
                     </template>
                   </el-table-column>
-                  <el-table-column label="出力" width="65" align="center">
+                  <el-table-column :label="t('systemUser.role.export')" width="65" align="center">
                     <template #default="{ row }">
                       <el-checkbox v-model="row.can_export" class="check-success" />
                     </template>
                   </el-table-column>
-                  <el-table-column label="承認" width="65" align="center">
+                  <el-table-column :label="t('systemUser.role.approve')" width="65" align="center">
                     <template #default="{ row }">
                       <el-checkbox v-model="row.can_approve" class="check-warning" />
                     </template>
@@ -192,12 +192,12 @@
               <template #label>
                 <div class="tab-label">
                   <el-icon><DataAnalysis /></el-icon>
-                  <span>データ範囲</span>
+                  <span>{{ t('systemUser.role.dataScope') }}</span>
                 </div>
               </template>
               <div class="tab-content">
                 <div class="data-scope-section">
-                  <label class="section-label">データ参照範囲</label>
+                  <label class="section-label">{{ t('systemUser.role.dataScopeLabel') }}</label>
                   <div class="scope-options">
                     <div 
                       v-for="option in scopeOptions" 
@@ -217,11 +217,11 @@
                 
                 <transition name="fade">
                   <div class="custom-dept-section" v-if="dataScope === 'custom'">
-                    <label class="section-label">カスタム部門</label>
+                    <label class="section-label">{{ t('systemUser.role.customDept') }}</label>
                     <el-select 
                       v-model="customDepartments" 
                       multiple 
-                      placeholder="部門を選択" 
+                      :placeholder="t('systemUser.role.selectDept')" 
                       style="width: 100%"
                       filterable
                     >
@@ -244,8 +244,8 @@
           <div class="empty-icon">
             <el-icon :size="48"><Select /></el-icon>
           </div>
-          <p class="empty-title">ロールを選択してください</p>
-          <p class="empty-desc">左側のロール一覧からロールを選択すると、権限設定が表示されます</p>
+          <p class="empty-title">{{ t('systemUser.role.emptyTitle') }}</p>
+          <p class="empty-desc">{{ t('systemUser.role.emptyDesc') }}</p>
         </div>
       </div>
     </div>
@@ -260,19 +260,19 @@
       :close-on-click-modal="false"
     >
       <el-form :model="roleForm" :rules="roleFormRules" ref="roleFormRef" label-width="90px" label-position="left">
-        <el-form-item label="ロール名" prop="name">
-          <el-input v-model="roleForm.name" placeholder="ロール名を入力" />
+        <el-form-item :label="t('systemUser.role.formRoleName')" prop="name">
+          <el-input v-model="roleForm.name" :placeholder="t('systemUser.role.formRoleNamePlaceholder')" />
         </el-form-item>
-        <el-form-item label="説明">
-          <el-input v-model="roleForm.description" type="textarea" :rows="2" placeholder="説明（任意）" />
+        <el-form-item :label="t('systemUser.role.formDesc')">
+          <el-input v-model="roleForm.description" type="textarea" :rows="2" :placeholder="t('systemUser.role.formDescPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="roleDialogVisible = false">キャンセル</el-button>
+          <el-button @click="roleDialogVisible = false">{{ t('systemUser.role.cancel') }}</el-button>
           <el-button type="primary" @click="handleRoleSubmit" :loading="roleSubmitting">
             <el-icon v-if="!roleSubmitting"><Check /></el-icon>
-            保存
+            {{ t('systemUser.role.save') }}
           </el-button>
         </div>
       </template>
@@ -282,13 +282,16 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Key, List, Edit, Delete, Setting, Check, Menu, Operation, DataAnalysis, InfoFilled, Select, User, OfficeBuilding, HomeFilled, Grid } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
 import type { Role, RoleListItem, MenuTreeNode, OperationPermission } from '@/api/system'
 
-/** 操作権限で設定可能なモジュール一覧 */
+const { t } = useI18n()
+
+/** 操作権限で設定可能なモジュール一覧（API 互換のためキーは固定） */
 const OPERATION_MODULES = [
   '販売管理',
   '購買管理',
@@ -300,14 +303,14 @@ const OPERATION_MODULES = [
   'システム管理',
 ] as const
 
-/** データ範囲オプション */
-const scopeOptions = [
-  { value: 'self', label: '自分のみ', desc: '自分が作成したデータ', icon: User },
-  { value: 'department', label: '自部門', desc: '所属部門のデータ', icon: OfficeBuilding },
-  { value: 'department_below', label: '部門以下', desc: '配下部門を含む', icon: HomeFilled },
-  { value: 'all', label: '全社', desc: '全データにアクセス', icon: Grid },
-  { value: 'custom', label: 'カスタム', desc: '指定部門のみ', icon: Setting },
-] as const
+/** データ範囲オプション（ラベルは i18n） */
+const scopeOptions = computed(() => [
+  { value: 'self' as const, label: t('systemUser.role.scopeSelf'), desc: t('systemUser.role.scopeSelfDesc'), icon: User },
+  { value: 'department' as const, label: t('systemUser.role.scopeDept'), desc: t('systemUser.role.scopeDeptDesc'), icon: OfficeBuilding },
+  { value: 'department_below' as const, label: t('systemUser.role.scopeDeptBelow'), desc: t('systemUser.role.scopeDeptBelowDesc'), icon: HomeFilled },
+  { value: 'all' as const, label: t('systemUser.role.scopeAll'), desc: t('systemUser.role.scopeAllDesc'), icon: Grid },
+  { value: 'custom' as const, label: t('systemUser.role.scopeCustom'), desc: t('systemUser.role.scopeCustomDesc'), icon: Setting },
+])
 
 // Computed
 const totalUserCount = computed(() => roleList.value.reduce((sum, r) => sum + (r.user_count || 0), 0))
@@ -333,7 +336,7 @@ const rolesLoading = ref(false)
 const menuTreeLoading = ref(false)
 const saveLoading = ref(false)
 const roleDialogVisible = ref(false)
-const roleDialogTitle = ref('ロール追加')
+const roleDialogTitle = ref('')
 const roleSubmitting = ref(false)
 const roleFormRef = ref<FormInstance>()
 
@@ -344,9 +347,9 @@ const departmentOptions = ref<{ id: number; name: string }[]>([])
 const operationPermissions = ref<OperationPermission[]>([])
 
 const roleForm = ref({ id: 0, name: '', description: '' })
-const roleFormRules: FormRules = {
-  name: [{ required: true, message: 'ロール名を入力してください', trigger: 'blur' }],
-}
+const roleFormRules = computed<FormRules>(() => ({
+  name: [{ required: true, message: t('systemUser.role.validationRoleName'), trigger: 'blur' }],
+}))
 
 async function fetchRoles() {
   rolesLoading.value = true
@@ -354,7 +357,7 @@ async function fetchRoles() {
     const res = (await systemApi.getRoles()) as unknown as RoleListItem[]
     roleList.value = Array.isArray(res) ? res : []
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || 'ロール一覧の取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgRolesError'))
   } finally {
     rolesLoading.value = false
   }
@@ -366,7 +369,7 @@ async function fetchMenuTree() {
     const res = (await systemApi.getMenuTree()) as unknown as MenuTreeNode[]
     menuTree.value = Array.isArray(res) ? res : []
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || 'メニューツリーの取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgMenuError'))
   } finally {
     menuTreeLoading.value = false
   }
@@ -406,20 +409,20 @@ async function handleRoleSelect(row: RoleListItem | null) {
     customDepartments.value = role.custom_departments || []
     operationPermissions.value = buildOperationPermissionsFromRole(role)
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || 'ロール詳細の取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgRoleDetailError'))
     selectedRole.value = null
     operationPermissions.value = []
   }
 }
 
 const handleAddRole = () => {
-  roleDialogTitle.value = 'ロール追加'
+  roleDialogTitle.value = t('systemUser.role.formAddTitle')
   roleForm.value = { id: 0, name: '', description: '' }
   roleDialogVisible.value = true
 }
 
 const handleEditRole = (row: RoleListItem) => {
-  roleDialogTitle.value = 'ロール編集'
+  roleDialogTitle.value = t('systemUser.role.formEditTitle')
   roleForm.value = { id: row.id, name: row.name, description: '' }
   roleDialogVisible.value = true
 }
@@ -434,18 +437,18 @@ const handleRoleSubmit = async () => {
         name: roleForm.value.name,
         description: roleForm.value.description || undefined,
       })
-      ElMessage.success('更新しました')
+      ElMessage.success(t('systemUser.role.msgSaveSuccess'))
     } else {
       await systemApi.createRole({
         name: roleForm.value.name,
         description: roleForm.value.description || undefined,
       })
-      ElMessage.success('登録しました')
+      ElMessage.success(t('systemUser.role.msgCreateSuccess'))
     }
     roleDialogVisible.value = false
     fetchRoles()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '保存に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgSaveFailed'))
   } finally {
     roleSubmitting.value = false
   }
@@ -453,13 +456,13 @@ const handleRoleSubmit = async () => {
 
 const handleDeleteRole = async (row: RoleListItem) => {
   try {
-    await ElMessageBox.confirm(`ロール「${row.name}」を削除しますか？`, '確認', { type: 'warning' })
+    await ElMessageBox.confirm(t('systemUser.role.msgDeleteConfirm', { name: row.name }), t('common.confirm'), { type: 'warning' })
     await systemApi.deleteRole(row.id)
-    ElMessage.success('削除しました')
+    ElMessage.success(t('systemUser.role.msgDeleteSuccess'))
     if (selectedRole.value?.id === row.id) selectedRole.value = null
     await fetchRoles()
   } catch (e: unknown) {
-    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || '削除に失敗しました')
+    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || t('systemUser.role.msgDeleteError'))
   }
 }
 
@@ -476,12 +479,12 @@ const handleSavePermission = async () => {
       data_scope: dataScope.value,
       custom_departments: dataScope.value === 'custom' ? customDepartments.value : undefined,
     })
-    ElMessage.success('権限設定を保存しました')
+    ElMessage.success(t('systemUser.role.msgPermSaveSuccess'))
     const role = (await systemApi.getRole(selectedRole.value.id)) as unknown as Role
     selectedRole.value = role
     operationPermissions.value = buildOperationPermissionsFromRole(role)
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '保存に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgSaveFailed'))
   } finally {
     saveLoading.value = false
   }

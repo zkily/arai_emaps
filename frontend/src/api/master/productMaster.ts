@@ -13,6 +13,7 @@ export interface ProductListParams {
   material_cd?: string
   route_cd?: string
   location_cd?: string
+  destination_cd?: string
   page?: number
   pageSize?: number
 }
@@ -26,6 +27,11 @@ export interface ProductListResponse {
 
 export function getProductList(params: ProductListParams): Promise<ProductListResponse> {
   return request.get('/api/master/products', { params }) as Promise<ProductListResponse>
+}
+
+/** 月注文一括登録用：指定納入先の製品のみ（destination_cd=納入先、status=active、product_type=量産品） */
+export function getProductsByDestinationForBatch(destinationCd: string): Promise<ProductListResponse> {
+  return request.get(`/api/master/products/by-destination/${encodeURIComponent(destinationCd)}`) as Promise<ProductListResponse>
 }
 
 export function getMaxProductCd(): Promise<number> {

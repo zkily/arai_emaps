@@ -5,18 +5,18 @@
         <div class="title-section">
           <h1 class="main-title">
             <el-icon class="title-icon"><OfficeBuilding /></el-icon>
-            仕入先マスタ管理
+            {{ t('master.supplier.title') }}
           </h1>
-          <p class="subtitle">仕入先情報の登録・編集・管理を行います</p>
+          <p class="subtitle">{{ t('master.supplier.subtitle') }}</p>
         </div>
         <div class="header-stats">
           <div class="stat-card">
             <div class="stat-number">{{ dataList.length }}</div>
-            <div class="stat-label">総仕入先数</div>
+            <div class="stat-label">{{ t('master.supplier.totalSuppliers') }}</div>
           </div>
           <div class="stat-card">
             <div class="stat-number">{{ dataList.filter((s) => s.email).length }}</div>
-            <div class="stat-label">メール登録</div>
+            <div class="stat-label">{{ t('master.supplier.emailRegistered') }}</div>
           </div>
         </div>
       </div>
@@ -26,12 +26,12 @@
       <div class="filter-header">
         <div class="filter-title">
           <el-icon class="filter-icon"><Filter /></el-icon>
-          <span>検索・絞り込み</span>
+          <span>{{ t('master.supplier.searchFilter') }}</span>
         </div>
         <div class="filter-actions">
-          <el-button text @click="clearFilter" :icon="Refresh" class="clear-btn">クリア</el-button>
+          <el-button text @click="clearFilter" :icon="Refresh" class="clear-btn">{{ t('master.supplier.clear') }}</el-button>
           <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-supplier-btn">
-            仕入先追加
+            {{ t('master.supplier.addSupplier') }}
           </el-button>
         </div>
       </div>
@@ -39,11 +39,11 @@
         <div class="filter-item search-item">
           <label class="filter-label">
             <el-icon><Search /></el-icon>
-            キーワード検索
+            {{ t('master.supplier.keywordSearch') }}
           </label>
           <el-input
             v-model="filters.keyword"
-            placeholder="仕入先CD・名称で検索"
+            :placeholder="t('master.supplier.placeholder')"
             clearable
             @keyup.enter="fetchList"
             class="filter-input"
@@ -54,14 +54,14 @@
           </el-input>
         </div>
         <div class="filter-item">
-          <el-button type="primary" @click="fetchList" :icon="Search" class="search-btn">検索</el-button>
+          <el-button type="primary" @click="fetchList" :icon="Search" class="search-btn">{{ t('master.common.search') }}</el-button>
         </div>
       </div>
     </div>
 
     <el-card class="table-card">
       <el-table :data="dataList" stripe highlight-current-row class="modern-table">
-        <el-table-column label="仕入先CD" prop="supplier_cd" width="120" align="center">
+        <el-table-column :label="t('master.supplier.supplierCD')" prop="supplier_cd" width="120" align="center">
           <template #default="{ row }">
             <div class="supplier-code-cell">
               <el-icon class="code-icon"><OfficeBuilding /></el-icon>
@@ -69,15 +69,15 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="仕入先名" prop="supplier_name" min-width="180" show-overflow-tooltip />
-        <el-table-column label="担当者" prop="contact_person" width="120" show-overflow-tooltip />
-        <el-table-column label="電話番号" prop="phone" width="150" show-overflow-tooltip />
-        <el-table-column label="メール" prop="email" min-width="200" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" fixed="right" align="center">
+        <el-table-column :label="t('master.supplier.supplierName')" prop="supplier_name" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="t('master.supplier.contactPerson')" prop="contact_person" width="120" show-overflow-tooltip />
+        <el-table-column :label="t('master.supplier.phone')" prop="phone" width="150" show-overflow-tooltip />
+        <el-table-column :label="t('master.supplier.email')" prop="email" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="t('master.common.actions')" width="140" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-buttons-table">
-              <el-button size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">編集</el-button>
-              <el-button size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">削除</el-button>
+              <el-button size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">{{ t('master.supplier.edit') }}</el-button>
+              <el-button size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">{{ t('master.supplier.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -107,12 +107,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Plus, OfficeBuilding, Filter, Refresh, Search, Edit, Delete } from '@element-plus/icons-vue'
 import { getSupplierList, deleteSupplier } from '@/api/master/supplierMaster'
 import type { Supplier } from '@/types/master'
 import SupplierEditDialog from './SupplierEditDialog.vue'
 
+const { t } = useI18n()
 const filters = reactive({ keyword: '' })
 const dataList = ref<Supplier[]>([])
 const pagination = reactive({ currentPage: 1, pageSize: 20, total: 0 })
@@ -152,9 +154,9 @@ const handleEdit = (row: Supplier) => {
 
 const handleDelete = async (row: Supplier) => {
   try {
-    await ElMessageBox.confirm('この仕入先を削除しますか？', '確認', { type: 'warning' })
+    await ElMessageBox.confirm(t('master.supplier.confirmDelete'), t('common.confirm'), { type: 'warning' })
     await deleteSupplier(row.id!)
-    ElMessage.success('削除しました')
+    ElMessage.success(t('master.common.deleteSuccess'))
     fetchList()
   } catch {}
 }

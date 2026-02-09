@@ -102,13 +102,13 @@ import { ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ja'
 import { useI18n } from 'vue-i18n'
-import { setLocale, getLocale, type LocaleType } from '@/i18n'
+import { setLocale, type LocaleType } from '@/i18n'
 import {
   FullScreen, Aim, Bell, User, Setting, SwitchButton, ArrowDown, Clock,
   Menu, Close, Promotion, Star
 } from '@element-plus/icons-vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const localeLabels: Record<LocaleType, string> = {
   en: 'EN',
@@ -116,10 +116,10 @@ const localeLabels: Record<LocaleType, string> = {
   zh: 'ZH',
   vi: 'VI',
 }
-const currentLangLabel = computed(() => localeLabels[getLocale()] || 'EN')
+const currentLangLabel = computed(() => localeLabels[locale.value as LocaleType] || 'EN')
 
-function handleLocaleChange(locale: LocaleType) {
-  setLocale(locale)
+function handleLocaleChange(newLocale: LocaleType) {
+  setLocale(newLocale)
 }
 
 defineProps<{

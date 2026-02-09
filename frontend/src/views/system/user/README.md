@@ -202,4 +202,38 @@ menus
 - **ロールと User.role**: ロールテーブル（roles）は「ロール名」と権限を保持し、`user_roles` でユーザーと多対多。一方、`users.role` には認証用のコード（admin/user/manager/worker/guest/viewer）が格納され、API では `ROLE_NAME_TO_CODE` でロール名とコードを対応付けている。
 - **app.models.user と auth.models.User**: システム API が参照するのは **auth.models.User**（`department_id`, `two_factor_enabled` あり）。`app.models.user` は別定義の可能性があり、本機能では auth 側が正とする。
 
+---
+
+## 9. 多言語対応（i18n）
+
+本フォルダ配下の **UserList.vue**・**OrganizationList.vue**・**RolePermission.vue** の 3 画面は、vue-i18n による多言語表示に対応しています。
+
+### 9.1 対応言語
+
+- **ja**（日本語）— デフォルト・フォールバック
+- **zh**（简体中文）
+- **en**（English）
+- **vi**（Tiếng Việt）
+
+言語の切り替えはヘッダーの言語選択で行い、選択値は `localStorage` の `app-locale` に保存されます。
+
+### 9.2 翻訳キー構造
+
+各画面の文言は `frontend/src/locales/{ja,zh,en,vi}.ts` の **systemUser** オブジェクトで定義されています。
+
+| キー | 対象画面 | 内容 |
+|------|----------|------|
+| **systemUser.org** | OrganizationList.vue | 組織・部門管理のタイトル、ラベル、ボタン、メッセージ、バリデーション、組織タイプ（会社/拠点/部門/課/ライン）など |
+| **systemUser.role** | RolePermission.vue | 権限・ロール管理のタイトル、ロール一覧、タブ（メニュー権限/操作権限/データ範囲）、データ範囲オプション、フォーム、メッセージなど |
+| **systemUser.user** | UserList.vue | ユーザー管理のタイトル、検索・テーブル列、フォーム、ロール/ステータスラベル、バリデーション、成功/エラーメッセージ、印刷用ラベルなど |
+
+### 9.3 コンポーネントでの利用
+
+各 Vue コンポーネントでは `useI18n()` で `t` を取得し、テンプレートおよび script 内で `t('systemUser.org.xxx')` のようにキーを指定して表示しています。
+
+- **テンプレート**: `{{ t('systemUser.org.title') }}` や `:label="t('systemUser.user.username')"`
+- **script**: `ElMessage.success(t('systemUser.user.msgSaveSuccess'))`、`computed` 内のフォームルールメッセージなど
+
+新規に文言を追加する場合は、上記 4 言語の locale ファイルの `systemUser.org` / `systemUser.role` / `systemUser.user` のいずれかに同じキーを追加してください。
+
 以上が、`frontend/src/views/system/user` 配下のファイルとバックエンド・データベースの対応の詳細説明です。

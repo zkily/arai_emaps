@@ -1,7 +1,7 @@
 /**
  * 下拉选项 API - 顧客・製品・納入先・材料・工程ルートの選択肢を取得
  */
-import { getCustomers, getDestinations, getProducts } from '@/api/order'
+import { getCustomers, getDestinations, getProducts } from '@/api/erp'
 import { getProductList } from '@/api/master/productMaster'
 import { getMaterialList } from '@/api/master/materialMaster'
 
@@ -10,12 +10,18 @@ export interface OptionItem {
   name: string
 }
 
+/** 顧客オプション（顧客マスタAPIを優先、未実装時は order API） */
 export async function getCustomerOptions(): Promise<OptionItem[]> {
-  const list = await getCustomers()
-  return (list || []).map((c) => ({
-    cd: c.customer_code,
-    name: c.customer_name || c.customer_code,
-  }))
+  try {
+    const { getCustomerOptions: getMasterOptions } = await import('@/api/master/customerMaster')
+    return await getMasterOptions()
+  } catch {
+    const list = await getCustomers()
+    return (list || []).map((c) => ({
+      cd: c.customer_code,
+      name: c.customer_name || c.customer_code,
+    }))
+  }
 }
 
 export async function getProductOptions(): Promise<OptionItem[]> {
@@ -33,6 +39,26 @@ export async function getDestinationOptions(customerCode?: string): Promise<Opti
       cd: d.destination_code,
       name: d.destination_name || d.destination_code,
     }))
+  } catch {
+    return []
+  }
+}
+
+/** 納入先マスタからオプション取得（納入先休日画面など） */
+export async function getDestinationMasterOptions(): Promise<OptionItem[]> {
+  try {
+    const { getDestinationOptions: getOptions } = await import('@/api/master/destinationMaster')
+    return await getOptions()
+  } catch {
+    return []
+  }
+}
+
+/** 運送会社オプション（未実装時は空） */
+export async function getCarrierOptions(): Promise<OptionItem[]> {
+  try {
+    // 将来 carrier マスタがあればここで取得
+    return []
   } catch {
     return []
   }

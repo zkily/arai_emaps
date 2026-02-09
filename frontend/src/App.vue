@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <el-config-provider :locale="elementLocale">
-      <router-view />
+      <router-view :key="locale" />
     </el-config-provider>
   </div>
 </template>

@@ -1,136 +1,10 @@
 """
 ERP モジュール Pydantic スキーマ
-受注管理（Order）関連のスキーマ定義
 """
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
-
-
-# ========== 月別受注スキーマ ==========
-
-class OrderMonthlyBase(BaseModel):
-    """月別受注基本スキーマ"""
-    year: int = Field(..., description="年")
-    month: int = Field(..., ge=1, le=12, description="月")
-    customer_code: str = Field(..., max_length=50, description="顧客コード")
-    customer_name: Optional[str] = Field(None, max_length=200, description="顧客名")
-    product_code: str = Field(..., max_length=100, description="品番")
-    product_name: Optional[str] = Field(None, max_length=300, description="品名")
-    destination_code: Optional[str] = Field(None, max_length=50, description="納入先コード")
-    destination_name: Optional[str] = Field(None, max_length=200, description="納入先名")
-    forecast_units: int = Field(default=0, description="内示本数")
-    confirmed_units: int = Field(default=0, description="確定本数")
-    forecast_diff: int = Field(default=0, description="内示差異")
-    plating_type: Optional[str] = Field(None, max_length=50, description="メッキ区分")
-    plating_count: int = Field(default=0, description="メッキ数")
-    welding_type: Optional[str] = Field(None, max_length=50, description="溶接区分")
-    welding_count: int = Field(default=0, description="溶接数")
-    unit_price: Optional[Decimal] = Field(None, description="単価")
-    total_amount: Optional[Decimal] = Field(None, description="合計金額")
-    remarks: Optional[str] = Field(None, description="備考")
-
-
-class OrderMonthlyCreate(OrderMonthlyBase):
-    """月別受注作成スキーマ"""
-    pass
-
-
-class OrderMonthlyUpdate(BaseModel):
-    """月別受注更新スキーマ"""
-    customer_name: Optional[str] = None
-    product_name: Optional[str] = None
-    destination_code: Optional[str] = None
-    destination_name: Optional[str] = None
-    forecast_units: Optional[int] = None
-    confirmed_units: Optional[int] = None
-    forecast_diff: Optional[int] = None
-    plating_type: Optional[str] = None
-    plating_count: Optional[int] = None
-    welding_type: Optional[str] = None
-    welding_count: Optional[int] = None
-    unit_price: Optional[Decimal] = None
-    total_amount: Optional[Decimal] = None
-    remarks: Optional[str] = None
-
-
-class OrderMonthly(OrderMonthlyBase):
-    """月別受注レスポンススキーマ"""
-    id: int
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-# ========== 日別受注スキーマ ==========
-
-class OrderDailyBase(BaseModel):
-    """日別受注基本スキーマ"""
-    year: int = Field(..., description="年")
-    month: int = Field(..., ge=1, le=12, description="月")
-    day: int = Field(..., ge=1, le=31, description="日")
-    order_date: date = Field(..., description="受注日")
-    customer_code: str = Field(..., max_length=50, description="顧客コード")
-    customer_name: Optional[str] = Field(None, max_length=200, description="顧客名")
-    product_code: str = Field(..., max_length=100, description="品番")
-    product_name: Optional[str] = Field(None, max_length=300, description="品名")
-    destination_code: Optional[str] = Field(None, max_length=50, description="納入先コード")
-    destination_name: Optional[str] = Field(None, max_length=200, description="納入先名")
-    confirmed_boxes: int = Field(default=0, description="確定箱数")
-    confirmed_units: int = Field(default=0, description="確定本数")
-    forecast_units: int = Field(default=0, description="内示本数")
-    shipped_boxes: int = Field(default=0, description="出荷箱数")
-    shipped_units: int = Field(default=0, description="出荷本数")
-    shipping_status: str = Field(default="未出荷", description="出荷状態")
-    confirmation_status: str = Field(default="未確認", description="確認状態")
-    unit_price: Optional[Decimal] = Field(None, description="単価")
-    total_amount: Optional[Decimal] = Field(None, description="合計金額")
-    remarks: Optional[str] = Field(None, description="備考")
-
-
-class OrderDailyCreate(OrderDailyBase):
-    """日別受注作成スキーマ"""
-    monthly_order_id: Optional[int] = None
-
-
-class OrderDailyUpdate(BaseModel):
-    """日別受注更新スキーマ"""
-    customer_name: Optional[str] = None
-    product_name: Optional[str] = None
-    destination_code: Optional[str] = None
-    destination_name: Optional[str] = None
-    confirmed_boxes: Optional[int] = None
-    confirmed_units: Optional[int] = None
-    forecast_units: Optional[int] = None
-    shipped_boxes: Optional[int] = None
-    shipped_units: Optional[int] = None
-    shipping_status: Optional[str] = None
-    confirmation_status: Optional[str] = None
-    unit_price: Optional[Decimal] = None
-    total_amount: Optional[Decimal] = None
-    remarks: Optional[str] = None
-
-
-class OrderDaily(OrderDailyBase):
-    """日別受注レスポンススキーマ"""
-    id: int
-    monthly_order_id: Optional[int] = None
-    is_shipped: bool
-    is_confirmed: bool
-    is_active: bool
-    created_at: datetime
-    updated_at: datetime
-    created_by: Optional[str] = None
-    updated_by: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 # ========== 顧客スキーマ ==========
@@ -268,61 +142,55 @@ class Product(ProductBase):
         from_attributes = True
 
 
-# ========== ログスキーマ ==========
+# ========== 月別受注スキーマ ==========
 
-class OrderLog(BaseModel):
-    """受注ログスキーマ"""
+class OrderMonthlyBase(BaseModel):
+    """月別受注基本スキーマ"""
+    destination_cd: str = Field(..., max_length=50, description="納入先CD")
+    destination_name: str = Field(..., max_length=100, description="納入先名")
+    year: int = Field(..., description="年")
+    month: int = Field(..., ge=1, le=12, description="月")
+    product_cd: str = Field(..., max_length=50, description="製品CD")
+    product_name: str = Field(..., max_length=100, description="製品名")
+    product_alias: Optional[str] = Field(None, max_length=100, description="製品別名")
+    product_type: str = Field(default="量産品", max_length=20, description="製品種別")
+    forecast_units: int = Field(default=0, ge=0, description="内示本数")
+    forecast_total_units: int = Field(default=0, ge=0, description="日内示合計")
+    forecast_diff: int = Field(default=0, description="内示差異")
+
+
+class OrderMonthlyCreate(OrderMonthlyBase):
+    """月別受注作成（order_id はトリガーで自動採番）"""
+    pass
+
+
+class OrderMonthlyUpdate(BaseModel):
+    """月別受注更新スキーマ"""
+    destination_cd: Optional[str] = Field(None, max_length=50)
+    destination_name: Optional[str] = Field(None, max_length=100)
+    year: Optional[int] = None
+    month: Optional[int] = Field(None, ge=1, le=12)
+    product_cd: Optional[str] = Field(None, max_length=50)
+    product_name: Optional[str] = Field(None, max_length=100)
+    product_alias: Optional[str] = Field(None, max_length=100)
+    product_type: Optional[str] = Field(None, max_length=20)
+    forecast_units: Optional[int] = Field(None, ge=0)
+    forecast_total_units: Optional[int] = Field(None, ge=0)
+    forecast_diff: Optional[int] = None
+
+
+class OrderMonthly(OrderMonthlyBase):
+    """月別受注レスポンススキーマ"""
     id: int
-    order_type: str
-    order_id: int
-    action: str
-    old_data: Optional[str] = None
-    new_data: Optional[str] = None
-    user_id: Optional[int] = None
-    user_name: Optional[str] = None
-    ip_address: Optional[str] = None
+    order_id: str
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
 
 
-# ========== 統計・集計スキーマ ==========
-
-class OrderMonthlySummary(BaseModel):
-    """月別受注集計スキーマ"""
-    forecast_units: int = Field(default=0, description="内示本数合計")
-    confirmed_units: int = Field(default=0, description="確定本数合計")
-    forecast_total_units: int = Field(default=0, description="内示合計")
-    forecast_diff: int = Field(default=0, description="内示差異")
-    plating_count: int = Field(default=0, description="社内メッキ数")
-    external_plating_count: int = Field(default=0, description="外注メッキ数")
-    internal_welding_count: int = Field(default=0, description="社内溶接数")
-    external_welding_count: int = Field(default=0, description="外注溶接数")
-
-
-class OrderDailySummary(BaseModel):
-    """日別受注集計スキーマ"""
-    total_confirmed_boxes: int = Field(default=0, description="確定箱数合計")
-    total_confirmed_units: int = Field(default=0, description="確定本数合計")
-    total_forecast_units: int = Field(default=0, description="内示本数合計")
-    shipped_orders_count: int = Field(default=0, description="出荷済件数")
-    unshipped_orders_count: int = Field(default=0, description="未出荷件数")
-    confirmed_orders_count: int = Field(default=0, description="確認済件数")
-    unconfirmed_orders_count: int = Field(default=0, description="未確認件数")
-
-
 # ========== 一括操作スキーマ ==========
-
-class BatchConfirmRequest(BaseModel):
-    """一括確認リクエストスキーマ"""
-    order_ids: List[int] = Field(..., description="受注IDリスト")
-
-
-class BatchImportRequest(BaseModel):
-    """一括インポートリクエストスキーマ"""
-    data: List[OrderDailyCreate] = Field(..., description="受注データリスト")
-
 
 class SyncRequest(BaseModel):
     """同期リクエストスキーマ"""

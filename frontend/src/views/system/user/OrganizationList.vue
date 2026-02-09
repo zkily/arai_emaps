@@ -7,19 +7,19 @@
           <el-icon :size="28"><OfficeBuilding /></el-icon>
         </div>
         <div class="header-text">
-          <h1>組織・部門管理</h1>
-          <p class="subtitle">会社・拠点・部門・課・ライン階層構造</p>
+          <h1>{{ t('systemUser.org.title') }}</h1>
+          <p class="subtitle">{{ t('systemUser.org.subtitle') }}</p>
         </div>
       </div>
       <div class="header-stats">
         <div class="stat-item">
           <span class="stat-value">{{ orgCount }}</span>
-          <span class="stat-label">総組織数</span>
+          <span class="stat-label">{{ t('systemUser.org.totalOrgs') }}</span>
         </div>
         <div class="stat-divider"></div>
         <div class="stat-item">
           <span class="stat-value highlight">{{ deptCount }}</span>
-          <span class="stat-label">部門</span>
+          <span class="stat-label">{{ t('systemUser.org.depts') }}</span>
         </div>
       </div>
     </div>
@@ -31,15 +31,15 @@
         <div class="panel-header">
           <div class="panel-title">
             <el-icon><Share /></el-icon>
-            <span>組織ツリー</span>
+            <span>{{ t('systemUser.org.treeTitle') }}</span>
           </div>
           <el-button type="primary" size="small" :icon="Plus" @click="handleAddOrg" class="btn-add-sm">
-            追加
+            {{ t('systemUser.org.add') }}
           </el-button>
         </div>
         <div class="tree-hint">
           <el-icon><InfoFilled /></el-icon>
-          クリックで選択、ダブルクリックで編集
+          {{ t('systemUser.org.treeHint') }}
         </div>
         <div class="panel-body">
           <el-tree
@@ -74,12 +74,12 @@
           <div class="panel-title">
             <el-icon><Document /></el-icon>
             <span v-if="selectedOrg">{{ selectedOrg.name }}</span>
-            <span v-else class="text-muted">組織を選択</span>
-            <span class="panel-subtitle" v-if="selectedOrg">詳細情報</span>
+            <span v-else class="text-muted">{{ t('systemUser.org.selectOrg') }}</span>
+            <span class="panel-subtitle" v-if="selectedOrg">{{ t('systemUser.org.detailInfo') }}</span>
           </div>
           <div class="header-actions" v-if="selectedOrg">
-            <el-button type="primary" size="small" :icon="Edit" @click="handleEditOrg">編集</el-button>
-            <el-button type="danger" size="small" :icon="Delete" @click="handleDeleteOrg" plain>削除</el-button>
+            <el-button type="primary" size="small" :icon="Edit" @click="handleEditOrg">{{ t('systemUser.org.edit') }}</el-button>
+            <el-button type="danger" size="small" :icon="Delete" @click="handleDeleteOrg" plain>{{ t('systemUser.org.delete') }}</el-button>
           </div>
         </div>
 
@@ -92,7 +92,7 @@
                   <el-icon><Ticket /></el-icon>
                 </div>
                 <div class="info-content">
-                  <label>組織コード</label>
+                  <label>{{ t('systemUser.org.orgCode') }}</label>
                   <span>{{ selectedOrg.code }}</span>
                 </div>
               </div>
@@ -101,7 +101,7 @@
                   <el-icon><component :is="getNodeIcon(selectedOrg.type)" /></el-icon>
                 </div>
                 <div class="info-content">
-                  <label>種類</label>
+                  <label>{{ t('systemUser.org.type') }}</label>
                   <span class="type-badge" :class="selectedOrg.type">{{ typeLabel(selectedOrg.type) }}</span>
                 </div>
               </div>
@@ -110,7 +110,7 @@
                   <el-icon><Connection /></el-icon>
                 </div>
                 <div class="info-content">
-                  <label>親組織</label>
+                  <label>{{ t('systemUser.org.parentOrg') }}</label>
                   <span>{{ parentName || '—' }}</span>
                 </div>
               </div>
@@ -119,7 +119,7 @@
                   <el-icon><User /></el-icon>
                 </div>
                 <div class="info-content">
-                  <label>責任者</label>
+                  <label>{{ t('systemUser.org.manager') }}</label>
                   <span>{{ selectedOrg.manager_name || '—' }}</span>
                 </div>
               </div>
@@ -128,22 +128,22 @@
             <div class="detail-list">
               <div class="detail-item">
                 <el-icon><Location /></el-icon>
-                <label>所在地</label>
+                <label>{{ t('systemUser.org.location') }}</label>
                 <span>{{ selectedOrg.location || '—' }}</span>
               </div>
               <div class="detail-item">
                 <el-icon><Phone /></el-icon>
-                <label>電話番号</label>
+                <label>{{ t('systemUser.org.phone') }}</label>
                 <span>{{ selectedOrg.phone || '—' }}</span>
               </div>
               <div class="detail-item">
                 <el-icon><Message /></el-icon>
-                <label>メール</label>
+                <label>{{ t('systemUser.org.email') }}</label>
                 <span>{{ selectedOrg.email || '—' }}</span>
               </div>
               <div class="detail-item" v-if="selectedOrg.description">
                 <el-icon><Document /></el-icon>
-                <label>説明</label>
+                <label>{{ t('systemUser.org.description') }}</label>
                 <span>{{ selectedOrg.description }}</span>
               </div>
             </div>
@@ -153,8 +153,8 @@
           <div class="member-section">
             <div class="section-header">
               <el-icon><UserFilled /></el-icon>
-              <span>所属ユーザー</span>
-              <el-tag size="small" type="info">{{ orgUsers.length }}名</el-tag>
+              <span>{{ t('systemUser.org.members') }}</span>
+              <el-tag size="small" type="info">{{ t('systemUser.org.usersCount', { n: orgUsers.length }) }}</el-tag>
             </div>
             <el-table 
               v-if="orgUsers.length > 0" 
@@ -162,7 +162,7 @@
               size="small"
               :header-cell-style="{ background: '#f8fafc', color: '#475569', fontWeight: '600', fontSize: '12px', padding: '8px' }"
             >
-              <el-table-column prop="username" label="ユーザー名" width="120">
+              <el-table-column prop="username" :label="t('systemUser.org.username')" width="120">
                 <template #default="{ row }">
                   <div class="user-cell">
                     <div class="avatar-mini">{{ row.username.charAt(0).toUpperCase() }}</div>
@@ -170,17 +170,17 @@
                   </div>
                 </template>
               </el-table-column>
-              <el-table-column prop="full_name" label="氏名" min-width="100" />
-              <el-table-column prop="role" label="役割" width="100">
+              <el-table-column prop="full_name" :label="t('systemUser.org.fullName')" min-width="100" />
+              <el-table-column prop="role" :label="t('systemUser.org.role')" width="100">
                 <template #default="{ row }">
                   <el-tag size="small" type="primary">{{ row.role }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="email" label="メール" min-width="160" />
+              <el-table-column prop="email" :label="t('systemUser.org.email')" min-width="160" />
             </el-table>
             <div class="empty-users" v-else>
               <el-icon :size="32"><UserFilled /></el-icon>
-              <p>所属ユーザーはユーザー管理で部門を指定して確認できます</p>
+              <p>{{ t('systemUser.org.emptyUsersHint') }}</p>
             </div>
           </div>
         </div>
@@ -190,8 +190,8 @@
           <div class="empty-icon">
             <el-icon :size="48"><Select /></el-icon>
           </div>
-          <p class="empty-title">組織を選択してください</p>
-          <p class="empty-desc">左側のツリーから組織を選択すると、詳細情報が表示されます</p>
+          <p class="empty-title">{{ t('systemUser.org.emptyTitle') }}</p>
+          <p class="empty-desc">{{ t('systemUser.org.emptyDesc') }}</p>
         </div>
       </div>
     </div>
@@ -207,81 +207,81 @@
       :close-on-click-modal="false"
     >
       <el-form :model="orgForm" :rules="orgFormRules" ref="orgFormRef" label-width="90px" label-position="left">
-        <el-form-item label="組織コード" prop="code">
-          <el-input v-model="orgForm.code" placeholder="例: DEPT001" :disabled="isEditOrg" />
+        <el-form-item :label="t('systemUser.org.orgCode')" prop="code">
+          <el-input v-model="orgForm.code" :placeholder="t('systemUser.org.codePlaceholder')" :disabled="isEditOrg" />
         </el-form-item>
-        <el-form-item label="組織名" prop="name">
-          <el-input v-model="orgForm.name" placeholder="組織名を入力" />
+        <el-form-item :label="t('systemUser.org.nameLabel')" prop="name">
+          <el-input v-model="orgForm.name" :placeholder="t('systemUser.org.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="種類" prop="type">
-          <el-select v-model="orgForm.type" placeholder="種類を選択" style="width: 100%">
-            <el-option label="会社" value="company">
+        <el-form-item :label="t('systemUser.org.type')" prop="type">
+          <el-select v-model="orgForm.type" :placeholder="t('systemUser.org.typePlaceholder')" style="width: 100%">
+            <el-option :label="t('systemUser.org.typeCompany')" value="company">
               <div class="type-option">
                 <el-icon><OfficeBuilding /></el-icon>
-                <span>会社</span>
+                <span>{{ t('systemUser.org.typeCompany') }}</span>
               </div>
             </el-option>
-            <el-option label="拠点" value="site">
+            <el-option :label="t('systemUser.org.typeSite')" value="site">
               <div class="type-option">
                 <el-icon><House /></el-icon>
-                <span>拠点</span>
+                <span>{{ t('systemUser.org.typeSite') }}</span>
               </div>
             </el-option>
-            <el-option label="部門" value="department">
+            <el-option :label="t('systemUser.org.typeDept')" value="department">
               <div class="type-option">
                 <el-icon><Grid /></el-icon>
-                <span>部門</span>
+                <span>{{ t('systemUser.org.typeDept') }}</span>
               </div>
             </el-option>
-            <el-option label="課" value="section">
+            <el-option :label="t('systemUser.org.typeSection')" value="section">
               <div class="type-option">
                 <el-icon><Folder /></el-icon>
-                <span>課</span>
+                <span>{{ t('systemUser.org.typeSection') }}</span>
               </div>
             </el-option>
-            <el-option label="ライン" value="line">
+            <el-option :label="t('systemUser.org.typeLine')" value="line">
               <div class="type-option">
                 <el-icon><Setting /></el-icon>
-                <span>ライン</span>
+                <span>{{ t('systemUser.org.typeLine') }}</span>
               </div>
             </el-option>
           </el-select>
         </el-form-item>
-        <el-form-item label="親組織" prop="parent_id">
+        <el-form-item :label="t('systemUser.org.parentOrg')" prop="parent_id">
           <el-tree-select
             v-model="orgForm.parent_id"
             :data="orgTreeForSelect"
             :props="{ label: 'name', children: 'children' }"
             value-key="id"
-            placeholder="親組織を選択"
+            :placeholder="t('systemUser.org.parentPlaceholder')"
             clearable
             check-strictly
             style="width: 100%"
             :render-after-expand="false"
           />
         </el-form-item>
-        <el-form-item label="責任者">
-          <el-input v-model="orgForm.manager_name" placeholder="責任者名" />
+        <el-form-item :label="t('systemUser.org.manager')">
+          <el-input v-model="orgForm.manager_name" :placeholder="t('systemUser.org.managerPlaceholder')" />
         </el-form-item>
-        <el-form-item label="所在地">
-          <el-input v-model="orgForm.location" placeholder="所在地" />
+        <el-form-item :label="t('systemUser.org.location')">
+          <el-input v-model="orgForm.location" :placeholder="t('systemUser.org.locationPlaceholder')" />
         </el-form-item>
-        <el-form-item label="電話">
-          <el-input v-model="orgForm.phone" placeholder="電話番号" />
+        <el-form-item :label="t('systemUser.org.phone')">
+          <el-input v-model="orgForm.phone" :placeholder="t('systemUser.org.phonePlaceholder')" />
         </el-form-item>
-        <el-form-item label="メール">
-          <el-input v-model="orgForm.email" type="email" placeholder="メール" />
+        <el-form-item :label="t('systemUser.org.email')">
+          <el-input v-model="orgForm.email" type="email" :placeholder="t('systemUser.org.emailPlaceholder')" />
         </el-form-item>
-        <el-form-item label="説明">
-          <el-input v-model="orgForm.description" type="textarea" :rows="2" placeholder="説明（任意）" />
+        <el-form-item :label="t('systemUser.org.description')">
+          <el-input v-model="orgForm.description" type="textarea" :rows="2" :placeholder="t('systemUser.org.descPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer">
-          <el-button @click="orgDialogVisible = false">キャンセル</el-button>
+          <el-button @click="orgDialogVisible = false">{{ t('systemUser.org.cancel') }}</el-button>
           <el-button type="primary" @click="handleOrgSubmit" :loading="orgSubmitting">
             <el-icon v-if="!orgSubmitting"><Check /></el-icon>
-            保存
+            {{ t('systemUser.org.save') }}
           </el-button>
         </div>
       </template>
@@ -291,12 +291,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, OfficeBuilding, House, Grid, Setting, Share, InfoFilled, Document, Edit, Delete, Ticket, Connection, User, Location, Phone, Message, UserFilled, Select, Check, Folder } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
 import type { Organization, OrganizationTreeNode } from '@/api/system'
 
+const { t } = useI18n()
 const treeProps = { children: 'children', label: 'name' }
 const treeLoading = ref(false)
 const treeKey = ref(0)
@@ -321,7 +323,7 @@ const deptCount = computed(() => {
 })
 
 const orgDialogVisible = ref(false)
-const orgDialogTitle = ref('組織追加')
+const orgDialogTitle = ref('')
 const isEditOrg = ref(false)
 const orgSubmitting = ref(false)
 const orgFormRef = ref<FormInstance>()
@@ -350,20 +352,20 @@ const orgForm = ref<{
   description: '',
 })
 
-const orgFormRules: FormRules = {
-  code: [{ required: true, message: '組織コードを入力してください', trigger: 'blur' }],
-  name: [{ required: true, message: '組織名を入力してください', trigger: 'blur' }],
-  type: [{ required: true, message: '種類を選択してください', trigger: 'change' }],
-}
+const orgFormRules = computed<FormRules>(() => ({
+  code: [{ required: true, message: t('systemUser.org.validationCode'), trigger: 'blur' }],
+  name: [{ required: true, message: t('systemUser.org.validationName'), trigger: 'blur' }],
+  type: [{ required: true, message: t('systemUser.org.validationType'), trigger: 'change' }],
+}))
 
-const typeLabels: Record<string, string> = {
-  company: '会社',
-  site: '拠点',
-  department: '部門',
-  section: '課',
-  line: 'ライン',
+const typeLabelKey: Record<string, string> = {
+  company: 'typeCompany',
+  site: 'typeSite',
+  department: 'typeDept',
+  section: 'typeSection',
+  line: 'typeLine',
 }
-const typeLabel = (type: string) => typeLabels[type] || type
+const typeLabel = (type: string) => t(`systemUser.org.${typeLabelKey[type] || 'typeDept'}`)
 
 const parentName = computed(() => {
   if (!selectedOrg.value?.parent_id) return null
@@ -379,7 +381,7 @@ const parentName = computed(() => {
 })
 
 const orgTreeForSelect = computed(() => [
-  { id: 0, name: '（ルート）', children: orgTree.value },
+  { id: 0, name: t('systemUser.org.rootOption'), children: orgTree.value },
 ])
 
 const getNodeIcon = (type: string) => {
@@ -405,7 +407,7 @@ async function fetchTree() {
     orgTree.value = Array.isArray(res) ? res : []
     treeKey.value += 1
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '組織ツリーの取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.org.msgTreeError'))
   } finally {
     treeLoading.value = false
   }
@@ -417,7 +419,7 @@ async function handleNodeClick(nodeData: OrganizationTreeNode) {
     selectedOrg.value = org
     orgUsers.value = []
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '組織詳細の取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.org.msgDetailError'))
   }
 }
 
@@ -428,7 +430,7 @@ async function handleNodeDblclick(nodeData: OrganizationTreeNode) {
     orgUsers.value = []
     handleEditOrg()
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '組織詳細の取得に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.org.msgDetailError'))
   }
 }
 
@@ -449,7 +451,7 @@ function resetOrgForm() {
 
 const handleAddOrg = () => {
   isEditOrg.value = false
-  orgDialogTitle.value = '組織追加'
+  orgDialogTitle.value = t('systemUser.org.formAddTitle')
   resetOrgForm()
   orgDialogVisible.value = true
 }
@@ -457,7 +459,7 @@ const handleAddOrg = () => {
 const handleEditOrg = () => {
   if (!selectedOrg.value) return
   isEditOrg.value = true
-  orgDialogTitle.value = '組織編集'
+  orgDialogTitle.value = t('systemUser.org.formEditTitle')
   orgForm.value = {
     id: selectedOrg.value.id,
     code: selectedOrg.value.code,
@@ -490,7 +492,7 @@ const handleOrgSubmit = async () => {
         email: orgForm.value.email || undefined,
         description: orgForm.value.description || undefined,
       })
-      ElMessage.success('更新しました')
+      ElMessage.success(t('systemUser.org.msgSaveSuccess'))
     } else {
       await systemApi.createOrganization({
         code: orgForm.value.code,
@@ -503,7 +505,7 @@ const handleOrgSubmit = async () => {
         email: orgForm.value.email || undefined,
         description: orgForm.value.description || undefined,
       })
-      ElMessage.success('登録しました')
+      ElMessage.success(t('systemUser.org.msgCreateSuccess'))
     }
     orgDialogVisible.value = false
     await fetchTree()
@@ -512,7 +514,7 @@ const handleOrgSubmit = async () => {
       selectedOrg.value = org
     }
   } catch (e: any) {
-    ElMessage.error(e?.response?.data?.detail || '保存に失敗しました')
+    ElMessage.error(e?.response?.data?.detail || t('systemUser.org.msgSaveFailed'))
   } finally {
     orgSubmitting.value = false
   }
@@ -521,13 +523,13 @@ const handleOrgSubmit = async () => {
 const handleDeleteOrg = async () => {
   if (!selectedOrg.value) return
   try {
-    await ElMessageBox.confirm('この組織を削除しますか？', '確認', { type: 'warning' })
+    await ElMessageBox.confirm(t('systemUser.org.msgDeleteConfirm'), t('common.confirm'), { type: 'warning' })
     await systemApi.deleteOrganization(selectedOrg.value.id)
-    ElMessage.success('削除しました')
+    ElMessage.success(t('systemUser.org.msgDeleteSuccess'))
     selectedOrg.value = null
     await fetchTree()
   } catch (e: unknown) {
-    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || '削除に失敗しました')
+    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || t('systemUser.org.msgDeleteError'))
   }
 }
 

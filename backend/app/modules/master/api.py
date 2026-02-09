@@ -29,7 +29,7 @@ def _row_to_dict(row: Product) -> dict:
         "start_use_date": row.start_use_date.isoformat() if row.start_use_date else None,
         "category": row.category,
         "department_id": row.department_id,
-        "delivery_destination_cd": row.delivery_destination_cd,
+        "destination_cd": row.destination_cd,
         "process_count": row.process_count,
         "lead_time": row.lead_time,
         "lot_size": row.lot_size,
@@ -69,6 +69,7 @@ async def get_product_list(
     material_cd: Optional[str] = Query(None),
     route_cd: Optional[str] = Query(None),
     location_cd: Optional[str] = Query(None),
+    destination_cd: Optional[str] = Query(None, description="納入先CD（該当納入先の製品のみ）"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=10000, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
@@ -99,6 +100,8 @@ async def get_product_list(
         query = query.where(Product.route_cd == route_cd)
     if location_cd:
         query = query.where(Product.location_cd == location_cd)
+    if destination_cd:
+        query = query.where(Product.destination_cd == destination_cd)
 
     count_q = select(func.count()).select_from(query.subquery())
     total_res = await db.execute(count_q)
@@ -114,6 +117,29 @@ async def get_product_list(
             "list": [_row_to_dict(r) for r in rows],
             "total": total,
         },
+    }
+
+
+@router.get("/by-destination/{destination_cd}")
+async def get_products_by_destination_for_batch(
+    destination_cd: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """月注文一括登録用：指定納入先の製品のみ。条件は destination_cd=納入先、status=active、product_type=量産品"""
+    query = (
+        select(Product)
+        .where(Product.destination_cd == destination_cd)
+        .where(Product.status == "active")
+        .where(Product.product_type == "量産品")
+        .order_by(Product.product_cd)
+    )
+    result = await db.execute(query)
+    rows = result.scalars().all()
+    return {
+        "success": True,
+        "data": {"list": [_row_to_dict(r) for r in rows], "total": len(rows)},
+        "list": [_row_to_dict(r) for r in rows],
     }
 
 

@@ -4,7 +4,9 @@ import type { RouteRecordRaw } from 'vue-router'
 export const masterRoutes: RouteRecordRaw[] = [
   {
     path: 'master',
-    redirect: { name: 'ProductList' },
+    name: 'MasterHome',
+    component: () => import('@/views/master/MasterList.vue'),
+    meta: { title: 'マスタホーム', requiresAuth: true },
   },
   {
     path: 'master/product',
@@ -25,10 +27,46 @@ export const masterRoutes: RouteRecordRaw[] = [
     meta: { title: '仕入先マスタ', requiresAuth: true },
   },
   {
+    path: 'master/process',
+    name: 'ProcessList',
+    component: () => import('@/views/master/process/ProcessList.vue'),
+    meta: { title: '工程マスタ', requiresAuth: true },
+  },
+  {
     path: 'master/process-route',
     name: 'ProcessRouteList',
     component: () => import('@/views/master/processRoute/ProcessRouteList.vue'),
     meta: { title: '工程ルートマスタ', requiresAuth: true },
+  },
+  {
+    path: 'master/customer',
+    name: 'CustomerList',
+    component: () => import('@/views/master/customer/CustomerList.vue'),
+    meta: { title: '顧客マスタ', requiresAuth: true },
+  },
+  {
+    path: 'master/carrier',
+    name: 'CarrierList',
+    component: () => import('@/views/master/carrier/CarrierList.vue'),
+    meta: { title: '運送便マスタ', requiresAuth: true },
+  },
+  {
+    path: 'master/machine',
+    name: 'MachineList',
+    component: () => import('@/views/master/machine/MachineList.vue'),
+    meta: { title: '設備マスタ', requiresAuth: true },
+  },
+  {
+    path: 'master/destination',
+    name: 'DestinationList',
+    component: () => import('@/views/master/destination/DestinationList.vue'),
+    meta: { title: '納入先マスタ', requiresAuth: true },
+  },
+  {
+    path: 'master/destination/holiday',
+    name: 'DestinationHoliday',
+    component: () => import('@/views/master/destination/DestinationHoliday.vue'),
+    meta: { title: '納入先休日設定', requiresAuth: true },
   },
   {
     path: 'master/process-route/:route_cd/steps',

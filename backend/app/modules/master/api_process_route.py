@@ -32,13 +32,11 @@ def _route_to_dict(row: ProcessRoute) -> dict:
 def _step_to_dict(row: ProcessRouteStep, process_name: Optional[str] = None) -> dict:
     d = {
         "id": row.id,
-        "product_cd": row.product_cd,
         "route_cd": row.route_cd,
         "step_no": row.step_no,
         "process_cd": row.process_cd,
-        "machine_id": row.machine_id,
-        "standard_cycle_time": float(row.standard_cycle_time) if row.standard_cycle_time is not None else None,
-        "setup_time": float(row.setup_time) if row.setup_time is not None else None,
+        "yield_percent": float(row.yield_percent) if row.yield_percent is not None else 100.0,
+        "cycle_sec": float(row.cycle_sec) if row.cycle_sec is not None else 0.0,
         "remarks": row.remarks,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -180,23 +178,19 @@ async def delete_route(
     return {"message": "削除しました"}
 
 
-# ========== ステップ（product_cd + route_cd ベース） ==========
+# ========== ステップ（route_cd ベース） ==========
 
 
 @router.get("/by-cd/{route_cd}/steps")
 async def get_route_steps(
     route_cd: str,
-    product_cd: str = Query(..., alias="productCd"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """製品別ルートのステップ一覧取得"""
+    """ルートのステップ一覧取得"""
     q = (
         select(ProcessRouteStep)
-        .where(
-            ProcessRouteStep.route_cd == route_cd,
-            ProcessRouteStep.product_cd == product_cd,
-        )
+        .where(ProcessRouteStep.route_cd == route_cd)
         .order_by(ProcessRouteStep.step_no)
     )
     res = await db.execute(q)
@@ -213,7 +207,6 @@ class StepOrderItem(BaseModel):
 async def update_step_order(
     route_cd: str,
     body: List[StepOrderItem],
-    product_cd: str = Query(..., alias="productCd"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -222,7 +215,6 @@ async def update_step_order(
         q = select(ProcessRouteStep).where(
             ProcessRouteStep.id == item.id,
             ProcessRouteStep.route_cd == route_cd,
-            ProcessRouteStep.product_cd == product_cd,
         )
         res = await db.execute(q)
         row = res.scalar_one_or_none()
@@ -239,18 +231,13 @@ async def create_route_step(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """ステップ追加（body に product_cd 必須）"""
-    product_cd = str(body.get("product_cd") or "")
-    if not product_cd:
-        raise HTTPException(status_code=400, detail="product_cd は必須です")
+    """ステップ追加"""
     step = ProcessRouteStep(
-        product_cd=product_cd,
         route_cd=route_cd,
         step_no=int(body.get("step_no", 1)),
         process_cd=str(body.get("process_cd", "")),
-        machine_id=body.get("machine_id"),
-        standard_cycle_time=float(body["standard_cycle_time"]) if body.get("standard_cycle_time") is not None else None,
-        setup_time=float(body["setup_time"]) if body.get("setup_time") is not None else None,
+        yield_percent=float(body["yield_percent"]) if body.get("yield_percent") is not None else 100.0,
+        cycle_sec=float(body["cycle_sec"]) if body.get("cycle_sec") is not None else 0.0,
         remarks=body.get("remarks"),
     )
     db.add(step)
@@ -276,12 +263,10 @@ async def update_route_step(
         row.step_no = int(body["step_no"])
     if "process_cd" in body:
         row.process_cd = str(body["process_cd"])
-    if "machine_id" in body:
-        row.machine_id = body["machine_id"]
-    if "standard_cycle_time" in body:
-        row.standard_cycle_time = float(body["standard_cycle_time"]) if body["standard_cycle_time"] is not None else None
-    if "setup_time" in body:
-        row.setup_time = float(body["setup_time"]) if body["setup_time"] is not None else None
+    if "yield_percent" in body:
+        row.yield_percent = float(body["yield_percent"]) if body["yield_percent"] is not None else 100.0
+    if "cycle_sec" in body:
+        row.cycle_sec = float(body["cycle_sec"]) if body["cycle_sec"] is not None else 0.0
     if "remarks" in body:
         row.remarks = body["remarks"]
     await db.commit()
@@ -293,7 +278,6 @@ async def update_route_step(
 async def delete_route_step(
     route_cd: str,
     step_id: int,
-    product_cd: str = Query(..., alias="productCd"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -301,7 +285,6 @@ async def delete_route_step(
     q = select(ProcessRouteStep).where(
         ProcessRouteStep.id == step_id,
         ProcessRouteStep.route_cd == route_cd,
-        ProcessRouteStep.product_cd == product_cd,
     )
     res = await db.execute(q)
     row = res.scalar_one_or_none()

@@ -193,12 +193,12 @@ const quotationModules = [
   }
 ]
 
-// 機能モジュール配置 - 受注プロセス
+// 機能モジュール配置 - 受注管理
 const orderModules = [
   {
     path: '/erp/sales/orders',
     title: '受注一覧',
-    description: '与信チェック・在庫引当・納期回答(ATP)',
+    description: '受注データ登録・与信チェック・在庫引当・納期回答(ATP)',
     icon: markRaw(List),
     gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
   },
@@ -208,40 +208,68 @@ const orderModules = [
     description: '顧客フォーマット(CSV/XML)自動取込',
     icon: markRaw(Tickets),
     gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)'
+  },
+  {
+    path: '/erp/sales/forecast',
+    title: '内示・フォーキャスト',
+    description: '確定前の需要予測をAPSへ連携',
+    icon: markRaw(DataAnalysis),
+    gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)'
+  },
+  {
+    path: '/erp/sales/credit',
+    title: '与信管理',
+    description: '受注時の限度額チェック・アラート',
+    icon: markRaw(User),
+    gradient: 'linear-gradient(135deg, #f56c6c, #f78989)'
+  },
+  {
+    path: '/erp/sales/contract-pricing',
+    title: '契約単価管理',
+    description: '期間別・数量別ボリュームディスカウント',
+    icon: markRaw(Tickets),
+    gradient: 'linear-gradient(135deg, #9254de, #b37feb)'
   }
 ]
 
-// 機能モジュール配置 - 出荷・売上
+// 機能モジュール配置 - 出荷管理
 const shippingModules = [
   {
     path: '/erp/sales/shipping',
     title: '出荷指示',
-    description: '出荷指図書・ピッキングリスト・送り状出力',
+    description: '出荷指図書・ピッキングリスト・分納管理',
     icon: markRaw(Van),
     gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)'
-  },
-  {
-    path: '/erp/sales/recording',
-    title: '売上計上',
-    description: '出荷基準/検収基準・赤黒訂正',
-    icon: markRaw(DataAnalysis),
-    gradient: 'linear-gradient(135deg, #67c23a, #85ce61)'
   }
 ]
 
-// 機能モジュール配置 - 返品管理
-const returnModules = [
+// 機能モジュール配置 - 売上・請求管理
+const billingModules = [
   {
-    path: '/erp/sales/returns',
-    title: '返品管理(RMA)',
-    description: '返品受付・受入検査・代替品/返金',
+    path: '/erp/sales/recording',
+    title: '売上計上',
+    description: '出荷基準/検収基準の切替',
+    icon: markRaw(DataAnalysis),
+    gradient: 'linear-gradient(135deg, #67c23a, #85ce61)'
+  },
+  {
+    path: '/erp/sales/invoice',
+    title: '請求書発行',
+    description: 'インボイス対応・電子請求書送信',
+    icon: markRaw(Document),
+    gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)'
+  },
+  {
+    path: '/erp/sales/return-correction',
+    title: '赤黒訂正処理',
+    description: '返品・値引き時の伝票修正',
     icon: markRaw(TrendCharts),
     gradient: 'linear-gradient(135deg, #f56c6c, #f78989)'
   }
 ]
 
 // 全機能モジュール(互換性のため)
-const modules = [...quotationModules, ...orderModules, ...shippingModules, ...returnModules]
+const modules = [...quotationModules, ...orderModules, ...shippingModules, ...billingModules]
 
 // 查看订单
 const viewOrder = (row: SalesOrder) => {

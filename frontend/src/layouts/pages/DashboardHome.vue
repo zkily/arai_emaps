@@ -164,7 +164,6 @@ const quickAccessItems = ref([
   { path: '/erp/purchase', titleKey: 'purchase', descKey: 'purchaseDesc', icon: markRaw(ShoppingCart), bg: 'linear-gradient(135deg, #f43f5e, #e11d48)' },
   { path: '/erp/inventory', titleKey: 'inventory', descKey: 'inventoryDesc', icon: markRaw(Box), bg: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
   { path: '/erp/costing', titleKey: 'costing', descKey: 'costingDesc', icon: markRaw(Coin), bg: 'linear-gradient(135deg, #10b981, #059669)' },
-  { path: '/erp/order', titleKey: 'order', descKey: 'orderDesc', icon: markRaw(DataAnalysis), bg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
   { path: '/aps/planning', titleKey: 'planning', descKey: 'planningDesc', icon: markRaw(Tickets), bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },
 ])
 

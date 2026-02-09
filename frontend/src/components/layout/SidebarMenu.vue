@@ -24,153 +24,201 @@
       >
         <el-menu-item index="/dashboard">
           <el-icon><HomeFilled /></el-icon>
-          <template #title>{{ t('menu.DASHBOARD') }}</template>
+          <template #title><span :title="t('menu.DASHBOARD')">{{ t('menu.DASHBOARD') }}</span></template>
         </el-menu-item>
         
         <el-sub-menu index="erp">
           <template #title>
             <el-icon><Management /></el-icon>
-            <span>{{ t('menu.ERP') }}</span>
+            <span :title="t('menu.ERP')">{{ t('menu.ERP') }}</span>
           </template>
           
           <el-sub-menu index="erp-sales">
             <template #title>
               <el-icon><Sell /></el-icon>
-              <span>{{ t('menu.ERP_SALES') }}</span>
+              <span :title="t('menu.ERP_SALES')">{{ t('menu.ERP_SALES') }}</span>
             </template>
-            <el-menu-item index="/erp/sales">{{ t('menu.ERP_SALES_HOME') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/quotation">{{ t('menu.ERP_SALES_QUOTATION') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/orders">{{ t('menu.ERP_SALES_ORDERS') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/edi-import">{{ t('menu.ERP_SALES_EDI') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/shipping">{{ t('menu.ERP_SALES_SHIPPING') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/recording">{{ t('menu.ERP_SALES_RECORDING') }}</el-menu-item>
-            <el-menu-item index="/erp/sales/returns">{{ t('menu.ERP_SALES_RETURNS') }}</el-menu-item>
+            <el-menu-item index="/erp/sales"><span :title="t('menu.ERP_SALES_HOME')">{{ t('menu.ERP_SALES_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/quotation"><span :title="t('menu.ERP_SALES_QUOTATION')">{{ t('menu.ERP_SALES_QUOTATION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/orders"><span :title="t('menu.ERP_SALES_ORDERS')">{{ t('menu.ERP_SALES_ORDERS') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/edi-import"><span :title="t('menu.ERP_SALES_EDI')">{{ t('menu.ERP_SALES_EDI') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/forecast"><span :title="t('menu.ERP_SALES_FORECAST')">{{ t('menu.ERP_SALES_FORECAST') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/credit"><span :title="t('menu.ERP_SALES_CREDIT')">{{ t('menu.ERP_SALES_CREDIT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/contract-pricing"><span :title="t('menu.ERP_SALES_CONTRACT')">{{ t('menu.ERP_SALES_CONTRACT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/shipping"><span :title="t('menu.ERP_SALES_SHIPPING')">{{ t('menu.ERP_SALES_SHIPPING') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/recording"><span :title="t('menu.ERP_SALES_RECORDING')">{{ t('menu.ERP_SALES_RECORDING') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/invoice"><span :title="t('menu.ERP_SALES_INVOICE')">{{ t('menu.ERP_SALES_INVOICE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/return-correction"><span :title="t('menu.ERP_SALES_CORRECTION')">{{ t('menu.ERP_SALES_CORRECTION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/sales/returns"><span :title="t('menu.ERP_SALES_RETURNS')">{{ t('menu.ERP_SALES_RETURNS') }}</span></el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="erp-order">
+            <template #title>
+              <el-icon><Document /></el-icon>
+              <span :title="t('menu.ERP_ORDER')">{{ t('menu.ERP_ORDER') }}</span>
+            </template>
+            <el-menu-item index="/erp/order"><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/order/monthly"><span :title="t('menu.ERP_ORDER_MONTHLY')">{{ t('menu.ERP_ORDER_MONTHLY') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-purchase">
             <template #title>
               <el-icon><ShoppingCart /></el-icon>
-              <span>{{ t('menu.ERP_PURCHASE') }}</span>
+              <span :title="t('menu.ERP_PURCHASE')">{{ t('menu.ERP_PURCHASE') }}</span>
             </template>
-            <el-menu-item index="/erp/purchase">{{ t('menu.ERP_PURCHASE_HOME') }}</el-menu-item>
-            <el-menu-item index="/erp/purchase/orders">{{ t('menu.ERP_PURCHASE_ORDERS') }}</el-menu-item>
-            <el-menu-item index="/erp/purchase/rfq">{{ t('menu.ERP_PURCHASE_RFQ') }}</el-menu-item>
-            <el-menu-item index="/erp/purchase/arrival">{{ t('menu.ERP_PURCHASE_ARRIVAL') }}</el-menu-item>
-            <el-menu-item index="/erp/purchase/receipt">{{ t('menu.ERP_PURCHASE_RECEIPT') }}</el-menu-item>
-            <el-menu-item index="/erp/purchase/invoice-matching">{{ t('menu.ERP_PURCHASE_INVOICE') }}</el-menu-item>
+            <el-menu-item index="/erp/purchase"><span :title="t('menu.ERP_PURCHASE_HOME')">{{ t('menu.ERP_PURCHASE_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/orders"><span :title="t('menu.ERP_PURCHASE_ORDERS')">{{ t('menu.ERP_PURCHASE_ORDERS') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/rfq"><span :title="t('menu.ERP_PURCHASE_RFQ')">{{ t('menu.ERP_PURCHASE_RFQ') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/subcontract-order"><span :title="t('menu.ERP_PURCHASE_SUBCONTRACT')">{{ t('menu.ERP_PURCHASE_SUBCONTRACT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/material-supply"><span :title="t('menu.ERP_PURCHASE_SUPPLY')">{{ t('menu.ERP_PURCHASE_SUPPLY') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/subcontract-inventory"><span :title="t('menu.ERP_PURCHASE_SUB_INV')">{{ t('menu.ERP_PURCHASE_SUB_INV') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/arrival"><span :title="t('menu.ERP_PURCHASE_ARRIVAL')">{{ t('menu.ERP_PURCHASE_ARRIVAL') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/receipt"><span :title="t('menu.ERP_PURCHASE_RECEIPT')">{{ t('menu.ERP_PURCHASE_RECEIPT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/inspection"><span :title="t('menu.ERP_PURCHASE_INSPECTION')">{{ t('menu.ERP_PURCHASE_INSPECTION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/invoice-matching"><span :title="t('menu.ERP_PURCHASE_INVOICE')">{{ t('menu.ERP_PURCHASE_INVOICE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/payment-schedule"><span :title="t('menu.ERP_PURCHASE_PAY_SCHEDULE')">{{ t('menu.ERP_PURCHASE_PAY_SCHEDULE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/purchase/bank-transfer"><span :title="t('menu.ERP_PURCHASE_BANK')">{{ t('menu.ERP_PURCHASE_BANK') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-inventory">
             <template #title>
               <el-icon><Box /></el-icon>
-              <span>{{ t('menu.ERP_INVENTORY') }}</span>
+              <span :title="t('menu.ERP_INVENTORY')">{{ t('menu.ERP_INVENTORY') }}</span>
             </template>
-            <el-menu-item index="/erp/inventory">{{ t('menu.ERP_INVENTORY_HOME') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/list">{{ t('menu.ERP_INVENTORY_LIST') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/transactions">{{ t('menu.ERP_INVENTORY_TX') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/movement">{{ t('menu.ERP_INVENTORY_MOVEMENT') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/stocktaking">{{ t('menu.ERP_INVENTORY_STOCKTAKING') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/dead-stock">{{ t('menu.ERP_INVENTORY_DEAD') }}</el-menu-item>
-            <el-menu-item index="/erp/inventory/abc-analysis">{{ t('menu.ERP_INVENTORY_ABC') }}</el-menu-item>
+            <el-menu-item index="/erp/inventory"><span :title="t('menu.ERP_INVENTORY_HOME')">{{ t('menu.ERP_INVENTORY_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/list"><span :title="t('menu.ERP_INVENTORY_LIST')">{{ t('menu.ERP_INVENTORY_LIST') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/location"><span :title="t('menu.ERP_INVENTORY_LOCATION')">{{ t('menu.ERP_INVENTORY_LOCATION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/transactions"><span :title="t('menu.ERP_INVENTORY_TX')">{{ t('menu.ERP_INVENTORY_TX') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/movement"><span :title="t('menu.ERP_INVENTORY_MOVEMENT')">{{ t('menu.ERP_INVENTORY_MOVEMENT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/lot-trace"><span :title="t('menu.ERP_INVENTORY_LOT')">{{ t('menu.ERP_INVENTORY_LOT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/stocktaking"><span :title="t('menu.ERP_INVENTORY_STOCKTAKING')">{{ t('menu.ERP_INVENTORY_STOCKTAKING') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/dead-stock"><span :title="t('menu.ERP_INVENTORY_DEAD')">{{ t('menu.ERP_INVENTORY_DEAD') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/abc-analysis"><span :title="t('menu.ERP_INVENTORY_ABC')">{{ t('menu.ERP_INVENTORY_ABC') }}</span></el-menu-item>
+          </el-sub-menu>
+          
+          <el-sub-menu index="erp-production">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span :title="t('menu.ERP_PRODUCTION')">{{ t('menu.ERP_PRODUCTION') }}</span>
+            </template>
+            <el-menu-item index="/erp/production"><span :title="t('menu.ERP_PRODUCTION_HOME')">{{ t('menu.ERP_PRODUCTION_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/eco"><span :title="t('menu.ERP_PRODUCTION_ECO')">{{ t('menu.ERP_PRODUCTION_ECO') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/bom"><span :title="t('menu.ERP_PRODUCTION_BOM')">{{ t('menu.ERP_PRODUCTION_BOM') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/mrp"><span :title="t('menu.ERP_PRODUCTION_MRP')">{{ t('menu.ERP_PRODUCTION_MRP') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/orders"><span :title="t('menu.ERP_PRODUCTION_ORDERS')">{{ t('menu.ERP_PRODUCTION_ORDERS') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/serial"><span :title="t('menu.ERP_PRODUCTION_SERIAL')">{{ t('menu.ERP_PRODUCTION_SERIAL') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/work-order"><span :title="t('menu.ERP_PRODUCTION_WO')">{{ t('menu.ERP_PRODUCTION_WO') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/material-issue"><span :title="t('menu.ERP_PRODUCTION_ISSUE')">{{ t('menu.ERP_PRODUCTION_ISSUE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/completion"><span :title="t('menu.ERP_PRODUCTION_COMPLETE')">{{ t('menu.ERP_PRODUCTION_COMPLETE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/consumption"><span :title="t('menu.ERP_PRODUCTION_CONSUME')">{{ t('menu.ERP_PRODUCTION_CONSUME') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-costing">
             <template #title>
               <el-icon><Coin /></el-icon>
-              <span>{{ t('menu.ERP_COSTING') }}</span>
+              <span :title="t('menu.ERP_COSTING')">{{ t('menu.ERP_COSTING') }}</span>
             </template>
-            <el-menu-item index="/erp/costing">{{ t('menu.ERP_COSTING_HOME') }}</el-menu-item>
-            <el-menu-item index="/erp/costing/standard">{{ t('menu.ERP_COSTING_STANDARD') }}</el-menu-item>
-            <el-menu-item index="/erp/costing/actual">{{ t('menu.ERP_COSTING_ACTUAL') }}</el-menu-item>
-            <el-menu-item index="/erp/costing/variance">{{ t('menu.ERP_COSTING_VARIANCE') }}</el-menu-item>
-            <el-menu-item index="/erp/costing/billing">{{ t('menu.ERP_COSTING_BILLING') }}</el-menu-item>
-            <el-menu-item index="/erp/costing/payment">{{ t('menu.ERP_COSTING_PAYMENT') }}</el-menu-item>
+            <el-menu-item index="/erp/costing"><span :title="t('menu.ERP_COSTING_HOME')">{{ t('menu.ERP_COSTING_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/standard"><span :title="t('menu.ERP_COSTING_STANDARD')">{{ t('menu.ERP_COSTING_STANDARD') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/actual"><span :title="t('menu.ERP_COSTING_ACTUAL')">{{ t('menu.ERP_COSTING_ACTUAL') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/variance"><span :title="t('menu.ERP_COSTING_VARIANCE')">{{ t('menu.ERP_COSTING_VARIANCE') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/allocation"><span :title="t('menu.ERP_COSTING_ALLOCATION')">{{ t('menu.ERP_COSTING_ALLOCATION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/wip"><span :title="t('menu.ERP_COSTING_WIP')">{{ t('menu.ERP_COSTING_WIP') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/equipment"><span :title="t('menu.ERP_COSTING_EQUIPMENT')">{{ t('menu.ERP_COSTING_EQUIPMENT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/depreciation"><span :title="t('menu.ERP_COSTING_DEPRECIATION')">{{ t('menu.ERP_COSTING_DEPRECIATION') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/journal"><span :title="t('menu.ERP_COSTING_JOURNAL')">{{ t('menu.ERP_COSTING_JOURNAL') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/accounting-export"><span :title="t('menu.ERP_COSTING_ACCT_EXPORT')">{{ t('menu.ERP_COSTING_ACCT_EXPORT') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/billing"><span :title="t('menu.ERP_COSTING_BILLING')">{{ t('menu.ERP_COSTING_BILLING') }}</span></el-menu-item>
+            <el-menu-item index="/erp/costing/payment"><span :title="t('menu.ERP_COSTING_PAYMENT')">{{ t('menu.ERP_COSTING_PAYMENT') }}</span></el-menu-item>
           </el-sub-menu>
-          
-          <el-sub-menu index="erp-order">
-            <template #title>
-              <el-icon><Document /></el-icon>
-              <span>{{ t('menu.ERP_ORDER') }}</span>
-            </template>
-            <el-menu-item index="/erp/order">{{ t('menu.ERP_ORDER_HOME') }}</el-menu-item>
-            <el-menu-item index="/erp/order/monthly">{{ t('menu.ERP_ORDER_MONTHLY') }}</el-menu-item>
-            <el-menu-item index="/erp/order/daily">{{ t('menu.ERP_ORDER_DAILY') }}</el-menu-item>
-            <el-menu-item index="/erp/order/dashboard">{{ t('menu.ERP_ORDER_DASHBOARD') }}</el-menu-item>
-            <el-menu-item index="/erp/order/kpi">{{ t('menu.ERP_ORDER_KPI') }}</el-menu-item>
-            <el-menu-item index="/erp/order/daily-history">{{ t('menu.ERP_ORDER_DAILY_HIST') }}</el-menu-item>
-            <el-menu-item index="/erp/order/customer-history">{{ t('menu.ERP_ORDER_CUSTOMER_HIST') }}</el-menu-item>
-            <el-menu-item index="/erp/order/destination-history">{{ t('menu.ERP_ORDER_DEST_HIST') }}</el-menu-item>
-            <el-menu-item index="/erp/order/comparison">{{ t('menu.ERP_ORDER_COMPARISON') }}</el-menu-item>
-            <el-menu-item index="/erp/order/print">{{ t('menu.ERP_ORDER_PRINT') }}</el-menu-item>
-          </el-sub-menu>
-          
-          <el-menu-item index="/erp/supplier">
-            <el-icon><User /></el-icon>
-            <template #title>{{ t('menu.ERP_SUPPLIER') }}</template>
-          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="aps">
           <template #title>
             <el-icon><DataAnalysis /></el-icon>
-            <span>{{ t('menu.APS') }}</span>
+            <span :title="t('menu.APS')">{{ t('menu.APS') }}</span>
           </template>
-          <el-menu-item index="/aps/planning">{{ t('menu.APS_PLANNING') }}</el-menu-item>
-          <el-menu-item index="/aps/scheduling">{{ t('menu.APS_SCHEDULING') }}</el-menu-item>
+          <el-menu-item index="/aps/planning">
+            <el-icon><Calendar /></el-icon>
+            <template #title><span :title="t('menu.APS_PLANNING')">{{ t('menu.APS_PLANNING') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/aps/scheduling">
+            <el-icon><Timer /></el-icon>
+            <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>
+          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="mes">
           <template #title>
             <el-icon><Monitor /></el-icon>
-            <span>{{ t('menu.MES') }}</span>
+            <span :title="t('menu.MES')">{{ t('menu.MES') }}</span>
           </template>
-          <el-menu-item index="/mes/execution">{{ t('menu.MES_EXECUTION') }}</el-menu-item>
-          <el-menu-item index="/mes/quality">{{ t('menu.MES_QUALITY') }}</el-menu-item>
+          <el-menu-item index="/mes/execution">
+            <el-icon><VideoPlay /></el-icon>
+            <template #title><span :title="t('menu.MES_EXECUTION')">{{ t('menu.MES_EXECUTION') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/mes/quality">
+            <el-icon><CircleCheck /></el-icon>
+            <template #title><span :title="t('menu.MES_QUALITY')">{{ t('menu.MES_QUALITY') }}</span></template>
+          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="master">
           <template #title>
             <el-icon><Collection /></el-icon>
-            <span>{{ t('menu.MASTER') }}</span>
+            <span :title="t('menu.MASTER')">{{ t('menu.MASTER') }}</span>
           </template>
           <el-sub-menu index="master-list">
-            <template #title>{{ t('menu.MASTER_LIST') }}</template>
-            <el-menu-item index="/master/product">{{ t('menu.MASTER_PRODUCT') }}</el-menu-item>
-            <el-menu-item index="/master/material">{{ t('menu.MASTER_MATERIAL') }}</el-menu-item>
-            <el-menu-item index="/master/supplier">{{ t('menu.MASTER_SUPPLIER') }}</el-menu-item>
-            <el-menu-item index="/master/process-route">{{ t('menu.MASTER_PROCESS_ROUTE') }}</el-menu-item>
+            <template #title>
+              <el-icon><List /></el-icon>
+              <span :title="t('menu.MASTER_LIST')">{{ t('menu.MASTER_LIST') }}</span>
+            </template>
+            <el-menu-item index="/master"><span :title="t('menu.MASTER_HOME')">{{ t('menu.MASTER_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/master/product"><span :title="t('menu.MASTER_PRODUCT')">{{ t('menu.MASTER_PRODUCT') }}</span></el-menu-item>
+            <el-menu-item index="/master/material"><span :title="t('menu.MASTER_MATERIAL')">{{ t('menu.MASTER_MATERIAL') }}</span></el-menu-item>
+            <el-menu-item index="/master/customer"><span :title="t('menu.MASTER_CUSTOMER')">{{ t('menu.MASTER_CUSTOMER') }}</span></el-menu-item>
+            <el-menu-item index="/master/supplier"><span :title="t('menu.MASTER_SUPPLIER')">{{ t('menu.MASTER_SUPPLIER') }}</span></el-menu-item>
+            <el-menu-item index="/master/destination"><span :title="t('menu.MASTER_DESTINATION')">{{ t('menu.MASTER_DESTINATION') }}</span></el-menu-item>
+            <el-menu-item index="/master/destination/holiday"><span :title="t('menu.MASTER_DESTINATION_HOLIDAY')">{{ t('menu.MASTER_DESTINATION_HOLIDAY') }}</span></el-menu-item>
+            <el-menu-item index="/master/carrier"><span :title="t('menu.MASTER_CARRIER')">{{ t('menu.MASTER_CARRIER') }}</span></el-menu-item>
+            <el-menu-item index="/master/machine"><span :title="t('menu.MASTER_MACHINE')">{{ t('menu.MASTER_MACHINE') }}</span></el-menu-item>
+            <el-menu-item index="/master/process"><span :title="t('menu.MASTER_PROCESS')">{{ t('menu.MASTER_PROCESS') }}</span></el-menu-item>
+            <el-menu-item index="/master/process-route"><span :title="t('menu.MASTER_PROCESS_ROUTE')">{{ t('menu.MASTER_PROCESS_ROUTE') }}</span></el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/master/bom">{{ t('menu.MASTER_BOM') }}</el-menu-item>
+          <el-menu-item index="/master/bom">
+            <el-icon><Connection /></el-icon>
+            <template #title><span :title="t('menu.MASTER_BOM')">{{ t('menu.MASTER_BOM') }}</span></template>
+          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu v-if="userStore.hasPermission('all')" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
-            <span>{{ t('menu.SYSTEM') }}</span>
+            <span :title="t('menu.SYSTEM')">{{ t('menu.SYSTEM') }}</span>
           </template>
           
           <el-sub-menu index="system-user">
             <template #title>
               <el-icon><User /></el-icon>
-              <span>{{ t('menu.SYSTEM_USER') }}</span>
+              <span :title="t('menu.SYSTEM_USER')">{{ t('menu.SYSTEM_USER') }}</span>
             </template>
-            <el-menu-item index="/system">{{ t('menu.SYSTEM_HOME') }}</el-menu-item>
-            <el-menu-item index="/system/users">{{ t('menu.SYSTEM_USERS') }}</el-menu-item>
-            <el-menu-item index="/system/organization">{{ t('menu.SYSTEM_ORG') }}</el-menu-item>
-            <el-menu-item index="/system/roles">{{ t('menu.SYSTEM_ROLE') }}</el-menu-item>
+            <el-menu-item index="/system"><span :title="t('menu.SYSTEM_HOME')">{{ t('menu.SYSTEM_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/system/users"><span :title="t('menu.SYSTEM_USERS')">{{ t('menu.SYSTEM_USERS') }}</span></el-menu-item>
+            <el-menu-item index="/system/organization"><span :title="t('menu.SYSTEM_ORG')">{{ t('menu.SYSTEM_ORG') }}</span></el-menu-item>
+            <el-menu-item index="/system/roles"><span :title="t('menu.SYSTEM_ROLE')">{{ t('menu.SYSTEM_ROLE') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="system-settings">
             <template #title>
               <el-icon><Tools /></el-icon>
-              <span>{{ t('menu.SYSTEM_SETTINGS') }}</span>
+              <span :title="t('menu.SYSTEM_SETTINGS')">{{ t('menu.SYSTEM_SETTINGS') }}</span>
             </template>
-            <el-menu-item index="/system/numbering">{{ t('menu.SYSTEM_NUMBERING') }}</el-menu-item>
-            <el-menu-item index="/system/workflow">{{ t('menu.SYSTEM_WORKFLOW') }}</el-menu-item>
-            <el-menu-item index="/system/notification">{{ t('menu.SYSTEM_NOTIFICATION') }}</el-menu-item>
-            <el-menu-item index="/system/logs">{{ t('menu.SYSTEM_LOGS') }}</el-menu-item>
-            <el-menu-item index="/system/data">{{ t('menu.SYSTEM_DATA') }}</el-menu-item>
-            <el-menu-item index="/system/menus">{{ t('menu.SYSTEM_MENUS') }}</el-menu-item>
+            <el-menu-item index="/system/numbering"><span :title="t('menu.SYSTEM_NUMBERING')">{{ t('menu.SYSTEM_NUMBERING') }}</span></el-menu-item>
+            <el-menu-item index="/system/workflow"><span :title="t('menu.SYSTEM_WORKFLOW')">{{ t('menu.SYSTEM_WORKFLOW') }}</span></el-menu-item>
+            <el-menu-item index="/system/notification"><span :title="t('menu.SYSTEM_NOTIFICATION')">{{ t('menu.SYSTEM_NOTIFICATION') }}</span></el-menu-item>
+            <el-menu-item index="/system/logs"><span :title="t('menu.SYSTEM_LOGS')">{{ t('menu.SYSTEM_LOGS') }}</span></el-menu-item>
+            <el-menu-item index="/system/data"><span :title="t('menu.SYSTEM_DATA')">{{ t('menu.SYSTEM_DATA') }}</span></el-menu-item>
+            <el-menu-item index="/system/menus"><span :title="t('menu.SYSTEM_MENUS')">{{ t('menu.SYSTEM_MENUS') }}</span></el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
       </el-menu>
@@ -196,7 +244,7 @@ import { useUserStore } from '@/modules/auth/stores/user'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document,
   User, DataAnalysis, Monitor, DataBoard, Setting, Tools,
-  Collection
+  Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -290,14 +338,16 @@ const toggleCollapse = () => {
 
 .sidebar-el-menu {
   border-right: none;
-  padding: 6px 8px;
+  padding: 4px 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sidebar-el-menu:not(.el-menu--collapse) {
-  width: 210px;
+  width: 100%;
 }
 
-/* Menu Items Styling */
+/* Menu Items Styling - 图标与文字并排，长文本省略防重叠，行宽填满侧栏 */
 :deep(.el-menu-item) {
   height: 38px;
   line-height: 38px;
@@ -305,6 +355,20 @@ const toggleCollapse = () => {
   border-radius: 8px;
   font-size: 13px;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+:deep(.el-menu-item .el-menu-tooltip__trigger),
+:deep(.el-menu-item > span) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :deep(.el-sub-menu__title) {
@@ -314,6 +378,28 @@ const toggleCollapse = () => {
   border-radius: 8px;
   font-size: 13px;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  padding-right: 36px; /* 固定留出右侧箭头区域，避免与文字重叠 */
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 标题内除箭头外的内容区域：限制宽度，防止挤到箭头 */
+:deep(.el-sub-menu__title > span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+:deep(.el-sub-menu__title > .el-icon:not(.el-sub-menu__icon-arrow)) {
+  flex-shrink: 0;
 }
 
 :deep(.el-menu-item:hover),
@@ -329,39 +415,72 @@ const toggleCollapse = () => {
 }
 
 :deep(.el-menu-item .el-icon),
-:deep(.el-sub-menu__title .el-icon) {
+:deep(.el-sub-menu__title > .el-icon:not(.el-sub-menu__icon-arrow)) {
   font-size: 16px;
   margin-right: 8px;
+  flex-shrink: 0;
+}
+
+/* 下拉箭头固定在该行最右侧，绝对定位避免与文字重叠（排除标题里的菜单图标） */
+:deep(.el-sub-menu__title > .el-sub-menu__icon-arrow) {
+  position: absolute !important;
+  right: 10px !important;
+  left: auto !important;
+  top: 50% !important;
+  margin: 0 !important;
+  margin-top: -6px !important;
+  margin-right: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: none !important;
+  flex-shrink: 0 !important;
+  width: auto !important;
 }
 
 :deep(.el-sub-menu .el-menu-item) {
-  padding-left: 48px !important;
+  padding-left: 40px !important;
   color: rgba(255, 255, 255, 0.65);
 }
 
 :deep(.el-sub-menu .el-sub-menu .el-menu-item) {
-  padding-left: 64px !important;
+  padding-left: 52px !important;
 }
 
 :deep(.el-sub-menu .el-menu-item:hover) {
   color: #fff !important;
 }
 
-/* Collapsed state */
+:deep(.el-sub-menu) {
+  width: 100%;
+}
+
+/* Collapsed state：隐藏下拉箭头，图标居中 */
 :deep(.el-menu--collapse) {
-  width: 56px;
-  padding: 6px 4px;
+  width: 100%;
+  padding: 4px 0;
+  box-sizing: border-box;
 }
 
 :deep(.el-menu--collapse .el-menu-item),
 :deep(.el-menu--collapse .el-sub-menu__title) {
   padding: 0 !important;
-  justify-content: center;
+  justify-content: center !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+:deep(.el-menu--collapse .el-sub-menu__icon-arrow) {
+  display: none !important;
+}
+
+:deep(.el-menu--collapse .el-sub-menu__title > span) {
+  display: none !important;
 }
 
 :deep(.el-menu--collapse .el-menu-item .el-icon),
 :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
-  margin-right: 0;
+  margin-right: 0 !important;
+  margin-left: 0 !important;
 }
 
 .collapse-btn {
@@ -436,6 +555,23 @@ const toggleCollapse = () => {
   padding: 0 14px !important;
   background: transparent !important;
   transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item .el-icon {
+  flex-shrink: 0 !important;
+  margin-right: 8px !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item > span,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item .el-menu-tooltip__trigger {
+  min-width: 0 !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item:hover {
@@ -454,9 +590,27 @@ const toggleCollapse = () => {
   line-height: 36px !important;
   color: rgba(255, 255, 255, 0.75) !important;
   border-radius: 8px !important;
-  padding: 0 14px !important;
+  padding: 0 36px 0 14px !important;
   background: transparent !important;
   transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu__title .el-icon {
+  flex-shrink: 0 !important;
+  margin-right: 8px !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu__title > span {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
+  flex: 1 !important;
 }
 
 .el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu__title:hover {
@@ -468,10 +622,41 @@ const toggleCollapse = () => {
   color: rgba(255, 255, 255, 0.7) !important;
 }
 
+.el-menu--vertical.el-menu--popup-container .el-sub-menu__icon-arrow {
+  position: absolute !important;
+  right: 10px !important;
+  left: auto !important;
+  top: 50% !important;
+  margin: 0 !important;
+  margin-top: -6px !important;
+  flex-shrink: 0 !important;
+}
+
 .el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu .el-menu {
   background: linear-gradient(180deg, #1a1f36 0%, #252b48 100%) !important;
   border: 1px solid rgba(102, 126, 234, 0.2) !important;
   border-radius: 8px !important;
   padding: 6px !important;
+}
+
+/* 折叠后所有层级弹出菜单项：图标与文字不重叠 */
+.el-menu--vertical.el-menu--popup-container .el-menu-item {
+  display: flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu-item .el-icon {
+  flex-shrink: 0 !important;
+  margin-right: 8px !important;
+}
+
+.el-menu--vertical.el-menu--popup-container .el-menu-item > span,
+.el-menu--vertical.el-menu--popup-container .el-menu-item .el-menu-tooltip__trigger {
+  min-width: 0 !important;
+  flex: 1 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 </style>
