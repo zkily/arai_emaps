@@ -45,8 +45,28 @@ export interface OrderMonthlyFilters {
   keyword?: string
 }
 
+/** 月別受注サマリ（合計カード用） */
+export interface OrderMonthlySummary {
+  forecast_units: number
+  forecast_total_units: number
+  forecast_diff: number
+  plating_count: number
+  external_plating_count: number
+  internal_welding_count: number
+  external_welding_count: number
+  internal_inspection_count: number
+  external_inspection_count: number
+}
+
+const ORDER_BASE = '/api/order'
+
 export function fetchOrderMonthlyList(params?: OrderMonthlyFilters): Promise<OrderMonthlyItem[]> {
   return request.get(BASE, { params }).then((res: any) => (Array.isArray(res) ? res : res?.data ?? []))
+}
+
+/** 月別受注合計（リストと同じ条件で year, month, destination_cd, keyword を渡す） */
+export function fetchMonthlySummary(params?: OrderMonthlyFilters): Promise<OrderMonthlySummary> {
+  return request.get(`${ORDER_BASE}/monthly/summary`, { params }).then((res: any) => res ?? {})
 }
 
 export function createOrderMonthly(data: OrderMonthlyCreate): Promise<OrderMonthlyItem> {

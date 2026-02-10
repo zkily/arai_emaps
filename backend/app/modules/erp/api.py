@@ -325,3 +325,158 @@ async def delete_order_monthly(
     await db.commit()
     return {"ok": True}
 
+
+# ========== 日別受注 API ==========
+
+@router.get("/orders/daily", response_model=List[schemas.OrderDaily])
+async def list_order_daily(
+    start_date: Optional[date] = Query(None, description="開始日"),
+    end_date: Optional[date] = Query(None, description="終了日"),
+    data_eq: Optional[date] = Query(None, description="指定日（単日）"),
+    monthly_order_id: Optional[str] = Query(None, description="月订单ID"),
+    destination_cd: Optional[str] = Query(None, description="納入先CD"),
+    keyword: Optional[str] = Query(None, description="製品CD・製品名検索"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """日別受注一覧"""
+    query = select(models.OrderDaily)
+    if data_eq is not None:
+        query = query.where(models.OrderDaily.date == data_eq)
+    if start_date is not None:
+        query = query.where(models.OrderDaily.date >= start_date)
+    if end_date is not None:
+        query = query.where(models.OrderDaily.date <= end_date)
+    if monthly_order_id:
+        query = query.where(models.OrderDaily.monthly_order_id == monthly_order_id)
+    if destination_cd:
+        query = query.where(models.OrderDaily.destination_cd == destination_cd)
+    if keyword:
+        k = f"%{keyword}%"
+        query = query.where(
+            or_(
+                models.OrderDaily.product_cd.like(k),
+                models.OrderDaily.product_name.like(k),
+            )
+        )
+    query = query.order_by(
+        models.OrderDaily.date.asc(),
+        models.OrderDaily.product_name.asc(),
+        models.OrderDaily.id.asc(),
+    )
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+@router.post("/orders/daily", response_model=schemas.OrderDaily)
+async def create_order_daily(
+    body: schemas.OrderDailyCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """日別受注登録"""
+    row = models.OrderDaily(
+        monthly_order_id=body.monthly_order_id,
+        destination_cd=body.destination_cd,
+        destination_name=body.destination_name,
+        date=body.date,
+        weekday=body.weekday,
+        product_cd=body.product_cd,
+        product_name=body.product_name,
+        product_alias=body.product_alias,
+        forecast_units=body.forecast_units or 0,
+        confirmed_boxes=body.confirmed_boxes or 0,
+        confirmed_units=body.confirmed_units or 0,
+        status=body.status or "未出荷",
+        remarks=body.remarks or "",
+        unit_per_box=body.unit_per_box or 0,
+        batch_id=body.batch_id,
+        batch_no=body.batch_no,
+        supply_status=body.supply_status,
+        fulfilled_from_stock=body.fulfilled_from_stock or 0,
+        fulfilled_from_wip=body.fulfilled_from_wip or 0,
+        product_type=body.product_type,
+        confirmed=body.confirmed,
+        confirmed_by=body.confirmed_by,
+        confirmed_at=body.confirmed_at,
+        delivery_date=body.delivery_date,
+        shipping_no=body.shipping_no,
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.get("/orders/daily/{id}", response_model=schemas.OrderDaily)
+async def get_order_daily_by_id(
+    id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """id で日別受注取得"""
+    result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Order daily not found")
+    return row
+
+
+@router.put("/orders/daily/{id}")
+async def update_order_daily(
+    id: int,
+    body: schemas.OrderDailyUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """日別受注更新"""
+    result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Order daily not found")
+    data = body.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(row, k, v)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.post("/orders/daily/batch-update")
+async def batch_update_order_daily(
+    body: schemas.BatchUpdateDailyRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """日別受注一括更新（1トランザクションで複数件更新、内示本数更新で利用）"""
+    if not body.list:
+        raise HTTPException(status_code=400, detail="list は空にできません")
+    ids = [item.id for item in body.list]
+    result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id.in_(ids)))
+    rows_by_id = {r.id: r for r in result.scalars().all()}
+    for item in body.list:
+        row = rows_by_id.get(item.id)
+        if not row:
+            continue
+        data = item.model_dump(exclude_unset=True)
+        for k, v in data.items():
+            setattr(row, k, v)
+    await db.commit()
+    return {"success": True, "updated": len(body.list)}
+
+
+@router.delete("/orders/daily/{id}")
+async def delete_order_daily(
+    id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """日別受注削除"""
+    result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Order daily not found")
+    await db.delete(row)
+    await db.commit()
+    return {"ok": True}
+

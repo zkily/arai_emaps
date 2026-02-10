@@ -130,7 +130,7 @@ import { useUserStore } from '@/modules/auth/stores/user'
 import dayjs from 'dayjs'
 import {
   UserFilled, Sell, ShoppingCart, Box, Coin, Document, Clock, List, Grid,
-  Top, Bottom, DataAnalysis, TrendCharts, User, Tickets, ArrowRight
+  Top, Bottom, TrendCharts, User, Tickets, ArrowRight
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -162,6 +162,7 @@ const statsCards = ref([
 const quickAccessItems = ref([
   { path: '/erp/sales', titleKey: 'sales', descKey: 'salesDesc', icon: markRaw(Sell), bg: 'linear-gradient(135deg, #667eea, #764ba2)' },
   { path: '/erp/purchase', titleKey: 'purchase', descKey: 'purchaseDesc', icon: markRaw(ShoppingCart), bg: 'linear-gradient(135deg, #f43f5e, #e11d48)' },
+  { path: '/erp/order', titleKey: 'order', descKey: 'orderDesc', icon: markRaw(Document), bg: 'linear-gradient(135deg, #0ea5e9, #0284c7)' },
   { path: '/erp/inventory', titleKey: 'inventory', descKey: 'inventoryDesc', icon: markRaw(Box), bg: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
   { path: '/erp/costing', titleKey: 'costing', descKey: 'costingDesc', icon: markRaw(Coin), bg: 'linear-gradient(135deg, #10b981, #059669)' },
   { path: '/aps/planning', titleKey: 'planning', descKey: 'planningDesc', icon: markRaw(Tickets), bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },

@@ -25,9 +25,14 @@ export function getDestinationList(params: DestinationListParams = {}): Promise<
   return request.get('/api/master/destinations', { params }) as Promise<DestinationListResponse>
 }
 
-/** 納入先オプション（有効のみ） */
+/** 納入先オプション（有効のみ・納入先名昇順） */
 export function getDestinationOptions(): Promise<{ cd: string; name: string }[]> {
-  return request.get('/api/master/destinations/options') as Promise<{ cd: string; name: string }[]>
+  return request.get('/api/master/destinations/options').then((res: unknown) => {
+    const arr = Array.isArray(res) ? res : (res as { data?: { cd: string; name: string }[] })?.data ?? []
+    return arr
+      .slice()
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))
+  })
 }
 
 /** 納入先1件取得 */

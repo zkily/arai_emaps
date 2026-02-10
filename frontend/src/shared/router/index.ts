@@ -39,7 +39,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/sales', name: 'Sales', component: () => import('@/views/erp/Sales.vue'), meta: { title: '販売管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/quotation', name: 'QuotationList', component: () => import('@/views/erp/sales/quotation/QuotationList.vue'), meta: { title: '見積管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/orders', name: 'SalesOrderList', component: () => import('@/views/erp/sales/SalesOrderList.vue'), meta: { title: '受注一覧', group: '販売管理', requiresAuth: true } },
-      { path: 'erp/sales/edi-import', name: 'EdiImport', component: () => import('@/views/erp/sales/order/EdiImport.vue'), meta: { title: 'EDI取込', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/edi-import', redirect: '/erp/order/monthly' },
       { path: 'erp/sales/shipping', name: 'ShippingList', component: () => import('@/views/erp/sales/shipping/ShippingList.vue'), meta: { title: '出荷指示', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/recording', name: 'SalesRecording', component: () => import('@/views/erp/sales/shipping/SalesRecording.vue'), meta: { title: '売上計上', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/returns', name: 'ReturnsList', component: () => import('@/views/erp/sales/returns/ReturnsList.vue'), meta: { title: '返品管理(RMA)', group: '販売管理', requiresAuth: true } },
@@ -47,6 +47,7 @@ const routes: RouteRecordRaw[] = [
       // ========== ERP - 受注管理 (Order Management) ==========
       { path: 'erp/order', name: 'Order', component: () => import('@/views/erp/Order.vue'), meta: { title: '受注管理', group: '受注管理', requiresAuth: true } },
       { path: 'erp/order/monthly', name: 'OrderMonthlyList', component: () => import('@/views/erp/order/OrderMonthlyList.vue'), meta: { title: '月受注管理', group: '受注管理 > 月受注管理', requiresAuth: true } },
+      { path: 'erp/order/daily', name: 'OrderDailyList', component: () => import('@/views/erp/order/OrderDailyList.vue'), meta: { title: '日受注管理', group: '受注管理 > 日受注管理', requiresAuth: true } },
 
       // ========== ERP - 購買管理 (Procurement / MM) ==========
       { path: 'erp/purchase', name: 'Purchase', component: () => import('@/views/erp/Purchase.vue'), meta: { title: '購買管理', group: '購買管理', requiresAuth: true } },
@@ -64,6 +65,19 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory/stocktaking', name: 'Stocktaking', component: () => import('@/views/erp/inventory/warehouse/Stocktaking.vue'), meta: { title: '棚卸管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/dead-stock', name: 'DeadStock', component: () => import('@/views/erp/inventory/analysis/DeadStock.vue'), meta: { title: '長期滞留在庫分析', group: '在庫分析', requiresAuth: true } },
       { path: 'erp/inventory/abc-analysis', name: 'AbcAnalysis', component: () => import('@/views/erp/inventory/analysis/AbcAnalysis.vue'), meta: { title: 'ABC分析', group: '在庫分析', requiresAuth: true } },
+
+      // ========== ERP - 生産管理 (Production Control / PP) ==========
+      { path: 'erp/production', name: 'Production', component: () => import('@/views/erp/Production.vue'), meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
+      { path: 'erp/production/eco', name: 'EcoManagement', component: () => import('@/views/erp/production/engineering/EcoManagement.vue'), meta: { title: '設計変更(ECO)管理', group: '生産管理 > エンジニアリング', requiresAuth: true } },
+      { path: 'erp/production/bom', name: 'BomExplore', component: () => import('@/views/erp/production/engineering/BomExplore.vue'), meta: { title: 'BOM展開', group: '生産管理 > エンジニアリング', requiresAuth: true } },
+      { path: 'erp/production/mrp', name: 'MrpCalculation', component: () => import('@/views/erp/production/planning/MrpCalculation.vue'), meta: { title: 'MRP（所要量計算）', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/orders', name: 'ProductionOrder', component: () => import('@/views/erp/production/planning/ProductionOrder.vue'), meta: { title: '生産オーダー', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/serial', name: 'SerialNumberManagement', component: () => import('@/views/erp/production/planning/SerialNumberManagement.vue'), meta: { title: '製番管理', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/work-order', name: 'WorkOrder', component: () => import('@/views/erp/production/instruction/WorkOrder.vue'), meta: { title: '製造指図書', group: '生産管理 > 製造指示', requiresAuth: true } },
+      { path: 'erp/production/material-issue', name: 'MaterialIssue', component: () => import('@/views/erp/production/instruction/MaterialIssue.vue'), meta: { title: '材料出庫指示', group: '生産管理 > 製造指示', requiresAuth: true } },
+      { path: 'erp/production/completion', name: 'CompletionReport', component: () => import('@/views/erp/production/result/CompletionReport.vue'), meta: { title: '完成報告', group: '生産管理 > 生産実績', requiresAuth: true } },
+      { path: 'erp/production/consumption', name: 'MaterialConsumption', component: () => import('@/views/erp/production/result/MaterialConsumption.vue'), meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true } },
 
       // ========== ERP - 原価・会計連携 (Costing & Finance) ==========
       { path: 'erp/costing', name: 'Costing', component: () => import('@/views/erp/Costing.vue'), meta: { title: '原価・会計', group: '原価・会計', requiresAuth: true } },
@@ -89,6 +103,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/process', name: 'ProcessList', component: () => import('@/views/master/process/ProcessList.vue'), meta: { title: '工程マスタ', requiresAuth: true } },
       { path: 'master/process-route', name: 'ProcessRouteList', component: () => import('@/views/master/processRoute/ProcessRouteList.vue'), meta: { title: '工程ルートマスタ', requiresAuth: true } },
       { path: 'master/process-route/:route_cd/steps', name: 'RouteStepList', component: () => import('@/views/master/processRoute/ProcessRouteStepEditor.vue'), meta: { title: 'ルートステップ編集', requiresAuth: true } },
+      { path: 'master/product-process-route', name: 'ProductProcessRouteManager', component: () => import('@/views/master/productProcessRoute/ProductRouteStepManager.vue'), meta: { title: '製品別工程ルートマスタ', requiresAuth: true } },
       { path: 'master/customer', name: 'CustomerList', component: () => import('@/views/master/customer/CustomerList.vue'), meta: { title: '顧客マスタ', requiresAuth: true } },
       { path: 'master/carrier', name: 'CarrierList', component: () => import('@/views/master/carrier/CarrierList.vue'), meta: { title: '運送便マスタ', requiresAuth: true } },
       { path: 'master/machine', name: 'MachineList', component: () => import('@/views/master/machine/MachineList.vue'), meta: { title: '設備マスタ', requiresAuth: true } },

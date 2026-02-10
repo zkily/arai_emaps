@@ -167,6 +167,7 @@
                   v-model="form.destination_cd"
                   filterable
                   placeholder="例:N38|(株)INOAC吉良"
+                  popper-class="destination-select-popper"
                 >
                   <el-option
                     v-for="item in destinationOptions"

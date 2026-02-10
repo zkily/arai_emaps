@@ -126,3 +126,40 @@ class OrderMonthly(Base):
     def __repr__(self):
         return f"<OrderMonthly {self.order_id} {self.destination_cd} {self.product_cd}>"
 
+
+class OrderDaily(Base):
+    """日別受注テーブル"""
+    __tablename__ = "order_daily"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="日订单ID")
+    monthly_order_id = Column(String(50), index=True, comment="月订单ID（order_monthly的order_id）")
+    destination_cd = Column(String(50), nullable=False, index=True, comment="納入先CD")
+    destination_name = Column(String(100), comment="納入先名")
+    date = Column(Date, nullable=False, comment="年月日")
+    weekday = Column(String(10), comment="曜日")
+    product_cd = Column(String(50), nullable=False, index=True, comment="製品CD")
+    product_name = Column(String(100), comment="製品名")
+    product_alias = Column(String(100), comment="製品別名")
+    forecast_units = Column(Integer, default=0, comment="内示本数")
+    confirmed_boxes = Column(Integer, default=0, comment="確定箱数")
+    confirmed_units = Column(Integer, default=0, comment="確定本数")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
+    status = Column(String(50), default="未出荷", comment="日別受注ステータス")
+    remarks = Column(String(255), default="", comment="備考")
+    unit_per_box = Column(Integer, default=0, comment="1箱あたりの個数")
+    batch_id = Column(Integer, nullable=True, comment="対応する生産バッチID")
+    batch_no = Column(String(50), comment="バッチ番号（表示用）")
+    supply_status = Column(String(20), default=None)
+    fulfilled_from_stock = Column(Integer, default=0)
+    fulfilled_from_wip = Column(Integer, default=0)
+    product_type = Column(String(20), default=None)
+    confirmed = Column(Boolean, default=False, nullable=False, comment="是否已确认")
+    confirmed_by = Column(String(50), comment="确认人")
+    confirmed_at = Column(DateTime, comment="确认时间")
+    delivery_date = Column(Date, comment="納入日")
+    shipping_no = Column(String(50), default=None)
+
+    def __repr__(self):
+        return f"<OrderDaily id={self.id} {self.destination_cd} {self.product_cd} {self.date}>"
+

@@ -75,6 +75,12 @@ export const masterRoutes: RouteRecordRaw[] = [
     meta: { title: 'ルートステップ編集', requiresAuth: true },
   },
   {
+    path: 'master/product-process-route',
+    name: 'ProductProcessRouteManager',
+    component: () => import('@/views/master/productProcessRoute/ProductRouteStepManager.vue'),
+    meta: { title: '製品別工程ルートマスタ', requiresAuth: true },
+  },
+  {
     path: 'master/bom',
     name: 'Bom',
     component: () => import('@/views/master/Bom.vue'),

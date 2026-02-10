@@ -9,7 +9,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.core.datetime_utils import JST
-from app.modules import auth, erp, aps, mes, websocket, system, master, order
+from app.modules import auth, erp, aps, mes, websocket, system, master, order, database
 
 
 @asynccontextmanager
@@ -87,6 +87,7 @@ app.include_router(mes.router, prefix="/api/mes", tags=["MES"])
 app.include_router(master.router, prefix="/api/master", tags=["マスタ管理"])
 app.include_router(system.router, prefix="/api/system", tags=["システム管理"])
 app.include_router(order.router, prefix="/api/order", tags=["受注バッチ"])
+app.include_router(database.router, prefix="/api/database", tags=["データベース"])
 
 # WebSocketエンドポイント
 @app.websocket("/ws")

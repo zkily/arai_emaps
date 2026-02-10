@@ -244,3 +244,36 @@ class Machine(Base):
     note = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ProductRouteStep(Base):
+    """製品別工程ルートステップ（product_route_steps）"""
+    __tablename__ = "product_route_steps"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    route_cd = Column(String(50), nullable=False, index=True)
+    step_no = Column(Integer, nullable=False)
+    process_cd = Column(String(50), nullable=False)
+    machine_id = Column(String(50))
+    standard_cycle_time = Column(Numeric(10, 2))
+    setup_time = Column(Numeric(10, 2))
+    remarks = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ProductRouteStepMachine(Base):
+    """製品別工程ステップ設備（product_route_step_machines）"""
+    __tablename__ = "product_route_step_machines"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    route_cd = Column(String(50), nullable=False, index=True)
+    step_no = Column(Integer, nullable=False)
+    machine_cd = Column(String(50), nullable=False, index=True)
+    machine_name = Column(String(100))
+    process_time_sec = Column(Numeric(4, 2), default=0)
+    setup_time = Column(Integer, default=0)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

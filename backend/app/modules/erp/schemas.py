@@ -3,7 +3,7 @@ ERP モジュール Pydantic スキーマ
 """
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List
-from datetime import datetime, date
+from datetime import datetime, date as date_type
 from decimal import Decimal
 
 
@@ -190,11 +190,101 @@ class OrderMonthly(OrderMonthlyBase):
         from_attributes = True
 
 
+# ========== 日別受注スキーマ ==========
+
+class OrderDailyBase(BaseModel):
+    """日別受注基本スキーマ"""
+    monthly_order_id: Optional[str] = Field(None, max_length=50, description="月订单ID")
+    destination_cd: str = Field(..., max_length=50, description="納入先CD")
+    destination_name: Optional[str] = Field(None, max_length=100, description="納入先名")
+    date: date_type = Field(..., description="年月日")
+    weekday: Optional[str] = Field(None, max_length=10, description="曜日")
+    product_cd: str = Field(..., max_length=50, description="製品CD")
+    product_name: Optional[str] = Field(None, max_length=100, description="製品名")
+    product_alias: Optional[str] = Field(None, max_length=100, description="製品別名")
+    forecast_units: int = Field(default=0, ge=0, description="内示本数")
+    confirmed_boxes: int = Field(default=0, ge=0, description="確定箱数")
+    confirmed_units: int = Field(default=0, ge=0, description="確定本数")
+    status: Optional[str] = Field(default="未出荷", max_length=50, description="日別受注ステータス")
+    remarks: Optional[str] = Field(default="", max_length=255, description="備考")
+    unit_per_box: int = Field(default=0, ge=0, description="1箱あたりの個数")
+    batch_id: Optional[int] = None
+    batch_no: Optional[str] = Field(None, max_length=50)
+    supply_status: Optional[str] = Field(None, max_length=20)
+    fulfilled_from_stock: int = Field(default=0, ge=0)
+    fulfilled_from_wip: int = Field(default=0, ge=0)
+    product_type: Optional[str] = Field(None, max_length=20)
+    confirmed: bool = Field(default=False, description="是否已确认")
+    confirmed_by: Optional[str] = Field(None, max_length=50)
+    confirmed_at: Optional[datetime] = None
+    delivery_date: Optional[date_type] = Field(None, description="納入日")
+    shipping_no: Optional[str] = Field(None, max_length=50)
+
+
+class OrderDailyCreate(OrderDailyBase):
+    """日別受注作成"""
+    pass
+
+
+class OrderDailyUpdate(BaseModel):
+    """日別受注更新スキーマ"""
+    monthly_order_id: Optional[str] = None
+    destination_cd: Optional[str] = None
+    destination_name: Optional[str] = None
+    date: Optional[date_type] = None
+    weekday: Optional[str] = None
+    product_cd: Optional[str] = None
+    product_name: Optional[str] = None
+    product_alias: Optional[str] = None
+    forecast_units: Optional[int] = Field(None, ge=0)
+    confirmed_boxes: Optional[int] = Field(None, ge=0)
+    confirmed_units: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = None
+    remarks: Optional[str] = None
+    unit_per_box: Optional[int] = Field(None, ge=0)
+    batch_id: Optional[int] = None
+    batch_no: Optional[str] = None
+    supply_status: Optional[str] = None
+    fulfilled_from_stock: Optional[int] = Field(None, ge=0)
+    fulfilled_from_wip: Optional[int] = Field(None, ge=0)
+    product_type: Optional[str] = None
+    confirmed: Optional[bool] = None
+    confirmed_by: Optional[str] = None
+    confirmed_at: Optional[datetime] = None
+    delivery_date: Optional[date_type] = None
+    shipping_no: Optional[str] = None
+
+
+class OrderDaily(OrderDailyBase):
+    """日別受注レスポンススキーマ"""
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ========== 一括操作スキーマ ==========
+
+class BatchUpdateDailyItem(BaseModel):
+    """日別受注一括更新の1件"""
+    id: int
+    forecast_units: Optional[int] = Field(None, ge=0)
+    confirmed_boxes: Optional[int] = Field(None, ge=0)
+    confirmed_units: Optional[int] = Field(None, ge=0)
+    status: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+class BatchUpdateDailyRequest(BaseModel):
+    """日別受注一括更新リクエスト"""
+    list: List[BatchUpdateDailyItem]
+
 
 class SyncRequest(BaseModel):
     """同期リクエストスキーマ"""
-    sync_date: Optional[date] = Field(None, description="同期対象日（未指定の場合は今日）")
+    sync_date: Optional[date_type] = Field(None, description="同期対象日（未指定の場合は今日）")
 
 
 # ========== ページネーションスキーマ ==========

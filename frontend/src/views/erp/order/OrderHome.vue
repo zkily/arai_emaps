@@ -14,7 +14,6 @@
           </div>
           <div class="header-text">
             <h1 class="header-title">受注管理</h1>
-            <div class="header-subtitle">Order Management</div>
           </div>
         </div>
       </div>
@@ -28,6 +27,16 @@
         <div class="module-info">
           <h3 class="module-title">月受注管理</h3>
           <p class="module-desc">月別受注の登録・照会・内示管理</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+      <router-link to="/erp/order/daily" class="module-card modern-card">
+        <div class="module-icon" style="background: linear-gradient(135deg, #06b6d4 0%, #22d3ee 100%);">
+          <el-icon :size="32"><Calendar /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">日受注管理</h3>
+          <p class="module-desc">日別受注の登録・照会・確定本数・納入日管理</p>
         </div>
         <el-icon class="module-arrow"><ArrowRight /></el-icon>
       </router-link>

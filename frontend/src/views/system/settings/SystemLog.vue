@@ -132,7 +132,7 @@
                 layout="sizes, prev, pager, next"
                 @current-change="fetchOperationLogs"
                 @size-change="() => { operationPagination.page = 1; fetchOperationLogs() }"
-                small
+                size="small"
                 background
               />
             </div>
@@ -223,7 +223,7 @@
                 layout="sizes, prev, pager, next"
                 @current-change="fetchErrorLogs"
                 @size-change="() => { errorPagination.page = 1; fetchErrorLogs() }"
-                small
+                size="small"
                 background
               />
             </div>
@@ -310,7 +310,7 @@
                 layout="sizes, prev, pager, next"
                 @current-change="fetchApiLogs"
                 @size-change="() => { apiPagination.page = 1; fetchApiLogs() }"
-                small
+                size="small"
                 background
               />
             </div>

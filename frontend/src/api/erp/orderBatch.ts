@@ -64,3 +64,37 @@ export function batchCreateMonthly(body: {
 }): Promise<BatchCreateMonthlyResponse> {
   return request.post('/api/order/batch-create-monthly', body) as Promise<BatchCreateMonthlyResponse>
 }
+
+export interface GenerateDailyOrdersBody {
+  year: number
+  month: number
+  productType: '量産品'
+  destination_cd?: string
+}
+
+export interface GenerateDailyOrdersResponse {
+  success: boolean
+  insertedCount?: number
+  updatedCount?: number
+  total?: number
+}
+
+/** 日受注リスト生成（量産品のみ。長時間かかるため timeout 長め） */
+export function generateDailyOrders(body: GenerateDailyOrdersBody): Promise<GenerateDailyOrdersResponse> {
+  return request.post('/api/order/generate-daily', body, { timeout: 120000 }) as Promise<GenerateDailyOrdersResponse>
+}
+
+export interface UpdateOrderFieldsBody {
+  startDate: string
+  updateProductInfo: boolean
+}
+
+export interface UpdateOrderFieldsResponse {
+  updatedCount: number
+  message: string
+}
+
+/** 製品情報一括更新（開始日以降の月受注・日受注の製品名・別名・種別・入数を主データで更新） */
+export function updateOrderFields(body: UpdateOrderFieldsBody): Promise<UpdateOrderFieldsResponse> {
+  return request.post('/api/order/monthly/update-fields', body) as Promise<UpdateOrderFieldsResponse>
+}

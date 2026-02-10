@@ -1,9 +1,10 @@
 <template>
-  <div class="edi-import">
-    <div class="page-header">
+  <div class="edi-import" :class="{ 'edi-import-embedded': embedded }">
+    <div v-if="!embedded" class="page-header">
       <h2>EDI取込</h2>
       <p class="subtitle">顧客フォーマット（CSV/XML）の受注データ自動取込</p>
     </div>
+    <p v-else class="embedded-subtitle">顧客フォーマット（CSV/XML）の受注データ自動取込</p>
 
     <!-- アップロードエリア -->
     <el-card class="upload-card" shadow="never">
@@ -111,6 +112,8 @@ import { ElMessage } from 'element-plus'
 import { Upload, DataAnalysis, Check } from '@element-plus/icons-vue'
 import type { UploadFile } from 'element-plus'
 
+defineProps<{ embedded?: boolean }>()
+
 const uploadRef = ref()
 const fileList = ref<UploadFile[]>([])
 const parsing = ref(false)
@@ -182,6 +185,9 @@ const loadHistory = async () => {
 
 <style scoped>
 .edi-import { padding: 20px; }
+.edi-import-embedded { padding: 0 4px 8px; }
+.edi-import-embedded .page-header { display: none; }
+.embedded-subtitle { margin: 0 0 16px 0; color: #909399; font-size: 13px; }
 .page-header { margin-bottom: 20px; }
 .page-header h2 { margin: 0 0 8px 0; color: #303133; }
 .subtitle { margin: 0; color: #909399; font-size: 14px; }

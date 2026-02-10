@@ -35,10 +35,11 @@ export async function getProductOptions(): Promise<OptionItem[]> {
 export async function getDestinationOptions(customerCode?: string): Promise<OptionItem[]> {
   try {
     const list = await getDestinations(customerCode)
-    return (list || []).map((d) => ({
+    const arr = (list || []).map((d) => ({
       cd: d.destination_code,
       name: d.destination_name || d.destination_code,
     }))
+    return arr.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))
   } catch {
     return []
   }

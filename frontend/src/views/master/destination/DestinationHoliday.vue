@@ -19,7 +19,7 @@
       <div class="selector-row">
         <div class="selector-group">
           <span class="selector-label">🚚 納入先</span>
-          <el-select v-model="filters.destination_cd" filterable placeholder="納入先を選択" class="destination-select" :loading="optionsLoading" size="small">
+          <el-select v-model="filters.destination_cd" filterable placeholder="納入先を選択" class="destination-select" popper-class="destination-select-popper" :loading="optionsLoading" size="small">
             <el-option v-for="item in destinationOptions" :key="item.cd" :label="`${item.cd}｜${item.name}`" :value="item.cd" />
           </el-select>
         </div>

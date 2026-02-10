@@ -32,9 +32,7 @@ export const erpRoutes: RouteRecordRaw[] = [
       },
       {
         path: 'erp/sales/edi-import',
-        name: 'EdiImport',
-        component: () => import('@/views/erp/sales/order/EdiImport.vue'),
-        meta: { title: 'EDI取込', group: '販売管理 > 受注管理', requiresAuth: true },
+        redirect: '/erp/order/monthly',
       },
       {
         path: 'erp/sales/forecast',
@@ -102,6 +100,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         name: 'OrderMonthlyList',
         component: () => import('@/views/erp/order/OrderMonthlyList.vue'),
         meta: { title: '月受注管理', group: '受注管理 > 月受注管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/order/daily',
+        name: 'OrderDailyList',
+        component: () => import('@/views/erp/order/OrderDailyList.vue'),
+        meta: { title: '日受注管理', group: '受注管理 > 日受注管理', requiresAuth: true },
       },
 
       // ╔══════════════════════════════════════════════════════════════╗
@@ -285,6 +289,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         name: 'SerialNumberManagement',
         component: () => import('@/views/erp/production/planning/SerialNumberManagement.vue'),
         meta: { title: '製番管理', group: '生産管理 > 生産計画', requiresAuth: true },
+      },
+      {
+        path: 'erp/production/data-management',
+        name: 'ProductionDataManagement',
+        component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'),
+        meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true },
       },
       // ── 製造指示 ──
       {

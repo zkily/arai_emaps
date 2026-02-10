@@ -122,7 +122,7 @@ watch(
 .layout-content {
   flex: 1;
   overflow: auto;
-  padding: 12px;
+  padding: 0 0px 0px 0px;
   background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
 }
 

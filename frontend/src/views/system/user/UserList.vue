@@ -167,7 +167,7 @@
           layout="sizes, prev, pager, next"
           @size-change="handleSizeChange"
           @current-change="handlePageChange"
-          small
+          size="small"
           background
         />
       </div>

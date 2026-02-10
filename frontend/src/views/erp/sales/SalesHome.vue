@@ -203,9 +203,9 @@ const orderModules = [
     gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
   },
   {
-    path: '/erp/sales/edi-import',
+    path: '/erp/order/monthly',
     title: 'EDI取込',
-    description: '顧客フォーマット(CSV/XML)自動取込',
+    description: '月受注画面の「EDI取込」ボタンから顧客フォーマット(CSV/XML)取込',
     icon: markRaw(Tickets),
     gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)'
   },

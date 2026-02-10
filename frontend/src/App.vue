@@ -193,5 +193,13 @@ body,
 #app {
   background-color: #f0f2f5;
 }
+
+/* 納入先下拉框：选项字体缩小 1 号，全页面统一 */
+.destination-select-popper.el-select-dropdown {
+  --el-select-dropdown-item-font-size: 12px;
+}
+.destination-select-popper .el-select-dropdown__item {
+  font-size: 12px;
+}
 </style>
 

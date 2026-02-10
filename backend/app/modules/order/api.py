@@ -3,10 +3,11 @@
 - GET /products: 納入先+年月で製品一覧（order_monthly と LEFT JOIN で forecast_units）
 - GET /check-combination-exists: 納入先名・製品名・年月の組み合わせが既存か
 - POST /batch-create-monthly: 一括登録（INSERT IGNORE 相当）
+- POST /generate-daily: 日受注リスト生成（量産品のみ）
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
@@ -14,10 +15,35 @@ from typing import List, Optional
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import Product
+from app.modules.master.models import Product, ProductRouteStep
 from app.modules.erp import models as erp_models
+from app.modules.order.generate_daily_service import run_generate_daily
 
 router = APIRouter()
+
+
+def _monthly_summary_base_where(om, year, month, destination_cd, keyword):
+    """月別サマリ・リスト共通の where 条件（product_name に「加工」を含む行は除外）"""
+    cond = and_(
+        (om.product_name.is_(None)) | (~om.product_name.like("%加工%")),
+    )
+    if year is not None:
+        cond = and_(cond, om.year == year)
+    if month is not None:
+        cond = and_(cond, om.month == month)
+    if destination_cd:
+        cond = and_(cond, om.destination_cd == destination_cd)
+    if keyword:
+        k = f"%{keyword}%"
+        cond = and_(
+            cond,
+            or_(
+                om.destination_name.like(k),
+                om.product_name.like(k),
+                om.product_cd.like(k),
+            ),
+        )
+    return cond
 
 
 # ---------- GET /products ----------
@@ -105,6 +131,72 @@ async def check_combination_exists(
     return {"exists": True, "id": row.id, "forecast_units": row.forecast_units or 0}
 
 
+# ---------- GET /monthly/summary ----------
+@router.get("/monthly/summary")
+async def get_monthly_summary(
+    year: Optional[int] = Query(None, description="年"),
+    month: Optional[int] = Query(None, ge=1, le=12, description="月"),
+    destination_cd: Optional[str] = Query(None, description="納入先CD"),
+    keyword: Optional[str] = Query(None, description="製品・納入先検索"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    月別受注の合計（リストと同じ条件で集計）。
+    内示本数・確定本数・内示差異・社内メッキ(KT05)・外注メッキ(KT06)・社内溶接(KT07)・外注溶接(KT08)・社内検査(KT09)・外注検査(KT10)。
+    製品名に「加工」を含む行は除外。
+    """
+    om = erp_models.OrderMonthly
+    prs = ProductRouteStep
+    base_where = _monthly_summary_base_where(om, year, month, destination_cd, keyword)
+
+    # 全体合計: forecast_units, forecast_total_units, forecast_diff
+    q_total = (
+        select(
+            func.coalesce(func.sum(om.forecast_units), 0).label("forecast_units"),
+            func.coalesce(func.sum(om.forecast_total_units), 0).label("forecast_total_units"),
+            func.coalesce(func.sum(om.forecast_diff), 0).label("forecast_diff"),
+        )
+        .select_from(om)
+        .where(base_where)
+    )
+    row_total = (await db.execute(q_total)).one()
+    forecast_units = int(row_total.forecast_units or 0)
+    forecast_total_units = int(row_total.forecast_total_units or 0)
+    forecast_diff = int(row_total.forecast_diff or 0)
+
+    # 工序別: 該当 process_cd を持つ製品の月订单のみ SUM（重複計上を防ぐため IN (DISTINCT product_cd) で結合）
+    async def sum_by_process(process_cd: str):
+        subq = select(prs.product_cd).where(prs.process_cd == process_cd).distinct()
+        q = (
+            select(func.coalesce(func.sum(om.forecast_units), 0))
+            .select_from(om)
+            .where(base_where)
+            .where(om.product_cd.in_(subq))
+        )
+        r = (await db.execute(q)).scalar()
+        return int(r or 0)
+
+    plating_count = await sum_by_process("KT05")  # 社内メッキ
+    external_plating_count = await sum_by_process("KT06")  # 外注メッキ
+    internal_welding_count = await sum_by_process("KT07")  # 社内溶接
+    external_welding_count = await sum_by_process("KT08")  # 外注溶接
+    internal_inspection_count = await sum_by_process("KT09")  # 社内検査
+    external_inspection_count = await sum_by_process("KT10")  # 外注検査
+
+    return {
+        "forecast_units": forecast_units,
+        "forecast_total_units": forecast_total_units,
+        "forecast_diff": forecast_diff,
+        "plating_count": plating_count,
+        "external_plating_count": external_plating_count,
+        "internal_welding_count": internal_welding_count,
+        "external_welding_count": external_welding_count,
+        "internal_inspection_count": internal_inspection_count,
+        "external_inspection_count": external_inspection_count,
+    }
+
+
 # ---------- POST /batch-create-monthly ----------
 class BatchProductItem(BaseModel):
     product_cd: str
@@ -182,4 +274,133 @@ async def batch_create_monthly(
         "total": total,
         "skipped": skipped,
         "message": f"{inserted}件登録、{skipped}件スキップ",
+    }
+
+
+# ---------- POST /generate-daily ----------
+class GenerateDailyBody(BaseModel):
+    year: int
+    month: int
+    productType: str = "量産品"
+    destination_cd: Optional[str] = None
+
+
+@router.post("/generate-daily")
+async def generate_daily_orders(
+    body: GenerateDailyBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    日受注リスト生成。year, month 必須。productType は '量産品' のみ対象。
+    トランザクション内で実行し、成功時 commit、異常時 rollback。
+    """
+    if body.productType != "量産品":
+        raise HTTPException(status_code=400, detail="productType は '量産品' のみ対応しています")
+    try:
+        result = await run_generate_daily(
+            db,
+            year=body.year,
+            month=body.month,
+            destination_cd=body.destination_cd,
+        )
+        if not result.get("success") and result.get("detail"):
+            raise HTTPException(status_code=404, detail=result["detail"])
+        await db.commit()
+        return {
+            "success": True,
+            "insertedCount": result.get("insertedCount", 0),
+            "updatedCount": result.get("updatedCount", 0),
+            "total": result.get("total", 0),
+        }
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception:
+        await db.rollback()
+        raise
+
+
+# ---------- POST /monthly/update-fields ----------
+class UpdateOrderFieldsBody(BaseModel):
+    startDate: str  # YYYY-MM-DD（年月のみ使用）
+    updateProductInfo: bool = True
+
+
+@router.post("/monthly/update-fields")
+async def update_order_fields(
+    body: UpdateOrderFieldsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    開始日以降の月受注・日受注の製品情報を主データに合わせて一括更新。
+    startDate の年月以降が対象。(year > startYear) OR (year = startYear AND month >= startMonth)
+    updateProductInfo が True のとき、order_monthly の product_name/product_alias/product_type と
+    order_daily の product_name/product_alias/product_type/unit_per_box を products 主データで更新。
+    """
+    from datetime import datetime
+
+    try:
+        dt = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+    start_year = dt.year
+    start_month = dt.month
+
+    updated_count = 0
+    if body.updateProductInfo:
+        om = erp_models.OrderMonthly
+        od = erp_models.OrderDaily
+        # 対象月订单: (year > startYear) OR (year = startYear AND month >= startMonth)
+        q = (
+            select(om.id, om.order_id, om.product_cd)
+            .where(
+                or_(
+                    om.year > start_year,
+                    and_(om.year == start_year, om.month >= start_month),
+                )
+            )
+        )
+        result = await db.execute(q)
+        monthly_rows = result.all()
+        product_cds = list({r.product_cd for r in monthly_rows})
+        if product_cds:
+            pq = select(Product).where(Product.product_cd.in_(product_cds))
+            presult = await db.execute(pq)
+            product_map = {p.product_cd: p for p in presult.scalars().all()}
+        else:
+            product_map = {}
+
+        for row in monthly_rows:
+            product = product_map.get(row.product_cd)
+            if not product:
+                continue
+            product_name = product.product_name or row.product_cd
+            product_alias = getattr(product, "product_alias", None) or None
+            product_type = (product.product_type or "量産品") if product.product_type else "量産品"
+            unit_per_box = product.unit_per_box if product.unit_per_box is not None else 0
+
+            await db.execute(
+                update(om).where(om.id == row.id).values(
+                    product_name=product_name,
+                    product_alias=product_alias,
+                    product_type=product_type,
+                )
+            )
+            await db.execute(
+                update(od).where(od.monthly_order_id == row.order_id).values(
+                    product_name=product_name,
+                    product_alias=product_alias,
+                    product_type=product_type,
+                    unit_per_box=unit_per_box,
+                )
+            )
+            updated_count += 1
+
+        await db.commit()
+
+    return {
+        "updatedCount": updated_count,
+        "message": f"{updated_count}件の受注情報を更新しました",
     }

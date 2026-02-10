@@ -175,6 +175,15 @@ const masterModules: MasterModule[] = [
     gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
   },
   {
+    name: 'productProcessRoute',
+    titleKey: 'masterHome.productProcessRouteTitle',
+    descKey: 'masterHome.productProcessRouteDesc',
+    path: '/master/product-process-route',
+    icon: markRaw(Setting),
+    color: '#909399',
+    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  },
+  {
     name: 'customer',
     titleKey: 'masterHome.customerTitle',
     descKey: 'masterHome.customerDesc',

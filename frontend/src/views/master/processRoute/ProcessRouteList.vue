@@ -108,7 +108,7 @@
           @size-change="fetchList" 
           @current-change="fetchList"
           class="compact-pagination"
-          small
+          size="small"
         />
       </div>
 

@@ -2,11 +2,11 @@
   <div class="sidebar-menu">
     <!-- Logo -->
     <div class="logo" @click="goHome">
-      <div class="logo-icon-wrapper">
-        <el-icon :size="isCollapsed ? 22 : 24"><DataBoard /></el-icon>
-      </div>
       <transition name="fade-text">
-        <span v-if="!isCollapsed" class="logo-text">Smart-EMAP</span>
+        <img v-if="!isCollapsed" src="/logo.png" alt="Smart-EMAP" class="logo-image" />
+        <div v-else class="logo-icon-wrapper">
+          <el-icon :size="22"><DataBoard /></el-icon>
+        </div>
       </transition>
     </div>
     
@@ -41,7 +41,6 @@
             <el-menu-item index="/erp/sales"><span :title="t('menu.ERP_SALES_HOME')">{{ t('menu.ERP_SALES_HOME') }}</span></el-menu-item>
             <el-menu-item index="/erp/sales/quotation"><span :title="t('menu.ERP_SALES_QUOTATION')">{{ t('menu.ERP_SALES_QUOTATION') }}</span></el-menu-item>
             <el-menu-item index="/erp/sales/orders"><span :title="t('menu.ERP_SALES_ORDERS')">{{ t('menu.ERP_SALES_ORDERS') }}</span></el-menu-item>
-            <el-menu-item index="/erp/sales/edi-import"><span :title="t('menu.ERP_SALES_EDI')">{{ t('menu.ERP_SALES_EDI') }}</span></el-menu-item>
             <el-menu-item index="/erp/sales/forecast"><span :title="t('menu.ERP_SALES_FORECAST')">{{ t('menu.ERP_SALES_FORECAST') }}</span></el-menu-item>
             <el-menu-item index="/erp/sales/credit"><span :title="t('menu.ERP_SALES_CREDIT')">{{ t('menu.ERP_SALES_CREDIT') }}</span></el-menu-item>
             <el-menu-item index="/erp/sales/contract-pricing"><span :title="t('menu.ERP_SALES_CONTRACT')">{{ t('menu.ERP_SALES_CONTRACT') }}</span></el-menu-item>
@@ -52,15 +51,6 @@
             <el-menu-item index="/erp/sales/returns"><span :title="t('menu.ERP_SALES_RETURNS')">{{ t('menu.ERP_SALES_RETURNS') }}</span></el-menu-item>
           </el-sub-menu>
 
-          <el-sub-menu index="erp-order">
-            <template #title>
-              <el-icon><Document /></el-icon>
-              <span :title="t('menu.ERP_ORDER')">{{ t('menu.ERP_ORDER') }}</span>
-            </template>
-            <el-menu-item index="/erp/order"><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></el-menu-item>
-            <el-menu-item index="/erp/order/monthly"><span :title="t('menu.ERP_ORDER_MONTHLY')">{{ t('menu.ERP_ORDER_MONTHLY') }}</span></el-menu-item>
-          </el-sub-menu>
-          
           <el-sub-menu index="erp-purchase">
             <template #title>
               <el-icon><ShoppingCart /></el-icon>
@@ -78,6 +68,16 @@
             <el-menu-item index="/erp/purchase/invoice-matching"><span :title="t('menu.ERP_PURCHASE_INVOICE')">{{ t('menu.ERP_PURCHASE_INVOICE') }}</span></el-menu-item>
             <el-menu-item index="/erp/purchase/payment-schedule"><span :title="t('menu.ERP_PURCHASE_PAY_SCHEDULE')">{{ t('menu.ERP_PURCHASE_PAY_SCHEDULE') }}</span></el-menu-item>
             <el-menu-item index="/erp/purchase/bank-transfer"><span :title="t('menu.ERP_PURCHASE_BANK')">{{ t('menu.ERP_PURCHASE_BANK') }}</span></el-menu-item>
+          </el-sub-menu>
+
+          <el-sub-menu index="erp-order">
+            <template #title>
+              <el-icon><Document /></el-icon>
+              <span :title="t('menu.ERP_ORDER')">{{ t('menu.ERP_ORDER') }}</span>
+            </template>
+            <el-menu-item index="/erp/order"><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/erp/order/monthly"><span :title="t('menu.ERP_ORDER_MONTHLY')">{{ t('menu.ERP_ORDER_MONTHLY') }}</span></el-menu-item>
+            <el-menu-item index="/erp/order/daily"><span :title="t('menu.ERP_ORDER_DAILY')">{{ t('menu.ERP_ORDER_DAILY') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-inventory">
@@ -107,6 +107,7 @@
             <el-menu-item index="/erp/production/mrp"><span :title="t('menu.ERP_PRODUCTION_MRP')">{{ t('menu.ERP_PRODUCTION_MRP') }}</span></el-menu-item>
             <el-menu-item index="/erp/production/orders"><span :title="t('menu.ERP_PRODUCTION_ORDERS')">{{ t('menu.ERP_PRODUCTION_ORDERS') }}</span></el-menu-item>
             <el-menu-item index="/erp/production/serial"><span :title="t('menu.ERP_PRODUCTION_SERIAL')">{{ t('menu.ERP_PRODUCTION_SERIAL') }}</span></el-menu-item>
+            <el-menu-item index="/erp/production/data-management"><span :title="t('menu.ERP_PRODUCTION_DATA')">{{ t('menu.ERP_PRODUCTION_DATA') }}</span></el-menu-item>
             <el-menu-item index="/erp/production/work-order"><span :title="t('menu.ERP_PRODUCTION_WO')">{{ t('menu.ERP_PRODUCTION_WO') }}</span></el-menu-item>
             <el-menu-item index="/erp/production/material-issue"><span :title="t('menu.ERP_PRODUCTION_ISSUE')">{{ t('menu.ERP_PRODUCTION_ISSUE') }}</span></el-menu-item>
             <el-menu-item index="/erp/production/completion"><span :title="t('menu.ERP_PRODUCTION_COMPLETE')">{{ t('menu.ERP_PRODUCTION_COMPLETE') }}</span></el-menu-item>
@@ -184,6 +185,7 @@
             <el-menu-item index="/master/machine"><span :title="t('menu.MASTER_MACHINE')">{{ t('menu.MASTER_MACHINE') }}</span></el-menu-item>
             <el-menu-item index="/master/process"><span :title="t('menu.MASTER_PROCESS')">{{ t('menu.MASTER_PROCESS') }}</span></el-menu-item>
             <el-menu-item index="/master/process-route"><span :title="t('menu.MASTER_PROCESS_ROUTE')">{{ t('menu.MASTER_PROCESS_ROUTE') }}</span></el-menu-item>
+            <el-menu-item index="/master/product-process-route"><span :title="t('menu.MASTER_PRODUCT_PROCESS_ROUTE')">{{ t('menu.MASTER_PRODUCT_PROCESS_ROUTE') }}</span></el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/master/bom">
             <el-icon><Connection /></el-icon>
@@ -329,6 +331,18 @@ const toggleCollapse = () => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+.logo-image {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  transition: all 0.3s ease;
+}
+
+.logo:hover .logo-image {
+  transform: scale(1.05);
+  filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.4));
 }
 
 .menu-scrollbar {
