@@ -277,3 +277,60 @@ class ProductRouteStepMachine(Base):
     setup_time = Column(Integer, default=0)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ProductProcessBOM(Base):
+    """製品工程BOM（product_process_bom）"""
+    __tablename__ = "product_process_bom"
+    __table_args__ = ({"mysql_comment": "製品工程BOM (Product Process BOM)"})
+
+    product_cd = Column(Integer, primary_key=True)
+    product_name = Column(String(100))
+    min_stock_days = Column(Integer)
+    safety_stock_days = Column(Integer)
+    material_process = Column(Integer)  # tinyint(1)
+    material_process_lt = Column(Integer)
+    cuting_process = Column(Integer)
+    cuting_process_lt = Column(Integer)
+    chamfering_process = Column(Integer)
+    chamfering_process_lt = Column(Integer)
+    swaging_process = Column(Integer)
+    swaging_process_lt = Column(Integer)
+    forming_process = Column(Integer)
+    forming_process_lt = Column(Integer)
+    plating_process = Column(Integer)
+    plating_process_lt = Column(Integer)
+    outsourced_plating_process = Column(Integer)
+    outsourced_plating_process_lt = Column(Integer)
+    welding_process = Column(Integer)
+    welding_process_lt = Column(Integer)
+    outsourced_welding_process = Column(Integer)
+    outsourced_welding_process_lt = Column(Integer)
+    inspection_process = Column(Integer)
+    inspection_process_lt = Column(Integer)
+    outsourced_warehouse_process = Column(Integer)
+    outsourced_warehouse_process_lt = Column(Integer)
+    pre_plating_welding = Column(Integer)
+    post_inspection_welding = Column(Integer)
+    post_inspection_welding_lt = Column(Integer)
+    is_discontinued = Column(Integer)
+
+
+class ProductMachineConfig(Base):
+    """製品機器設定（product_machine_config）"""
+    __tablename__ = "product_machine_config"
+    __table_args__ = ({"mysql_comment": "製品機器設定管理テーブル"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), unique=True, nullable=False, index=True)
+    product_name = Column(String(255), nullable=False, index=True)
+    cutting_machine = Column(String(100))
+    chamfering_machine = Column(String(100))
+    molding_machine = Column(String(100))
+    plating_machine = Column(String(100))
+    welding_machine = Column(String(100))
+    inspector_machine = Column(String(100))
+    outsourced_plating_machine = Column(String(100))
+    outsourced_welding_machine = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

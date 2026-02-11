@@ -23,7 +23,7 @@ DIST_DIR = FRONTEND_DIR / "dist"
 
 processes: List[subprocess.Popen] = []
 should_exit = False
-PROCESS_NAMES = ("バックエンド", "フロントエンド（開発）")
+PROCESS_NAMES = ("バックエンド", "フロントエンド（開発）", "ファイル監視")
 production_httpd = None  # 本番サーバー（signal で shutdown 用）
 
 # 設定
@@ -194,6 +194,8 @@ def signal_handler(sig, frame):
         production_httpd = None
 
     for i, process in enumerate(processes):
+        if process is None:
+            continue
         try:
             name = PROCESS_NAMES[i] if i < len(PROCESS_NAMES) else f"プロセス{i}"
             print(f"   {name}サーバーを停止中...")
@@ -260,8 +262,6 @@ def start_backend(output_buffer: List[str]) -> subprocess.Popen:
                         break
                     line = line.rstrip()
                     output_buffer.append(line)
-                    if "Uvicorn running" in line or "Application startup" in line:
-                        print(f"[backend] {line}")
         except Exception:
             pass
     
@@ -304,11 +304,49 @@ def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
                         break
                     line = line.rstrip()
                     output_buffer.append(line)
-                    if "VITE" in line or "Local:" in line or "Network:" in line or "ready" in line:
-                        print(f"[frontend-dev] {line}")
         except Exception:
             pass
     
+    threading.Thread(target=read_output, daemon=True).start()
+    return process
+
+
+def start_file_watcher(output_buffer: List[str]) -> subprocess.Popen:
+    """バックエンドのBT-data受信CSVファイル監視を起動"""
+    if sys.platform == "win32":
+        python_path = BACKEND_DIR / "venv" / "Scripts" / "python.exe"
+    else:
+        python_path = BACKEND_DIR / "venv" / "bin" / "python"
+    if not python_path.exists():
+        python_path = Path(sys.executable)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(BACKEND_DIR)
+    env["PYTHONIOENCODING"] = "utf-8"
+    process = subprocess.Popen(
+        [str(python_path), "run_file_watcher.py"],
+        cwd=BACKEND_DIR,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=0,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+    def read_output():
+        try:
+            if process.stdout:
+                for line in iter(process.stdout.readline, ""):
+                    if not line:
+                        break
+                    s = line.rstrip()
+                    output_buffer.append(s)
+                    if s:
+                        print(f"[file-watcher] {s}")
+        except Exception:
+            pass
+
     threading.Thread(target=read_output, daemon=True).start()
     return process
 
@@ -555,6 +593,20 @@ def main():
         frontend_proc = start_frontend_dev(frontend_output)
         processes.append(frontend_proc)
         
+        # バックエンド ファイル監視（BT-data受信CSV）。.env の FILE_WATCH_BASE_PATH が空でない場合のみ起動
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
+        except Exception:
+            pass
+        watch_path = os.environ.get("FILE_WATCH_BASE_PATH", "").strip()
+        file_watcher_output = []
+        if watch_path:
+            print()
+            print("> file-watcher")
+            file_watcher_proc = start_file_watcher(file_watcher_output)
+            processes.append(file_watcher_proc)
+        
         # 本番フロント（dist）をスレッドで起動
         print()
         print("> prod:frontend (dist)")
@@ -596,8 +648,19 @@ def main():
         # メインループ
         while not should_exit:
             for i, process in enumerate(processes):
+                if process is None:
+                    continue
                 if process.poll() is not None:
                     name = PROCESS_NAMES[i] if i < len(PROCESS_NAMES) else f"プロセス{i}"
+                    # ファイル監視が code 0 で終了＝監視パス未設定またはパスが存在しない（正常扱いでアプリは継続）
+                    if i == 2 and process.returncode == 0:
+                        print_color("⚠️  ファイル監視が終了しました（監視パスが未設定か、指定パスが存在しません）", Colors.YELLOW)
+                        processes[i] = None
+                        continue
+                    if i == 2 and process.returncode != 0 and file_watcher_output:
+                        print_color("   ファイル監視のエラー出力:", Colors.YELLOW)
+                        for line in file_watcher_output[-25:]:
+                            print(f"   {line}")
                     print_color(f"\n❌ {name}サーバーが終了しました (code: {process.returncode})", Colors.RED)
                     signal_handler(None, None)
                     sys.exit(1)

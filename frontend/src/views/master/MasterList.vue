@@ -86,7 +86,6 @@ import {
   Folder,
   ArrowRight,
   Plus,
-  List,
 } from '@element-plus/icons-vue'
 import { markRaw, h, type Component } from 'vue'
 
@@ -218,15 +217,6 @@ const masterModules: MasterModule[] = [
     icon: markRaw(Position),
     color: '#F56C6C',
     gradient: 'linear-gradient(135deg, #fddb92 0%, #d1fdff 100%)',
-  },
-  {
-    name: 'bom',
-    titleKey: 'masterHome.bomTitle',
-    descKey: 'masterHome.bomDesc',
-    path: '/master/bom',
-    icon: markRaw(List),
-    color: '#909399',
-    gradient: 'linear-gradient(135deg, #c1dfc4 0%, #deecdd 100%)',
   },
 ]
 

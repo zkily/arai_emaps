@@ -335,17 +335,24 @@ async def get_current_user(
     current_user: User = Depends(verify_token_and_get_user)
 ):
     """現在のユーザー情報取得"""
-    # ユーザー権限を取得
-    permissions = get_user_permissions(current_user.role)
-    
-    return {
-        "id": current_user.id,
-        "username": current_user.username,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-        "is_active": current_user.is_active,
-        "permissions": permissions,
-        "department_id": getattr(current_user, "department_id", None),
-    }
+    try:
+        # UserResponse は username/email/role を必須とするため、None の場合は空文字/デフォルトで返す
+        role = current_user.role if current_user.role is not None else "user"
+        permissions = get_user_permissions(role)
+        return {
+            "id": current_user.id,
+            "username": current_user.username or "",
+            "email": current_user.email or "",
+            "full_name": current_user.full_name,
+            "role": role,
+            "is_active": bool(current_user.is_active) if current_user.is_active is not None else True,
+            "permissions": permissions,
+            "department_id": getattr(current_user, "department_id", None),
+        }
+    except Exception as e:
+        logger.exception("GET /me でエラー: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ユーザー情報の取得に失敗しました",
+        ) from e
 

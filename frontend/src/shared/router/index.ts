@@ -61,6 +61,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory', name: 'Inventory', component: () => import('@/views/erp/Inventory.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/InventoryList.vue'), meta: { title: '在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/transactions', name: 'InventoryTransactions', component: () => import('@/views/erp/inventory/InventoryTransactions.vue'), meta: { title: '入出庫履歴', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/stock-transaction-logs', name: 'StockTransactionLog', component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'), meta: { title: '在庫取引記録', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/movement', name: 'StockMovement', component: () => import('@/views/erp/inventory/warehouse/StockMovement.vue'), meta: { title: '入出庫移動', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stocktaking', name: 'Stocktaking', component: () => import('@/views/erp/inventory/warehouse/Stocktaking.vue'), meta: { title: '棚卸管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/dead-stock', name: 'DeadStock', component: () => import('@/views/erp/inventory/analysis/DeadStock.vue'), meta: { title: '長期滞留在庫分析', group: '在庫分析', requiresAuth: true } },
@@ -109,7 +110,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/machine', name: 'MachineList', component: () => import('@/views/master/machine/MachineList.vue'), meta: { title: '設備マスタ', requiresAuth: true } },
       { path: 'master/destination', name: 'DestinationList', component: () => import('@/views/master/destination/DestinationList.vue'), meta: { title: '納入先マスタ', requiresAuth: true } },
       { path: 'master/destination/holiday', name: 'DestinationHoliday', component: () => import('@/views/master/destination/DestinationHoliday.vue'), meta: { title: '納入先休日設定', requiresAuth: true } },
-      { path: 'master/bom', name: 'Bom', component: () => import('@/views/master/Bom.vue'), meta: { title: 'BOM', requiresAuth: true } },
+      { path: 'master/bom', name: 'BomHome', component: () => import('@/views/master/BomList.vue'), meta: { title: 'BOMホーム', requiresAuth: true } },
+      { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
+      { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========
       { path: 'system', name: 'System', component: () => import('@/views/system/SystemHome.vue'), meta: { title: 'システム管理', requiresAuth: true } },
@@ -122,6 +125,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/logs', name: 'SystemLog', component: () => import('@/views/system/settings/SystemLog.vue'), meta: { title: 'システムログ', requiresAuth: true } },
       { path: 'system/data', name: 'DataManagement', component: () => import('@/views/system/settings/DataManagement.vue'), meta: { title: 'データ管理', requiresAuth: true } },
       { path: 'system/menus', name: 'MenuManagement', component: () => import('@/views/system/settings/MenuManagement.vue'), meta: { title: 'メニュー管理', requiresAuth: true } },
+      { path: 'system/file-watcher', name: 'FileWatcherSetting', component: () => import('@/views/system/settings/FileWatcherSetting.vue'), meta: { title: 'ファイル監視設定', requiresAuth: true } },
     ],
   },
 ]

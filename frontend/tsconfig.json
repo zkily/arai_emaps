@@ -33,7 +33,8 @@
     "src/views/Login.vue",
     "src/views/Redirect.vue",
     "src/views/Dashboard.vue",
-    "src/views/DashboardHome.vue"
+    "src/views/DashboardHome.vue",
+    "src/views/master/Bom.vue"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

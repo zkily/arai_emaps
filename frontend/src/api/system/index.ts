@@ -431,3 +431,21 @@ export function getErrorLogs(params?: ErrorLogParams) {
 export function getApiLogs(params?: ApiLogParams) {
   return request.get<PaginatedLogs<ApiLogItem>>(`${SETTINGS_BASE}/logs/api`, { params })
 }
+
+// ========== ファイル監視設定 ==========
+
+export interface FileWatcherSettings {
+  stockFiles: string[]
+  materialFiles: string[]
+  enabled: Record<string, boolean>
+}
+
+/** ファイル監視の有効/無効一覧取得 */
+export function getFileWatcherSettings() {
+  return request.get<FileWatcherSettings>(`${SETTINGS_BASE}/file-watcher`)
+}
+
+/** ファイル監視の有効/無効を保存 */
+export function updateFileWatcherSettings(enabled: Record<string, boolean>) {
+  return request.put<{ message: string; enabled: Record<string, boolean> }>(`${SETTINGS_BASE}/file-watcher`, { enabled })
+}

@@ -82,8 +82,20 @@ export const masterRoutes: RouteRecordRaw[] = [
   },
   {
     path: 'master/bom',
-    name: 'Bom',
-    component: () => import('@/views/master/Bom.vue'),
-    meta: { title: 'BOM', requiresAuth: true },
+    name: 'BomHome',
+    component: () => import('@/views/master/BomList.vue'),
+    meta: { title: 'BOMホーム', requiresAuth: true },
+  },
+  {
+    path: 'master/bom/product-process',
+    name: 'ProductProcessBOM',
+    component: () => import('@/views/master/bom/ProductProcessBOM.vue'),
+    meta: { title: '製品工程BOM', requiresAuth: true },
+  },
+  {
+    path: 'master/bom/product-machine-config',
+    name: 'ProductMachineConfig',
+    component: () => import('@/views/master/bom/ProductMachineConfig.vue'),
+    meta: { title: '製品機器設定', requiresAuth: true },
   },
 ]

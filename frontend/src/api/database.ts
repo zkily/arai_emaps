@@ -51,3 +51,101 @@ export interface UpdateFromOrderDailyParams {
 export function updateProductionSummarysFromOrderDaily(params?: UpdateFromOrderDailyParams) {
   return request.post(`${BASE}/update-from-order-daily`, params || {})
 }
+
+/** 繰越フィールドを全件 0 にクリア */
+export function clearProductionSummarysCarryOver() {
+  return request.post(`${BASE}/clear-carry-over`)
+}
+
+/** 初期在庫ログから繰越を再計算して production_summarys に反映 */
+export function updateProductionSummarysCarryOver() {
+  return request.post(`${BASE}/update-carry-over`)
+}
+
+/** 実績データ更新：stock_transaction_logs から actual 列を再計算して production_summarys に反映 */
+export function updateProductionSummarysActual() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; cleared?: number; clearPeriod?: string }
+    message?: string
+  }>(`${BASE}/update-actual`)
+}
+
+/** 不良データ更新：stock_transaction_logs の不良を集計して production_summarys の defect 列に反映 */
+export function updateProductionSummarysDefect() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number }
+    message?: string
+  }>(`${BASE}/update-defect`)
+}
+
+/** 廃棄データ更新：stock_transaction_logs の廃棄を集計して production_summarys の scrap 列に反映 */
+export function updateProductionSummarysScrap() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number }
+    message?: string
+  }>(`${BASE}/update-scrap`)
+}
+
+/** 保留データ更新：stock_transaction_logs の保留を集計して production_summarys の on_hold 列に反映 */
+export function updateProductionSummarysOnHold() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number }
+    message?: string
+  }>(`${BASE}/update-on-hold`)
+}
+
+/** 生産計画日更新：product_process_bom のリードタイムで production_summarys の各工程 *_production_date を営業日逆算で更新 */
+export function updateProductionSummarysProductionDates() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number }
+    message?: string
+  }>(`${BASE}/update-production-dates`)
+}
+
+/** 計算フィールド（在庫・推移・actual_plan_trend）を date >= startDate で 0 にクリア */
+export function clearProductionSummarysCalculatedFields(startDate: string) {
+  return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate })
+}
+
+/** 計画データ更新：production_plan_updates を集計して production_summarys の plan / actual_plan を更新 */
+export function updateProductionSummarysPlan() {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-plan`)
+}
+
+/** 在庫・推移更新は処理時間がかかるため 5 分タイムアウト */
+const LONG_REQUEST_TIMEOUT = 5 * 60 * 1000
+
+/** 在庫更新：開始日～+3ヶ月の在庫列を再計算 */
+export function updateProductionSummarysInventory(startDate?: string) {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-inventory`, startDate != null ? { startDate } : {}, { timeout: LONG_REQUEST_TIMEOUT })
+}
+
+/** 推移更新：開始日～+3ヶ月の trend / actual_plan_trend を再計算 */
+export function updateProductionSummarysTrend(startDate?: string) {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-trend`, startDate != null ? { startDate } : {}, { timeout: LONG_REQUEST_TIMEOUT })
+}
+
+/** 製品マスタ更新：products の route_cd, product_name を production_summarys に同期 */
+export function updateProductionSummarysProductMaster(body: { startDate: string; endDate: string }) {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; startDate?: string; endDate?: string; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-product-master`, body)
+}
+
+/** 設備フィールド更新：product_machine_config + machines から production_summarys の各 *_machine を同期 */
+export function updateProductionSummarysMachine(body: { startDate: string; endDate: string }) {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; startDate?: string; endDate?: string; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-machine`, body)
+}

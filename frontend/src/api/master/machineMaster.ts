@@ -48,3 +48,8 @@ export function updateMachine(data: Partial<MachineItem> & { id: number }): Prom
 export function deleteMachineById(id: number): Promise<{ message: string }> {
   return request.delete(`/api/master/machines/${id}`) as Promise<{ message: string }>
 }
+
+/** 設備一覧（オプション用・list を返す形式） */
+export function fetchMachines(): Promise<MachineListResponse> {
+  return getMachineList({ pageSize: 9999 }) as Promise<MachineListResponse>
+}

@@ -12,6 +12,8 @@ from app.modules.master.api_customer import router as customer_router
 from app.modules.master.api_carrier import router as carrier_router
 from app.modules.master.api_machine import router as machine_router
 from app.modules.master.api_product_route_steps import router as product_route_steps_router
+from app.modules.master.api_product_process_bom import router as product_process_bom_router
+from app.modules.master.api_product_machine_config import router as product_machine_config_router
 
 router = APIRouter()
 router.include_router(product_router, prefix="/products", tags=["製品マスタ"])
@@ -28,3 +30,5 @@ router.include_router(
     prefix="/product/process/routes",
     tags=["製品別工程ルートステップ"],
 )
+router.include_router(product_process_bom_router, prefix="/product-process-bom", tags=["製品工程BOM"])
+router.include_router(product_machine_config_router, prefix="/product-machine-config", tags=["製品機器設定"])

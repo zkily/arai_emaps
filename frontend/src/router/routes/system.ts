@@ -62,4 +62,10 @@ export const systemRoutes: RouteRecordRaw[] = [
     component: () => import('@/views/system/settings/MenuManagement.vue'),
     meta: { title: 'メニュー管理', requiresAuth: true, permission: 'all' },
   },
+  {
+    path: 'system/file-watcher',
+    name: 'FileWatcherSetting',
+    component: () => import('@/views/system/settings/FileWatcherSetting.vue'),
+    meta: { title: 'ファイル監視設定', requiresAuth: true, permission: 'all' },
+  },
 ]

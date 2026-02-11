@@ -11,13 +11,13 @@
         <el-dropdown
           trigger="click"
           placement="bottom-start"
-          :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+          :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
           class="others-dropdown"
         >
           <el-button
             size="small"
             :icon="MoreFilled"
-            :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily"
+            :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
             class="modern-btn others-btn"
           >
             その他
@@ -34,12 +34,115 @@
                 <span>データ生成</span>
               </el-dropdown-item>
               <el-dropdown-item
+                @click="handleAllUpdate"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item all-update-item"
+              >
+                <el-icon><Operation /></el-icon>
+                <span>全部一括更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
                 @click="handleUpdateFromOrderDaily"
                 :disabled="updatingFromOrderDaily"
                 class="dropdown-item update-order-item"
               >
                 <el-icon><Refresh /></el-icon>
                 <span>受注データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="openBatchInitialStockDialog"
+                class="dropdown-item batch-initial-item"
+              >
+                <el-icon><DocumentCopy /></el-icon>
+                <span>初期在庫一括登録</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateCarryOver"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item carry-over-item"
+              >
+                <el-icon><RefreshRight /></el-icon>
+                <span>繰越データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateActual"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item actual-item"
+              >
+                <el-icon><Refresh /></el-icon>
+                <span>実績データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateDefect"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item defect-item"
+              >
+                <el-icon><WarningFilled /></el-icon>
+                <span>不良データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateScrap"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item scrap-item"
+              >
+                <el-icon><Delete /></el-icon>
+                <span>廃棄データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateOnHold"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item on-hold-item"
+              >
+                <el-icon><Clock /></el-icon>
+                <span>保留データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateProductionDates"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item production-dates-item"
+              >
+                <el-icon><Calendar /></el-icon>
+                <span>生産計画日更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdatePlan"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item plan-item"
+              >
+                <el-icon><DocumentCopy /></el-icon>
+                <span>計画データ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleInventoryTrendUpdate"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item inventory-trend-item"
+              >
+                <el-icon><Refresh /></el-icon>
+                <span>在庫・推移更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateProductMaster"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingProductMaster"
+                class="dropdown-item product-master-item"
+              >
+                <el-icon><Goods /></el-icon>
+                <span>製品マスタ更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleUpdateMachine"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingMachine"
+                class="dropdown-item machine-update-item"
+              >
+                <el-icon><Monitor /></el-icon>
+                <span>設備フィールド更新</span>
+              </el-dropdown-item>
+              <el-dropdown-item
+                @click="handleOpenBatchActualDialog"
+                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                class="dropdown-item batch-actual-item"
+              >
+                <el-icon><DocumentCopy /></el-icon>
+                <span>実績一括登録</span>
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -60,6 +163,14 @@
           class="modern-btn print-btn"
         >
           <span>印刷</span>
+        </el-button>
+        <el-button
+          size="small"
+          :icon="Printer"
+          @click="handleProcessPrint"
+          class="modern-btn process-print-btn-primary"
+        >
+          <span>工程別計画確認印刷</span>
         </el-button>
         <el-button
           size="small"
@@ -330,6 +441,216 @@
       </template>
     </el-dialog>
 
+    <!-- 計画データ更新確認ダイアログ -->
+    <el-dialog
+      v-model="showPlanConfirmDialog"
+      title="計画データ更新確認"
+      width="550px"
+      class="plan-confirm-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">計画データを更新しますか？</h3>
+          <div class="confirm-details">
+            <div class="detail-row">
+              <span class="detail-value">production_plan_updates の集計を production_summarys の plan 列に反映し、actual_plan を更新します。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showPlanConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" @click="confirmUpdatePlan" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 在庫・推移更新確認ダイアログ -->
+    <el-dialog
+      v-model="showInventoryTrendUpdateConfirmDialog"
+      title="在庫・推移更新確認"
+      width="550px"
+      class="inventory-trend-confirm-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">在庫・推移を更新しますか？</h3>
+          <div class="confirm-details">
+            <div class="detail-row">
+              <span class="detail-value">計算期間は開始日～+3ヶ月です。先に計算フィールドをクリアしてから、在庫→推移の順で更新します。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showInventoryTrendUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" @click="confirmInventoryTrendUpdate" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 製品マスタ更新ダイアログ -->
+    <el-dialog
+      v-model="showProductMasterUpdateDialog"
+      title="製品マスタ更新"
+      width="550px"
+      class="product-master-update-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">製品マスタを更新しますか？</h3>
+          <div class="confirm-details">
+            <div class="detail-row">
+              <span class="detail-label">更新期間</span>
+            </div>
+            <div class="detail-row" style="margin-top: 8px;">
+              <el-date-picker
+                v-model="productMasterDateRange"
+                type="daterange"
+                range-separator="～"
+                start-placeholder="開始日"
+                end-placeholder="終了日"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 100%;"
+              />
+            </div>
+            <div class="detail-row" style="margin-top: 8px;">
+              <span class="detail-value">products の route_cd, product_name を production_summarys に同期します。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showProductMasterUpdateDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" @click="confirmUpdateProductMaster" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 設備フィールド更新ダイアログ -->
+    <el-dialog
+      v-model="showMachineUpdateDialog"
+      title="設備フィールド更新"
+      width="550px"
+      class="machine-update-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">機器フィールドを更新しますか？</h3>
+          <div class="confirm-details">
+            <div class="detail-row">
+              <span class="detail-label">更新期間</span>
+            </div>
+            <div class="detail-row" style="margin-top: 8px;">
+              <el-date-picker
+                v-model="machineDateRange"
+                type="daterange"
+                range-separator="～"
+                start-placeholder="開始日"
+                end-placeholder="終了日"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                style="width: 100%;"
+              />
+            </div>
+            <div class="detail-row" style="margin-top: 8px;">
+              <span class="detail-value">product_machine_config と machines から production_summarys の各工程設備名を同期します。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showMachineUpdateDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" @click="confirmUpdateMachine" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 全部一括更新確認ダイアログ -->
+    <el-dialog
+      v-model="showAllUpdateConfirmDialog"
+      title="全部一括更新確認"
+      width="520px"
+      class="all-update-confirm-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <div class="confirm-icon-wrapper">
+          <el-icon class="confirm-icon"><InfoFilled /></el-icon>
+        </div>
+        <div class="confirm-info">
+          <h3 class="confirm-title">以下の順で一括更新します</h3>
+          <div class="confirm-details">
+            <ol class="all-update-steps-list">
+              <li>受注データ更新</li>
+              <li>実績データ更新</li>
+              <li>不良データ更新</li>
+              <li>廃棄データ更新</li>
+              <li>保留データ更新</li>
+              <li>計画データ更新</li>
+              <li>在庫・推移更新</li>
+            </ol>
+            <div class="detail-row" style="margin-top: 10px;">
+              <span class="detail-value">この処理には時間がかかる場合があります。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showAllUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
+          <el-button type="primary" @click="confirmAllUpdate" class="confirm-btn">一括更新開始</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 工程別計画確認印刷 - 対象日選択 -->
+    <el-dialog
+      v-model="showPrintDateDialog"
+      title="工程別計画確認印刷 - 対象日選択"
+      width="420px"
+      class="process-print-date-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="generate-confirm-content">
+        <p class="detail-value" style="margin-bottom: 12px;">印刷対象の日付を選択してください。</p>
+        <el-date-picker
+          v-model="printTargetDate"
+          type="date"
+          value-format="YYYY-MM-DD"
+          placeholder="日付を選択"
+          style="width: 100%;"
+        />
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showPrintDateDialog = false">キャンセル</el-button>
+          <el-button type="primary" :disabled="!printTargetDate" @click="handleConfirmPrintDate">印刷</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- データ生成進度ダイアログ -->
     <el-dialog
       v-model="showProgressDialog"
@@ -356,6 +677,176 @@
           <span class="detail-value">{{ Math.round(progressPercentage) }}%</span>
         </div>
       </div>
+    </el-dialog>
+
+    <!-- 初期在庫一括登録ダイアログ -->
+    <el-dialog
+      v-model="showBatchInitialStockDialog"
+      title="初期在庫一括登録"
+      width="720px"
+      class="batch-initial-stock-dialog"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="batch-initial-filter">
+        <div class="filter-row">
+          <label class="filter-label">月（必須）</label>
+          <el-date-picker
+            v-model="batchInitialStockMonth"
+            type="month"
+            value-format="YYYY-MM"
+            placeholder="月を選択"
+            size="small"
+            class="month-picker"
+          />
+        </div>
+        <div class="filter-row">
+          <label class="filter-label">工程（必須）</label>
+          <el-select
+            v-model="batchInitialStockProcessCd"
+            placeholder="工程を選択"
+            size="small"
+            clearable
+            filterable
+            class="process-select"
+          >
+            <el-option
+              v-for="p in processOptions"
+              :key="p.cd"
+              :label="`${p.cd} - ${p.name}`"
+              :value="p.cd"
+            />
+          </el-select>
+        </div>
+        <div class="filter-actions">
+          <el-button type="primary" size="small" :loading="batchInitialStockLoading" @click="handleBatchInitialStockSearch">
+            検索
+          </el-button>
+          <el-button type="success" size="small" :loading="batchInitialStockSaving" :disabled="!batchInitialStockData.length" @click="handleSaveBatchInitialStock">
+            一括保存
+          </el-button>
+        </div>
+      </div>
+      <div class="batch-initial-table-wrap">
+        <el-table
+          :data="batchInitialStockData"
+          stripe
+          border
+          size="small"
+          max-height="360"
+          show-summary
+          :summary-method="batchInitialStockSummaryMethod"
+        >
+          <el-table-column prop="product_cd" label="製品CD" width="100" align="center" />
+          <el-table-column prop="product_name" label="製品名" min-width="140" show-overflow-tooltip />
+          <el-table-column label="初期在庫数量" width="140" align="center">
+            <template #default="{ row, $index }">
+              <el-input-number
+                :ref="(el: any) => setBatchQtyInputRef($index, el)"
+                v-model="row.editQuantity"
+                :min="0"
+                :controls="true"
+                size="small"
+                class="qty-input"
+                @keydown.enter.prevent="focusBatchInitialRow($index + 1)"
+                @keydown.down.prevent="focusBatchInitialRow($index + 1)"
+                @keydown.up.prevent="focusBatchInitialRow($index - 1)"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </el-dialog>
+
+    <!-- 実績一括登録ダイアログ -->
+    <el-dialog
+      v-model="showBatchActualDialog"
+      title="実績一括登録"
+      width="780px"
+      class="batch-actual-dialog"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="batch-actual-filter">
+        <div class="filter-row">
+          <label class="filter-label">日付（必須）</label>
+          <el-date-picker
+            v-model="batchActualDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="日付を選択"
+            size="small"
+            style="width: 160px;"
+            @change="handleBatchActualDateChange"
+          />
+        </div>
+      </div>
+      <div class="batch-actual-table-wrap">
+        <el-table :data="batchActualTableData" stripe border size="small" max-height="320">
+          <el-table-column label="製品" min-width="180">
+            <template #default="{ row }">
+              <el-select
+                v-model="row.product_cd"
+                placeholder="製品を選択"
+                size="small"
+                filterable
+                clearable
+                style="width: 100%;"
+                @change="(val: string) => handleBatchActualProductChange(row, val)"
+              >
+                <el-option
+                  v-for="p in productList"
+                  :key="p.product_cd"
+                  :label="p.product_name ? `${p.product_cd} - ${p.product_name}` : p.product_cd"
+                  :value="p.product_cd"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="日付" width="120" align="center">
+            <template #default="{ row }">
+              {{ row.date || batchActualDate || '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="切断実績" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.cuttingActual"
+                :controls="true"
+                size="small"
+                style="width: 100%;"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="面取実績" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.chamferingActual"
+                :controls="true"
+                size="small"
+                style="width: 100%;"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column label="成型実績" width="120" align="center">
+            <template #default="{ row }">
+              <el-input-number
+                v-model="row.moldingActual"
+                :controls="true"
+                size="small"
+                style="width: 100%;"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="handleResetBatchActual" class="cancel-btn">リセット</el-button>
+          <el-button @click="showBatchActualDialog = false">キャンセル</el-button>
+          <el-button type="primary" :loading="batchActualSaving" @click="handleSubmitBatchActual" class="confirm-btn">保存</el-button>
+        </div>
+      </template>
     </el-dialog>
 
     <!-- 列設定ダイアログ -->
@@ -400,11 +891,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading } from '@element-plus/icons-vue'
-import { getProductionSummarysList, getProductionSummarysProducts, generateProductionSummarys, updateProductionSummarysFromOrderDaily } from '@/api/database'
+import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
+import {
+  getProductionSummarysList,
+  getProductionSummarysProducts,
+  generateProductionSummarys,
+  updateProductionSummarysFromOrderDaily,
+  clearProductionSummarysCarryOver,
+  updateProductionSummarysCarryOver,
+  updateProductionSummarysActual,
+  updateProductionSummarysDefect,
+  updateProductionSummarysScrap,
+  updateProductionSummarysOnHold,
+  updateProductionSummarysProductionDates,
+  clearProductionSummarysCalculatedFields,
+  updateProductionSummarysPlan,
+  updateProductionSummarysInventory,
+  updateProductionSummarysTrend,
+  updateProductionSummarysProductMaster,
+  updateProductionSummarysMachine,
+} from '@/api/database'
+import request from '@/utils/request'
 import jaLocale from 'element-plus/es/locale/lang/ja'
+
+const STOCK_LOGS_BASE = '/api/erp/stock-transaction-logs'
+const INVENTORY_BASE = '/api/erp/inventory'
 
 const getJSTDateString = (year: number, month: number, day: number) => {
   const monthStr = String(month + 1).padStart(2, '0')
@@ -475,12 +989,64 @@ const productList = ref<Array<{ product_cd: string; product_name?: string }>>([]
 const showColumnSettings = ref(false)
 const activeTableTab = ref<string>('custom')
 
+// 初期在庫一括登録
+const showBatchInitialStockDialog = ref(false)
+const batchInitialStockMonth = ref<string>('')
+const batchInitialStockProcessCd = ref<string>('')
+const batchInitialStockData = ref<
+  Array<{
+    product_cd: string
+    product_name: string
+    editQuantity: number | null
+    existing_id?: number
+    existing_quantity?: number
+    transaction_time?: string
+  }>
+>([])
+const processOptions = ref<Array<{ cd: string; name: string }>>([])
+const batchInitialStockLoading = ref(false)
+const batchInitialStockSaving = ref(false)
+const batchQtyInputRefs = ref<Array<any>>([])
+
 // データ生成
 const generating = ref(false)
 const updatingFromOrderDaily = ref(false)
 const updatingCarryOver = ref(false)
 const updatingOrder = ref(false)
 const updatingAll = ref(false)
+const updatingActual = ref(false)
+const updatingDefect = ref(false)
+const updatingScrap = ref(false)
+const updatingOnHold = ref(false)
+const updatingProductionDates = ref(false)
+const updatingPlan = ref(false)
+const updatingInventoryTrend = ref(false)
+const updatingProductMaster = ref(false)
+const showInventoryTrendUpdateConfirmDialog = ref(false)
+const showPlanConfirmDialog = ref(false)
+const showProductMasterUpdateDialog = ref(false)
+const productMasterDateRange = ref<[string, string] | null>(null)
+const updatingMachine = ref(false)
+const showMachineUpdateDialog = ref(false)
+const machineDateRange = ref<[string, string] | null>(null)
+const showAllUpdateConfirmDialog = ref(false)
+// 実績一括登録
+const showBatchActualDialog = ref(false)
+const batchActualDate = ref<string>('')
+const batchActualTableData = ref<
+  Array<{
+    product_cd: string
+    product_name: string
+    date: string
+    cuttingActual: number | null
+    chamferingActual: number | null
+    moldingActual: number | null
+  }>
+>([])
+const batchActualSaving = ref(false)
+// 工程別計画確認印刷
+const showPrintDateDialog = ref(false)
+const printTargetDate = ref<string>('')
 const showGenerateConfirmDialog = ref(false)
 const generateDateRange = ref({ start: '', end: '' })
 const showProgressDialog = ref(false)
@@ -854,14 +1420,14 @@ const handleGenerateData = () => {
 const handleUpdateFromOrderDaily = async () => {
   try {
     updatingFromOrderDaily.value = true
-    const { data } = await updateProductionSummarysFromOrderDaily({
+    const res = await updateProductionSummarysFromOrderDaily({
       updateMode: 'changed',
       days: 30,
       clearBeforeUpdate: false,
-    })
-    const info = data?.data || {}
+    }) as { data?: { updated?: number; unchanged?: number; skipped?: number; total?: number }; message?: string }
+    const info = (res?.data ?? res ?? {}) as { updated?: number; unchanged?: number; skipped?: number; total?: number }
     const msg =
-      data?.message ||
+      res?.message ??
       `${info.updated ?? 0}件の受注データを反映しました（変更なし ${info.unchanged ?? 0} 件 / スキップ ${info.skipped ?? 0} 件）`
     ElMessage.success(msg)
     await fetchData()
@@ -870,6 +1436,643 @@ const handleUpdateFromOrderDaily = async () => {
   } finally {
     updatingFromOrderDaily.value = false
   }
+}
+
+const handleUpdateCarryOver = async () => {
+  try {
+    await ElMessageBox.confirm('繰越データを更新します。', '繰越データ更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+  updatingCarryOver.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '繰越フィールドをクリア中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    try {
+      await clearProductionSummarysCarryOver()
+    } catch (e) {
+      console.warn('clear-carry-over:', e)
+    }
+    progressText.value = '繰越データを更新中...'
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    const res = await updateProductionSummarysCarryOver() as { data?: { updated?: number; skipped?: number; total?: number }; message?: string }
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const info = (res?.data ?? res ?? {}) as { updated?: number; skipped?: number; total?: number }
+    const msg = res?.message ?? `更新 ${info.updated ?? 0} 件、スキップ ${info.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '繰越データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '繰越データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingCarryOver.value = false
+  }
+}
+
+const handleUpdateActual = async () => {
+  try {
+    await ElMessageBox.confirm('実績データを更新します。', '実績データ更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+  updatingActual.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '実績データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '実績データを更新中...'
+    const res = await updateProductionSummarysActual()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg =
+      body?.message ??
+      `更新 ${d?.updated ?? 0} 件、クリア ${d?.cleared ?? 0} 件（当月開始）、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '実績データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '実績データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingActual.value = false
+  }
+}
+
+const handleUpdateDefect = async () => {
+  try {
+    await ElMessageBox.confirm('不良データを更新します。', '不良データ更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  updatingDefect.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '不良データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '不良データを更新中...'
+    const res = await updateProductionSummarysDefect()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg = body?.message ?? `更新 ${d?.updated ?? 0} 件、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '不良データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '不良データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingDefect.value = false
+  }
+}
+
+const handleUpdateScrap = async () => {
+  try {
+    await ElMessageBox.confirm('廃棄データを更新します。', '廃棄データ更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  updatingScrap.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '廃棄データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '廃棄データを更新中...'
+    const res = await updateProductionSummarysScrap()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg = body?.message ?? `更新 ${d?.updated ?? 0} 件、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '廃棄データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '廃棄データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingScrap.value = false
+  }
+}
+
+const handleUpdateOnHold = async () => {
+  try {
+    await ElMessageBox.confirm('保留データを更新します。', '保留データ更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+  updatingOnHold.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '保留データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '保留データを更新中...'
+    const res = await updateProductionSummarysOnHold()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg = body?.message ?? `更新 ${d?.updated ?? 0} 件、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '保留データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '保留データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingOnHold.value = false
+  }
+}
+
+const handleUpdateProductionDates = async () => {
+  try {
+    await ElMessageBox.confirm('各工程の生産計画日を営業日換算で更新します。', '生産計画日更新確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'info',
+    })
+  } catch {
+    return
+  }
+  updatingProductionDates.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '生産計画日データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '生産計画日データを更新中...'
+    const res = await updateProductionSummarysProductionDates()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg = body?.message ?? `更新 ${d?.updated ?? 0} 件、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '生産計画日更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '生産計画日更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingProductionDates.value = false
+  }
+}
+
+const CARRY_OVER_COLUMNS = [
+  'cutting_carry_over', 'chamfering_carry_over', 'molding_carry_over', 'plating_carry_over',
+  'welding_carry_over', 'inspection_carry_over', 'warehouse_carry_over',
+  'outsourced_plating_carry_over', 'outsourced_welding_carry_over',
+  'pre_welding_inspection_carry_over', 'pre_inspection_carry_over', 'pre_outsourcing_carry_over',
+]
+
+/** 各工程繰越で「最后に >0 の日付」のうち最も早い日を startDate とする */
+function calculateStartDate(): string | null {
+  const rows = tableData.value || []
+  if (rows.length === 0) return null
+  const lastDates: string[] = []
+  for (const col of CARRY_OVER_COLUMNS) {
+    const datesWithPositive = rows
+      .filter((r: any) => (r[col] != null && Number(r[col]) > 0) && r.date)
+      .map((r: any) => (typeof r.date === 'string' ? r.date : (r.date && r.date.substring) ? r.date.substring(0, 10) : ''))
+      .filter(Boolean)
+    if (datesWithPositive.length > 0) {
+      const maxDate = datesWithPositive.sort().pop()
+      if (maxDate) lastDates.push(maxDate)
+    }
+  }
+  if (lastDates.length === 0) return null
+  lastDates.sort()
+  return lastDates[0]
+}
+
+const handleUpdatePlan = () => {
+  showPlanConfirmDialog.value = true
+}
+
+const confirmUpdatePlan = async () => {
+  showPlanConfirmDialog.value = false
+  updatingPlan.value = true
+  const startDate = calculateStartDate()
+  if (startDate) {
+    try {
+      await clearProductionSummarysCalculatedFields(startDate)
+    } catch (_e) {
+      console.warn('計算フィールドのクリアに失敗しました', _e)
+    }
+  }
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '計画データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
+    }, 200)
+    progressText.value = '計画データを更新中...'
+    const res = await updateProductionSummarysPlan()
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const msg = body?.message ?? `更新 ${d?.updated ?? 0} 件、スキップ ${d?.skipped ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success(msg)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '計画データ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '計画データ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingPlan.value = false
+  }
+}
+
+const handleInventoryTrendUpdate = () => {
+  showInventoryTrendUpdateConfirmDialog.value = true
+}
+
+const confirmInventoryTrendUpdate = async () => {
+  showInventoryTrendUpdateConfirmDialog.value = false
+  updatingInventoryTrend.value = true
+  const startDate = calculateStartDate() ?? undefined
+  if (startDate) {
+    try {
+      await clearProductionSummarysCalculatedFields(startDate)
+    } catch (_e) {
+      console.warn('計算フィールドのクリアに失敗しました', _e)
+    }
+  }
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '在庫・推移データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 4, 90)
+    }, 200)
+    progressText.value = '在庫データを更新中...'
+    const invRes = await updateProductionSummarysInventory(startDate)
+    progressPercentage.value = 50
+    progressText.value = '推移データを更新中...'
+    const trendRes = await updateProductionSummarysTrend(startDate)
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const invBody = (invRes as any)?.data ?? {}
+    const invD = invBody?.data ?? invBody
+    const trendBody = (trendRes as any)?.data ?? {}
+    const trendD = trendBody?.data ?? trendBody
+    const calcPeriod = startDate ? `計算期間: ${startDate}～` : '計算期間: 全件'
+    const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success('在庫・推移の更新が完了しました')
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '在庫・推移更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '在庫・推移更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingInventoryTrend.value = false
+  }
+}
+
+// ── 製品マスタ更新 ─────────────────────
+const handleUpdateProductMaster = () => {
+  // 初期期間：表示中の dateRange があればそれを使う、なければ createDefaultDateRange
+  if (dateRange.value && dateRange.value.length === 2) {
+    productMasterDateRange.value = [dateRange.value[0], dateRange.value[1]]
+  } else {
+    productMasterDateRange.value = createDefaultDateRange()
+  }
+  showProductMasterUpdateDialog.value = true
+}
+
+const confirmUpdateProductMaster = async () => {
+  if (!productMasterDateRange.value || productMasterDateRange.value.length !== 2) {
+    ElMessage.warning('更新期間を選択してください')
+    return
+  }
+  const startDate = productMasterDateRange.value[0]
+  const endDate = productMasterDateRange.value[1]
+  try {
+    await ElMessageBox.confirm(
+      `製品マスタを更新します。\n期間: ${startDate} ～ ${endDate}`,
+      '製品マスタ更新確認',
+      { confirmButtonText: '更新', cancelButtonText: 'キャンセル', type: 'info' },
+    )
+  } catch {
+    return
+  }
+  showProductMasterUpdateDialog.value = false
+  updatingProductMaster.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '製品マスタデータを更新中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 5, 90)
+    }, 200)
+    const res = await updateProductionSummarysProductMaster({ startDate, endDate })
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const updated = d?.updated ?? 0
+    const skipped = d?.skipped ?? 0
+    const elapsed = d?.elapsedTime ?? 0
+    progressText.value = `更新 ${updated} 件 / スキップ ${skipped} 件\n期間: ${startDate} ～ ${endDate}\n処理時間: ${elapsed}s`
+    ElMessage.success(`製品マスタの更新が完了しました（${updated}件）`)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '製品マスタ更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '製品マスタ更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingProductMaster.value = false
+  }
+}
+
+// ── 設備フィールド更新 ─────────────────────
+const handleUpdateMachine = () => {
+  if (dateRange.value && dateRange.value.length === 2) {
+    machineDateRange.value = [dateRange.value[0], dateRange.value[1]]
+  } else {
+    machineDateRange.value = createDefaultDateRange()
+  }
+  showMachineUpdateDialog.value = true
+}
+
+const confirmUpdateMachine = async () => {
+  if (!machineDateRange.value || machineDateRange.value.length !== 2) {
+    ElMessage.warning('更新期間を選択してください')
+    return
+  }
+  const startDate = machineDateRange.value[0]
+  const endDate = machineDateRange.value[1]
+  try {
+    await ElMessageBox.confirm(
+      `機器フィールドを更新します。\n期間: ${startDate} ～ ${endDate}`,
+      '機器フィールド更新確認',
+      { confirmButtonText: '更新', cancelButtonText: 'キャンセル', type: 'info' },
+    )
+  } catch {
+    return
+  }
+  showMachineUpdateDialog.value = false
+  updatingMachine.value = true
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '機器フィールドデータを更新中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 5, 90)
+    }, 200)
+    const res = await updateProductionSummarysMachine({ startDate, endDate })
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const body = (res as any)?.data ?? {}
+    const d = body?.data ?? body
+    const updated = d?.updated ?? 0
+    const skipped = d?.skipped ?? 0
+    const elapsed = d?.elapsedTime ?? 0
+    progressText.value = `更新 ${updated} 件 / スキップ ${skipped} 件\n期間: ${startDate} ～ ${endDate}\n処理時間: ${elapsed}s`
+    ElMessage.success(`機器フィールドの更新が完了しました（${updated}件）`)
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '機器フィールド更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '機器フィールド更新に失敗しました')
+    setTimeout(() => { showProgressDialog.value = false }, 2000)
+  } finally {
+    updatingMachine.value = false
+  }
+}
+
+// ── 全部一括更新 ─────────────────────
+const handleAllUpdate = () => {
+  showAllUpdateConfirmDialog.value = true
+}
+
+const confirmAllUpdate = async () => {
+  showAllUpdateConfirmDialog.value = false
+  updatingAll.value = true
+  showProgressDialog.value = true
+  progressStatus.value = ''
+  const results: { name: string; success: boolean }[] = []
+  const stepNames = [
+    '受注データ更新',
+    '実績データ更新',
+    '不良データ更新',
+    '廃棄データ更新',
+    '保留データ更新',
+    '計画データ更新',
+  ]
+  const steps = [
+    () => updateProductionSummarysFromOrderDaily({ updateMode: 'all' }),
+    () => updateProductionSummarysActual(),
+    () => updateProductionSummarysDefect(),
+    () => updateProductionSummarysScrap(),
+    () => updateProductionSummarysOnHold(),
+    () => updateProductionSummarysPlan(),
+  ]
+  for (let i = 0; i < steps.length; i++) {
+    progressPercentage.value = Math.round(((i + 1) / 7) * 90)
+    progressText.value = `${stepNames[i]}を実行中... (${i + 1}/7)`
+    try {
+      await steps[i]()
+      results.push({ name: stepNames[i], success: true })
+    } catch (_e) {
+      results.push({ name: stepNames[i], success: false })
+    }
+    await new Promise(r => setTimeout(r, 300))
+  }
+  // 步骤 7: 在庫・推移更新
+  const startDate = calculateStartDate() ?? undefined
+  if (startDate) {
+    try {
+      await clearProductionSummarysCalculatedFields(startDate)
+    } catch (_e) {
+      // 清空失败不记入 results，继续执行在庫・推移
+    }
+  }
+  progressPercentage.value = 92
+  progressText.value = '在庫・推移更新を実行中... (7/7)'
+  try {
+    await updateProductionSummarysInventory(startDate)
+    results.push({ name: '在庫更新', success: true })
+  } catch (_e) {
+    results.push({ name: '在庫更新', success: false })
+  }
+  await new Promise(r => setTimeout(r, 300))
+  try {
+    await updateProductionSummarysTrend(startDate)
+    results.push({ name: '推移更新', success: true })
+  } catch (_e) {
+    results.push({ name: '推移更新', success: false })
+  }
+  progressPercentage.value = 100
+  progressStatus.value = 'success'
+  const successCount = results.filter(r => r.success).length
+  const failCount = results.filter(r => !r.success).length
+  const failedNames = results.filter(r => !r.success).map(r => r.name)
+  progressText.value = failCount === 0
+    ? '全部一括更新が完了しました！'
+    : `全部一括更新が完了しました（成功 ${successCount} / 失敗 ${failCount}）\n失敗: ${failedNames.join('、')}`
+  if (failCount === 0) {
+    ElMessage.success('全部一括更新が完了しました')
+  } else {
+    ElMessage.warning(`一部失敗しました: ${failedNames.join('、')}`)
+  }
+  setTimeout(() => {
+    showProgressDialog.value = false
+    updatingAll.value = false
+    setTimeout(() => fetchData(), 500)
+  }, 1500)
 }
 
 const confirmGenerateData = async () => {
@@ -961,6 +2164,112 @@ const fetchProductList = async () => {
   }
 }
 
+// ---------- 実績一括登録 ----------
+function getEmptyBatchActualRow() {
+  return {
+    product_cd: '',
+    product_name: '',
+    date: '',
+    cuttingActual: null as number | null,
+    chamferingActual: null as number | null,
+    moldingActual: null as number | null,
+  }
+}
+function handleResetBatchActual() {
+  batchActualTableData.value = [
+    { ...getEmptyBatchActualRow() },
+    { ...getEmptyBatchActualRow() },
+  ]
+  if (batchActualDate.value) {
+    batchActualTableData.value.forEach((r) => { r.date = batchActualDate.value })
+  }
+}
+function handleOpenBatchActualDialog() {
+  if (!batchActualDate.value) {
+    batchActualDate.value = createDefaultDateRange()[0]
+  }
+  handleResetBatchActual()
+  showBatchActualDialog.value = true
+}
+function handleBatchActualDateChange() {
+  const d = batchActualDate.value || ''
+  batchActualTableData.value.forEach((r) => { r.date = d })
+}
+function handleBatchActualProductChange(row: { product_cd: string; product_name: string }, productCd: string) {
+  const p = productList.value.find((x) => x.product_cd === productCd)
+  row.product_name = p?.product_name ?? ''
+}
+async function handleSubmitBatchActual() {
+  if (!batchActualDate.value) {
+    ElMessage.warning('日付を選択してください')
+    return
+  }
+  const validRows = batchActualTableData.value.filter((r) => r.product_cd && r.product_cd.trim())
+  if (validRows.length === 0) {
+    ElMessage.warning('少なくとも1つの製品を選択してください')
+    return
+  }
+  const hasAnyActual = validRows.some(
+    (r) =>
+      (r.cuttingActual != null && Number(r.cuttingActual) !== 0) ||
+      (r.chamferingActual != null && Number(r.chamferingActual) !== 0) ||
+      (r.moldingActual != null && Number(r.moldingActual) !== 0),
+  )
+  if (!hasAnyActual) {
+    ElMessage.warning('少なくとも1つの実績を入力してください')
+    return
+  }
+  const transactionTime = `${batchActualDate.value} 00:00:00`
+  const transactions: Array<{ product_cd: string; process_cd: string; quantity: number; transaction_time: string }> = []
+  for (const row of validRows) {
+    if (row.cuttingActual != null && Number(row.cuttingActual) !== 0) {
+      transactions.push({
+        product_cd: row.product_cd,
+        process_cd: 'KT01',
+        quantity: Number(row.cuttingActual),
+        transaction_time: transactionTime,
+      })
+    }
+    if (row.chamferingActual != null && Number(row.chamferingActual) !== 0) {
+      transactions.push({
+        product_cd: row.product_cd,
+        process_cd: 'KT02',
+        quantity: Number(row.chamferingActual),
+        transaction_time: transactionTime,
+      })
+    }
+    if (row.moldingActual != null && Number(row.moldingActual) !== 0) {
+      transactions.push({
+        product_cd: row.product_cd,
+        process_cd: 'KT04',
+        quantity: Number(row.moldingActual),
+        transaction_time: transactionTime,
+      })
+    }
+  }
+  if (transactions.length === 0) {
+    ElMessage.warning('登録する実績データがありません')
+    return
+  }
+  batchActualSaving.value = true
+  try {
+    const res = await request.post<{ message?: string; data?: { success?: number; failed?: number } }>(
+      `${STOCK_LOGS_BASE}/batch-actual`,
+      { transactions },
+    )
+    const data = (res as any)?.data ?? res
+    const msg = data?.message ?? `実績データを${transactions.length}件登録しました`
+    ElMessage.success(msg)
+    showBatchActualDialog.value = false
+    handleResetBatchActual()
+    setTimeout(() => fetchData(), 500)
+  } catch (error: any) {
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '実績一括登録に失敗しました')
+  } finally {
+    batchActualSaving.value = false
+  }
+}
+
 const handleFilterChange = () => {
   currentPage.value = 1
   fetchData()
@@ -997,7 +2306,6 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
   }
   fetchData()
 }
-const handlePageSizeChange = () => fetchData()
 const handlePageChange = () => fetchData()
 const handleRefresh = () => fetchData()
 
@@ -1035,6 +2343,212 @@ const handlePrint = () => {
   win.close()
 }
 
+// ---------- 工程別計画確認印刷 ----------
+function handleProcessPrint() {
+  printTargetDate.value = new Date().toISOString().split('T')[0]
+  showPrintDateDialog.value = true
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T12:00:00')
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function buildProcessPrintHtml(allData: any[], targetDate: string): string {
+  const toStr = (v: any) => (v == null || v === '' ? '' : typeof v === 'string' ? v : String(v))
+  const dateStr = (row: any, key: string) => {
+    const v = row[key]
+    if (v == null) return '—'
+    if (typeof v === 'string') return v.substring(0, 10)
+    return toStr(v)
+  }
+  const num = (v: any) => (v != null && v !== '' ? Number(v) : null as number | null)
+  const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
+
+  const todayDataMap = new Map<string, any>()
+  for (const row of allData) {
+    const d = row.date != null ? (typeof row.date === 'string' ? row.date.substring(0, 10) : toStr(row.date)) : ''
+    if (d === targetDate && row.product_cd) todayDataMap.set(row.product_cd, row)
+  }
+
+  const processConfigs = [
+    {
+      name: '成型工程',
+      color: '#6366f1',
+      productionDateKey: 'molding_production_date',
+      trendKey: 'molding_trend',
+      planKey: 'molding_plan',
+      dateLabel: '推奨成型生産日',
+      trendLabel: '成型推移',
+      planLabel: '成型計画',
+      hasPlan: true,
+    },
+    {
+      name: 'メッキ工程',
+      color: '#f59e0b',
+      productionDateKey: 'plating_production_date',
+      trendKey: 'plating_trend',
+      planKey: 'plating_plan',
+      dateLabel: '推奨メッキ生産日',
+      trendLabel: 'メッキ推移',
+      planLabel: 'メッキ計画',
+      hasPlan: true,
+    },
+    {
+      name: '溶接工程',
+      color: '#10b981',
+      productionDateKey: 'welding_production_date',
+      trendKey: 'welding_trend',
+      planKey: 'welding_plan',
+      dateLabel: '推奨溶接生産日',
+      trendLabel: '溶接推移',
+      planLabel: '溶接計画',
+      hasPlan: true,
+    },
+    {
+      name: '倉庫',
+      color: '#8b5cf6',
+      productionDateKey: null,
+      trendKey: null,
+      planKey: null,
+      dateLabel: '',
+      trendLabel: '',
+      planLabel: '',
+      hasPlan: false,
+    },
+  ] as const
+
+  let tablesHtml = ''
+  for (const cfg of processConfigs) {
+    let rows: any[] = []
+    if (cfg.hasPlan && cfg.productionDateKey && cfg.trendKey) {
+      const byProduct = new Map<string, any[]>()
+      for (const row of allData) {
+        const prodDate = dateStr(row, cfg.productionDateKey)
+        if (prodDate !== targetDate || !row.product_cd) continue
+        const trendVal = num(row[cfg.trendKey])
+        if (trendVal == null || trendVal >= 0) continue
+        if (!byProduct.has(row.product_cd)) byProduct.set(row.product_cd, [])
+        byProduct.get(row.product_cd)!.push(row)
+      }
+      for (const [, arr] of byProduct) {
+        const best = arr.reduce((a, b) => (num(a[cfg.trendKey])! < num(b[cfg.trendKey])! ? a : b))
+        rows.push(best)
+      }
+    } else {
+      const seen = new Set<string>()
+      for (const row of allData) {
+        const d = row.date != null ? (typeof row.date === 'string' ? row.date.substring(0, 10) : toStr(row.date)) : ''
+        if (d !== targetDate || !row.product_cd) continue
+        const inv = num(row.warehouse_inventory) ?? num(row.inspection_inventory)
+        if (inv == null || inv >= 0) continue
+        if (seen.has(row.product_cd)) continue
+        seen.add(row.product_cd)
+        rows.push(row)
+      }
+    }
+    rows = rows.sort((a, b) => (toStr(a.product_name || a.product_cd)).localeCompare(toStr(b.product_name || b.product_cd)))
+
+    if (cfg.hasPlan && cfg.productionDateKey && cfg.trendKey && cfg.planKey) {
+      tablesHtml += `<div class="process-block" style="margin-bottom:20px;break-inside:avoid;"><h2 style="color:${cfg.color};font-size:14px;margin:0 0 8px 0;">${cfg.name}</h2>
+<table class="print-table"><thead><tr><th>製品名</th><th>${cfg.dateLabel}</th><th>${cfg.trendLabel}</th><th>${cfg.planLabel}</th><th>計画状態</th><th>確認</th></tr></thead><tbody>`
+      for (const row of rows) {
+        const todayRow = todayDataMap.get(row.product_cd)
+        const planVal = todayRow ? num(todayRow[cfg.planKey]) : null
+        const planState = planVal != null && planVal > 0 ? '生産計画あり' : '確認必要'
+        const planClass = planVal != null && planVal > 0 ? 'plan-ok' : 'plan-warn'
+        const trendVal = num(row[cfg.trendKey])
+        const trendClass = trendVal != null && trendVal < 0 ? 'negative' : ''
+        tablesHtml += `<tr><td>${escapeHtml(toStr(row.product_name || row.product_cd))}</td><td>${dateStr(row, cfg.productionDateKey!)}</td><td class="${trendClass}">${trendVal != null ? trendVal : '—'}</td><td>${row[cfg.planKey] != null ? row[cfg.planKey] : '—'}</td><td class="${planClass}">${planState}</td><td class="check-cell">□</td></tr>`
+      }
+      tablesHtml += '</tbody></table></div>'
+    } else {
+      tablesHtml += `<div class="process-block" style="margin-bottom:20px;break-inside:avoid;"><h2 style="color:${cfg.color};font-size:14px;margin:0 0 8px 0;">${cfg.name}</h2>
+<table class="print-table"><thead><tr><th>製品名</th><th>検査在庫</th><th>倉庫在庫</th><th>確認</th></tr></thead><tbody>`
+      for (const row of rows) {
+        const inv = row.inspection_inventory != null ? Number(row.inspection_inventory) : '—'
+        const wh = row.warehouse_inventory != null ? Number(row.warehouse_inventory) : '—'
+        const invClass = typeof inv === 'number' && inv < 0 ? 'negative' : ''
+        const whClass = typeof wh === 'number' && wh < 0 ? 'negative' : ''
+        tablesHtml += `<tr><td>${escapeHtml(toStr(row.product_name || row.product_cd))}</td><td class="${invClass}">${inv}</td><td class="${whClass}">${wh}</td><td class="check-cell">□</td></tr>`
+      }
+      tablesHtml += '</tbody></table></div>'
+    }
+  }
+
+  function escapeHtml(s: string) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  }
+
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>工程別生産計画確認サマリー</title>
+<style>
+body{font-family: sans-serif; padding: 12px; font-size: 12px;}
+@media print { body { padding: 0; } }
+h1{font-size:16px;margin:0 0 4px 0;}
+.subtitle{font-size:11px;color:#64748b;margin-bottom:16px;}
+.print-table{border-collapse:collapse;width:100%;margin-bottom:8px;}
+.print-table th,.print-table td{border:1px solid #cbd5e1;padding:6px 8px;text-align:left;}
+.print-table th{background:#f1f5f9;font-weight:600;}
+.print-table td.negative{color:#dc2626;}
+.print-table td.plan-ok{background:#dcfce7;}
+.print-table td.plan-warn{background:#fee2e2;}
+.print-table td.check-cell{text-align:center;}
+.process-block{page-break-inside:avoid;}
+</style>
+</head><body>
+<h1>工程別生産計画確認サマリー(成型、メッキ、溶接、倉庫)</h1>
+<p class="subtitle">対象日: ${targetDate} / 出力時間: ${now}</p>
+${tablesHtml}
+</body></html>`
+}
+
+async function fetchPrintData(targetDate: string) {
+  const startDate = addDays(targetDate, -90)
+  const endDate = addDays(targetDate, 90)
+  const res = await getProductionSummarysList({ page: 1, limit: 50000, startDate, endDate })
+  const data = (res as any)?.data ?? res
+  const list = data?.list ?? (Array.isArray(res) ? res : [])
+  return list
+}
+
+async function handleConfirmPrintDate() {
+  if (!printTargetDate.value) {
+    ElMessage.warning('日付を選択してください')
+    return
+  }
+  const selectedDate = printTargetDate.value
+  showPrintDateDialog.value = false
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '印刷データを取得中...'
+  try {
+    const allData = await fetchPrintData(selectedDate)
+    if (!allData || allData.length === 0) {
+      ElMessage.warning('印刷できるデータがありません。')
+      return
+    }
+    const html = buildProcessPrintHtml(allData, selectedDate)
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.warning('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。')
+      return
+    }
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.print()
+    printWindow.onafterprint = () => {
+      setTimeout(() => { printWindow.close() }, 300)
+    }
+    ElMessage.success('印刷ダイアログを開きました')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '印刷データの取得に失敗しました')
+  } finally {
+    showProgressDialog.value = false
+  }
+}
+
 const selectAllColumns = () => {
   columnKeys.forEach((k) => (visibleColumns.value[k] = true))
 }
@@ -1051,6 +2565,195 @@ const saveColumnSettings = () => {
     showColumnSettings.value = false
   } catch {
     ElMessage.error('列設定の保存に失敗しました')
+  }
+}
+
+// ---------- 初期在庫一括登録 ----------
+function setBatchQtyInputRef(index: number, el: any) {
+  if (el != null) {
+    batchQtyInputRefs.value[index] = el
+  }
+}
+
+function focusBatchInitialRow(targetIndex: number) {
+  const len = batchInitialStockData.value.length
+  if (len === 0) return
+  const idx = Math.max(0, Math.min(targetIndex, len - 1))
+  nextTick(() => {
+    const ref = batchQtyInputRefs.value[idx]
+    if (ref?.focus) ref.focus()
+    else if (ref?.$el?.querySelector) ref.$el.querySelector('input')?.focus()
+  })
+}
+
+function openBatchInitialStockDialog() {
+  const { year, month } = getCurrentJSTInfo()
+  batchInitialStockMonth.value = getJSTDateString(year, month, 1).slice(0, 7)
+  batchInitialStockProcessCd.value = ''
+  batchInitialStockData.value = []
+  batchQtyInputRefs.value = []
+  if (!processOptions.value.length) {
+    request.get<Array<{ cd: string; name: string }>>('/api/master/processes/options').then((res) => {
+      processOptions.value = Array.isArray(res) ? res : (res as { data?: Array<{ cd: string; name: string }> })?.data ?? []
+    }).catch(() => { processOptions.value = [] })
+  }
+  showBatchInitialStockDialog.value = true
+}
+
+/** 製品フィルタ: 末位1、加工・アーチ除外、active、量産品/試作品 */
+function filterProductsForInitial(products: Array<{ product_cd: string; product_name?: string; product_type?: string; status?: string }>) {
+  const allowedTypes = ['量産品', '試作品']
+  return products.filter((p) => {
+    const cd = (p.product_cd || '').trim()
+    if (!cd || cd.slice(-1) !== '1') return false
+    const name = (p.product_name || '')
+    if (name.includes('加工') || name.includes('アーチ')) return false
+    const status = (p.status ?? '').toString().toLowerCase()
+    if (status === 'inactive' || status === '0' || status === 'false') return false
+    const pt = (p.product_type || '').trim()
+    if (pt && !allowedTypes.includes(pt)) return false
+    return true
+  })
+}
+
+async function handleBatchInitialStockSearch() {
+  const month = (batchInitialStockMonth.value || '').trim()
+  const processCd = (batchInitialStockProcessCd.value || '').trim()
+  if (!month || !processCd) {
+    ElMessage.warning('月と工程を選択してください')
+    return
+  }
+  batchInitialStockLoading.value = true
+  try {
+    let products: Array<{ product_cd: string; product_name?: string; product_type?: string; status?: string }> = []
+    try {
+      const res = await request.get<Array<{ product_cd: string; product_name?: string; product_type?: string; status?: string }>>(
+        `${INVENTORY_BASE}/products-by-process`,
+        { params: { process_cd: processCd } }
+      )
+      products = Array.isArray(res) ? res : (res as { data?: typeof products })?.data ?? []
+    } catch {
+      const fallback = await getProductionSummarysProducts()
+      const list = (fallback as { data?: typeof products })?.data ?? (Array.isArray(fallback) ? fallback : [])
+      products = list.map((p: { product_cd: string; product_name?: string }) => ({ product_cd: p.product_cd, product_name: p.product_name }))
+    }
+    const filtered = filterProductsForInitial(products)
+    const monthFirst = `${month}-01`
+    const dateStart = `${monthFirst} 00:00:00`
+    let existingList: Array<{ id: number; target_cd: string; quantity: number; transaction_time?: string }> = []
+    try {
+      const logRes = await request.get(
+        STOCK_LOGS_BASE,
+        {
+          params: {
+            transaction_type: '初期',
+            process_cd: processCd,
+            date_start: dateStart,
+            date_end: monthFirst,
+            page: 1,
+            pageSize: 5000,
+          },
+        }
+      ) as { list?: typeof existingList; data?: { list?: typeof existingList } }
+      const body = 'data' in logRes && logRes.data != null ? logRes.data : logRes
+      existingList = body?.list ?? []
+    } catch {
+      existingList = []
+    }
+    const existingMap = new Map<string, { quantity: number; transaction_time?: string; id: number }>()
+    for (const log of existingList) {
+      existingMap.set((log.target_cd || '').trim(), {
+        quantity: Number(log.quantity) || 0,
+        transaction_time: log.transaction_time,
+        id: log.id,
+      })
+    }
+    const rows = filtered.map((p) => {
+      const cd = (p.product_cd || '').trim()
+      const ex = existingMap.get(cd)
+      return {
+        product_cd: cd,
+        product_name: (p.product_name || '').trim(),
+        editQuantity: ex ? ex.quantity : null,
+        existing_id: ex?.id,
+        existing_quantity: ex?.quantity,
+        transaction_time: ex?.transaction_time,
+      }
+    })
+    rows.sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '') || a.product_cd.localeCompare(b.product_cd))
+    batchQtyInputRefs.value = []
+    batchInitialStockData.value = rows
+  } catch (e) {
+    ElMessage.error('検索に失敗しました')
+    console.error(e)
+  } finally {
+    batchInitialStockLoading.value = false
+  }
+}
+
+function batchInitialStockSummaryMethod({ data }: { data: Array<{ editQuantity?: number | null }> }) {
+  const total = data.reduce((s, row) => s + (Number(row.editQuantity) || 0), 0)
+  return ['', '', `合計: ${total.toLocaleString()}`]
+}
+
+async function handleSaveBatchInitialStock() {
+  const month = (batchInitialStockMonth.value || '').trim()
+  const processCd = (batchInitialStockProcessCd.value || '').trim()
+  if (!month || !processCd) {
+    ElMessage.warning('月と工程を選択してください')
+    return
+  }
+  const transactionTime = `${month}-01 00:00:00`
+  const updatePromises: Promise<unknown>[] = []
+  const insertPromises: Promise<unknown>[] = []
+  for (const row of batchInitialStockData.value) {
+    const newQty = Number(row.editQuantity)
+    const existingQty = Number(row.existing_quantity ?? 0)
+    if (newQty === existingQty) continue
+    if (row.existing_id != null) {
+      updatePromises.push(
+        request.put(`${STOCK_LOGS_BASE}/${row.existing_id}`, {
+          transaction_time: transactionTime,
+          transaction_type: '初期',
+          target_cd: row.product_cd,
+          quantity: newQty,
+          stock_type: processCd === 'KT13' ? '製品' : processCd === 'KT15' ? '製品' : '仕掛品',
+          location_cd: processCd === 'KT13' ? '製品倉庫' : processCd === 'KT15' ? '外注倉庫' : '工程中間在庫',
+          unit: '本',
+          source_file: '生産データ管理',
+        })
+      )
+    } else {
+      if (newQty <= 0) continue
+      insertPromises.push(
+        request.post(STOCK_LOGS_BASE, {
+          stock_type: processCd === 'KT13' ? '製品' : processCd === 'KT15' ? '製品' : '仕掛品',
+          target_cd: row.product_cd,
+          location_cd: processCd === 'KT13' ? '製品倉庫' : processCd === 'KT15' ? '外注倉庫' : '工程中間在庫',
+          transaction_type: '初期',
+          quantity: newQty,
+          unit: '本',
+          process_cd: processCd,
+          transaction_time: transactionTime,
+          source_file: '生産データ管理',
+        })
+      )
+    }
+  }
+  if (updatePromises.length === 0 && insertPromises.length === 0) {
+    ElMessage.info('変更がありません')
+    return
+  }
+  batchInitialStockSaving.value = true
+  try {
+    await Promise.all([...insertPromises, ...updatePromises])
+    ElMessage.success(`更新 ${updatePromises.length} 件、追加 ${insertPromises.length} 件`)
+    await handleBatchInitialStockSearch()
+  } catch (e) {
+    ElMessage.error('一括保存に失敗しました')
+    console.error(e)
+  } finally {
+    batchInitialStockSaving.value = false
   }
 }
 
@@ -1361,6 +3064,9 @@ onMounted(() => {
 .others-btn {
   margin-right: 0.25rem;
 }
+.process-print-btn-primary {
+  margin-left: 0.25rem;
+}
 
 /* データ生成確認ダイアログ */
 .generate-confirm-content {
@@ -1401,6 +3107,13 @@ onMounted(() => {
   font-weight: 600;
   color: #0f172a;
 }
+.all-update-steps-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.6;
+}
 
 /* データ生成進度ダイアログ */
 .progress-content {
@@ -1430,6 +3143,59 @@ onMounted(() => {
 .progress-details .detail-value {
   margin-left: 0.35rem;
   font-weight: 600;
+}
+
+/* 初期在庫一括登録ダイアログ */
+.batch-initial-stock-dialog :deep(.el-dialog__body) {
+  padding: 0.6rem 1rem;
+}
+.batch-initial-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+.batch-initial-filter .filter-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.batch-initial-filter .filter-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+.batch-initial-filter .month-picker {
+  width: 140px;
+}
+.batch-initial-filter .process-select {
+  width: 200px;
+}
+.batch-initial-filter .filter-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 0.35rem;
+}
+.batch-initial-table-wrap {
+  font-size: 0.75rem;
+}
+.batch-initial-table-wrap .qty-input {
+  width: 100%;
+}
+.batch-initial-table-wrap :deep(.el-input-number) {
+  width: 120px;
+}
+
+/* 実績一括登録ダイアログ */
+.batch-actual-filter {
+  margin-bottom: 0.75rem;
+}
+.batch-actual-table-wrap {
+  font-size: 0.8rem;
 }
 
 /* ========== 响应式 ========== */

@@ -248,6 +248,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/inventory/analysis/AbcAnalysis.vue'),
         meta: { title: 'ABC分析', group: '在庫管理 > 棚卸管理', requiresAuth: true },
       },
+      {
+        path: 'erp/inventory/stock-transaction-logs',
+        name: 'StockTransactionLog',
+        component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'),
+        meta: { title: '在庫取引記録', group: '在庫管理 > 入出庫・移動管理', requiresAuth: true },
+      },
 
       // ╔══════════════════════════════════════════════════════════════╗
       // ║  4. 生産管理 (Production Control / PP)                       ║

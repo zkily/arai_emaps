@@ -15,6 +15,7 @@ from app.core.database import get_db
 from app.modules.erp.inventory_models import (
     Inventory, InventoryTransaction, InventoryAdjustment, StockAlert, Warehouse
 )
+from app.modules.master.models import Product, ProductRouteStep
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
 
@@ -100,6 +101,42 @@ async def get_inventory_stats(
         "overstock_count": overstock_count or 0,
         "expiring_soon_count": 0
     }
+
+
+@router.get("/products-by-process")
+async def get_products_by_process(
+    process_cd: Optional[str] = Query(..., description="工程コード"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """指定工程に紐づく製品一覧（product_route_steps + product_cd 末位1、初期在庫一括登録用）"""
+    if not process_cd or not process_cd.strip():
+        return []
+    process_cd = process_cd.strip()
+    # product_route_steps に存在し、product_cd が末位 1 の製品を products と JOIN
+    subq = (
+        select(ProductRouteStep.product_cd)
+        .where(
+            ProductRouteStep.process_cd == process_cd,
+            ProductRouteStep.product_cd.like("%1"),
+        )
+        .distinct()
+    )
+    query = (
+        select(Product.product_cd, Product.product_name, Product.product_type, Product.status)
+        .where(Product.product_cd.in_(subq))
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        {
+            "product_cd": r.product_cd,
+            "product_name": r.product_name or "",
+            "product_type": r.product_type or "",
+            "status": r.status or "",
+        }
+        for r in rows
+    ]
 
 
 @router.get("/{inventory_id}")

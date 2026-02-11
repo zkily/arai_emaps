@@ -36,6 +36,11 @@ pytest==7.4.4
 pytest-asyncio==0.23.3
 httpx==0.26.0
 
+# 文件监视 (BT-data 受信 CSV 同步 / 生産計画 Excel 同步)
+watchdog>=3.0.0
+mysql-connector-python>=8.0.0
+openpyxl>=3.1.0
+
 # コード品質
 black==24.1.1
 flake8==7.0.0

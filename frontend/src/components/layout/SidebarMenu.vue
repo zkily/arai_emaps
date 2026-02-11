@@ -94,6 +94,7 @@
             <el-menu-item index="/erp/inventory/stocktaking"><span :title="t('menu.ERP_INVENTORY_STOCKTAKING')">{{ t('menu.ERP_INVENTORY_STOCKTAKING') }}</span></el-menu-item>
             <el-menu-item index="/erp/inventory/dead-stock"><span :title="t('menu.ERP_INVENTORY_DEAD')">{{ t('menu.ERP_INVENTORY_DEAD') }}</span></el-menu-item>
             <el-menu-item index="/erp/inventory/abc-analysis"><span :title="t('menu.ERP_INVENTORY_ABC')">{{ t('menu.ERP_INVENTORY_ABC') }}</span></el-menu-item>
+            <el-menu-item index="/erp/inventory/stock-transaction-logs"><span :title="t('menu.ERP_INVENTORY_STOCK_TX_LOG')">{{ t('menu.ERP_INVENTORY_STOCK_TX_LOG') }}</span></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-production">
@@ -187,10 +188,15 @@
             <el-menu-item index="/master/process-route"><span :title="t('menu.MASTER_PROCESS_ROUTE')">{{ t('menu.MASTER_PROCESS_ROUTE') }}</span></el-menu-item>
             <el-menu-item index="/master/product-process-route"><span :title="t('menu.MASTER_PRODUCT_PROCESS_ROUTE')">{{ t('menu.MASTER_PRODUCT_PROCESS_ROUTE') }}</span></el-menu-item>
           </el-sub-menu>
-          <el-menu-item index="/master/bom">
-            <el-icon><Connection /></el-icon>
-            <template #title><span :title="t('menu.MASTER_BOM')">{{ t('menu.MASTER_BOM') }}</span></template>
-          </el-menu-item>
+          <el-sub-menu index="master-bom">
+            <template #title>
+              <el-icon><Connection /></el-icon>
+              <span :title="t('menu.MASTER_BOM')">{{ t('menu.MASTER_BOM') }}</span>
+            </template>
+            <el-menu-item index="/master/bom"><span :title="t('menu.MASTER_BOM_HOME')">{{ t('menu.MASTER_BOM_HOME') }}</span></el-menu-item>
+            <el-menu-item index="/master/bom/product-process"><span :title="t('menu.MASTER_PRODUCT_PROCESS_BOM')">{{ t('menu.MASTER_PRODUCT_PROCESS_BOM') }}</span></el-menu-item>
+            <el-menu-item index="/master/bom/product-machine-config"><span :title="t('menu.MASTER_PRODUCT_MACHINE_CONFIG')">{{ t('menu.MASTER_PRODUCT_MACHINE_CONFIG') }}</span></el-menu-item>
+          </el-sub-menu>
         </el-sub-menu>
         
         <el-sub-menu v-if="userStore.hasPermission('all')" index="system">
@@ -221,6 +227,7 @@
             <el-menu-item index="/system/logs"><span :title="t('menu.SYSTEM_LOGS')">{{ t('menu.SYSTEM_LOGS') }}</span></el-menu-item>
             <el-menu-item index="/system/data"><span :title="t('menu.SYSTEM_DATA')">{{ t('menu.SYSTEM_DATA') }}</span></el-menu-item>
             <el-menu-item index="/system/menus"><span :title="t('menu.SYSTEM_MENUS')">{{ t('menu.SYSTEM_MENUS') }}</span></el-menu-item>
+            <el-menu-item index="/system/file-watcher"><span :title="t('menu.SYSTEM_FILE_WATCHER')">{{ t('menu.SYSTEM_FILE_WATCHER') }}</span></el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
       </el-menu>

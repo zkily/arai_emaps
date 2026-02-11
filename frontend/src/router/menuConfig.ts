@@ -62,6 +62,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY_STOCKTAKING', name: '棚卸管理', path: '/erp/inventory/stocktaking', parentCode: 'ERP_INVENTORY', sortOrder: 6 },
   { code: 'ERP_INVENTORY_DEAD', name: '滞留在庫アラート', path: '/erp/inventory/dead-stock', parentCode: 'ERP_INVENTORY', sortOrder: 7 },
   { code: 'ERP_INVENTORY_ABC', name: 'ABC分析', path: '/erp/inventory/abc-analysis', parentCode: 'ERP_INVENTORY', sortOrder: 8 },
+  { code: 'ERP_INVENTORY_STOCK_TX_LOG', name: '在庫取引記録', path: '/erp/inventory/stock-transaction-logs', parentCode: 'ERP_INVENTORY', sortOrder: 9 },
 
   // ===== 4. 生産管理 (Production Control / PP) =====
   { code: 'ERP_PRODUCTION', name: '生産管理', path: '/erp/production', icon: 'Setting', parentCode: 'ERP', sortOrder: 6 },
@@ -112,7 +113,10 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_MACHINE', name: '設備マスタ', path: '/master/machine', parentCode: 'MASTER_LIST', sortOrder: 9 },
   { code: 'MASTER_DESTINATION', name: '納入先マスタ', path: '/master/destination', parentCode: 'MASTER_LIST', sortOrder: 10 },
   { code: 'MASTER_DESTINATION_HOLIDAY', name: '納入先休日設定', path: '/master/destination/holiday', parentCode: 'MASTER_LIST', sortOrder: 11 },
-  { code: 'MASTER_BOM', name: 'BOM', path: '/master/bom', parentCode: 'MASTER', sortOrder: 2 },
+  { code: 'MASTER_BOM', name: 'BOM', parentCode: 'MASTER', sortOrder: 2 },
+  { code: 'MASTER_BOM_HOME', name: 'BOMホーム', path: '/master/bom', parentCode: 'MASTER_BOM', sortOrder: 0 },
+  { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
+  { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
   { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },
   { code: 'SYSTEM_HOME', name: 'システムホーム', path: '/system', parentCode: 'SYSTEM_USER', sortOrder: 0 },
@@ -126,4 +130,5 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_LOGS', name: 'システムログ', path: '/system/logs', parentCode: 'SYSTEM_SETTINGS', sortOrder: 4 },
   { code: 'SYSTEM_DATA', name: 'データ管理', path: '/system/data', parentCode: 'SYSTEM_SETTINGS', sortOrder: 5 },
   { code: 'SYSTEM_MENUS', name: 'メニュー管理', path: '/system/menus', parentCode: 'SYSTEM_SETTINGS', sortOrder: 6 },
+  { code: 'SYSTEM_FILE_WATCHER', name: 'ファイル監視設定', path: '/system/file-watcher', parentCode: 'SYSTEM_SETTINGS', sortOrder: 7 },
 ]

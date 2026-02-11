@@ -71,6 +71,18 @@ async def get_process_list(
     }
 
 
+@router.get("/options")
+async def get_process_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """工程オプション（セレクト用）"""
+    q = select(Process).order_by(Process.process_cd)
+    res = await db.execute(q)
+    rows = res.scalars().all()
+    return [{"cd": r.process_cd, "name": r.process_name or r.process_cd} for r in rows]
+
+
 @router.get("/by-cd/{process_cd}")
 async def get_process_by_cd(
     process_cd: str,

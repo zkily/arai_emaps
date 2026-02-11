@@ -1353,3 +1353,41 @@ def _format_file_size(size_bytes: int) -> str:
             return f"{size_bytes:.1f}{unit}"
         size_bytes /= 1024
     return f"{size_bytes:.1f}TB"
+
+
+# ========== ファイル監視設定 (BT-data 受信 CSV の有効/無効) ==========
+
+try:
+    from app.services.file_watcher.sync_services import STOCK_FILES, MATERIAL_FILES
+    from app.services.file_watcher.enabled_config import get_enabled, set_enabled
+except Exception:
+    STOCK_FILES = []
+    MATERIAL_FILES = []
+    get_enabled = lambda: {}
+    set_enabled = lambda x: None
+
+
+@router.get("/file-watcher", summary="ファイル監視対象の有効/無効一覧")
+async def get_file_watcher_settings(
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """監視対象 CSV の一覧と各ファイルの有効/無効を返す"""
+    enabled = get_enabled()
+    return {
+        "stockFiles": list(STOCK_FILES),
+        "materialFiles": list(MATERIAL_FILES),
+        "enabled": enabled,
+    }
+
+
+@router.put("/file-watcher", summary="ファイル監視の有効/無効を保存")
+async def update_file_watcher_settings(
+    body: dict,
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """enabled: { "StockIn.csv": true, ... } で保存"""
+    enabled = body.get("enabled")
+    if not isinstance(enabled, dict):
+        raise HTTPException(status_code=400, detail="enabled はオブジェクトで指定してください")
+    set_enabled(enabled)
+    return {"message": "保存しました", "enabled": get_enabled()}

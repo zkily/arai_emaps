@@ -55,9 +55,17 @@ class Settings(BaseSettings):
     LOG_FILE: str = "logs/app.log"
     # SQL ログ（有効だと起動・処理が重くなるため、デバッグ時のみ True 推奨）
     SQL_ECHO: bool = False
+
+    # ファイル監視：CSV 受信 + 生産計画 Excel（2 ディレクトリを別々に指定可）
+    FILE_WATCH_BASE_PATH: str = ""  # CSV 受信ディレクトリ（いずれか必須）
+    FILE_WATCH_EXCEL_BASE_PATH: str = ""  # Excel 計画ディレクトリ（省略時は BASE と共用）
+    FILE_WATCH_POLL_INTERVAL: float = 1.0  # ネットワークパスは 1 秒推奨
+    FILE_WATCH_DEBOUNCE_SEC: int = 2
+    FILE_WATCH_EXCEL_WORKERS: int = 3  # 同時処理は最大 3 ファイル
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
     
     def get_database_url(self) -> str:
