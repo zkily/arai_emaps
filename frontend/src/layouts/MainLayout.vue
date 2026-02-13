@@ -42,7 +42,7 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useTabsStore } from '@/stores/tabs'
 import SidebarMenu from '@/components/layout/SidebarMenu.vue'
 import HeaderBar from '@/components/layout/HeaderBar.vue'
@@ -51,6 +51,7 @@ import TabsNav from '@/components/layout/TabsNav.vue'
 const MOBILE_BREAKPOINT = 768
 
 const route = useRoute()
+const router = useRouter()
 const tabsStore = useTabsStore()
 
 const isCollapsed = ref(false)
@@ -75,7 +76,23 @@ onUnmounted(() => {
 watch(
   () => route.path,
   () => {
+    // 刷新或重新登录后：若刚从 localStorage 恢复了标签列表，且当前路由在已恢复的标签中且不是保存的激活项，则跳转到保存的激活页
+    if (
+      tabsStore.justRestored &&
+      tabsStore.tabs.some((t) => t.path === route.path) &&
+      route.path !== tabsStore.activeTab
+    ) {
+      router.replace({ path: tabsStore.activeTab })
+      tabsStore.clearJustRestored()
+      if (isMobile.value) {
+        isCollapsed.value = true
+      }
+      return
+    }
     tabsStore.addTab(route)
+    if (tabsStore.justRestored) {
+      tabsStore.clearJustRestored()
+    }
     if (isMobile.value) {
       isCollapsed.value = true
     }

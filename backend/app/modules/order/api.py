@@ -96,6 +96,73 @@ async def get_products_by_destination(
     return {"success": True, "data": data}
 
 
+# ---------- GET /check-exists ----------
+@router.get("/check-exists")
+async def check_monthly_order_exists(
+    order_id: str = Query(..., description="月次注文ID（monthlyOrderId）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    order_monthly に指定 order_id が存在するか。
+    返却: { exists: true/false, id?: number, order_id?: string }
+    """
+    om = erp_models.OrderMonthly
+    q = select(om.id, om.order_id).where(om.order_id == order_id).limit(1)
+    result = await db.execute(q)
+    row = result.one_or_none()
+    if row is None:
+        return {"exists": False}
+    return {"exists": True, "id": row.id, "order_id": row.order_id}
+
+
+# ---------- POST /monthly/add ----------
+@router.post("/monthly/add")
+async def add_monthly_order(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    月次注文を作成する（日次追加時の自動作成用）。
+    既に同一 order_id が存在する場合はスキップして既存を返す。
+    """
+    order_id = body.get("order_id", "")
+    if not order_id:
+        raise HTTPException(status_code=400, detail="order_id は必須です")
+
+    # 既存チェック
+    om = erp_models.OrderMonthly
+    existing_q = select(om).where(om.order_id == order_id).limit(1)
+    existing_result = await db.execute(existing_q)
+    existing_row = existing_result.scalar_one_or_none()
+    if existing_row:
+        return {"ok": True, "order_id": existing_row.order_id, "created": False}
+
+    row = erp_models.OrderMonthly(
+        order_id=order_id,
+        destination_cd=body.get("destination_cd", ""),
+        destination_name=body.get("destination_name", ""),
+        year=int(body.get("year", 0)),
+        month=int(body.get("month", 0)),
+        product_cd=body.get("product_cd", ""),
+        product_name=body.get("product_name", ""),
+        product_alias=body.get("product_alias", ""),
+        product_type=body.get("product_type", "量産品"),
+        forecast_units=int(body.get("forecast_units", 0)),
+        forecast_total_units=int(body.get("forecast_total_units", 0)),
+        forecast_diff=0,
+    )
+    try:
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+        return {"ok": True, "order_id": row.order_id, "created": True}
+    except IntegrityError:
+        await db.rollback()
+        return {"ok": True, "order_id": order_id, "created": False}
+
+
 # ---------- GET /check-combination-exists ----------
 @router.get("/check-combination-exists")
 async def check_combination_exists(

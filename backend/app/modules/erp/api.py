@@ -5,9 +5,14 @@ ERP（企業資源計画）APIエンドポイント
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, delete
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import date, datetime
 import json
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
@@ -316,14 +321,30 @@ async def delete_order_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """月別受注削除"""
+    """月別受注削除。紐づく日別受注も同時に削除する（カスケード削除）。"""
     result = await db.execute(select(models.OrderMonthly).where(models.OrderMonthly.id == id))
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Order not found")
-    await db.delete(row)
-    await db.commit()
-    return {"ok": True}
+
+    order_id = row.order_id
+
+    try:
+        # 同じ月次订单号（order_id）に紐づく日別受注を先に削除
+        await db.execute(
+            delete(models.OrderDaily).where(models.OrderDaily.monthly_order_id == order_id)
+        )
+        # 月別受注を削除
+        await db.delete(row)
+        await db.commit()
+        return {"ok": True}
+    except IntegrityError as e:
+        await db.rollback()
+        logger.warning("delete_order_monthly IntegrityError: %s", e)
+        raise HTTPException(
+            status_code=400,
+            detail="削除に失敗しました。",
+        )
 
 
 # ========== 日別受注 API ==========
@@ -340,32 +361,43 @@ async def list_order_daily(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """日別受注一覧"""
-    query = select(models.OrderDaily)
-    if data_eq is not None:
-        query = query.where(models.OrderDaily.date == data_eq)
-    if start_date is not None:
-        query = query.where(models.OrderDaily.date >= start_date)
-    if end_date is not None:
-        query = query.where(models.OrderDaily.date <= end_date)
-    if monthly_order_id:
-        query = query.where(models.OrderDaily.monthly_order_id == monthly_order_id)
-    if destination_cd:
-        query = query.where(models.OrderDaily.destination_cd == destination_cd)
-    if keyword:
-        k = f"%{keyword}%"
-        query = query.where(
-            or_(
-                models.OrderDaily.product_cd.like(k),
-                models.OrderDaily.product_name.like(k),
+    try:
+        query = select(models.OrderDaily)
+        if data_eq is not None:
+            query = query.where(models.OrderDaily.date == data_eq)
+        if start_date is not None:
+            query = query.where(models.OrderDaily.date >= start_date)
+        if end_date is not None:
+            query = query.where(models.OrderDaily.date <= end_date)
+        if monthly_order_id:
+            query = query.where(models.OrderDaily.monthly_order_id == monthly_order_id)
+        if destination_cd:
+            query = query.where(models.OrderDaily.destination_cd == destination_cd)
+        if keyword:
+            k = f"%{keyword}%"
+            query = query.where(
+                or_(
+                    models.OrderDaily.product_cd.like(k),
+                    models.OrderDaily.product_name.like(k),
+                )
             )
+        query = query.order_by(
+            models.OrderDaily.date.asc(),
+            models.OrderDaily.product_name.asc(),
+            models.OrderDaily.id.asc(),
         )
-    query = query.order_by(
-        models.OrderDaily.date.asc(),
-        models.OrderDaily.product_name.asc(),
-        models.OrderDaily.id.asc(),
-    )
-    result = await db.execute(query)
-    return result.scalars().all()
+        result = await db.execute(query)
+        rows = result.scalars().all()
+        # 显式转换为 schema，便于在序列化阶段捕获校验错误
+        return [schemas.OrderDaily.model_validate(r) for r in rows]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("list_order_daily failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"list_order_daily error: {type(e).__name__}: {e}",
+        )
 
 
 @router.post("/orders/daily", response_model=schemas.OrderDaily)

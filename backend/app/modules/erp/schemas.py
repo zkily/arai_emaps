@@ -1,7 +1,7 @@
 """
 ERP モジュール Pydantic スキーマ
 """
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 from typing import Optional, List
 from datetime import datetime, date as date_type
 from decimal import Decimal
@@ -192,6 +192,11 @@ class OrderMonthly(OrderMonthlyBase):
 
 # ========== 日別受注スキーマ ==========
 
+def _coerce_int_zero(v):
+    """DB で NULL の数値カラムを 0 に正規化"""
+    return 0 if v is None else v
+
+
 class OrderDailyBase(BaseModel):
     """日別受注基本スキーマ"""
     monthly_order_id: Optional[str] = Field(None, max_length=50, description="月订单ID")
@@ -219,6 +224,20 @@ class OrderDailyBase(BaseModel):
     confirmed_at: Optional[datetime] = None
     delivery_date: Optional[date_type] = Field(None, description="納入日")
     shipping_no: Optional[str] = Field(None, max_length=50)
+
+    @field_validator(
+        "forecast_units", "confirmed_boxes", "confirmed_units",
+        "unit_per_box", "fulfilled_from_stock", "fulfilled_from_wip",
+        mode="before",
+    )
+    @classmethod
+    def coerce_int_null_to_zero(cls, v):
+        return _coerce_int_zero(v)
+
+    @field_validator("confirmed", mode="before")
+    @classmethod
+    def coerce_confirmed_null_to_false(cls, v):
+        return False if v is None else bool(v)
 
 
 class OrderDailyCreate(OrderDailyBase):
@@ -258,8 +277,8 @@ class OrderDailyUpdate(BaseModel):
 class OrderDaily(OrderDailyBase):
     """日別受注レスポンススキーマ"""
     id: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

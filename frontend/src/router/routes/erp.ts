@@ -302,6 +302,43 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'),
         meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true },
       },
+      {
+        path: 'erp/production/plan-baseline',
+        name: 'ProductionPlanBaselineManagement',
+        component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'),
+        meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true },
+      },
+      // ── 生産指示 ──
+      {
+        path: 'erp/production/instruction/cutting',
+        name: 'CuttingInstruction',
+        component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'),
+        meta: { title: '切断指示', group: '生産管理 > 生産指示', requiresAuth: true },
+      },
+      {
+        path: 'erp/production/instruction/surface',
+        name: 'SurfaceInstruction',
+        component: () => import('@/views/erp/production/instruction/surface/SurfaceInstruction.vue'),
+        meta: { title: '面取指示', group: '生産管理 > 生産指示', requiresAuth: true },
+      },
+      {
+        path: 'erp/production/instruction/forming',
+        name: 'FormingInstruction',
+        component: () => import('@/views/erp/production/instruction/forming/FormingInstruction.vue'),
+        meta: { title: '成型指示', group: '生産管理 > 生産指示', requiresAuth: true },
+      },
+      {
+        path: 'erp/production/instruction/welding',
+        name: 'WeldingInstruction',
+        component: () => import('@/views/erp/production/instruction/welding/WeldingInstruction.vue'),
+        meta: { title: '溶接指示', group: '生産管理 > 生産指示', requiresAuth: true },
+      },
+      {
+        path: 'erp/production/instruction/plating',
+        name: 'PlatingInstruction',
+        component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'),
+        meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true },
+      },
       // ── 製造指示 ──
       {
         path: 'erp/production/work-order',
@@ -316,6 +353,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         meta: { title: '材料出庫指示', group: '生産管理 > 製造指示', requiresAuth: true },
       },
       // ── 生産実績 (ERP側) ──
+      {
+        path: 'erp/production/actual-management',
+        name: 'ProductionActualManagement',
+        component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'),
+        meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true },
+      },
       {
         path: 'erp/production/completion',
         name: 'CompletionReport',
@@ -395,6 +438,46 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/costing/accounting/AccountingExport.vue'),
         meta: { title: '会計ソフト出力', group: '原価・財務連携 > 会計連携', requiresAuth: true },
       },
+      // ╔══════════════════════════════════════════════════════════════╗
+      // ║  6. 出荷管理 (Shipping Management)                            ║
+      // ╚══════════════════════════════════════════════════════════════╝
+      {
+        path: 'erp/shipping',
+        name: 'Shipping',
+        component: () => import('@/views/erp/shipping/ShippingList.vue'),
+        meta: { title: '出荷構成表管理', group: '出荷管理 > 出荷構成表管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/report',
+        name: 'ShippingReport',
+        component: () => import('@/views/erp/shipping/ShippingReportPage.vue'),
+        meta: { title: '出荷報告書管理', group: '出荷管理 > 出荷報告書管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/overview',
+        name: 'ShippingOverview',
+        component: () => import('@/views/erp/shipping/ShippingOverview.vue'),
+        meta: { title: '出荷予定表発行', group: '出荷管理 > 出荷予定表発行', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/confirm',
+        name: 'ShippingListPage',
+        component: () => import('@/views/erp/shipping/ShippingListPage.vue'),
+        meta: { title: '出荷確認リスト', group: '出荷管理 > 出荷確認リスト', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/welding',
+        name: 'WeldingShippingManager',
+        component: () => import('@/views/erp/shipping/WeldingShippingManager.vue'),
+        meta: { title: '溶接出荷管理', group: '出荷管理 > 溶接出荷管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/picking',
+        name: 'ShippingPickingHome',
+        component: () => import('@/views/erp/shipping/ShippingPickingHome.vue'),
+        meta: { title: 'ピッキング管理', group: '出荷管理 > ピッキング管理', requiresAuth: true },
+      },
+
       // ── 債権債務（既存互換） ──
       {
         path: 'erp/costing/billing',

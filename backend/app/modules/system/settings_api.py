@@ -1355,28 +1355,32 @@ def _format_file_size(size_bytes: int) -> str:
     return f"{size_bytes:.1f}TB"
 
 
-# ========== ファイル監視設定 (BT-data 受信 CSV の有効/無効) ==========
+# ========== ファイル監視設定（在庫・材料・ピッキング・Excel 計画の有効/無効） ==========
 
 try:
-    from app.services.file_watcher.sync_services import STOCK_FILES, MATERIAL_FILES
+    from app.services.file_watcher.sync_services import STOCK_FILES, MATERIAL_FILES, PICKING_FILES
     from app.services.file_watcher.enabled_config import get_enabled, set_enabled
 except Exception:
     STOCK_FILES = []
     MATERIAL_FILES = []
+    PICKING_FILES = []
     get_enabled = lambda: {}
-    set_enabled = lambda x: None
+    set_enabled = lambda x, excel=True: None
 
 
 @router.get("/file-watcher", summary="ファイル監視対象の有効/無効一覧")
 async def get_file_watcher_settings(
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """監視対象 CSV の一覧と各ファイルの有効/無効を返す"""
-    enabled = get_enabled()
+    """監視対象一覧（在庫・材料・ピッキング・Excel）と各ファイルの有効/無効を返す"""
+    data = get_enabled()
+    excel_watcher_enabled = data.pop("excel_watcher_enabled", True)
     return {
         "stockFiles": list(STOCK_FILES),
         "materialFiles": list(MATERIAL_FILES),
-        "enabled": enabled,
+        "pickingFiles": list(PICKING_FILES),
+        "enabled": data,
+        "excelWatcherEnabled": excel_watcher_enabled,
     }
 
 
@@ -1385,9 +1389,12 @@ async def update_file_watcher_settings(
     body: dict,
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """enabled: { "StockIn.csv": true, ... } で保存"""
+    """enabled: { "StockIn.csv": true, ... }, excelWatcherEnabled: true で保存"""
     enabled = body.get("enabled")
     if not isinstance(enabled, dict):
         raise HTTPException(status_code=400, detail="enabled はオブジェクトで指定してください")
-    set_enabled(enabled)
-    return {"message": "保存しました", "enabled": get_enabled()}
+    excel_watcher_enabled = body.get("excelWatcherEnabled", True)
+    set_enabled(enabled, excel_watcher_enabled=excel_watcher_enabled)
+    data = get_enabled()
+    excel = data.pop("excel_watcher_enabled", True)
+    return {"message": "保存しました", "enabled": data, "excelWatcherEnabled": excel}

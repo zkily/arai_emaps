@@ -14,7 +14,7 @@ export interface MenuConfigItem {
 /** 全メニュー定義（親→子の順で並べる） */
 export const menuConfig: MenuConfigItem[] = [
   { code: 'DASHBOARD', name: 'ダッシュボード', path: '/dashboard', icon: 'HomeFilled', sortOrder: 0 },
-  { code: 'ERP', name: 'ERP', icon: 'Management', sortOrder: 1 },
+  { code: 'ERP', name: '総合管理メニュー', icon: 'Management', sortOrder: 1 },
 
   // ===== 1. 販売管理 (Sales / SD) =====
   { code: 'ERP_SALES', name: '販売管理', path: '/erp/sales', icon: 'Sell', parentCode: 'ERP', sortOrder: 1 },
@@ -72,11 +72,21 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_MRP', name: 'MRP（所要量計算）', path: '/erp/production/mrp', parentCode: 'ERP_PRODUCTION', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_ORDERS', name: '生産オーダー', path: '/erp/production/orders', parentCode: 'ERP_PRODUCTION', sortOrder: 4 },
   { code: 'ERP_PRODUCTION_SERIAL', name: '製番管理', path: '/erp/production/serial', parentCode: 'ERP_PRODUCTION', sortOrder: 5 },
-  { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION', sortOrder: 5.5 },
+  { code: 'ERP_PRODUCTION_PLANNING', name: '生産計画', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION', sortOrder: 5.5 },
+  { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 1 },
+  { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_INSTRUCTION', name: '生産指示', path: '/erp/production/instruction', parentCode: 'ERP_PRODUCTION', sortOrder: 5.6 },
+  { code: 'ERP_PRODUCTION_INSTR_CUTTING', name: '切断指示', path: '/erp/production/instruction/cutting', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 1 },
+  { code: 'ERP_PRODUCTION_INSTR_SURFACE', name: '面取指示', path: '/erp/production/instruction/surface', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_INSTR_FORMING', name: '成型指示', path: '/erp/production/instruction/forming', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 3 },
+  { code: 'ERP_PRODUCTION_INSTR_WELDING', name: '溶接指示', path: '/erp/production/instruction/welding', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 4 },
+  { code: 'ERP_PRODUCTION_INSTR_PLATING', name: 'メッキ指示', path: '/erp/production/instruction/plating', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 5 },
   { code: 'ERP_PRODUCTION_WO', name: '製造指図書', path: '/erp/production/work-order', parentCode: 'ERP_PRODUCTION', sortOrder: 6 },
   { code: 'ERP_PRODUCTION_ISSUE', name: '材料出庫指示', path: '/erp/production/material-issue', parentCode: 'ERP_PRODUCTION', sortOrder: 7 },
-  { code: 'ERP_PRODUCTION_COMPLETE', name: '完成報告', path: '/erp/production/completion', parentCode: 'ERP_PRODUCTION', sortOrder: 8 },
-  { code: 'ERP_PRODUCTION_CONSUME', name: '材料消費実績', path: '/erp/production/consumption', parentCode: 'ERP_PRODUCTION', sortOrder: 9 },
+  { code: 'ERP_PRODUCTION_RESULT', name: '生産実績', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION', sortOrder: 8 },
+  { code: 'ERP_PRODUCTION_ACTUAL', name: '生産実績管理', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 1 },
+  { code: 'ERP_PRODUCTION_COMPLETE', name: '完成報告', path: '/erp/production/completion', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_CONSUME', name: '材料消費実績', path: '/erp/production/consumption', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 3 },
 
   // ===== 5. 原価・財務連携 (Costing & Finance) =====
   { code: 'ERP_COSTING', name: '原価・財務連携', path: '/erp/costing', icon: 'Coin', parentCode: 'ERP', sortOrder: 7 },
@@ -93,10 +103,19 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_COSTING_BILLING', name: '請求管理(AR)', path: '/erp/costing/billing', parentCode: 'ERP_COSTING', sortOrder: 10 },
   { code: 'ERP_COSTING_PAYMENT', name: '支払管理(AP)', path: '/erp/costing/payment', parentCode: 'ERP_COSTING', sortOrder: 11 },
 
-  { code: 'APS', name: 'APS', icon: 'DataAnalysis', sortOrder: 2 },
+  // ===== 6. 出荷管理 (Shipping Management) =====
+  { code: 'ERP_SHIPPING', name: '出荷管理', path: '/erp/shipping', icon: 'Van', parentCode: 'ERP', sortOrder: 8 },
+  { code: 'ERP_SHIPPING_LIST', name: '出荷構成表管理', path: '/erp/shipping', parentCode: 'ERP_SHIPPING', sortOrder: 1 },
+  { code: 'ERP_SHIPPING_REPORT', name: '出荷報告書管理', path: '/erp/shipping/report', parentCode: 'ERP_SHIPPING', sortOrder: 2 },
+  { code: 'ERP_SHIPPING_OVERVIEW', name: '出荷予定表発行', path: '/erp/shipping/overview', parentCode: 'ERP_SHIPPING', sortOrder: 3 },
+  { code: 'ERP_SHIPPING_CONFIRM', name: '出荷確認リスト', path: '/erp/shipping/confirm', parentCode: 'ERP_SHIPPING', sortOrder: 4 },
+  { code: 'ERP_SHIPPING_WELDING', name: '溶接出荷管理', path: '/erp/shipping/welding', parentCode: 'ERP_SHIPPING', sortOrder: 5 },
+  { code: 'ERP_SHIPPING_PICKING', name: 'ピッキング管理', path: '/erp/shipping/picking', parentCode: 'ERP_SHIPPING', sortOrder: 6 },
+
+  { code: 'APS', name: '生産スケジューラ', icon: 'DataAnalysis', sortOrder: 2 },
   { code: 'APS_PLANNING', name: '生産計画', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
-  { code: 'MES', name: 'MES', icon: 'Monitor', sortOrder: 3 },
+  { code: 'MES', name: '製造実行メニュー', icon: 'Monitor', sortOrder: 3 },
   { code: 'MES_EXECUTION', name: '製造実行', path: '/mes/execution', parentCode: 'MES', sortOrder: 1 },
   { code: 'MES_QUALITY', name: '品質管理', path: '/mes/quality', parentCode: 'MES', sortOrder: 2 },
   { code: 'MASTER', name: 'マスタ管理', icon: 'Collection', sortOrder: 4 },
@@ -117,6 +136,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_BOM_HOME', name: 'BOMホーム', path: '/master/bom', parentCode: 'MASTER_BOM', sortOrder: 0 },
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
+  { code: 'MASTER_EQUIPMENT_EFFICIENCY', name: '設備能率管理', path: '/master/bom/equipment-efficiency', parentCode: 'MASTER_BOM', sortOrder: 3 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
   { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },
   { code: 'SYSTEM_HOME', name: 'システムホーム', path: '/system', parentCode: 'SYSTEM_USER', sortOrder: 0 },

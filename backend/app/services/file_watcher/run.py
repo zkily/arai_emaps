@@ -11,8 +11,10 @@ from app.services.file_watcher.handler import UnifiedHandler
 from app.services.file_watcher.sync_services import (
     StockService,
     MaterialService,
+    PickingLogService,
     STOCK_FILES,
     MATERIAL_FILES,
+    PICKING_FILES,
 )
 from app.services.file_watcher.excel_processor import (
     ExcelProcessor,
@@ -20,7 +22,7 @@ from app.services.file_watcher.excel_processor import (
     is_excel_target_file,
 )
 from app.services.file_watcher.utils import wait_for_file_stable
-from app.services.file_watcher.enabled_config import is_file_enabled
+from app.services.file_watcher.enabled_config import is_file_enabled, is_excel_watcher_enabled
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +108,7 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
     """ワーカー：キューから (filepath, filename) を取得し、ファイル安定後に種別で処理；同一 Excel は 1 ワーカーのみ"""
     stock_svc = StockService()
     material_svc = MaterialService()
+    picking_svc = PickingLogService()
     excel_processor = ExcelProcessor()
     while True:
         try:
@@ -136,9 +139,14 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
             if not os.path.isfile(filepath):
                 logger.warning("ファイルが存在しないためスキップ: %s", filename)
                 continue
-            logger.info("开始处理: %s", filename)
+            logger.info("処理開始: %s", filename)
             if is_excel_target_file(filename):
                 excel_processor.process_file(filepath)
+            elif filename in PICKING_FILES:
+                if is_file_enabled(filename):
+                    picking_svc.sync(filepath, filename)
+                else:
+                    logger.debug("ピッキングファイル監視は無効のためスキップ: %s", filename)
             elif filename in STOCK_FILES:
                 if is_file_enabled(filename):
                     stock_svc.sync(filepath, filename)
@@ -178,11 +186,11 @@ def run_watcher():
         logger.info("📂 Excel 計画監視パス: %s", excel_path)
     else:
         logger.info("📂 Excel 計画与 CSV 共用路径")
-    logger.info("📊 轮询间隔: %.1f 秒，工作线程: %s 个", POLL_INTERVAL, WORKER_COUNT)
-    logger.info("📑 支持: 库存 %s 个, 材料 %s 个, Excel 計画 %s 个", len(STOCK_FILES), len(MATERIAL_FILES), len(EXCEL_FILES))
-    excel_watcher_enabled = os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true"
+    logger.info("📊 ポーリング間隔: %.1f 秒、ワーカー: %s 個", POLL_INTERVAL, WORKER_COUNT)
+    logger.info("📑 監視対象: 在庫 %s 件、材料 %s 件、ピッキング %s 件、Excel 計画 %s 件", len(STOCK_FILES), len(MATERIAL_FILES), len(PICKING_FILES), len(EXCEL_FILES))
+    excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     if not excel_watcher_enabled:
-        logger.info("📌 Excel 監視は DISABLE_EXCEL_WATCHER により無効です")
+        logger.info("📌 Excel 監視は無効です（環境変数またはシステム設定）")
     if excel_watcher_enabled and excel_path:
         _scan_excel_files_at_startup(excel_path, None)
 

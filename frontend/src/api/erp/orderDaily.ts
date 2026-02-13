@@ -97,3 +97,46 @@ export function updateOrderDaily(id: number, data: Partial<OrderDailyCreate>): P
 export function deleteOrderDaily(id: number): Promise<void> {
   return request.delete(`${BASE}/${id}`)
 }
+
+// ========== 日次追加用：月次注文の存在チェック＆自動作成 ==========
+
+export interface CheckMonthlyExistsResponse {
+  exists: boolean
+  id?: number
+  order_id?: string
+}
+
+/** 月次注文IDで存在チェック */
+export function checkMonthlyOrderExists(orderId: string): Promise<CheckMonthlyExistsResponse> {
+  return request.get('/api/order/check-exists', { params: { order_id: orderId } }) as Promise<CheckMonthlyExistsResponse>
+}
+
+export interface AddMonthlyOrderData {
+  order_id: string
+  destination_cd: string
+  destination_name: string
+  year: number
+  month: number
+  product_cd: string
+  product_name: string
+  product_alias?: string
+  product_type: string
+  forecast_units: number
+  forecast_total_units: number
+}
+
+export interface AddMonthlyOrderResponse {
+  ok: boolean
+  order_id: string
+  created: boolean
+}
+
+/** 月次注文の自動作成（日次追加時に月次が無い場合に呼び出す） */
+export function addMonthlyOrder(data: AddMonthlyOrderData): Promise<AddMonthlyOrderResponse> {
+  return request.post('/api/order/monthly/add', data) as Promise<AddMonthlyOrderResponse>
+}
+
+/** 日次注文を追加（POST /api/erp/orders/daily） — addOrderDaily は createOrderDaily のエイリアス */
+export function addOrderDaily(data: OrderDailyCreate): Promise<OrderDailyItem> {
+  return request.post(BASE, data)
+}

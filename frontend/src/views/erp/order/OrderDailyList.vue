@@ -91,13 +91,24 @@
 
     <el-dialog 
       v-model="dialogVisible" 
-      :title="editId ? '日別受注編集' : '新規受注追加（試作品・補給品等）'" 
       width="540px" 
       destroy-on-close 
       @close="resetForm"
       class="daily-order-dialog compact-dialog"
+      :show-close="false"
     >
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="70px" class="modern-form compact-form" size="default">
+      <template #header>
+        <div class="dialog-header-custom">
+          <div class="dialog-header-left">
+            <span class="dialog-header-add-btn" title="新規追加">
+              <el-icon><Plus /></el-icon>
+            </span>
+            <span class="dialog-header-title">{{ editId ? '日別受注編集' : '新規受注追加(試作品・補給品等)' }}</span>
+          </div>
+          <el-icon class="dialog-header-close" @click="dialogVisible = false"><Close /></el-icon>
+        </div>
+      </template>
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="modern-form compact-form" size="default">
         <!-- 日付情報セクション -->
         <div class="form-section compact-section">
           <div class="section-header compact-header">
@@ -119,7 +130,7 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="納入日" prop="delivery_date" class="compact-item">
+                <el-form-item label="納入日" prop="delivery_date" required class="compact-item">
                   <el-date-picker 
                     v-model="form.delivery_date" 
                     type="date" 
@@ -142,55 +153,48 @@
             <span class="section-title">基本情報</span>
           </div>
           <div class="section-content compact-content">
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <el-form-item label="納入先" prop="destination_cd" required class="compact-item">
-                  <el-select 
-                    v-model="form.destination_cd" 
-                    placeholder="選択" 
-                    filterable 
-                    style="width: 100%" 
-                    popper-class="destination-select-popper"
-                    @change="onDestinationChange"
-                    size="default"
-                  >
-                    <el-option 
-                      v-for="d in destinationOptions" 
-                      :key="d.cd" 
-                      :label="`${d.cd} | ${d.name}`" 
-                      :value="d.cd" 
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="製品" prop="product_cd" required class="compact-item">
-                  <el-select 
-                    v-model="form.product_cd" 
-                    placeholder="選択" 
-                    filterable 
-                    style="width: 100%" 
-                    @change="onProductChange"
-                    size="default"
-                  >
-                    <el-option
-                      v-for="p in productOptions"
-                      :key="p.cd"
-                      :value="p.cd"
-                      :label="`${p.cd} | ${p.name}`"
-                    >
-                      <div class="product-option-compact">
-                        <span class="opt-cd">{{ p.cd }}</span>
-                        <span class="opt-name">{{ p.name }}</span>
-                      </div>
-                    </el-option>
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            
-            <el-form-item label="タイプ" prop="product_type" class="compact-item">
-              <el-select v-model="form.product_type" placeholder="選択" style="width: 100%" size="default">
+            <el-form-item label="納入先" prop="destination_cd" required class="compact-item">
+              <el-select 
+                v-model="form.destination_cd" 
+                placeholder="納入先を選択" 
+                filterable 
+                style="width: 100%" 
+                popper-class="destination-select-popper"
+                @change="onDestinationChange"
+                size="default"
+              >
+                <el-option 
+                  v-for="d in destinationOptions" 
+                  :key="d.cd" 
+                  :label="`${d.cd} | ${d.name}`" 
+                  :value="d.cd" 
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="製品" prop="product_cd" required class="compact-item">
+              <el-select 
+                v-model="form.product_cd" 
+                placeholder="製品を選択" 
+                filterable 
+                style="width: 100%" 
+                @change="onProductChange"
+                size="default"
+              >
+                <el-option
+                  v-for="p in productOptions"
+                  :key="p.cd"
+                  :value="p.cd"
+                  :label="`${p.cd} | ${p.name}`"
+                >
+                  <div class="product-option-compact">
+                    <span class="opt-cd">{{ p.cd }}</span>
+                    <span class="opt-name">{{ p.name }}</span>
+                  </div>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="製品タイプ" prop="product_type" class="compact-item">
+              <el-select v-model="form.product_type" placeholder="製品タイプを選択" style="width: 100%" size="default">
                 <el-option label="量産品" value="量産品" />
                 <el-option label="試作品" value="試作品" />
                 <el-option label="別注品" value="別注品" />
@@ -212,12 +216,12 @@
           </div>
           <div class="section-content compact-content">
             <el-row :gutter="12">
-              <el-col :span="8">
+              <el-col :span="12">
                 <el-form-item label="入数" prop="unit_per_box" class="compact-item">
                   <el-input-number 
                     v-model="form.unit_per_box" 
                     :min="0" 
-                    placeholder="0"
+                    placeholder="入数を入力"
                     style="width: 100%" 
                     @change="calculateConfirmedUnits"
                     size="default"
@@ -225,12 +229,12 @@
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="8">
+              <el-col :span="12">
                 <el-form-item label="箱数" prop="confirmed_boxes" class="compact-item">
                   <el-input-number 
                     v-model="form.confirmed_boxes" 
                     :min="0" 
-                    placeholder="0"
+                    placeholder="箱数を入力"
                     style="width: 100%" 
                     @change="calculateConfirmedUnits"
                     size="default"
@@ -238,26 +242,23 @@
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="8">
-                <el-form-item label="確定" prop="confirmed_units" class="compact-item">
-                  <el-input 
-                    :model-value="confirmedUnitsDisplay" 
-                    placeholder="自動" 
-                    readonly
-                    class="calculated-field"
-                    size="default"
-                  >
-                    <template #suffix>
-                      <span class="unit-suffix">本</span>
-                    </template>
-                  </el-input>
-                </el-form-item>
-              </el-col>
             </el-row>
-            
+            <el-form-item label="確定本数" prop="confirmed_units" class="compact-item calculated-row">
+              <el-input 
+                :model-value="confirmedUnitsDisplay" 
+                placeholder="自動計算" 
+                readonly
+                class="calculated-field"
+                size="default"
+              >
+                <template #suffix>
+                  <span class="unit-suffix"> (本)</span>
+                </template>
+              </el-input>
+            </el-form-item>
             <div class="info-tip compact-tip">
               <el-icon><InfoFilled /></el-icon>
-              <span>確定本数 = 入数 × 箱数</span>
+              <span>確定本数は入数×確定箱数で自動計算されます</span>
             </div>
           </div>
         </div>
@@ -288,31 +289,42 @@ import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
 import {
   fetchOrderDailyList,
-  createOrderDaily,
   updateOrderDaily,
   deleteOrderDaily,
+  checkMonthlyOrderExists,
+  addMonthlyOrder,
+  addOrderDaily,
   type OrderDailyItem,
   type OrderDailyCreate,
   type OrderDailyFilters,
 } from '@/api/erp/orderDaily'
 
+// ========== 一覧用 ==========
 const loading = ref(false)
 const list = ref<OrderDailyItem[]>([])
 const destinationOptions = ref<{ cd: string; name: string }[]>([])
+
 interface ProductOption {
   cd: string
   name: string
+  product_type?: string
+  unit_per_box?: number
+  product_alias?: string
   destination_cd?: string
   destination_name?: string
 }
 const productOptions = ref<ProductOption[]>([])
+/** 全製品（納入先変更時にフィルタする元データ） */
+const allProductOptions = ref<ProductOption[]>([])
 
 const filters = reactive<OrderDailyFilters>({})
 
-// 日本時区の現在日付を取得
+// ========== 日本時区ユーティリティ ==========
 function getJapanDate(): Date {
   return new Date(new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }))
 }
+
+const WEEKDAY_MAP = ['日', '月', '火', '水', '木', '金', '土']
 
 function getTodayRange(): [string, string] {
   const d = getJapanDate()
@@ -323,12 +335,30 @@ function getTodayRange(): [string, string] {
 }
 const dateRange = ref<[string, string] | null>(getTodayRange())
 
+// ========== ページング ==========
 const pagination = reactive({
   page: 1,
   pageSize: 20,
   total: 0,
 })
 
+// ========== typeSuffix 映射 ==========
+const TYPE_SUFFIX_MAP: Record<string, string> = {
+  '量産品': '0',
+  '試作品': '1',
+  '別注品': '2',
+  '補給品': '3',
+  'サンプル品': '4',
+  '代替品': '5',
+  '返却品': '6',
+  'その他': '7',
+}
+
+function getTypeSuffix(productType: string): string {
+  return TYPE_SUFFIX_MAP[productType] || '0'
+}
+
+// ========== データ読込 ==========
 async function loadOptions() {
   try {
     const [d, pr] = await Promise.all([
@@ -338,17 +368,22 @@ async function loadOptions() {
     destinationOptions.value = d.map((x) => ({ cd: x.cd, name: x.name }))
     const destMap: Record<string, string> = {}
     destinationOptions.value.forEach((x) => { destMap[x.cd] = x.name })
-    const list = pr?.data?.list ?? pr?.list ?? []
-    productOptions.value = list
-      .map((p: { product_cd: string; product_name?: string; destination_cd?: string }) => ({
+    const rawList = pr?.data?.list ?? pr?.list ?? []
+    allProductOptions.value = rawList
+      .map((p: any) => ({
         cd: p.product_cd,
         name: p.product_name || p.product_cd,
+        product_type: p.product_type || '量産品',
+        unit_per_box: p.unit_per_box ?? 0,
+        product_alias: p.product_alias || '',
         destination_cd: p.destination_cd,
         destination_name: p.destination_cd ? (destMap[p.destination_cd] || p.destination_cd) : undefined,
       }))
-      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'ja'))
+      .sort((a: ProductOption, b: ProductOption) => (a.name || '').localeCompare(b.name || '', 'ja'))
+    productOptions.value = [...allProductOptions.value]
   } catch {
     destinationOptions.value = []
+    allProductOptions.value = []
     productOptions.value = []
   }
 }
@@ -393,10 +428,16 @@ watch(
   { deep: true }
 )
 
+// ========== ダイアログ ==========
 const dialogVisible = ref(false)
 const formRef = ref<FormInstance>()
 const saving = ref(false)
 const editId = ref<number | null>(null)
+
+// 日付から分解した年・月・日
+const formYear = ref('')
+const formMonth = ref('')
+const formDay = ref('')
 
 const form = reactive<OrderDailyCreate & { destination_name?: string; product_name?: string }>({
   monthly_order_id: '',
@@ -418,22 +459,74 @@ const form = reactive<OrderDailyCreate & { destination_name?: string; product_na
 })
 
 const rules: FormRules = {
+  date: [{ required: true, message: '出荷日を入力してください', trigger: 'change' }],
+  delivery_date: [{ required: true, message: '納入日を入力してください', trigger: 'change' }],
   destination_cd: [{ required: true, message: '納入先を選択してください', trigger: 'change' }],
-  date: [{ required: true, message: '日付を選択してください', trigger: 'change' }],
   product_cd: [{ required: true, message: '製品を選択してください', trigger: 'change' }],
 }
 
+// ========== 日付変更時に year/month/day/weekday を自動設定 ==========
+watch(() => form.date, (newDate) => {
+  if (!newDate) {
+    formYear.value = ''
+    formMonth.value = ''
+    formDay.value = ''
+    form.weekday = ''
+    return
+  }
+  const parts = newDate.split('-')
+  formYear.value = parts[0] || ''
+  formMonth.value = parts[1] || ''
+  formDay.value = parts[2] || ''
+  // 曜日を自動設定
+  const d = new Date(newDate)
+  if (!isNaN(d.getTime())) {
+    form.weekday = WEEKDAY_MAP[d.getDay()] || ''
+  }
+  // 納入日が未設定なら出荷日と同じにする
+  if (!form.delivery_date) {
+    form.delivery_date = newDate
+  }
+})
+
+// ========== 納入先変更 → 製品クリア＆製品リストをフィルタ ==========
 function onDestinationChange(cd: string) {
   const d = destinationOptions.value.find((x) => x.cd === cd)
   if (d) form.destination_name = d.name
+
+  // 製品をクリア
+  form.product_cd = ''
+  form.product_name = ''
+  form.product_alias = ''
+  form.product_type = '量産品'
+  form.unit_per_box = 0
+  form.confirmed_units = 0
+
+  // 該当納入先の製品を優先表示（全製品も含む）
+  if (cd) {
+    const filtered = allProductOptions.value.filter((p) => p.destination_cd === cd)
+    // 該当納入先の製品があればそれを優先、無ければ全製品
+    productOptions.value = filtered.length > 0 ? filtered : [...allProductOptions.value]
+  } else {
+    productOptions.value = [...allProductOptions.value]
+  }
 }
 
+// ========== 製品変更 → product_type, unit_per_box, product_name を帯出 ==========
 function onProductChange(cd: string) {
   const p = productOptions.value.find((x) => x.cd === cd)
-  if (p) form.product_name = p.name
+    || allProductOptions.value.find((x) => x.cd === cd)
+  if (p) {
+    form.product_name = p.name
+    form.product_alias = p.product_alias || ''
+    form.product_type = p.product_type || '量産品'
+    form.unit_per_box = p.unit_per_box ?? 0
+    // 本数を再計算
+    calculateConfirmedUnits()
+  }
 }
 
-// 確定本数の自動計算
+// ========== 確定本数の自動計算 ==========
 const confirmedUnitsDisplay = computed(() => {
   const units = (form.unit_per_box || 0) * (form.confirmed_boxes || 0)
   return units > 0 ? `${units}` : ''
@@ -443,6 +536,7 @@ function calculateConfirmedUnits() {
   form.confirmed_units = (form.unit_per_box || 0) * (form.confirmed_boxes || 0)
 }
 
+// ========== ダイアログ開閉 ==========
 function openDialog(row?: OrderDailyItem) {
   editId.value = row?.id ?? null
   if (row) {
@@ -488,48 +582,154 @@ function resetForm() {
   form.status = '未出荷'
   form.remarks = ''
   form.delivery_date = ''
+  formYear.value = ''
+  formMonth.value = ''
+  formDay.value = ''
+  // 製品リストをリセット
+  productOptions.value = [...allProductOptions.value]
 }
 
+// ========== 保存ロジック（handleSave） ==========
 async function submitForm() {
+  // ① Element Plus Form 校验
   try {
     await formRef.value?.validate()
-  } catch {
+  } catch (e: any) {
+    const msg = (e && typeof e === 'object' && e.message) ? e.message : '入力内容を確認してください'
+    ElMessage.warning(msg)
     return
   }
+
+  // ② 年月日二次校验
+  if (!formYear.value || !formMonth.value || !formDay.value) {
+    ElMessage.warning('日付が正しく設定されていません')
+    return
+  }
+
+  // ③ 納入日二次校验
+  if (!form.delivery_date) {
+    ElMessage.warning('納入日を入力してください')
+    return
+  }
+
+  // ④ 箱数・入数校验
+  if (!form.confirmed_boxes || !form.unit_per_box) {
+    ElMessage.warning('確定箱数と入数を入力してください')
+    return
+  }
+
   saving.value = true
   try {
-    const payload: OrderDailyCreate = {
-      monthly_order_id: form.monthly_order_id || undefined,
+    // ---------- 編集モード ----------
+    if (editId.value != null) {
+      const payload: OrderDailyCreate = {
+        monthly_order_id: form.monthly_order_id || undefined,
+        destination_cd: form.destination_cd,
+        destination_name: form.destination_name || undefined,
+        date: form.date,
+        weekday: form.weekday || undefined,
+        product_cd: form.product_cd,
+        product_name: form.product_name || undefined,
+        product_alias: form.product_alias || undefined,
+        product_type: form.product_type,
+        forecast_units: form.forecast_units ?? 0,
+        confirmed_boxes: form.confirmed_boxes ?? 0,
+        confirmed_units: form.confirmed_units ?? 0,
+        unit_per_box: form.unit_per_box ?? 0,
+        status: form.status,
+        remarks: form.remarks || undefined,
+        delivery_date: form.delivery_date || undefined,
+      }
+      await updateOrderDaily(editId.value, payload)
+      ElMessage.success('更新しました')
+      dialogVisible.value = false
+      loadList()
+      return
+    }
+
+    // ---------- 新規追加モード ----------
+    const year = formYear.value
+    const month = formMonth.value.padStart(2, '0')
+    const weekday = form.weekday || ''
+    const confirmedUnits = Number(form.confirmed_units) || 0
+
+    // ⑤ typeSuffix = product_type → 類型後綴
+    const typeSuffix = getTypeSuffix(form.product_type || '量産品')
+
+    // ⑥ monthlyOrderId = YYYYMM + destination_cd + product_cd + typeSuffix
+    const monthlyOrderId = `${year}${month}${form.destination_cd}${form.product_cd}${typeSuffix}`
+
+    // ⑦ 月次注文が存在するかチェック
+    let monthlyExists = false
+    try {
+      const checkResult = await checkMonthlyOrderExists(monthlyOrderId)
+      monthlyExists = checkResult.exists
+    } catch {
+      ElMessage.error('月次注文の確認に失敗しました')
+      return
+    }
+
+    // ⑧ 月次注文が存在しない場合は自動作成
+    if (!monthlyExists) {
+      try {
+        const monthlyResult = await addMonthlyOrder({
+          order_id: monthlyOrderId,
+          destination_cd: form.destination_cd,
+          destination_name: form.destination_name || '',
+          year: Number(year),
+          month: Number(month),
+          product_cd: form.product_cd,
+          product_name: form.product_name || '',
+          product_alias: form.product_alias || '',
+          product_type: form.product_type || '量産品',
+          forecast_units: confirmedUnits,
+          forecast_total_units: confirmedUnits,
+        })
+        if (monthlyResult.ok) {
+          ElMessage.success('月次注文が自動作成されました')
+        } else {
+          ElMessage.error('月次注文の作成に失敗しました')
+          return
+        }
+      } catch {
+        ElMessage.error('月次注文の作成に失敗しました')
+        return
+      }
+    }
+
+    // ⑨ 日次注文を作成
+    const rawPostData: OrderDailyCreate = {
+      monthly_order_id: monthlyOrderId,
       destination_cd: form.destination_cd,
       destination_name: form.destination_name || undefined,
       date: form.date,
-      weekday: form.weekday || undefined,
+      weekday: weekday || undefined,
       product_cd: form.product_cd,
       product_name: form.product_name || undefined,
       product_alias: form.product_alias || undefined,
       product_type: form.product_type,
-      forecast_units: form.forecast_units ?? 0,
-      confirmed_boxes: form.confirmed_boxes ?? 0,
-      confirmed_units: form.confirmed_units ?? 0,
-      unit_per_box: form.unit_per_box ?? 0,
-      status: form.status,
-      remarks: form.remarks || undefined,
+      unit_per_box: Number(form.unit_per_box) || 0,
+      confirmed_boxes: Number(form.confirmed_boxes) || 0,
+      confirmed_units: confirmedUnits,
+      forecast_units: confirmedUnits,
       delivery_date: form.delivery_date || undefined,
+      status: '未出荷',
     }
-    if (editId.value != null) {
-      await updateOrderDaily(editId.value, payload)
-      ElMessage.success('更新しました')
-    } else {
-      await createOrderDaily(payload)
-      ElMessage.success('登録しました')
-    }
+
+    await addOrderDaily(rawPostData)
+    ElMessage.success('追加成功しました')
     dialogVisible.value = false
+    resetForm()
     loadList()
+  } catch (e: any) {
+    const errorMessage = (e instanceof Error) ? e.message : '日次注文の追加に失敗しました'
+    ElMessage.error(errorMessage)
   } finally {
     saving.value = false
   }
 }
 
+// ========== 削除 ==========
 async function handleDelete(row: OrderDailyItem) {
   try {
     await ElMessageBox.confirm(`日別受注 ID「${row.id}」を削除しますか？`, '確認', { type: 'warning' })
@@ -541,6 +741,7 @@ async function handleDelete(row: OrderDailyItem) {
   }
 }
 
+// ========== マウント ==========
 onMounted(() => {
   loadOptions()
   loadList()
@@ -796,26 +997,66 @@ onMounted(() => {
   overflow: hidden;
 }
 
+/* カスタムヘッダー：紫背景・左に青＋・右に閉じる */
 .daily-order-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 16px 20px;
+  padding: 0;
   margin: 0;
 }
 
-.daily-order-dialog :deep(.el-dialog__title) {
+.dialog-header-custom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.dialog-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dialog-header-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(59, 130, 246, 0.95);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dialog-header-add-btn:hover {
+  background: rgba(37, 99, 235, 1);
+}
+
+.dialog-header-title {
   color: #fff;
   font-size: 16px;
   font-weight: 600;
 }
 
-.daily-order-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+.dialog-header-close {
   color: #fff;
   font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.dialog-header-close:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .daily-order-dialog :deep(.el-dialog__body) {
   padding: 0;
-  background: #f8f9fa;
+  background: #fff;
 }
 
 .compact-form {
@@ -892,70 +1133,96 @@ onMounted(() => {
   color: #303133;
 }
 
+/* 確定本数：浅绿背景・灰色文字・自動計算 (本) */
+.calculated-row :deep(.el-input__wrapper) {
+  min-height: 40px;
+}
+
 .calculated-field :deep(.el-input__wrapper) {
-  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
-  border: 1px solid #81c784;
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
   box-shadow: none;
 }
 
-.calculated-field :deep(.el-input__inner) {
-  color: #2e7d32;
-  font-weight: 600;
-  text-align: center;
+.calculated-field :deep(.el-input__inner),
+.calculated-field :deep(.el-input__wrapper) {
+  color: #616161;
+  font-size: 14px;
+  text-align: left;
+}
+
+.calculated-field:not(.is-focus):deep(.el-input__wrapper) .el-input__inner::placeholder {
+  color: #9e9e9e;
 }
 
 .unit-suffix {
-  font-size: 12px;
-  color: #2e7d32;
-  font-weight: 500;
-  padding-right: 4px;
+  font-size: 13px;
+  color: #616161;
+  padding-right: 8px;
 }
 
+/* 説明：青い i アイコン・確定本数は入数×確定箱数で自動計算されます */
 .compact-tip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: linear-gradient(135deg, #e3f2fd 0%, #f0f7ff 100%);
-  border-radius: 6px;
-  border-left: 3px solid #2196f3;
-  margin-top: 10px;
-  font-size: 11px;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #e3f2fd;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+  margin-top: 12px;
+  font-size: 12px;
   color: #1976d2;
 }
 
 .compact-tip .el-icon {
-  font-size: 14px;
+  font-size: 16px;
   color: #2196f3;
+  flex-shrink: 0;
 }
 
 .dialog-footer-compact {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 14px 20px;
   background: #fff;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid #e0e0e0;
 }
 
-.btn-cancel,
-.btn-save {
-  border-radius: 6px;
-  padding: 8px 16px;
+.btn-cancel {
+  background: #fff;
+  border: 1px solid #9e9e9e;
+  color: #424242;
+  border-radius: 8px;
+  padding: 8px 18px;
   font-size: 13px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.btn-cancel:hover {
+  background: #f5f5f5;
+  border-color: #757575;
+  color: #212121;
 }
 
 .btn-save {
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   font-weight: 500;
+  color: #fff;
 }
 
 .btn-save:hover {
-  opacity: 0.9;
+  opacity: 0.92;
 }
 
 /* Responsive Design */

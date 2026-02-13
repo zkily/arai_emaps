@@ -334,3 +334,36 @@ class ProductMachineConfig(Base):
     outsourced_welding_machine = Column(String(100))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class EquipmentEfficiency(Base):
+    """設備能率管理（equipment_efficiency）"""
+    __tablename__ = "equipment_efficiency"
+    __table_args__ = ({"mysql_comment": "設備能率管理テーブル"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    machine_cd = Column(String(20), nullable=True, index=True)
+    machines_name = Column(String(50), nullable=True)
+    product_cd = Column(String(20), nullable=True, index=True)
+    product_name = Column(String(50), nullable=True)
+    efficiency_rate = Column(Numeric(10, 1), default=0.0)
+    step_time = Column(Integer, nullable=True)
+    unit = Column(String(50), nullable=True)
+    remarks = Column(Text, nullable=True)
+    status = Column(Integer, nullable=True)  # 1=有効, 0=無効
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class MachineWorkTimeConfig(Base):
+    """設備運行時間設定（machine_work_time_config）"""
+    __tablename__ = "machine_work_time_config"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    machine_cd = Column(String(50), unique=True, nullable=False, index=True)
+    machine_name = Column(String(100), nullable=True)
+    time_slot_17_19 = Column(Integer, default=0, nullable=False)  # 1=稼働, 0=非稼働
+    time_slot_19_21 = Column(Integer, default=0, nullable=False)
+    time_slot_6_8 = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

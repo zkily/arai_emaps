@@ -98,4 +98,10 @@ export const masterRoutes: RouteRecordRaw[] = [
     component: () => import('@/views/master/bom/ProductMachineConfig.vue'),
     meta: { title: '製品機器設定', requiresAuth: true },
   },
+  {
+    path: 'master/bom/equipment-efficiency',
+    name: 'EquipmentEfficiencyManagement',
+    component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'),
+    meta: { title: '設備能率管理', requiresAuth: true },
+  },
 ]

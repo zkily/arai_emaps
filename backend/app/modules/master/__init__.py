@@ -14,8 +14,11 @@ from app.modules.master.api_machine import router as machine_router
 from app.modules.master.api_product_route_steps import router as product_route_steps_router
 from app.modules.master.api_product_process_bom import router as product_process_bom_router
 from app.modules.master.api_product_machine_config import router as product_machine_config_router
+from app.modules.master.api_equipment_efficiency import router as equipment_efficiency_router
+from app.modules.master.api_options import router as options_router
 
 router = APIRouter()
+router.include_router(options_router, prefix="/options", tags=["マスタオプション"])
 router.include_router(product_router, prefix="/products", tags=["製品マスタ"])
 router.include_router(material_router, prefix="/materials", tags=["材料マスタ"])
 router.include_router(supplier_router, prefix="/suppliers", tags=["仕入先マスタ"])
@@ -32,3 +35,4 @@ router.include_router(
 )
 router.include_router(product_process_bom_router, prefix="/product-process-bom", tags=["製品工程BOM"])
 router.include_router(product_machine_config_router, prefix="/product-machine-config", tags=["製品機器設定"])
+router.include_router(equipment_efficiency_router, prefix="/equipment-efficiency", tags=["設備能率管理"])

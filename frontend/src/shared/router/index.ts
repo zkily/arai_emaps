@@ -75,8 +75,15 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/orders', name: 'ProductionOrder', component: () => import('@/views/erp/production/planning/ProductionOrder.vue'), meta: { title: '生産オーダー', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/serial', name: 'SerialNumberManagement', component: () => import('@/views/erp/production/planning/SerialNumberManagement.vue'), meta: { title: '製番管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/instruction/cutting', name: 'CuttingInstruction', component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'), meta: { title: '切断指示', group: '生産管理 > 生産指示', requiresAuth: true } },
+      { path: 'erp/production/instruction/surface', name: 'SurfaceInstruction', component: () => import('@/views/erp/production/instruction/surface/SurfaceInstruction.vue'), meta: { title: '面取指示', group: '生産管理 > 生産指示', requiresAuth: true } },
+      { path: 'erp/production/instruction/forming', name: 'FormingInstruction', component: () => import('@/views/erp/production/instruction/forming/FormingInstruction.vue'), meta: { title: '成型指示', group: '生産管理 > 生産指示', requiresAuth: true } },
+      { path: 'erp/production/instruction/welding', name: 'WeldingInstruction', component: () => import('@/views/erp/production/instruction/welding/WeldingInstruction.vue'), meta: { title: '溶接指示', group: '生産管理 > 生産指示', requiresAuth: true } },
+      { path: 'erp/production/instruction/plating', name: 'PlatingInstruction', component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'), meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/work-order', name: 'WorkOrder', component: () => import('@/views/erp/production/instruction/WorkOrder.vue'), meta: { title: '製造指図書', group: '生産管理 > 製造指示', requiresAuth: true } },
       { path: 'erp/production/material-issue', name: 'MaterialIssue', component: () => import('@/views/erp/production/instruction/MaterialIssue.vue'), meta: { title: '材料出庫指示', group: '生産管理 > 製造指示', requiresAuth: true } },
+      { path: 'erp/production/actual-management', name: 'ProductionActualManagement', component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'), meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/completion', name: 'CompletionReport', component: () => import('@/views/erp/production/result/CompletionReport.vue'), meta: { title: '完成報告', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/consumption', name: 'MaterialConsumption', component: () => import('@/views/erp/production/result/MaterialConsumption.vue'), meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true } },
 
@@ -87,6 +94,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/costing/variance', name: 'VarianceAnalysis', component: () => import('@/views/erp/costing/cost/VarianceAnalysis.vue'), meta: { title: '原価差異分析', group: '原価管理', requiresAuth: true } },
       { path: 'erp/costing/billing', name: 'Billing', component: () => import('@/views/erp/costing/finance/Billing.vue'), meta: { title: '請求管理(AR)', group: '債権債務', requiresAuth: true } },
       { path: 'erp/costing/payment', name: 'Payment', component: () => import('@/views/erp/costing/finance/Payment.vue'), meta: { title: '支払管理(AP)', group: '債権債務', requiresAuth: true } },
+
+      // ========== ERP - 出荷管理 (Shipping Management) ==========
+      { path: 'erp/shipping', name: 'Shipping', component: () => import('@/views/erp/shipping/ShippingList.vue'), meta: { title: '出荷構成表管理', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/report', name: 'ShippingReport', component: () => import('@/views/erp/shipping/ShippingReportPage.vue'), meta: { title: '出荷報告書管理', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/overview', name: 'ShippingOverview', component: () => import('@/views/erp/shipping/ShippingOverview.vue'), meta: { title: '出荷予定表発行', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/confirm', name: 'ShippingListPage', component: () => import('@/views/erp/shipping/ShippingListPage.vue'), meta: { title: '出荷確認リスト', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/welding', name: 'WeldingShippingManager', component: () => import('@/views/erp/shipping/WeldingShippingManager.vue'), meta: { title: '溶接出荷管理', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/picking', name: 'ShippingPickingHome', component: () => import('@/views/erp/shipping/ShippingPickingHome.vue'), meta: { title: 'ピッキング管理', group: '出荷管理', requiresAuth: true } },
 
       // ========== APS モジュール ==========
       { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '生産計画', requiresAuth: true } },
@@ -113,6 +128,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/bom', name: 'BomHome', component: () => import('@/views/master/BomList.vue'), meta: { title: 'BOMホーム', requiresAuth: true } },
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
+      { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========
       { path: 'system', name: 'System', component: () => import('@/views/system/SystemHome.vue'), meta: { title: 'システム管理', requiresAuth: true } },

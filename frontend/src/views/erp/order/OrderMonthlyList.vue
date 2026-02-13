@@ -382,86 +382,142 @@
       </div>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editId ? t('orderMonthly.editDialogTitleEdit') : t('orderMonthly.editDialogTitleCreate')" width="520px" destroy-on-close @close="resetForm" class="monthly-edit-dialog">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="70px" size="default" class="me-form">
-        <div class="me-section">
-          <div class="me-section-hd"><el-icon class="me-icon"><Document /></el-icon><span>{{ t('orderMonthly.sectionBasic') }}</span></div>
-          <div class="me-section-bd">
-            <el-row :gutter="12">
-              <el-col :span="12">
-                <el-form-item :label="t('orderMonthly.destination')" prop="destination_cd" class="me-item">
-                  <el-select v-model="form.destination_cd" :placeholder="t('orderMonthly.select')" filterable style="width:100%" popper-class="destination-select-popper" @change="onDestinationChange">
-                    <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} ${d.name}`" :value="d.cd" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item :label="t('orderMonthly.product')" prop="product_cd" class="me-item">
-                  <el-select v-model="form.product_cd" :placeholder="t('orderMonthly.select')" filterable style="width:100%" @change="onProductChange">
-                    <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd} ${p.name}`" :value="p.cd" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="12">
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.filterYear')" prop="year" class="me-item">
-                  <el-select v-model="form.year" :placeholder="t('orderMonthly.filterYear')" style="width:100%">
-                    <el-option v-for="y in yearOptions" :key="y" :label="String(y)" :value="y" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.filterMonth')" prop="month" class="me-item">
-                  <el-select v-model="form.month" :placeholder="t('orderMonthly.filterMonth')" style="width:100%">
-                    <el-option v-for="m in 12" :key="m" :label="String(m)" :value="m" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.type')" prop="product_type" class="me-item">
-                  <el-select v-model="form.product_type" :placeholder="t('orderMonthly.select')" style="width:100%">
-                    <el-option :label="t('orderMonthly.productTypeMass')" value="量産品" />
-                    <el-option :label="t('orderMonthly.productTypeTrial')" value="試作品" />
-                    <el-option :label="t('orderMonthly.productTypeSpecial')" value="別注品" />
-                    <el-option :label="t('orderMonthly.productTypeSupply')" value="補給品" />
-                    <el-option :label="t('orderMonthly.productTypeSample')" value="サンプル品" />
-                    <el-option :label="t('orderMonthly.productTypeAlt')" value="代替品" />
-                    <el-option :label="t('orderMonthly.productTypeReturn')" value="返却品" />
-                    <el-option :label="t('orderMonthly.productTypeOther')" value="その他" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
+    <el-dialog
+      v-model="dialogVisible"
+      width="520px"
+      destroy-on-close
+      align-center
+      :show-close="false"
+      @close="resetForm"
+      class="monthly-edit-dialog"
+    >
+      <template #header>
+        <div class="me-header">
+          <div class="me-icon-wrap">
+            <el-icon class="me-header-icon"><Document /></el-icon>
+          </div>
+          <div class="me-title-wrap">
+            <span class="me-title">{{ editId ? t('orderMonthly.editDialogTitleEdit') : t('orderMonthly.editDialogTitleCreate') }}</span>
+            <span class="me-subtitle">{{ t('orderMonthly.editDialogSubtitle') || '内約情報の詳細設定' }}</span>
           </div>
         </div>
-        <div class="me-section">
-          <div class="me-section-hd"><el-icon class="me-icon"><Box /></el-icon><span>{{ t('orderMonthly.sectionQuantity') }}</span></div>
-          <div class="me-section-bd">
-            <el-row :gutter="12">
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.forecast')" prop="forecast_units" class="me-item">
-                  <el-input-number v-model="form.forecast_units" :min="0" style="width:100%" :controls="false" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.dailyTotal')" prop="forecast_total_units" class="me-item">
-                  <el-input-number v-model="form.forecast_total_units" :min="0" style="width:100%" :controls="false" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item :label="t('orderMonthly.diff')" prop="forecast_diff" class="me-item">
-                  <el-input-number v-model="form.forecast_diff" style="width:100%" :controls="false" />
-                </el-form-item>
-              </el-col>
-            </el-row>
+      </template>
+
+      <div class="me-body">
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="80px" size="default" class="me-form">
+          <div class="me-section">
+            <div class="me-section-hd">
+              <el-icon class="me-section-icon"><InfoFilled /></el-icon>
+              <span>{{ t('orderMonthly.sectionBasic') }}</span>
+            </div>
+            <div class="me-section-bd">
+              <el-row :gutter="14">
+                <el-col :span="12">
+                  <el-form-item :label="t('orderMonthly.destination')" prop="destination_cd" class="me-item">
+                    <el-select
+                      v-model="form.destination_cd"
+                      :placeholder="t('orderMonthly.select')"
+                      filterable
+                      style="width: 100%"
+                      popper-class="destination-select-popper"
+                      @change="onDestinationChange"
+                    >
+                      <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} ${d.name}`" :value="d.cd" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item :label="t('orderMonthly.product')" prop="product_cd" class="me-item">
+                    <el-select
+                      v-model="form.product_cd"
+                      :placeholder="t('orderMonthly.select')"
+                      filterable
+                      style="width: 100%"
+                      @change="onProductChange"
+                    >
+                      <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd} ${p.name}`" :value="p.cd" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="14">
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.filterYear')" prop="year" class="me-item">
+                    <el-select v-model="form.year" :placeholder="t('orderMonthly.filterYear')" style="width: 100%">
+                      <el-option v-for="y in yearOptions" :key="y" :label="String(y)" :value="y" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.filterMonth')" prop="month" class="me-item">
+                    <el-select v-model="form.month" :placeholder="t('orderMonthly.filterMonth')" style="width: 100%">
+                      <el-option v-for="m in 12" :key="m" :label="String(m)" :value="m" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.type')" prop="product_type" class="me-item">
+                    <el-select v-model="form.product_type" :placeholder="t('orderMonthly.select')" style="width: 100%">
+                      <el-option :label="t('orderMonthly.productTypeMass')" value="量産品" />
+                      <el-option :label="t('orderMonthly.productTypeTrial')" value="試作品" />
+                      <el-option :label="t('orderMonthly.productTypeSpecial')" value="別注品" />
+                      <el-option :label="t('orderMonthly.productTypeSupply')" value="補給品" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </div>
           </div>
-        </div>
-      </el-form>
+
+          <div class="me-section">
+            <div class="me-section-hd">
+              <el-icon class="me-section-icon"><Box /></el-icon>
+              <span>{{ t('orderMonthly.sectionQuantity') }}</span>
+            </div>
+            <div class="me-section-bd">
+              <el-row :gutter="14">
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.forecast')" prop="forecast_units" class="me-item">
+                    <el-input-number
+                      v-model="form.forecast_units"
+                      :min="0"
+                      style="width: 100%"
+                      :controls="false"
+                      placeholder="0"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.dailyTotal')" prop="forecast_total_units" class="me-item">
+                    <el-input-number
+                      v-model="form.forecast_total_units"
+                      :min="0"
+                      style="width: 100%"
+                      :controls="false"
+                      placeholder="0"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="8">
+                  <el-form-item :label="t('orderMonthly.diff')" prop="forecast_diff" class="me-item">
+                    <el-input-number
+                      v-model="form.forecast_diff"
+                      style="width: 100%"
+                      :controls="false"
+                      placeholder="0"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </div>
+          </div>
+        </el-form>
+      </div>
+
       <template #footer>
-        <div class="modern-dialog-ft">
-          <el-button @click="dialogVisible = false">{{ t('orderMonthly.cancel') }}</el-button>
-          <el-button type="primary" class="btn-accent" :loading="saving" @click="submitForm">{{ t('orderMonthly.save') }}</el-button>
+        <div class="me-footer">
+          <el-button class="me-btn-cancel" @click="dialogVisible = false">{{ t('orderMonthly.cancel') }}</el-button>
+          <el-button type="primary" class="me-btn-submit" :loading="saving" @click="submitForm">{{ t('orderMonthly.save') }}</el-button>
         </div>
       </template>
     </el-dialog>
@@ -986,7 +1042,9 @@ async function handleDelete(row: OrderMonthlyItem) {
     ElMessage.success(t('orderMonthly.msgDeleted'))
     loadList()
   } catch (e: any) {
-    if (e !== 'cancel') ElMessage.error(e?.message || t('orderMonthly.msgDeleteFailed'))
+    if (e === 'cancel') return
+    const msg = e?.response?.data?.detail ?? e?.message ?? t('orderMonthly.msgDeleteFailed')
+    ElMessage.error(typeof msg === 'string' ? msg : t('orderMonthly.msgDeleteFailed'))
   }
 }
 
@@ -2431,37 +2489,152 @@ onMounted(() => {
 .monthly-edit-dialog :deep(.el-dialog) {
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.5) inset;
+  border: 1px solid rgba(255,255,255,0.4);
 }
 .monthly-edit-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
-  padding: 12px 20px; margin: 0;
+  padding: 0;
+  margin: 0;
 }
-.monthly-edit-dialog :deep(.el-dialog__title) { color: #fff; font-size: 14px; font-weight: 600; }
-.monthly-edit-dialog :deep(.el-dialog__headerbtn .el-dialog__close) { color: rgba(255,255,255,0.85); }
-.monthly-edit-dialog :deep(.el-dialog__body) { padding: 0; background: #f8fafc; }
-.me-form { padding: 0; }
+.monthly-edit-dialog :deep(.el-dialog__body) {
+  padding: 0 24px 20px;
+  background: linear-gradient(180deg, #fafbff 0%, #f5f6fb 100%);
+}
+.monthly-edit-dialog :deep(.el-dialog__footer) {
+  padding: 14px 24px 20px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  background: #fff;
+}
+
+.me-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, rgba(79,70,229,0.92) 0%, rgba(99,102,241,0.95) 50%, rgba(139,92,246,0.92) 100%);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+}
+.me-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.me-header-icon {
+  font-size: 22px;
+  color: #fff;
+}
+.me-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.me-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+  line-height: 1.3;
+}
+.me-subtitle {
+  font-size: 12px;
+  color: rgba(255,255,255,0.88);
+  font-weight: 500;
+}
+
+.me-body {
+  padding-top: 18px;
+}
+.me-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
 .me-section {
   background: rgba(255,255,255,0.85);
   backdrop-filter: blur(8px);
-  margin: 8px; border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
-  border: 1px solid rgba(0,0,0,0.05);
+  border-radius: 12px;
+  padding: 0;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  margin-bottom: 14px;
+}
+.me-section:last-child {
+  margin-bottom: 0;
 }
 .me-section-hd {
-  display: flex; align-items: center; gap: 6px;
-  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
   background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.06) 100%);
   border-bottom: 1px solid rgba(99,102,241,0.1);
-  font-size: 12.5px; font-weight: 600; color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 }
-.me-icon { font-size: 15px; color: #6366f1; }
-.me-section-bd { padding: 10px; }
-.me-item { margin-bottom: 8px !important; }
-.me-item:last-child { margin-bottom: 0 !important; }
+.me-section-icon {
+  font-size: 16px;
+  color: #6366f1;
+}
+.me-section-bd {
+  padding: 14px 16px;
+}
+.me-item {
+  margin-bottom: 0 !important;
+}
 .me-item :deep(.el-form-item__label) {
-  font-size: 12px; padding-right: 4px; line-height: 30px;
+  font-size: 12.5px;
+  color: #64748b;
+  font-weight: 500;
+  padding-right: 8px;
+}
+.me-item :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.08) inset;
+  transition: all 0.2s;
+}
+.me-item :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.3) inset;
+}
+.me-item :deep(.el-input.is-focus .el-input__wrapper) {
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.5) inset, 0 0 0 3px rgba(99,102,241,0.08);
+}
+
+.me-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.me-btn-cancel {
+  border-radius: 10px;
+  padding: 8px 18px;
+  font-weight: 500;
+  border: 1px solid rgba(0,0,0,0.12);
+  color: #475569;
+  transition: all 0.2s;
+}
+.me-btn-cancel:hover {
+  background: #f1f5f9;
+  border-color: rgba(0,0,0,0.18);
+  color: #000;
+}
+.me-btn-submit {
+  border-radius: 10px;
+  padding: 8px 20px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  transition: all 0.2s;
+}
+.me-btn-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99,102,241,0.45);
 }
 
 /* --- Batch Dialog (Glass) --- */

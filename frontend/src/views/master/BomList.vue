@@ -88,6 +88,15 @@ const bomModules: BomModule[] = [
     color: '#67C23A',
     gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
   },
+  {
+    name: 'equipmentEfficiency',
+    titleKey: 'bomHome.equipmentEfficiencyTitle',
+    descKey: 'bomHome.equipmentEfficiencyDesc',
+    path: '/master/bom/equipment-efficiency',
+    icon: markRaw(Tools),
+    color: '#E6A23C',
+    gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  },
 ]
 
 const navigateTo = (path: string) => {

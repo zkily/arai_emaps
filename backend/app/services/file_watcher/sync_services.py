@@ -31,6 +31,11 @@ MATERIAL_FILES = [
     "Material_Okajima.csv",
 ]
 
+# ピッキングログファイル → shipping_log（fileWatcherService.js と同等）
+PICKING_FILES = [
+    "PickingLog.csv",
+]
+
 
 def get_db_connection():
     """プロジェクト設定の同期用 MySQL 接続（ファイル監視用）"""
@@ -427,3 +432,199 @@ class MaterialService:
             else:
                 d["outer_diameter1"] = 0
                 d["outer_diameter2"] = 0
+
+
+# ---------- PickingLogService: PickingLog.csv → shipping_log（fileWatcherService.js と同等）----------
+
+
+def _picking_int(v):
+    """数値に変換。空・非数は 0。"""
+    if v is None or str(v).strip() == "":
+        return 0
+    try:
+        return int(float(str(v).strip()))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _picking_format_date(s):
+    """日付を YYYY-MM-DD に正規化。空は None。"""
+    if not s or not str(s).strip():
+        return None
+    out = normalize_date_str(str(s).strip())
+    return out if out else None
+
+
+def _picking_format_datetime(dt_str, date_str=None):
+    """日時を YYYY-MM-DD HH:MM:SS に。時間のみの場合は date_str と結合。"""
+    if not dt_str or not str(dt_str).strip():
+        return None
+    s = str(dt_str).strip()
+    # 既に日付+時間
+    if " " in s or "T" in s or ("-" in s and ":" in s):
+        try:
+            from datetime import datetime as dt
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M"):
+                try:
+                    return dt.strptime(s[:19], fmt).strftime("%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    continue
+        except Exception:
+            pass
+    # 時間のみ → date と結合
+    if ":" in s:
+        parts = s.split(":")
+        if len(parts) >= 2:
+            try:
+                h = int(parts[0])
+                m = int(parts[1])
+                sec = int(parts[2]) if len(parts) > 2 else 0
+                if 0 <= h <= 23 and 0 <= m <= 59 and 0 <= sec <= 59:
+                    date_part = _picking_format_date(date_str) if date_str else None
+                    if not date_part:
+                        from datetime import date as date_type
+                        date_part = date_type.today().strftime("%Y-%m-%d")
+                    return f"{date_part} {h:02d}:{m:02d}:{sec:02d}"
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+class PickingLogService:
+    """PickingLog.csv → shipping_log（重複は (picking_no, product_code, date) で ON DUPLICATE KEY UPDATE）。続けて picking_tasks を更新。"""
+
+    def sync(self, filepath, filename):
+        rows = read_csv_content(filepath)
+        if not rows or len(rows) < 2:
+            return
+        # 先頭行がヘッダーならスキップ（project, date 等）
+        start = 0
+        if rows and rows[0] and len(rows[0]) > 0:
+            first = str(rows[0][0]).strip().lower()
+            if first in ("project", "date", "プロジェクト", "日付"):
+                start = 1
+        data_rows = [r for r in rows[start:] if r and len(r) >= 8]
+        records = []
+        for r in data_rows:
+            # 列: project, date, datetime, model_no, person_in_charge, picking_no, product_name, product_code, product_name_2, quantity, shipping_quantity
+            rec = {
+                "project": (r[0] or "").strip() if len(r) > 0 else "",
+                "date": _picking_format_date(r[1]) if len(r) > 1 else None,
+                "datetime": _picking_format_datetime(r[2] if len(r) > 2 else None, r[1] if len(r) > 1 else None),
+                "model_no": (r[3] or "").strip() if len(r) > 3 else "",
+                "person_in_charge": (r[4] or "").strip() if len(r) > 4 else "",
+                "picking_no": (r[5] or "").strip() if len(r) > 5 else "",
+                "product_name": (r[6] or "").strip() if len(r) > 6 else "",
+                "product_code": (r[7] or "").strip() if len(r) > 7 else "",
+                "product_name_2": (r[8] or "").strip() if len(r) > 8 else "",
+                "quantity": _picking_int(r[9]) if len(r) > 9 else 0,
+                "shipping_quantity": _picking_int(r[10]) if len(r) > 10 else 0,
+            }
+            if rec["picking_no"] or rec["product_code"]:
+                records.append(rec)
+        if not records:
+            logger.warning("⚠️ [PickingLog] %s 有効レコードなし", filename)
+            return
+        # 同一ファイル内で (picking_no, product_code, date) 重複除去
+        seen = set()
+        unique_records = []
+        for rec in records:
+            key = (rec["picking_no"] or "", rec["product_code"] or "", rec["date"] or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_records.append(rec)
+        conn = get_db_connection()
+        conn.autocommit = False
+        cursor = conn.cursor(dictionary=True)
+        try:
+            # 既存一括チェック（DB に既にあるものはスキップして新規のみ INSERT、ただし JS は ON DUPLICATE で常に挿入/更新）
+            # ここでは JS と同様に全件 INSERT ON DUPLICATE KEY UPDATE で投入
+            insert_sql = """
+                INSERT INTO shipping_log
+                (project, date, datetime, model_no, person_in_charge, picking_no, product_name, product_code, product_name_2, quantity, shipping_quantity)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                project = VALUES(project),
+                date = VALUES(date),
+                datetime = VALUES(datetime),
+                model_no = VALUES(model_no),
+                person_in_charge = VALUES(person_in_charge),
+                product_name = VALUES(product_name),
+                product_code = VALUES(product_code),
+                product_name_2 = VALUES(product_name_2),
+                quantity = VALUES(quantity),
+                shipping_quantity = VALUES(shipping_quantity),
+                updated_at = CURRENT_TIMESTAMP
+            """
+            inserted, updated = 0, 0
+            records_to_sync_pt = []
+            for rec in unique_records:
+                if not rec["picking_no"] and not rec["product_code"]:
+                    continue
+                vals = (
+                    rec["project"],
+                    rec["date"],
+                    rec["datetime"],
+                    rec["model_no"],
+                    rec["person_in_charge"],
+                    rec["picking_no"],
+                    rec["product_name"],
+                    rec["product_code"],
+                    rec["product_name_2"],
+                    rec["quantity"],
+                    rec["shipping_quantity"],
+                )
+                try:
+                    cursor.execute(insert_sql, vals)
+                    if cursor.rowcount == 1:
+                        inserted += 1
+                        records_to_sync_pt.append(rec)
+                    elif cursor.rowcount == 2:
+                        updated += 1
+                        records_to_sync_pt.append(rec)
+                except Exception as e:
+                    logger.warning("shipping_log 挿入/更新失敗: %s", e)
+            conn.commit()
+            logger.info("%s 処理完了: shipping_log 新規 %s 件, 更新 %s 件", filename, inserted, updated)
+            if records_to_sync_pt:
+                self._sync_to_picking_tasks(cursor, records_to_sync_pt)
+                conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.error("❌ [PickingLog] エラー %s: %s", filename, e, exc_info=True)
+        finally:
+            cursor.close()
+            conn.close()
+
+    def _sync_to_picking_tasks(self, cursor, records):
+        """挿入/更新したレコードで picking_tasks を更新（shipping_no_p = picking_no）。テーブルが無い場合はスキップ。"""
+        if not records:
+            return
+        # picking_no があるもののみ
+        valid = [r for r in records if r.get("picking_no")]
+        if not valid:
+            return
+        update_sql = """
+            UPDATE picking_tasks
+            SET start_time = %s, picker_id = %s, product_name = %s, product_cd = %s,
+                picked_quantity = %s, picked_no = %s, status = 'completed', updated_at = CURRENT_TIMESTAMP
+            WHERE shipping_no_p = %s
+        """
+        try:
+            for rec in valid:
+                cursor.execute(
+                    update_sql,
+                    (
+                        rec.get("datetime"),
+                        rec.get("person_in_charge", ""),
+                        rec.get("product_name", ""),
+                        rec.get("product_code", ""),
+                        rec.get("quantity", 0),
+                        rec.get("picking_no", ""),
+                        rec.get("picking_no", ""),
+                    ),
+                )
+        except Exception as e:
+            # picking_tasks が存在しない等
+            logger.debug("picking_tasks 更新スキップ（テーブル未作成の可能性）: %s", e)

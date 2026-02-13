@@ -23,14 +23,14 @@ from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 
 router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
 
-# 繰越クリア対象の全工程カラム（12列）
+# 繰越クリア対象の全工程カラム（KT13=倉庫, KT15=外注倉庫 を分離）
 CARRY_OVER_COLUMNS = [
     "cutting_carry_over", "chamfering_carry_over", "molding_carry_over", "plating_carry_over",
-    "welding_carry_over", "inspection_carry_over", "warehouse_carry_over",
+    "welding_carry_over", "inspection_carry_over", "warehouse_carry_over", "outsourced_warehouse_carry_over",
     "outsourced_plating_carry_over", "outsourced_welding_carry_over",
     "pre_welding_inspection_carry_over", "pre_inspection_carry_over", "pre_outsourcing_carry_over",
 ]
-# process_cd → production_summarys 繰越カラム名
+# process_cd → production_summarys 繰越カラム名（KT13=倉庫, KT15=外注倉庫）
 PROCESS_CARRY_OVER_MAPPING = {
     "KT01": "cutting_carry_over",
     "KT02": "chamfering_carry_over",
@@ -39,6 +39,7 @@ PROCESS_CARRY_OVER_MAPPING = {
     "KT07": "welding_carry_over",
     "KT09": "inspection_carry_over",
     "KT13": "warehouse_carry_over",
+    "KT15": "outsourced_warehouse_carry_over",
     "KT06": "outsourced_plating_carry_over",
     "KT08": "outsourced_welding_carry_over",
     "KT11": "pre_welding_inspection_carry_over",
@@ -399,21 +400,28 @@ async def clear_production_summarys_calculated_fields(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    date >= startDate かつ date <= startDate+3ヶ月 の行について、
+    startDate 必須。date >= startDate かつ date <= startDate+3ヶ月 の行について、
     在庫・推移・actual_plan_trend 等の计算字段を 0 にクリアする。
     """
+    if not (body.startDate and body.startDate.strip()):
+        raise HTTPException(status_code=400, detail="startDate は必須です（YYYY-MM-DD）")
     try:
         start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
     end_d = _parse_end_date(start_d, 3)
-    set_parts = ", ".join([f"{col} = 0" for col in CALCULATED_FIELDS_TO_CLEAR])
+    set_parts = ", ".join([f"`{col}` = 0" for col in CALCULATED_FIELDS_TO_CLEAR])
     sql = text(
         f"UPDATE production_summarys SET {set_parts} WHERE date >= :start_date AND date <= :end_date"
     )
-    await db.execute(sql, {"start_date": start_d, "end_date": end_d})
+    res = await db.execute(sql, {"start_date": start_d, "end_date": end_d})
     await db.commit()
-    return {"code": 200, "message": "計算フィールドをクリアしました"}
+    cleared = res.rowcount if hasattr(res, "rowcount") else 0
+    return {
+        "code": 200,
+        "data": {"cleared": cleared, "startDate": body.startDate[:10], "endDate": end_d.isoformat()},
+        "message": f"計算フィールドをクリアしました（{cleared}件）",
+    }
 
 
 @router.post("/update-from-order-daily")
@@ -1286,23 +1294,26 @@ def _get_process_config_by_key(key: str) -> Optional[dict]:
 
 
 def _parse_route_sequence_from_description(description: Optional[str]) -> list:
-    """routes.description を ⇒ / → / , で分割し、keywords でマッチして工程 key のリストを返す"""
+    """routes.description を ⇒ / → / -> / => / , / ｜ / | 等で分割し、keywords でマッチして工程 key のリストを返す。
+    最後工程が正しく判定されるよう、長いキーワードを優先マッチ（例: 「外注倉庫」を「倉庫」より先にマッチ）する。"""
     if not description or not (description := description.strip()):
         return []
-    parts = re.split(r"[⇒→,、\s]+", description)
+    # 分隔符: ⇒ → , 、 空白, 以及 -> => ｜ |
+    parts = re.split(r"[⇒→,、\s]+|->|=>|｜|\|", description)
     result = []
     for part in parts:
         part = (part or "").strip()
         if not part:
             continue
+        best_key = None
+        best_kw_len = 0
         for config in INVENTORY_PROCESS_CONFIG:
             for kw in config.get("keywords", []):
-                if kw in part:
-                    result.append(config["key"])
-                    break
-            else:
-                continue
-            break
+                if kw in part and len(kw) > best_kw_len:
+                    best_kw_len = len(kw)
+                    best_key = config["key"]
+        if best_key is not None:
+            result.append(best_key)
     return result
 
 
@@ -1336,7 +1347,7 @@ def _num(row: dict, key: str) -> int:
 def _compute_inventory_updates(
     row: dict, sequence: list, previous_inventories: dict, is_start_date: bool
 ) -> dict:
-    """一般工程在庫 = 繰越 + 実績 - 不良 - 廃棄 - 保留 - 下一工程実績 + 前日当工程在庫。外注倉庫は別計算のためスキップ。"""
+    """一般工程在庫 = 繰越 + 実績 - 不良 - 廃棄 - 保留 - 下一工程実績 + 前日当工程在庫（負数許容）。外注倉庫は別計算のためスキップ。"""
     updates = {}
     for i, key in enumerate(sequence):
         config = _get_process_config_by_key(key)
@@ -1363,27 +1374,27 @@ def _compute_inventory_updates(
                     break
         prev_inv = 0 if is_start_date else previous_inventories.get(key, 0)
         inv = carry + actual - defect - scrap - on_hold - next_actual + prev_inv
-        updates[inv_field] = max(0, inv)
+        updates[inv_field] = inv
     return updates
 
 
 def _compute_warehouse_inventory(row: dict, quantity_to_subtract: int, previous_warehouse: int) -> int:
-    """倉庫在庫 = warehouse_carry_over + warehouse_actual - warehouse_scrap - warehouse_on_hold - quantityToSubtract + previousInventory"""
+    """倉庫在庫 = warehouse_carry_over + warehouse_actual - warehouse_scrap - warehouse_on_hold - quantityToSubtract + previousInventory（負数許容）"""
     carry = _num(row, "warehouse_carry_over")
     actual = _num(row, "warehouse_actual")
     scrap = _num(row, "warehouse_scrap")
     on_hold = _num(row, "warehouse_on_hold")
-    return max(0, carry + actual - scrap - on_hold - quantity_to_subtract + previous_warehouse)
+    return carry + actual - scrap - on_hold - quantity_to_subtract + previous_warehouse
 
 
 def _compute_outsourced_warehouse_inventory(
     row: dict, quantity_to_subtract: int, previous_outsourced: int
 ) -> int:
-    """外注倉庫在庫 = outsourced_warehouse_carry_over + outsourced_warehouse_actual - scrap - quantityToSubtract + previousInventory"""
+    """外注倉庫在庫 = outsourced_warehouse_carry_over + outsourced_warehouse_actual - scrap - quantityToSubtract + previousInventory（負数許容）"""
     carry = _num(row, "outsourced_warehouse_carry_over")
     actual = _num(row, "outsourced_warehouse_actual")
     scrap = _num(row, "outsourced_warehouse_scrap")
-    return max(0, carry + actual - scrap - quantity_to_subtract + previous_outsourced)
+    return carry + actual - scrap - quantity_to_subtract + previous_outsourced
 
 
 def _compute_trend_updates(row: dict, sequence: list) -> dict:
@@ -1527,8 +1538,9 @@ async def _batch_case_update(db: AsyncSession, batch: list, columns: list):
     await db.execute(text(sql), params)
 
 
-async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float):
-    """在庫・推移共通: startDate からグローバル範囲を決め、行を取得して dict リスト化・product でグループ化"""
+async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float, trend_no_end_cap: bool = False):
+    """在庫・推移共通: startDate からグローバル範囲を決め、行を取得して dict リスト化・product でグループ化。
+    trend_no_end_cap=True かつ startDate 指定時は推移用に終了日を設けず date >= startDate の全行を対象とする。"""
     body = body or OptionalStartDateBody()
     global_start_d = None
     global_end_d = None
@@ -1536,13 +1548,17 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
     if body.startDate and body.startDate.strip():
         try:
             global_start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
-            global_end_d = _parse_end_date(global_start_d, 3)
+            # 推移更新で startDate 指定時は終了日なし（表内の最大日まで）；在庫更新は startDate+3 ヶ月
+            if trend_no_end_cap:
+                global_end_d = date(2099, 12, 31)
+            else:
+                global_end_d = _parse_end_date(global_start_d, 3)
         except ValueError:
             raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
     if global_start_d is None:
         product_start_dates = await _get_product_start_dates_for_summaries(db)
         if not product_start_dates:
-            return None, None, {}, {}
+            return None, None, {}, {}, {}
         global_start_d = min(product_start_dates.values())
         global_end_d = max(_parse_end_date(d, 3) for d in product_start_dates.values())
 
@@ -1554,7 +1570,7 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
     result = await db.execute(q)
     rows = result.scalars().all()
     if not rows:
-        return None, None, {}, {}
+        return None, None, {}, {}, {}
 
     # product 別起算日フィルタ
     if product_start_dates:
@@ -1567,7 +1583,7 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
         rows = filtered
 
     if not rows:
-        return None, None, {}, {}
+        return None, None, {}, {}, {}
 
     # route description キャッシュ
     route_desc_by_cd = {}
@@ -1587,7 +1603,18 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
             by_product[pc] = []
         by_product[pc].append(d)
 
-    return global_start_d, product_start_dates, route_desc_by_cd, by_product
+    # production_summarys.route_cd が空の製品用：products テーブルから route_cd を取得（最後工程判定のため）
+    product_route_by_cd = {}
+    if by_product:
+        pq = select(Product.product_cd, Product.route_cd).where(
+            Product.product_cd.in_([pc for pc in by_product.keys() if (pc or "").strip()])
+        )
+        prd_res = await db.execute(pq)
+        for r in prd_res.fetchall():
+            if r[0]:
+                product_route_by_cd[(r[0] or "").strip()] = (r[1] or "").strip() if r[1] else ""
+
+    return global_start_d, product_start_dates, route_desc_by_cd, by_product, product_route_by_cd
 
 
 @router.post("/update-inventory")
@@ -1599,7 +1626,7 @@ async def update_production_summarys_inventory(
     """在庫更新（CASE WHEN バッチ最適化版）"""
     start_time = time.perf_counter()
     try:
-        global_start_d, product_start_dates, route_desc_by_cd, by_product = \
+        global_start_d, product_start_dates, route_desc_by_cd, by_product, product_route_by_cd = \
             await _resolve_date_range_and_rows(db, body or OptionalStartDateBody(), start_time)
         if not by_product:
             return {
@@ -1632,7 +1659,10 @@ async def update_production_summarys_inventory(
 
         for product_cd, product_rows in by_product.items():
             product_rows.sort(key=lambda x: (x.get("date") or ""))
+            # 最後工程判定：production_summarys.route_cd が空の場合は products の route_cd を使用（900B FR/RR 等で外注倉庫が正しく判定されるように）
             route_cd = (product_rows[0].get("route_cd") or "").strip() if product_rows else ""
+            if not route_cd:
+                route_cd = product_route_by_cd.get(product_cd, "") or ""
             route_description = route_desc_by_cd.get(route_cd) if route_cd else None
             cache_key = (route_cd, route_description)
             if cache_key not in route_sequences:
@@ -1644,15 +1674,28 @@ async def update_production_summarys_inventory(
             product_start = product_start_dates.get(product_cd, global_start_d)
             product_start_str = _to_date_str(product_start)
 
+            # 扣除数用：该产品「order_quantity > 0 的最后日期」lastOrderQuantityDate；当日 <= 该日且 order_quantity > 0 时用 order_quantity，否则用 forecast_quantity
+            last_order_date = None
+            for r in product_rows:
+                if _num(r, "order_quantity") > 0:
+                    d = r.get("date")
+                    if d:
+                        ds = _to_date_str(d)
+                        if ds and (last_order_date is None or ds > last_order_date):
+                            last_order_date = ds
+
             previous_inv = {}
             prev_warehouse = 0
             prev_outsourced_wh = 0
             for r in product_rows:
                 dt_str = _to_date_str(r.get("date"))
                 is_start_date = (dt_str == product_start_str) if product_start_str else False
-                # order_quantity があればそれを引く、なければ forecast_quantity を引く
+                # 扣除数：存在 lastOrderQuantityDate 且 当前 date <= 该日 且 order_quantity > 0 时用 order_quantity，否则用 forecast_quantity（内示）
                 order_qty = _num(r, "order_quantity")
-                qty_subtract = order_qty if order_qty > 0 else _num(r, "forecast_quantity")
+                if last_order_date is not None and dt_str <= last_order_date and order_qty > 0:
+                    qty_subtract = order_qty
+                else:
+                    qty_subtract = _num(r, "forecast_quantity")
 
                 inv_updates = _compute_inventory_updates(r, sequence, previous_inv, is_start_date)
                 for k, v in inv_updates.items():
@@ -1707,8 +1750,9 @@ async def update_production_summarys_trend(
     """推移更新（CASE WHEN バッチ最適化版）"""
     start_time = time.perf_counter()
     try:
-        global_start_d, product_start_dates, route_desc_by_cd, by_product = \
-            await _resolve_date_range_and_rows(db, body or OptionalStartDateBody(), start_time)
+        # 推移更新：startDate 指定時は date >= startDate の全行を対象（終了日なし）
+        global_start_d, product_start_dates, route_desc_by_cd, by_product, product_route_by_cd = \
+            await _resolve_date_range_and_rows(db, body or OptionalStartDateBody(), start_time, trend_no_end_cap=True)
         if not by_product:
             return {
                 "code": 200,
@@ -1751,6 +1795,8 @@ async def update_production_summarys_trend(
         for product_cd, product_rows in by_product.items():
             product_rows.sort(key=lambda x: (x.get("date") or ""))
             route_cd = (product_rows[0].get("route_cd") or "").strip() if product_rows else ""
+            if not route_cd:
+                route_cd = product_route_by_cd.get(product_cd, "") or ""
             route_description = route_desc_by_cd.get(route_cd) if route_cd else None
             cache_key = (route_cd, route_description)
             if cache_key not in route_sequences:

@@ -7,7 +7,7 @@
         </div>
         <div class="header-text">
           <h1>ファイル監視設定</h1>
-          <p class="subtitle">BT-data 受信 CSV の監視対象を有効/無効にします</p>
+          <p class="subtitle">BT-data 受信 CSV・ピッキングログ・Excel 計画の監視対象を有効/無効にします</p>
         </div>
       </div>
     </div>
@@ -40,8 +40,26 @@
         </div>
       </div>
 
+      <div class="section">
+        <h3 class="section-title">ピッキングログ CSV（shipping_log へ同期）</h3>
+        <div class="file-list">
+          <div v-for="name in pickingFiles" :key="name" class="file-row">
+            <span class="file-name">{{ name }}</span>
+            <el-switch v-model="enabled[name]" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h3 class="section-title">Excel 計画（加工・溶接 .xlsm → production_plan_*）</h3>
+        <div class="file-row">
+          <span class="file-name">計画更新・加工状況・操業度の監視</span>
+          <el-switch v-model="excelWatcherEnabled" />
+        </div>
+      </div>
+
       <el-alert type="info" :closable="false" show-icon class="tip">
-        オフにしたファイルは監視対象外となり、更新されても同期されません。監視プロセスは再起動不要で設定を反映します。
+        オフにしたファイル／Excel 監視は対象外となり、更新されても同期されません。監視プロセスは再起動不要で設定を反映します。
       </el-alert>
     </el-card>
   </div>
@@ -57,6 +75,8 @@ const loading = ref(false)
 const saving = ref(false)
 const stockFiles = ref<string[]>([])
 const materialFiles = ref<string[]>([])
+const pickingFiles = ref<string[]>([])
+const excelWatcherEnabled = ref(true)
 const enabled = ref<Record<string, boolean>>({})
 
 async function load() {
@@ -65,6 +85,8 @@ async function load() {
     const res = await getFileWatcherSettings()
     stockFiles.value = res.stockFiles || []
     materialFiles.value = res.materialFiles || []
+    pickingFiles.value = res.pickingFiles || []
+    excelWatcherEnabled.value = res.excelWatcherEnabled !== false
     enabled.value = { ...(res.enabled || {}) }
   } catch (e) {
     ElMessage.error('取得に失敗しました')
@@ -77,7 +99,10 @@ async function load() {
 async function handleSave() {
   saving.value = true
   try {
-    await updateFileWatcherSettings(enabled.value)
+    await updateFileWatcherSettings({
+      enabled: enabled.value,
+      excelWatcherEnabled: excelWatcherEnabled.value,
+    })
     ElMessage.success('保存しました')
   } catch (e) {
     ElMessage.error('保存に失敗しました')
