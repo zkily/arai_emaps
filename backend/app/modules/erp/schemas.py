@@ -1,7 +1,7 @@
 """
 ERP モジュール Pydantic スキーマ
 """
-from pydantic import BaseModel, Field, validator, field_validator
+from pydantic import BaseModel, Field, validator, field_validator, model_validator
 from typing import Optional, List
 from datetime import datetime, date as date_type
 from decimal import Decimal
@@ -155,8 +155,8 @@ class OrderMonthlyBase(BaseModel):
     product_alias: Optional[str] = Field(None, max_length=100, description="製品別名")
     product_type: str = Field(default="量産品", max_length=20, description="製品種別")
     forecast_units: int = Field(default=0, ge=0, description="内示本数")
-    forecast_total_units: int = Field(default=0, ge=0, description="日内示合計")
-    forecast_diff: int = Field(default=0, description="内示差異")
+    forecast_total_units: int = Field(default=0, ge=0, description="確定本数")
+    forecast_diff: int = Field(default=0, description="内示差異（確定本数-内示本数）")
 
 
 class OrderMonthlyCreate(OrderMonthlyBase):
@@ -180,7 +180,7 @@ class OrderMonthlyUpdate(BaseModel):
 
 
 class OrderMonthly(OrderMonthlyBase):
-    """月別受注レスポンススキーマ"""
+    """月別受注レスポンススキーマ。内示差異は常に 確定本数 - 内示本数 で返す。"""
     id: int
     order_id: str
     created_at: datetime
@@ -188,6 +188,12 @@ class OrderMonthly(OrderMonthlyBase):
 
     class Config:
         from_attributes = True
+
+    @model_validator(mode="after")
+    def compute_forecast_diff(self) -> "OrderMonthly":
+        """返却時に内示差異 = 確定本数 - 内示本数 で上書き（DB に旧公式で入っているデータを補正）"""
+        self.forecast_diff = (self.forecast_total_units or 0) - (self.forecast_units or 0)
+        return self
 
 
 # ========== 日別受注スキーマ ==========

@@ -31,7 +31,7 @@
         <h2>今日のピッキング作業概要</h2>
         <div class="title-line"></div>
       </div>
-      <el-row :gutter="21" class="overview-cards">
+      <el-row :gutter="10" class="overview-cards">
         <el-col :span="7">
           <div class="stat-card total-card">
             <div class="card-background">
@@ -42,8 +42,8 @@
                 <el-icon><DataBoard /></el-icon>
               </div>
               <div class="stat-info">
-                <div class="stat-value">{{ todayOverview.total_today }}</div>
-                <div class="stat-label">総ピッキング作業数</div>
+                <div class="stat-value">{{ detailOverviewStats.total }}</div>
+                <div class="stat-label">総ピッキングパレット数</div>
                 <div class="stat-trend">今日の全体</div>
               </div>
             </div>
@@ -60,7 +60,7 @@
                 <el-icon><Clock /></el-icon>
               </div>
               <div class="stat-info">
-                <div class="stat-value">{{ todayOverview.pending_today }}</div>
+                <div class="stat-value">{{ detailOverviewStats.pending }}</div>
                 <div class="stat-label">未ピッキング</div>
                 <div class="stat-trend">ピッキング待ち</div>
               </div>
@@ -78,7 +78,7 @@
                 <el-icon><Check /></el-icon>
               </div>
               <div class="stat-info">
-                <div class="stat-value">{{ todayOverview.completed_today }}</div>
+                <div class="stat-value">{{ detailOverviewStats.completed }}</div>
                 <div class="stat-label">完了済み</div>
                 <div class="stat-trend">ピッキング済</div>
               </div>
@@ -137,7 +137,7 @@
                       <el-icon><CircleCheck /></el-icon>
                     </div>
                     <div class="stat-content">
-                      <div class="stat-number">{{ todayOverview.completed_today }}</div>
+                      <div class="stat-number">{{ detailOverviewStats.completed }}</div>
                       <div class="stat-text">完了済み</div>
                     </div>
                   </div>
@@ -147,7 +147,7 @@
                       <el-icon><Clock /></el-icon>
                     </div>
                     <div class="stat-content">
-                      <div class="stat-number">{{ todayOverview.pending_today }}</div>
+                      <div class="stat-number">{{ detailOverviewStats.pending }}</div>
                       <div class="stat-text">作業中</div>
                     </div>
                   </div>
@@ -155,14 +155,14 @@
 
                 <div class="total-stat">
                   <div class="total-label">総作業数</div>
-                  <div class="total-number">{{ todayOverview.total_today }}</div>
+                  <div class="total-number">{{ detailOverviewStats.total }}</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 趋势折线图卡片 -->
+        <!-- 進捗推移トレンド: 图标 TrendCharts / 标题・副标题 / 右侧三色图例 past #67c23a, today #e6a23c, future #909399 -->
         <div class="chart-card trend-card">
           <div class="card-header">
             <div class="header-content">
@@ -265,14 +265,13 @@
           </div>
         </div>
 
-        <div class="table-container" v-loading="loading.data">
+        <div class="table-container detail-table-wrap" v-loading="loading.data">
           <el-table
             :data="paginatedDetailData"
             stripe
             :row-class-name="getRowClass"
             @sort-change="handleSortChange"
-            class="data-table"
-            :header-cell-style="{ backgroundColor: '#f8fafc', color: '#374151', fontWeight: '600' }"
+            class="data-table detail-table"
           >
             <el-table-column prop="shipping_no_p" label="出荷番号" width="160" sortable="custom">
               <template #default="{ row }">
@@ -294,13 +293,24 @@
             <el-table-column
               prop="product_name"
               label="製品名"
-              min-width="220"
+              min-width="200"
               show-overflow-tooltip
             >
               <template #default="{ row }">
                 <div class="product-cell">
                   <div class="product-name">{{ row.product_name }}</div>
                 </div>
+              </template>
+            </el-table-column>
+
+            <el-table-column
+              prop="confirmed_boxes"
+              label="箱数"
+              width="88"
+              align="center"
+            >
+              <template #default="{ row }">
+                <span class="boxes-cell">{{ row.confirmed_boxes ?? '-' }}</span>
               </template>
             </el-table-column>
 
@@ -334,17 +344,13 @@
               </template>
             </el-table-column>
 
-            <el-table-column prop="picker_name" label="作業者" width="140">
+            <el-table-column prop="picker_name" label="作業者" width="120" align="left">
               <template #default="{ row }">
                 <div class="picker-cell">
-                  <div v-if="row.picker_name" class="picker-assigned">
-                    <el-avatar :size="24" class="picker-avatar">
-                      <el-icon><User /></el-icon>
-                    </el-avatar>
-                    <span class="picker-name">{{ row.picker_name }}</span>
+                  <div v-if="row.picker_full_name || row.picker_name" class="picker-assigned">
+                    <span class="picker-name">{{ row.picker_full_name || row.picker_name }}</span>
                   </div>
                   <div v-else class="picker-unassigned">
-                    <el-icon class="unassigned-icon"><QuestionFilled /></el-icon>
                     <span class="no-picker">未割当</span>
                   </div>
                 </div>
@@ -371,7 +377,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   DataBoard,
@@ -406,10 +412,12 @@ interface PalletItem {
   shipping_no_p: string
   shipping_date: string
   product_name: string
+  confirmed_boxes?: number
   destination_name: string
   status: string
-  picker_name: string
   picker_id: string
+  picker_name: string
+  picker_full_name?: string
 }
 
 interface ProgressStat {
@@ -470,9 +478,21 @@ const MAX_INIT_RETRIES = 5
 let resizeObserver: ResizeObserver | null = null
 let mutationObserver: MutationObserver | null = null
 
-// 计算属性
+// ピッキングリスト詳細の筛选结果に基づく概要统计（概要カード・進捗円環に表示）
+const detailOverviewStats = computed(() => {
+  const list = filteredDetailPalletList.value
+  const total = list.length
+  const completed = list.filter((i) => i.status === 'completed').length
+  const pending = list.filter(
+    (i) => i.status === 'pending' || i.status === 'picking',
+  ).length
+  const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0
+  return { total, completed, pending, completionRate }
+})
+
+// 计算属性（概要区域は detailOverviewStats を使用）
 const todayCompletionRate = computed(() => {
-  return Math.round(todayOverview.value.today_completion_rate || 0)
+  return detailOverviewStats.value.completionRate
 })
 
 const filteredPalletList = computed(() => {
@@ -480,9 +500,18 @@ const filteredPalletList = computed(() => {
   return palletList.value.filter((item) => item.status === statusFilter.value)
 })
 
+// 製品名に「加工」「アーチ」を含む行を除外する
+const excludeProductNameKeywords = (name: string) => {
+  const n = (name || '').trim()
+  return n.includes('加工') || n.includes('アーチ')
+}
+
 // 详细列表的过滤逻辑
 const filteredDetailPalletList = computed(() => {
   let filtered = palletList.value
+
+  // 製品名に「加工」「アーチ」を含むデータを除外
+  filtered = filtered.filter((item) => !excludeProductNameKeywords(item.product_name))
 
   // 按日期范围过滤
   if (detailFilters.value.dateRange && detailFilters.value.dateRange.length === 2) {
@@ -536,57 +565,60 @@ const generateTestData = () => {
   return testData
 }
 
+// 進捗推移トレンド 数据: GET /api/shipping/picking/new-progress → progressStats（无数据时 generateTestData 兜底）→ nextTick 后 updateChart / initChart+updateChart
 // 方法
 const fetchProgressData = async () => {
   loading.value.data = true
   try {
-    console.log('获取新进度数据...')
-    const response = (await request.get('/api/shipping/picking/new-progress')) as NewProgressResponse
-
-    console.log('API响应:', response)
-
-    // 由于响应拦截器已经处理了success判断，这里直接使用response
-    if (response && typeof response === 'object') {
-      palletList.value = (response.palletList || []) as PalletItem[]
-      progressStats.value = (response.progressStats || generateTestData()) as ProgressStat[]
-      const ov = response.todayOverview
-      todayOverview.value = {
-        total_today: ov?.total_today ?? 0,
-        pending_today: ov?.pending_today ?? 0,
-        completed_today: ov?.completed_today ?? 0,
-        today_completion_rate: ov?.today_completion_rate ?? 0,
-      }
-
-      console.log('数据加载完成:', {
-        palletCount: palletList.value.length,
-        statsCount: progressStats.value.length,
-        todayOverview: todayOverview.value,
-      })
-
-      // 添加详细的数据调试信息
-      console.log('todayOverview.value 详细信息:', JSON.stringify(todayOverview.value, null, 2))
-      console.log('palletList.value 前3项:', JSON.stringify(palletList.value.slice(0, 3), null, 2))
-      console.log('progressStats.value 详细信息:', JSON.stringify(progressStats.value, null, 2))
-
-      // 更新图表
-      await nextTick()
-      console.log('Updating chart with new data...')
-      if (chartInstance) {
-        updateChart()
-      } else {
-        console.warn('Chart instance not ready, reinitializing...')
-        await initChart()
-        updateChart()
-      }
-
-      ElMessage.success(`データを取得しました (${palletList.value.length}件)`)
-    } else {
-      console.error('API响应格式错误:', response)
-      ElMessage.error('データの取得に失敗しました')
+    const range = detailFilters.value.dateRange
+    const params: Record<string, string> = {}
+    if (range && range.length === 2 && range[0] && range[1]) {
+      params.start_date = range[0]
+      params.end_date = range[1]
     }
+    const response = (await request.get('/api/shipping/picking/new-progress', {
+      params,
+    })) as NewProgressResponse
+
+    if (!response || typeof response !== 'object') {
+      ElMessage.error('データの取得に失敗しました')
+      return
+    }
+
+    // palletList: API は配列を返す
+    palletList.value = Array.isArray(response.palletList) ? (response.palletList as PalletItem[]) : []
+
+    // todayOverview: API は todayOverview オブジェクトを返す
+    const ov = response.todayOverview
+    todayOverview.value = {
+      total_today: ov?.total_today ?? 0,
+      pending_today: ov?.pending_today ?? 0,
+      completed_today: ov?.completed_today ?? 0,
+      today_completion_rate: ov?.today_completion_rate ?? 0,
+    }
+
+    // 進捗推移トレンド: 后端返回过去7日～未来3日、按日出荷分组、排除加工・アーチ・料金 的 progressStats 配列
+    // 直接使用后端 completion_rate；无数据时用 generateTestData() 兜底
+    if (Array.isArray(response.progressStats) && response.progressStats.length > 0) {
+      progressStats.value = response.progressStats as ProgressStat[]
+    } else {
+      progressStats.value = generateTestData() as ProgressStat[]
+    }
+
+    await nextTick()
+    if (chartInstance) {
+      updateChart()
+    } else {
+      await initChart()
+      updateChart()
+    }
+
+    ElMessage.success(`データを取得しました (${palletList.value.length}件)`)
   } catch (error: any) {
     console.error('数据获取失败:', error)
-    ElMessage.error(`データの取得に失敗しました: ${error.message || 'Unknown error'}`)
+    if (!error?.response) {
+      ElMessage.error(error?.message || 'データの取得に失敗しました')
+    }
   } finally {
     loading.value.data = false
   }
@@ -1005,8 +1037,8 @@ const updateChart = () => {
         itemColor = '#f59e0b'
         shadowColor = 'rgba(245, 158, 11, 0.7)'
       } else if (isFuture) {
-        itemColor = '#6b7280'
-        shadowColor = 'rgba(107, 114, 128, 0.4)'
+        itemColor = '#909399'
+        shadowColor = 'rgba(144, 147, 153, 0.4)'
       } else if (isPast) {
         if (stat.completion_rate >= 90) {
           itemColor = '#10b981'
@@ -1079,6 +1111,17 @@ const updateChart = () => {
         series: [
           {
             data: rates,
+            label: {
+              show: true,
+              position: 'top',
+              formatter: (params: { data?: { value?: number }; value?: unknown }) => {
+                const v = params.data?.value ?? (typeof params.value === 'number' ? params.value : null)
+                return v != null ? `${v}%` : ''
+              },
+              fontSize: 11,
+              color: '#374151',
+              fontWeight: 500,
+            },
             markPoint: {
               data: markPointData,
             },
@@ -1252,6 +1295,7 @@ const printDetailData = () => {
             <th>出荷番号</th>
             <th>出荷日</th>
             <th>製品名</th>
+            <th>箱数</th>
             <th>納入先</th>
             <th>状態</th>
             <th>作業者</th>
@@ -1265,9 +1309,10 @@ const printDetailData = () => {
               <td>${item.shipping_no_p}</td>
               <td>${formatDate(item.shipping_date)}</td>
               <td>${item.product_name}</td>
+              <td>${item.confirmed_boxes ?? '-'}</td>
               <td>${item.destination_name}</td>
               <td class="status-${item.status}">${getStatusText(item.status)}</td>
-              <td>${item.picker_name || '<span class="no-picker">未割当</span>'}</td>
+              <td>${item.picker_full_name || item.picker_name || '<span class="no-picker">未割当</span>'}</td>
             </tr>
           `,
             )
@@ -1293,6 +1338,17 @@ const printDetailData = () => {
     console.error('无法打开打印窗口，可能被浏览器阻止')
   }
 }
+
+// 期間変更時にピッキングリスト詳細用データを再取得
+watch(
+  () => detailFilters.value.dateRange,
+  (range) => {
+    if (range && range.length === 2 && range[0] && range[1]) {
+      fetchProgressData()
+    }
+  },
+  { deep: true },
+)
 
 // 响应式调整图表大小
 const handleResize = () => {
@@ -1357,29 +1413,22 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 整体容器 */
+/* 整体容器 - 紧凑 */
 .picking-progress-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  padding: 24px;
-  font-family:
-    'Inter',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  background: linear-gradient(145deg, #f1f5f9 0%, #e2e8f0 100%);
+  padding: 10px 12px;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* 页面标题区域 */
+/* 页面标题 - 紧凑 */
 .page-header {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 20px;
-  padding: 32px;
-  margin-bottom: 32px;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .header-content {
@@ -1388,107 +1437,103 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.title-section {
-  flex: 1;
-}
+.title-section { flex: 1; }
 
 .page-title {
-  font-size: 32px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 8px 0;
+  margin: 0 0 4px 0;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .title-icon {
-  font-size: 36px;
-  color: #3b82f6;
+  font-size: 22px;
+  color: #6366f1;
 }
 
 .page-subtitle {
-  font-size: 16px;
+  font-size: 12px;
   color: #64748b;
   margin: 0;
   font-weight: 400;
 }
 
-.header-actions {
-  display: flex;
-  gap: 16px;
-}
+.header-actions { display: flex; gap: 8px; }
 
 .refresh-btn {
-  padding: 12px 24px;
-  border-radius: 12px;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-weight: 600;
-  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  font-size: 13px;
+  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  transition: all 0.2s ease;
 }
 
 .refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25);
 }
 
-/* 概要统计区域 */
+/* 概要统计 - 紧凑 */
 .overview-section {
-  margin-bottom: 32px;
+  margin-bottom: 12px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  margin-bottom: 24px;
-  gap: 16px;
+  margin-bottom: 10px;
+  gap: 10px;
 }
 
 .section-title h2 {
-  font-size: 24px;
+  font-size: 14px;
   font-weight: 600;
-  color: #1e293b;
+  color: #334155;
   margin: 0;
 }
 
 .title-line {
   flex: 1;
-  height: 2px;
-  background: linear-gradient(90deg, #3b82f6 0%, transparent 100%);
+  height: 1px;
+  background: linear-gradient(90deg, #6366f1 0%, transparent 100%);
   border-radius: 1px;
 }
 
 .overview-cards {
   display: flex;
-  gap: 24px;
+  gap: 10px;
 }
 
 .stat-card {
   position: relative;
-  border-radius: 20px;
+  border-radius: 12px;
   overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.25s ease;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .stat-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
 .total-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
 }
 
 .pending-card {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
   color: white;
 }
 
 .completed-card {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
   color: white;
 }
 
@@ -1498,78 +1543,74 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  opacity: 0.1;
+  opacity: 0.08;
 }
 
 .background-pattern {
   width: 100%;
   height: 100%;
   background-image:
-    radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.2) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.15) 0%, transparent 50%);
+    radial-gradient(circle at 20% 80%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
 }
 
 .card-content {
   position: relative;
-  padding: 28px;
+  padding: 12px 14px;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   z-index: 1;
 }
 
 .stat-icon {
-  font-size: 48px;
-  opacity: 0.9;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  font-size: 28px;
+  opacity: 0.95;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
 }
 
-.stat-info {
-  flex: 1;
-}
+.stat-info { flex: 1; }
 
 .stat-value {
-  font-size: 36px;
+  font-size: 22px;
   font-weight: 800;
   line-height: 1;
-  margin-bottom: 8px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 4px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .stat-label {
-  font-size: 16px;
+  font-size: 12px;
   font-weight: 600;
   opacity: 0.95;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .stat-trend {
-  font-size: 13px;
-  opacity: 0.8;
+  font-size: 11px;
+  opacity: 0.85;
   font-weight: 500;
 }
 
-/* 图表分析区域 */
+/* 图表分析 - 紧凑 */
 .analytics-section {
-  margin-bottom: 32px;
+  margin-bottom: 12px;
 }
 
 .analytics-grid {
   display: grid;
-  grid-template-columns: 400px 1fr;
-  gap: 24px;
+  grid-template-columns: 320px 1fr;
+  gap: 12px;
   align-items: stretch;
 }
 
 .chart-card {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 24px;
+  background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  transition: all 0.25s ease;
   position: relative;
 }
 
@@ -1579,82 +1620,76 @@ onUnmounted(() => {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 50%, #06b6d4 100%);
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
   z-index: 1;
 }
 
 .chart-card:hover {
-  transform: translateY(-6px);
-  box-shadow:
-    0 20px 40px rgba(0, 0, 0, 0.12),
-    0 8px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
 }
 
 .card-header {
-  padding: 24px 28px 20px 28px;
+  padding: 10px 14px;
   border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  background: linear-gradient(135deg, #ffffff 0%, #fafbff 100%);
+  background: linear-gradient(135deg, #fff 0%, #fafbff 100%);
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   flex: 1;
 }
 
 .header-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
-.header-text {
-  flex: 1;
-}
+.header-text { flex: 1; }
 
 .card-title {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   line-height: 1.3;
 }
 
 .card-subtitle {
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
   margin: 0;
   font-weight: 500;
 }
 
 .completion-badge {
-  padding: 10px 16px;
-  border-radius: 20px;
-  font-size: 14px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  font-size: 12px;
   font-weight: 700;
   color: white;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
-  gap: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
-.badge-icon {
-  font-size: 16px;
-}
+.badge-icon { font-size: 12px; }
 
 .badge-excellent {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -1706,19 +1741,18 @@ onUnmounted(() => {
 }
 
 .card-body {
-  padding: 28px;
+  padding: 12px 14px;
 }
 
-/* 进度卡片样式 */
 .progress-card .card-body {
-  padding: 32px 28px;
+  padding: 14px 14px;
 }
 
 .progress-display {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 28px;
+  gap: 14px;
 }
 
 .progress-circle-wrapper {
@@ -1730,16 +1764,16 @@ onUnmounted(() => {
 }
 
 .percentage-large {
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 800;
   color: #1e293b;
   line-height: 1;
 }
 
 .progress-label-small {
-  font-size: 13px;
+  font-size: 11px;
   color: #64748b;
-  margin-top: 4px;
+  margin-top: 2px;
   font-weight: 600;
 }
 
@@ -1747,23 +1781,23 @@ onUnmounted(() => {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 10px;
 }
 
 .stat-row {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   justify-content: center;
 }
 
 .stat-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: 16px;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
   flex: 1;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .stat-item:hover {
@@ -1847,7 +1881,7 @@ onUnmounted(() => {
   color: #1e293b;
 }
 
-/* 趋势卡片样式 */
+/* 進捗推移トレンド: 卡片・图表容器样式（渐变白底、圆角20/16、细边框、阴影、blur） */
 .trend-card .card-body {
   padding: 20px 28px 28px 28px;
 }
@@ -1898,78 +1932,75 @@ onUnmounted(() => {
   display: block !important;
 }
 
-/* 数据列表区域 */
+/* 数据列表 - 紧凑 */
 .data-section {
-  margin-bottom: 32px;
+  margin-bottom: 12px;
 }
 
 .data-panel {
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 20px;
-  padding: 28px;
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: linear-gradient(135deg, #fff 0%, #f8fafc 100%);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .data-panel .panel-header {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding-bottom: 20px;
-  border-bottom: 2px solid #f1f5f9;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .data-count {
-  padding: 6px 12px;
+  padding: 4px 10px;
   background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-  border-radius: 20px;
+  border-radius: 10px;
   border: 1px solid #0ea5e9;
 }
 
 .count-text {
-  font-size: 13px;
+  font-size: 12px;
   color: #0369a1;
   font-weight: 600;
 }
 
 .header-right {
   display: flex;
-  gap: 16px;
+  gap: 8px;
   align-items: center;
 }
 
-/* 详细筛选区域样式 */
 .detail-filters {
   background: #f8fafc;
-  padding: 16px;
-  border-radius: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
 }
 
 .filter-row {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .filter-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .filter-label {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: #374151;
   white-space: nowrap;
@@ -1978,43 +2009,43 @@ onUnmounted(() => {
 .date-filter-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .date-quick-buttons-detail {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .date-quick-buttons-detail .el-button {
-  min-width: 48px;
-  padding: 6px 12px;
+  min-width: 40px;
+  padding: 5px 10px;
   font-size: 12px;
   border-radius: 6px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .date-quick-buttons-detail .el-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .filter-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-left: auto;
 }
 
 .filter-actions .el-button {
-  padding: 6px 16px;
-  font-size: 13px;
+  padding: 5px 12px;
+  font-size: 12px;
   border-radius: 6px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .filter-actions .el-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
 .filter-controls {
@@ -2036,6 +2067,71 @@ onUnmounted(() => {
 .data-table {
   border-radius: 16px;
   overflow: hidden;
+}
+
+/* ピッキングリスト詳細テーブル - 日本简约风 */
+.detail-table-wrap {
+  background: #fafafa;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e8e8e8;
+  box-shadow: none;
+}
+
+.detail-table-wrap :deep(.el-table) {
+  --el-table-border-color: #eee;
+  --el-table-header-bg-color: #f5f5f5;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.detail-table-wrap :deep(.el-table__header-wrapper) th {
+  background: #f5f5f5 !important;
+  color: #333;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 14px 12px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.detail-table-wrap :deep(.el-table__body-wrapper) td {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #444;
+}
+
+.detail-table-wrap :deep(.el-table__row:hover) td {
+  background: #f9f9f9 !important;
+}
+
+.detail-table-wrap :deep(.el-table__row) td {
+  background: #fff;
+}
+
+.detail-table-wrap :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background: #fafafa;
+}
+
+.detail-table-wrap :deep(.el-table--striped .el-table__body tr.el-table__row--striped:hover td) {
+  background: #f5f5f5 !important;
+}
+
+.boxes-cell {
+  font-variant-numeric: tabular-nums;
+  color: #555;
+  font-weight: 500;
+}
+
+.detail-table-wrap .picker-cell .picker-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.detail-table-wrap .no-picker {
+  color: #999;
+  font-style: normal;
+  font-size: 12px;
 }
 
 /* 表格单元格样式 */

@@ -1,32 +1,52 @@
 <template>
   <div class="tabs-nav">
-    <div class="tabs-scroll">
-      <el-scrollbar>
-        <div class="tabs-wrapper">
-          <div
-            v-for="tab in tabsStore.tabs"
-            :key="tab.path"
-            :class="['tab-item', { 'is-active': tab.path === tabsStore.activeTab }]"
-            @click="handleTabClick(tab)"
-            @contextmenu.prevent="handleContextMenu($event, tab)"
+    <!-- 左箭头：内容超出时显示 -->
+    <button
+      v-show="canScrollLeft"
+      type="button"
+      class="nav-arrow nav-arrow--left"
+      aria-label="左へスクロール"
+      @click="scrollBy(-scrollStep)"
+    >
+      <el-icon :size="14"><ArrowLeft /></el-icon>
+    </button>
+
+    <div ref="scrollContainerRef" class="tabs-scroll" @scroll="updateScrollState">
+      <div class="tabs-wrapper">
+        <div
+          v-for="tab in tabsStore.tabs"
+          :key="tab.path"
+          :class="['tab-item', { 'is-active': tab.path === tabsStore.activeTab }]"
+          @click="handleTabClick(tab)"
+          @contextmenu.prevent="handleContextMenu($event, tab)"
+        >
+          <el-icon class="tab-icon" :size="12">
+            <HomeFilled v-if="tab.path === '/dashboard'" />
+            <Document v-else />
+          </el-icon>
+          <span class="tab-title">{{ tabTitle(tab) }}</span>
+          <el-icon
+            v-if="tab.closable"
+            class="tab-close"
+            :size="11"
+            @click.stop="handleClose(tab.path)"
           >
-            <el-icon class="tab-icon" :size="12">
-              <HomeFilled v-if="tab.path === '/dashboard'" />
-              <Document v-else />
-            </el-icon>
-            <span class="tab-title">{{ tabTitle(tab) }}</span>
-            <el-icon
-              v-if="tab.closable"
-              class="tab-close"
-              :size="11"
-              @click.stop="handleClose(tab.path)"
-            >
-              <Close />
-            </el-icon>
-          </div>
+            <Close />
+          </el-icon>
         </div>
-      </el-scrollbar>
+      </div>
     </div>
+
+    <!-- 右箭头：内容超出时显示 -->
+    <button
+      v-show="canScrollRight"
+      type="button"
+      class="nav-arrow nav-arrow--right"
+      aria-label="右へスクロール"
+      @click="scrollBy(scrollStep)"
+    >
+      <el-icon :size="14"><ArrowRight /></el-icon>
+    </button>
     
     <!-- 操作按钮 -->
     <div class="tabs-actions">
@@ -94,12 +114,12 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, onUnmounted, computed } from 'vue'
+import { reactive, ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTabsStore, type TabItem } from '@/stores/tabs'
 import { menuConfig } from '@/router/menuConfig'
-import { Close, ArrowDown, Refresh, FolderRemove, DArrowLeft, DArrowRight, HomeFilled, Document } from '@element-plus/icons-vue'
+import { Close, ArrowDown, Refresh, FolderRemove, DArrowLeft, DArrowRight, HomeFilled, Document, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -208,12 +228,50 @@ const closeContextMenu = () => {
   contextMenu.visible = false
 }
 
+// 左右箭头滚动
+const scrollContainerRef = ref<HTMLElement | null>(null)
+const canScrollLeft = ref(false)
+const canScrollRight = ref(false)
+const scrollStep = 180
+
+function updateScrollState() {
+  const el = scrollContainerRef.value
+  if (!el) return
+  const { scrollLeft, clientWidth, scrollWidth } = el
+  canScrollLeft.value = scrollLeft > 2
+  canScrollRight.value = scrollLeft + clientWidth < scrollWidth - 2
+}
+
+function scrollBy(delta: number) {
+  const el = scrollContainerRef.value
+  if (!el) return
+  el.scrollLeft += delta
+  nextTick(updateScrollState)
+}
+
+watch(() => tabsStore.tabs.length, () => {
+  nextTick(updateScrollState)
+})
+
+let resizeObserver: ResizeObserver | null = null
+
 onMounted(() => {
   document.addEventListener('click', closeContextMenu)
+  nextTick(() => {
+    const el = scrollContainerRef.value
+    if (el) {
+      updateScrollState()
+      resizeObserver = new ResizeObserver(() => updateScrollState())
+      resizeObserver.observe(el)
+    }
+  })
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu)
+  if (scrollContainerRef.value && resizeObserver) {
+    resizeObserver.disconnect()
+  }
 })
 </script>
 
@@ -221,18 +279,20 @@ onUnmounted(() => {
 .tabs-nav {
   display: flex;
   align-items: center;
-  height: 38px;
-  background: linear-gradient(180deg, 
-    rgba(255, 255, 255, 0.95) 0%, 
-    rgba(248, 250, 252, 0.98) 50%,
-    rgba(241, 245, 249, 0.95) 100%
+  height: 32px;
+  min-height: 32px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.97) 0%,
+    rgba(248, 250, 252, 0.96) 100%
   );
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
-  padding: 0 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 
-              0 1px 2px rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.55);
+  padding: 0 6px;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   position: relative;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .tabs-nav::before {
@@ -242,69 +302,110 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, 
-    transparent 0%, 
-    rgba(102, 126, 234, 0.1) 50%, 
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(99, 102, 241, 0.08) 50%,
     transparent 100%
   );
+  pointer-events: none;
+}
+
+/* 左右箭头 */
+.nav-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: rgba(248, 250, 252, 0.9);
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.nav-arrow:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: #6366f1;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12);
+}
+
+.nav-arrow:active {
+  transform: scale(0.96);
 }
 
 .tabs-scroll {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tabs-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .tabs-wrapper {
   display: flex;
-  gap: 6px;
-  padding: 5px 0;
+  gap: 4px;
+  padding: 4px 2px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(248, 250, 252, 0.85) 100%
+  gap: 5px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(248, 250, 252, 0.88) 100%
   );
   border: 1px solid rgba(226, 232, 240, 0.5);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   white-space: nowrap;
   font-size: 12px;
-  color: #64748b;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03),
-              inset 0 1px 1px rgba(255, 255, 255, 0.8);
+              inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
 }
 
 .tab-item::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, 
-    rgba(102, 126, 234, 0.03) 0%, 
-    rgba(118, 75, 162, 0.02) 100%
+  border-radius: 6px;
+  background: linear-gradient(135deg,
+    rgba(99, 102, 241, 0.04) 0%,
+    rgba(139, 92, 246, 0.02) 100%
   );
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.2s ease;
 }
 
 .tab-item:hover {
-  border-color: rgba(102, 126, 234, 0.3);
-  color: #475569;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.95) 0%, 
-    rgba(248, 250, 252, 0.9) 100%
+  border-color: rgba(99, 102, 241, 0.28);
+  color: #334155;
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(248, 250, 252, 0.95) 100%
   );
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.08),
-              0 1px 2px rgba(0, 0, 0, 0.04),
-              inset 0 1px 1px rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.08),
+              0 1px 2px rgba(0, 0, 0, 0.03),
+              inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .tab-item:hover::after {
@@ -312,16 +413,15 @@ onUnmounted(() => {
 }
 
 .tab-item.is-active {
-  background: linear-gradient(135deg, 
-    #667eea 0%, 
-    #764ba2 100%
+  background: linear-gradient(135deg,
+    #6366f1 0%,
+    #7c3aed 100%
   );
   border-color: transparent;
-  color: white;
-  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.35),
-              0 1px 3px rgba(102, 126, 234, 0.25),
-              inset 0 1px 1px rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.35),
+              0 1px 2px rgba(99, 102, 241, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .tab-item.is-active::after {
@@ -346,11 +446,12 @@ onUnmounted(() => {
 }
 
 .tab-title {
-  max-width: 100px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 500;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
 }
 
 .tab-close {
@@ -386,41 +487,32 @@ onUnmounted(() => {
 .tabs-actions {
   display: flex;
   align-items: center;
-  padding-left: 10px;
-  margin-left: 6px;
-  border-left: 1px solid rgba(226, 232, 240, 0.5);
+  padding-left: 6px;
+  margin-left: 2px;
+  border-left: 1px solid rgba(226, 232, 240, 0.45);
+  flex-shrink: 0;
 }
 
 .action-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
   cursor: pointer;
   color: #64748b;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(248, 250, 252, 0.85) 100%
-  );
+  background: rgba(248, 250, 252, 0.9);
   border: 1px solid rgba(226, 232, 240, 0.5);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03),
-              inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  transition: all 0.18s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
 }
 
 .action-btn:hover {
-  color: #667eea;
-  border-color: rgba(102, 126, 234, 0.4);
-  background: linear-gradient(135deg, 
-    rgba(102, 126, 234, 0.12) 0%, 
-    rgba(118, 75, 162, 0.08) 100%
-  );
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.15),
-              0 1px 2px rgba(0, 0, 0, 0.05),
-              inset 0 1px 1px rgba(255, 255, 255, 0.9);
-  transform: translateY(-1px);
+  color: #6366f1;
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.08);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.12);
 }
 
 /* Context Menu */
@@ -460,7 +552,7 @@ onUnmounted(() => {
     rgba(102, 126, 234, 0.12) 0%, 
     rgba(118, 75, 162, 0.08) 100%
   );
-  color: #667eea;
+  color: #6366f1;
   box-shadow: 0 1px 3px rgba(102, 126, 234, 0.1);
   transform: translateX(2px);
 }
@@ -507,11 +599,6 @@ onUnmounted(() => {
   transform: scale(0.92) translateY(-8px);
 }
 
-/* Scrollbar */
-:deep(.el-scrollbar__bar) {
-  display: none;
-}
-
 :deep(.el-dropdown-menu) {
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.98) 0%, 
@@ -541,12 +628,12 @@ onUnmounted(() => {
     rgba(102, 126, 234, 0.12) 0%, 
     rgba(118, 75, 162, 0.08) 100%
   );
-  color: #667eea;
+  color: #6366f1;
 }
 
 :deep(.el-dropdown-menu__item .el-icon) {
   font-size: 14px;
-  color: #667eea;
+  color: #6366f1;
   opacity: 0.85;
   transition: all 0.2s ease;
 }
@@ -559,23 +646,37 @@ onUnmounted(() => {
 /* Responsive */
 @media (max-width: 768px) {
   .tabs-nav {
-    height: 34px;
-    padding: 0 8px;
+    height: 30px;
+    padding: 0 4px;
+    gap: 1px;
   }
-  
+
+  .nav-arrow {
+    width: 22px;
+    height: 22px;
+  }
+
+  .nav-arrow .el-icon {
+    font-size: 12px;
+  }
+
   .tab-title {
-    max-width: 60px;
+    max-width: 72px;
   }
-  
+
   .tab-item {
-    padding: 4px 8px;
+    padding: 3px 8px;
     font-size: 11px;
     gap: 4px;
   }
-  
+
+  .tabs-wrapper {
+    padding: 3px 2px;
+  }
+
   .action-btn {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 }
 </style>

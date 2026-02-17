@@ -60,7 +60,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatDateWithWeekdayJST, formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
+
+const { locale } = useI18n()
 
 const props = defineProps({
   data: {
@@ -74,35 +78,16 @@ const props = defineProps({
 })
 
 const printDateTime = computed(() => {
-  const now = new Date()
-  return now.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+  return formatDateTimeJST(new Date(), localeForIntl(locale.value), {
     hour: '2-digit',
     minute: '2-digit',
+    second: undefined,
   })
 })
 
 function formatDate(dateStr) {
   if (!dateStr) return 'N/A'
-  try {
-    // 使用日本标准时间格式化日期
-    const date = new Date(dateStr + 'T00:00:00+09:00') // 确保使用JST时区
-    const year = date.getFullYear()
-    const month = date.getMonth() + 1
-    const day = date.getDate()
-
-    // 获取星期（日文简写）
-    const weekdays = ['日', '月', '火', '水', '木', '金', '土']
-    const weekday = weekdays[date.getDay()]
-
-    // 格式: 2025/10/1 水
-    return `${year}/${month}/${day} ${weekday}`
-  } catch (error) {
-    console.error('日期格式化错误:', error)
-    return dateStr
-  }
+  return formatDateWithWeekdayJST(dateStr, localeForIntl(locale.value))
 }
 
 // 数据分组逻辑
@@ -173,11 +158,10 @@ function getDestinationSize(dest) {
   return baseSize + itemCount + estimatedExtraSpace
 }
 
-// 纳入先分配函数 - 基于调整后的容量限制（考虑换行）
+// 纳入先分配函数 - 单页容量限制，超出则分到下一页
 function allocateNounyusenToColumns(nounyusenGroup, columns, columnSizes) {
-  // 调整后的容量限制 - 考虑换行后的行高增加
-  const maxItemsPerColumn = 42 // 增加到36个商品（考虑换行后占用更多空间）
-  const maxRowsPerColumn = 60 // 增加到60行（充分利用空间）
+  const maxItemsPerColumn = 30
+  const maxRowsPerColumn = 40 // 一页放不下时自动分到第2页
 
   // 计算每列当前的商品数量
   function getColumnItemCount(columnIndex) {
@@ -212,12 +196,12 @@ function allocateNounyusenToColumns(nounyusenGroup, columns, columnSizes) {
   }
 }
 
-// 重新设计的列分配算法 - 基于调整后的容量限制（考虑换行）
+// 列分配算法 - 单页容量限制，超出由 getPaginatedData 分到下一页
 function allocateDestinationsToColumns(destinations) {
   const columns = [[], []]
   const columnSizes = [0, 0]
-  const maxItemsPerColumn = 36 // 增加到36个商品（考虑换行后占用更多空间）
-  const maxRowsPerColumn = 60 // 增加到60行（充分利用空间）
+  const maxItemsPerColumn = 28
+  const maxRowsPerColumn = 40
 
   // 计算列的商品数量
   function getColumnItemCount(columnIndex) {
@@ -289,9 +273,9 @@ function getPaginatedData(dateGroup) {
 
   const destinations = dateGroup.destinations
   const pages = []
-  // 调整后的容量：考虑换行后需要更多空间
-  const maxItemsPerColumn = 36 // 调整到36个商品
-  const maxRowsPerColumn = 60 // 增加到60行
+  // 单页容量：一页放不下时自动分成第2页显示
+  const maxItemsPerColumn = 28
+  const maxRowsPerColumn = 40
 
   // 计算目的地组的商品数量
   function getDestItemCount(dest) {
@@ -498,8 +482,8 @@ function createPage(shipping_date, destinations) {
 /* 页面设置 */
 @page {
   size: A4 portrait;
-  margin: 15mm 10mm 0mm 10mm;
-  /* 上边距增加到35mm (约3.5cm) */
+  margin: 18mm 10mm 0mm 10mm;
+  /* 页面上方保留 1cm 空白 */
 }
 
 /* 全局重置 */
@@ -641,50 +625,40 @@ function createPage(shipping_date, destinations) {
   line-height: 1.2;
 }
 
-/* 表格样式 */
+/* 表格样式（行高较原样增加约 10%） */
 .print-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 15px;
-  /* 字体增大 */
-  line-height: 1.2;
+  line-height: 1.32;
+  /* 1.2 * 1.1 */
   table-layout: fixed;
-  /* 固定表格布局 */
 }
 
 .print-table th {
   font-weight: bold;
   text-align: center;
-  padding: 1px 3px;
-  /* 增大内边距 */
+  padding: 2px 3px;
   border: 1px solid #000;
   font-size: 14px;
-  /* 字体增大 */
-  line-height: 1.1;
-  height: 22px;
-  /* 增大表头高度 */
+  line-height: 1.21;
+  height: 24px;
+  /* 22px * 1.1 ≈ 24px */
 }
 
 .print-table td {
-  padding: 2px 3px;
-  /* 增大内边距 */
+  padding: 3px 3px;
   border: 1px solid #000;
   vertical-align: top;
   font-size: 14px;
-  /* 字体增大 */
-  line-height: 1.1;
+  line-height: 1.21;
+  /* 1.1 * 1.1 */
   height: auto;
-  /* 改为自动高度，允许内容换行 */
   overflow: visible;
-  /* 显示溢出内容 */
   text-overflow: clip;
-  /* 不使用省略号 */
   white-space: normal;
-  /* 允许换行 */
   word-wrap: break-word;
-  /* 长单词自动换行 */
   word-break: break-all;
-  /* 强制换行，适合长编号 */
 }
 
 /* 列宽设置 */

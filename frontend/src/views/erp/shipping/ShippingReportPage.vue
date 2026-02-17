@@ -7,7 +7,7 @@
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title">出荷報告書</h1>
+          <h1 class="header-title">{{ t('shipping.reportTitle') }}</h1>
         </div>
       </div>
 
@@ -18,21 +18,21 @@
       <div class="filter-section glass-card">
         <div class="filter-main-row">
           <div class="filter-item">
-            <label class="filter-label">出荷日期</label>
+            <label class="filter-label">{{ t('shipping.dateRange') }}</label>
             <div class="date-controls">
-              <el-date-picker v-model="filters.dateRange" type="daterange" start-placeholder="開始日" end-placeholder="終了日"
+              <el-date-picker v-model="filters.dateRange" type="daterange" :start-placeholder="t('shipping.startDate')" :end-placeholder="t('shipping.endDate')"
                 value-format="YYYY-MM-DD" @change="handleDateChange" class="date-picker" size="default" />
               <div class="date-nav-buttons">
                 <el-button size="small" @click="adjustDate(-1)" class="nav-btn btn-glass prev-btn" title="前日">←</el-button>
-                <el-button size="small" @click="goToToday" class="nav-btn btn-glass today-btn" title="本日">本日</el-button>
+                <el-button size="small" @click="goToToday" class="nav-btn btn-glass today-btn" :title="t('shipping.today')">{{ t('shipping.today') }}</el-button>
                 <el-button size="small" @click="adjustDate(1)" class="nav-btn btn-glass next-btn" title="次日">→</el-button>
               </div>
             </div>
           </div>
           <div class="filter-item">
-            <label class="filter-label">納入先</label>
+            <label class="filter-label">{{ t('shipping.destination') }}</label>
             <div class="destination-controls">
-              <el-select v-model="filters.destinationCds" multiple placeholder="納入先を選択" collapse-tags
+              <el-select v-model="filters.destinationCds" multiple :placeholder="t('shipping.selectDestination')" collapse-tags
                 collapse-tags-tooltip @change="handleDestinationChange" class="destination-select" size="default">
                 <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label" :value="dest.value" />
               </el-select>
@@ -50,7 +50,7 @@
         <div v-if="hasGroups" class="group-selection">
           <label class="filter-label">グループ選択</label>
           <el-radio-group v-model="filters.selectedGroup" @change="handleGroupChange" class="group-radios">
-            <el-radio :value="-1" class="group-radio">全て</el-radio>
+            <el-radio :value="-1" class="group-radio">{{ t('shipping.all') }}</el-radio>
             <el-radio v-for="(group, index) in destinationGroups" :key="group.id || index" :value="index"
               :disabled="!group?.destinations || group.destinations.length === 0" class="group-radio">
               {{ group.groupName }} ({{ group?.destinations?.length || 0 }})
@@ -93,7 +93,7 @@
 
       <!-- 数据表格：玻璃卡片 -->
       <div class="table-section glass-card" v-loading="loading">
-        <el-empty v-if="!loading && (!overviewData || overviewData.length === 0)" description="条件に合うデータがありません"
+        <el-empty v-if="!loading && (!overviewData || overviewData.length === 0)" :description="t('shipping.noData')"
           :image-size="56" class="empty-state" />
 
         <div v-else class="table-container">
@@ -177,7 +177,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { getJSTToday as getJSTTodayUtil, formatDateJST, localeForIntl } from '@/utils/dateFormat'
 import {
   Document,
   Location,
@@ -241,13 +243,9 @@ const showGroupManager = ref(false)
 const showPrintHistory = ref(false)
 
 // 筛选条件
-// 获取日本标准时间(JST)的今天日期
-const getJSTToday = () => {
-  const now = new Date()
-  const jstOffset = 9 * 60 // JST是UTC+9
-  const jstTime = new Date(now.getTime() + (jstOffset * 60 * 1000))
-  return jstTime.toISOString().slice(0, 10)
-}
+const { t, locale } = useI18n()
+const getJSTToday = getJSTTodayUtil
+
 const today = getJSTToday()
 const filters = reactive<FilterData>({
   dateRange: [today, today],
@@ -392,16 +390,14 @@ function handleDateChange() {
   }
 }
 
-// 调整日期
 function adjustDate(days: number) {
   if (filters.dateRange && filters.dateRange.length === 2) {
-    const startDate = new Date(filters.dateRange[0])
-    const endDate = new Date(filters.dateRange[1])
-
+    const startDate = new Date(filters.dateRange[0] + 'T00:00:00+09:00')
+    const endDate = new Date(filters.dateRange[1] + 'T00:00:00+09:00')
     startDate.setDate(startDate.getDate() + days)
     endDate.setDate(endDate.getDate() + days)
-
-    filters.dateRange = [startDate.toISOString().slice(0, 10), endDate.toISOString().slice(0, 10)]
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    filters.dateRange = [fmt(startDate), fmt(endDate)]
     fetchOverviewData()
   }
 }
@@ -418,12 +414,9 @@ function handleDestinationChange() {
   fetchOverviewData()
 }
 
-// 格式化日期
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-'
-  // 使用日本标准时间格式化日期
-  const date = new Date(dateStr + 'T00:00:00+09:00') // 确保使用JST时区
-  return date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }).replace(/\//g, '-')
+  return formatDateJST(dateStr, localeForIntl(locale.value)).replace(/\//g, '-')
 }
 
 // 分组标题行添加 class 便于样式
@@ -620,9 +613,10 @@ async function recordPrintFailure(errorMessage: string) {
 </script>
 
 <style scoped>
+/* 出荷報告書：蓝色主题 */
 .shipping-report-page {
   padding: 12px;
-  background: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 100%);
+  background: linear-gradient(160deg, #eff6ff 0%, #dbeafe 50%, #e0e7ff 100%);
   min-height: 100vh;
 }
 

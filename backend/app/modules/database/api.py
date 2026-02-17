@@ -7,7 +7,9 @@ from fastapi import APIRouter, Depends, Query, HTTPException, Body
 logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update, tuple_, text
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
+import math
 import re
 import time
 from typing import Optional
@@ -18,10 +20,14 @@ from app.core.datetime_utils import now_jst
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
-from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep
+from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, Destination
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 
 router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
+
+# 一括更新用分散ロック（他端末同時実行防止）
+BATCH_UPDATE_LOCK_KEY = "production_summary_batch_update"
+DEFAULT_LOCK_TTL_SECONDS = 300  # 5分で自動解放
 
 # 繰越クリア対象の全工程カラム（KT13=倉庫, KT15=外注倉庫 を分離）
 CARRY_OVER_COLUMNS = [
@@ -140,8 +146,9 @@ PLAN_PROCESS_MAPPING = {
     "面取": "chamfering_plan",
     "検査": "inspection_plan",
 }
-# 清空计算字段（在庫・推移・actual_plan_trend）：date >= startDate 时置 0
+# 清空计算字段（在庫・推移・actual_plan_trend・安全在庫）：date >= startDate 时置 0
 CALCULATED_FIELDS_TO_CLEAR = [
+    "safety_stock",
     "cutting_inventory", "cutting_trend", "cutting_actual_plan_trend",
     "chamfering_inventory", "chamfering_trend", "chamfering_actual_plan_trend",
     "molding_inventory", "molding_trend", "molding_actual_plan_trend",
@@ -274,6 +281,100 @@ async def get_production_summarys_products(
     return {"data": data}
 
 
+@router.get("/inventory-shortage-print")
+async def get_inventory_shortage_print(
+    startDate: Optional[str] = Query(None, description="開始日 YYYY-MM-DD"),
+    endDate: Optional[str] = Query(None, description="終了日 YYYY-MM-DD"),
+    productCd: Optional[str] = Query(None, description="製品CD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    在庫不足一覧印刷用。production_summarys の倉庫在庫マイナス行を、
+    products（product_type, box_type, unit_per_box, destination_cd）と
+    destinations（destination_name）でジョインして返す。
+    箱数 = 本数 / unit_per_box（本数＝warehouse_inventory）
+    """
+    if not startDate or not endDate:
+        return {"data": []}
+    try:
+        start_d = date.fromisoformat(startDate)
+        end_d = date.fromisoformat(endDate)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="無効な日付形式（YYYY-MM-DD）")
+    # 同一 collation で JOIN（utf8mb4_unicode_ci / utf8mb4_0900_ai_ci 混在エラー回避）
+    _collation = "utf8mb4_unicode_ci"
+    join_product = (
+        ProductionSummary.product_cd.collate(_collation)
+        == Product.product_cd.collate(_collation)
+    )
+    join_dest = (
+        Product.destination_cd.collate(_collation)
+        == Destination.destination_cd.collate(_collation)
+    )
+    try:
+        q = (
+            select(
+                ProductionSummary.product_cd,
+                ProductionSummary.product_name,
+                ProductionSummary.date,
+                ProductionSummary.warehouse_inventory,
+                Product.product_type,
+                Product.box_type,
+                Product.unit_per_box,
+                Product.destination_cd,
+                Destination.destination_name,
+            )
+            .select_from(ProductionSummary)
+            .outerjoin(Product, join_product)
+            .outerjoin(Destination, join_dest)
+            .where(ProductionSummary.date >= start_d)
+            .where(ProductionSummary.date <= end_d)
+            .where(ProductionSummary.warehouse_inventory < 0)
+            .order_by(ProductionSummary.product_name, ProductionSummary.product_cd)
+        )
+        if productCd:
+            q = q.where(ProductionSummary.product_cd == productCd)
+        result = await db.execute(q)
+        rows = result.all()
+        out = []
+        for r in rows:
+            try:
+                raw_units = r.warehouse_inventory
+                units = int(raw_units) if raw_units is not None else 0
+                raw_upb = r.unit_per_box
+                unit_per_box = int(raw_upb) if raw_upb is not None and int(raw_upb) > 0 else None
+                box_quantity = (units // unit_per_box) if unit_per_box else None
+            except (TypeError, ValueError):
+                units = 0
+                unit_per_box = None
+                box_quantity = None
+            d = r.date
+            if d is None:
+                date_str = ""
+            elif hasattr(d, "isoformat"):
+                date_str = d.isoformat()
+            else:
+                date_str = str(d)
+            out.append({
+                "product_cd": r.product_cd or "",
+                "product_name": r.product_name or "",
+                "date": date_str,
+                "destination_name": r.destination_name or "",
+                "product_type": r.product_type or "",
+                "box_type": r.box_type or "",
+                "unit_per_box": r.unit_per_box,
+                "units": units,
+                "box_quantity": box_quantity,
+            })
+        return {"data": out}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("inventory-shortage-print error: %s", e)
+        raise HTTPException(status_code=500, detail=f"印刷データ取得エラー: {str(e)}")
+
+
 class GenerateBody(BaseModel):
     startDate: str
     endDate: str
@@ -372,6 +473,15 @@ class ClearCalculatedFieldsBody(BaseModel):
     startDate: str  # YYYY-MM-DD
 
 
+class LockAcquireBody(BaseModel):
+    lockValue: str  # クライアント発行の一意値（例: UUID）
+    ttlSeconds: Optional[int] = None  # 未指定時は DEFAULT_LOCK_TTL_SECONDS
+
+
+class LockReleaseBody(BaseModel):
+    lockValue: str
+
+
 class OptionalStartDateBody(BaseModel):
     startDate: Optional[str] = None  # YYYY-MM-DD、未指定時は全件または製品別起算
 
@@ -422,6 +532,70 @@ async def clear_production_summarys_calculated_fields(
         "data": {"cleared": cleared, "startDate": body.startDate[:10], "endDate": end_d.isoformat()},
         "message": f"計算フィールドをクリアしました（{cleared}件）",
     }
+
+
+@router.post("/batch-update-lock/acquire")
+async def batch_update_lock_acquire(
+    body: LockAcquireBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    一括更新用の分散ロックを取得する。
+    他端末が既に保持している場合は 423 Locked を返す。
+    """
+    lock_key = BATCH_UPDATE_LOCK_KEY
+    lock_value = (body.lockValue or "").strip()[:255]
+    if not lock_value:
+        raise HTTPException(status_code=400, detail="lockValue は必須です")
+    ttl = body.ttlSeconds if body.ttlSeconds is not None and body.ttlSeconds > 0 else DEFAULT_LOCK_TTL_SECONDS
+    now = now_jst()
+    expires_at = now + timedelta(seconds=ttl)
+    try:
+        await db.execute(
+            text(
+                "INSERT INTO distributed_locks (lock_key, lock_value, expires_at) VALUES (:lock_key, :lock_value, :expires_at)"
+            ),
+            {"lock_key": lock_key, "lock_value": lock_value, "expires_at": expires_at},
+        )
+        await db.commit()
+        return {"code": 200, "data": {"acquired": True}, "message": "ロックを取得しました"}
+    except IntegrityError:
+        await db.rollback()
+        # 既存行あり → 有効期限内なら 423、期限切れなら UPDATE で取得
+        upd = await db.execute(
+            text(
+                "UPDATE distributed_locks SET lock_value = :lock_value, expires_at = :expires_at "
+                "WHERE lock_key = :lock_key AND expires_at <= :now"
+            ),
+            {"lock_key": lock_key, "lock_value": lock_value, "expires_at": expires_at, "now": now},
+        )
+        await db.commit()
+        if upd.rowcount and upd.rowcount > 0:
+            return {"code": 200, "data": {"acquired": True}, "message": "ロックを取得しました（期限切れを再取得）"}
+        raise HTTPException(
+            status_code=423,
+            detail="他の端末で一括更新が実行中のため、しばらく待ってから再度お試しください。",
+        )
+
+
+@router.post("/batch-update-lock/release")
+async def batch_update_lock_release(
+    body: LockReleaseBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """取得した分散ロックを解放する（lock_value が一致する場合のみ削除）。"""
+    lock_key = BATCH_UPDATE_LOCK_KEY
+    lock_value = (body.lockValue or "").strip()[:255]
+    if not lock_value:
+        raise HTTPException(status_code=400, detail="lockValue は必須です")
+    res = await db.execute(
+        text("DELETE FROM distributed_locks WHERE lock_key = :lock_key AND lock_value = :lock_value"),
+        {"lock_key": lock_key, "lock_value": lock_value},
+    )
+    await db.commit()
+    return {"code": 200, "data": {"released": True}, "message": "ロックを解放しました"}
 
 
 @router.post("/update-from-order-daily")
@@ -1398,7 +1572,7 @@ def _compute_outsourced_warehouse_inventory(
 
 
 def _compute_trend_updates(row: dict, sequence: list) -> dict:
-    """当日 trend 計算値 = currentCarryOver + subsequentCarryOverSum + currentActual - defect - scrap - onHold - forecast - subsequentScrapSum - subsequentOnHoldSum"""
+    """当日 trend = carry + sub_carry + actual - defect - scrap - on_hold - forecast - sub_defect - sub_scrap - sub_on_hold"""
     updates = {}
     forecast = _num(row, "forecast_quantity")
     for i, key in enumerate(sequence):
@@ -1414,18 +1588,20 @@ def _compute_trend_updates(row: dict, sequence: list) -> dict:
         defect = _num(row, fields.get("defect", "")) if fields.get("defect") else 0
         scrap = _num(row, fields.get("scrap", "")) if fields.get("scrap") else 0
         on_hold = _num(row, fields.get("onHold", "")) if fields.get("onHold") else 0
-        sub_carry = sub_scrap = sub_on_hold = 0
+        sub_carry = sub_defect = sub_scrap = sub_on_hold = 0
         for j in range(i + 1, len(sequence)):
             nc = _get_process_config_by_key(sequence[j])
             if nc and nc.get("fields"):
                 f = nc["fields"]
                 if f.get("carry"):
                     sub_carry += _num(row, f["carry"])
+                if f.get("defect"):
+                    sub_defect += _num(row, f["defect"])
                 if f.get("scrap"):
                     sub_scrap += _num(row, f["scrap"])
                 if f.get("onHold"):
                     sub_on_hold += _num(row, f["onHold"])
-        trend = carry + sub_carry + actual - defect - scrap - on_hold - forecast - sub_scrap - sub_on_hold
+        trend = carry + sub_carry + actual - defect - scrap - on_hold - forecast - sub_defect - sub_scrap - sub_on_hold
         updates[trend_field] = trend
     return updates
 
@@ -1452,7 +1628,7 @@ def _compute_actual_plan_trend_updates(row: dict, sequence: list) -> dict:
         scrap = _num(row, fields.get("scrap", "")) if fields.get("scrap") else 0
         on_hold = _num(row, fields.get("onHold", "")) if fields.get("onHold") else 0
         idx = sequence.index(key) if key in sequence else -1
-        sub_carry = sub_scrap = sub_on_hold = 0
+        sub_carry = sub_defect = sub_scrap = sub_on_hold = 0
         if idx >= 0:
             for j in range(idx + 1, len(sequence)):
                 nc = _get_process_config_by_key(sequence[j])
@@ -1460,11 +1636,13 @@ def _compute_actual_plan_trend_updates(row: dict, sequence: list) -> dict:
                     f = nc["fields"]
                     if f.get("carry"):
                         sub_carry += _num(row, f["carry"])
+                    if f.get("defect"):
+                        sub_defect += _num(row, f["defect"])
                     if f.get("scrap"):
                         sub_scrap += _num(row, f["scrap"])
                     if f.get("onHold"):
                         sub_on_hold += _num(row, f["onHold"])
-        trend = carry + sub_carry + actual_plan - defect - scrap - on_hold - forecast - sub_scrap - sub_on_hold
+        trend = carry + sub_carry + actual_plan - defect - scrap - on_hold - forecast - sub_defect - sub_scrap - sub_on_hold
         updates[trend_field] = trend
     return updates
 
@@ -1841,6 +2019,165 @@ async def update_production_summarys_trend(
         except Exception:
             pass
         raise HTTPException(status_code=500, detail=f"推移更新に失敗しました: {str(e)}") from e
+
+
+def _next_n_workdays(from_date: date, n: int = 30):
+    """from_date の翌日から数えて n 個の営業日（土日除く）の日付リストを返す。"""
+    d = from_date + timedelta(days=1)
+    out = []
+    while len(out) < n:
+        if d.weekday() < 5:  # Mon=0, Fri=4
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
+@router.post("/update-safety-stock")
+async def update_production_summarys_safety_stock(
+    body: Optional[OptionalStartDateBody] = Body(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    安全在庫更新：製品マスタの safety_days > 0 の製品について、
+    安全在庫 = ceil(将来30営業日の平均日出荷数 × safety_days)。
+    平均日出荷数は production_summarys の内示数(forecast_quantity)を将来30営業日で平均した値。
+    """
+    start_time = time.perf_counter()
+    try:
+        global_start_d, product_start_dates, _, by_product, _ = await _resolve_date_range_and_rows(
+            db, body or OptionalStartDateBody(), start_time, trend_no_end_cap=False
+        )
+        if not by_product:
+            return {
+                "code": 200,
+                "data": {"updated": 0, "skipped": 0, "total": 0, "elapsedTime": round(time.perf_counter() - start_time, 2)},
+                "message": "更新するデータがありません",
+            }
+
+        # 製品マスタで safety_days IS NOT NULL AND safety_days > 0 の product_cd のみ対象
+        pq = select(Product.product_cd, Product.safety_days).where(
+            Product.product_cd.in_(list(by_product.keys())),
+            Product.safety_days.isnot(None),
+            Product.safety_days > 0,
+        )
+        pr_res = await db.execute(pq)
+        product_safety_days = {row[0]: int(row[1]) for row in pr_res.fetchall() if row[0] and row[1] is not None}
+        if not product_safety_days:
+            await db.commit()
+            return {
+                "code": 200,
+                "data": {"updated": 0, "skipped": len(by_product), "total": sum(len(v) for v in by_product.values()), "elapsedTime": round(time.perf_counter() - start_time, 2)},
+                "message": "安全在庫日数が設定された製品がありません（safety_days > 0）",
+            }
+
+        # 対象行を product_cd でフィルタ（safety_days が設定されている製品のみ）
+        by_product_filtered = {pc: rows for pc, rows in by_product.items() if pc in product_safety_days}
+        if not by_product_filtered:
+            await db.commit()
+            return {
+                "code": 200,
+                "data": {"updated": 0, "skipped": 0, "total": 0, "elapsedTime": round(time.perf_counter() - start_time, 2)},
+                "message": "更新するデータがありません",
+            }
+
+        # 将来30営業日分の forecast を取るため、日付範囲を延長（最大 date + 60 日程度）
+        all_dates = set()
+        for rows in by_product_filtered.values():
+            for r in rows:
+                d = r.get("date")
+                if d:
+                    if hasattr(d, "isoformat"):
+                        base = d if isinstance(d, date) else datetime.strptime(str(d)[:10], "%Y-%m-%d").date()
+                    else:
+                        base = datetime.strptime(str(d)[:10], "%Y-%m-%d").date()
+                    for fd in _next_n_workdays(base, 30):
+                        all_dates.add(fd)
+        if not all_dates:
+            return {
+                "code": 200,
+                "data": {"updated": 0, "skipped": 0, "total": 0, "elapsedTime": round(time.perf_counter() - start_time, 2)},
+                "message": "更新するデータがありません",
+            }
+        min_fetch = min(all_dates)
+        max_fetch = max(all_dates)
+        product_cds = list(by_product_filtered.keys())
+
+        # production_summarys から (product_cd, date) の forecast_quantity を一括取得
+        q_forecast = (
+            select(ProductionSummary.product_cd, ProductionSummary.date, ProductionSummary.forecast_quantity)
+            .where(
+                ProductionSummary.product_cd.in_(product_cds),
+                ProductionSummary.date >= min_fetch,
+                ProductionSummary.date <= max_fetch,
+            )
+        )
+        res_forecast = await db.execute(q_forecast)
+        forecast_map = {}
+        for row in res_forecast.fetchall():
+            pc = (row[0] or "").strip()
+            if not pc:
+                continue
+            dt = row[1]
+            qty = int(row[2]) if row[2] is not None else 0
+            forecast_map[(pc, dt)] = qty
+
+        updated_count = 0
+        BATCH = 100
+        updates_batch = []
+
+        def _parse_row_date(r):
+            d = r.get("date")
+            if d is None:
+                return None
+            if isinstance(d, date):
+                return d
+            s = str(d)[:10]
+            try:
+                return datetime.strptime(s, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+
+        for product_cd, product_rows in by_product_filtered.items():
+            safety_days = product_safety_days.get(product_cd, 0)
+            if safety_days <= 0:
+                continue
+            for r in product_rows:
+                base_date = _parse_row_date(r)
+                if base_date is None:
+                    continue
+                next_30 = _next_n_workdays(base_date, 30)
+                total_forecast = sum(forecast_map.get((product_cd, d), 0) for d in next_30)
+                n_days = len(next_30)
+                avg_daily = (total_forecast / n_days) if n_days else 0
+                safety_val = int(math.ceil(avg_daily * safety_days)) if avg_daily else 0
+                r["safety_stock"] = safety_val
+                updates_batch.append(r)
+                if len(updates_batch) >= BATCH:
+                    await _batch_case_update(db, updates_batch, ["safety_stock"])
+                    updated_count += len(updates_batch)
+                    updates_batch = []
+                    await db.commit()
+
+        if updates_batch:
+            await _batch_case_update(db, updates_batch, ["safety_stock"])
+            updated_count += len(updates_batch)
+        await db.commit()
+        elapsed = round(time.perf_counter() - start_time, 2)
+        return {
+            "code": 200,
+            "data": {"updated": updated_count, "skipped": 0, "total": updated_count, "elapsedTime": elapsed},
+            "message": f"{updated_count}件の安全在庫を更新しました（{elapsed}秒）",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("update-safety-stock でエラー: %s", e)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"安全在庫更新に失敗しました: {str(e)}") from e
 
 
 class UpdateProductMasterBody(BaseModel):

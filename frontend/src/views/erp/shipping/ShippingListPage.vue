@@ -6,38 +6,41 @@
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title">出荷確認リスト</h1>
+          <h1 class="header-title">{{ t('shipping.listTitle') }}</h1>
         </div>
       </div>
+
+      <!-- 出荷確認リストカレンダー（オワリ便・社内便等グループ別印刷） -->
+      <ShippingCalendarDialog :model-value="true" inline report-type="list" />
 
       <div class="filter-section">
         <div class="filter-row">
           <div class="filter-item">
-            <label class="filter-label">出荷日</label>
-            <el-date-picker v-model="filters.dateRange" type="daterange" start-placeholder="開始日" end-placeholder="終了日"
+            <label class="filter-label">{{ t('shipping.dateRange') }}</label>
+            <el-date-picker v-model="filters.dateRange" type="daterange" :start-placeholder="t('shipping.startDate')" :end-placeholder="t('shipping.endDate')"
               value-format="YYYY-MM-DD" @change="handleDateChange" class="date-picker" size="small" />
             <div class="date-nav-buttons">
               <el-button size="small" @click="adjustDate(-1)" class="nav-btn">←</el-button>
-              <el-button size="small" @click="goToToday" class="nav-btn today-btn">今日</el-button>
+              <el-button size="small" @click="goToToday" class="nav-btn today-btn">{{ t('shipping.today') }}</el-button>
               <el-button size="small" @click="adjustDate(1)" class="nav-btn">→</el-button>
             </div>
           </div>
 
           <div class="filter-item">
-            <label class="filter-label">納入先</label>
-            <el-select v-model="filters.destinationCds" multiple placeholder="納入先を選択" collapse-tags
+            <label class="filter-label">{{ t('shipping.destination') }}</label>
+            <el-select v-model="filters.destinationCds" multiple :placeholder="t('shipping.selectDestination')" collapse-tags
               collapse-tags-tooltip @change="handleDestinationChange" class="destination-select" size="small">
               <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label" :value="dest.value" />
             </el-select>
-            <el-button :icon="Setting" @click="showGroupManager = true" class="group-btn" title="納入先グループ管理" size="small">
-              グループ
+            <el-button :icon="Setting" @click="showGroupManager = true" class="group-btn" :title="t('shipping.groupManage')" size="small">
+              {{ t('shipping.group') }}
             </el-button>
           </div>
 
           <div class="filter-actions">
             <el-button type="primary" :icon="Printer" @click="handleReport"
               :disabled="loading || !listData || listData.length === 0" class="print-btn" size="small">
-              印刷
+              {{ t('shipping.print') }}
             </el-button>
           </div>
         </div>
@@ -45,7 +48,7 @@
         <div v-if="hasGroups" class="group-selection">
           <label class="filter-label">グループ選択</label>
           <el-radio-group v-model="filters.selectedGroup" @change="handleGroupChange" class="group-radios">
-            <el-radio :value="-1" class="group-radio">全て</el-radio>
+            <el-radio :value="-1" class="group-radio">{{ t('shipping.all') }}</el-radio>
             <el-radio v-for="(group, index) in destinationGroups" :key="group.id || index" :value="index"
               :disabled="!group?.destinations || group.destinations.length === 0" class="group-radio">
               {{ group.groupName }} ({{ group?.destinations?.length || 0 }})
@@ -87,30 +90,66 @@
         </div>
       </div>
 
-      <div class="table-section" v-loading="loading">
-        <el-empty v-if="!loading && (!listData || listData.length === 0)" description="条件に合うデータがありません" :image-size="56" class="empty-state" />
+      <div class="table-section glass-card" v-loading="loading">
+        <el-empty v-if="!loading && (!listData || listData.length === 0)" :description="t('shipping.noData')" :image-size="56" class="empty-state" />
         <div v-else class="table-container">
-          <el-table :data="listData" stripe style="width: 100%" show-summary :summary-method="getSummaries" size="small" class="modern-table">
+          <el-table
+            :data="groupedTableData"
+            stripe
+            style="width: 100%"
+            show-summary
+            :summary-method="getSummaries"
+            :span-method="spanMethod"
+            :row-class-name="tableRowClassName"
+            size="default"
+            class="modern-table table-by-destination"
+          >
             <el-table-column label="No" prop="no" width="80" align="center" fixed>
-              <template #default="{ row }"><div class="no-cell">{{ row.no }}</div></template>
+              <template #default="{ row }">
+                <template v-if="(row as TableRow & { _groupHeader?: boolean })._groupHeader">
+                  <div class="group-header-cell">
+                    <el-icon class="group-header-icon"><Location /></el-icon>
+                    <span class="group-header-label">{{ (row as { destination_name: string }).destination_name }}</span>
+                  </div>
+                </template>
+                <div v-else class="no-cell">{{ (row as ShippingListItem).no }}</div>
+              </template>
             </el-table-column>
             <el-table-column label="出荷日" prop="shipping_date" width="120" align="center">
-              <template #default="{ row }"><div class="date-cell">{{ formatDate(row.shipping_date) }}</div></template>
+              <template #default="{ row }">
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="date-cell">
+                  {{ formatDate((row as ShippingListItem).shipping_date) }}
+                </div>
+              </template>
             </el-table-column>
             <el-table-column label="納入先" prop="destination_name" width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                <div class="destination-cell">
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="destination-cell">
                   <el-icon class="destination-icon"><Location /></el-icon>
-                  <span class="destination-name">{{ row.destination_name }}</span>
+                  <span class="destination-name">{{ (row as ShippingListItem).destination_name }}</span>
                 </div>
               </template>
             </el-table-column>
             <el-table-column label="出荷No" prop="shipping_no" width="200">
-              <template #default="{ row }"><div class="shipping-no-cell">{{ row.shipping_no }}</div></template>
+              <template #default="{ row }">
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="shipping-no-cell">
+                  {{ (row as ShippingListItem).shipping_no }}
+                </div>
+              </template>
             </el-table-column>
-            <el-table-column label="製品名" prop="product_name" min-width="300" show-overflow-tooltip />
+            <el-table-column label="製品名" prop="product_name" min-width="300" show-overflow-tooltip>
+              <template #default="{ row }">
+                <template v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader">
+                  {{ (row as ShippingListItem).product_name }}
+                </template>
+              </template>
+            </el-table-column>
             <el-table-column label="箱数" prop="quantity" width="100" align="center">
-              <template #default="{ row }"><div class="quantity-cell">{{ row.quantity }}</div></template>
+              <template #default="{ row }">
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="quantity-cell">
+                  {{ (row as ShippingListItem).quantity }}
+                </div>
+              </template>
             </el-table-column>
           </el-table>
         </div>
@@ -127,11 +166,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { getJSTToday as getJSTTodayUtil, formatDateJST, localeForIntl } from '@/utils/dateFormat'
 import { Document, Printer, Location, Setting, Calendar, Box, Files } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import ShippingListReport from './components/ShippingListReport.vue'
 import DestinationGroupManager from './components/DestinationGroupManager.vue'
+import ShippingCalendarDialog from './components/ShippingCalendarDialog.vue'
 
 interface DestinationOption {
   value: string
@@ -160,20 +202,15 @@ interface FilterState {
   selectedGroup: number
 }
 
+/** 表格行：普通数据行 或 納入先分组标题行 */
+type TableRow = ShippingListItem | { _groupHeader: true; destination_name: string }
+
 const loading = ref(false)
 const printContent = ref<HTMLElement | null>(null)
 const showGroupManager = ref(false)
 
-const getJSTToday = () => {
-  const now = new Date()
-  const jstDateStr = now.toLocaleString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  })
-  return jstDateStr.replace(/\//g, '-')
-}
+const { t, locale } = useI18n()
+const getJSTToday = getJSTTodayUtil
 
 const today = getJSTToday()
 const filters = reactive<FilterState>({
@@ -209,6 +246,25 @@ const totalBoxes = computed(() => {
 const hasGroups = computed(() => {
   if (!Array.isArray(destinationGroups.value)) return false
   return destinationGroups.value.some((group) => group?.destinations?.length > 0)
+})
+
+// 按納入先分组后的表格数据（插入分组标题行）
+const groupedTableData = computed<TableRow[]>(() => {
+  const list = listData.value
+  if (!Array.isArray(list) || list.length === 0) return []
+  const byDest = new Map<string, ShippingListItem[]>()
+  for (const row of list) {
+    const key = row.destination_name || ''
+    if (!byDest.has(key)) byDest.set(key, [])
+    byDest.get(key)!.push(row)
+  }
+  const sortedKeys = Array.from(byDest.keys()).sort((a, b) => (a || '').localeCompare(b || ''))
+  const result: TableRow[] = []
+  for (const key of sortedKeys) {
+    result.push({ _groupHeader: true, destination_name: key })
+    result.push(...(byDest.get(key) || []))
+  }
+  return result
 })
 
 onMounted(() => {
@@ -314,12 +370,26 @@ function handleDestinationChange() {
 
 function formatDate(dateStr: string | undefined): string {
   if (!dateStr) return '-'
-  const date = new Date(dateStr + 'T00:00:00+09:00')
-  return date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
+  return formatDateJST(dateStr, localeForIntl(locale.value)).replace(/\//g, '-')
 }
 
-function getSummaries(param: { columns: Array<{ property?: string }>; data: ShippingListItem[] }): string[] {
+function tableRowClassName({ row }: { row: TableRow }): string {
+  if ('_groupHeader' in row && (row as { _groupHeader?: boolean })._groupHeader) return 'group-header-row'
+  return ''
+}
+
+function spanMethod({ row, columnIndex }: { row: TableRow; columnIndex: number }): [number, number] {
+  const isHeader = '_groupHeader' in row && (row as { _groupHeader?: boolean })._groupHeader
+  if (isHeader) {
+    if (columnIndex === 0) return [1, 6]
+    return [0, 0]
+  }
+  return [1, 1]
+}
+
+function getSummaries(param: { columns: Array<{ property?: string }>; data: TableRow[] }): string[] {
   const { columns, data } = param
+  const dataRows = data.filter((item) => !('_groupHeader' in item && (item as { _groupHeader?: boolean })._groupHeader))
   const sums: string[] = []
   columns.forEach((column, index) => {
     if (index === 0) {
@@ -327,7 +397,7 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Ship
       return
     }
     if (column.property === 'quantity') {
-      const values = data.map((item) => Number(item.quantity || 0))
+      const values = dataRows.map((item) => Number((item as ShippingListItem).quantity || 0))
       sums[index] = values.every((v) => isNaN(v)) ? '' : String(values.reduce((p, c) => p + c, 0))
     } else {
       sums[index] = ''
@@ -408,10 +478,11 @@ function handleGroupChange() {
 </script>
 
 <style scoped>
+/* 出荷確認リスト：绿色主题 */
 .shipping-list-page {
   padding: 8px;
   min-height: 100vh;
-  background: linear-gradient(145deg, #e8ecf4 0%, #dde2eb 50%, #e2e8f0 100%);
+  background: linear-gradient(145deg, #f0fdf4 0%, #dcfce7 50%, #d1fae5 100%);
 }
 
 .list-card {
@@ -497,6 +568,13 @@ function handleGroupChange() {
 .print-btn {
   border-radius: 8px;
   font-weight: 500;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.9) 0%, rgba(22, 163, 74, 0.9) 100%);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: #fff;
+}
+.print-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.95) 0%, rgba(21, 128, 61, 0.95) 100%);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.35);
 }
 
 .group-btn {
@@ -610,70 +688,118 @@ function handleGroupChange() {
   letter-spacing: 0.04em;
 }
 
-.table-section {
-  margin: 8px;
+.table-section.glass-card {
+  margin: 10px 12px;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
-.modern-table :deep(.el-table__header th) {
-  background: rgba(248, 250, 252, 0.9);
-  color: #374151;
+.table-container {
+  border-radius: 8px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.table-container :deep(.el-table) {
+  border-radius: 8px;
+  --el-table-border-color: #e2e8f0;
+  --el-table-header-bg-color: #f8fafc;
+}
+
+.table-container :deep(.el-table__header th) {
+  font-size: 12px;
   font-weight: 600;
-  font-size: 12px;
-  padding: 5px 8px;
+  color: #475569;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.modern-table :deep(.el-table__body td) {
-  padding: 5px 8px;
+.table-container :deep(.el-table__body td) {
+  padding: 8px 0;
   font-size: 12px;
+}
+
+.table-container :deep(.el-table__body tr:hover) {
+  background-color: #f8fafc !important;
+}
+
+.table-container :deep(.el-table__footer) {
+  background: rgba(22, 163, 74, 0.9);
+  color: #fff;
+  font-weight: 600;
+}
+
+.group-header-row :deep(td) {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.14) 0%, rgba(22, 163, 74, 0.08) 100%) !important;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.group-header-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #15803d;
+  padding: 8px 12px;
+}
+
+.group-header-icon {
+  color: #16a34a;
+  font-size: 16px;
+}
+
+.group-header-label {
+  letter-spacing: 0.02em;
+}
+
+.empty-state {
+  padding: 24px 16px;
 }
 
 .no-cell,
 .date-cell {
   font-weight: 500;
   color: #374151;
+  font-size: 13px;
 }
 
 .destination-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .destination-icon {
-  color: #059669;
-  font-size: 12px;
+  color: #16a34a;
+  font-size: 14px;
 }
 
 .destination-name {
   font-weight: 500;
   color: #374151;
-  font-size: 11px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .shipping-no-cell {
-  font-family: ui-monospace, monospace;
   font-weight: 500;
-  color: #475569;
-  font-size: 11px;
-  background: rgba(248, 250, 252, 0.9);
-  border-radius: 4px;
-  padding: 2px 6px;
-  display: inline-block;
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  color: #15803d;
+  font-size: 13px;
 }
 
 .quantity-cell {
   font-weight: 600;
-  color: #dc2626;
-  font-size: 12px;
-  text-align: right;
+  font-size: 14px;
+  color: #16a34a;
 }
 
 .print-content-hidden {
@@ -681,13 +807,6 @@ function handleGroupChange() {
   left: -9999px;
   top: -9999px;
   visibility: hidden;
-}
-
-.empty-state {
-  padding: 24px 12px;
-  margin: 8px;
-  border-radius: 8px;
-  background: rgba(248, 250, 252, 0.7);
 }
 
 @media (max-width: 768px) {

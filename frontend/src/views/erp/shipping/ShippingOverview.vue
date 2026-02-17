@@ -7,49 +7,52 @@
           <div class="header-icon-container">
             <el-icon class="header-icon"><Document /></el-icon>
           </div>
-          <h1 class="header-title">出荷予定表</h1>
+          <h1 class="header-title">{{ t('shipping.overviewTitle') }}</h1>
         </div>
       </div>
+
+      <!-- 出荷予定表カレンダー（オワリ便・吉良・社内便等グループ別印刷） -->
+      <ShippingCalendarDialog :model-value="true" inline report-type="schedule" />
 
       <!-- フィルター条件 -->
       <div class="filter-section glass-filter">
         <div class="filter-row">
           <div class="filter-item">
-            <label class="filter-label">出荷日</label>
-            <el-date-picker v-model="filters.dateRange" type="daterange" start-placeholder="開始日" end-placeholder="終了日"
+            <label class="filter-label">{{ t('shipping.dateRange') }}</label>
+            <el-date-picker v-model="filters.dateRange" type="daterange" :start-placeholder="t('shipping.startDate')" :end-placeholder="t('shipping.endDate')"
               value-format="YYYY-MM-DD" size="small" @change="handleDateChange" class="date-picker" />
             <div class="date-nav-buttons">
               <el-button size="small" @click="adjustDate(-1)" class="nav-btn nav-prev">←</el-button>
-              <el-button size="small" @click="goToToday" class="nav-btn today-btn">今日</el-button>
+              <el-button size="small" @click="goToToday" class="nav-btn today-btn">{{ t('shipping.today') }}</el-button>
               <el-button size="small" @click="adjustDate(1)" class="nav-btn nav-next">→</el-button>
             </div>
           </div>
 
           <div class="filter-item">
-            <label class="filter-label">納入先</label>
-            <el-select v-model="filters.destinationCds" multiple placeholder="納入先を選択" collapse-tags
+            <label class="filter-label">{{ t('shipping.destination') }}</label>
+            <el-select v-model="filters.destinationCds" multiple :placeholder="t('shipping.selectDestination')" collapse-tags
               collapse-tags-tooltip @change="handleDestinationChange" class="destination-select" size="small">
               <el-option v-for="dest in destinationOptions" :key="dest.value" :label="dest.label" :value="dest.value" />
             </el-select>
-            <el-button :icon="Setting" @click="showGroupManager = true" class="action-btn group-btn" title="納入先グループ管理" size="small">
-              グループ
+            <el-button :icon="Setting" @click="showGroupManager = true" class="action-btn group-btn" :title="t('shipping.groupManage')" size="small">
+              {{ t('shipping.group') }}
             </el-button>
           </div>
 
           <div class="filter-actions">
-            <el-button size="small" @click="resetFilters" class="action-btn reset-btn">リセット</el-button>
+            <el-button size="small" @click="resetFilters" class="action-btn reset-btn">{{ t('shipping.reset') }}</el-button>
             <el-button type="primary" :icon="Printer" @click="handlePrint"
               :disabled="loading || !overviewData || overviewData.length === 0" class="action-btn print-btn" size="small">
-              印刷
+              {{ t('shipping.print') }}
             </el-button>
           </div>
         </div>
 
         <!-- グループ選択 -->
         <div v-if="hasGroups" class="group-selection">
-          <label class="filter-label">グループ</label>
+          <label class="filter-label">{{ t('shipping.group') }}</label>
           <el-radio-group v-model="filters.selectedGroup" @change="handleGroupChange" class="group-radios">
-            <el-radio :value="-1" class="group-radio">全て</el-radio>
+            <el-radio :value="-1" class="group-radio">{{ t('shipping.all') }}</el-radio>
             <el-radio v-for="(group, index) in destinationGroups" :key="group.id || index" :value="index"
               :disabled="!group?.destinations || group.destinations.length === 0" class="group-radio">
               {{ group.groupName }} ({{ group?.destinations?.length || 0 }})
@@ -69,7 +72,7 @@
             </div>
             <div class="stat-content">
               <div class="stat-value">{{ totalDestinations }}</div>
-              <div class="stat-label">納入先数</div>
+              <div class="stat-label">{{ t('shipping.statDestinations') }}</div>
             </div>
           </div>
 
@@ -79,7 +82,7 @@
             </div>
             <div class="stat-content">
               <div class="stat-value">{{ totalDates }}</div>
-              <div class="stat-label">出荷日数</div>
+              <div class="stat-label">{{ t('shipping.statDates') }}</div>
             </div>
           </div>
 
@@ -89,7 +92,7 @@
             </div>
             <div class="stat-content">
               <div class="stat-value">{{ totalProducts }}</div>
-              <div class="stat-label">製品種類</div>
+              <div class="stat-label">{{ t('shipping.statProducts') }}</div>
             </div>
           </div>
 
@@ -99,52 +102,74 @@
             </div>
             <div class="stat-content">
               <div class="stat-value">{{ totalBoxes }}</div>
-              <div class="stat-label">総箱数</div>
+              <div class="stat-label">{{ t('shipping.statBoxes') }}</div>
             </div>
           </div>
         </div>
       </div>
 
       <!-- データテーブル -->
-      <div class="table-section glass-table-wrap" v-loading="loading">
-        <el-empty v-if="!loading && (!overviewData || overviewData.length === 0)" description="条件に合うデータがありません"
+      <div class="table-section glass-card" v-loading="loading">
+        <el-empty v-if="!loading && (!overviewData || overviewData.length === 0)" :description="t('shipping.noData')"
           :image-size="56" class="empty-state" />
 
         <div v-else class="table-container">
-          <el-table :data="overviewData" stripe style="width: 100%" show-summary :summary-method="getSummaries" size="small" class="modern-table">
+          <el-table
+            :data="groupedTableData"
+            stripe
+            style="width: 100%"
+            show-summary
+            :summary-method="getSummaries"
+            :span-method="spanMethod"
+            :row-class-name="tableRowClassName"
+            size="default"
+            class="modern-table table-by-destination"
+          >
             <el-table-column label="出荷日" prop="shipping_date" width="140" align="center" fixed>
               <template #default="{ row }">
-                <div class="date-cell">
-                  {{ formatDate(row.shipping_date) }}
+                <template v-if="(row as TableRow & { _groupHeader?: boolean })._groupHeader">
+                  <div class="group-header-cell">
+                    <el-icon class="group-header-icon"><Location /></el-icon>
+                    <span class="group-header-label">{{ (row as { destination_name: string }).destination_name }}</span>
+                  </div>
+                </template>
+                <div v-else class="date-cell">
+                  {{ formatDate((row as ShippingOverviewData).shipping_date) }}
                 </div>
               </template>
             </el-table-column>
 
             <el-table-column label="納入先" prop="destination_name" width="200" show-overflow-tooltip>
               <template #default="{ row }">
-                <div class="destination-cell">
-                  <el-icon class="destination-icon">
-                    <Location />
-                  </el-icon>
-                  <span class="destination-name">{{ row.destination_name }}</span>
-                </div>
+                <template v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader">
+                  <div class="destination-cell">
+                    <el-icon class="destination-icon"><Location /></el-icon>
+                    <span class="destination-name">{{ (row as ShippingOverviewData).destination_name }}</span>
+                  </div>
+                </template>
               </template>
             </el-table-column>
 
             <el-table-column label="出荷No" prop="shipping_no" width="220">
               <template #default="{ row }">
-                <div class="shipping-no-cell">
-                  {{ row.shipping_no }}
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="shipping-no-cell">
+                  {{ (row as ShippingOverviewData).shipping_no }}
                 </div>
               </template>
             </el-table-column>
 
-            <el-table-column label="製品名" prop="product_name" min-width="300" show-overflow-tooltip />
+            <el-table-column label="製品名" prop="product_name" min-width="300" show-overflow-tooltip>
+              <template #default="{ row }">
+                <template v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader">
+                  {{ (row as ShippingOverviewData).product_name }}
+                </template>
+              </template>
+            </el-table-column>
 
             <el-table-column label="箱数" prop="quantity" width="110" align="center">
               <template #default="{ row }">
-                <div class="quantity-cell">
-                  {{ row.quantity }}
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="quantity-cell">
+                  {{ (row as ShippingOverviewData).quantity }}
                 </div>
               </template>
             </el-table-column>
@@ -166,7 +191,9 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { getJSTToday as getJSTTodayUtil, formatDateJST, localeForIntl } from '@/utils/dateFormat'
 import {
   Document,
   Printer,
@@ -178,6 +205,7 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import ShippingOverviewPrint from './components/ShippingOverviewPrint.vue'
+import ShippingCalendarDialog from './components/ShippingCalendarDialog.vue'
 import DestinationGroupManager from './components/DestinationGroupManager.vue'
 
 // 型定義
@@ -212,24 +240,16 @@ interface FilterData {
   selectedGroup: number
 }
 
+/** 表格行：普通数据行 或 納入先分组标题行 */
+type TableRow = ShippingOverviewData | { _groupHeader: true; destination_name: string }
+
 // リアクティブデータ
 const loading = ref(false)
 const printContent = ref<HTMLElement | null>(null)
 const showGroupManager = ref(false)
 
-// 日本標準時(JST)の今日の日付を取得
-const getJSTToday = () => {
-  const now = new Date()
-  // JSTはUTC+9、toLocaleStringを使用してJST時区で日付を取得
-  const jstDateStr = now.toLocaleString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  })
-  // "2024/01/01" 形式を "2024-01-01" に変換
-  return jstDateStr.replace(/\//g, '-')
-}
+const { t, locale } = useI18n()
+const getJSTToday = getJSTTodayUtil
 
 // フィルター条件
 const today = getJSTToday()
@@ -263,6 +283,25 @@ const totalProducts = computed(() => {
 const totalBoxes = computed(() => {
   if (!Array.isArray(overviewData.value)) return 0
   return overviewData.value.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0)
+})
+
+// 按納入先分组后的表格数据（插入分组标题行）
+const groupedTableData = computed<TableRow[]>(() => {
+  const list = overviewData.value
+  if (!Array.isArray(list) || list.length === 0) return []
+  const byDest = new Map<string, ShippingOverviewData[]>()
+  for (const row of list) {
+    const key = row.destination_name || ''
+    if (!byDest.has(key)) byDest.set(key, [])
+    byDest.get(key)!.push(row)
+  }
+  const sortedKeys = Array.from(byDest.keys()).sort((a, b) => (a || '').localeCompare(b || ''))
+  const result: TableRow[] = []
+  for (const key of sortedKeys) {
+    result.push({ _groupHeader: true, destination_name: key })
+    result.push(...(byDest.get(key) || []))
+  }
+  return result
 })
 
 const hasGroups = computed(() => {
@@ -380,21 +419,31 @@ function handleDestinationChange() {
   fetchOverviewData()
 }
 
-// 日付をフォーマット（JST時区を使用）
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '-'
-  const date = new Date(dateStr + 'T00:00:00+09:00')
-  return date.toLocaleDateString('ja-JP', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).replace(/\//g, '-')
+  return formatDateJST(dateStr, localeForIntl(locale.value)).replace(/\//g, '-')
 }
 
-// 合計行
-function getSummaries(param: { columns: Array<{ property?: string }>; data: ShippingOverviewData[] }): string[] {
+// 分组标题行添加 class 便于样式
+function tableRowClassName({ row }: { row: TableRow }): string {
+  if ('_groupHeader' in row && (row as { _groupHeader?: boolean })._groupHeader) return 'group-header-row'
+  return ''
+}
+
+// 按納入先分组时的单元格合并：分组标题行占满整行（5列）
+function spanMethod({ row, columnIndex }: { row: TableRow; columnIndex: number }): [number, number] {
+  const isHeader = '_groupHeader' in row && (row as { _groupHeader?: boolean })._groupHeader
+  if (isHeader) {
+    if (columnIndex === 0) return [1, 5]
+    return [0, 0]
+  }
+  return [1, 1]
+}
+
+// 合計行（只合计数据行，排除分组标题行）
+function getSummaries(param: { columns: Array<{ property?: string }>; data: TableRow[] }): string[] {
   const { columns, data } = param
+  const dataRows = data.filter((item) => !('_groupHeader' in item && (item as { _groupHeader?: boolean })._groupHeader))
   const sums: string[] = []
   columns.forEach((column, index) => {
     if (index === 0) {
@@ -402,7 +451,7 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Ship
       return
     }
     if (column.property === 'quantity') {
-      const values = data.map((item) => Number(item.quantity || 0))
+      const values = dataRows.map((item) => Number((item as ShippingOverviewData).quantity || 0))
       if (!values.every((value) => isNaN(value))) {
         sums[index] = String(values.reduce((prev, curr) => prev + curr, 0))
       } else {
@@ -526,10 +575,11 @@ function handleGroupChange() {
 
 <style scoped>
 /* ---- 基底・玻璃卡片 ---- */
+/* 出荷予定表：紫色主题 */
 .shipping-overview {
   padding: 8px;
   min-height: 100vh;
-  background: linear-gradient(145deg, #e8ecf4 0%, #dde2eb 50%, #e2e8f0 100%);
+  background: linear-gradient(145deg, #f5f3ff 0%, #ede9fe 50%, #e0e7ff 100%);
 }
 
 .glass-card {
@@ -629,14 +679,14 @@ function handleGroupChange() {
   border: 1px solid transparent;
 }
 .action-btn.print-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   border-color: rgba(255, 255, 255, 0.25);
   color: #fff;
-  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
+  box-shadow: 0 1px 4px rgba(99, 102, 241, 0.35);
 }
 .action-btn.print-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
 }
 .action-btn.group-btn {
   background: rgba(148, 163, 184, 0.2);
@@ -698,13 +748,13 @@ function handleGroupChange() {
   color: #475569;
 }
 .nav-btn.today-btn {
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.35);
-  color: #16a34a;
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #4f46e5;
 }
 .nav-btn.today-btn:hover {
-  background: rgba(34, 197, 94, 0.2);
-  border-color: #22c55e;
+  background: rgba(99, 102, 241, 0.35);
+  border-color: #6366f1;
 }
 
 .destination-select {
@@ -827,95 +877,89 @@ function handleGroupChange() {
 }
 
 /* ---- 表格区・玻璃 ---- */
-.glass-table-wrap {
-  margin: 8px;
+.table-section.glass-card {
+  margin: 10px 12px;
   border-radius: 10px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
-.modern-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+.table-container {
+  border-radius: 8px;
+  overflow: hidden;
   background: transparent;
 }
 
-.modern-table :deep(.el-table__header-wrapper) {
-  background: rgba(248, 250, 252, 0.9);
+.table-container :deep(.el-table) {
+  border-radius: 8px;
+  --el-table-border-color: #e2e8f0;
+  --el-table-header-bg-color: #f8fafc;
 }
 
-.modern-table :deep(.el-table__header th) {
-  background: transparent;
-  color: #374151;
+.table-container :deep(.el-table__header th) {
+  font-size: 12px;
   font-weight: 600;
-  font-size: 12px;
-  padding: 5px 8px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  color: #475569;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.modern-table :deep(.el-table__body td) {
-  padding: 5px 8px;
-  color: #374151;
+.table-container :deep(.el-table__body td) {
+  padding: 8px 0;
   font-size: 12px;
-  border-bottom: 1px solid rgba(241, 245, 249, 0.9);
-  vertical-align: middle;
 }
 
-.modern-table :deep(.el-table__row:hover) {
-  background: rgba(99, 102, 241, 0.04);
+.table-container :deep(.el-table__body tr:hover) {
+  background-color: #f8fafc !important;
+}
+
+.table-container :deep(.el-table__footer) {
+  background: rgba(99, 102, 241, 0.9);
+  color: #fff;
+  font-weight: 600;
 }
 
 .date-cell {
   font-weight: 500;
-  color: #4f46e5;
-  font-size: 11px;
+  color: #374151;
+  font-size: 13px;
 }
 
 .destination-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .destination-icon {
-  color: #059669;
-  font-size: 12px;
+  color: #6366f1;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
 .destination-name {
   font-weight: 500;
   color: #374151;
-  font-size: 11px;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .shipping-no-cell {
-  font-family: ui-monospace, monospace;
   font-weight: 500;
-  color: #475569;
-  font-size: 11px;
-  background: rgba(248, 250, 252, 0.9);
-  border-radius: 4px;
-  padding: 2px 6px;
-  display: inline-block;
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  color: #6366f1;
+  font-size: 13px;
 }
 
 .quantity-cell {
   font-weight: 600;
-  color: #dc2626;
-  font-size: 12px;
-  text-align: right;
+  font-size: 14px;
+  color: #4f46e5;
 }
 
 .print-content-hidden {
@@ -926,16 +970,38 @@ function handleGroupChange() {
 }
 
 .empty-state {
-  padding: 24px 12px;
-  margin: 8px;
-  border-radius: 8px;
-  background: rgba(248, 250, 252, 0.7);
+  padding: 24px 16px;
 }
 
 .empty-state :deep(.el-empty__description) {
   color: #64748b;
   font-size: 12px;
   font-weight: 500;
+}
+
+.group-header-row :deep(td) {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.14) 0%, rgba(139, 92, 246, 0.08) 100%) !important;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.group-header-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #4f46e5;
+  padding: 8px 12px;
+}
+
+.group-header-icon {
+  color: #6366f1;
+  font-size: 16px;
+}
+
+.group-header-label {
+  letter-spacing: 0.02em;
 }
 
 /* ---- 响应式 ---- */
@@ -991,13 +1057,13 @@ function handleGroupChange() {
     padding: 6px 8px;
   }
 
-  .glass-table-wrap {
+  .table-section.glass-card {
     margin: 6px;
   }
 
-  .modern-table :deep(.el-table__header th),
-  .modern-table :deep(.el-table__body td) {
-    padding: 4px 6px;
+  .table-container :deep(.el-table__header th),
+  .table-container :deep(.el-table__body td) {
+    padding: 6px 0;
     font-size: 11px;
   }
 }
@@ -1028,7 +1094,7 @@ function handleGroupChange() {
   .glass-header,
   .glass-filter,
   .glass-stats,
-  .glass-table-wrap,
+  .table-section.glass-card,
   .glass-stat {
     background: #fff !important;
     backdrop-filter: none !important;
@@ -1046,18 +1112,18 @@ function handleGroupChange() {
     display: none !important;
   }
 
-  .modern-table :deep(.el-table__header th) {
+  .table-container :deep(.el-table__header th) {
     background: #fff !important;
     color: #000 !important;
     border: 1px solid #000 !important;
   }
 
-  .modern-table :deep(.el-table__body td) {
+  .table-container :deep(.el-table__body td) {
     border: 1px solid #000 !important;
     color: #000 !important;
   }
 
-  .modern-table :deep(.el-table__row:hover) {
+  .table-container :deep(.el-table__body tr:hover) {
     background: #fff !important;
   }
 }

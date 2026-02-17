@@ -22,21 +22,6 @@
         </div>
         <div class="header-actions">
           <el-button
-            @click="toggleFullscreen"
-            :type="fullscreenState ? 'warning' : 'primary'"
-            size="small"
-            class="modern-btn fullscreen-btn"
-            :title="fullscreenState ? '全画面終了' : '全画面表示'"
-          >
-            <div class="btn-content">
-              <el-icon class="btn-icon">
-                <FullScreen v-if="!fullscreenState" />
-                <Aim v-else />
-              </el-icon>
-              <span class="btn-text">{{ fullscreenState ? '全画面終了' : '全画面表示' }}</span>
-            </div>
-          </el-button>
-          <el-button
             type="primary"
             @click="submitShipping"
             :disabled="submitDisabled"
@@ -82,7 +67,8 @@
             <div class="filter-section">
               <el-card shadow="never" class="filter-card">
                 <div class="filter-form-compact">
-                  <div class="filter-row">
+                  <!-- 第1行：出荷日 + 追加 -->
+                  <div class="filter-row filter-row-date-add">
                     <div class="filter-group">
                       <label class="filter-label">出荷日:</label>
                       <div class="date-range-container">
@@ -93,7 +79,9 @@
                           end-placeholder="終了日"
                           value-format="YYYY-MM-DD"
                           style="width: 200px"
+                          :editable="false"
                           @change="onFilterChange"
+                          @focus="preventKeyboardOnFocus"
                           size="small"
                           :teleported="true"
                           :append-to-body="true"
@@ -145,9 +133,6 @@
                         class="modern-btn add-selected-btn"
                       >
                         <div class="btn-content">
-                          <!-- <el-icon class="btn-icon">
-                            <Plus />
-                          </el-icon> -->
                           <span class="btn-text">追加 ({{ validSelectedCount }}件)</span>
                           <el-icon class="btn-icon">
                             <Right />
@@ -155,6 +140,9 @@
                         </div>
                       </el-button>
                     </div>
+                  </div>
+                  <!-- 第2行：納入先 + 快捷 -->
+                  <div class="filter-row filter-row-dest-quick">
                     <div class="filter-group destination-filter-group">
                       <label class="filter-label">納入先:</label>
                       <el-select
@@ -163,6 +151,7 @@
                         class="destination-select"
                         size="small"
                         @change="onDestinationChange"
+                        @focus="preventKeyboardOnFocus"
                         clearable
                       >
                         <el-option
@@ -364,100 +353,84 @@
             </div>
             <div class="shipping-settings">
               <el-card shadow="never" class="settings-card">
-                <el-form :inline="true" size="small">
-                  <el-row :gutter="10">
-                    <el-col :span="24">
-                      <div class="settings-section">
-                        <div class="section-title">
-                          <el-icon class="section-icon">
-                            <Setting />
-                          </el-icon>
-                          <span>パレット割当設定</span>
-                          <el-tooltip
-                            content="パレット容量と最適化アルゴリズムを設定します"
-                            placement="top"
-                          >
-                            <el-icon class="help-icon">
-                              <InfoFilled />
-                            </el-icon>
-                          </el-tooltip>
-                        </div>
-                      </div>
-                    </el-col>
-                    <el-col :span="4">
-                      <el-form-item label="小箱" class="capacity-item">
-                        <el-input-number
-                          v-model="boxSettings.小箱"
-                          :min="1"
-                          size="small"
-                          @change="recalculatePallets"
-                          controls-position="right"
-                          style="width: 90px"
-                        />
-                      </el-form-item>
-                    </el-col>
-                    <el-col :span="4">
-                      <el-form-item label="大箱" class="capacity-item">
-                        <el-input-number
-                          v-model="boxSettings.大箱"
-                          :min="1"
-                          size="small"
-                          @change="recalculatePallets"
-                          controls-position="right"
-                          style="width: 90px"
-                        />
-                      </el-form-item>
-                    </el-col>
-                    <el-col :span="4">
-                      <el-form-item label="TP箱" class="capacity-item">
-                        <el-input-number
-                          v-model="boxSettings.TP箱"
-                          :min="1"
-                          size="small"
-                          @change="recalculatePallets"
-                          controls-position="right"
-                          style="width: 90px"
-                        />
-                      </el-form-item>
-                    </el-col>
-                    <el-col :span="8">
-                      <el-form-item label="最適化" class="algorithm-item">
-                        <el-select
-                          v-model="settings.optimizationMethod"
-                          style="width: 100%"
-                          size="small"
-                          @change="recalculatePallets"
-                        >
-                          <el-option
-                            v-for="option in optimizationOptions"
-                            :key="option.value"
-                            :label="option.label"
-                            :value="option.value"
-                          />
-                        </el-select>
-                      </el-form-item>
-                    </el-col>
-                    <el-col
-                      :span="4"
-                      style="display: flex; align-items: flex-end; padding-bottom: 4px"
+                <div class="settings-section">
+                  <div class="section-title">
+                    <el-icon class="section-icon">
+                      <Setting />
+                    </el-icon>
+                    <span>パレット割当設定</span>
+                    <el-tooltip
+                      content="パレット容量と最適化アルゴリズムを設定します"
+                      placement="top"
                     >
-                      <el-button
-                        type="success"
-                        size="small"
-                        @click="recalculatePalletsWithExpandedDisplay"
-                        :disabled="selectedItems.length === 0"
-                        class="modern-btn recalculate-btn"
-                      >
-                        <div class="btn-content">
-                          <el-icon class="btn-icon">
-                            <Refresh />
-                          </el-icon>
-                          <span class="btn-text">再計算</span>
-                        </div>
-                      </el-button>
-                    </el-col>
-                  </el-row>
-                </el-form>
+                      <el-icon class="help-icon">
+                        <InfoFilled />
+                      </el-icon>
+                    </el-tooltip>
+                  </div>
+                </div>
+                <div class="settings-fields-row">
+                  <el-form-item label="小箱" class="capacity-item">
+                    <el-input-number
+                      v-model="boxSettings.小箱"
+                      :min="1"
+                      size="small"
+                      @change="recalculatePallets"
+                      @focus="preventKeyboardOnFocus"
+                      controls-position="right"
+                      class="capacity-input"
+                    />
+                  </el-form-item>
+                  <el-form-item label="大箱" class="capacity-item">
+                    <el-input-number
+                      v-model="boxSettings.大箱"
+                      :min="1"
+                      size="small"
+                      @change="recalculatePallets"
+                      @focus="preventKeyboardOnFocus"
+                      controls-position="right"
+                      class="capacity-input"
+                    />
+                  </el-form-item>
+                  <el-form-item label="TP箱" class="capacity-item">
+                    <el-input-number
+                      v-model="boxSettings.TP箱"
+                      :min="1"
+                      size="small"
+                      @change="recalculatePallets"
+                      @focus="preventKeyboardOnFocus"
+                      controls-position="right"
+                      class="capacity-input"
+                    />
+                  </el-form-item>
+                  <el-form-item label="加工箱" class="capacity-item">
+                    <el-input-number
+                      v-model="boxSettings.加工箱"
+                      :min="1"
+                      size="small"
+                      @change="recalculatePallets"
+                      @focus="preventKeyboardOnFocus"
+                      controls-position="right"
+                      class="capacity-input"
+                    />
+                  </el-form-item>
+                  <el-form-item label="最適化" class="algorithm-item">
+                    <el-select
+                      v-model="settings.optimizationMethod"
+                      size="small"
+                      @change="recalculatePallets"
+                      @focus="preventKeyboardOnFocus"
+                      class="algorithm-select"
+                    >
+                      <el-option
+                        v-for="option in optimizationOptions"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                  </el-form-item>
+                </div>
               </el-card>
             </div>
           </div>
@@ -1318,7 +1291,7 @@
         </el-table-column>
 
         <!-- パレット番号 - 編集可能 -->
-        <el-table-column label="パレット番号" width="170">
+        <el-table-column label="パレット番号" width="180">
           <template #default="{ row, $index }">
             <div class="pallet-number-editor">
               <span class="prefix-label">{{ row.shipping_no_prefix }}</span>
@@ -1329,6 +1302,7 @@
                   class="serial-input"
                   size="small"
                   @input="validatePalletSerial($index)"
+                  @focus="preventKeyboardOnFocus"
                 >
                   <template #suffix>
                     <div class="serial-controls-inner">
@@ -1442,7 +1416,9 @@
           value-format="YYYY-MM-DD"
           style="width: 100%"
           size="default"
+          :editable="false"
           @change="updateEditingPalletPrefix"
+          @focus="preventKeyboardOnFocus"
         />
       </el-form-item>
 
@@ -1454,6 +1430,7 @@
           style="width: 100%"
           size="default"
           @change="updateEditingDestinationName"
+          @focus="preventKeyboardOnFocus"
         >
           <el-option
             v-for="dest in destinationOptions"
@@ -1472,6 +1449,7 @@
           style="width: 100%"
           size="default"
           @change="updateEditingPalletUnits"
+          @focus="preventKeyboardOnFocus"
         />
       </el-form-item>
 
@@ -1482,6 +1460,7 @@
           :precision="0"
           style="width: 100%"
           size="default"
+          @focus="preventKeyboardOnFocus"
         />
       </el-form-item>
 
@@ -1634,8 +1613,6 @@ import {
   Edit,
   CopyDocument,
   Search,
-  FullScreen,
-  Aim,
   Sort,
   ArrowUp,
   ArrowDown,
@@ -2107,6 +2084,16 @@ function resetFilters() {
   }
   selectedDestinations.value = ''
   fetchDailyOrders()
+}
+
+// 防止出荷日・パレット割当設定等点击时弹出虚拟键盘（移动端）
+function preventKeyboardOnFocus(e: FocusEvent): void {
+  const target = e.target as HTMLElement
+  const input =
+    target?.tagName === 'INPUT' ? target : target?.querySelector?.('input')
+  if (input) {
+    input.setAttribute('inputmode', 'none')
+  }
 }
 
 // 日期快捷操作
@@ -7398,11 +7385,11 @@ function applyChangesAndClose() {
 }
 
 :deep(.shipping-dialog .el-dialog__footer) {
-  padding: 12px 20px;
+  padding: 6px 16px;
   border-top: 1px solid rgba(240, 240, 240, 0.8);
   background: linear-gradient(135deg, #fafafa 0%, #ffffff 100%);
   backdrop-filter: blur(10px);
-  border-radius: 0 0 16px 16px;
+  border-radius: 0 0 12px 12px;
 }
 
 /* 全屏状态下的样式 */
@@ -7517,14 +7504,14 @@ function applyChangesAndClose() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 4px 10px;
   background: linear-gradient(135deg, #f7f8a0 0%, #88f591 100%);
   color: rgb(8, 8, 8);
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.25);
   position: relative;
   overflow: hidden;
-  min-height: 44px;
+  min-height: 36px;
 }
 
 .dialog-header::before {
@@ -7541,7 +7528,7 @@ function applyChangesAndClose() {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   position: relative;
   z-index: 1;
 }
@@ -7553,10 +7540,10 @@ function applyChangesAndClose() {
 }
 
 .header-title {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .header-center {
@@ -7858,7 +7845,7 @@ function applyChangesAndClose() {
 
 .pool-container {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   height: 100%;
   min-height: 650px;
 }
@@ -7889,21 +7876,21 @@ function applyChangesAndClose() {
 .pool-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 4px 5px;
+  padding: 2px 6px;
   border-bottom: none;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 1px 4px rgba(102, 126, 234, 0.2);
 }
 
 .pool-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 6px;
+  margin-bottom: 2px;
 }
 
 .pool-title h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -7933,7 +7920,7 @@ function applyChangesAndClose() {
 
 /* 筛选区域 */
 .filter-section {
-  margin-top: 5px;
+  margin-top: 2px;
 }
 
 .filter-card {
@@ -7942,24 +7929,37 @@ function applyChangesAndClose() {
 }
 
 :deep(.filter-card .el-card__body) {
-  padding: 4px;
+  padding: 2px 4px;
 }
 
 .filter-form-compact {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .filter-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 第1行：出荷日 + 追加 */
+.filter-row-date-add {
+  flex-wrap: wrap;
+}
+
+/* 第2行：納入先 + 快捷 */
+.filter-row-dest-quick {
   flex-wrap: wrap;
 }
 
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
 }
 
@@ -7989,32 +7989,67 @@ function applyChangesAndClose() {
 
 /* 设置区域 */
 .shipping-settings {
-  margin-top: 4px;
+  margin-top: 2px;
+  min-width: 0;
 }
 
 .settings-card {
   background: rgba(255, 255, 255, 0.15);
   border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  border-radius: 6px;
   backdrop-filter: blur(10px);
+  overflow: hidden;
 }
 
 :deep(.settings-card .el-card__body) {
-  padding: 4px;
+  padding: 2px 6px;
+  min-width: 0;
+}
+
+.settings-fields-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.settings-fields-row .capacity-item :deep(.el-input-number),
+.settings-fields-row .capacity-input {
+  width: 72px !important;
+  min-width: 72px;
+}
+
+.settings-fields-row .capacity-item {
+  flex-shrink: 0;
+}
+
+.settings-fields-row .algorithm-item {
+  flex: 1 1 auto;
+  min-width: 100px;
+  max-width: 180px;
+}
+
+.settings-fields-row .algorithm-select {
+  width: 100%;
+}
+
+.settings-fields-row .algorithm-select :deep(.el-input__wrapper) {
+  min-width: 0;
 }
 
 .settings-section {
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
   color: rgb(10, 10, 10);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
@@ -8028,11 +8063,11 @@ function applyChangesAndClose() {
 .pallets-section .section-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-  padding: 4px 4px;
+  gap: 6px;
+  margin-bottom: 2px;
+  padding: 2px 4px;
   background: linear-gradient(135deg, #f0f9ff 0%, #e1efff 100%);
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid #c6e2ff;
 }
 
@@ -8060,8 +8095,8 @@ function applyChangesAndClose() {
 
 .capacity-item,
 .algorithm-item {
-  margin-bottom: 4px;
-  width: 90%;
+  margin-bottom: 0;
+  width: auto;
 }
 
 :deep(.capacity-item .el-form-item__label),
@@ -8530,16 +8565,42 @@ function applyChangesAndClose() {
     min-height: 350px;
   }
 
-  .filter-row {
+  .filter-row-date-add {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
 
-  .filter-group {
+  .filter-row-date-add .filter-group {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+  }
+
+  .filter-row-date-add .add-selected-group {
+    align-self: flex-start;
+  }
+
+  /* 第2行：納入先 + 快捷 保持一行 */
+  .filter-row-dest-quick {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-row-dest-quick .destination-filter-group {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .filter-row-dest-quick .destination-select {
+    min-width: 120px;
+  }
+
+  .filter-row-dest-quick .destination-quick-buttons {
+    flex: 0 1 auto;
   }
 
   .filter-actions {
@@ -9218,7 +9279,7 @@ function applyChangesAndClose() {
 }
 
 .serial-input {
-  width: 60px;
+  width: 60px; /* 60px + 30% */
   flex-shrink: 0;
 }
 
@@ -9400,13 +9461,13 @@ function applyChangesAndClose() {
 .date-range-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: nowrap;
 }
 
 .date-quick-buttons {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -9471,7 +9532,7 @@ function applyChangesAndClose() {
 .destination-filter-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -9490,7 +9551,7 @@ function applyChangesAndClose() {
 /* 快捷納入先按钮样式 */
 .destination-quick-buttons {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: wrap;
   align-items: center;
   flex: 1;
@@ -9812,6 +9873,23 @@ function applyChangesAndClose() {
 
 /* 响应式设计 */
 @media (max-width: 768px) {
+  .filter-form-compact {
+    gap: 10px;
+  }
+
+  .filter-row-date-add .date-range-container {
+    width: 100%;
+  }
+
+  .filter-row-dest-quick .destination-filter-group {
+    width: 100%;
+  }
+
+  .filter-row-dest-quick .destination-select {
+    flex: 1;
+    min-width: 0;
+  }
+
   .date-range-container {
     flex-direction: column;
     align-items: stretch;
@@ -9873,25 +9951,43 @@ function applyChangesAndClose() {
   box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
 }
 
-/* 按钮组样式 */
+/* 操作列按钮组 - 简单美化，尺寸不变 */
 :deep(.view-pallets-table .el-button-group) {
   display: flex;
-  gap: 2px;
+  gap: 3px;
 }
 
 :deep(.view-pallets-table .el-button-group .el-button) {
-  border-radius: 2px;
+  border-radius: 4px;
   padding: 4px 6px;
   font-size: 11px;
-  transition: all 0.15s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   border: 1px solid #dcdfe6;
   min-height: 24px;
+  box-shadow: 0 0 0 transparent;
 }
 
 :deep(.view-pallets-table .el-button-group .el-button:hover) {
   transform: none;
-  box-shadow: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-color: currentColor;
+}
+
+:deep(.view-pallets-table .el-button-group .el-button .el-icon) {
+  font-size: 12px;
+}
+
+/* 編集 (warning) */
+:deep(.view-pallets-table .el-button--warning.is-plain) {
+  background: #fdf6ec;
+  color: #e6a23c;
+  border-color: #f0c78a;
+}
+
+:deep(.view-pallets-table .el-button--warning.is-plain:hover) {
+  background: #faecd8;
+  border-color: #e6a23c;
+  color: #cf9236;
 }
 
 :deep(.view-pallets-table .el-button--info.is-plain) {
@@ -9905,32 +10001,37 @@ function applyChangesAndClose() {
   border-color: #909399;
 }
 
+/* 複製 (primary) */
 :deep(.view-pallets-table .el-button--primary.is-plain) {
-  background: #ffffff;
+  background: #ecf5ff;
   color: #409eff;
-  border-color: #dcdfe6;
+  border-color: #b3d8ff;
 }
 
 :deep(.view-pallets-table .el-button--primary.is-plain:hover) {
-  background: #ecf5ff;
+  background: #d9ecff;
   border-color: #409eff;
+  color: #337ecc;
 }
 
+/* 削除 (danger) */
 :deep(.view-pallets-table .el-button--danger.is-plain) {
-  background: #ffffff;
+  background: #fef0f0;
   color: #f56c6c;
-  border-color: #dcdfe6;
+  border-color: #fbc4c4;
 }
 
 :deep(.view-pallets-table .el-button--danger.is-plain:hover) {
-  background: #fef0f0;
+  background: #fde2e2;
   border-color: #f56c6c;
+  color: #dd6161;
 }
 
 :deep(.view-pallets-table .el-button:disabled) {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
+  box-shadow: none;
 }
 
 /* 底部按钮样式 - 简约版 */
@@ -9997,7 +10098,7 @@ function applyChangesAndClose() {
   }
 
   .serial-input {
-    width: 35px;
+    width: 50px;
   }
 
   .serial-btn {

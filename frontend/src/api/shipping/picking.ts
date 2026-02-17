@@ -10,12 +10,12 @@ export function getPickingHistoryData(params: { start_date: string; end_date: st
   return request.get('/api/shipping/picking/history', { params })
 }
 
-// Get performance by destination（可选 picker_names / group_names 用于担当者・グループ分析）
+// Get performance by destination（担当者＝納入先グループ group_name，按该组 destinations + 日期在 picking_tasks 上汇总）
 export function getPerformanceByDestination(params: {
   start_date: string
   end_date: string
-  picker_names?: string[]
   group_names?: string
+  page_key?: string
 }) {
   return request.get('/api/shipping/picking/performance-by-destination', { params })
 }

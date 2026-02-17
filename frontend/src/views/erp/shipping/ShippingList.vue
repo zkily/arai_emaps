@@ -15,12 +15,8 @@
                 <Van />
               </el-icon>
             </div>
-            <span class="title-text">出荷構成表管理</span>
-            <div class="title-badge">
-              <span class="badge-text">{{ shippingList.length }}</span>
-            </div>
+            <span class="title-text">{{ t('shipping.compositionTitle') }}</span>
           </h2>
-          <p class="subtitle">出荷構成表の検索・作成・編集・発行が行えます</p>
         </div>
         <div class="header-decoration">
           <div class="decoration-circle circle-1"></div>
@@ -33,14 +29,6 @@
     <!-- フィルター -->
     <el-card class="filter-card modern-card">
       <template #header>
-        <div class="filter-header">
-          <div class="filter-title">
-            <el-icon class="filter-icon">
-              <Search />
-            </el-icon>
-            <span>検索条件</span>
-          </div>
-        </div>
       </template>
       <el-form :inline="true" :model="filters" class="filter-bar">
         <!-- 基本検索条件 -->
@@ -55,7 +43,9 @@
                 start-placeholder="開始日"
                 end-placeholder="終了日"
                 value-format="YYYY-MM-DD"
+                :editable="false"
                 @change="handleDateRangeChange"
+                @focus="preventKeyboardOnFocus"
                 class="modern-date-picker"
                 style="width: 240px"
               />
@@ -76,8 +66,38 @@
           </div>
 
           <div class="filter-group destination-group">
-            <label class="filter-label">納入先</label>
+            <div class="group-controls">
+              <el-select
+                v-model="selectedGroupFilter"
+                placeholder="グループ"
+                clearable
+                class="group-filter-dropdown"
+                style="width: 120px"
+                @change="handleGroupFilterChange"
+                @focus="preventKeyboardOnFocus"
+              >
+                <el-option
+                  v-for="(group, index) in availableGroups"
+                  :key="group.id || index"
+                  :label="group.groupName"
+                  :value="index"
+                >
+                  <div class="group-option">
+                    <span class="group-name">{{ group.groupName }}</span>
+                    <span class="group-count">({{ group.destinations.length }})</span>
+                  </div>
+                </el-option>
+              </el-select>
+              <el-button @click="showGroupManager = true" class="group-manage-button">
+                <el-icon>
+                  <Setting />
+                </el-icon>
+                <span>グループ管理</span>
+              </el-button>
+            </div>
             <div class="destination-controls">
+              <label class="filter-label filter-label-inline">納入先</label>
+
               <!-- 纳入先选择下拉框 -->
               <el-select
                 v-model="singleDestination"
@@ -87,7 +107,7 @@
                 class="destination-select-dropdown"
                 style="width: 200px"
                 @change="handleSingleDestinationChange"
-                :disabled="selectedDestinations.length > 0 || !!selectedGroupFilter"
+                @focus="preventKeyboardOnFocus"
               >
                 <el-option
                   v-for="dest in sortedDestinationOptions"
@@ -110,83 +130,14 @@
                   @click="selectQuickDestination(quick.code)"
                   class="destination-quick-btn"
                   :class="{ active: singleDestination === quick.code }"
-                  :disabled="selectedDestinations.length > 0 || !!selectedGroupFilter"
                   size="small"
                 >
                   {{ quick.name }}
                 </el-button>
               </div>
-
-              <!-- 分组筛选下拉框 -->
-              <el-select
-                v-model="selectedGroupFilter"
-                placeholder="グループ"
-                clearable
-                class="group-filter-dropdown"
-                style="width: 120px"
-                @change="handleGroupFilterChange"
-                :disabled="!!singleDestination"
-              >
-                <el-option
-                  v-for="(group, index) in availableGroups"
-                  :key="group.id || index"
-                  :label="group.groupName"
-                  :value="index"
-                >
-                  <div class="group-option">
-                    <span class="group-name">{{ group.groupName }}</span>
-                    <span class="group-count">({{ group.destinations.length }})</span>
-                  </div>
-                </el-option>
-              </el-select>
-
-              <!-- 分组管理按钮 -->
-              <el-button @click="showGroupManager = true" class="group-manage-button">
-                <el-icon>
-                  <Setting />
-                </el-icon>
-                <span>グループ管理</span>
-              </el-button>
             </div>
           </div>
 
-          <div class="filter-group status-group">
-            <label class="filter-label">状態</label>
-            <el-select
-              v-model="filters.status"
-              placeholder="選択"
-              clearable
-              class="modern-select"
-              style="width: 80px"
-            >
-              <el-option label="未発行" value="未発行" />
-              <el-option label="発行済" value="発行済" />
-            </el-select>
-          </div>
-
-          <div class="filter-group actions-group">
-            <el-button
-              type="primary"
-              @click="fetchData"
-              :loading="loading"
-              class="search-button compact-btn"
-              :class="{ searching: searchAnimating }"
-            >
-              <el-icon v-if="!loading">
-                <Search />
-              </el-icon>
-              <el-icon v-else>
-                <Loading />
-              </el-icon>
-              {{ loading ? '検索中' : '検索' }}
-            </el-button>
-            <el-button @click="resetFilters" class="reset-button compact-btn">
-              <el-icon>
-                <Refresh />
-              </el-icon>
-              リセット
-            </el-button>
-          </div>
         </div>
 
         <!-- 活跃分组显示 -->
@@ -229,6 +180,66 @@
       </el-form>
     </el-card>
 
+    <!-- 操作按钮行（筛选区域下方单独一行） -->
+    <div class="action-buttons-row">
+      <el-button type="primary" @click="openCreateDialog" class="action-button create-button">
+        <el-icon>
+          <Plus />
+        </el-icon>
+        出荷構成表作成
+      </el-button>
+      <el-button
+        type="warning"
+        @click="printSelected"
+        :disabled="allSelectedIds.size === 0"
+        class="action-button print-button"
+      >
+        <el-icon>
+          <Printer />
+        </el-icon>
+        選択印刷
+        <span class="button-badge" v-if="totalSelectedCount > 0">{{
+          totalSelectedCount
+        }}</span>
+      </el-button>
+      <el-button
+        type="danger"
+        @click="cancelSelected"
+        :disabled="allSelectedIds.size === 0"
+        :loading="actionLoading"
+        class="action-button delete-button"
+      >
+        <el-icon>
+          <Close />
+        </el-icon>
+        選択削除
+        <span class="button-badge" v-if="totalSelectedCount > 0">{{
+          totalSelectedCount
+        }}</span>
+      </el-button>
+      <el-button
+        type="info"
+        @click="columnSelectVisible = true"
+        class="action-button setting-button"
+      >
+        <el-icon>
+          <Setting />
+        </el-icon>
+        列表示設定
+      </el-button>
+      <el-button
+        type="success"
+        @click="openExportConfirmDialog"
+        :loading="exportLoading"
+        class="action-button export-button"
+      >
+        <el-icon>
+          <Download />
+        </el-icon>
+        ピッキング出力
+      </el-button>
+    </div>
+
     <!-- 一覧表 -->
     <el-card class="table-card modern-card">
       <template #header>
@@ -250,64 +261,6 @@
               </el-icon>
               <span>{{ totalSelectedCount }}件選択中</span>
             </div>
-          </div>
-          <div class="header-buttons">
-            <el-button type="primary" @click="openCreateDialog" class="action-button create-button">
-              <el-icon>
-                <Plus />
-              </el-icon>
-              出荷構成表管理
-            </el-button>
-            <el-button
-              type="warning"
-              @click="printSelected"
-              :disabled="allSelectedIds.size === 0"
-              class="action-button print-button"
-            >
-              <el-icon>
-                <Printer />
-              </el-icon>
-              選択印刷
-              <span class="button-badge" v-if="totalSelectedCount > 0">{{
-                totalSelectedCount
-              }}</span>
-            </el-button>
-            <el-button
-              type="danger"
-              @click="cancelSelected"
-              :disabled="allSelectedIds.size === 0"
-              :loading="actionLoading"
-              class="action-button delete-button"
-            >
-              <el-icon>
-                <Close />
-              </el-icon>
-              選択削除
-              <span class="button-badge" v-if="totalSelectedCount > 0">{{
-                totalSelectedCount
-              }}</span>
-            </el-button>
-            <el-button
-              type="info"
-              @click="columnSelectVisible = true"
-              class="action-button setting-button"
-            >
-              <el-icon>
-                <Setting />
-              </el-icon>
-              列表示設定
-            </el-button>
-            <el-button
-              type="success"
-              @click="openExportConfirmDialog"
-              :loading="exportLoading"
-              class="action-button export-button"
-            >
-              <el-icon>
-                <Download />
-              </el-icon>
-              ピッキング出力
-            </el-button>
           </div>
         </div>
       </template>
@@ -335,7 +288,7 @@
           <el-table-column
             label="出荷番号"
             prop="shipping_no"
-            min-width="70"
+            width="105"
             show-overflow-tooltip
             v-if="columnVisible.shipping_no"
             key="shipping_no"
@@ -513,7 +466,14 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="170" fixed="right" key="actions">
+          <el-table-column
+            label="操作"
+            width="170"
+            fixed="right"
+            header-align="center"
+            align="center"
+            key="actions"
+          >
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-tooltip content="編集" placement="top" :show-after="500">
@@ -582,7 +542,7 @@
           v-model:current-page="currentPage"
           v-model:page-size="pageSize"
           :page-sizes="[10, 20, 50, 100]"
-          layout="sizes, prev, pager, next, jumper"
+          layout="sizes, prev, pager, next"
           :total="shippingList.length"
           @size-change="handleSizeChange"
           @current-change="handleCurrentChange"
@@ -854,14 +814,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import request from '@/utils/request'
+import { getJSTToday as getJSTTodayUtil, formatDateJST, formatDateWithWeekdayJST, localeForIntl } from '@/utils/dateFormat'
 import ShippingDetailDialog from './ShippingDetailDialog.vue'
 import ShippingCreateDialog from './ShippingCreateDialog.vue'
 import ShippingQuickEditDialog from './components/ShippingQuickEditDialog.vue'
 import DestinationGroupManager from './components/DestinationGroupManager.vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import {
-  Search,
   Refresh,
   Document,
   Check,
@@ -920,13 +881,8 @@ interface FilterOptions {
   end_date: string
 }
 
-// 获取日本标准时间(JST)的今天日期
-const getJSTToday = () => {
-  const now = new Date()
-  const jstOffset = 9 * 60 // JST是UTC+9
-  const jstTime = new Date(now.getTime() + jstOffset * 60 * 1000)
-  return jstTime.toISOString().slice(0, 10)
-}
+const { t, locale } = useI18n()
+const getJSTToday = getJSTTodayUtil
 
 // 状態
 const today = getJSTToday()
@@ -1169,7 +1125,7 @@ const handleGroupFilterChange = (groupIndex: number | undefined) => {
 
     if (groupDestinations.length > 0) {
       ElMessage.success(
-        `グループ「${selectedGroup.name}」で絞り込みました（${groupDestinations.length}件）`,
+        `グループ「${selectedGroup.groupName ?? ''}」で絞り込みました（${groupDestinations.length}件）`,
       )
     }
   } else {
@@ -1302,45 +1258,16 @@ function tableRowClassName({ row }: { row: ShippingItem }): string {
   return ''
 }
 
-// 日付フォーマット
+const intlLocale = computed(() => localeForIntl(locale.value))
+
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return ''
-  try {
-    // 使用日本标准时间格式化日期
-    const date = new Date(dateStr + 'T00:00:00+09:00') // 确保使用JST时区
-    return date
-      .toLocaleDateString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'Asia/Tokyo',
-      })
-      .replace(/\//g, '-')
-  } catch (e) {
-    return dateStr
-  }
+  return formatDateJST(dateStr, intlLocale.value).replace(/\//g, '-')
 }
 
-// 日付と曜日のフォーマット（印刷用）
 function formatDateWithWeekday(dateStr: string | null): string {
   if (!dateStr) return ''
-  try {
-    // 使用日本标准时间格式化日期
-    const date = new Date(dateStr + 'T00:00:00+09:00') // 确保使用JST时区
-    const weekdays = ['日', '月', '火', '水', '木', '金', '土']
-    const formattedDate = date
-      .toLocaleDateString('ja-JP', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        timeZone: 'Asia/Tokyo',
-      })
-      .replace(/\//g, '-')
-    const weekday = weekdays[date.getDay()]
-    return `${formattedDate} (${weekday})`
-  } catch (e) {
-    return dateStr
-  }
+  return formatDateWithWeekdayJST(dateStr, intlLocale.value).replace(/\//g, '-').replace(/\s/g, ' ')
 }
 
 // 行クリック - 避免与选择冲突，只在非选择列区域触发
@@ -1497,7 +1424,17 @@ function handleSelectAll(selection: ShippingItem[]): void {
   })
 }
 
-// 日付範囲の変更処理
+// 防止期间/納入先等下拉点击时弹出虚拟键盘（移动端）
+function preventKeyboardOnFocus(e: FocusEvent): void {
+  const target = e.target as HTMLElement
+  const input =
+    target?.tagName === 'INPUT' ? target : target?.querySelector?.('input')
+  if (input) {
+    input.setAttribute('inputmode', 'none')
+  }
+}
+
+// 日付範囲の変更処理（自动筛选）
 function handleDateRangeChange(range: [string, string] | null): void {
   if (range && range.length === 2) {
     filters.value.shipping_date = range[0]
@@ -1505,6 +1442,7 @@ function handleDateRangeChange(range: [string, string] | null): void {
   } else {
     filters.value.shipping_date = ''
   }
+  fetchData()
 }
 
 // フィルターリセット
@@ -3038,7 +2976,7 @@ async function loadDestinationGroups() {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0;
+  gap: 8px;
   padding: 0;
   margin: 0;
 }
@@ -3163,29 +3101,33 @@ async function loadDestinationGroups() {
   margin-bottom: 8px;
 }
 
+.table-card :deep(.el-card__header) {
+  padding: 4px 12px !important;
+}
+
 .table-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 2px 0;
+  border-bottom: none;
 }
 
 .table-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   font-weight: 600;
   color: #1f2937;
   font-size: 14px;
 }
 
 .table-icon {
-  font-size: 20px;
+  font-size: 18px;
   color: #3498db;
   background: rgba(52, 152, 219, 0.1);
-  padding: 6px;
-  border-radius: 6px;
+  padding: 4px;
+  border-radius: 4px;
 }
 
 .count-badge {
@@ -3306,6 +3248,17 @@ async function loadDestinationGroups() {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+/* 操作按钮行（筛选区域下方单独一行，同行居中） */
+.action-buttons-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  padding: 2px 0;
 }
 
 .action-button {
@@ -3464,7 +3417,7 @@ async function loadDestinationGroups() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
+  padding: 8px 0 2px 0;
   border-top: 1px solid #e5e7eb;
 }
 
@@ -3691,7 +3644,7 @@ async function loadDestinationGroups() {
 :deep(.el-table__header th) {
   border-bottom: 1px solid #d1d5db;
   color: #374151;
-  font-size: 12px;
+  font-size: calc(12px * 0.9);
   padding: 4px 0;
   height: 30px;
 }
@@ -3700,6 +3653,7 @@ async function loadDestinationGroups() {
   padding: 0 8px;
   font-weight: 600;
   white-space: nowrap;
+  font-size: inherit;
 }
 
 :deep(.el-table__body) {
@@ -3724,6 +3678,24 @@ async function loadDestinationGroups() {
 
 :deep(.el-table__fixed-right) {
   height: auto !important;
+  z-index: 3;
+  overflow: hidden;
+}
+
+:deep(.el-table__fixed-right .el-table__header th),
+:deep(.el-table__fixed-right .el-table__body td) {
+  background: #fff !important;
+}
+
+:deep(.el-table__fixed-right .el-table__header),
+:deep(.el-table__fixed-right .el-table__body) {
+  overflow: hidden;
+}
+
+:deep(.el-table__fixed-right .el-table__header th .cell),
+:deep(.el-table__fixed-right .el-table__body td .cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 :deep(.el-table--border .el-table__cell) {
@@ -3783,7 +3755,7 @@ async function loadDestinationGroups() {
 :deep(.el-table__header th) {
   border-bottom: 2px solid rgba(52, 152, 219, 0.2);
   color: #2c3e50;
-  font-size: 14px;
+  font-size: calc(14px * 0.9);
 }
 
 :deep(.el-table__row) {
@@ -3861,6 +3833,14 @@ async function loadDestinationGroups() {
 
 :deep(.el-pagination) {
   font-weight: 500;
+  font-size: 12px;
+}
+
+:deep(.el-pagination .el-select .el-input__inner),
+:deep(.el-pagination .el-pager li),
+:deep(.el-pagination .btn-prev),
+:deep(.el-pagination .btn-next) {
+  font-size: 12px;
 }
 
 :deep(.el-pagination .el-pager li) {
@@ -3962,6 +3942,24 @@ async function loadDestinationGroups() {
 
 :deep(.el-table__fixed-right) {
   height: auto !important;
+  z-index: 3;
+  overflow: hidden;
+}
+
+:deep(.el-table__fixed-right .el-table__header th),
+:deep(.el-table__fixed-right .el-table__body td) {
+  background: #fff !important;
+}
+
+:deep(.el-table__fixed-right .el-table__header),
+:deep(.el-table__fixed-right .el-table__body) {
+  overflow: hidden;
+}
+
+:deep(.el-table__fixed-right .el-table__header th .cell),
+:deep(.el-table__fixed-right .el-table__body td .cell) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 对话框样式 */
@@ -4126,6 +4124,13 @@ async function loadDestinationGroups() {
   flex: 0 0 auto;
 }
 
+.group-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
 .status-group {
   flex: 0 0 auto;
 }
@@ -4147,6 +4152,14 @@ async function loadDestinationGroups() {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
+}
+
+.date-quick-buttons .date-btn,
+.date-quick-buttons :deep(.el-button) {
+  margin: 0;
+}
+.date-quick-buttons :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .date-btn {
@@ -4208,6 +4221,11 @@ async function loadDestinationGroups() {
   flex-wrap: wrap;
 }
 
+.destination-controls .filter-label-inline {
+  margin-left: 4px;
+  margin-right: 0;
+}
+
 .destination-select-dropdown {
   flex-shrink: 0;
 }
@@ -4215,7 +4233,7 @@ async function loadDestinationGroups() {
 .destination-quick-buttons {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
@@ -4450,19 +4468,38 @@ async function loadDestinationGroups() {
 
 /* 納入先拖拽分组选择相关样式已移至DestinationDragFilter组件 */
 
-/* 响应式设计 */
+/* 筛选区域响应式 */
 @media (max-width: 1400px) {
   .compact-filter-row {
     flex-wrap: wrap;
+    gap: 10px;
   }
 
   .filter-group {
     flex: 1 1 auto;
-    min-width: 200px;
+    min-width: 180px;
+  }
+
+  .filter-group.destination-group {
+    flex: 1 1 100%;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .date-range-container {
     flex-wrap: wrap;
+  }
+
+  .group-controls {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .destination-controls {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 
@@ -4479,7 +4516,8 @@ async function loadDestinationGroups() {
     font-size: 22px;
   }
 
-  .header-buttons {
+  .header-buttons,
+  .action-buttons-row {
     flex-wrap: wrap;
     gap: 8px;
   }
@@ -4496,12 +4534,22 @@ async function loadDestinationGroups() {
     gap: 10px;
   }
 
+  .filter-group.destination-group {
+    flex: 1 1 100%;
+  }
+
   .destination-controls {
     flex-wrap: wrap;
+    gap: 8px;
   }
 
   .destination-quick-buttons {
     flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .group-controls {
+    gap: 6px;
   }
 
   /* 表格列优化 */
@@ -4551,9 +4599,36 @@ async function loadDestinationGroups() {
 
   .compact-filter-row {
     gap: 12px;
+    row-gap: 12px;
   }
 
-  .header-buttons {
+  .filter-group.date-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .filter-group.destination-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .date-range-container {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .group-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .destination-controls .filter-label-inline {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .header-buttons,
+  .action-buttons-row {
     flex-direction: row;
     flex-wrap: wrap;
     width: 100%;
@@ -4561,8 +4636,8 @@ async function loadDestinationGroups() {
     justify-content: center;
   }
 
-  .action-button {
-    flex: 1 1 auto;
+  .action-buttons-row .action-button {
+    flex: 0 0 auto;
     min-width: 120px;
     max-width: 200px;
     justify-content: center;
@@ -4594,6 +4669,28 @@ async function loadDestinationGroups() {
 
   :deep(.el-table) {
     min-width: 800px;
+  }
+
+  /* 响应式：操作列固定右侧、不透明，表头与内容在操作列内裁剪避免重叠 */
+  :deep(.el-table__fixed-right) {
+    z-index: 3;
+    overflow: hidden;
+  }
+
+  :deep(.el-table__fixed-right .el-table__header th),
+  :deep(.el-table__fixed-right .el-table__body td) {
+    background: #fff !important;
+  }
+
+  :deep(.el-table__fixed-right .el-table__header),
+  :deep(.el-table__fixed-right .el-table__body) {
+    overflow: hidden;
+  }
+
+  :deep(.el-table__fixed-right .el-table__header th .cell),
+  :deep(.el-table__fixed-right .el-table__body td .cell) {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* 隐藏部分列在中等屏幕 */
@@ -4653,8 +4750,8 @@ async function loadDestinationGroups() {
   .compact-filter-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 10px;
-    padding: 8px;
+    gap: 12px;
+    padding: 10px;
   }
 
   .filter-group {
@@ -4664,32 +4761,42 @@ async function loadDestinationGroups() {
     width: 100%;
   }
 
+  .filter-group.date-group .filter-label {
+    margin-bottom: 4px;
+  }
+
   .filter-label {
     font-size: 12px;
     margin-bottom: 4px;
   }
 
-  .actions-group {
-    margin-left: 0;
-    flex-direction: row;
-    justify-content: stretch;
-    gap: 8px;
-    width: 100%;
+  .filter-group.destination-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
-  .search-button,
-  .reset-button {
-    flex: 1;
+  .group-controls {
     width: 100%;
-    padding: 8px 12px;
-    font-size: 13px;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .group-controls .group-filter-dropdown {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .group-controls .group-manage-button {
+    flex-shrink: 0;
   }
 
   /* 移动端日期快捷按钮样式 */
   .date-range-container {
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
   }
 
   .modern-date-picker {
@@ -4713,7 +4820,12 @@ async function loadDestinationGroups() {
   .destination-controls {
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
+  }
+
+  .destination-controls .filter-label-inline {
+    margin-left: 0;
+    margin-bottom: 4px;
   }
 
   .destination-select-dropdown {
@@ -4723,7 +4835,7 @@ async function loadDestinationGroups() {
   .destination-quick-buttons {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
+    gap: 2px;
     width: 100%;
   }
 
@@ -4795,14 +4907,19 @@ async function loadDestinationGroups() {
     font-size: 14px;
   }
 
-  .header-buttons {
+  .header-buttons,
+  .action-buttons-row {
     flex-direction: column;
+    align-items: center;
     width: 100%;
     gap: 6px;
+    margin-bottom: 6px;
+    padding: 2px 0;
   }
 
-  .action-button {
+  .action-buttons-row .action-button {
     width: 100%;
+    max-width: 280px;
     justify-content: center;
     font-size: 12px;
     padding: 6px 12px;
@@ -4826,7 +4943,7 @@ async function loadDestinationGroups() {
   }
 
   :deep(.el-table__header th) {
-    font-size: 11px;
+    font-size: calc(11px * 0.9);
     padding: 4px 0;
     height: 28px;
   }
@@ -4854,7 +4971,7 @@ async function loadDestinationGroups() {
   .pagination-container {
     flex-direction: column;
     gap: 10px;
-    padding: 10px 0;
+    padding: 8px 0 2px 0;
   }
 
   :deep(.el-pagination) {
@@ -4963,7 +5080,7 @@ async function loadDestinationGroups() {
   /* 超小屏幕的紧凑筛选行样式 */
   .compact-filter-row {
     gap: 8px;
-    padding: 6px;
+    padding: 8px;
   }
 
   .filter-group {
@@ -4984,7 +5101,7 @@ async function loadDestinationGroups() {
   }
 
   .date-quick-buttons {
-    gap: 4px;
+    gap: 0;
   }
 
   .date-btn {
@@ -4995,13 +5112,22 @@ async function loadDestinationGroups() {
     font-weight: 600;
   }
 
+  .filter-group.destination-group {
+    gap: 8px;
+  }
+
+  .group-controls {
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
   .destination-controls {
-    gap: 4px;
+    gap: 6px;
   }
 
   .destination-quick-buttons {
     grid-template-columns: repeat(2, 1fr);
-    gap: 4px;
+    gap: 2px;
   }
 
   .destination-quick-btn {
@@ -5051,11 +5177,12 @@ async function loadDestinationGroups() {
     min-width: auto;
   }
 
-  .header-buttons {
+  .header-buttons,
+  .action-buttons-row {
     gap: 4px;
   }
 
-  .action-button {
+  .action-buttons-row .action-button {
     font-size: 11px;
     font-weight: 600;
     padding: 5px 10px;
@@ -5086,7 +5213,7 @@ async function loadDestinationGroups() {
   }
 
   :deep(.el-table__header th) {
-    font-size: 10px;
+    font-size: calc(10px * 0.9);
     padding: 3px 0;
     height: 26px;
   }
@@ -5115,7 +5242,7 @@ async function loadDestinationGroups() {
   }
 
   .pagination-container {
-    padding: 8px 0;
+    padding: 6px 0 2px 0;
     gap: 8px;
   }
 
@@ -5205,8 +5332,20 @@ async function loadDestinationGroups() {
   }
 
   .compact-filter-row {
-    padding: 4px;
+    padding: 6px;
+    gap: 8px;
+  }
+
+  .filter-group.destination-group {
     gap: 6px;
+  }
+
+  .group-controls {
+    gap: 4px;
+  }
+
+  .destination-controls {
+    gap: 4px;
   }
 
   .date-btn {
@@ -5221,7 +5360,7 @@ async function loadDestinationGroups() {
     padding: 2px 6px !important;
   }
 
-  .action-button {
+  .action-buttons-row .action-button {
     font-size: 10px;
     padding: 4px 8px;
     min-height: 30px;
@@ -5238,7 +5377,7 @@ async function loadDestinationGroups() {
   }
 
   :deep(.el-table__header th) {
-    font-size: 9px;
+    font-size: calc(9px * 0.9);
     height: 24px;
   }
 

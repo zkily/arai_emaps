@@ -8,7 +8,6 @@
           <el-icon><Box /></el-icon>
           ピッキングリスト
         </h2>
-        <p class="page-subtitle">出荷データからピッキングリストを表示します</p>
       </div>
 
       <!-- 右侧按钮区域 -->
@@ -30,65 +29,30 @@
       </div>
     </div>
 
-    <!-- 统计卡片区域 -->
+     <!-- 统计卡片：紧凑横並び -->
     <div class="statistics-section">
-      <el-row :gutter="20">
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-card class="statistics-card total-card">
-            <div class="statistics-content">
-              <div class="statistics-icon">
-                <el-icon size="32"><Box /></el-icon>
-              </div>
-              <div class="statistics-info">
-                <div class="statistics-label">総件数</div>
-                <div class="statistics-value">{{ totalStats.total.toLocaleString() }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-card class="statistics-card pending-card">
-            <div class="statistics-content">
-              <div class="statistics-icon">
-                <el-icon size="32"><Clock /></el-icon>
-              </div>
-              <div class="statistics-info">
-                <div class="statistics-label">未ピッキング件数</div>
-                <div class="statistics-value">{{ totalStats.pending.toLocaleString() }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-card class="statistics-card completed-card">
-            <div class="statistics-content">
-              <div class="statistics-icon">
-                <el-icon size="32"><CircleCheck /></el-icon>
-              </div>
-              <div class="statistics-info">
-                <div class="statistics-label">ピッキング済件数</div>
-                <div class="statistics-value">{{ totalStats.completed.toLocaleString() }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-
-        <el-col :xs="24" :sm="12" :md="6">
-          <el-card class="statistics-card completion-card">
-            <div class="statistics-content">
-              <div class="statistics-icon">
-                <el-icon size="32"><TrendCharts /></el-icon>
-              </div>
-              <div class="statistics-info">
-                <div class="statistics-label">完成率</div>
-                <div class="statistics-value">{{ totalStats.completionRate }}%</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+      <div class="statistics-cards">
+        <div class="stat-card total-card">
+          <span class="stat-icon"><el-icon><Box /></el-icon></span>
+          <span class="stat-value">{{ totalStats.total.toLocaleString() }}</span>
+          <span class="stat-label">パレット数</span>
+        </div>
+        <div class="stat-card pending-card">
+          <span class="stat-icon"><el-icon><Clock /></el-icon></span>
+          <span class="stat-value">{{ totalStats.pending.toLocaleString() }}</span>
+          <span class="stat-label">未ピッキング</span>
+        </div>
+        <div class="stat-card completed-card">
+          <span class="stat-icon"><el-icon><CircleCheck /></el-icon></span>
+          <span class="stat-value">{{ totalStats.completed.toLocaleString() }}</span>
+          <span class="stat-label">ピッキング済</span>
+        </div>
+        <div class="stat-card completion-card">
+          <span class="stat-icon"><el-icon><TrendCharts /></el-icon></span>
+          <span class="stat-value">{{ totalStats.completionRate }}%</span>
+          <span class="stat-label">完成率</span>
+        </div>
+      </div>
     </div>
 
     <!-- 中部筛选区域 -->
@@ -98,14 +62,14 @@
           <div class="filter-header">
             <span class="filter-title">
               <el-icon><Filter /></el-icon>
-              筛选条件
+              検索条件
             </span>
             <el-tag type="info" size="small">自動読み込み</el-tag>
           </div>
         </template>
 
         <el-form :inline="true" :model="filters" class="filter-form">
-          <el-form-item label="出荷日期">
+          <el-form-item label="出荷日">
             <div class="date-picker-group">
               <el-date-picker
                 v-model="dateRange"
@@ -114,7 +78,7 @@
                 start-placeholder="開始日"
                 end-placeholder="終了日"
                 value-format="YYYY-MM-DD"
-                style="width: 280px"
+                class="compact-date-picker"
               />
               <div class="date-quick-buttons">
                 <el-button size="small" @click="setDateRange(-1)"> 前日 </el-button>
@@ -211,28 +175,25 @@
           </el-empty>
         </div>
 
-        <!-- 托盘表格 -->
+        <!-- 托盘表格（分页：每页25件） -->
         <div v-else class="pallet-table">
-          <el-table :data="filteredPalletGroups" border stripe size="default" class="pallet-main-table">
+          <el-table :data="paginatedPalletGroups" border stripe size="default" class="pallet-main-table">
             <!-- 托盘编号 -->
             <el-table-column prop="shipping_no" label="パレット番号" width="150">
               <template #default="{ row }">
-                <div class="pallet-no-cell">
-                  <span class="pallet-number">{{ row.shipping_no }}</span>
-                  <el-tag size="small" type="primary">{{ row.items.length }}項目</el-tag>
-                </div>
+                <span class="pallet-number">{{ row.shipping_no }}</span>
               </template>
             </el-table-column>
 
             <!-- 出荷日 -->
-            <el-table-column prop="shipping_date" label="出荷日" width="110" align="center">
+            <el-table-column prop="shipping_date" label="出荷日" width="100" align="center">
               <template #default="{ row }">
                 {{ formatDate(row.shipping_date) }}
               </template>
             </el-table-column>
 
             <!-- 状態 -->
-            <el-table-column label="状態" width="120" align="center">
+            <el-table-column label="状態" width="130" align="center">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">
                   {{ getStatusText(row.status) }}
@@ -240,15 +201,8 @@
               </template>
             </el-table-column>
 
-            <!-- 总数量 -->
-            <el-table-column label="総数量" width="100" align="right">
-              <template #default="{ row }">
-                <span class="quantity-value">{{ row.totalUnits.toLocaleString() }}個</span>
-              </template>
-            </el-table-column>
-
             <!-- 总箱数 -->
-            <el-table-column label="総箱数" width="100" align="right">
+            <el-table-column label="箱数" width="80" align="right">
               <template #default="{ row }">
                 <span class="box-value">{{ row.totalBoxes.toLocaleString() }}箱</span>
               </template>
@@ -264,7 +218,7 @@
                     <span class="product-quantity"
                       >{{
                         (item.confirmed_units || item.confirmed_boxes || 0).toLocaleString()
-                      }}個</span
+                      }}箱</span
                     >
                   </div>
                 </div>
@@ -274,103 +228,33 @@
             <!-- 納入先 -->
             <el-table-column label="納入先" width="180">
               <template #default="{ row }">
-                <div class="destination-info">
-                  <span v-if="row.items[0]?.destination_name" class="destination-name">
-                    {{ row.items[0].destination_name }}
-                  </span>
-                  <span v-if="row.items[0]?.destination_cd" class="destination-code">
-                    ({{ row.items[0].destination_cd }})
-                  </span>
-                </div>
+                <span v-if="row.items[0]?.destination_name" class="destination-name">
+                  {{ row.items[0].destination_name }}
+                </span>
+                <span v-else class="destination-code">-</span>
               </template>
             </el-table-column>
 
-            <!-- 作業者 -->
+            <!-- 作業者（users.full_name を優先表示） -->
             <el-table-column label="作業者" width="120" align="center">
               <template #default="{ row }">
-                <span v-if="row.picker_name || row.picker_id" class="picker-id">{{
-                  row.picker_name || row.picker_id
+                <span v-if="row.picker_full_name || row.picker_name || row.picker_id" class="picker-id">{{
+                  row.picker_full_name || row.picker_name || row.picker_id
                 }}</span>
                 <span v-else class="no-picker">未割当</span>
               </template>
             </el-table-column>
 
-            <!-- 操作列 -->
-            <el-table-column label="操作" width="120" align="center">
-              <template #default="{ row }">
-                <el-button size="small" link @click="togglePalletDetail(row.shipping_no)">
-                  {{ expandedPallets.includes(row.shipping_no) ? '詳細を閉じる' : '詳細を見る' }}
-                  <el-icon>
-                    <ArrowDown v-if="!expandedPallets.includes(row.shipping_no)" />
-                    <ArrowUp v-else />
-                  </el-icon>
-                </el-button>
-              </template>
-            </el-table-column>
           </el-table>
 
-          <!-- 展开的详细信息 -->
-          <div
-            v-for="pallet in filteredPalletGroups"
-            :key="`detail-${pallet.shipping_no}`"
-            class="pallet-detail-section"
-          >
-            <el-collapse-transition>
-              <div
-                v-show="expandedPallets.includes(pallet.shipping_no)"
-                class="pallet-detail-content"
-              >
-                <div class="detail-header">
-                  <h4>{{ pallet.shipping_no }} の詳細情報</h4>
-                </div>
-                <el-table :data="pallet.items" size="small" border class="detail-table">
-                  <el-table-column prop="product_cd" label="製品コード" width="120" />
-                  <el-table-column
-                    prop="product_name"
-                    label="製品名"
-                    min-width="200"
-                    show-overflow-tooltip
-                  />
-                  <el-table-column prop="confirmed_units" label="数量" width="100" align="right">
-                    <template #default="{ row }">
-                      {{ (row.confirmed_units || row.confirmed_boxes || 0).toLocaleString() }}個
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="confirmed_boxes" label="箱数" width="100" align="right">
-                    <template #default="{ row }">
-                      {{ (row.confirmed_boxes || 0).toLocaleString() }}箱
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="状態" width="150" align="center">
-                    <template #default="{ row }">
-                      <el-tag :type="getStatusType(row.status)" size="small">
-                        {{ getStatusText(row.status) }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column
-                    prop="destination_name"
-                    label="納入先"
-                    width="180"
-                    show-overflow-tooltip
-                  />
-                  <el-table-column prop="delivery_date" label="納期" width="120">
-                    <template #default="{ row }">
-                      {{ formatDate(row.delivery_date) }}
-                    </template>
-                  </el-table-column>
-                  <el-table-column prop="picker_id" label="作業者" width="100" align="center">
-                    <template #default="{ row }">
-                      <span v-if="row.picker_name || row.picker_id" class="picker-id">{{
-                        row.picker_name || row.picker_id
-                      }}</span>
-                      <span v-else class="no-picker">未割当</span>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-            </el-collapse-transition>
-          </div>
+          <el-pagination
+            v-if="filteredPalletGroups.length > PAGE_SIZE"
+            v-model:current-page="currentPage"
+            :page-size="PAGE_SIZE"
+            :total="filteredPalletGroups.length"
+            layout="total, prev, pager, next, jumper"
+            class="pallet-pagination"
+          />
         </div>
       </el-card>
     </div>
@@ -387,8 +271,6 @@ import {
   Box,
   Filter,
   List,
-  ArrowDown,
-  ArrowUp,
   RefreshLeft,
   Clock,
   CircleCheck,
@@ -415,7 +297,7 @@ interface TasksForDisplayResponse {
 }
 
 interface ShippingItem {
-  shipping_no_p: string
+  shipping_no_p?: string
   shipping_no: string
   product_cd: string
   product_name: string
@@ -429,6 +311,7 @@ interface ShippingItem {
   status: string
   picker_id: string
   picker_name?: string
+  picker_full_name?: string
 }
 
 interface PalletGroup {
@@ -440,6 +323,7 @@ interface PalletGroup {
   status: string
   picker_id: string
   picker_name?: string
+  picker_full_name?: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -474,7 +358,6 @@ const dateRange = ref<[string, string]>([today, today])
 let debounceTimer: NodeJS.Timeout | null = null
 
 const palletGroups = ref<PalletGroup[]>([])
-const expandedPallets = ref<string[]>([])
 
 // 筛选后的托盘组
 const filteredPalletGroups = computed(() => {
@@ -490,70 +373,92 @@ const filteredPalletGroups = computed(() => {
   return filtered
 })
 
-// 统计数据计算属性
+// 统计数据：按パレット（shipping_no_p）件数。未ピッキング = pending + picking（作業中も含む）
 const totalStats = computed(() => {
-  const total = filteredPalletGroups.value.length
-  const completed = filteredPalletGroups.value.filter((pallet) => pallet.status === 'completed').length
-  const pending = filteredPalletGroups.value.filter((pallet) => pallet.status === 'pending').length
+  const groups = filteredPalletGroups.value
+  const total = groups.length
+  const completed = groups.filter((p) => p.status === 'completed').length
+  const pending = groups.filter(
+    (p) => p.status === 'pending' || p.status === 'picking',
+  ).length
   const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
-
-  return {
-    total,
-    completed,
-    pending,
-    completionRate,
-  }
+  return { total, completed, pending, completionRate }
 })
 
-// 方法
+const PAGE_SIZE = 25
+const currentPage = ref(1)
+const paginatedPalletGroups = computed(() => {
+  const list = filteredPalletGroups.value
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return list.slice(start, start + PAGE_SIZE)
+})
+
+// API 1ページあたりの件数（全件取得するため複数ページをリクエスト）
+const API_PAGE_SIZE = 500
+
+// 方法：全ページを取得してから結合（API はデフォルト 50 件のみ返すため）
 async function fetchShippingData() {
   loading.value.fetch = true
   try {
-    const params = {
+    const statusMap: Record<string, string> = { '未ピッキング': 'pending', 'ピッキング済': 'completed' }
+    const baseParams: Record<string, string | number> = {
       start_date: dateRange.value[0],
       end_date: dateRange.value[1],
-      status: filters.value.status,
+      page_size: API_PAGE_SIZE,
+    }
+    if (filters.value.status) {
+      baseParams.status = statusMap[filters.value.status] || filters.value.status
     }
 
-    console.log('API请求参数:', params)
+    const allItems: ShippingItem[] = []
+    let page = 1
+    let totalPages = 1
 
-    const response = (await request.get('/api/shipping/picking/tasks/for-display', { params })) as
-      | ApiResponseBody
-      | TasksForDisplayResponse
-      | unknown[]
-    console.log('API响应:', response)
-    console.log('API响应类型:', typeof response)
-    console.log('API响应数据详情:', JSON.stringify(response, null, 2))
+    // 全ページを取得（API は最大 500 件/ページのため、複数回リクエスト）
+    do {
+      const params = { ...baseParams, page }
+      const response = (await request.get('/api/shipping/picking/tasks/for-display', {
+        params,
+      })) as ApiResponseBody | TasksForDisplayResponse | unknown[]
 
-    // 检查响应格式 - 处理不同的响应格式
-    let items: ShippingItem[]
-    if (response && typeof response === 'object' && 'items' in response && Array.isArray((response as TasksForDisplayResponse).items)) {
-      // 后端格式: { items, total, page, page_size, total_pages }
-      items = (response as TasksForDisplayResponse).items as ShippingItem[]
-    } else if (response && (response as ApiResponseBody).success !== undefined) {
-      const res = response as ApiResponseBody
-      if (!res.success) {
-        console.error('API请求失败:', res.message)
-        ElMessage.error(res.message || 'データの取得に失敗しました')
+      let items: ShippingItem[] = []
+      if (
+        response &&
+        typeof response === 'object' &&
+        'items' in response &&
+        Array.isArray((response as TasksForDisplayResponse).items)
+      ) {
+        const res = response as TasksForDisplayResponse
+        items = res.items as ShippingItem[]
+        const totalFromApi = res.total ?? 0
+        totalPages = Math.max(1, Math.ceil(totalFromApi / API_PAGE_SIZE))
+      } else if (response && (response as ApiResponseBody).success !== undefined) {
+        const res = response as ApiResponseBody
+        if (!res.success) {
+          ElMessage.error(res.message || 'データの取得に失敗しました')
+          return
+        }
+        items = Array.isArray(res.data) ? (res.data as ShippingItem[]) : []
+        totalPages = 1
+      } else if (Array.isArray(response)) {
+        items = response as ShippingItem[]
+        totalPages = 1
+      } else {
+        ElMessage.error('データ形式が正しくありません')
         return
       }
-      items = Array.isArray(res.data) ? (res.data as ShippingItem[]) : []
-    } else if (Array.isArray(response)) {
-      items = response as ShippingItem[]
-    } else {
-      console.error('未知的响应格式:', response)
-      ElMessage.error('データ形式が正しくありません')
-      return
-    }
 
-    // 检查数据是否为数组
-    if (!Array.isArray(items)) {
-      console.error('返回的数据不是数组:', items)
-      ElMessage.error('データ形式が正しくありません')
-      return
-    }
+      if (!Array.isArray(items)) {
+        ElMessage.error('データ形式が正しくありません')
+        return
+      }
 
-    console.log(`获取到 ${items.length} 条原始数据`)
+      allItems.push(...items)
+      page++
+    } while (page <= totalPages)
+
+    const items = allItems
+    console.log(`获取到 ${items.length} 条原始数据（全ページ取得）`)
 
     // 过滤掉製品名包含特定关键词的数据
     const excludeKeywords = ['加工', 'アーチ', '料金']
@@ -584,37 +489,29 @@ async function fetchShippingData() {
       return // Exit function early if no items
     }
 
-    // 按shipping_no分组
+    // 按 shipping_no_p（パレット番号）分组，无则退化为 shipping_no，统计按パレット件数
+    const palletKey = (item: ShippingItem) => (item.shipping_no_p && item.shipping_no_p.trim()) ? item.shipping_no_p.trim() : (item.shipping_no || '').trim()
     const grouped = filteredItems.reduce((acc: Record<string, PalletGroup>, item: ShippingItem) => {
-      console.log('处理项目:', item.shipping_no, item.product_cd, 'status:', item.status)
-
-      if (!acc[item.shipping_no]) {
-        console.log(
-          '创建新托盘组:',
-          item.shipping_no,
-          'status:',
-          item.status,
-          'picker_id:',
-          item.picker_id,
-        )
-        acc[item.shipping_no] = {
-          shipping_no: item.shipping_no,
+      const key = palletKey(item)
+      if (!key) return acc
+      if (!acc[key]) {
+        acc[key] = {
+          shipping_no: item.shipping_no || item.shipping_no_p || key,
           shipping_date: item.shipping_date,
           items: [],
           totalUnits: 0,
           totalBoxes: 0,
-          status: 'pending', // 暂时设为pending，后面会重新计算
-          picker_id: item.picker_id || '', // 从API数据中读取picker_id字段
-          picker_name: item.picker_name || item.picker_id || '', // 从API数据中读取picker_name字段
+          status: 'pending',
+          picker_id: item.picker_id || '',
+          picker_name: item.picker_full_name || item.picker_name || item.picker_id || '',
+          picker_full_name: item.picker_full_name || '',
         }
       }
-      acc[item.shipping_no].items.push(item)
-      // 使用confirmed_units，如果不存在则使用confirmed_boxes
+      acc[key].items.push(item)
       const units = Number(item.confirmed_units || item.confirmed_boxes) || 0
       const boxes = Number(item.confirmed_boxes) || 0
-      acc[item.shipping_no].totalUnits += units
-      acc[item.shipping_no].totalBoxes += boxes
-
+      acc[key].totalUnits += units
+      acc[key].totalBoxes += boxes
       return acc
     }, {})
 
@@ -642,6 +539,7 @@ async function fetchShippingData() {
     }
 
     palletGroups.value = Object.values(grouped)
+    currentPage.value = 1
     console.log(`分组后的托盘数量: ${palletGroups.value.length}`)
     console.log('完整的托盘数据:', palletGroups.value)
 
@@ -813,48 +711,96 @@ function handlePrint() {
   printWindow.document.write(printContent)
   printWindow.document.close()
 
+  const closePreview = () => {
+    try {
+      if (printWindow && !printWindow.closed) printWindow.close()
+    } catch (_) {}
+  }
+
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = setTimeout(closePreview, 60000)
+
+  const onAfterPrint = () => {
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer)
+      fallbackTimer = null
+    }
+    closePreview()
+    printWindow.removeEventListener('afterprint', onAfterPrint)
+  }
+
+  printWindow.onafterprint = onAfterPrint
+  printWindow.addEventListener('afterprint', onAfterPrint)
+
   setTimeout(() => {
     printWindow.print()
-    printWindow.onafterprint = () => {
-      printWindow.close()
-    }
   }, 250)
 }
 
-// 生成打印HTML
+// 印刷用：出荷日 → 納入先 でグループ化し、表は 製品コード・製品名・箱数・状態・納入先
 function generatePrintHTML(pallets: PalletGroup[], filterInfo: string[], currentDate: string): string {
-  const tableRows = pallets
-    .map((pallet) => {
-      const itemsHtml = pallet.items
+  type Row = { product_cd: string; product_name: string; boxes: number; status: string; destination_name: string }
+  const byDate = new Map<string, Map<string, Row[]>>()
+
+  for (const pallet of pallets) {
+    const dateKey = pallet.shipping_date || ''
+    if (!byDate.has(dateKey)) byDate.set(dateKey, new Map())
+    const byDest = byDate.get(dateKey)!
+
+    for (const item of pallet.items) {
+      const destKey = (item.destination_name || item.destination_cd || '').trim() || '-'
+      if (!byDest.has(destKey)) byDest.set(destKey, [])
+      byDest.get(destKey)!.push({
+        product_cd: item.product_cd || '-',
+        product_name: item.product_name || '-',
+        boxes: Number(item.confirmed_boxes) || 0,
+        status: getStatusText(item.status),
+        destination_name: item.destination_name || item.destination_cd || '-',
+      })
+    }
+  }
+
+  const sortedDates = Array.from(byDate.keys()).sort()
+  const sections: string[] = []
+
+  for (const dateKey of sortedDates) {
+    const byDest = byDate.get(dateKey)!
+    const destKeys = Array.from(byDest.keys()).sort((a, b) => (a === '-' ? 1 : b === '-' ? -1 : a.localeCompare(b)))
+    const dateLabel = dateKey ? formatDate(dateKey) : '-'
+
+    for (const destKey of destKeys) {
+      const rows = byDest.get(destKey)!
+      const destLabel = destKey === '-' ? '（納入先未設定）' : destKey
+      const rowsHtml = rows
         .map(
-          (item) => `
+          (r) => `
         <tr>
-          <td>${item.product_cd || '-'}</td>
-          <td>${item.product_name || '-'}</td>
-          <td class="text-right">${(item.confirmed_units || item.confirmed_boxes || 0).toLocaleString()}個</td>
-          <td class="text-right">${(item.confirmed_boxes || 0).toLocaleString()}箱</td>
-          <td class="text-center">${getStatusText(item.status)}</td>
-          <td>${item.destination_name || '-'}</td>
-          <td>${formatDate(item.delivery_date)}</td>
-        </tr>
-      `,
+          <td>${escapeHtml(r.product_cd)}</td>
+          <td>${escapeHtml(r.product_name)}</td>
+          <td class="text-right">${r.boxes.toLocaleString()}</td>
+          <td class="text-center">${escapeHtml(r.status)}</td>
+          <td>${escapeHtml(r.destination_name)}</td>
+        </tr>`,
         )
         .join('')
 
-      return `
-      <tr class="pallet-header-row">
-        <td colspan="7" class="pallet-header">
-          <strong>パレット番号: ${pallet.shipping_no}</strong> | 
-          出荷日: ${formatDate(pallet.shipping_date)} | 
-          状態: ${getStatusText(pallet.status)} | 
-          総数量: ${pallet.totalUnits.toLocaleString()}個 | 
-          総箱数: ${pallet.totalBoxes.toLocaleString()}箱
-        </td>
-      </tr>
-      ${itemsHtml}
-    `
-    })
-    .join('')
+      sections.push(`
+      <div class="print-section">
+        <div class="print-section-title">出荷日: ${escapeHtml(dateLabel)}　納入先: ${escapeHtml(destLabel)}</div>
+        <table class="print-table">
+          <thead>
+            <tr>
+              <th style="width: 18%">製品コード</th>
+              <th style="width: 32%">製品名</th>
+              <th style="width: 12%">箱数</th>
+              <th style="width: 14%">状態</th>
+              <th style="width: 24%">納入先</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>`)
+    }
+  }
 
   return `
     <!DOCTYPE html>
@@ -864,71 +810,54 @@ function generatePrintHTML(pallets: PalletGroup[], filterInfo: string[], current
       <title>ピッキングリスト印刷</title>
       <style>
         @media print {
-          @page {
-            size: A4 landscape;
-            margin: 10mm;
-          }
+          @page { size: A4; margin: 12mm; }
         }
         body {
           font-family: 'MS Gothic', 'Yu Gothic', sans-serif;
-          font-size: 12px;
+          font-size: 11px;
           margin: 0;
-          padding: 20px;
+          padding: 16px;
         }
         .print-header {
           text-align: center;
-          margin-bottom: 20px;
+          margin-bottom: 14px;
           border-bottom: 2px solid #333;
-          padding-bottom: 10px;
+          padding-bottom: 8px;
         }
-        .print-title {
-          font-size: 20px;
+        .print-title { font-size: 18px; font-weight: bold; margin-bottom: 4px; }
+        .print-info { font-size: 10px; color: #555; }
+        .print-info div { margin: 2px 0; }
+        .print-section { margin-bottom: 16px; break-inside: avoid; }
+        .print-section-title {
           font-weight: bold;
-          margin-bottom: 5px;
+          padding: 6px 8px;
+          background: #e8f4f8;
+          border: 1px solid #333;
+          border-bottom: none;
         }
-        .print-info {
-          font-size: 11px;
-          color: #666;
-          margin-bottom: 15px;
-        }
-        .print-info div {
-          margin: 3px 0;
-        }
-        table {
+        .print-table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 20px;
         }
-        th, td {
+        .print-table th, .print-table td {
           border: 1px solid #333;
-          padding: 6px 8px;
+          padding: 5px 6px;
           text-align: left;
         }
-        th {
-          background-color: #f0f0f0;
+        .print-table th {
+          background: #f0f0f0;
           font-weight: bold;
           text-align: center;
         }
-        .text-right {
-          text-align: right;
-        }
-        .text-center {
-          text-align: center;
-        }
-        .pallet-header-row {
-          background-color: #e8f4f8;
-        }
-        .pallet-header {
-          font-weight: bold;
-          padding: 8px;
-        }
+        .print-table .text-right { text-align: right; }
+        .print-table .text-center { text-align: center; }
         .print-footer {
           text-align: center;
-          font-size: 10px;
+          font-size: 9px;
           color: #666;
-          margin-top: 20px;
+          margin-top: 14px;
           border-top: 1px solid #ccc;
-          padding-top: 10px;
+          padding-top: 8px;
         }
       </style>
     </head>
@@ -936,33 +865,26 @@ function generatePrintHTML(pallets: PalletGroup[], filterInfo: string[], current
       <div class="print-header">
         <div class="print-title">ピッキングリスト</div>
         <div class="print-info">
-          <div>印刷日時: ${currentDate}</div>
-          <div>${filterInfo.length > 0 ? `筛选条件: ${filterInfo.join(' | ')}` : '筛选条件: 全て'}</div>
-          <div>総件数: ${pallets.length}個のパレット</div>
+          <div>印刷日時: ${escapeHtml(currentDate)}</div>
+          <div>${filterInfo.length > 0 ? `検索条件: ${filterInfo.join(' | ')}` : '検索条件: 全て'}</div>
         </div>
       </div>
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 12%">製品コード</th>
-            <th style="width: 25%">製品名</th>
-            <th style="width: 10%">数量</th>
-            <th style="width: 10%">箱数</th>
-            <th style="width: 12%">状態</th>
-            <th style="width: 18%">納入先</th>
-            <th style="width: 13%">納期</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${tableRows}
-        </tbody>
-      </table>
+      ${sections.join('')}
       <div class="print-footer">
-        この資料は ${currentDate} に印刷されました。 | Smart-EMAP システム
+        この資料は ${escapeHtml(currentDate)} に印刷されました。 | Smart-EMAP
       </div>
     </body>
     </html>
   `
+}
+
+function escapeHtml(s: string): string {
+  if (s == null || s === '') return ''
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 // 快捷日期设置函数
@@ -978,15 +900,6 @@ function setDateRange(dayOffset: number) {
     currentDate.setDate(currentDate.getDate() + dayOffset)
     const dateStr = currentDate.toISOString().slice(0, 10)
     dateRange.value = [dateStr, dateStr]
-  }
-}
-
-function togglePalletDetail(shippingNo: string) {
-  const index = expandedPallets.value.indexOf(shippingNo)
-  if (index > -1) {
-    expandedPallets.value.splice(index, 1)
-  } else {
-    expandedPallets.value.push(shippingNo)
   }
 }
 
@@ -1036,10 +949,12 @@ function getStatusText(status: string) {
   switch (status) {
     case 'completed':
       return 'ピッキング済'
+    case 'picking':
+      return '作業中'
     case 'pending':
       return '未ピッキング'
     default:
-      return status || '未ピッキング' // 直接显示原始状态值，如果为空则显示'未ピッキング'
+      return status || '未ピッキング'
   }
 }
 
@@ -1047,6 +962,8 @@ function getStatusType(status: string) {
   switch (status) {
     case 'completed':
       return 'success'
+    case 'picking':
+      return 'primary'
     case 'pending':
       return 'warning'
     default:
@@ -1063,6 +980,11 @@ function debouncedFetchData() {
     fetchShippingData()
   }, 500) // 500ms 防抖延迟
 }
+
+// クライアント側フィルタ（製品）変更時はページを1に戻す
+watch(() => filters.value.product_cd, () => {
+  currentPage.value = 1
+})
 
 // 监听筛选条件变化，自动重新获取数据
 watch(
@@ -1099,50 +1021,71 @@ onMounted(async () => {
 
 <style scoped>
 .picking-list-generator {
-  padding: 20px;
+  padding: 0 2px 6px;
 }
 
-/* 上部区域：标题和按钮 */
+/* 上部：标题与按钮 - 紧凑 */
 .header-section {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-  padding: 20px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.title-section {
-  flex: 1;
-}
+.title-section { flex: 1; }
 
 .page-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 0 0 8px 0;
-  font-size: 24px;
+  gap: 6px;
+  margin: 0 0 2px 0;
+  font-size: 15px;
   font-weight: 600;
-  color: #2c3e50;
+  color: #334155;
 }
 
 .page-subtitle {
   margin: 0;
-  color: #7f8c8d;
-  font-size: 14px;
+  color: #64748b;
+  font-size: 11px;
 }
 
 .action-buttons-section {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
 }
 
-/* 中部筛选区域 */
+/* 筛选区域 - 紧凑 */
 .filter-section {
-  margin-bottom: 24px;
+  margin-bottom: 8px;
+}
+
+.filter-section :deep(.el-card) {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+.filter-section :deep(.el-card__header) {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.filter-section :deep(.el-card__body) {
+  padding: 8px 12px;
+}
+.compact-date-picker {
+  width: 240px !important;
+}
+.filter-form :deep(.el-form-item) {
+  margin-bottom: 6px;
+  margin-right: 12px;
+}
+.filter-form :deep(.el-form-item__label) {
+  font-size: 12px;
 }
 
 .filter-header {
@@ -1154,8 +1097,9 @@ onMounted(async () => {
 .filter-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 600;
+  font-size: 13px;
 }
 
 .filter-form {
@@ -1166,34 +1110,52 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
-/* 日期选择器组样式 */
 .date-picker-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .date-quick-buttons {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .date-quick-buttons .el-button {
-  min-width: 48px;
-  padding: 6px 12px;
+  min-width: 42px;
+  padding: 5px 10px;
   font-size: 12px;
   border-radius: 6px;
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .date-quick-buttons .el-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* 下部列表显示区域 */
+/* 列表区域 - 紧凑 */
 .list-section {
-  margin-bottom: 24px;
+  margin-bottom: 0;
+}
+
+.list-section :deep(.el-card) {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+.list-section :deep(.el-card__header) {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.list-section :deep(.el-card__body) {
+  padding: 8px 12px;
+}
+.list-section :deep(.el-table) {
+  font-size: 12px;
+}
+.list-section :deep(.el-table th),
+.list-section :deep(.el-table td) {
+  padding: 6px 8px;
 }
 
 .list-header {
@@ -1205,18 +1167,19 @@ onMounted(async () => {
 .list-title {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-weight: 600;
+  font-size: 13px;
 }
 
 .list-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .loading-state,
 .empty-state {
-  padding: 60px 20px;
+  padding: 24px 12px;
   text-align: center;
 }
 
@@ -1236,19 +1199,27 @@ onMounted(async () => {
 
 .empty-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .empty-hint {
-  color: #909399;
-  font-size: 14px;
+  color: #64748b;
+  font-size: 12px;
   margin: 0;
 }
 
 .pallet-table {
   overflow: hidden;
+}
+
+.pallet-pagination {
+  margin-top: 10px;
+  justify-content: flex-end;
+}
+.pallet-pagination :deep(.el-pagination__total) {
+  font-size: 12px;
 }
 
 .pallet-main-table {
@@ -1336,32 +1307,6 @@ onMounted(async () => {
   color: #909399;
 }
 
-.pallet-detail-section {
-  margin-top: 12px;
-}
-
-.pallet-detail-content {
-  background: #f8f9fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 16px;
-}
-
-.detail-header {
-  margin-bottom: 12px;
-}
-
-.detail-header h4 {
-  margin: 0;
-  font-size: 16px;
-  color: #303133;
-  font-weight: 600;
-}
-
-.detail-table {
-  margin: 0;
-}
-
 .picker-id {
   font-weight: 600;
   color: #409eff;
@@ -1385,30 +1330,6 @@ onMounted(async () => {
 
   .action-buttons-section {
     justify-content: flex-end;
-  }
-
-  .statistics-section .el-col {
-    margin-bottom: 16px;
-  }
-
-  .statistics-card {
-    padding: 16px 12px;
-  }
-
-  .statistics-content {
-    gap: 12px;
-  }
-
-  .statistics-icon {
-    transform: scale(0.9);
-  }
-
-  .statistics-value {
-    font-size: 20px;
-  }
-
-  .statistics-label {
-    font-size: 12px;
   }
 
   .filter-form {
@@ -1445,184 +1366,64 @@ onMounted(async () => {
   }
 }
 
-/* 统计卡片区域 */
+/* 统计卡片 - 紧凑横並び・余白削減 */
 .statistics-section {
-  margin-bottom: 24px;
+  margin-bottom: 6px;
 }
 
-.statistics-card {
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  padding: 20px 16px;
-  text-align: center;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+.statistics-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+@media (max-width: 992px) {
+  .statistics-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .statistics-cards { grid-template-columns: 1fr; }
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
   border: none;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
 }
-
-.statistics-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: inherit;
-  opacity: 0.9;
-  z-index: -1;
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
 }
-
-.statistics-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
-}
-
-.total-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  position: relative;
-}
-
-.total-card::after {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 100px;
-  height: 100px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  animation: float 6s ease-in-out infinite;
-}
-
-.pending-card {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  position: relative;
-}
-
-.pending-card::after {
-  content: '';
-  position: absolute;
-  top: -30%;
-  left: -30%;
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  animation: float 4s ease-in-out infinite reverse;
-}
-
-.completed-card {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-  position: relative;
-}
-
-.completed-card::after {
-  content: '';
-  position: absolute;
-  bottom: -40%;
-  right: -40%;
-  width: 90px;
-  height: 90px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  animation: float 5s ease-in-out infinite;
-}
-
-.completion-card {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-  position: relative;
-}
-
-.completion-card::after {
-  content: '';
-  position: absolute;
-  top: -20%;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 70px;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  animation: float 3s ease-in-out infinite reverse;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translateY(-10px) rotate(180deg);
-    opacity: 1;
-  }
-}
-
-.statistics-card .statistics-icon,
-.statistics-card .statistics-label,
-.statistics-card .statistics-value {
-  color: #ffffff !important;
-  position: relative;
-  z-index: 2;
-}
-
-.statistics-content {
+.stat-card .stat-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  position: relative;
-  z-index: 2;
-}
-
-.statistics-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   flex-shrink: 0;
-  animation: pulse 2s ease-in-out infinite;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.25);
 }
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-.statistics-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
-}
-
-.statistics-label {
-  font-weight: 500;
-  margin-bottom: 4px;
-  font-size: 13px;
-  opacity: 0.9;
-  letter-spacing: 0.5px;
-}
-
-.statistics-value {
+.stat-card .stat-value {
   font-weight: 700;
-  font-size: 24px;
+  font-size: 15px;
   line-height: 1;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  animation: countUp 0.8s ease-out;
+  color: #fff;
+  letter-spacing: 0.02em;
 }
-
-@keyframes countUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.stat-card .stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  margin-left: auto;
+  white-space: nowrap;
 }
+.total-card { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
+.pending-card { background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%); }
+.completed-card { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); }
+.completion-card { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); }
 </style>

@@ -1,19 +1,28 @@
 <template>
-  <el-dialog v-model="visible" title="納入先グループ管理" width="58%" :close-on-click-modal="false"
-    class="destination-group-dialog" @close="handleClose">
+  <el-dialog
+    v-model="visible"
+    title="納入先グループ管理"
+    width="56%"
+    :close-on-click-modal="false"
+    class="destination-group-dialog"
+    @close="handleClose"
+  >
     <div class="group-manager">
-      <!-- 顶部纳入先标签区域 -->
+      <!-- 利用可能な納入先（各グループで重複選択可） -->
       <div class="destinations-section">
-        <h3 class="section-title">
-          <el-icon>
-            <Collection />
-          </el-icon>
-          利用可能な納入先
-        </h3>
+        <div class="section-row">
+          <span class="section-title">
+            <el-icon><Collection /></el-icon>
+            利用可能な納入先
+          </span>
+          <span class="section-hint">（各グループで重複選択可）</span>
+        </div>
         <div class="destinations-container">
           <div v-for="destination in availableDestinations" :key="destination.value"
             :data-destination="JSON.stringify(destination)" class="destination-tag" draggable="true"
-            @dragstart="handleDragStart">
+            @dragstart="handleDragStart"
+            @touchstart="handleTouchStart($event, destination)"
+            @touchcancel="handleTouchCancel">
             <el-tag size="default" type="info" class="draggable-tag">
               {{ destination.label }}
             </el-tag>
@@ -21,55 +30,52 @@
         </div>
       </div>
 
-      <!-- 分组管理区域 -->
+      <!-- グループ管理 -->
       <div class="groups-section">
-        <div class="groups-header">
-          <h3 class="section-title">
-            <el-icon>
-              <Box />
-            </el-icon>
+        <div class="section-row groups-header">
+          <span class="section-title">
+            <el-icon><Box /></el-icon>
             グループ管理
-          </h3>
-          <el-button type="primary" @click="showCreateGroupDialog">
-            <el-icon>
-              <Plus />
-            </el-icon>
-            新規グループ作成
+          </span>
+          <el-button type="primary" size="small" @click="showCreateGroupDialog" class="btn-create">
+            <el-icon><Plus /></el-icon>
+            新規作成
           </el-button>
         </div>
 
         <div class="groups-container">
           <div v-for="(group, index) in groups" :key="group.id || index"
-            :class="['group-container', `group-${(index % 3) + 1}`]" @drop="handleDrop($event, index)"
+            :class="['group-container', `group-${(index % 3) + 1}`]"
+            :data-group-index="String(index)"
+            @drop="handleDrop($event, index)"
             @dragover="handleDragOver" @dragenter="handleDragEnter" @dragleave="handleDragLeave">
             <div class="group-header">
               <div class="group-title">
-                <el-input v-if="group.editing" v-model="group.groupName" size="small" @blur="saveGroupName(group)"
-                  @keyup.enter="saveGroupName(group)" ref="groupNameInput" />
+                <el-input
+                  v-if="group.editing"
+                  v-model="group.groupName"
+                  size="small"
+                  @blur="saveGroupName(group)"
+                  @keyup.enter="saveGroupName(group)"
+                  ref="groupNameInput"
+                  class="group-name-input"
+                />
                 <h4 v-else @dblclick="editGroupName(group)">
-                  <el-icon>
-                    <Box />
-                  </el-icon>
+                  <el-icon><Box /></el-icon>
                   {{ group.groupName }}
-                  <el-badge :value="group.destinations.length" type="primary" />
+                  <el-badge :value="group.destinations.length" type="primary" class="group-badge" />
                 </h4>
               </div>
               <div class="group-actions">
-                <el-button size="small" type="primary" text @click="editGroupName(group)" title="グループ名編集">
-                  <el-icon>
-                    <Edit />
-                  </el-icon>
+                <el-button size="small" type="primary" text @click="editGroupName(group)" title="編集" class="btn-icon">
+                  <el-icon><Edit /></el-icon>
                 </el-button>
                 <el-button size="small" type="warning" text @click="clearGroup(index)"
-                  :disabled="group.destinations.length === 0" title="グループクリア">
-                  <el-icon>
-                    <Delete />
-                  </el-icon>
+                  :disabled="group.destinations.length === 0" title="クリア" class="btn-icon">
+                  <el-icon><Delete /></el-icon>
                 </el-button>
-                <el-button size="small" type="danger" text @click="deleteGroup(group, index)" title="グループ削除">
-                  <el-icon>
-                    <Close />
-                  </el-icon>
+                <el-button size="small" type="danger" text @click="deleteGroup(group, index)" title="削除" class="btn-icon">
+                  <el-icon><Close /></el-icon>
                 </el-button>
               </div>
             </div>
@@ -80,28 +86,22 @@
                 </el-tag>
               </div>
               <div v-if="group.destinations.length === 0" class="empty-group">
-                <el-icon>
-                  <Plus />
-                </el-icon>
-                <span>ここに納入先をドラッグ</span>
+                <el-icon><Plus /></el-icon>
+                <span>ここにドラッグ</span>
+                <span class="touch-hint">長押しでドラッグ</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 操作按钮 -->
       <div class="actions-section">
-        <el-button @click="autoAssignByIssueType" :loading="autoAssignLoading">
-          <el-icon>
-            <Star />
-          </el-icon>
-          一键分配（按発行区分）
+        <el-button size="small" @click="autoAssignByIssueType" :loading="autoAssignLoading" class="btn-action">
+          <el-icon><Star /></el-icon>
+          一键分配
         </el-button>
-        <el-button type="primary" @click="saveAndClose" :loading="saveLoading">
-          <el-icon>
-            <Check />
-          </el-icon>
+        <el-button type="primary" size="small" @click="saveAndClose" :loading="saveLoading" class="btn-action btn-save">
+          <el-icon><Check /></el-icon>
           保存
         </el-button>
       </div>
@@ -124,11 +124,22 @@
       </template>
     </el-dialog>
 
+    <!-- 触摸拖拽时的跟随幽灵（手机/平板用） -->
+    <Teleport to="body">
+      <div
+        v-show="touchDragActive"
+        ref="touchDragGhostRef"
+        class="touch-drag-ghost"
+        :style="touchGhostStyle"
+      >
+        <el-tag size="default" type="info" class="draggable-tag">{{ touchDragLabel }}</el-tag>
+      </div>
+    </Teleport>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Collection, Box, Plus, Edit, Delete, Close, Check, Star } from '@element-plus/icons-vue'
 import request from '@/utils/request'
@@ -172,22 +183,30 @@ const groups: Ref<Group[]> = ref([])
 const createGroupDialogVisible = ref(false)
 const groupNameInput = ref<HTMLElement[]>()
 
+// 触摸拖拽状态（手机/平板）
+const touchDragGhostRef = ref<HTMLElement | null>(null)
+const touchDragActive = ref(false)
+const touchDragPayload = ref<Destination | null>(null)
+const touchGhostX = ref(0)
+const touchGhostY = ref(0)
+const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+let touchMoveHandler: ((e: TouchEvent) => void) | null = null
+let touchEndHandler: ((e: TouchEvent) => void) | null = null
+let touchCancelHandler: ((e: TouchEvent) => void) | null = null
+
+const touchDragLabel = computed(() => touchDragPayload.value?.label ?? '')
+const touchGhostStyle = computed(() => ({
+  left: `${touchGhostX.value}px`,
+  top: `${touchGhostY.value}px`,
+}))
+
 // 新建分组表单
 const newGroupForm = reactive({
   groupName: '',
 })
 
-// 计算可用的纳入先（未分组的）
-const availableDestinations = computed(() => {
-  const assignedValues = new Set()
-  groups.value.forEach((group) => {
-    group.destinations.forEach((dest) => {
-      assignedValues.add(dest.value)
-    })
-  })
-
-  return allDestinations.value.filter((dest) => !assignedValues.has(dest.value))
-})
+// 利用可能な納入先：常に全件表示し、各グループで重複選択可能
+const availableDestinations = computed(() => [...allDestinations.value])
 
 // 监听props变化
 watch(
@@ -213,6 +232,14 @@ onMounted(() => {
     loadDestinationsWithIssueType()
     loadGroups()
   }
+})
+
+onUnmounted(() => {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+  removeTouchListeners()
 })
 
 // API响应类型定义
@@ -530,6 +557,16 @@ async function saveAllGroups() {
   }
 }
 
+// 将納入先加入指定分组（同一納入先可存在于多个グループ，不再从其他组移除）
+function addDestinationToGroup(groupIndex: number, destination: Destination) {
+  if (groupIndex < 0 || groupIndex >= groups.value.length) return
+  const group = groups.value[groupIndex]
+  const isAlreadyInGroup = group.destinations.some((dest) => dest.value === destination.value)
+  if (!isAlreadyInGroup) {
+    group.destinations.push({ ...destination })
+  }
+}
+
 // 拖拽开始
 function handleDragStart(event: DragEvent) {
   const target = event.target as HTMLElement
@@ -571,23 +608,102 @@ function handleDrop(event: DragEvent, groupIndex: number) {
     const destinationData = event.dataTransfer?.getData('text/plain')
     if (!destinationData) return
     const destination: Destination = JSON.parse(destinationData)
-
-    // 检查是否已经在该分组中
-    const isAlreadyInGroup = groups.value[groupIndex].destinations.some(
-      (dest) => dest.value === destination.value,
-    )
-
-    if (!isAlreadyInGroup) {
-      // 从其他分组中移除（如果存在）
-      groups.value.forEach((group) => {
-        group.destinations = group.destinations.filter((dest) => dest.value !== destination.value)
-      })
-
-      // 添加到目标分组
-      groups.value[groupIndex].destinations.push(destination)
-    }
+    addDestinationToGroup(groupIndex, destination)
   } catch (error) {
     console.error('拖拽处理失败:', error)
+  }
+}
+
+// 清除所有 drop 区域的高亮（触摸拖拽用）
+function clearTouchDragOver() {
+  document.querySelectorAll('.group-container.drag-over').forEach((el) => el.classList.remove('drag-over'))
+}
+
+// 触摸：长按开始拖拽
+function handleTouchStart(event: TouchEvent, destination: Destination) {
+  if (event.touches.length !== 1) return
+  const touch = event.touches[0]
+  const startX = touch.clientX
+  const startY = touch.clientY
+
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+
+  longPressTimer.value = setTimeout(() => {
+    longPressTimer.value = null
+    touchDragPayload.value = destination
+    touchGhostX.value = startX
+    touchGhostY.value = startY
+    touchDragActive.value = true
+
+    touchMoveHandler = (e: TouchEvent) => {
+      if (!touchDragActive.value || e.touches.length !== 1) return
+      e.preventDefault()
+      const t = e.touches[0]
+      touchGhostX.value = t.clientX
+      touchGhostY.value = t.clientY
+      clearTouchDragOver()
+      const under = document.elementFromPoint(t.clientX, t.clientY)
+      const container = under?.closest('.group-container')
+      if (container) container.classList.add('drag-over')
+    }
+
+    touchEndHandler = (e: TouchEvent) => {
+      if (!touchDragActive.value) return
+      e.preventDefault()
+      touchDragActive.value = false
+      clearTouchDragOver()
+      const under = document.elementFromPoint(touchGhostX.value, touchGhostY.value)
+      const container = under?.closest('.group-container')
+      const groupIndexStr = container?.getAttribute('data-group-index')
+      if (groupIndexStr != null && touchDragPayload.value) {
+        const groupIndex = parseInt(groupIndexStr, 10)
+        if (!Number.isNaN(groupIndex)) addDestinationToGroup(groupIndex, touchDragPayload.value)
+      }
+      touchDragPayload.value = null
+      removeTouchListeners()
+    }
+
+    touchCancelHandler = () => {
+      touchDragActive.value = false
+      touchDragPayload.value = null
+      clearTouchDragOver()
+      removeTouchListeners()
+    }
+
+    document.addEventListener('touchmove', touchMoveHandler, { passive: false })
+    document.addEventListener('touchend', touchEndHandler, { passive: false })
+    document.addEventListener('touchcancel', touchCancelHandler, { passive: false })
+  }, 400)
+}
+
+function removeTouchListeners() {
+  if (touchMoveHandler) {
+    document.removeEventListener('touchmove', touchMoveHandler)
+    touchMoveHandler = null
+  }
+  if (touchEndHandler) {
+    document.removeEventListener('touchend', touchEndHandler)
+    touchEndHandler = null
+  }
+  if (touchCancelHandler) {
+    document.removeEventListener('touchcancel', touchCancelHandler)
+    touchCancelHandler = null
+  }
+}
+
+function handleTouchCancel() {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+  if (touchDragActive.value) {
+    touchDragActive.value = false
+    touchDragPayload.value = null
+    clearTouchDragOver()
+    removeTouchListeners()
   }
 }
 
@@ -624,68 +740,95 @@ defineExpose({
 
 <style scoped>
 .destination-group-dialog :deep(.el-dialog) {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12), 0 4px 12px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
 }
 
 .destination-group-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-  color: white;
-  padding: 12px 16px;
-  border-radius: 8px 8px 0 0;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #1e40af 0%, #2563eb 50%, #3b82f6 100%);
+  color: #fff;
+  border-bottom: none;
 }
 
 .destination-group-dialog :deep(.el-dialog__title) {
-  color: white;
+  color: #fff;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.destination-group-dialog :deep(.el-dialog__headerbtn) {
+  width: 32px;
+  height: 32px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .destination-group-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.destination-group-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #fff;
 }
 
 .destination-group-dialog :deep(.el-dialog__body) {
-  padding: 12px;
-}
-
-.destination-group-dialog {
+  padding: 10px 14px 12px;
   --el-dialog-content-font-size: 13px;
 }
 
 .group-manager {
-  min-height: 500px;
+  min-height: 320px;
+}
+
+.section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .section-title {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-  color: #374151;
-  font-size: 14px;
+  gap: 5px;
+  color: #334155;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .section-title .el-icon {
-  font-size: 16px;
+  font-size: 14px;
   color: #2563eb;
 }
 
-/* 纳入先标签区域 */
+.section-hint {
+  margin-left: 8px;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: normal;
+}
+
+/* 利用可能な納入先 - 紧凑 */
 .destinations-section {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f9fafb;
-  border-radius: 6px;
-  border: 1px dashed #e5e7eb;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
 }
 
 .destinations-container {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  min-height: 60px;
+  gap: 4px;
+  min-height: 40px;
+  align-items: center;
 }
 
 .destination-tag {
@@ -695,76 +838,68 @@ defineExpose({
 
 .destination-tag:hover {
   transform: translateY(-1px);
-  transition: transform 0.2s ease;
+  transition: transform 0.15s ease;
 }
 
 .draggable-tag {
   cursor: move;
-  font-size: 12px;
-  padding: 4px 10px;
-}
-
-/* 分组区域 */
-.groups-section {
-  margin-bottom: 16px;
-}
-
-.groups-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.groups-header .el-button {
-  padding: 6px 12px;
-  font-size: 13px;
+  font-size: 11px;
+  padding: 3px 8px;
   border-radius: 6px;
   font-weight: 500;
 }
 
+/* グループ管理 */
+.groups-section {
+  margin-bottom: 10px;
+}
+
+.groups-header .btn-create {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
 .groups-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
 }
 
 .group-container {
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
   background: #fff;
-  min-height: 250px;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  min-height: 180px;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.group-container:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
 .group-container.drag-over {
   border-color: #2563eb;
-  background: #eff6ff;
-  transform: scale(1.01);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
 }
 
-.group-1 {
-  border-left: 3px solid #10b981;
-}
-
-.group-2 {
-  border-left: 3px solid #f59e0b;
-}
-
-.group-3 {
-  border-left: 3px solid #ef4444;
-}
+.group-1 { border-left: 3px solid #059669; }
+.group-2 { border-left: 3px solid #d97706; }
+.group-3 { border-left: 3px solid #dc2626; }
 
 .group-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  background: #f9fafb;
-  border-bottom: 1px solid #e5e7eb;
-  border-radius: 6px 6px 0 0;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  border-radius: 8px 8px 0 0;
 }
 
 .group-title {
@@ -772,52 +907,70 @@ defineExpose({
   min-width: 0;
 }
 
+.group-title .group-name-input :deep(.el-input__wrapper) {
+  padding: 2px 8px;
+  min-height: 26px;
+  border-radius: 4px;
+}
+
 .group-title h4 {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  color: #374151;
+  color: #334155;
   cursor: pointer;
 }
 
 .group-title h4 .el-icon {
-  font-size: 14px;
+  font-size: 13px;
   color: #2563eb;
+  flex-shrink: 0;
 }
 
 .group-title h4:hover {
-  color: #2563eb;
+  color: #1d4ed8;
+}
+
+.group-badge {
+  margin-left: 4px;
+}
+
+.group-badge :deep(.el-badge__content) {
+  font-size: 10px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 5px;
 }
 
 .group-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
-.group-actions .el-button {
-  padding: 4px 6px;
+.group-actions .btn-icon {
+  padding: 4px;
   font-size: 12px;
 }
 
 .group-content {
-  padding: 10px;
-  min-height: 200px;
-  max-height: 300px;
+  padding: 8px;
+  min-height: 140px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
 .group-item {
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .group-item .el-tag {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
 }
 
 .empty-group {
@@ -825,64 +978,74 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 150px;
-  color: #9ca3af;
-  font-size: 12px;
+  height: 100px;
+  color: #94a3b8;
+  font-size: 11px;
 }
 
 .empty-group .el-icon {
-  font-size: 24px;
-  margin-bottom: 6px;
-  color: #d1d5db;
+  font-size: 20px;
+  margin-bottom: 4px;
+  color: #cbd5e1;
 }
 
-/* 操作按钮区域 */
+.empty-group .touch-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+/* 操作按钮 - 紧凑 */
 .actions-section {
   display: flex;
   justify-content: center;
   gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid #e5e7eb;
+  padding: 8px 0 0;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 2px;
 }
 
-.actions-section .el-button {
-  padding: 8px 16px;
+.actions-section .btn-action {
+  padding: 6px 14px;
+  font-size: 12px;
   font-weight: 500;
-  font-size: 13px;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.actions-section .el-button:hover {
+.actions-section .btn-save {
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+.actions-section .btn-action:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
-/* 对话框底部 */
+/* 内层对话框 */
+.destination-group-dialog :deep(.el-dialog__body .el-dialog__body) {
+  padding: 12px;
+}
+
 .dialog-footer {
   display: flex;
   gap: 8px;
 }
 
 .dialog-footer .el-button {
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 6px 14px;
+  font-size: 12px;
   border-radius: 6px;
   font-weight: 500;
 }
 
-/* 创建分组对话框 */
-.destination-group-dialog :deep(.el-dialog__body .el-dialog__body) {
-  padding: 16px;
-}
-
-/* 滚动条美化 */
+/* 滚动条 */
 .group-content::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 .group-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f1f5f9;
   border-radius: 3px;
 }
 
@@ -895,24 +1058,109 @@ defineExpose({
   background: #94a3b8;
 }
 
-/* 响应式设计 */
+/* 响应式 */
+@media (max-width: 900px) {
+  .destination-group-dialog :deep(.el-dialog) {
+    width: 92% !important;
+    margin: 4vh auto;
+  }
+
+  .groups-container {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
+  .destination-group-dialog :deep(.el-dialog) {
+    width: 96% !important;
+    max-width: 100%;
+  }
+
+  .destination-group-dialog :deep(.el-dialog__body) {
+    padding: 8px 10px 10px;
+  }
+
+  .group-manager {
+    min-height: 280px;
+  }
+
+  .destinations-section {
+    padding: 6px 8px;
+    margin-bottom: 8px;
+  }
+
   .destinations-container {
-    justify-content: center;
+    min-height: 36px;
   }
 
   .groups-container {
     grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .group-container {
-    margin-bottom: 12px;
+    min-height: 160px;
   }
 
-  .groups-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+  .group-content {
+    min-height: 120px;
+    max-height: 180px;
   }
+
+  .empty-group {
+    height: 80px;
+  }
+
+  .section-row.groups-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .groups-header .btn-create {
+    align-self: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .destination-group-dialog :deep(.el-dialog__header) {
+    padding: 8px 12px;
+  }
+
+  .destination-group-dialog :deep(.el-dialog__title) {
+    font-size: 14px;
+  }
+
+  .group-header {
+    padding: 5px 8px;
+  }
+
+  .group-title h4 {
+    font-size: 11px;
+  }
+
+  .actions-section {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 6px 0 0;
+  }
+
+  .actions-section .btn-action {
+    flex: 1;
+    min-width: 120px;
+  }
+}
+</style>
+
+<!-- 触摸拖拽幽灵在 body 下，需全局样式 -->
+<style>
+.touch-drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.2));
+}
+.touch-drag-ghost .draggable-tag {
+  white-space: nowrap;
 }
 </style>

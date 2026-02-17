@@ -136,11 +136,6 @@
         </template>
       </el-table-column>
       <el-table-column :label="t('orderDailyBatchEdit.colWeekday')" prop="weekday" width="50" align="center" />
-      <el-table-column :label="t('orderDailyBatchEdit.colDeliveryDate')" prop="delivery_date" width="70" align="center">
-        <template #default="{ row }">
-          <span class="cell-delivery-date">{{ formatDate(row.delivery_date) }}</span>
-        </template>
-      </el-table-column>
 
       <!-- 確定箱数（編集） -->
       <el-table-column :label="t('orderDailyBatchEdit.colConfirmedBoxes')" prop="confirmed_boxes" width="100" align="center">
@@ -228,6 +223,12 @@
               }
             "
           />
+        </template>
+      </el-table-column>
+      <!-- 納入日（内示本数の後） -->
+      <el-table-column :label="t('orderDailyBatchEdit.colDeliveryDate')" prop="delivery_date" width="70" align="center">
+        <template #default="{ row }">
+          <span class="cell-delivery-date">{{ formatDate(row.delivery_date) }}</span>
         </template>
       </el-table-column>
       <!-- 備考 -->

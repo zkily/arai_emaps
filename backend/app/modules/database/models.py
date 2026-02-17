@@ -17,6 +17,7 @@ class ProductionSummary(Base):
     day_of_week = Column(String(10), comment="曜日")
     order_quantity = Column(Integer, default=0, comment="受注数")
     forecast_quantity = Column(Integer, default=0, comment="内示数")
+    safety_stock = Column(Integer, default=0, comment="安全在庫")
     # 切断
     cutting_carry_over = Column(Integer, default=0)
     cutting_actual = Column(Integer, default=0)

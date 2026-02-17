@@ -111,6 +111,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_CONFIRM', name: '出荷確認リスト', path: '/erp/shipping/confirm', parentCode: 'ERP_SHIPPING', sortOrder: 4 },
   { code: 'ERP_SHIPPING_WELDING', name: '溶接出荷管理', path: '/erp/shipping/welding', parentCode: 'ERP_SHIPPING', sortOrder: 5 },
   { code: 'ERP_SHIPPING_PICKING', name: 'ピッキング管理', path: '/erp/shipping/picking', parentCode: 'ERP_SHIPPING', sortOrder: 6 },
+  { code: 'ERP_SHIPPING_INVENTORY_SHORTAGE', name: '在庫不足管理', path: '/erp/shipping/inventory-shortage', parentCode: 'ERP_SHIPPING', sortOrder: 7 },
 
   { code: 'APS', name: '生産スケジューラ', icon: 'DataAnalysis', sortOrder: 2 },
   { code: 'APS_PLANNING', name: '生産計画', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },

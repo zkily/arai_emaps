@@ -1615,20 +1615,19 @@ const refreshData = () => {
 // 指示書を印刷
 const printInstructions = async () => {
   try {
-    // 获取完整的期间数据，而不是分页数据
-    const fullPlanData = await getFullPlanDataForPrint()
-
-    if (fullPlanData.length === 0) {
-      ElMessage.warning('印刷する計画データがありません')
+    // 获取要生成指示書的设备列表（每台设备都生成一页）
+    const machineList = await getFormingMachineNamesForPrint()
+    if (machineList.length === 0) {
+      ElMessage.warning('印刷対象の設備がありません')
       return
     }
 
-    // 按设备分组数据
-    const groupedByMachine = groupDataByMachine(fullPlanData)
+    // 获取完整的期间数据（可能为空，无数据时表格显示「生産計画停止」）
+    const fullPlanData = await getFullPlanDataForPrint()
 
     // 各設備の印刷コンテンツを生成
     const printContents = await Promise.all(
-      Object.keys(groupedByMachine).map(async (machineName) => {
+      machineList.map(async (machineName) => {
         return await generatePrintContent(fullPlanData, machineName)
       }),
     )
@@ -2012,6 +2011,28 @@ const calculateSmartDateRange = async () => {
   }
 }
 
+// 获取要生成成型生産指示書的设备列表：指定设备时只返回该设备，未指定时返回所有成型设备
+const getFormingMachineNamesForPrint = async (): Promise<string[]> => {
+  if (planSearchForm.machineName) {
+    return [planSearchForm.machineName]
+  }
+  try {
+    const result = (await request.get('/api/master/machines', {
+      params: { machine_type: '成型' },
+    })) as ApiResponse
+    const list: any[] = Array.isArray(result)
+      ? result
+      : (result?.list ?? (result?.data as any)?.list ?? [])
+    return list
+      .map((m: any) => m.machine_name)
+      .filter(Boolean)
+      .sort((a: string, b: string) => a.localeCompare(b))
+  } catch (error) {
+    console.error('获取成型设备列表失败:', error)
+    return []
+  }
+}
+
 // 获取完整的期间数据用于打印
 const getFullPlanDataForPrint = async () => {
   try {
@@ -2082,21 +2103,19 @@ const getFullPlanDataForPrint = async () => {
 // 指示書印刷プレビューを表示
 const showPrintPreview = async () => {
   try {
-    // 获取完整的期间数据，而不是分页数据
-    const fullPlanData = await getFullPlanDataForPrint()
-
-    if (fullPlanData.length === 0) {
-      ElMessage.warning('印刷する計画データがありません')
+    // 获取要生成指示書的设备列表（每台设备都生成一页）
+    const machineList = await getFormingMachineNamesForPrint()
+    if (machineList.length === 0) {
+      ElMessage.warning('印刷対象の設備がありません')
       return
     }
 
-    // 按设备分组数据
-    const groupedByMachine = groupDataByMachine(fullPlanData)
+    // 获取完整的期间数据（可能为空，无数据时表格显示「生産計画停止」）
+    const fullPlanData = await getFullPlanDataForPrint()
 
     // 为每台设备生成预览内容
     const previewContents = await Promise.all(
-      Object.keys(groupedByMachine).map(async (machineName) => {
-        // 传递完整的数据，让generatePrintContent函数自己进行过滤
+      machineList.map(async (machineName) => {
         return await generatePrintContent(fullPlanData, machineName)
       }),
     )
@@ -2644,9 +2663,20 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
                     // 注意：这里不需要再次过滤日期，因为getFullPlanDataForPrint已经使用了智能日期范围
                     return true
                   })
+                  .sort((a, b) => {
+                    // 生産日升序
+                    const dateA = a.plan_date || ''
+                    const dateB = b.plan_date || ''
+                    if (dateA !== dateB) return dateA.localeCompare(dateB)
+                    // 生産順位升序（数值优先，否则按字符串）
+                    const opA = a.operator != null && a.operator !== '' ? Number(a.operator) : NaN
+                    const opB = b.operator != null && b.operator !== '' ? Number(b.operator) : NaN
+                    if (!Number.isNaN(opA) && !Number.isNaN(opB)) return opA - opB
+                    return String(a.operator || '').localeCompare(String(b.operator || ''))
+                  })
                   .slice(0, 4) // 只显示前4行数据
 
-                // 如果没有数据，显示"生産停止"
+                // 如果没有数据，在表格里显示「生産計画停止」
                 if (filteredData.length === 0) {
                   return `
                     <tr>

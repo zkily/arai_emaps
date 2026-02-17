@@ -10,8 +10,8 @@
             </el-icon>
           </div>
           <div class="title-text">
-            <h2 class="page-title">スライディング溶接出荷管理</h2>
-            <p class="page-description">スライディング溶接製品の出荷予定を期間別・納入先別に管理</p>
+            <h2 class="page-title">{{ t('shipping.weldingTitle') }}</h2>
+            <p class="page-description">{{ t('shipping.weldingSubtitle') }}</p>
           </div>
         </div>
         <div class="header-decoration"></div>
@@ -26,7 +26,7 @@
             <el-icon class="header-icon">
               <Search />
             </el-icon>
-            <span class="header-title">検索条件</span>
+            <span class="header-title">{{ t('shipping.weldingSearchCondition') }}</span>
           </div>
           <div class="header-badge">検索設定</div>
         </div>
@@ -34,15 +34,15 @@
 
       <el-form :model="searchForm" :inline="true" class="search-form">
         <div class="form-row-inline">
-          <el-form-item label="期間" class="form-item-compact">
+          <el-form-item :label="t('shipping.weldingPeriod')" class="form-item-compact">
             <el-date-picker v-model="dateRange" type="daterange" range-separator="～" start-placeholder="開始日"
               end-placeholder="終了日" format="YYYY-MM-DD" value-format="YYYY-MM-DD" :shortcuts="dateShortcuts"
               @change="onDateRangeChange" class="date-picker" />
           </el-form-item>
 
-          <el-form-item label="対象製品" class="form-item-compact">
+          <el-form-item :label="t('shipping.weldingProduct')" class="form-item-compact">
             <el-select v-model="searchForm.selectedProducts" multiple collapse-tags collapse-tags-tooltip
-              placeholder="溶接製品を選択" class="product-select" :loading="productLoading">
+              :placeholder="t('shipping.selectWeldingProduct')" class="product-select" :loading="productLoading">
               <el-option v-for="product in weldingProducts" :key="product.value" :label="product.label"
                 :value="product.value" />
             </el-select>
@@ -56,13 +56,13 @@
               <el-icon>
                 <Search />
               </el-icon>
-              検索実行
+              {{ t('shipping.searchExecute') }}
             </el-button>
             <el-button @click="handleReset" class="reset-btn">
               <el-icon>
                 <Refresh />
               </el-icon>
-              リセット
+              {{ t('shipping.reset') }}
             </el-button>
           </div>
         </div>
@@ -77,14 +77,14 @@
             <el-icon class="header-icon">
               <Printer />
             </el-icon>
-            <span class="header-title">出荷予定表</span>
+            <span class="header-title">{{ t('shipping.weldingSchedule') }}</span>
           </div>
           <div class="header-actions">
             <el-button type="success" @click="handleExport" :loading="exportLoading" class="export-btn">
               <el-icon>
                 <Printer />
               </el-icon>
-              印刷用出力
+              {{ t('shipping.printExport') }}
             </el-button>
           </div>
         </div>
@@ -218,6 +218,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { TableColumnCtx } from 'element-plus'
 import { Search, Refresh, Printer, Calendar, Box, DataLine, Loading } from '@element-plus/icons-vue'
@@ -230,18 +231,34 @@ import {
   type WeldingShippingRecord,
 } from '@/api/shipping/weldingShipping'
 
+const { t } = useI18n()
+
+// 当月期间（默认）：按 JST 计算，与页面其他日期显示一致
+const getCurrentMonthRange = (): [string, string] => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  // 当前时刻在 JST 下的年月日
+  const jst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+  const y = jst.getUTCFullYear()
+  const m = jst.getUTCMonth()
+  const startStr = `${y}-${pad(m + 1)}-01`
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+  const endStr = `${y}-${pad(m + 1)}-${pad(lastDay)}`
+  return [startStr, endStr]
+}
+const initialMonthRange = getCurrentMonthRange()
+
 // 响应式数据
 const productLoading = ref(false)
 const tableLoading = ref(false)
 const exportLoading = ref(false)
 const weldingProducts = ref<WeldingProduct[]>([])
 const tableData = ref<WeldingShippingData | null>(null)
-const dateRange = ref<[string, string]>()
+const dateRange = ref<[string, string] | undefined>(initialMonthRange)
 
-// 搜索表单
+// 搜索表单（默认当月、対象製品在 loadWeldingProducts 后全选）
 const searchForm = reactive({
-  startDate: '',
-  endDate: '',
+  startDate: initialMonthRange[0],
+  endDate: initialMonthRange[1],
   selectedProducts: [] as string[],
 })
 
@@ -361,13 +378,20 @@ onMounted(() => {
   loadWeldingProducts()
 })
 
-// 加载溶接产品列表
+// 加载溶接产品列表（加载完成后默认全选対象製品，并用默认条件自动检索）
 const loadWeldingProducts = async () => {
   try {
     productLoading.value = true
     const response = await getWeldingProducts()
     // request工具已经自动提取了data字段，所以直接使用response
-    weldingProducts.value = (response as WeldingProduct[]) || []
+    const list = (response as WeldingProduct[]) || []
+    weldingProducts.value = list
+    // 対象製品默认全选
+    searchForm.selectedProducts = list.map((p) => p.value)
+    // 用默认筛选条件（当月・全选）自动加载数据
+    if (searchForm.startDate && searchForm.endDate && searchForm.selectedProducts.length > 0) {
+      await handleSearch()
+    }
   } catch (error) {
     console.error('溶接製品取得エラー:', error)
     ElMessage.error('溶接製品の取得に失敗しました')

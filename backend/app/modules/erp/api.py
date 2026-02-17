@@ -236,13 +236,16 @@ async def create_order_monthly(
         existing.product_alias = body.product_alias
         existing.forecast_units = body.forecast_units or 0
         existing.forecast_total_units = body.forecast_total_units or 0
-        existing.forecast_diff = body.forecast_diff or 0
+        # 内示差異 = 確定本数 - 内示本数
+        existing.forecast_diff = (body.forecast_total_units or 0) - (body.forecast_units or 0)
         await db.commit()
         await db.refresh(existing)
         return existing
     # order_id をアプリで生成（DBトリガーが無い環境でも動作するように）
     suffix = _order_monthly_type_suffix(product_type)
     order_id = f"{body.year}{body.month:02d}{body.destination_cd}{body.product_cd}{suffix}"
+    # 内示差異 = 確定本数 - 内示本数
+    forecast_diff = (body.forecast_total_units or 0) - (body.forecast_units or 0)
     row = models.OrderMonthly(
         order_id=order_id,
         destination_cd=body.destination_cd,
@@ -255,7 +258,7 @@ async def create_order_monthly(
         product_type=product_type,
         forecast_units=body.forecast_units or 0,
         forecast_total_units=body.forecast_total_units or 0,
-        forecast_diff=body.forecast_diff or 0,
+        forecast_diff=forecast_diff,
     )
     db.add(row)
     await db.commit()

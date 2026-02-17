@@ -2,8 +2,8 @@
   <!-- 内联模式：直接渲染在页面中（筛选区上方） -->
   <div v-if="inline" class="shipping-calendar-inline">
     <div class="calendar-inline-header">
-      <span class="calendar-inline-title">営業報告カレンダー</span>
-      <span class="calendar-inline-subtitle">（発行説明：当日--終了便・社内便 翌日--鈴鹿便）</span>
+      <span class="calendar-inline-title">{{ calendarTitle }}</span>
+      <span class="calendar-inline-subtitle">{{ calendarSubtitle }}</span>
     </div>
     <div class="calendar-container">
       <!-- 月份导航 -->
@@ -37,6 +37,7 @@
               <div
                 v-for="(group, groupIndex) in destinationGroups"
                 :key="group.id || groupIndex"
+                v-show="!isList || isAllowedGroupForList(group)"
                 class="group-button-wrapper"
                 :class="{ 'has-data': hasGroupData(date, groupIndex), 'is-printed': isPrinted(date, groupIndex) }"
               >
@@ -48,10 +49,10 @@
                   :class="{ 'is-printed': isPrinted(date, groupIndex), [`group-${groupIndex}`]: true }"
                 >
                   <div class="button-content">
-                    <span class="button-text">{{ group.groupName }}</span>
+                    <span class="button-text">{{ stripReportPrefix(group.groupName) }}</span>
                     <div v-if="isPrinted(date, groupIndex)" class="print-badge">
                       <el-icon class="print-icon"><Check /></el-icon>
-                      <span class="print-text">発行済</span>
+                      <span class="print-text">済</span>
                     </div>
                   </div>
                 </el-button>
@@ -74,8 +75,8 @@
   >
     <template #header>
       <div class="dialog-header">
-        <span class="dialog-title">営業報告カレンダー</span>
-        <span class="dialog-subtitle">（発行説明：当日--終了便・社内便 翌日--鈴鹿便）</span>
+        <span class="dialog-title">{{ calendarTitle }}</span>
+        <span class="dialog-subtitle">{{ calendarSubtitle }}</span>
       </div>
     </template>
     <div class="calendar-container">
@@ -132,6 +133,7 @@
               <div
                 v-for="(group, groupIndex) in destinationGroups"
                 :key="group.id || groupIndex"
+                v-show="!isList || isAllowedGroupForList(group)"
                 class="group-button-wrapper"
                 :class="{
                   'has-data': hasGroupData(date, groupIndex),
@@ -149,12 +151,12 @@
                   }"
                 >
                   <div class="button-content">
-                    <span class="button-text">{{ group.groupName }}</span>
+                    <span class="button-text">{{ stripReportPrefix(group.groupName) }}</span>
                     <div v-if="isPrinted(date, groupIndex)" class="print-badge">
                       <el-icon class="print-icon">
                         <Check />
                       </el-icon>
-                      <span class="print-text">発行済</span>
+                      <span class="print-text">済</span>
                     </div>
                   </div>
                 </el-button>
@@ -172,7 +174,7 @@
   <!-- 分组管理 / 打印预览：内联与弹窗模式共用 -->
   <DestinationGroupManager
     v-model="showGroupManager"
-    page-key="destination_groups_calendar"
+    :page-key="groupsPageKey"
     @groups-updated="handleGroupsUpdated"
   />
   <el-dialog
@@ -185,7 +187,7 @@
       <div class="print-dialog-header">
         <span class="print-dialog-title">
           印刷プレビュー - {{ formatDate(selectedDate) }}
-          {{ destinationGroups[selectedGroup]?.groupName }}
+          {{ stripReportPrefix(destinationGroups[selectedGroup]?.groupName) }}
         </span>
         <div class="print-dialog-actions">
           <el-button @click="printDialogVisible = false">キャンセル</el-button>
@@ -194,7 +196,8 @@
       </div>
     </template>
     <div ref="printContent" class="print-content">
-        <ShippingReport
+        <component
+          :is="printComponent"
           v-if="printData && printData.length > 0"
           :data="printData"
           :filters="printFilters"
@@ -209,7 +212,8 @@
     class="hidden-print-container"
     style="position: absolute; left: -9999px; top: -9999px; visibility: hidden"
   >
-    <ShippingReport
+    <component
+      :is="printComponent"
       v-if="directPrintData && directPrintData.length > 0"
       :data="directPrintData"
       :filters="directPrintFilters"
@@ -224,6 +228,8 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Setting, Check, Calendar } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import ShippingReport from './ShippingReport.vue'
+import ShippingOverviewPrint from './ShippingOverviewPrint.vue'
+import ShippingListReport from './ShippingListReport.vue'
 import DestinationGroupManager from './DestinationGroupManager.vue'
 import { recordPrintHistory } from '@/api/shipping/printHistory'
 
@@ -232,10 +238,16 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  /** 为 true 时在页面内联显示（不弹窗），用于报告页筛选区上方 */
+  /** 为 true 时在页面内联显示（不弹窗），用于报告页/出荷予定表页筛选区上方 */
   inline: {
     type: Boolean,
     default: false,
+  },
+  /** report=出荷報告書（默认）, schedule=出荷予定表（オワリ便・吉良・社内便等）, list=出荷確認リスト（オワリ便・社内便等） */
+  reportType: {
+    type: String,
+    default: 'report',
+    validator: (v) => ['report', 'schedule', 'list'].includes(v),
   },
 })
 
@@ -305,6 +317,46 @@ const directPrintData = ref([])
 const directPrintFilters = ref({})
 
 const weekdays = ['日', '月', '火', '水', '木', '金', '土']
+
+// 显示用：去掉「出荷報告書-」前缀（按钮、打印标题、履历标题统一用短名）
+const stripReportPrefix = (name) => (name || '').replace(/^出荷報告書-?/, '')
+
+// reportType=list 时仅显示オワリ便・社内便
+const LIST_ALLOWED_GROUP_NAMES = ['オワリ便', '社内便']
+function isAllowedGroupForList(group) {
+  if (!group) return false
+  const name = stripReportPrefix(group.groupName || group.group_name || '')
+  return LIST_ALLOWED_GROUP_NAMES.includes(name)
+}
+
+// reportType=schedule 时：出荷予定表（オワリ便・吉良・社内便等）；report 时：出荷報告書；list 时：出荷確認リスト（オワリ便・社内便等）
+const isSchedule = computed(() => props.reportType === 'schedule')
+const isList = computed(() => props.reportType === 'list')
+const groupsPageKey = computed(() => {
+  if (isSchedule.value) return 'shipping_overview'
+  if (isList.value) return 'shipping_list'
+  return 'destination_groups_calendar'
+})
+const reportTypeForHistory = computed(() => {
+  if (isSchedule.value) return 'shipping_schedule_calendar'
+  if (isList.value) return 'shipping_list_calendar'
+  return 'shipping_calendar'
+})
+const printComponent = computed(() => {
+  if (isSchedule.value) return ShippingOverviewPrint
+  if (isList.value) return ShippingListReport
+  return ShippingReport
+})
+const calendarTitle = computed(() => {
+  if (isSchedule.value) return '出荷予定表カレンダー'
+  if (isList.value) return '出荷確認リストカレンダー'
+  return '営業報告カレンダー'
+})
+const calendarSubtitle = computed(() => {
+  if (isSchedule.value) return '（オワリ便・吉良・社内便等のグループ別に印刷）'
+  if (isList.value) return '（オワリ便・社内便等のグループ別に印刷）'
+  return '（発行説明：当日--終了便・社内便 翌日--鈴鹿便）'
+})
 
 // 计算属性（直接用数字年月，不经过 Date/JST，保证 1 月 31 天、2 月正常）
 const daysInMonth = computed(() => {
@@ -503,7 +555,7 @@ async function loadDestinationGroups() {
   try {
     console.log('🔄 分組配置を読み込み中...')
     const response = await request.get(
-      '/api/shipping/destination-groups/destination_groups_calendar',
+      `/api/shipping/destination-groups/${groupsPageKey.value}`,
     )
     console.log('📋 分組配置API応答:', response)
 
@@ -616,7 +668,7 @@ async function loadPrintHistory() {
     const params = {
       date_from: `${y}-${String(m + 1).padStart(2, '0')}-01`,
       date_to: `${y}-${String(m + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       offset: 0,
       limit: 500,
     }
@@ -651,10 +703,12 @@ async function loadPrintHistory() {
         console.log(`🔍 処理中 ${index + 1}/${printRecords.length}:`, record)
 
         if (record.report_title && record.status === '成功') {
-          // 解析 report_title 格式: '出荷報告書カレンダー - 2025-1-8 鈴鹿便'
-          const titleMatch = record.report_title.match(
-            /出荷報告書カレンダー\s*-\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\s+(.+)/,
-          )
+          // 解析 report_title：新格式 "2025-01-08 鈴鹿便"，旧格式 "出荷報告書カレンダー - 2025-1-8 鈴鹿便"
+          const titleMatch =
+            record.report_title.match(/^(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\s+(.+)$/) ||
+            record.report_title.match(
+              /出荷報告書カレンダー\s*-\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\s+(.+)/,
+            )
 
           if (titleMatch) {
             const dateStr = titleMatch[1].trim() // 例如: "2025-1-8"
@@ -675,9 +729,11 @@ async function loadPrintHistory() {
               // 先去掉可能存在的文件扩展名，例如 ".pdf"
               const cleanGroupName = groupName.replace(/\.(pdf|PDF)$/i, '').trim()
 
-              // 根据组名映射到组索引
+              // 根据组名映射到组索引（支持带「出荷報告書-」前缀的存储名与无前缀显示名）
               let groupIndex = destinationGroups.value.findIndex(
-                (g) => g.groupName === cleanGroupName,
+                (g) =>
+                  g.groupName === cleanGroupName ||
+                  stripReportPrefix(g.groupName) === cleanGroupName,
               )
 
               // 如果无法通过组名匹配，再尝试解析 filters 中的 selectedGroup 信息
@@ -913,6 +969,11 @@ async function handleGroupPrint(date, groupIndex) {
     // 获取打印数据（传 dateStr 保证 API 请求日期正确）
     await fetchDirectPrintData(dateStr, groupIndex)
 
+    if (!directPrintData.value || directPrintData.value.length === 0) {
+      ElMessage.warning('該当するデータがありません')
+      return
+    }
+
     // 等待一下让组件渲染完成
     await new Promise((resolve) => setTimeout(resolve, 100))
 
@@ -1027,7 +1088,7 @@ async function executePrint() {
   printWindow.document.write(`
     <html>
       <head>
-        <title>出荷報告書印刷 - ${formatDate(selectedDate.value)} ${destinationGroups.value[selectedGroup.value]?.groupName}</title>
+        <title>${formatDate(selectedDate.value)} ${stripReportPrefix(destinationGroups.value[selectedGroup.value]?.groupName)}</title>
         ${styles}
       </head>
       <body>
@@ -1075,12 +1136,12 @@ async function executeDirectPrint(dateStr, groupIndex) {
     .map((el) => el.outerHTML)
     .join('')
 
-  const groupName = destinationGroups.value[groupIndex]?.groupName || ''
+  const groupName = stripReportPrefix(destinationGroups.value[groupIndex]?.groupName || '')
 
   printWindow.document.write(`
     <html>
       <head>
-        <title>出荷報告書印刷 - ${dateStr} ${groupName}</title>
+        <title>${dateStr} ${groupName}</title>
         ${styles}
       </head>
       <body>
@@ -1114,10 +1175,10 @@ async function recordPrintSuccess() {
     const day = selectedDate.value.getDate()
     const dateForTitle = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
 
-    const reportTitle = `出荷報告書カレンダー - ${dateForTitle} ${destinationGroups.value[selectedGroup.value]?.groupName}`
+    const reportTitle = `${dateForTitle} ${stripReportPrefix(destinationGroups.value[selectedGroup.value]?.groupName)}`
 
     console.log('記録打印履歴:', {
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
@@ -1125,7 +1186,7 @@ async function recordPrintSuccess() {
     })
 
     const response = await recordPrintHistory({
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
@@ -1148,10 +1209,10 @@ async function recordPrintFailure(errorMessage) {
     const day = selectedDate.value.getDate()
     const dateForTitle = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`
 
-    const reportTitle = `出荷報告書カレンダー - ${dateForTitle} ${destinationGroups.value[selectedGroup.value]?.groupName}`
+    const reportTitle = `${dateForTitle} ${stripReportPrefix(destinationGroups.value[selectedGroup.value]?.groupName)}`
 
     console.log('記録打印失敗履歴:', {
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
@@ -1160,7 +1221,7 @@ async function recordPrintFailure(errorMessage) {
     })
 
     const response = await recordPrintHistory({
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
@@ -1177,8 +1238,8 @@ async function recordPrintFailure(errorMessage) {
 // 记录直接打印成功（dateStr 为 YYYY-MM-DD）
 async function recordDirectPrintSuccess(dateStr, groupIndex) {
   try {
-    const groupName = destinationGroups.value[groupIndex]?.groupName || ''
-    const reportTitle = `出荷報告書カレンダー - ${dateStr} ${groupName}`
+    const groupName = stripReportPrefix(destinationGroups.value[groupIndex]?.groupName || '')
+    const reportTitle = `${dateStr} ${groupName}`
 
     const filters = {
       dateRange: [dateStr, dateStr],
@@ -1188,7 +1249,7 @@ async function recordDirectPrintSuccess(dateStr, groupIndex) {
     }
 
     console.log('記録直接打印履歴:', {
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
@@ -1196,7 +1257,7 @@ async function recordDirectPrintSuccess(dateStr, groupIndex) {
     })
 
     const response = await recordPrintHistory({
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
@@ -1214,8 +1275,8 @@ async function recordDirectPrintSuccess(dateStr, groupIndex) {
 // 记录直接打印失败（dateStr 为 YYYY-MM-DD）
 async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
   try {
-    const groupName = destinationGroups.value[groupIndex]?.groupName || ''
-    const reportTitle = `出荷報告書カレンダー - ${dateStr} ${groupName}`
+    const groupName = stripReportPrefix(destinationGroups.value[groupIndex]?.groupName || '')
+    const reportTitle = `${dateStr} ${groupName}`
 
     const filters = {
       dateRange: [dateStr, dateStr],
@@ -1225,7 +1286,7 @@ async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
     }
 
     console.log('記録直接打印失敗履歴:', {
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
@@ -1234,7 +1295,7 @@ async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
     })
 
     const response = await recordPrintHistory({
-      report_type: 'shipping_calendar',
+      report_type: reportTypeForHistory.value,
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
@@ -1244,7 +1305,7 @@ async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
 
     console.log('直接打印失敗履歴の記録に成功しました:', response)
   } catch (error) {
-    console.error('直接打印失敗履歴の記録に失敗しました:', error)
+    console.warn('直接打印失敗履歴の記録に失敗しました（サーバー記録のみ）:', error)
   }
 }
 

@@ -102,6 +102,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/shipping/confirm', name: 'ShippingListPage', component: () => import('@/views/erp/shipping/ShippingListPage.vue'), meta: { title: '出荷確認リスト', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/welding', name: 'WeldingShippingManager', component: () => import('@/views/erp/shipping/WeldingShippingManager.vue'), meta: { title: '溶接出荷管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/picking', name: 'ShippingPickingHome', component: () => import('@/views/erp/shipping/ShippingPickingHome.vue'), meta: { title: 'ピッキング管理', group: '出荷管理', requiresAuth: true } },
+      { path: 'erp/shipping/inventory-shortage', name: 'InventoryShortageManagement', component: () => import('@/views/erp/shipping/InventoryShortageManagement.vue'), meta: { title: '在庫不足管理', group: '出荷管理', requiresAuth: true } },
 
       // ========== APS モジュール ==========
       { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '生産計画', requiresAuth: true } },

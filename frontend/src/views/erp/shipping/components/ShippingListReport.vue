@@ -57,6 +57,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatDateJST, formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
+
+const { locale } = useI18n()
 
 interface ListItem {
   no?: string
@@ -77,7 +81,7 @@ const props = defineProps<{
 }>()
 
 const printDateTime = computed(() => {
-  return new Date().toLocaleString('ja-JP')
+  return formatDateTimeJST(new Date(), localeForIntl(locale.value))
 })
 
 function formatShippingDateSlash(dateRange: string[] | undefined) {
@@ -88,8 +92,7 @@ function formatShippingDateSlash(dateRange: string[] | undefined) {
 
 function formatDateSlash(dateStr: string | undefined | null) {
   if (!dateStr) return '-'
-  const date = new Date(dateStr + 'T00:00:00+09:00')
-  return date.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: 'numeric', day: 'numeric' })
+  return formatDateJST(dateStr, localeForIntl(locale.value))
 }
 
 function formatNum(v: number | undefined | null): string {

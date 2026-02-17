@@ -205,6 +205,7 @@
             <el-menu-item index="/erp/shipping/confirm"><el-icon><CircleCheck /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_CONFIRM')">{{ t('menu.ERP_SHIPPING_CONFIRM') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/welding"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_WELDING')">{{ t('menu.ERP_SHIPPING_WELDING') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/picking"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_PICKING')">{{ t('menu.ERP_SHIPPING_PICKING') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping/inventory-shortage"><el-icon><Warning /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE')">{{ t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE') }}</span></template></el-menu-item>
           </el-sub-menu>
 
           <el-sub-menu index="erp-costing">
@@ -348,7 +349,7 @@ import {
   User, DataAnalysis, Monitor, DataBoard, Setting, Tools,
   Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
-  Expand, Fold
+  Expand, Fold, Warning
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -452,101 +453,216 @@ const toggleCollapse = () => {
   overflow: hidden;
 }
 
-.sidebar-el-menu {
+/* 减小子菜单缩进：覆盖 Element Plus 的菜单缩进变量（默认各 20px），子项往左收 */
+:deep(.sidebar-el-menu) {
+  --el-menu-base-level-padding: 10px;
+  --el-menu-level-padding: 10px;
   border-right: none;
   padding: 4px 0;
   width: 100%;
   box-sizing: border-box;
 }
 
-.sidebar-el-menu:not(.el-menu--collapse) {
+:deep(.sidebar-el-menu:not(.el-menu--collapse)) {
   width: 100%;
 }
 
-/* ========== 层级区分：一级父目录（ERP 直下的 販売/購買/受注/在庫/生産/出荷/原価） ========== */
-:deep(.el-sub-menu > .el-sub-menu__title) {
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95) !important;
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-left: 3px solid rgba(102, 126, 234, 0.6);
-  margin: 6px 8px 2px;
-  padding-left: 12px !important;
-  border-radius: 8px 0 0 8px;
+/* ========== 各层级菜单用颜色区分 ========== */
+/* 顶级菜单项(Dashboard/ERP/APS/MES/Master/System) - 纯白 */
+:deep(.sidebar-el-menu > .el-menu-item) {
+  height: 42px;
+  line-height: 42px;
+  margin: 8px 6px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  padding-left: 6px !important;
+  color: #ffffff !important;
 }
-:deep(.el-sub-menu > .el-sub-menu__title:hover) {
-  background: rgba(102, 126, 234, 0.18) !important;
-  border-left-color: rgba(102, 126, 234, 0.9);
+
+/* 顶级父菜单标题(ERP/APS等) - 白色 + 蓝紫左边框 */
+:deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__title) {
+  height: 42px;
+  line-height: 42px;
+  font-size: 14px;
+  font-weight: 700;
+  margin: 8px 6px;
+  color: #ffffff !important;
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(102, 126, 234, 0.06) 100%) !important;
+  border-left: 4px solid rgba(102, 126, 234, 0.8);
+  border-radius: 8px;
+  padding-left: 6px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
-:deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
-  background: rgba(102, 126, 234, 0.12) !important;
+
+:deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__title:hover) {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.22) 0%, rgba(102, 126, 234, 0.12) 100%) !important;
+  border-left-color: #667eea;
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.2);
+}
+
+:deep(.sidebar-el-menu > .el-sub-menu.is-opened > .el-sub-menu__title) {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.18) 0%, rgba(102, 126, 234, 0.08) 100%) !important;
   border-left-color: #667eea;
 }
 
-/* 一级父目录下的子菜单列表：增加上边距，与父标题视觉分组 */
-:deep(.el-sub-menu > .el-sub-menu__list) {
-  padding-top: 4px;
-  padding-bottom: 8px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+/* 顶级菜单下的子菜单列表容器 */
+:deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__list) {
+  padding-top: 6px;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 0 0 8px 8px;
 }
+
+/* 一级父目录(販売/購買/出荷等) - 青蓝色 */
+:deep(.el-sub-menu > .el-sub-menu__title) {
+  font-weight: 600;
+  font-size: 13.5px;
+  color: #93c5fd !important;
+  background: rgba(147, 197, 253, 0.08) !important;
+  border-left: 4px solid rgba(147, 197, 253, 0.7);
+  margin: 6px 8px 3px;
+  padding-left: 6px !important;
+  border-radius: 8px 0 0 8px;
+}
+
+:deep(.el-sub-menu > .el-sub-menu__title:hover) {
+  background: rgba(147, 197, 253, 0.18) !important;
+  border-left-color: #93c5fd;
+}
+
+:deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
+  background: rgba(147, 197, 253, 0.12) !important;
+  border-left-color: #93c5fd;
+}
+
+/* 一级父目录下的子菜单列表：增加上边距，与父标题视觉分组；减小左侧缩进 */
+:deep(.el-sub-menu > .el-sub-menu__list) {
+  padding-top: 5px;
+  padding-bottom: 8px;
+  padding-left: 0;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 :deep(.el-sub-menu:last-child > .el-sub-menu__list) {
   border-bottom: none;
 }
 
-/* ========== 二级父目录（如 生産計画、生産指示、マスタリスト 等） ========== */
+/* 二级父目录(生産計画、生産指示等) - 青绿色 */
 :deep(.el-sub-menu .el-sub-menu > .el-sub-menu__title) {
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85) !important;
-  background: transparent !important;
-  border-left: 2px solid rgba(255, 255, 255, 0.2);
-  margin: 2px 0;
-  padding-left: 36px !important;
+  font-size: 13px;
+  color: #67e8f9 !important;
+  background: rgba(103, 232, 249, 0.06) !important;
+  border-left: 2px solid rgba(103, 232, 249, 0.6);
+  margin: 3px 4px 2px 8px;
+  padding-left: 15px !important;
   border-radius: 6px;
-  font-size: 12.5px;
 }
+
 :deep(.el-sub-menu .el-sub-menu > .el-sub-menu__title:hover) {
-  background: rgba(102, 126, 234, 0.12) !important;
-  border-left-color: rgba(102, 126, 234, 0.5);
+  background: rgba(103, 232, 249, 0.14) !important;
+  border-left-color: #67e8f9;
+  border-left-style: solid;
 }
+
 :deep(.el-sub-menu .el-sub-menu.is-opened > .el-sub-menu__title) {
-  background: rgba(102, 126, 234, 0.08) !important;
-  border-left-color: rgba(102, 126, 234, 0.7);
+  background: rgba(103, 232, 249, 0.1) !important;
+  border-left-color: #67e8f9;
+  border-left-style: solid;
 }
 
 /* 二级父目录下的子项列表 */
-:deep(.el-sub-menu .el-sub-menu > .el-sub-menu__list) {
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__list) {
+  padding-top: 3px;
+  padding-bottom: 5px;
+  border-bottom: none;
+  margin-bottom: 0;
+  background: rgba(0, 0, 0, 0.08);
+  padding-left: 15px !important;
+  border-radius: 0 0 6px 6px;
+}
+
+/* 三级父目录 - 高亮白色 */
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
+  font-weight: 500;
+  font-size: 12.5px;
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-left: 2px solid rgba(255, 255, 255, 0.4);
+  margin: 2px 4px 2px 8px;
+  padding-left: 25px !important;
+  border-radius: 6px;
+}
+
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-left-color: rgba(255, 255, 255, 0.7);
+  border-left-style: solid;
+}
+
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu.is-opened > .el-sub-menu__title) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-left-color: rgba(255, 255, 255, 0.6);
+  border-left-style: solid;
+}
+
+/* 三级父目录下的子项列表 */
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__list) {
   padding-top: 2px;
   padding-bottom: 4px;
   border-bottom: none;
   margin-bottom: 0;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 0 0 6px 6px;
 }
 
-/* Menu Items Styling - 叶子节点（最终可点击项） */
+/* ========== 叶子节点样式(最终可点击项)，颜色与所属层级一致 ========== */
+/* 通用叶子节点基础样式 */
 :deep(.el-menu-item) {
   height: 36px;
   line-height: 36px;
-  margin: 2px 0;
+  margin: 2px 4px;
   border-radius: 6px;
   font-size: 13px;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
-  padding-left: 8px;
-  width: 100%;
+  width: auto;
   box-sizing: border-box;
   color: rgba(255, 255, 255, 0.78);
 }
-/* 一级父目录下的直接子项 */
-:deep(.el-sub-menu > .el-sub-menu__list > .el-menu-item) {
-  padding-left: 35px !important;
+
+/* 一级下的叶子(販売ホーム/生産ホーム/出荷構成表管理等) - 高亮白色 */
+:deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__list > .el-sub-menu > .el-sub-menu__list > .el-menu-item) {
+  padding-left: 8px !important;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.72);
+  color: #ffffff !important;
+  margin-left: 4px;
 }
-/* 二级父目录下的子项（再缩进、略小字） */
-:deep(.el-sub-menu .el-sub-menu .el-menu-item) {
-  padding-left: 47px !important;
+:deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__list > .el-sub-menu > .el-sub-menu__list > .el-menu-item .el-menu-tooltip__trigger) {
+  padding-left: 8px !important;
+}
+
+/* 二级下的叶子(生産計画下的 生産データ管理等) - 青绿 */
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item) {
+  padding-left: 35px !important;
   font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.68);
+  color: #67e8f9 !important;
+  margin-left: 8px;
+}
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item .el-menu-tooltip__trigger) {
+  padding-left: 35px !important;
+}
+
+/* 三级下的叶子 - 高亮白色 */
+:deep(.el-sub-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item) {
+  padding-left: 30px !important;
+  font-size: 12px;
+  color: #ffffff !important;
+  margin-left: 8px;
 }
 
 :deep(.el-menu-item .el-menu-tooltip__trigger),

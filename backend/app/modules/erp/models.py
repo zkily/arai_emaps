@@ -118,8 +118,8 @@ class OrderMonthly(Base):
     product_alias = Column(String(100), comment="製品別名")
     product_type = Column(String(20), nullable=False, default="量産品", comment="製品種別")
     forecast_units = Column(Integer, default=0, comment="内示本数")
-    forecast_total_units = Column(Integer, default=0, comment="日内示合計")
-    forecast_diff = Column(Integer, default=0, comment="内示差異")
+    forecast_total_units = Column(Integer, default=0, comment="確定本数")
+    forecast_diff = Column(Integer, default=0, comment="内示差異（確定本数-内示本数）")
     created_at = Column(DateTime, default=func.now(), comment="作成日時")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
 

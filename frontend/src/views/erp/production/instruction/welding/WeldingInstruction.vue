@@ -1160,7 +1160,7 @@ const loadWeldingPlanComparisonSummary = async (
       let productionStatus: string | null = null
       if (achievementRatioDifference !== null && achievementRatioDifference !== undefined) {
         if (achievementRatioDifference > 5) {
-          productionStatus = '生産早い'
+          productionStatus = '生産先行'
         } else if (achievementRatioDifference < -5) {
           productionStatus = '生産遅れ'
         } else {
@@ -2254,6 +2254,20 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
                     // 使用智能算法计算的日期范围进行过滤
                     // 注意：这里不需要再次过滤日期，因为getFullPlanDataForPrint已经使用了智能日期范围
                     return true
+                  })
+                  .sort((a, b) => {
+                    // 生産日升序
+                    const dateA = (a.plan_date || '').toString()
+                    const dateB = (b.plan_date || '').toString()
+                    const dateCompare = dateA.localeCompare(dateB)
+                    if (dateCompare !== 0) return dateCompare
+                    // 生産順位升序：数值优先，否则字符串比较
+                    const opA = (a.operator ?? '').toString().trim()
+                    const opB = (b.operator ?? '').toString().trim()
+                    const numA = Number(opA)
+                    const numB = Number(opB)
+                    if (!Number.isNaN(numA) && !Number.isNaN(numB)) return numA - numB
+                    return opA.localeCompare(opB, 'ja')
                   })
                   .slice(0, 4) // 只显示前4行数据
 

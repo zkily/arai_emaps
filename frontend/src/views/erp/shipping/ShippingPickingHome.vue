@@ -19,25 +19,25 @@
               </el-icon>
             </div>
             <div class="title-text">
-              <h1 class="main-title">出荷ピッキング管理システム</h1>
+              <h1 class="main-title">{{ t('shipping.titlePicking') }}</h1>
               <p class="subtitle">
                 <el-icon class="subtitle-icon">
                   <LocationInformation />
                 </el-icon>
-                出荷作業のピッキング管理・進捗追跡システム
+                {{ t('shipping.subtitlePicking') }}
               </p>
             </div>
           </div>
         </div>
         <div class="header-right">
-          <el-button type="warning" :icon="Tools" :loading="initLoading" @click="handleInitDatabase" size="large"
+          <el-button type="warning" :icon="Tools" :loading="initLoading" @click="handleInitDatabase" size="default"
             class="header-btn init-btn">
-            <span>データベース初期化</span>
+            <span>{{ t('shipping.initDatabase') }}</span>
           </el-button>
 
-          <el-button type="primary" :icon="Refresh" :loading="syncLoading" @click="handleSyncData" size="large"
+          <el-button type="primary" :icon="Refresh" :loading="syncLoading" @click="handleSyncData" size="default"
             class="header-btn sync-btn">
-            <span>{{ $t('menu.shipping.picking.syncData') }}</span>
+            <span>{{ t('shipping.syncData') }}</span>
           </el-button>
         </div>
       </div>
@@ -65,7 +65,7 @@
                 <!-- <span>+12%</span> -->
               </div>
             </div>
-            <span class="stat-label">今日ピッキング件数</span>
+            <span class="stat-label">{{ t('shipping.todayPallets') }}</span>
           </div>
         </div>
       </el-card>
@@ -83,9 +83,9 @@
           <div class="stat-content">
             <div class="stat-number-container">
               <span class="stat-number">{{ todayOverview.pending_today }}</span>
-              <div class="stat-badge pending">進行中</div>
+              <div class="stat-badge pending">{{ t('shipping.inProgress') }}</div>
             </div>
-            <span class="stat-label">今日作業中</span>
+            <span class="stat-label">{{ t('shipping.todayInProgress') }}</span>
             <div class="stat-progress">
               <div class="progress-bar progress-bar-orange" :style="{ width: pendingProgress }"></div>
             </div>
@@ -113,7 +113,7 @@
                 <!-- <span>+8%</span> -->
               </div>
             </div>
-            <span class="stat-label">今日完了</span>
+            <span class="stat-label">{{ t('shipping.todayCompleted') }}</span>
             <div class="stat-progress">
               <div class="progress-bar progress-bar-green" :style="{ width: completedProgress }"></div>
             </div>
@@ -136,7 +136,7 @@
               <span class="stat-number">{{ todayOverview.today_completion_rate }}</span>
               <span class="stat-percent">%</span>
             </div>
-            <span class="stat-label">今日完了率</span>
+            <span class="stat-label">{{ t('shipping.todayCompletionRate') }}</span>
             <div class="circular-progress">
               <svg class="progress-ring" width="60" height="60">
                 <circle class="progress-ring-circle" stroke="#e6f7ff" stroke-width="4" fill="transparent" r="26" cx="30"
@@ -164,7 +164,7 @@
           <el-icon>
             <Operation />
           </el-icon>
-          管理パネル
+          {{ t('shipping.panelTitle') }}
         </h2>
       </div>
 
@@ -175,7 +175,7 @@
               <el-icon>
                 <List />
               </el-icon>
-              <span>ピッキングリスト</span>
+              <span>{{ t('shipping.tabPickingList') }}</span>
             </div>
           </template>
           <PickingListGenerator @refresh="refreshStats" />
@@ -187,7 +187,7 @@
               <el-icon>
                 <Clock />
               </el-icon>
-              <span>進捗管理</span>
+              <span>{{ t('shipping.tabProgress') }}</span>
             </div>
           </template>
           <PickingProgress @refresh="refreshStats" />
@@ -199,22 +199,10 @@
               <el-icon>
                 <PieChart />
               </el-icon>
-              <span>履歴・分析</span>
+              <span>{{ t('shipping.tabHistory') }}</span>
             </div>
           </template>
           <PickingHistory />
-        </el-tab-pane>
-
-        <el-tab-pane name="fileWatcher">
-          <template #label>
-            <div class="tab-label">
-              <el-icon>
-                <Monitor />
-              </el-icon>
-              <span>ファイル監視器</span>
-            </div>
-          </template>
-          <FileWatcherManager />
         </el-tab-pane>
       </el-tabs>
     </el-card>
@@ -223,7 +211,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
 import {
   Box,
   Calendar,
@@ -237,14 +227,12 @@ import {
   Operation,
   List,
   PieChart,
-  Monitor,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { syncShippingDataToPickingTasks } from '@/api/shipping/picking'
 import PickingListGenerator from './components/PickingListGenerator.vue'
 import PickingProgress from './components/PickingProgress.vue'
 import PickingHistory from './components/PickingHistory.vue'
-import FileWatcherManager from './components/FileWatcherManager.vue'
 
 // 更新接口数据结构
 interface TodayOverview {
@@ -269,13 +257,8 @@ interface ApiResponseBody {
   data?: unknown
 }
 
-// 获取日本标准时间（JST）的今天日期
-const getJSTToday = () => {
-  const now = new Date()
-  const jstOffset = 9 * 60 // JST是UTC+9
-  const jstTime = new Date(now.getTime() + jstOffset * 60 * 1000)
-  return jstTime.toISOString().slice(0, 10)
-}
+const { t } = useI18n()
+const getJSTToday = getJSTTodayUtil
 
 const activeTab = ref('generate')
 const syncLoading = ref(false)
@@ -473,7 +456,10 @@ async function handleInitDatabase() {
     }
   } catch (error: any) {
     console.error('データベース初期化エラー:', error)
-    ElMessage.error(error.message || 'データベース初期化に失敗しました')
+    // レスポンスなし（ネットワークエラー等）のときのみトースト（4xx/5xx は interceptor で表示済み）
+    if (!error?.response) {
+      ElMessage.error(error?.message || 'データベース初期化に失敗しました')
+    }
   } finally {
     initLoading.value = false
   }
@@ -491,7 +477,9 @@ async function handleSyncData() {
     }
   } catch (error: any) {
     console.error('データ同期エラー:', error)
-    ElMessage.error(error.message || 'データ同期に失敗しました')
+    if (!error?.response) {
+      ElMessage.error(error?.message || 'データ同期に失敗しました')
+    }
   } finally {
     syncLoading.value = false
   }
@@ -509,13 +497,13 @@ onMounted(() => {
 <style scoped>
 .picking-management {
   position: relative;
-  padding: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #6b73ff 100%);
+  padding: 10px 12px;
+  background: linear-gradient(145deg, #1e1b4b 0%, #312e81 40%, #3730a3 100%);
   min-height: 100vh;
   overflow: hidden;
 }
 
-/* 背景装饰 - 简化版 */
+/* 背景装饰 - 极简 */
 .background-decoration {
   position: absolute;
   top: 0;
@@ -524,67 +512,31 @@ onMounted(() => {
   height: 100%;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.6;
+  opacity: 0.4;
 }
 
 .floating-shape {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  animation: float 8s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.06);
+  animation: float 10s ease-in-out infinite;
 }
 
-.shape-1 {
-  width: 80px;
-  height: 80px;
-  top: 5%;
-  left: 85%;
-  animation-delay: 0s;
-}
-
-.shape-2 {
-  width: 50px;
-  height: 50px;
-  top: 75%;
-  left: 5%;
-  animation-delay: 2s;
-}
-
-.shape-3 {
-  width: 60px;
-  height: 60px;
-  top: 15%;
-  left: 15%;
-  animation-delay: 4s;
-}
-
-.shape-4 {
-  width: 90px;
-  height: 90px;
-  top: 65%;
-  right: 15%;
-  animation-delay: 1s;
-}
+.shape-1 { width: 60px; height: 60px; top: 8%; left: 88%; animation-delay: 0s; }
+.shape-2 { width: 40px; height: 40px; top: 78%; left: 6%; animation-delay: 2s; }
+.shape-3 { width: 48px; height: 48px; top: 18%; left: 12%; animation-delay: 4s; }
+.shape-4 { width: 56px; height: 56px; top: 68%; right: 12%; animation-delay: 1s; }
 
 @keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg);
-    opacity: 0.6;
-  }
-
-  50% {
-    transform: translateY(-15px) rotate(180deg);
-    opacity: 0.3;
-  }
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.5; }
+  50% { transform: translateY(-12px) rotate(180deg); opacity: 0.2; }
 }
 
-/* 页面头部 - 紧凑版 */
+/* 页面头部 - 紧凑 */
 .page-header {
   position: relative;
   z-index: 1;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   color: white;
 }
 
@@ -593,43 +545,40 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .title-container {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .title-icon-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
 }
 
 .title-icon {
-  font-size: 28px;
+  font-size: 22px;
   color: white;
 }
 
-.title-text {
-  flex: 1;
-  min-width: 0;
-}
+.title-text { flex: 1; min-width: 0; }
 
 .main-title {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
-  margin: 0 0 4px 0;
-  background: linear-gradient(45deg, #fff, #e0e7ff);
+  margin: 0 0 2px 0;
+  background: linear-gradient(45deg, #fff, #c7d2fe);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -637,67 +586,74 @@ onMounted(() => {
 }
 
 .subtitle {
-  font-size: 13px;
-  opacity: 0.85;
+  font-size: 12px;
+  opacity: 0.88;
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
-.subtitle-icon {
-  font-size: 14px;
-}
+.subtitle-icon { font-size: 12px; }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .header-btn {
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
   font-weight: 500;
+  padding: 8px 14px;
 }
 
 .header-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .init-btn {
-  background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
-  border-color: #fdcb6e;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border-color: #f59e0b;
 }
 
 .sync-btn {
-  background: linear-gradient(135deg, #74b9ff, #0984e3);
-  border-color: #74b9ff;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  border-color: #6366f1;
 }
 
-/* 状态统计卡片 - 紧凑版 */
+/* 状态统计卡片 - 紧凑 */
 .status-cards {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 1200px) {
+  .status-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .status-cards { grid-template-columns: 1fr; }
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 16px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   position: relative;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
 }
 
 .stat-card::before {
@@ -706,39 +662,36 @@ onMounted(() => {
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
 }
 
 .stat-item {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 16px;
+  gap: 10px;
+  padding: 10px 12px;
 }
 
-.stat-icon-container {
-  position: relative;
-  flex-shrink: 0;
-}
+.stat-icon-container { position: relative; flex-shrink: 0; }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 18px;
   color: white;
   position: relative;
   z-index: 2;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .stat-pulse {
@@ -746,335 +699,206 @@ onMounted(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 60px;
-  height: 60px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  opacity: 0.25;
+  opacity: 0.2;
   animation: pulse 2.5s infinite;
 }
 
 @keyframes pulse {
-
-  0%,
-  100% {
-    transform: translate(-50%, -50%) scale(0.9);
-    opacity: 0.3;
-  }
-
-  50% {
-    transform: translate(-50%, -50%) scale(1.1);
-    opacity: 0.15;
-  }
+  0%, 100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.25; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.12; }
 }
 
-.stat-icon.today {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.today-pulse {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-
-.stat-icon.progress {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-}
-
-.progress-pulse {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-}
-
-.stat-icon.completed {
-  background: linear-gradient(135deg, #4facfe, #00f2fe);
-}
-
-.completed-pulse {
-  background: linear-gradient(135deg, #4facfe, #00f2fe);
-}
-
-.stat-icon.efficiency {
-  background: linear-gradient(135deg, #a8edea, #fed6e3);
-}
-
-.efficiency-pulse {
-  background: linear-gradient(135deg, #a8edea, #fed6e3);
-}
+.stat-icon.today { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.today-pulse { background: linear-gradient(135deg, #6366f1, #8b5cf6); }
+.stat-icon.progress { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+.progress-pulse { background: linear-gradient(135deg, #ec4899, #f43f5e); }
+.stat-icon.completed { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+.completed-pulse { background: linear-gradient(135deg, #0ea5e9, #06b6d4); }
+.stat-icon.efficiency { background: linear-gradient(135deg, #10b981, #34d399); }
+.efficiency-pulse { background: linear-gradient(135deg, #10b981, #34d399); }
 
 .stat-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .stat-number-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .stat-number {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
-  color: #1a202c;
+  color: #1e293b;
   line-height: 1;
 }
 
-.stat-percent {
-  font-size: 18px;
-  font-weight: 600;
-  color: #667eea;
-}
+.stat-percent { font-size: 14px; font-weight: 600; color: #6366f1; }
 
 .stat-trend {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 6px;
-  border-radius: 8px;
-  font-size: 11px;
+  gap: 2px;
+  padding: 2px 5px;
+  border-radius: 6px;
+  font-size: 10px;
   font-weight: 600;
 }
 
 .stat-trend.up {
-  background: linear-gradient(135deg, #d4f6cc, #c3f0ca);
-  color: #22c55e;
+  background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+  color: #059669;
 }
 
 .stat-badge {
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
   font-weight: 600;
   background: linear-gradient(135deg, #fef3c7, #fde68a);
-  color: #d97706;
+  color: #b45309;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 .stat-progress {
-  height: 4px;
+  height: 3px;
   background: #e2e8f0;
   border-radius: 2px;
   overflow: hidden;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #667eea, #764ba2);
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
   border-radius: 2px;
-  transition: width 0.8s ease;
+  transition: width 0.6s ease;
 }
 
-.progress-bar-orange {
-  background: linear-gradient(90deg, #f093fb, #f5576c);
-}
-
-.progress-bar-green {
-  background: linear-gradient(90deg, #4facfe, #00f2fe);
-}
+.progress-bar-orange { background: linear-gradient(90deg, #ec4899, #f43f5e); }
+.progress-bar-green { background: linear-gradient(90deg, #0ea5e9, #06b6d4); }
 
 .circular-progress {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: 10px;
+  right: 10px;
 }
 
-.progress-ring {
-  transform: rotate(-90deg);
-}
+.progress-ring { transform: rotate(-90deg); }
+.progress-ring-circle,
+.progress-ring-progress { transition: stroke-dasharray 0.6s ease; }
 
-.progress-ring-circle {
-  transition: stroke-dasharray 0.8s ease;
-}
-
-.progress-ring-progress {
-  transition: stroke-dasharray 0.8s ease;
-}
-
-/* 主要功能区域 - 紧凑版 */
+/* 主内容区 - 紧凑 */
 .main-content {
   position: relative;
   z-index: 1;
   background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .content-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(248, 250, 252, 0.8);
 }
 
 .content-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 16px;
+  gap: 6px;
+  font-size: 14px;
   font-weight: 600;
-  color: #2d3748;
+  color: #334155;
   margin: 0;
 }
 
-.content-title .el-icon {
-  font-size: 18px;
-  color: #667eea;
-}
+.content-title .el-icon { font-size: 16px; color: #6366f1; }
 
-.content-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.custom-tabs {
-  padding: 0 18px;
-}
+.custom-tabs { padding: 0 14px; }
 
 :deep(.el-tabs__header) {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   border-bottom: 1px solid #e2e8f0;
 }
 
-:deep(.el-tabs__nav-wrap::after) {
-  display: none;
-}
+:deep(.el-tabs__nav-wrap::after) { display: none; }
 
 :deep(.el-tabs__item) {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #64748b;
   transition: all 0.2s ease;
-  padding: 12px 16px;
-  margin-right: 4px;
+  padding: 8px 12px;
+  margin-right: 2px;
   border-radius: 8px 8px 0 0;
 }
 
 :deep(.el-tabs__item:hover) {
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.06);
+  color: #6366f1;
+  background: rgba(99, 102, 241, 0.06);
 }
 
 :deep(.el-tabs__item.is-active) {
-  color: #667eea;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08), rgba(118, 75, 162, 0.08));
-  border-bottom: 2px solid #667eea;
+  color: #6366f1;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.06));
+  border-bottom: 2px solid #6366f1;
   font-weight: 600;
 }
 
-:deep(.el-tabs__active-bar) {
-  display: none;
-}
+:deep(.el-tabs__active-bar) { display: none; }
 
 .tab-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
-.tab-label .el-icon {
-  font-size: 16px;
-}
+.tab-label .el-icon { font-size: 14px; }
 
-/* 响应式设计 */
+:deep(.el-tabs__content) { padding: 0; }
+:deep(.el-tab-pane) { padding: 10px 0 0; }
+
+/* 响应式 */
 @media (max-width: 768px) {
-  .picking-management {
-    padding: 12px;
-  }
-
-  .page-header {
-    margin-bottom: 12px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .title-container {
-    gap: 10px;
-  }
-
-  .title-icon-wrapper {
-    width: 48px;
-    height: 48px;
-  }
-
-  .title-icon {
-    font-size: 24px;
-  }
-
-  .main-title {
-    font-size: 20px;
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .header-right {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .header-btn {
-    flex: 1;
-  }
-
-  .status-cards {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
-
-  .stat-item {
-    padding: 14px;
-  }
-
-  .content-header {
-    padding: 12px 16px;
-  }
-
-  .custom-tabs {
-    padding: 0 16px;
-  }
-
-  :deep(.el-tabs__header) {
-    margin-bottom: 12px;
-  }
+  .picking-management { padding: 8px 10px; }
+  .page-header { margin-bottom: 8px; }
+  .header-content { flex-direction: column; align-items: stretch; gap: 8px; }
+  .title-icon-wrapper { width: 40px; height: 40px; }
+  .title-icon { font-size: 20px; }
+  .main-title { font-size: 18px; }
+  .subtitle { font-size: 11px; }
+  .header-btn { padding: 6px 12px; }
+  .status-cards { margin-bottom: 8px; }
+  .stat-item { padding: 8px 10px; }
+  .content-header { padding: 8px 12px; }
+  .custom-tabs { padding: 0 12px; }
+  :deep(.el-tabs__header) { margin-bottom: 8px; }
 }
 
 @media (max-width: 480px) {
-  .picking-management {
-    padding: 10px;
-  }
-
-  .header-right {
-    flex-direction: column;
-  }
-
-  .stat-number {
-    font-size: 24px;
-  }
-
-  .stat-icon {
-    width: 42px;
-    height: 42px;
-    font-size: 20px;
-  }
+  .stat-number { font-size: 20px; }
+  .stat-icon { width: 36px; height: 36px; font-size: 16px; }
 }
 </style>

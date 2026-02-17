@@ -279,10 +279,10 @@
                   >
                     <el-option label="全ての担当者" value="all" />
                     <el-option
-                      v-for="group in groupOptions"
-                      :key="group.id"
-                      :label="group.group_name"
-                      :value="group.group_name"
+                      v-for="user in performerOptionsWithFixed"
+                      :key="user.username"
+                      :label="user.name"
+                      :value="user.name"
                     />
                   </el-select>
                 </el-form-item>
@@ -383,12 +383,11 @@
                     <span class="stat-value">{{ getCompletionRate(performer) }}%</span>
                   </div>
                 </div>
-                <div class="expand-icon">
-                  <el-icon
-                    :class="{ expanded: expandedPerformers.includes(performer.performer_id) }"
-                  >
-                    <ArrowDown />
-                  </el-icon>
+                <div
+                  class="expand-icon"
+                  :class="{ expanded: expandedPerformers.includes(performer.performer_id) }"
+                >
+                  <el-icon><ArrowDown /></el-icon>
                 </div>
               </div>
 
@@ -441,8 +440,8 @@
                       </div>
                     </div>
                     <div class="destination-status">
-                      <el-tag :type="getDestinationStatusType(destination.status)" size="small">
-                        {{ getDestinationStatusText(destination.status) }}
+                      <el-tag :type="getDestinationStatusType(destination)" size="small">
+                        {{ getDestinationStatusText(destination) }}
                       </el-tag>
                     </div>
                   </div>
@@ -459,118 +458,31 @@
       </div>
     </el-card>
 
-    <!-- Modern Tables Grid -->
-    <div class="tables-grid">
-      <!-- Pending Tasks Table -->
-      <el-card class="table-card pending-card" shadow="never">
-        <template #header>
-          <div class="card-header">
-            <div class="header-left">
-              <el-icon class="header-icon pending-icon"><Clock /></el-icon>
-              <span class="header-title">未ピッキングリスト</span>
-            </div>
-            <div class="task-count-badge pending-badge">
-              {{ pendingTasks.length }}
-            </div>
-          </div>
-        </template>
-        <div class="table-container" v-loading="loading.pendingTasks">
-          <el-table
-            :data="paginatedPendingTasks"
-            @row-click="showTaskDetail"
-            :row-class-name="getTaskRowClass"
-            height="400"
-            size="small"
-            class="modern-table"
-          >
-            <el-table-column prop="shipping_no" label="ピッキングNo" width="120" />
-            <el-table-column prop="product_cd" label="製品CD" width="90" />
-            <el-table-column
-              prop="product_name"
-              label="製品名"
-              min-width="150"
-              show-overflow-tooltip
-            />
-            <el-table-column label="数量" min-width="100" align="right">
-              <template #default="{ row }">
-                {{ row.picked_quantity || 0 }}/{{ row.confirmed_boxes || 0 }}
-              </template>
-            </el-table-column>
-            <el-table-column label="状態" min-width="100">
-              <template #default="{ row }">
-                <el-tag :type="getStatusTagType(row.status)" size="small">
-                  {{ getStatusText(row.status) }}
-                </el-tag>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="pagination-container" v-if="pendingTasks.length > pendingPageSize">
-            <el-pagination
-              v-model:current-page="pendingCurrentPage"
-              v-model:page-size="pendingPageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="pendingTasks.length"
-              layout="total, sizes, prev, pager, next"
-              size="small"
-            />
+    <!-- 担当者每天完成率折线图 -->
+    <el-card class="daily-rate-chart-card" shadow="never">
+      <template #header>
+        <div class="card-header">
+          <div class="header-left">
+            <el-icon class="header-icon"><TrendCharts /></el-icon>
+            <span class="header-title">担当者別日次完了率</span>
           </div>
         </div>
-      </el-card>
-
-      <!-- Completed Tasks Table -->
-      <el-card class="table-card completed-card" shadow="never">
-        <template #header>
-          <div class="card-header">
-            <div class="header-left">
-              <el-icon class="header-icon completed-icon"><CircleCheck /></el-icon>
-              <span class="header-title">ピッキング済リスト</span>
-            </div>
-            <div class="task-count-badge completed-badge">
-              {{ completedTasks.length }}
-            </div>
-          </div>
-        </template>
-        <div class="table-container" v-loading="loading.completedTasks">
-          <el-table
-            :data="paginatedCompletedTasks"
-            @row-click="showTaskDetail"
-            :row-class-name="getTaskRowClass"
-            height="400"
-            size="small"
-            class="modern-table"
-          >
-            <el-table-column prop="shipping_no" label="ピッキングNo" width="120" />
-            <el-table-column prop="product_cd" label="製品CD" width="90" />
-            <el-table-column
-              prop="product_name"
-              label="製品名"
-              min-width="150"
-              show-overflow-tooltip
-            />
-            <el-table-column label="数量" min-width="100" align="right">
-              <template #default="{ row }">
-                {{ row.picked_quantity || 0 }}/{{ row.confirmed_boxes || 0 }}
-              </template>
-            </el-table-column>
-            <el-table-column label="完了時間" min-width="120">
-              <template #default="{ row }">
-                {{ formatDateTime(row.start_time) }}
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="pagination-container" v-if="completedTasks.length > completedPageSize">
-            <el-pagination
-              v-model:current-page="completedCurrentPage"
-              v-model:page-size="completedPageSize"
-              :page-sizes="[10, 20, 50]"
-              :total="completedTasks.length"
-              layout="total, sizes, prev, pager, next"
-              size="small"
-            />
-          </div>
+      </template>
+      <div class="chart-container">
+        <ChartWrapper
+          v-if="!loading.trend"
+          :data="(dailyCompletionRateChartData as any)"
+          :options="(dailyCompletionRateChartOptions as any)"
+          height="320px"
+          @error="handleChartError"
+          @retry="retryChart"
+        />
+        <div v-else class="chart-loading-placeholder">
+          <el-icon class="loading-icon"><Loading /></el-icon>
+          <span>データ読み込み中...</span>
         </div>
-      </el-card>
-    </div>
+      </div>
+    </el-card>
 
     <!-- Task Detail Dialog -->
     <!-- <el-dialog
@@ -655,6 +567,7 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import { getPickingHistoryData, getPerformanceByDestination } from '@/api/shipping/picking'
+import request from '@/utils/request'
 import DestinationGroupManager from './DestinationGroupManager.vue'
 import ChartWrapper from '@/components/ChartWrapper.vue'
 import { runChartTests } from '@/utils/chartTest'
@@ -674,6 +587,8 @@ interface PickingTask {
   confirmed_boxes: number
   picked_quantity: number
   location_cd: string
+  destination_cd?: string
+  destination_name?: string
   status: string
   picker_id: string
   picker_name: string
@@ -760,23 +675,9 @@ const completedTasks = ref<PickingTask[]>([])
 // Chart related
 const trendGranularity = ref<'daily' | 'monthly'>('daily')
 const trendData = ref<TrendDataPoint[]>([])
-
-// Task detail
-const taskDetailVisible = ref(false)
-const selectedTask = ref<PickingTask | null>(null)
-
-// Pagination
-const pendingCurrentPage = ref(1)
-const pendingPageSize = ref(10)
-const completedCurrentPage = ref(1)
-const completedPageSize = ref(10)
+const rawTrendTasks = ref<PickingTask[]>([])
 
 // 担当者分析関連
-interface PerformerOption {
-  username: string
-  name: string
-}
-
 interface GroupOption {
   id: string
   group_name: string
@@ -790,8 +691,8 @@ interface DestinationData {
   completed_tasks: number
   completed_from_status?: number
   completion_rate: number
-  status: string
-  last_updated: string
+  status?: string
+  last_updated?: string
 }
 
 interface PerformerAnalysisData {
@@ -805,7 +706,21 @@ interface PerformerAnalysisData {
   destinations: DestinationData[]
 }
 
-const performerOptions = ref<PerformerOption[]>([])
+// 担当者＝納入先グループ（destination_groups 的 group_name），每个担当者＝一组納入先，按该组+日期在 picking_tasks 上汇总
+const FIXED_GROUP_NAMES = ['福島', '青山', '小森']
+const performerOptionsWithFixed = computed(() => {
+  const fromGroups = (groupOptions.value || []).map((g) => ({
+    username: g.group_name,
+    name: g.group_name,
+  }))
+  const existing = new Set(fromGroups.map((u) => u.username))
+  const fixed = FIXED_GROUP_NAMES.filter((n) => !existing.has(n)).map((n) => ({
+    username: n,
+    name: n,
+  }))
+  return [...fixed, ...fromGroups]
+})
+
 const groupOptions = ref<GroupOption[]>([])
 const selectedGroups = ref<string[]>(['all'])
 const performerAnalysisData = ref<PerformerAnalysisData[]>([])
@@ -819,38 +734,15 @@ const showGroupManager = ref(false)
 // 担当者チャート表示関連（将来のテンプレート用に保留）
 const _performerViewMode = ref<'chart' | 'list'>('chart')
 
-// Computed properties
-const paginatedPendingTasks = computed(() => {
-  const start = (pendingCurrentPage.value - 1) * pendingPageSize.value
-  const end = start + pendingPageSize.value
-  return pendingTasks.value.slice(start, end)
-})
-
-const paginatedCompletedTasks = computed(() => {
-  const start = (completedCurrentPage.value - 1) * completedPageSize.value
-  const end = start + completedPageSize.value
-  return completedTasks.value.slice(start, end)
-})
-
-// 担当者分析関連のcomputed
+// 担当者分析関連のcomputed（不显示担当者为空的数据；选具体担当者时按 performer_name 过滤）
 const filteredPerformerData = computed(() => {
-  console.log('📊 filteredPerformerData计算:', {
-    selectedGroups: selectedGroups.value,
-    performerAnalysisData: performerAnalysisData.value,
-    includesAll: selectedGroups.value.includes('all'),
-    length: selectedGroups.value.length,
-  })
-
-  if (selectedGroups.value.includes('all') || selectedGroups.value.length === 0) {
-    console.log('📊 返回所有担当者数据:', performerAnalysisData.value)
-    return performerAnalysisData.value
-  }
-
-  const filtered = performerAnalysisData.value.filter((performer) =>
-    selectedGroups.value.includes(performer.performer_id),
+  const list = performerAnalysisData.value.filter(
+    (p) => (p.performer_id || '').trim() !== '' || (p.performer_name || '').trim() !== '',
   )
-  console.log('📊 返回过滤后的担当者数据:', filtered)
-  return filtered
+  if (selectedGroups.value.includes('all') || selectedGroups.value.length === 0) {
+    return list
+  }
+  return list.filter((performer) => selectedGroups.value.includes(performer.performer_name))
 })
 
 // 担当者チャート用の計算プロパティ（将来のテンプレート用に保留）
@@ -1165,13 +1057,6 @@ const trendChartData = computed<ChartData<'bar' | 'line'>>(() => {
   }
 }) as any
 
-// 计算完了率数据，供插件使用
-const completionRatesData = computed(() => {
-  return trendData.value.map((d) =>
-    d.total > 0 ? Number(((d.completed / d.total) * 100).toFixed(1)) : 50,
-  )
-})
-
 const trendChartOptions = computed<ChartOptions<'bar' | 'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -1240,7 +1125,6 @@ const trendChartOptions = computed<ChartOptions<'bar' | 'line'>>(() => ({
         },
       },
     },
-    // 添加数据标签插件
     legend: {
       display: true,
       position: 'top',
@@ -1252,30 +1136,98 @@ const trendChartOptions = computed<ChartOptions<'bar' | 'line'>>(() => ({
         },
       },
     },
-    // 自定义插件：在完了率折线上显示数据标签
-    customDatalabels: {
-      id: 'customDatalabels',
-      afterDraw: function (chart: any) {
-        const ctx = chart.ctx
-        const meta = chart.getDatasetMeta(2) // 完了率是第3个数据集
+    // 完了率折线上的数值由 chartRegistration 的 completionRateDatalabels 插件统一绘制
+  },
+}))
 
-        if (meta && meta.data) {
-          meta.data.forEach((point: any, index: number) => {
-            const value = completionRatesData.value[index]
-            if (value !== null && value !== undefined) {
-              const x = point.x
-              const y = point.y - 10 // 向上偏移
+// 担当者別日次完了率（折线图）：按日期 + 各グループ的納入先在 rawTrendTasks 上汇总
+function getTaskDateKey(task: PickingTask): string {
+  return task.shipping_date
+    ? task.shipping_date.split('T')[0]
+    : task.created_at
+      ? task.created_at.split('T')[0]
+      : formatDateString(getJapanDate())
+}
 
-              ctx.save()
-              ctx.fillStyle = '#f59e0b'
-              ctx.font = '10px Arial'
-              ctx.textAlign = 'center'
-              ctx.textBaseline = 'bottom'
-              ctx.fillText(value + '%', x, y)
-              ctx.restore()
-            }
-          })
-        }
+function getGroupDestinationCds(group: GroupOption): string[] {
+  const dests = group.destinations || []
+  return dests.map((d: any) => (typeof d === 'object' && d && 'value' in d ? String(d.value) : String(d))).filter(Boolean)
+}
+
+const dailyCompletionRateChartData = computed<ChartData<'line'>>(() => {
+  const tasks = rawTrendTasks.value
+  const groups = groupOptions.value || []
+  if (tasks.length === 0 || groups.length === 0) {
+    return { labels: [], datasets: [] }
+  }
+  const dateSet = new Set<string>()
+  tasks.forEach((t) => dateSet.add(getTaskDateKey(t)))
+  const sortedDates = Array.from(dateSet).sort()
+  const rateByDateAndGroup: Record<string, Record<string, number>> = {}
+  sortedDates.forEach((d) => {
+    rateByDateAndGroup[d] = {}
+  })
+  groups.forEach((group) => {
+    const destCds = new Set(getGroupDestinationCds(group))
+    if (destCds.size === 0) return
+    sortedDates.forEach((date) => {
+      const dayTasks = tasks.filter(
+        (t) => getTaskDateKey(t) === date && destCds.has((t.destination_cd || '').trim()),
+      )
+      const palletMap = new Map<string, string[]>()
+      dayTasks.forEach((t) => {
+        const key = t.shipping_no_p || t.shipping_no || ''
+        if (!key) return
+        if (!palletMap.has(key)) palletMap.set(key, [])
+        palletMap.get(key)!.push(t.status || 'pending')
+      })
+      let total = 0
+      let completed = 0
+      palletMap.forEach((statuses) => {
+        total++
+        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
+      })
+      const rate = total > 0 ? Number(((completed / total) * 100).toFixed(1)) : 0
+      rateByDateAndGroup[date][group.group_name] = rate
+    })
+  })
+  const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6']
+  const datasets = groups.map((g, i) => ({
+    type: 'line' as const,
+    label: g.group_name,
+    data: sortedDates.map((d) => rateByDateAndGroup[d]?.[g.group_name] ?? null),
+    borderColor: colors[i % colors.length],
+    backgroundColor: colors[i % colors.length],
+    tension: 0.3,
+    fill: false,
+    pointRadius: 4,
+    spanGaps: true,
+  }))
+  return { labels: sortedDates, datasets }
+})
+
+const dailyCompletionRateChartOptions = computed<ChartOptions<'line'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  scales: {
+    x: { grid: { display: false } },
+    y: {
+      type: 'linear',
+      min: 0,
+      max: 110,
+      title: { display: true, text: '完了率 (%)' },
+      grid: { color: '#f1f5f9' },
+    },
+  },
+  plugins: {
+    legend: { display: true, position: 'top' },
+    tooltip: {
+      callbacks: {
+        label: (ctx: any) => {
+          const v = ctx.parsed?.y
+          return v != null ? `${ctx.dataset.label}: ${v}%` : ''
+        },
       },
     },
   },
@@ -1296,51 +1248,63 @@ async function fetchHistoryStats() {
     const response = await getPickingHistoryData(params)
     console.log('📊 履歴統計データ取得結果:', response)
 
-    const data = response?.data || response
+    const data = response?.data ?? response
 
     if (data) {
-      const allTasks = data.tasks || data || []
-      if (Array.isArray(allTasks)) {
-        // 过滤掉产品名包含特定关键词的数据
+      // 后端 GET /api/shipping/picking/history 返回 { statistics, items }，任务列表在 items
+      const allTasks = Array.isArray(data.items)
+        ? data.items
+        : Array.isArray(data.tasks)
+          ? data.tasks
+          : Array.isArray(data)
+            ? data
+            : []
+      if (Array.isArray(allTasks) && allTasks.length > 0) {
+        // 过滤掉产品名包含特定关键词的数据（与 PickingListGenerator / 進捗管理 一致）
         const excludeKeywords = ['加工', 'アーチ', '料金']
         const filteredTasks = allTasks.filter((task) => {
           const productName = task.product_name || ''
           return !excludeKeywords.some((keyword) => productName.includes(keyword))
         })
 
-        // 総ピッキング数：筛选期间picking_tasks表内shipping_no_p件数统计
-        const uniqueShippingNos = new Set(
-          filteredTasks.map((task) => task.shipping_no_p || task.shipping_no),
-        )
-        const totalTasks = uniqueShippingNos.size
+        // 按 shipping_no_p（パレット）分组，托盘状态与 PickingListGenerator 一致：
+        // 全部 completed → completed；任一 picking → picking；否则 pending
+        const palletGroups = new Map<string, { statuses: string[] }>()
+        for (const task of filteredTasks) {
+          const key = task.shipping_no_p || task.shipping_no || ''
+          if (!key) continue
+          if (!palletGroups.has(key)) palletGroups.set(key, { statuses: [] })
+          palletGroups.get(key)!.statuses.push(task.status || 'pending')
+        }
+        let totalTasks = 0
+        let pendingTasksCount = 0
+        let completedTasksCount = 0
+        palletGroups.forEach(({ statuses }) => {
+          const allCompleted = statuses.every((s) => s === 'completed' || s === 'picked')
+          const anyPicking = statuses.some((s) => s === 'picking')
+          totalTasks++
+          if (allCompleted) completedTasksCount++
+          else if (anyPicking) pendingTasksCount++
+          else pendingTasksCount++
+        })
 
-        // 総未ピッキング数：status字段为pending的直接件数统计
-        const pendingTasksCount = filteredTasks.filter(
-          (task) => task.status === 'pending' || task.status === 'assigned',
-        ).length
-
-        // 総ピッキング済数：status字段为completed的直接件数统计
-        const completedTasksCount = filteredTasks.filter(
-          (task) => task.status === 'completed' || task.status === 'picked',
-        ).length
-
-        // 更新统计数据
+        // 更新统计数据（按托盘数）
         historyStats.totalTasks = totalTasks
         historyStats.completedTasks = completedTasksCount
         historyStats.pendingTasks = pendingTasksCount
         historyStats.completionRate =
           totalTasks > 0 ? Number(((completedTasksCount / totalTasks) * 100).toFixed(1)) : 0
 
-        // 更新任务列表
+        // 任务列表仍按行展示：未ピッキング = pending + picking 行，完了 = completed 行
         pendingTasks.value = filteredTasks.filter(
-          (task) => task.status === 'pending' || task.status === 'assigned',
+          (task) => task.status === 'pending' || task.status === 'picking' || task.status === 'assigned',
         )
         completedTasks.value = filteredTasks.filter(
           (task) => task.status === 'completed' || task.status === 'picked',
         )
 
         console.log('📊 更新後の統計データ:', historyStats)
-        console.log('📊 按shipping_no_p件数统计:', {
+        console.log('📊 按パレット(shipping_no_p)统计（与ピッキングリスト一致）:', {
           totalTasks,
           completedTasksCount,
           pendingTasksCount,
@@ -1383,77 +1347,53 @@ function generateTrendDataFromTasks(tasks: PickingTask[]): TrendDataPoint[] {
     return !excludeKeywords.some((keyword) => productName.includes(keyword))
   })
 
+  // 按日期/月分组，再按 shipping_no_p 判定托盘状态（与 PickingListGenerator 一致）
+  const getDateKey = (task: PickingTask) =>
+    task.shipping_date
+      ? task.shipping_date.split('T')[0]
+      : task.created_at
+        ? task.created_at.split('T')[0]
+        : formatDateString(getJapanDate())
+
   if (trendGranularity.value === 'daily') {
-    // 按日期分组统计
-    const dailyStats: Record<string, { total: Set<string>; completed: number }> = {}
-
+    // 按日期 → shipping_no_p 分组，每个托盘状态：全部 completed → completed，否则任一 picking → picking，否则 pending
+    const dailyPallets: Record<string, Map<string, string[]>> = {}
     filteredTasks.forEach((task) => {
-      // 使用shipping_date字段，如果没有则使用created_at
-      const date = task.shipping_date
-        ? task.shipping_date.split('T')[0]
-        : task.created_at
-          ? task.created_at.split('T')[0]
-          : formatDateString(getJapanDate())
-      if (!dailyStats[date]) {
-        dailyStats[date] = { total: new Set(), completed: 0 }
-      }
-
-      // 统计shipping_no_p件数（与主统计逻辑一致）
-      const shippingNo = task.shipping_no_p || task.shipping_no
-      if (shippingNo) {
-        dailyStats[date].total.add(shippingNo)
-      }
-
-      // 统计completed件数（直接件数统计）
-      if (task.status === 'completed' || task.status === 'picked') {
-        dailyStats[date].completed++
-      }
+      const date = getDateKey(task)
+      if (!dailyPallets[date]) dailyPallets[date] = new Map()
+      const key = task.shipping_no_p || task.shipping_no || ''
+      if (!key) return
+      if (!dailyPallets[date].has(key)) dailyPallets[date].set(key, [])
+      dailyPallets[date].get(key)!.push(task.status || 'pending')
     })
-
-    // 转换为数组格式
-    Object.entries(dailyStats).forEach(([date, stats]) => {
-      data.push({
-        date,
-        total: stats.total.size,
-        completed: stats.completed,
+    Object.entries(dailyPallets).forEach(([date, palletMap]) => {
+      let total = 0
+      let completed = 0
+      palletMap.forEach((statuses) => {
+        total++
+        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
       })
+      data.push({ date, total, completed })
     })
   } else {
-    // 按月份分组统计
-    const monthlyStats: Record<string, { total: Set<string>; completed: number }> = {}
-
+    const monthlyPallets: Record<string, Map<string, string[]>> = {}
     filteredTasks.forEach((task) => {
-      // 使用shipping_date字段，如果没有则使用created_at
-      const date = task.shipping_date
-        ? task.shipping_date.split('T')[0]
-        : task.created_at
-          ? task.created_at.split('T')[0]
-          : formatDateString(getJapanDate())
-      const month = date.substring(0, 7) // YYYY-MM
-
-      if (!monthlyStats[month]) {
-        monthlyStats[month] = { total: new Set(), completed: 0 }
-      }
-
-      // 统计shipping_no_p件数（与主统计逻辑一致）
-      const shippingNo = task.shipping_no_p || task.shipping_no
-      if (shippingNo) {
-        monthlyStats[month].total.add(shippingNo)
-      }
-
-      // 统计completed件数（直接件数统计）
-      if (task.status === 'completed' || task.status === 'picked') {
-        monthlyStats[month].completed++
-      }
+      const date = getDateKey(task)
+      const month = date.substring(0, 7)
+      if (!monthlyPallets[month]) monthlyPallets[month] = new Map()
+      const key = task.shipping_no_p || task.shipping_no || ''
+      if (!key) return
+      if (!monthlyPallets[month].has(key)) monthlyPallets[month].set(key, [])
+      monthlyPallets[month].get(key)!.push(task.status || 'pending')
     })
-
-    // 转换为数组格式
-    Object.entries(monthlyStats).forEach(([month, stats]) => {
-      data.push({
-        date: month,
-        total: stats.total.size,
-        completed: stats.completed,
+    Object.entries(monthlyPallets).forEach(([month, palletMap]) => {
+      let total = 0
+      let completed = 0
+      palletMap.forEach((statuses) => {
+        total++
+        if (statuses.every((s) => s === 'completed' || s === 'picked')) completed++
       })
+      data.push({ date: month, total, completed })
     })
   }
 
@@ -1472,20 +1412,27 @@ async function fetchTrendData() {
     }
 
     const response = await getPickingHistoryData(params)
-    const data = response?.data || response
-    const allTasks = data?.tasks || data || []
+    const data = response?.data ?? response
+    const allTasks = Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.tasks)
+        ? data.tasks
+        : Array.isArray(data)
+          ? data
+          : []
 
-    if (Array.isArray(allTasks)) {
-      trendData.value = generateTrendDataFromTasks(allTasks)
-    } else {
-      trendData.value = []
-    }
-
-    console.log('📈 トレンドデータ更新完了:', trendData.value)
+    const excludeKeywords = ['加工', 'アーチ', '料金']
+    const filtered = (allTasks as PickingTask[]).filter((task: PickingTask) => {
+      const productName = task.product_name || ''
+      return !excludeKeywords.some((keyword: string) => productName.includes(keyword))
+    })
+    trendData.value = generateTrendDataFromTasks(filtered)
+    rawTrendTasks.value = filtered
   } catch (error) {
     console.error('❌ トレンドデータ取得エラー:', error)
     ElMessage.error('トレンドデータの取得に失敗しました')
     trendData.value = []
+    rawTrendTasks.value = []
   } finally {
     loading.value.trend = false
   }
@@ -1648,15 +1595,6 @@ function setPerformerQuickDate(type: string) {
   ElMessage.success(`担当者分析: ${dateTypeMap[type]}の期間に設定しました`)
 }
 
-function showTaskDetail(task: PickingTask) {
-  selectedTask.value = task
-  taskDetailVisible.value = true
-}
-
-function getTaskRowClass({ row }: { row: PickingTask }) {
-  return `task-row-${row.status}`
-}
-
 function getStatusTagType(status: string): 'success' | 'warning' | 'danger' | 'info' {
   const typeMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
     completed: 'success',
@@ -1705,35 +1643,14 @@ function _formatDate(dateStr?: string): string {
   }).format(date)
 }
 
-// 担当者分析関連の関数
-async function fetchPerformerOptions() {
-  try {
-    const response = await fetch('/api/master/users')
-    const data = await response.json()
-    if (data.success && Array.isArray(data.data)) {
-      performerOptions.value = data.data.map((user: any) => ({
-        username: user.username,
-        name: user.name || user.first_name || user.username,
-      }))
-    }
-  } catch (error) {
-    console.error('担当者オプション取得エラー:', error)
-  }
-}
-
+// 担当者＝納入先グループ（group_name）。groupOptions 由 fetchGroupOptions 从 destination-groups/picking_history 取得
 // グループ分析関連の関数
 async function fetchGroupOptions() {
   try {
-    console.log('📊 グループオプション取得開始')
-
-    const response = await fetch('/api/shipping/destination-groups/picking_history')
-    const responseData = await response.json()
-
-    console.log('📊 グループAPI响应:', responseData)
+    const res = await request.get('/api/shipping/destination-groups/picking_history')
+    const responseData = (res as any)?.data ?? res
 
     let data = null
-
-    // 处理不同的响应格式
     if (responseData && responseData.success === true && Array.isArray(responseData.data)) {
       data = responseData.data
     } else if (Array.isArray(responseData)) {
@@ -1748,9 +1665,7 @@ async function fetchGroupOptions() {
         group_name: group.group_name,
         destinations: group.destinations || [],
       }))
-      console.log('📊 グループオプション処理完了:', groupOptions.value)
     } else {
-      console.error('グループデータ格式不正确:', responseData)
       groupOptions.value = []
     }
   } catch (error) {
@@ -1762,173 +1677,46 @@ async function fetchGroupOptions() {
 async function fetchPerformerAnalysisData() {
   loading.value.performerAnalysis = true
   try {
-    console.log('📊 担当者分析データ取得開始')
-    console.log('📊 選択されたグループ:', selectedGroups.value)
-
     const groupNames = selectedGroups.value.includes('all') ? [] : selectedGroups.value
-    // 使用担当者专用的日期范围
     const dateRange =
       performerDateRange.value && performerDateRange.value.length === 2
         ? performerDateRange.value
         : getCurrentMonthRange()
 
-    console.log('📊 使用日期范围:', dateRange)
-    console.log('📊 处理グループ名:', groupNames)
+    const response = await getPerformanceByDestination({
+      start_date: dateRange[0],
+      end_date: dateRange[1],
+      page_key: 'picking_history',
+      ...(groupNames.length > 0 ? { group_names: groupNames.join(',') } : {}),
+    })
 
-    if (groupNames.length === 0) {
-      // 选择"全部"时，获取所有担当者的数据
-      console.log('📊 使用"全部"逻辑')
-      await fetchAllPerformersData(dateRange)
-    } else {
-      // 选择特定グループ时，获取该グループ的整体绩效数据
-      console.log('📊 使用特定グループ逻辑')
-      await fetchSelectedGroupsData(groupNames, dateRange)
+    const data = response?.data ?? response
+    let processedData: any[] = []
+    if (data?.success && Array.isArray(data.data)) {
+      processedData = data.data
+    } else if (Array.isArray(data)) {
+      processedData = data
+    } else if (data?.data && Array.isArray(data.data)) {
+      processedData = data.data
     }
-  } catch (error) {
-    console.error('担当者分析データ取得エラー:', error)
-    ElMessage.error('担当者分析データの取得に失敗しました')
+
+    performerAnalysisData.value = processedData.map((item: any) => ({
+      performer_id: item.picker_id,
+      performer_name: item.picker_name,
+      destination_count: item.destination_count ?? 0,
+      completion_rate: item.completion_rate ?? 0,
+      total_tasks: item.total_tasks ?? 0,
+      completed_tasks: item.completed_tasks ?? 0,
+      last_activity: new Date().toISOString(),
+      destinations: item.destinations ?? [],
+    }))
+  } catch (error: any) {
+    if (!error?.isTokenError) {
+      ElMessage.error('担当者分析データの取得に失敗しました')
+    }
     performerAnalysisData.value = []
   } finally {
     loading.value.performerAnalysis = false
-  }
-}
-
-// 获取所有担当者数据（当选择"全部"时）
-async function fetchAllPerformersData(dateRange: [string, string]) {
-  try {
-    console.log('📊 全グループ分析データ取得開始:', { dateRange })
-
-    // 1. 获取所有グループ管理数据
-    const groupResponse = await fetch(`/api/shipping/destination-groups/picking_history`)
-    const groupData = await groupResponse.json()
-
-    console.log('📊 グループ管理API响应:', groupData)
-
-    if (!groupData.success || !Array.isArray(groupData.data)) {
-      console.warn('📊 グループ管理データが取得できません')
-      performerAnalysisData.value = []
-      return
-    }
-
-    // 获取所有グループ名
-    const allGroupNames = groupData.data.map((group: any) => group.group_name).filter(Boolean)
-    console.log('📊 全グループ名:', allGroupNames)
-
-    if (allGroupNames.length === 0) {
-      console.warn('📊 グループ名が見つかりません')
-      performerAnalysisData.value = []
-      return
-    }
-
-    // 使用现有的fetchSelectedGroupsData函数处理所有グループ
-    await fetchSelectedGroupsData(allGroupNames, dateRange)
-  } catch (error) {
-    console.error('全担当者データ取得エラー:', error)
-    performerAnalysisData.value = []
-  }
-}
-
-// 获取选定担当者的整体绩效数据（新逻辑）（未使用のため _ 接頭辞）
-async function _fetchSelectedPerformersData(performerNames: string[], dateRange: [string, string]) {
-  try {
-    // 使用后端API进行统计计算
-    const response = await getPerformanceByDestination({
-      start_date: dateRange[0],
-      end_date: dateRange[1],
-      picker_names: performerNames,
-    })
-
-    const data = response?.data || response
-    if (data.success && Array.isArray(data.data)) {
-      // 直接使用后端返回的数据，因为后端已经按新逻辑处理了
-      performerAnalysisData.value = data.data.map((item: any) => ({
-        performer_id: item.picker_id,
-        performer_name: item.picker_name,
-        destination_count: item.destination_count || 0,
-        completion_rate: item.completion_rate || 0,
-        total_tasks: item.total_tasks || 0,
-        completed_tasks: item.completed_tasks || 0,
-        last_activity: new Date().toISOString(),
-        destinations: item.destinations || [],
-      }))
-    } else {
-      performerAnalysisData.value = []
-    }
-  } catch (error: any) {
-    console.error('選択担当者データ取得エラー:', error)
-
-    // トークンエラーの場合は特別な処理をしない（request.tsで処理済み）
-    if (error?.isTokenError) {
-      return
-    }
-
-    // その他のエラーの場合はメッセージを表示
-    ElMessage.error('担当者分析データの取得に失敗しました')
-    performerAnalysisData.value = []
-  }
-}
-
-// 获取选定グループ的整体绩效数据
-async function fetchSelectedGroupsData(groupNames: string[], dateRange: [string, string]) {
-  try {
-    console.log('📊 グループ分析データ取得開始:', { groupNames, dateRange })
-
-    // 使用后端API进行统计计算
-    const response = await getPerformanceByDestination({
-      start_date: dateRange[0],
-      end_date: dateRange[1],
-      group_names: groupNames.join(','), // 修正：传递字符串而不是数组
-    })
-
-    console.log('📊 API响应:', response)
-
-    const data = response?.data || response
-    console.log('📊 处理后的数据:', data)
-
-    // 修正：检查数据格式，支持多种响应格式
-    let processedData = []
-
-    if (data && data.success && Array.isArray(data.data)) {
-      // 格式1：{success: true, data: [...]}
-      processedData = data.data
-    } else if (Array.isArray(data)) {
-      // 格式2：直接是数组
-      processedData = data
-    } else if (data && Array.isArray(data.data)) {
-      // 格式3：{data: [...]}
-      processedData = data.data
-    } else {
-      console.warn('📊 グループ分析データが取得できません:', data)
-      performerAnalysisData.value = []
-      return
-    }
-
-    // 转换后端数据格式为前端需要的格式
-    const groupStats: PerformerAnalysisData[] = processedData.map((item: any) => ({
-      performer_id: item.picker_id,
-      performer_name: item.picker_name,
-      destination_count: item.destination_count || 0,
-      completion_rate: item.completion_rate || 0,
-      total_tasks: item.total_tasks || 0,
-      completed_tasks: item.completed_tasks || 0,
-      last_activity: new Date().toISOString(),
-      destinations: item.destinations || [],
-    }))
-
-    performerAnalysisData.value = groupStats
-    console.log('📊 グループ分析データ処理完了:', performerAnalysisData.value)
-  } catch (error: any) {
-    console.error('📊 グループ分析データが取得できません')
-    console.error('選択グループデータ取得エラー:', error)
-
-    // トークンエラーの場合は特別な処理をしない（request.tsで処理済み）
-    if (error?.isTokenError) {
-      return
-    }
-
-    // その他のエラーの場合はメッセージを表示
-    ElMessage.error('グループ分析データの取得に失敗しました')
-    performerAnalysisData.value = []
   }
 }
 
@@ -1938,10 +1726,10 @@ async function _getDestinationsByPerformer(performerName: string): Promise<{
   destinationDetails: Array<{ value: string; label: string }>
 }> {
   try {
-    const response = await fetch(`/api/shipping/destination-groups/picking_history`)
-    const data = await response.json()
+    const res = await request.get('/api/shipping/destination-groups/picking_history')
+    const data = (res as any)?.data ?? res
 
-    if (data.success && Array.isArray(data.data)) {
+    if (data?.success && Array.isArray(data.data)) {
       const destinations: string[] = []
       const destinationDetails: Array<{ value: string; label: string }> = []
 
@@ -2047,10 +1835,20 @@ function getFilteredDestinations(performer: PerformerAnalysisData): DestinationD
   if (!filter) {
     return performer.destinations
   }
-  return performer.destinations.filter((dest) => dest.status === filter)
+  return performer.destinations.filter((dest) => getDestinationStatus(dest) === filter)
 }
 
-function getDestinationStatusType(status: string): 'success' | 'warning' | 'danger' | 'info' {
+// 納入先状態：后端未返 status 时按 completion_rate 推导
+function getDestinationStatus(dest: DestinationData): string {
+  if (dest.status) return dest.status
+  const rate = dest.completion_rate ?? 0
+  if (rate >= 100) return 'completed'
+  if (rate > 0) return 'in_progress'
+  return 'pending'
+}
+
+function getDestinationStatusType(dest: DestinationData): 'success' | 'warning' | 'danger' | 'info' {
+  const status = getDestinationStatus(dest)
   const typeMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
     completed: 'success',
     in_progress: 'warning',
@@ -2059,7 +1857,8 @@ function getDestinationStatusType(status: string): 'success' | 'warning' | 'dang
   return typeMap[status] || 'info'
 }
 
-function getDestinationStatusText(status: string): string {
+function getDestinationStatusText(dest: DestinationData): string {
+  const status = getDestinationStatus(dest)
   const textMap: Record<string, string> = {
     completed: '完了',
     in_progress: '進行中',
@@ -2113,9 +1912,8 @@ safeOnMounted(async () => {
     ElMessage.warning('チャートライブラリの読み込みに問題があります')
   }
 
-  // 并行加载数据
+  // 并行加载数据（担当者选项来自 納入先グループ group_name）
   await Promise.all([
-    fetchPerformerOptions(),
     fetchGroupOptions(),
     refreshData(),
     fetchPerformerAnalysisData(),
@@ -2180,8 +1978,8 @@ if (app) {
 
 <style scoped>
 .picking-history-container {
-  padding: 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  padding: 10px 12px;
+  background: linear-gradient(145deg, #1e1b4b 0%, #312e81 45%, #3730a3 100%);
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
@@ -2218,9 +2016,9 @@ if (app) {
   z-index: 1;
 }
 
-/* Modern Header */
+/* 紧凑 Header */
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: 12px;
 }
 
 .header-content {
@@ -2232,30 +2030,30 @@ if (app) {
 .title-section {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .title-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 24px;
-  box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3);
+  font-size: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
 }
 
 .title-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .page-title {
-  font-size: 32px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
   margin: 0;
@@ -2266,59 +2064,56 @@ if (app) {
 }
 
 .page-subtitle {
-  font-size: 16px;
-  color: #fbfbfc;
+  font-size: 12px;
+  color: #e2e8f0;
   margin: 0;
   font-weight: 500;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
 .refresh-btn {
-  border-radius: 12px;
-  padding: 12px 24px;
+  border-radius: 8px;
+  padding: 8px 16px;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-  transition: all 0.3s ease;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  transition: all 0.2s ease;
 }
 
 .refresh-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
 }
 
-/* 担当者分析カード */
+/* 担当者分析カード - 圆角 20px、白底半透明、阴影、hover 略上浮 */
 .performer-analysis-card {
   border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(16px);
   overflow: hidden;
   height: auto;
-  min-height: 200px;
-  transition: all 0.3s ease;
-  margin-top: 24px;
-  margin-bottom: 24px;
+  min-height: 160px;
+  transition: all 0.25s ease;
+  margin-top: 12px;
+  margin-bottom: 12px;
 }
 
 .performer-analysis-card:hover {
   transform: translateY(-2px);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.15),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 .performer-analysis-card :deep(.el-card__header) {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(226, 232, 240, 0.9) 100%);
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(226, 232, 240, 0.9) 100%);
   border-bottom: 1px solid rgba(226, 232, 240, 0.5);
-  padding: 24px;
-  backdrop-filter: blur(10px);
+  padding: 10px 14px;
+  backdrop-filter: blur(8px);
 }
 
 /* 担当者分析カードのコントロール行 */
@@ -2794,24 +2589,24 @@ if (app) {
   padding-top: 8px;
 }
 
-/* Modern Filter Card */
+/* 紧凑 Filter Card */
 .filter-card {
-  margin-bottom: 32px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  transition: all 0.3s ease;
+  margin-bottom: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  transition: all 0.25s ease;
 }
 
 .filter-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.15),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+}
+
+.filter-card :deep(.el-card__header) {
+  padding: 10px 14px;
 }
 
 .card-header {
@@ -2823,34 +2618,33 @@ if (app) {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .header-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   color: #6366f1;
 }
 
 .header-title {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: #1e293b;
 }
 
 .filter-form {
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
-/* 期間選択セクション样式 */
 .date-selection-section {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .date-selection-row {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 12px;
   width: 100%;
   flex-wrap: wrap;
 }
@@ -2860,46 +2654,45 @@ if (app) {
   flex-shrink: 0;
 }
 
-/* 快捷日期按钮样式 */
 .quick-date-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
+  gap: 12px;
   align-items: center;
-  padding: 16px;
+  padding: 10px 12px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
 }
 
 .button-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .group-label {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
-  margin-right: 8px;
+  margin-right: 6px;
   white-space: nowrap;
 }
 
 .quick-btn {
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 11px;
   font-weight: 500;
-  padding: 6px 12px;
-  transition: all 0.3s ease;
+  padding: 5px 10px;
+  transition: all 0.2s ease;
   border: 1px solid #e2e8f0;
   background: white;
   color: #64748b;
 }
 
 .quick-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 /* 日別按钮样式 */
@@ -2978,14 +2771,15 @@ if (app) {
 
 .search-btn,
 .reset-btn {
-  border-radius: 12px;
-  padding: 10px 20px;
+  border-radius: 8px;
+  padding: 6px 14px;
   font-weight: 600;
-  transition: all 0.3s ease;
+  font-size: 12px;
+  transition: all 0.2s ease;
 }
 
 .search-btn {
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
 .search-btn:hover {
@@ -3005,25 +2799,23 @@ if (app) {
   transform: translateY(-1px);
 }
 
-/* Modern Stats Grid */
+/* 紧凑 Stats Grid */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .stat-card {
   position: relative;
-  padding: 32px;
-  border-radius: 20px;
+  padding: 12px 14px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.95);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(20px);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px);
+  transition: all 0.25s ease;
   overflow: hidden;
 }
 
@@ -3033,17 +2825,15 @@ if (app) {
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  height: 2px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.15),
-    0 1px 0 rgba(255, 255, 255, 0.6) inset;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
 .stat-card:hover::before {
@@ -3053,21 +2843,21 @@ if (app) {
 .stat-content {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
   position: relative;
   z-index: 2;
 }
 
 .stat-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
+  font-size: 20px;
   color: white;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 }
 
 .stat-info {
@@ -3075,18 +2865,18 @@ if (app) {
 }
 
 .stat-number {
-  font-size: 36px;
+  font-size: 22px;
   font-weight: 800;
   color: #1e293b;
   line-height: 1;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .stat-label {
-  font-size: 14px;
+  font-size: 11px;
   color: #64748b;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .stat-decoration {
@@ -3137,21 +2927,19 @@ if (app) {
   background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
 }
 
-/* Modern Chart Card */
+/* 紧凑 Chart Card */
 .chart-card {
-  margin-bottom: 32px;
-  border-radius: 20px;
+  margin-bottom: 12px;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    0 1px 0 rgba(255, 255, 255, 0.5) inset;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20px);
-  transition: all 0.3s ease;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(16px);
+  transition: all 0.25s ease;
 }
 
 .chart-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.15),
     0 1px 0 rgba(255, 255, 255, 0.6) inset;
@@ -3424,7 +3212,21 @@ if (app) {
   }
 }
 
-/* Modern Tables Grid */
+/* 担当者別日次完了率折线图卡片 */
+.daily-rate-chart-card {
+  margin-bottom: 24px;
+  border-radius: 20px;
+  border: none;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+.daily-rate-chart-card .chart-container {
+  min-height: 320px;
+}
+
+/* Modern Tables Grid (保留样式供其他用途) */
 .tables-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3593,7 +3395,7 @@ if (app) {
 }
 
 .performer-analysis-card {
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
 }
 
@@ -3601,20 +3403,39 @@ if (app) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: auto; /* 使列表高度自适应 */
+  height: auto;
 }
 
+/* 列表项：白到浅灰渐变、圆角 20px、顶部渐变条 hover 显示 */
 .performer-list-item {
-  background: white;
-  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 20px;
   border: 1px solid #e2e8f0;
   transition: all 0.3s ease;
-  height: auto; /* 使每个列表项高度自适应 */
+  height: auto;
+  position: relative;
+  overflow: hidden;
+}
+
+.performer-list-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .performer-list-item:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
+}
+
+.performer-list-item:hover::before {
+  opacity: 1;
 }
 
 .performer-list-header {
@@ -3634,6 +3455,11 @@ if (app) {
   align-items: center;
   justify-content: center;
   color: white;
+  transition: transform 0.3s ease;
+}
+
+.performer-list-item:hover .performer-avatar {
+  transform: scale(1.05);
 }
 
 .performer-summary {
@@ -3660,6 +3486,15 @@ if (app) {
   display: flex;
   flex-direction: column;
   align-items: center;
+  padding: 8px 12px;
+  background: rgba(248, 250, 252, 0.9);
+  border-radius: 10px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .stat-label {
@@ -3702,7 +3537,7 @@ if (app) {
 }
 
 .destination-list-item {
-  background: #f8fafc;
+  background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
   padding: 16px;
@@ -3710,12 +3545,13 @@ if (app) {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: auto; /* 使每个目的地项高度自适应 */
+  height: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .destination-list-item:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   border-color: #6366f1;
 }
 

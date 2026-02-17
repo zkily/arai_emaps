@@ -209,7 +209,8 @@ async def run_generate_daily(
         sum_r = await db.execute(sum_q)
         total_confirmed = int(sum_r.scalar() or 0)
         row.forecast_total_units = total_confirmed
-        row.forecast_diff = (row.forecast_units or 0) - total_confirmed
+        # 内示差異 = 確定本数 - 内示本数
+        row.forecast_diff = total_confirmed - (row.forecast_units or 0)
 
     return {
         "success": True,

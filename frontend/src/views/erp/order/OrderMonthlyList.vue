@@ -2,6 +2,7 @@
   <div class="order-monthly-list">
     <div class="page-toolbar">
       <div class="toolbar-left">
+        <el-icon class="toolbar-icon"><Calendar /></el-icon>
         <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
       </div>
       <div class="toolbar-right">
@@ -360,7 +361,7 @@
             <span :class="{ 'cell-negative': Number(row.forecast_diff) < 0 }">{{ row.forecast_diff }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('orderMonthly.tableActions')" width="180" fixed="right" align="center">
+        <el-table-column :label="t('orderMonthly.tableActions')" width="200" fixed="right" align="center">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="openDailyDialog(row)">{{ t('orderMonthly.actionDailyOrder') }}</el-button>
             <el-button size="small" type="primary" link @click="openDialog(row)">{{ t('orderMonthly.actionEdit') }}</el-button>
@@ -384,7 +385,7 @@
 
     <el-dialog
       v-model="dialogVisible"
-      width="520px"
+      width="480px"
       destroy-on-close
       align-center
       :show-close="false"
@@ -394,130 +395,91 @@
       <template #header>
         <div class="me-header">
           <div class="me-icon-wrap">
-            <el-icon class="me-header-icon"><Document /></el-icon>
+            <el-icon class="me-header-icon"><Edit /></el-icon>
           </div>
-          <div class="me-title-wrap">
-            <span class="me-title">{{ editId ? t('orderMonthly.editDialogTitleEdit') : t('orderMonthly.editDialogTitleCreate') }}</span>
-            <span class="me-subtitle">{{ t('orderMonthly.editDialogSubtitle') || '内約情報の詳細設定' }}</span>
-          </div>
+          <span class="me-title">{{ editId ? t('orderMonthly.editDialogTitleEdit') : t('orderMonthly.editDialogTitleCreate') }}</span>
         </div>
       </template>
 
       <div class="me-body">
-        <el-form ref="formRef" :model="form" :rules="rules" label-width="80px" size="default" class="me-form">
-          <div class="me-section">
-            <div class="me-section-hd">
-              <el-icon class="me-section-icon"><InfoFilled /></el-icon>
-              <span>{{ t('orderMonthly.sectionBasic') }}</span>
-            </div>
-            <div class="me-section-bd">
-              <el-row :gutter="14">
-                <el-col :span="12">
-                  <el-form-item :label="t('orderMonthly.destination')" prop="destination_cd" class="me-item">
-                    <el-select
-                      v-model="form.destination_cd"
-                      :placeholder="t('orderMonthly.select')"
-                      filterable
-                      style="width: 100%"
-                      popper-class="destination-select-popper"
-                      @change="onDestinationChange"
-                    >
-                      <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} ${d.name}`" :value="d.cd" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="12">
-                  <el-form-item :label="t('orderMonthly.product')" prop="product_cd" class="me-item">
-                    <el-select
-                      v-model="form.product_cd"
-                      :placeholder="t('orderMonthly.select')"
-                      filterable
-                      style="width: 100%"
-                      @change="onProductChange"
-                    >
-                      <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd} ${p.name}`" :value="p.cd" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-              <el-row :gutter="14">
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.filterYear')" prop="year" class="me-item">
-                    <el-select v-model="form.year" :placeholder="t('orderMonthly.filterYear')" style="width: 100%">
-                      <el-option v-for="y in yearOptions" :key="y" :label="String(y)" :value="y" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.filterMonth')" prop="month" class="me-item">
-                    <el-select v-model="form.month" :placeholder="t('orderMonthly.filterMonth')" style="width: 100%">
-                      <el-option v-for="m in 12" :key="m" :label="String(m)" :value="m" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.type')" prop="product_type" class="me-item">
-                    <el-select v-model="form.product_type" :placeholder="t('orderMonthly.select')" style="width: 100%">
-                      <el-option :label="t('orderMonthly.productTypeMass')" value="量産品" />
-                      <el-option :label="t('orderMonthly.productTypeTrial')" value="試作品" />
-                      <el-option :label="t('orderMonthly.productTypeSpecial')" value="別注品" />
-                      <el-option :label="t('orderMonthly.productTypeSupply')" value="補給品" />
-                    </el-select>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-            </div>
-          </div>
-
-          <div class="me-section">
-            <div class="me-section-hd">
-              <el-icon class="me-section-icon"><Box /></el-icon>
-              <span>{{ t('orderMonthly.sectionQuantity') }}</span>
-            </div>
-            <div class="me-section-bd">
-              <el-row :gutter="14">
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.forecast')" prop="forecast_units" class="me-item">
-                    <el-input-number
-                      v-model="form.forecast_units"
-                      :min="0"
-                      style="width: 100%"
-                      :controls="false"
-                      placeholder="0"
-                    />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.dailyTotal')" prop="forecast_total_units" class="me-item">
-                    <el-input-number
-                      v-model="form.forecast_total_units"
-                      :min="0"
-                      style="width: 100%"
-                      :controls="false"
-                      placeholder="0"
-                    />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="8">
-                  <el-form-item :label="t('orderMonthly.diff')" prop="forecast_diff" class="me-item">
-                    <el-input-number
-                      v-model="form.forecast_diff"
-                      style="width: 100%"
-                      :controls="false"
-                      placeholder="0"
-                    />
-                  </el-form-item>
-                </el-col>
-              </el-row>
-            </div>
-          </div>
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="100px" size="default" class="me-form me-form-vertical">
+          <el-form-item :label="t('orderMonthly.destination')" prop="destination_cd" class="me-item me-item-first">
+            <el-select
+              v-model="form.destination_cd"
+              :placeholder="t('orderMonthly.select')"
+              filterable
+              disabled
+              style="width: 100%"
+              popper-class="destination-select-popper"
+              @change="onDestinationChange"
+            >
+              <el-option v-for="d in destinationOptions" :key="d.cd" :label="`${d.cd} | ${d.name}`" :value="d.cd" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('orderMonthly.filterYear')" prop="year" class="me-item">
+            <el-input-number
+              v-model="form.year"
+              :min="yearOptions[yearOptions.length - 1] ?? 2020"
+              :max="yearOptions[0] ?? 2030"
+              disabled
+              style="width: 100%"
+              :controls="true"
+              placeholder="年"
+            />
+          </el-form-item>
+          <el-form-item :label="t('orderMonthly.filterMonth')" prop="month" class="me-item">
+            <el-input-number
+              v-model="form.month"
+              :min="1"
+              :max="12"
+              disabled
+              style="width: 100%"
+              :controls="true"
+              placeholder="月"
+            />
+          </el-form-item>
+          <el-form-item :label="t('orderMonthly.product')" prop="product_cd" class="me-item">
+            <el-select
+              v-model="form.product_cd"
+              :placeholder="t('orderMonthly.select')"
+              filterable
+              disabled
+              style="width: 100%"
+              @change="onProductChange"
+            >
+              <el-option v-for="p in productOptions" :key="p.cd" :label="`${p.cd} ${p.name}`" :value="p.cd" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('orderMonthly.type')" prop="product_type" class="me-item">
+            <el-select v-model="form.product_type" :placeholder="t('orderMonthly.select')" disabled style="width: 100%">
+              <el-option :label="t('orderMonthly.productTypeMass')" value="量産品" />
+              <el-option :label="t('orderMonthly.productTypeTrial')" value="試作品" />
+              <el-option :label="t('orderMonthly.productTypeSpecial')" value="別注品" />
+              <el-option :label="t('orderMonthly.productTypeSupply')" value="補給品" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('orderMonthly.forecast')" prop="forecast_units" class="me-item me-item-last">
+            <el-input-number
+              v-model="form.forecast_units"
+              :min="0"
+              style="width: 100%"
+              :controls="true"
+              placeholder="0"
+            />
+          </el-form-item>
         </el-form>
       </div>
 
       <template #footer>
         <div class="me-footer">
-          <el-button class="me-btn-cancel" @click="dialogVisible = false">{{ t('orderMonthly.cancel') }}</el-button>
-          <el-button type="primary" class="me-btn-submit" :loading="saving" @click="submitForm">{{ t('orderMonthly.save') }}</el-button>
+          <el-button class="me-btn-cancel" @click="dialogVisible = false">
+            <el-icon><Close /></el-icon>
+            {{ t('orderMonthly.cancel') }}
+          </el-button>
+          <el-button type="primary" class="me-btn-submit" :loading="saving" @click="submitForm">
+            <el-icon><Check /></el-icon>
+            {{ t('orderMonthly.save') }}
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -731,7 +693,7 @@ import OrderDailyManageDialog from './OrderDailyManageDialog.vue'
 import EdiImport from './EdiImport.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Calendar, Search, ArrowLeft, ArrowRight, Upload, Download, Close, Check, Loading as LoadingIcon, Refresh, Document, DocumentAdd, Files, Box, InfoFilled, TrendCharts, Operation, Tools, OfficeBuilding, View, Monitor } from '@element-plus/icons-vue'
+import { Calendar, Search, ArrowLeft, ArrowRight, Upload, Download, Close, Check, Edit, Loading as LoadingIcon, Refresh, Document, DocumentAdd, Files, Box, InfoFilled, TrendCharts, Operation, Tools, OfficeBuilding, View, Monitor } from '@element-plus/icons-vue'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductOptions } from '@/api/options'
 import {
@@ -1008,6 +970,9 @@ async function submitForm() {
   }
   saving.value = true
   try {
+    // 内示差異 = 確定本数 - 内示本数
+    const forecastTotal = form.forecast_total_units ?? 0
+    const forecastUnits = form.forecast_units ?? 0
     const payload: OrderMonthlyCreate = {
       destination_cd: form.destination_cd,
       destination_name: form.destination_name!,
@@ -1017,9 +982,9 @@ async function submitForm() {
       product_name: form.product_name!,
       product_alias: form.product_alias || undefined,
       product_type: form.product_type,
-      forecast_units: form.forecast_units ?? 0,
-      forecast_total_units: form.forecast_total_units ?? 0,
-      forecast_diff: form.forecast_diff ?? 0,
+      forecast_units: forecastUnits,
+      forecast_total_units: forecastTotal,
+      forecast_diff: forecastTotal - forecastUnits,
     }
     if (editId.value != null) {
       await updateOrderMonthly(editId.value, payload)
@@ -1738,6 +1703,16 @@ onMounted(() => {
     0 4px 24px rgba(99,102,241,0.25),
     inset 0 1px 0 rgba(255,255,255,0.2);
 }
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.toolbar-icon {
+  font-size: 20px;
+  color: #fff;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
+}
 .toolbar-title {
   margin: 0;
   font-size: 17px;
@@ -2021,36 +1996,116 @@ onMounted(() => {
 
 /* --- Table Section (Glass) --- */
 .table-section {
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.65);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-  padding: 10px;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(16px) saturate(170%);
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.8);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  padding: 12px;
+  overflow: hidden;
 }
-/* --- 表格美化：纯黑字体，负数红色 --- */
-.data-table { width: 100%; }
+
+/* --- Modern Premium Table Styling --- */
+.data-table { 
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* Header Styling */
 .data-table :deep(.el-table__header-wrapper th) {
-  background: rgba(248,250,252,0.95) !important;
-  color: #000;
-  font-weight: 600;
-  font-size: 12px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
+  background: linear-gradient(180deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.08) 100%) !important;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border-bottom: 2px solid rgba(99,102,241,0.2);
+  padding: 8px 12px !important;
+  height: 36px !important;
 }
+
+.data-table :deep(.el-table__header-wrapper th .cell) {
+  padding: 0;
+  line-height: 1.3;
+}
+
+/* Body Cell Styling */
 .data-table :deep(.el-table__body-wrapper td.el-table__cell) {
-  color: #000;
-  font-size: 13px;
+  color: #1e293b;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid rgba(0,0,0,0.04);
 }
+
+.data-table :deep(.el-table__body-wrapper td .cell) {
+  padding: 0;
+  line-height: 1.4;
+}
+
+/* Row Styling */
 .data-table :deep(.el-table__row) {
-  transition: background-color 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .data-table :deep(.el-table__row:hover > td) {
-  background: rgba(99,102,241,0.05) !important;
+  background: linear-gradient(90deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.06) 100%) !important;
+  transform: scale(1.001);
 }
+
+/* Striped Rows */
+.data-table :deep(.el-table__body .el-table__row--striped td) {
+  background: rgba(248,250,252,0.5) !important;
+}
+
+.data-table :deep(.el-table__body .el-table__row--striped:hover > td) {
+  background: linear-gradient(90deg, rgba(99,102,241,0.08) 0%, rgba(139,92,246,0.06) 100%) !important;
+}
+
+/* Negative Values */
 .data-table .cell-negative {
-  color: #c62828;
+  color: #dc2626;
+  font-weight: 700;
+  background: rgba(220,38,38,0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+/* Action Buttons */
+.data-table :deep(.el-button--small.is-link) {
+  font-size: 11.5px;
   font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.data-table :deep(.el-button--primary.is-link:hover) {
+  background: rgba(99,102,241,0.1);
+  color: #4f46e5;
+}
+
+.data-table :deep(.el-button--danger.is-link:hover) {
+  background: rgba(220,38,38,0.1);
+  color: #b91c1c;
+}
+
+/* Border Styling */
+.data-table :deep(.el-table--border) {
+  border: 1px solid rgba(0,0,0,0.06);
+}
+
+.data-table :deep(.el-table--border th),
+.data-table :deep(.el-table--border td) {
+  border-right: 1px solid rgba(0,0,0,0.04);
+}
+
+.data-table :deep(.el-table--border::after),
+.data-table :deep(.el-table__inner-wrapper::before) {
+  background-color: rgba(0,0,0,0.06);
 }
 .pagination-container {
   display: flex; justify-content: flex-end;
@@ -2485,156 +2540,211 @@ onMounted(() => {
   transform: translateY(-1px);
 }
 
-/* --- Monthly Edit Dialog (Glass) --- */
+/* --- Monthly Edit Dialog（精致样式） --- */
 .monthly-edit-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.18), 0 0 0 1px rgba(255,255,255,0.5) inset;
-  border: 1px solid rgba(255,255,255,0.4);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.04);
+  background: #fff;
 }
 .monthly-edit-dialog :deep(.el-dialog__header) {
   padding: 0;
   margin: 0;
 }
+.monthly-edit-dialog :deep(.el-dialog__header .el-dialog__headerbtn) {
+  top: 16px;
+  right: 18px;
+  width: 30px;
+  height: 30px;
+  color: #94a3b8;
+  font-size: 16px;
+  transition: color 0.2s, background 0.2s;
+}
+.monthly-edit-dialog :deep(.el-dialog__header .el-dialog__headerbtn:hover) {
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
 .monthly-edit-dialog :deep(.el-dialog__body) {
-  padding: 0 24px 20px;
-  background: linear-gradient(180deg, #fafbff 0%, #f5f6fb 100%);
+  padding: 24px 28px 20px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 24px);
 }
 .monthly-edit-dialog :deep(.el-dialog__footer) {
-  padding: 14px 24px 20px;
-  border-top: 1px solid rgba(0,0,0,0.06);
-  background: #fff;
+  padding: 16px 28px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
 }
 
 .me-header {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, rgba(79,70,229,0.92) 0%, rgba(99,102,241,0.95) 50%, rgba(139,92,246,0.92) 100%);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255,255,255,0.2);
+  padding: 18px 28px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #d1fae5 100%);
+  border-bottom: 1px solid #a7f3d0;
 }
 .me-icon-wrap {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.25);
+  background: linear-gradient(145deg, #10b981 0%, #059669 50%, #047857 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(16,185,129,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.me-icon-wrap:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 16px rgba(16,185,129,0.4);
 }
 .me-header-icon {
-  font-size: 22px;
+  font-size: 20px;
   color: #fff;
-}
-.me-title-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
 }
 .me-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.3px;
-  line-height: 1.3;
-}
-.me-subtitle {
-  font-size: 12px;
-  color: rgba(255,255,255,0.88);
-  font-weight: 500;
+  font-size: 17px;
+  font-weight: 600;
+  color: #064e3b;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .me-body {
-  padding-top: 18px;
-}
-.me-form :deep(.el-form-item) {
-  margin-bottom: 14px;
-}
-.me-section {
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
   padding: 0;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  margin-bottom: 14px;
 }
-.me-section:last-child {
+.me-form.me-form-vertical :deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+.me-form.me-form-vertical :deep(.el-form-item:last-child) {
   margin-bottom: 0;
 }
-.me-section-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(139,92,246,0.06) 100%);
-  border-bottom: 1px solid rgba(99,102,241,0.1);
+.me-item :deep(.el-form-item__label) {
   font-size: 13px;
+  color: #475569;
   font-weight: 600;
+  padding-right: 14px;
+  letter-spacing: 0.01em;
+}
+.me-item.me-item-first :deep(.el-form-item__label) {
   color: #334155;
 }
-.me-section-icon {
-  font-size: 16px;
-  color: #6366f1;
+.monthly-edit-dialog .me-form :deep(.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label::before) {
+  color: #dc2626;
+  margin-right: 2px;
 }
-.me-section-bd {
-  padding: 14px 16px;
+
+/* 输入框 / 选择框 */
+.me-item :deep(.el-input__wrapper),
+.me-item :deep(.el-input-number .el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px #e2e8f0, 0 1px 2px rgba(0,0,0,0.04);
+  transition: box-shadow 0.2s, border-color 0.2s;
+  background: #fff;
+  padding: 2px 12px;
+  min-height: 36px;
 }
-.me-item {
-  margin-bottom: 0 !important;
+.me-item :deep(.el-input__wrapper:hover),
+.me-item :deep(.el-input-number:hover .el-input__wrapper) {
+  box-shadow: 0 0 0 1px #cbd5e1, 0 1px 3px rgba(0,0,0,0.06);
 }
-.me-item :deep(.el-form-item__label) {
-  font-size: 12.5px;
-  color: #64748b;
+.me-item :deep(.el-input.is-focus .el-input__wrapper),
+.me-item :deep(.el-input-number:focus-within .el-input__wrapper) {
+  box-shadow: 0 0 0 2px #3b82f6, 0 0 0 4px rgba(59,130,246,0.12);
+}
+.me-item :deep(.el-input__inner),
+.me-item :deep(.el-input-number .el-input__inner) {
+  color: #1e293b;
   font-weight: 500;
-  padding-right: 8px;
 }
-.me-item :deep(.el-input__wrapper) {
+.me-item :deep(.el-input .el-input__suffix .el-icon),
+.me-item :deep(.el-select .el-input__suffix .el-icon) {
+  color: #64748b;
+  transition: color 0.2s;
+}
+.me-item :deep(.el-select:hover .el-input__suffix .el-icon) {
+  color: #3b82f6;
+}
+
+/* 数字步进器 */
+.me-item :deep(.el-input-number) {
+  width: 100%;
+}
+.me-item :deep(.el-input-number .el-input-number__decrease),
+.me-item :deep(.el-input-number .el-input-number__increase) {
   border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.08) inset;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  color: #64748b;
   transition: all 0.2s;
+  width: 32px;
 }
-.me-item :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px rgba(99,102,241,0.3) inset;
+.me-item :deep(.el-input-number .el-input-number__decrease:hover),
+.me-item :deep(.el-input-number .el-input-number__increase:hover) {
+  color: #3b82f6;
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
 }
-.me-item :deep(.el-input.is-focus .el-input__wrapper) {
-  box-shadow: 0 0 0 1px rgba(99,102,241,0.5) inset, 0 0 0 3px rgba(99,102,241,0.08);
+.me-item :deep(.el-input-number .el-input-number__decrease:active),
+.me-item :deep(.el-input-number .el-input-number__increase:active) {
+  background: #bfdbfe;
 }
 
 .me-footer {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 .me-btn-cancel {
   border-radius: 10px;
-  padding: 8px 18px;
-  font-weight: 500;
-  border: 1px solid rgba(0,0,0,0.12);
+  padding: 10px 22px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  border: 1px solid #e2e8f0;
   color: #475569;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   transition: all 0.2s;
 }
 .me-btn-cancel:hover {
   background: #f1f5f9;
-  border-color: rgba(0,0,0,0.18);
-  color: #000;
+  border-color: #cbd5e1;
+  color: #1e293b;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+  transform: translateY(-1px);
+}
+.me-btn-cancel .el-icon {
+  margin-right: 6px;
+  font-size: 15px;
+  vertical-align: -0.15em;
 }
 .me-btn-submit {
   border-radius: 10px;
-  padding: 8px 20px;
+  padding: 10px 24px;
+  font-size: 13px;
   font-weight: 600;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  background: linear-gradient(145deg, #3b82f6 0%, #2563eb 50%, #1d4ed8 100%) !important;
   border: none !important;
-  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(59,130,246,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
   transition: all 0.2s;
 }
 .me-btn-submit:hover {
+  background: linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: #fff !important;
+  box-shadow: 0 6px 20px rgba(59,130,246,0.45);
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+}
+.me-btn-submit:active {
+  transform: translateY(0);
+}
+.me-btn-submit .el-icon {
+  margin-right: 6px;
+  font-size: 15px;
+  vertical-align: -0.15em;
 }
 
 /* --- Batch Dialog (Glass) --- */

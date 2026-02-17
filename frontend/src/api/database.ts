@@ -31,6 +31,29 @@ export function getProductionSummarysProducts() {
   return request.get(`${BASE}/products`)
 }
 
+export interface InventoryShortagePrintParams {
+  startDate: string
+  endDate: string
+  productCd?: string
+}
+
+export interface InventoryShortagePrintRow {
+  product_cd: string
+  product_name: string
+  date: string
+  destination_name: string
+  product_type: string
+  box_type: string
+  unit_per_box: number | null
+  units: number
+  box_quantity: number | null
+}
+
+/** 在庫不足一覧印刷用（products・destinations ジョイン済み） */
+export function getInventoryShortagePrint(params: InventoryShortagePrintParams) {
+  return request.get<{ data: InventoryShortagePrintRow[] }>(`${BASE}/inventory-shortage-print`, { params })
+}
+
 export interface GenerateProductionSummarysParams {
   startDate: string
   endDate: string
@@ -45,6 +68,22 @@ export interface UpdateFromOrderDailyParams {
   updateMode?: 'all' | 'changed' | 'recent'
   days?: number
   clearBeforeUpdate?: boolean
+}
+
+/** 一括更新用分散ロック取得（他端末同時実行防止） */
+export function acquireBatchUpdateLock(lockValue: string, ttlSeconds?: number) {
+  return request.post<{ data?: { acquired?: boolean }; message?: string }>(
+    `${BASE}/batch-update-lock/acquire`,
+    { lockValue, ttlSeconds }
+  )
+}
+
+/** 一括更新用分散ロック解放 */
+export function releaseBatchUpdateLock(lockValue: string) {
+  return request.post<{ data?: { released?: boolean }; message?: string }>(
+    `${BASE}/batch-update-lock/release`,
+    { lockValue }
+  )
 }
 
 /** 受注データから forecast_quantity / order_quantity を更新 */
@@ -132,6 +171,14 @@ export function updateProductionSummarysTrend(startDate?: string) {
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
     message?: string
   }>(`${BASE}/update-trend`, startDate != null ? { startDate } : {}, { timeout: LONG_REQUEST_TIMEOUT })
+}
+
+/** 安全在庫更新：将来30営業日の平均内示数×製品マスタsafety_days で safety_stock を再計算 */
+export function updateProductionSummarysSafetyStock(startDate?: string) {
+  return request.post<{
+    data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
+    message?: string
+  }>(`${BASE}/update-safety-stock`, startDate != null ? { startDate } : {}, { timeout: LONG_REQUEST_TIMEOUT })
 }
 
 /** 製品マスタ更新：products の route_cd, product_name を production_summarys に同期 */

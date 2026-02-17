@@ -217,12 +217,11 @@ async def get_monthly_summary(
     prs = ProductRouteStep
     base_where = _monthly_summary_base_where(om, year, month, destination_cd, keyword)
 
-    # 全体合計: forecast_units, forecast_total_units, forecast_diff
+    # 全体合計: forecast_units, forecast_total_units。内示差異は 確定本数 - 内示本数 で計算
     q_total = (
         select(
             func.coalesce(func.sum(om.forecast_units), 0).label("forecast_units"),
             func.coalesce(func.sum(om.forecast_total_units), 0).label("forecast_total_units"),
-            func.coalesce(func.sum(om.forecast_diff), 0).label("forecast_diff"),
         )
         .select_from(om)
         .where(base_where)
@@ -230,7 +229,7 @@ async def get_monthly_summary(
     row_total = (await db.execute(q_total)).one()
     forecast_units = int(row_total.forecast_units or 0)
     forecast_total_units = int(row_total.forecast_total_units or 0)
-    forecast_diff = int(row_total.forecast_diff or 0)
+    forecast_diff = forecast_total_units - forecast_units  # 内示差異 = 確定本数 - 内示本数
 
     # 工序別: 該当 process_cd を持つ製品の月订单のみ SUM（重複計上を防ぐため IN (DISTINCT product_cd) で結合）
     async def sum_by_process(process_cd: str):

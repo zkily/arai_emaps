@@ -8,145 +8,287 @@
         </el-tag>
       </div>
       <div class="header-actions">
-        <el-dropdown
-          trigger="click"
-          placement="bottom-start"
-          :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
-          class="others-dropdown"
-        >
+        <!-- PC: ドロップダウン / スマホ・タブレット: ボタンで Drawer を開く -->
+        <template v-if="!isSmallScreen">
+          <el-dropdown
+            trigger="click"
+            placement="bottom-start"
+            :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
+            class="others-dropdown"
+            @command="handleDropdownCommand"
+          >
+            <el-button
+              size="small"
+              :icon="MoreFilled"
+              :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
+              class="modern-btn others-btn"
+            >
+              その他
+              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  command="generate"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item generate-item"
+                >
+                  <el-icon><DocumentAdd /></el-icon>
+                  <span>データ生成</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="all-update"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item all-update-item"
+                >
+                  <el-icon><Operation /></el-icon>
+                  <span>全部一括更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="update-order"
+                  :disabled="updatingFromOrderDaily"
+                  class="dropdown-item update-order-item"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  <span>受注データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="batch-initial"
+                  class="dropdown-item batch-initial-item"
+                >
+                  <el-icon><DocumentCopy /></el-icon>
+                  <span>初期在庫一括登録</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="carry-over"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item carry-over-item"
+                >
+                  <el-icon><RefreshRight /></el-icon>
+                  <span>繰越データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="actual"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item actual-item"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  <span>実績データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="defect"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item defect-item"
+                >
+                  <el-icon><WarningFilled /></el-icon>
+                  <span>不良データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="scrap"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item scrap-item"
+                >
+                  <el-icon><Delete /></el-icon>
+                  <span>廃棄データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="on-hold"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item on-hold-item"
+                >
+                  <el-icon><Clock /></el-icon>
+                  <span>保留データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="production-dates"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item production-dates-item"
+                >
+                  <el-icon><Calendar /></el-icon>
+                  <span>生産計画日更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="plan"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item plan-item"
+                >
+                  <el-icon><DocumentCopy /></el-icon>
+                  <span>計画データ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="inventory-trend"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item inventory-trend-item"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  <span>在庫・推移更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="product-master"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingProductMaster"
+                  class="dropdown-item product-master-item"
+                >
+                  <el-icon><Goods /></el-icon>
+                  <span>製品マスタ更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="machine"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingMachine"
+                  class="dropdown-item machine-update-item"
+                >
+                  <el-icon><Monitor /></el-icon>
+                  <span>設備フィールド更新</span>
+                </el-dropdown-item>
+                <el-dropdown-item
+                  command="batch-actual"
+                  :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
+                  class="dropdown-item batch-actual-item"
+                >
+                  <el-icon><DocumentCopy /></el-icon>
+                  <span>実績一括登録</span>
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </template>
+        <template v-else>
           <el-button
             size="small"
             :icon="MoreFilled"
             :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
+            :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
             class="modern-btn others-btn"
+            @click="showOthersDrawer = true"
           >
             その他
-            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
           </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                @click="handleGenerateData"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item generate-item"
+          <el-drawer
+            v-model="showOthersDrawer"
+            title="その他"
+            direction="btt"
+            size="auto"
+            class="others-drawer"
+          >
+            <div class="others-drawer-list">
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('generate')"
               >
                 <el-icon><DocumentAdd /></el-icon>
                 <span>データ生成</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleAllUpdate"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item all-update-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('all-update')"
               >
                 <el-icon><Operation /></el-icon>
                 <span>全部一括更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateFromOrderDaily"
-                :disabled="updatingFromOrderDaily"
-                class="dropdown-item update-order-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': updatingFromOrderDaily }"
+                @click="!updatingFromOrderDaily && onOthersDrawerSelect('update-order')"
               >
                 <el-icon><Refresh /></el-icon>
                 <span>受注データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="openBatchInitialStockDialog"
-                class="dropdown-item batch-initial-item"
-              >
+              </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('batch-initial')">
                 <el-icon><DocumentCopy /></el-icon>
                 <span>初期在庫一括登録</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateCarryOver"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item carry-over-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('carry-over')"
               >
                 <el-icon><RefreshRight /></el-icon>
                 <span>繰越データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateActual"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item actual-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('actual')"
               >
                 <el-icon><Refresh /></el-icon>
                 <span>実績データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateDefect"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item defect-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('defect')"
               >
                 <el-icon><WarningFilled /></el-icon>
                 <span>不良データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateScrap"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item scrap-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('scrap')"
               >
                 <el-icon><Delete /></el-icon>
                 <span>廃棄データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateOnHold"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item on-hold-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('on-hold')"
               >
                 <el-icon><Clock /></el-icon>
                 <span>保留データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateProductionDates"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item production-dates-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('production-dates')"
               >
                 <el-icon><Calendar /></el-icon>
                 <span>生産計画日更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdatePlan"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item plan-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('plan')"
               >
                 <el-icon><DocumentCopy /></el-icon>
                 <span>計画データ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleInventoryTrendUpdate"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item inventory-trend-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('inventory-trend')"
               >
                 <el-icon><Refresh /></el-icon>
                 <span>在庫・推移更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateProductMaster"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingProductMaster"
-                class="dropdown-item product-master-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll || updatingProductMaster }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll || updatingProductMaster) && onOthersDrawerSelect('product-master')"
               >
                 <el-icon><Goods /></el-icon>
                 <span>製品マスタ更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleUpdateMachine"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingMachine"
-                class="dropdown-item machine-update-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll || updatingMachine }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll || updatingMachine) && onOthersDrawerSelect('machine')"
               >
                 <el-icon><Monitor /></el-icon>
                 <span>設備フィールド更新</span>
-              </el-dropdown-item>
-              <el-dropdown-item
-                @click="handleOpenBatchActualDialog"
-                :disabled="generating || updatingCarryOver || updatingOrder || updatingAll"
-                class="dropdown-item batch-actual-item"
+              </div>
+              <div
+                class="others-drawer-item"
+                :class="{ 'is-disabled': generating || updatingCarryOver || updatingOrder || updatingAll }"
+                @click="!(generating || updatingCarryOver || updatingOrder || updatingAll) && onOthersDrawerSelect('batch-actual')"
               >
                 <el-icon><DocumentCopy /></el-icon>
                 <span>実績一括登録</span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+              </div>
+            </div>
+          </el-drawer>
+        </template>
         <el-button
           size="small"
           :icon="Refresh"
@@ -273,7 +415,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.id"
               prop="id"
               label="ID"
-              width="80"
+              :width="columnDefinitions.id?.width ?? 80"
               fixed="left"
               align="center"
             />
@@ -281,7 +423,7 @@
               v-if="activeTableTab === 'custom' ? visibleColumns.date : true"
               prop="date"
               label="日付"
-              width="90"
+              :width="columnDefinitions.date?.width ?? 90"
               fixed="left"
               align="center"
               sortable="custom"
@@ -295,7 +437,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.day_of_week"
               prop="day_of_week"
               label="曜日"
-              width="60"
+              :width="columnDefinitions.day_of_week?.width ?? 60"
               fixed="left"
               align="center"
             >
@@ -309,7 +451,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.route_cd"
               prop="route_cd"
               label="工程グループ"
-              width="120"
+              :width="columnDefinitions.route_cd?.width ?? 120"
               fixed="left"
               align="center"
             />
@@ -317,7 +459,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.product_cd"
               prop="product_cd"
               label="製品CD"
-              width="70"
+              :width="columnDefinitions.product_cd?.width ?? 90"
               fixed="left"
               align="center"
             />
@@ -325,7 +467,7 @@
               v-if="activeTableTab === 'custom' ? visibleColumns.product_name : true"
               prop="product_name"
               label="製品名"
-              width="110"
+              :width="columnDefinitions.product_name?.width ?? 110"
               fixed="left"
               show-overflow-tooltip
               sortable="custom"
@@ -339,7 +481,7 @@
               v-if="activeTableTab === 'custom' && visibleColumns.order_quantity"
               prop="order_quantity"
               label="受注数"
-              width="70"
+              :width="columnDefinitions.order_quantity?.width ?? 70"
               align="center"
             >
               <template #default="{ row }">
@@ -354,13 +496,28 @@
               v-if="activeTableTab === 'custom' && visibleColumns.forecast_quantity"
               prop="forecast_quantity"
               label="内示数"
-              width="70"
+              :width="columnDefinitions.forecast_quantity?.width ?? 70"
               align="center"
             >
               <template #default="{ row }">
                 <span class="number-cell">{{
                   row.forecast_quantity != null && row.forecast_quantity !== 0
                     ? Number(row.forecast_quantity).toLocaleString()
+                    : ''
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-if="activeTableTab === 'custom' && visibleColumns.safety_stock"
+              prop="safety_stock"
+              label="安全在庫"
+              :width="columnDefinitions.safety_stock?.width ?? 90"
+              align="center"
+            >
+              <template #default="{ row }">
+                <span class="number-cell">{{
+                  row.safety_stock != null && row.safety_stock !== 0
+                    ? Number(row.safety_stock).toLocaleString()
                     : ''
                 }}</span>
               </template>
@@ -486,7 +643,7 @@
           <h3 class="confirm-title">在庫・推移を更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">計算期間は開始日～+3ヶ月です。先に計算フィールドをクリアしてから、在庫→推移の順で更新します。</span>
+              <span class="detail-value">当月月初から先の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は当月月初～+3ヶ月、推移は当月月初～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</span>
             </div>
           </div>
         </div>
@@ -609,7 +766,7 @@
               <li>廃棄データ更新</li>
               <li>保留データ更新</li>
               <li>計画データ更新</li>
-              <li>在庫・推移更新</li>
+              <li>在庫・推移・安全在庫更新</li>
             </ol>
             <div class="detail-row" style="margin-top: 10px;">
               <span class="detail-value">この処理には時間がかかる場合があります。</span>
@@ -620,7 +777,10 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="showAllUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
-          <el-button type="primary" @click="confirmAllUpdate" class="confirm-btn">一括更新開始</el-button>
+          <!-- 本番ビルドで teleport 内の el-button @click が効かないため、原生 button で実行 -->
+          <button type="button" class="el-button el-button--primary confirm-btn" @click="onAllUpdateConfirmClick">
+            一括更新開始
+          </button>
         </div>
       </template>
     </el-dialog>
@@ -651,30 +811,35 @@
       </template>
     </el-dialog>
 
-    <!-- データ生成進度ダイアログ -->
+    <!-- データ生成・一括更新進度ダイアログ（在庫不足管理と同様のスタイル） -->
     <el-dialog
       v-model="showProgressDialog"
-      title="データ生成中"
+      :title="progressDialogTitle"
       width="500px"
       :close-on-click-modal="false"
       :close-on-press-escape="false"
       :show-close="false"
-      class="progress-dialog"
+      class="progress-dialog progress-dialog--styled"
     >
       <div class="progress-content">
         <div class="progress-info">
-          <el-icon class="progress-icon"><Loading /></el-icon>
+          <div class="progress-icon-wrap">
+            <el-icon class="progress-icon"><Loading /></el-icon>
+          </div>
           <span class="progress-text">{{ progressText }}</span>
         </div>
-        <el-progress
-          :percentage="Math.round(progressPercentage)"
-          :status="progressStatus"
-          :stroke-width="12"
-          class="progress-bar"
-        />
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            :class="{ 'progress-fill--success': progressStatus === 'success' }"
+            :style="{ width: Math.min(100, Math.round(progressPercentage)) + '%' }"
+          >
+            <span class="progress-shine" />
+          </div>
+        </div>
         <div class="progress-details">
-          <span class="detail-label">進捗:</span>
-          <span class="detail-value">{{ Math.round(progressPercentage) }}%</span>
+          <span class="detail-label">進捗</span>
+          <span class="detail-value progress-percent">{{ Math.round(progressPercentage) }}%</span>
         </div>
       </div>
     </el-dialog>
@@ -891,7 +1056,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
@@ -900,6 +1065,8 @@ import {
   getProductionSummarysProducts,
   generateProductionSummarys,
   updateProductionSummarysFromOrderDaily,
+  acquireBatchUpdateLock,
+  releaseBatchUpdateLock,
   clearProductionSummarysCarryOver,
   updateProductionSummarysCarryOver,
   updateProductionSummarysActual,
@@ -911,6 +1078,7 @@ import {
   updateProductionSummarysPlan,
   updateProductionSummarysInventory,
   updateProductionSummarysTrend,
+  updateProductionSummarysSafetyStock,
   updateProductionSummarysProductMaster,
   updateProductionSummarysMachine,
 } from '@/api/database'
@@ -1030,6 +1198,11 @@ const updatingMachine = ref(false)
 const showMachineUpdateDialog = ref(false)
 const machineDateRange = ref<[string, string] | null>(null)
 const showAllUpdateConfirmDialog = ref(false)
+// その他メニュー（スマホ・タブレットは Drawer で表示）
+const isSmallScreen = ref(false)
+const showOthersDrawer = ref(false)
+let othersDrawerMql: MediaQueryList | null = null
+let othersDrawerMqlHandler: (() => void) | null = null
 // 実績一括登録
 const showBatchActualDialog = ref(false)
 const batchActualDate = ref<string>('')
@@ -1053,6 +1226,7 @@ const showProgressDialog = ref(false)
 const progressPercentage = ref(0)
 const progressStatus = ref<'success' | 'exception' | 'warning' | ''>('')
 const progressText = ref('データ生成を準備中...')
+const progressDialogTitle = ref('処理中')
 
 const tableTabs = [
   { key: 'custom', label: '受注', icon: '📝', color: 'linear-gradient(135deg, #8b5cf6, #ec4899)' },
@@ -1068,15 +1242,16 @@ const tableTabs = [
 ]
 
 const columnDefinitions: Record<string, { label: string; group: string; type?: string; width?: number }> = {
-  // 基本情報
-  id: { label: 'ID', group: '基本情報' },
-  date: { label: '日付', group: '基本情報' },
-  day_of_week: { label: '曜日', group: '基本情報' },
-  route_cd: { label: '工程グループ', group: '基本情報' },
-  product_cd: { label: '製品CD', group: '基本情報' },
-  product_name: { label: '製品名', group: '基本情報' },
-  order_quantity: { label: '受注数', group: '受注・内示' },
-  forecast_quantity: { label: '内示数', group: '受注・内示' },
+  // 基本情報（width = 固定列幅）
+  id: { label: 'ID', group: '基本情報', width: 20 },
+  date: { label: '日付', group: '基本情報', width: 100 },
+  day_of_week: { label: '曜日', group: '基本情報', width: 60 },
+  route_cd: { label: '工程グループ', group: '基本情報', width: 120 },
+  product_cd: { label: '製品CD', group: '基本情報', width: 90 },
+  product_name: { label: '製品名', group: '基本情報', width: 110 },
+  order_quantity: { label: '受注数', group: '受注・内示', width: 70 },
+  forecast_quantity: { label: '内示数', group: '受注・内示', width: 70 },
+  safety_stock: { label: '安全在庫', group: '受注・内示', width: 90 },
 
   // 切断
   cutting_carry_over: { label: '切断繰越', group: '切断', width: 70 },
@@ -1154,7 +1329,7 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   inspection_defect: { label: '検査不良', group: '検査', width: 70 },
   inspection_scrap: { label: '検査廃棄', group: '検査', width: 70 },
   inspection_on_hold: { label: '検査保留品', group: '検査', width: 80 },
-  inspection_inventory: { label: '検査在庫', group: '検査', width: 70 },
+  inspection_inventory: { label: '検査在庫', group: '検査', width: 85 },
   inspection_trend: { label: '検査推移', group: '検査', width: 70 },
   inspection_production_date: { label: '検査生産日', group: '検査', type: 'date', width: 100 },
   inspector_machine: { label: '検査員', group: '検査', type: 'text', width: 80 },
@@ -1168,7 +1343,7 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   warehouse_defect: { label: '倉庫不良', group: '倉庫', width: 70 },
   warehouse_scrap: { label: '倉庫廃棄', group: '倉庫', width: 70 },
   warehouse_on_hold: { label: '倉庫保留品', group: '倉庫', width: 80 },
-  warehouse_inventory: { label: '倉庫在庫', group: '倉庫', width: 70 },
+  warehouse_inventory: { label: '倉庫在庫', group: '倉庫', width: 90 },
   warehouse_trend: { label: '倉庫推移', group: '倉庫', width: 70 },
 
   // 外注倉庫
@@ -1177,7 +1352,7 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   outsourced_warehouse_defect: { label: '外注倉庫不良', group: '外注倉庫', width: 100 },
   outsourced_warehouse_scrap: { label: '外注倉庫廃棄', group: '外注倉庫', width: 100 },
   outsourced_warehouse_on_hold: { label: '外注倉庫保留品', group: '外注倉庫', width: 110 },
-  outsourced_warehouse_inventory: { label: '外注倉庫在庫', group: '外注倉庫', width: 100 },
+  outsourced_warehouse_inventory: { label: '外注倉庫在庫', group: '外注倉庫', width: 120 },
   outsourced_warehouse_trend: { label: '外注倉庫推移', group: '外注倉庫', width: 100 },
 
   // 外注メッキ
@@ -1242,11 +1417,12 @@ const defaultVisibleColumns: Record<string, boolean> = {
   product_name: true,
   order_quantity: true,
   forecast_quantity: true,
+  safety_stock: true,
   ...Object.fromEntries(
     columnKeys
       .filter(
         (k) =>
-          !['id', 'date', 'day_of_week', 'route_cd', 'product_cd', 'product_name', 'order_quantity', 'forecast_quantity'].includes(k)
+          !['id', 'date', 'day_of_week', 'route_cd', 'product_cd', 'product_name', 'order_quantity', 'forecast_quantity', 'safety_stock'].includes(k)
       )
       .map((k) => [k, false])
   ),
@@ -1284,7 +1460,7 @@ const processPrefixes = [
 const dynamicColumns = computed(() => {
   const activeFieldType = activeTableTab.value
   if (activeFieldType === 'custom') {
-    const baseColumns = ['id', 'date', 'day_of_week', 'route_cd', 'product_cd', 'product_name', 'order_quantity', 'forecast_quantity']
+    const baseColumns = ['id', 'date', 'day_of_week', 'route_cd', 'product_cd', 'product_name', 'order_quantity', 'forecast_quantity', 'safety_stock']
     const cols: Array<{ prop: string; label: string; width?: number; type?: string }> = []
     columnKeys.forEach((key) => {
       if (visibleColumns.value[key] && !baseColumns.includes(key)) {
@@ -1377,6 +1553,20 @@ const cellStyleHandler = ({ row, column }: { row: Record<string, any>; column: {
   }
   return {}
 }
+/** 安全在庫列の合計：product_cd ごとに最新日付の行の safety_stock のみを取って合算 */
+function sumSafetyStockByLatestDatePerProduct(data: any[]): number {
+  const byProduct = new Map<string, { date: string; safety_stock: number }>()
+  for (const row of data) {
+    const pc = (row.product_cd ?? '').toString().trim()
+    if (!pc) continue
+    const d = row.date ? (typeof row.date === 'string' ? row.date.slice(0, 10) : String(row.date).slice(0, 10)) : ''
+    const val = Number(row.safety_stock) || 0
+    const cur = byProduct.get(pc)
+    if (!cur || d > cur.date) byProduct.set(pc, { date: d, safety_stock: val })
+  }
+  return Array.from(byProduct.values()).reduce((a, b) => a + b.safety_stock, 0)
+}
+
 const getSummaries = (param: { columns: any[]; data: any[] }) => {
   const { columns, data } = param
   const sums: string[] = []
@@ -1386,7 +1576,15 @@ const getSummaries = (param: { columns: any[]; data: any[] }) => {
       return
     }
     const prop = column.property
-    if (!prop || !numericFields.has(prop)) {
+    if (!prop) {
+      sums[index] = ''
+      return
+    }
+    if (prop === 'safety_stock') {
+      sums[index] = sumSafetyStockByLatestDatePerProduct(data).toLocaleString()
+      return
+    }
+    if (!numericFields.has(prop)) {
       sums[index] = ''
       return
     }
@@ -1727,14 +1925,157 @@ const handleUpdateProductionDates = async () => {
   }
 }
 
+/**
+ * 在庫更新（在庫・推移更新中的「在庫」部分）— 计算方法详细总结
+ * =============================================================================
+ * 一、前端流程（本画面）
+ * -----------------------------------------------------------------------------
+ * 1. 入口：「その他」→「在庫・推移更新」→ 确认对话框「在庫・推移更新確認」→ 点击「更新」
+ * 2. 开始日：当月月初 getFirstDayOfCurrentMonth()（当月1日 YYYY-MM-DD）。计算前先清空「当月月初之后」的在庫・推移字段，再在该范围内重新计算。
+ *    - 清空：POST clear-calculated-fields(当月月初) → 范围 当月月初～当月月初+3ヶ月 的计算字段置 0
+ *    - 在庫：POST update-inventory(当月月初) → 同上区间按公式重算
+ *    - 推移：POST update-trend(当月月初) → 当月月初～表内最大日
+ *    - 另 calculateStartDate() 仍用于计划更新等，按繰越列最后 >0 的最早日。
+ * 3. 执行顺序：先 clear-calculated-fields(当月月初)，再 update-inventory(当月月初)，再 update-trend(当月月初)
+ * 4. 计算期间说明：在庫・清空＝当月月初～当月月初+3ヶ月；推移＝当月月初～表内最大日
+ *
+ * 二、后端在庫更新范围与数据准备
+ * -----------------------------------------------------------------------------
+ * - 有 startDate：全局开始日 = startDate，结束日 = startDate + 3 个月；只处理 date ∈ [globalStart, globalEnd] 的行
+ * - 无 startDate：按产品取「任意 carry_over 列 > 0 的行的 MAX(date)」作为该产品 start_date，结束日 = start_date + 3 个月；只处理该产品在该区间内的行
+ * - 先对范围内行的「所有在庫列」一次性置 0，再按 product_cd、date 升序逐行计算并批量 UPDATE
+ *
+ * 三、工程顺序（sequence）
+ * -----------------------------------------------------------------------------
+ * - route_cd：优先 production_summarys.route_cd，空则用 products.route_cd
+ * - 顺序来源：ProcessRoute.description 用分隔符（⇒ / → / , / 空白 / -> / => / ｜ / |）分割，按关键词最长匹配得到 key 序列（切断→面取→…→倉庫 或 外注倉庫）；无 description 时用 process_route_steps 按 step_no 的 process_cd 映射（KT13=倉庫, KT15=外注倉庫）；再无则用默认顺序（最后工程=倉庫）
+ *
+ * 四、一般工程在庫公式（_compute_inventory_updates）
+ * -----------------------------------------------------------------------------
+ * 对 sequence 中除「外注倉庫」外的每个工程：
+ *   当工程在庫 = 繰越(carry) + 実績(actual) - 不良(defect) - 廃棄(scrap) - 保留(on_hold) - 下一工程実績(next_actual) + 前日当工程在庫(previous_inventory)
+ * - 起算日当天：前日当工程在庫 = 0
+ * - 下一工程：若下一项为「外注倉庫」则 next_actual = outsourced_warehouse_actual；否则为下一项的 actual 列
+ * - 外注倉庫在庫不在此函数中计算，由倉庫/外注倉庫单独公式处理
+ *
+ * 五、倉庫在庫（仅当 sequence 最后工程 = 倉庫 时）
+ * -----------------------------------------------------------------------------
+ * 倉庫在庫 = 倉庫繰越 + 倉庫実績 - 倉庫廃棄 - 倉庫保留品 - 扣除数 + 前日倉庫在庫
+ * - 起算日当天前日倉庫在庫 = 0
+ * - 扣除数（见下）
+ *
+ * 六、外注倉庫在庫（仅当 sequence 最后工程 = 外注倉庫 时）
+ * -----------------------------------------------------------------------------
+ * 外注倉庫在庫 = 外注倉庫繰越 + 外注倉庫実績 - 外注倉庫廃棄 - 扣除数 + 前日外注倉庫在庫
+ * - 起算日当天前日外注倉庫在庫 = 0
+ * - 扣除数（见下）
+ *
+ * 七、扣除数（qty_subtract）规则
+ * -----------------------------------------------------------------------------
+ * - 先按产品计算 lastOrderQuantityDate = 该产品在本次处理行中「order_quantity > 0」的日期的最大值
+ * - 对每一行：若存在 lastOrderQuantityDate 且 当前行 date <= lastOrderQuantityDate 且 当前行 order_quantity > 0，则 扣除数 = order_quantity（受注）；否则 扣除数 = forecast_quantity（内示）
+ *
+ * 八、递推与写回
+ * -----------------------------------------------------------------------------
+ * - 同一产品内按 date 升序处理；previous_inv / prev_warehouse / prev_outsourced_wh 分别记录「上一行（前日）」的同工程在庫，供下一行使用
+ * - 每 100 行一批，用 CASE id WHEN ... THEN value ... 批量 UPDATE production_summarys 的在庫列
+ * - 允许在庫为负数（不做 floor 到 0）
+ */
+
+/**
+ * 安全在庫更新（在庫・推移更新に含まれる）— 算法总结
+ * -----------------------------------------------------------------------------
+ * 公式: 安全在庫 = ceil(将来30営業日の平均日出荷数 × 製品マスタの safety_days)
+ * - 対象: 製品マスタで safety_days IS NOT NULL AND safety_days > 0 の製品のみ
+ * - 平均日出荷数: production_summarys の内示数(forecast_quantity)を、当該行の翌日から30営業日分で平均
+ * - 安全在庫列の合計: product_cd ごとに「最新日付の行」の safety_stock のみを合算（表の合計行）
+ *
+ * 以下は正式な趨勢データがない場合の表示用・他画面用の备用計算（表の主列「安全在庫」の算出には使わない）:
+ * - calculateSafetyStockForDisplay: 前30件の (出庫+出荷) 日均 × 7 × 1.5 を ceil
+ * - calculateSafetyStockForProduct: 当該製品の直近30件 (出庫+出荷) 日均 × 7 × 1.5 を ceil
+ * - calculateSimpleSafetyStock: 当前在庫 ≤ 0 → 10、否则 max(10, ceil(当前在庫 × 0.2))
+ */
+function calculateSafetyStockForDisplay(rows: Array<{ [k: string]: number }>, outKey = 'warehouse_actual', shipKey = 'warehouse_actual'): number {
+  const recent = rows.slice(-30)
+  if (recent.length === 0) return 0
+  const total = recent.reduce((a, r) => a + (Number(r[outKey]) || 0) + (Number(r[shipKey]) || 0), 0)
+  const avg = total / recent.length
+  return Math.ceil(avg * 7 * 1.5)
+}
+function calculateSafetyStockForProduct(rows: Array<{ [k: string]: unknown }>, productCd: string, outKey = 'warehouse_actual', shipKey = 'warehouse_actual'): number {
+  const byProduct = rows.filter((r) => String(r.product_cd ?? '') === String(productCd)).slice(-30) as Array<{ [k: string]: number }>
+  return calculateSafetyStockForDisplay(byProduct, outKey, shipKey)
+}
+function calculateSimpleSafetyStock(currentInventory: number): number {
+  if (currentInventory <= 0) return 10
+  return Math.max(10, Math.ceil(currentInventory * 0.2))
+}
+
+/**
+ * 推移更新（在庫・推移更新中的「推移」部分）— 算法总结
+ * =============================================================================
+ * 一、前端与执行顺序
+ * -----------------------------------------------------------------------------
+ * - 入口同「在庫・推移更新」；开始日 = 当月月初 getFirstDayOfCurrentMonth()
+ * - 执行顺序：先 clear（当月月初～+3ヶ月 含 trend 列）→ 在庫更新 → 推移更新
+ * - 推移 API：POST update-trend(startDate)，startDate 指定时后端处理 date >= startDate 的全行（无结束日上限）
+ *
+ * 二、后端处理范围与数据准备
+ * -----------------------------------------------------------------------------
+ * - 有 startDate：只处理 date >= startDate 的行（終了日なし、表内最大日まで）
+ * - 无 startDate：按产品起算日（任意 carry_over > 0 的 MAX(date)），处理 date >= 该产品 start_date 的行
+ * - 先对范围内行的「所有 *_trend、*_actual_plan_trend 列」一次性置 0，再按 product_cd、date 升序逐行计算并累加后写回
+ *
+ * 三、工程顺序（sequence）
+ * -----------------------------------------------------------------------------
+ * - 与在庫更新相同：route_cd（production_summarys / products）、ProcessRoute.description 或 process_route_steps，KT13=倉庫 / KT15=外注倉庫
+ *
+ * 四、当日 trend 增量公式（_compute_trend_updates）
+ * -----------------------------------------------------------------------------
+ * 对 sequence 中每个有 trend 字段的工程（含倉庫・外注倉庫）：
+ *   当日 trend 增量 = 当工程繰越(carry)
+ *                  + 后续工程繰越之和(subsequentCarryOverSum)
+ *                  + 当工程実績(actual)
+ *                  - 当工程不良(defect) - 廃棄(scrap) - 保留(on_hold)
+ *                  - 需要数(forecast_quantity)
+ *                  - 后续工程不良之和(subsequentDefectSum)
+ *                  - 后续工程廃棄之和(subsequentScrapSum)
+ *                  - 后续工程保留之和(subsequentOnHoldSum)
+ * 即：trend_daily = carry + sub_carry + actual - defect - scrap - on_hold - forecast - sub_defect - sub_scrap - sub_on_hold
+ * 「后续」= sequence 中该工程之后的所有工程（carry/defect/scrap/on_hold 分别求和）
+ *
+ * 五、最终 trend 写回（累加前日）
+ * -----------------------------------------------------------------------------
+ * 对每一行：最终 trend = 当日 trend 增量(day_trends) + 前日 trend(prev_trends[key])
+ * 起算日（该产品第一行）时前日 = 0。同一产品内按 date 升序，prev_trends 记录上一行写回后的各工程 trend，供下一行使用。
+ *
+ * 六、实计推移 actual_plan_trend（_compute_actual_plan_trend_updates）
+ * -----------------------------------------------------------------------------
+ * - 仅对 6 工程计算：cutting, chamfering, molding, plating, welding, inspection（TREND_PREFIXES）
+ * - 公式与 trend 相同，但「当工程実績」改为「当工程実計」*_actual_plan；carry / defect / scrap / on_hold / forecast / 后续 carry・defect・scrap・on_hold 不变
+ * - 写回：当日 actual_plan_trend 增量 + 前日 actual_plan_trend，prev_actual_plan_trends 递推
+ *
+ * 七、批处理与写回
+ * -----------------------------------------------------------------------------
+ * - 每 100 行一批，用 CASE id 批量 UPDATE 各 *_trend、*_actual_plan_trend 列
+ * - 允许 trend 为负数
+ */
 const CARRY_OVER_COLUMNS = [
   'cutting_carry_over', 'chamfering_carry_over', 'molding_carry_over', 'plating_carry_over',
-  'welding_carry_over', 'inspection_carry_over', 'warehouse_carry_over',
+  'welding_carry_over', 'inspection_carry_over', 'warehouse_carry_over', 'outsourced_warehouse_carry_over',
   'outsourced_plating_carry_over', 'outsourced_welding_carry_over',
   'pre_welding_inspection_carry_over', 'pre_inspection_carry_over', 'pre_outsourcing_carry_over',
 ]
 
-/** 各工程繰越で「最后に >0 の日付」のうち最も早い日を startDate とする */
+/** 当月月初（当月1日）YYYY-MM-DD。在庫・推移更新では「当月月初以降」を清空してから再計算する。 */
+function getFirstDayOfCurrentMonth(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}-01`
+}
+
+/** 各工程繰越で「最后に >0 の日付」のうち最も早い日を startDate とする（計画更新等で使用） */
 function calculateStartDate(): string | null {
   const rows = tableData.value || []
   if (rows.length === 0) return null
@@ -1812,13 +2153,12 @@ const handleInventoryTrendUpdate = () => {
 const confirmInventoryTrendUpdate = async () => {
   showInventoryTrendUpdateConfirmDialog.value = false
   updatingInventoryTrend.value = true
-  const startDate = calculateStartDate() ?? undefined
-  if (startDate) {
-    try {
-      await clearProductionSummarysCalculatedFields(startDate)
-    } catch (_e) {
-      console.warn('計算フィールドのクリアに失敗しました', _e)
-    }
+  // 当月月初から先の在庫・推移を清空してから再計算
+  const startDate = getFirstDayOfCurrentMonth()
+  try {
+    await clearProductionSummarysCalculatedFields(startDate)
+  } catch (_e) {
+    console.warn('計算フィールドのクリアに失敗しました', _e)
   }
   showProgressDialog.value = true
   progressPercentage.value = 0
@@ -1834,6 +2174,9 @@ const confirmInventoryTrendUpdate = async () => {
     progressPercentage.value = 50
     progressText.value = '推移データを更新中...'
     const trendRes = await updateProductionSummarysTrend(startDate)
+    progressPercentage.value = 75
+    progressText.value = '安全在庫を更新中...'
+    const safetyRes = await updateProductionSummarysSafetyStock(startDate)
     if (progressTimer) clearInterval(progressTimer)
     progressTimer = null
     progressPercentage.value = 100
@@ -1842,8 +2185,10 @@ const confirmInventoryTrendUpdate = async () => {
     const invD = invBody?.data ?? invBody
     const trendBody = (trendRes as any)?.data ?? {}
     const trendD = trendBody?.data ?? trendBody
-    const calcPeriod = startDate ? `計算期間: ${startDate}～` : '計算期間: 全件'
-    const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件`
+    const safetyBody = (safetyRes as any)?.data ?? {}
+    const safetyD = safetyBody?.data ?? safetyBody
+    const calcPeriod = `計算期間: ${startDate}～（当月月初から）`
+    const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件\n安全在庫: 更新 ${safetyD?.updated ?? 0} 件`
     progressText.value = msg
     ElMessage.success('在庫・推移の更新が完了しました')
     setTimeout(() => {
@@ -1993,16 +2338,110 @@ const confirmUpdateMachine = async () => {
   }
 }
 
+// スマホ・タブレット用「その他」Drawer で項目選択時
+const onOthersDrawerSelect = (command: string) => {
+  showOthersDrawer.value = false
+  handleDropdownCommand(command)
+}
+
+// ── その他ドロップダウン（command で実行。本番ビルドで @click が効かない問題を回避） ──
+const handleDropdownCommand = (command: string) => {
+  switch (command) {
+    case 'generate':
+      handleGenerateData()
+      break
+    case 'all-update':
+      handleAllUpdate()
+      break
+    case 'update-order':
+      handleUpdateFromOrderDaily()
+      break
+    case 'batch-initial':
+      openBatchInitialStockDialog()
+      break
+    case 'carry-over':
+      handleUpdateCarryOver()
+      break
+    case 'actual':
+      handleUpdateActual()
+      break
+    case 'defect':
+      handleUpdateDefect()
+      break
+    case 'scrap':
+      handleUpdateScrap()
+      break
+    case 'on-hold':
+      handleUpdateOnHold()
+      break
+    case 'production-dates':
+      handleUpdateProductionDates()
+      break
+    case 'plan':
+      handleUpdatePlan()
+      break
+    case 'inventory-trend':
+      handleInventoryTrendUpdate()
+      break
+    case 'product-master':
+      handleUpdateProductMaster()
+      break
+    case 'machine':
+      handleUpdateMachine()
+      break
+    case 'batch-actual':
+      handleOpenBatchActualDialog()
+      break
+    default:
+      break
+  }
+}
+
 // ── 全部一括更新 ─────────────────────
 const handleAllUpdate = () => {
   showAllUpdateConfirmDialog.value = true
 }
 
+// 全部一括更新確認ダイアログの「一括更新開始」用（本番ビルドで el-button @click が効かないため原生 button から呼ぶ）
+const onAllUpdateConfirmClick = () => {
+  confirmAllUpdate()
+}
+
+// crypto.randomUUID が無い環境（古いブラウザ・非 HTTPS 等）用のフォールバック
+function getRandomUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  const buf = new Uint8Array(16)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(buf)
+  } else {
+    for (let i = 0; i < 16; i++) buf[i] = Math.floor(Math.random() * 256)
+  }
+  buf[6] = (buf[6]! & 0x0f) | 0x40
+  buf[8] = (buf[8]! & 0x3f) | 0x80
+  const hex = Array.from(buf, b => b.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 const confirmAllUpdate = async () => {
   showAllUpdateConfirmDialog.value = false
+  const lockValue = getRandomUUID()
+  try {
+    await acquireBatchUpdateLock(lockValue)
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } })?.response?.status
+    if (status === 423) {
+      ElMessage.warning('他の端末で一括更新が実行中のため、しばらく待ってから再度お試しください。')
+      return
+    }
+    ElMessage.error('ロックの取得に失敗しました。')
+    return
+  }
   updatingAll.value = true
   showProgressDialog.value = true
   progressStatus.value = ''
+  progressDialogTitle.value = '一括更新中'
   const results: { name: string; success: boolean }[] = []
   const stepNames = [
     '受注データ更新',
@@ -2020,59 +2459,73 @@ const confirmAllUpdate = async () => {
     () => updateProductionSummarysOnHold(),
     () => updateProductionSummarysPlan(),
   ]
-  for (let i = 0; i < steps.length; i++) {
-    progressPercentage.value = Math.round(((i + 1) / 7) * 90)
-    progressText.value = `${stepNames[i]}を実行中... (${i + 1}/7)`
-    try {
-      await steps[i]()
-      results.push({ name: stepNames[i], success: true })
-    } catch (_e) {
-      results.push({ name: stepNames[i], success: false })
+  try {
+    for (let i = 0; i < steps.length; i++) {
+      progressPercentage.value = Math.round(((i + 1) / 7) * 90)
+      progressText.value = `${stepNames[i]}を実行中... (${i + 1}/7)`
+      try {
+        await steps[i]()
+        results.push({ name: stepNames[i], success: true })
+      } catch (_e) {
+        results.push({ name: stepNames[i], success: false })
+      }
+      await new Promise(r => setTimeout(r, 300))
     }
-    await new Promise(r => setTimeout(r, 300))
-  }
-  // 步骤 7: 在庫・推移更新
-  const startDate = calculateStartDate() ?? undefined
-  if (startDate) {
+    // 步骤 7: 在庫・推移更新（当月月初以降をクリアしてから再計算）
+    const startDate = getFirstDayOfCurrentMonth()
     try {
       await clearProductionSummarysCalculatedFields(startDate)
     } catch (_e) {
       // 清空失败不记入 results，继续执行在庫・推移
     }
+    progressPercentage.value = 92
+    progressText.value = '在庫・推移更新を実行中... (7/7)'
+    try {
+      await updateProductionSummarysInventory(startDate)
+      results.push({ name: '在庫更新', success: true })
+    } catch (_e) {
+      results.push({ name: '在庫更新', success: false })
+    }
+    await new Promise(r => setTimeout(r, 300))
+    try {
+      await updateProductionSummarysTrend(startDate)
+      results.push({ name: '推移更新', success: true })
+    } catch (_e) {
+      results.push({ name: '推移更新', success: false })
+    }
+    await new Promise(r => setTimeout(r, 300))
+    progressText.value = '安全在庫を更新中... (8/8)'
+    try {
+      await updateProductionSummarysSafetyStock(startDate)
+      results.push({ name: '安全在庫更新', success: true })
+    } catch (_e) {
+      results.push({ name: '安全在庫更新', success: false })
+    }
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const successCount = results.filter(r => r.success).length
+    const failCount = results.filter(r => !r.success).length
+    const failedNames = results.filter(r => !r.success).map(r => r.name)
+    progressText.value = failCount === 0
+      ? '全部一括更新が完了しました！'
+      : `全部一括更新が完了しました（成功 ${successCount} / 失敗 ${failCount}）\n失敗: ${failedNames.join('、')}`
+    if (failCount === 0) {
+      ElMessage.success('全部一括更新が完了しました')
+    } else {
+      ElMessage.warning(`一部失敗しました: ${failedNames.join('、')}`)
+    }
+    setTimeout(() => {
+      showProgressDialog.value = false
+      updatingAll.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } finally {
+    try {
+      await releaseBatchUpdateLock(lockValue)
+    } catch (_e) {
+      /* 解放失敗は無視（ロックは有効期限で自動解放） */
+    }
   }
-  progressPercentage.value = 92
-  progressText.value = '在庫・推移更新を実行中... (7/7)'
-  try {
-    await updateProductionSummarysInventory(startDate)
-    results.push({ name: '在庫更新', success: true })
-  } catch (_e) {
-    results.push({ name: '在庫更新', success: false })
-  }
-  await new Promise(r => setTimeout(r, 300))
-  try {
-    await updateProductionSummarysTrend(startDate)
-    results.push({ name: '推移更新', success: true })
-  } catch (_e) {
-    results.push({ name: '推移更新', success: false })
-  }
-  progressPercentage.value = 100
-  progressStatus.value = 'success'
-  const successCount = results.filter(r => r.success).length
-  const failCount = results.filter(r => !r.success).length
-  const failedNames = results.filter(r => !r.success).map(r => r.name)
-  progressText.value = failCount === 0
-    ? '全部一括更新が完了しました！'
-    : `全部一括更新が完了しました（成功 ${successCount} / 失敗 ${failCount}）\n失敗: ${failedNames.join('、')}`
-  if (failCount === 0) {
-    ElMessage.success('全部一括更新が完了しました')
-  } else {
-    ElMessage.warning(`一部失敗しました: ${failedNames.join('、')}`)
-  }
-  setTimeout(() => {
-    showProgressDialog.value = false
-    updatingAll.value = false
-    setTimeout(() => fetchData(), 500)
-  }, 1500)
 }
 
 const confirmGenerateData = async () => {
@@ -2082,6 +2535,7 @@ const confirmGenerateData = async () => {
   if (!startDateStr || !endDateStr) return
   generating.value = true
   showProgressDialog.value = true
+  progressDialogTitle.value = 'データ生成中'
   progressPercentage.value = 0
   progressStatus.value = ''
   progressText.value = 'データ生成中...'
@@ -2769,6 +3223,19 @@ onMounted(() => {
   }
   fetchProductList()
   fetchData()
+  // スマホ・タブレットで「その他」を Drawer 表示にする
+  othersDrawerMql = window.matchMedia('(max-width: 992px)')
+  othersDrawerMqlHandler = () => { isSmallScreen.value = othersDrawerMql!.matches }
+  othersDrawerMqlHandler()
+  othersDrawerMql.addEventListener('change', othersDrawerMqlHandler)
+})
+
+onUnmounted(() => {
+  if (othersDrawerMql && othersDrawerMqlHandler) {
+    othersDrawerMql.removeEventListener('change', othersDrawerMqlHandler)
+    othersDrawerMql = null
+    othersDrawerMqlHandler = null
+  }
 })
 </script>
 
@@ -3064,6 +3531,45 @@ onMounted(() => {
 .others-btn {
   margin-right: 0.25rem;
 }
+
+/* その他 Drawer（スマホ・タブレット） */
+.others-drawer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 0 12px 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.others-drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #303133;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+.others-drawer-item:hover {
+  background: #f5f7fa;
+}
+.others-drawer-item:active {
+  background: #e4e7ed;
+}
+.others-drawer-item.is-disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.others-drawer-item .el-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
 .process-print-btn-primary {
   margin-left: 0.25rem;
 }
@@ -3115,34 +3621,111 @@ onMounted(() => {
   line-height: 1.6;
 }
 
-/* データ生成進度ダイアログ */
+/* データ生成・一括更新進度ダイアログ（在庫不足管理と同様のスタイル） */
+.progress-dialog--styled .el-dialog__body {
+  padding: 20px 24px 24px;
+}
 .progress-content {
-  padding: 0.35rem 0;
+  padding: 4px 0;
 }
 .progress-info {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.6rem;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.progress-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15);
+  animation: progress-icon-pulse 1.5s ease-in-out infinite;
 }
 .progress-icon {
-  font-size: 1.1rem;
+  font-size: 20px;
   color: #6366f1;
+  animation: progress-icon-spin 0.9s linear infinite;
 }
 .progress-text {
-  font-size: 0.8rem;
-  color: #475569;
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
+  transition: opacity 0.25s ease;
 }
-.progress-bar {
-  margin-bottom: 0.5rem;
+.progress-track {
+  height: 14px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+  margin-bottom: 12px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+  background-size: 200% 100%;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
+}
+.progress-fill--success {
+  background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+}
+.progress-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  animation: progress-shine 1.8s ease-in-out infinite;
 }
 .progress-details {
-  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
   color: #64748b;
 }
+.progress-details .detail-label {
+  font-weight: 500;
+}
 .progress-details .detail-value {
-  margin-left: 0.35rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: #6366f1;
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.2s ease, color 0.3s ease;
+}
+.progress-details .detail-value.progress-percent {
+  min-width: 2.5em;
+  text-align: right;
+}
+.progress-dialog--styled .progress-content:has(.progress-fill--success) .detail-value {
+  color: #059669;
+}
+@keyframes progress-icon-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes progress-icon-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+@keyframes progress-shine {
+  0% { left: -100%; }
+  60%, 100% { left: 100%; }
 }
 
 /* 初期在庫一括登録ダイアログ */

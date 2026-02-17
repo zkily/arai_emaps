@@ -5,13 +5,14 @@
 - GET  /tasks/for-display: ピッキングタスク一覧
 - POST /sync-data: shipping_items → picking_tasks 同期
 - GET  /history: ピッキング履歴
-- GET  /performance-by-destination: 納入先別パフォーマンス
+- GET  /performance-by-destination: 担当者別・納入先別パフォーマンス（担当者＝納入先グループ）
 """
+import json
 import logging
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from typing import Optional, List
+from sqlalchemy import text, bindparam
+from typing import Optional, List, Any
 from datetime import date, timedelta
 
 from app.modules.auth.api import verify_token_and_get_user
@@ -21,6 +22,26 @@ from app.core.database import get_db
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def _parse_group_destinations(raw: Any) -> List[str]:
+    """destination_groups.destinations の JSON から destination_cd のリストを取得"""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return []
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if isinstance(item, dict) and item.get("value"):
+            out.append(str(item["value"]).strip())
+        elif isinstance(item, str) and item.strip():
+            out.append(item.strip())
+    return out
 
 
 # ---------- helpers ----------
@@ -41,7 +62,7 @@ def _safe_datetime(val) -> str:
 
 
 def _task_row_to_dict(r) -> dict:
-    """picking_tasks の行を辞書に変換"""
+    """picking_tasks の行を辞書に変換。作業者表示用に users.full_name を picker_full_name で返す"""
     return {
         "id": r.get("id"),
         "shipping_no_p": r.get("shipping_no_p") or "",
@@ -57,6 +78,7 @@ def _task_row_to_dict(r) -> dict:
         "location_cd": r.get("location_cd") or "",
         "picker_id": r.get("picker_id") or "",
         "picker_name": r.get("picker_name") or "",
+        "picker_full_name": r.get("picker_full_name") or "",  # users.full_name（picker_id=username で JOIN）
         "status": r.get("status") or "pending",
         "start_time": _safe_datetime(r.get("start_time")),
         "complete_time": _safe_datetime(r.get("complete_time")),
@@ -66,71 +88,126 @@ def _task_row_to_dict(r) -> dict:
 
 
 # ================================================================
-# 1. GET /new-progress  ─ 本日のピッキング進捗
+# 1. GET /new-progress  ─ ピッキング進捗（本日 or 指定期間）
 # ================================================================
 @router.get("/new-progress")
 async def get_new_progress(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
+    start_date: Optional[str] = Query(None, description="期間開始日 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="期間終了日 YYYY-MM-DD"),
 ) -> dict:
-    """本日の出荷データ＋ピッキングタスクから進捗情報を返す"""
+    """ピッキングタスクから進捗情報を返す。start_date/end_date を指定するとその期間の palletList を返す。"""
 
-    # --- shipping_items: 本日の出荷件数（キャンセル除外） ---
-    si_result = await db.execute(text("""
+    use_range = start_date and end_date and start_date <= end_date
+
+    if use_range:
+        # --- 指定期間の pallet list（picking_tasks + users.full_name）---
+        pallet_result = await db.execute(
+            text("""
+            SELECT pt.*, u.full_name AS picker_full_name
+            FROM picking_tasks pt
+            LEFT JOIN users u ON u.username = pt.picker_id
+            WHERE pt.shipping_date BETWEEN :start_date AND :end_date
+            ORDER BY pt.shipping_date ASC, pt.status ASC, pt.shipping_no_p ASC
+        """),
+            {"start_date": start_date, "end_date": end_date},
+        )
+        pallet_rows = pallet_result.mappings().all()
+        # 期間内の集計（todayOverview / progressStats はこの期間のサマリ）
+        total_tasks = len(pallet_rows)
+        pending_today = sum(
+            1 for r in pallet_rows if (r.get("status") or "") in ("pending", "picking")
+        )
+        completed_today = sum(1 for r in pallet_rows if (r.get("status") or "") == "completed")
+        today_completion_rate = round(
+            (completed_today / total_tasks * 100) if total_tasks > 0 else 0, 1
+        )
+        total_today = total_tasks
+        completed_today_si = completed_today
+    else:
+        # --- 本日のみ（従来どおり）---
+        si_result = await db.execute(text("""
+            SELECT
+                COUNT(DISTINCT shipping_no_p)                       AS total_today,
+                SUM(CASE WHEN status = '完了' THEN 1 ELSE 0 END)  AS completed_today
+            FROM shipping_items
+            WHERE shipping_date = CURDATE()
+              AND status != 'キャンセル'
+              AND shipping_no_p IS NOT NULL
+              AND shipping_no_p != ''
+        """))
+        si_row = si_result.mappings().first()
+        total_today = int(si_row["total_today"] or 0) if si_row else 0
+        completed_today_si = int(si_row["completed_today"] or 0) if si_row else 0
+
+        pt_result = await db.execute(text("""
+            SELECT
+                COUNT(*) AS total_tasks,
+                SUM(CASE WHEN status IN ('pending', 'picking') THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
+            FROM picking_tasks
+            WHERE shipping_date = CURDATE()
+        """))
+        pt_row = pt_result.mappings().first()
+        total_tasks = int(pt_row["total_tasks"] or 0) if pt_row else 0
+        pending_today = int(pt_row["pending_count"] or 0) if pt_row else 0
+        completed_today = int(pt_row["completed_count"] or 0) if pt_row else 0
+        today_completion_rate = round(
+            (completed_today / total_tasks * 100) if total_tasks > 0 else 0, 1
+        )
+
+        pallet_result = await db.execute(text("""
+            SELECT pt.*, u.full_name AS picker_full_name
+            FROM picking_tasks pt
+            LEFT JOIN users u ON u.username = pt.picker_id
+            WHERE pt.shipping_date = CURDATE()
+            ORDER BY pt.status ASC, pt.shipping_no_p ASC
+        """))
+        pallet_rows = pallet_result.mappings().all()
+
+    # --- 進捗推移トレンド用: 過去7日～未来3日、按出荷日分组、排除加工・アーチ・料金 ---
+    trend_result = await db.execute(
+        text("""
         SELECT
-            COUNT(*)                                           AS total_today,
-            SUM(CASE WHEN status = '完了' THEN 1 ELSE 0 END)  AS completed_today
-        FROM shipping_items
-        WHERE shipping_date = CURDATE()
-          AND status != 'キャンセル'
-    """))
-    si_row = si_result.mappings().first()
-    total_today = int(si_row["total_today"] or 0) if si_row else 0
-    completed_today_si = int(si_row["completed_today"] or 0) if si_row else 0
-
-    # --- picking_tasks: 本日分のタスク ---
-    pt_result = await db.execute(text("""
-        SELECT
-            COUNT(*)                                              AS total_tasks,
-            SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) AS pending_count,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
-        FROM picking_tasks
-        WHERE shipping_date = CURDATE()
-    """))
-    pt_row = pt_result.mappings().first()
-    total_tasks = int(pt_row["total_tasks"] or 0) if pt_row else 0
-    pending_today = int(pt_row["pending_count"] or 0) if pt_row else 0
-    completed_today = int(pt_row["completed_count"] or 0) if pt_row else 0
-
-    today_completion_rate = round(
-        (completed_today / total_tasks * 100) if total_tasks > 0 else 0, 1
+            pt.shipping_date AS shipping_date,
+            COUNT(*) AS total_count,
+            SUM(CASE WHEN pt.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+            SUM(CASE WHEN pt.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+            ROUND(
+                SUM(CASE WHEN pt.status = 'completed' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+                2
+            ) AS completion_rate
+        FROM picking_tasks pt
+        WHERE pt.shipping_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+          AND COALESCE(pt.product_name, '') NOT LIKE '%加工%'
+          AND COALESCE(pt.product_name, '') NOT LIKE '%アーチ%'
+          AND COALESCE(pt.product_name, '') NOT LIKE '%料金%'
+        GROUP BY pt.shipping_date
+        ORDER BY pt.shipping_date
+    """)
     )
-
-    # --- pallet list ---
-    pallet_result = await db.execute(text("""
-        SELECT *
-        FROM picking_tasks
-        WHERE shipping_date = CURDATE()
-        ORDER BY status ASC, shipping_no_p ASC
-    """))
-    pallet_rows = pallet_result.mappings().all()
+    trend_rows = trend_result.mappings().all()
+    progress_stats_list = [
+        {
+            "shipping_date": _safe_date(r.get("shipping_date")),
+            "total_count": int(r.get("total_count") or 0),
+            "pending_count": int(r.get("pending_count") or 0),
+            "completed_count": int(r.get("completed_count") or 0),
+            "completion_rate": float(r.get("completion_rate") or 0),
+        }
+        for r in trend_rows
+    ]
 
     return {
         "todayOverview": {
-            "total_today": total_today,
+            "total_today": total_tasks if use_range else total_today,
             "pending_today": pending_today,
             "completed_today": completed_today,
             "today_completion_rate": today_completion_rate,
         },
         "palletList": [_task_row_to_dict(r) for r in pallet_rows],
-        "progressStats": {
-            "total_tasks": total_tasks,
-            "pending": pending_today,
-            "completed": completed_today,
-            "completion_rate": today_completion_rate,
-            "shipping_items_total": total_today,
-            "shipping_items_completed": completed_today_si,
-        },
+        "progressStats": progress_stats_list,
     }
 
 
@@ -181,6 +258,8 @@ async def init_picking_tasks_table(
 @router.get("/tasks/for-display")
 async def get_tasks_for_display(
     date: Optional[str] = Query(None, description="対象日（YYYY-MM-DD）。省略時は本日"),
+    start_date: Optional[str] = Query(None, description="開始日（範囲指定時）"),
+    end_date: Optional[str] = Query(None, description="終了日（範囲指定時）"),
     status: Optional[str] = Query(None, description="ステータスでフィルタ"),
     product_cd: Optional[str] = Query(None, description="品番でフィルタ"),
     destination_cd: Optional[str] = Query(None, description="納入先コードでフィルタ"),
@@ -193,8 +272,12 @@ async def get_tasks_for_display(
     conditions = []
     params: dict = {}
 
-    # 日付（デフォルト: 本日）
-    if date:
+    # 日付: start_date/end_date があれば範囲、date があれば単日、なければ本日
+    if start_date and end_date:
+        conditions.append("pt.shipping_date BETWEEN :start_date AND :end_date")
+        params["start_date"] = start_date
+        params["end_date"] = end_date
+    elif date:
         conditions.append("pt.shipping_date = :target_date")
         params["target_date"] = date
     else:
@@ -224,15 +307,18 @@ async def get_tasks_for_display(
     count_result = await db.execute(count_q, params)
     total = int(count_result.scalar() or 0)
 
-    # データ取得（shipping_items と LEFT JOIN して最新の destination 情報を補完）
+    # データ取得（shipping_items で destination 補完、users で作業者 full_name 取得）
     data_q = text(f"""
         SELECT
             pt.*,
             COALESCE(si.destination_name, pt.destination_name) AS destination_name,
-            COALESCE(si.destination_cd, pt.destination_cd)     AS destination_cd
+            COALESCE(si.destination_cd, pt.destination_cd)     AS destination_cd,
+            u.full_name AS picker_full_name
         FROM picking_tasks pt
         LEFT JOIN shipping_items si
             ON si.shipping_no_p = pt.shipping_no_p
+        LEFT JOIN users u
+            ON u.username = pt.picker_id
         WHERE {where_sql}
         ORDER BY pt.status ASC, pt.shipping_no_p ASC
         LIMIT :limit OFFSET :offset
@@ -367,68 +453,126 @@ async def get_picking_history(
 
 
 # ================================================================
-# 6. GET /performance-by-destination  ─ 納入先別パフォーマンス
+# 6. GET /performance-by-destination  ─ 担当者別・納入先別パフォーマンス
+# 担当者＝納入先グループ（destination_groups の group_name）。該当グループの destinations + 日期で picking_tasks を集計
 # ================================================================
 @router.get("/performance-by-destination")
 async def get_performance_by_destination(
     start_date: Optional[str] = Query(None, description="開始日"),
     end_date: Optional[str] = Query(None, description="終了日"),
+    group_names: Optional[str] = Query(
+        None,
+        description="担当者＝グループ名（destination_groups.group_name）カンマ区切り。未指定時は全グループ",
+    ),
+    page_key: Optional[str] = Query(
+        "picking_history",
+        description="destination_groups の page_key",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """納入先ごとにピッキングの件数・完了率を集計して返す"""
+    """担当者＝納入先グループ（destination_groups の1行＝1つの group_name）。
+    各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で picking_tasks を集計。
+    件数は出荷单维度 COUNT(DISTINCT shipping_no_p)、完了は status が completed/picked/完了 のみ。品名 加工・アーチ・料金 除外。
+    """
     params: dict = {}
     if start_date and end_date:
         params["start_date"] = start_date
         params["end_date"] = end_date
-        date_condition = "shipping_date BETWEEN :start_date AND :end_date"
+        date_condition = "pt.shipping_date BETWEEN :start_date AND :end_date"
     elif start_date:
         params["start_date"] = start_date
-        date_condition = "shipping_date >= :start_date"
+        date_condition = "pt.shipping_date >= :start_date"
     elif end_date:
         params["end_date"] = end_date
-        date_condition = "shipping_date <= :end_date"
+        date_condition = "pt.shipping_date <= :end_date"
     else:
-        date_condition = "shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        date_condition = "pt.shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
 
-    q = text(f"""
-        SELECT
-            destination_cd,
-            destination_name,
-            COUNT(*)                                              AS total_tasks,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_tasks,
-            SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) AS pending_tasks,
-            SUM(confirmed_boxes)                                   AS total_boxes,
-            SUM(picked_quantity)                                    AS total_picked
-        FROM picking_tasks
-        WHERE {date_condition}
-        GROUP BY destination_cd, destination_name
-        ORDER BY total_tasks DESC
-    """)
-    result = await db.execute(q, params)
-    rows = result.mappings().all()
+    # destination_groups から対象グループ取得（group_names 指定時はそのまま、未指定時は全件）
+    group_q = text(
+        "SELECT id, group_name, destinations FROM destination_groups WHERE page_key = :page_key ORDER BY id"
+    )
+    group_result = await db.execute(group_q, {"page_key": page_key or "picking_history"})
+    group_rows = group_result.mappings().all()
+    filter_names: Optional[List[str]] = None
+    if group_names and group_names.strip():
+        filter_names = [n.strip() for n in group_names.split(",") if n.strip()]
+    groups_list = []
+    for r in group_rows:
+        gname = (r["group_name"] or "").strip()
+        if not gname:
+            continue
+        if filter_names is not None and gname not in filter_names:
+            continue
+        dest_cds = _parse_group_destinations(r["destinations"])
+        groups_list.append({"group_name": gname, "destination_cds": dest_cds})
 
-    destinations = []
-    for r in rows:
-        total_tasks = int(r["total_tasks"] or 0)
-        completed_tasks = int(r["completed_tasks"] or 0)
-        destinations.append({
-            "destination_cd": r["destination_cd"] or "",
-            "destination_name": r["destination_name"] or "",
+    product_exclude = (
+        " AND (pt.product_name NOT LIKE '%加工%' AND pt.product_name NOT LIKE '%アーチ%' AND pt.product_name NOT LIKE '%料金%')"
+    )
+    completed_condition = (
+        "LOWER(TRIM(COALESCE(pt.status,''))) IN ('completed','picked') OR TRIM(COALESCE(pt.status,'')) = '完了'"
+    )
+    out: List[dict] = []
+    for grp in groups_list:
+        gname = grp["group_name"]
+        dest_cds = grp["destination_cds"]
+        if not dest_cds:
+            out.append({
+                "picker_id": gname,
+                "picker_name": gname,
+                "destination_count": 0,
+                "total_tasks": 0,
+                "completed_tasks": 0,
+                "completion_rate": 0.0,
+                "destinations": [],
+            })
+            continue
+        q = text(f"""
+            SELECT
+                pt.destination_cd,
+                pt.destination_name,
+                COUNT(DISTINCT pt.shipping_no_p) AS total_tasks,
+                COUNT(DISTINCT CASE WHEN ({completed_condition}) THEN pt.shipping_no_p END) AS completed_tasks
+            FROM picking_tasks pt
+            WHERE {date_condition}
+            {product_exclude}
+            AND pt.destination_cd IN :dest_cds
+            GROUP BY pt.destination_cd, pt.destination_name
+            ORDER BY total_tasks DESC
+        """).bindparams(bindparam("dest_cds", expanding=True))
+        exec_params = {**params, "dest_cds": dest_cds}
+        result = await db.execute(q, exec_params)
+        rows = result.mappings().all()
+        total_tasks = 0
+        completed_tasks = 0
+        destinations = []
+        for r in rows:
+            t = int(r["total_tasks"] or 0)
+            c = int(r["completed_tasks"] or 0)
+            rate = round((c / t * 100) if t > 0 else 0, 1)
+            total_tasks += t
+            completed_tasks += c
+            destinations.append({
+                "destination_cd": r["destination_cd"] or "",
+                "destination_name": r["destination_name"] or "",
+                "total_tasks": t,
+                "completed_tasks": c,
+                "completion_rate": rate,
+            })
+        completion_rate = round((completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1)
+        out.append({
+            "picker_id": gname,
+            "picker_name": gname,
+            "destination_count": len(destinations),
             "total_tasks": total_tasks,
             "completed_tasks": completed_tasks,
-            "pending_tasks": int(r["pending_tasks"] or 0),
-            "completion_rate": round(
-                (completed_tasks / total_tasks * 100) if total_tasks > 0 else 0, 1
-            ),
-            "total_boxes": int(r["total_boxes"] or 0),
-            "total_picked": int(r["total_picked"] or 0),
+            "completion_rate": completion_rate,
+            "destinations": destinations,
         })
-
-    return {
-        "destinations": destinations,
-        "total_destinations": len(destinations),
-    }
+    out.sort(key=lambda x: (-x["completion_rate"], -x["total_tasks"]))
+    return {"success": True, "data": out}
 
 
 # ================================================================

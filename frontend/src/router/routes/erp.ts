@@ -477,6 +477,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/shipping/ShippingPickingHome.vue'),
         meta: { title: 'ピッキング管理', group: '出荷管理 > ピッキング管理', requiresAuth: true },
       },
+      {
+        path: 'erp/shipping/inventory-shortage',
+        name: 'InventoryShortageManagement',
+        component: () => import('@/views/erp/shipping/InventoryShortageManagement.vue'),
+        meta: { title: '在庫不足管理', group: '出荷管理 > 在庫不足管理', requiresAuth: true },
+      },
 
       // ── 債権債務（既存互換） ──
       {

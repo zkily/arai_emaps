@@ -41,48 +41,68 @@ async def list_print_history(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """印刷履歴一覧"""
-    conditions = ["1=1"]
-    params = {"limit": limit, "offset": offset}
-    if report_type:
-        conditions.append("report_type = :report_type")
-        params["report_type"] = report_type
-    if user_name:
-        conditions.append("user_name LIKE :user_name")
-        params["user_name"] = f"%{user_name}%"
-    if date_from:
-        conditions.append("DATE(print_date) >= :date_from")
-        params["date_from"] = date_from
-    if date_to:
-        conditions.append("DATE(print_date) <= :date_to")
-        params["date_to"] = date_to
-    where = " AND ".join(conditions)
-    q = text(f"""
-        SELECT id, report_type, report_title, filters, record_count, status, error_message, user_name, print_date
-        FROM print_history WHERE {where}
-        ORDER BY print_date DESC LIMIT :limit OFFSET :offset
-    """)
-    result = await db.execute(q, params)
-    rows = result.mappings().all()
-    def _fmt(d):
-        if d is None:
-            return ""
-        return d.isoformat() if hasattr(d, "isoformat") else str(d)
+    try:
+        conditions = []
+        params = {"limit": limit, "offset": offset}
+        
+        if report_type:
+            conditions.append("report_type = :report_type")
+            params["report_type"] = report_type
+        if user_name:
+            conditions.append("user_name LIKE :user_name")
+            params["user_name"] = f"%{user_name}%"
+        if date_from:
+            conditions.append("DATE(printed_at) >= :date_from")
+            params["date_from"] = date_from
+        if date_to:
+            conditions.append("DATE(printed_at) <= :date_to")
+            params["date_to"] = date_to
+        
+        # Build WHERE clause - if no conditions, use "1=1" to make query valid
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        # Construct query with proper WHERE clause
+        query_str = f"""
+            SELECT id, report_type, report_title, filters, record_count, status, error_message, user_name, printed_at
+            FROM print_history 
+            WHERE {where_clause}
+            ORDER BY printed_at DESC 
+            LIMIT :limit OFFSET :offset
+        """
+        
+        q = text(query_str)
+        result = await db.execute(q, params)
+        rows = result.mappings().all()
+        
+        def _fmt(d):
+            if d is None:
+                return ""
+            return d.isoformat() if hasattr(d, "isoformat") else str(d)
 
-    return [
-        {
-            "id": r["id"],
-            "report_type": r["report_type"],
-            "report_title": r["report_title"] or "",
-            "filters": r["filters"],
-            "record_count": r["record_count"],
-            "status": r["status"],
-            "error_message": r["error_message"],
-            "user_name": r["user_name"],
-            "print_date": _fmt(r.get("print_date")),
-            "printed_at": _fmt(r.get("print_date")),
+        return {
+            "success": True,
+            "list": [
+                {
+                    "id": r["id"],
+                    "report_type": r["report_type"],
+                    "report_title": r["report_title"] or "",
+                    "filters": r["filters"],
+                    "record_count": r["record_count"],
+                    "status": r["status"],
+                    "error_message": r["error_message"],
+                    "user_name": r["user_name"],
+                    "print_date": _fmt(r.get("printed_at")),
+                    "printed_at": _fmt(r.get("printed_at")),
+                }
+                for r in rows
+            ],
+            "total": len(rows)
         }
-        for r in rows
-    ]
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in list_print_history: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"印刷履歴の取得に失敗しました: {str(e)}")
 
 
 @router.get("/history/stats")
@@ -94,33 +114,48 @@ async def get_print_history_stats(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """印刷履歴統計"""
-    conditions = ["1=1"]
-    params = {}
-    if report_type:
-        conditions.append("report_type = :report_type")
-        params["report_type"] = report_type
-    if date_from:
-        conditions.append("DATE(print_date) >= :date_from")
-        params["date_from"] = date_from
-    if date_to:
-        conditions.append("DATE(print_date) <= :date_to")
-        params["date_to"] = date_to
-    where = " AND ".join(conditions)
-    q = text(f"""
-        SELECT COUNT(*) AS total,
-               SUM(CASE WHEN status = '成功' THEN 1 ELSE 0 END) AS success_count,
-               SUM(CASE WHEN status IN ('失败', '失敗') THEN 1 ELSE 0 END) AS fail_count,
-               SUM(CASE WHEN status = '取消' THEN 1 ELSE 0 END) AS cancel_count
-        FROM print_history WHERE {where}
-    """)
-    result = await db.execute(q, params)
-    row = result.mappings().first()
-    return {
-        "total": row["total"] or 0,
-        "success_count": row["success_count"] or 0,
-        "fail_count": row["fail_count"] or 0,
-        "cancel_count": row["cancel_count"] or 0,
-    }
+    try:
+        conditions = []
+        params = {}
+        
+        if report_type:
+            conditions.append("report_type = :report_type")
+            params["report_type"] = report_type
+        if date_from:
+            conditions.append("DATE(printed_at) >= :date_from")
+            params["date_from"] = date_from
+        if date_to:
+            conditions.append("DATE(printed_at) <= :date_to")
+            params["date_to"] = date_to
+        
+        # Build WHERE clause
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        query_str = f"""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN status = '成功' THEN 1 ELSE 0 END) AS success_count,
+                   SUM(CASE WHEN status IN ('失败', '失敗') THEN 1 ELSE 0 END) AS fail_count,
+                   SUM(CASE WHEN status = '取消' THEN 1 ELSE 0 END) AS cancel_count
+            FROM print_history 
+            WHERE {where_clause}
+        """
+        
+        q = text(query_str)
+        result = await db.execute(q, params)
+        row = result.mappings().first()
+        
+        return {
+            "success": True,
+            "total": row["total"] or 0,
+            "success_count": row["success_count"] or 0,
+            "fail_count": row["fail_count"] or 0,
+            "cancel_count": row["cancel_count"] or 0,
+        }
+    except Exception as e:
+        import traceback
+        print(f"❌ Error in get_print_history_stats: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"印刷履歴統計の取得に失敗しました: {str(e)}")
 
 
 @router.post("/history")
@@ -129,20 +164,18 @@ async def record_print_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """印刷履歴を1件登録（テーブル: print_date, report_title NOT NULL）"""
+    """印刷履歴を1件登録（テーブル: printed_at, report_title 等）"""
     import json
     filters_json = json.dumps(body.filters, ensure_ascii=False) if body.filters else None
     report_title = body.report_title or ""
     user_name = getattr(current_user, "username", None) or getattr(current_user, "name", None)
-    user_id = getattr(current_user, "id", None)
     q = text("""
-        INSERT INTO print_history (report_type, report_title, user_id, user_name, filters, record_count, status, error_message)
-        VALUES (:report_type, :report_title, :user_id, :user_name, :filters, :record_count, :status, :error_message)
+        INSERT INTO print_history (report_type, report_title, user_name, filters, record_count, status, error_message)
+        VALUES (:report_type, :report_title, :user_name, :filters, :record_count, :status, :error_message)
     """)
     await db.execute(q, {
         "report_type": body.report_type,
         "report_title": report_title,
-        "user_id": user_id,
         "user_name": user_name,
         "filters": filters_json,
         "record_count": body.record_count,
