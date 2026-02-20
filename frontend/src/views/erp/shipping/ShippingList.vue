@@ -279,12 +279,25 @@
           :empty-text="emptyText"
           @row-click="handleRowClick"
           :row-class-name="tableRowClassName"
-          @selection-change="handleSelectionChange"
-          @select="handleSelectRow"
-          @select-all="handleSelectAll"
           :key="tableKey"
         >
-          <el-table-column type="selection" width="50" align="center" />
+          <el-table-column label="選択" width="60" align="center" prop="singleSelection">
+            <template #header>
+              <el-checkbox
+                :model-value="isAllDisplayedSelected"
+                :indeterminate="isDisplayedIndeterminate"
+                @update:model-value="handleSelectAll"
+                @click.stop
+              />
+            </template>
+            <template #default="{ row }">
+              <el-checkbox
+                :model-value="allSelectedIds.has(row.id)"
+                @update:model-value="(val) => handleSingleSelect(!!val, row)"
+                @click.stop
+              />
+            </template>
+          </el-table-column>
           <el-table-column
             label="出荷番号"
             prop="shipping_no"
@@ -338,7 +351,7 @@
           <el-table-column
             label="納入先"
             prop="destination_name"
-            min-width="120"
+            width="180"
             show-overflow-tooltip
             v-if="columnVisible.destination_name"
             key="destination_name"
@@ -383,7 +396,7 @@
           <el-table-column
             label="製品名"
             prop="product_name"
-            min-width="120"
+            width="150"
             show-overflow-tooltip
             v-if="columnVisible.product_name"
             key="product_name"
@@ -450,25 +463,14 @@
               </el-tooltip>
             </template>
           </el-table-column>
-          <el-table-column label="状態" width="80" v-if="columnVisible.status" key="status">
+          <el-table-column label="状態" width="72" v-if="columnVisible.status" key="status">
             <template #default="{ row }">
-              <el-tag :type="statusColor(row.status)" effect="dark" class="status-tag">
-                <el-icon v-if="row.status === '発行済'" class="status-icon">
-                  <Check />
-                </el-icon>
-                <el-icon v-else-if="row.status === '未発行'" class="status-icon">
-                  <Clock />
-                </el-icon>
-                <el-icon v-else-if="row.status === 'キャンセル'" class="status-icon">
-                  <Close />
-                </el-icon>
-                {{ row.status }}
-              </el-tag>
+              <span class="status-simple" :class="'status-' + statusColor(row.status)">{{ row.status }}</span>
             </template>
           </el-table-column>
           <el-table-column
             label="操作"
-            width="170"
+            width="160"
             fixed="right"
             header-align="center"
             align="center"
@@ -906,8 +908,8 @@ const createDialogVisible = ref(false)
 const selectedItem = ref<ShippingItem | null>(null)
 const quickEditVisible = ref(false)
 const selectedRows = ref<ShippingItem[]>([])
-const allSelectedIds = ref<Set<number>>(new Set()) // 跟踪所有选中项目的ID
-const isSelectAllOperation = ref(false) // 标记是否正在进行全选操作
+const allSelectedIds = ref<Set<number>>(new Set()) // 多选：支持全选与单选
+const selectedRowId = ref<number | null>(null) // 当前选中的行 id（单选）
 const loading = ref(false)
 const actionLoading = ref(false)
 const exportLoading = ref(false)
@@ -1250,11 +1252,8 @@ function statusColor(status: string): ElTagType {
   }
 }
 
-// 行スタイル
-function tableRowClassName({ row }: { row: ShippingItem }): string {
-  if (row.status === 'キャンセル') {
-    return 'canceled-row'
-  }
+// 行スタイル（削除は物理削除のためキャンセル行の特別スタイルは不要）
+function tableRowClassName(_: { row: ShippingItem }): string {
   return ''
 }
 
@@ -1270,10 +1269,9 @@ function formatDateWithWeekday(dateStr: string | null): string {
   return formatDateWithWeekdayJST(dateStr, intlLocale.value).replace(/\//g, '-').replace(/\s/g, ' ')
 }
 
-// 行クリック - 避免与选择冲突，只在非选择列区域触发
+// 行クリック - 避免与选择列冲突，只在非选择列区域触发
 function handleRowClick(row: ShippingItem, column: any): void {
-  // 如果点击的是选择列，不触发编辑
-  if (column && column.type === 'selection') {
+  if (column && column.property === 'singleSelection') {
     return
   }
   editShipping(row)
@@ -1283,145 +1281,63 @@ function handleRowClick(row: ShippingItem, column: any): void {
 function handleSizeChange(newSize: number): void {
   pageSize.value = newSize
   currentPage.value = 1
-  // 分页大小变更后，同步当前分页的选择状态
-  nextTick(() => {
-    syncCurrentPageSelection()
-  })
-}
-
-// 同步当前分页的选择状态
-function syncCurrentPageSelection(): void {
-  if (!tableRef.value) return
-
-  displayedList.value.forEach((row) => {
-    const isSelected = allSelectedIds.value.has(row.id)
-    tableRef.value?.toggleRowSelection(row, isSelected)
-  })
 }
 
 // ページ変更
 function handleCurrentChange(newPage: number): void {
   currentPage.value = newPage
-  // 分页切换后，同步当前分页的选择状态
-  nextTick(() => {
-    syncCurrentPageSelection()
-  })
-}
-
-// 選択された行の処理 - 出荷番号でグループ化
-function handleSelectionChange(rows: ShippingItem[]): void {
-  selectedRows.value = rows
-
-  // 只在不是全选操作时更新全局选中状态
-  if (!isSelectAllOperation.value) {
-    // 先移除当前分页中所有项目的选中状态
-    displayedList.value.forEach((item) => {
-      allSelectedIds.value.delete(item.id)
-    })
-
-    // 然后添加当前选中项目的ID
-    rows.forEach((item) => {
-      allSelectedIds.value.add(item.id)
-    })
-  }
 }
 
 // 表格引用
 const tableRef = ref()
 
-// 手动选择处理 - 支持按出荷番号分组选择
-function handleSelectRow(selection: ShippingItem[], row: ShippingItem): void {
-  const isSelected = selection.some((item) => item.id === row.id)
+// 当前页是否全部选中（用于表头全选复选框）
+const isAllDisplayedSelected = computed(() => {
+  const list = displayedList.value
+  if (list.length === 0) return false
+  return list.every((row) => allSelectedIds.value.has(row.id))
+})
+// 当前页半选状态（部分选中）
+const isDisplayedIndeterminate = computed(() => {
+  const list = displayedList.value
+  if (list.length === 0) return false
+  const selectedCount = list.filter((row) => allSelectedIds.value.has(row.id)).length
+  return selectedCount > 0 && selectedCount < list.length
+})
 
-  // 获取所有相同出荷番号的行（包括不在当前分页的）
-  const sameShippingNoRows = shippingList.value.filter(
-    (item) => item.shipping_no === row.shipping_no,
-  )
-
-  // 获取当前分页中相同出荷番号的行
-  const currentPageSameRows = displayedList.value.filter(
-    (item) => item.shipping_no === row.shipping_no,
-  )
-
-  if (isSelected) {
-    // 如果当前行被选中，则选中所有相同出荷番号的行（包括其他分页的）
-    sameShippingNoRows.forEach((item) => {
-      allSelectedIds.value.add(item.id)
-    })
-
-    // 同步当前分页的选择状态
-    currentPageSameRows.forEach((item) => {
-      if (!selection.some((selected) => selected.id === item.id)) {
-        tableRef.value?.toggleRowSelection(item, true)
-      }
-    })
-
-    // 如果同一出荷番号有多个产品，显示提示
-    if (sameShippingNoRows.length > 1) {
-      ElMessage({
-        message: `出荷番号 ${row.shipping_no} の${sameShippingNoRows.length}件の製品を選択しました`,
-        type: 'info',
-        duration: 2000,
-        showClose: true,
-      })
-    }
+// 表头全选/取消全选（仅作用于当前页 displayedList）
+function handleSelectAll(val: unknown): void {
+  const checked = !!val
+  const list = displayedList.value
+  const next = new Set(allSelectedIds.value)
+  if (checked) {
+    list.forEach((row) => next.add(row.id))
   } else {
-    // 如果当前行被取消选中，则取消选中所有相同出荷番号的行（包括其他分页的）
-    sameShippingNoRows.forEach((item) => {
-      allSelectedIds.value.delete(item.id)
-    })
-
-    // 同步当前分页的选择状态
-    currentPageSameRows.forEach((item) => {
-      tableRef.value?.toggleRowSelection(item, false)
-    })
-
-    // 如果同一出荷番号有多个产品，显示提示
-    if (sameShippingNoRows.length > 1) {
-      ElMessage({
-        message: `出荷番号 ${row.shipping_no} の${sameShippingNoRows.length}件の製品の選択を解除しました`,
-        type: 'info',
-        duration: 2000,
-        showClose: true,
-      })
-    }
+    list.forEach((row) => next.delete(row.id))
+  }
+  allSelectedIds.value = next
+  if (list.length > 0) {
+    selectedRowId.value = checked ? list[0].id : (next.size > 0 ? Array.from(next)[0] : null)
+    selectedRows.value = shippingList.value.filter((item) => next.has(item.id))
+  } else {
+    selectedRowId.value = null
+    selectedRows.value = []
   }
 }
 
-// 全选处理 - 选择所有筛选结果
-function handleSelectAll(selection: ShippingItem[]): void {
-  isSelectAllOperation.value = true // 标记开始全选操作
-
-  const isAllCurrentPageSelected = selection.length === displayedList.value.length
-
-  if (isAllCurrentPageSelected) {
-    // 当前分页全选时，选中所有筛选结果
-    shippingList.value.forEach((item) => {
-      allSelectedIds.value.add(item.id)
-    })
-
-    ElMessage({
-      message: `全ての検索結果 ${shippingList.value.length}件を選択しました`,
-      type: 'success',
-      duration: 3000,
-      showClose: true,
-    })
+// 多选：勾选/取消勾选单行；選択印刷・選択削除的数字会随 totalSelectedCount 更新
+function handleSingleSelect(checked: boolean, row: ShippingItem): void {
+  const next = new Set(allSelectedIds.value)
+  if (checked) {
+    next.add(row.id)
+    selectedRowId.value = row.id
+    selectedRows.value = shippingList.value.filter((item) => next.has(item.id))
   } else {
-    // 取消全选时，清空所有选择
-    allSelectedIds.value.clear()
-
-    ElMessage({
-      message: '全ての選択を解除しました',
-      type: 'info',
-      duration: 2000,
-      showClose: true,
-    })
+    next.delete(row.id)
+    selectedRowId.value = next.size > 0 ? (selectedRowId.value === row.id ? Array.from(next)[0] : selectedRowId.value) : null
+    selectedRows.value = shippingList.value.filter((item) => next.has(item.id))
   }
-
-  // 重置标志
-  nextTick(() => {
-    isSelectAllOperation.value = false
-  })
+  allSelectedIds.value = next
 }
 
 // 防止期间/納入先等下拉点击时弹出虚拟键盘（移动端）
@@ -1538,6 +1454,7 @@ async function fetchData(): Promise<void> {
     tableKey.value++
 
     // 清空选择状态（因为数据已更新）
+    selectedRowId.value = null
     allSelectedIds.value.clear()
     selectedRows.value = []
 
@@ -1681,8 +1598,9 @@ async function printShipping(row: ShippingItem): Promise<void> {
   }
 }
 
-// キャンセル処理
+// 单行取消：操作列「取消」按钮，仅对当前行 row.id 调用 cancel API（不按出荷番号整单取消）
 async function cancel(row: ShippingItem): Promise<void> {
+  if (row.status === 'キャンセル') return
   try {
     actionLoading.value = true
     await ElMessageBox.confirm(
@@ -1695,17 +1613,9 @@ async function cancel(row: ShippingItem): Promise<void> {
       },
     )
 
-    try {
-      // 選択した行のIDを使用して、該当する出荷データのみをキャンセル
-      await request.post(`/api/shipping/items/${row.id}/cancel`)
-
-      // 成功メッセージを表示して、データを再取得
-      ElMessage.success('選択した出荷データのキャンセル処理が完了しました')
-      await fetchData()
-    } catch (apiError) {
-      console.error('API呼び出しエラー:', apiError)
-      ElMessage.error('キャンセル処理に失敗しました')
-    }
+    await request.post(`/api/shipping/items/${row.id}/cancel`)
+    ElMessage.success('選択した出荷データのキャンセル処理が完了しました')
+    await fetchData()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('キャンセル処理に失敗しました:', error)
@@ -1716,19 +1626,23 @@ async function cancel(row: ShippingItem): Promise<void> {
   }
 }
 
-// 批量删除选中的出荷数据
+// 批量取消：工具栏「選択削除」，对 allSelectedIds 中全部 id 逐条调用 cancel API（跨分页勾选一并处理）
 async function cancelSelected(): Promise<void> {
   if (allSelectedIds.value.size === 0) {
     ElMessage.warning('削除する出荷データを選択してください')
     return
   }
 
+  const selectedItems = shippingList.value.filter((item) => allSelectedIds.value.has(item.id))
+  if (selectedItems.length === 0) {
+    selectedRowId.value = null
+    allSelectedIds.value.clear()
+    selectedRows.value = []
+    return
+  }
+
   try {
     actionLoading.value = true
-
-    // 获取所有选中的项目
-    const selectedItems = shippingList.value.filter((item) => allSelectedIds.value.has(item.id))
-
     await ElMessageBox.confirm(
       `選択した${selectedItems.length}件の出荷データを削除しますか？\n注意：選択したデータのみが削除されます。`,
       '確認',
@@ -1739,38 +1653,29 @@ async function cancelSelected(): Promise<void> {
       },
     )
 
-    try {
-      // 批量删除：循环调用删除API
-      const deletePromises = selectedItems.map((item) =>
-        request.post(`/api/shipping/items/${item.id}/cancel`).catch((error) => {
-          console.error(`删除项目 ${item.id} 失败:`, error)
-          return { error: true, id: item.id }
-        }),
+    type CancelErrorResult = { error: true; id: number }
+    const cancelPromises = selectedItems.map((item) =>
+      request.post(`/api/shipping/items/${item.id}/cancel`).then((): void => undefined).catch((err): CancelErrorResult => {
+        console.error(`キャンセル失敗 (id: ${item.id}):`, err)
+        return { error: true, id: item.id }
+      }),
+    )
+    const results = await Promise.all(cancelPromises)
+    const failedItems = results.filter((r): r is CancelErrorResult => r != null && typeof r === 'object' && 'error' in r && (r as CancelErrorResult).error)
+
+    const successCount = selectedItems.length - failedItems.length
+    if (failedItems.length > 0) {
+      ElMessage.warning(
+        `${successCount}件成功、${failedItems.length}件失敗しました`,
       )
-
-      const results = await Promise.all(deletePromises)
-
-      // 检查是否有失败的删除（接口返回 data 体，可能含 error）
-      const failedItems = results.filter((result: unknown) => result != null && typeof result === 'object' && 'error' in result && (result as { error?: boolean }).error)
-
-      if (failedItems.length > 0) {
-        ElMessage.warning(
-          `${selectedItems.length - failedItems.length}件の削除が成功しましたが、${failedItems.length}件の削除に失敗しました`,
-        )
-      } else {
-        ElMessage.success(`${selectedItems.length}件の出荷データのキャンセル処理が完了しました`)
-      }
-
-      // 清空选择状态
-      allSelectedIds.value.clear()
-      selectedRows.value = []
-
-      // データを再取得
-      await fetchData()
-    } catch (apiError) {
-      console.error('API呼び出しエラー:', apiError)
-      ElMessage.error('キャンセル処理に失敗しました')
+    } else {
+      ElMessage.success(`${selectedItems.length}件の出荷データのキャンセル処理が完了しました`)
     }
+
+    selectedRowId.value = null
+    allSelectedIds.value.clear()
+    selectedRows.value = []
+    await fetchData()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('キャンセル処理に失敗しました:', error)
@@ -2428,17 +2333,6 @@ watch(
     saveColumnVisibility()
   },
   { deep: true },
-)
-
-// 监听分页数据变化，同步选择状态
-watch(
-  displayedList,
-  () => {
-    nextTick(() => {
-      syncCurrentPageSelection()
-    })
-  },
-  { flush: 'post' },
 )
 
 // 日期快捷操作函数
@@ -3509,86 +3403,49 @@ async function loadDestinationGroups() {
   line-height: 1.2 !important;
 }
 
-.status-tag {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-weight: 600;
-  font-size: 11px;
-  padding: 3px 8px !important;
-  height: auto !important;
-  line-height: 1.2 !important;
-  position: relative;
-  overflow: hidden;
-  transition: all 0.3s ease;
+/* 状態：简约文本样式 */
+.status-simple {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
-
-.status-tag::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transition: left 0.5s;
-}
-
-.status-tag:hover::before {
-  left: 100%;
-}
-
-.status-tag:hover {
-  transform: scale(1.05);
-}
-
-.status-icon {
-  font-size: 10px;
-  animation: statusPulse 2s infinite;
-}
-
-@keyframes statusPulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.7;
-  }
-}
+.status-simple.status-info { color: #909399; }
+.status-simple.status-primary { color: #3498db; }
+.status-simple.status-success { color: #27ae60; }
+.status-simple.status-warning { color: #f39c12; }
+.status-simple.status-danger { color: #e74c3c; }
 
 .action-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
   align-items: center;
-  padding: 4px 2px;
+  padding: 2px 1px;
 }
 
 .table-action-button {
-  border-radius: 6px;
-  font-size: 13px;
-  padding: 6px 5px !important;
-  height: 25px !important;
+  border-radius: 5px;
+  font-size: 12px;
+  padding: 4px 4px !important;
+  height: 22px !important;
   font-weight: 700;
   letter-spacing: 0.3px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
-  min-width: 50px;
+  min-width: 44px;
 }
 
 .table-action-button.icon-only {
-  width: 34px !important;
-  height: 34px !important;
-  min-width: 34px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
   padding: 0 !important;
   border-radius: 50% !important;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .table-action-button:hover {
@@ -3632,8 +3489,8 @@ async function loadDestinationGroups() {
 }
 
 :deep(.el-table .cell) {
-  padding: 2px 8px;
-  line-height: 1.2;
+  padding: 1px 6px;
+  line-height: 1.15;
 }
 
 :deep(.el-table__header) {
@@ -3645,12 +3502,12 @@ async function loadDestinationGroups() {
   border-bottom: 1px solid #d1d5db;
   color: #374151;
   font-size: calc(12px * 0.9);
-  padding: 4px 0;
-  height: 30px;
+  padding: 3px 0;
+  height: 27px;
 }
 
 :deep(.el-table__header .cell) {
-  padding: 0 8px;
+  padding: 0 6px;
   font-weight: 600;
   white-space: nowrap;
   font-size: inherit;
@@ -3664,11 +3521,11 @@ async function loadDestinationGroups() {
   cursor: pointer;
   transition: all 0.2s ease;
   animation: fadeInUp 0.4s ease-out;
-  height: 32px;
+  height: 29px;
 }
 
 :deep(.el-table__row td) {
-  padding: 1px 0;
+  padding: 0;
   border-bottom: 1px solid #e5e7eb;
 }
 
@@ -3780,13 +3637,6 @@ async function loadDestinationGroups() {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-:deep(.canceled-row) {
-  background: linear-gradient(135deg, #fef0f0, #fde2e2);
-  color: #f56c6c;
-  text-decoration: line-through;
-  opacity: 0.7;
 }
 
 :deep(.el-tag) {

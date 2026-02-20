@@ -638,11 +638,63 @@ onMounted(() => {
 }
 
 @media (max-width: 1200px) {
-  .status-cards { grid-template-columns: repeat(2, 1fr); }
+  .status-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  .picking-management {
+    padding: 8px 10px;
+  }
+
+  .page-header {
+    margin-bottom: 8px;
+  }
+
+  .header-content {
+    gap: 8px;
+  }
+
+  .header-right {
+    flex-wrap: wrap;
+  }
+
+  .header-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .main-content {
+    border-radius: 10px;
+  }
+
+  .content-header {
+    padding: 8px 12px;
+  }
+
+  .content-title {
+    font-size: 13px;
+  }
+
+  .custom-tabs {
+    padding: 0 12px;
+  }
+
+  :deep(.el-tabs__item) {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  :deep(.el-tab-pane) {
+    padding: 8px 0 0;
+  }
 }
 
 @media (max-width: 600px) {
-  .status-cards { grid-template-columns: 1fr; }
+  .status-cards {
+    grid-template-columns: 1fr;
+  }
 }
 
 .stat-card {
@@ -880,25 +932,140 @@ onMounted(() => {
 :deep(.el-tabs__content) { padding: 0; }
 :deep(.el-tab-pane) { padding: 10px 0 0; }
 
-/* 响应式 */
 @media (max-width: 768px) {
-  .picking-management { padding: 8px 10px; }
-  .page-header { margin-bottom: 8px; }
-  .header-content { flex-direction: column; align-items: stretch; gap: 8px; }
-  .title-icon-wrapper { width: 40px; height: 40px; }
-  .title-icon { font-size: 20px; }
-  .main-title { font-size: 18px; }
-  .subtitle { font-size: 11px; }
-  .header-btn { padding: 6px 12px; }
-  .status-cards { margin-bottom: 8px; }
-  .stat-item { padding: 8px 10px; }
-  .content-header { padding: 8px 12px; }
-  .custom-tabs { padding: 0 12px; }
-  :deep(.el-tabs__header) { margin-bottom: 8px; }
+  .picking-management {
+    padding: 6px 8px;
+  }
+
+  .page-header {
+    margin-bottom: 6px;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .title-icon-wrapper {
+    width: 36px;
+    height: 36px;
+  }
+
+  .title-icon {
+    font-size: 18px;
+  }
+
+  .main-title {
+    font-size: 16px;
+  }
+
+  .subtitle {
+    font-size: 11px;
+  }
+
+  .header-right {
+    width: 100%;
+  }
+
+  .header-btn {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    font-size: 13px;
+  }
+
+  .status-cards {
+    margin-bottom: 6px;
+    gap: 6px;
+  }
+
+  .stat-item {
+    padding: 6px 10px;
+  }
+
+  .stat-number {
+    font-size: 18px;
+  }
+
+  .main-content {
+    border-radius: 10px;
+  }
+
+  .content-header {
+    padding: 6px 10px;
+  }
+
+  .content-title {
+    font-size: 13px;
+  }
+
+  .custom-tabs {
+    padding: 0 8px;
+  }
+
+  :deep(.el-tabs__header) {
+    margin-bottom: 6px;
+  }
+
+  :deep(.el-tabs__item) {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  :deep(.el-tab-pane) {
+    padding: 6px 0 0;
+  }
+
+  .tab-label .el-icon {
+    font-size: 12px;
+  }
 }
 
 @media (max-width: 480px) {
-  .stat-number { font-size: 20px; }
-  .stat-icon { width: 36px; height: 36px; font-size: 16px; }
+  .picking-management {
+    padding: 4px 6px;
+  }
+
+  .title-icon-wrapper {
+    width: 32px;
+    height: 32px;
+  }
+
+  .main-title {
+    font-size: 15px;
+  }
+
+  .header-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .stat-number {
+    font-size: 16px;
+  }
+
+  .stat-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  .stat-label {
+    font-size: 10px;
+  }
+
+  .content-header {
+    padding: 6px 8px;
+  }
+
+  .content-title {
+    font-size: 12px;
+  }
+
+  :deep(.el-tabs__item) {
+    font-size: 10px;
+    padding: 5px 6px;
+  }
 }
 </style>

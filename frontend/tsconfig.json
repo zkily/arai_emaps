@@ -34,7 +34,8 @@
     "src/views/Redirect.vue",
     "src/views/Dashboard.vue",
     "src/views/DashboardHome.vue",
-    "src/views/master/Bom.vue"
+    "src/views/master/Bom.vue",
+    "src/views/erp/inventory/warehouse/Stocktaking.vue"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

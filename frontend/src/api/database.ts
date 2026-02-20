@@ -21,6 +21,28 @@ export interface ProductionSummaryProduct {
   product_name?: string
 }
 
+/** production_summarys 一覧行（在庫一覧で使用するフィールド） */
+export interface ProductionSummaryInventoryRow {
+  id?: number
+  product_cd: string
+  product_name: string | null
+  date: string
+  day_of_week: string | null
+  cutting_inventory?: number | null
+  chamfering_inventory?: number | null
+  molding_inventory?: number | null
+  plating_inventory?: number | null
+  welding_inventory?: number | null
+  inspection_inventory?: number | null
+  warehouse_inventory?: number | null
+  outsourced_warehouse_inventory?: number | null
+  outsourced_plating_inventory?: number | null
+  outsourced_welding_inventory?: number | null
+  pre_welding_inspection_inventory?: number | null
+  pre_inspection_inventory?: number | null
+  pre_outsourcing_inventory?: number | null
+}
+
 /** 一覧取得（ページネーション） */
 export function getProductionSummarysList(params: ProductionSummaryListParams) {
   return request.get(BASE, { params })
@@ -195,4 +217,117 @@ export function updateProductionSummarysMachine(body: { startDate: string; endDa
     data?: { updated?: number; skipped?: number; startDate?: string; endDate?: string; elapsedTime?: number }
     message?: string
   }>(`${BASE}/update-machine`, body)
+}
+
+// ========== 在庫KPI（設計書：production_summarys ベース） ==========
+const KPI_BASE = '/api/database/inventory-kpi'
+
+export interface TurnoverRow {
+  product_cd: string
+  product_name: string
+  period_forecast: number
+  opening_inventory: number
+  closing_inventory: number
+  avg_inventory: number
+  turnover: number | null
+  turnover_days: number | null
+}
+
+export function getInventoryTurnover(params: {
+  start_date?: string
+  end_date?: string
+  period_type?: 'month' | 'quarter' | 'year'
+  product_cd?: string
+  by_amount?: boolean
+}) {
+  return request.get<{ data: { list: TurnoverRow[]; start_date: string; end_date: string; by_amount: boolean } }>(
+    `${KPI_BASE}/turnover`,
+    { params }
+  )
+}
+
+export interface AvgInventoryDaysRow {
+  product_cd: string
+  product_name: string
+  current_inventory: number
+  avg_daily_demand: number
+  avg_inventory_days: number | null
+  latest_date: string | null
+}
+
+export function getAvgInventoryDays(params: {
+  as_of_date?: string
+  recent_days?: number
+  product_cd?: string
+}) {
+  return request.get<{
+    data: { list: AvgInventoryDaysRow[]; as_of_date: string; recent_days: number }
+  }>(`${KPI_BASE}/avg-inventory-days`, { params })
+}
+
+export interface ShortageAlertRow {
+  product_cd: string
+  product_name: string
+  current_inventory: number
+  avg_inventory_days: number | null
+  lead_time: number
+  safety_margin_days: number
+  threshold_days: number
+}
+
+export function getShortageAlerts(params: {
+  as_of_date?: string
+  recent_days?: number
+  safety_margin_days?: number
+  product_cd?: string
+}) {
+  return request.get<{ data: { list: ShortageAlertRow[]; as_of_date: string } }>(
+    `${KPI_BASE}/shortage-alerts`,
+    { params }
+  )
+}
+
+export interface OverstockAlertRow {
+  product_cd: string
+  product_name: string
+  current_inventory: number
+  turnover: number | null
+  turnover_days: number | null
+  last_ship_date: string | null
+  days_since_ship: number | null
+  over_by_turnover: boolean
+  over_by_ship: boolean
+}
+
+export function getOverstockAlerts(params: {
+  as_of_date?: string
+  turnover_period_days?: number
+  max_turnover_days?: number
+  days_since_ship?: number
+  product_cd?: string
+}) {
+  return request.get<{
+    data: {
+      list: OverstockAlertRow[]
+      as_of_date: string
+      max_turnover_days?: number
+      days_since_ship?: number
+    }
+  }>(`${KPI_BASE}/overstock-alerts`, { params })
+}
+
+export interface ReorderPointRow {
+  product_cd: string
+  product_name: string
+  latest_date: string | null
+  warehouse_inventory: number
+  safety_stock: number
+  below_reorder: boolean
+}
+
+export function getReorderPointList(params: { as_of_date?: string; product_cd?: string }) {
+  return request.get<{ data: { list: ReorderPointRow[]; as_of_date: string } }>(
+    `${KPI_BASE}/reorder-point`,
+    { params }
+  )
 }

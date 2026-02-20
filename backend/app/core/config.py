@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     JWT_SECRET: Optional[str] = None  # JWT_SECRET_KEYのエイリアス
     JWT_SECRET_KEY: str = "smart_secret"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 720  # 12 小时
     
     # CORS設定
     # 開発環境ではすべてのオリジンを許可（ネットワークアクセス対応）

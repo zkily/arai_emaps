@@ -466,25 +466,26 @@ function getSummaries(param: SummaryParam): string[] {
 }
 
 // 報告書印刷：直接生成并执行打印（不经过预览弹窗）
+// 注意：移动端/平板需在「用户手势」内同步打开窗口，故先 open 再 await
 async function handleReport() {
-  await nextTick()
-  await executeFrontendPrint(reportContent.value)
-}
-
-// 执行前端打印
-async function executeFrontendPrint(contentRef: HTMLElement | null) {
-  if (!contentRef || !contentRef.innerHTML) {
-    ElMessage.error('印刷内容の取得に失敗しました。')
-    // 记录打印失败
-    await recordPrintFailure('印刷内容の取得に失敗しました。')
-    return
-  }
-
+  // 在用户点击的同一同步调用栈内先打开窗口，避免移动端弹窗被拦截
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
-    ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください。')
-    // 记录打印失败
-    await recordPrintFailure('ポップアップがブロックされました。')
+    // 弹窗被拦截时（常见于手机/平板），改用当前窗口打印
+    await nextTick()
+    await executeFrontendPrintFallback(reportContent.value)
+    return
+  }
+  await nextTick()
+  await executeFrontendPrint(reportContent.value, printWindow)
+}
+
+// 执行前端打印（新窗口）
+async function executeFrontendPrint(contentRef: HTMLElement | null, printWindow: Window) {
+  if (!contentRef || !contentRef.innerHTML) {
+    printWindow.close()
+    ElMessage.error('印刷内容の取得に失敗しました。')
+    await recordPrintFailure('印刷内容の取得に失敗しました。')
     return
   }
 
@@ -497,6 +498,8 @@ async function executeFrontendPrint(contentRef: HTMLElement | null) {
     <html>
       <head>
         <title>出荷報告書印刷</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         ${styles}
       </head>
       <body>
@@ -509,13 +512,81 @@ async function executeFrontendPrint(contentRef: HTMLElement | null) {
 
   printWindow.document.close()
 
-  printWindow.onload = () => {
-    printWindow.focus()
-    printWindow.print()
-    printWindow.close()
-    // 记录打印成功
+  // 等待文档与样式就绪后再打印，避免手机/平板上预览空白
+  let printed = false
+  function doPrint() {
+    if (printed || printWindow.closed) return
+    printed = true
+    try {
+      printWindow.focus()
+      printWindow.print()
+    } finally {
+      setTimeout(() => {
+        if (printWindow && !printWindow.closed) printWindow.close()
+        recordPrintSuccess()
+      }, 500)
+    }
+  }
+
+  if (printWindow.document.readyState === 'complete') {
+    setTimeout(doPrint, 200)
+  } else {
+    printWindow.onload = () => setTimeout(doPrint, 200)
+    const checkReady = () => {
+      if (printWindow.closed || printed) return
+      if (printWindow.document.readyState === 'complete') {
+        setTimeout(doPrint, 200)
+        return
+      }
+      setTimeout(checkReady, 80)
+    }
+    setTimeout(checkReady, 400)
+  }
+}
+
+// 弹窗被拦截时：在当前窗口内显示打印内容并调用 window.print()
+async function executeFrontendPrintFallback(contentRef: HTMLElement | null) {
+  if (!contentRef || !contentRef.innerHTML) {
+    ElMessage.error('印刷内容の取得に失敗しました。')
+    await recordPrintFailure('印刷内容の取得に失敗しました。')
+    return
+  }
+
+  const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+    .map((el) => el.outerHTML)
+    .join('')
+
+  const wrap = document.createElement('div')
+  wrap.id = 'shipping-report-print-fallback'
+  wrap.innerHTML = `
+    <div class="print-fallback-styles">
+      ${styles}
+      <style>
+        #shipping-report-print-fallback { position: fixed; inset: 0; z-index: 99999; background: #fff; overflow: auto; }
+        @media print {
+          body * { visibility: hidden; }
+          #shipping-report-print-fallback, #shipping-report-print-fallback * { visibility: visible; }
+          #shipping-report-print-fallback { position: absolute; inset: 0; overflow: visible; }
+        }
+      </style>
+    </div>
+    <div class="print-container">${contentRef.innerHTML}</div>
+  `
+  document.body.appendChild(wrap)
+
+  const remove = () => {
+    wrap.remove()
+    window.removeEventListener('afterprint', remove)
     recordPrintSuccess()
   }
+  window.addEventListener('afterprint', remove)
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      window.print()
+    })
+  })
 }
 
 // 加载保存的分组

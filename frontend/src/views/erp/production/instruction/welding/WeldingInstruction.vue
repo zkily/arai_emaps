@@ -1443,23 +1443,22 @@ const refreshData = () => {
   loadStats()
 }
 
-// 指示書を印刷
+// 指示書を印刷（全設備を印刷し、計画データがない設備は「生産計画停止」と表示）
 const printInstructions = async () => {
   try {
-    // 完全な期間データを取得（ページングデータではなく）
-    const fullPlanData = await getFullPlanDataForPrint()
-
-    if (fullPlanData.length === 0) {
-      ElMessage.warning('印刷する計画データがありません')
+    // 印刷対象の全溶接設備を取得
+    const allMachineNames = await getPrintMachineNames()
+    if (allMachineNames.length === 0) {
+      ElMessage.warning('設備データがありません')
       return
     }
 
-    // 設備ごとにデータをグループ化
-    const groupedByMachine = groupDataByMachine(fullPlanData)
+    // 完全な期間データを取得（ページングデータではなく）
+    const fullPlanData = await getFullPlanDataForPrint()
 
-    // 各設備の印刷内容を生成
+    // 全設備について印刷内容を生成（データがない設備は generatePrintContent 内で「生産計画停止」表示）
     const printContents = await Promise.all(
-      Object.keys(groupedByMachine).map(async (machineName) => {
+      allMachineNames.map(async (machineName) => {
         return await generatePrintContent(fullPlanData, machineName)
       }),
     )
@@ -1708,21 +1707,19 @@ const getFullPlanDataForPrint = async () => {
 // 指示書印刷プレビューを表示
 const showPrintPreview = async () => {
   try {
-    // 完全な期間データを取得（ページングデータではなく）
-    const fullPlanData = await getFullPlanDataForPrint()
-
-    if (fullPlanData.length === 0) {
-      ElMessage.warning('印刷する計画データがありません')
+    // プレビュー対象の全溶接設備を取得
+    const allMachineNames = await getPrintMachineNames()
+    if (allMachineNames.length === 0) {
+      ElMessage.warning('設備データがありません')
       return
     }
 
-    // 設備ごとにデータをグループ化
-    const groupedByMachine = groupDataByMachine(fullPlanData)
+    // 完全な期間データを取得（ページングデータではなく）
+    const fullPlanData = await getFullPlanDataForPrint()
 
-    // 各設備のプレビュー内容を生成
+    // 全設備についてプレビュー内容を生成（データがない設備は「生産計画停止」表示）
     const previewContents = await Promise.all(
-      Object.keys(groupedByMachine).map(async (machineName) => {
-        // 完全なデータを渡し、generatePrintContent関数にフィルタリングを任せる
+      allMachineNames.map(async (machineName) => {
         return await generatePrintContent(fullPlanData, machineName)
       }),
     )
@@ -1811,6 +1808,22 @@ const getMachineCd = async (machineName: string) => {
     machineCdCache.set(machineName, '未指定')
     return '未指定'
   }
+}
+
+// 印刷用に全溶接設備名リストを取得（machineOptions があればそれを使用、なければ API 取得）
+const getPrintMachineNames = async (): Promise<string[]> => {
+  if (machineOptions.value && machineOptions.value.length > 0) {
+    return machineOptions.value.map((m: any) => m.label || m.value).filter(Boolean).sort((a, b) => String(a).localeCompare(String(b)))
+  }
+  const result = (await request.get('/api/master/machines', {
+    params: { machine_type: '溶接' },
+  })) as ApiResponse<{ list: any[] }>
+  const list = (result?.data?.list ?? result?.list ?? (Array.isArray(result) ? result : [])) as any[]
+  if (list.length === 0) return []
+  return list
+    .map((m: any) => m.machine_name)
+    .filter(Boolean)
+    .sort((a, b) => String(a).localeCompare(String(b)))
 }
 
 // 印刷内容を生成

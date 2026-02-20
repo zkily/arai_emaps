@@ -54,22 +54,6 @@ export const deleteInventory = (id: number) => {
 
 // ========== 库存流水 ==========
 
-/** 获取库存流水记录 */
-export const getInventoryTransactions = (params?: {
-  inventory_id?: number
-  product_code?: string
-  transaction_type?: string
-  start_date?: string
-  end_date?: string
-  page?: number
-  page_size?: number
-}) => {
-  return request.get<{ items: InventoryTransaction[]; total: number }>(
-    `${BASE_URL}/transactions`,
-    { params }
-  )
-}
-
 /** 创建入库记录 */
 export const createInboundTransaction = (data: {
   product_code: string

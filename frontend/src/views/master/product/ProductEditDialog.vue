@@ -275,7 +275,7 @@
 import { ref, watch, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Product, OptionItem } from '@/types/master'
-import { getDestinationOptions, getMaterialOptions, getRouteOptions } from '@/api/options'
+import { getDestinationMasterOptions, getMaterialOptions, getRouteOptions } from '@/api/options'
 import { createProduct, updateProduct, getMaxProductCd } from '@/api/master/productMaster'
 
 const props = defineProps<{ visible: boolean; editData?: Product | null }>()
@@ -437,7 +437,7 @@ const handleClose = () => {
 }
 
 onMounted(async () => {
-  destinationOptions.value = await getDestinationOptions()
+  destinationOptions.value = await getDestinationMasterOptions()
   materialOptions.value = await getMaterialOptions()
   routeOptions.value = await getRouteOptions()
   locationOptions.value = [

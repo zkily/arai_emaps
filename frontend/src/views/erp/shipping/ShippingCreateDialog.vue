@@ -1690,6 +1690,8 @@ interface DailyOrder {
   box_type?: string
   delivery_date?: string
   shipping_date?: string
+  /** 日订单 API 返回的日期字段 (order_daily.date) */
+  date?: string
 }
 
 interface DestinationOption {
@@ -2370,15 +2372,23 @@ function formatDateToYYYYMMDD(dateStr: string | number | Date) {
   }
 }
 
-// 专门用于托盘编号生成的日期格式化方法
-function formatShippingDateForPallet(item: {
+// 日订单行可能带有的日期字段（API 返回 date，前端也可能有 shipping_date / year,month,day）
+type DateSourceRow = {
   shipping_date?: string
+  date?: string
   year?: number
   month?: number
   day?: number
-}) {
+}
+
+// 专门用于托盘编号生成的日期格式化方法
+function formatShippingDateForPallet(item: DateSourceRow) {
   if (item.shipping_date && item.shipping_date !== '未設定') {
     return formatDateToYYYYMMDD(item.shipping_date)
+  }
+  // API order_daily 返回 date (YYYY-MM-DD)
+  if (item.date && String(item.date).trim()) {
+    return formatDateToYYYYMMDD(item.date)
   }
   if (item.year && item.month && item.day) {
     const month = String(item.month).padStart(2, '0')
@@ -2388,28 +2398,23 @@ function formatShippingDateForPallet(item: {
   return getJSTDateString().replace(/-/g, '')
 }
 
-// 从year、month、day字段组合出荷日期
-function formatShippingDate(row: {
-  shipping_date?: string
-  year?: number
-  month?: number
-  day?: number
-}): string {
+// 从 date / shipping_date / year,month,day 组合出荷日期
+function formatShippingDate(row: DateSourceRow): string {
   if (!row) {
     return '未設定'
   }
 
-  // 优先使用shipping_date字段（如果存在且有效）
   if (row.shipping_date && row.shipping_date !== '未設定') {
     return formatDate(row.shipping_date)
   }
-
-  // 如果没有shipping_date字段，尝试使用year、month、day字段组合
+  // API order_daily 返回 date (YYYY-MM-DD)
+  if (row.date && String(row.date).trim()) {
+    return formatDate(row.date)
+  }
   if (row.year && row.month && row.day) {
-    const year = row.year
     const month = String(row.month).padStart(2, '0')
     const day = String(row.day).padStart(2, '0')
-    return `${year}-${month}-${day}`
+    return `${row.year}-${month}-${day}`
   }
 
   return '未設定'
@@ -3250,10 +3255,10 @@ function recalculatePallets() {
     // 按照出荷日期和纳入先分组
     const groupedItems: { [key: string]: any[] } = {}
     selectedItems.value.forEach((item) => {
-      // 确保shipping_date是有效值
+      // 确保 shipping_date 有效（日订单 API 可能返回 date 字段，已在 formatShippingDate 中统一）
       if (!item.shipping_date || item.shipping_date === '未設定') {
-        console.warn(`项目 ${item.product_cd} 没有有效的出荷日期，使用当前日期（日本时区）`)
-        item.shipping_date = getJSTDateString()
+        const fallback = getJSTDateString()
+        item.shipping_date = fallback
       }
 
       const key = `${item.shipping_date}-${item.destination_cd}`
@@ -4332,181 +4337,155 @@ function savePalletOptimized(currentPallet: any, boxType: any, pallets: any[]) {
   })
 }
 
-// 提交保存
+// 出荷Noを保存：パレット割当て案 → shippingItemsPayload → POST /api/shipping/items/bulk
 async function submitShipping() {
   if (submitDisabled.value) {
     ElMessage.warning('データが完全で、パレット割り当てが正しいことを確認してください')
     return
   }
-
   try {
     await ElMessageBox.confirm(
-      ` ${pallets.value.length} パレット分の出荷伝票を作成しますか？`,
+      `${pallets.value.length} パレット分の出荷伝票を作成しますか？`,
       '操作確認',
-      {
-        confirmButtonText: 'はい',
-        cancelButtonText: 'いいえ',
-        type: 'warning',
-      },
+      { confirmButtonText: 'はい', cancelButtonText: 'いいえ', type: 'warning' },
     )
+  } catch (err) {
+    if (err === 'cancel') return
+    throw err
+  }
 
-    loading.value.submit = true
+  loading.value.submit = true
+  try {
+    const shippingItemsPayload: Array<{
+      shipping_no: string
+      product_cd: string
+      product_name: string
+      product_type: string
+      product_alias: string
+      delivery_date: string | null
+      destination_cd: string
+      destination_name: string
+      shipping_date: string
+      box_type: string
+      confirmed_boxes: number
+      confirmed_units: number
+      unit: string
+      remarks: string
+    }> = []
 
-    // 构建提交数据
-    const shippingItemsPayload = []
-
-    // 处理每个托盘
     for (const pallet of pallets.value) {
-      // 格式化序列号为两位数，不满两位的话十位数补0
       const formattedSerial = formatSerialForDisplay(pallet.shipping_no_serial)
-      const shippingNo = `${pallet.shipping_no_prefix ?? ''}${formattedSerial}`
+      const shippingNo = (pallet.shipping_no_prefix ?? '') + formattedSerial
 
-      // 检查是否为混載パレット（有detail且长度大于1）
       if (pallet.detail && pallet.detail.length > 1) {
-        console.log('处理混載パレット:', shippingNo)
-
-        // 遍历每个明细项目，为每个项目创建单独的记录
-        // 确保使用detail中已同步的数据
+        // 混載パレット：detail の各行を1件ずつ挿入用に追加
         for (const item of pallet.detail) {
           shippingItemsPayload.push({
-            shipping_no: shippingNo, // 保持相同的托盘编号
-            product_cd: item.product_cd,
-            product_name: item.product_name,
-            product_type: item.product_type || '-',
+            shipping_no: shippingNo,
+            product_cd: item.product_cd ?? '',
+            product_name: item.product_name ?? '',
+            product_type: item.product_type ?? (pallet as any).product_type ?? '-',
             product_alias: '',
-            delivery_date: item.delivery_date || null,
-            destination_cd: pallet.destination_cd,
-            destination_name: pallet.destination_name,
-            shipping_date: item.shipping_date, // 使用原始日订单的出荷日
-            box_type: item.box_type || '-', // 确保箱タイプ有值
-            confirmed_boxes: item.confirmed_boxes !== undefined ? item.confirmed_boxes : 0,
-            confirmed_units: item.confirmed_units !== undefined ? item.confirmed_units : 0,
-            unit: pallet.unit || '本',
-            remarks: `${pallet.remarks || ''} 混載パレット`.trim(),
+            delivery_date: item.delivery_date ?? (pallet as any).delivery_date ?? null,
+            destination_cd: pallet.destination_cd ?? '',
+            destination_name: pallet.destination_name ?? '',
+            shipping_date: item.shipping_date ?? pallet.shipping_date ?? '',
+            box_type: item.box_type ?? (pallet as any).box_type ?? '-',
+            confirmed_boxes: item.confirmed_boxes ?? 0,
+            confirmed_units: item.confirmed_units ?? 0,
+            unit: pallet.unit ?? '本',
+            remarks: `${(pallet.remarks ?? '').trim()} 混載パレット`.trim() || '混載パレット',
           })
         }
       } else {
-        // 非混載パレット，直接添加
-        const mainItem = pallet.detail && pallet.detail.length > 0 ? pallet.detail[0] : pallet
-        // 优先使用pallet级别的confirmed_boxes和confirmed_units，确保与编辑后的数据一致
+        // 非混載：1件のみ。数量は托盘級を優先
+        const mainItem = pallet.detail?.[0] ?? pallet
         const confirmedBoxes =
-          pallet.confirmed_boxes !== undefined
+          pallet.confirmed_boxes !== undefined && pallet.confirmed_boxes !== null
             ? pallet.confirmed_boxes
-            : mainItem.confirmed_boxes || 0
+            : mainItem.confirmed_boxes ?? 0
         const confirmedUnits =
-          pallet.confirmed_units !== undefined
+          pallet.confirmed_units !== undefined && pallet.confirmed_units !== null
             ? pallet.confirmed_units
-            : mainItem.confirmed_units || 0
-
+            : mainItem.confirmed_units ?? 0
         shippingItemsPayload.push({
           shipping_no: shippingNo,
-          product_cd: mainItem.product_cd,
-          product_name: mainItem.product_name,
-          product_type: mainItem.product_type || pallet.product_type || '-',
+          product_cd: mainItem.product_cd ?? '',
+          product_name: mainItem.product_name ?? (pallet as any).product_name ?? '',
+          product_type: mainItem.product_type ?? (pallet as any).product_type ?? '-',
           product_alias: '',
-          delivery_date: mainItem.delivery_date || null,
-          destination_cd: pallet.destination_cd,
-          destination_name: pallet.destination_name,
-          shipping_date: mainItem.shipping_date || pallet.shipping_date, // 使用原始日订单的出荷日
-          box_type: mainItem.box_type || pallet.box_type || '-', // 确保箱タイプ有值
+          delivery_date: mainItem.delivery_date ?? (pallet as any).delivery_date ?? null,
+          destination_cd: pallet.destination_cd ?? '',
+          destination_name: pallet.destination_name ?? '',
+          shipping_date: mainItem.shipping_date ?? pallet.shipping_date ?? '',
+          box_type: mainItem.box_type ?? (pallet as any).box_type ?? '-',
           confirmed_boxes: confirmedBoxes,
           confirmed_units: confirmedUnits,
-          unit: pallet.unit || '本',
-          remarks: pallet.remarks || '',
+          unit: pallet.unit ?? '本',
+          remarks: pallet.remarks ?? '',
         })
       }
     }
 
-    // Build a map to find the pallet# for each selected item
-    // Key: item unique identifier (id or composite key), Value: shippingNo
-    const itemPalletMap = new Map<string, string>()
+    if (shippingItemsPayload.length === 0) {
+      ElMessage.warning('登録する出荷明細がありません')
+      return
+    }
 
-    // 首先，为每个pallet构建shippingNo
+    // ---------- 選択済み → order_daily 更新用 updatePayload ----------
+    const itemPalletMap = new Map<string, string>()
     for (const pallet of pallets.value) {
       const formattedSerial = formatSerialForDisplay(pallet.shipping_no_serial)
-      const shippingNo = `${pallet.shipping_no_prefix ?? ''}${formattedSerial}`
-
+      const shippingNo = (pallet.shipping_no_prefix ?? '') + formattedSerial
       if (pallet.detail && pallet.detail.length > 0) {
-        // 对于有detail的pallet，遍历每个detail项目
         for (const detailItem of pallet.detail) {
-          // 通过产品代码、目的地、出荷日期匹配selectedItems中的项目
-          const destinationCd = detailItem.destination_cd || pallet.destination_cd
-          const matchedItems = selectedItems.value.filter(
-            (selected) =>
-              selected.product_cd === detailItem.product_cd &&
-              selected.destination_cd === destinationCd &&
-              selected.shipping_date === detailItem.shipping_date,
+          const destCd = detailItem.destination_cd ?? pallet.destination_cd
+          const palletDateStr = formatShippingDateForPallet(detailItem) || formatShippingDateForPallet(pallet)
+          const matched = selectedItems.value.filter(
+            (s) =>
+              s.product_cd === detailItem.product_cd &&
+              s.destination_cd === destCd &&
+              formatShippingDateForPallet(s) === palletDateStr,
           )
-
-          // 为每个匹配的项目分配shippingNo
-          for (const matchedItem of matchedItems) {
-            const key =
-              matchedItem.id != null
-                ? String(matchedItem.id)
-                : `${matchedItem.product_cd}_${matchedItem.destination_cd}_${matchedItem.shipping_date}`
-            // 如果还没有分配过，或者需要更新（同一个项目可能在多个pallet中，但应该只在一个中）
-            if (!itemPalletMap.has(key)) {
-              itemPalletMap.set(key, shippingNo)
-            }
+          for (const m of matched) {
+            const key = m.id != null ? String(m.id) : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}`
+            if (!itemPalletMap.has(key)) itemPalletMap.set(key, shippingNo)
           }
         }
       } else {
-        // 对于没有detail的pallet，使用pallet本身的信息
         const mainItem = pallet
-        const matchedItems = selectedItems.value.filter(
-          (selected) =>
-            selected.product_cd === mainItem.product_cd &&
-            selected.destination_cd === mainItem.destination_cd &&
-            selected.shipping_date === mainItem.shipping_date,
+        const palletDateStr = formatShippingDateForPallet(mainItem)
+        const matched = selectedItems.value.filter(
+          (s) =>
+            s.product_cd === mainItem.product_cd &&
+            s.destination_cd === mainItem.destination_cd &&
+            formatShippingDateForPallet(s) === palletDateStr,
         )
-
-        for (const matchedItem of matchedItems) {
-          const key =
-            matchedItem.id != null
-              ? String(matchedItem.id)
-              : `${matchedItem.product_cd}_${matchedItem.destination_cd}_${matchedItem.shipping_date}`
-          if (!itemPalletMap.has(key)) {
-            itemPalletMap.set(key, shippingNo)
-          }
+        for (const m of matched) {
+          const key = m.id != null ? String(m.id) : `${m.product_cd}_${m.destination_cd}_${formatShippingDateForPallet(m)}`
+          if (!itemPalletMap.has(key)) itemPalletMap.set(key, shippingNo)
         }
       }
     }
 
-    // 统计每个(パレット番号, 产品代码)组合在selectedItems中出现的次数，用于生成序号
     const palletProductCountMap = new Map<string, number>()
     for (const item of selectedItems.value) {
-      const key =
-        item.id != null
-          ? String(item.id)
-          : `${item.product_cd}_${item.destination_cd}_${item.shipping_date}`
+      const key = item.id != null ? String(item.id) : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}`
       const shippingNo = itemPalletMap.get(key)
       if (shippingNo) {
         const countKey = `${shippingNo}_${item.product_cd}`
         palletProductCountMap.set(countKey, (palletProductCountMap.get(countKey) || 0) + 1)
       }
     }
-
-    // 用于跟踪每个(パレット番号, 产品代码)组合的当前序号
     const palletProductIndexMap = new Map<string, number>()
 
-    // Build payload to update the shipping_no in the source daily orders
     const updatePayload = selectedItems.value
       .map((item) => {
-        const key =
-          item.id != null
-            ? String(item.id)
-            : `${item.product_cd}_${item.destination_cd}_${item.shipping_date}`
-        const shippingNo = itemPalletMap.get(key) || ''
-        if (!shippingNo) {
-          return null
-        }
-
-        // 生成带序号的出现荷No
+        const key = item.id != null ? String(item.id) : `${item.product_cd}_${item.destination_cd}_${formatShippingDateForPallet(item)}`
+        const shippingNo = itemPalletMap.get(key)
+        if (!shippingNo) return null
         const countKey = `${shippingNo}_${item.product_cd}`
         const totalCount = palletProductCountMap.get(countKey) || 1
-
-        // 如果同一个产品在同一个パレット番号中只出现一次，不添加序号
-        // 如果出现多次，添加序号（从1开始）
         let shippingNoWithSuffix: string
         if (totalCount > 1) {
           const currentIndex = (palletProductIndexMap.get(countKey) || 0) + 1
@@ -4515,64 +4494,40 @@ async function submitShipping() {
         } else {
           shippingNoWithSuffix = `${shippingNo}_${item.product_cd}`
         }
-
+        const shipDateRaw = formatShippingDateForPallet(item)
+        if (!shipDateRaw) return null
+        const shipping_date =
+          /^\d{4}-\d{2}-\d{2}$/.test(shipDateRaw)
+            ? shipDateRaw
+            : /^\d{8}$/.test(shipDateRaw)
+              ? `${shipDateRaw.slice(0, 4)}-${shipDateRaw.slice(4, 6)}-${shipDateRaw.slice(6, 8)}`
+              : shipDateRaw
         return {
           product_cd: item.product_cd,
           destination_cd: item.destination_cd,
-          shipping_date: item.shipping_date,
+          shipping_date,
           shipping_no: shippingNoWithSuffix,
         }
       })
-      .filter((item) => item !== null && item.shipping_no) as Array<{
-      product_cd: string
-      destination_cd: string
-      shipping_date: string
-      shipping_no: string
-    }>
+      .filter((x): x is NonNullable<typeof x> => x !== null && !!x.shipping_no)
 
-    // console.log(`将保存 ${shippingItemsPayload.length} 条记录`)
-    // console.log(`将更新 ${updatePayload.length} 条原始订单`)
-
-    // Perform both API calls
-    try {
-      if (shippingItemsPayload.length > 0) {
-        // console.log('开始保存出荷项目...')
-        const bulkRes = await request.post('/api/shipping/items/bulk', shippingItemsPayload)
-        // console.log('出荷项目保存成功:', bulkRes)
-      }
-
-      if (updatePayload.length > 0) {
-        // console.log('开始更新原始订单的出荷编号...')
-        // 修改API调用，不再使用/api/shipping/suggestion/update-shipping-no
-        const updateRes = await request.patch('/api/order/daily/update-shipping-no', updatePayload)
-        // console.log('原始订单更新成功:', updateRes)
-      }
-
-      ElMessage.success('出荷伝票の保存に成功しました')
-      visible.value = false
-      emit('submitted')
-    } catch (apiError) {
-      console.error('API调用失败:', apiError)
-      // 优先使用后端返回的具体错误消息
-      const errorMessage =
-        (apiError as any)?.response?.data?.message || (apiError as any)?.message || '不明なエラー'
-
-      // 如果后端已经返回了具体的错误消息（如"同じパレットに同じ製品がある場合、再確認してください"），直接显示
-      // 否则显示通用错误消息
-      if (errorMessage.includes('同じパレット') || errorMessage.includes('再確認')) {
-        ElMessage.error(errorMessage)
-      } else {
-        ElMessage.error(`出荷伝票の保存に失敗しました: ${errorMessage}`)
-      }
-      throw apiError // 重新抛出错误以便外部catch捕获
+    await request.post('/api/shipping/items/bulk', shippingItemsPayload)
+    if (updatePayload.length > 0) {
+      await request.patch('/api/order/daily/update-shipping-no', updatePayload)
     }
-  } catch (error) {
-    if (error === 'cancel') {
-      // console.log('用户取消了操作')
-      return
-    }
-    console.error('保存出荷单失败:', error)
-    // 错误消息已在内部try-catch中处理，这里不需要再显示
+    ElMessage.success('出荷伝票の保存に成功しました')
+    visible.value = false
+    emit('submitted')
+  } catch (apiError: any) {
+    const data = apiError?.response?.data
+    const msg =
+      (typeof data?.detail === 'string' ? data.detail : null) ||
+      (Array.isArray(data?.detail) && data.detail[0]?.msg) ||
+      data?.message ||
+      apiError?.message ||
+      '不明なエラー'
+    ElMessage.error(`出荷伝票の保存に失敗しました: ${msg}`)
+    throw apiError
   } finally {
     loading.value.submit = false
   }

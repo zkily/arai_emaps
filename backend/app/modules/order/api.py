@@ -4,6 +4,7 @@
 - GET /check-combination-exists: 納入先名・製品名・年月の組み合わせが既存か
 - POST /batch-create-monthly: 一括登録（INSERT IGNORE 相当）
 - POST /generate-daily: 日受注リスト生成（量産品のみ）
+- PATCH /daily/update-shipping-no: 日订单に出荷Noを書戻し（产品+納入先+出荷日で定位、未填写の行のみ更新）
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -470,3 +471,51 @@ async def update_order_fields(
         "updatedCount": updated_count,
         "message": f"{updated_count}件の受注情報を更新しました",
     }
+
+
+# ---------- PATCH /daily/update-shipping-no ----------
+class UpdateShippingNoItem(BaseModel):
+    """日订单出荷No書戻しの1件（产品+納入先+出荷日で定位）"""
+    product_cd: str
+    destination_cd: str
+    shipping_date: str  # 出荷日（order_daily.date に対応）
+    shipping_no: str
+
+
+@router.patch("/daily/update-shipping-no")
+async def update_daily_shipping_no(
+    body: List[UpdateShippingNoItem],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    前端 updatePayload に従い、「产品 + 納入先 + 出荷日」で order_daily を特定し、
+    shipping_no を書戻す。只更新 shipping_no が空の行。
+    """
+    if not body:
+        return {"success": True, "updatedCount": 0}
+    od = erp_models.OrderDaily
+    updated = 0
+    for item in body:
+        product_cd = (item.product_cd or "").strip()
+        destination_cd = (item.destination_cd or "").strip()
+        shipping_date_str = (item.shipping_date or "").strip()
+        shipping_no = (item.shipping_no or "").strip()
+        if not product_cd or not destination_cd or not shipping_date_str or not shipping_no:
+            continue
+        stmt = (
+            update(od)
+            .where(
+                and_(
+                    od.product_cd == product_cd,
+                    od.destination_cd == destination_cd,
+                    od.date == shipping_date_str,
+                    or_(od.shipping_no.is_(None), od.shipping_no == ""),
+                )
+            )
+            .values(shipping_no=shipping_no)
+        )
+        result = await db.execute(stmt)
+        updated += result.rowcount
+    await db.commit()
+    return {"success": True, "updatedCount": updated}

@@ -158,51 +158,6 @@ async def get_inventory_by_id(
 
 # ========== 入出庫 ==========
 
-@router.get("/transactions")
-async def get_inventory_transactions(
-    inventory_id: Optional[int] = Query(None),
-    product_code: Optional[str] = Query(None),
-    transaction_type: Optional[str] = Query(None),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
-):
-    """在庫トランザクション一覧取得"""
-    query = select(InventoryTransaction)
-    
-    if inventory_id:
-        query = query.where(InventoryTransaction.inventory_id == inventory_id)
-    if product_code:
-        query = query.where(InventoryTransaction.product_code.like(f"%{product_code}%"))
-    if transaction_type:
-        query = query.where(InventoryTransaction.transaction_type == transaction_type)
-    if start_date:
-        query = query.where(InventoryTransaction.created_at >= start_date)
-    if end_date:
-        query = query.where(InventoryTransaction.created_at <= end_date)
-    
-    # 総件数
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-    
-    # ページネーション
-    query = query.order_by(InventoryTransaction.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
-    
-    return {
-        "items": [_transaction_to_dict(item) for item in items],
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    }
-
-
 @router.post("/inbound")
 async def create_inbound_transaction(
     data: dict,

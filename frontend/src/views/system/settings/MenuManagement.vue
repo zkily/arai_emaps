@@ -207,7 +207,7 @@ function handleSyncFromConfig() {
         path: c.path ?? null,
         icon: c.icon ?? null,
         parent_code: c.parentCode ?? null,
-        sort_order: c.sortOrder,
+        sort_order: Number.isFinite(c.sortOrder) ? Math.round(Number(c.sortOrder)) : 0,
       })))
       ElMessage.success('メニューを同期しました')
       await fetchMenus()

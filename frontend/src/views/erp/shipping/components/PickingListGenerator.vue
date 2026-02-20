@@ -29,28 +29,52 @@
       </div>
     </div>
 
-     <!-- 统计卡片：紧凑横並び -->
+     <!-- 统计卡片：精美UI -->
     <div class="statistics-section">
       <div class="statistics-cards">
         <div class="stat-card total-card">
-          <span class="stat-icon"><el-icon><Box /></el-icon></span>
-          <span class="stat-value">{{ totalStats.total.toLocaleString() }}</span>
-          <span class="stat-label">パレット数</span>
+          <div class="stat-card-inner">
+            <div class="stat-icon-wrap">
+              <el-icon class="stat-icon"><Box /></el-icon>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value">{{ totalStats.total.toLocaleString() }}</span>
+              <span class="stat-label">パレット数</span>
+            </div>
+          </div>
         </div>
         <div class="stat-card pending-card">
-          <span class="stat-icon"><el-icon><Clock /></el-icon></span>
-          <span class="stat-value">{{ totalStats.pending.toLocaleString() }}</span>
-          <span class="stat-label">未ピッキング</span>
+          <div class="stat-card-inner">
+            <div class="stat-icon-wrap">
+              <el-icon class="stat-icon"><Clock /></el-icon>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value">{{ totalStats.pending.toLocaleString() }}</span>
+              <span class="stat-label">未ピッキング</span>
+            </div>
+          </div>
         </div>
         <div class="stat-card completed-card">
-          <span class="stat-icon"><el-icon><CircleCheck /></el-icon></span>
-          <span class="stat-value">{{ totalStats.completed.toLocaleString() }}</span>
-          <span class="stat-label">ピッキング済</span>
+          <div class="stat-card-inner">
+            <div class="stat-icon-wrap">
+              <el-icon class="stat-icon"><CircleCheck /></el-icon>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value">{{ totalStats.completed.toLocaleString() }}</span>
+              <span class="stat-label">ピッキング済</span>
+            </div>
+          </div>
         </div>
         <div class="stat-card completion-card">
-          <span class="stat-icon"><el-icon><TrendCharts /></el-icon></span>
-          <span class="stat-value">{{ totalStats.completionRate }}%</span>
-          <span class="stat-label">完成率</span>
+          <div class="stat-card-inner">
+            <div class="stat-icon-wrap">
+              <el-icon class="stat-icon"><TrendCharts /></el-icon>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value">{{ totalStats.completionRate }}%</span>
+              <span class="stat-label">完成率</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -100,32 +124,7 @@
             </el-select>
           </el-form-item>
 
-          <el-form-item label="製品">
-            <el-select
-              v-model="filters.product_cd"
-              placeholder="全ての製品"
-              clearable
-              filterable
-              style="width: 250px"
-            >
-              <el-option
-                v-for="product in productOptions"
-                :key="product.product_cd"
-                :label="`${product.product_cd} - ${product.product_name}`"
-                :value="product.product_cd"
-              />
-            </el-select>
-          </el-form-item>
-
           <el-form-item>
-            <el-button type="primary" @click="fetchShippingData" :loading="loading.fetch">
-              <el-icon><Search /></el-icon>
-              検索
-            </el-button>
-            <el-button @click="resetFilters">
-              <el-icon><RefreshLeft /></el-icon>
-              リセット
-            </el-button>
             <el-button type="success" @click="handlePrint" :disabled="filteredPalletGroups.length === 0">
               <el-icon><Printer /></el-icon>
               印刷
@@ -271,7 +270,6 @@ import {
   Box,
   Filter,
   List,
-  RefreshLeft,
   Clock,
   CircleCheck,
   TrendCharts,
@@ -338,7 +336,6 @@ const loading = ref({
 
 const filters = ref({
   status: '',
-  product_cd: '',
 })
 
 const productOptions = ref<Array<{ product_cd: string; product_name: string }>>([])
@@ -359,19 +356,8 @@ let debounceTimer: NodeJS.Timeout | null = null
 
 const palletGroups = ref<PalletGroup[]>([])
 
-// 筛选后的托盘组
-const filteredPalletGroups = computed(() => {
-  let filtered = palletGroups.value
-
-  // 按产品筛选
-  if (filters.value.product_cd) {
-    filtered = filtered.filter((pallet) =>
-      pallet.items.some((item) => item.product_cd === filters.value.product_cd),
-    )
-  }
-
-  return filtered
-})
+// 筛选后的托盘组（状態は API で指定済み。クライアント側の追加フィルタなし）
+const filteredPalletGroups = computed(() => palletGroups.value)
 
 // 统计数据：按パレット（shipping_no_p）件数。未ピッキング = pending + picking（作業中も含む）
 const totalStats = computed(() => {
@@ -543,11 +529,6 @@ async function fetchShippingData() {
     console.log(`分组后的托盘数量: ${palletGroups.value.length}`)
     console.log('完整的托盘数据:', palletGroups.value)
 
-    // 如果产品列表为空或很少，从数据中提取产品列表
-    if (palletGroups.value.length > 0 && productOptions.value.length === 0) {
-      extractProductsFromData()
-    }
-
     if (palletGroups.value.length > 0) {
       ElMessage.success(`${palletGroups.value.length}個のパレットを取得しました`)
     } else {
@@ -577,11 +558,6 @@ async function fetchShippingData() {
   }
 }
 
-function resetFilters() {
-  filters.value.status = ''
-  filters.value.product_cd = ''
-  dateRange.value = [today, today]
-}
 
 // 加载产品列表 - 加载所有产品
 async function loadProductOptions() {
@@ -699,10 +675,6 @@ function handlePrint() {
   }
   if (filters.value.status) {
     filterInfo.push(`状態: ${filters.value.status}`)
-  }
-  if (filters.value.product_cd) {
-    const product = productOptions.value.find((p) => p.product_cd === filters.value.product_cd)
-    filterInfo.push(`製品: ${product ? `${product.product_cd} - ${product.product_name}` : filters.value.product_cd}`)
   }
 
   // 生成打印HTML
@@ -981,12 +953,7 @@ function debouncedFetchData() {
   }, 500) // 500ms 防抖延迟
 }
 
-// クライアント側フィルタ（製品）変更時はページを1に戻す
-watch(() => filters.value.product_cd, () => {
-  currentPage.value = 1
-})
-
-// 监听筛选条件变化，自动重新获取数据
+// 出荷日・状態変更時に自動で再取得
 watch(
   [dateRange, () => filters.value.status],
   () => {
@@ -995,27 +962,15 @@ watch(
   { deep: true },
 )
 
-// 监听产品筛选变化，不需要重新获取数据，只需要前端筛选
 watch(
-  () => filters.value.product_cd,
+  () => filters.value.status,
   () => {
-    // 产品筛选是前端筛选，不需要重新请求API
-    // 但如果数据为空，可能需要重新加载产品选项
-    if (palletGroups.value.length > 0 && productOptions.value.length === 0) {
-      extractProductsFromData()
-    }
+    currentPage.value = 1
   },
 )
 
-onMounted(async () => {
-  // 加载产品列表
-  await loadProductOptions()
-  // 页面加载时直接获取数据，不需要用户手动筛选
-  await fetchShippingData()
-  // 如果产品列表为空，从数据中提取
-  if (productOptions.value.length === 0 && palletGroups.value.length > 0) {
-    extractProductsFromData()
-  }
+onMounted(() => {
+  fetchShippingData()
 })
 </script>
 
@@ -1061,8 +1016,9 @@ onMounted(async () => {
   align-items: center;
 }
 
-/* 筛选区域 - 紧凑 */
+/* 筛选区域 - 紧凑・统一高度（与今日按钮一致） */
 .filter-section {
+  --filter-control-h: 32px;
   margin-bottom: 8px;
 }
 
@@ -1077,15 +1033,39 @@ onMounted(async () => {
 .filter-section :deep(.el-card__body) {
   padding: 8px 12px;
 }
+
+/* 日期选择器・下拉框・按钮：统一高度 */
+.filter-section :deep(.el-date-editor .el-input__wrapper),
+.filter-section :deep(.el-select .el-input__wrapper) {
+  height: var(--filter-control-h) !important;
+  min-height: var(--filter-control-h) !important;
+  padding: 0 11px;
+  border-radius: 6px;
+}
+.filter-section :deep(.el-date-editor .el-input__inner),
+.filter-section :deep(.el-select .el-input__inner) {
+  height: calc(var(--filter-control-h) - 2px);
+  line-height: calc(var(--filter-control-h) - 2px);
+}
+
 .compact-date-picker {
   width: 240px !important;
 }
+
+.filter-section :deep(.el-form-item .el-button) {
+  height: var(--filter-control-h) !important;
+  padding: 0 15px !important;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
 .filter-form :deep(.el-form-item) {
-  margin-bottom: 6px;
-  margin-right: 12px;
+  margin-bottom: 0;
+  margin-right: 0;
 }
 .filter-form :deep(.el-form-item__label) {
   font-size: 12px;
+  line-height: var(--filter-control-h);
 }
 
 .filter-header {
@@ -1104,10 +1084,10 @@ onMounted(async () => {
 
 .filter-form {
   margin: 0;
-}
-
-.filter-form .el-form-item {
-  margin-bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
 }
 
 .date-picker-group {
@@ -1119,19 +1099,26 @@ onMounted(async () => {
 .date-quick-buttons {
   display: flex;
   gap: 4px;
+  align-items: center;
 }
 
 .date-quick-buttons .el-button {
+  height: var(--filter-control-h) !important;
   min-width: 42px;
-  padding: 5px 10px;
+  padding: 0 10px !important;
   font-size: 12px;
   border-radius: 6px;
+  line-height: 1;
   transition: all 0.2s ease;
 }
 
 .date-quick-buttons .el-button:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.filter-section .date-picker-group {
+  align-items: center;
 }
 
 /* 列表区域 - 紧凑 */
@@ -1319,111 +1306,444 @@ onMounted(async () => {
   font-style: italic;
 }
 
-/* 响应式设计 */
+/* ========== 响应式：ピッキングリスト tab ========== */
+
+@media (max-width: 1024px) {
+  .picking-list-generator {
+    padding: 0 4px 6px;
+  }
+
+  .header-section {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+
+  .page-title {
+    font-size: 14px;
+  }
+
+  .filter-section :deep(.el-card__body) {
+    padding: 8px 10px;
+  }
+
+  .compact-date-picker {
+    width: 100% !important;
+    max-width: 260px;
+  }
+
+  .filter-form :deep(.el-form-item) {
+    margin-right: 8px;
+  }
+
+  .filter-form :deep(.el-select),
+  .filter-form :deep(.el-date-editor) {
+    width: 100% !important;
+    max-width: 220px;
+  }
+
+  .list-section :deep(.el-card__body) {
+    padding: 8px 10px;
+  }
+
+  .list-section :deep(.el-table th),
+  .list-section :deep(.el-table td) {
+    padding: 5px 6px;
+    font-size: 11px;
+  }
+}
 
 @media (max-width: 768px) {
   .header-section {
     flex-direction: column;
-    gap: 16px;
+    gap: 10px;
     align-items: stretch;
+    padding: 6px 10px;
+  }
+
+  .page-title {
+    font-size: 13px;
   }
 
   .action-buttons-section {
-    justify-content: flex-end;
+    justify-content: stretch;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .action-buttons-section .el-button {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .statistics-section {
+    margin-bottom: 8px;
+  }
+
+  .statistics-cards {
+    gap: 8px;
+  }
+
+  .stat-card-inner {
+    padding: 10px 12px;
+    min-height: 52px;
+    gap: 10px;
+  }
+
+  .stat-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+  }
+
+  .stat-card .stat-icon {
+    font-size: 16px;
+  }
+
+  .stat-card .stat-value {
+    font-size: 16px;
+  }
+
+  .stat-card .stat-label {
+    font-size: 10px;
+  }
+
+  .filter-section :deep(.el-card__header) {
+    padding: 6px 10px;
+  }
+
+  .filter-section :deep(.el-card__body) {
+    padding: 6px 10px;
   }
 
   .filter-form {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .filter-form :deep(.el-form-item) {
+    margin-right: 0;
+    width: 100%;
+  }
+
+  .filter-form :deep(.el-form-item .el-form-item__content) {
+    width: 100%;
+  }
+
+  .filter-form :deep(.el-select),
+  .filter-form :deep(.el-date-editor) {
+    width: 100% !important;
+    max-width: none;
+  }
+
+  .compact-date-picker {
+    width: 100% !important;
+    max-width: none;
   }
 
   .date-picker-group {
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 6px;
   }
 
   .date-quick-buttons {
-    justify-content: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .date-quick-buttons .el-button {
     flex: 1;
-    max-width: 80px;
+    min-width: 60px;
+    max-width: none;
+  }
+
+  .list-section :deep(.el-card__header) {
+    padding: 6px 10px;
+  }
+
+  .list-section :deep(.el-card__body) {
+    padding: 6px 10px;
+  }
+
+  .list-title {
+    font-size: 12px;
   }
 
   .list-header {
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     align-items: stretch;
   }
 
-  .pallet-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
+  .pallet-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 -2px;
+  }
+
+  .pallet-main-table {
+    min-width: 640px;
+  }
+
+  .pallet-number {
+    font-size: 12px;
+  }
+
+  .product-code {
+    min-width: 70px;
+    font-size: 11px;
+  }
+
+  .product-name {
+    font-size: 11px;
+  }
+
+  .pallet-pagination {
+    margin-top: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pallet-pagination :deep(.el-pagination) {
+    font-size: 11px;
+  }
+
+  .pallet-pagination :deep(.el-pager li),
+  .pallet-pagination :deep(.btn-prev),
+  .pallet-pagination :deep(.btn-next) {
+    min-width: 26px;
+    height: 26px;
+    line-height: 26px;
   }
 }
 
-/* 统计卡片 - 紧凑横並び・余白削減 */
+@media (max-width: 480px) {
+  .picking-list-generator {
+    padding: 0 2px 4px;
+  }
+
+  .header-section {
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    gap: 8px;
+  }
+
+  .page-title {
+    font-size: 12px;
+  }
+
+  .action-buttons-section {
+    flex-direction: column;
+  }
+
+  .action-buttons-section .el-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .statistics-cards {
+    gap: 6px;
+  }
+
+  .stat-card-inner {
+    padding: 8px 12px;
+    min-height: 48px;
+    gap: 8px;
+  }
+
+  .stat-icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .stat-card .stat-icon {
+    font-size: 14px;
+  }
+
+  .stat-card .stat-value {
+    font-size: 15px;
+  }
+
+  .stat-card .stat-label {
+    font-size: 9px;
+  }
+
+  .filter-section :deep(.el-card__body) {
+    padding: 6px 8px;
+  }
+
+  .filter-title {
+    font-size: 12px;
+  }
+
+  .filter-form :deep(.el-form-item__label) {
+    font-size: 11px;
+  }
+
+  .date-quick-buttons .el-button {
+    min-width: 0;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .list-section :deep(.el-card__body) {
+    padding: 6px 8px;
+  }
+
+  .list-section :deep(.el-table th),
+  .list-section :deep(.el-table td) {
+    padding: 4px 5px;
+    font-size: 10px;
+  }
+
+  .pallet-main-table {
+    min-width: 560px;
+  }
+
+  .pallet-pagination :deep(.el-pagination) {
+    font-size: 10px;
+  }
+
+  .pallet-pagination :deep(.el-pager li),
+  .pallet-pagination :deep(.btn-prev),
+  .pallet-pagination :deep(.btn-next) {
+    min-width: 24px;
+    height: 24px;
+    line-height: 24px;
+  }
+
+  .loading-state,
+  .empty-state {
+    padding: 16px 8px;
+  }
+}
+
+/* ========== 统计卡片：精美UI ========== */
 .statistics-section {
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
 .statistics-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-}
-@media (max-width: 992px) {
-  .statistics-cards { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 480px) {
-  .statistics-cards { grid-template-columns: 1fr; }
+  gap: 10px;
 }
 
 .stat-card {
+  --stat-accent: #6366f1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.05),
+    0 1px 0 rgba(255, 255, 255, 0.8) inset;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.stat-card-inner {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  border: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s ease;
+  gap: 12px;
+  padding: 12px 14px;
+  min-height: 56px;
 }
-.stat-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
-}
-.stat-card .stat-icon {
+
+.stat-icon-wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
   flex-shrink: 0;
-  font-size: 14px;
+  background: var(--stat-accent);
   color: #fff;
-  background: rgba(255, 255, 255, 0.25);
 }
+
+.stat-card .stat-icon {
+  font-size: 18px;
+}
+
+.stat-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .stat-card .stat-value {
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1;
-  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.2;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card .stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
   letter-spacing: 0.02em;
 }
-.stat-card .stat-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.9);
-  margin-left: auto;
-  white-space: nowrap;
+
+/* 各卡片主题色 */
+.total-card {
+  --stat-accent: #6366f1;
+  border-left: 3px solid #6366f1;
 }
-.total-card { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
-.pending-card { background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%); }
-.completed-card { background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%); }
-.completion-card { background: linear-gradient(135deg, #10b981 0%, #34d399 100%); }
+.total-card .stat-icon-wrap {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+}
+
+.pending-card {
+  --stat-accent: #ec4899;
+  border-left: 3px solid #ec4899;
+}
+.pending-card .stat-icon-wrap {
+  background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
+  box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
+}
+
+.completed-card {
+  --stat-accent: #0ea5e9;
+  border-left: 3px solid #0ea5e9;
+}
+.completed-card .stat-icon-wrap {
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+}
+
+.completion-card {
+  --stat-accent: #10b981;
+  border-left: 3px solid #10b981;
+}
+.completion-card .stat-icon-wrap {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+}
+
+@media (max-width: 992px) {
+  .statistics-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .statistics-cards {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

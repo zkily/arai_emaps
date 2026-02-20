@@ -35,23 +35,8 @@
       </div>
     </div>
 
-    <!-- エンジニアリング -->
-    <div class="section-title">エンジニアリング（基準情報）</div>
-    <div class="module-grid">
-      <router-link v-for="m in engineeringModules" :key="m.path" :to="m.path" class="module-card modern-card">
-        <div class="module-icon" :style="{ background: m.gradient }">
-          <el-icon :size="32"><component :is="m.icon" /></el-icon>
-        </div>
-        <div class="module-info">
-          <h3 class="module-title">{{ m.title }}</h3>
-          <p class="module-desc">{{ m.description }}</p>
-        </div>
-        <el-icon class="module-arrow"><ArrowRight /></el-icon>
-      </router-link>
-    </div>
-
-    <!-- 生産計画 -->
-    <div class="section-title">生産計画（ERP側）</div>
+    <!-- 1. 生産計画 -->
+    <div class="section-title">生産計画</div>
     <div class="module-grid">
       <router-link v-for="m in planningModules" :key="m.path" :to="m.path" class="module-card modern-card">
         <div class="module-icon" :style="{ background: m.gradient }">
@@ -65,8 +50,8 @@
       </router-link>
     </div>
 
-    <!-- 製造指示 -->
-    <div class="section-title">製造指示</div>
+    <!-- 2. 生産指示（instruction 配下の各工程） -->
+    <div class="section-title">生産指示</div>
     <div class="module-grid">
       <router-link v-for="m in instructionModules" :key="m.path" :to="m.path" class="module-card modern-card">
         <div class="module-icon" :style="{ background: m.gradient }">
@@ -80,8 +65,8 @@
       </router-link>
     </div>
 
-    <!-- 生産実績 -->
-    <div class="section-title">生産実績（ERP側）</div>
+    <!-- 3. 生産実績 -->
+    <div class="section-title">生産実績</div>
     <div class="module-grid">
       <router-link v-for="m in resultModules" :key="m.path" :to="m.path" class="module-card modern-card">
         <div class="module-icon" :style="{ background: m.gradient }">
@@ -99,10 +84,19 @@
 
 <script setup lang="ts">
 import { ref, markRaw } from 'vue'
+import type { Component } from 'vue'
 import {
-  Setting, ArrowRight, Document, DataAnalysis, List, Tickets,
-  Connection, Box, Cpu, TrendCharts
+  Setting, ArrowRight, Document, DataAnalysis, Tickets,
+  Cpu, TrendCharts, DataLine, Calendar, CircleCheck, Operation, Connection
 } from '@element-plus/icons-vue'
+
+interface ModuleItem {
+  path: string
+  title: string
+  description: string
+  icon: Component
+  gradient: string
+}
 
 const statsCards = ref([
   { key: 'active_orders', label: '製造オーダー(稼働中)', value: '24', gradient: 'linear-gradient(135deg, #409eff, #67c23a)', icon: markRaw(Document) },
@@ -111,24 +105,22 @@ const statsCards = ref([
   { key: 'completion_rate', label: '今月完了率', value: '87.5%', gradient: 'linear-gradient(135deg, #67c23a, #85ce61)', icon: markRaw(TrendCharts) },
 ])
 
-const engineeringModules = ref([
-  { path: '/erp/production/eco', title: '設計変更(ECO)管理', description: 'BOM版数管理・切替日設定・影響範囲分析', icon: markRaw(Document), gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
-  { path: '/erp/production/bom', title: 'BOM展開', description: '正展開（構成部品検索）・逆展開（使用先検索）', icon: markRaw(Connection), gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)' },
+const planningModules = ref<ModuleItem[]>([
+  { path: '/erp/production/data-management', title: '生産データ管理', description: '日別生産サマリ・実績入力・進捗可視化', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #409eff, #67c23a)' },
+  { path: '/erp/production/plan-baseline', title: '計画ベースライン', description: 'ベースライン登録・計画 vs 実績比較', icon: markRaw(Calendar), gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
 ])
 
-const planningModules = ref([
-  { path: '/erp/production/mrp', title: 'MRP（所要量計算）', description: '所要量展開・発注推奨・手配指示自動生成', icon: markRaw(Cpu), gradient: 'linear-gradient(135deg, #409eff, #67c23a)' },
-  { path: '/erp/production/orders', title: '生産オーダー', description: '生産オーダー生成・進捗管理・優先順位設定', icon: markRaw(List), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
-  { path: '/erp/production/serial', title: '製番管理', description: '個別受注生産向け：オーダー別原価管理用の番号発行', icon: markRaw(Tickets), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
+const instructionModules = ref<ModuleItem[]>([
+  { path: '/erp/production/instruction/cutting', title: '切断指示', description: '切断工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
+  { path: '/erp/production/instruction/surface', title: '面取指示', description: '面取工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
+  { path: '/erp/production/instruction/forming', title: '成型指示', description: '成型工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
+  { path: '/erp/production/instruction/welding', title: '溶接指示', description: '溶接工程の指示・実績', icon: markRaw(Connection), gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)' },
+  { path: '/erp/production/instruction/plating', title: 'メッキ指示', description: 'メッキ工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },
 ])
 
-const instructionModules = ref([
-  { path: '/erp/production/work-order', title: '製造指図書', description: '現品票発行・作業指示書・工程別指示', icon: markRaw(Document), gradient: 'linear-gradient(135deg, #f093fb, #f5576c)' },
-  { path: '/erp/production/material-issue', title: '材料出庫指示', description: '先入れ先出し(FIFO)・ロット指定出庫・自動引当', icon: markRaw(Box), gradient: 'linear-gradient(135deg, #fa709a, #fee140)' },
-])
-
-const resultModules = ref([
-  { path: '/erp/production/completion', title: '完成報告', description: '製品入庫登録・歩留まり記録・品質データ連携', icon: markRaw(TrendCharts), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
+const resultModules = ref<ModuleItem[]>([
+  { path: '/erp/production/actual-management', title: '生産実績管理', description: '実績一覧・進捗・集計・分析', icon: markRaw(TrendCharts), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
+  { path: '/erp/production/completion', title: '完成報告', description: '製品入庫登録・歩留まり記録・品質データ連携', icon: markRaw(CircleCheck), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
   { path: '/erp/production/consumption', title: '材料消費実績', description: 'バックフラッシュ/実消費選択・差異管理', icon: markRaw(DataAnalysis), gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
 ])
 </script>

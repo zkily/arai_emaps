@@ -5,7 +5,7 @@
       <transition name="fade-text">
         <img v-if="!isCollapsed" src="/logo.png" alt="Smart-EMAP" class="logo-image" />
         <div v-else class="logo-icon-wrapper">
-          <el-icon :size="22"><DataBoard /></el-icon>
+          <img src="/favicon.ico" alt="Smart-EMAP" class="logo-favicon" />
         </div>
       </transition>
     </div>
@@ -22,7 +22,7 @@
         active-text-color="#ffffff"
         @select="handleMenuSelect"
       >
-        <el-menu-item index="/dashboard">
+        <el-menu-item index="/dashboard" class="menu-item-home">
           <el-icon><HomeFilled /></el-icon>
           <template #title><span :title="t('menu.DASHBOARD')">{{ t('menu.DASHBOARD') }}</span></template>
         </el-menu-item>
@@ -38,7 +38,7 @@
               <el-icon><Sell /></el-icon>
               <span :title="t('menu.ERP_SALES')">{{ t('menu.ERP_SALES') }}</span>
             </template>
-            <el-menu-item index="/erp/sales"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_SALES_HOME')">{{ t('menu.ERP_SALES_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/sales" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_SALES_HOME')">{{ t('menu.ERP_SALES_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/sales/quotation"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_SALES_QUOTATION')">{{ t('menu.ERP_SALES_QUOTATION') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/sales/orders"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_SALES_ORDERS')">{{ t('menu.ERP_SALES_ORDERS') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/sales/forecast"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_SALES_FORECAST')">{{ t('menu.ERP_SALES_FORECAST') }}</span></template></el-menu-item>
@@ -56,18 +56,56 @@
               <el-icon><ShoppingCart /></el-icon>
               <span :title="t('menu.ERP_PURCHASE')">{{ t('menu.ERP_PURCHASE') }}</span>
             </template>
-            <el-menu-item index="/erp/purchase"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_HOME')">{{ t('menu.ERP_PURCHASE_HOME') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/orders"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_ORDERS')">{{ t('menu.ERP_PURCHASE_ORDERS') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/rfq"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_RFQ')">{{ t('menu.ERP_PURCHASE_RFQ') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/subcontract-order"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_SUBCONTRACT')">{{ t('menu.ERP_PURCHASE_SUBCONTRACT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/material-supply"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_SUPPLY')">{{ t('menu.ERP_PURCHASE_SUPPLY') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/subcontract-inventory"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_SUB_INV')">{{ t('menu.ERP_PURCHASE_SUB_INV') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/arrival"><el-icon><Van /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_ARRIVAL')">{{ t('menu.ERP_PURCHASE_ARRIVAL') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/receipt"><el-icon><CircleCheck /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_RECEIPT')">{{ t('menu.ERP_PURCHASE_RECEIPT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/inspection"><el-icon><CircleCheck /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_INSPECTION')">{{ t('menu.ERP_PURCHASE_INSPECTION') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/invoice-matching"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_INVOICE')">{{ t('menu.ERP_PURCHASE_INVOICE') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/payment-schedule"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_PAY_SCHEDULE')">{{ t('menu.ERP_PURCHASE_PAY_SCHEDULE') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/purchase/bank-transfer"><el-icon><Coin /></el-icon><template #title><span :title="t('menu.ERP_PURCHASE_BANK')">{{ t('menu.ERP_PURCHASE_BANK') }}</span></template></el-menu-item>
+            <el-sub-menu index="erp-purchase-outsourcing">
+              <template #title>
+                <el-icon><OfficeBuilding /></el-icon>
+                <span>外注管理</span>
+              </template>
+              <el-menu-item index="/erp/purchase/outsourcing" class="menu-item-home">
+                <el-icon><HomeFilled /></el-icon>
+                <template #title><span>外注ホーム</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/dashboard">
+                <el-icon><DataLine /></el-icon>
+                <template #title><span>外注ダッシュボード</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/plating-order">
+                <el-icon><Document /></el-icon>
+                <template #title><span>メッキ注文</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/plating-receiving">
+                <el-icon><Download /></el-icon>
+                <template #title><span>メッキ受入</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/welding-order">
+                <el-icon><Document /></el-icon>
+                <template #title><span>溶接注文</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/welding-receiving">
+                <el-icon><Download /></el-icon>
+                <template #title><span>溶接受入</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/suppliers">
+                <el-icon><User /></el-icon>
+                <template #title><span>外注先マスタ</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/stock">
+                <el-icon><Box /></el-icon>
+                <template #title><span>外注在庫</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/supplied-material-stock">
+                <el-icon><Box /></el-icon>
+                <template #title><span>支給材料在庫</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/usage">
+                <el-icon><DataAnalysis /></el-icon>
+                <template #title><span>使用数管理</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/material-issue">
+                <el-icon><Upload /></el-icon>
+                <template #title><span>支給材料出庫</span></template>
+              </el-menu-item>
+            </el-sub-menu>
           </el-sub-menu>
 
           <el-sub-menu index="erp-order">
@@ -75,7 +113,7 @@
               <el-icon><Document /></el-icon>
               <span :title="t('menu.ERP_ORDER')">{{ t('menu.ERP_ORDER') }}</span>
             </template>
-            <el-menu-item index="/erp/order"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/order" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/order/monthly"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.ERP_ORDER_MONTHLY')">{{ t('menu.ERP_ORDER_MONTHLY') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/order/daily"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_ORDER_DAILY')">{{ t('menu.ERP_ORDER_DAILY') }}</span></template></el-menu-item>
           </el-sub-menu>
@@ -85,15 +123,9 @@
               <el-icon><Box /></el-icon>
               <span :title="t('menu.ERP_INVENTORY')">{{ t('menu.ERP_INVENTORY') }}</span>
             </template>
-            <el-menu-item index="/erp/inventory"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_HOME')">{{ t('menu.ERP_INVENTORY_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_HOME')">{{ t('menu.ERP_INVENTORY_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/inventory/list"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_LIST')">{{ t('menu.ERP_INVENTORY_LIST') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/location"><el-icon><FolderOpened /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_LOCATION')">{{ t('menu.ERP_INVENTORY_LOCATION') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/transactions"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_TX')">{{ t('menu.ERP_INVENTORY_TX') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/movement"><el-icon><Van /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_MOVEMENT')">{{ t('menu.ERP_INVENTORY_MOVEMENT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/lot-trace"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_LOT')">{{ t('menu.ERP_INVENTORY_LOT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/stocktaking"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCKTAKING')">{{ t('menu.ERP_INVENTORY_STOCKTAKING') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/dead-stock"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_DEAD')">{{ t('menu.ERP_INVENTORY_DEAD') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/abc-analysis"><el-icon><DataAnalysis /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_ABC')">{{ t('menu.ERP_INVENTORY_ABC') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory/stock-entry"><el-icon><DocumentAdd /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_ENTRY')">{{ t('menu.ERP_INVENTORY_STOCK_ENTRY') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/inventory/stock-transaction-logs"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_TX_LOG')">{{ t('menu.ERP_INVENTORY_STOCK_TX_LOG') }}</span></template></el-menu-item>
           </el-sub-menu>
           
@@ -102,29 +134,9 @@
               <el-icon><Setting /></el-icon>
               <span :title="t('menu.ERP_PRODUCTION')">{{ t('menu.ERP_PRODUCTION') }}</span>
             </template>
-            <el-menu-item index="/erp/production">
+            <el-menu-item index="/erp/production" class="menu-item-home">
               <el-icon><HomeFilled /></el-icon>
               <template #title><span :title="t('menu.ERP_PRODUCTION_HOME')">{{ t('menu.ERP_PRODUCTION_HOME') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/eco">
-              <el-icon><EditPen /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_ECO')">{{ t('menu.ERP_PRODUCTION_ECO') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/bom">
-              <el-icon><Connection /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_BOM')">{{ t('menu.ERP_PRODUCTION_BOM') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/mrp">
-              <el-icon><DataAnalysis /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_MRP')">{{ t('menu.ERP_PRODUCTION_MRP') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/orders">
-              <el-icon><Document /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_ORDERS')">{{ t('menu.ERP_PRODUCTION_ORDERS') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/serial">
-              <el-icon><Tickets /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_SERIAL')">{{ t('menu.ERP_PRODUCTION_SERIAL') }}</span></template>
             </el-menu-item>
             <el-sub-menu index="erp-production-planning">
               <template #title>
@@ -166,14 +178,6 @@
                 <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_PLATING')">{{ t('menu.ERP_PRODUCTION_INSTR_PLATING') }}</span></template>
               </el-menu-item>
             </el-sub-menu>
-            <el-menu-item index="/erp/production/work-order">
-              <el-icon><Document /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_WO')">{{ t('menu.ERP_PRODUCTION_WO') }}</span></template>
-            </el-menu-item>
-            <el-menu-item index="/erp/production/material-issue">
-              <el-icon><Box /></el-icon>
-              <template #title><span :title="t('menu.ERP_PRODUCTION_ISSUE')">{{ t('menu.ERP_PRODUCTION_ISSUE') }}</span></template>
-            </el-menu-item>
             <el-sub-menu index="erp-production-result">
               <template #title>
                 <el-icon><DataLine /></el-icon>
@@ -199,13 +203,16 @@
               <el-icon><Van /></el-icon>
               <span :title="t('menu.ERP_SHIPPING')">{{ t('menu.ERP_SHIPPING') }}</span>
             </template>
-            <el-menu-item index="/erp/shipping"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_LIST')">{{ t('menu.ERP_SHIPPING_LIST') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_HOME')">{{ t('menu.ERP_SHIPPING_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping/list"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_LIST')">{{ t('menu.ERP_SHIPPING_LIST') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/report"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_REPORT')">{{ t('menu.ERP_SHIPPING_REPORT') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/overview"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_OVERVIEW')">{{ t('menu.ERP_SHIPPING_OVERVIEW') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/confirm"><el-icon><CircleCheck /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_CONFIRM')">{{ t('menu.ERP_SHIPPING_CONFIRM') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/welding"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_WELDING')">{{ t('menu.ERP_SHIPPING_WELDING') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/picking"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_PICKING')">{{ t('menu.ERP_SHIPPING_PICKING') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/inventory-shortage"><el-icon><Warning /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE')">{{ t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping/abc-analysis"><el-icon><DataAnalysis /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_ABC')">{{ t('menu.ERP_SHIPPING_ABC') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping/inventory-kpi"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_KPI')">{{ t('menu.ERP_SHIPPING_INVENTORY_KPI') }}</span></template></el-menu-item>
           </el-sub-menu>
 
           <el-sub-menu index="erp-costing">
@@ -213,7 +220,7 @@
               <el-icon><Coin /></el-icon>
               <span :title="t('menu.ERP_COSTING')">{{ t('menu.ERP_COSTING') }}</span>
             </template>
-            <el-menu-item index="/erp/costing"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_COSTING_HOME')">{{ t('menu.ERP_COSTING_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/costing" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_COSTING_HOME')">{{ t('menu.ERP_COSTING_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/costing/standard"><el-icon><Coin /></el-icon><template #title><span :title="t('menu.ERP_COSTING_STANDARD')">{{ t('menu.ERP_COSTING_STANDARD') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/costing/actual"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_COSTING_ACTUAL')">{{ t('menu.ERP_COSTING_ACTUAL') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/costing/variance"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_COSTING_VARIANCE')">{{ t('menu.ERP_COSTING_VARIANCE') }}</span></template></el-menu-item>
@@ -268,7 +275,7 @@
               <el-icon><List /></el-icon>
               <span :title="t('menu.MASTER_LIST')">{{ t('menu.MASTER_LIST') }}</span>
             </template>
-            <el-menu-item index="/master"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.MASTER_HOME')">{{ t('menu.MASTER_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/master" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.MASTER_HOME')">{{ t('menu.MASTER_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/master/product"><el-icon><Box /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT')">{{ t('menu.MASTER_PRODUCT') }}</span></template></el-menu-item>
             <el-menu-item index="/master/material"><el-icon><Collection /></el-icon><template #title><span :title="t('menu.MASTER_MATERIAL')">{{ t('menu.MASTER_MATERIAL') }}</span></template></el-menu-item>
             <el-menu-item index="/master/customer"><el-icon><User /></el-icon><template #title><span :title="t('menu.MASTER_CUSTOMER')">{{ t('menu.MASTER_CUSTOMER') }}</span></template></el-menu-item>
@@ -304,7 +311,7 @@
               <el-icon><User /></el-icon>
               <span :title="t('menu.SYSTEM_USER')">{{ t('menu.SYSTEM_USER') }}</span>
             </template>
-            <el-menu-item index="/system"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.SYSTEM_HOME')">{{ t('menu.SYSTEM_HOME') }}</span></template></el-menu-item>
+            <el-menu-item index="/system" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.SYSTEM_HOME')">{{ t('menu.SYSTEM_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/system/users"><el-icon><User /></el-icon><template #title><span :title="t('menu.SYSTEM_USERS')">{{ t('menu.SYSTEM_USERS') }}</span></template></el-menu-item>
             <el-menu-item index="/system/organization"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.SYSTEM_ORG')">{{ t('menu.SYSTEM_ORG') }}</span></template></el-menu-item>
             <el-menu-item index="/system/roles"><el-icon><List /></el-icon><template #title><span :title="t('menu.SYSTEM_ROLE')">{{ t('menu.SYSTEM_ROLE') }}</span></template></el-menu-item>
@@ -346,10 +353,10 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document,
-  User, DataAnalysis, Monitor, DataBoard, Setting, Tools,
+  User, DataAnalysis, Monitor, Setting, Tools,
   Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
-  Expand, Fold, Warning
+  Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
@@ -443,7 +450,19 @@ const toggleCollapse = () => {
   transition: all 0.3s ease;
 }
 
+.logo-favicon {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  transition: all 0.3s ease;
+}
+
 .logo:hover .logo-image {
+  transform: scale(1.05);
+  filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.4));
+}
+
+.logo:hover .logo-favicon {
   transform: scale(1.05);
   filter: drop-shadow(0 4px 8px rgba(102, 126, 234, 0.4));
 }
@@ -458,7 +477,7 @@ const toggleCollapse = () => {
   --el-menu-base-level-padding: 10px;
   --el-menu-level-padding: 10px;
   border-right: none;
-  padding: 4px 0;
+  padding: 4px 5px 4px 8px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -468,31 +487,42 @@ const toggleCollapse = () => {
 }
 
 /* ========== 各层级菜单用颜色区分 ========== */
-/* 顶级菜单项(Dashboard/ERP/APS/MES/Master/System) - 纯白 */
+/* 顶级菜单项(Dashboard/ERP/APS/MES/Master/System) - 纯白，左对齐统一 */
 :deep(.sidebar-el-menu > .el-menu-item) {
   height: 42px;
   line-height: 42px;
-  margin: 8px 6px;
+  margin: 8px 6px 8px 0;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 700;
-  padding-left: 6px !important;
+  padding-left: 10px !important;
   color: #ffffff !important;
+  justify-content: flex-start !important;
 }
 
-/* 顶级父菜单标题(ERP/APS等) - 白色 + 蓝紫左边框 */
+/* 带「ホーム」的菜单项 - 橘黄色（含选中态） */
+:deep(.sidebar-el-menu .menu-item-home),
+:deep(.sidebar-el-menu .menu-item-home .el-menu-tooltip__trigger),
+:deep(.sidebar-el-menu .menu-item-home.is-active),
+:deep(.sidebar-el-menu .menu-item-home.is-active .el-menu-tooltip__trigger) {
+  color: #f8f66b !important;
+  font-weight: 700 !important;
+}
+
+/* 顶级父菜单标题(ERP/APS等) - 白色 + 蓝紫左边框，与顶级菜单项左对齐 */
 :deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__title) {
   height: 42px;
   line-height: 42px;
   font-size: 14px;
   font-weight: 700;
-  margin: 8px 6px;
+  margin: 8px 6px 8px 0;
   color: #ffffff !important;
   background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(102, 126, 234, 0.06) 100%) !important;
   border-left: 4px solid rgba(102, 126, 234, 0.8);
   border-radius: 8px;
-  padding-left: 6px !important;
+  padding-left: 6px !important; /* 4px 边框 + 6px = 10px，与顶级菜单项图标列对齐 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  justify-content: flex-start !important;
 }
 
 :deep(.sidebar-el-menu > .el-sub-menu > .el-sub-menu__title:hover) {
@@ -585,27 +615,27 @@ const toggleCollapse = () => {
   border-radius: 0 0 6px 6px;
 }
 
-/* 三级父目录 - 高亮白色 */
+/* 三级父目录 - 淡琥珀色，与二级(青绿)区分 */
 :deep(.el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
   font-weight: 500;
   font-size: 12.5px;
   color: #ffffff !important;
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-left: 2px solid rgba(255, 255, 255, 0.4);
+  background: rgba(253, 230, 138, 0.08) !important;
+  border-left: 2px solid rgba(253, 230, 138, 0.6);
   margin: 2px 4px 2px 8px;
   padding-left: 25px !important;
   border-radius: 6px;
 }
 
 :deep(.el-sub-menu .el-sub-menu .el-sub-menu > .el-sub-menu__title:hover) {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border-left-color: rgba(255, 255, 255, 0.7);
+  background: rgba(253, 230, 138, 0.16) !important;
+  border-left-color: #fde68a;
   border-left-style: solid;
 }
 
 :deep(.el-sub-menu .el-sub-menu .el-sub-menu.is-opened > .el-sub-menu__title) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-left-color: rgba(255, 255, 255, 0.6);
+  background: rgba(253, 230, 138, 0.12) !important;
+  border-left-color: #fde68a;
   border-left-style: solid;
 }
 
@@ -632,7 +662,7 @@ const toggleCollapse = () => {
   align-items: center;
   width: auto;
   box-sizing: border-box;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgb(255, 255, 255);
 }
 
 /* 一级下的叶子(販売ホーム/生産ホーム/出荷構成表管理等) - 高亮白色 */
@@ -646,11 +676,11 @@ const toggleCollapse = () => {
   padding-left: 8px !important;
 }
 
-/* 二级下的叶子(生産計画下的 生産データ管理等) - 青绿 */
+/* 二级下的叶子(生産計画下的 生産データ管理等) - 高亮白色 */
 :deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item) {
   padding-left: 35px !important;
   font-size: 12.5px;
-  color: #67e8f9 !important;
+  color: #ffffff !important;
   margin-left: 8px;
 }
 :deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item .el-menu-tooltip__trigger) {
@@ -672,6 +702,8 @@ const toggleCollapse = () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: flex !important;
+  align-items: center !important;
 }
 
 :deep(.el-sub-menu__title) {
@@ -722,6 +754,9 @@ const toggleCollapse = () => {
   font-size: 16px;
   margin-right: 8px;
   flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 /* 下拉箭头固定在该行最右侧，绝对定位避免与文字重叠（排除标题里的菜单图标） */
@@ -741,34 +776,78 @@ const toggleCollapse = () => {
 }
 
 :deep(.el-sub-menu .el-menu-item:hover) {
-  color: #fff !important;
+  color: #a6ff00 !important;
+}
+
+/* 二级下的叶子(生産データ管理等) 悬停显示绿色 */
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item:hover),
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item:hover .el-menu-tooltip__trigger) {
+  color: #55fc02 !important;
 }
 
 :deep(.el-sub-menu) {
   width: 100%;
 }
 
-/* Collapsed state：隐藏下拉箭头，图标居中 */
-:deep(.el-menu--collapse) {
-  width: 100%;
-  padding: 4px 0;
+/* Collapsed state：隐藏下拉箭头，所有图标在折叠宽度内居中 */
+:deep(.sidebar-el-menu.el-menu--collapse) {
+  width: 100% !important;
+  padding: 4px 6px !important;
   box-sizing: border-box;
+  --el-menu-base-level-padding: 0 !important;
+  --el-menu-level-padding: 0 !important;
 }
 
-:deep(.el-menu--collapse .el-menu-item),
-:deep(.el-menu--collapse .el-sub-menu__title) {
-  padding: 0 !important;
-  justify-content: center !important;
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu) {
   padding-left: 0 !important;
   padding-right: 0 !important;
+  padding-inline-start: 0 !important;
+  padding-inline-end: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
 }
-/* 折叠时取消层级样式，保持图标行统一 */
-:deep(.el-menu--collapse .el-sub-menu > .el-sub-menu__title),
-:deep(.el-menu--collapse .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
+
+/* 折叠时所有行：图标在行总宽度内居中 */
+:deep(.sidebar-el-menu.el-menu--collapse .el-menu-item),
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu__title) {
   margin: 2px 0 !important;
+  padding: 0 !important;
+  justify-content: center !important;
+  min-height: 40px;
+  height: 40px;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: none !important;
+  display: flex !important;
+  align-items: center !important;
+}
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu > .el-sub-menu__title),
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
+  padding: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   border-left: none !important;
   background: transparent !important;
   border-radius: 8px !important;
+  justify-content: center !important;
+  width: 100% !important;
+}
+
+/* 折叠时ダッシュボード图标也居中 */
+:deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item) {
+  padding: 0 !important;
+  justify-content: center !important;
+  display: flex !important;
+  align-items: center !important;
+}
+:deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item .el-menu-tooltip__trigger) {
+  justify-content: center !important;
+  padding: 0 !important;
+  flex: none !important;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 :deep(.el-menu--collapse .el-sub-menu__icon-arrow) {
@@ -785,6 +864,21 @@ const toggleCollapse = () => {
   margin-left: 0 !important;
 }
 
+/* 折叠时子菜单标题整行占满并居中图标（覆盖 Element 可能的内联/变量缩进） */
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu__title) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-inline-start: 0 !important;
+  padding-inline-end: 0 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  justify-content: center !important;
+  text-align: center !important;
+}
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu__title .el-icon) {
+  margin: 0 !important;
+}
+
 .collapse-btn {
   display: flex;
   align-items: center;
@@ -792,7 +886,7 @@ const toggleCollapse = () => {
   gap: 8px;
   height: 44px;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.08) 100%);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 254, 254, 0.7);
   cursor: pointer;
   transition: all 0.3s ease;
   border-top: 1px solid rgba(255, 255, 255, 0.08);

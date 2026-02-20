@@ -19,9 +19,9 @@
           </div>
         </div>
 
-        <!-- 页面内容 -->
-        <div class="print-body">
-          <div class="column" v-for="colIndex in 2" :key="colIndex">
+        <!-- 页面内容：列数由单页最优分配结果决定 -->
+        <div class="print-body" :style="getPrintBodyStyle(pageData)">
+          <div class="column" v-for="colIndex in getColumnCount(pageData)" :key="colIndex">
             <div v-for="destGroup in getColumnData(pageData, colIndex - 1)"
               :key="`${destGroup.destination_name}-${pageIndex}-${colIndex}`" class="destination-group">
               <div class="destination-header">
@@ -136,346 +136,110 @@ const groupedData = computed(() => {
   return result.sort((a, b) => new Date(a.shipping_date) - new Date(b.shipping_date))
 })
 
+// 与现有 CSS 一致的“行高”单位（不改变字体与行高）：表头约 1 行，每数据行 1 行，目的地标题+间距约 2 行
+const ROWS_HEADER = 2
+const ROWS_PER_ITEM = 1
+
+/** 计算单个納入先块的高度（行单位，与当前样式一致） */
+function getDestinationHeightInRows(dest) {
+  if (!dest || !dest.items || !Array.isArray(dest.items)) return ROWS_HEADER + 2
+  return ROWS_HEADER + dest.items.length * ROWS_PER_ITEM
+}
+
+/** 单页可用的每列最大行数（A4 竖版 body 高度换算，字体/行高不变） */
+function getMaxRowsPerColumn() {
+  // 270mm - header ~22px，约 260mm 可用；按 24px/行 估算
+  const mmPerRow = 6
+  const bodyMm = 260
+  return Math.floor(bodyMm / mmPerRow)
+}
+
 function getColumnData(pageData, columnIndex) {
   if (!pageData || !pageData.destinations) return []
-
-  // 使用预计算的列分配结果
   if (!pageData.columnAllocations) {
-    pageData.columnAllocations = allocateDestinationsToColumns(pageData.destinations)
+    pageData.columnAllocations = allocateDestinationsToOnePage(pageData.destinations)
   }
-
   return pageData.columnAllocations[columnIndex] || []
 }
 
-function getDestinationSize(dest) {
-  if (!dest || !dest.items || !Array.isArray(dest.items)) return 4
-  // 调整尺寸计算：由于允许换行，每行可能占用更多空间
-  // 目的地标题(1行) + 表头(1行) + 数据行数 + 底部间距(1行) + 换行预留空间
-  const baseSize = 4
-  const itemCount = dest.items.length
-  // 预估每行可能需要的额外空间（考虑换行）
-  const estimatedExtraSpace = Math.ceil(itemCount * 0.15) // 预留15%的额外空间用于换行
-  return baseSize + itemCount + estimatedExtraSpace
+function getColumnCount(pageData) {
+  if (!pageData || !pageData.destinations) return 2
+  if (!pageData.columnAllocations) {
+    pageData.columnAllocations = allocateDestinationsToOnePage(pageData.destinations)
+  }
+  return pageData.columnAllocations.length
 }
 
-// 纳入先分配函数 - 单页容量限制，超出则分到下一页
-function allocateNounyusenToColumns(nounyusenGroup, columns, columnSizes) {
-  const maxItemsPerColumn = 30
-  const maxRowsPerColumn = 40 // 一页放不下时自动分到第2页
-
-  // 计算每列当前的商品数量
-  function getColumnItemCount(columnIndex) {
-    return columns[columnIndex].reduce((sum, dest) => {
-      return sum + (dest.items ? dest.items.length : 0)
-    }, 0)
-  }
-
-  // 从商品数量较少的列开始分配
-  let currentColumnIndex = getColumnItemCount(0) <= getColumnItemCount(1) ? 0 : 1
-
-  for (const dest of nounyusenGroup) {
-    const destSize = getDestinationSize(dest)
-    const itemCount = dest.items ? dest.items.length : 0
-    const currentItems = getColumnItemCount(currentColumnIndex)
-
-    // 检查商品数量和行数限制
-    if (
-      currentItems + itemCount <= maxItemsPerColumn &&
-      columnSizes[currentColumnIndex] + destSize <= maxRowsPerColumn
-    ) {
-      // 当前列可以容纳
-      columns[currentColumnIndex].push(dest)
-      columnSizes[currentColumnIndex] += destSize
-    } else {
-      // 当前列容纳不下，切换到另一列
-      const otherColumnIndex = 1 - currentColumnIndex
-      currentColumnIndex = otherColumnIndex
-      columns[currentColumnIndex].push(dest)
-      columnSizes[currentColumnIndex] += destSize
-    }
-  }
+function getPrintBodyStyle(pageData) {
+  const n = getColumnCount(pageData)
+  return n > 2 ? { display: 'flex', gap: '8px', flexWrap: 'nowrap' } : {}
 }
 
-// 列分配算法 - 单页容量限制，超出由 getPaginatedData 分到下一页
-function allocateDestinationsToColumns(destinations) {
-  const columns = [[], []]
-  const columnSizes = [0, 0]
-  const maxItemsPerColumn = 28
-  const maxRowsPerColumn = 40
+/**
+ * 单页最优排版：先算各納入先高度，再从左侧列开始分配，使两列高度尽量均衡（贪心：每次放入当前高度较小的列）。
+ * 若两列放不下则尝试 3 列、4 列，保证只出一页。
+ */
+function allocateDestinationsToOnePage(destinations) {
+  if (!destinations || destinations.length === 0) return [[], []]
 
-  // 计算列的商品数量
-  function getColumnItemCount(columnIndex) {
-    return columns[columnIndex].reduce((sum, dest) => {
-      return sum + (dest.items ? dest.items.length : 0)
-    }, 0)
-  }
+  const maxRowsPerColumn = getMaxRowsPerColumn()
+  const heights = destinations.map((d) => getDestinationHeightInRows(d))
+  const totalRows = heights.reduce((a, b) => a + b, 0)
 
-  let i = 0
-  while (i < destinations.length) {
-    const dest = destinations[i]
+  for (const numCols of [2, 3, 4]) {
+    const capacity = maxRowsPerColumn * numCols
+    if (totalRows > capacity) continue
 
-    // 如果是纳入先，收集所有连续的纳入先
-    if (dest.destination_name && dest.destination_name.includes('納入先')) {
-      const nounyusenGroup = []
-      let j = i
+    const columns = Array.from({ length: numCols }, () => [])
+    const columnHeights = Array(numCols).fill(0)
 
-      while (
-        j < destinations.length &&
-        destinations[j].destination_name &&
-        destinations[j].destination_name.includes('納入先')
-      ) {
-        nounyusenGroup.push(destinations[j])
-        j++
-      }
+    // 按高度降序，优先放大的块，有利于平衡
+    const indexed = destinations.map((d, i) => ({ dest: d, height: heights[i] }))
+    indexed.sort((a, b) => b.height - a.height)
 
-      // 智能分配纳入先到列中
-      allocateNounyusenToColumns(nounyusenGroup, columns, columnSizes)
-      i = j // 跳过已处理的纳入先
-    } else {
-      // 普通目的地，放入商品数量较少的列
-      const destSize = getDestinationSize(dest)
-      const itemCount = dest.items ? dest.items.length : 0
-      const targetColumn = getColumnItemCount(0) <= getColumnItemCount(1) ? 0 : 1
-
-      if (
-        getColumnItemCount(targetColumn) + itemCount <= maxItemsPerColumn &&
-        columnSizes[targetColumn] + destSize <= maxRowsPerColumn
-      ) {
-        columns[targetColumn].push(dest)
-        columnSizes[targetColumn] += destSize
-      } else {
-        // 如果当前列放不下，尝试另一列
-        const otherColumn = 1 - targetColumn
-        if (
-          getColumnItemCount(otherColumn) + itemCount <= maxItemsPerColumn &&
-          columnSizes[otherColumn] + destSize <= maxRowsPerColumn
-        ) {
-          columns[otherColumn].push(dest)
-          columnSizes[otherColumn] += destSize
-        } else {
-          // 两列都放不下，放入商品数量较少的列（允许适度超出）
-          columns[targetColumn].push(dest)
-          columnSizes[targetColumn] += destSize
+    for (const { dest, height } of indexed) {
+      let bestCol = 0
+      let minH = columnHeights[0]
+      for (let c = 1; c < numCols; c++) {
+        if (columnHeights[c] < minH) {
+          minH = columnHeights[c]
+          bestCol = c
         }
       }
-      i++
+      columns[bestCol].push(dest)
+      columnHeights[bestCol] += height
     }
+
+    const maxH = Math.max(...columnHeights)
+    if (maxH <= maxRowsPerColumn) return columns
   }
 
+  // 仍用 2 列，尽量均衡（可能超出一页时也只出一页）
+  const columns = [[], []]
+  const columnHeights = [0, 0]
+  const indexed = destinations.map((d, i) => ({ dest: d, height: heights[i] }))
+  indexed.sort((a, b) => b.height - a.height)
+  for (const { dest, height } of indexed) {
+    const bestCol = columnHeights[0] <= columnHeights[1] ? 0 : 1
+    columns[bestCol].push(dest)
+    columnHeights[bestCol] += height
+  }
   return columns
 }
 
-// 基于调整后容量的分页算法 - 考虑换行后的空间需求
+/** 每个出荷日只出一页，所有納入先都在这一页内按最优列分配 */
 function getPaginatedData(dateGroup) {
   if (!dateGroup || !dateGroup.destinations || dateGroup.destinations.length === 0) {
-    return [{ shipping_date: dateGroup?.shipping_date || '', destinations: [] }]
+    return [{ shipping_date: dateGroup?.shipping_date || '', destinations: [], columnAllocations: null }]
   }
-
-  const destinations = dateGroup.destinations
-  const pages = []
-  // 单页容量：一页放不下时自动分成第2页显示
-  const maxItemsPerColumn = 28
-  const maxRowsPerColumn = 40
-
-  // 计算目的地组的商品数量
-  function getDestItemCount(dest) {
-    return dest.items ? dest.items.length : 0
+  const page = {
+    shipping_date: dateGroup.shipping_date,
+    destinations: [...dateGroup.destinations],
+    columnAllocations: null,
   }
-
-  let i = 0
-  while (i < destinations.length) {
-    const currentPageDestinations = []
-    const testColumns = [[], []]
-    const testColumnSizes = [0, 0]
-
-    // 计算测试列的商品数量
-    function getTestColumnItemCount(columnIndex) {
-      return testColumns[columnIndex].reduce((sum, dest) => {
-        return sum + getDestItemCount(dest)
-      }, 0)
-    }
-
-    // 尝试添加目的地到当前页，直到页面满为止
-    while (i < destinations.length) {
-      const dest = destinations[i]
-
-      // 如果是纳入先，整组处理
-      if (dest.destination_name && dest.destination_name.includes('納入先')) {
-        const nounyusenGroup = []
-        let j = i
-
-        // 收集所有连续的纳入先
-        while (
-          j < destinations.length &&
-          destinations[j].destination_name &&
-          destinations[j].destination_name.includes('納入先')
-        ) {
-          nounyusenGroup.push(destinations[j])
-          j++
-        }
-
-        // 测试纳入先组是否能放入当前页
-        const tempColumns = [
-          JSON.parse(JSON.stringify(testColumns[0])),
-          JSON.parse(JSON.stringify(testColumns[1])),
-        ]
-        const tempColumnSizes = [...testColumnSizes]
-
-        // 计算临时列的商品数量
-        function getTempColumnItemCount(columnIndex) {
-          return tempColumns[columnIndex].reduce((sum, dest) => {
-            return sum + getDestItemCount(dest)
-          }, 0)
-        }
-
-        // 模拟分配纳入先 - 基于调整后的容量限制
-        let currentColumnIndex = getTempColumnItemCount(0) <= getTempColumnItemCount(1) ? 0 : 1
-        let canFitAll = true
-
-        for (const nounyusenDest of nounyusenGroup) {
-          const destSize = getDestinationSize(nounyusenDest)
-          const itemCount = getDestItemCount(nounyusenDest)
-
-          // 检查商品数量限制
-          if (
-            getTempColumnItemCount(currentColumnIndex) + itemCount <= maxItemsPerColumn &&
-            tempColumnSizes[currentColumnIndex] + destSize <= maxRowsPerColumn
-          ) {
-            // 当前列可以容纳
-            tempColumns[currentColumnIndex].push(nounyusenDest)
-            tempColumnSizes[currentColumnIndex] += destSize
-          } else {
-            // 当前列容纳不下，切换到另一列
-            const otherColumnIndex = 1 - currentColumnIndex
-            if (
-              getTempColumnItemCount(otherColumnIndex) + itemCount <= maxItemsPerColumn &&
-              tempColumnSizes[otherColumnIndex] + destSize <= maxRowsPerColumn
-            ) {
-              currentColumnIndex = otherColumnIndex
-              tempColumns[currentColumnIndex].push(nounyusenDest)
-              tempColumnSizes[currentColumnIndex] += destSize
-            } else {
-              // 两列都放不下
-              canFitAll = false
-              break
-            }
-          }
-        }
-
-        // 严格的页面容量检查
-        if (
-          canFitAll &&
-          tempColumnSizes[0] <= maxRowsPerColumn &&
-          tempColumnSizes[1] <= maxRowsPerColumn &&
-          getTempColumnItemCount(0) <= maxItemsPerColumn &&
-          getTempColumnItemCount(1) <= maxItemsPerColumn
-        ) {
-          // 可以放入当前页
-          currentPageDestinations.push(...nounyusenGroup)
-          testColumns[0] = tempColumns[0]
-          testColumns[1] = tempColumns[1]
-          testColumnSizes[0] = tempColumnSizes[0]
-          testColumnSizes[1] = tempColumnSizes[1]
-          i = j
-        } else {
-          // 如果当前页是空的，将纳入先组拆分处理
-          if (currentPageDestinations.length === 0) {
-            // 尝试单独放入每个纳入先，确保至少能放入一个
-            for (const nounyusenDest of nounyusenGroup) {
-              const destSize = getDestinationSize(nounyusenDest)
-              const itemCount = getDestItemCount(nounyusenDest)
-              const targetColumn = getTestColumnItemCount(0) <= getTestColumnItemCount(1) ? 0 : 1
-
-              if (
-                getTestColumnItemCount(targetColumn) + itemCount <= maxItemsPerColumn &&
-                testColumnSizes[targetColumn] + destSize <= maxRowsPerColumn
-              ) {
-                currentPageDestinations.push(nounyusenDest)
-                testColumns[targetColumn].push(nounyusenDest)
-                testColumnSizes[targetColumn] += destSize
-                i++
-              } else {
-                const otherColumn = 1 - targetColumn
-                if (
-                  getTestColumnItemCount(otherColumn) + itemCount <= maxItemsPerColumn &&
-                  testColumnSizes[otherColumn] + destSize <= maxRowsPerColumn
-                ) {
-                  currentPageDestinations.push(nounyusenDest)
-                  testColumns[otherColumn].push(nounyusenDest)
-                  testColumnSizes[otherColumn] += destSize
-                  i++
-                } else {
-                  // 单个纳入先都放不下，强制放入避免无限循环
-                  currentPageDestinations.push(nounyusenDest)
-                  testColumns[targetColumn].push(nounyusenDest)
-                  testColumnSizes[targetColumn] += destSize
-                  i++
-                  break // 这页只放这一个
-                }
-              }
-            }
-            break // 结束当前页
-          } else {
-            // 不能放入当前页，结束当前页
-            break
-          }
-        }
-      } else {
-        // 普通目的地
-        const destSize = getDestinationSize(dest)
-        const itemCount = getDestItemCount(dest)
-        const targetColumn = getTestColumnItemCount(0) <= getTestColumnItemCount(1) ? 0 : 1
-
-        // 检查是否能放入（商品数量和行数双重限制）
-        if (
-          getTestColumnItemCount(targetColumn) + itemCount <= maxItemsPerColumn &&
-          testColumnSizes[targetColumn] + destSize <= maxRowsPerColumn
-        ) {
-          // 可以放入
-          currentPageDestinations.push(dest)
-          testColumns[targetColumn].push(dest)
-          testColumnSizes[targetColumn] += destSize
-          i++
-        } else {
-          // 尝试另一列
-          const otherColumn = 1 - targetColumn
-          if (
-            getTestColumnItemCount(otherColumn) + itemCount <= maxItemsPerColumn &&
-            testColumnSizes[otherColumn] + destSize <= maxRowsPerColumn
-          ) {
-            currentPageDestinations.push(dest)
-            testColumns[otherColumn].push(dest)
-            testColumnSizes[otherColumn] += destSize
-            i++
-          } else {
-            // 两列都放不下，结束当前页
-            break
-          }
-        }
-      }
-    }
-
-    // 创建页面
-    if (currentPageDestinations.length > 0) {
-      pages.push(createPage(dateGroup.shipping_date, currentPageDestinations))
-    } else if (i < destinations.length) {
-      // 如果没有添加任何目的地但还有剩余，强制添加一个避免无限循环
-      const dest = destinations[i]
-      pages.push(createPage(dateGroup.shipping_date, [dest]))
-      i++
-    }
-  }
-
-  return pages.length > 0 ? pages : [createPage(dateGroup.shipping_date, [])]
+  return [page]
 }
 
-function createPage(shipping_date, destinations) {
-  return {
-    shipping_date,
-    destinations: [...destinations],
-    columnAllocations: null, // 将在getColumnData中计算
-  }
-}
 </script>
 
 <style scoped>

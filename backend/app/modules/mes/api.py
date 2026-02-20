@@ -26,9 +26,3 @@ async def get_equipment(current_user: User = Depends(verify_token_and_get_user))
     """設備管理データ取得"""
     return {"message": "設備管理データ", "data": []}
 
-
-@router.get("/traceability")
-async def get_traceability(current_user: User = Depends(verify_token_and_get_user)):
-    """トレーサビリティデータ取得"""
-    return {"message": "トレーサビリティデータ", "data": []}
-

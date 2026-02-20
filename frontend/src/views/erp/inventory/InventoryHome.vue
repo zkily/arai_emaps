@@ -92,7 +92,7 @@ import { ref, onMounted, computed, markRaw } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Box, ArrowRight, Warning, Top, Bottom,
-  List, Tickets, Setting, DataAnalysis, Document
+  List, DataAnalysis, Document
 } from '@element-plus/icons-vue'
 import { getInventoryStats, getStockAlerts } from '@/api/erp/inventory'
 import type { InventoryStats, StockAlert } from '@/types/erp/inventory'
@@ -141,7 +141,7 @@ const statsCards = computed(() => [
   }
 ])
 
-// 機能モジュール - 在庫・ロケーション管理
+// 機能モジュール - 在庫管理
 const locationModules = [
   {
     path: '/erp/inventory/list',
@@ -151,76 +151,27 @@ const locationModules = [
     gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
   },
   {
-    path: '/erp/inventory/location',
-    title: 'ロケーション管理',
-    description: 'マルチ倉庫・ロケーション管理',
-    icon: markRaw(Setting),
-    gradient: 'linear-gradient(135deg, #667eea, #764ba2)'
-  }
-]
-
-// 機能モジュール - 入出庫・移動管理
-const transactionModules = [
-  {
-    path: '/erp/inventory/transactions',
-    title: '入出庫履歴',
-    description: '入出庫の履歴を管理',
-    icon: markRaw(Tickets),
+    path: '/erp/inventory/stock-entry',
+    title: '在庫登録管理',
+    description: '製品・材料・部品・仕掛品の入出庫一元登録',
+    icon: markRaw(Document),
     gradient: 'linear-gradient(135deg, #67c23a, #85ce61)'
-  },
-  {
-    path: '/erp/inventory/movement',
-    title: '入出庫移動',
-    description: '倉庫間移動・セット品組立/分解',
-    icon: markRaw(Box),
-    gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)'
-  },
-  {
-    path: '/erp/inventory/lot-trace',
-    title: 'ロット・トレーサビリティ',
-    description: '正展開（製品→材料）・逆展開（材料→製品）',
-    icon: markRaw(DataAnalysis),
-    gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)'
-  }
-]
-
-// 機能モジュール - 棚卸管理
-const stocktakingModules = [
-  {
-    path: '/erp/inventory/stocktaking',
-    title: '棚卸管理',
-    description: '一斉棚卸/循環棚卸・棚卸票発行・差異修正',
-    icon: markRaw(Setting),
-    gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)'
-  },
-  {
-    path: '/erp/inventory/dead-stock',
-    title: '滞留在庫アラート',
-    description: 'デッドストック(Dead Stock)リストアップ',
-    icon: markRaw(Warning),
-    gradient: 'linear-gradient(135deg, #f56c6c, #f78989)'
-  },
-  {
-    path: '/erp/inventory/abc-analysis',
-    title: 'ABC分析',
-    description: '出荷頻度・金額ランク付け・ロケ最適化',
-    icon: markRaw(DataAnalysis),
-    gradient: 'linear-gradient(135deg, #9254de, #b37feb)'
   }
 ]
 
 // 全機能モジュール
-const modules = [...locationModules, ...transactionModules, ...stocktakingModules]
+const modules = [...locationModules]
 
-// 获取预警类型样式
-const getAlertType = (type: string) => {
-  const typeMap: Record<string, string> = {
+// 获取预警类型样式（el-tag 的 type）
+type AlertTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const getAlertType = (type: string): AlertTagType => {
+  const typeMap: Record<string, AlertTagType> = {
     low_stock: 'warning',
     overstock: 'info',
     expiring: 'danger',
     expired: 'danger'
   }
-  return typeMap[type] || 'info'
+  return typeMap[type] ?? 'info'
 }
 
 // 处理预警
@@ -237,7 +188,7 @@ const fetchData = async () => {
       getStockAlerts({ status: 'active', page_size: 10 })
     ])
     stats.value = statsRes.data || statsRes
-    alerts.value = (alertsRes.data?.items || alertsRes.items || []) as StockAlert[]
+    alerts.value = (alertsRes.data?.items ?? []) as StockAlert[]
   } catch (error) {
     console.error('データ取得に失敗しました', error)
   } finally {

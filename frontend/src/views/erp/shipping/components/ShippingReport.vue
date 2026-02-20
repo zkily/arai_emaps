@@ -155,345 +155,96 @@ const PAGE_CONFIG = {
   maxUtilization: 98, // 最大占用率98%
 }
 
-// 精确计算section高度
+// 精确计算每个 section 高度（行数），与现有样式一致，不改变样式
 function calculateSectionHeight(destGroup) {
   const { sectionTitleHeight, tableHeaderHeight, summaryHeight, marginHeight } = PAGE_CONFIG
-
-  const itemRows = destGroup.items.length
+  const itemRows = destGroup.items?.length ?? 0
   return sectionTitleHeight + tableHeaderHeight + itemRows + summaryHeight + marginHeight
 }
 
-// 超高效95%+占用率算法 - 动态规划 + 贪心优化 (考虑每页头部)
-function ultraHighEfficiencyPacking(destinations) {
-  const { maxRowsPerPage, headerHeight, pageHeaderHeight, targetUtilization, maxUtilization } =
-    PAGE_CONFIG
-  const firstPageHeight = maxRowsPerPage - headerHeight // 第一页可用高度
-  const otherPageHeight = maxRowsPerPage - pageHeaderHeight // 其他页面可用高度
-
-  // 1. 精确计算每个section的高度
-  const sections = destinations.map((dest, index) => ({
+/** 第一步：先算出所有納入先各自占的行数 */
+function getSectionsWithHeights(destinations) {
+  return destinations.map((dest, index) => ({
     ...dest,
     height: calculateSectionHeight(dest),
     originalIndex: index,
     id: `${dest.destination_name}-${index}`,
   }))
-
-  console.log(
-    'Section高度分析:',
-    sections.map((s) => ({
-      name: s.destination_name,
-      height: s.height,
-      items: s.items.length,
-    })),
-  )
-
-  // 2. 处理第一页 - 使用第一页可用高度
-  const firstPageResult = processFirstPage(sections, firstPageHeight)
-
-  // 3. 处理剩余section - 使用其他页面可用高度
-  const remainingSections = sections.filter((s) => !firstPageResult.usedSections.has(s.id))
-  const otherPagesResult = processOtherPages(remainingSections, otherPageHeight)
-
-  const allPages = [firstPageResult.page, ...otherPagesResult.pages].filter(
-    (page) => page.sections.length > 0,
-  )
-
-  // 4. 最终优化
-  const optimizedPages = finalOptimizationWithHeaders(allPages, firstPageHeight, otherPageHeight)
-
-  // 5. 生成结果
-  return generateResultWithHeaders(optimizedPages, firstPageHeight, otherPageHeight)
 }
 
-// 处理第一页
-function processFirstPage(sections, availableHeight) {
-  const combinations = findEfficientCombinations(sections, availableHeight)
-  const usedSections = new Set()
-  let bestCombination = null
-  let bestUtilization = 0
+/** 单页背包：在容量内选出总高度最大的一组 section（0/1 背包），用于最少页数 */
+function packOnePage(sections, capacity) {
+  const UNIT = 0.5
+  const toUnit = (v) => Math.round(v / UNIT)
+  const capUnit = toUnit(capacity)
+  const dp = Array(capUnit + 1).fill(null)
+  dp[0] = { height: 0, list: [] }
 
-  // 寻找最佳第一页组合
-  for (const combo of combinations) {
-    if (combo.utilization > bestUtilization && combo.utilization >= PAGE_CONFIG.targetUtilization) {
-      bestCombination = combo
-      bestUtilization = combo.utilization
-    }
-  }
-
-  // 如果没有找到95%+的组合，选择最佳的
-  if (!bestCombination && combinations.length > 0) {
-    bestCombination = combinations[0]
-  }
-
-  if (bestCombination) {
-    bestCombination.sections.forEach((s) => usedSections.add(s.id))
-    return {
-      page: {
-        sections: bestCombination.sections,
-        height: bestCombination.height,
-        remainingHeight: availableHeight - bestCombination.height,
-        utilizationRate: Math.round(bestCombination.utilization),
-        isFirstPage: true,
-      },
-      usedSections,
-    }
-  }
-
-  // 如果没有找到任何组合，使用第一个section
-  if (sections.length > 0) {
-    const firstSection = sections[0]
-    usedSections.add(firstSection.id)
-    return {
-      page: {
-        sections: [firstSection],
-        height: firstSection.height,
-        remainingHeight: availableHeight - firstSection.height,
-        utilizationRate: Math.round((firstSection.height / availableHeight) * 100),
-        isFirstPage: true,
-      },
-      usedSections,
-    }
-  }
-
-  return {
-    page: {
-      sections: [],
-      height: 0,
-      remainingHeight: availableHeight,
-      utilizationRate: 0,
-      isFirstPage: true,
-    },
-    usedSections,
-  }
-}
-
-// 处理其他页面
-function processOtherPages(sections, availableHeight) {
-  if (sections.length === 0) return { pages: [] }
-
-  const combinations = findEfficientCombinations(sections, availableHeight)
-  const selectedPages = selectOptimalPages(combinations, sections, availableHeight)
-  const remainingSections = sections.filter((s) => !isInSelectedPages(s, selectedPages))
-  const additionalPages = packRemainingSections(remainingSections, availableHeight)
-
-  return { pages: [...selectedPages, ...additionalPages] }
-}
-
-// 寻找高效组合 (动态规划思想)
-function findEfficientCombinations(sections, maxHeight) {
-  const combinations = []
-  const n = sections.length
-
-  // 单个section组合
-  sections.forEach((section) => {
-    if (section.height <= maxHeight) {
-      const utilization = (section.height / maxHeight) * 100
-      combinations.push({
-        sections: [section],
-        height: section.height,
-        utilization: utilization,
-        efficiency: utilization >= 70 ? utilization : utilization * 0.5, // 惩罚低效组合
-      })
-    }
-  })
-
-  // 两个section组合
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      const combinedHeight = sections[i].height + sections[j].height
-      if (combinedHeight <= maxHeight) {
-        const utilization = (combinedHeight / maxHeight) * 100
-        combinations.push({
-          sections: [sections[i], sections[j]],
-          height: combinedHeight,
-          utilization: utilization,
-          efficiency: utilization >= 85 ? utilization * 1.2 : utilization, // 奖励高效组合
-        })
-      }
-    }
-  }
-
-  // 三个section组合 (适用于小section)
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      for (let k = j + 1; k < n; k++) {
-        const combinedHeight = sections[i].height + sections[j].height + sections[k].height
-        if (combinedHeight <= maxHeight) {
-          const utilization = (combinedHeight / maxHeight) * 100
-          if (utilization >= 90) {
-            // 只考虑高效三section组合
-            combinations.push({
-              sections: [sections[i], sections[j], sections[k]],
-              height: combinedHeight,
-              utilization: utilization,
-              efficiency: utilization * 1.5, // 高度奖励三section高效组合
-            })
+  sections.forEach((sec) => {
+    const hUnit = toUnit(sec.height)
+    if (hUnit > capUnit) return
+    for (let c = capUnit; c >= hUnit; c--) {
+      if (dp[c - hUnit]) {
+        const candHeight = dp[c - hUnit].height + hUnit
+        if (!dp[c] || candHeight > dp[c].height) {
+          dp[c] = {
+            height: candHeight,
+            list: [...dp[c - hUnit].list, sec],
           }
         }
       }
     }
-  }
+  })
 
-  // 按效率排序
-  return combinations.sort((a, b) => b.efficiency - a.efficiency)
-}
-
-// 贪心选择最优页面组合
-function selectOptimalPages(combinations, allSections, maxHeight) {
-  const selectedPages = []
-  const usedSections = new Set()
-
-  for (const combo of combinations) {
-    // 检查是否所有section都未被使用
-    const hasConflict = combo.sections.some((s) => usedSections.has(s.id))
-    if (hasConflict) continue
-
-    // 检查是否达到目标占用率
-    if (combo.utilization >= PAGE_CONFIG.targetUtilization) {
-      selectedPages.push({
-        sections: combo.sections,
-        height: combo.height,
-        remainingHeight: maxHeight - combo.height,
-        utilizationRate: Math.round(combo.utilization),
-      })
-
-      // 标记已使用的section
-      combo.sections.forEach((s) => usedSections.add(s.id))
+  let best = null
+  for (let c = capUnit; c >= 0; c--) {
+    if (dp[c]) {
+      best = dp[c]
+      break
     }
   }
-
-  console.log(
-    '选中的高效页面:',
-    selectedPages.length,
-    '页，平均占用率:',
-    selectedPages.reduce((sum, p) => sum + p.utilizationRate, 0) / selectedPages.length || 0,
-  )
-
-  return selectedPages
+  const list = best?.list || []
+  return { chosen: list, usedHeight: list.reduce((sum, s) => sum + s.height, 0) }
 }
 
-// 检查section是否已在选中页面中
-function isInSelectedPages(section, selectedPages) {
-  return selectedPages.some((page) => page.sections.some((s) => s.id === section.id))
-}
+/** 第二步：从第一页开始循环试着排版，找到最少打印页数（保持现有样式不变） */
+function allocateMinimumPages(destinations) {
+  const { maxRowsPerPage, headerHeight, pageHeaderHeight } = PAGE_CONFIG
+  const firstPageCap = maxRowsPerPage - headerHeight
+  const otherPageCap = maxRowsPerPage - pageHeaderHeight
 
-// 打包剩余section
-function packRemainingSections(remainingSections, maxHeight) {
-  if (remainingSections.length === 0) return []
-
+  const sections = getSectionsWithHeights(destinations)
   const pages = []
-  const sections = [...remainingSections].sort((a, b) => b.height - a.height)
+  let remaining = [...sections]
+  let pageIndex = 0
 
-  sections.forEach((section) => {
-    let placed = false
+  while (remaining.length > 0) {
+    const capacity = pageIndex === 0 ? firstPageCap : otherPageCap
+    const { chosen } = packOnePage(remaining, capacity)
 
-    // 寻找最佳填充页面
-    for (const page of pages) {
-      if (page.remainingHeight >= section.height) {
-        const newUtilization =
-          ((maxHeight - page.remainingHeight + section.height) / maxHeight) * 100
+    const chosenList = chosen.length > 0 ? chosen : [remaining[0]]
+    const usedHeight = chosenList.reduce((sum, s) => sum + s.height, 0)
 
-        if (newUtilization <= PAGE_CONFIG.maxUtilization) {
-          page.sections.push(section)
-          page.remainingHeight -= section.height
-          page.utilizationRate = Math.round(newUtilization)
-          placed = true
-          break
-        }
-      }
-    }
+    pages.push({
+      sections: chosenList,
+      height: usedHeight,
+      remainingHeight: Math.max(0, capacity - usedHeight),
+      utilizationRate: Math.round((usedHeight / capacity) * 100),
+      isFirstPage: pageIndex === 0,
+    })
 
-    if (!placed) {
-      const utilization = (section.height / maxHeight) * 100
-      pages.push({
-        sections: [section],
-        height: section.height,
-        remainingHeight: maxHeight - section.height,
-        utilizationRate: Math.round(utilization),
-      })
-    }
-  })
-
-  return pages
-}
-
-// 考虑头部的最终优化
-function finalOptimizationWithHeaders(pages, firstPageHeight, otherPageHeight) {
-  let optimized = true
-  let iterations = 0
-  const maxIterations = 5
-
-  while (optimized && iterations < maxIterations) {
-    optimized = false
-    iterations++
-
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i]
-      const availableHeight = page.isFirstPage ? firstPageHeight : otherPageHeight
-
-      if (page.utilizationRate < PAGE_CONFIG.targetUtilization) {
-        for (let j = 0; j < pages.length; j++) {
-          if (i === j) continue
-
-          const otherPage = pages[j]
-          const otherAvailableHeight = otherPage.isFirstPage ? firstPageHeight : otherPageHeight
-
-          if (otherPage.sections.length === 0) continue
-
-          const smallestSection = otherPage.sections.reduce((smallest, current) =>
-            current.height < smallest.height ? current : smallest,
-          )
-
-          if (page.remainingHeight >= smallestSection.height) {
-            const newPageUtilization =
-              ((availableHeight - page.remainingHeight + smallestSection.height) /
-                availableHeight) *
-              100
-            const newOtherUtilization =
-              ((otherAvailableHeight - otherPage.remainingHeight - smallestSection.height) /
-                otherAvailableHeight) *
-              100
-
-            if (newPageUtilization >= PAGE_CONFIG.targetUtilization && newOtherUtilization >= 80) {
-              // 执行移动
-              page.sections.push(smallestSection)
-              page.remainingHeight -= smallestSection.height
-              page.utilizationRate = Math.round(newPageUtilization)
-
-              otherPage.sections = otherPage.sections.filter((s) => s.id !== smallestSection.id)
-              otherPage.remainingHeight =
-                otherAvailableHeight - otherPage.sections.reduce((sum, s) => sum + s.height, 0)
-              otherPage.utilizationRate = Math.round(newOtherUtilization)
-
-              optimized = true
-              break
-            }
-          }
-        }
-
-        if (optimized) break
-      }
-    }
-
-    // 清除空页面
-    const nonEmptyPages = pages.filter((page) => page.sections.length > 0)
-    if (nonEmptyPages.length !== pages.length) {
-      pages.splice(0, pages.length, ...nonEmptyPages)
-      optimized = true
-    }
+    const chosenIds = new Set(chosenList.map((s) => s.id))
+    remaining = remaining.filter((s) => !chosenIds.has(s.id))
+    pageIndex++
   }
 
-  console.log(`最终优化完成，${iterations}次迭代`)
-
-  return pages
+  return generateResultWithHeaders(pages, firstPageCap, otherPageCap)
 }
 
-// 生成考虑头部的最终结果
+/** 生成带页头信息的最终结果（样式与模板不变） */
 function generateResultWithHeaders(pages, firstPageHeight, otherPageHeight) {
-  // 按納入先名称排序页面内容
   pages.forEach((page, pageIndex) => {
     page.sections.sort((a, b) => a.destination_name.localeCompare(b.destination_name))
-
     page.sections.forEach((section) => {
       section.pageInfo = {
         currentPage: pageIndex + 1,
@@ -502,14 +253,12 @@ function generateResultWithHeaders(pages, firstPageHeight, otherPageHeight) {
     })
   })
 
-  // 页面间排序 - 按第一个section的名称
   pages.sort((a, b) => {
     const aFirstName = a.sections[0]?.destination_name || ''
     const bFirstName = b.sections[0]?.destination_name || ''
     return aFirstName.localeCompare(bFirstName)
   })
 
-  // 设置分页标记
   const result = []
   pages.forEach((page, pageIndex) => {
     page.sections.forEach((section, sectionIndex) => {
@@ -520,138 +269,7 @@ function generateResultWithHeaders(pages, firstPageHeight, otherPageHeight) {
     })
   })
 
-  const avgUtilization = pages.reduce((sum, p) => sum + p.utilizationRate, 0) / pages.length
-  const highEfficiencyPages = pages.filter(
-    (p) => p.utilizationRate >= PAGE_CONFIG.targetUtilization,
-  ).length
-
-  console.log('🎯 超高效分页结果 (含每页头部):', {
-    totalPages: pages.length,
-    avgUtilization: Math.round(avgUtilization),
-    highEfficiencyPages: highEfficiencyPages,
-    efficiency: `${highEfficiencyPages}/${pages.length} (${Math.round((highEfficiencyPages / pages.length) * 100)}%)`,
-    firstPageHeight: firstPageHeight,
-    otherPageHeight: otherPageHeight,
-    pages: pages.map((p) => ({
-      sections: p.sections.length,
-      utilization: `${p.utilizationRate}%`,
-      isFirstPage: p.isFirstPage || false,
-      destinations: p.sections.map((s) => s.destination_name).join(', '),
-    })),
-  })
-
   return { result, pages }
-}
-
-// 页面合并优化函数
-function optimizePageMerging(pages, availableHeight) {
-  let merged = true
-
-  while (merged) {
-    merged = false
-
-    for (let i = 0; i < pages.length - 1; i++) {
-      for (let j = i + 1; j < pages.length; j++) {
-        const page1 = pages[i]
-        const page2 = pages[j]
-
-        // 计算合并后的总高度
-        const combinedHeight =
-          availableHeight - page1.remainingHeight + (availableHeight - page2.remainingHeight)
-
-        if (combinedHeight <= availableHeight * 0.95) {
-          // 合并后不超过95%填充
-          // 执行合并
-          page1.sections.push(...page2.sections)
-          page1.remainingHeight = availableHeight - combinedHeight
-          page1.utilizationRate = Math.round((combinedHeight / availableHeight) * 100)
-
-          pages.splice(j, 1) // 删除被合并的页面
-          merged = true
-          break
-        }
-      }
-      if (merged) break
-    }
-  }
-}
-
-// ---------------- 新的 0/1 背包分页算法 ----------------
-function ultraHighEfficiencyPackingDP(destinations) {
-  const { maxRowsPerPage, headerHeight, pageHeaderHeight } = PAGE_CONFIG
-  const firstPageCap = maxRowsPerPage - headerHeight
-  const otherPageCap = maxRowsPerPage - pageHeaderHeight
-
-  // 预处理：为每个 destination 计算 section 高度
-  const sections = destinations.map((dest, idx) => ({
-    ...dest,
-    height: calculateSectionHeight(dest),
-    originalIndex: idx,
-    id: `${dest.destination_name}-${idx}`,
-  }))
-
-  // 离散单位（0.5 行）
-  const UNIT = 0.5
-  const toUnit = (v) => Math.round(v / UNIT)
-
-  const pages = []
-  let remaining = [...sections]
-  let pageIdx = 0
-
-  while (remaining.length) {
-    const capacity = pageIdx === 0 ? firstPageCap : otherPageCap
-    const capUnit = toUnit(capacity)
-
-    // 0/1 背包 DP
-    const dp = Array(capUnit + 1).fill(null)
-    dp[0] = { height: 0, list: [] }
-
-    remaining.forEach((sec) => {
-      const hUnit = toUnit(sec.height)
-      if (hUnit > capUnit) return
-      for (let c = capUnit; c >= hUnit; c--) {
-        if (dp[c - hUnit]) {
-          const candHeight = dp[c - hUnit].height + hUnit
-          if (!dp[c] || candHeight > dp[c].height) {
-            dp[c] = {
-              height: candHeight,
-              list: [...dp[c - hUnit].list, sec],
-            }
-          }
-        }
-      }
-    })
-
-    let best = null
-    for (let c = capUnit; c >= 0; c--) {
-      if (dp[c]) {
-        best = dp[c]
-        break
-      }
-    }
-
-    const chosen = best?.list || []
-    if (chosen.length === 0 && remaining.length) {
-      chosen.push(remaining[0])
-    }
-
-    const usedHeight = chosen.reduce((sum, s) => sum + s.height, 0)
-    pages.push({
-      sections: chosen,
-      height: usedHeight,
-      remainingHeight: Math.max(0, capacity - usedHeight),
-      utilizationRate: Math.round((usedHeight / capacity) * 100),
-      isFirstPage: pageIdx === 0,
-    })
-
-    const chosenIds = new Set(chosen.map((s) => s.id))
-    remaining = remaining.filter((s) => !chosenIds.has(s.id))
-
-    pageIdx++
-  }
-
-  // 复用原有的结果生成函数
-  return generateResultWithHeaders(pages, firstPageCap, otherPageCap)
 }
 
 // 按納入先分组数据，并应用智能分页
@@ -690,7 +308,7 @@ const optimizedGroupedData = computed(() => {
     a.destination_name.localeCompare(b.destination_name),
   )
 
-  const { result, pages } = ultraHighEfficiencyPackingDP(sortedDestinations)
+  const { result, pages } = allocateMinimumPages(sortedDestinations)
 
   // 存储分页信息供其他computed使用
   paginationResult.value = { result, pages }

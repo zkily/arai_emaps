@@ -500,17 +500,17 @@ const filteredPalletList = computed(() => {
   return palletList.value.filter((item) => item.status === statusFilter.value)
 })
 
-// 製品名に「加工」「アーチ」を含む行を除外する
+// 製品名に「加工」「アーチ」「料金」を含む行を除外する
 const excludeProductNameKeywords = (name: string) => {
   const n = (name || '').trim()
-  return n.includes('加工') || n.includes('アーチ')
+  return n.includes('加工') || n.includes('アーチ') || n.includes('料金')
 }
 
 // 详细列表的过滤逻辑
 const filteredDetailPalletList = computed(() => {
   let filtered = palletList.value
 
-  // 製品名に「加工」「アーチ」を含むデータを除外
+  // 製品名に「加工」「アーチ」「料金」を含むデータを除外
   filtered = filtered.filter((item) => !excludeProductNameKeywords(item.product_name))
 
   // 按日期范围过滤
@@ -610,7 +610,7 @@ const fetchProgressData = async () => {
       updateChart()
     } else {
       await initChart()
-      updateChart()
+      if (chartInstance) updateChart()
     }
 
     ElMessage.success(`データを取得しました (${palletList.value.length}件)`)
@@ -656,14 +656,6 @@ const initChart = async () => {
 
   // 检查容器尺寸
   const containerRect = chartContainer.value.getBoundingClientRect()
-  const parentRect = chartContainer.value.parentElement?.getBoundingClientRect()
-
-  console.log('Container dimensions:', {
-    width: containerRect.width,
-    height: containerRect.height,
-    parentWidth: parentRect?.width,
-    parentHeight: parentRect?.height,
-  })
 
   if (containerRect.width === 0 || containerRect.height === 0) {
     // 使用ResizeObserver监听容器尺寸变化
@@ -672,11 +664,10 @@ const initChart = async () => {
         for (const entry of entries) {
           const { width, height } = entry.contentRect
           if (width > 0 && height > 0) {
-            console.log('Container resized, initializing chart...', { width, height })
             resizeObserver?.disconnect()
             resizeObserver = null
             initRetryCount = 0
-            initChart()
+            initChart().then(() => updateChart())
           }
         }
       })
@@ -690,14 +681,10 @@ const initChart = async () => {
           if (mutation.type === 'childList' || mutation.type === 'attributes') {
             const containerRect = chartContainer.value?.getBoundingClientRect()
             if (containerRect && containerRect.width > 0 && containerRect.height > 0) {
-              console.log('DOM changed, container has size, initializing chart...', {
-                width: containerRect.width,
-                height: containerRect.height,
-              })
               mutationObserver?.disconnect()
               mutationObserver = null
               initRetryCount = 0
-              initChart()
+              initChart().then(() => updateChart())
             }
           }
         }
@@ -712,9 +699,6 @@ const initChart = async () => {
 
     if (initRetryCount < MAX_INIT_RETRIES) {
       initRetryCount++
-      console.warn(
-        `Container size is 0, waiting for resize... (${initRetryCount}/${MAX_INIT_RETRIES})`,
-      )
       return
     } else {
       console.error('Failed to initialize chart after maximum retries. Container size is still 0.')
@@ -995,17 +979,13 @@ const initChart = async () => {
     }
 
     chartInstance.setOption(option)
-    console.log('Chart initialized successfully')
   } catch (error) {
     console.error('Error initializing chart:', error)
   }
 }
 
 const updateChart = () => {
-  if (!chartInstance) {
-    console.warn('Chart instance not available')
-    return
-  }
+  if (!chartInstance) return
 
   if (!progressStats.value || progressStats.value.length === 0) {
     console.warn('No progress data available')
@@ -1358,36 +1338,26 @@ const handleResize = () => {
 }
 
 onMounted(async () => {
-  console.log('Component mounted, fetching data...')
   await fetchProgressData()
 
-  // 使用更可靠的初始化方法
   await nextTick()
-  console.log('DOM updated, waiting for layout...')
-
-  // 确保容器存在且有尺寸后再初始化图表
   if (chartContainer.value) {
-    // 强制触发一次布局计算
     chartContainer.value.style.display = 'none'
     await nextTick()
     chartContainer.value.style.display = 'block'
     await nextTick()
 
-    // 使用requestAnimationFrame确保在下一帧渲染后再初始化
     requestAnimationFrame(async () => {
-      console.log('Initializing chart...')
       await initChart()
+      if (chartInstance) updateChart()
     })
 
-    // 备用初始化方法：如果主要方法失败，延迟500ms后重试
     setTimeout(async () => {
       if (!chartInstance) {
-        console.log('Retrying chart initialization...')
         await initChart()
+        if (chartInstance) updateChart()
       }
     }, 500)
-  } else {
-    console.error('Chart container not found during mount')
   }
 
   // 添加窗口大小变化监听

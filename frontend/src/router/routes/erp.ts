@@ -117,75 +117,24 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/Purchase.vue'),
         meta: { title: '購買・外注管理', group: '購買・外注管理', requiresAuth: true },
       },
-      // ── 発注管理 ──
       {
-        path: 'erp/purchase/orders',
-        name: 'PurchaseOrderList',
-        component: () => import('@/views/erp/purchase/PurchaseOrderList.vue'),
-        meta: { title: '発注一覧', group: '購買・外注管理 > 発注管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/rfq',
-        name: 'RfqList',
-        component: () => import('@/views/erp/purchase/order/RfqList.vue'),
-        meta: { title: '見積依頼(RFQ)', group: '購買・外注管理 > 発注管理', requiresAuth: true },
-      },
-      // ── 外注加工管理 ──
-      {
-        path: 'erp/purchase/subcontract-order',
-        name: 'SubcontractOrder',
-        component: () => import('@/views/erp/purchase/subcontracting/SubcontractOrder.vue'),
-        meta: { title: '外注加工指示', group: '購買・外注管理 > 外注加工管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/material-supply',
-        name: 'MaterialSupply',
-        component: () => import('@/views/erp/purchase/subcontracting/MaterialSupply.vue'),
-        meta: { title: '有償/無償支給管理', group: '購買・外注管理 > 外注加工管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/subcontract-inventory',
-        name: 'SubcontractInventory',
-        component: () => import('@/views/erp/purchase/subcontracting/SubcontractInventory.vue'),
-        meta: { title: '外注先在庫管理', group: '購買・外注管理 > 外注加工管理', requiresAuth: true },
-      },
-      // ── 受入・検収管理 ──
-      {
-        path: 'erp/purchase/arrival',
-        name: 'ArrivalSchedule',
-        component: () => import('@/views/erp/purchase/receiving/ArrivalSchedule.vue'),
-        meta: { title: '入荷予定管理', group: '購買・外注管理 > 受入・検収管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/receipt',
-        name: 'ReceiptList',
-        component: () => import('@/views/erp/purchase/receiving/ReceiptList.vue'),
-        meta: { title: '受入登録', group: '購買・外注管理 > 受入・検収管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/inspection',
-        name: 'InspectionResult',
-        component: () => import('@/views/erp/purchase/receiving/InspectionResult.vue'),
-        meta: { title: '受入検査', group: '購買・外注管理 > 受入・検収管理', requiresAuth: true },
-      },
-      // ── 債務管理 ──
-      {
-        path: 'erp/purchase/invoice-matching',
-        name: 'InvoiceMatching',
-        component: () => import('@/views/erp/purchase/settlement/InvoiceMatching.vue'),
-        meta: { title: '請求書照合', group: '購買・外注管理 > 債務管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/payment-schedule',
-        name: 'PaymentSchedule',
-        component: () => import('@/views/erp/purchase/payable/PaymentSchedule.vue'),
-        meta: { title: '支払予定表', group: '購買・外注管理 > 債務管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/purchase/bank-transfer',
-        name: 'BankTransfer',
-        component: () => import('@/views/erp/purchase/payable/BankTransfer.vue'),
-        meta: { title: 'FBデータ作成', group: '購買・外注管理 > 債務管理', requiresAuth: true },
+        path: 'erp/purchase/outsourcing',
+        name: 'OutsourcingHome',
+        component: () => import('@/views/erp/purchase/outsourcing/OutsourcingHome.vue'),
+        meta: { title: '外注管理', group: 'メインメニュー', requiresAuth: true },
+        children: [
+          { path: '', redirect: { name: 'OutsourcingDashboard' } },
+          { path: 'dashboard', name: 'OutsourcingDashboard', component: () => import('@/views/erp/purchase/outsourcing/dashboard/DashboardPage.vue'), meta: { title: '外注ダッシュボード', group: '外注管理', requiresAuth: true } },
+          { path: 'plating-order', name: 'OutsourcingPlatingOrder', component: () => import('@/views/erp/purchase/outsourcing/plating/PlatingOrderPage.vue'), meta: { title: '外注メッキ注文', group: '注文管理', requiresAuth: true } },
+          { path: 'plating-receiving', name: 'OutsourcingPlatingReceiving', component: () => import('@/views/erp/purchase/outsourcing/plating/PlatingReceivingPage.vue'), meta: { title: '外注メッキ受入', group: '受入管理', requiresAuth: true } },
+          { path: 'welding-order', name: 'OutsourcingWeldingOrder', component: () => import('@/views/erp/purchase/outsourcing/welding/WeldingOrderPage.vue'), meta: { title: '外注溶接注文', group: '注文管理', requiresAuth: true } },
+          { path: 'welding-receiving', name: 'OutsourcingWeldingReceiving', component: () => import('@/views/erp/purchase/outsourcing/welding/WeldingReceivingPage.vue'), meta: { title: '外注溶接受入', group: '受入管理', requiresAuth: true } },
+          { path: 'suppliers', name: 'OutsourcingSuppliers', component: () => import('@/views/erp/purchase/outsourcing/suppliers/SuppliersPage.vue'), meta: { title: '外注先マスタ', group: 'マスタ', requiresAuth: true } },
+          { path: 'stock', name: 'OutsourcingStock', component: () => import('@/views/erp/purchase/outsourcing/stock/OutsourcingStockPage.vue'), meta: { title: '外注在庫管理', group: '在庫管理', requiresAuth: true } },
+          { path: 'supplied-material-stock', name: 'OutsourcingSuppliedMaterialStock', component: () => import('@/views/erp/purchase/outsourcing/material/SuppliedMaterialStockPage.vue'), meta: { title: '支給材料在庫', group: '支給材料管理', requiresAuth: true } },
+          { path: 'usage', name: 'OutsourcingUsageManagement', component: () => import('@/views/erp/purchase/outsourcing/material/UsageManagementPage.vue'), meta: { title: '使用数管理', group: '支給材料管理', requiresAuth: true } },
+          { path: 'material-issue', name: 'OutsourcingMaterialIssue', component: () => import('@/views/erp/purchase/outsourcing/material/MaterialIssuePage.vue'), meta: { title: '支給材料出庫', group: '支給材料管理', requiresAuth: true } },
+        ],
       },
 
       // ╔══════════════════════════════════════════════════════════════╗
@@ -201,53 +150,16 @@ export const erpRoutes: RouteRecordRaw[] = [
       {
         path: 'erp/inventory/list',
         name: 'InventoryList',
-        component: () => import('@/views/erp/inventory/InventoryList.vue'),
+        component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'),
         meta: { title: '在庫照会', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
       },
       {
-        path: 'erp/inventory/location',
-        name: 'LocationManagement',
-        component: () => import('@/views/erp/inventory/location/LocationManagement.vue'),
-        meta: { title: 'ロケーション管理', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
-      },
-      // ── 入出庫・移動管理 ──
-      {
-        path: 'erp/inventory/transactions',
-        name: 'InventoryTransactions',
-        component: () => import('@/views/erp/inventory/InventoryTransactions.vue'),
-        meta: { title: '入出庫履歴', group: '在庫管理 > 入出庫・移動管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/inventory/movement',
-        name: 'StockMovement',
-        component: () => import('@/views/erp/inventory/warehouse/StockMovement.vue'),
-        meta: { title: '入出庫移動', group: '在庫管理 > 入出庫・移動管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/inventory/lot-trace',
-        name: 'LotTraceability',
-        component: () => import('@/views/erp/inventory/transaction/LotTraceability.vue'),
-        meta: { title: 'ロット・トレーサビリティ', group: '在庫管理 > 入出庫・移動管理', requiresAuth: true },
+        path: 'erp/inventory/stock-entry',
+        name: 'StockEntryManagement',
+        component: () => import('@/views/erp/inventory/stockEntry/UnifiedStockEntry.vue'),
+        meta: { title: '在庫登録管理', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
       },
       // ── 棚卸管理 ──
-      {
-        path: 'erp/inventory/stocktaking',
-        name: 'Stocktaking',
-        component: () => import('@/views/erp/inventory/warehouse/Stocktaking.vue'),
-        meta: { title: '棚卸管理', group: '在庫管理 > 棚卸管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/inventory/dead-stock',
-        name: 'DeadStock',
-        component: () => import('@/views/erp/inventory/analysis/DeadStock.vue'),
-        meta: { title: '滞留在庫アラート', group: '在庫管理 > 棚卸管理', requiresAuth: true },
-      },
-      {
-        path: 'erp/inventory/abc-analysis',
-        name: 'AbcAnalysis',
-        component: () => import('@/views/erp/inventory/analysis/AbcAnalysis.vue'),
-        meta: { title: 'ABC分析', group: '在庫管理 > 棚卸管理', requiresAuth: true },
-      },
       {
         path: 'erp/inventory/stock-transaction-logs',
         name: 'StockTransactionLog',
@@ -264,38 +176,7 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/Production.vue'),
         meta: { title: '生産管理', group: '生産管理', requiresAuth: true },
       },
-      // ── エンジニアリング（基準情報） ──
-      {
-        path: 'erp/production/eco',
-        name: 'EcoManagement',
-        component: () => import('@/views/erp/production/engineering/EcoManagement.vue'),
-        meta: { title: '設計変更(ECO)管理', group: '生産管理 > エンジニアリング', requiresAuth: true },
-      },
-      {
-        path: 'erp/production/bom',
-        name: 'BomExplore',
-        component: () => import('@/views/erp/production/engineering/BomExplore.vue'),
-        meta: { title: 'BOM展開', group: '生産管理 > エンジニアリング', requiresAuth: true },
-      },
       // ── 生産計画 (ERP側) ──
-      {
-        path: 'erp/production/mrp',
-        name: 'MrpCalculation',
-        component: () => import('@/views/erp/production/planning/MrpCalculation.vue'),
-        meta: { title: 'MRP（所要量計算）', group: '生産管理 > 生産計画', requiresAuth: true },
-      },
-      {
-        path: 'erp/production/orders',
-        name: 'ProductionOrder',
-        component: () => import('@/views/erp/production/planning/ProductionOrder.vue'),
-        meta: { title: '生産オーダー', group: '生産管理 > 生産計画', requiresAuth: true },
-      },
-      {
-        path: 'erp/production/serial',
-        name: 'SerialNumberManagement',
-        component: () => import('@/views/erp/production/planning/SerialNumberManagement.vue'),
-        meta: { title: '製番管理', group: '生産管理 > 生産計画', requiresAuth: true },
-      },
       {
         path: 'erp/production/data-management',
         name: 'ProductionDataManagement',
@@ -339,19 +220,6 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'),
         meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true },
       },
-      // ── 製造指示 ──
-      {
-        path: 'erp/production/work-order',
-        name: 'WorkOrder',
-        component: () => import('@/views/erp/production/instruction/WorkOrder.vue'),
-        meta: { title: '製造指図書', group: '生産管理 > 製造指示', requiresAuth: true },
-      },
-      {
-        path: 'erp/production/material-issue',
-        name: 'MaterialIssue',
-        component: () => import('@/views/erp/production/instruction/MaterialIssue.vue'),
-        meta: { title: '材料出庫指示', group: '生産管理 > 製造指示', requiresAuth: true },
-      },
       // ── 生産実績 (ERP側) ──
       {
         path: 'erp/production/actual-management',
@@ -362,13 +230,13 @@ export const erpRoutes: RouteRecordRaw[] = [
       {
         path: 'erp/production/completion',
         name: 'CompletionReport',
-        component: () => import('@/views/erp/production/result/CompletionReport.vue'),
+        component: () => import('@/views/erp/production/actual/CompletionReport.vue'),
         meta: { title: '完成報告', group: '生産管理 > 生産実績', requiresAuth: true },
       },
       {
         path: 'erp/production/consumption',
         name: 'MaterialConsumption',
-        component: () => import('@/views/erp/production/result/MaterialConsumption.vue'),
+        component: () => import('@/views/erp/production/actual/MaterialConsumption.vue'),
         meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true },
       },
 
@@ -443,6 +311,12 @@ export const erpRoutes: RouteRecordRaw[] = [
       // ╚══════════════════════════════════════════════════════════════╝
       {
         path: 'erp/shipping',
+        name: 'ShippingHome',
+        component: () => import('@/views/erp/shipping/ShippingHome.vue'),
+        meta: { title: '出荷管理', group: '出荷管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/list',
         name: 'Shipping',
         component: () => import('@/views/erp/shipping/ShippingList.vue'),
         meta: { title: '出荷構成表管理', group: '出荷管理 > 出荷構成表管理', requiresAuth: true },
@@ -481,7 +355,19 @@ export const erpRoutes: RouteRecordRaw[] = [
         path: 'erp/shipping/inventory-shortage',
         name: 'InventoryShortageManagement',
         component: () => import('@/views/erp/shipping/InventoryShortageManagement.vue'),
-        meta: { title: '在庫不足管理', group: '出荷管理 > 在庫不足管理', requiresAuth: true },
+        meta: { title: '倉庫在庫管理', group: '出荷管理 > 倉庫在庫管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/abc-analysis',
+        name: 'ShippingAbcAnalysis',
+        component: () => import('@/views/erp/shipping/ShippingAbcAnalysis.vue'),
+        meta: { title: 'ABC分析', group: '出荷管理 > ABC分析', requiresAuth: true },
+      },
+      {
+        path: 'erp/shipping/inventory-kpi',
+        name: 'InventoryKpi',
+        component: () => import('@/views/erp/shipping/InventoryKpi.vue'),
+        meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true },
       },
 
       // ── 債権債務（既存互換） ──

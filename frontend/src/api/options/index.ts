@@ -153,3 +153,28 @@ export async function getRouteOptions(): Promise<OptionItem[]> {
     return []
   }
 }
+
+/** 部品オプション（部品・コンポーネント選択用、製品マスタから取得） */
+export async function getComponentOptions(): Promise<OptionItem[]> {
+  try {
+    const list = await getProductOptions()
+    return list || []
+  } catch {
+    return []
+  }
+}
+
+/** 設備オプション（工程・設備選択用） */
+export async function getMachineOptions(): Promise<OptionItem[]> {
+  try {
+    const { getMachineOptions: fetchMachines } = await import('@/api/master/machineMaster')
+    const list = await fetchMachines()
+    const arr = Array.isArray(list) ? list : (list as { data?: OptionItem[] })?.data ?? []
+    return arr.map((m: { cd?: string; name?: string }) => ({
+      cd: m.cd ?? '',
+      name: m.name ?? m.cd ?? '',
+    }))
+  } catch {
+    return []
+  }
+}

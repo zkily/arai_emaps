@@ -1,7 +1,7 @@
 <template>
   <div class="inventory-shortage">
     <div class="overview-card glass-card">
-      <!-- ページタイトル -->
+      <!-- ページタイトル（アイコン＋タイトルのみ） -->
       <div class="card-header glass-header">
         <div class="header-left">
           <div class="header-icon-container">
@@ -9,26 +9,9 @@
           </div>
           <h1 class="header-title">{{ t('shipping.inventoryShortageTitle') }}</h1>
         </div>
-        <div class="header-right">
-          <el-button
-            :icon="TrendCharts"
-            @click="openChartDialog"
-            :disabled="chartButtonDisabled"
-            class="header-btn header-btn-chart"
-            size="small"
-          >
-            {{ t('shipping.chartTrend') }}
-          </el-button>
-          <el-button :icon="Printer" @click="handlePrint" :disabled="loading || !filters.dateRange || filters.dateRange.length !== 2" class="header-btn header-btn-print" size="small">
-            {{ t('shipping.print') }}
-          </el-button>
-          <el-button :icon="Operation" @click="handleAllUpdate" :disabled="updatingAll" :loading="updatingAll" class="header-btn header-btn-update" size="small">
-            {{ t('shipping.batchUpdate') }}
-          </el-button>
-        </div>
       </div>
 
-      <!-- フィルター条件 -->
+      <!-- フィルター条件＋操作ボタン -->
       <div class="filter-section glass-filter">
         <div class="filter-row">
           <div class="filter-item">
@@ -75,6 +58,37 @@
               {{ t('shipping.onlyNegative') }}
             </el-checkbox>
           </div>
+
+          <div class="filter-actions">
+            <el-button
+              :icon="TrendCharts"
+              @click="openChartDialog"
+              :disabled="chartButtonDisabled"
+              class="action-btn action-btn-chart"
+              size="small"
+            >
+              {{ t('shipping.chartTrend') }}
+            </el-button>
+            <el-button
+              :icon="Printer"
+              @click="handlePrint"
+              :disabled="loading || !filters.dateRange || filters.dateRange.length !== 2"
+              class="action-btn action-btn-print"
+              size="small"
+            >
+              不足数発行
+            </el-button>
+            <el-button
+              :icon="Operation"
+              @click="handleAllUpdate"
+              :disabled="updatingAll"
+              :loading="updatingAll"
+              class="action-btn action-btn-update"
+              size="small"
+            >
+              {{ t('shipping.batchUpdate') }}
+            </el-button>
+          </div>
         </div>
       </div>
 
@@ -86,7 +100,7 @@
               <el-icon><Box /></el-icon>
             </div>
             <div class="stat-content">
-              <div class="stat-value">{{ totalCurrentInventory }}</div>
+              <div class="stat-value">{{ formatNumber(totalCurrentInventory) }}</div>
               <div class="stat-label">{{ t('shipping.currentStock') }}</div>
             </div>
           </div>
@@ -95,7 +109,7 @@
               <el-icon><Lock /></el-icon>
             </div>
             <div class="stat-content">
-              <div class="stat-value">{{ totalSafetyStock }}</div>
+              <div class="stat-value">{{ formatNumber(totalSafetyStock) }}</div>
               <div class="stat-label">{{ t('shipping.safetyStock') }}</div>
             </div>
           </div>
@@ -104,7 +118,7 @@
               <el-icon><Warning /></el-icon>
             </div>
             <div class="stat-content">
-              <div class="stat-value stat-value-negative">{{ totalNegativeWarehouse }}</div>
+              <div class="stat-value stat-value-negative">{{ formatNumber(totalNegativeWarehouse) }}</div>
               <div class="stat-label">{{ t('shipping.shortage') }}</div>
             </div>
           </div>
@@ -136,33 +150,33 @@
             <el-table-column label="製品名" prop="product_name" width="140" show-overflow-tooltip />
             <el-table-column label="受注数" prop="order_quantity" width="100" align="right">
               <template #default="{ row }">
-                <span :class="{ 'cell-negative': (Number(row.order_quantity) || 0) < 0 }">{{ row.order_quantity ?? '-' }}</span>
+                <span :class="{ 'cell-negative': (Number(row.order_quantity) || 0) < 0 }">{{ formatNumber(row.order_quantity) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="内示数" prop="forecast_quantity" width="100" align="right">
               <template #default="{ row }">
-                <span :class="{ 'cell-negative': (Number(row.forecast_quantity) || 0) < 0 }">{{ row.forecast_quantity ?? '-' }}</span>
+                <span :class="{ 'cell-negative': (Number(row.forecast_quantity) || 0) < 0 }">{{ formatNumber(row.forecast_quantity) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="安全在庫" prop="safety_stock" width="100" align="right">
               <template #default="{ row }">
-                <span :class="{ 'cell-negative': (Number(row.safety_stock) || 0) < 0 }">{{ row.safety_stock ?? '-' }}</span>
+                <span :class="{ 'cell-negative': (Number(row.safety_stock) || 0) < 0 }">{{ formatNumber(row.safety_stock) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="倉庫在庫" prop="warehouse_inventory" width="100" align="right">
               <template #default="{ row }">
-                <span :class="{ 'cell-negative': (Number(row.warehouse_inventory) || 0) < 0 }">{{ row.warehouse_inventory ?? '-' }}</span>
+                <span :class="{ 'cell-negative': (Number(row.warehouse_inventory) || 0) < 0 }">{{ formatNumber(row.warehouse_inventory) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="外注倉庫在庫" prop="outsourced_warehouse_inventory" width="120" align="right">
               <template #default="{ row }">
-                <span :class="{ 'cell-negative': (Number(row.outsourced_warehouse_inventory) || 0) < 0 }">{{ row.outsourced_warehouse_inventory ?? '-' }}</span>
+                <span :class="{ 'cell-negative': (Number(row.outsourced_warehouse_inventory) || 0) < 0 }">{{ formatNumber(row.outsourced_warehouse_inventory) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="現在在庫合計" width="120" align="right">
               <template #default="{ row }">
                 <span :class="{ 'cell-negative': ((Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0)) < 0 }">
-                  {{ (Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0) }}
+                  {{ formatNumber((Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0)) }}
                 </span>
               </template>
             </el-table-column>
@@ -174,7 +188,7 @@
               :page-size="pagination.pageSize"
               :total="displayedData.length"
               layout="total, prev, pager, next"
-              small
+              size="small"
               background
             />
           </div>
@@ -187,7 +201,7 @@
           <div class="print-header">
             <div class="print-title-wrap">
               <span class="print-title-accent"></span>
-              <h1 class="print-title">在庫不足一覧</h1>
+              <h1 class="print-title">出荷不足数一覧</h1>
               <p class="print-subtitle">検査工程用</p>
             </div>
             <div class="print-header-row">
@@ -198,8 +212,8 @@
               </div>
               <div class="print-summary-box">
                 <span class="print-summary-label">合計</span>
-                <span class="print-summary-item"><em>箱数</em> {{ printTotals.box_quantity }}</span>
-                <span class="print-summary-item"><em>本数</em> {{ printTotals.units }}</span>
+                <span class="print-summary-item"><em>箱数</em> {{ formatNumber(printTotals.box_quantity) }}</span>
+                <span class="print-summary-item"><em>本数</em> {{ formatNumber(printTotals.units) }}</span>
               </div>
             </div>
           </div>
@@ -227,8 +241,8 @@
                       <td class="print-td">{{ row.product_name || '—' }}</td>
                       <td class="print-td">{{ row.product_type || '—' }}</td>
                       <td class="print-td">{{ row.box_type || '—' }}</td>
-                      <td class="print-td print-td-num">{{ row.box_quantity != null ? row.box_quantity : '—' }}</td>
-                      <td class="print-td print-td-num">{{ row.units }}</td>
+                      <td class="print-td print-td-num">{{ row.box_quantity != null ? formatNumber(row.box_quantity) : '—' }}</td>
+                      <td class="print-td print-td-num">{{ formatNumber(row.units) }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -488,7 +502,15 @@ const totalNegativeWarehouse = computed(() => {
   }, 0)
 })
 
-/** 印刷用：日付ごとにグループ化 [{ date, rows }] */
+/** 土日判定（JST）：月〜金を true、土日を false */
+function isWeekday(dateStr: string): boolean {
+  if (!dateStr || dateStr.length < 10) return false
+  const d = new Date(dateStr + 'T00:00:00+09:00')
+  const day = d.getDay()
+  return day >= 1 && day <= 5
+}
+
+/** 印刷用：日付ごとにグループ化 [{ date, rows }]（土日は除外済みの printTableData を利用） */
 const printDataGroupedByDate = computed(() => {
   const list = printTableData.value
   if (!list.length) return []
@@ -502,15 +524,19 @@ const printDataGroupedByDate = computed(() => {
   return sorted.map(([date, rows]) => ({ date, rows }))
 })
 
-/** 印刷用：対象期間のフォーマット（年月日） */
+/** 印刷用：対象期間のフォーマット（年月日）。印刷データ＝土日除くので、実際の印刷日範囲を表示 */
 const printPeriodFormatted = computed(() => {
-  if (!filters.dateRange || filters.dateRange.length !== 2) return '—'
+  const list = printTableData.value
   const fmt = (s: string) => {
     if (!s || s.length < 10) return s
     const [y, m, d] = [s.slice(0, 4), s.slice(5, 7), s.slice(8, 10)]
     return `${y}年${m}月${d}日`
   }
-  return `${fmt(filters.dateRange[0])} ～ ${fmt(filters.dateRange[1])}`
+  if (!list.length) return '—'
+  const dates = [...new Set(list.map((row) => row.date).filter(Boolean))] as string[]
+  if (dates.length === 0) return '—'
+  dates.sort()
+  return `${fmt(dates[0])} ～ ${fmt(dates[dates.length - 1])}（土日除く）`
 })
 
 /** 印刷用：合計（箱数・本数） */
@@ -600,6 +626,12 @@ function handleProductChange() {
   fetchList()
 }
 
+/** 数字を三位カンマ表示（null/undefined は '-'） */
+function formatNumber(val: number | null | undefined): string {
+  if (val == null || (typeof val === 'number' && Number.isNaN(val))) return '-'
+  return Number(val).toLocaleString()
+}
+
 function getSummaries(param: { columns: Array<{ property?: string }>; data: SummaryRow[] }): string[] {
   const { columns, data } = param
   const sums: string[] = []
@@ -617,7 +649,7 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Summ
       prop === 'outsourced_warehouse_inventory'
     ) {
       const v = data.reduce((s, row) => s + (Number((row as any)[prop]) || 0), 0)
-      sums[i] = String(v)
+      sums[i] = formatNumber(v)
     } else if (i === 9) {
       // 現在在庫合計列（倉庫＋外注倉庫）
       const v = data.reduce(
@@ -625,7 +657,7 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Summ
           s + (Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0),
         0
       )
-      sums[i] = String(v)
+      sums[i] = formatNumber(v)
     } else {
       sums[i] = ''
     }
@@ -646,9 +678,11 @@ async function handlePrint() {
     })
     const data = res?.data ?? res
     const list = Array.isArray(data) ? data : data?.data ?? []
-    printTableData.value = list
-    if (list.length === 0) {
-      ElMessage.warning('印刷対象の在庫不足データがありません')
+    // 土日を除外して印刷対象とする
+    const weekdaysOnly = list.filter((row: InventoryShortagePrintRow) => isWeekday(row.date || ''))
+    printTableData.value = weekdaysOnly
+    if (weekdaysOnly.length === 0) {
+      ElMessage.warning('印刷対象の在庫不足データがありません（対象期間内の平日データがありません）')
       return
     }
     nextTick(() => {
@@ -679,7 +713,7 @@ function executeFrontendPrint(contentRef: HTMLElement | null) {
   printWindow.document.write(`
     <html>
       <head>
-        <title>在庫不足一覧</title>
+        <title>出荷不足数一覧</title>
         ${styles}
       </head>
       <body>
@@ -848,8 +882,8 @@ function initChart() {
 }
 
 function formatChartLabel(value: number): string {
-  if (typeof value === 'number' && value < 0) return `{negative|${value}}`
-  return `${value}`
+  if (typeof value === 'number' && value < 0) return `{negative|${formatNumber(value)}}`
+  return formatNumber(value)
 }
 
 function updateChart() {
@@ -863,38 +897,51 @@ function updateChart() {
     backgroundColor: 'transparent',
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255,255,255,0.96)',
-      borderColor: '#e2e8f0',
+      backgroundColor: 'rgba(255,255,255,0.98)',
+      borderColor: 'rgba(148, 163, 184, 0.4)',
       borderWidth: 1,
-      textStyle: { color: '#000', fontSize: 12 },
-      padding: [10, 14],
-      axisPointer: { type: 'cross', lineStyle: { color: '#94a3b8', type: 'dashed' } },
+      padding: [12, 16],
+      textStyle: { color: '#1e293b', fontSize: 13, fontWeight: 500 },
+      axisPointer: {
+        type: 'cross',
+        lineStyle: { color: '#94a3b8', width: 1, type: 'dashed' },
+        crossStyle: { color: '#94a3b8', width: 1 },
+      },
+      confine: true,
     },
     legend: {
       data: ['内示数', '倉庫在庫'],
-      top: 8,
-      right: 16,
-      textStyle: { fontSize: 11, color: '#000' },
-      itemWidth: 14,
-      itemGap: 12,
+      top: 12,
+      right: 24,
+      textStyle: { fontSize: 12, color: '#334155', fontWeight: 600 },
+      itemWidth: 18,
+      itemHeight: 10,
+      itemGap: 20,
+      itemStyle: { borderWidth: 0 },
     },
-    grid: { left: 40, right: 40, top: 50, bottom: 72, containLabel: false },
+    grid: { left: 48, right: 48, top: 56, bottom: 80, containLabel: false },
     xAxis: {
       type: 'category',
       data: dates,
+      boundaryGap: false,
       axisLabel: {
-        fontSize: 11,
-        color: '#000',
+        fontSize: 12,
+        color: '#64748b',
         rotate: dates.length > 14 ? 35 : 0,
-        margin: 28,
+        margin: 20,
+        fontWeight: 500,
       },
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLine: { lineStyle: { color: '#e2e8f0', width: 1 } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
-      axisLabel: { fontSize: 11, color: '#000' },
-      splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+      axisLabel: {
+        fontSize: 12,
+        color: '#64748b',
+        fontWeight: 500,
+      },
+      splitLine: { lineStyle: { color: '#f1f5f9', width: 1, type: 'dashed' } },
       axisLine: { show: false },
       axisTick: { show: false },
     },
@@ -903,35 +950,51 @@ function updateChart() {
         name: '内示数',
         type: 'line',
         smooth: true,
-        data: forecastQty,
         symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#8b5cf6' },
+        symbolSize: 8,
+        showSymbol: true,
+        lineStyle: { width: 2.5, color: '#7c3aed' },
+        itemStyle: {
+          color: '#7c3aed',
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
+        areaStyle: { color: 'rgba(124, 58, 237, 0.08)' },
         label: {
           show: true,
-          fontSize: 10,
+          fontSize: 11,
           position: 'top',
+          color: '#5b21b6',
+          fontWeight: 600,
           formatter: (params: any) => formatChartLabel(Number(params.value)),
-          rich: { negative: { color: '#f56c6c' } },
+          rich: { negative: { color: '#dc2626', fontWeight: 600 } },
         },
+        data: forecastQty,
       },
       {
         name: '倉庫在庫',
         type: 'line',
         smooth: true,
-        data: warehouseInv,
         symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { width: 2 },
-        itemStyle: { color: '#f59e0b' },
+        symbolSize: 8,
+        showSymbol: true,
+        lineStyle: { width: 2.5, color: '#ea580c' },
+        itemStyle: {
+          color: '#ea580c',
+          borderColor: '#fff',
+          borderWidth: 2,
+        },
+        areaStyle: { color: 'rgba(234, 88, 12, 0.08)' },
         label: {
           show: true,
-          fontSize: 10,
+          fontSize: 11,
           position: 'bottom',
+          color: '#c2410c',
+          fontWeight: 600,
           formatter: (params: any) => formatChartLabel(Number(params.value)),
-          rich: { negative: { color: '#f56c6c' } },
+          rich: { negative: { color: '#dc2626', fontWeight: 600 } },
         },
+        data: warehouseInv,
       },
     ],
   }
@@ -1010,118 +1073,118 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 48px;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.92) 0%, rgba(139, 92, 246, 0.9) 100%);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-height: 56px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 14px;
 }
 
 .header-icon-container {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.24);
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .header-icon {
   color: #fff;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .header-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: #fff;
   margin: 0;
-  letter-spacing: 0.03em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
-.header-right {
+/* 筛选行内操作按钮（由标题行移入） */
+.filter-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 
-.header-btn {
-  border-radius: 6px;
-  font-weight: 500;
+.action-btn {
+  border-radius: 8px;
+  font-weight: 600;
   font-size: 12px;
-  padding: 5px 12px;
+  padding: 6px 12px;
   border: 1px solid transparent;
-  color: #fff;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
 }
 
-.header-btn:disabled {
+.action-btn :deep(.el-icon) {
+  margin-right: 4px;
+}
+
+.action-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-  box-shadow: none;
+  transform: none;
 }
 
-/* 推移グラフ：青緑 */
-.header-btn-chart {
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.95) 0%, rgba(13, 148, 136, 0.9) 100%);
-  border-color: rgba(255, 255, 255, 0.35);
+.action-btn:not(:disabled):hover {
+  transform: translateY(-1px);
 }
 
-.header-btn-chart:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(13, 148, 136, 0.95) 0%, rgba(15, 118, 110, 0.95) 100%);
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 2px 6px rgba(20, 184, 166, 0.35);
+.action-btn-chart {
+  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
+  color: #fff !important;
+  border-color: rgba(13, 148, 136, 0.4);
+}
+.action-btn-chart:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.35);
 }
 
-/* 印刷：スレート灰 */
-.header-btn-print {
-  background: linear-gradient(135deg, rgba(71, 85, 105, 0.9) 0%, rgba(51, 65, 85, 0.9) 100%);
-  border-color: rgba(255, 255, 255, 0.25);
+.action-btn-print {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%);
+  color: #fff !important;
+  border-color: rgba(51, 65, 85, 0.4);
+}
+.action-btn-print:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(71, 85, 105, 0.35);
 }
 
-.header-btn-print:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(51, 65, 85, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%);
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 2px 6px rgba(51, 65, 85, 0.4);
+.action-btn-update {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff !important;
+  border-color: rgba(217, 119, 6, 0.4);
 }
-
-/* 全部一括更新：オレンジ・メイン操作 */
-.header-btn-update {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.95) 0%, rgba(217, 119, 6, 0.9) 100%);
-  border-color: rgba(255, 255, 255, 0.4);
-}
-
-.header-btn-update:hover:not(:disabled) {
-  background: linear-gradient(135deg, rgba(217, 119, 6, 0.95) 0%, rgba(180, 83, 9, 0.95) 100%);
-  border-color: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+.action-btn-update:not(:disabled):hover {
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 
 .glass-filter {
   margin: 6px;
-  padding: 8px 10px;
+  padding: 6px 12px;
   border-radius: 8px;
-  background: rgba(248, 250, 252, 0.85);
-  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 6px 14px;
   align-items: center;
   justify-content: flex-start;
 }
@@ -1134,73 +1197,114 @@ onMounted(() => {
 }
 
 .filter-label {
-  font-weight: 500;
-  color: #000;
+  font-weight: 600;
+  color: #334155;
   font-size: 12px;
   white-space: nowrap;
+  height: 26px;
+  line-height: 26px;
+  margin: 0;
 }
 
 .filter-item :deep(.el-checkbox) {
   margin-right: 0;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
 }
 .filter-item :deep(.el-checkbox__label) {
   font-size: 12px;
-  color: #000;
+  color: #334155;
+  font-weight: 500;
 }
 
 .date-picker {
-  width: 180px;
+  width: 200px;
 }
 
 .date-picker :deep(.el-input__wrapper) {
   border-radius: 6px;
-  border: 1px solid rgba(203, 213, 225, 0.85);
-  background: rgba(255, 255, 255, 0.9);
-  padding: 2px 10px;
-  min-height: 32px;
-  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 0 8px;
+  height: 26px;
+  min-height: 26px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .date-picker :deep(.el-input__inner) {
   font-size: 12px;
+  height: 22px;
 }
 
 .date-nav-buttons {
   display: flex;
-  gap: 3px;
-  margin-left: 3px;
+  gap: 0.5px;
+  align-items: center;
 }
 
 .nav-btn {
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 0 8px !important;
   font-size: 11px;
-  min-width: 28px;
-  min-height: 28px;
-  border: 1px solid rgba(203, 213, 225, 0.8);
-  background: rgba(248, 250, 252, 0.95);
-  color: #000;
+  font-weight: 600;
+  height: 22px !important;
+  line-height: 22px !important;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+.filter-section :deep(.nav-btn) {
+  height: 26px !important;
+  min-height: 26px !important;
 }
 
-.nav-btn:hover {
-  background: rgba(226, 232, 240, 0.95);
-  border-color: #94a3b8;
+.nav-btn.nav-prev {
+  background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%);
+  color: #4338ca;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+.nav-btn.nav-prev:hover {
+  background: linear-gradient(180deg, #c7d2fe 0%, #a5b4fc 100%);
+  border-color: #6366f1;
+}
+
+.nav-btn.today-btn {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.nav-btn.today-btn:hover {
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
+}
+
+.nav-btn.nav-next {
+  background: linear-gradient(180deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+.nav-btn.nav-next:hover {
+  background: linear-gradient(180deg, #a7f3d0 0%, #6ee7b7 100%);
+  border-color: #10b981;
 }
 
 .product-select {
-  width: 228px;
+  width: 240px;
 }
 
 .product-select :deep(.el-input__wrapper) {
   border-radius: 6px;
-  border: 1px solid rgba(203, 213, 225, 0.85);
-  background: rgba(255, 255, 255, 0.9);
-  min-height: 32px;
-  font-size: 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 0 8px;
+  height: 26px;
+  min-height: 26px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .product-select :deep(.el-input__inner) {
   font-size: 12px;
+  height: 24px;
 }
 
 .glass-stats {
@@ -1304,11 +1408,16 @@ onMounted(() => {
 .modern-table :deep(.el-table__body td) {
   padding: 4px 8px;
   font-size: 12px;
+  color: #000;
 }
 .modern-table :deep(.el-table__footer-wrapper td) {
   padding: 4px 8px;
   font-size: 12px;
   font-weight: 600;
+  color: #000;
+}
+.modern-table :deep(.el-table .cell) {
+  color: #000;
 }
 .modern-table :deep(.el-table .el-table__row) {
   --el-table-row-hover-bg-color: rgba(99, 102, 241, 0.04);
@@ -1486,23 +1595,45 @@ onMounted(() => {
   60%, 100% { left: 100%; }
 }
 
-/* ========== 推移グラフダイアログ（最上层・画面 70%） ========== */
+/* ========== 推移グラフダイアログ（在庫・受注推移） ========== */
 .chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog) {
-  width: 70vw !important;
-  max-width: 70vw;
-  margin-top: 3vh !important;
+  width: 72vw !important;
+  max-width: 900px;
+  margin-top: 5vh !important;
   margin-bottom: 0;
-  max-height: 70vh;
+  max-height: 75vh;
   display: flex;
   flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(99, 102, 241, 0.12);
+}
+.chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog__header) {
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+.chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog__title) {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
+}
+.chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #fff;
 }
 .chart-dialog.chart-dialog--fullscreen-top :deep(.el-dialog__body) {
-  padding: 16px 20px 20px;
+  padding: 20px 24px 24px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: #f8fafc;
 }
 .chart-dialog-body {
   flex: 1;
@@ -1512,37 +1643,91 @@ onMounted(() => {
 }
 .chart-dialog-subtitle {
   font-size: 13px;
-  color: #000;
-  margin-bottom: 12px;
-  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 14px;
+  font-weight: 600;
   flex-shrink: 0;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  display: inline-block;
 }
 .chart-dialog.chart-dialog--fullscreen-top .chart-container {
   flex: 1;
-  min-height: 280px;
+  min-height: 300px;
   height: 100%;
 }
 .chart-container {
   width: 100%;
-  border-radius: 10px;
-  background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+  border-radius: 12px;
+  background: #fff;
   border: 1px solid #e2e8f0;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 .chart-dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
+  padding: 12px 24px 16px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+.chart-dialog-footer :deep(.el-button) {
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 16px;
+}
+.chart-dialog-footer :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border-color: transparent;
+}
+.chart-dialog-footer :deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
 }
 
 /* ========== 响应式布局 ========== */
-@media (max-width: 992px) {
+@media (max-width: 1024px) {
   .inventory-shortage {
-    padding: 5px;
+    padding: 6px 8px;
+  }
+
+  .glass-header {
+    padding: 10px 14px;
+  }
+
+  .filter-section {
+    padding: 8px 10px;
   }
 
   .filter-row {
-    gap: 6px 8px;
+    gap: 8px 12px;
+  }
+
+  .filter-actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .product-select {
+    width: 100%;
+    max-width: 260px;
+  }
+}
+
+@media (max-width: 992px) {
+  .inventory-shortage {
+    padding: 5px 6px;
+  }
+
+  .filter-row {
+    gap: 6px 10px;
+  }
+
+  .filter-actions {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .product-select {
@@ -1553,7 +1738,7 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .inventory-shortage {
-    padding: 4px;
+    padding: 4px 6px;
   }
 
   .glass-card {
@@ -1562,12 +1747,12 @@ onMounted(() => {
 
   .glass-header {
     min-height: 44px;
-    padding: 6px 10px;
+    padding: 8px 10px;
   }
 
   .header-icon-container {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
   }
 
   .header-icon {
@@ -1580,17 +1765,18 @@ onMounted(() => {
 
   .glass-filter {
     margin: 5px;
-    padding: 6px 8px;
+    padding: 8px 10px;
   }
 
   .filter-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 6px;
+    gap: 8px;
   }
 
   .filter-item {
     flex-wrap: wrap;
+    width: 100%;
   }
 
   .filter-item .date-picker {
@@ -1605,7 +1791,20 @@ onMounted(() => {
 
   .date-nav-buttons {
     margin-left: 0;
-    margin-top: 3px;
+    margin-top: 4px;
+  }
+
+  .filter-actions {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(226, 232, 240, 0.8);
+  }
+
+  .action-btn {
+    font-size: 11px;
+    padding: 5px 10px;
   }
 
   .glass-stats {
@@ -1655,16 +1854,20 @@ onMounted(() => {
     padding: 3px 6px;
     font-size: 11px;
   }
+
+  .pagination-wrap {
+    padding: 8px 0 4px;
+  }
 }
 
 @media (max-width: 480px) {
   .inventory-shortage {
-    padding: 3px;
+    padding: 3px 4px;
   }
 
   .glass-header {
-    min-height: 42px;
-    padding: 5px 8px;
+    min-height: 40px;
+    padding: 6px 8px;
   }
 
   .header-title {
@@ -1675,9 +1878,21 @@ onMounted(() => {
     font-size: 11px;
   }
 
-  .header-btn {
+  .filter-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .filter-actions .action-btn {
+    width: 100%;
+    justify-content: center;
     font-size: 11px;
-    padding: 4px 8px;
+    padding: 6px 10px;
+  }
+
+  .glass-filter {
+    padding: 6px 8px;
   }
 
   .stats-grid {
@@ -1689,6 +1904,10 @@ onMounted(() => {
     flex: none;
     width: 100%;
     padding: 6px 10px;
+  }
+
+  .stat-value {
+    font-size: 14px;
   }
 }
 
@@ -1975,24 +2194,44 @@ onMounted(() => {
 <!-- 推移グラフ append-to-body 時も効くよう unscoped -->
 <style>
 .chart-dialog.chart-dialog--fullscreen-top.el-dialog {
-  width: 70vw !important;
-  max-width: 70vw;
-  margin-top: 3vh !important;
+  width: 72vw !important;
+  max-width: 900px;
+  margin-top: 5vh !important;
   margin-bottom: 0;
-  max-height: 70vh;
+  max-height: 75vh;
   display: flex;
   flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(99, 102, 241, 0.12);
+}
+.chart-dialog.chart-dialog--fullscreen-top .el-dialog__header {
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+.chart-dialog.chart-dialog--fullscreen-top .el-dialog__title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+.chart-dialog.chart-dialog--fullscreen-top .el-dialog__headerbtn .el-dialog__close {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 18px;
 }
 .chart-dialog.chart-dialog--fullscreen-top .el-dialog__body {
+  padding: 20px 24px 24px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: #f8fafc;
 }
 .chart-dialog.chart-dialog--fullscreen-top .chart-container {
   flex: 1;
-  min-height: 280px;
+  min-height: 300px;
   height: 100%;
 }
 </style>

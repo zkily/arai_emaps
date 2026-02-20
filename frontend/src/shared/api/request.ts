@@ -126,7 +126,7 @@ service.interceptors.response.use(
           ElMessage.error(errorMessage || 'リソースが見つかりません。')
           break
         case 500:
-          ElMessage.error(errorMessage || 'サーバーエラーが発生しました。')
+          // 500 は呼び出し元の catch でメッセージ表示するため、ここでは表示しない（二重表示を防ぐ）
           break
         default:
           ElMessage.error(errorMessage)
