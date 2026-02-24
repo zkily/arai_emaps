@@ -87,14 +87,6 @@
               </div>
             </el-form-item>
           </div>
-          <div class="filter-actions">
-            <el-button type="primary" size="small" :icon="Search" @click="handleSearch" class="btn-glass btn-primary">
-              検索
-            </el-button>
-            <el-button size="small" :icon="RefreshLeft" @click="resetFilters" class="btn-glass btn-secondary">
-              リセット
-            </el-button>
-          </div>
         </el-form>
       </section>
 
@@ -170,6 +162,9 @@
             </template>
           </el-table-column>
           <el-table-column label="対象CD" prop="target_cd" width="92" align="center" show-overflow-tooltip />
+          <el-table-column label="製品名" prop="product_name" min-width="120" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.product_name || '-' }}</template>
+          </el-table-column>
           <el-table-column label="保管場所" prop="location_cd" width="100" align="center" show-overflow-tooltip />
           <el-table-column label="操作種別" prop="transaction_type" width="92" align="center">
             <template #default="scope">
@@ -183,18 +178,19 @@
               <span class="qty-cell" :class="{ negative: Number(scope.row.quantity) < 0 }">{{ scope.row.quantity }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="単位" prop="unit" width="52" align="center">
+          <el-table-column label="単位" prop="unit" width="56" align="center">
             <template #default="scope">{{ scope.row.unit || '-' }}</template>
           </el-table-column>
-          <el-table-column label="ロット" prop="lot_no" width="82" align="center" show-overflow-tooltip />
+          <!-- <el-table-column label="ロット" prop="lot_no" width="82" align="center" show-overflow-tooltip /> -->
           <el-table-column label="操作日時" prop="transaction_time" width="158" align="center">
             <template #default="scope">{{ formatDate(scope.row.transaction_time) }}</template>
           </el-table-column>
-          <el-table-column label="工程" prop="process_cd" width="82" align="center" show-overflow-tooltip />
+          <el-table-column label="工程" prop="process_name" width="100" align="center" show-overflow-tooltip>
+            <template #default="scope">{{ scope.row.process_name ?? scope.row.process_cd ?? '-' }}</template>
+          </el-table-column>
           <el-table-column label="設備" prop="machine_cd" width="82" align="center" show-overflow-tooltip />
-          <el-table-column label="伝票No" prop="order_no" width="92" align="center" show-overflow-tooltip />
-          <el-table-column label="来源" prop="source_file" width="100" align="center" show-overflow-tooltip />
-          <el-table-column label="操作" fixed="right" width="140" align="center">
+          <el-table-column label="来源" prop="source_file" width="185" align="center" show-overflow-tooltip />
+          <el-table-column label="操作" fixed="right" width="160" align="center">
             <template #default="scope">
               <el-button size="small" type="primary" link @click="handleEdit(scope.row)" :icon="Edit" class="btn-inline btn-edit">編集</el-button>
               <el-button size="small" type="danger" link @click="handleDelete(scope.row)" :icon="Delete" class="btn-inline btn-delete">削除</el-button>
@@ -288,11 +284,11 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import request from '@/utils/request'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Document, Search, RefreshLeft, TrendCharts, DataAnalysis, Histogram, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Delete, Edit, Document, Search, TrendCharts, DataAnalysis, Histogram, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import type { OptionItem } from '@/types/master'
 
 const locationOptions = ref([
@@ -381,9 +377,11 @@ interface StockLogRow {
   stock_type: string
   transaction_type: string
   target_cd: string
+  product_name?: string
   location_cd: string
   lot_no?: string
   process_cd?: string
+  process_name?: string
   machine_cd?: string
   quantity: number
   unit?: string
@@ -447,38 +445,32 @@ const fetchLogs = async () => {
   }
 }
 
-const handleSearch = () => {
-  pagination.value.page = 1
-  fetchLogs()
-}
-
-const resetFilters = () => {
-  filters.value = {
-    stock_type: '',
-    target_cd: '',
-    keyword: '',
-    location_cd: '',
-    transaction_type: '',
-    process_cd: '',
-    date_range: [dayjs().format('YYYY-MM-DD'), dayjs().format('YYYY-MM-DD')],
-  }
-  pagination.value.page = 1
-  fetchLogs()
-}
+// フィルタ変更で自動検索（デバウンス 350ms）
+let filterDebounceId: ReturnType<typeof setTimeout> | null = null
+watch(
+  filters,
+  () => {
+    pagination.value.page = 1
+    if (filterDebounceId) clearTimeout(filterDebounceId)
+    filterDebounceId = setTimeout(() => {
+      filterDebounceId = null
+      fetchLogs()
+    }, 350)
+  },
+  { deep: true }
+)
 
 const adjustDate = (days: number) => {
   if (filters.value.date_range && filters.value.date_range.length === 2) {
     const start = dayjs(filters.value.date_range[0]).add(days, 'day').format('YYYY-MM-DD')
     const end = dayjs(filters.value.date_range[1]).add(days, 'day').format('YYYY-MM-DD')
     filters.value.date_range = [start, end]
-    handleSearch()
   }
 }
 
 const setToday = () => {
   const today = dayjs().format('YYYY-MM-DD')
   filters.value.date_range = [today, today]
-  handleSearch()
 }
 
 const handleSelectionChange = (selection: StockLogRow[]) => {

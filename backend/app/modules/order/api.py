@@ -12,6 +12,8 @@ from sqlalchemy import select, and_, or_, func, update
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
+from datetime import date
+from calendar import monthrange
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
@@ -215,21 +217,40 @@ async def get_monthly_summary(
     製品名に「加工」を含む行は除外。
     """
     om = erp_models.OrderMonthly
+    od = erp_models.OrderDaily
     prs = ProductRouteStep
     base_where = _monthly_summary_base_where(om, year, month, destination_cd, keyword)
 
-    # 全体合計: forecast_units, forecast_total_units。内示差異は 確定本数 - 内示本数 で計算
+    # 内示本数: order_monthly.forecast_units 合計
     q_total = (
-        select(
-            func.coalesce(func.sum(om.forecast_units), 0).label("forecast_units"),
-            func.coalesce(func.sum(om.forecast_total_units), 0).label("forecast_total_units"),
-        )
+        select(func.coalesce(func.sum(om.forecast_units), 0).label("forecast_units"))
         .select_from(om)
         .where(base_where)
     )
     row_total = (await db.execute(q_total)).one()
     forecast_units = int(row_total.forecast_units or 0)
-    forecast_total_units = int(row_total.forecast_total_units or 0)
+
+    # 確定本数: order_daily.confirmed_units の合計（該当月订单かつ期間内の日付に限定）
+    if year is not None and month is not None:
+        first_day = date(year, month, 1)
+        last_day = date(year, month, monthrange(year, month)[1])
+        subq = select(om.order_id).where(base_where)
+        q_confirmed = (
+            select(func.coalesce(func.sum(od.confirmed_units), 0))
+            .select_from(od)
+            .where(od.monthly_order_id.in_(subq))
+            .where(od.date >= first_day)
+            .where(od.date <= last_day)
+        )
+        forecast_total_units = int((await db.execute(q_confirmed)).scalar() or 0)
+    else:
+        q_total_units = (
+            select(func.coalesce(func.sum(om.forecast_total_units), 0).label("forecast_total_units"))
+            .select_from(om)
+            .where(base_where)
+        )
+        forecast_total_units = int((await db.execute(q_total_units)).scalar() or 0)
+
     forecast_diff = forecast_total_units - forecast_units  # 内示差異 = 確定本数 - 内示本数
 
     # 工序別: 該当 process_cd を持つ製品の月订单のみ SUM（重複計上を防ぐため IN (DISTINCT product_cd) で結合）

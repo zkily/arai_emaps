@@ -1,7 +1,7 @@
 <template>
   <div class="outsourcing-order-page">
     <!-- 页面头部 -->
-    <div class="page-header">
+    <div class="page-header glass-header">
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -19,7 +19,7 @@
     </div>
 
     <!-- 検索フィルター -->
-    <el-card class="filter-card">
+    <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
         <div class="filter-group">
@@ -120,7 +120,7 @@
     </el-card>
 
     <!-- 操作按钮栏 -->
-    <div class="action-bar">
+    <div class="action-bar glass-card">
       <div class="left-actions">
         <el-button type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>新規注文
@@ -134,13 +134,13 @@
       </div>
       <div class="right-actions">
         <el-tag type="info" size="large">
-          合計: {{ formatNumber(totalQuantity) }} 個 / {{ formatCurrency(totalAmount) }}
+          合計: {{ formatNumber(totalQuantity) }} 個 / {{ formatCurrency(totalAmount) }}円
         </el-tag>
       </div>
     </div>
 
     <!-- 数据表格 -->
-    <el-card class="table-card">
+    <el-card class="table-card glass-card">
       <el-table
         ref="tableRef"
         :data="orderList"
@@ -235,9 +235,11 @@
           <template #default="{ row }">
             <el-progress
               :percentage="
-                row.quantity > 0 ? Math.round(((row.receivedQty || 0) / row.quantity) * 100) : 0
+                row.quantity > 0
+                  ? Math.round((((row.totalReceivingQty ?? row.receivedQty) || 0) / row.quantity) * 100)
+                  : 0
               "
-              :status="(row.receivedQty || 0) >= row.quantity ? 'success' : ''"
+              :status="((row.totalReceivingQty ?? row.receivedQty) || 0) >= row.quantity ? 'success' : ''"
               :stroke-width="6"
             />
           </template>
@@ -252,17 +254,6 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="pagination-wrapper">
-        <el-pagination
-          v-model:current-page="pagination.page"
-          v-model:page-size="pagination.pageSize"
-          :page-sizes="[20, 50, 100, 200]"
-          :total="pagination.total"
-          layout="total, sizes, prev, pager, next, jumper"
-          @size-change="handleSearch"
-          @current-change="handleSearch"
-        />
-      </div>
     </el-card>
 
     <!-- 新建/编辑对话框 -->
@@ -562,7 +553,7 @@
               <el-table-column
                 prop="orderDate"
                 label="注文日"
-                width="100"
+                width="110"
                 align="center"
                 fixed="left"
               />
@@ -807,6 +798,16 @@
           </el-row>
           <el-row :gutter="12">
             <el-col :span="12">
+              <el-form-item label="メッキ種類" class="edit-form-item-compact">
+                <el-input
+                  v-model="editFormData.platingType"
+                  placeholder="メッキ種類"
+                  class="edit-input-compact"
+                  size="small"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
               <el-form-item label="数量" required class="edit-form-item-compact">
                 <el-input-number
                   v-model="editFormData.quantity"
@@ -818,6 +819,8 @@
                 />
               </el-form-item>
             </el-col>
+          </el-row>
+          <el-row :gutter="12">
             <el-col :span="12">
               <el-form-item label="単価" class="edit-form-item-compact">
                 <el-input-number
@@ -830,8 +833,6 @@
                 />
               </el-form-item>
             </el-col>
-          </el-row>
-          <el-row :gutter="12">
             <el-col :span="12">
               <el-form-item label="納入場所" class="edit-form-item-compact">
                 <el-input
@@ -842,6 +843,8 @@
                 />
               </el-form-item>
             </el-col>
+          </el-row>
+          <el-row :gutter="12">
             <el-col :span="12">
               <el-form-item label="区分" class="edit-form-item-compact">
                 <el-input
@@ -1125,6 +1128,8 @@ interface OrderItem {
   amount: number
   deliveryDate: string
   receivedQty: number
+  /** 受入数合計（SUM(receiving_qty)）。状態の判定に使用。未設定時は receivedQty にフォールバック */
+  totalReceivingQty?: number
   status: string
   remarks?: string
   deliveryLocation?: string
@@ -1160,9 +1165,10 @@ const convertOrderFromBackend = (item: any): OrderItem => {
     platingType: item.plating_type || item.platingType,
     quantity: item.quantity || 0,
     unitPrice: Number(item.unit_price || item.unitPrice || 0),
-    amount: Number(item.amount || 0),
+    amount: Number(item.amount ?? (item.quantity || 0) * Number(item.unit_price || item.unitPrice || 0)),
     deliveryDate: item.delivery_date || item.deliveryDate,
     receivedQty: item.received_qty || item.receivedQty || 0,
+    totalReceivingQty: item.total_receiving_qty ?? item.totalReceivingQty,
     status: item.status || 'pending',
     remarks: item.remarks || '',
     deliveryLocation: item.delivery_location || item.deliveryLocation,
@@ -1274,10 +1280,10 @@ const filters = reactive({
   status: '',
 })
 
-// 分页
+// 不分页，一次加载全部（后端 pageSize 上限 1000）
 const pagination = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: 1000,
   total: 0,
 })
 
@@ -1298,6 +1304,7 @@ const editFormData = reactive({
   supplierCd: '',
   productCode: '',
   productName: '',
+  platingType: '',
   quantity: 0,
   unitPrice: 0,
   deliveryDate: '',
@@ -1356,7 +1363,7 @@ const currentPrintOrderItems = ref<OrderItem[]>([]) // 当前要打印的订单�
 // 记录已打印的订单号（使用 Set 存储 orderNo）
 const printedOrderNos = ref<Set<string>>(new Set())
 // 承認者・発行者选项
-const personOptions = ['篠田', '小森', '趙', '青山', '孫', '竹村']
+const personOptions = ['篠田', '小森', '趙', '青山', '孫', '竹村', '東條']
 const printForm = reactive({
   recipientCompany: '',
   approver: '',
@@ -1381,18 +1388,16 @@ const orderList = ref<OrderItem[]>([])
 // 外注先选项（value为supplier_cd）
 const supplierOptions = ref<Array<{ value: string; label: string }>>([])
 
-// 加载外注先列表
+// 加载外注先列表（outsourcing_suppliers、種別 plating）
 const loadSuppliers = async () => {
   try {
-    const res = await getSuppliers({ type: 'メッキ', isActive: true })
+    const res = await getSuppliers({ type: 'plating', isActive: true })
+    const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
     let suppliers: any[] = []
-
-    if (Array.isArray(res)) {
-      suppliers = res
-    } else if (res?.data && Array.isArray(res.data)) {
-      suppliers = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      suppliers = res.data
+    if (Array.isArray(body)) {
+      suppliers = body
+    } else if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      suppliers = (body as { data: unknown[] }).data
     }
 
     supplierOptions.value = suppliers.map((s) => {
@@ -1413,10 +1418,12 @@ const loadSuppliers = async () => {
 const loadProductNames = async () => {
   try {
     const res = await request.get('/api/outsourcing/plating/receivings/products')
-    if (res?.success && Array.isArray(res.data)) {
-      productNameOptions.value = res.data
-    } else if (Array.isArray(res)) {
-      productNameOptions.value = res
+    const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
+    if (Array.isArray(body)) {
+      productNameOptions.value = body.map((x) => (typeof x === 'string' ? x : String(x)))
+    } else if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      const arr = (body as { data: unknown[] }).data
+      productNameOptions.value = arr.map((x) => (typeof x === 'string' ? x : String(x)))
     }
   } catch (error) {
     console.error('製品名一覧取得エラー:', error)
@@ -1428,27 +1435,32 @@ const totalQuantity = computed(() => orderList.value.reduce((sum, item) => sum +
 const totalAmount = computed(() => orderList.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogTitle = computed(() => (isEdit.value ? '注文編集' : '新規注文'))
 
-// 根据订单状态计算显示状态
+// 状態は「受入数」と「数量」で判定する（良品数ではない）
 const calculateStatus = (row: OrderItem): string => {
-  const isPrinted = printedOrderNos.value.has(row.orderNo)
-  const receivedQty = row.receivedQty || 0
+  const backendStatus = (row.status || '').toLowerCase()
   const quantity = row.quantity || 0
+  const receivingQty = row.totalReceivingQty ?? row.receivedQty ?? 0
 
-  // 如果没有打印过，显示'未発注'
-  if (!isPrinted) {
+  if (backendStatus === 'pending') {
     return '未発注'
   }
 
-  // 如果已打印过，根据入庫数判断
-  if (receivedQty === 0) {
-    return '発注済'
-  } else if (receivedQty === quantity) {
-    return '受入完'
-  } else if (receivedQty > 0 && receivedQty < quantity) {
-    return '一部受入'
-  } else {
+  if (backendStatus === 'ordered' || backendStatus === 'partial') {
+    if (receivingQty === 0) return '発注済'
+    if (receivingQty >= quantity) return '受入完'
+    if (receivingQty > 0 && receivingQty < quantity) return '一部受入'
     return '発注済'
   }
+
+  if (backendStatus === 'completed') return '受入完'
+  if (backendStatus === 'cancelled') return '取消'
+
+  const isPrinted = printedOrderNos.value.has(row.orderNo)
+  if (!isPrinted) return '未発注'
+  if (receivingQty === 0) return '発注済'
+  if (receivingQty >= quantity) return '受入完'
+  if (receivingQty > 0 && receivingQty < quantity) return '一部受入'
+  return '発注済'
 }
 
 // 方法
@@ -1459,6 +1471,7 @@ const getStatusType = (row: OrderItem): 'success' | 'info' | 'warning' | 'primar
     発注済: 'warning',
     一部受入: 'primary',
     受入完: 'success',
+    取消: 'danger',
   }
   return types[status] || 'info'
 }
@@ -1554,8 +1567,9 @@ const handleSearch = async () => {
       params.endDate = filters.dateRange[1]
     }
 
+    // 后端接口使用 supplierId（值可为 id 或 supplier_cd）
     if (filters.supplier) {
-      params.supplierCd = filters.supplier
+      params.supplierId = filters.supplier
     }
 
     if (filters.productName) {
@@ -1567,14 +1581,15 @@ const handleSearch = async () => {
 
     const res = await getPlatingOrders(params)
 
-    // レスポンス構造の確認と処理
+    // レスポンス構造の確認と処理（axios の body は res.data）
+    const body = res?.data as { success?: boolean; data?: unknown[]; total?: number } | unknown[] | undefined
     let responseData: any = null
-    if (res?.success !== undefined) {
-      responseData = res
-    } else if (res?.data) {
-      responseData = res
-    } else if (Array.isArray(res)) {
-      responseData = { success: true, data: res, total: res.length }
+    if (body && typeof body === 'object' && 'success' in body) {
+      responseData = body
+    } else if (body && typeof body === 'object' && body !== null && Array.isArray((body as { data?: unknown[] }).data)) {
+      responseData = body
+    } else if (Array.isArray(body)) {
+      responseData = { success: true, data: body, total: body.length }
     }
 
     if (responseData?.success) {
@@ -1587,24 +1602,14 @@ const handleSearch = async () => {
           const status = calculateStatus(item)
           return status === filters.status
         })
-        // 更新总数（筛选后的数量）
-        pagination.total = orderList.value.length
-      } else {
-        if (responseData.total !== undefined) {
-          pagination.total = responseData.total
-        } else {
-          pagination.total = orderList.value.length
-        }
       }
     } else {
       orderList.value = []
-      pagination.total = 0
     }
   } catch (error) {
     console.error('データ取得エラー:', error)
     ElMessage.error('データの取得に失敗しました')
     orderList.value = []
-    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -1724,10 +1729,8 @@ const loadBatchProductOptions = async () => {
       products = res
     } else if (res?.data && Array.isArray(res.data)) {
       products = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      products = res.data
-    } else if (res?.success && res?.data && Array.isArray(res.data)) {
-      products = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      products = (res?.data as any).data
     }
 
     batchProductOptions.value = products
@@ -1787,10 +1790,8 @@ const fetchBatchProducts = async () => {
       products = res
     } else if (res?.data && Array.isArray(res.data)) {
       products = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      products = res.data
-    } else if (res?.success && res?.data && Array.isArray(res.data)) {
-      products = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      products = (res?.data as any).data
     }
 
     const selectedProduct = products.find(
@@ -1803,28 +1804,59 @@ const fetchBatchProducts = async () => {
       return
     }
 
+    // 期間内の既存注文を取得（同一外注先・製品名で絞り込み）
+    const listRes = await getPlatingOrders({
+      page: 1,
+      pageSize: 500,
+      startDate: batchFormData.dateRange[0],
+      endDate: batchFormData.dateRange[1],
+      supplierId: batchFormData.supplierCd,
+      productName: selectedProduct.product_name || selectedProduct.productName || '',
+    })
+    const listBody = listRes && typeof listRes === 'object' && 'data' in listRes ? listRes : null
+    const existingOrders: any[] = Array.isArray((listBody as any)?.data) ? (listBody as any).data : []
+
+    // 注文日ごとに既存データを集約（同一日の複数件は数量を合算、納期は先頭を使用）
+    const existingByDate: Record<string, { quantity: number; deliveryDate: string }> = {}
+    for (const o of existingOrders) {
+      const orderDateStr = typeof o.order_date === 'string' ? o.order_date.slice(0, 10) : ''
+      if (!orderDateStr) continue
+      const qty = Number(o.quantity) || 0
+      const deliveryStr =
+        typeof o.delivery_date === 'string' ? o.delivery_date.slice(0, 10) : ''
+      const deliveryLeadTime = Number(
+        selectedProduct.delivery_lead_time || selectedProduct.deliveryLeadTime || 7,
+      )
+      if (existingByDate[orderDateStr]) {
+        existingByDate[orderDateStr].quantity += qty
+      } else {
+        existingByDate[orderDateStr] = {
+          quantity: qty,
+          deliveryDate:
+            deliveryStr || addBusinessDays(orderDateStr, deliveryLeadTime),
+        }
+      }
+    }
+
     // 生成期间内的日期列表
     const startDate = new Date(batchFormData.dateRange[0])
     const endDate = new Date(batchFormData.dateRange[1])
     const dateList: string[] = []
-
-    // 生成日期列表（包括开始和结束日期）
     const currentDate = new Date(startDate)
     while (currentDate <= endDate) {
-      const dateStr = formatDate(currentDate)
-      dateList.push(dateStr)
+      dateList.push(formatDate(currentDate))
       currentDate.setDate(currentDate.getDate() + 1)
     }
 
-    // 计算默认納期（注文日 + lead_time 工作日）
     const deliveryLeadTime = Number(
       selectedProduct.delivery_lead_time || selectedProduct.deliveryLeadTime || 7,
     )
 
-    // 为每个日期生成一条订单记录
+    // 各注文日について：既存データがあれば数量・納期を反映、なければ新規行
     batchOrderList.value = dateList.map((orderDate) => {
-      // 计算納期（注文日 + lead_time 工作日）
-      const deliveryDate = addBusinessDays(orderDate, deliveryLeadTime)
+      const existing = existingByDate[orderDate]
+      const deliveryDate = existing?.deliveryDate || addBusinessDays(orderDate, deliveryLeadTime)
+      const quantity = existing && existing.quantity > 0 ? existing.quantity : ''
 
       return {
         orderDate,
@@ -1837,12 +1869,17 @@ const fetchBatchProducts = async () => {
         content: selectedProduct.content || '',
         specification: selectedProduct.specification || '',
         deliveryDate,
-        quantity: '',
+        quantity,
         deliveryLeadTime,
       }
     })
 
-    ElMessage.success(`${batchOrderList.value.length}件の注文データを生成しました`)
+    const filledCount = Object.keys(existingByDate).length
+    if (filledCount > 0) {
+      ElMessage.success(`${batchOrderList.value.length}件のデータを読込ました（${filledCount}日分は既存の数量を反映）`)
+    } else {
+      ElMessage.success(`${batchOrderList.value.length}件の注文データを生成しました`)
+    }
   } catch (error) {
     console.error('一括注文データ生成エラー:', error)
     ElMessage.error('一括注文データの生成に失敗しました')
@@ -1970,8 +2007,8 @@ const editOrder = async (row: OrderItem) => {
       orders = res
     } else if (res?.data && Array.isArray(res.data)) {
       orders = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      orders = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      orders = (res?.data as any).data
     }
 
     if (orders.length === 0) {
@@ -1989,6 +2026,7 @@ const editOrder = async (row: OrderItem) => {
       supplierCd: order.supplierCd || '',
       productCode: order.productCode,
       productName: order.productName,
+      platingType: order.platingType || '',
       quantity: order.quantity,
       unitPrice: order.unitPrice,
       deliveryDate: order.deliveryDate,
@@ -2024,8 +2062,8 @@ const loadHolidays = async (destinationCd?: string) => {
       holidays = res
     } else if (res?.data && Array.isArray(res.data)) {
       holidays = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      holidays = res.data
+    } else if (res?.data && typeof res.data === 'object' && (res.data as any)?.data && Array.isArray((res.data as any).data)) {
+      holidays = (res.data as any).data
     }
 
     // 将休息日转换为 Set，方便快速查找
@@ -2101,10 +2139,8 @@ const fetchProducts = async () => {
       products = res
     } else if (res?.data && Array.isArray(res.data)) {
       products = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      products = res.data
-    } else if (res?.success && res?.data && Array.isArray(res.data)) {
-      products = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      products = (res?.data as any).data
     }
 
     if (products.length === 0) {
@@ -2287,6 +2323,7 @@ const submitEditForm = async () => {
       supplier_cd: editFormData.supplierCd,
       product_cd: editFormData.productCode,
       product_name: editFormData.productName,
+      plating_type: editFormData.platingType || undefined,
       quantity: editFormData.quantity,
       unit_price: editFormData.unitPrice,
       delivery_date: editFormData.deliveryDate || null,
@@ -2322,8 +2359,8 @@ const printOrder = async (row: OrderItem) => {
       orders = res
     } else if (res?.data && Array.isArray(res.data)) {
       orders = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      orders = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      orders = (res?.data as any).data
     }
 
     if (orders.length === 0) {
@@ -2358,7 +2395,7 @@ const printOrder = async (row: OrderItem) => {
 
     // 设置默认值
     printForm.approver = '小森' // 承認者默认'小森'
-    printForm.issuer = '竹村' // 発行者默认'竹村'
+    printForm.issuer = '東條' // 発行者默认'東條'（与溶接页一致）
 
     // 临时存储当前要打印的订单数据（用于 confirmPrint 函数）
     currentPrintOrderItems.value = orderItems
@@ -2409,9 +2446,9 @@ const handlePrintOrder = async () => {
     }
   }
 
-  // 设置默认值
+  // 设置默认值（与溶接页一致）
   printForm.approver = '小森' // 承認者默认'小森'
-  printForm.issuer = '竹村' // 発行者默认'竹村'
+  printForm.issuer = '東條' // 発行者默认'東條'
 
   // 存储当前要打印的订单数据
   currentPrintOrderItems.value = orderItems
@@ -2448,12 +2485,15 @@ const confirmPrint = async () => {
         .filter((id) => id !== undefined && id !== null) as number[]
 
       if (orderIds.length > 0) {
-        await batchOrderPlating(orderIds)
+        const res = await batchOrderPlating(orderIds)
+        const msg = (res as any)?.data?.message
+        if (msg) ElMessage.success(msg)
+        // 注文書発行で状態が ordered に更新されたため、一覧の状態表示を再取得する
+        await handleSearch()
       }
     } catch (err) {
       console.error('订单状态更新失败:', err)
       ElMessage.warning('注文状態の更新に失敗しましたが、印刷は続行します')
-      // 失败时不阻断打印流程
     }
 
     // 保存打印履历（不中断主流程）
@@ -2954,12 +2994,34 @@ onMounted(async () => {
 }
 
 .page-header {
-  background: linear-gradient(135deg, #4ecdc4 0%, #44b09e 100%);
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.88) 0%, rgba(118, 75, 162, 0.88) 100%);
+  border-radius: 14px;
+  padding: 16px 22px;
+  margin-bottom: 14px;
   color: white;
-  box-shadow: 0 3px 15px rgba(78, 205, 196, 0.25);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.page-header.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+}
+
+/* 玻璃体卡片（与溶接页一致） */
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08), 0 0 0 1px rgba(102, 126, 234, 0.06);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.glass-card:hover {
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12), 0 0 0 1px rgba(102, 126, 234, 0.08);
 }
 
 .header-content {
@@ -3341,13 +3403,6 @@ onMounted(async () => {
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 12px;
-}
-
-.pagination-wrapper {
-  padding: 12px 14px;
-  display: flex;
-  justify-content: flex-end;
-  border-top: 1px solid #ebeef5;
 }
 
 .order-dialog :deep(.el-dialog) {
@@ -4185,18 +4240,6 @@ onMounted(async () => {
     min-width: calc(50% - 4px);
   }
 
-  .pagination-wrapper {
-    padding: 8px 10px;
-  }
-
-  .pagination-wrapper :deep(.el-pagination) {
-    justify-content: center;
-  }
-
-  .pagination-wrapper :deep(.el-pagination .el-pagination__sizes),
-  .pagination-wrapper :deep(.el-pagination .el-pagination__jump) {
-    display: none;
-  }
 }
 
 /* 打印按钮样式 */

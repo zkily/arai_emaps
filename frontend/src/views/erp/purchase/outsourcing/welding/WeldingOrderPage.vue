@@ -1,7 +1,7 @@
 <template>
   <div class="outsourcing-order-page">
     <!-- 页面头部 -->
-    <div class="page-header">
+    <div class="page-header glass-header">
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -19,7 +19,7 @@
     </div>
 
     <!-- 検索フィルター -->
-    <el-card class="filter-card">
+    <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
         <div class="filter-group">
@@ -120,7 +120,7 @@
     </el-card>
 
     <!-- 操作按钮栏 -->
-    <div class="action-bar">
+    <div class="action-bar glass-card">
       <div class="left-actions">
         <el-button type="primary" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>新規注文
@@ -134,13 +134,13 @@
       </div>
       <div class="right-actions">
         <el-tag type="info" size="large">
-          合計: {{ formatNumber(totalQuantity) }} 個 / {{ formatCurrency(totalAmount) }}
+          合計: {{ formatNumber(totalQuantity) }} 本 / {{ formatCurrency(totalAmount) }}円
         </el-tag>
       </div>
     </div>
 
     <!-- 数据表格 -->
-    <el-card class="table-card">
+    <el-card class="table-card glass-card">
       <el-table
         ref="tableRef"
         :data="orderList"
@@ -182,7 +182,7 @@
         <el-table-column
           prop="content"
           label="内容"
-          width="100"
+          width="120"
           align="center"
           show-overflow-tooltip
         >
@@ -193,7 +193,7 @@
         <el-table-column
           prop="category"
           label="区分"
-          width="110"
+          width="130"
           align="center"
           show-overflow-tooltip
         >
@@ -1344,7 +1344,7 @@ const currentPrintOrderItems = ref<OrderItem[]>([]) // 当前要打印的订单�
 // 记录已打印的订单号（使用 Set 存储 orderNo）
 const printedOrderNos = ref<Set<string>>(new Set())
 // 承認者・発行者选项
-const personOptions = ['篠田', '小森', '趙', '青山', '孫', '竹村']
+const personOptions = ['篠田', '小森', '趙', '青山', '孫', '竹村', '東條']
 const printForm = reactive({
   recipientCompany: '',
   approver: '',
@@ -1416,27 +1416,35 @@ const totalQuantity = computed(() => orderList.value.reduce((sum, item) => sum +
 const totalAmount = computed(() => orderList.value.reduce((sum, item) => sum + item.amount, 0))
 const dialogTitle = computed(() => (isEdit.value ? '注文編集' : '新規注文'))
 
-// 根据订单状态计算显示状态
+// 根据订单状态计算显示状态（优先使用后端 status，新規登録为 pending → 未発注）
 const calculateStatus = (row: OrderItem): string => {
-  const isPrinted = printedOrderNos.value.has(row.orderNo)
+  const backendStatus = (row.status || '').toLowerCase()
   const receivedQty = row.receivedQty || 0
   const quantity = row.quantity || 0
 
-  // 如果没有打印过，显示'未発注'
-  if (!isPrinted) {
+  // 后端 status=pending 时一律显示 未発注（新規登録・未发注）
+  if (backendStatus === 'pending') {
     return '未発注'
   }
 
-  // 如果已打印过，根据入庫数判断
-  if (receivedQty === 0) {
-    return '発注済'
-  } else if (receivedQty === quantity) {
-    return '受入完'
-  } else if (receivedQty > 0 && receivedQty < quantity) {
-    return '一部受入'
-  } else {
+  // 后端 status=ordered / partial 时，按入庫数显示
+  if (backendStatus === 'ordered' || backendStatus === 'partial') {
+    if (receivedQty === 0) return '発注済'
+    if (receivedQty >= quantity) return '受入完'
+    if (receivedQty > 0 && receivedQty < quantity) return '一部受入'
     return '発注済'
   }
+
+  if (backendStatus === 'completed') return '受入完'
+  if (backendStatus === 'cancelled') return '取消'
+
+  // 兼容：无 status 或未知值时，按打印履历与入庫数判断
+  const isPrinted = printedOrderNos.value.has(row.orderNo)
+  if (!isPrinted) return '未発注'
+  if (receivedQty === 0) return '発注済'
+  if (receivedQty >= quantity) return '受入完'
+  if (receivedQty > 0 && receivedQty < quantity) return '一部受入'
+  return '発注済'
 }
 
 // 方法
@@ -1447,6 +1455,7 @@ const getStatusType = (row: OrderItem): 'success' | 'info' | 'warning' | 'primar
     発注済: 'warning',
     一部受入: 'primary',
     受入完: 'success',
+    取消: 'danger',
   }
   return types[status] || 'info'
 }
@@ -1942,6 +1951,7 @@ const submitBatchForm = async () => {
         specification: safeValue(order.specification || null),
         remarks: null,
         created_by: 'system',
+        status: 'pending', // 新規登録は未発注
       }
     })
 
@@ -2239,6 +2249,7 @@ const submitForm = async () => {
         specification: safeValue(product.specification || null),
         remarks: safeValue(formData.remarks || null),
         created_by: 'system',
+        status: 'pending', // 新規登録は未発注
       }
     })
 
@@ -2371,7 +2382,7 @@ const printOrder = async (row: OrderItem) => {
 
     // 设置默认值
     printForm.approver = '小森' // 承認者默认'小森'
-    printForm.issuer = '青山' // 発行者默认'青山'
+    printForm.issuer = '東條' // 発行者默认'東條'
 
     // 临时存储当前要打印的订单数据（用于 confirmPrint 函数）
     currentPrintOrderItems.value = orderItems
@@ -2424,7 +2435,7 @@ const handlePrintOrder = async () => {
 
   // 设置默认值
   printForm.approver = '小森' // 承認者默认'小森'
-  printForm.issuer = '青山' // 発行者默认'青山'
+  printForm.issuer = '東條' // 発行者默认'東條'
 
   // 存储当前要打印的订单数据
   currentPrintOrderItems.value = orderItems
@@ -2433,10 +2444,9 @@ const handlePrintOrder = async () => {
   printConfirmDialogVisible.value = true
 }
 
-// 确认打印
+// 确认印刷（执行顺序：数据来源 → 本地已打印标记 → 批量更新状态 → 记录打印履历 → 生成并打开打印窗口）
 const confirmPrint = async () => {
   try {
-    // 获取注文数据（优先使用 currentPrintOrderItems，否则使用筛选后的列表）
     const orderItems =
       currentPrintOrderItems.value.length > 0
         ? currentPrintOrderItems.value
@@ -2447,29 +2457,25 @@ const confirmPrint = async () => {
       return
     }
 
-    // 记录已打印的订单号
     orderItems.forEach((item) => {
-      if (item.orderNo) {
-        printedOrderNos.value.add(item.orderNo)
-      }
+      if (item.orderNo) printedOrderNos.value.add(item.orderNo)
     })
 
-    // 更新订单状态为'発注済'（ordered）
-    try {
-      const orderIds = orderItems
-        .map((item) => item.id)
-        .filter((id) => id !== undefined && id !== null) as number[]
+    const orderIds = orderItems
+      .map((item) => item.id)
+      .filter((id) => id !== undefined && id !== null) as number[]
 
-      if (orderIds.length > 0) {
-        await batchOrderWelding(orderIds)
+    if (orderIds.length > 0) {
+      try {
+        const res = await batchOrderWelding(orderIds)
+        const msg = (res as any)?.data?.message
+        if (msg) ElMessage.success(msg)
+      } catch (err) {
+        console.error('订单状态更新失败:', err)
+        ElMessage.warning('注文状態の更新に失敗しましたが、印刷は続行します')
       }
-    } catch (err) {
-      console.error('订单状态更新失败:', err)
-      ElMessage.warning('注文状態の更新に失敗しましたが、印刷は続行します')
-      // 失败时不阻断打印流程
     }
 
-    // 保存打印履历（不中断主流程）
     try {
       const filtersPayload = {
         dateRange: filters.dateRange,
@@ -2888,12 +2894,12 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
         <table>
           <thead>
             <tr>
-              <th width="22%">注文番号</th>
+              <th width="24%">注文番号</th>
               <th width="11%">製品名</th>
               <th width="17%">内容</th>
               <th width="11%">単価(円)</th>
               <th width="10%">注文数</th>
-              <th width="11%">単位</th>
+              <th width="8%">単位</th>
               <th width="18%">区分</th>
             </tr>
           </thead>
@@ -2955,19 +2961,78 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 少量动画：页面与区块入场 */
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 字体清晰：抗锯齿与易读性 */
 .outsourcing-order-page {
-  padding: 12px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  padding: 16px;
+  background: linear-gradient(160deg, #e8ecf4 0%, #dde2ed 35%, #e8eaf6 70%, #e0e7ff 100%);
   min-height: 100vh;
+  animation: pageFadeIn 0.5s ease-out;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+}
+.outsourcing-order-page :deep(.el-table),
+.outsourcing-order-page :deep(.el-form),
+.outsourcing-order-page :deep(.el-dialog),
+.outsourcing-order-page :deep(.el-button),
+.outsourcing-order-page :deep(.el-input__inner),
+.outsourcing-order-page :deep(.el-select) {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.outsourcing-order-page :deep(.el-table .cell),
+.outsourcing-order-page :deep(.el-form-item__label) {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.outsourcing-order-page :deep(.el-table__header th .cell) {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.outsourcing-order-page :deep(.el-input__wrapper) {
+  font-weight: 500;
+}
+.outsourcing-order-page :deep(.el-link) {
+  font-weight: 600;
+}
+.outsourcing-order-page :deep(.el-tag) {
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .page-header {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.88) 0%, rgba(118, 75, 162, 0.88) 100%);
+  border-radius: 14px;
+  padding: 16px 22px;
+  margin-bottom: 14px;
   color: white;
-  box-shadow: 0 3px 15px rgba(78, 205, 196, 0.25);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  animation: slideDown 0.45s ease-out;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.page-header.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
 }
 
 .header-content {
@@ -2992,18 +3057,25 @@ onMounted(async () => {
 }
 
 .title-icon {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+.page-header:hover .title-icon {
+  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .title-text {
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.03em;
+  font-weight: 700;
 }
 
 .title-badge {
@@ -3017,20 +3089,33 @@ onMounted(async () => {
 .subtitle {
   margin: 0;
   font-size: 12px;
-  opacity: 0.9;
+  opacity: 0.95;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+
+/* ==================== 玻璃体卡片 ==================== */
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08), 0 0 0 1px rgba(102, 126, 234, 0.06);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.glass-card:hover {
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12), 0 0 0 1px rgba(102, 126, 234, 0.08);
 }
 
 /* ==================== 検索条件区域样式 ==================== */
 .filter-card {
-  margin-bottom: 10px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.08);
-  border: 1px solid rgba(102, 126, 234, 0.12);
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  margin-bottom: 12px;
+  border-radius: 14px;
+  animation: cardFadeIn 0.5s ease-out 0.08s both;
 }
 
 .filter-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: 14px 18px;
 }
 
 .filter-form {
@@ -3186,16 +3271,24 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 10px 14px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  animation: cardFadeIn 0.5s ease-out 0.14s both;
 }
 
 .left-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+}
+.left-actions .el-button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.left-actions .el-button:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+.left-actions .el-button:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .right-actions {
@@ -3204,14 +3297,20 @@ onMounted(async () => {
 }
 
 .right-actions .el-tag {
-  padding: 6px 14px;
+  padding: 8px 16px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  color: #0369a1;
-  box-shadow: 0 1px 3px rgba(3, 105, 161, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.right-actions .el-tag:hover {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: scale(1.02);
 }
 
 /* 按钮颜色区分 */
@@ -3260,12 +3359,13 @@ onMounted(async () => {
 }
 
 .table-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  animation: cardFadeIn 0.5s ease-out 0.2s both;
 }
 
 .table-card :deep(.el-card__body) {
   padding: 0;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .data-table {
@@ -3282,21 +3382,25 @@ onMounted(async () => {
 
 .data-table :deep(.el-table__body td) {
   padding: 6px 0;
-  height: 36px;
-  font-size: 12px;
+  height: 38px;
+  font-size: 13px;
 }
 
 .data-table :deep(.el-table__body tr) {
   height: 36px;
 }
 
+.data-table :deep(.el-table__body tr) {
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
 .data-table :deep(.el-table__body tr:hover) {
-  background-color: #f8f9fa;
+  background-color: rgba(102, 126, 234, 0.06);
 }
 
 .data-table :deep(.el-table .cell) {
   padding: 0 8px;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: 13px;
 }
 
 .data-table :deep(.el-link) {
@@ -3340,7 +3444,8 @@ onMounted(async () => {
 
 .amount-cell {
   font-weight: 600;
-  color: #e6a23c;
+  color: #c2410c;
+  letter-spacing: 0.02em;
 }
 
 /* 外注先标签样式 */
@@ -3358,11 +3463,14 @@ onMounted(async () => {
 }
 
 .order-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: white;
   margin: 0;
   padding: 12px 16px;
-  border-bottom: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
 }
 
 .order-dialog :deep(.el-dialog__title) {
@@ -3390,21 +3498,31 @@ onMounted(async () => {
 
 .order-dialog :deep(.el-dialog__body) {
   padding: 0;
-  background: #f5f7fa;
+  background: rgba(248, 249, 252, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.order-dialog :deep(.el-dialog) {
+  animation: cardFadeIn 0.35s ease-out;
 }
 
 .batch-dialog :deep(.el-dialog) {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 24px 64px rgba(102, 126, 234, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  animation: cardFadeIn 0.35s ease-out;
 }
 
 .batch-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: white;
   margin: 0;
   padding: 12px 20px;
-  border-bottom: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
 }
 
 /* 新規一括注文 美化样式 */
@@ -3450,16 +3568,24 @@ onMounted(async () => {
 
 .batch-dialog__body {
   padding: 20px 24px 16px;
-  background: #f8f9fc;
+  background: rgba(248, 249, 252, 0.9);
+  backdrop-filter: blur(8px);
   min-height: 200px;
 }
 
 .batch-dialog__section {
-  background: #fff;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: box-shadow 0.25s ease;
+}
+.batch-dialog__section:hover {
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
 }
 
 .batch-dialog__section:last-child {
@@ -3479,7 +3605,7 @@ onMounted(async () => {
 }
 
 .batch-dialog__section-icon {
-  color: #f5576c;
+  color: #667eea;
   font-size: 16px;
 }
 
@@ -3636,7 +3762,7 @@ onMounted(async () => {
 }
 
 .batch-dialog__empty--loading .batch-dialog__empty-icon {
-  color: #f5576c;
+  color: #667eea;
 }
 
 .batch-dialog__empty-text {
@@ -3678,13 +3804,13 @@ onMounted(async () => {
 }
 
 .batch-dialog__btn--submit {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(245, 87, 108, 0.35);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
 }
 
 .batch-dialog__btn--submit:hover {
-  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.45);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45);
   transform: translateY(-1px);
 }
 
@@ -3932,14 +4058,14 @@ onMounted(async () => {
 }
 
 .dialog-footer .el-button--primary {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(78, 205, 196, 0.3);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .dialog-footer .el-button--primary:hover {
-  background: linear-gradient(135deg, #44b09e 0%, #3a9d8f 100%);
-  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.4);
+  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 /* 批量登録窗体样式 */
@@ -4495,8 +4621,8 @@ onMounted(async () => {
 
 .print-confirm-dialog :deep(.el-dialog__header) {
   padding: 10px 14px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: rgb(8, 8, 8);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
   border-bottom: none;
 }
 
@@ -4822,7 +4948,7 @@ onMounted(async () => {
 
 .edit-dialog-compact :deep(.el-dialog__header) {
   padding: 10px 16px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   margin: 0;
   border-bottom: none;

@@ -80,6 +80,62 @@ class OutsourcingProcessProduct(Base):
     updated_by = Column(String(50))
 
 
+class PlatingOrder(Base):
+    """外注メッキ注文（outsourcing_plating_orders）"""
+    __tablename__ = "outsourcing_plating_orders"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    order_no = Column(String(30), unique=True, nullable=False, index=True)
+    order_date = Column(Date, nullable=False, index=True)
+    supplier_cd = Column(String(10), nullable=False, index=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    plating_type = Column(String(50), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    unit = Column(String(10), default="個")
+    unit_price = Column(Numeric(12, 2), default=0)
+    delivery_date = Column(Date)
+    delivery_location = Column(String(50))
+    category = Column(String(50))
+    content = Column(String(50))
+    specification = Column(String(50))
+    received_qty = Column(Integer, default=0)
+    status = Column(String(20), default="pending", index=True)  # pending, ordered, partial, completed, cancelled
+    remarks = Column(Text)
+    created_by = Column(String(50))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class PlatingReceiving(Base):
+    """外注メッキ受入（outsourcing_plating_receivings）"""
+    __tablename__ = "outsourcing_plating_receivings"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    receiving_no = Column(String(30), unique=True, nullable=False, index=True)
+    receiving_date = Column(Date, nullable=False, index=True)
+    order_id = Column(Integer, ForeignKey("outsourcing_plating_orders.id", ondelete="RESTRICT"), nullable=False, index=True)
+    order_no = Column(String(30), nullable=False, index=True)
+    supplier_cd = Column(String(10), nullable=False, index=True)
+    product_cd = Column(String(50), nullable=False)
+    product_name = Column(String(200))
+    plating_type = Column(String(50))
+    order_qty = Column(Integer, nullable=False)
+    receiving_qty = Column(Integer, nullable=False)
+    good_qty = Column(Integer, default=0)
+    defect_qty = Column(Integer, default=0)
+    defect_reason = Column(String(100))
+    status = Column(String(20), default="pending", index=True)  # pending, inspected, defect
+    inspector = Column(String(50))
+    remarks = Column(Text)
+    delivery_location = Column(String(50))
+    category = Column(String(50))
+    content = Column(String(50))
+    specification = Column(String(50))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class WeldingReceiving(Base):
     """外注溶接受入（outsourcing_welding_receivings）"""
     __tablename__ = "outsourcing_welding_receivings"

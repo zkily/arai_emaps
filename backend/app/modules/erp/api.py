@@ -8,6 +8,7 @@ from sqlalchemy import select, func, and_, or_, delete
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from datetime import date, datetime
+from calendar import monthrange
 import json
 import logging
 import traceback
@@ -177,7 +178,8 @@ async def list_order_monthly(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """月別受注一覧"""
+    """月別受注一覧。確定本数は order_daily.confirmed_units の合計（当該月・期間内）で返す。"""
+    od = models.OrderDaily
     query = select(models.OrderMonthly)
     if year is not None:
         query = query.where(models.OrderMonthly.year == year)
@@ -198,7 +200,38 @@ async def list_order_monthly(
         )
     query = query.order_by(models.OrderMonthly.year.desc(), models.OrderMonthly.month.desc())
     result = await db.execute(query)
-    return result.scalars().all()
+    rows = result.scalars().all()
+
+    # 確定本数 = 当該月订单・期間内の order_daily.confirmed_units 合計
+    sum_map = {}
+    if rows:
+        by_ym = {}
+        for r in rows:
+            ym = (r.year, r.month)
+            if ym not in by_ym:
+                by_ym[ym] = []
+            by_ym[ym].append(r.order_id)
+        for (y, m), order_ids in by_ym.items():
+            first_day = date(y, m, 1)
+            last_day = date(y, m, monthrange(y, m)[1])
+            q = (
+                select(od.monthly_order_id, func.coalesce(func.sum(od.confirmed_units), 0).label("total"))
+                .where(od.monthly_order_id.in_(order_ids))
+                .where(od.date >= first_day)
+                .where(od.date <= last_day)
+                .group_by(od.monthly_order_id)
+            )
+            sub_r = await db.execute(q)
+            for s in sub_r.all():
+                sum_map[s.monthly_order_id] = int(s.total or 0)
+
+    out = []
+    for r in rows:
+        item = schemas.OrderMonthly.model_validate(r)
+        item.forecast_total_units = sum_map.get(r.order_id, 0)
+        item.forecast_diff = item.forecast_total_units - (r.forecast_units or 0)
+        out.append(item)
+    return out
 
 
 def _order_monthly_type_suffix(product_type: str) -> str:

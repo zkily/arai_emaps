@@ -29,6 +29,7 @@ class StockTransactionLog(Base):
     quantity = Column(Numeric(18, 4), nullable=False, comment="操作数量")
     unit = Column(String(10), nullable=True, comment="単位")
     order_no = Column(String(50), nullable=True, comment="関連伝票No")
+    notes = Column(String(100), nullable=True, comment="注文番号等（トリガー互換・削除照合用）")
     related_log_id = Column(BigInteger, nullable=True, comment="取消時の元ログIDなど")
     operator_id = Column(String(50), nullable=True, comment="操作担当者ID")
     operator_name = Column(String(100), nullable=True, comment="担当者名")

@@ -12,19 +12,26 @@ from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+from app.modules.master.models import Process, Product
 
 router = APIRouter(prefix="/stock-transaction-logs", tags=["StockTransactionLogs"])
 
 
-def _log_to_dict(row: StockTransactionLog) -> dict:
+def _log_to_dict(
+    row: StockTransactionLog,
+    process_name: Optional[str] = None,
+    product_name: Optional[str] = None,
+) -> dict:
     return {
         "id": row.id,
         "stock_type": row.stock_type,
         "transaction_type": row.transaction_type,
         "target_cd": row.target_cd,
+        "product_name": (product_name or "").strip() or "",
         "location_cd": row.location_cd,
         "lot_no": row.lot_no,
         "process_cd": row.process_cd,
+        "process_name": (process_name or "").strip() or (row.process_cd or ""),
         "machine_cd": row.machine_cd,
         "quantity": float(row.quantity) if row.quantity is not None else 0,
         "unit": row.unit,
@@ -55,31 +62,31 @@ async def get_stock_transaction_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """在庫取引履歴一覧取得"""
-    query = select(StockTransactionLog)
+    """在庫取引履歴一覧取得（processes を JOIN して process_name を返す）"""
+    base = select(StockTransactionLog).where(True)
     if stock_type:
-        query = query.where(StockTransactionLog.stock_type == stock_type)
+        base = base.where(StockTransactionLog.stock_type == stock_type)
     if target_cd and target_cd.strip():
-        query = query.where(StockTransactionLog.target_cd == target_cd.strip())
+        base = base.where(StockTransactionLog.target_cd == target_cd.strip())
     if keyword:
         q = f"%{keyword}%"
-        query = query.where(
+        base = base.where(
             (StockTransactionLog.target_cd.like(q)) | (StockTransactionLog.remarks.like(q))
         )
     if location_cd:
-        query = query.where(StockTransactionLog.location_cd == location_cd)
+        base = base.where(StockTransactionLog.location_cd == location_cd)
     if transaction_type:
-        query = query.where(StockTransactionLog.transaction_type == transaction_type)
+        base = base.where(StockTransactionLog.transaction_type == transaction_type)
     if process_cd:
-        query = query.where(StockTransactionLog.process_cd == process_cd)
+        base = base.where(StockTransactionLog.process_cd == process_cd)
     if source_file and source_file.strip():
-        query = query.where(StockTransactionLog.source_file == source_file.strip())
+        base = base.where(StockTransactionLog.source_file == source_file.strip())
     if date_start:
-        query = query.where(StockTransactionLog.transaction_time >= date_start)
+        base = base.where(StockTransactionLog.transaction_time >= date_start)
     if date_end:
-        query = query.where(StockTransactionLog.transaction_time <= f"{date_end} 23:59:59")
+        base = base.where(StockTransactionLog.transaction_time <= f"{date_end} 23:59:59")
 
-    count_query = select(func.count()).select_from(query.subquery())
+    count_query = select(func.count()).select_from(base.subquery())
     total_result = await db.execute(count_query)
     total = total_result.scalar() or 0
 
@@ -129,13 +136,41 @@ async def get_stock_transaction_logs(
     agg_result = await db.execute(agg_query)
     agg_row = agg_result.first()
 
+    query = (
+        select(StockTransactionLog, Process.process_name, Product.product_name)
+        .select_from(StockTransactionLog)
+        .outerjoin(Process, StockTransactionLog.process_cd == Process.process_cd)
+        .outerjoin(Product, StockTransactionLog.target_cd == Product.product_cd)
+        .where(True)
+    )
+    if stock_type:
+        query = query.where(StockTransactionLog.stock_type == stock_type)
+    if target_cd and target_cd.strip():
+        query = query.where(StockTransactionLog.target_cd == target_cd.strip())
+    if keyword:
+        q = f"%{keyword}%"
+        query = query.where(
+            (StockTransactionLog.target_cd.like(q)) | (StockTransactionLog.remarks.like(q))
+        )
+    if location_cd:
+        query = query.where(StockTransactionLog.location_cd == location_cd)
+    if transaction_type:
+        query = query.where(StockTransactionLog.transaction_type == transaction_type)
+    if process_cd:
+        query = query.where(StockTransactionLog.process_cd == process_cd)
+    if source_file and source_file.strip():
+        query = query.where(StockTransactionLog.source_file == source_file.strip())
+    if date_start:
+        query = query.where(StockTransactionLog.transaction_time >= date_start)
+    if date_end:
+        query = query.where(StockTransactionLog.transaction_time <= f"{date_end} 23:59:59")
     query = query.order_by(StockTransactionLog.transaction_time.desc())
     query = query.offset((page - 1) * pageSize).limit(pageSize)
     result = await db.execute(query)
-    rows = result.scalars().all()
+    rows = result.all()
 
     return {
-        "list": [_log_to_dict(r) for r in rows],
+        "list": [_log_to_dict(r, pname, pprod_name) for r, pname, pprod_name in rows],
         "total": total,
         "totalQuantity": float(agg_row.total_quantity) if agg_row else 0,
         "inboundQuantity": float(agg_row.inbound_quantity) if agg_row else 0,
@@ -288,11 +323,19 @@ async def get_stock_transaction_log(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """在庫取引履歴1件取得"""
-    result = await db.execute(select(StockTransactionLog).where(StockTransactionLog.id == log_id))
-    row = result.scalar_one_or_none()
-    if not row:
+    q = (
+        select(StockTransactionLog, Process.process_name, Product.product_name)
+        .select_from(StockTransactionLog)
+        .outerjoin(Process, StockTransactionLog.process_cd == Process.process_cd)
+        .outerjoin(Product, StockTransactionLog.target_cd == Product.product_cd)
+        .where(StockTransactionLog.id == log_id)
+    )
+    result = await db.execute(q)
+    row_tuple = result.one_or_none()
+    if not row_tuple:
         raise HTTPException(status_code=404, detail="在庫取引履歴が見つかりません")
-    return _log_to_dict(row)
+    row, pname, prod_name = row_tuple
+    return _log_to_dict(row, pname, prod_name)
 
 
 @router.put("/{log_id}")

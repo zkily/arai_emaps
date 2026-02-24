@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, distinct, or_
+from sqlalchemy import select, func, distinct, or_, text, delete as sql_delete
 from typing import Optional, Any
 from datetime import date, datetime
 
@@ -11,6 +11,7 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.outsourcing.models import WeldingOrder, WeldingReceiving, OutsourcingSupplier
+from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 
 router = APIRouter()
 
@@ -111,7 +112,7 @@ async def get_welding_orders(
     total_result = await db.execute(count_q)
     total = total_result.scalar() or 0
 
-    q = q.order_by(WeldingOrder.order_date.desc(), WeldingOrder.id.desc())
+    q = q.order_by(WeldingOrder.order_date.asc(), WeldingOrder.id.asc())
     offset = (page - 1) * pageSize
     q = q.offset(offset).limit(pageSize)
     result = await db.execute(q)
@@ -181,29 +182,59 @@ def _order_to_dict(r: WeldingOrder, supplier_name: Optional[str] = None) -> dict
     }
 
 
-def _order_no_prefix() -> str:
-    """注文番号プレフィックス: WO + YYYYMMDD-"""
-    return f"WO{date.today().strftime('%Y%m%d')}-"
+def _order_no_prefix(supplier_cd: str, order_date: date) -> str:
+    """注文番号プレフィックス: 外注先コード + YYYYMMDD-（例: OS-00520260223-）"""
+    return f"{supplier_cd}{order_date.strftime('%Y%m%d')}-"
 
 
 async def _get_next_order_no_seq(db: AsyncSession, prefix: str) -> int:
-    """当日の最大連番を1回だけ取得し、次の連番を返す（1始まり）"""
+    """同一プレフィックスでの最大連番を取得し、次の連番を返す（1始まり）"""
     q = select(func.max(WeldingOrder.order_no)).where(WeldingOrder.order_no.like(f"{prefix}%"))
     r = await db.execute(q)
-    max_no = r.scalar_one_or_none()
-    if not max_no or not max_no[0]:
+    max_no = r.scalar_one_or_none()  # 标量：最大 order_no 字符串，如 "OS-00520260223-01"
+    if not max_no:
         return 1
     try:
-        return int(max_no[0].split("-")[-1]) + 1
+        seq_part = str(max_no).split("-")[-1]
+        return int(seq_part) + 1
     except (IndexError, ValueError):
         return 1
 
 
-async def _generate_order_no(db: AsyncSession) -> str:
-    """生成注文番号: WO + YYYYMMDD + - + 4桁連番（単体登録用）"""
-    prefix = _order_no_prefix()
+async def _generate_order_no(db: AsyncSession, supplier_cd: str, order_date: date) -> str:
+    """生成注文番号: 外注先コード + YYYYMMDD + - + 2桁連番（例: OS-00520260223-01）"""
+    prefix = _order_no_prefix(supplier_cd, order_date)
     seq = await _get_next_order_no_seq(db, prefix)
-    return f"{prefix}{seq:04d}"
+    return f"{prefix}{seq:02d}"
+
+
+def _receiving_no_prefix(receiving_date: date) -> str:
+    """受入番号プレフィックス: WR-YYYYMMDD-（例: WR-20260225-）"""
+    return f"WR-{receiving_date.strftime('%Y%m%d')}-"
+
+
+async def _get_next_receiving_no_seq(db: AsyncSession, receiving_date: date) -> int:
+    """同一日付での受入番号最大連番を取得し、次の連番を返す（1始まり）。形式 WR-YYYYMMDD-NN"""
+    prefix = _receiving_no_prefix(receiving_date)
+    q = select(func.max(WeldingReceiving.receiving_no)).where(
+        WeldingReceiving.receiving_no.like(f"{prefix}%")
+    )
+    r = await db.execute(q)
+    max_no = r.scalar_one_or_none()
+    if not max_no or not str(max_no).startswith(prefix):
+        return 1
+    try:
+        seq_part = str(max_no).replace(prefix, "").strip()
+        return int(seq_part) + 1
+    except (ValueError, TypeError):
+        return 1
+
+
+async def _generate_receiving_no(db: AsyncSession, receiving_date: date) -> str:
+    """生成受入番号: WR-YYYYMMDD-NN（例: WR-20260225-01）"""
+    prefix = _receiving_no_prefix(receiving_date)
+    seq = await _get_next_receiving_no_seq(db, receiving_date)
+    return f"{prefix}{seq:02d}"
 
 
 @router.get("/orders/by-order-no")
@@ -250,9 +281,8 @@ async def create_welding_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接注文新規登録（order_no は自動採番）"""
+    """溶接注文新規登録（order_no は自動採番: 外注先コード+注文日+2桁連番）"""
     try:
-        order_no = await _generate_order_no(db)
         order_date_val = body.get("order_date") or body.get("orderDate")
         if not order_date_val:
             raise HTTPException(status_code=400, detail="order_date は必須です")
@@ -267,6 +297,7 @@ async def create_welding_order(
         supplier_cd = str(body.get("supplier_cd") or body.get("supplierCd") or "").strip()
         if not supplier_cd:
             raise HTTPException(status_code=400, detail="supplier_cd は必須です")
+        order_no = await _generate_order_no(db, supplier_cd, order_date)
         product_cd = str(body.get("product_cd") or body.get("productCode") or "").strip()
         if not product_cd:
             raise HTTPException(status_code=400, detail="product_cd は必須です")
@@ -378,17 +409,13 @@ async def create_welding_orders_batch(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接注文一括新規登録（1リクエストで複数件、order_no を先に連番で採番してから一括INSERT）"""
+    """溶接注文一括新規登録（order_no: 外注先コード+注文日+2桁連番、同一外注先・同一注文日で連番）"""
     orders_payload = body.get("orders") or body.get("Orders") or []
     if not orders_payload:
         raise HTTPException(status_code=400, detail="orders は必須です")
     created = []
     try:
-        # 先に当日の次の連番を1回だけ取得し、ループでは seq+i で採番（同一トランザクション内の未コミットを参照しない）
-        prefix = _order_no_prefix()
-        start_seq = await _get_next_order_no_seq(db, prefix)
         for i, item in enumerate(orders_payload):
-            order_no = f"{prefix}{start_seq + i:04d}"
             order_date_val = item.get("order_date") or item.get("orderDate")
             if not order_date_val:
                 raise HTTPException(status_code=400, detail=f"orders[{i}].order_date は必須です")
@@ -402,6 +429,9 @@ async def create_welding_orders_batch(
             supplier_cd = str(item.get("supplier_cd") or item.get("supplierCd") or "").strip()
             if not supplier_cd:
                 raise HTTPException(status_code=400, detail=f"orders[{i}].supplier_cd は必須です")
+            prefix = _order_no_prefix(supplier_cd, order_date)
+            seq = await _get_next_order_no_seq(db, prefix)
+            order_no = f"{prefix}{seq:02d}"
             product_cd = str(item.get("product_cd") or item.get("productCode") or "").strip()
             if not product_cd:
                 raise HTTPException(status_code=400, detail=f"orders[{i}].product_cd は必須です")
@@ -470,12 +500,22 @@ async def delete_welding_order(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接注文削除"""
+    """溶接注文削除。該当注文の stock_transaction_logs も同時に削除する。"""
     q = select(WeldingOrder).where(WeldingOrder.id == order_id)
     res = await db.execute(q)
     row = res.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="注文が見つかりません")
+    order_no = (row.order_no or "").strip()
+    # 該当注文から生成された在庫取引ログを削除（order_no または notes が一致するレコード。トリガーで notes に注文番号が入る場合あり）
+    if order_no:
+        await db.execute(
+            text(
+                "DELETE FROM stock_transaction_logs WHERE source_file = 'outsourcing_welding_orders' "
+                "AND (order_no = :ono OR notes = :ono)"
+            ),
+            {"ono": order_no},
+        )
     await db.delete(row)
     await db.flush()
     return {"success": True, "message": "削除しました"}
@@ -487,17 +527,77 @@ async def batch_order_welding(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接注文一括発注（指定IDの status を ordered に更新）"""
-    order_ids = body.get("order_ids") or body.get("orderIds") or []
+    """注文書発行：対象 id のうち status='pending' の注文のみ status を 'ordered' に更新し、
+    該当注文ごとに outsourcing_welding_receivings に 1 件の受入レコード（待受入）を自動作成する。"""
+    raw_ids = body.get("ids") or body.get("order_ids") or body.get("orderIds") or []
+    order_ids = []
+    for x in raw_ids:
+        try:
+            order_ids.append(int(x))
+        except (TypeError, ValueError):
+            continue
+    order_ids = list(dict.fromkeys(order_ids))
     if not order_ids:
-        return {"success": True, "message": "対象がありません"}
-    q = select(WeldingOrder).where(WeldingOrder.id.in_(order_ids))
-    result = await db.execute(q)
-    rows = result.scalars().all()
-    for row in rows:
-        row.status = "ordered"
-    await db.flush()
-    return {"success": True, "message": f"{len(rows)}件を発注済に更新しました"}
+        return {"success": True, "message": "0件の注文を発注しました"}
+    try:
+        # 手動で IN 句を組み立て（expanding 依存を避け、notes 等の誤列を一切含めない）
+        placeholders = ", ".join([f":id_{i}" for i in range(len(order_ids))])
+        sql = (
+            "UPDATE outsourcing_welding_orders SET status = :status "
+            f"WHERE id IN ({placeholders}) AND status = 'pending'"
+        )
+        params = {"status": "ordered", **{f"id_{i}": order_ids[i] for i in range(len(order_ids))}}
+        result = await db.execute(text(sql), params)
+        count = result.rowcount if result.rowcount is not None else 0
+
+        # 更新された注文（status='ordered'）を取得し、受入が未作成の注文のみ受入レコードを 1 件作成
+        q_orders = select(WeldingOrder).where(
+            WeldingOrder.id.in_(order_ids),
+            WeldingOrder.status == "ordered",
+        )
+        res_orders = await db.execute(q_orders)
+        orders_updated = list(res_orders.scalars().all())
+        existing = await db.execute(
+            select(WeldingReceiving.order_id).where(WeldingReceiving.order_id.in_(order_ids))
+        )
+        existing_order_ids = {r[0] for r in existing.all()}
+        today = date.today()
+        for order in orders_updated:
+            if order.id in existing_order_ids:
+                continue
+            receiving_date = order.delivery_date if order.delivery_date else today
+            receiving_no = await _generate_receiving_no(db, receiving_date)
+            row = WeldingReceiving(
+                receiving_no=receiving_no,
+                receiving_date=receiving_date,
+                order_id=order.id,
+                order_no=order.order_no,
+                supplier_cd=order.supplier_cd,
+                product_cd=order.product_cd,
+                product_name=order.product_name,
+                welding_type=order.welding_type,
+                welding_points=order.welding_points or 0,
+                delivery_location=order.delivery_location,
+                category=order.category,
+                content=order.content,
+                specification=order.specification,
+                order_qty=order.quantity,
+                receiving_qty=0,
+                good_qty=0,
+                defect_qty=0,
+                status="pending",
+                inspector=None,
+                remarks=None,
+            )
+            db.add(row)
+            existing_order_ids.add(order.id)
+            await db.flush()  # 次の _generate_receiving_no で同日連番を正しく採番するため
+
+        return {"success": True, "message": f"{count}件の注文を発注しました"}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/receivings/products")
@@ -600,14 +700,11 @@ async def create_welding_receiving(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接受入新規登録"""
+    """溶接受入新規登録（receiving_no 未指定時は WR-YYYYMMDD-NN 形式を自動作成）"""
     order_id = body.get("order_id") or body.get("orderId")
     if not order_id:
         raise HTTPException(status_code=400, detail="order_id は必須です")
-    order_no = body.get("order_no") or body.get("orderNo") or ""
     receiving_no = body.get("receiving_no") or body.get("receivingNo")
-    if not receiving_no:
-        raise HTTPException(status_code=400, detail="受入番号は必須です")
     receiving_date = body.get("receiving_date") or body.get("receivingDate")
     if not receiving_date:
         raise HTTPException(status_code=400, detail="受入日は必須です")
@@ -622,7 +719,17 @@ async def create_welding_receiving(
     if not order_row:
         raise HTTPException(status_code=404, detail="注文が見つかりません")
 
-    # 重複受入番号チェック
+    # 受入番号未指定時は WR-YYYYMMDD-NN 形式を自動作成（例: WR-20260225-01）
+    if not receiving_no or not str(receiving_no).strip():
+        if hasattr(receiving_date, "isoformat"):
+            rec_date = receiving_date
+        else:
+            rec_date = _parse_date(str(receiving_date)[:10])
+        if not rec_date:
+            raise HTTPException(status_code=400, detail="受入日の形式が不正です（YYYY-MM-DD）")
+        receiving_no = await _generate_receiving_no(db, rec_date)
+
+    # 重複受入番号チェック（手入力で指定した場合）
     ex = await db.execute(select(WeldingReceiving).where(WeldingReceiving.receiving_no == receiving_no))
     if ex.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="受入番号が既に存在します")
@@ -697,6 +804,43 @@ async def update_welding_receiving(
     await db.flush()
     await db.refresh(row)
     return {"success": True, "data": _receiving_to_dict(row)}
+
+
+@router.delete("/receivings/{receiving_id}")
+async def delete_welding_receiving(
+    receiving_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """溶接受入削除。削除後に該当注文の received_qty を再計算して更新する。"""
+    q = select(WeldingReceiving).where(WeldingReceiving.id == receiving_id)
+    res = await db.execute(q)
+    row = res.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="受入が見つかりません")
+    order_id = row.order_id
+    await db.delete(row)
+    await db.flush()
+    # 該当注文の入庫数を再計算（残りの受入の good_qty 合計）
+    subq = (
+        select(func.coalesce(func.sum(WeldingReceiving.good_qty), 0))
+        .where(WeldingReceiving.order_id == order_id)
+    )
+    r2 = await db.execute(subq)
+    new_received = int(r2.scalar_one_or_none() or 0)
+    oq = select(WeldingOrder).where(WeldingOrder.id == order_id)
+    ores = await db.execute(oq)
+    order_row = ores.scalar_one_or_none()
+    if order_row:
+        order_row.received_qty = new_received
+        if new_received >= order_row.quantity:
+            order_row.status = "completed"
+        elif new_received > 0:
+            order_row.status = "partial"
+        else:
+            order_row.status = "pending"
+        await db.flush()
+    return {"success": True, "message": "受入を削除しました"}
 
 
 # keyword 用の条件は SQLAlchemy で複数カラムに ilike をかける場合、各カラムが None でないことも必要

@@ -1,7 +1,7 @@
 <template>
   <div class="outsourcing-receiving-page">
     <!-- 页面头部 -->
-    <div class="page-header plating-header">
+    <div class="page-header plating-header glass-header">
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -29,7 +29,7 @@
     </div>
 
     <!-- 検索フィルター -->
-    <el-card class="filter-card">
+    <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
         <div class="filter-group">
@@ -145,7 +145,7 @@
     </el-card>
 
     <!-- 操作按钮栏 -->
-    <div class="action-bar">
+    <div class="action-bar glass-card">
       <div class="left-actions">
         <el-button type="primary" @click="openReceivingDialog">
           <el-icon><Plus /></el-icon>受入登録
@@ -163,7 +163,7 @@
     </div>
 
     <!-- 数据表格 -->
-    <el-card class="table-card">
+    <el-card class="table-card glass-card">
       <el-table
         ref="tableRef"
         :data="receivingList"
@@ -227,7 +227,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="inspector" label="検収者" width="80" />
-        <el-table-column label="操作" width="70" fixed="right" align="center">
+        <el-table-column label="操作" width="80" fixed="right" align="center">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="editReceiving(row)" :icon="Edit" />
           </template>
@@ -439,11 +439,11 @@
               </el-form-item>
             </el-col>
           </el-row>
-          <el-form-item label="備考" class="form-item-info">
+          <el-form-item label="備考" class="form-item-info form-item-remarks">
             <el-input
               v-model="formData.remarks"
               type="textarea"
-              :rows="2"
+              :rows="3"
               placeholder="備考を入力"
             />
           </el-form-item>
@@ -460,7 +460,7 @@
     </el-dialog>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="受入詳細" width="680px" class="detail-dialog">
+    <el-dialog v-model="detailVisible" title="受入詳細" width="700px" class="detail-dialog">
       <el-descriptions :column="2" border size="small">
         <el-descriptions-item label="受入番号">{{ detailData.receivingNo }}</el-descriptions-item>
         <el-descriptions-item label="受入日">{{ detailData.receivingDate }}</el-descriptions-item>
@@ -622,8 +622,10 @@ interface OrderItem {
   specification?: string
 }
 
-// 数据转换：后端snake_case -> 前端camelCase
+// 数据转换：后端snake_case -> 前端camelCase（与溶接页一致，含 remainQty）
 const convertReceivingFromBackend = (item: any): ReceivingItem => {
+  const orderQty = item.order_qty ?? item.orderQty ?? 0
+  const receivingQty = item.receiving_qty ?? item.receivingQty ?? 0
   return {
     id: item.id,
     receivingNo: item.receiving_no || item.receivingNo,
@@ -635,14 +637,15 @@ const convertReceivingFromBackend = (item: any): ReceivingItem => {
     productCode: item.product_cd || item.productCode,
     productName: item.product_name || item.productName,
     platingType: item.plating_type || item.platingType,
-    orderQty: item.order_qty || item.orderQty || 0,
-    receivingQty: item.receiving_qty || item.receivingQty || 0,
-    goodQty: item.good_qty || item.goodQty || 0,
-    defectQty: item.defect_qty || item.defectQty || 0,
+    orderQty,
+    receivingQty,
+    goodQty: item.good_qty ?? item.goodQty ?? 0,
+    defectQty: item.defect_qty ?? item.defectQty ?? 0,
     defectReason: item.defect_reason || item.defectReason,
     status: item.status || 'pending',
     inspector: item.inspector || '',
     remarks: item.remarks || '',
+    remainQty: Math.max(0, orderQty - receivingQty),
   }
 }
 
@@ -726,10 +729,13 @@ const setDateThisMonth = () => {
 const loadProductNames = async () => {
   try {
     const res = await request.get('/api/outsourcing/plating/receivings/products')
-    if (res?.success && Array.isArray(res.data)) {
-      productNameOptions.value = res.data
-    } else if (Array.isArray(res)) {
-      productNameOptions.value = res
+    const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
+    const toNameList = (arr: unknown[]): string[] =>
+      arr.map((x) => (typeof x === 'string' ? x : (x as any)?.product_name ?? (x as any)?.productName ?? String(x)))
+    if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      productNameOptions.value = toNameList((body as { data: unknown[] }).data)
+    } else if (Array.isArray(body)) {
+      productNameOptions.value = toNameList(body)
     }
   } catch (error) {
     console.error('製品名一覧取得エラー:', error)
@@ -782,7 +788,11 @@ const supplierOptions = ref<Array<{ value: number; label: string }>>([])
 
 const orderOptions = ref<OrderOption[]>([])
 
-const inspectorOptions = ref<Array<{ value: string; label: string; name: string }>>([])
+// 検収者下拉框固定名单（与溶接页一致）
+const INSPECTOR_NAMES = ['篠田', '小森', '趙', '竹村', '孫', '東條'] as const
+const inspectorOptions = ref<Array<{ value: string; label: string }>>(
+  INSPECTOR_NAMES.map((name) => ({ value: name, label: name }))
+)
 
 // 获取日本时区的当前日期
 const getJapanDate = (): Date => {
@@ -799,18 +809,16 @@ const formatDate = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-// 加载外注先列表
+// 加载外注先列表（与溶接页一致）
 const loadSuppliers = async () => {
   try {
     const res = await getSuppliers({ type: 'plating', isActive: true })
+    const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
     let suppliers: any[] = []
-
-    if (Array.isArray(res)) {
-      suppliers = res
-    } else if (res?.data && Array.isArray(res.data)) {
-      suppliers = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      suppliers = res.data
+    if (Array.isArray(body)) {
+      suppliers = body
+    } else if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      suppliers = (body as { data: unknown[] }).data
     }
 
     supplierOptions.value = suppliers.map((s) => {
@@ -828,41 +836,7 @@ const loadSuppliers = async () => {
   }
 }
 
-// 加载用户列表（用于検収者下拉框）
-const loadInspectors = async () => {
-  try {
-    const res = await request.get('/api/master/users')
-    let users: any[] = []
-
-    if (res?.success && Array.isArray(res.data)) {
-      users = res.data
-    } else if (Array.isArray(res)) {
-      users = res
-    } else if (res?.data && Array.isArray(res.data)) {
-      users = res.data
-    }
-
-    // 过滤出 username 以 "1" 开头的用户
-    const filteredUsers = users.filter((u: any) => {
-      const username = u.username || ''
-      return username.startsWith('1')
-    })
-
-    inspectorOptions.value = filteredUsers.map((u: any) => {
-      const username = u.username || ''
-      const name = u.name || ''
-      const displayName = name ? `${username} - ${name}` : username
-      return {
-        value: username, // 使用 username 作为值（用于选择）
-        label: displayName, // 显示 username - name
-        name: name, // 保存 name 字段
-      }
-    })
-  } catch (error) {
-    console.error('検収者一覧取得エラー:', error)
-    ElMessage.error('検収者データの取得に失敗しました')
-  }
-}
+// 検収者使用固定名单，无需请求 API
 
 // 加载未完成订单列表（用于新建受入）
 const loadPendingOrders = async () => {
@@ -870,47 +844,35 @@ const loadPendingOrders = async () => {
     const res = await getPendingPlatingOrders()
     let orders: any[] = []
 
-    // 处理不同的响应格式
-    if (res?.success && Array.isArray(res.data)) {
-      orders = res.data
+    // 处理不同的响应格式（axios の body は res.data）
+    const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
+    if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      orders = (body as { data: unknown[] }).data
+    } else if (body && Array.isArray(body)) {
+      orders = body
     } else if (res?.data && Array.isArray(res.data)) {
       orders = res.data
-    } else if (Array.isArray(res)) {
-      orders = res
     }
 
     console.log('加载的订单数据:', orders)
 
-    orderOptions.value = orders
-      .map((o: any) => {
-        const order = {
-          id: o.id,
-          orderNo: o.order_no || o.orderNo,
-          productCode: o.product_cd || o.productCode,
-          productName: o.product_name || o.productName,
-          supplier: o.supplier_name || o.supplier || '',
-          supplierId: o.supplier_id || o.supplierId,
-          platingType: o.plating_type || o.platingType,
-          orderQty: o.quantity || o.orderQty || 0,
-          deliveredQty: o.received_qty || o.receivedQty || 0,
-          remainQty: o.remaining_qty || o.remainQty || 0,
-        }
-        console.log('映射后的订单:', order)
-        return order
-      })
-      .filter((order) => {
-        // 过滤掉注文番号为 "os-004" 的订单
-        if (order.orderNo === 'os-004') {
-          return false
-        }
-        // 过滤掉产品名开头为 "900" 的订单
-        if (order.productName && order.productName.startsWith('900')) {
-          return false
-        }
-        return true
-      })
+    const orderQty = (o: any) => o.quantity ?? o.orderQty ?? 0
+    const receivedQty = (o: any) => o.received_qty ?? o.receivedQty ?? 0
 
-    console.log('订单选项列表:', orderOptions.value)
+    orderOptions.value = orders
+      .map((o: any) => ({
+        id: o.id,
+        orderNo: o.order_no || o.orderNo,
+        productCode: o.product_cd || o.productCode,
+        productName: o.product_name || o.productName,
+        supplier: o.supplier_name || o.supplier || '',
+        supplierId: o.supplier_id ?? o.supplierId,
+        platingType: o.plating_type || o.platingType || 'メッキ',
+        orderQty: orderQty(o),
+        deliveredQty: receivedQty(o),
+        remainQty: Math.max(0, orderQty(o) - receivedQty(o)),
+      }))
+      .filter((order) => order.remainQty > 0)
   } catch (error) {
     console.error('未完了注文取得エラー:', error)
     ElMessage.error('未完了注文データの取得に失敗しました')
@@ -1080,29 +1042,31 @@ const handleSearch = async () => {
     let data: any[] = []
     let total = 0
 
-    if (res?.success && res.data) {
-      data = Array.isArray(res.data) ? res.data : []
-      total = res.total || 0
-    } else if (Array.isArray(res)) {
-      data = res
-    } else if (res?.data && Array.isArray(res.data)) {
-      data = res.data
-      total = res.total || data.length
+    const body = res?.data as { success?: boolean; data?: unknown[]; total?: number } | unknown[] | undefined
+    if (body && typeof body === 'object' && 'success' in body) {
+      const b = body as { data?: unknown[]; total?: number }
+      data = Array.isArray(b.data) ? b.data : []
+      total = b.total ?? data.length
+    } else if (Array.isArray(body)) {
+      data = body
+      total = body.length
+    } else if (body && typeof body === 'object' && Array.isArray((body as { data?: unknown[] }).data)) {
+      data = (body as { data: unknown[]; total?: number }).data
+      total = (body as { total?: number }).total ?? data.length
     }
 
     receivingList.value = data.map(convertReceivingFromBackend)
 
-    // 如果筛选条件中有状态，需要根据计算的状态进行过滤
     if (filters.status) {
       receivingList.value = receivingList.value.filter((item) => {
         const status = calculateStatus(item)
         return status === filters.status
       })
-      // 更新总数（筛选后的数量）
       total = receivingList.value.length
     }
 
     pagination.total = total
+    tableRef.value?.clearSelection?.()
   } catch (error: any) {
     console.error('受入一覧取得エラー:', error)
     ElMessage.error(error?.message || '受入一覧の取得に失敗しました')
@@ -1125,7 +1089,6 @@ const resetFilters = () => {
 
 const openReceivingDialog = async () => {
   isEdit.value = false
-  await loadInspectors() // 确保検収者选项已加载
   Object.assign(formData, {
     orderId: 0,
     orderNo: '',
@@ -1164,10 +1127,10 @@ const handleOrderChange = (orderNo: string) => {
     formData.orderQty = order.orderQty
     formData.deliveredQty = order.deliveredQty
     formData.remainQty = order.remainQty
-    // 编辑模式下不修改受入数、良品数等字段，保持原有值
+    // 新規時：受入数・良品数默认与注文数一致
     if (!isEdit.value) {
-      formData.receivingQty = order.remainQty
-      formData.goodQty = order.remainQty
+      formData.receivingQty = order.orderQty
+      formData.goodQty = order.orderQty
     }
     console.log('更新后的表单数据:', formData)
   } else {
@@ -1186,22 +1149,8 @@ const editReceiving = async (row: ReceivingItem) => {
   isEdit.value = true
   const remainQty = row.remainQty || row.orderQty - row.receivingQty
 
-  await loadInspectors() // 确保 inspectorOptions 已加载，再做映射
-
-  // 根据 name 找到对应的 username（因为数据库中存储的是 name）
-  const getInspectorUsername = (name: string | null | undefined): string => {
-    if (!name) return ''
-    const inspector = inspectorOptions.value.find((opt) => opt.name === name)
-    return inspector?.value || ''
-  }
-
-  // 保存原始的受入数和良品数，确保在编辑模式下不会被重置
-  const originalReceivingQty = row.receivingQty || 0
-  const originalGoodQty = row.goodQty || 0
-  const originalDefectQty = row.defectQty || 0
-
   Object.assign(formData, {
-    id: row.id, // 受入ID
+    id: row.id,
     orderId: row.orderId,
     orderNo: row.orderNo,
     receivingDate: row.receivingDate,
@@ -1213,19 +1162,14 @@ const editReceiving = async (row: ReceivingItem) => {
     orderQty: row.orderQty,
     deliveredQty: row.orderQty - remainQty,
     remainQty: remainQty,
-    receivingQty: originalReceivingQty,
-    goodQty: originalGoodQty,
-    defectQty: originalDefectQty,
-    defectReason: row.defectReason || '',
-    inspector: getInspectorUsername(row.inspector), // 根据 name 找到 username
+    receivingQty: row.orderQty, // 編集時：受入数默认与注文数一致
+    goodQty: row.orderQty,
+    defectQty: 0,
+    defectReason: '',
+    inspector: row.inspector || '',
     remarks: row.remarks || '',
   })
   await loadPendingOrders()
-  // 在加载订单列表后，重新确保受入数等字段保持原值（防止被重置）
-  formData.receivingQty = originalReceivingQty
-  formData.goodQty = originalGoodQty
-  formData.defectQty = originalDefectQty
-  await loadInspectors() // 确保 inspectorOptions 已加载
   dialogVisible.value = true
 }
 
@@ -1270,8 +1214,8 @@ const viewOrder = async (row: ReceivingItem) => {
       orders = res
     } else if (res?.data && Array.isArray(res.data)) {
       orders = res.data
-    } else if (res?.success && Array.isArray(res.data)) {
-      orders = res.data
+    } else if ((res?.data as any)?.success && Array.isArray((res?.data as any)?.data)) {
+      orders = (res?.data as any).data
     }
 
     if (orders.length === 0) {
@@ -1318,18 +1262,9 @@ const submitForm = async () => {
 
   submitLoading.value = true
   try {
-    // 将空字符串转换为 null，避免后端处理 undefined
     const safeValue = (value: any) => (value === '' || value === undefined ? null : value)
 
-    // 根据选择的 username 找到对应的 name
-    const getInspectorName = (username: string | null | undefined): string | null => {
-      if (!username) return null
-      const inspector = inspectorOptions.value.find((opt) => opt.value === username)
-      return inspector?.name || null
-    }
-
     if (isEdit.value) {
-      // 编辑受入
       if (!formData.id || formData.id === 0) {
         ElMessage.warning('受入IDが見つかりません')
         return
@@ -1340,16 +1275,14 @@ const submitForm = async () => {
         good_qty: formData.goodQty,
         defect_qty: formData.defectQty,
         defect_reason: safeValue(formData.defectReason),
-        inspector: safeValue(getInspectorName(formData.inspector)),
+        inspector: safeValue(formData.inspector),
         remarks: safeValue(formData.remarks),
       }
-      console.log('更新的受入数据:', data)
       await updatePlatingReceiving(formData.id, data)
       ElMessage.success('更新しました')
       dialogVisible.value = false
       handleSearch()
     } else {
-      // 新規受入（实际上是更新已存在的受入记录）
       const data = {
         order_id: formData.orderId,
         receiving_date: formData.receivingDate,
@@ -1357,12 +1290,12 @@ const submitForm = async () => {
         good_qty: formData.goodQty,
         defect_qty: formData.defectQty,
         defect_reason: safeValue(formData.defectReason),
-        inspector: safeValue(getInspectorName(formData.inspector)),
+        inspector: safeValue(formData.inspector),
         remarks: safeValue(formData.remarks),
       }
       console.log('提交的受入数据:', data)
       await createPlatingReceiving(data)
-      ElMessage.success('更新しました')
+      ElMessage.success('登録しました')
       dialogVisible.value = false
       handleSearch()
     }
@@ -1647,7 +1580,6 @@ onMounted(async () => {
   filters.dateRange = [today, today]
 
   await loadSuppliers()
-  await loadInspectors()
   await loadProductNames()
   await handleSearch()
 })
@@ -1666,6 +1598,14 @@ onMounted(async () => {
   margin-bottom: 10px;
   color: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+.page-header.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
 }
 
 .plating-header {
@@ -1766,6 +1706,18 @@ onMounted(async () => {
 
 .filter-card :deep(.el-card__body) {
   padding: 12px 16px;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08), 0 0 0 1px rgba(102, 126, 234, 0.06);
+  transition: box-shadow 0.25s ease;
+}
+.glass-card:hover {
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12), 0 0 0 1px rgba(102, 126, 234, 0.08);
 }
 
 .filter-form {
@@ -2374,6 +2326,33 @@ onMounted(async () => {
   padding: 5px 8px;
   border-radius: 4px;
   font-size: 13px;
+}
+
+.receiving-dialog .form-item-remarks {
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-form-item__content) {
+  line-height: 1.5;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner) {
+  height: auto !important;
+  min-height: 72px !important;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner:hover) {
+  border-color: #c0c4cc;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner:focus) {
+  border-color: #909399;
+  box-shadow: 0 0 0 2px rgba(144, 147, 153, 0.12);
+  outline: none;
 }
 
 .receiving-dialog :deep(.el-dialog__footer) {

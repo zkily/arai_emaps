@@ -1,7 +1,7 @@
 <template>
   <div class="outsourcing-receiving-page">
     <!-- 页面头部 -->
-    <div class="page-header welding-header">
+    <div class="page-header welding-header glass-header">
       <div class="header-content">
         <div class="title-section">
           <h2 class="title">
@@ -29,7 +29,7 @@
     </div>
 
     <!-- 検索フィルター -->
-    <el-card class="filter-card">
+    <el-card class="filter-card glass-card">
       <el-form :inline="true" :model="filters" class="filter-form">
         <!-- 期間フィルタ -->
         <div class="filter-group">
@@ -145,7 +145,7 @@
     </el-card>
 
     <!-- 操作按钮栏 -->
-    <div class="action-bar">
+    <div class="action-bar glass-card">
       <div class="left-actions">
         <el-button type="primary" @click="openReceivingDialog">
           <el-icon><Plus /></el-icon>受入登録
@@ -163,7 +163,7 @@
     </div>
 
     <!-- 数据表格 -->
-    <el-card class="table-card">
+    <el-card class="table-card glass-card">
       <el-table
         ref="tableRef"
         :data="receivingList"
@@ -226,7 +226,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="inspector" label="検収者" width="80" />
-        <el-table-column label="操作" width="70" fixed="right" align="center">
+        <el-table-column label="操作" width="80" fixed="right" align="center">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="editReceiving(row)" :icon="Edit" />
           </template>
@@ -438,11 +438,11 @@
               </el-form-item>
             </el-col>
           </el-row>
-          <el-form-item label="備考" class="form-item-info">
+          <el-form-item label="備考" class="form-item-info form-item-remarks">
             <el-input
               v-model="formData.remarks"
               type="textarea"
-              :rows="2"
+              :rows="3"
               placeholder="備考を入力"
             />
           </el-form-item>
@@ -793,7 +793,10 @@ const supplierOptions = ref<Array<{ value: number; label: string }>>([])
 
 const orderOptions = ref<OrderOption[]>([])
 
-const inspectorOptions = ref<Array<{ value: string; label: string; name: string }>>([])
+const INSPECTOR_NAMES = ['篠田', '小森', '趙', '竹村', '孫', '東條'] as const
+const inspectorOptions = ref<Array<{ value: string; label: string }>>(
+  INSPECTOR_NAMES.map((name) => ({ value: name, label: name }))
+)
 
 // 加载外注先列表
 const loadSuppliers = async () => {
@@ -823,31 +826,8 @@ const loadSuppliers = async () => {
   }
 }
 
-// 加载用户列表（用于検収者下拉框）- 使用系统用户 API
-const loadInspectors = async () => {
-  try {
-    const res = await request.get('/api/system/users', { params: { page: 1, page_size: 100 } })
-    const body = res?.data as { items?: { username?: string; full_name?: string }[] } | undefined
-    let users: any[] = []
-    if (body && typeof body === 'object' && Array.isArray((body as { items?: unknown[] }).items)) {
-      users = (body as { items: any[] }).items
-    }
-
-    inspectorOptions.value = users.map((u: any) => {
-      const username = u.username || ''
-      const name = u.full_name || u.name || ''
-      const displayName = name ? `${username} - ${name}` : username
-      return {
-        value: username,
-        label: displayName,
-        name: name,
-      }
-    })
-  } catch (error) {
-    console.error('検収者一覧取得エラー:', error)
-    ElMessage.error('検収者データの取得に失敗しました')
-  }
-}
+// 検収者下拉框使用固定名单，无需请求 API
+const loadInspectors = async () => {}
 
 // 加载未完成订单列表（用于新建受入）
 const loadPendingOrders = async () => {
@@ -1152,8 +1132,8 @@ const handleOrderChange = (orderNo: string) => {
     formData.orderQty = order.orderQty
     formData.deliveredQty = order.deliveredQty
     formData.remainQty = order.remainQty
-    formData.receivingQty = order.remainQty
-    formData.goodQty = order.remainQty
+    formData.receivingQty = order.orderQty
+    formData.goodQty = order.orderQty
     console.log('更新后的表单数据:', formData)
   } else {
     console.error('未找到订单:', orderNo)
@@ -1170,15 +1150,6 @@ const handleQtyChange = (val: number | undefined) => {
 const editReceiving = async (row: ReceivingItem) => {
   isEdit.value = true
   const remainQty = row.remainQty || row.orderQty - row.receivingQty
-
-  await loadInspectors() // 确保 inspectorOptions 已加载，再做映射
-
-  // 根据 name 找到对应的 username（因为数据库中存储的是 name）
-  const getInspectorUsername = (name: string | null | undefined): string => {
-    if (!name) return ''
-    const inspector = inspectorOptions.value.find((opt) => opt.name === name)
-    return inspector?.value || ''
-  }
 
   Object.assign(formData, {
     id: row.id, // 受入ID
@@ -1197,11 +1168,10 @@ const editReceiving = async (row: ReceivingItem) => {
     goodQty: row.orderQty, // 编辑时良品数也等于注文数
     defectQty: 0, // 编辑时不良数重置为0
     defectReason: '', // 编辑时不良理由重置为空
-    inspector: getInspectorUsername(row.inspector), // 根据 name 找到 username
+    inspector: row.inspector || '',
     remarks: row.remarks || '',
   })
   await loadPendingOrders()
-  await loadInspectors() // 确保 inspectorOptions 已加载
   dialogVisible.value = true
 }
 
@@ -1296,13 +1266,6 @@ const submitForm = async () => {
     // 将空字符串转换为 null，避免后端处理 undefined
     const safeValue = (value: any) => (value === '' || value === undefined ? null : value)
 
-    // 根据选择的 username 找到对应的 name
-    const getInspectorName = (username: string | null | undefined): string | null => {
-      if (!username) return null
-      const inspector = inspectorOptions.value.find((opt) => opt.value === username)
-      return inspector?.name || null
-    }
-
     if (isEdit.value) {
       // 编辑受入
       if (!formData.id || formData.id === 0) {
@@ -1315,7 +1278,7 @@ const submitForm = async () => {
         good_qty: formData.goodQty,
         defect_qty: formData.defectQty,
         defect_reason: safeValue(formData.defectReason),
-        inspector: safeValue(getInspectorName(formData.inspector)),
+        inspector: safeValue(formData.inspector),
         remarks: safeValue(formData.remarks),
       }
       console.log('更新的受入数据:', data)
@@ -1332,7 +1295,7 @@ const submitForm = async () => {
         good_qty: formData.goodQty,
         defect_qty: formData.defectQty,
         defect_reason: safeValue(formData.defectReason),
-        inspector: safeValue(getInspectorName(formData.inspector)),
+        inspector: safeValue(formData.inspector),
         remarks: safeValue(formData.remarks),
       }
       console.log('提交的受入数据:', data)
@@ -1629,23 +1592,70 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 字体清晰 */
 .outsourcing-receiving-page {
-  padding: 10px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  padding: 16px;
+  background: linear-gradient(160deg, #e8ecf4 0%, #dde2ed 35%, #e8eaf6 70%, #e0e7ff 100%);
   min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'kern' 1, 'liga' 1;
+  animation: pageFadeIn 0.5s ease-out;
+}
+.outsourcing-receiving-page :deep(.el-table),
+.outsourcing-receiving-page :deep(.el-form),
+.outsourcing-receiving-page :deep(.el-dialog),
+.outsourcing-receiving-page :deep(.el-button),
+.outsourcing-receiving-page :deep(.el-input__inner),
+.outsourcing-receiving-page :deep(.el-select) {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.outsourcing-receiving-page :deep(.el-table .cell),
+.outsourcing-receiving-page :deep(.el-form-item__label) {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.outsourcing-receiving-page :deep(.el-table__header th .cell) {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .page-header {
-  border-radius: 8px;
-  padding: 14px 18px;
-  margin-bottom: 10px;
+  border-radius: 14px;
+  padding: 16px 22px;
+  margin-bottom: 14px;
   color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  animation: slideDown 0.45s ease-out;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .welding-header {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  box-shadow: 0 3px 15px rgba(240, 147, 251, 0.35);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.88) 0%, rgba(118, 75, 162, 0.88) 100%);
+}
+.page-header.glass-header {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.page-header:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(102, 126, 234, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.2) inset;
 }
 
 .header-content {
@@ -1671,15 +1681,19 @@ onMounted(async () => {
 }
 
 .title-icon {
-  width: 38px;
-  height: 38px;
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  backdrop-filter: blur(10px);
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+.page-header:hover .title-icon {
+  transform: scale(1.05);
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .title-badge {
@@ -1696,6 +1710,12 @@ onMounted(async () => {
   font-size: 12px;
   opacity: 0.95;
   line-height: 1.3;
+  letter-spacing: 0.02em;
+  font-weight: 500;
+}
+.title-text {
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .header-stats {
@@ -1731,16 +1751,26 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
+.glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 24px rgba(102, 126, 234, 0.08), 0 0 0 1px rgba(102, 126, 234, 0.06);
+  transition: box-shadow 0.25s ease;
+}
+.glass-card:hover {
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.12), 0 0 0 1px rgba(102, 126, 234, 0.08);
+}
+
 .filter-card {
-  margin-bottom: 10px;
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(240, 147, 251, 0.08);
-  border: 1px solid rgba(240, 147, 251, 0.12);
-  background: linear-gradient(135deg, #ffffff 0%, #fef9ff 100%);
+  margin-bottom: 12px;
+  border-radius: 14px;
+  animation: cardFadeIn 0.5s ease-out 0.08s both;
 }
 
 .filter-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: 14px 18px;
 }
 
 .filter-form {
@@ -1761,7 +1791,7 @@ onMounted(async () => {
   font-weight: 600;
   color: #606266;
   white-space: nowrap;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1779,12 +1809,12 @@ onMounted(async () => {
 
 .date-picker :deep(.el-input__wrapper) {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(240, 147, 251, 0.2) inset;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
   transition: all 0.2s;
 }
 
 .date-picker :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #f093fb inset;
+  box-shadow: 0 0 0 1px #667eea inset;
 }
 
 .date-quick-btns {
@@ -1796,14 +1826,14 @@ onMounted(async () => {
   padding: 6px 8px;
   font-size: 12px;
   border-radius: 4px;
-  border: 1px solid rgba(240, 147, 251, 0.3);
+  border: 1px solid rgba(102, 126, 234, 0.3);
   background: white;
-  color: #f093fb;
+  color: #667eea;
   transition: all 0.2s;
 }
 
 .quick-btn:hover {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border-color: transparent;
   transform: translateY(-1px);
@@ -1814,7 +1844,7 @@ onMounted(async () => {
 }
 
 .today-btn {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-color: transparent;
   color: white;
   font-weight: 600;
@@ -1826,8 +1856,8 @@ onMounted(async () => {
 }
 
 .month-btn {
-  background: rgba(240, 147, 251, 0.1);
-  border-color: rgba(240, 147, 251, 0.3);
+  background: rgba(102, 126, 234, 0.1);
+  border-color: rgba(102, 126, 234, 0.3);
 }
 
 .supplier-select {
@@ -1836,11 +1866,11 @@ onMounted(async () => {
 
 .supplier-select :deep(.el-input__wrapper) {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(240, 147, 251, 0.2) inset;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
 }
 
 .supplier-select :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #f093fb inset;
+  box-shadow: 0 0 0 1px #667eea inset;
 }
 
 .product-select {
@@ -1849,11 +1879,11 @@ onMounted(async () => {
 
 .product-select :deep(.el-input__wrapper) {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(240, 147, 251, 0.2) inset;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
 }
 
 .product-select :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #f093fb inset;
+  box-shadow: 0 0 0 1px #667eea inset;
 }
 
 .keyword-input {
@@ -1862,15 +1892,15 @@ onMounted(async () => {
 
 .keyword-input :deep(.el-input__wrapper) {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(240, 147, 251, 0.2) inset;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
 }
 
 .keyword-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #f093fb inset;
+  box-shadow: 0 0 0 1px #667eea inset;
 }
 
 .keyword-input :deep(.el-input__prefix) {
-  color: #f093fb;
+  color: #667eea;
 }
 
 .status-select {
@@ -1879,11 +1909,11 @@ onMounted(async () => {
 
 .status-select :deep(.el-input__wrapper) {
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(240, 147, 251, 0.2) inset;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
 }
 
 .status-select :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #f093fb inset;
+  box-shadow: 0 0 0 1px #667eea inset;
 }
 
 .filter-actions {
@@ -1894,15 +1924,15 @@ onMounted(async () => {
   padding: 6px 12px;
   font-size: 12px;
   border-radius: 6px;
-  border: 1px solid rgba(240, 147, 251, 0.3);
+  border: 1px solid rgba(102, 126, 234, 0.3);
   background: white;
-  color: #f093fb;
+  color: #667eea;
   transition: all 0.2s;
 }
 
 .reset-btn:hover {
-  background: rgba(240, 147, 251, 0.1);
-  border-color: #f093fb;
+  background: rgba(102, 126, 234, 0.1);
+  border-color: #667eea;
 }
 
 .reset-btn :deep(.el-icon) {
@@ -1917,12 +1947,16 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  padding: 10px 14px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  margin-bottom: 14px;
+  padding: 12px 18px;
+  border-radius: 14px;
+  animation: cardFadeIn 0.5s ease-out 0.14s both;
+}
+.left-actions .el-button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.left-actions .el-button:hover {
+  transform: translateY(-2px) scale(1.02);
 }
 
 .left-actions {
@@ -1948,21 +1982,32 @@ onMounted(async () => {
 .total-tag {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 8px 16px;
   font-size: 13px;
-  border-radius: 6px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.total-tag:hover {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: scale(1.02);
 }
 
 .table-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 14px;
   overflow: hidden;
+  animation: cardFadeIn 0.5s ease-out 0.2s both;
 }
 
 .table-card :deep(.el-card__body) {
   padding: 0;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .data-table {
@@ -1983,24 +2028,25 @@ onMounted(async () => {
 }
 
 .data-table :deep(.el-table__body td) {
-  padding: 4px 0;
-  height: 36px;
-  font-size: 12px;
+  padding: 6px 0;
+  height: 38px;
+  font-size: 13px;
   border-bottom: 1px solid #f0f2f5;
 }
 
 .data-table :deep(.el-table__body tr) {
-  height: 36px;
-  transition: background-color 0.2s;
+  height: 38px;
+  transition: background-color 0.2s ease;
 }
 
 .data-table :deep(.el-table__body tr:hover) {
-  background-color: #f5f7fa;
+  background-color: rgba(102, 126, 234, 0.06);
 }
 
 .data-table :deep(.el-table .cell) {
   padding: 0 8px;
-  line-height: 1.4;
+  line-height: 1.45;
+  font-size: 13px;
 }
 
 .data-table :deep(.el-link) {
@@ -2043,8 +2089,9 @@ onMounted(async () => {
 
 .receiving-qty {
   font-weight: 600;
-  color: #f093fb;
-  font-size: 12px;
+  color: #667eea;
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 .supplier-text {
@@ -2056,8 +2103,8 @@ onMounted(async () => {
 }
 
 .supplier-color-0 {
-  color: #f093fb;
-  background-color: #fef0ff;
+  color: #667eea;
+  background-color: #eef2ff;
 }
 
 .supplier-color-1 {
@@ -2098,13 +2145,15 @@ onMounted(async () => {
 .good-qty {
   font-weight: 600;
   color: #67c23a;
-  font-size: 12px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 .defect-qty {
   font-weight: 600;
-  color: #f56c6c;
-  font-size: 12px;
+  color: #dc2626;
+  font-size: 13px;
+  letter-spacing: 0.02em;
 }
 
 .text-danger {
@@ -2134,12 +2183,15 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 50%, #ff8c42 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: white;
   margin: 0;
-  padding: 10px 16px;
-  border-radius: 8px 8px 0 0;
-  box-shadow: 0 2px 6px rgba(255, 107, 107, 0.2);
+  padding: 12px 16px;
+  border-radius: 12px 12px 0 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
 }
 
 .receiving-dialog :deep(.el-dialog__title) {
@@ -2150,8 +2202,13 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-dialog__body) {
-  padding: 12px 16px;
-  background: #f5f7fa;
+  padding: 14px 18px;
+  background: rgba(248, 249, 252, 0.95);
+}
+.receiving-dialog :deep(.el-link),
+.receiving-dialog :deep(.el-tag) {
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .receiving-form {
@@ -2247,6 +2304,38 @@ onMounted(async () => {
   color: #909399;
 }
 
+/* 備考：与上方区块间距 + 文本框美化 */
+.receiving-dialog .form-item-remarks {
+  margin-top: 20px;
+  margin-bottom: 0;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-form-item__content) {
+  line-height: 1.5;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner) {
+  height: auto !important;
+  min-height: 72px !important;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid #dcdfe6;
+  font-size: 13px;
+  line-height: 1.5;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  resize: vertical;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner:hover) {
+  border-color: #c0c4cc;
+}
+
+.receiving-dialog .form-item-remarks :deep(.el-textarea__inner:focus) {
+  border-color: #909399;
+  box-shadow: 0 0 0 2px rgba(144, 147, 153, 0.12);
+  outline: none;
+}
+
 .receiving-dialog :deep(.el-input__wrapper),
 .receiving-dialog :deep(.el-select .el-input__wrapper),
 .receiving-dialog :deep(.el-textarea__inner) {
@@ -2272,8 +2361,8 @@ onMounted(async () => {
 
 .receiving-dialog :deep(.el-input.is-focus .el-input__wrapper),
 .receiving-dialog :deep(.el-select.is-focus .el-input__wrapper) {
-  border-color: #ff6b6b;
-  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
 }
 
 /* 不同类型输入框的颜色 */
@@ -2324,8 +2413,8 @@ onMounted(async () => {
 }
 
 .receiving-dialog :deep(.el-input-number.is-focus .el-input__wrapper) {
-  border-color: #ff6b6b;
-  box-shadow: 0 0 0 2px rgba(255, 107, 107, 0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
 }
 
 .receiving-dialog :deep(.el-date-editor) {
@@ -2429,11 +2518,14 @@ onMounted(async () => {
 }
 
 .detail-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   color: white;
   margin: 0;
   padding: 14px 18px;
-  border-radius: 8px 8px 0 0;
+  border-radius: 12px 12px 0 0;
 }
 
 .detail-dialog :deep(.el-dialog__title) {
