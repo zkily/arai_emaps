@@ -46,10 +46,11 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_OUTSOURCING_WELDING_ORDER', name: '溶接注文', path: '/erp/purchase/outsourcing/welding-order', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 4 },
   { code: 'ERP_OUTSOURCING_WELDING_RECEIVING', name: '溶接受入', path: '/erp/purchase/outsourcing/welding-receiving', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 5 },
   { code: 'ERP_OUTSOURCING_SUPPLIERS', name: '外注先マスタ', path: '/erp/purchase/outsourcing/suppliers', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 6 },
-  { code: 'ERP_OUTSOURCING_STOCK', name: '外注在庫', path: '/erp/purchase/outsourcing/stock', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 7 },
-  { code: 'ERP_OUTSOURCING_SUPPLIED_STOCK', name: '支給材料在庫', path: '/erp/purchase/outsourcing/supplied-material-stock', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 8 },
-  { code: 'ERP_OUTSOURCING_USAGE', name: '使用数管理', path: '/erp/purchase/outsourcing/usage', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 9 },
-  { code: 'ERP_OUTSOURCING_MATERIAL_ISSUE', name: '支給材料出庫', path: '/erp/purchase/outsourcing/material-issue', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 10 },
+  { code: 'ERP_OUTSOURCING_PROCESS_PRODUCTS', name: '外注工程製品', path: '/erp/purchase/outsourcing/process-products', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 7 },
+  { code: 'ERP_OUTSOURCING_STOCK', name: '外注在庫', path: '/erp/purchase/outsourcing/stock', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 8 },
+  { code: 'ERP_OUTSOURCING_SUPPLIED_STOCK', name: '支給材料在庫', path: '/erp/purchase/outsourcing/supplied-material-stock', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 9 },
+  { code: 'ERP_OUTSOURCING_USAGE', name: '使用数管理', path: '/erp/purchase/outsourcing/usage', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 10 },
+  { code: 'ERP_OUTSOURCING_MATERIAL_ISSUE', name: '支給材料出庫', path: '/erp/purchase/outsourcing/material-issue', parentCode: 'ERP_PURCHASE_OUTSOURCING', sortOrder: 11 },
 
   // ===== 3. 在庫管理 (Inventory / WMS) =====
   { code: 'ERP_INVENTORY', name: '在庫管理', path: '/erp/inventory', icon: 'Box', parentCode: 'ERP', sortOrder: 5 },

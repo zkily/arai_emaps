@@ -184,8 +184,8 @@ export function getWeldingOrdersByOrderNo(orderNo: string) {
   return request.get<{ success?: boolean; data?: WeldingOrder[] }>(`${BASE}/welding/orders/by-order-no`, { params: { order_no: orderNo } })
 }
 
-export function batchOrderWelding(orderIds: number[]) {
-  return request.post<{ success: boolean }>(`${BASE}/welding/orders/batch-order`, { order_ids: orderIds })
+export function batchOrderWelding(ids: number[]) {
+  return request.post<{ success: boolean; message?: string }>(`${BASE}/welding/orders/batch-order`, { ids })
 }
 
 // ========== 溶接受入 ==========
@@ -199,6 +199,10 @@ export function createWeldingReceiving(data: Partial<WeldingReceiving>) {
 
 export function updateWeldingReceiving(id: number, data: Partial<WeldingReceiving>) {
   return request.put<{ success: boolean; data: WeldingReceiving }>(`${BASE}/welding/receivings/${id}`, data)
+}
+
+export function deleteWeldingReceiving(id: number) {
+  return request.delete<{ success: boolean; message?: string }>(`${BASE}/welding/receivings/${id}`)
 }
 
 export function getPendingWeldingOrders() {
@@ -218,9 +222,75 @@ export function getOutsourcingStockHistory(params: { processType: string; produc
   return request.get<{ success?: boolean; data?: unknown[] }>(`${BASE}/stock/history`, { params })
 }
 
-// ========== 工程製品・納入日 ==========
-export function getProcessProducts(params: { processType: string; supplierCd: string; isActive?: boolean }) {
-  return request.get<{ success?: boolean; data?: unknown[] }>(`${BASE}/process-products`, { params })
+// ========== 外注工程製品マスタ（一覧・統計・CRUD） ==========
+export interface OutsourcingProcessProduct {
+  id?: number
+  process_type?: string
+  process_type_name?: string
+  supplier_cd?: string
+  supplier_name?: string
+  product_cd?: string
+  product_name?: string
+  specification?: string
+  unit_price?: number
+  delivery_lead_time?: number
+  delivery_location?: string
+  category?: string
+  content?: string
+  remarks?: string
+  is_active?: boolean
+  created_at?: string
+  updated_at?: string
+  [key: string]: unknown
+}
+
+/** 一覧（検索・ページネーション対応） */
+export function getProcessProducts(params?: {
+  processType?: string
+  keyword?: string
+  supplierCd?: string
+  productCd?: string
+  isActive?: string
+  page?: number
+  pageSize?: number
+}) {
+  return request.get<{
+    success?: boolean
+    data?: OutsourcingProcessProduct[]
+    pagination?: { page: number; pageSize: number; total: number }
+  }>(`${BASE}/process-products`, { params })
+}
+
+/** 統計 */
+export function getProcessProductStats() {
+  return request.get<{
+    success?: boolean
+    data?: {
+      total?: { total_count?: number; active_count?: number; supplier_count?: number }
+      byProcessType?: Array<{ process_type: string; total_count: number }>
+    }
+  }>(`${BASE}/process-products/stats`)
+}
+
+/** 工程・外注先で絞り込み（注文画面等） */
+export function getProcessProductsByKeys(params: { processType: string; supplierCd: string; isActive?: boolean }) {
+  return request.get<{ success?: boolean; data?: OutsourcingProcessProduct[] }>(`${BASE}/process-products/by-keys`, { params })
+}
+
+export function createProcessProduct(data: Partial<OutsourcingProcessProduct>) {
+  return request.post<{ success: boolean; data: OutsourcingProcessProduct }>(`${BASE}/process-products`, data)
+}
+
+export function updateProcessProduct(id: number, data: Partial<OutsourcingProcessProduct>) {
+  return request.put<{ success: boolean; data: OutsourcingProcessProduct }>(`${BASE}/process-products/${id}`, data)
+}
+
+export function deleteProcessProduct(id: number) {
+  return request.delete<{ success: boolean; message?: string }>(`${BASE}/process-products/${id}`)
+}
+
+export function toggleProcessProductStatus(id: number) {
+  return request.patch<{ success: boolean; data: OutsourcingProcessProduct }>(`${BASE}/process-products/${id}/toggle`)
 }
 
 /** 納入先休日（master の納入先休日 API を利用） */
