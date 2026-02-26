@@ -131,7 +131,6 @@
     <!-- 数据表格 -->
     <el-card class="table-card">
       <el-table
-        ref="tableRef"
         :data="currentStockList"
         v-loading="loading"
         stripe
@@ -340,6 +339,13 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * 外注在庫管理
+ * - 外注先: outsourcing_suppliers（筛选下拉・列表外注先名）
+ * - メッキTab: outsourcing_plating_stock（getPlatingStock）
+ * - 溶接Tab: outsourcing_welding_stock（getWeldingStock）
+ * - 在庫履歴弹窗: outsourcing_stock_transactions（getOutsourcingStockHistory）
+ */
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -363,12 +369,17 @@ import {
   type OutsourcingSupplier,
 } from '@/api/outsourcing'
 
+/** API 响应体（request 拦截器已返回 response.data） */
+type SupplierListRes = { success?: boolean; data?: OutsourcingSupplier[] }
+type StockListRes = { success?: boolean; data?: unknown[]; total?: number }
+
 interface StockItem {
   id: number
   productCode: string
   productName: string
   supplier: string
   supplierId: number
+  supplierCd?: string
   platingType?: string
   weldingType?: string
   orderedQty: number
@@ -396,7 +407,6 @@ const activeTab = ref('plating')
 const detailVisible = ref(false)
 const historyVisible = ref(false)
 const historyTitle = ref('')
-const tableRef = ref()
 
 const filters = reactive({
   supplier: '',
@@ -426,6 +436,7 @@ const convertStockFromBackend = (item: any): StockItem => {
     productName: item.product_name || item.productName,
     supplier: item.supplier_name || item.supplier || '',
     supplierId: item.supplier_id || item.supplierId,
+    supplierCd: item.supplier_cd || item.supplierCd || '',
     platingType: item.plating_type || item.platingType,
     weldingType: item.welding_type || item.weldingType,
     orderedQty: item.ordered_qty || item.orderedQty || 0,
@@ -491,7 +502,7 @@ const getStockStatusLabel = (row: Partial<StockItem>) => {
 // 加载外注先列表
 const loadSuppliers = async () => {
   try {
-    const res = await getSuppliers({ isActive: true })
+    const res = (await getSuppliers({ isActive: true })) as unknown as SupplierListRes | OutsourcingSupplier[]
     let suppliers: any[] = []
 
     if (Array.isArray(res)) {
@@ -538,37 +549,37 @@ const handleSearch = async () => {
     }
 
     if (activeTab.value === 'plating') {
-      const res = await getPlatingStock(params)
+      const res = (await getPlatingStock(params)) as unknown as StockListRes
       let data: any[] = []
       let total = 0
 
       if (res?.success && res.data) {
         data = Array.isArray(res.data) ? res.data : []
-        total = res.total || 0
+        total = res.total ?? 0
       } else if (Array.isArray(res)) {
         data = res
         total = res.length
       } else if (res?.data && Array.isArray(res.data)) {
         data = res.data
-        total = res.total || data.length
+        total = res?.total ?? data.length
       }
 
       platingStockList.value = data.map(convertStockFromBackend)
       pagination.total = total
     } else {
-      const res = await getWeldingStock(params)
+      const res = (await getWeldingStock(params)) as unknown as StockListRes
       let data: any[] = []
       let total = 0
 
       if (res?.success && res.data) {
         data = Array.isArray(res.data) ? res.data : []
-        total = res.total || 0
+        total = res.total ?? 0
       } else if (Array.isArray(res)) {
         data = res
         total = res.length
       } else if (res?.data && Array.isArray(res.data)) {
         data = res.data
-        total = res.total || data.length
+        total = res?.total ?? data.length
       }
 
       weldingStockList.value = data.map(convertStockFromBackend)
@@ -605,7 +616,12 @@ const viewHistory = async (row: StockItem) => {
 
   try {
     const processType = activeTab.value === 'plating' ? 'plating' : 'welding'
-    const res = await getOutsourcingStockHistory(row.productCode, processType)
+    const res = (await getOutsourcingStockHistory({
+      processType,
+      productCd: row.productCode,
+      supplierCd: row.supplierCd || '',
+      weldingType: row.weldingType,
+    })) as unknown as StockListRes
 
     let data: any[] = []
     if (res?.success && Array.isArray(res.data)) {

@@ -10,7 +10,7 @@ from datetime import date, datetime
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.outsourcing.models import WeldingOrder, WeldingReceiving, OutsourcingSupplier
+from app.modules.outsourcing.models import WeldingOrder, WeldingReceiving, WeldingStock, OutsourcingSupplier
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 
 router = APIRouter()
@@ -624,6 +624,68 @@ async def get_welding_receiving_products(
             names.append(row[0])
     names.sort()
     return {"success": True, "data": names}
+
+
+@router.get("/stock")
+async def get_welding_stock(
+    page: int = Query(1, ge=1),
+    pageSize: int = Query(20, ge=1, le=200),
+    supplierId: Optional[int] = Query(None, alias="supplierId"),
+    productCode: Optional[str] = Query(None, alias="productCode"),
+    stockStatus: Optional[str] = Query(None, alias="stockStatus"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """外注溶接在庫一覧（outsourcing_welding_stock + 外注先名は outsourcing_suppliers と JOIN）"""
+    q = (
+        select(WeldingStock, OutsourcingSupplier.supplier_name, OutsourcingSupplier.id.label("supplier_id"))
+        .join(OutsourcingSupplier, WeldingStock.supplier_cd == OutsourcingSupplier.supplier_cd)
+    )
+    if supplierId is not None:
+        q = q.where(OutsourcingSupplier.id == supplierId)
+    if productCode and productCode.strip():
+        q = q.where(WeldingStock.product_cd.ilike(f"%{productCode.strip()}%"))
+    if stockStatus:
+        if stockStatus == "empty":
+            q = q.where(WeldingStock.ordered_qty - WeldingStock.used_qty <= 0)
+        elif stockStatus == "low":
+            q = q.where(
+                (WeldingStock.ordered_qty - WeldingStock.used_qty > 0)
+                & (WeldingStock.ordered_qty - WeldingStock.used_qty < WeldingStock.min_stock)
+            )
+        elif stockStatus == "normal":
+            q = q.where(
+                (WeldingStock.ordered_qty - WeldingStock.used_qty > 0)
+                & ((WeldingStock.ordered_qty - WeldingStock.used_qty) >= WeldingStock.min_stock)
+            )
+    count_q = select(func.count()).select_from(q.subquery())
+    total_result = await db.execute(count_q)
+    total = total_result.scalar() or 0
+    q = q.order_by(WeldingStock.product_cd, WeldingStock.supplier_cd, WeldingStock.welding_type)
+    q = q.offset((page - 1) * pageSize).limit(pageSize)
+    result = await db.execute(q)
+    rows = result.all()
+    data = []
+    for st, supplier_name, supplier_id in rows:
+        stock_qty = (st.ordered_qty or 0) - (st.used_qty or 0)
+        data.append({
+            "id": st.id,
+            "product_cd": st.product_cd,
+            "product_name": st.product_name or "",
+            "supplier_cd": st.supplier_cd,
+            "supplier_name": supplier_name or st.supplier_cd,
+            "supplier_id": supplier_id,
+            "welding_type": st.welding_type or "",
+            "ordered_qty": st.ordered_qty or 0,
+            "received_qty": st.received_qty or 0,
+            "used_qty": st.used_qty or 0,
+            "stock_qty": stock_qty,
+            "pending_qty": st.pending_qty or 0,
+            "min_stock": st.min_stock or 0,
+            "last_receive_date": st.last_receive_date.isoformat() if st.last_receive_date else None,
+            "last_issue_date": st.last_issue_date.isoformat() if st.last_issue_date else None,
+        })
+    return {"success": True, "data": data, "total": total}
 
 
 @router.get("/receivings")

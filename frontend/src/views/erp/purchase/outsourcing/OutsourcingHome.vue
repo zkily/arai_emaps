@@ -1,755 +1,547 @@
 <template>
-  <div class="outsourcing-home" :class="{ 'is-child-page': isChildPage }">
-    <!-- 仅在「外注ホーム」顶层时显示：动态背景、头部、卡片区、页脚 -->
-    <template v-if="!isChildPage">
-      <div class="dynamic-background">
-        <div class="gradient-orb orb-1"></div>
-        <div class="gradient-orb orb-2"></div>
-        <div class="gradient-orb orb-3"></div>
-        <div class="gradient-orb orb-4"></div>
+  <div class="dashboard-page">
+    <!-- 页面头部 -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="title-section">
+          <h1 class="page-title">
+            <DataBoard class="title-icon" />
+            外注ダッシュボード
+          </h1>
+          <span class="subtitle">外注管理の全体状況</span>
+        </div>
+        <el-button @click="fetchAllData" :loading="loading">
+          <Refresh class="btn-icon" />
+          更新
+        </el-button>
       </div>
+    </div>
 
-      <div class="page-header">
-        <div class="header-content">
-          <div class="header-left">
-            <div class="header-icon">
-              <el-icon size="40">
-                <OfficeBuilding />
-              </el-icon>
-            </div>
-            <div class="header-text">
-              <h1 class="main-title">外注管理システム</h1>
-              <p class="subtitle">外注メッキ・溶接の注文・受入・在庫を一元管理</p>
-            </div>
-          </div>
-          <div class="header-stats">
-            <div class="stat-item">
-              <span class="stat-value">{{ totalMenuItems }}</span>
-              <span class="stat-label">メニュー</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value">{{ Object.keys(groupedRoutes).length }}</span>
-              <span class="stat-label">グループ</span>
-            </div>
-          </div>
+    <!-- 統計カード -->
+    <div class="stats-grid">
+      <div class="stat-card today-orders">
+        <div class="stat-icon">
+          <List />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.todayOrders }}</div>
+          <div class="stat-label">本日の注文</div>
+        </div>
+        <div class="stat-detail">
+          <span>メッキ: {{ dashboardData?.todayOrders?.plating_orders || 0 }}</span>
+          <span>溶接: {{ dashboardData?.todayOrders?.welding_orders || 0 }}</span>
         </div>
       </div>
 
-      <div class="content-container">
-        <div class="groups-container">
-          <template v-if="Object.keys(groupedRoutes).length">
-            <div
-              v-for="(routes, group, index) in groupedRoutes"
-              :key="group"
-              class="group-section"
-              :class="groupClass(group)"
-              :style="{ animationDelay: `${index * 0.1}s` }"
-            >
-              <div class="group-header">
-                <div class="group-title-wrapper">
-                  <div class="group-icon-wrapper">
-                    <el-icon class="group-icon">
-                      <component :is="getGroupIcon(group)" />
-                    </el-icon>
-                  </div>
-                  <h3 class="group-title">{{ group }}</h3>
-                </div>
-                <div class="group-badge">{{ routes.length }}</div>
-              </div>
+      <div class="stat-card pending-orders">
+        <div class="stat-icon">
+          <Clock />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.pendingOrders }}</div>
+          <div class="stat-label">未完了注文</div>
+        </div>
+        <div class="stat-detail">
+          <span>メッキ: {{ dashboardData?.pendingOrders?.plating_pending || 0 }}</span>
+          <span>溶接: {{ dashboardData?.pendingOrders?.welding_pending || 0 }}</span>
+        </div>
+      </div>
 
-              <div class="button-grid">
-                <div
-                  v-for="(route, routeIndex) in routes"
-                  :key="route.name"
-                  class="button-card"
-                  :style="{ animationDelay: `${index * 0.1 + routeIndex * 0.05}s` }"
-                  @click="goTo(route.name)"
-                  tabindex="0"
+      <div class="stat-card today-receivings">
+        <div class="stat-icon">
+          <CircleCheck />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.todayReceivings }}</div>
+          <div class="stat-label">本日の受入</div>
+        </div>
+        <div class="stat-detail">
+          <span>メッキ: {{ dashboardData?.todayReceivings?.plating_receivings || 0 }}</span>
+          <span>溶接: {{ dashboardData?.todayReceivings?.welding_receivings || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card stock-alerts" :class="{ 'has-alert': stats.stockAlerts > 0 }">
+        <div class="stat-icon">
+          <Warning />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.stockAlerts }}</div>
+          <div class="stat-label">在庫警告</div>
+        </div>
+        <div class="stat-detail">
+          <span>メッキ: {{ dashboardData?.stockAlerts?.plating_alerts || 0 }}</span>
+          <span>溶接: {{ dashboardData?.stockAlerts?.welding_alerts || 0 }}</span>
+          <span>材料: {{ dashboardData?.stockAlerts?.material_alerts || 0 }}</span>
+        </div>
+      </div>
+
+      <div class="stat-card overdue-orders" :class="{ 'has-alert': stats.overdueOrders > 0 }">
+        <div class="stat-icon">
+          <WarningFilled />
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ stats.overdueOrders }}</div>
+          <div class="stat-label">納期遅延</div>
+        </div>
+        <div class="stat-detail">
+          <span>メッキ: {{ dashboardData?.overdueOrders?.plating_overdue || 0 }}</span>
+          <span>溶接: {{ dashboardData?.overdueOrders?.welding_overdue || 0 }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- メインコンテンツ -->
+    <div class="main-content">
+      <!-- 直近の納期一覧 -->
+      <div class="content-card deliveries-card">
+        <div class="card-header">
+          <h3 class="card-title">
+            <Calendar class="card-icon" />
+            直近の納期一覧（7日以内）
+          </h3>
+        </div>
+        <div class="card-body">
+          <el-table :data="upcomingDeliveries" stripe size="small" max-height="300" empty-text="データがありません">
+            <el-table-column prop="type" label="種別" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.type === 'plating' ? 'warning' : 'danger'" size="small">
+                  {{ row.type === 'plating' ? 'メッキ' : '溶接' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="order_no" label="注文番号" width="130" />
+            <el-table-column prop="product_cd" label="品番" width="120" />
+            <el-table-column prop="supplier_name" label="外注先" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="quantity" label="数量" width="80" align="right" />
+            <el-table-column label="残数" width="80" align="right">
+              <template #default="{ row }">
+                {{ row.quantity - row.received_qty }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="delivery_date" label="納期" width="110" />
+            <el-table-column prop="days_remaining" label="残日数" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag
+                  :type="row.days_remaining <= 1 ? 'danger' : row.days_remaining <= 3 ? 'warning' : 'success'"
+                  size="small"
                 >
-                  <div class="card-background"></div>
-                  <div class="card-content">
-                    <div class="card-icon">
-                      <el-icon v-if="route.meta?.icon" class="animated-icon">
-                        <component :is="route.meta.icon" />
-                      </el-icon>
-                      <el-icon v-else class="animated-icon">
-                        <OfficeBuilding />
-                      </el-icon>
-                    </div>
-                    <div class="card-text">
-                      <h4 class="card-title">{{ route.meta?.title || route.name }}</h4>
-                      <p class="card-description">{{ getRouteDescription(route.name as string) }}</p>
-                    </div>
-                  </div>
-                  <div class="card-arrow">
-                    <el-icon>
-                      <ArrowRight />
-                    </el-icon>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-          <template v-else>
-            <div class="empty-menu">
-              <el-icon size="48">
-                <OfficeBuilding />
-              </el-icon>
-              <p>暂无可用菜单</p>
-            </div>
-          </template>
+                  {{ row.days_remaining }}日
+                </el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </div>
 
-      <div class="footer-info">
-        <p>© 2025 Smart Manufacturing System - Outsourcing Management</p>
+      <!-- 外注先別サマリー -->
+      <div class="content-card suppliers-card">
+        <div class="card-header">
+          <h3 class="card-title">
+            <OfficeBuilding class="card-icon" />
+            外注先別サマリー
+          </h3>
+        </div>
+        <div class="card-body">
+          <el-table :data="supplierSummary" stripe size="small" max-height="300" empty-text="データがありません">
+            <el-table-column prop="supplier_cd" label="コード" width="100" />
+            <el-table-column prop="supplier_name" label="外注先名" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="supplier_type" label="種別" width="80" align="center">
+              <template #default="{ row }">
+                <el-tag :type="getTypeTagColor(row.supplier_type) as 'success' | 'primary' | 'warning' | 'info' | 'danger'" size="small">
+                  {{ getTypeLabel(row.supplier_type) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="メッキ注文" width="90" align="center">
+              <template #default="{ row }">
+                <span :class="{ 'has-value': row.plating_order_count > 0 }">
+                  {{ row.plating_order_count || 0 }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="溶接注文" width="90" align="center">
+              <template #default="{ row }">
+                <span :class="{ 'has-value': row.welding_order_count > 0 }">
+                  {{ row.welding_order_count || 0 }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="支給材料在庫" width="110" align="right">
+              <template #default="{ row }">
+                {{ row.supplied_material_stock?.toLocaleString() || 0 }}
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
-    </template>
+    </div>
 
-    <!-- 子路由时只显示此处；顶层时 redirect 后也会通过此处显示子页 -->
-    <router-view :class="{ 'outsourcing-child-view': isChildPage }" />
+    <!-- クイックアクセス -->
+    <div class="quick-access">
+      <h3 class="section-title">クイックアクセス</h3>
+      <div class="quick-buttons">
+        <router-link to="/erp/purchase/outsourcing/plating-order" class="quick-btn plating">
+          <Star class="quick-icon" />
+          <span>メッキ注文</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/welding-order" class="quick-btn welding">
+          <TrendCharts class="quick-icon" />
+          <span>溶接注文</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/plating-receiving" class="quick-btn receiving">
+          <CircleCheck class="quick-icon" />
+          <span>メッキ受入</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/welding-receiving" class="quick-btn receiving">
+          <CircleCheck class="quick-icon" />
+          <span>溶接受入</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/material-issue" class="quick-btn issue">
+          <Delete class="quick-icon" />
+          <span>材料支給</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/stock" class="quick-btn stock">
+          <Box class="quick-icon" />
+          <span>在庫管理</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/suppliers" class="quick-btn suppliers">
+          <OfficeBuilding class="quick-icon" />
+          <span>外注先マスタ</span>
+        </router-link>
+        <router-link to="/erp/purchase/outsourcing/process-products" class="quick-btn process-products">
+          <DataBoard class="quick-icon" />
+          <span>外注工程製品</span>
+        </router-link>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useRoute, useRouter } from 'vue-router'
-import { computed } from 'vue'
-import type { RouteRecordName, RouteRecordRaw } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
-  OfficeBuilding,
-  ArrowRight,
-  Document,
-  Box,
-  TakeawayBox,
-  Goods,
-  Setting,
-  DataAnalysis,
+  DataBoard,
+  Refresh,
   List,
-  Download,
-  Upload,
+  Clock,
+  CircleCheck,
+  Warning,
+  WarningFilled,
+  Calendar,
+  OfficeBuilding,
+  Star,
+  TrendCharts,
+  Delete,
+  Box,
 } from '@element-plus/icons-vue'
+import {
+  getOutsourcingDashboard,
+  getUpcomingDeliveries,
+  getSupplierSummary,
+} from '@/api/outsourcing'
 
-const router = useRouter()
-const route = useRoute()
+// 状态
+const loading = ref(false)
+const dashboardData = ref<any>(null)
+const upcomingDeliveries = ref<any[]>([])
+const supplierSummary = ref<any[]>([])
 
-/** 当前是否为子页面（ダッシュボード・外注先マスタ等），仅子页面时隐藏首页的头部/卡片/页脚 */
-const isChildPage = computed(() => {
-  const name = route.name as string | undefined
-  if (!name) return false
-  if (name === 'OutsourcingHome' || name === 'OutsourcingHomeRedirect') return false
-  return true
-})
+// 计算属性
+const stats = computed(() => ({
+  todayOrders: (dashboardData.value?.todayOrders?.plating_orders || 0) +
+               (dashboardData.value?.todayOrders?.welding_orders || 0),
+  pendingOrders: (dashboardData.value?.pendingOrders?.plating_pending || 0) +
+                 (dashboardData.value?.pendingOrders?.welding_pending || 0),
+  todayReceivings: (dashboardData.value?.todayReceivings?.plating_receivings || 0) +
+                   (dashboardData.value?.todayReceivings?.welding_receivings || 0),
+  stockAlerts: (dashboardData.value?.stockAlerts?.plating_alerts || 0) +
+               (dashboardData.value?.stockAlerts?.welding_alerts || 0) +
+               (dashboardData.value?.stockAlerts?.material_alerts || 0),
+  overdueOrders: (dashboardData.value?.overdueOrders?.plating_overdue || 0) +
+                 (dashboardData.value?.overdueOrders?.welding_overdue || 0),
+}))
 
-const subRoutes = computed(() => {
-  const matchedParent = route.matched.find((r) => r.name === 'OutsourcingHome')
-  return (matchedParent?.children || []).filter((r) => !!r.name) as RouteRecordRaw[]
-})
+// 方法（request 拦截器已返回 response.data，故 res 即为 body: { success, data }）
+const fetchAllData = async () => {
+  loading.value = true
+  try {
+    const [dashboardRes, deliveriesRes, summaryRes] = await Promise.all([
+      getOutsourcingDashboard(),
+      getUpcomingDeliveries(7),
+      getSupplierSummary(),
+    ]) as Array<{ success?: boolean; data?: unknown }>
 
-const groupedRoutes = computed(() => {
-  const groups: Record<string, RouteRecordRaw[]> = {}
-  for (const r of subRoutes.value) {
-    const group = (r.meta?.group as string) || 'その他'
-    if (group === 'メインメニュー') continue
-    if (!groups[group]) groups[group] = []
-    groups[group].push(r)
+    if (dashboardRes?.success && dashboardRes.data) {
+      dashboardData.value = dashboardRes.data as Record<string, unknown>
+    }
+    if (deliveriesRes?.success) {
+      upcomingDeliveries.value = Array.isArray(deliveriesRes.data) ? deliveriesRes.data : []
+    }
+    if (summaryRes?.success) {
+      supplierSummary.value = Array.isArray(summaryRes.data) ? summaryRes.data : []
+    }
+  } catch (error) {
+    console.error('データ取得エラー:', error)
+    ElMessage.error('データの取得に失敗しました')
+  } finally {
+    loading.value = false
   }
-  return groups
-})
-
-// 总菜单项数
-const totalMenuItems = computed(() => {
-  return Object.values(groupedRoutes.value).reduce((total, routes) => total + routes.length, 0)
-})
-
-const getGroupIcon = (group: string) => {
-  if (group.includes('注文')) return Document
-  if (group.includes('受入')) return Download
-  if (group.includes('支給材料')) return Upload
-  if (group.includes('在庫')) return Box
-  if (group.includes('使用')) return DataAnalysis
-  return OfficeBuilding
 }
 
-const getRouteDescription = (routeName: string) => {
-  const descriptions: Record<string, string> = {
-    OutsourcingPlatingOrder: '外注メッキ加工の注文を管理',
-    OutsourcingWeldingOrder: '外注溶接加工の注文を管理',
-    OutsourcingPlatingReceiving: '外注メッキ品の受入処理',
-    OutsourcingWeldingReceiving: '外注溶接品の受入処理',
-    OutsourcingMaterialIssue: '外注業者への材料支給を管理',
-    OutsourcingSuppliedMaterialStock: '外注先に支給した材料の在庫を管理',
-    OutsourcingUsageManagement: '外注先での材料使用数を管理',
-    OutsourcingStock: '外注品（メッキ・溶接）の在庫を一覧表示',
-    OutsourcingSuppliers: '外注先マスタの登録・編集',
-    OutsourcingDashboard: '外注管理の全体状況',
+const getTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    plating: 'メッキ',
+    welding: '溶接',
+    both: '両方',
   }
-  return descriptions[routeName] || '外注データの管理・操作'
+  return labels[type] || type
 }
 
-const groupClass = (group: string) => {
-  if (group.includes('注文')) return 'group-order'
-  if (group.includes('受入')) return 'group-receiving'
-  if (group.includes('支給材料')) return 'group-material'
-  if (group.includes('在庫')) return 'group-stock'
-  if (group.includes('使用')) return 'group-usage'
-  return 'group-default'
+const getTypeTagColor = (type: string) => {
+  const colors: Record<string, string> = {
+    plating: 'warning',
+    welding: 'danger',
+    both: 'primary',
+  }
+  return colors[type] || 'info'
 }
 
-const goTo = (routeName: RouteRecordName | undefined) => {
-  if (routeName) router.replace({ name: routeName })
-}
+onMounted(() => {
+  fetchAllData()
+})
 </script>
 
-<style scoped>
-.outsourcing-home {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #1e3c72 100%);
-  position: relative;
-  overflow-x: hidden;
-  scroll-behavior: smooth;
-}
-
-/* 子页面时不再显示首页背景，仅保留容器让子页占满 */
-.outsourcing-home.is-child-page {
-  background: transparent;
-  min-height: 100%;
-}
-
-.outsourcing-child-view {
-  display: block;
-  min-height: 100%;
-}
-
-/* 动态背景 */
-.dynamic-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  overflow: hidden;
-  will-change: transform;
-}
-
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  background: linear-gradient(45deg, rgba(30, 60, 114, 0.2), rgba(42, 82, 152, 0.15));
-  animation: floatOrb 20s ease-in-out infinite;
-  will-change: transform;
-}
-
-.orb-1 {
-  width: 350px;
-  height: 350px;
-  top: -175px;
-  right: -175px;
-  background: linear-gradient(45deg, rgba(78, 205, 196, 0.15), rgba(30, 60, 114, 0.1));
-  animation-delay: -5s;
-}
-
-.orb-2 {
-  width: 250px;
-  height: 250px;
-  bottom: -125px;
-  left: -125px;
-  background: linear-gradient(45deg, rgba(255, 107, 107, 0.1), rgba(42, 82, 152, 0.15));
-  animation-delay: -10s;
-}
-
-.orb-3 {
-  width: 300px;
-  height: 300px;
-  top: 40%;
-  left: 60%;
-  background: linear-gradient(45deg, rgba(67, 233, 123, 0.1), rgba(30, 60, 114, 0.15));
-  animation-delay: -15s;
-}
-
-.orb-4 {
-  width: 200px;
-  height: 200px;
-  top: 20%;
-  left: 10%;
-  background: linear-gradient(45deg, rgba(255, 193, 7, 0.1), rgba(42, 82, 152, 0.15));
-  animation-delay: -7s;
-}
-
-@keyframes floatOrb {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33% { transform: translateY(-40px) rotate(120deg); }
-  66% { transform: translateY(40px) rotate(240deg); }
+<style scoped lang="scss">
+.dashboard-page {
+  padding: 20px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  min-height: calc(100vh - 60px);
 }
 
 .page-header {
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);
-  border-radius: 0 0 28px 28px;
-  margin: 0 16px 24px;
-  padding: 24px 32px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  position: relative;
-  overflow: hidden;
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.header-icon {
-  width: 64px;
-  height: 64px;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
   border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  box-shadow: 0 6px 20px rgba(30, 60, 114, 0.4);
-  animation: iconFloat 3s ease-in-out infinite;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .title-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .page-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+
+    .title-icon {
+      width: 32px;
+      height: 32px;
+      color: #4facfe;
+    }
+  }
+
+  .subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+  }
 }
 
-@keyframes iconFloat {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-4px); }
-}
-
-.header-text {
-  flex: 1;
-}
-
-.main-title {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1e3c72;
-  margin: 0 0 4px 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-}
-
-.subtitle {
-  font-size: 13px;
-  color: #7c8db5;
-  margin: 0;
-  font-weight: 500;
-}
-
-.header-stats {
-  display: flex;
-  gap: 16px;
-}
-
-.stat-item {
-  text-align: center;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(30, 60, 114, 0.08), rgba(42, 82, 152, 0.08));
-  border-radius: 12px;
-  border: 1px solid rgba(30, 60, 114, 0.15);
-  min-width: 70px;
-}
-
-.stat-value {
-  display: block;
-  font-size: 22px;
-  font-weight: 700;
-  color: #1e3c72;
-  line-height: 1;
-}
-
-.stat-label {
-  display: block;
-  font-size: 11px;
-  color: #8492a6;
-  margin-top: 4px;
-  font-weight: 500;
-}
-
-.content-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 16px 32px;
-  position: relative;
-  z-index: 1;
-}
-
-.groups-container {
+.stats-grid {
   display: grid;
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
-.group-section {
-  background: rgba(255, 255, 255, 0.97);
+.stat-card {
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-  animation: slideInUp 0.6s ease-out forwards;
-  opacity: 0;
-  transform: translateY(30px);
-}
 
-@keyframes slideInUp {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.group-section:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
-}
-
-.group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.group-title-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.group-icon-wrapper {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-  box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
-}
-
-.group-icon {
-  font-size: 16px;
-}
-
-.group-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-  color: #2c3e50;
-}
-
-.group-badge {
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-  color: white;
-  padding: 4px 10px;
-  border-radius: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  min-width: 22px;
-  text-align: center;
-  box-shadow: 0 2px 8px rgba(30, 60, 114, 0.3);
-}
-
-.button-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 12px;
-}
-
-.button-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  padding: 16px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  position: relative;
-  overflow: hidden;
-  animation: slideInCard 0.6s ease-out forwards;
-  opacity: 0;
-  transform: translateY(20px);
-  will-change: transform;
-}
-
-.card-background {
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(30, 60, 114, 0.08), transparent);
-  transition: left 0.5s ease;
-  pointer-events: none;
-}
-
-.button-card:hover .card-background {
-  left: 100%;
-}
-
-@keyframes slideInCard {
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.button-card:hover {
-  transform: translateY(-4px);
-  border-color: #1e3c72;
-  box-shadow: 0 8px 24px rgba(30, 60, 114, 0.2);
-}
-
-.card-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 16px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
-  flex-shrink: 0;
-}
-
-.button-card:hover .card-icon {
-  transform: scale(1.1) rotate(5deg);
-  box-shadow: 0 6px 16px rgba(30, 60, 114, 0.4);
-}
-
-.animated-icon {
-  transition: transform 0.3s ease;
-}
-
-.card-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.card-title {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0 0 2px;
-  color: #2c3e50;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-description {
-  font-size: 11px;
-  color: #8492a6;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.card-arrow {
-  color: #bdc3c7;
-  font-size: 14px;
-  transition: all 0.3s ease;
-  flex-shrink: 0;
-}
-
-.button-card:hover .card-arrow {
-  color: #1e3c72;
-  transform: translateX(4px);
-}
-
-/* 组别颜色主题 - 注文 */
-.group-order .group-icon-wrapper {
-  background: linear-gradient(135deg, #4ecdc4, #44b09e);
-}
-.group-order .group-badge {
-  background: linear-gradient(135deg, #4ecdc4, #44b09e);
-}
-.group-order .card-icon {
-  background: linear-gradient(135deg, #4ecdc4, #44b09e);
-  box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
-}
-.group-order .button-card:hover {
-  border-color: #4ecdc4;
-}
-
-/* 受入 */
-.group-receiving .group-icon-wrapper {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-.group-receiving .group-badge {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-}
-.group-receiving .card-icon {
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-}
-.group-receiving .button-card:hover {
-  border-color: #667eea;
-}
-
-/* 支給材料 */
-.group-material .group-icon-wrapper {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-}
-.group-material .group-badge {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-}
-.group-material .card-icon {
-  background: linear-gradient(135deg, #f093fb, #f5576c);
-  box-shadow: 0 4px 12px rgba(240, 147, 251, 0.3);
-}
-.group-material .button-card:hover {
-  border-color: #f093fb;
-}
-
-/* 在庫 */
-.group-stock .group-icon-wrapper {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
-}
-.group-stock .group-badge {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
-}
-.group-stock .card-icon {
-  background: linear-gradient(135deg, #43e97b, #38f9d7);
-  box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3);
-}
-.group-stock .button-card:hover {
-  border-color: #43e97b;
-}
-
-/* 使用数 */
-.group-usage .group-icon-wrapper {
-  background: linear-gradient(135deg, #ffc107, #ff9800);
-}
-.group-usage .group-badge {
-  background: linear-gradient(135deg, #ffc107, #ff9800);
-}
-.group-usage .card-icon {
-  background: linear-gradient(135deg, #ffc107, #ff9800);
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
-}
-.group-usage .button-card:hover {
-  border-color: #ffc107;
-}
-
-/* 默认 */
-.group-default .group-icon-wrapper {
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-}
-.group-default .group-badge {
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-}
-.group-default .card-icon {
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
-}
-
-.footer-info {
-  text-align: center;
-  padding: 24px 16px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  font-weight: 400;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* 空菜单提示样式 */
-.empty-menu {
-  text-align: center;
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 16px;
-  padding: 48px 32px;
-  margin: 16px;
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-}
-
-.empty-menu .el-icon {
-  color: #8492a6;
-}
-
-.empty-menu p {
-  color: #8492a6;
-  font-size: 14px;
-  font-weight: 500;
-  margin: 0;
-}
-
-/* 响应式设计 */
-@media (max-width: 1200px) {
-  .button-grid {
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
   }
-  .header-content {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-  }
-  .header-stats {
+
+  .stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
     justify-content: center;
+    margin-bottom: 12px;
+
+    svg {
+      width: 24px;
+      height: 24px;
+      color: #fff;
+    }
+  }
+
+  .stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .stat-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    margin-top: 4px;
+  }
+
+  .stat-detail {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+
+    span {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+  }
+
+  &.today-orders .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+  &.pending-orders .stat-icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+  &.today-receivings .stat-icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+  &.stock-alerts .stat-icon { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+  &.overdue-orders .stat-icon { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
+
+  &.has-alert {
+    border-color: rgba(255, 99, 71, 0.5);
+    animation: pulse 2s infinite;
   }
 }
 
-@media (max-width: 768px) {
-  .page-header {
-    padding: 16px 12px;
-    margin: 0 12px 16px;
-  }
-  .main-title { font-size: 22px; }
-  .subtitle { font-size: 12px; }
-  .content-container { padding: 0 12px 24px; }
-  .group-section { padding: 16px; }
-  .group-title { font-size: 14px; }
-  .button-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .button-card { padding: 14px; }
-  .card-icon {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
-  }
-  .card-title { font-size: 12px; }
-  .card-description { font-size: 10px; }
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 99, 71, 0.4); }
+  50% { box-shadow: 0 0 20px 10px rgba(255, 99, 71, 0.2); }
 }
 
-@media (max-width: 480px) {
-  .page-header {
-    padding: 12px 8px;
-    margin: 0 8px 12px;
+.main-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.content-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+    background: #f8f9fa;
   }
-  .main-title { font-size: 18px; }
-  .group-section { padding: 12px; }
-  .button-card { padding: 12px; }
-  .footer-info {
-    padding: 16px 8px;
-    font-size: 11px;
+
+  .card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+
+    .card-icon {
+      width: 20px;
+      height: 20px;
+      color: #667eea;
+    }
   }
+
+  .card-body {
+    padding: 16px;
+  }
+}
+
+.quick-access {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  .section-title {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+  }
+
+  .quick-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .quick-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+
+    .quick-icon {
+      width: 20px;
+      height: 20px;
+    }
+
+    &.plating { background: linear-gradient(135deg, #f5af19 0%, #f12711 100%); }
+    &.welding { background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%); }
+    &.receiving { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    &.issue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    &.stock { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    &.suppliers { background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%); }
+    &.process-products { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); }
+  }
+}
+
+.btn-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+}
+
+.has-value {
+  font-weight: 600;
+  color: #409eff;
 }
 </style>
-

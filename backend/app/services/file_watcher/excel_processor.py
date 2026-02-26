@@ -237,7 +237,7 @@ class ExcelProcessor:
         if product_names:
             placeholders = ",".join(["%s"] * len(product_names))
             cursor.execute(
-                f"SELECT product_name, product_cd FROM products WHERE product_name IN ({placeholders})",
+                f"SELECT product_name, product_cd FROM products WHERE product_name IN ({placeholders}) AND RIGHT(product_cd, 1) = '1'",
                 list(product_names),
             )
             for r in cursor.fetchall():

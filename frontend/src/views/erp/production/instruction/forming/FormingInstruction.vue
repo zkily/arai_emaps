@@ -273,7 +273,7 @@
             layout="total, sizes, prev, pager, next, jumper"
             @size-change="handlePlanSizeChange"
             @current-change="handlePlanCurrentChange"
-            small
+            size="small"
           />
         </div>
       </el-card>

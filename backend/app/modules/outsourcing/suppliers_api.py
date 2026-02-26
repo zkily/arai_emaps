@@ -3,13 +3,13 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, func
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.outsourcing.models import OutsourcingSupplier
+from app.modules.outsourcing.models import OutsourcingSupplier, PlatingOrder, WeldingOrder
 from app.modules.outsourcing.schemas import OutsourcingSupplierCreate, OutsourcingSupplierUpdate
 
 router = APIRouter()
@@ -53,6 +53,42 @@ async def get_suppliers(
     result = await db.execute(query)
     rows = result.scalars().all()
     return {"success": True, "data": [_row_to_dict(r) for r in rows]}
+
+
+@router.get("/summary")
+async def get_suppliers_summary(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """外注先別サマリー（メッキ・溶接の未完了注文数、支給材料在庫は0）"""
+    suppliers_q = select(OutsourcingSupplier).where(
+        OutsourcingSupplier.is_active == True
+    ).order_by(OutsourcingSupplier.supplier_cd)
+    suppliers = (await db.execute(suppliers_q)).scalars().all()
+    pending_statuses = ["pending", "ordered", "partial"]
+
+    result = []
+    for s in suppliers:
+        cd = s.supplier_cd
+        plating_count_q = select(func.count(PlatingOrder.id)).where(
+            PlatingOrder.supplier_cd == cd,
+            PlatingOrder.status.in_(pending_statuses),
+        )
+        welding_count_q = select(func.count(WeldingOrder.id)).where(
+            WeldingOrder.supplier_cd == cd,
+            WeldingOrder.status.in_(pending_statuses),
+        )
+        plating_count = (await db.execute(plating_count_q)).scalar() or 0
+        welding_count = (await db.execute(welding_count_q)).scalar() or 0
+        result.append({
+            "supplier_cd": cd,
+            "supplier_name": s.supplier_name,
+            "supplier_type": s.supplier_type or "plating",
+            "plating_order_count": plating_count,
+            "welding_order_count": welding_count,
+            "supplied_material_stock": 0,
+        })
+    return {"success": True, "data": result}
 
 
 @router.get("/{supplier_id}")

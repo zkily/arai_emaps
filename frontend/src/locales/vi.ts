@@ -57,6 +57,7 @@ export default {
     ERP_OUTSOURCING_WELDING_ORDER: 'Đơn hàn',
     ERP_OUTSOURCING_WELDING_RECEIVING: 'Nhận hàn',
     ERP_OUTSOURCING_SUPPLIERS: 'Nhà cung cấp gia công',
+    ERP_OUTSOURCING_PROCESS_PRODUCTS: 'Sản phẩm theo công đoạn',
     ERP_OUTSOURCING_STOCK: 'Tồn gia công',
     ERP_OUTSOURCING_SUPPLIED_STOCK: 'Tồn NVL cấp phát',
     ERP_OUTSOURCING_USAGE: 'Quản lý sử dụng',

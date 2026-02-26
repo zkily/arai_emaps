@@ -136,6 +136,67 @@ class PlatingReceiving(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class PlatingStock(Base):
+    """外注メッキ品在庫（outsourcing_plating_stock）"""
+    __tablename__ = "outsourcing_plating_stock"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    supplier_cd = Column(String(10), nullable=False, index=True)
+    plating_type = Column(String(50))
+    ordered_qty = Column(Integer, default=0)
+    received_qty = Column(Integer, default=0)
+    used_qty = Column(Integer, default=0)
+    stock_qty = Column(Integer, default=0)  # DB 上は GENERATED、ORM では通常カラムとして扱う
+    pending_qty = Column(Integer, default=0)
+    min_stock = Column(Integer, default=0)
+    last_receive_date = Column(Date)
+    last_issue_date = Column(Date)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class WeldingStock(Base):
+    """外注溶接品在庫（outsourcing_welding_stock）"""
+    __tablename__ = "outsourcing_welding_stock"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    supplier_cd = Column(String(20), nullable=False, index=True)
+    welding_type = Column(String(50))
+    ordered_qty = Column(Integer, default=0)
+    received_qty = Column(Integer, default=0)
+    used_qty = Column(Integer, default=0)
+    stock_qty = Column(Integer, default=0)
+    pending_qty = Column(Integer, default=0)
+    min_stock = Column(Integer, default=0)
+    last_receive_date = Column(Date)
+    last_issue_date = Column(Date)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class OutsourcingStockTransaction(Base):
+    """外注入出庫履歴（outsourcing_stock_transactions）"""
+    __tablename__ = "outsourcing_stock_transactions"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    transaction_date = Column(Date, nullable=False, index=True)
+    transaction_type = Column(String(20), nullable=False, index=True)  # receive, issue
+    process_type = Column(String(20), nullable=False, index=True)  # plating, welding
+    product_cd = Column(String(50), nullable=False, index=True)
+    product_name = Column(String(200))
+    supplier_cd = Column(String(10), nullable=False, index=True)
+    related_no = Column(String(30))
+    quantity = Column(Integer, nullable=False)
+    stock_after = Column(Integer)
+    operator = Column(String(50))
+    remarks = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+
+
 class WeldingReceiving(Base):
     """外注溶接受入（outsourcing_welding_receivings）"""
     __tablename__ = "outsourcing_welding_receivings"

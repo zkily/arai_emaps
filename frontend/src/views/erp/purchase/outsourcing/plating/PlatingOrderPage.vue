@@ -1077,7 +1077,6 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search,
   Refresh,
   Plus,
   Download,
@@ -1091,9 +1090,6 @@ import {
   Upload,
   Close,
   Loading,
-  Calendar,
-  OfficeBuilding,
-  CircleCheck,
   ArrowLeft,
   ArrowRight,
 } from '@element-plus/icons-vue'
@@ -1104,12 +1100,11 @@ import {
   deletePlatingOrder,
   getPlatingOrdersByOrderNo,
   batchOrderPlating,
-  type PlatingOrder,
   getProcessProducts,
   getDestinationHolidays,
 } from '@/api/outsourcing'
 import { getPrintHistory, recordPrintHistory } from '@/api/shipping/printHistory'
-import { getSuppliers, type OutsourcingSupplier } from '@/api/outsourcing'
+import { getSuppliers } from '@/api/outsourcing'
 import request from '@/utils/request'
 
 // 类型定义
@@ -1178,34 +1173,6 @@ const convertOrderFromBackend = (item: any): OrderItem => {
   }
 }
 
-// 数据转换：前端camelCase -> 后端snake_case
-const convertOrderToBackend = (item: Partial<OrderItem>, includeStatus = false): any => {
-  const data: any = {
-    supplier_cd: item.supplierCd ?? undefined,
-    order_date: item.orderDate,
-    product_cd: item.productCode,
-    product_name: item.productName,
-    plating_type: item.platingType,
-    quantity: item.quantity,
-    unit: '個',
-    unit_price: item.unitPrice,
-    delivery_date: item.deliveryDate,
-    delivery_location: item.deliveryLocation,
-    category: item.category,
-    content: item.content,
-    specification: item.specification,
-    remarks: item.remarks,
-    created_by: 'system', // TODO: 从用户信息获取
-  }
-
-  // 更新时包含status字段
-  if (includeStatus && item.status) {
-    data.status = item.status
-  }
-
-  return data
-}
-
 // 状态
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -1213,7 +1180,8 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const editDialogVisible = ref(false)
 const isEdit = ref(false)
-const tableRef = ref()
+// tableRef 在模板中通过 ref="tableRef" 使用
+const tableRef = ref<HTMLElement | null>(null)
 
 // ==================== 日本时区工具函数 ====================
 // 获取日本时区的当前日期（优化版本，性能更好）
@@ -1259,12 +1227,6 @@ const formatCurrency = (value: number | null | undefined): string => {
   return `¥${value.toLocaleString('ja-JP')}`
 }
 
-// 日本货币格式化（带小数）
-const formatCurrencyDecimal = (value: number | null | undefined): string => {
-  if (value == null || isNaN(value)) return '¥0.00'
-  return `¥${value.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 // 获取当天的日期范围（开始和结束都是同一天）
 const getTodayDateRange = (): string[] => {
   const today = getJapanDate()
@@ -1288,7 +1250,6 @@ const pagination = reactive({
 })
 
 // 表单数据
-const formRef = ref()
 const formData = reactive({
   supplierCd: undefined as string | undefined,
   orderDate: '',
@@ -1373,11 +1334,6 @@ const printForm = reactive({
   note3:
     '3.支払期日・支払方法・検査完了期日・有償支給原材料代金の決済期日及び方法については、令和8年1月1日の「支払方法等について」によります。',
 })
-
-const formRules = {
-  supplierCd: [{ required: true, message: '外注先を選択してください', trigger: 'blur' }],
-  orderDate: [{ required: true, message: '注文日を選択してください', trigger: 'change' }],
-}
 
 // 详情数据
 const detailData = ref<Partial<OrderItem>>({})
@@ -1721,7 +1677,7 @@ const loadBatchProductOptions = async () => {
     const res = await getProcessProducts({
       processType: 'plating',
       supplierCd: batchFormData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
 
     let products: any[] = []
@@ -1782,7 +1738,7 @@ const fetchBatchProducts = async () => {
     const res = await getProcessProducts({
       processType: 'plating',
       supplierCd: batchFormData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
 
     let products: any[] = []
@@ -2131,7 +2087,7 @@ const fetchProducts = async () => {
     const res = await getProcessProducts({
       processType: 'plating',
       supplierCd: formData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
 
     let products: any[] = []
@@ -2881,7 +2837,7 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
 
     pagesHtml += `
       <div class="order-sheet ${pageBreakClass}">
-        <div class="issued-info">注文日: ${orderDateDisplay}</div>
+        <div class="issued-info">注文日: ${orderDateDisplay}　発行日時: ${issuedDateTime}</div>
 
         <div class="title">注 文 書</div>
 

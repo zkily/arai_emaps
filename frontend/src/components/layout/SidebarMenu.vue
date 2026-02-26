@@ -65,29 +65,29 @@
                 <el-icon><HomeFilled /></el-icon>
                 <template #title><span>外注ホーム</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/purchase/outsourcing/dashboard">
-                <el-icon><DataLine /></el-icon>
-                <template #title><span>外注ダッシュボード</span></template>
-              </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/plating-order">
                 <el-icon><Document /></el-icon>
-                <template #title><span>メッキ注文</span></template>
+                <template #title><span :title="t('menu.ERP_OUTSOURCING_PLATING_ORDER')">{{ t('menu.ERP_OUTSOURCING_PLATING_ORDER') }}</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/plating-receiving">
                 <el-icon><Download /></el-icon>
-                <template #title><span>メッキ受入</span></template>
+                <template #title><span :title="t('menu.ERP_OUTSOURCING_PLATING_RECEIVING')">{{ t('menu.ERP_OUTSOURCING_PLATING_RECEIVING') }}</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/welding-order">
                 <el-icon><Document /></el-icon>
-                <template #title><span>溶接注文</span></template>
+                <template #title><span :title="t('menu.ERP_OUTSOURCING_WELDING_ORDER')">{{ t('menu.ERP_OUTSOURCING_WELDING_ORDER') }}</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/welding-receiving">
                 <el-icon><Download /></el-icon>
-                <template #title><span>溶接受入</span></template>
+                <template #title><span :title="t('menu.ERP_OUTSOURCING_WELDING_RECEIVING')">{{ t('menu.ERP_OUTSOURCING_WELDING_RECEIVING') }}</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/suppliers">
                 <el-icon><User /></el-icon>
                 <template #title><span>外注先マスタ</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/outsourcing/process-products">
+                <el-icon><Grid /></el-icon>
+                <template #title><span>外注工程製品</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/outsourcing/stock">
                 <el-icon><Box /></el-icon>
@@ -353,7 +353,7 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document,
-  User, DataAnalysis, Monitor, Setting, Tools,
+  User, DataAnalysis, Monitor, Setting, Tools, Grid,
   Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
   Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload

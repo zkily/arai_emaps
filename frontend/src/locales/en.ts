@@ -58,6 +58,7 @@ export default {
     ERP_OUTSOURCING_WELDING_ORDER: 'Welding Order',
     ERP_OUTSOURCING_WELDING_RECEIVING: 'Welding Receiving',
     ERP_OUTSOURCING_SUPPLIERS: 'Outsourcing Suppliers',
+    ERP_OUTSOURCING_PROCESS_PRODUCTS: 'Process Products',
     ERP_OUTSOURCING_STOCK: 'Outsourcing Stock',
     ERP_OUTSOURCING_SUPPLIED_STOCK: 'Supplied Material Stock',
     ERP_OUTSOURCING_USAGE: 'Usage Management',

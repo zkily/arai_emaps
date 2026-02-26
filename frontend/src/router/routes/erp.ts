@@ -120,11 +120,11 @@ export const erpRoutes: RouteRecordRaw[] = [
       {
         path: 'erp/purchase/outsourcing',
         name: 'OutsourcingHome',
-        component: () => import('@/views/erp/purchase/outsourcing/OutsourcingHome.vue'),
+        component: () => import('@/views/erp/purchase/outsourcing/OutsourcingLayout.vue'),
         meta: { title: '外注管理', group: 'メインメニュー', requiresAuth: true },
         children: [
-          { path: '', redirect: { name: 'OutsourcingDashboard' } },
-          { path: 'dashboard', name: 'OutsourcingDashboard', component: () => import('@/views/erp/purchase/outsourcing/dashboard/DashboardPage.vue'), meta: { title: '外注ダッシュボード', group: '外注管理', requiresAuth: true } },
+          { path: '', name: 'OutsourcingHomeDefault', component: () => import('@/views/erp/purchase/outsourcing/OutsourcingHome.vue'), meta: { title: '外注ホーム', group: '外注管理', requiresAuth: true } },
+          { path: 'dashboard', redirect: { name: 'OutsourcingHomeDefault' } },
           { path: 'plating-order', name: 'OutsourcingPlatingOrder', component: () => import('@/views/erp/purchase/outsourcing/plating/PlatingOrderPage.vue'), meta: { title: '外注メッキ注文', group: '注文管理', requiresAuth: true } },
           { path: 'plating-receiving', name: 'OutsourcingPlatingReceiving', component: () => import('@/views/erp/purchase/outsourcing/plating/PlatingReceivingPage.vue'), meta: { title: '外注メッキ受入', group: '受入管理', requiresAuth: true } },
           { path: 'welding-order', name: 'OutsourcingWeldingOrder', component: () => import('@/views/erp/purchase/outsourcing/welding/WeldingOrderPage.vue'), meta: { title: '外注溶接注文', group: '注文管理', requiresAuth: true } },

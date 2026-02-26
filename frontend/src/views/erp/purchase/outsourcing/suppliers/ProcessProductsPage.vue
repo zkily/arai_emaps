@@ -103,20 +103,14 @@
       </el-tabs>
     </div>
 
-    <!-- 功能操作区域 -->
+    <!-- 功能操作区域（自动筛选：外注先・キーワード・状態変更時に自動で一覧取得） -->
     <div class="action-section">
       <div class="filter-header">
         <div class="filter-title">
           <el-icon class="filter-icon"><Filter /></el-icon>
-          <span>検索・絞り込み</span>
+          <span>絞り込み</span>
         </div>
         <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
-            クリア
-          </el-button>
-          <el-button type="primary" @click="handleSearch" :icon="Search" class="search-btn">
-            検索
-          </el-button>
           <el-button type="success" @click="handleAdd" :icon="Plus" class="add-btn">
             新規登録
           </el-button>
@@ -126,43 +120,38 @@
       <div class="filters-grid">
         <div class="filter-item">
           <label class="filter-label">
+            <el-icon><OfficeBuilding /></el-icon>
+            外注先
+          </label>
+          <el-select
+            v-model="filters.supplierCd"
+            placeholder="外注先を選択"
+            clearable
+            filterable
+            :loading="suppliersLoading"
+            class="filter-select filter-select-supplier"
+            value-key="supplier_cd"
+            @change="onFilterChange"
+          >
+            <el-option
+              v-for="s in suppliersList"
+              :key="s.supplier_cd"
+              :label="`${s.supplier_cd} ${s.supplier_name || ''}`.trim()"
+              :value="s.supplier_cd"
+            />
+          </el-select>
+        </div>
+        <div class="filter-item">
+          <label class="filter-label">
             <el-icon><Search /></el-icon>
             キーワード
           </label>
           <el-input
             v-model="filters.keyword"
-            placeholder="外注先/品番/品名で検索"
+            placeholder="品番・品名で検索"
             clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-            class="filter-input"
-          />
-        </div>
-        <div class="filter-item">
-          <label class="filter-label">
-            <el-icon><OfficeBuilding /></el-icon>
-            外注先コード
-          </label>
-          <el-input
-            v-model="filters.supplierCd"
-            placeholder="外注先コードで検索"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
-            class="filter-input"
-          />
-        </div>
-        <div class="filter-item">
-          <label class="filter-label">
-            <el-icon><Tickets /></el-icon>
-            品番
-          </label>
-          <el-input
-            v-model="filters.productCd"
-            placeholder="品番で検索"
-            clearable
-            @clear="handleSearch"
-            @keyup.enter="handleSearch"
+            @clear="onFilterChange"
+            @keyup.enter="onFilterChange"
             class="filter-input"
           />
         </div>
@@ -176,6 +165,7 @@
             placeholder="すべて"
             clearable
             class="filter-select"
+            @change="onFilterChange"
           >
             <el-option label="すべて" value="all" />
             <el-option label="有効" value="true" />
@@ -194,9 +184,10 @@
           stripe
           border
           :empty-text="'データがありません'"
-          height="calc(100vh - 400px)"
-          :row-style="{ height: '42px' }"
-          size="default"
+          height="calc(100vh - 340px)"
+          :row-style="{ height: '32px' }"
+          size="small"
+          class="compact-table"
         >
           <el-table-column
             prop="process_type_name"
@@ -206,7 +197,7 @@
             fixed="left"
           >
             <template #default="{ row }">
-              <el-tag :type="getProcessTypeColor(row.process_type)" size="small" effect="plain">
+              <el-tag :type="getProcessTypeColor(row.process_type)" size="small" effect="plain" class="process-tag">
                 {{ row.process_type_name }}
               </el-tag>
             </template>
@@ -214,38 +205,39 @@
           <el-table-column
             prop="supplier_cd"
             label="外注先CD"
-            width="90"
+            width="100"
             align="center"
             show-overflow-tooltip
           />
           <el-table-column
             prop="supplier_name"
             label="外注先名"
-            width="140"
+            width="130"
+            align="center"
             show-overflow-tooltip
           />
           <el-table-column
             prop="product_cd"
             label="製品CD"
-            width="90"
+            width="88"
             align="center"
             show-overflow-tooltip
           />
-          <el-table-column prop="product_name" label="品名" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="specification" label="規格" width="100" show-overflow-tooltip />
-          <el-table-column prop="unit_price" label="単価" width="70" align="right">
+          <el-table-column prop="product_name" label="品名" width="120" align="center" show-overflow-tooltip />
+          <el-table-column prop="specification" label="規格" width="88" align="center" show-overflow-tooltip />
+          <el-table-column prop="unit_price" label="単価" width="88" align="center">
             <template #default="{ row }">
               <span class="price-text">{{ formatPrice(row.unit_price) }}</span>
             </template>
           </el-table-column>
           <el-table-column
             prop="delivery_lead_time"
-            label="納入リードタイム"
-            width="140"
+            label="納入リード"
+            width="90"
             align="center"
           >
             <template #default="{ row }">
-              <span class="lead-time">{{ row.delivery_lead_time || '-' }}日</span>
+              <span class="lead-time">{{ row.delivery_lead_time ?? '-' }}日</span>
             </template>
           </el-table-column>
           <el-table-column
@@ -255,15 +247,9 @@
             align="center"
             show-overflow-tooltip
           />
-          <el-table-column prop="category" label="区分" width="120" align="center" />
-          <el-table-column
-            prop="content"
-            label="内容"
-            width="120"
-            align="center"
-            show-overflow-tooltip
-          />
-          <el-table-column prop="is_active" label="状態" width="70" align="center">
+          <el-table-column prop="category" label="区分" width="110" align="center" show-overflow-tooltip />
+          <el-table-column prop="content" label="内容" width="88" align="center" show-overflow-tooltip />
+          <el-table-column prop="is_active" label="状態" width="72" align="center">
             <template #default="{ row }">
               <el-tag
                 :type="row.is_active ? 'success' : 'info'"
@@ -275,7 +261,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" align="center" fixed="right">
+          <el-table-column label="操作" width="180" align="center" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
                 <el-button
@@ -622,11 +608,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
 import {
   Filter,
-  Refresh,
   Search,
   Plus,
   Edit,
@@ -640,7 +625,6 @@ import {
   View,
   Tools,
   OfficeBuilding,
-  Tickets,
   CircleCheck,
 } from '@element-plus/icons-vue'
 import {
@@ -680,11 +664,10 @@ const stats = ref({
 // 工程统计
 const processStats = ref<Record<string, number>>({})
 
-// 筛选表单
+// 筛选表单（外注先下拉来自 outsourcing_suppliers）
 const filters = reactive({
   keyword: '',
   supplierCd: '',
-  productCd: '',
   isActive: 'all',
 })
 
@@ -747,30 +730,17 @@ const fetchData = async () => {
     if (filters.supplierCd) {
       params.supplierCd = filters.supplierCd
     }
-    if (filters.productCd) {
-      params.productCd = filters.productCd
-    }
 
-    const res = await getProcessProducts(params)
-
-    if (res?.success) {
-      tableData.value = Array.isArray(res.data) ? res.data : []
-      if (res.pagination) {
-        pagination.total = res.pagination.total || 0
-        pagination.page = res.pagination.page || pagination.page
-        pagination.pageSize = res.pagination.pageSize || pagination.pageSize
+    // request 拦截器已返回 response.data，故 raw 即为后端 body: { success, data, pagination }
+    const raw = (await getProcessProducts(params)) as unknown as { success?: boolean; data?: OutsourcingProcessProduct[]; pagination?: { total: number; page: number; pageSize: number } }
+    if (raw?.success) {
+      tableData.value = Array.isArray(raw.data) ? raw.data : []
+      if (raw.pagination) {
+        pagination.total = raw.pagination.total ?? 0
+        pagination.page = raw.pagination.page ?? pagination.page
+        pagination.pageSize = raw.pagination.pageSize ?? pagination.pageSize
       } else {
-        pagination.total = res.data?.length || 0
-      }
-    } else if (res?.data?.success) {
-      const data = res.data as { data?: OutsourcingProcessProduct[]; pagination?: { total: number; page: number; pageSize: number } }
-      tableData.value = Array.isArray(data.data) ? data.data : []
-      if (data.pagination) {
-        pagination.total = data.pagination.total || 0
-        pagination.page = data.pagination.page || pagination.page
-        pagination.pageSize = data.pagination.pageSize || pagination.pageSize
-      } else {
-        pagination.total = data.data?.length || 0
+        pagination.total = raw.data?.length ?? 0
       }
     } else {
       tableData.value = []
@@ -789,40 +759,19 @@ const fetchData = async () => {
 
 const fetchStats = async () => {
   try {
-    const res = await getProcessProductStats()
-
-    if (res?.success) {
-      const data = res.data || {}
+    // request 拦截器已返回 response.data，raw 即为 body: { success, data: { total, byProcessType } }
+    const raw = (await getProcessProductStats()) as unknown as { success?: boolean; data?: { total?: { total_count?: number; active_count?: number; supplier_count?: number }; byProcessType?: Array<{ process_type: string; total_count: number }> } }
+    if (raw?.success && raw.data) {
+      const d = raw.data
+      const t = d.total
       stats.value = {
-        total: data.total?.total_count ?? data.total_count ?? tableData.value.length ?? 0,
-        active:
-          data.total?.active_count ??
-          data.active_count ??
-          tableData.value.filter((item) => item.is_active).length ??
-          0,
-        suppliers:
-          data.total?.supplier_count ??
-          data.supplier_count ??
-          new Set(tableData.value.map((item) => item.supplier_cd)).size ??
-          0,
+        total: t?.total_count ?? tableData.value.length ?? 0,
+        active: t?.active_count ?? tableData.value.filter((item) => item.is_active).length ?? 0,
+        suppliers: t?.supplier_count ?? new Set(tableData.value.map((item) => item.supplier_cd)).size ?? 0,
       }
-
-      const byProcess = data.byProcessType || data.by_process_type || []
+      const byProcess = d.byProcessType || []
       processStats.value = {}
       byProcess.forEach((item: { process_type: string; total_count: number }) => {
-        processStats.value[item.process_type] = item.total_count || 0
-      })
-    } else if (res?.data?.success) {
-      const inner = (res as { data: { data?: unknown; total?: { total_count: number; active_count: number; supplier_count: number }; byProcessType?: Array<{ process_type: string; total_count: number }> } }).data
-      const data = inner.data || inner
-      stats.value = {
-        total: (data as { total?: { total_count: number } }).total?.total_count ?? 0,
-        active: (data as { total?: { active_count: number } }).total?.active_count ?? 0,
-        suppliers: (data as { total?: { supplier_count: number } }).total?.supplier_count ?? 0,
-      }
-      const byProcess = (data as { byProcessType?: Array<{ process_type: string; total_count: number }> }).byProcessType || []
-      processStats.value = {}
-      byProcess.forEach((item) => {
         processStats.value[item.process_type] = item.total_count || 0
       })
     } else {
@@ -852,15 +801,13 @@ const fetchStats = async () => {
 const fetchSuppliers = async () => {
   suppliersLoading.value = true
   try {
-    const res = await getSuppliers({ isActive: true })
-    if (res?.success || (res as { data?: { success?: boolean } }).data?.success) {
-      const data = res.data || res
-      suppliersList.value = Array.isArray(data) ? data : (data as { data?: unknown[] }).data || []
-    } else if (Array.isArray(res)) {
-      suppliersList.value = res
-    } else {
-      suppliersList.value = []
-    }
+    // request 拦截器已返回 response.data，raw 即为 body: { success, data: [...] }
+    const raw = (await getSuppliers({ isActive: true })) as unknown as { success?: boolean; data?: Array<{ supplier_cd?: string; supplier_name?: string }> }
+    const arr = Array.isArray(raw?.data) ? raw.data : []
+    suppliersList.value = arr.map((s) => ({
+      supplier_cd: s.supplier_cd ?? '',
+      supplier_name: s.supplier_name,
+    }))
   } catch (error) {
     console.error('外注先リスト取得エラー:', error)
     suppliersList.value = []
@@ -916,16 +863,8 @@ const handleTabChange = () => {
   fetchData()
 }
 
-const handleSearch = () => {
-  pagination.page = 1
-  fetchData()
-}
-
-const clearFilters = () => {
-  filters.keyword = ''
-  filters.supplierCd = ''
-  filters.productCd = ''
-  filters.isActive = 'all'
+/** 筛选条件变更时自动查询（外注先・状態选择、キーワード回车/清空时调用） */
+const onFilterChange = () => {
   pagination.page = 1
   fetchData()
 }
@@ -1064,7 +1003,22 @@ const formatPrice = (price: number | undefined) => {
   return `¥${price.toLocaleString('ja-JP', { minimumFractionDigits: 2 })}`
 }
 
+// キーワード输入防抖后自动筛选
+let keywordTimer: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => filters.keyword,
+  () => {
+    if (keywordTimer) clearTimeout(keywordTimer)
+    keywordTimer = setTimeout(() => {
+      pagination.page = 1
+      fetchData()
+      keywordTimer = null
+    }, 350)
+  },
+)
+
 onMounted(() => {
+  fetchSuppliers()
   fetchData()
   fetchStats()
 })
@@ -1074,21 +1028,21 @@ onMounted(() => {
 .outsourcing-products-page {
   min-height: 100vh;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 12px 16px;
+  padding: 8px 12px;
   font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
   color: #1e293b;
 }
 
 .page-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.25);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.22);
   position: relative;
   overflow: hidden;
 }
@@ -1108,7 +1062,8 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
   position: relative;
   z-index: 1;
 }
@@ -1121,22 +1076,22 @@ onMounted(() => {
 .main-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 1.35rem;
+  gap: 8px;
+  font-size: 1.2rem;
   font-weight: 700;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   color: #fff;
   letter-spacing: 0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .title-icon {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   opacity: 0.95;
 }
 
 .subtitle {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.92);
   margin: 0;
   font-weight: 500;
@@ -1145,19 +1100,19 @@ onMounted(() => {
 
 .header-stats {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .stat-card {
   background: rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(10px);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: 6px;
+  padding: 5px 10px;
   text-align: center;
-  min-width: 70px;
+  min-width: 58px;
   border: 1px solid rgba(255, 255, 255, 0.25);
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
 }
 
 .stat-card:hover {
@@ -1176,32 +1131,32 @@ onMounted(() => {
 }
 
 .stat-number {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: #fff;
-  margin-bottom: 2px;
-  line-height: 1.3;
+  margin-bottom: 0;
+  line-height: 1.25;
   letter-spacing: 0.02em;
 }
 
 .stat-label {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.98);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
 
 .process-tabs-section {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .process-tabs {
   :deep(.el-tabs__header) {
     margin: 0;
     background: #fff;
-    border-radius: 10px;
-    padding: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 5px 6px;
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
     border: 1px solid #e2e8f0;
   }
 
@@ -1210,15 +1165,15 @@ onMounted(() => {
   }
 
   :deep(.el-tabs__item) {
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 8px;
-    margin-right: 4px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    margin-right: 3px;
     color: #475569;
     transition: all 0.2s ease;
     height: auto;
-    line-height: 1.45;
+    line-height: 1.4;
     letter-spacing: 0.02em;
   }
 
@@ -1241,7 +1196,7 @@ onMounted(() => {
 .tab-label {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tab-badge {
@@ -1249,11 +1204,11 @@ onMounted(() => {
     background: rgba(102, 126, 234, 0.2);
     color: #667eea;
     border: none;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    height: 20px;
-    line-height: 20px;
-    padding: 0 6px;
+    height: 18px;
+    line-height: 18px;
+    padding: 0 5px;
     letter-spacing: 0.02em;
   }
 }
@@ -1265,10 +1220,10 @@ onMounted(() => {
 
 .action-section {
   background: #fff;
-  border-radius: 10px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
 }
 
@@ -1276,46 +1231,48 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .filter-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9375rem;
+  gap: 6px;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #1e293b;
   letter-spacing: 0.02em;
 }
 
 .filter-icon {
-  font-size: 1.125rem;
+  font-size: 1rem;
   color: #667eea;
 }
 
 .filter-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .filter-item {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 3px;
 }
 
 .filter-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8125rem;
+  gap: 4px;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #475569;
   letter-spacing: 0.02em;
@@ -1328,27 +1285,32 @@ onMounted(() => {
 
 .filter-input :deep(.el-input__wrapper),
 .filter-select :deep(.el-select__wrapper) {
-  font-size: 0.875rem;
-  padding: 6px 12px;
+  font-size: 0.8125rem;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  box-sizing: border-box;
+  align-items: center;
 }
 .filter-input :deep(.el-input__inner) {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: #334155;
 }
 
 .table-section {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .table-card :deep(.el-table__empty-text) {
-  font-size: 0.9375rem;
+  font-size: 0.8125rem;
   color: #64748b;
   font-weight: 500;
+  padding: 24px 0;
 }
 
 .table-card {
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
   overflow: hidden;
 }
@@ -1357,59 +1319,84 @@ onMounted(() => {
   padding: 0;
 }
 
-.table-card :deep(.el-table th) {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  color: #1e293b;
-  font-weight: 600;
-  padding: 10px 12px;
-  border-bottom: 2px solid #e2e8f0;
-  font-size: 0.8125rem;
-  height: 44px;
-  letter-spacing: 0.02em;
+/* 紧凑表格：减少空白、居中、精美 */
+.table-card.compact-table :deep(.el-table) {
+  --el-table-border-color: #e2e8f0;
+  --el-table-header-bg-color: #f8fafc;
+  font-size: 0.75rem;
 }
 
-.table-card :deep(.el-table td) {
-  padding: 8px 12px;
+.table-card :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: #475569;
+  font-weight: 600;
+  padding: 4px 6px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 0.7rem;
+  height: 32px;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.table-card :deep(.el-table td.el-table__cell) {
+  padding: 4px 6px;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 0.8125rem;
-  height: 42px;
+  font-size: 0.75rem;
+  height: 32px;
   color: #334155;
   letter-spacing: 0.01em;
+  text-align: center;
 }
 
-.table-card :deep(.el-table--small) .el-table__cell {
-  padding: 8px 12px;
+.table-card :deep(.el-table--small .el-table__cell) {
+  padding: 4px 6px;
 }
 
-.table-card :deep(.el-tag) {
-  font-size: 0.75rem;
+.table-card :deep(.el-table .cell) {
+  padding-left: 6px;
+  padding-right: 6px;
+  text-align: center;
+}
+
+.table-card :deep(.el-table__row--striped) {
+  --el-table-tr-bg-color: #fafbfc;
+}
+
+.table-card :deep(.el-table__body tr:hover > td) {
+  background-color: #f0f9ff !important;
+}
+
+.table-card :deep(.el-tag.process-tag),
+.table-card :deep(.el-tag.status-tag) {
+  font-size: 0.65rem;
   font-weight: 600;
-  padding: 3px 10px;
-  height: 22px;
-  line-height: 16px;
+  padding: 2px 6px;
+  height: 18px;
+  line-height: 14px;
   letter-spacing: 0.02em;
+  border-radius: 4px;
 }
 
 .price-text {
   font-weight: 600;
   color: #047857;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
 .lead-time {
   font-weight: 600;
   color: #2563eb;
-  font-size: 0.875rem;
+  font-size: 0.75rem;
   letter-spacing: 0.02em;
 }
 
 .status-tag {
-  font-size: 0.75rem !important;
+  font-size: 0.65rem !important;
   font-weight: 600 !important;
-  padding: 3px 8px !important;
-  height: 22px !important;
-  line-height: 16px !important;
+  padding: 2px 6px !important;
+  height: 18px !important;
+  line-height: 14px !important;
   letter-spacing: 0.02em;
 }
 
@@ -1418,45 +1405,53 @@ onMounted(() => {
   gap: 2px;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .action-btn-edit,
 .action-btn-toggle,
 .action-btn-delete {
-  padding: 5px 10px;
-  font-size: 0.8125rem;
+  padding: 2px 6px;
+  font-size: 0.7rem;
   font-weight: 500;
-  height: 28px;
-  min-height: 28px;
+  height: 24px;
+  min-height: 24px;
   letter-spacing: 0.02em;
 }
 
 .action-btn-edit :deep(.el-icon),
 .action-btn-delete :deep(.el-icon) {
-  font-size: 14px;
+  font-size: 11px;
 }
 
 .pagination-section {
   background: #fff;
-  border-radius: 10px;
-  padding: 12px 18px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 6px 12px;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
   border: 1px solid #e2e8f0;
   display: flex;
   justify-content: flex-end;
 }
 
 .pagination-section :deep(.el-pagination) {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
+}
+
+.pagination-section :deep(.el-pagination .el-pagination__sizes),
+.pagination-section :deep(.el-pagination .el-pager),
+.pagination-section :deep(.el-pagination .btn-prev),
+.pagination-section :deep(.el-pagination .btn-next) {
+  margin: 0 2px;
 }
 
 .modern-dialog {
   :deep(.el-dialog) {
-    border-radius: 12px;
+    border-radius: 10px;
     overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    border: 1px solid #e2e8f0;
   }
 
   :deep(.el-dialog__header) {
@@ -1466,29 +1461,28 @@ onMounted(() => {
   }
 
   :deep(.el-dialog__headerbtn) {
-    top: 16px;
-    right: 16px;
-    width: 28px;
-    height: 28px;
+    top: 10px;
+    right: 12px;
+    width: 26px;
+    height: 26px;
     border-radius: 6px;
-    background: rgba(255, 255, 255, 0.15);
-    backdrop-filter: blur(10px);
-    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
   }
 
   :deep(.el-dialog__headerbtn:hover) {
-    background: rgba(255, 255, 255, 0.25);
-    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.3);
   }
 
   :deep(.el-dialog__body) {
     padding: 0;
-    max-height: 82vh;
+    max-height: 78vh;
     overflow-y: auto;
   }
 
   :deep(.el-dialog__footer) {
-    padding: 12px 20px;
+    padding: 8px 14px;
     border-top: 1px solid #e5e7eb;
     background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
   }
@@ -1498,7 +1492,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 10px 14px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   position: relative;
   overflow: hidden;
@@ -1507,17 +1501,17 @@ onMounted(() => {
 .modern-header .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   position: relative;
   z-index: 1;
 }
 
 .modern-header .header-icon-wrapper {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1525,7 +1519,7 @@ onMounted(() => {
 }
 
 .modern-header .header-icon {
-  font-size: 20px;
+  font-size: 1.125rem;
   color: white;
 }
 
@@ -1534,16 +1528,16 @@ onMounted(() => {
 }
 
 .modern-header .header-title {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   letter-spacing: 0.02em;
-  line-height: 1.4;
+  line-height: 1.35;
   color: #fff;
 }
 
 .modern-header .header-subtitle {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   margin: 0;
   opacity: 0.92;
   font-weight: 500;
@@ -1552,17 +1546,17 @@ onMounted(() => {
 }
 
 .modern-content {
-  padding: 16px 20px;
+  padding: 10px 14px;
   background: #f8fafc;
   min-height: auto;
 }
 
 .process-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.22);
   position: relative;
   overflow: hidden;
 }
@@ -1570,19 +1564,19 @@ onMounted(() => {
 .process-card .process-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
   position: relative;
   z-index: 1;
 }
 
 .process-card .process-icon {
-  font-size: 18px;
+  font-size: 1rem;
   color: white;
 }
 
 .process-card .process-title {
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: white;
   letter-spacing: 0.025em;
@@ -1600,40 +1594,37 @@ onMounted(() => {
 
 .process-card .process-select :deep(.el-select__wrapper) {
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  font-size: 0.9rem;
-  height: 40px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  min-height: 34px;
 }
 
 .option-content {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: 0.8125rem;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 10px;
 }
 
 .form-card {
   background: white;
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s ease;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
   overflow: hidden;
 }
 
 .form-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
 }
 
 .form-card.full-width {
@@ -1643,32 +1634,32 @@ onMounted(() => {
 .form-card .card-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
+  gap: 6px;
+  padding: 6px 10px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e5e7eb;
 }
 
 .form-card .card-icon {
-  font-size: 16px;
+  font-size: 0.875rem;
   color: #667eea;
 }
 
 .form-card .card-title {
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   font-weight: 600;
   color: #1e293b;
   letter-spacing: 0.03em;
 }
 
 .form-card .card-content {
-  padding: 14px;
+  padding: 8px 10px;
 }
 
 .form-row {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .form-row:last-child {
@@ -1697,10 +1688,10 @@ onMounted(() => {
 .modern-form :deep(.el-form-item__label) {
   font-weight: 600;
   color: #1e293b;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   margin-bottom: 0;
-  margin-right: 8px;
-  line-height: 1.4;
+  margin-right: 6px;
+  line-height: 1.35;
   padding-bottom: 0;
   padding-top: 0;
   white-space: nowrap;
@@ -1716,20 +1707,19 @@ onMounted(() => {
 }
 
 .modern-form :deep(.el-form-item__error) {
-  font-size: 0.75rem;
-  padding-top: 4px;
+  font-size: 0.7rem;
+  padding-top: 2px;
   color: #dc2626;
 }
 
 .modern-form :deep(.el-input .el-input__wrapper),
 .modern-form :deep(.el-select .el-select__wrapper),
 .modern-form :deep(.el-input-number .el-input__wrapper) {
-  border-radius: 8px;
-  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  min-height: 36px;
-  font-size: 0.875rem;
+  min-height: 32px;
+  font-size: 0.8125rem;
   color: #334155;
 }
 
@@ -1779,9 +1769,26 @@ onMounted(() => {
   .filters-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
+  .outsourcing-products-page {
+    padding: 6px 8px;
+  }
+
+  .page-header {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+
+  .main-title {
+    font-size: 1.05rem;
+  }
+
   .header-content {
     flex-direction: column;
     align-items: flex-start;
@@ -1789,15 +1796,51 @@ onMounted(() => {
 
   .header-stats {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+
+  .stat-card {
+    min-width: 52px;
+    padding: 4px 8px;
+  }
+
+  .stat-number {
+    font-size: 1rem;
   }
 
   .filters-grid {
     grid-template-columns: 1fr;
+    gap: 6px;
   }
 
   .filter-actions {
     flex-wrap: wrap;
+  }
+
+  .action-section {
+    padding: 6px 10px;
+  }
+
+  .table-section .table-card :deep(.el-table th),
+  .table-section .table-card :deep(.el-table td) {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+
+  .modern-dialog :deep(.el-dialog) {
+    width: 96% !important;
+    margin: 2vh auto;
+  }
+
+  .modern-content {
+    padding: 8px 10px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
   }
 }
 
