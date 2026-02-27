@@ -201,6 +201,7 @@
                 @change="loadCuttingManagement"
               />
               <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftDateToday(1)" />
+              <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
             </div>
             <div class="cutting-mgmt-machine-btns">
               <el-button
@@ -327,7 +328,10 @@
                   @dragover="onDragoverCuttingRow($event)"
                 />
               </div>
-              <div v-if="cuttingManagementList.length" class="cutting-mgmt-tfoot">
+              </div>
+            </div>
+            <div v-if="cuttingManagementList.length" class="cutting-mgmt-tfoot-wrap">
+              <div class="cutting-mgmt-tfoot">
                 <div class="cutting-mgmt-tr">
                   <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
                   <div class="cutting-mgmt-td"></div>
@@ -342,7 +346,6 @@
                   <div class="cutting-mgmt-td"></div>
                   <div class="cutting-mgmt-td cutting-mgmt-td-actions"></div>
                 </div>
-              </div>
               </div>
             </div>
             <div v-if="!cuttingManagementList.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -443,6 +446,19 @@
                   @dragover="onDragoverCuttingRow($event)"
                 />
               </div>
+              </div>
+            </div>
+            <div v-if="cuttingManagementListTomorrow.length" class="cutting-mgmt-tfoot-wrap cutting-mgmt-tfoot-wrap--tomorrow">
+              <div class="cutting-mgmt-tfoot">
+                <div class="cutting-mgmt-tr">
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTomorrowTotal.quantity }}</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTomorrowTotal.time ?? '-' }}</div>
+                </div>
               </div>
             </div>
             <div v-if="!cuttingManagementListTomorrow.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -1326,6 +1342,26 @@ const cuttingMachineOptionsFiltered = computed(() =>
 /** 切断指示-今日：生産数・生産時間の合計 */
 const cuttingTodayTotal = computed(() => {
   const list = cuttingManagementList.value
+  let qty = 0
+  let time = 0
+  for (const row of list) {
+    const n = row.actual_production_quantity
+    if (n != null && typeof n === 'number' && !Number.isNaN(n)) qty += n
+    else if (n != null && String(n).trim() !== '') {
+      const v = Number(String(n).trim())
+      if (!Number.isNaN(v)) qty += v
+    }
+    const t = row.production_time
+    if (t != null && (typeof t === 'number' || typeof t === 'string')) {
+      const tv = typeof t === 'number' ? t : parseFloat(String(t))
+      if (!Number.isNaN(tv)) time += tv
+    }
+  }
+  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+})
+/** 切断指示-翌日：生産数・生産時間の合計 */
+const cuttingTomorrowTotal = computed(() => {
+  const list = cuttingManagementListTomorrow.value
   let qty = 0
   let time = 0
   for (const row of list) {
@@ -2466,6 +2502,137 @@ async function loadCuttingManagement() {
   }
 }
 
+/** 指示書発行：指定日の全データを切断機ごとに1ページずつ A5 横向で印刷 */
+const issueCuttingInstructionSheetLoading = ref(false)
+async function issueCuttingInstructionSheet() {
+  const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  issueCuttingInstructionSheetLoading.value = true
+  try {
+    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { production_day: day, limit: 2000 } }
+    )
+    const rows = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+    const byMachine = new Map<string, CuttingManagementRow[]>()
+    for (const r of rows) {
+      const key = (r.cutting_machine || '').trim() || '（未設定）'
+      if (!byMachine.has(key)) byMachine.set(key, [])
+      byMachine.get(key)!.push(r)
+    }
+    for (const [, list] of byMachine) {
+      list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
+    }
+    const dayDisplay = day.replace(/-/g, '/')
+    const pages: string[] = []
+    const machineNames = Array.from(byMachine.keys()).sort()
+    for (const machineName of machineNames) {
+      const list = byMachine.get(machineName)!
+      let totalQty = 0
+      const trs = list.map((r) => {
+        const qty = r.actual_production_quantity ?? 0
+        totalQty += qty
+        return `<tr>
+          <td>${escapeHtml(r.cd ?? '')}</td>
+          <td>${escapeHtml(r.product_name ?? '')}</td>
+          <td>${r.production_sequence ?? ''}</td>
+          <td>${escapeHtml(r.material_name ?? '')}</td>
+          <td>${r.actual_production_quantity ?? ''}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td>${escapeHtml(r.remarks ?? '')}</td>
+        </tr>`
+      }).join('')
+      pages.push(`
+        <div class="instruction-sheet-page">
+          <div class="instruction-sheet-header">
+            <span class="instruction-sheet-title">切断生産指示書</span>
+            <span class="instruction-sheet-machine">${escapeHtml(machineName)}</span>
+            <span class="instruction-sheet-date">生産日 ${dayDisplay}</span>
+          </div>
+          <div class="instruction-sheet-table-wrap">
+            <table class="instruction-sheet-table">
+              <thead><tr>
+                <th>CD</th><th>製品名</th><th>順位</th><th>原材料</th><th>生産数</th><th>実績数</th><th>不良</th><th>段取</th><th>開始</th><th>終了</th><th>作業者</th><th>備考</th>
+              </tr></thead>
+              <tbody>${trs}</tbody>
+            </table>
+          </div>
+          <div class="instruction-sheet-footer">
+            <span>合計 ${totalQty.toLocaleString()}</span>
+          </div>
+        </div>
+      `)
+    }
+    if (pages.length === 0) {
+      ElMessage.warning('該当日のデータがありません')
+      return
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断生産指示書</title><style>
+      @page { size: A5 landscape; margin: 10mm 0cm; }
+      body { font-family: 'MS Gothic', 'Yu Gothic', sans-serif; font-size: 11px; margin: 0; padding: 8px 0.6cm; }
+      .instruction-sheet-page { page-break-after: always; width: 100%; box-sizing: border-box; }
+      .instruction-sheet-page:last-child { page-break-after: auto; }
+      .instruction-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 6px 0; border-bottom: 1px solid #999; }
+      .instruction-sheet-title { font-weight: bold; font-size: 22px; }
+      .instruction-sheet-machine { font-size: 22px; }
+      .instruction-sheet-date { font-size: 22px; }
+      .instruction-sheet-table-wrap { overflow: auto; }
+      .instruction-sheet-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .instruction-sheet-table th:nth-child(1), .instruction-sheet-table td:nth-child(1) { width: 4%; }
+      .instruction-sheet-table th:nth-child(2), .instruction-sheet-table td:nth-child(2) { width: 13%; }
+      .instruction-sheet-table th:nth-child(3), .instruction-sheet-table td:nth-child(3) { width: 4%; }
+      .instruction-sheet-table th:nth-child(4), .instruction-sheet-table td:nth-child(4) { width: 16%; }
+      .instruction-sheet-table th:nth-child(5), .instruction-sheet-table td:nth-child(5) { width: 5%; }
+      .instruction-sheet-table th:nth-child(6), .instruction-sheet-table td:nth-child(6) { width: 5%; }
+      .instruction-sheet-table th:nth-child(7), .instruction-sheet-table td:nth-child(7) { width: 4%; }
+      .instruction-sheet-table th:nth-child(8), .instruction-sheet-table td:nth-child(8) { width: 4%; }
+      .instruction-sheet-table th:nth-child(9), .instruction-sheet-table td:nth-child(9) { width: 4%; }
+      .instruction-sheet-table th:nth-child(10), .instruction-sheet-table td:nth-child(10) { width: 5%; }
+      .instruction-sheet-table th:nth-child(11), .instruction-sheet-table td:nth-child(11) { width: 5%; }
+      .instruction-sheet-table th:nth-child(12), .instruction-sheet-table td:nth-child(12) { width: 10%; }
+      .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
+      .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 10px; }
+      .instruction-sheet-table td { font-size: 14px; }
+      .instruction-sheet-table td:nth-child(1), .instruction-sheet-table td:nth-child(12) { font-size: 10px; }
+      .instruction-sheet-table td:nth-child(2), .instruction-sheet-table td:nth-child(4), .instruction-sheet-table td:nth-child(12) { text-align: left; }
+      .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
+      @media print {
+        .instruction-sheet-page { overflow: hidden; }
+      }
+    </style></head><body>${pages.join('')}</body></html>`
+    const w = window.open('', '_blank')
+    if (!w) {
+      ElMessage.warning('ポップアップがブロックされています。印刷用ウィンドウを許可してください。')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print(); w.close() }, 300)
+    ElMessage.success('指示書を印刷ウィンドウで開きました')
+  } catch (e) {
+    const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (e as { message?: string })?.message
+      ?? '指示書の取得に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    issueCuttingInstructionSheetLoading.value = false
+  }
+}
+function escapeHtml(s: string): string {
+  const div = document.createElement('div')
+  div.textContent = s
+  return div.innerHTML
+}
+
 watch(selectedScheduleMonth, () => {
   loadCuttingManagement()
   loadChamferingManagement()
@@ -2793,7 +2960,7 @@ onUnmounted(() => {
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   overflow-x: auto;
-  overflow-y: auto;
+  overflow-y: hidden;
   scrollbar-gutter: stable;
   background: #fff;
 }
@@ -2807,10 +2974,12 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-/* バッチ→切断のドロップゾーン：表头以下のみ */
+/* バッチ→切断のドロップゾーン：12行分の高さで固定、超過時は縦スクロール */
 .cutting-mgmt-tbody-drop-zone {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  height: 376px;
+  min-height: 376px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
@@ -2833,9 +3002,16 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-/* 切断指示-今日：表下の合計行 */
-.cutting-mgmt-tfoot {
+/* 切断指示-今日：表下の合計行（表格外、下方） */
+.cutting-mgmt-tfoot-wrap {
   flex-shrink: 0;
+  min-width: 810px;
+  width: 100%;
+}
+.cutting-mgmt-tfoot-wrap--tomorrow {
+  min-width: 460px;
+}
+.cutting-mgmt-tfoot {
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
 }
@@ -2975,6 +3151,9 @@ onUnmounted(() => {
   border-bottom: 1px solid #f1f5f9;
   cursor: grab;
   transition: background 0.15s;
+  height: 30px;
+  min-height: 30px;
+  flex-shrink: 0;
 }
 .cutting-mgmt-data-row:hover {
   background: #f8fafc;
