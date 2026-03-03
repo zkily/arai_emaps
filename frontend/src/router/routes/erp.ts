@@ -195,13 +195,7 @@ export const erpRoutes: RouteRecordRaw[] = [
         path: 'erp/production/instruction/cutting',
         name: 'CuttingInstruction',
         component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'),
-        meta: { title: '切断指示', group: '生産管理 > 生産指示', requiresAuth: true },
-      },
-      {
-        path: 'erp/production/instruction/surface',
-        name: 'SurfaceInstruction',
-        component: () => import('@/views/erp/production/instruction/surface/SurfaceInstruction.vue'),
-        meta: { title: '面取指示', group: '生産管理 > 生産指示', requiresAuth: true },
+        meta: { title: '切断・面取指示', group: '生産管理 > 生産指示', requiresAuth: true },
       },
       {
         path: 'erp/production/instruction/forming',

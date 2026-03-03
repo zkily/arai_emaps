@@ -1,7 +1,7 @@
 """
 製品別工程ルートステップ API（product_route_steps / product_route_step_machines）
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from pydantic import BaseModel
@@ -21,6 +21,35 @@ from app.modules.master.models import (
 )
 
 router = APIRouter()
+
+
+# ========== 工程別製品一覧（面取工程＝KT02 等） ==========
+
+
+@router.get("/products-by-process")
+async def get_products_by_process_cd(
+    process_cd: str = Query(..., description="工程コード（例: KT02=面取）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """指定工程に紐づく製品一覧（product_route_steps に process_cd が存在する製品）"""
+    if not process_cd or not process_cd.strip():
+        return []
+    process_cd = process_cd.strip()
+    subq = (
+        select(ProductRouteStep.product_cd).where(ProductRouteStep.process_cd == process_cd).distinct()
+    )
+    query = (
+        select(Product.product_cd, Product.product_name)
+        .where(Product.product_cd.in_(subq))
+        .order_by(Product.product_cd)
+    )
+    result = await db.execute(query)
+    rows = result.all()
+    return [
+        {"product_cd": r.product_cd, "product_name": r.product_name or r.product_cd}
+        for r in rows
+    ]
 
 
 # ========== 工程一覧（ダイアログ用） ==========

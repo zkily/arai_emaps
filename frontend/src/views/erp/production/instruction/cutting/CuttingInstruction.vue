@@ -3,7 +3,9 @@
     <div class="page-header">
       <div class="header-left">
         <div class="header-title">
-          <h1>切断指示管理</h1>
+          <span class="page-header-badge">生産指示</span>
+          <h1>切断・面取指示管理</h1>
+          <p class="header-desc">バッチ一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
       </div>
     </div>
@@ -70,7 +72,8 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" size="small" @click="openNewRecordDialog">+ 新規追加</el-button>
+              <el-button type="primary" size="small" @click="openNewRecordDialog(false)">+ 新規追加</el-button>
+              <el-button type="default" size="small" class="btn-trial-add" @click="openNewRecordDialog(true)">試作追加</el-button>
             </el-form-item>
           </el-form>
         </div>
@@ -154,29 +157,33 @@
           <div v-if="!selectedProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
           <div v-else v-loading="productDetailLoading" class="product-detail-body">
             <template v-if="productDetail">
-              <div class="detail-row"><span class="detail-label">製品CD</span><span class="detail-value">{{ productDetail.product_cd ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">製品名</span><span class="detail-value">{{ productDetail.product_name ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">生産ロット</span><span class="detail-value">{{ productDetail.lot_size ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">材料</span><span class="detail-value">{{ productDetail.material_cd ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">切断長</span><span class="detail-value">{{ productDetail.cut_length ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">面取長</span><span class="detail-value">{{ productDetail.chamfer_length ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">展開長</span><span class="detail-value">{{ productDetail.developed_length ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">端材長</span><span class="detail-value">{{ productDetail.scrap_length ?? '-' }}</span></div>
-              <div class="detail-row"><span class="detail-label">取数</span><span class="detail-value">{{ productDetail.take_count ?? '-' }}</span></div>
+              <ul class="product-detail-list">
+                <li class="product-detail-list-item"><span class="detail-label">製品CD</span><span class="detail-value">{{ productDetail.product_cd ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">製品名</span><span class="detail-value">{{ productDetail.product_name ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">生産ロット</span><span class="detail-value">{{ productDetail.lot_size ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">材料</span><span class="detail-value">{{ productDetail.material_name ?? productDetail.material_cd ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">取数</span><span class="detail-value">{{ productDetail.take_count ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">切断長</span><span class="detail-value">{{ productDetail.cut_length ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">面取長</span><span class="detail-value">{{ (productDetail.chamfer_length != null && Number(productDetail.chamfer_length) !== 0) ? productDetail.chamfer_length : '--' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">展開長</span><span class="detail-value">{{ (productDetail.developed_length != null && Number(productDetail.developed_length) !== 0) ? productDetail.developed_length : '--' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">端材長</span><span class="detail-value">{{ productDetail.scrap_length ?? '-' }}</span></li>
+              </ul>
             </template>
             <div v-else-if="!productDetailLoading" class="right-panel-placeholder">該当製品なし</div>
           </div>
         </div>
-        <!-- 下：設備能率（equipment_efficiency 表・該当製品） -->
+        <!-- 下：設備能率（切断・面取のみ） -->
         <div class="right-panel-bottom">
-          <div class="right-panel-title">設備能率</div>
+          <div class="right-panel-title">設備能率（切断・面取）</div>
           <div v-if="!selectedProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
           <div v-else v-loading="equipmentEfficiencyLoading" class="equipment-efficiency-body">
-            <el-table v-if="equipmentEfficiencyList.length" :data="equipmentEfficiencyList" size="small" max-height="220">
+            <el-table v-if="equipmentEfficiencyListFiltered.length" :data="equipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
               <el-table-column prop="machines_name" label="設備名" min-width="100" show-overflow-tooltip />
-              <el-table-column prop="efficiency_rate" label="能率" width="80" align="right" />
+              <el-table-column prop="efficiency_rate" label="能率" width="80" align="right">
+                <template #default="{ row }">{{ row.efficiency_rate != null ? Number(row.efficiency_rate) : '-' }}</template>
+              </el-table-column>
             </el-table>
-            <div v-else-if="!equipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし</div>
+            <div v-else-if="!equipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（切断・面取のみ表示）</div>
           </div>
         </div>
       </div>
@@ -188,31 +195,36 @@
       <div class="instruction-row instruction-two-cols instruction-cols-6-4">
         <div class="instruction-col cutting-management-section">
           <div class="cutting-mgmt-header">
-            <span class="cutting-mgmt-title">切断指示-今日</span>
-            <div class="cutting-mgmt-date-wrap">
-              <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftDateToday(-1)" />
-              <el-date-picker
-                v-model="selectedDateToday"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="生産日"
-                size="small"
-                class="cutting-mgmt-date-picker"
-                @change="loadCuttingManagement"
-              />
-              <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftDateToday(1)" />
-              <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
+            <div class="cutting-mgmt-header-left">
+              <span class="cutting-mgmt-title">切断指示-今日</span>
+              <div class="cutting-mgmt-date-wrap">
+                <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftDateToday(-1)" />
+                <el-date-picker
+                  v-model="selectedDateToday"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="生産日"
+                  size="small"
+                  class="cutting-mgmt-date-picker"
+                  @change="loadCuttingManagement"
+                />
+                <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftDateToday(1)" />
+              </div>
+              <div class="cutting-mgmt-machine-btns">
+                <el-button
+                  v-for="m in cuttingMachineOptionsFiltered"
+                  :key="m.machine_name"
+                  size="small"
+                  :type="cuttingMachineFilter === m.machine_name ? 'primary' : 'default'"
+                  @click="cuttingMachineFilter = m.machine_name; loadCuttingManagement()"
+                >
+                  {{ m.machine_name }}
+                </el-button>
+              </div>
             </div>
-            <div class="cutting-mgmt-machine-btns">
-              <el-button
-                v-for="m in cuttingMachineOptionsFiltered"
-                :key="m.machine_name"
-                size="small"
-                :type="cuttingMachineFilter === m.machine_name ? 'primary' : 'default'"
-                @click="cuttingMachineFilter = m.machine_name; loadCuttingManagement()"
-              >
-                {{ m.machine_name }}
-              </el-button>
+            <div class="cutting-mgmt-header-right">
+              <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
+              <el-button type="success" size="small" :loading="confirmCuttingActualLoading" @click="confirmCuttingActual">実績確定</el-button>
             </div>
           </div>
           <div v-loading="cuttingManagementLoading" class="cutting-mgmt-table-wrap">
@@ -465,40 +477,435 @@
           </div>
         </div>
       </div>
-      <!-- 第2行：面取指示 | カンバン発行 -->
-      <div class="instruction-row instruction-two-cols">
-        <div class="instruction-col chamfering-management-section">
-          <div class="cutting-mgmt-header">
-            <span class="cutting-mgmt-title">面取指示</span>
-          </div>
-          <div v-loading="chamferingManagementLoading" class="cutting-mgmt-table-wrap">
-            <el-table
-              :data="chamferingManagementList"
-              size="small"
-              class="cutting-mgmt-table"
-              max-height="260"
-              stripe
+      <!-- 面取バッチ一覧（面取指示の上）：レイアウト・幅は生産バッチ一覧と同様、右に製品情報・設備能率 -->
+      <div class="plan-row chamfering-plan-row">
+        <div class="plan-section plan-section-left">
+          <div class="chamfering-batch-section-card">
+            <div class="cutting-mgmt-header">
+              <span class="cutting-mgmt-title">面取バッチ一覧</span>
+            </div>
+            <div
+              v-loading="chamferingBatchLoading"
+              class="plan-batch-table-wrap chamfering-batch-table-wrap"
+              :class="{ 'drop-zone-active': dragOverZone === 'chamferingBatchList' }"
+              @drop="onDropChamferingBatchList"
+              @dragover="onDragOverChamfering($event, 'chamferingBatchList')"
+              @dragenter="onDragEnterChamfering('chamferingBatchList')"
+              @dragleave="onDragLeaveChamfering('chamferingBatchList')"
             >
-              <el-table-column prop="production_day" label="生産日" width="92" align="center">
-                <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) }}</template>
-              </el-table-column>
-              <el-table-column prop="production_line" label="ライン" width="72" show-overflow-tooltip />
-              <el-table-column prop="product_name" label="製品名" min-width="100" show-overflow-tooltip />
-              <el-table-column prop="actual_production_quantity" label="数" width="48" align="center" />
-              <el-table-column prop="chamfering_length" label="面取長" width="72" align="right" />
-              <el-table-column prop="production_completed_check" label="完了" width="52" align="center">
-                <template #default="{ row }">
-                  <el-tag v-if="row.production_completed_check" type="success" size="small">済</el-tag>
-                  <span v-else>-</span>
-                </template>
-              </el-table-column>
-            </el-table>
-            <div v-if="!chamferingManagementList.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
+              <div v-if="dragOverZone === 'chamferingBatchList'" class="plan-batch-drop-hint">ここにドロップで面取指示をバッチへ戻す</div>
+              <div v-show="chamferingBatchList.length > 0" class="plan-batch-table-inner">
+                <div class="plan-batch-thead">
+                  <div class="plan-batch-tr">
+                    <div class="plan-batch-th">CD</div>
+                    <div class="plan-batch-th">生産月</div>
+                    <div class="plan-batch-th">ライン</div>
+                    <div class="plan-batch-th">製品名</div>
+                    <div class="plan-batch-th">原材料</div>
+                    <div class="plan-batch-th">生産数</div>
+                    <div class="plan-batch-th">ロット数</div>
+                    <div class="plan-batch-th">ロットNo</div>
+                    <div class="plan-batch-th">SW</div>
+                    <div class="plan-batch-th plan-batch-th-actions">操作</div>
+                  </div>
+                </div>
+                <div class="plan-batch-tbody">
+                  <div
+                    v-for="(row, idx) in chamferingBatchList"
+                    :key="row.id ?? `cb-${idx}`"
+                    class="plan-batch-tr plan-batch-data-row"
+                    :class="{ 'plan-batch-row-selected': selectedChamferingProductCd === (row.product_cd ?? '') }"
+                    draggable="true"
+                    @click.stop="onChamferingBatchRowClick(row)"
+                    @dragstart="onChamferingBatchDragStart($event, row)"
+                    @dragend="onChamferingDragEnd"
+                  >
+                    <div class="plan-batch-td">{{ (row.cd ?? (row.management_code ? String(row.management_code).slice(-5) : '')) || '-' }}</div>
+                    <div class="plan-batch-td">{{ formatDateOnly(String(row.production_month ?? '')) || '-' }}</div>
+                    <div class="plan-batch-td">{{ row.production_line ?? '-' }}</div>
+                    <div class="plan-batch-td">{{ row.product_name || row.product_cd || '-' }}</div>
+                    <div class="plan-batch-td">{{ row.material_name ?? '-' }}</div>
+                    <div class="plan-batch-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                    <div class="plan-batch-td">{{ row.production_lot_size ?? '-' }}</div>
+                    <div class="plan-batch-td">{{ row.lot_number ?? '-' }}</div>
+                    <div class="plan-batch-td" @click.stop>
+                      <el-switch
+                        :model-value="!!row.has_sw_process"
+                        size="small"
+                        :loading="chamferingSwLoading === row.id"
+                        @change="(v: string | number | boolean) => updateChamferingPlanSw(row, !!v)"
+                      />
+                    </div>
+                    <div class="plan-batch-td plan-batch-td-actions">
+                      <el-button
+                        type="primary"
+                        link
+                        size="small"
+                        title="複製"
+                        :loading="chamferingBatchActionLoading === row.id"
+                        @click.stop="copyChamferingPlan(row)"
+                      >
+                        <el-icon><DocumentCopy /></el-icon>
+                      </el-button>
+                      <el-button
+                        type="danger"
+                        link
+                        size="small"
+                        title="削除"
+                        :loading="chamferingBatchActionLoading === row.id"
+                        @click.stop="deleteChamferingPlan(row)"
+                      >
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div v-if="!chamferingBatchList.length && !chamferingBatchLoading" class="plan-batch-empty">データなし</div>
+            </div>
           </div>
         </div>
-        <div class="instruction-col kanban-issuance-section">
+        <div class="plan-section-right right-panel chamfering-right-panel">
+          <div class="right-panel-top">
+            <div class="right-panel-title">製品情報</div>
+            <div v-if="!selectedChamferingProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
+            <div v-else v-loading="chamferingProductDetailLoading" class="product-detail-body">
+              <template v-if="chamferingProductDetail">
+                <ul class="product-detail-list product-detail-list--chamfering">
+                  <li class="product-detail-list-item"><span class="detail-label">製品CD</span><span class="detail-value">{{ chamferingProductDetail.product_cd ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">製品名</span><span class="detail-value">{{ chamferingProductDetail.product_name ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">生産ロット</span><span class="detail-value">{{ chamferingProductDetail.lot_size ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">材料</span><span class="detail-value">{{ chamferingProductDetail.material_name ?? chamferingProductDetail.material_cd ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">取数</span><span class="detail-value">{{ chamferingProductDetail.take_count ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">切断長</span><span class="detail-value">{{ chamferingProductDetail.cut_length ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">面取長</span><span class="detail-value">{{ (chamferingProductDetail.chamfer_length != null && Number(chamferingProductDetail.chamfer_length) !== 0) ? chamferingProductDetail.chamfer_length : '--' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">展開長</span><span class="detail-value">{{ (chamferingProductDetail.developed_length != null && Number(chamferingProductDetail.developed_length) !== 0) ? chamferingProductDetail.developed_length : '--' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">端材長</span><span class="detail-value">{{ chamferingProductDetail.scrap_length ?? '-' }}</span></li>
+                </ul>
+              </template>
+              <div v-else-if="!chamferingProductDetailLoading" class="right-panel-placeholder">該当製品なし</div>
+            </div>
+          </div>
+          <div class="right-panel-bottom">
+            <div class="right-panel-title">設備能率（切断・面取）</div>
+            <div v-if="!selectedChamferingProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
+            <div v-else v-loading="chamferingEquipmentEfficiencyLoading" class="equipment-efficiency-body">
+              <el-table v-if="chamferingEquipmentEfficiencyListFiltered.length" :data="chamferingEquipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
+                <el-table-column prop="machines_name" label="設備名" min-width="100" show-overflow-tooltip />
+                <el-table-column prop="efficiency_rate" label="能率" width="80" align="right">
+                  <template #default="{ row }">{{ row.efficiency_rate != null ? Number(row.efficiency_rate) : '-' }}</template>
+                </el-table-column>
+              </el-table>
+              <div v-else-if="!chamferingEquipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（切断・面取のみ表示）</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- 第2行：面取指示-今日 | 面取指示-翌日（同切断指示 6:4 + 日期筛选） -->
+      <div class="instruction-row instruction-two-cols instruction-cols-6-4">
+        <div class="instruction-col chamfering-management-section">
+          <div class="cutting-mgmt-header chamfering-mgmt-header-two-rows">
+            <div class="chamfering-mgmt-header-row1">
+              <div class="cutting-mgmt-header-left">
+                <span class="cutting-mgmt-title">面取指示-今日</span>
+                <div class="cutting-mgmt-date-wrap">
+                  <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftChamferingDateToday(-1)" />
+                  <el-date-picker
+                    v-model="selectedChamferingDateToday"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    placeholder="生産日"
+                    size="small"
+                    class="cutting-mgmt-date-picker"
+                    @change="loadChamferingManagement"
+                  />
+                  <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftChamferingDateToday(1)" />
+                </div>
+              </div>
+              <div class="cutting-mgmt-header-right">
+                <el-button type="default" size="small" @click="openChamferingNewDialog">新規追加</el-button>
+                <el-button type="primary" size="small" :loading="issueChamferingInstructionSheetLoading" @click="issueChamferingInstructionSheet">指示書発行</el-button>
+                <el-button type="success" size="small" :loading="confirmChamferingActualLoading" @click="confirmChamferingActual">実績確定</el-button>
+              </div>
+            </div>
+            <div class="chamfering-mgmt-header-row2">
+              <div class="cutting-mgmt-machine-btns chamfering-machine-btns">
+                <el-button
+                  size="small"
+                  :type="!selectedChamferingMachineFilter ? 'primary' : 'default'"
+                  @click="selectedChamferingMachineFilter = ''; loadChamferingManagement()"
+                >
+                  全部
+                </el-button>
+                <el-button
+                  v-for="m in chamferingMachineOptions"
+                  :key="m.machine_name"
+                  size="small"
+                  :type="selectedChamferingMachineFilter === m.machine_name ? 'primary' : 'default'"
+                  @click="selectedChamferingMachineFilter = m.machine_name; loadChamferingManagement()"
+                >
+                  {{ m.machine_name }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <div
+            v-loading="chamferingManagementLoading"
+            class="cutting-mgmt-table-wrap chamfering-mgmt-drop-wrap"
+            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagement' }"
+            @drop="onDropChamferingManagement"
+            @dragover="onDragOverChamfering($event, 'chamferingManagement')"
+            @dragenter="onDragEnterChamfering('chamferingManagement')"
+            @dragleave="onDragLeaveChamfering('chamferingManagement')"
+          >
+            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取バッチを面取指示へ移行</div>
+            <div class="cutting-mgmt-table-inner">
+              <div class="cutting-mgmt-thead">
+                <div class="cutting-mgmt-tr">
+                  <div class="cutting-mgmt-th">CD</div>
+                  <div class="cutting-mgmt-th">ライン</div>
+                  <div class="cutting-mgmt-th">生産日</div>
+                  <div class="cutting-mgmt-th">面取機</div>
+                  <div class="cutting-mgmt-th">製品名</div>
+                  <div class="cutting-mgmt-th">原材料</div>
+                  <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">完了</div>
+                  <div class="cutting-mgmt-th">カ無</div>
+                  <div class="cutting-mgmt-th">生産順</div>
+                  <div class="cutting-mgmt-th">生産時間</div>
+                  <div class="cutting-mgmt-th cutting-mgmt-th-actions">操作</div>
+                </div>
+              </div>
+              <div class="cutting-mgmt-tbody">
+                <div
+                  class="cutting-mgmt-drop-edge"
+                  @drop.prevent="onDropChamferingRowToEdge($event, 'first', 'today')"
+                  @dragover="onDragoverChamferingRow($event)"
+                />
+                <div
+                  v-for="(row, idx) in chamferingManagementListToday"
+                  :key="row.id ?? `cham-today-${idx}`"
+                  class="cutting-mgmt-tr cutting-mgmt-data-row"
+                  draggable="true"
+                  @dblclick.stop="openChamferingEditDialog(row)"
+                  @dragstart="onChamferingManagementDragStart($event, row)"
+                  @dragend="onChamferingDragEnd"
+                  @drop.prevent="onDropChamferingRowForReorder($event, row)"
+                  @dragover="onDragoverChamferingRow($event)"
+                >
+                  <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.production_line ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.chamfering_machine ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.material_name ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-switch">
+                    <el-switch
+                      :model-value="!!row.production_completed_check"
+                      :loading="chamferingCompletedLoading === (row.id ?? 0)"
+                      size="small"
+                      @click.stop
+                      @change="toggleChamferingCompleted(row)"
+                    />
+                  </div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-switch">
+                    <el-switch
+                      :model-value="!!row.no_count"
+                      :loading="chamferingNoCountLoading === (row.id ?? 0)"
+                      size="small"
+                      @click.stop
+                      @change="toggleChamferingNoCount(row)"
+                    />
+                  </div>
+                  <div class="cutting-mgmt-td">{{ row.production_sequence ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.production_time ?? '-' }}</div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-actions">
+                    <el-button
+                      v-if="(row.actual_production_quantity ?? 0) > 0"
+                      type="warning"
+                      link
+                      size="small"
+                      title="未完了分を翌日へ順延"
+                      @click.stop="openChamferingSplitDialog(row)"
+                    >
+                      <el-icon><DArrowRight /></el-icon>
+                    </el-button>
+                    <el-button type="primary" link size="small" title="複製" @click.stop="duplicateChamferingRow(row)">
+                      <el-icon><DocumentCopy /></el-icon>
+                    </el-button>
+                    <el-button type="danger" link size="small" title="削除" @click.stop="deleteChamferingRow(row)">
+                      <el-icon><Delete /></el-icon>
+                    </el-button>
+                  </div>
+                </div>
+                <div
+                  class="cutting-mgmt-drop-edge cutting-mgmt-drop-edge--last"
+                  @drop.prevent="onDropChamferingRowToEdge($event, 'last', 'today')"
+                  @dragover="onDragoverChamferingRow($event)"
+                />
+              </div>
+            </div>
+            <div v-if="chamferingManagementListToday.length" class="cutting-mgmt-tfoot-wrap">
+              <div class="cutting-mgmt-tfoot">
+                <div class="cutting-mgmt-tr">
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTodayTotal.quantity }}</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTodayTotal.time ?? '-' }}</div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-actions"></div>
+                </div>
+              </div>
+            </div>
+            <div v-if="!chamferingManagementListToday.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
+          </div>
+        </div>
+        <div class="instruction-col chamfering-management-section cutting-management-section-right">
+          <div class="cutting-mgmt-header">
+            <span class="cutting-mgmt-title">面取指示-翌日</span>
+            <div class="cutting-mgmt-date-wrap">
+              <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftChamferingDateTomorrow(-1)" />
+              <el-date-picker
+                v-model="selectedChamferingDateTomorrow"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="生産日"
+                size="small"
+                class="cutting-mgmt-date-picker"
+                @change="loadChamferingManagement"
+              />
+              <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftChamferingDateTomorrow(1)" />
+            </div>
+          </div>
+          <div
+            v-loading="chamferingManagementLoading"
+            class="cutting-mgmt-table-wrap chamfering-mgmt-drop-wrap"
+            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagement' }"
+            @drop="onDropChamferingManagement"
+            @dragover="onDragOverChamfering($event, 'chamferingManagement')"
+            @dragenter="onDragEnterChamfering('chamferingManagement')"
+            @dragleave="onDragLeaveChamfering('chamferingManagement')"
+          >
+            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取バッチを面取指示へ移行</div>
+            <div class="cutting-mgmt-table-inner cutting-mgmt-table-inner--tomorrow cutting-mgmt-table-inner--chamfering-tomorrow">
+              <div class="cutting-mgmt-thead">
+                <div class="cutting-mgmt-tr">
+                  <div class="cutting-mgmt-th">CD</div>
+                  <div class="cutting-mgmt-th">生産日</div>
+                  <div class="cutting-mgmt-th">面取機</div>
+                  <div class="cutting-mgmt-th">製品名</div>
+                  <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">生産順</div>
+                  <div class="cutting-mgmt-th">生産時間</div>
+                </div>
+              </div>
+              <div class="cutting-mgmt-tbody">
+                <div
+                  class="cutting-mgmt-drop-edge"
+                  @drop.prevent="onDropChamferingRowToEdge($event, 'first', 'tomorrow')"
+                  @dragover="onDragoverChamferingRow($event)"
+                />
+                <div
+                  v-for="(row, idx) in chamferingManagementListTomorrow"
+                  :key="row.id ?? `cham-tomorrow-${idx}`"
+                  class="cutting-mgmt-tr cutting-mgmt-data-row"
+                  draggable="true"
+                  @dragstart="onChamferingManagementDragStart($event, row)"
+                  @dragend="onChamferingDragEnd"
+                  @drop.prevent="onDropChamferingRowForReorder($event, row)"
+                  @dragover="onDragoverChamferingRow($event)"
+                >
+                  <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.chamfering_machine ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.production_sequence ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.production_time ?? '-' }}</div>
+                </div>
+                <div
+                  class="cutting-mgmt-drop-edge cutting-mgmt-drop-edge--last"
+                  @drop.prevent="onDropChamferingRowToEdge($event, 'last', 'tomorrow')"
+                  @dragover="onDragoverChamferingRow($event)"
+                />
+              </div>
+            </div>
+            <div v-if="chamferingManagementListTomorrow.length" class="cutting-mgmt-tfoot-wrap cutting-mgmt-tfoot-wrap--tomorrow">
+              <div class="cutting-mgmt-tfoot">
+                <div class="cutting-mgmt-tr">
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTomorrowTotal.quantity }}</div>
+                  <div class="cutting-mgmt-td"></div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTomorrowTotal.time ?? '-' }}</div>
+                </div>
+              </div>
+            </div>
+            <div v-if="!chamferingManagementListTomorrow.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
+          </div>
+        </div>
+      </div>
+      <!-- 第3行：カンバン発行 -->
+      <div class="instruction-row instruction-two-cols">
+        <div class="instruction-col kanban-issuance-section instruction-col-full">
           <div class="cutting-mgmt-header">
             <span class="cutting-mgmt-title">カンバン発行</span>
+            <div class="cutting-mgmt-date-wrap">
+              <el-date-picker
+                v-model="kanbanFilterProductionDay"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="生産日"
+                size="small"
+                clearable
+                class="kanban-filter-date"
+                style="width: 130px;"
+                @change="loadKanbanIssuance"
+              />
+              <el-select
+                v-model="kanbanFilterStatus"
+                placeholder="状態"
+                clearable
+                size="small"
+                class="kanban-filter-status"
+                style="width: 110px; margin-left: 8px;"
+                @change="loadKanbanIssuance"
+              >
+                <el-option label="（全部）" value="" />
+                <el-option label="待発行" value="pending" />
+                <el-option label="発行済" value="issued" />
+                <el-option label="完了" value="completed" />
+              </el-select>
+              <el-select
+                v-model="kanbanFilterProductName"
+                placeholder="製品名"
+                clearable
+                filterable
+                size="small"
+                class="kanban-filter-product"
+                style="width: 160px; margin-left: 8px;"
+                @change="loadKanbanIssuance"
+              >
+                <el-option label="（全部）" value="" />
+                <el-option
+                  v-for="name in kanbanIssuanceProductNameOptions"
+                  :key="name"
+                  :label="name"
+                  :value="name"
+                />
+              </el-select>
+              <el-button type="primary" size="small" :loading="kanbanBatchIssueLoading" @click="batchIssueKanban">一括発行</el-button>
+              <el-button type="default" size="small" :loading="kanbanSyncProductionDayLoading" @click="syncKanbanProductionDay">更新</el-button>
+            </div>
           </div>
           <div v-loading="kanbanIssuanceLoading" class="cutting-mgmt-table-wrap">
             <el-table
@@ -507,17 +914,12 @@
               class="cutting-mgmt-table"
               max-height="260"
               stripe
+              row-key="id"
+              @selection-change="kanbanIssuanceSelection = $event"
+              @row-dblclick="openKanbanEdit"
             >
-              <el-table-column prop="process_type" label="工程" width="80" align="center">
-                <template #default="{ row }">
-                  <el-tag v-if="row.process_type === 'cutting'" type="info" size="small">切断</el-tag>
-                  <el-tag v-else-if="row.process_type === 'chamfering'" type="warning" size="small">面取</el-tag>
-                  <span v-else>{{ row.process_type }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column prop="kanban_no" label="カンバン番号" min-width="140" show-overflow-tooltip />
-              <el-table-column prop="issue_date" label="発行日" width="92" align="center" />
-              <el-table-column prop="status" label="状態" width="80" align="center">
+              <el-table-column type="selection" width="40" align="center" :selectable="(row) => row.status === 'pending' || row.status === 'issued'" />
+              <el-table-column prop="status" label="状態" width="76" align="center">
                 <template #default="{ row }">
                   <el-tag v-if="row.status === 'pending'" type="warning" size="small">待発行</el-tag>
                   <el-tag v-else-if="row.status === 'issued'" size="small">発行済</el-tag>
@@ -525,7 +927,15 @@
                   <span v-else>{{ row.status }}</span>
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="80" align="center" fixed="right">
+              <el-table-column prop="issue_date" label="発行日" width="92" align="center" />
+              <el-table-column prop="production_day" label="生産日" width="110" align="center">
+                <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
+              </el-table-column>
+              <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="production_line" label="ライン" width="70" align="center" show-overflow-tooltip />
+              <el-table-column prop="lot_number" label="ロットNo." width="90" show-overflow-tooltip />
+              <el-table-column prop="actual_production_quantity" label="ロット本数" width="84" align="right" />
+              <el-table-column label="操作" width="110" align="center" fixed="right">
                 <template #default="{ row }">
                   <el-button
                     v-if="row.status === 'pending'"
@@ -537,6 +947,16 @@
                   >
                     発行
                   </el-button>
+                  <el-button
+                    v-else-if="row.status === 'issued'"
+                    type="warning"
+                    link
+                    size="small"
+                    :loading="kanbanReissueLoading === row.id"
+                    @click="reissueKanban(row.id!)"
+                  >
+                    再発行
+                  </el-button>
                   <span v-else>-</span>
                 </template>
               </el-table-column>
@@ -546,6 +966,140 @@
         </div>
       </div>
     </div>
+
+    <!-- カンバン発行：双击编辑弹窗 -->
+    <el-dialog
+      v-model="kanbanEditDialogVisible"
+      title="カンバン発行 編集"
+      width="720px"
+      :close-on-click-modal="false"
+      class="kanban-edit-dialog"
+      @close="kanbanEditRow = null"
+    >
+      <el-form :model="kanbanEditForm" label-width="120px" label-position="left" class="kanban-edit-form">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="製品CD">
+              <el-input v-model="kanbanEditForm.product_cd" size="small" clearable placeholder="製品CD" />
+            </el-form-item>
+            <el-form-item label="製品名">
+              <el-input v-model="kanbanEditForm.product_name" size="small" clearable placeholder="製品名" />
+            </el-form-item>
+            <el-form-item label="ライン">
+              <el-input v-model="kanbanEditForm.production_line" size="small" clearable placeholder="ライン" />
+            </el-form-item>
+            <el-form-item label="切断機">
+              <el-input v-model="kanbanEditForm.cutting_machine" size="small" clearable placeholder="切断機" />
+            </el-form-item>
+            <el-form-item label="原材料">
+              <el-input v-model="kanbanEditForm.material_name" size="small" clearable placeholder="原材料" />
+            </el-form-item>
+            <el-form-item label="規格">
+              <el-input v-model="kanbanEditForm.standard_specification" size="small" clearable placeholder="規格" />
+            </el-form-item>
+            <el-form-item label="管理コード">
+              <el-input v-model="kanbanEditForm.management_code" size="small" clearable placeholder="管理コード" />
+            </el-form-item>
+            <el-form-item label="成型期間（開始）">
+              <el-date-picker
+                v-model="kanbanEditForm.start_date"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="開始日"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="成型期間（終了）">
+              <el-date-picker
+                v-model="kanbanEditForm.end_date"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="終了日"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="計画数">
+              <el-input-number v-model="kanbanEditForm.planned_quantity" :min="0" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="成型ロット">
+              <el-input-number v-model="kanbanEditForm.production_lot_size" :min="0" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="ロット本数">
+              <el-input-number v-model="kanbanEditForm.actual_production_quantity" :min="0" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="取数">
+              <el-input-number v-model="kanbanEditForm.take_count" :min="0" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="切断長">
+              <el-input-number v-model="kanbanEditForm.cutting_length" :min="0" :precision="2" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="面取長">
+              <el-input-number v-model="kanbanEditForm.chamfering_length" :min="0" :precision="2" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="展開長">
+              <el-input-number v-model="kanbanEditForm.developed_length" :min="0" :precision="2" controls-position="right" size="small" style="width: 100%" />
+            </el-form-item>
+            <el-form-item label="面取工程">
+              <el-checkbox v-model="kanbanEditForm.has_chamfering_process">あり</el-checkbox>
+            </el-form-item>
+            <el-form-item label="ロットNo.">
+              <el-input v-model="kanbanEditForm.lot_number" size="small" clearable placeholder="ロットNo." />
+            </el-form-item>
+            <el-form-item label="生産日">
+              <el-date-picker
+                v-model="kanbanEditForm.production_day"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="生産日"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="kanbanEditDialogVisible = false">取消</el-button>
+        <el-button type="primary" size="small" :loading="kanbanEditSubmitting" @click="saveKanbanEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 実績確定：结果汇总弹窗 -->
+    <el-dialog
+      v-model="confirmActualResultVisible"
+      width="420px"
+      :show-close="true"
+      class="confirm-actual-result-dialog"
+      align-center
+    >
+      <template #header>
+        <div class="confirm-actual-result-header">
+          <el-icon class="confirm-actual-result-icon"><CircleCheck /></el-icon>
+          <span class="confirm-actual-result-title">実績確定 結果</span>
+        </div>
+      </template>
+      <div class="confirm-actual-result-body">
+        <div class="confirm-actual-result-cards">
+          <div class="confirm-actual-result-card">
+            <span class="confirm-actual-result-card-label">登録件数</span>
+            <span class="confirm-actual-result-card-value">{{ confirmActualResultCount }} 件</span>
+          </div>
+          <div class="confirm-actual-result-card confirm-actual-result-card--highlight">
+            <span class="confirm-actual-result-card-label">数量合計（生産数）</span>
+            <span class="confirm-actual-result-card-value">{{ confirmActualResultTotalQty.toLocaleString() }} 本</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="confirm-actual-result-footer">
+          <el-button type="primary" size="default" @click="confirmActualResultVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <!-- バッチ→切断：生産日・切断機指定ダイアログ -->
     <el-dialog
@@ -596,6 +1150,101 @@
         <div class="move-to-cutting-dialog__footer">
           <el-button size="small" @click="moveToCuttingDialogVisible = false">取消</el-button>
           <el-button type="primary" size="small" :loading="moveToCuttingSubmitting" @click="submitMoveToCutting">登録</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 面取バッチ→面取指示：生産日・面取機指定ダイアログ -->
+    <el-dialog
+      v-model="moveToChamferingDialogVisible"
+      width="480px"
+      :close-on-click-modal="false"
+      class="move-to-chamfering-dialog"
+      @close="pendingChamferingBatchRow = null; moveToChamferingForm.production_line_2 = ''"
+    >
+      <template #header>
+        <div class="move-to-cutting-dialog__header">
+          <span class="move-to-cutting-dialog__title">面取指示の登録</span>
+        </div>
+      </template>
+      <el-form :model="moveToChamferingForm" label-width="72px" label-position="left" class="move-to-cutting-form">
+        <el-form-item label="生産日" class="move-to-cutting-form-item">
+          <div class="move-to-cutting-date-row">
+            <el-date-picker
+              v-model="moveToChamferingForm.production_day"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="生産日"
+              size="small"
+              class="move-to-cutting-date-picker"
+            />
+            <div class="move-to-cutting-date-shortcuts">
+              <el-button size="small" @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), -1)">前日</el-button>
+              <el-button size="small" type="primary" @click="moveToChamferingForm.production_day = getTodayString()">今日</el-button>
+              <el-button size="small" @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), 1)">翌日</el-button>
+            </div>
+          </div>
+        </el-form-item>
+        <template v-if="!pendingChamferingBatchRow?.has_sw_process">
+          <el-form-item label="面取機" class="move-to-cutting-form-item">
+            <el-select
+              v-model="moveToChamferingForm.production_line"
+              placeholder="面取機を選択"
+              filterable
+              clearable
+              size="small"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in chamferingMachineOptions"
+                :key="m.machine_name"
+                :label="m.machine_name"
+                :value="m.machine_name"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="面取機" class="move-to-cutting-form-item">
+            <el-select
+              v-model="moveToChamferingForm.production_line"
+              placeholder="面取機を選択"
+              filterable
+              clearable
+              size="small"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in chamferingMachineOptions"
+                :key="m.machine_name"
+                :label="m.machine_name"
+                :value="m.machine_name"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="面取機（SW）" class="move-to-cutting-form-item">
+            <el-select
+              v-model="moveToChamferingForm.production_line_2"
+              placeholder="面取機（SW）を選択"
+              filterable
+              clearable
+              size="small"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="m in chamferingMachineOptions"
+                :key="m.machine_name"
+                :label="m.machine_name"
+                :value="m.machine_name"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
+      </el-form>
+      <template #footer>
+        <div class="move-to-cutting-dialog__footer">
+          <el-button size="small" @click="moveToChamferingDialogVisible = false">取消</el-button>
+          <el-button type="primary" size="small" :loading="moveToChamferingSubmitting" @click="submitMoveToChamfering">登録</el-button>
         </div>
       </template>
     </el-dialog>
@@ -669,6 +1318,212 @@
         <div class="cutting-edit-dialog__footer">
           <el-button size="small" @click="cuttingEditDialogVisible = false">取消</el-button>
           <el-button type="primary" size="small" :loading="cuttingEditSubmitting" class="cutting-edit-save-btn" @click="saveCuttingEdit">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 面取指示：双击编辑（面取機・生産数・生産順・備考） -->
+    <el-dialog
+      v-model="chamferingEditDialogVisible"
+      width="504px"
+      :close-on-click-modal="false"
+      class="cutting-edit-dialog chamfering-edit-dialog"
+      @close="editingChamferingId = null"
+    >
+      <template #header>
+        <div class="cutting-edit-dialog__header">
+          <span class="cutting-edit-dialog__title">面取指示編集</span>
+        </div>
+      </template>
+      <el-form :model="chamferingEditForm" label-width="72px" label-position="left" class="cutting-edit-form">
+        <el-form-item label="面取機" class="cutting-edit-form-item">
+          <el-select
+            v-model="chamferingEditForm.chamfering_machine"
+            placeholder="面取機を選択"
+            filterable
+            clearable
+            size="small"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="m in chamferingMachineOptions"
+              :key="m.machine_name"
+              :label="m.machine_name"
+              :value="m.machine_name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="生産数" class="cutting-edit-form-item">
+          <el-input
+            v-model="chamferingEditForm.actual_production_quantity"
+            placeholder="生産数"
+            size="small"
+            clearable
+          />
+        </el-form-item>
+        <el-form-item label="生産順" class="cutting-edit-form-item">
+          <el-input-number
+            v-model="chamferingEditForm.production_sequence"
+            :min="1"
+            :max="9999"
+            controls-position="right"
+            size="small"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="備考" class="cutting-edit-form-item">
+          <el-input
+            v-model="chamferingEditForm.remarks"
+            type="textarea"
+            :rows="2"
+            placeholder="備考"
+            maxlength="500"
+            show-word-limit
+            size="small"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="cutting-edit-dialog__footer">
+          <el-button size="small" @click="chamferingEditDialogVisible = false">取消</el-button>
+          <el-button type="primary" size="small" :loading="chamferingEditSubmitting" class="cutting-edit-save-btn" @click="saveChamferingEdit">保存</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 面取指示：新規追加ダイアログ（chamfering_management 構造に合わせたフォーム） -->
+    <el-dialog
+      v-model="chamferingNewDialogVisible"
+      title="面取指示 - 新規追加"
+      width="min(96vw, 480px)"
+      :close-on-click-modal="false"
+      class="chamfering-new-dialog"
+      @closed="resetChamferingNewForm"
+    >
+      <el-form :model="chamferingNewForm" label-width="82px" label-position="left" class="chamfering-new-form">
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="生産日" required>
+              <el-date-picker
+                v-model="chamferingNewForm.production_day"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="生産日"
+                size="small"
+                style="width: 100%"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="ライン">
+              <el-select
+                v-model="chamferingNewForm.production_line"
+                placeholder="ラインを選択"
+                filterable
+                clearable
+                size="small"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in machineOptions"
+                  :key="m.machine_name"
+                  :label="m.machine_name"
+                  :value="m.machine_name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="面取機" required>
+              <el-select
+                v-model="chamferingNewForm.chamfering_machine"
+                placeholder="面取機を選択"
+                filterable
+                clearable
+                size="small"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in chamferingMachineOptions"
+                  :key="m.machine_name"
+                  :label="m.machine_name"
+                  :value="m.machine_name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生産順">
+              <el-input-number
+                v-model="chamferingNewForm.production_sequence"
+                :min="1"
+                :max="9999"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+                placeholder="省略時は自動"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="製品CD" required>
+          <el-select
+            v-model="chamferingNewForm.product_cd"
+            placeholder="製品を選択（面取工程）"
+            filterable
+            clearable
+            size="small"
+            style="width: 100%"
+            @change="onChamferingNewProductChange"
+          >
+            <el-option
+              v-for="p in chamferingProductOptions"
+              :key="p.product_cd"
+              :label="`${p.product_cd} ${p.product_name || ''}`"
+              :value="p.product_cd"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="製品名">
+          <el-input v-model="chamferingNewForm.product_name" placeholder="製品CD選択で自動入力" size="small" readonly />
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="生産数">
+              <el-input v-model="chamferingNewForm.actual_production_quantity" placeholder="生産数" size="small" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="原材料">
+              <el-select
+                v-model="chamferingNewForm.material_name"
+                placeholder="原材料を選択"
+                filterable
+                clearable
+                size="small"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="mat in chamferingMaterialOptions"
+                  :key="mat.material_cd"
+                  :label="mat.material_name"
+                  :value="mat.material_name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="管理コード">
+          <el-input v-model="chamferingNewForm.management_code" size="small" readonly placeholder="自動生成" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="chamfering-new-dialog__footer">
+          <el-button size="small" @click="chamferingNewDialogVisible = false">取消</el-button>
+          <el-button type="primary" size="small" :loading="chamferingNewSubmitting" @click="submitChamferingNew">登録</el-button>
         </div>
       </template>
     </el-dialog>
@@ -933,10 +1788,108 @@
       </template>
     </el-dialog>
 
+    <!-- 面取指示：未完了分を翌日へ順延 -->
+    <el-dialog
+      v-model="chamferingSplitDialogVisible"
+      width="420px"
+      class="split-to-next-day-dialog chamfering-snd-dialog"
+      :close-on-click-modal="false"
+      @close="chamferingSplitDialogRow = null"
+    >
+      <template #header>
+        <div class="snd-header">
+          <div class="snd-header-icon">
+            <el-icon size="16"><DArrowRight /></el-icon>
+          </div>
+          <div class="snd-header-text">
+            <span class="snd-title">未完了分を翌日へ順延</span>
+            <span class="snd-subtitle" v-if="chamferingSplitDialogRow">{{ chamferingSplitDialogRow.product_name ?? chamferingSplitDialogRow.product_cd ?? '' }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="chamferingSplitDialogRow" class="snd-body">
+        <div class="snd-info-card">
+          <div class="snd-info-row">
+            <span class="snd-info-label">生産日</span>
+            <span class="snd-info-value">{{ formatDateOnly(String(chamferingSplitDialogRow.production_day ?? '')) || '-' }}</span>
+          </div>
+          <div class="snd-info-row">
+            <span class="snd-info-label">面取機</span>
+            <span class="snd-info-value">{{ chamferingSplitDialogRow.chamfering_machine ?? '-' }}</span>
+          </div>
+          <div class="snd-info-row">
+            <span class="snd-info-label">元生産数</span>
+            <span class="snd-info-value snd-info-qty">{{ chamferingSplitDialogRow.actual_production_quantity ?? 0 }}</span>
+          </div>
+        </div>
+
+        <div class="snd-form-section">
+          <div class="snd-section-label">分割設定</div>
+          <div class="snd-form-grid">
+            <div class="snd-field">
+              <label class="snd-field-label">当日完成数 <span class="snd-required">*</span></label>
+              <el-input
+                v-model="chamferingSplitTodayQuantityInput"
+                type="text"
+                inputmode="numeric"
+                placeholder="0"
+                maxlength="8"
+                size="small"
+                class="snd-qty-input"
+                @input="onChamferingSplitTodayQuantityInput"
+              >
+                <template #suffix>
+                  <span class="snd-input-suffix">個</span>
+                </template>
+              </el-input>
+            </div>
+            <div class="snd-field">
+              <label class="snd-field-label">翌日順延数</label>
+              <div class="snd-remainder-badge">
+                {{ Math.max(0, (chamferingSplitDialogRow.actual_production_quantity ?? 0) - (parseInt(chamferingSplitTodayQuantityInput, 10) || 0)) }}
+                <span class="snd-remainder-unit">個</span>
+              </div>
+            </div>
+          </div>
+          <div class="snd-field snd-field-full">
+            <label class="snd-field-label">翌日の生産日</label>
+            <el-date-picker
+              v-model="chamferingSplitNextDay"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="省略時は自動（+1日）"
+              size="small"
+              style="width:100%"
+            />
+          </div>
+        </div>
+
+        <p class="snd-hint">
+          <el-icon style="margin-right:4px;color:#f59e0b"><Warning /></el-icon>
+          順延後、元の行は自動的に「完了」になります。
+        </p>
+      </div>
+
+      <template #footer>
+        <div class="snd-footer">
+          <el-button size="small" @click="chamferingSplitDialogVisible = false">取消</el-button>
+          <el-button
+            type="warning"
+            size="small"
+            :loading="chamferingSplitSubmitting"
+            @click="confirmChamferingSplit"
+          >
+            <el-icon style="margin-right:4px"><DArrowRight /></el-icon>順延する
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- データ管理：instruction_plans 全件表示＋筛选 -->
     <el-dialog
       v-model="dataManagementDialogVisible"
-      title="データ管理（instruction_plans）"
+      title="データ管理"
       width="min(98vw, 1200px)"
       destroy-on-close
       class="data-management-dialog"
@@ -950,19 +1903,20 @@
             </el-select>
           </el-form-item>
           <el-form-item label="ライン">
-            <el-select v-model="dataManagementFilter.equipment" placeholder="全部" clearable filterable style="width: 120px">
+            <el-select v-model="dataManagementFilter.equipment" placeholder="全部" clearable filterable style="width: 120px" popper-class="data-management-product-select-dropdown">
               <el-option label="（全部）" value="" />
               <el-option v-for="line in dataManagementLineOptions" :key="line" :label="line" :value="line" />
             </el-select>
           </el-form-item>
           <el-form-item label="製品名">
-            <el-select v-model="dataManagementFilter.product_name" placeholder="全部" clearable filterable style="width: 160px">
+            <el-select v-model="dataManagementFilter.product_name" placeholder="全部" clearable filterable style="width: 160px" popper-class="data-management-product-select-dropdown">
               <el-option label="（全部）" value="" />
               <el-option v-for="name in dataManagementProductNameOptions" :key="name" :label="name" :value="name" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" size="small" @click="openNewRecordDialog">+ 新規追加</el-button>
+            <el-button type="primary" size="small" @click="openNewRecordDialog(false)">+ 新規追加</el-button>
+            <el-button type="default" size="small" class="btn-trial-add" @click="openNewRecordDialog(true)">試作追加</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -995,7 +1949,7 @@
           </el-table-column>
 
           <!-- 2. ライン -->
-          <el-table-column prop="production_line" label="ライン" width="80">
+          <el-table-column prop="production_line" label="ライン" width="70" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'production_line')">
                 <el-input :model-value="row.production_line ?? ''" size="small" @update:model-value="(v) => (row.production_line = v ?? '')" @blur="saveDataManagementCell(row, 'production_line', row.production_line ?? '')" />
@@ -1005,7 +1959,7 @@
           </el-table-column>
 
           <!-- 3. 順位 -->
-          <el-table-column prop="priority_order" label="順位" width="58" align="right">
+          <el-table-column prop="priority_order" label="順位" width="45" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'priority_order')">
                 <el-input-number :model-value="row.priority_order ?? null" size="small" :min="0" :max="9999" controls-position="right" style="width: 100%" @change="(v: number | undefined) => saveDataManagementCell(row, 'priority_order', v ?? null)" @blur="dataManagementEditingCell = null" />
@@ -1025,7 +1979,7 @@
           </el-table-column>
 
           <!-- 5. 原材料 -->
-          <el-table-column prop="material_name" label="原材料" width="100" show-overflow-tooltip>
+          <el-table-column prop="material_name" label="原材料" width="120" show-overflow-tooltip align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'material_name')">
                 <el-input :model-value="row.material_name ?? ''" size="small" @update:model-value="(v) => (row.material_name = v ?? '')" @blur="saveDataManagementCell(row, 'material_name', row.material_name ?? '')" />
@@ -1035,7 +1989,7 @@
           </el-table-column>
 
           <!-- 6. 計画数 -->
-          <el-table-column prop="planned_quantity" label="計画数" width="72" align="right">
+          <el-table-column prop="planned_quantity" label="計画数" width="72" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'planned_quantity')">
                 <el-input-number :model-value="row.planned_quantity ?? null" size="small" :min="0" controls-position="right" style="width: 100%" @change="(v: number | undefined) => saveDataManagementCell(row, 'planned_quantity', v ?? null)" @blur="dataManagementEditingCell = null" />
@@ -1045,7 +1999,7 @@
           </el-table-column>
 
           <!-- 7. ロット数 -->
-          <el-table-column prop="production_lot_size" label="ロット数" width="72" align="right">
+          <el-table-column prop="production_lot_size" label="ロット数" width="70" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'production_lot_size')">
                 <el-input-number :model-value="row.production_lot_size ?? null" size="small" :min="0" controls-position="right" style="width: 100%" @change="(v: number | undefined) => saveDataManagementCell(row, 'production_lot_size', v ?? null)" @blur="dataManagementEditingCell = null" />
@@ -1055,7 +2009,7 @@
           </el-table-column>
 
           <!-- 8. ロットNo -->
-          <el-table-column prop="lot_number" label="ロットNo" width="90">
+          <el-table-column prop="lot_number" label="No." width="50" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'lot_number')">
                 <el-input :model-value="row.lot_number ?? ''" size="small" @update:model-value="(v) => (row.lot_number = v ?? '')" @blur="saveDataManagementCell(row, 'lot_number', row.lot_number ?? '')" />
@@ -1065,7 +2019,7 @@
           </el-table-column>
 
           <!-- 9. 生産数 -->
-          <el-table-column prop="actual_production_quantity" label="生産数" width="72" align="right">
+          <el-table-column prop="actual_production_quantity" label="生産数" width="72" align="center">
             <template #default="{ row }">
               <template v-if="isEditingDataCell(row, 'actual_production_quantity')">
                 <el-input-number :model-value="row.actual_production_quantity ?? null" size="small" :min="0" controls-position="right" style="width: 100%" @change="(v: number | undefined) => saveDataManagementCell(row, 'actual_production_quantity', v ?? null)" @blur="dataManagementEditingCell = null" />
@@ -1131,64 +2085,172 @@
       </div>
     </el-dialog>
 
-    <!-- 新規追加ダイアログ -->
+    <!-- 新規追加ダイアログ（新規＝量産品 / 試作＝試作品） -->
     <el-dialog
       v-model="newRecordDialogVisible"
-      title="新規レコード追加"
-      width="min(96vw, 640px)"
+      width="min(96vw, 580px)"
       :close-on-click-modal="false"
       class="new-record-dialog"
+      :show-close="false"
     >
-      <el-form :model="newRecordForm" label-width="90px" size="small" class="nr-form">
-        <div class="nr-grid">
-          <el-form-item label="生産月">
-            <el-date-picker v-model="newRecordForm.production_month" type="month" value-format="YYYY-MM" placeholder="YYYY-MM" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="ライン">
-            <el-input v-model="newRecordForm.production_line" placeholder="例: A" />
-          </el-form-item>
-          <el-form-item label="順位">
-            <el-input-number v-model="newRecordForm.priority_order" :min="0" :max="9999" controls-position="right" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="製品名">
-            <el-input v-model="newRecordForm.product_name" placeholder="製品名" />
-          </el-form-item>
-          <el-form-item label="製品CD">
-            <el-input v-model="newRecordForm.product_cd" placeholder="製品CD" />
-          </el-form-item>
-          <el-form-item label="原材料">
-            <el-input v-model="newRecordForm.material_name" placeholder="原材料名" />
-          </el-form-item>
-          <el-form-item label="計画数">
-            <el-input-number v-model="newRecordForm.planned_quantity" :min="0" controls-position="right" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="ロット数">
-            <el-input-number v-model="newRecordForm.production_lot_size" :min="0" controls-position="right" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="ロットNo">
-            <el-input v-model="newRecordForm.lot_number" placeholder="ロットNo" />
-          </el-form-item>
-          <el-form-item label="生産数">
-            <el-input-number v-model="newRecordForm.actual_production_quantity" :min="0" controls-position="right" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="開始日">
-            <el-date-picker v-model="newRecordForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="YYYY-MM-DD" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="終了日">
-            <el-date-picker v-model="newRecordForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="YYYY-MM-DD" style="width:100%" />
-          </el-form-item>
-          <el-form-item label="面取工程">
-            <el-switch v-model="newRecordForm.has_chamfering_process" :active-value="1" :inactive-value="0" />
-          </el-form-item>
-          <el-form-item label="SW工程">
-            <el-switch v-model="newRecordForm.has_sw_process" :active-value="1" :inactive-value="0" />
-          </el-form-item>
+      <template #header>
+        <div class="nr-header" :class="newRecordIsTrialMode ? 'nr-header--trial' : 'nr-header--normal'">
+          <div class="nr-header-icon">
+            <el-icon size="16"><DocumentCopy v-if="newRecordIsTrialMode" /><Calendar v-else /></el-icon>
+          </div>
+          <div class="nr-header-text">
+            <span class="nr-title">{{ newRecordIsTrialMode ? '試作バッチ追加' : '新規バッチ追加' }}</span>
+            <span class="nr-subtitle">{{ newRecordIsTrialMode ? '試作品' : '量産品' }}</span>
+          </div>
+          <el-button class="nr-close-btn" text @click="newRecordDialogVisible = false">
+            <el-icon size="15"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></el-icon>
+          </el-button>
         </div>
-      </el-form>
+      </template>
+
+      <div class="nr-body">
+        <!-- ■ 基本情報 -->
+        <div class="nr-section">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-blue"></span>基本情報</div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">生産月<em>*</em></span>
+              <el-date-picker v-model="newRecordForm.production_month" type="month" value-format="YYYY-MM" placeholder="YYYY-MM" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">ライン</span>
+              <el-select v-model="newRecordForm.production_line" placeholder="成型ライン" filterable clearable size="small" style="width:100%">
+                <el-option v-for="opt in newRecordLineOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">優先順位</span>
+              <el-input-number v-model="newRecordForm.priority_order" :min="0" :max="9999" controls-position="right" size="small" style="width:100%" />
+            </div>
+          </div>
+          <div class="nr-row1">
+            <div class="nr-col">
+              <span class="nr-lbl">製品<em>*</em></span>
+              <el-select v-model="newRecordForm.product_cd" placeholder="製品名／CDで検索・選択" filterable clearable size="small" style="width:100%" @change="onNewRecordProductChange">
+                <el-option v-for="p in newRecordProductOptions" :key="p.product_cd" :label="`${p.product_name}  [${p.product_cd}]`" :value="p.product_cd" />
+              </el-select>
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">製品名（確認）</span>
+              <el-input v-model="newRecordForm.product_name" size="small" readonly style="background:#f8fafc" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">製品CD</span>
+              <el-input v-model="newRecordForm.product_cd" size="small" readonly style="background:#f8fafc" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">ロットNo</span>
+              <el-input v-model="newRecordForm.lot_number" placeholder="ロットNo" size="small" />
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">原材料</span>
+              <el-input v-model="newRecordForm.material_name" placeholder="原材料名" size="small" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">材料メーカー</span>
+              <el-input v-model="newRecordForm.material_manufacturer" placeholder="材料メーカー" size="small" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">規格</span>
+              <el-input v-model="newRecordForm.standard_specification" placeholder="規格" size="small" />
+            </div>
+          </div>
+        </div>
+
+        <!-- ■ 数量・寸法 -->
+        <div class="nr-section">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-green"></span>数量・寸法</div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">計画数</span>
+              <el-input-number v-model="newRecordForm.planned_quantity" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">ロット数</span>
+              <el-input-number v-model="newRecordForm.production_lot_size" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">生産数</span>
+              <el-input-number v-model="newRecordForm.actual_production_quantity" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">取数</span>
+              <el-input-number v-model="newRecordForm.take_count" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">切断長</span>
+              <el-input-number v-model="newRecordForm.cutting_length" :min="0" :precision="2" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">面取長</span>
+              <el-input-number v-model="newRecordForm.chamfering_length" :min="0" :precision="2" controls-position="right" size="small" style="width:100%" />
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">展開長</span>
+              <el-input-number v-model="newRecordForm.developed_length" :min="0" :precision="2" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">端材長</span>
+              <el-input-number v-model="newRecordForm.scrap_length" :min="0" :precision="2" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col"></div>
+          </div>
+        </div>
+
+        <!-- ■ 日程・工程 -->
+        <div class="nr-section nr-section--last">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-amber"></span>日程・工程</div>
+          <div class="nr-row3 nr-row-align-end">
+            <div class="nr-col">
+              <span class="nr-lbl">開始日</span>
+              <el-date-picker v-model="newRecordForm.start_date" type="date" value-format="YYYY-MM-DD" placeholder="YYYY-MM-DD" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">終了日</span>
+              <el-date-picker v-model="newRecordForm.end_date" type="date" value-format="YYYY-MM-DD" placeholder="YYYY-MM-DD" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">工程フラグ</span>
+              <div class="nr-switches">
+                <label class="nr-sw-item">
+                  <el-switch v-model="newRecordForm.has_chamfering_process" :active-value="1" :inactive-value="0" size="small" />
+                  <span>面取</span>
+                </label>
+                <label class="nr-sw-item">
+                  <el-switch v-model="newRecordForm.has_sw_process" :active-value="1" :inactive-value="0" size="small" />
+                  <span>SW</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <template #footer>
         <div class="nr-footer">
-          <el-button size="small" @click="newRecordDialogVisible = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="newRecordSubmitting" @click="createDataManagementRecord">保存</el-button>
+          <el-button size="small" @click="newRecordDialogVisible = false">キャンセル</el-button>
+          <el-button
+            :type="newRecordIsTrialMode ? 'warning' : 'primary'"
+            size="small"
+            :loading="newRecordSubmitting"
+            class="nr-save-btn"
+            @click="createDataManagementRecord"
+          >
+            <el-icon style="margin-right:3px"><Check /></el-icon>保存
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -1200,7 +2262,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
@@ -1329,6 +2391,14 @@ function shiftDateTomorrow(delta: number) {
   selectedDateTomorrow.value = shiftDate(selectedDateTomorrow.value, delta)
   loadCuttingManagement()
 }
+function shiftChamferingDateToday(delta: number) {
+  selectedChamferingDateToday.value = shiftDate(selectedChamferingDateToday.value, delta)
+  loadChamferingManagement()
+}
+function shiftChamferingDateTomorrow(delta: number) {
+  selectedChamferingDateTomorrow.value = shiftDate(selectedChamferingDateTomorrow.value, delta)
+  loadChamferingManagement()
+}
 const selectedDateToday = ref(getTodayString())
 const selectedDateTomorrow = ref(getTomorrowString())
 /** 切断機でフィルタ（空は全件） */
@@ -1379,11 +2449,56 @@ const cuttingTomorrowTotal = computed(() => {
   }
   return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
+/** 面取指示-今日：生産数・生産時間の合計 */
+const chamferingTodayTotal = computed(() => {
+  const list = chamferingManagementListToday.value
+  let qty = 0
+  let time = 0
+  for (const row of list) {
+    const n = row.actual_production_quantity
+    if (n != null && typeof n === 'number' && !Number.isNaN(n)) qty += n
+    else if (n != null && String(n).trim() !== '') {
+      const v = Number(String(n).trim())
+      if (!Number.isNaN(v)) qty += v
+    }
+    const t = row.production_time
+    if (t != null && (typeof t === 'number' || typeof t === 'string')) {
+      const tv = typeof t === 'number' ? t : parseFloat(String(t))
+      if (!Number.isNaN(tv)) time += tv
+    }
+  }
+  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+})
+/** 面取指示-翌日：生産数・生産時間の合計 */
+const chamferingTomorrowTotal = computed(() => {
+  const list = chamferingManagementListTomorrow.value
+  let qty = 0
+  let time = 0
+  for (const row of list) {
+    const n = row.actual_production_quantity
+    if (n != null && typeof n === 'number' && !Number.isNaN(n)) qty += n
+    else if (n != null && String(n).trim() !== '') {
+      const v = Number(String(n).trim())
+      if (!Number.isNaN(v)) qty += v
+    }
+    const t = row.production_time
+    if (t != null && (typeof t === 'number' || typeof t === 'string')) {
+      const tv = typeof t === 'number' ? t : parseFloat(String(t))
+      if (!Number.isNaN(tv)) time += tv
+    }
+  }
+  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+})
 /** バッチ→切断にドロップ時：生産日・切断機を指定するダイアログ */
 const moveToCuttingDialogVisible = ref(false)
 const pendingBatchRow = ref<CuttingPlanRow | null>(null)
 const moveToCuttingForm = reactive({ production_day: '', cutting_machine: '' })
 const moveToCuttingSubmitting = ref(false)
+/** 面取バッチ→面取指示にドロップ時：生産日・面取機を指定するダイアログ */
+const moveToChamferingDialogVisible = ref(false)
+const pendingChamferingBatchRow = ref<ChamferingBatchRow | null>(null)
+const moveToChamferingForm = reactive({ production_day: '', production_line: '', production_line_2: '' })
+const moveToChamferingSubmitting = ref(false)
 /** 切断指示：双击编辑弹窗 */
 const cuttingEditDialogVisible = ref(false)
 const editingCuttingId = ref<number | null>(null)
@@ -1394,11 +2509,52 @@ const cuttingEditForm = reactive({
   remarks: '',
 })
 const cuttingEditSubmitting = ref(false)
+/** 面取指示：双击编辑弹窗 */
+const chamferingEditDialogVisible = ref(false)
+const editingChamferingId = ref<number | null>(null)
+const chamferingEditForm = reactive({
+  chamfering_machine: '',
+  actual_production_quantity: '' as string,
+  production_sequence: 1,
+  remarks: '',
+})
+const chamferingEditSubmitting = ref(false)
+/** 面取指示 新規追加ダイアログ（chamfering_management 構造） */
+const chamferingNewDialogVisible = ref(false)
+const chamferingNewSubmitting = ref(false)
+const chamferingNewForm = reactive({
+  production_day: '',
+  production_line: '',
+  chamfering_machine: '',
+  product_cd: '',
+  product_name: '',
+  actual_production_quantity: '' as string, // 普通文本框，提交时转为 number
+  production_sequence: null as number | null,
+  material_name: '',
+  management_code: '', // 自动生成，watch 同步
+})
+/** 管理コード自动生成：YYMM + 製品CD + ライン下2桁 + 生産順2桁（不足补0） */
+const chamferingManagementCodePreview = computed(() => {
+  const day = (chamferingNewForm.production_day || '').toString().trim().slice(0, 10)
+  const line = (chamferingNewForm.production_line || '').toString().trim()
+  const productCd = (chamferingNewForm.product_cd || '').toString().trim()
+  const seq = chamferingNewForm.production_sequence
+  if (!day || day.length < 10) return ''
+  const yy = day.slice(2, 4)
+  const mm = day.slice(5, 7)
+  const lineSuffix = line.slice(-2).padEnd(2, '0')
+  const seqStr = String(seq ?? 1).padStart(2, '0')
+  return `${yy}${mm}${productCd}${lineSuffix}${seqStr}`
+})
+watch(chamferingManagementCodePreview, (v) => { chamferingNewForm.management_code = v }, { immediate: true })
 /** 生産日セル：双击でインライン編集（±1日ボタン + 日期选择） */
 const editingProductionDayId = ref<number | null>(null)
 const editingProductionDayValue = ref('')
 /** 完了切替 loading：当前正在请求的行 id，用于显示该行的 switch loading */
 const cuttingCompletedLoading = ref<number>(0)
+/** 面取指示 完了/カウント無 切替 loading */
+const chamferingCompletedLoading = ref<number | null>(null)
+const chamferingNoCountLoading = ref<number | null>(null)
 /** 生産バッチ双击编辑 */
 const planEditDialogVisible = ref(false)
 const editingPlanId = ref<number | null>(null)
@@ -1475,7 +2631,8 @@ const paginatedDataManagementList = computed(() => {
   return filteredDataManagementList.value.slice(start, start + dataManagementPagination.pageSize)
 })
 
-/** 新規追加ダイアログ */
+/** 新規追加ダイアログ（false＝量産品 / true＝試作品） */
+const newRecordIsTrialMode = ref(false)
 const newRecordDialogVisible = ref(false)
 const newRecordSubmitting = ref(false)
 const newRecordFormDefault = () => ({
@@ -1485,10 +2642,17 @@ const newRecordFormDefault = () => ({
   product_cd: '',
   product_name: '',
   material_name: '',
+  material_manufacturer: '',
+  standard_specification: '',
   planned_quantity: null as number | null,
   production_lot_size: null as number | null,
   lot_number: '',
   actual_production_quantity: null as number | null,
+  take_count: null as number | null,
+  cutting_length: null as number | null,
+  chamfering_length: null as number | null,
+  developed_length: null as number | null,
+  scrap_length: null as number | null,
   start_date: '',
   end_date: '',
   has_chamfering_process: 0 as number,
@@ -1496,17 +2660,127 @@ const newRecordFormDefault = () => ({
 })
 const newRecordForm = reactive(newRecordFormDefault())
 
-function openNewRecordDialog() {
+/** 新規バッチ追加：ライン（成型設備）オプション */
+const newRecordLineOptions = ref<{ value: string; label: string }[]>([])
+async function loadNewRecordLineOptions() {
+  try {
+    const result = await request.get<{ data?: { list?: { machine_name?: string }[] }; list?: { machine_name?: string }[] }>(
+      '/api/master/machines',
+      { params: { keyword: '成型', pageSize: 500 } }
+    )
+    const list = (result as any)?.data?.list ?? (result as any)?.list ?? []
+    newRecordLineOptions.value = (list as { machine_name?: string }[])
+      .filter((r) => r.machine_name && String(r.machine_name).includes('成型'))
+      .map((r) => ({ value: String(r.machine_name), label: String(r.machine_name) }))
+  } catch (e) {
+    console.error('成型ライン取得失敗:', e)
+    newRecordLineOptions.value = []
+  }
+}
+
+/** 新規バッチ追加：製品オプション
+ * 試作追加（試作品）：product_type=試作品、且つ (製品CD末位が1 または 製品名に「加工」を含まない)
+ * 新規追加（量産品）：product_type=量産品、且つ 製品CD末位が1 且つ 製品名に「加工」を含まない
+ */
+const newRecordProductOptions = ref<{ product_cd: string; product_name: string }[]>([])
+async function loadNewRecordProductOptions() {
+  const isTrial = newRecordIsTrialMode.value
+  const productType = isTrial ? '試作品' : '量産品'
+  try {
+    const result = await request.get<{ data?: { list?: { product_cd?: string; product_name?: string }[] }; list?: { product_cd?: string; product_name?: string }[] }>(
+      '/api/master/products',
+      { params: { product_type: productType, pageSize: 10000 } }
+    )
+    const list = (result as any)?.data?.list ?? (result as any)?.list ?? []
+    const raw = (list as { product_cd?: string; product_name?: string }[]) || []
+    newRecordProductOptions.value = raw
+      .filter((p) => {
+        const cd = (p.product_cd ?? '').toString().trim()
+        const name = (p.product_name ?? '').toString()
+        if (!cd) return false
+        const lastChar1 = cd.slice(-1) === '1'
+        const noKagyo = !name.includes('加工')
+        if (isTrial) {
+          return lastChar1 || noKagyo
+        }
+        return lastChar1 && noKagyo
+      })
+      .map((p) => ({ product_cd: String(p.product_cd ?? ''), product_name: (p.product_name ?? p.product_cd ?? '').toString() }))
+  } catch (e) {
+    console.error('製品一覧取得失敗:', e)
+    newRecordProductOptions.value = []
+  }
+}
+
+/** 製品選択時：batch-detail API で原材料・規格・取数・寸法・面取/SW工程を自動入力 */
+async function onNewRecordProductChange(productCd: string) {
+  if (!productCd) {
+    newRecordForm.product_name = ''
+    newRecordForm.material_name = ''
+    newRecordForm.standard_specification = ''
+    newRecordForm.material_manufacturer = ''
+    newRecordForm.take_count = null
+    newRecordForm.cutting_length = null
+    newRecordForm.chamfering_length = null
+    newRecordForm.developed_length = null
+    newRecordForm.scrap_length = null
+    newRecordForm.has_chamfering_process = 0
+    newRecordForm.has_sw_process = 0
+    return
+  }
+  const opt = newRecordProductOptions.value.find((p) => p.product_cd === productCd)
+  if (opt) newRecordForm.product_name = opt.product_name
+  try {
+    const res = await request.get<{ success?: boolean; data?: Record<string, unknown> }>(
+      `/api/master/products/batch-detail/${encodeURIComponent(productCd)}`
+    )
+    const data = (res as any)?.data
+    if (data) {
+      newRecordForm.material_name = (data.material_name ?? '') as string
+      newRecordForm.standard_specification = (data.standard_specification ?? '') as string
+      newRecordForm.material_manufacturer = (data.material_manufacturer ?? '') as string
+      newRecordForm.take_count = (data.take_count ?? null) as number | null
+      newRecordForm.cutting_length = (data.cutting_length ?? null) as number | null
+      newRecordForm.chamfering_length = (data.chamfering_length ?? null) as number | null
+      newRecordForm.developed_length = (data.developed_length ?? null) as number | null
+      newRecordForm.scrap_length = (data.scrap_length ?? null) as number | null
+      newRecordForm.has_chamfering_process = (data.has_chamfering_process === true ? 1 : 0) as number
+      newRecordForm.has_sw_process = (data.has_sw_process === true ? 1 : 0) as number
+    }
+  } catch (e) {
+    console.error('製品詳細取得失敗:', e)
+  }
+}
+
+function openNewRecordDialog(trialMode: boolean = false) {
+  newRecordIsTrialMode.value = trialMode
   Object.assign(newRecordForm, newRecordFormDefault())
+  loadNewRecordLineOptions()
+  loadNewRecordProductOptions()
   newRecordDialogVisible.value = true
 }
 
 async function createDataManagementRecord() {
+  const month = (newRecordForm.production_month ?? '').toString().trim()
+  const productCd = (newRecordForm.product_cd ?? '').toString().trim()
+  const productName = (newRecordForm.product_name ?? '').toString().trim()
+  if (!month) {
+    ElMessage.warning('生産月を選択してください')
+    return
+  }
+  if (!productCd || !productName) {
+    ElMessage.warning('製品名で製品を選択してください')
+    return
+  }
   newRecordSubmitting.value = true
   try {
+    if (!newRecordForm.product_name && productCd) {
+      const opt = newRecordProductOptions.value.find((p) => p.product_cd === productCd)
+      if (opt) newRecordForm.product_name = opt.product_name
+    }
     const payload: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(newRecordForm)) {
-      if (v !== '' && v !== null) payload[k] = v
+      if (v !== '' && v !== null && v !== undefined) payload[k] = v
     }
     const result = await request.post<{ success?: boolean; message?: string }>(
       '/api/plan/batch/create',
@@ -1515,12 +2789,21 @@ async function createDataManagementRecord() {
     if ((result as any)?.success) {
       ElMessage.success('レコードを追加しました')
       newRecordDialogVisible.value = false
+      loadPlans()
       loadDataManagementList()
     } else {
       throw new Error((result as any)?.message ?? '追加に失敗しました')
     }
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '追加に失敗しました')
+    const err = e as { response?: { data?: { detail?: string | unknown[] } }; message?: string }
+    const detail = err.response?.data?.detail
+    let msg: string
+    if (typeof detail === 'string') msg = detail
+    else if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string } | unknown
+      msg = (first && typeof first === 'object' && 'msg' in first ? (first as { msg: string }).msg : String(first))
+    } else msg = err.message ?? '追加に失敗しました'
+    ElMessage.error(msg)
   } finally {
     newRecordSubmitting.value = false
   }
@@ -1529,13 +2812,47 @@ async function createDataManagementRecord() {
 /** 編集中セル: { rowId, prop } */
 const dataManagementEditingCell = ref<{ rowId: number; prop: string } | null>(null)
 const dataManagementSavingCell = ref(false)
-/** 拖拽放置区：バッチ一覧（左）、切断指示 */
-const dragOverZone = ref<'batchList' | 'cuttingManagement' | null>(null)
-/** 当前拖拽来源：仅用于控制是否显示放置提示（切断内拖拽不显示提示） */
-const dragSourceRef = ref<'batchList' | 'cuttingManagement' | null>(null)
+/** 拖拽放置区：バッチ一覧（左）、切断指示、面取バッチ一覧、面取指示 */
+const dragOverZone = ref<'batchList' | 'cuttingManagement' | 'chamferingBatchList' | 'chamferingManagement' | null>(null)
+/** 当前拖拽来源：仅用于控制是否显示放置提示 */
+const dragSourceRef = ref<'batchList' | 'cuttingManagement' | 'chamferingBatch' | 'chamferingManagement' | null>(null)
 
 /** 面取指示（chamfering_management） */
 interface ChamferingManagementRow {
+  id?: number
+  cutting_management_id?: number | null
+  production_month?: string | null
+  production_day?: string | null
+  production_line?: string | null
+  chamfering_machine?: string | null
+  production_order?: number | null
+  production_sequence?: number | null
+  product_cd?: string | null
+  product_name?: string | null
+  actual_production_quantity?: number | null
+  production_lot_size?: number | null
+  lot_number?: string | null
+  chamfering_length?: number | null
+  production_time?: number | null
+  material_name?: string | null
+  management_code?: string | null
+  has_sw_process?: number | null
+  production_completed_check?: number | null
+  no_count?: number | null
+  remarks?: string | null
+  cd?: string | null
+  created_at?: string | null
+}
+const chamferingManagementList = ref<ChamferingManagementRow[]>([])
+const chamferingManagementListToday = ref<ChamferingManagementRow[]>([])
+const chamferingManagementListTomorrow = ref<ChamferingManagementRow[]>([])
+const chamferingManagementLoading = ref(false)
+const selectedChamferingDateToday = ref(getTodayString())
+const selectedChamferingMachineFilter = ref<string>('')
+const selectedChamferingDateTomorrow = ref(getTomorrowString())
+
+/** 面取バッチ一覧（chamfering_plans）：切断登録時・面取工程ありで自動登録された待機データ */
+interface ChamferingBatchRow {
   id?: number
   cutting_management_id?: number | null
   production_month?: string | null
@@ -1545,18 +2862,21 @@ interface ChamferingManagementRow {
   product_cd?: string | null
   product_name?: string | null
   actual_production_quantity?: number | null
+  production_lot_size?: number | null
+  lot_number?: string | null
   chamfering_length?: number | null
-  production_time?: number | null
   material_name?: string | null
   management_code?: string | null
-  production_completed_check?: number | null
   cd?: string | null
+  has_sw_process?: number | null
   created_at?: string | null
 }
-const chamferingManagementList = ref<ChamferingManagementRow[]>([])
-const chamferingManagementLoading = ref(false)
+const chamferingBatchList = ref<ChamferingBatchRow[]>([])
+const chamferingBatchLoading = ref(false)
+const chamferingBatchActionLoading = ref<number | null>(null)
+const chamferingSwLoading = ref<number | null>(null)
 
-/** カンバン発行（kanban_issuance）：第一工程のみ待発行→手動発行 */
+/** カンバン発行（kanban_issuance）：切断現品票に必要な全フィールド */
 interface KanbanIssuanceRow {
   id?: number
   process_type?: string | null
@@ -1565,19 +2885,93 @@ interface KanbanIssuanceRow {
   issue_date?: string | null
   status?: string | null
   created_at?: string | null
+  product_cd?: string | null
+  product_name?: string | null
+  production_line?: string | null
+  cutting_machine?: string | null
+  material_name?: string | null
+  standard_specification?: string | null
+  management_code?: string | null
+  start_date?: string | null
+  end_date?: string | null
+  planned_quantity?: number | null
+  production_lot_size?: number | null
+  actual_production_quantity?: number | null
+  take_count?: number | null
+  cutting_length?: number | null
+  chamfering_length?: number | null
+  developed_length?: number | null
+  has_chamfering_process?: boolean | null
+  lot_number?: string | null
+  production_day?: string | null
 }
 const kanbanIssuanceList = ref<KanbanIssuanceRow[]>([])
 const kanbanIssuanceLoading = ref(false)
 const kanbanIssuePendingLoading = ref<number | null>(null)
+const kanbanReissueLoading = ref<number | null>(null)
+/** カンバン発行筛选：生産日・状態・製品名 */
+const kanbanFilterProductionDay = ref<string>('')
+const kanbanFilterStatus = ref<string>('')
+const kanbanFilterProductName = ref<string>('')
+const kanbanIssuanceProductNameOptions = ref<string[]>([])
+const kanbanIssuanceSelection = ref<KanbanIssuanceRow[]>([])
+const kanbanBatchIssueLoading = ref(false)
+const kanbanSyncProductionDayLoading = ref(false)
+/** カンバン発行：双击编辑弹窗 */
+const kanbanEditDialogVisible = ref(false)
+const kanbanEditRow = ref<KanbanIssuanceRow | null>(null)
+const kanbanEditSubmitting = ref(false)
+const kanbanEditForm = reactive<{
+  product_cd: string
+  product_name: string
+  production_line: string
+  cutting_machine: string
+  material_name: string
+  standard_specification: string
+  management_code: string
+  start_date: string
+  end_date: string
+  planned_quantity: number | null
+  production_lot_size: number | null
+  actual_production_quantity: number | null
+  take_count: number | null
+  cutting_length: number | null
+  chamfering_length: number | null
+  developed_length: number | null
+  has_chamfering_process: boolean
+  lot_number: string
+  production_day: string
+}>({
+  product_cd: '',
+  product_name: '',
+  production_line: '',
+  cutting_machine: '',
+  material_name: '',
+  standard_specification: '',
+  management_code: '',
+  start_date: '',
+  end_date: '',
+  planned_quantity: null,
+  production_lot_size: null,
+  actual_production_quantity: null,
+  take_count: null,
+  cutting_length: null,
+  chamfering_length: null,
+  developed_length: null,
+  has_chamfering_process: false,
+  lot_number: '',
+  production_day: '',
+})
 const dragEnterCount = ref(0)
 const DRAG_PLAN_KEY = 'cutting-plan-row'
 
-/** 右侧上：製品情報（products 表） */
+/** 右侧上：製品情報（products 表・material_name は API で materials 結合） */
 interface ProductDetail {
   product_cd?: string
   product_name?: string
   lot_size?: number | null
   material_cd?: string | null
+  material_name?: string | null
   cut_length?: number | null
   chamfer_length?: number | null
   developed_length?: number | null
@@ -1596,6 +2990,35 @@ interface EquipmentEfficiencyRow {
 }
 const equipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
 const equipmentEfficiencyLoading = ref(false)
+
+/** 設備能率：切断機・面取機のみ表示（設備名が切断/面取オプションに含まれるもの） */
+const equipmentEfficiencyListFiltered = computed(() => {
+  const list = equipmentEfficiencyList.value
+  const cuttingNames = new Set(cuttingMachineOptionsFiltered.value.map((m) => m.machine_name))
+  const chamferingNames = new Set(chamferingMachineOptions.value.map((m) => m.machine_name))
+  return list.filter((r) => {
+    const name = (r.machines_name ?? '').toString().trim()
+    return name && (cuttingNames.has(name) || chamferingNames.has(name))
+  })
+})
+
+/** 面取バッチ一覧用：右側製品情報・設備能率 */
+const selectedChamferingProductCd = ref<string | null>(null)
+const chamferingProductDetail = ref<ProductDetail | null>(null)
+const chamferingProductDetailLoading = ref(false)
+const chamferingEquipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
+const chamferingEquipmentEfficiencyLoading = ref(false)
+
+/** 面取用設備能率：切断機・面取機のみ表示 */
+const chamferingEquipmentEfficiencyListFiltered = computed(() => {
+  const list = chamferingEquipmentEfficiencyList.value
+  const cuttingNames = new Set(cuttingMachineOptionsFiltered.value.map((m) => m.machine_name))
+  const chamferingNames = new Set(chamferingMachineOptions.value.map((m) => m.machine_name))
+  return list.filter((r) => {
+    const name = (r.machines_name ?? '').toString().trim()
+    return name && (cuttingNames.has(name) || chamferingNames.has(name))
+  })
+})
 
 /** 拖拽中不触发点击 */
 const isDragging = ref(false)
@@ -1650,6 +3073,59 @@ const loadCuttingMachineOptions = async () => {
   } catch (error) {
     console.error('切断機データの読み込みに失敗:', error)
     cuttingMachineOptions.value = []
+  }
+}
+
+/** 面取機オプション：machines の machine_name で「面取」を含むもの */
+const chamferingMachineOptions = ref<{ machine_name: string }[]>([])
+const loadChamferingMachineOptions = async () => {
+  try {
+    const result = await request.get<{ data?: { list?: { machine_name?: string }[] }; list?: { machine_name?: string }[] }>(
+      '/api/master/machines',
+      { params: { keyword: '面取', pageSize: 500 } }
+    )
+    const list = (result as any)?.data?.list ?? (result as any)?.list ?? []
+    chamferingMachineOptions.value = (list as { machine_name?: string }[])
+      .filter((r) => r.machine_name && String(r.machine_name).includes('面取'))
+      .map((r) => ({ machine_name: String(r.machine_name) }))
+  } catch (error) {
+    console.error('面取機データの読み込みに失敗:', error)
+    chamferingMachineOptions.value = []
+  }
+}
+
+/** 面取工程（KT02）製品一覧：新規追加ダイアログ用 */
+const chamferingProductOptions = ref<{ product_cd: string; product_name: string }[]>([])
+const loadChamferingProductOptions = async () => {
+  try {
+    const list = await request.get<{ product_cd: string; product_name: string }[]>(
+      '/api/master/product/process/routes/products-by-process',
+      { params: { process_cd: 'KT02' } }
+    )
+    chamferingProductOptions.value = Array.isArray(list)
+      ? [...list].sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ja'))
+      : []
+  } catch (error) {
+    console.error('面取工程製品の読み込みに失敗:', error)
+    chamferingProductOptions.value = []
+  }
+}
+
+/** 原材料マスタ一覧：新規追加ダイアログ用 */
+const chamferingMaterialOptions = ref<{ material_cd: string; material_name: string }[]>([])
+const loadChamferingMaterialOptions = async () => {
+  try {
+    const result = await request.get<{ data?: { list?: { material_cd?: string; material_name?: string }[] }; list?: { material_cd?: string; material_name?: string }[] }>(
+      '/api/master/materials',
+      { params: { pageSize: 500 } }
+    )
+    const list = (result as any)?.data?.list ?? (result as any)?.list ?? []
+    chamferingMaterialOptions.value = (list as { material_cd?: string; material_name?: string }[])
+      .filter((r) => r.material_name != null)
+      .map((r) => ({ material_cd: String(r.material_cd ?? ''), material_name: String(r.material_name ?? '') }))
+  } catch (error) {
+    console.error('原材料データの読み込みに失敗:', error)
+    chamferingMaterialOptions.value = []
   }
 }
 
@@ -1879,6 +3355,53 @@ async function loadEquipmentEfficiency(productCd: string) {
   }
 }
 
+function onChamferingBatchRowClick(row: ChamferingBatchRow) {
+  if (isDragging.value) return
+  const cd = (row.product_cd ?? '').toString().trim() || null
+  if (!cd) return
+  selectedChamferingProductCd.value = cd
+  loadChamferingProductDetail(cd)
+  loadChamferingEquipmentEfficiency(cd)
+}
+
+async function loadChamferingProductDetail(productCd: string) {
+  chamferingProductDetail.value = null
+  chamferingProductDetailLoading.value = true
+  try {
+    const result = await request.get<{ success?: boolean; data?: { list?: ProductDetail[] }; message?: string }>(
+      '/api/master/products',
+      { params: { product_cd: productCd, page: 1, pageSize: 1 } }
+    )
+    if ((result as any)?.success && (result as any)?.data?.list?.length) {
+      chamferingProductDetail.value = (result as any).data.list[0] as ProductDetail
+    }
+  } catch (e) {
+    console.error('面取バッチ用・製品詳細の取得に失敗:', e)
+    ElMessage.error('製品データの取得に失敗しました')
+  } finally {
+    chamferingProductDetailLoading.value = false
+  }
+}
+
+async function loadChamferingEquipmentEfficiency(productCd: string) {
+  chamferingEquipmentEfficiencyList.value = []
+  chamferingEquipmentEfficiencyLoading.value = true
+  try {
+    const result = await request.get<{
+      success?: boolean
+      data?: { list?: EquipmentEfficiencyRow[] }
+      list?: EquipmentEfficiencyRow[]
+    }>('/api/master/equipment-efficiency', { params: { keyword: productCd, limit: 9999 } })
+    const list = ((result as any)?.data?.list ?? (result as any)?.list ?? []) as EquipmentEfficiencyRow[]
+    chamferingEquipmentEfficiencyList.value = list.filter((r) => r.product_cd === productCd)
+  } catch (e) {
+    console.error('面取バッチ用・設備能率の取得に失敗:', e)
+    ElMessage.error('設備能率データの取得に失敗しました')
+  } finally {
+    chamferingEquipmentEfficiencyLoading.value = false
+  }
+}
+
 function onPlanCardDragStart(e: DragEvent, row: CuttingPlanRow) {
   isDragging.value = true
   dragSourceRef.value = 'batchList'
@@ -1913,6 +3436,253 @@ function onDragEnter(zone: 'batchList' | 'cuttingManagement') {
 function onDragLeave(_zone: 'batchList' | 'cuttingManagement') {
   dragEnterCount.value = Math.max(0, dragEnterCount.value - 1)
   if (dragEnterCount.value === 0) dragOverZone.value = null
+}
+
+function onDragOverChamfering(e: DragEvent, _zone: 'chamferingBatchList' | 'chamferingManagement') {
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+}
+
+function onDragEnterChamfering(zone: 'chamferingBatchList' | 'chamferingManagement') {
+  dragEnterCount.value += 1
+  if (zone === 'chamferingBatchList' && dragSourceRef.value === 'chamferingManagement') dragOverZone.value = zone
+  else if (zone === 'chamferingManagement' && dragSourceRef.value === 'chamferingBatch') dragOverZone.value = zone
+}
+
+function onDragLeaveChamfering(_zone: 'chamferingBatchList' | 'chamferingManagement') {
+  dragEnterCount.value = Math.max(0, dragEnterCount.value - 1)
+  if (dragEnterCount.value === 0) dragOverZone.value = null
+}
+
+function onChamferingBatchDragStart(e: DragEvent, row: ChamferingBatchRow) {
+  if (isDragging.value) return
+  isDragging.value = true
+  dragSourceRef.value = 'chamferingBatch'
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('application/json', JSON.stringify({ source: 'chamferingBatch', row }))
+}
+
+function onChamferingManagementDragStart(e: DragEvent, row: ChamferingManagementRow) {
+  if (isDragging.value) return
+  isDragging.value = true
+  dragSourceRef.value = 'chamferingManagement'
+  if (!e.dataTransfer) return
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('application/json', JSON.stringify({ source: 'chamferingManagement', row }))
+}
+
+function onChamferingDragEnd() {
+  isDragging.value = false
+  dragSourceRef.value = null
+  dragEnterCount.value = 0
+  dragOverZone.value = null
+}
+
+/** 面取指示行を別の行にドロップして同一面取機・同一生産日内で並び替え */
+async function onDropChamferingRowForReorder(e: DragEvent, targetRow: ChamferingManagementRow) {
+  e.preventDefault()
+  e.stopPropagation()
+  let payload: { source?: string; row?: ChamferingManagementRow }
+  try {
+    const raw = e.dataTransfer?.getData('application/json')
+    if (!raw) return
+    payload = JSON.parse(raw)
+  } catch {
+    return
+  }
+  if (payload?.source !== 'chamferingManagement' || !payload?.row) return
+  const dragged = payload.row as ChamferingManagementRow
+  if (!dragged.id || !targetRow.id || dragged.id === targetRow.id) return
+  const cm = (dragged.chamfering_machine || '').trim()
+  if (!cm) {
+    ElMessage.warning('同一面取機内で並び替えてください')
+    return
+  }
+  const dayStr = String(targetRow.production_day ?? '').slice(0, 10)
+  const isToday = dayStr === selectedChamferingDateToday.value
+  const list = isToday ? chamferingManagementListToday.value : chamferingManagementListTomorrow.value
+  const productionDay = isToday ? selectedChamferingDateToday.value : selectedChamferingDateTomorrow.value
+  const sameMachine = list.filter((r) => (r.chamfering_machine || '').trim() === cm)
+  const fromIdx = sameMachine.findIndex((r) => r.id === dragged.id)
+  const toIdx = sameMachine.findIndex((r) => r.id === targetRow.id)
+  if (fromIdx === -1 || toIdx === -1) return
+  const reordered = [...sameMachine]
+  reordered.splice(fromIdx, 1)
+  reordered.splice(toIdx, 0, dragged)
+  const orderedIds = reordered.map((r) => r.id!).filter((id) => id != null)
+  try {
+    await request.post('/api/plan/chamfering-management/reorder', {
+      chamfering_machine: cm,
+      production_day: productionDay?.slice(0, 10) ?? dayStr,
+      ordered_ids: orderedIds,
+    })
+    ElMessage.success('生産順を更新しました')
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '並び替えに失敗しました'
+    ElMessage.error(String(msg))
+  }
+}
+
+function onDragoverChamferingRow(e: DragEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+}
+
+/** 面取指示：表頭前/表尾後のドロップで先頭または末尾へ移動 */
+async function onDropChamferingRowToEdge(
+  e: DragEvent,
+  position: 'first' | 'last',
+  context: 'today' | 'tomorrow'
+) {
+  e.preventDefault()
+  e.stopPropagation()
+  let payload: { source?: string; row?: ChamferingManagementRow }
+  try {
+    const raw = e.dataTransfer?.getData('application/json')
+    if (!raw) return
+    payload = JSON.parse(raw)
+  } catch {
+    return
+  }
+  if (payload?.source !== 'chamferingManagement' || !payload?.row) return
+  const dragged = payload.row as ChamferingManagementRow
+  if (!dragged.id) return
+  const cm = (dragged.chamfering_machine || '').trim()
+  if (!cm) {
+    ElMessage.warning('同一面取機内で並び替えてください')
+    return
+  }
+  const list = context === 'today' ? chamferingManagementListToday.value : chamferingManagementListTomorrow.value
+  const productionDay = context === 'today' ? selectedChamferingDateToday.value : selectedChamferingDateTomorrow.value
+  const sameMachine = list.filter((r) => (r.chamfering_machine || '').trim() === cm)
+  const fromIdx = sameMachine.findIndex((r) => r.id === dragged.id)
+  if (fromIdx === -1) return
+  const rest = sameMachine.filter((r) => r.id !== dragged.id).map((r) => r.id!).filter((id) => id != null)
+  const orderedIds = position === 'first' ? [dragged.id!, ...rest] : [...rest, dragged.id!]
+  try {
+    await request.post('/api/plan/chamfering-management/reorder', {
+      chamfering_machine: cm,
+      production_day: productionDay?.slice(0, 10) ?? '',
+      ordered_ids: orderedIds,
+    })
+    ElMessage.success('生産順を更新しました')
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '並び替えに失敗しました'
+    ElMessage.error(String(msg))
+  }
+}
+
+async function onDropChamferingManagement(e: DragEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragEnterCount.value = 0
+  dragOverZone.value = null
+  let payload: { source?: string; row?: ChamferingBatchRow }
+  try {
+    const raw = e.dataTransfer?.getData('application/json')
+    if (!raw) return
+    payload = JSON.parse(raw) as { source?: string; row?: ChamferingBatchRow }
+  } catch {
+    return
+  }
+  if (payload.source !== 'chamferingBatch' || !payload.row?.id) return
+  const row = payload.row
+  const today = new Date()
+  moveToChamferingForm.production_day = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0')
+  const opts = chamferingMachineOptions.value
+  const firstChamfering = opts[0]?.machine_name ?? ''
+  const secondChamfering = opts[1]?.machine_name ?? firstChamfering
+  const rowLine = (row.production_line ?? '').trim()
+  moveToChamferingForm.production_line = opts.some((m) => m.machine_name === rowLine) ? rowLine : firstChamfering
+  moveToChamferingForm.production_line_2 = row.has_sw_process ? (opts.some((m) => m.machine_name === rowLine) ? secondChamfering : (opts[1] ? opts[1].machine_name : firstChamfering)) : ''
+  pendingChamferingBatchRow.value = row
+  moveToChamferingDialogVisible.value = true
+  onChamferingDragEnd()
+}
+
+async function submitMoveToChamfering() {
+  const row = pendingChamferingBatchRow.value
+  if (!row?.id) return
+  const productionDay = moveToChamferingForm.production_day?.trim()
+  if (!productionDay || productionDay.length < 10) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  const productionLine = moveToChamferingForm.production_line?.trim()
+  if (!productionLine) {
+    ElMessage.warning('面取機を選択してください')
+    return
+  }
+  const isSw = !!row.has_sw_process
+  if (isSw) {
+    const productionLine2 = moveToChamferingForm.production_line_2?.trim()
+    if (!productionLine2) {
+      ElMessage.warning('面取機（SW）を選択してください')
+      return
+    }
+  }
+  moveToChamferingSubmitting.value = true
+  try {
+    const body: { chamfering_plan_id: number; production_day: string; production_line: string; production_line_2?: string } = {
+      chamfering_plan_id: row.id,
+      production_day: productionDay.slice(0, 10),
+      production_line: productionLine,
+    }
+    if (isSw) body.production_line_2 = moveToChamferingForm.production_line_2?.trim() ?? ''
+    await request.post('/api/plan/chamfering-plans/move-to-chamfering', body)
+    ElMessage.success(isSw ? '面取指示を2件登録しました' : '面取指示に登録しました')
+    moveToChamferingDialogVisible.value = false
+    pendingChamferingBatchRow.value = null
+    loadChamferingBatchList()
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '面取指示への移行に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    moveToChamferingSubmitting.value = false
+  }
+}
+
+async function onDropChamferingBatchList(e: DragEvent) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragEnterCount.value = 0
+  dragOverZone.value = null
+  let payload: { source?: string; row?: ChamferingManagementRow }
+  try {
+    const raw = e.dataTransfer?.getData('application/json')
+    if (!raw) return
+    payload = JSON.parse(raw) as { source?: string; row?: ChamferingManagementRow }
+  } catch {
+    return
+  }
+  if (payload.source !== 'chamferingManagement' || !payload.row?.id) return
+  const id = payload.row.id
+  try {
+    await request.post('/api/plan/chamfering-plans/move-from-chamfering', { chamfering_management_id: id })
+    ElMessage.success('面取バッチ一覧に戻しました')
+    loadChamferingBatchList()
+    loadChamferingManagement()
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '面取バッチへの戻しに失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    onChamferingDragEnd()
+  }
 }
 
 async function onDropBatchList(e: DragEvent) {
@@ -1956,6 +3726,7 @@ async function onDropBatchList(e: DragEvent) {
     loadPlans()
     loadCuttingManagement()
     loadChamferingManagement()
+    loadChamferingBatchList()
     loadKanbanIssuance()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -2032,6 +3803,7 @@ async function submitMoveToCutting() {
     loadPlans()
     loadCuttingManagement()
     loadChamferingManagement()
+    loadChamferingBatchList()
     loadKanbanIssuance()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -2247,6 +4019,46 @@ async function toggleCuttingCompleted(row: CuttingManagementRow) {
   }
 }
 
+/** 面取指示 完了切替 */
+async function toggleChamferingCompleted(row: ChamferingManagementRow) {
+  const id = row.id
+  if (id == null) return
+  const next = !row.production_completed_check
+  chamferingCompletedLoading.value = id
+  try {
+    await request.patch(`/api/plan/chamfering-management/${id}`, { production_completed_check: !!next })
+    row.production_completed_check = next ? 1 : 0
+    ElMessage.success(next ? '完了にしました' : '未完了に戻しました')
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingCompletedLoading.value = null
+  }
+}
+
+/** 面取指示 カウント無切替 */
+async function toggleChamferingNoCount(row: ChamferingManagementRow) {
+  const id = row.id
+  if (id == null) return
+  const next = !row.no_count
+  chamferingNoCountLoading.value = id
+  try {
+    await request.patch(`/api/plan/chamfering-management/${id}`, { no_count: !!next })
+    row.no_count = next ? 1 : 0
+    ElMessage.success(next ? 'カウント無にしました' : 'カウント無を解除しました')
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingNoCountLoading.value = null
+  }
+}
+
 function openCuttingEditDialog(row: CuttingManagementRow) {
   if (row.id == null) return
   editingCuttingId.value = row.id
@@ -2279,6 +4091,7 @@ async function saveCuttingEdit() {
     ElMessage.success('保存しました')
     cuttingEditDialogVisible.value = false
     loadCuttingManagement()
+    loadChamferingBatchList()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -2286,6 +4099,121 @@ async function saveCuttingEdit() {
     ElMessage.error(String(msg))
   } finally {
     cuttingEditSubmitting.value = false
+  }
+}
+
+function openChamferingEditDialog(row: ChamferingManagementRow) {
+  if (row.id == null) return
+  editingChamferingId.value = row.id
+  chamferingEditForm.chamfering_machine = (row.chamfering_machine ?? '') || ''
+  chamferingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
+  chamferingEditForm.production_sequence = row.production_sequence ?? 1
+  chamferingEditForm.remarks = (row.remarks ?? '') || ''
+  chamferingEditDialogVisible.value = true
+}
+
+async function saveChamferingEdit() {
+  const id = editingChamferingId.value
+  if (id == null) return
+  chamferingEditSubmitting.value = true
+  try {
+    const qty = chamferingEditForm.actual_production_quantity
+    const qtyNum = qty === '' || qty === null || qty === undefined ? 0 : parseInt(String(qty).trim(), 10)
+    await request.patch(`/api/plan/chamfering-management/${id}`, {
+      chamfering_machine: chamferingEditForm.chamfering_machine?.trim() || null,
+      actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
+      production_sequence: chamferingEditForm.production_sequence,
+      remarks: chamferingEditForm.remarks?.trim() || null,
+    })
+    ElMessage.success('保存しました')
+    chamferingEditDialogVisible.value = false
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '保存に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingEditSubmitting.value = false
+  }
+}
+
+function onChamferingNewProductChange(productCd: string) {
+  const p = chamferingProductOptions.value.find((x) => x.product_cd === productCd)
+  chamferingNewForm.product_name = p?.product_name ?? ''
+}
+
+async function openChamferingNewDialog() {
+  chamferingNewForm.production_day = selectedChamferingDateToday.value || getTodayString()
+  chamferingNewForm.production_line = ''
+  chamferingNewForm.chamfering_machine = selectedChamferingMachineFilter.value || chamferingMachineOptions.value[0]?.machine_name || ''
+  chamferingNewForm.product_cd = ''
+  chamferingNewForm.product_name = ''
+  chamferingNewForm.actual_production_quantity = ''
+  chamferingNewForm.production_sequence = null
+  chamferingNewForm.material_name = ''
+  chamferingNewForm.management_code = ''
+  await Promise.all([
+    loadMachineOptions(),
+    loadChamferingProductOptions(),
+    loadChamferingMaterialOptions(),
+  ])
+  chamferingNewDialogVisible.value = true
+}
+
+function resetChamferingNewForm() {
+  chamferingNewForm.production_day = ''
+  chamferingNewForm.production_line = ''
+  chamferingNewForm.chamfering_machine = ''
+  chamferingNewForm.product_cd = ''
+  chamferingNewForm.product_name = ''
+  chamferingNewForm.actual_production_quantity = ''
+  chamferingNewForm.production_sequence = null
+  chamferingNewForm.material_name = ''
+  chamferingNewForm.management_code = ''
+}
+
+async function submitChamferingNew() {
+  const day = (chamferingNewForm.production_day || '').toString().trim()
+  const machine = (chamferingNewForm.chamfering_machine || '').toString().trim()
+  const productCd = (chamferingNewForm.product_cd || '').toString().trim()
+  const productName = (chamferingNewForm.product_name || '').toString().trim()
+  if (!day || day.length < 10) {
+    ElMessage.warning('生産日を入力してください（YYYY-MM-DD）')
+    return
+  }
+  if (!machine) {
+    ElMessage.warning('面取機を選択してください')
+    return
+  }
+  if (!productCd || !productName) {
+    ElMessage.warning('製品CD・製品名は必須です')
+    return
+  }
+  chamferingNewSubmitting.value = true
+  try {
+    const qty = parseInt(String(chamferingNewForm.actual_production_quantity || '0'), 10) || 0
+    await request.post('/api/plan/chamfering-management', {
+      production_day: day.slice(0, 10),
+      production_line: chamferingNewForm.production_line?.trim() || '',
+      chamfering_machine: machine,
+      product_cd: productCd,
+      product_name: productName,
+      actual_production_quantity: qty,
+      production_sequence: chamferingNewForm.production_sequence ?? undefined,
+      material_name: chamferingNewForm.material_name?.trim() || undefined,
+      management_code: chamferingNewForm.management_code?.trim() || undefined,
+    })
+    ElMessage.success('面取指示を登録しました')
+    chamferingNewDialogVisible.value = false
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '登録に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingNewSubmitting.value = false
   }
 }
 
@@ -2308,6 +4236,7 @@ async function saveProductionDay(row: CuttingManagementRow, dateStr: string) {
     ElMessage.success('生産日を更新しました')
     editingProductionDayId.value = null
     loadCuttingManagement()
+    loadChamferingBatchList()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -2327,6 +4256,12 @@ const splitDialogRow = ref<CuttingManagementRow | null>(null)
 const splitTodayQuantityInput = ref('0')
 const splitNextDay = ref('')
 const splitToNextDaySubmitting = ref(false)
+/** 面取指示 順延用 */
+const chamferingSplitDialogVisible = ref(false)
+const chamferingSplitDialogRow = ref<ChamferingManagementRow | null>(null)
+const chamferingSplitTodayQuantityInput = ref('0')
+const chamferingSplitNextDay = ref('')
+const chamferingSplitSubmitting = ref(false)
 
 function onSplitTodayQuantityInput(val: string) {
   const s = val.replace(/\D/g, '')
@@ -2367,6 +4302,7 @@ async function confirmSplitToNextDay() {
     ElMessage.success('順延しました（元の行を完了にしました）')
     splitToNextDayDialogVisible.value = false
     loadCuttingManagement()
+    loadChamferingBatchList()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -2399,7 +4335,7 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
   if (id == null) return
   try {
     await ElMessageBox.confirm(
-      'この切断指示を削除しますか？紐づく面取指示・カンバン発行も削除されます。',
+      'この切断指示を削除しますか？紐づく面取指示・面取バッチ一覧・カンバン発行も削除されます。',
       '削除の確認',
       { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
     )
@@ -2410,6 +4346,8 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
     await request.delete(`/api/plan/cutting-management/${id}`)
     ElMessage.success('削除しました')
     loadCuttingManagement()
+    loadChamferingManagement()
+    loadChamferingBatchList()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -2418,30 +4356,212 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
   }
 }
 
+/** 面取指示1件を削除（確認後） */
+async function deleteChamferingRow(row: ChamferingManagementRow) {
+  const id = row.id
+  if (id == null) return
+  try {
+    await ElMessageBox.confirm(
+      'この面取指示を削除しますか？紐づくカンバン発行も削除されます。',
+      '削除の確認',
+      { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
+    )
+  } catch {
+    return
+  }
+  try {
+    await request.delete(`/api/plan/chamfering-management/${id}`)
+    ElMessage.success('削除しました')
+    loadChamferingManagement()
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '削除に失敗しました'
+    ElMessage.error(String(msg))
+  }
+}
+
+function onChamferingSplitTodayQuantityInput(val: string) {
+  const s = val.replace(/\D/g, '')
+  chamferingSplitTodayQuantityInput.value = s
+}
+
+function openChamferingSplitDialog(row: ChamferingManagementRow) {
+  const total = row.actual_production_quantity ?? 0
+  if (total <= 0) return
+  chamferingSplitDialogRow.value = row
+  chamferingSplitTodayQuantityInput.value = '0'
+  chamferingSplitNextDay.value = shiftDate(String(row.production_day ?? ''), 1)
+  chamferingSplitDialogVisible.value = true
+}
+
+async function confirmChamferingSplit() {
+  const row = chamferingSplitDialogRow.value
+  if (!row || row.id == null) return
+  const todayQty = parseInt(chamferingSplitTodayQuantityInput.value, 10) || 0
+  const total = row.actual_production_quantity ?? 0
+  if (todayQty < 0 || todayQty >= total) {
+    ElMessage.warning('当日完成数は 0 以上、かつ現在の生産数より少なく入力してください')
+    return
+  }
+  chamferingSplitSubmitting.value = true
+  try {
+    await request.post(`/api/plan/chamfering-management/${row.id}/split-to-next-day`, {
+      today_quantity: todayQty,
+      next_day: chamferingSplitNextDay.value || undefined,
+    })
+    ElMessage.success('順延しました（元の行を完了にしました）')
+    chamferingSplitDialogVisible.value = false
+    loadChamferingManagement()
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '順延に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingSplitSubmitting.value = false
+  }
+}
+
+/** 面取指示1件を複製 */
+async function duplicateChamferingRow(row: ChamferingManagementRow) {
+  const id = row.id
+  if (id == null) return
+  try {
+    await request.post(`/api/plan/chamfering-management/${id}/duplicate`)
+    ElMessage.success('複製しました')
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '複製に失敗しました'
+    ElMessage.error(String(msg))
+  }
+}
+
 async function loadChamferingManagement() {
   chamferingManagementLoading.value = true
+  const baseParams: Record<string, string> = {}
+  if (selectedScheduleMonth.value) baseParams.production_month = selectedScheduleMonth.value
+  const todayParam = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
+  const tomorrowParam = selectedChamferingDateTomorrow.value ? String(selectedChamferingDateTomorrow.value).slice(0, 10) : ''
+  const chamferingMachineParam = selectedChamferingMachineFilter.value ? String(selectedChamferingMachineFilter.value).trim() : undefined
   try {
-    const params: Record<string, string> = {}
-    if (selectedScheduleMonth.value) params.production_month = selectedScheduleMonth.value
-    const result = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
-      '/api/plan/chamfering-management/list',
-      { params: { ...params, limit: 2000 } }
-    )
-    chamferingManagementList.value = (result as any)?.success ? ((result as any).data ?? []) : []
+    const [resToday, resTomorrow] = await Promise.all([
+      request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+        '/api/plan/chamfering-management/list',
+        { params: { ...baseParams, limit: 2000, ...(todayParam ? { production_day: todayParam } : {}), ...(chamferingMachineParam ? { chamfering_machine: chamferingMachineParam } : {}) } }
+      ),
+      request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+        '/api/plan/chamfering-management/list',
+        { params: { ...baseParams, limit: 2000, ...(tomorrowParam ? { production_day: tomorrowParam } : {}), ...(chamferingMachineParam ? { chamfering_machine: chamferingMachineParam } : {}) } }
+      ),
+    ])
+    chamferingManagementListToday.value = (resToday as any)?.success ? ((resToday as any).data ?? []) : []
+    chamferingManagementListTomorrow.value = (resTomorrow as any)?.success ? ((resTomorrow as any).data ?? []) : []
+    chamferingManagementList.value = [...chamferingManagementListToday.value, ...chamferingManagementListTomorrow.value]
   } catch (e) {
     console.error('面取指示一覧の取得に失敗:', e)
+    chamferingManagementListToday.value = []
+    chamferingManagementListTomorrow.value = []
     chamferingManagementList.value = []
   } finally {
     chamferingManagementLoading.value = false
   }
 }
 
+async function loadChamferingBatchList() {
+  chamferingBatchLoading.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (selectedScheduleMonth.value) params.production_month = selectedScheduleMonth.value
+    const result = await request.get<{ success?: boolean; data?: ChamferingBatchRow[] }>(
+      '/api/plan/chamfering-plans/list',
+      { params: { ...params, limit: 5000 } }
+    )
+    chamferingBatchList.value = (result as any)?.success ? ((result as any).data ?? []) : []
+  } catch (e) {
+    console.error('面取バッチ一覧の取得に失敗:', e)
+    chamferingBatchList.value = []
+  } finally {
+    chamferingBatchLoading.value = false
+  }
+}
+
+async function updateChamferingPlanSw(row: ChamferingBatchRow, value: boolean) {
+  const id = row.id
+  if (id == null) return
+  chamferingSwLoading.value = id
+  try {
+    await request.patch(`/api/plan/chamfering-plans/${id}`, { has_sw_process: value })
+    row.has_sw_process = value ? 1 : 0
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? 'SWの更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingSwLoading.value = null
+  }
+}
+
+async function copyChamferingPlan(row: ChamferingBatchRow) {
+  const id = row.id
+  if (id == null) return
+  chamferingBatchActionLoading.value = id
+  try {
+    await request.post(`/api/plan/chamfering-plans/${id}/copy`)
+    ElMessage.success('複製しました')
+    loadChamferingBatchList()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '複製に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingBatchActionLoading.value = null
+  }
+}
+
+async function deleteChamferingPlan(row: ChamferingBatchRow) {
+  const id = row.id
+  if (id == null) return
+  try {
+    await ElMessageBox.confirm(
+      'この面取バッチを削除しますか？',
+      '削除の確認',
+      { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
+    )
+  } catch {
+    return
+  }
+  chamferingBatchActionLoading.value = id
+  try {
+    await request.delete(`/api/plan/chamfering-plans/${id}`)
+    ElMessage.success('削除しました')
+    loadChamferingBatchList()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '削除に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    chamferingBatchActionLoading.value = null
+  }
+}
+
 async function loadKanbanIssuance() {
   kanbanIssuanceLoading.value = true
   try {
+    const params: Record<string, string | number> = { limit: 2000 }
+    if (kanbanFilterProductionDay.value) params.production_day = kanbanFilterProductionDay.value
+    if (kanbanFilterStatus.value) params.status = kanbanFilterStatus.value
+    if (kanbanFilterProductName.value) params.product_name = kanbanFilterProductName.value
     const result = await request.get<{ success?: boolean; data?: KanbanIssuanceRow[] }>(
       '/api/plan/kanban-issuance/list',
-      { params: { limit: 1000 } }
+      { params }
     )
     kanbanIssuanceList.value = (result as any)?.success ? ((result as any).data ?? []) : []
   } catch (e) {
@@ -2452,20 +4572,404 @@ async function loadKanbanIssuance() {
   }
 }
 
+async function loadKanbanProductNames() {
+  try {
+    const result = await request.get<{ success?: boolean; data?: string[] }>(
+      '/api/plan/kanban-issuance/product-names',
+      { params: { limit: 500 } }
+    )
+    kanbanIssuanceProductNameOptions.value = (result as any)?.success ? ((result as any).data ?? []) : []
+  } catch (e) {
+    console.error('カンバン製品名一覧の取得に失敗:', e)
+    kanbanIssuanceProductNameOptions.value = []
+  }
+}
+
+/** 1枚分の切断現品票HTML（上中下で同じ内容を3回使う） */
+function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): string {
+  const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const fmtDate = (v: string | null | undefined) => (v ? String(v).slice(0, 10).replace(/-/g, '/') : '')
+  const lotQty = row.actual_production_quantity != null ? row.actual_production_quantity : ''
+  const lineDisplay = esc(row.production_line || '')
+  const cuttingMachineDisplay = esc(row.cutting_machine || '')
+  const lineShort = esc((row.production_line || '').replace(/号機$/, ''))
+  const chamferDisplay = row.has_chamfering_process ? '〇' : '--'
+  const chamferingLengthDisplay = (row.chamfering_length != null && Number(row.chamfering_length) !== 0) ? esc(row.chamfering_length) : '--'
+  const developedLengthDisplay = (row.developed_length != null && Number(row.developed_length) !== 0) ? esc(row.developed_length) : '--'
+  const lotNoFromMgmt = esc(String(row.management_code ?? '').slice(-5))
+  const productCdForQr = encodeURIComponent(String(row.product_cd ?? ''))
+  const qrSrc = productCdForQr ? `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${productCdForQr}` : ''
+  return `
+    <div class="ticket-top">
+      <div>
+        <div class="ticket-title">切断現品票</div>
+        <div class="ticket-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR" width="32" height="32" />` : '<span>QR</span>'}</div>
+      </div>
+      <div class="ticket-product">${esc(row.product_name)}</div>
+      <div class="ticket-machine">${lineDisplay}</div>
+    </div>
+    <table class="tbl">
+      <tr>
+        <th>規格</th>
+        <td colspan="3">${esc(row.standard_specification)}</td>
+        <th>管理コード</th>
+        <td colspan="3">${esc(row.management_code)}</td>
+      </tr>
+      <tr>
+        <th>原材料</th>
+        <td colspan="3">${esc(row.material_name)}</td>
+  
+        <th>成型期間</th>
+        <td colspan="1">${fmtDate(row.start_date)}</td>
+        <th class="tbl-c">～</th>
+        <td colspan="1">${fmtDate(row.end_date)}</td>
+      </tr>
+      <tr>
+        <th>製造番号</th>
+        <td colspan="3"></td>       
+        <th>成型計画数</th>
+        <td class="big tbl-c">${esc(row.planned_quantity)}</td>
+        <th>成型ロット</th>
+        <td class="big tbl-c">${esc(row.production_lot_size)}</td>       
+      </tr>
+      <tr>
+        <th>ロット本数</th>
+        <td class="red tbl-c">${esc(lotQty)}</td>
+        <th>取数</th>
+        <td class="big tbl-c">${esc(row.take_count)}</td>
+        <th>工程</th>
+        <td class="tbl-c">切断機</td>
+        <td class="tbl-c">面取機</td>
+        <th class="tbl-c">成型ライン</th>
+      </tr>
+      <tr>
+        <th>切断長</th>
+        <td class="big tbl-c">${esc(row.cutting_length)}</td>
+        <th>面取長</th>
+        <td class="tbl-c">${chamferingLengthDisplay}</td>
+        <th>設備No.</th>
+        <td class="tbl-c">${cuttingMachineDisplay}</td>
+        <td></td>
+        <td class="tbl-c">${lineShort}</td>
+      </tr>
+      <tr>
+        <th>展開長</th>
+        <td class="grey tbl-c">${developedLengthDisplay}</td>
+        <th>面取</th>
+        <td class="tbl-c"><span class="box">${chamferDisplay}</span></td>
+        <th>実績数</th>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+      <tr class="tbl-row-lotno">
+        <th>ロットNo</th>
+        <td colspan="3" class="big tbl-c tbl-lotno-val">${lotNoFromMgmt}</td>
+        <th>確認</th>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </table>
+    <div class="kanban-no">カンバン番号: ${esc(kanbanNo)}　発行日: ${fmtDate(new Date().toISOString())}</div>
+  `
+}
+
+/** 切断現品票HTMLを生成して印刷ウィンドウを開く（A4縦・上中下3枚・切断線あり） */
+function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
+  const oneTicket = buildOneKanbanTicketHtml(row, kanbanNo)
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断現品票</title><style>
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; font-family: 'Yu Gothic','MS Gothic',sans-serif; font-size: 10px; }
+    .page { width: 194mm; height: 281mm; margin: 0; padding: 0; }
+    .ticket-sheet { width: 100%; height: 281mm; display: flex; flex-direction: column; margin: 0; padding: 0; position: relative; }
+    .ticket-block { flex: 0 0 calc(281mm / 3); height: calc(281mm / 3); display: flex; flex-direction: column; padding: 4mm 6mm; margin: 0; overflow: hidden; }
+    .ticket-sheet .ticket-block:nth-of-type(2) { margin-bottom: 15px; }
+    .ticket-block .ticket { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .cut-line { position: absolute; left: 0; right: 0; height: 0; border: none; border-top: 2px dotted #999; pointer-events: none; }
+    .cut-line-1 { top: calc(281mm / 3 - 15px); }
+    .cut-line-2 { top: calc(281mm * 2 / 3 + 4px); }
+    .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
+    .ticket-title { font-size: 16px; font-weight: bold; }
+    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
+    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; min-width: 80px; text-align: right; }
+    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+    .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
+    .tbl th { background: transparent; font-weight: bold; text-align: left; }
+    .tbl .tbl-c { text-align: center; }
+    /* 各列宽（第1～8列，px 可改） */
+    .tbl th:nth-child(1), .tbl td:nth-child(1) { width: 60px; }
+    .tbl th:nth-child(2), .tbl td:nth-child(2) { width: 110px; }
+    .tbl th:nth-child(3), .tbl td:nth-child(3) { width: 60px; }
+    .tbl th:nth-child(4), .tbl td:nth-child(4) { width: 150px; }
+    .tbl th:nth-child(5), .tbl td:nth-child(5) { width: 70px; }
+    .tbl th:nth-child(6), .tbl td:nth-child(6) { width: 95px; }
+    .tbl th:nth-child(7), .tbl td:nth-child(7) { width: 85px; }
+    .tbl th:nth-child(8), .tbl td:nth-child(8) { width: 95px; }
+    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.5; }
+    .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
+    .red { color: #cc0000; font-weight: bold; font-size: 12px; }
+    .big { font-size: 12px; font-weight: bold; }
+    .grey { background: #444; color: #fff; }
+    .box { display: inline-block; width: 12px; height: 12px; border: none; vertical-align: middle; text-align: center; line-height: 10px; font-size: 10px; }
+    .kanban-no { font-size: 8px; color: #666; text-align: right; margin-top: 2px; }
+    @media print {
+      html, body { margin: 0 !important; padding: 0 !important; width: 194mm !important; height: 281mm !important; }
+      .page { width: 194mm !important; height: 281mm !important; margin: 0 !important; padding: 0 !important; }
+      .ticket-sheet { height: 281mm !important; }
+      .ticket-block { flex: 0 0 calc(281mm / 3) !important; height: calc(281mm / 3) !important; }
+    }
+  </style></head><body>
+  <div class="page">
+    <div class="ticket-sheet">
+      <div class="cut-line cut-line-1"></div>
+      <div class="cut-line cut-line-2"></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+    </div>
+  </div>
+  <script>window.onload=()=>{setTimeout(()=>{window.print();window.onafterprint=()=>window.close();}, 400);}<\/script>
+  </body></html>`
+  const w = window.open('', '_blank', 'width=620,height=900')
+  if (w) { w.document.write(html); w.document.close() }
+}
+
+/** 一括：複数枚を1つの印刷ウィンドウで連続印刷（選択したデータを循环打印） */
+function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: string }[]) {
+  if (!items.length) return
+  const pagesHtml = items
+    .map(({ row, kanbanNo }) => {
+      const oneTicket = buildOneKanbanTicketHtml(row, kanbanNo)
+      return `<div class="page ticket-page">
+    <div class="ticket-sheet">
+      <div class="cut-line cut-line-1"></div>
+      <div class="cut-line cut-line-2"></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+      <div class="ticket-block"><div class="ticket">${oneTicket}</div></div>
+    </div>
+  </div>`
+    })
+    .join('\n')
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断現品票（${items.length}枚）</title><style>
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; width: 100%; font-family: 'Yu Gothic','MS Gothic',sans-serif; font-size: 10px; }
+    .page { width: 194mm; height: 281mm; margin: 0; padding: 0; page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+    .ticket-sheet { width: 100%; height: 281mm; display: flex; flex-direction: column; margin: 0; padding: 0; position: relative; }
+    .ticket-block { flex: 0 0 calc(281mm / 3); height: calc(281mm / 3); display: flex; flex-direction: column; padding: 4mm 6mm; margin: 0; overflow: hidden; }
+    .ticket-sheet .ticket-block:nth-of-type(2) { margin-bottom: 15px; }
+    .ticket-block .ticket { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .cut-line { position: absolute; left: 0; right: 0; height: 0; border: none; border-top: 2px dotted #999; pointer-events: none; }
+    .cut-line-1 { top: calc(281mm / 3 - 15px); }
+    .cut-line-2 { top: calc(281mm * 2 / 3 + 4px); }
+    .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
+    .ticket-title { font-size: 16px; font-weight: bold; }
+    .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
+    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; min-width: 80px; text-align: right; }
+    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
+    .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
+    .tbl th { background: transparent; font-weight: bold; text-align: left; }
+    .tbl .tbl-c { text-align: center; }
+    .tbl th:nth-child(1), .tbl td:nth-child(1) { width: 60px; }
+    .tbl th:nth-child(2), .tbl td:nth-child(2) { width: 110px; }
+    .tbl th:nth-child(3), .tbl td:nth-child(3) { width: 60px; }
+    .tbl th:nth-child(4), .tbl td:nth-child(4) { width: 150px; }
+    .tbl th:nth-child(5), .tbl td:nth-child(5) { width: 70px; }
+    .tbl th:nth-child(6), .tbl td:nth-child(6) { width: 95px; }
+    .tbl th:nth-child(7), .tbl td:nth-child(7) { width: 85px; }
+    .tbl th:nth-child(8), .tbl td:nth-child(8) { width: 95px; }
+    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.5; }
+    .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
+    .red { color: #cc0000; font-weight: bold; font-size: 12px; }
+    .big { font-size: 12px; font-weight: bold; }
+    .grey { background: #444; color: #fff; }
+    .box { display: inline-block; width: 12px; height: 12px; border: none; vertical-align: middle; text-align: center; line-height: 10px; font-size: 10px; }
+    .kanban-no { font-size: 8px; color: #666; text-align: right; margin-top: 2px; }
+    @media print {
+      html, body { margin: 0 !important; padding: 0 !important; }
+      .page { width: 194mm !important; height: 281mm !important; margin: 0 !important; padding: 0 !important; page-break-after: always !important; }
+      .page:last-child { page-break-after: auto !important; }
+      .ticket-sheet { height: 281mm !important; }
+      .ticket-block { flex: 0 0 calc(281mm / 3) !important; height: calc(281mm / 3) !important; }
+    }
+  </style></head><body>
+${pagesHtml}
+  <script>window.onload=()=>{setTimeout(()=>{window.print();window.onafterprint=()=>window.close();}, 400);}<\/script>
+  </body></html>`
+  const w = window.open('', '_blank', 'width=620,height=900')
+  if (w) { w.document.write(html); w.document.close() }
+}
+
 /** 待発行カンバンを手動で発行 */
 async function issuePendingKanban(kanbanId: number) {
+  const row = kanbanIssuanceList.value.find((r) => r.id === kanbanId)
   kanbanIssuePendingLoading.value = kanbanId
   try {
     const res = await request.post<{ success?: boolean; kanban_no?: string }>(
       `/api/plan/kanban-issuance/${kanbanId}/issue`
     )
-    ElMessage.success((res as any)?.kanban_no ? `カンバン発行: ${(res as any).kanban_no}` : 'カンバンを発行しました')
+    const kno = (res as any)?.kanban_no ?? ''
+    ElMessage.success(kno ? `カンバン発行: ${kno}` : 'カンバンを発行しました')
     loadKanbanIssuance()
+    if (row) printKanbanTicket(row, kno)
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? 'カンバン発行に失敗しました'
     ElMessage.error(String(msg))
   } finally {
     kanbanIssuePendingLoading.value = null
+  }
+}
+
+/** 発行済カンバンを再発行（現場で紛失した場合など） */
+async function reissueKanban(kanbanId: number) {
+  const row = kanbanIssuanceList.value.find((r) => r.id === kanbanId)
+  kanbanReissueLoading.value = kanbanId
+  try {
+    const res = await request.post<{ success?: boolean; kanban_no?: string }>(
+      `/api/plan/kanban-issuance/${kanbanId}/reissue`
+    )
+    const kno = (res as any)?.kanban_no ?? ''
+    ElMessage.success(kno ? `再発行: ${kno}` : 'カンバンを再発行しました')
+    loadKanbanIssuance()
+    if (row) printKanbanTicket(row, kno)
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '再発行に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    kanbanReissueLoading.value = null
+  }
+}
+
+/** 選択した待発行カンバンを一括発行 */
+async function batchIssueKanban() {
+  const pending = kanbanIssuanceSelection.value.filter(
+    (r) => (r.status === 'pending' || r.status === 'issued') && r.id != null
+  )
+  if (!pending.length) {
+    ElMessage.warning('発行対象のカンバン（待発行・発行済）を選択してください')
+    return
+  }
+  kanbanBatchIssueLoading.value = true
+  try {
+    const res = await request.post<{
+      success?: boolean
+      issued?: number
+      skipped?: number
+      errors?: string[]
+      issued_items?: { id: number; kanban_no: string }[]
+    }>('/api/plan/kanban-issuance/batch-issue', { kanban_ids: pending.map((r) => r.id!) })
+    const issued = (res as any)?.issued ?? 0
+    const errors = (res as any)?.errors as string[] | undefined
+    const issuedItems = (res as any)?.issued_items as { id: number; kanban_no: string }[] | undefined
+    if (issued > 0) ElMessage.success((res as any)?.message ?? `${issued} 件発行しました`)
+    if (errors?.length) ElMessage.warning(errors.slice(0, 3).join('; '))
+    kanbanIssuanceSelection.value = []
+    // 選択したデータを循环打印：后端返回的 issued_items 与选中行匹配，单窗口多页打印（避免弹窗被拦截）
+    if (issued > 0 && Array.isArray(issuedItems) && issuedItems.length > 0) {
+      const toPrint: { row: KanbanIssuanceRow; kanbanNo: string }[] = []
+      for (const p of pending) {
+        const item = issuedItems.find((i) => i.id === p.id)
+        if (item?.kanban_no) toPrint.push({ row: p, kanbanNo: item.kanban_no })
+      }
+      if (toPrint.length) printKanbanTicketsBatch(toPrint)
+    }
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '一括発行に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    kanbanBatchIssueLoading.value = false
+  }
+}
+
+/** カンバン発行の生産日を cutting_management / chamfering_management から同期する */
+async function syncKanbanProductionDay() {
+  kanbanSyncProductionDayLoading.value = true
+  try {
+    const res = await request.post<{ success?: boolean; message?: string; updated?: number }>(
+      '/api/plan/kanban-issuance/sync-production-day'
+    )
+    ElMessage.success((res as any)?.message ?? '生産日を更新しました')
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '生産日の更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    kanbanSyncProductionDayLoading.value = false
+  }
+}
+
+/** カンバン発行：双击打开编辑弹窗 */
+function openKanbanEdit(row: KanbanIssuanceRow) {
+  if (!row?.id) return
+  kanbanEditRow.value = row
+  kanbanEditForm.product_cd = row.product_cd ?? ''
+  kanbanEditForm.product_name = row.product_name ?? ''
+  kanbanEditForm.production_line = row.production_line ?? ''
+  kanbanEditForm.cutting_machine = row.cutting_machine ?? ''
+  kanbanEditForm.material_name = row.material_name ?? ''
+  kanbanEditForm.standard_specification = row.standard_specification ?? ''
+  kanbanEditForm.management_code = row.management_code ?? ''
+  kanbanEditForm.start_date = row.start_date ? String(row.start_date).slice(0, 10) : ''
+  kanbanEditForm.end_date = row.end_date ? String(row.end_date).slice(0, 10) : ''
+  kanbanEditForm.planned_quantity = row.planned_quantity ?? null
+  kanbanEditForm.production_lot_size = row.production_lot_size ?? null
+  kanbanEditForm.actual_production_quantity = row.actual_production_quantity ?? null
+  kanbanEditForm.take_count = row.take_count ?? null
+  kanbanEditForm.cutting_length = row.cutting_length != null ? Number(row.cutting_length) : null
+  kanbanEditForm.chamfering_length = row.chamfering_length != null ? Number(row.chamfering_length) : null
+  kanbanEditForm.developed_length = row.developed_length != null ? Number(row.developed_length) : null
+  kanbanEditForm.has_chamfering_process = !!row.has_chamfering_process
+  kanbanEditForm.lot_number = row.lot_number ?? ''
+  kanbanEditForm.production_day = row.production_day ? String(row.production_day).slice(0, 10) : ''
+  kanbanEditDialogVisible.value = true
+}
+
+/** カンバン発行：保存编辑 */
+async function saveKanbanEdit() {
+  const id = kanbanEditRow.value?.id
+  if (!id) return
+  kanbanEditSubmitting.value = true
+  try {
+    const body: Record<string, unknown> = {
+      product_cd: kanbanEditForm.product_cd || undefined,
+      product_name: kanbanEditForm.product_name || undefined,
+      production_line: kanbanEditForm.production_line || undefined,
+      cutting_machine: kanbanEditForm.cutting_machine || undefined,
+      material_name: kanbanEditForm.material_name || undefined,
+      standard_specification: kanbanEditForm.standard_specification || undefined,
+      management_code: kanbanEditForm.management_code || undefined,
+      start_date: kanbanEditForm.start_date || undefined,
+      end_date: kanbanEditForm.end_date || undefined,
+      planned_quantity: kanbanEditForm.planned_quantity ?? undefined,
+      production_lot_size: kanbanEditForm.production_lot_size ?? undefined,
+      actual_production_quantity: kanbanEditForm.actual_production_quantity ?? undefined,
+      take_count: kanbanEditForm.take_count ?? undefined,
+      cutting_length: kanbanEditForm.cutting_length ?? undefined,
+      chamfering_length: kanbanEditForm.chamfering_length ?? undefined,
+      developed_length: kanbanEditForm.developed_length ?? undefined,
+      has_chamfering_process: kanbanEditForm.has_chamfering_process,
+      lot_number: kanbanEditForm.lot_number || undefined,
+      production_day: kanbanEditForm.production_day || undefined,
+    }
+    await request.patch<{ success?: boolean; message?: string }>(
+      `/api/plan/kanban-issuance/${id}`,
+      body
+    )
+    ElMessage.success('更新しました')
+    kanbanEditDialogVisible.value = false
+    loadKanbanIssuance()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '更新に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    kanbanEditSubmitting.value = false
   }
 }
 
@@ -2499,6 +5003,65 @@ async function loadCuttingManagement() {
     cuttingManagementListTomorrow.value = []
   } finally {
     cuttingManagementLoading.value = false
+  }
+}
+
+/** 実績確定：production_completed_check=1 の切断指示を stock_transaction_logs に保存 */
+const confirmCuttingActualLoading = ref(false)
+const confirmActualResultVisible = ref(false)
+const confirmActualResultCount = ref(0)
+const confirmActualResultTotalQty = ref(0)
+async function confirmCuttingActual() {
+  const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  confirmCuttingActualLoading.value = true
+  try {
+    const params: Record<string, string> = { production_day: day }
+    if (cuttingMachineFilter.value) params.cutting_machine = cuttingMachineFilter.value
+    const res = await request.post<{ success?: boolean; message?: string; inserted?: number; total_quantity?: number }>(
+      '/api/plan/cutting-management/confirm-actual',
+      null,
+      { params }
+    )
+    confirmActualResultCount.value = (res as any)?.inserted ?? 0
+    confirmActualResultTotalQty.value = (res as any)?.total_quantity ?? 0
+    confirmActualResultVisible.value = true
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '実績確定に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    confirmCuttingActualLoading.value = false
+  }
+}
+
+/** 面取指示-今日：実績確定（chamfering_management → stock_transaction_logs） */
+const confirmChamferingActualLoading = ref(false)
+async function confirmChamferingActual() {
+  const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  confirmChamferingActualLoading.value = true
+  try {
+    const params: Record<string, string> = { production_day: day }
+    if (selectedChamferingMachineFilter.value) params.chamfering_machine = selectedChamferingMachineFilter.value
+    const res = await request.post<{ success?: boolean; message?: string; inserted?: number; total_quantity?: number }>(
+      '/api/plan/chamfering-management/confirm-actual',
+      null,
+      { params }
+    )
+    confirmActualResultCount.value = (res as any)?.inserted ?? 0
+    confirmActualResultTotalQty.value = (res as any)?.total_quantity ?? 0
+    confirmActualResultVisible.value = true
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '実績確定に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    confirmChamferingActualLoading.value = false
   }
 }
 
@@ -2627,6 +5190,131 @@ async function issueCuttingInstructionSheet() {
     issueCuttingInstructionSheetLoading.value = false
   }
 }
+
+/** 面取指示書発行：指定日の今日分を面取機ごとに1ページずつ A5 横向で印刷 */
+const issueChamferingInstructionSheetLoading = ref(false)
+async function issueChamferingInstructionSheet() {
+  const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  issueChamferingInstructionSheetLoading.value = true
+  try {
+    const params: Record<string, string> = { production_day: day, limit: '2000' }
+    if (selectedChamferingMachineFilter.value) params.chamfering_machine = selectedChamferingMachineFilter.value
+    const res = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+      '/api/plan/chamfering-management/list',
+      { params }
+    )
+    const rows = (res as any)?.success ? ((res as any).data ?? []) as ChamferingManagementRow[] : []
+    const byMachine = new Map<string, ChamferingManagementRow[]>()
+    for (const r of rows) {
+      const key = (r.chamfering_machine || '').trim() || '（未設定）'
+      if (!byMachine.has(key)) byMachine.set(key, [])
+      byMachine.get(key)!.push(r)
+    }
+    for (const [, list] of byMachine) {
+      list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
+    }
+    const dayDisplay = day.replace(/-/g, '/')
+    const pages: string[] = []
+    const machineNames = Array.from(byMachine.keys()).sort()
+    for (const machineName of machineNames) {
+      const list = byMachine.get(machineName)!
+      let totalQty = 0
+      const trs = list.map((r) => {
+        const qty = r.actual_production_quantity ?? 0
+        totalQty += qty
+        const noCountDisplay = r.no_count ? '〇' : '--'
+        return `<tr>
+          <td>${escapeHtml(r.cd ?? r.management_code ?? '')}</td>
+          <td>${escapeHtml(r.production_line ?? '')}</td>
+          <td>${escapeHtml(r.product_name ?? '')}</td>
+          <td>${r.production_sequence ?? ''}</td>
+          <td>${r.actual_production_quantity ?? ''}</td>
+          <td></td>
+          <td>${noCountDisplay}</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>`
+      }).join('')
+      pages.push(`
+        <div class="instruction-sheet-page">
+          <div class="instruction-sheet-header">
+            <span class="instruction-sheet-title">面取生産指示書</span>
+            <span class="instruction-sheet-machine">${escapeHtml(machineName)}</span>
+            <span class="instruction-sheet-date">生産日 ${dayDisplay}</span>
+          </div>
+          <div class="instruction-sheet-table-wrap">
+            <table class="instruction-sheet-table chamfering-sheet-table">
+              <thead><tr>
+                <th>CD</th><th>ライン</th><th>製品名</th><th>順位</th><th>計画数</th><th>実績数</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
+              </tr></thead>
+              <tbody>${trs}</tbody>
+            </table>
+          </div>
+          <div class="instruction-sheet-footer">
+            <span>合計 ${totalQty.toLocaleString()}</span>
+          </div>
+        </div>
+      `)
+    }
+    if (pages.length === 0) {
+      ElMessage.warning('該当日のデータがありません')
+      return
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>面取生産指示書</title><style>
+      @page { size: A5 landscape; margin: 10mm 0cm; }
+      body { font-family: 'MS Gothic', 'Yu Gothic', sans-serif; font-size: 11px; margin: 0; padding: 8px 0.6cm; }
+      .instruction-sheet-page { page-break-after: always; width: 100%; box-sizing: border-box; }
+      .instruction-sheet-page:last-child { page-break-after: auto; }
+      .instruction-sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 6px 0; border-bottom: 1px solid #999; }
+      .instruction-sheet-title { font-weight: bold; font-size: 22px; }
+      .instruction-sheet-machine { font-size: 22px; }
+      .instruction-sheet-date { font-size: 22px; }
+      .instruction-sheet-table-wrap { overflow: auto; }
+      .instruction-sheet-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .chamfering-sheet-table th:nth-child(1), .chamfering-sheet-table td:nth-child(1) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(2), .chamfering-sheet-table td:nth-child(2) { width: 7%; }
+      .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 18%; }
+      .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 5%; }
+      .chamfering-sheet-table th:nth-child(5), .chamfering-sheet-table td:nth-child(5) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(6), .chamfering-sheet-table td:nth-child(6) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(7), .chamfering-sheet-table td:nth-child(7) { width: 5%; }
+      .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 8%; }
+      .chamfering-sheet-table th:nth-child(9), .chamfering-sheet-table td:nth-child(9) { width: 8%; }
+      .chamfering-sheet-table th:nth-child(10), .chamfering-sheet-table td:nth-child(10) { width: 8%; }
+      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 8%; }
+      .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
+      .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 11px; }
+      .instruction-sheet-table td { font-size: 14px; }
+      .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(3) { font-size: 14px; text-align: left; }
+      .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
+      @media print { .instruction-sheet-page { overflow: hidden; } }
+    </style></head><body>${pages.join('')}</body></html>`
+    const w = window.open('', '_blank')
+    if (!w) {
+      ElMessage.warning('ポップアップがブロックされています。印刷用ウィンドウを許可してください。')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print(); w.close() }, 300)
+    ElMessage.success('指示書を印刷ウィンドウで開きました')
+  } catch (e) {
+    const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (e as { message?: string })?.message
+      ?? '指示書の取得に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    issueChamferingInstructionSheetLoading.value = false
+  }
+}
+
 function escapeHtml(s: string): string {
   const div = document.createElement('div')
   div.textContent = s
@@ -2636,6 +5324,7 @@ function escapeHtml(s: string): string {
 watch(selectedScheduleMonth, () => {
   loadCuttingManagement()
   loadChamferingManagement()
+  loadChamferingBatchList()
 })
 
 function onProductionDayEditorKeydown(e: KeyboardEvent) {
@@ -2647,10 +5336,13 @@ function onProductionDayEditorKeydown(e: KeyboardEvent) {
 onMounted(() => {
   loadMachineOptions()
   loadCuttingMachineOptions()
+  loadChamferingMachineOptions()
   loadScheduleMonths()
   loadPlans()
   loadCuttingManagement()
   loadChamferingManagement()
+  loadChamferingBatchList()
+  loadKanbanProductNames()
   loadKanbanIssuance()
   window.addEventListener('keydown', onProductionDayEditorKeydown)
 })
@@ -2660,11 +5352,23 @@ onUnmounted(() => {
 </script>
  
 <style scoped>
+/* ========== 主题色变量 ========== */
+.cutting-instruction-container {
+  --cutting-accent: #4f46e5;
+  --cutting-bg: rgba(79, 70, 229, 0.06);
+  --chamfering-accent: #059669;
+  --chamfering-bg: rgba(5, 150, 105, 0.06);
+  --kanban-accent: #d97706;
+  --kanban-bg: rgba(217, 119, 6, 0.06);
+  --batch-accent: #2563eb;
+  --batch-bg: rgba(37, 99, 235, 0.06);
+}
+
 .cutting-instruction-container {
   max-width: 100%;
   margin: 0 auto;
-  padding: 16px 20px;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 20px 24px;
+  background: linear-gradient(160deg, #f0f4ff 0%, #f8fafc 35%, #f1f5f9 100%);
   min-height: 100vh;
 }
 
@@ -2672,26 +5376,40 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding: 12px 16px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  margin-bottom: 20px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #fafbff 100%);
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.06), 0 2px 4px -2px rgba(79, 70, 229, 0.04);
+}
+
+.page-header-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.12);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  letter-spacing: 0.04em;
 }
 
 .header-title h1 {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e1b4b;
   margin: 0;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
 }
 
 .header-title .header-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #64748b;
-  margin: 2px 0 0 0;
+  margin: 8px 0 0 0;
+  font-weight: 400;
 }
 
 .plan-row {
@@ -2710,21 +5428,28 @@ onUnmounted(() => {
   flex: 4 1 0;
   min-width: 0;
   min-height: 200px;
+  display: flex;
+  flex-direction: column;
 }
 
-/* 右侧与生産バッチ一覧同高：288px（与 .plan-batch-table-wrap max-height 一致） */
+/* 右侧製品情報容器：与生産バッチ一覧（左列）同高で stretch。左：右＝6：4 を維持 */
 .right-panel {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: row;
   gap: 10px;
-  height: 288px;
-  min-height: 288px;
-  max-height: 288px;
-  background: #fafbfc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 12px;
+  background: linear-gradient(135deg, #fafbff 0%, #f8fafc 100%);
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+  padding: 12px 14px;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.04);
+}
+
+/* 同一要素が plan-section-right + right-panel のため、列幅は 6:4 を強制（.right-panel の flex:1 で上書きされないように） */
+.plan-row > .plan-section-right.right-panel {
+  flex: 3.65 1 0;
 }
 
 .right-panel-top,
@@ -2732,13 +5457,23 @@ onUnmounted(() => {
   flex: 1 1 0;
   min-width: 0;
   background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 8px 10px;
+  border: 1px solid #eef2ff;
+  border-radius: 8px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.chamfering-right-panel {
+  background: linear-gradient(135deg, #f0fdf4 0%, #f8fafc 100%);
+  border-color: #d1fae5;
+}
+
+.chamfering-right-panel .right-panel-top,
+.chamfering-right-panel .right-panel-bottom {
+  border-color: #d1fae5;
 }
 
 .right-panel-top {
@@ -2751,11 +5486,16 @@ onUnmounted(() => {
 
 .right-panel-title {
   font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #f1f5f9;
+  font-weight: 700;
+  color: #334155;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.chamfering-right-panel .right-panel-title {
+  color: #047857;
+  border-bottom-color: #d1fae5;
 }
 
 .right-panel-placeholder {
@@ -2770,24 +5510,133 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+/* 製品情報：列表式（1行1項目） */
+.product-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.product-detail-list--chamfering {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+.product-detail-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  min-height: 28px;
+}
+.product-detail-list-item:last-child {
+  border-bottom: none;
+}
+.product-detail-list--chamfering .product-detail-list-item {
+  border-bottom-color: #dcfce7;
+}
+.product-detail-list-item .detail-label {
+  flex: 0 0 72px;
+  font-size: 11px;
+  color: #64748b;
+}
+.product-detail-list-item .detail-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 製品情報カード（旧レイアウト・参照用） */
+.product-detail-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.product-detail-card--chamfering {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-color: #bbf7d0;
+}
+.product-detail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+.product-detail-card--chamfering .product-detail-header {
+  border-bottom-color: #bbf7d0;
+}
+.product-detail-cd {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  letter-spacing: 0.02em;
+}
+.product-detail-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.product-detail-group {
+  margin-bottom: 10px;
+}
+.product-detail-group:last-child {
+  margin-bottom: 0;
+}
+.product-detail-group-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+.detail-item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.detail-label {
+  flex: 0 0 64px;
+  font-size: 10px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+.detail-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .detail-row {
   display: flex;
   align-items: baseline;
   gap: 8px;
   padding: 2px 0;
-}
-
-.detail-label {
-  flex: 0 0 72px;
-  color: #64748b;
-}
-
-.detail-value {
-  flex: 1;
-  min-width: 0;
-  color: #1e293b;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .equipment-efficiency-body {
@@ -2796,25 +5645,40 @@ onUnmounted(() => {
   overflow: auto;
 }
 
-.equipment-efficiency-body :deep(.el-table) {
+.equipment-efficiency-body :deep(.el-table),
+.equipment-efficiency-body :deep(.efficiency-table) {
   font-size: 11px;
+}
+.equipment-efficiency-body :deep(.efficiency-table .el-table__header th) {
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 600;
+}
+.equipment-efficiency-body :deep(.efficiency-table .el-table__body td) {
+  color: #334155;
+}
+.equipment-efficiency-body :deep(.efficiency-table .el-table__row:hover > td) {
+  background-color: #f8fafc !important;
 }
 
 
 .plan-section .section-card {
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.06), 0 2px 4px -2px rgba(37, 99, 235, 0.04);
+  overflow: hidden;
+  border-left: 4px solid var(--batch-accent);
 }
 
 .plan-section .section-card :deep(.el-card__header) {
-  padding: 10px 16px;
+  padding: 14px 18px;
   font-size: 13px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid #eef2ff;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.04) 0%, transparent 100%);
 }
 
 .plan-section .section-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: 14px 18px;
 }
 
 /* 下部：第1行＝切断指示（左|右）、第2行＝面取指示|カンバン発行 */
@@ -2841,7 +5705,7 @@ onUnmounted(() => {
 }
 /* 今日 59% : 翌日 41%（今日比原 6:4 缩小 1%） */
 .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1) {
-  flex: 6.5;
+  flex: 6.6;
   min-width: 0;
 }
 .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
@@ -2855,11 +5719,15 @@ onUnmounted(() => {
   min-height: 240px;
   background: #fff;
   border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.instruction-row .instruction-col.instruction-col-full {
+  flex: 1 1 100%;
 }
 
 .chamfering-management-section,
@@ -2876,6 +5744,35 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: #ffffff;
+  border-left: 4px solid var(--cutting-accent);
+  border-color: #e0e7ff;
+  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.06), 0 2px 4px -2px rgba(79, 70, 229, 0.04);
+}
+
+.cutting-management-section .cutting-mgmt-header {
+  padding: 6px 0 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #eef2ff;
+}
+
+.instruction-col.chamfering-management-section {
+  border-left: 4px solid var(--chamfering-accent);
+  border-color: #d1fae5;
+  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.06), 0 2px 4px -2px rgba(5, 150, 105, 0.04);
+}
+
+.instruction-col.chamfering-management-section .cutting-mgmt-header {
+  border-bottom-color: #d1fae5;
+}
+
+.instruction-col.kanban-issuance-section {
+  border-left: 4px solid var(--kanban-accent);
+  border-color: #ffedd5;
+  box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.06), 0 2px 4px -2px rgba(217, 119, 6, 0.04);
+}
+
+.instruction-col.kanban-issuance-section .cutting-mgmt-header {
+  border-bottom-color: #ffedd5;
 }
 
 .cutting-mgmt-header {
@@ -2883,6 +5780,58 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* 切断指示-今日：左側＝标题+日期+切断機 横並び、右側＝指示書発行・実績確定 */
+.cutting-mgmt-header-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.cutting-mgmt-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 面取指示-今日：第一排＝标题左、日期在标题右侧、指示書発行・実績確定最右侧；第二排＝面取機按钮居中 */
+.chamfering-mgmt-header-two-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  align-self: stretch;
+}
+.chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 12px;
+  width: 100%;
+}
+.chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 .cutting-mgmt-header-left {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 .cutting-mgmt-header-right {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row2 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row2 .chamfering-machine-btns {
+  margin-right: 0;
 }
 
 .cutting-mgmt-drop-hint {
@@ -2895,10 +5844,36 @@ onUnmounted(() => {
   border: 1px dashed #3b82f6;
 }
 
+.chamfering-mgmt-drop-wrap {
+  position: relative;
+}
+
+.chamfering-drag-handle {
+  cursor: grab;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.chamfering-drag-handle:active {
+  cursor: grabbing;
+}
+
 .cutting-mgmt-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: -0.02em;
+}
+
+.cutting-management-section .cutting-mgmt-title {
+  color: #3730a3;
+}
+
+.chamfering-management-section .cutting-mgmt-title {
+  color: #047857;
+}
+
+.kanban-issuance-section .cutting-mgmt-title {
+  color: #b45309;
 }
 
 .cutting-mgmt-date-wrap {
@@ -2958,20 +5933,47 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border-radius: 10px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-gutter: stable;
   background: #fff;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.cutting-management-section .cutting-mgmt-table-inner {
+  border-color: #c7d2fe;
+}
+
+.chamfering-management-section .cutting-mgmt-table-inner {
+  border-color: #a7f3d0;
 }
 
 .cutting-mgmt-thead {
   flex-shrink: 0;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
   z-index: 1;
+}
+
+.cutting-management-section .cutting-mgmt-thead {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  border-bottom-color: #c7d2fe;
+}
+
+.cutting-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
+  color: #3730a3;
+}
+
+.chamfering-management-section .cutting-mgmt-thead {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-bottom-color: #a7f3d0;
+}
+
+.chamfering-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
+  color: #047857;
 }
 
 /* バッチ→切断のドロップゾーン：12行分の高さで固定、超過時は縦スクロール */
@@ -3005,12 +6007,45 @@ onUnmounted(() => {
 /* 切断指示-今日：表下の合計行（表格外、下方） */
 .cutting-mgmt-tfoot-wrap {
   flex-shrink: 0;
-  min-width: 810px;
   width: 100%;
 }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) {
+  min-width: 810px;
+}
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-tr {
+  min-width: 810px;
+}
+/* 切断指示-今日：合計行 12 列与表头同幅で对齐 */
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 50px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 75px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 55px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 100px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 105px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 55px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 44px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 45px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 60px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 90px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 70px; }
+
 .cutting-mgmt-tfoot-wrap--tomorrow {
   min-width: 460px;
 }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow {
+  min-width: 400px;
+}
+/* 切断指示-翌日：合計行 7 列与表头同幅で对齐 */
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-tr {
+  min-width: 400px;
+}
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 41px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(2) { flex: 0 0 75px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(3) { flex: 0 0 50px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 30px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 52px; }
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 62px; }
 .cutting-mgmt-tfoot {
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
@@ -3037,7 +6072,7 @@ onUnmounted(() => {
 .cutting-mgmt-tr {
   display: flex;
   align-items: center;
-  min-width: 810px;
+  min-width: 795px;
   width: 100%;
   font-size: 11px;
 }
@@ -3056,11 +6091,18 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .cutting-mgmt-th:last-child,
 .cutting-mgmt-td:last-child {
   border-right: none;
+}
+
+/* 切断指示-今日：12列 表・合計行 同幅（810px） */
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
+  min-width: 795px;
 }
 
 /* 11列: CD, ライン, 生産日, 切断機, 製品名, 原材料, 生産数, 完了, 生産順, 生産時間, 備考 */
@@ -3075,7 +6117,7 @@ onUnmounted(() => {
 .cutting-mgmt-th:nth-child(5),
 .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 100px; }
 .cutting-mgmt-th:nth-child(6),
-.cutting-mgmt-td:nth-child(6) { flex: 0 0 110px; }
+.cutting-mgmt-td:nth-child(6) { flex: 0 0 105px; }
 .cutting-mgmt-th:nth-child(7),
 .cutting-mgmt-td:nth-child(7) { flex: 0 0 55px; }
 .cutting-mgmt-th:nth-child(8),
@@ -3085,13 +6127,13 @@ onUnmounted(() => {
 .cutting-mgmt-th:nth-child(10),
 .cutting-mgmt-td:nth-child(10) { flex: 0 0 60px; }
 .cutting-mgmt-th:nth-child(11),
-.cutting-mgmt-td:nth-child(11) { flex: 0 0 100px; }
+.cutting-mgmt-td:nth-child(11) { flex: 0 0 90px; }
 .cutting-mgmt-th:nth-child(12),
 .cutting-mgmt-td:nth-child(12) { flex: 0 0 70px; }
 
 /* 翌日テーブル：7列（CD, 生産日, 切断機, 製品名, 生産数, 生産順, 生産時間）※原材料なし */
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-tr {
-  min-width: 460px;
+  min-width: 400px;
 }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(1),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 41px; }
@@ -3117,6 +6159,118 @@ onUnmounted(() => {
   text-align: center;
 }
 
+/* 面取指示-今日：12列（CD, ライン, 生産日, 面取機, 製品名, 原材料, 生産数, 完了, カ無, 生産順, 生産時間, 操作）min-width 730px */
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
+  min-width: 730px;
+}
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(1),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(2),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 48px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(3),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 72px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(4),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 60px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 100px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 68px; }
+
+/* 面取指示-翌日：7列（CD, 生産日, 面取機, 製品名, 生産数, 生産順, 生産時間） */
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-tr {
+  min-width: 460px;
+}
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(1),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(2),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(2) { flex: 0 0 75px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(3),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(3) { flex: 0 0 55px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(4),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 55px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 60px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) {
+  justify-content: center;
+  text-align: center;
+}
+
+/* 面取指示-今日：生産数(7)、完了(8)、カ無(9)、生産順(10)、生産時間(11)、操作(12) 居中 */
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) {
+  justify-content: center;
+  text-align: center;
+}
+
+/* 面取指示-今日：合計行与表头列宽一致（12列 730px） */
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) {
+  min-width: 730px;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-tr {
+  min-width: 730px;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 48px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 72px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 60px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 100px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 68px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap.cutting-mgmt-tfoot-wrap--tomorrow {
+  min-width: 460px;
+}
+/* 面取指示-翌日：合計行 7 列与表头同宽对齐 */
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-tr {
+  min-width: 460px;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(2) { flex: 0 0 75px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(3) { flex: 0 0 55px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 55px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 60px; }
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td-total-value {
+  justify-content: flex-end;
+  text-align: right;
+}
+
 .cutting-mgmt-th-actions,
 .cutting-mgmt-td-actions {
   justify-content: center;
@@ -3130,13 +6284,141 @@ onUnmounted(() => {
   margin-left: 0;
 }
 
-/* 生産数(7)、生産順(9)、生産時間(10)：表头与数据居中 */
-.cutting-mgmt-th:nth-child(7),
-.cutting-mgmt-th:nth-child(9),
-.cutting-mgmt-th:nth-child(10),
-.cutting-mgmt-td:nth-child(7),
-.cutting-mgmt-td:nth-child(9),
-.cutting-mgmt-td:nth-child(10) {
+/* ========== 4表共通：列对齐（表头・数据・合計一致） ========== */
+/* 切断指示-今日：12列 — 左: 製品名(5), 原材料(6), 備考(11)；右: 生産数(7)；中: 其余 */
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) {
+  justify-content: flex-end;
+  text-align: right;
+}
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(1),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(2),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(3),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(4),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(2),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(3),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(4),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) {
+  justify-content: center;
+  text-align: center;
+}
+/* 切断指示-今日：合計行 左/右/中 与数据列一致 */
+.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* 切断指示-翌日：7列 — 左: 製品名(4)；右: 生産数(5)；中: 其余 */
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(4),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(4) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(5),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(5) {
+  justify-content: flex-end;
+  text-align: right;
+}
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(1),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(2),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(3),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(6),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(7),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(1),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(2),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(3),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(6),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7) {
+  justify-content: center;
+  text-align: center;
+}
+/* 切断指示-翌日 合計行 */
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5),
+.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* 面取指示-今日：12列 — 左: 製品名(5), 原材料(6)；右: 生産数(7)；中: 其余（7,8,9,10,11,12 原已居中，覆盖 7 为右） */
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) {
+  justify-content: flex-end;
+  text-align: right;
+}
+/* 面取指示-今日 合計行 */
+.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* 面取指示-翌日：7列 — 左: 製品名(4)；右: 生産数(5)；中: 其余 */
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(4),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(4) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(5),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(5) {
+  justify-content: flex-end;
+  text-align: right;
+}
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(1),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(2),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(3),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(1),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(2),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(3),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) {
+  justify-content: center;
+  text-align: center;
+}
+/* 面取翌日 合計行 */
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) {
+  justify-content: flex-start;
+  text-align: left;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5),
+.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* 生産数(7)、生産順(9)、生産時間(10)：切断今日 表头与数据居中（与上不冲突，7 已设为右） */
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10) {
   justify-content: center;
   text-align: center;
 }
@@ -3192,11 +6474,24 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+.kanban-issuance-section .cutting-mgmt-table-wrap :deep(.el-table__header-wrapper) {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+}
+.kanban-issuance-section .cutting-mgmt-table-wrap :deep(.el-table th.el-table__cell) {
+  background: transparent !important;
+  color: #92400e;
+  font-weight: 600;
+}
+
 .cutting-mgmt-empty {
-  padding: 24px;
+  padding: 32px 24px;
   text-align: center;
-  color: #94a3b8;
-  font-size: 12px;
+  color: #64748b;
+  font-size: 13px;
+  background: #f8fafc;
+  border-radius: 10px;
+  margin: 8px;
+  border: 1px dashed #e2e8f0;
 }
 
 .cutting-row-drag-handle {
@@ -3219,10 +6514,11 @@ onUnmounted(() => {
 .section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #334155;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1d4ed8;
+  letter-spacing: -0.02em;
 }
 .section-title .title-right-btn {
   margin-left: 8px;
@@ -3448,6 +6744,25 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 
+/* 試作追加按钮：与 新規追加 区分，试作专用样式 */
+.btn-trial-add {
+  border-radius: 6px;
+  font-weight: 500;
+  color: #b45309;
+  border-color: #d97706;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: 0 1px 2px rgba(217, 119, 6, 0.08);
+}
+.btn-trial-add:hover {
+  color: #fff;
+  border-color: #d97706;
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.3);
+}
+.btn-trial-add:active {
+  background: linear-gradient(180deg, #d97706 0%, #b45309 100%);
+}
+
 .instruction-column-picker {
   max-height: 280px;
   overflow-y: auto;
@@ -3494,8 +6809,8 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
   overflow-x: auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
@@ -3504,8 +6819,8 @@ onUnmounted(() => {
 
 .plan-batch-thead {
   flex-shrink: 0;
-  background: #f8fafc;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  border-bottom: 1px solid #c7d2fe;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -3527,6 +6842,11 @@ onUnmounted(() => {
 .plan-batch-thead .plan-batch-tr {
   font-weight: 600;
   color: #475569;
+}
+
+.chamfering-batch-section-card .plan-batch-thead {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-bottom-color: #a7f3d0;
 }
 
 .plan-batch-th,
@@ -3610,15 +6930,88 @@ onUnmounted(() => {
 }
 
 .plan-batch-empty {
-  padding: 24px;
+  padding: 32px 24px;
   text-align: center;
-  color: #94a3b8;
-  font-size: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  margin-top: 0;
+  color: #64748b;
+  font-size: 13px;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+  margin: 8px;
 }
+
+/* 面取バッチ一覧：生産バッチ一覧と同じレイアウト（plan-row + 右パネル） */
+.chamfering-plan-row {
+  align-items: stretch;
+}
+
+.chamfering-batch-section-card {
+  height: 100%;
+  min-height: 288px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #d1fae5;
+  border-left: 4px solid var(--chamfering-accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.06), 0 2px 4px -2px rgba(5, 150, 105, 0.04);
+}
+
+.chamfering-batch-section-card .cutting-mgmt-header {
+  margin-bottom: 8px;
+  flex-shrink: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d1fae5;
+}
+
+.chamfering-batch-section-card .cutting-mgmt-title {
+  color: #047857;
+}
+
+.chamfering-batch-table-wrap {
+  flex: 1;
+  min-height: 0;
+  max-height: 288px;
+}
+
+/* 面取バッチ一覧：10列（CD, 生産月, ライン, 製品名, 原材料, 生産数, ロット数, ロットNo, SW, 操作） */
+.chamfering-batch-table-wrap .plan-batch-tr {
+  min-width: 620px;
+}
+
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(1),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(1) { flex: 0 0 56px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(2),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(2) { flex: 0 0 72px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(3),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(3) { flex: 0 0 52px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(4),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(4) { flex: 1 1 0; min-width: 110px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(5),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(5) { flex: 0 0 110px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(6),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(6) { flex: 0 0 55px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(7),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(7) { flex: 0 0 55px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(8),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(8) { flex: 0 0 48px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(9),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(9) { flex: 0 0 36px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(10),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(10) { flex: 0 0 90px; }
+
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(4),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(4) {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.chamfering-batch-table-wrap .plan-batch-data-row {
+  cursor: pointer;
+}
+
+/* 面取行右パネルも左列（面取バッチ一覧）と同高で stretch（.right-panel の flex:1 を継承） */
 
 /* 放置区 */
 .drop-zone {
@@ -3858,10 +7251,13 @@ onUnmounted(() => {
 }
 </style>
 
-<!-- 設備下拉選項字體縮小（popper 掛在 body，需單獨樣式） -->
+<!-- 設備・データ管理製品名下拉選項字體縮小（popper 掛在 body，需單獨樣式） -->
 <style>
 .equipment-select-dropdown.el-select-dropdown .el-select-dropdown__item {
   font-size: 12px;
+}
+.data-management-product-select-dropdown.el-select-dropdown .el-select-dropdown__item {
+  font-size: 11px;
 }
 
 /* 切断指示の登録：生産日快捷・切断機按钮・紧凑UI（body 直下 teleport のため global） */
@@ -4036,6 +7432,139 @@ onUnmounted(() => {
   background: #fff;
   border-top: 1px solid #e2e8f0;
 }
+
+/* 面取指示 新規追加ダイアログ：紧凑・现代UI */
+.chamfering-new-dialog .el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 40px -12px rgba(5, 150, 105, 0.15);
+}
+.chamfering-new-dialog .el-dialog__header {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f0fdf4 0%, #fff 100%);
+}
+.chamfering-new-dialog .el-dialog__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #047857;
+}
+.chamfering-new-dialog .el-dialog__body {
+  padding: 12px 16px 14px;
+  background: #fafbfc;
+}
+.chamfering-new-form .el-form-item {
+  margin-bottom: 10px;
+}
+.chamfering-new-form .el-form-item:last-child {
+  margin-bottom: 0;
+}
+.chamfering-new-form .el-form-item__label {
+  font-size: 12px;
+  color: #64748b;
+  padding-right: 8px;
+}
+.chamfering-new-form .el-row {
+  margin-bottom: 0;
+}
+.chamfering-new-form .el-row + .el-form-item {
+  margin-top: 2px;
+}
+.chamfering-new-form .el-input__wrapper,
+.chamfering-new-form .el-textarea__inner {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+.chamfering-new-form .el-input.is-disabled .el-input__wrapper {
+  background: #f1f5f9;
+  color: #475569;
+}
+.chamfering-new-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+}
+
+.confirm-actual-result-dialog .el-dialog__header {
+  padding: 16px 20px 12px;
+  margin-right: 0;
+}
+.confirm-actual-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.confirm-actual-result-icon {
+  font-size: 24px;
+  color: var(--el-color-success);
+}
+.confirm-actual-result-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: 0.02em;
+}
+.confirm-actual-result-dialog .el-dialog__body {
+  padding: 8px 20px 20px;
+}
+.confirm-actual-result-body {
+  font-size: 14px;
+}
+.confirm-actual-result-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.confirm-actual-result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.confirm-actual-result-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.confirm-actual-result-card--highlight {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-color: #a7f3d0;
+}
+.confirm-actual-result-card--highlight:hover {
+  border-color: #6ee7b7;
+  box-shadow: 0 1px 3px rgba(34, 197, 94, 0.12);
+}
+.confirm-actual-result-card-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.confirm-actual-result-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+.confirm-actual-result-card--highlight .confirm-actual-result-card-value {
+  color: #047857;
+  font-size: 22px;
+}
+.confirm-actual-result-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 0;
+}
+.confirm-actual-result-footer .el-button {
+  min-width: 88px;
+  border-radius: 8px;
+}
 .cutting-edit-save-btn {
   --el-button-bg-color: #2563eb;
   --el-button-border-color: #2563eb;
@@ -4078,21 +7607,105 @@ onUnmounted(() => {
   border-top: 1px solid #e8edf3 !important;
 }
 
-/* 新規追加ダイアログ */
-.nr-form {
-  padding: 16px 20px 8px;
+/* ============================================================
+   新規バッチ追加 / 試作バッチ追加 ダイアログ（global styles）
+   ============================================================ */
+.new-record-dialog .el-dialog {
+  border-radius: 12px !important;
+  overflow: hidden !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.16), 0 4px 12px rgba(0,0,0,0.07) !important;
 }
-.nr-grid {
+.new-record-dialog .el-dialog__header {
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+}
+.new-record-dialog .el-dialog__body {
+  padding: 0 !important;
+  max-height: 74vh;
+  overflow-y: auto;
+}
+.new-record-dialog .el-dialog__footer {
+  padding: 0 !important;
+  border-top: 1px solid #e8edf3 !important;
+}
+/* ── Header ── */
+.nr-header {
+  display: flex; align-items: center; gap: 10px; padding: 11px 16px;
+}
+.nr-header--normal { background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 55%, #3b82f6 100%); }
+.nr-header--trial  { background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 55%, #a78bfa 100%); }
+.nr-header-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; color: #fff;
+}
+.nr-header-text { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+.nr-title   { font-size: 14px; font-weight: 700; color: #fff; line-height: 1.3; }
+.nr-subtitle { font-size: 10px; color: rgba(255,255,255,0.70); line-height: 1.3; }
+.nr-close-btn {
+  color: rgba(255,255,255,0.7) !important;
+  border: none !important; background: transparent !important;
+  padding: 3px !important; min-height: unset !important; border-radius: 5px !important;
+}
+.nr-close-btn:hover { color:#fff !important; background: rgba(255,255,255,0.14) !important; }
+/* ── Body ── */
+.nr-body { padding: 0; }
+.nr-section {
+  padding: 8px 14px 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.nr-section--last { border-bottom: none; }
+.nr-sec-hd {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 10px; font-weight: 700; color: #64748b;
+  letter-spacing: 0.07em; text-transform: uppercase;
+  margin-bottom: 5px;
+}
+.nr-sec-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
+.nr-dot-blue  { background: #2563eb; }
+.nr-dot-green { background: #16a34a; }
+.nr-dot-amber { background: #d97706; }
+/* 3-col row */
+.nr-row3 {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px 8px;
+  margin-bottom: 4px;
 }
+.nr-row3:last-child { margin-bottom: 0; }
+/* 1-col full row */
+.nr-row1 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.nr-row-align-end { align-items: end; }
+.nr-col {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.nr-lbl {
+  font-size: 10.5px; color: #64748b; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.nr-lbl em { font-style: normal; color: #ef4444; margin-left: 1px; }
+/* Switch pair */
+.nr-switches { display: flex; align-items: center; gap: 10px; padding-top: 3px; }
+.nr-sw-item {
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
+  font-size: 11px; color: #374151; font-weight: 500;
+}
+/* ── Footer ── */
 .nr-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 20px 12px;
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; padding: 8px 14px 10px; background: #f8fafc;
+}
+.nr-save-btn {
+  border-radius: 6px !important; font-weight: 600 !important; min-width: 76px !important;
 }
 /* ==================================================
    未完了順延ダイアログ シェル（global スタイル）
@@ -4173,5 +7786,253 @@ onUnmounted(() => {
   gap: 8px;
   padding: 8px 16px 10px;
   background: #fafbfc;
+}
+
+/* ============================================================
+   ページ全体美化 – コンパクト・フォント・アニメーション
+   ============================================================ */
+
+/* ── コンテナ余白を縮小 ── */
+.cutting-instruction-container {
+  padding: 12px 16px !important;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── ページヘッダー compact ── */
+.page-header {
+  margin-bottom: 10px !important;
+  padding: 12px 18px !important;
+  border-radius: 10px !important;
+}
+.header-title h1 { font-size: 18px !important; letter-spacing: -0.04em !important; }
+.header-title .header-desc { font-size: 11.5px !important; margin: 4px 0 0 !important; }
+.page-header-badge { font-size: 10px !important; padding: 3px 8px !important; margin-bottom: 5px !important; }
+
+/* ── カード padding compact ── */
+.plan-section .section-card :deep(.el-card__header) { padding: 10px 16px !important; }
+.plan-section .section-card :deep(.el-card__body)   { padding: 10px 16px !important; }
+
+/* ── カード hover lift ── */
+.plan-section .section-card {
+  transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+}
+.plan-section .section-card:hover {
+  box-shadow: 0 8px 20px -4px rgba(37,99,235,0.13), 0 3px 8px -2px rgba(37,99,235,0.08) !important;
+  transform: translateY(-1px);
+}
+
+/* ── instruction-col hover lift ── */
+.instruction-row .instruction-col {
+  padding: 10px 12px !important;
+  transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+}
+.instruction-row .instruction-col:hover {
+  box-shadow: 0 6px 18px -3px rgba(0,0,0,0.10) !important;
+  transform: translateY(-1px);
+}
+
+/* ── gap compact ── */
+.plan-row { gap: 10px !important; margin-bottom: 10px !important; }
+.instruction-section { gap: 10px !important; margin-bottom: 10px !important; }
+.instruction-row.instruction-two-cols { gap: 10px !important; }
+.cutting-mgmt-header { margin-bottom: 6px !important; gap: 6px !important; }
+.search-section { padding: 0 !important; }
+.search-section :deep(.el-form--inline .el-form-item) { margin-bottom: 6px !important; }
+
+/* ── バッチ行 hover ── */
+.plan-batch-data-row {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+.plan-batch-data-row:hover {
+  background: #eff6ff !important;
+  box-shadow: inset 2px 0 0 #2563eb !important;
+}
+
+/* ── 切断指示行 hover ── */
+.cutting-mgmt-data-row { transition: background-color 0.15s ease !important; }
+.cutting-mgmt-data-row:hover { background: #f8faff !important; }
+
+/* ── table header 強化 ── */
+.plan-batch-th, .cutting-mgmt-th {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf5 100%) !important;
+  color: #3730a3 !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  border-bottom: 2px solid #c7d2fe !important;
+}
+
+/* ── ボタン カラーコーディング & アニメーション ── */
+.cutting-instruction-container :deep(.el-button) {
+  transition: background-color 0.18s ease, border-color 0.18s ease,
+              box-shadow 0.18s ease, transform 0.15s ease !important;
+}
+.cutting-instruction-container :deep(.el-button:not(:disabled)):hover {
+  transform: translateY(-1px) !important;
+}
+.cutting-instruction-container :deep(.el-button:not(:disabled)):active {
+  transform: translateY(0) scale(0.97) !important;
+}
+
+/* primary – 青 */
+.cutting-instruction-container :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 2px 6px rgba(37,99,235,0.30) !important;
+}
+.cutting-instruction-container :deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.40) !important;
+}
+
+/* success – 緑 */
+.cutting-instruction-container :deep(.el-button--success) {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  border-color: #15803d !important;
+  box-shadow: 0 2px 6px rgba(22,163,74,0.28) !important;
+}
+.cutting-instruction-container :deep(.el-button--success:hover) {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  box-shadow: 0 4px 12px rgba(22,163,74,0.38) !important;
+}
+
+/* danger – 赤 */
+.cutting-instruction-container :deep(.el-button--danger) {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  border-color: #b91c1c !important;
+  box-shadow: 0 2px 4px rgba(220,38,38,0.25) !important;
+}
+.cutting-instruction-container :deep(.el-button--danger:hover) {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 4px 10px rgba(220,38,38,0.35) !important;
+}
+
+/* warning – オレンジ */
+.cutting-instruction-container :deep(.el-button--warning) {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
+  border-color: #b45309 !important;
+  box-shadow: 0 2px 6px rgba(217,119,6,0.28) !important;
+}
+.cutting-instruction-container :deep(.el-button--warning:hover) {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 4px 12px rgba(217,119,6,0.38) !important;
+}
+
+/* default – グレー */
+.cutting-instruction-container :deep(.el-button--default) {
+  background: #fff !important;
+  border-color: #d1d5db !important;
+  color: #374151 !important;
+}
+.cutting-instruction-container :deep(.el-button--default:hover) {
+  border-color: #6366f1 !important;
+  color: #4f46e5 !important;
+  background: #f5f3ff !important;
+}
+
+/* 試作追加ボタン */
+.btn-trial-add {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+  border-color: #6d28d9 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgba(124,58,237,0.28) !important;
+}
+.btn-trial-add:hover {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
+  box-shadow: 0 4px 12px rgba(124,58,237,0.38) !important;
+}
+
+/* データ管理ボタン */
+.title-right-btn {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+  font-size: 11px !important;
+}
+.title-right-btn:hover {
+  background: #e0e7ff !important;
+  border-color: #818cf8 !important;
+  color: #3730a3 !important;
+}
+
+/* ── card section-title ── */
+.card-header .section-title {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #1e1b4b !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+/* ── right-panel hover ── */
+.right-panel { transition: box-shadow 0.22s ease !important; }
+.right-panel:hover { box-shadow: 0 4px 14px rgba(37,99,235,0.10) !important; }
+
+/* ── 製品詳細リスト compact & hover ── */
+.product-detail-list-item {
+  transition: background-color 0.12s ease !important;
+  padding: 4px 8px !important;
+  min-height: 24px !important;
+}
+.product-detail-list-item:hover { background: #f8faff !important; }
+.product-detail-list-item .detail-label { font-size: 10.5px !important; font-weight: 600 !important; }
+.product-detail-list-item .detail-value { font-size: 11px !important; font-weight: 500 !important; }
+
+/* ── ページネーション compact ── */
+.pagination-wrap { padding: 6px 0 2px !important; }
+.pagination-wrap :deep(.el-pagination) { font-size: 11px !important; }
+
+/* ── セクションタイトルアンダーライン ── */
+.cutting-mgmt-title { position: relative; padding-bottom: 2px; }
+.cutting-mgmt-title::after {
+  content: '';
+  display: block;
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 100%; height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+/* ── right-panel-title compact ── */
+.right-panel-title { margin-bottom: 6px !important; padding-bottom: 4px !important; font-size: 11px !important; }
+
+/* ── el-table global polish ── */
+.cutting-instruction-container :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf5 100%) !important;
+  font-weight: 700 !important;
+  font-size: 11px !important;
+  color: #374151 !important;
+  padding: 5px 0 !important;
+}
+.cutting-instruction-container :deep(.el-table td.el-table__cell) {
+  padding: 4px 0 !important;
+  font-size: 11px !important;
+}
+.cutting-instruction-container :deep(.el-table .el-table__row:hover > td) {
+  background: #eff6ff !important;
+  transition: background-color 0.15s ease !important;
+}
+
+/* ── input/select focus glow ── */
+.cutting-instruction-container :deep(.el-input__wrapper:focus-within) {
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.20) !important;
+  transition: box-shadow 0.18s ease !important;
+}
+.cutting-instruction-container :deep(.el-select .el-input__wrapper:focus-within) {
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.20) !important;
+}
+
+/* ── drop-zone ── */
+.drop-zone-active {
+  outline: 2px dashed #2563eb !important;
+  outline-offset: -2px;
+  background: rgba(37,99,235,0.04) !important;
+  transition: background 0.15s ease !important;
 }
 </style>

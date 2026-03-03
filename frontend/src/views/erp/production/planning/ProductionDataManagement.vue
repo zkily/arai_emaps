@@ -405,6 +405,7 @@
             :default-sort="{ prop: 'product_name', order: 'ascending' }"
             :height="'calc(72vh - 60px)'"
             @sort-change="handleSortChange"
+            @cell-dblclick="handleCellDoubleClick"
             :cell-style="cellStyleHandler"
             :header-cell-style="headerCellStyle"
             size="small"
@@ -623,6 +624,123 @@
         <div class="dialog-footer">
           <el-button @click="showPlanConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
           <el-button type="primary" @click="confirmUpdatePlan" class="confirm-btn">更新</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 在庫取引ログ入力（表格双击） -->
+    <el-dialog
+      v-model="showTransactionInputDialog"
+      title="在庫取引ログ入力"
+      width="580px"
+      class="transaction-log-dialog"
+      :close-on-click-modal="false"
+      @close="showTransactionInputDialog = false"
+    >
+      <div v-if="transactionInputInfo.date" class="transaction-input-info">
+        <div class="transaction-info-grid">
+          <div class="transaction-info-item">
+            <div class="transaction-info-label">日付</div>
+            <div class="transaction-info-value">{{ transactionInputInfo.date }}</div>
+          </div>
+          <div class="transaction-info-item">
+            <div class="transaction-info-label">製品CD</div>
+            <div class="transaction-info-value">{{ transactionInputInfo.productCd }}</div>
+          </div>
+          <div class="transaction-info-item">
+            <div class="transaction-info-label">製品名</div>
+            <div class="transaction-info-value">{{ transactionInputInfo.productName }}</div>
+          </div>
+          <div class="transaction-info-item">
+            <div class="transaction-info-label">工程</div>
+            <div class="transaction-info-value">{{ transactionInputInfo.processName }} ({{ transactionInputInfo.processCd }})</div>
+          </div>
+        </div>
+      </div>
+      <div class="transaction-panels">
+        <template v-if="transactionInputInfo.processCd === 'KT13'">
+          <div class="transaction-panel transaction-panel--green">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><CircleCheck /></el-icon>
+              <span class="transaction-panel-label">入庫</span>
+            </div>
+            <el-input-number v-model="transactionForm.inbound" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--orange">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><WarningFilled /></el-icon>
+              <span class="transaction-panel-label">出庫</span>
+            </div>
+            <el-input-number v-model="transactionForm.outbound" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--red">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><Delete /></el-icon>
+              <span class="transaction-panel-label">廃棄</span>
+            </div>
+            <el-input-number v-model="transactionForm.scrap" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--blue">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><Clock /></el-icon>
+              <span class="transaction-panel-label">保留</span>
+            </div>
+            <el-input-number v-model="transactionForm.onHold" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+        </template>
+        <template v-else-if="transactionInputInfo.processCd === 'KT15'">
+          <div class="transaction-panel transaction-panel--green">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><CircleCheck /></el-icon>
+              <span class="transaction-panel-label">入庫</span>
+            </div>
+            <el-input-number v-model="transactionForm.actual" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--red">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><Delete /></el-icon>
+              <span class="transaction-panel-label">廃棄</span>
+            </div>
+            <el-input-number v-model="transactionForm.scrap" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--empty"></div>
+          <div class="transaction-panel transaction-panel--empty"></div>
+        </template>
+        <template v-else>
+          <div class="transaction-panel transaction-panel--green">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><CircleCheck /></el-icon>
+              <span class="transaction-panel-label">実績</span>
+            </div>
+            <el-input-number v-model="transactionForm.actual" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--orange">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><WarningFilled /></el-icon>
+              <span class="transaction-panel-label">不良</span>
+            </div>
+            <el-input-number v-model="transactionForm.defect" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--red">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><Delete /></el-icon>
+              <span class="transaction-panel-label">廃棄</span>
+            </div>
+            <el-input-number v-model="transactionForm.scrap" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+          <div class="transaction-panel transaction-panel--blue">
+            <div class="transaction-panel-head">
+              <el-icon class="transaction-panel-icon"><Clock /></el-icon>
+              <span class="transaction-panel-label">保留</span>
+            </div>
+            <el-input-number v-model="transactionForm.onHold" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showTransactionInputDialog = false">キャンセル</el-button>
+          <el-button type="primary" :loading="submittingTransaction" @click="handleSubmitTransaction">登録</el-button>
         </div>
       </template>
     </el-dialog>
@@ -1058,7 +1176,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation } from '@element-plus/icons-vue'
+import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import {
   getProductionSummarysList,
@@ -1217,6 +1335,24 @@ const batchActualTableData = ref<
   }>
 >([])
 const batchActualSaving = ref(false)
+// 在庫取引ログ入力（表格双击弹窗）
+const showTransactionInputDialog = ref(false)
+const submittingTransaction = ref(false)
+const transactionInputInfo = ref<{
+  date: string
+  productCd: string
+  productName: string
+  processCd: string
+  processName: string
+}>({ date: '', productCd: '', productName: '', processCd: '', processName: '' })
+const transactionForm = ref<{
+  actual: number | null
+  defect: number | null
+  scrap: number | null
+  onHold: number | null
+  inbound: number | null
+  outbound: number | null
+}>({ actual: null, defect: null, scrap: null, onHold: null, inbound: null, outbound: null })
 // 工程別計画確認印刷
 const showPrintDateDialog = ref(false)
 const printTargetDate = ref<string>('')
@@ -1405,6 +1541,28 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   pre_outsourcing_scrap: { label: '外注検査前廃棄', group: '外注検査前', width: 110 },
   pre_outsourcing_inventory: { label: '外注検査前在庫', group: '外注検査前', width: 110 },
   pre_outsourcing_trend: { label: '外注検査前推移', group: '外注検査前', width: 110 },
+}
+
+/** 双击不弹窗的列（基本情報等） */
+const basicColumns = new Set([
+  'id', 'date', 'day_of_week', 'route_cd', 'product_cd', 'product_name',
+  'order_quantity', 'forecast_quantity', 'safety_stock',
+])
+/** 列字段前缀 → 工程CD（双击弹窗用） */
+const processFieldToProcessCd: Record<string, string> = {
+  cutting: 'KT01',
+  chamfering: 'KT02',
+  molding: 'KT04',
+  plating: 'KT05',
+  welding: 'KT07',
+  inspection: 'KT09',
+  warehouse: 'KT13',
+  outsourced_plating: 'KT06',
+  outsourced_welding: 'KT08',
+  outsourced_warehouse: 'KT15',
+  pre_welding_inspection: 'KT11',
+  pre_inspection: 'KT17',
+  pre_outsourcing: 'KT16',
 }
 
 const columnKeys = Object.keys(columnDefinitions)
@@ -2724,6 +2882,240 @@ async function handleSubmitBatchActual() {
   }
 }
 
+const PRODUCT_ROUTE_BASE = '/api/master/product/process/routes'
+/** 取得製品工程ルートステップ（工程校验用） */
+async function getProductRouteSteps(productCd: string): Promise<Array<{ process_cd: string }>> {
+  try {
+    const raw = await request.get<{ route_cd?: string }>(`${PRODUCT_ROUTE_BASE}/${encodeURIComponent(productCd)}`)
+    const info = (raw as any)?.data ?? raw
+    const routeCd = (info as { route_cd?: string })?.route_cd
+    if (!routeCd) return []
+    const steps = await request.get<Array<{ process_cd: string }>>(
+      `${PRODUCT_ROUTE_BASE}/${encodeURIComponent(productCd)}/${encodeURIComponent(routeCd)}`
+    )
+    return Array.isArray(steps) ? steps : (steps as any)?.data ?? []
+  } catch {
+    return []
+  }
+}
+
+function getProcessName(processCd: string): string {
+  const opt = processOptions.value.find((p) => p.cd === processCd)
+  return opt?.name ?? processCd
+}
+
+async function ensureProcessOptions() {
+  if (processOptions.value.length > 0) return
+  try {
+    const res = await request.get<Array<{ cd: string; name: string }>>('/api/master/processes/options')
+    processOptions.value = Array.isArray(res) ? res : (res as { data?: Array<{ cd: string; name: string }> })?.data ?? []
+  } catch {
+    processOptions.value = []
+  }
+}
+
+function handleCellDoubleClick(
+  row: Record<string, any>,
+  column: { property?: string },
+  _cell: HTMLElement,
+  _event: MouseEvent
+) {
+  const prop = column?.property
+  if (!prop || basicColumns.has(prop)) return
+  const parts = prop.split('_')
+  let processCd: string | null = null
+  for (let i = 1; i <= parts.length; i++) {
+    const prefix = parts.slice(0, i).join('_')
+    if (processFieldToProcessCd[prefix]) {
+      processCd = processFieldToProcessCd[prefix]
+      break
+    }
+  }
+  if (!processCd) {
+    ElMessage.warning('該当する工程が見つかりません')
+    return
+  }
+  const productCd = (row.product_cd ?? '').toString().trim()
+  if (!productCd) return
+  if (processCd !== 'KT13') {
+    getProductRouteSteps(productCd).then((steps) => {
+      const hasProcess = steps.some((s) => (s.process_cd || '').trim() === processCd)
+      if (steps.length > 0 && !hasProcess) {
+        ElMessage.warning('製品は工程に属していません')
+        return
+      }
+      openTransactionDialog(row, processCd)
+    }).catch(() => openTransactionDialog(row, processCd))
+  } else {
+    openTransactionDialog(row, processCd)
+  }
+}
+
+function openTransactionDialog(row: Record<string, any>, processCd: string) {
+  const dateVal = row.date
+  const dateStr = dateVal
+    ? (typeof dateVal === 'string' ? dateVal.slice(0, 10) : String(dateVal).slice(0, 10))
+    : ''
+  ensureProcessOptions()
+  transactionInputInfo.value = {
+    date: dateStr,
+    productCd: (row.product_cd ?? '').toString().trim(),
+    productName: (row.product_name ?? '').toString().trim(),
+    processCd,
+    processName: getProcessName(processCd),
+  }
+  transactionForm.value = {
+    actual: null,
+    defect: null,
+    scrap: null,
+    onHold: null,
+    inbound: null,
+    outbound: null,
+  }
+  showTransactionInputDialog.value = true
+}
+
+function getTransactionTime(dateStr: string): string {
+  const now = new Date()
+  const h = String(now.getHours()).padStart(2, '0')
+  const m = String(now.getMinutes()).padStart(2, '0')
+  const s = String(now.getSeconds()).padStart(2, '0')
+  return `${dateStr} ${h}:${m}:${s}`
+}
+
+async function handleSubmitTransaction() {
+  const info = transactionInputInfo.value
+  const form = transactionForm.value
+  const processCd = info.processCd
+  const dateStr = info.date
+  if (!dateStr || !info.productCd) {
+    ElMessage.warning('日付・製品が設定されていません')
+    return
+  }
+  const transactionTime = getTransactionTime(dateStr)
+  if (processCd === 'KT13') {
+    const hasQty =
+      (form.inbound != null && Number(form.inbound) !== 0) ||
+      (form.outbound != null && Number(form.outbound) !== 0) ||
+      (form.scrap != null && Number(form.scrap) !== 0) ||
+      (form.onHold != null && Number(form.onHold) !== 0)
+    if (!hasQty) {
+      ElMessage.warning('少なくとも1つの数量を入力してください')
+      return
+    }
+  } else if (processCd === 'KT15') {
+    const hasQty =
+      (form.actual != null && Number(form.actual) !== 0) || (form.scrap != null && Number(form.scrap) !== 0)
+    if (!hasQty) {
+      ElMessage.warning('少なくとも1つの数量を入力してください')
+      return
+    }
+  } else {
+    const hasQty =
+      (form.actual != null && Number(form.actual) !== 0) ||
+      (form.defect != null && Number(form.defect) !== 0) ||
+      (form.scrap != null && Number(form.scrap) !== 0) ||
+      (form.onHold != null && Number(form.onHold) !== 0)
+    if (!hasQty) {
+      ElMessage.warning('少なくとも1つの数量を入力してください')
+      return
+    }
+  }
+  const insertPromises: Promise<unknown>[] = []
+  const stockType =
+    processCd === 'KT13' || processCd === 'KT09' || processCd === 'KT15' ? '製品' : '仕掛品'
+  const locationCd =
+    processCd === 'KT15'
+      ? '外注倉庫'
+      : (info.processName || '').includes('倉庫')
+        ? '製品倉庫'
+        : '工程中間在庫'
+  const unit = processCd === 'KT09' ? '本' : null
+  const baseBody: Record<string, any> = {
+    target_cd: info.productCd,
+    process_cd: processCd,
+    transaction_time: transactionTime,
+    source_file: '生産データ管理',
+  }
+  if (processCd === 'KT13') {
+    const add = (type: string, qty: number | null) => {
+      if (qty == null || Number(qty) === 0) return
+      insertPromises.push(
+        request.post(STOCK_LOGS_BASE, {
+          ...baseBody,
+          stock_type: stockType,
+          location_cd: locationCd,
+          transaction_type: type,
+          quantity: Number(qty),
+          unit: unit ?? undefined,
+        })
+      )
+    }
+    add('入庫', form.inbound)
+    add('出庫', form.outbound)
+    add('廃棄', form.scrap)
+    add('保留', form.onHold)
+  } else if (processCd === 'KT15') {
+    if (form.actual != null && Number(form.actual) !== 0) {
+      insertPromises.push(
+        request.post(STOCK_LOGS_BASE, {
+          ...baseBody,
+          stock_type: stockType,
+          location_cd: '外注倉庫',
+          transaction_type: '入庫',
+          quantity: Number(form.actual),
+          unit: unit ?? undefined,
+        })
+      )
+    }
+    if (form.scrap != null && Number(form.scrap) !== 0) {
+      insertPromises.push(
+        request.post(STOCK_LOGS_BASE, {
+          ...baseBody,
+          stock_type: stockType,
+          location_cd: '外注倉庫',
+          transaction_type: '廃棄',
+          quantity: Number(form.scrap),
+          unit: unit ?? undefined,
+        })
+      )
+    }
+  } else {
+    const add = (type: string, qty: number | null) => {
+      if (qty == null || Number(qty) === 0) return
+      insertPromises.push(
+        request.post(STOCK_LOGS_BASE, {
+          ...baseBody,
+          stock_type: stockType,
+          location_cd: locationCd,
+          transaction_type: type,
+          quantity: Number(qty),
+          unit: unit ?? undefined,
+        })
+      )
+    }
+    add('実績', form.actual)
+    add('不良', form.defect)
+    add('廃棄', form.scrap)
+    add('保留', form.onHold)
+  }
+  if (insertPromises.length === 0) {
+    ElMessage.warning('少なくとも1つの数量を入力してください')
+    return
+  }
+  submittingTransaction.value = true
+  try {
+    await Promise.all(insertPromises)
+    ElMessage.success('在庫取引ログを登録しました')
+    showTransactionInputDialog.value = false
+    setTimeout(() => fetchData(), 500)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.response?.data?.message ?? e?.message ?? '登録に失敗しました')
+  } finally {
+    submittingTransaction.value = false
+  }
+}
+
 const handleFilterChange = () => {
   currentPage.value = 1
   fetchData()
@@ -3612,6 +4004,113 @@ onUnmounted(() => {
 .detail-value.highlight {
   font-weight: 600;
   color: #0f172a;
+}
+/* 在庫取引ログ入力ダイアログ */
+.transaction-log-dialog .el-dialog__body {
+  padding: 16px 20px 20px;
+}
+.transaction-input-info {
+  margin-bottom: 1.25rem;
+  padding: 12px 14px;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+.transaction-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+}
+.transaction-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.transaction-info-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+.transaction-info-value {
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 600;
+}
+.transaction-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.transaction-panel {
+  border-radius: 8px;
+  border: 2px solid;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.transaction-panel--green {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.04);
+}
+.transaction-panel--orange {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.04);
+}
+.transaction-panel--red {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.04);
+}
+.transaction-panel--blue {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.04);
+}
+.transaction-panel--empty {
+  border: none;
+  background: transparent;
+  visibility: hidden;
+  padding: 0;
+  min-height: 0;
+}
+.transaction-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.transaction-panel--green .transaction-panel-icon { color: #22c55e; }
+.transaction-panel--orange .transaction-panel-icon { color: #f59e0b; }
+.transaction-panel--red .transaction-panel-icon { color: #ef4444; }
+.transaction-panel--blue .transaction-panel-icon { color: #3b82f6; }
+.transaction-panel-icon {
+  font-size: 18px;
+}
+.transaction-panel-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+.transaction-panel-input {
+  width: 100%;
+}
+.transaction-panel-input :deep(.el-input__wrapper) {
+  background-color: #f8fafc;
+  border-radius: 6px;
+}
+.transaction-panel--green .transaction-panel-input :deep(.el-input__wrapper) { box-shadow: 0 0 0 1px #86efac; }
+.transaction-panel--orange .transaction-panel-input :deep(.el-input__wrapper) { box-shadow: 0 0 0 1px #fcd34d; }
+.transaction-panel--red .transaction-panel-input :deep(.el-input__wrapper) { box-shadow: 0 0 0 1px #fca5a5; }
+.transaction-panel--blue .transaction-panel-input :deep(.el-input__wrapper) { box-shadow: 0 0 0 1px #93c5fd; }
+.transaction-panel--green .transaction-panel-input :deep(.el-input__wrapper:hover),
+.transaction-panel--green .transaction-panel-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #22c55e; }
+.transaction-panel--orange .transaction-panel-input :deep(.el-input__wrapper:hover),
+.transaction-panel--orange .transaction-panel-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #f59e0b; }
+.transaction-panel--red .transaction-panel-input :deep(.el-input__wrapper:hover),
+.transaction-panel--red .transaction-panel-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #ef4444; }
+.transaction-panel--blue .transaction-panel-input :deep(.el-input__wrapper:hover),
+.transaction-panel--blue .transaction-panel-input :deep(.el-input__wrapper.is-focus) { box-shadow: 0 0 0 1px #3b82f6; }
+.transaction-log-dialog .dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 .all-update-steps-list {
   margin: 0;

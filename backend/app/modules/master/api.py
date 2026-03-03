@@ -13,7 +13,7 @@ import csv
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import Product
+from app.modules.master.models import Product, Material, Supplier, ProductRouteStep, Process
 from app.modules.master.schemas import ProductCreate, ProductUpdate
 
 router = APIRouter()
@@ -111,10 +111,28 @@ async def get_product_list(
     result = await db.execute(query)
     rows = result.scalars().all()
 
+    # 材料名を付与：material_cd 一覧で materials を取得
+    material_cds = [r.material_cd for r in rows if getattr(r, "material_cd", None)]
+    material_names = {}
+    if material_cds:
+        mat_result = await db.execute(
+            select(Material.material_cd, Material.material_name).where(Material.material_cd.in_(material_cds))
+        )
+        for mat_row in mat_result.all():
+            material_names[mat_row.material_cd] = mat_row.material_name
+
+    def _item_with_material(p: Product) -> dict:
+        d = _row_to_dict(p)
+        if p.material_cd and p.material_cd in material_names:
+            d["material_name"] = material_names[p.material_cd]
+        else:
+            d["material_name"] = None
+        return d
+
     return {
         "success": True,
         "data": {
-            "list": [_row_to_dict(r) for r in rows],
+            "list": [_item_with_material(r) for r in rows],
             "total": total,
         },
     }
@@ -140,6 +158,68 @@ async def get_products_by_destination_for_batch(
         "success": True,
         "data": {"list": [_row_to_dict(r) for r in rows], "total": len(rows)},
         "list": [_row_to_dict(r) for r in rows],
+    }
+
+
+@router.get("/batch-detail/{product_cd}")
+async def get_product_batch_detail(
+    product_cd: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """新規バッチ追加用：製品の製品CD・製品名・原材料・規格・材料メーカー・取数・切断長・面取長・展開長・端材長・面取工程・SW工程を返す。"""
+    q = select(Product).where(Product.product_cd == product_cd)
+    res = await db.execute(q)
+    product = res.scalar_one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="製品が見つかりません")
+    material_name = None
+    standard_specification = None
+    material_manufacturer = None
+    if product.material_cd:
+        mat_res = await db.execute(select(Material).where(Material.material_cd == product.material_cd))
+        mat = mat_res.scalar_one_or_none()
+        if mat:
+            material_name = mat.material_name
+            standard_specification = getattr(mat, "standard_spec", None) or None
+            if getattr(mat, "supplier_cd", None):
+                sup_res = await db.execute(select(Supplier).where(Supplier.supplier_cd == mat.supplier_cd))
+                sup = sup_res.scalar_one_or_none()
+                if sup:
+                    material_manufacturer = sup.supplier_name
+    has_chamfering_process = False
+    has_sw_process = False
+    if product.route_cd:
+        steps_res = await db.execute(
+            select(ProductRouteStep.process_cd)
+            .where(ProductRouteStep.product_cd == product_cd)
+            .where(ProductRouteStep.route_cd == product.route_cd)
+        )
+        process_cds = [r[0] for r in steps_res.all() if r[0]]
+        if process_cds:
+            proc_res = await db.execute(select(Process.process_cd, Process.process_name).where(Process.process_cd.in_(process_cds)))
+            for row in proc_res.all():
+                name = (row.process_name or "").strip()
+                if "面取" in name:
+                    has_chamfering_process = True
+                if "SW" in name or "swaging" in name.lower():
+                    has_sw_process = True
+    return {
+        "success": True,
+        "data": {
+            "product_cd": product.product_cd,
+            "product_name": product.product_name or product.product_cd,
+            "material_name": material_name,
+            "standard_specification": standard_specification,
+            "material_manufacturer": material_manufacturer,
+            "take_count": product.take_count,
+            "cutting_length": float(product.cut_length) if product.cut_length is not None else None,
+            "chamfering_length": float(product.chamfer_length) if product.chamfer_length is not None else None,
+            "developed_length": float(product.developed_length) if product.developed_length is not None else None,
+            "scrap_length": float(product.scrap_length) if product.scrap_length is not None else None,
+            "has_chamfering_process": has_chamfering_process,
+            "has_sw_process": has_sw_process,
+        },
     }
 
 

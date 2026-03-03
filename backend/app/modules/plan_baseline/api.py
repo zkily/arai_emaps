@@ -7,7 +7,7 @@
 - PUT /plan-quantity: 計画数量の更新
 """
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from fastapi import APIRouter, Body, Depends, Query
 from sqlalchemy import text
@@ -206,6 +206,14 @@ async def get_plan_baseline_comparison(
         if not start_date or not end_date:
             return _empty_comparison_response(month_start)
 
+        # 基準月の翌月1日（実績は [monthStart, nextMonthStart) で集計）
+        _d = date.fromisoformat(month_start[:10])
+        if _d.month == 12:
+            next_month_first = date(_d.year + 1, 1, 1)
+        else:
+            next_month_first = date(_d.year, _d.month + 1, 1)
+        next_month_start_str = next_month_first.isoformat()
+
         # ベースライン集計（日付×工程）
         base_sql = text("""
             SELECT plan_date, process_name, COALESCE(SUM(plan_quantity), 0) AS baseline_plan
@@ -227,37 +235,56 @@ async def get_plan_baseline_comparison(
         """)
         curr_result = await db.execute(curr_sql, {"start_date": start_date, "end_date": end_date, "process_name": processName or None})
         curr_rows = list(curr_result.mappings().fetchall())
+        current_plan_map = {(_date_str(r["plan_date"]), (r.get("process_name") or "").strip()): _decimal_float(r.get("current_plan")) for r in curr_rows}
 
-        # 現行実績は production_plan_baselines.actual_quantity を日次集計で使う（未連携時は 0）
+        # 現行実績：stock_transaction_logs を日付+工程で集計（transaction_type='実績'、[start_date, next_month_start)）
         actual_sql = text("""
-            SELECT plan_date, process_name, COALESCE(SUM(actual_quantity), 0) AS current_actual
-            FROM production_plan_baselines
-            WHERE baseline_month = :baseline_month
-              AND (:process_name IS NULL OR process_name = :process_name)
-            GROUP BY plan_date, process_name
+            SELECT
+                DATE(l.transaction_time) AS plan_date_value,
+                COALESCE(pr.process_name, '') AS process_name_value,
+                SUM(COALESCE(l.quantity, 0)) AS total_actual
+            FROM stock_transaction_logs l
+            LEFT JOIN processes pr ON l.process_cd = pr.process_cd
+            WHERE l.transaction_time >= :start_date AND l.transaction_time < :next_month_start
+              AND l.transaction_type = '実績'
+              AND (:process_name IS NULL OR pr.process_name = :process_name)
+            GROUP BY DATE(l.transaction_time), COALESCE(pr.process_name, '')
         """)
-        actual_result = await db.execute(actual_sql, {"baseline_month": month_start, "process_name": processName or None})
-        actual_map = {(_date_str(r["plan_date"]), (r.get("process_name") or "").strip()): _decimal_float(r.get("current_actual")) for r in actual_result.mappings().fetchall()}
+        actual_result = await db.execute(actual_sql, {
+            "start_date": start_date,
+            "next_month_start": next_month_start_str,
+            "process_name": processName or None,
+        })
+        actual_map = {}
+        for r in actual_result.mappings().fetchall():
+            k = (_date_str(r.get("plan_date_value")), (r.get("process_name_value") or "").strip())
+            actual_map[k] = _decimal_float(r.get("total_actual"))
 
-        # 全ての (plan_date, process_name) を網羅
-        keys_seen = set()
+        # dateKeys = 基準・現行計画・実績のキー和集合
+        date_keys = set(base_rows.keys()) | set(current_plan_map.keys()) | set(actual_map.keys())
+        today_str = date.today().isoformat()
+
+        def _resolve_current_actual(plan_date: str, baseline_plan: float, current_plan: float, raw_actual: Optional[float]) -> Optional[float]:
+            """現行実績の補正：過去日で計画あり実績なしの場合は 0、それ以外は raw のまま（今日・未来で実績なしは null）"""
+            is_future = (plan_date or "") > today_str
+            is_today = (plan_date or "") == today_str
+            if raw_actual is not None:
+                return raw_actual
+            if not is_future and not is_today and (baseline_plan != 0 or current_plan != 0):
+                return 0.0
+            return None
+
         items = []
-        for r in curr_rows:
-            plan_date = _date_str(r.get("plan_date"))
-            proc = (r.get("process_name") or "").strip()
+        for key in sorted(date_keys):
+            plan_date, proc = key[0], key[1]
             if not plan_date:
                 continue
-            key = (plan_date, proc)
-            if key in keys_seen:
-                continue
-            keys_seen.add(key)
             baseline_plan = base_rows.get(key, 0.0)
-            current_plan = _decimal_float(r.get("current_plan"))
-            current_actual = actual_map.get(key)
-            if current_actual == 0:
-                current_actual = None  # 未連携時は null 表示
+            current_plan = current_plan_map.get(key, 0.0)
+            raw_actual = actual_map.get(key)  # 実績テーブルに無い場合は None
+            current_actual = _resolve_current_actual(plan_date, baseline_plan, current_plan, raw_actual)
             plan_diff = current_plan - baseline_plan
-            actual_diff = (baseline_plan - current_actual) if current_actual is not None else None
+            actual_diff = (current_actual - baseline_plan) if current_actual is not None else None
             items.append({
                 "plan_date": plan_date,
                 "process_name": proc,
@@ -268,41 +295,31 @@ async def get_plan_baseline_comparison(
                 "actual_diff": actual_diff,
             })
 
-        # ベースラインにのみある日付×工程も追加
-        for (plan_date, proc), baseline_plan in base_rows.items():
-            if not plan_date:
-                continue
-            key = (plan_date, proc)
-            if key in keys_seen:
-                continue
-            keys_seen.add(key)
-            current_plan = 0.0
-            current_actual = actual_map.get(key)
-            if current_actual == 0 and key not in actual_map:
-                current_actual = None
-            items.append({
-                "plan_date": plan_date,
-                "process_name": proc,
-                "baseline_plan": baseline_plan,
-                "current_plan": current_plan,
-                "plan_diff": current_plan - baseline_plan,
-                "current_actual": current_actual,
-                "actual_diff": (baseline_plan - current_actual) if current_actual is not None else None,
-            })
-
         items.sort(key=lambda x: (x["plan_date"] or "", x["process_name"] or ""))
 
         baseline_total = sum(i["baseline_plan"] for i in items)
         current_plan_total = sum(i["current_plan"] for i in items)
         plan_diff_total = current_plan_total - baseline_total
-        current_actual_total = sum(i["current_actual"] for i in items if i.get("current_actual") is not None)
-        actual_diff_total = baseline_total - current_actual_total if any(i.get("current_actual") is not None for i in items) else None
+
+        # 現行実績合計：currentActual !== null かつ 非未来日 のときのみ加算（今日実績なしは加算しない）
+        # 計画対実績差：按日 (当日実績−当日基準計画)、非未来かつ実績ありの項のみ合計
+        current_actual_total = 0
+        plan_vs_actual_diff_total = 0
+        for i in items:
+            plan_date = i.get("plan_date") or ""
+            if plan_date > today_str:
+                continue
+            if i.get("current_actual") is not None:
+                current_actual_total += i["current_actual"]
+                plan_vs_actual_diff_total += i["current_actual"] - i["baseline_plan"]
+        has_any_actual = any(i.get("current_actual") is not None for i in items)
+        actual_diff_total = plan_vs_actual_diff_total if has_any_actual else None
 
         summary = {
             "baselinePlanTotal": baseline_total,
             "currentPlanTotal": current_plan_total,
             "planDifference": plan_diff_total,
-            "currentActualTotal": current_actual_total if any(i.get("current_actual") is not None for i in items) else None,
+            "currentActualTotal": current_actual_total if items else None,
             "actualDifference": actual_diff_total,
         }
 

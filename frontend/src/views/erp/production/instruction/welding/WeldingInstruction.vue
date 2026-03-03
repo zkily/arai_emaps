@@ -596,11 +596,14 @@ const planStats = ref({
   machineCount: 0,
 })
 
+/** 計画比較サマリ（API 返回）。現行実績合計=基准月内、到“今天”为止的按「日期+工程」汇总实绩之和（数据源 stock_transaction_logs；仅非未来日参与，过去日有计划无实绩按 0，今日无实绩不参与）。計画対実績差=Σ(当日実績−当日基準計画)仅非未来且有实绩项 */
 type PlanComparisonSummary = {
   baselinePlanTotal: number | null
   currentPlanTotal: number | null
   planDifference: number | null
+  /** 現行実績合計：基准月内到今日为止的实绩合计（仅非未来日；过去日有计划无实绩按 0，今日无实绩不加入） */
   currentActualTotal: number | null
+  /** 計画対実績差：Σ(当日実績−当日基準計画)，仅对非未来日且有实绩的项求和，正=实绩超过 */
   actualDifference: number | null
   planAchievementRatio: number | null
   baselineDailyAverage: number | null
@@ -1142,7 +1145,7 @@ const loadWeldingPlanComparisonSummary = async (
           : null
 
       // 達成率差異 = 計画対実績差 / 基準計画合計 × 100%
-      // 計画対実績差 = 現行実績 - 基準計画合計（API 定义）
+      // 計画対実績差 = Σ(当日実績 − 当日基準計画)，仅对非未来日且有实绩的「日期|工程」求和（API 定义）
       // 正数表示実績超过（生产快），负数表示実績不足（生产慢）
       const achievementRatioDifference =
         summary.actualDifference !== null &&
@@ -1153,7 +1156,7 @@ const loadWeldingPlanComparisonSummary = async (
           ? (summary.actualDifference / summary.baselinePlanTotal) * 100
           : null
 
-      // 生产状态判定（与 API 計画対実績差 = 現行実績 - 基準計画 一致）
+      // 生产状态判定（計画対実績差 = Σ(当日実績−当日基準計画)，正=实绩超过、负=不足）
       // 達成率差異 > 5%: 実績超过计划 → 生産早い（快）
       // 達成率差異 < -5%: 実績不足计划 → 生産遅れ（慢）
       // 其他: 生産正常（正常）

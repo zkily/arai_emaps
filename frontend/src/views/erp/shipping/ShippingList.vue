@@ -848,6 +848,7 @@ import {
 } from '@element-plus/icons-vue'
 import QRCode from 'qrcode'
 import { exportPickingCSV } from '@/api/shipping/pickingExport'
+import { recordPrintHistory } from '@/api/shipping/printHistory'
 
 // 定义接口
 interface ShippingItem {
@@ -1291,24 +1292,24 @@ function handleCurrentChange(newPage: number): void {
 // 表格引用
 const tableRef = ref()
 
-// 当前页是否全部选中（用于表头全选复选框）
+// 当前列表是否全部选中（用于表头全选复选框）- 全部分页
 const isAllDisplayedSelected = computed(() => {
-  const list = displayedList.value
+  const list = shippingList.value
   if (list.length === 0) return false
   return list.every((row) => allSelectedIds.value.has(row.id))
 })
-// 当前页半选状态（部分选中）
+// 半选状态（部分选中，全部分页）
 const isDisplayedIndeterminate = computed(() => {
-  const list = displayedList.value
+  const list = shippingList.value
   if (list.length === 0) return false
   const selectedCount = list.filter((row) => allSelectedIds.value.has(row.id)).length
   return selectedCount > 0 && selectedCount < list.length
 })
 
-// 表头全选/取消全选（仅作用于当前页 displayedList）
+// 表头全选/取消全选（作用于全部分页 shippingList）
 function handleSelectAll(val: unknown): void {
   const checked = !!val
-  const list = displayedList.value
+  const list = shippingList.value
   const next = new Set(allSelectedIds.value)
   if (checked) {
     list.forEach((row) => next.add(row.id))
@@ -1514,11 +1515,15 @@ async function issue(row: ShippingItem): Promise<void> {
     })
 
     try {
-      // 出荷番号を発行
-      await request.post(`/api/shipping/${row.shipping_no}/issue`)
+      // 出荷番号を発行（API: items 配下で status を「発行済」に更新）
+      await request.post(`/api/shipping/items/${row.shipping_no}/issue`)
 
       ElMessage.success('出荷番号を発行しました')
-      await fetchData() // データを再取得
+      // 发行后立即更新本地状态，无需等待整表刷新
+      const no = row.shipping_no
+      shippingList.value = shippingList.value.map((item) =>
+        item.shipping_no === no ? { ...item, status: '発行済' } : item,
+      )
     } catch (apiError) {
       console.error('API呼び出しエラー:', apiError)
       ElMessage.error('発行処理に失敗しました')
@@ -1582,8 +1587,24 @@ async function printShipping(row: ShippingItem): Promise<void> {
         `出荷番号: ${row.shipping_no} (${sameShippingNoItems.length}件の製品) を印刷し、記録を保存しました`,
       )
 
-      // データを再取得して最新状態を反映
-      await fetchData()
+      // 印刷后立即更新本地状態（同一出荷番号の行を発行済に）
+      const no = row.shipping_no
+      shippingList.value = shippingList.value.map((item) =>
+        item.shipping_no === no ? { ...item, status: '発行済' } : item,
+      )
+
+      // print_history 表に印刷履歴を保存
+      try {
+        await recordPrintHistory({
+          report_type: '出荷リスト',
+          report_title: `出荷番号 ${row.shipping_no}`,
+          filters: { ...filters.value },
+          record_count: sameShippingNoItems.length,
+          status: '成功',
+        })
+      } catch (historyErr) {
+        console.warn('印刷履歴の保存に失敗しました:', historyErr)
+      }
     } catch (recordError) {
       console.error('印刷記録の保存に失敗しました:', recordError)
       ElMessage.warning(
@@ -1765,8 +1786,25 @@ async function printSelected(): Promise<void> {
         `${selectedShippingNumbers.size}件の出荷番号 (計${allItemsToPrint.length}製品) を印刷し、記録を保存しました`,
       )
 
-      // データを再取得して最新状態を反映
-      await fetchData()
+      // 選択印刷后立即更新本地状態（与发行一致，无需整表刷新）
+      shippingList.value = shippingList.value.map((item) =>
+        selectedShippingNumbers.has(item.shipping_no)
+          ? { ...item, status: '発行済' }
+          : item,
+      )
+
+      // print_history 表に印刷履歴を保存
+      try {
+        await recordPrintHistory({
+          report_type: '出荷リスト',
+          report_title: '選択印刷',
+          filters: { ...filters.value },
+          record_count: allItemsToPrint.length,
+          status: '成功',
+        })
+      } catch (historyErr) {
+        console.warn('印刷履歴の保存に失敗しました:', historyErr)
+      }
     } catch (recordError) {
       console.error('印刷記録の保存に失敗しました:', recordError)
       ElMessage.warning(

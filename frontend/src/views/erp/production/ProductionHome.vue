@@ -111,8 +111,7 @@ const planningModules = ref<ModuleItem[]>([
 ])
 
 const instructionModules = ref<ModuleItem[]>([
-  { path: '/erp/production/instruction/cutting', title: '切断指示', description: '切断工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
-  { path: '/erp/production/instruction/surface', title: '面取指示', description: '面取工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
+  { path: '/erp/production/instruction/cutting', title: '切断・面取指示', description: '切断・面取工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
   { path: '/erp/production/instruction/forming', title: '成型指示', description: '成型工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
   { path: '/erp/production/instruction/welding', title: '溶接指示', description: '溶接工程の指示・実績', icon: markRaw(Connection), gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)' },
   { path: '/erp/production/instruction/plating', title: 'メッキ指示', description: 'メッキ工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },

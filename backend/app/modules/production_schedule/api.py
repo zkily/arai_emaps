@@ -352,6 +352,137 @@ class UpdatePlanBody(BaseModel):
     scrap_length: Optional[float] = None
 
 
+class CreatePlanBody(BaseModel):
+    """新規バッチ追加（instruction_plans 1件 INSERT）"""
+    production_month: Optional[str] = None  # YYYY-MM
+    production_line: Optional[str] = None
+    priority_order: Optional[int] = None
+    product_cd: Optional[str] = None
+    product_name: Optional[str] = None
+    material_name: Optional[str] = None
+    material_manufacturer: Optional[str] = None
+    standard_specification: Optional[str] = None
+    planned_quantity: Optional[int] = None
+    production_lot_size: Optional[int] = None
+    lot_number: Optional[str] = None
+    actual_production_quantity: Optional[int] = None
+    take_count: Optional[int] = None
+    cutting_length: Optional[float] = None
+    chamfering_length: Optional[float] = None
+    developed_length: Optional[float] = None
+    scrap_length: Optional[float] = None
+    start_date: Optional[str] = None  # YYYY-MM-DD
+    end_date: Optional[str] = None
+    has_chamfering_process: Optional[int] = None  # 0/1
+    has_sw_process: Optional[int] = None  # 0/1
+
+
+def _parse_date_ymd(s: Optional[str]):
+    """Parse YYYY-MM-DD or YYYY-MM to date."""
+    if s is None or len(str(s).strip()) < 7:
+        return None
+    try:
+        parts = str(s).strip()[:10].replace("-", " ").split()
+        if len(parts) >= 2:
+            y, m = int(parts[0]), int(parts[1])
+            d = int(parts[2]) if len(parts) >= 3 else 1
+            if 1 <= m <= 12:
+                return date(y, m, d)
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+def _parse_datetime_plan(s: Optional[str]):
+    """Parse YYYY-MM-DD to datetime."""
+    if s is None or len(str(s).strip()) < 10:
+        return None
+    try:
+        parts = str(s).strip()[:10].split("-")
+        if len(parts) == 3:
+            return datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+@router.post("/plan/batch/create")
+async def create_instruction_plan(
+    body: CreatePlanBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """instruction_plans に1件新規追加。management_code はトリガーで自動設定。"""
+    production_month = _parse_date_ymd(body.production_month)
+    if not production_month:
+        raise HTTPException(status_code=400, detail="production_month (YYYY-MM) を指定してください")
+    product_cd = (body.product_cd or "").strip() or None
+    product_name = (body.product_name or "").strip() or None
+    if not product_cd or not product_name:
+        raise HTTPException(status_code=400, detail="product_cd と product_name は必須です")
+    production_line = (body.production_line or "").strip() or ""
+    priority_order = body.priority_order if body.priority_order is not None else 0
+    planned_quantity = body.planned_quantity if body.planned_quantity is not None else 0
+    production_lot_size = body.production_lot_size if body.production_lot_size is not None else None
+    lot_number = (body.lot_number or "").strip() or None
+    actual_production_quantity = body.actual_production_quantity if body.actual_production_quantity is not None else 0
+    take_count = body.take_count if body.take_count is not None else None
+    cutting_length = body.cutting_length
+    chamfering_length = body.chamfering_length
+    developed_length = body.developed_length
+    scrap_length = body.scrap_length
+    material_name = (body.material_name or "").strip() or None
+    material_manufacturer = (body.material_manufacturer or "").strip() or None
+    standard_specification = (body.standard_specification or "").strip() or None
+    start_date = _parse_datetime_plan(body.start_date)
+    end_date = _parse_datetime_plan(body.end_date)
+    has_chamfering_process = 1 if (body.has_chamfering_process == 1) else 0
+    has_sw_process = 1 if (body.has_sw_process == 1) else 0
+
+    sql = text("""
+        INSERT INTO instruction_plans (
+            production_month, production_line, priority_order, product_cd, product_name,
+            planned_quantity, start_date, end_date, production_lot_size, lot_number,
+            is_cutting_instructed, has_chamfering_process, is_chamfering_instructed,
+            has_sw_process, is_sw_instructed, actual_production_quantity,
+            take_count, cutting_length, chamfering_length, developed_length, scrap_length,
+            material_name, material_manufacturer, standard_specification
+        ) VALUES (
+            :production_month, :production_line, :priority_order, :product_cd, :product_name,
+            :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
+            0, :has_chamfering_process, 0, :has_sw_process, 0, :actual_production_quantity,
+            :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
+            :material_name, :material_manufacturer, :standard_specification
+        )
+    """)
+    params = {
+        "production_month": production_month,
+        "production_line": production_line,
+        "priority_order": priority_order,
+        "product_cd": product_cd,
+        "product_name": product_name,
+        "planned_quantity": planned_quantity,
+        "start_date": start_date,
+        "end_date": end_date,
+        "production_lot_size": production_lot_size,
+        "lot_number": lot_number,
+        "actual_production_quantity": actual_production_quantity,
+        "take_count": take_count,
+        "cutting_length": cutting_length,
+        "chamfering_length": chamfering_length,
+        "developed_length": developed_length,
+        "scrap_length": scrap_length,
+        "material_name": material_name,
+        "material_manufacturer": material_manufacturer,
+        "standard_specification": standard_specification,
+        "has_chamfering_process": has_chamfering_process,
+        "has_sw_process": has_sw_process,
+    }
+    await db.execute(sql, params)
+    await db.commit()
+    return {"success": True, "message": "レコードを追加しました"}
+
+
 @router.patch("/plan/batch/{plan_id}")
 async def update_instruction_plan(
     plan_id: int,
@@ -666,6 +797,95 @@ async def get_cutting_management_list(
         )
 
 
+@router.post("/plan/cutting-management/confirm-actual")
+async def confirm_cutting_actual(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
+    cutting_machine: Optional[str] = Query(None, description="切断機（省略時は全機）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    切断指示-今日の「実績確定」: production_completed_check=1 の cutting_management を
+    stock_transaction_logs に保存する。去重复：同一生産日（および同一切断機フィルタ）の
+    既存 cutting_management 実績を先に削除してから挿入する（先删除再插入）。
+    """
+    try:
+        parts = production_day.strip().split("-")
+        if len(parts) != 3:
+            raise HTTPException(status_code=400, detail="production_day は YYYY-MM-DD で指定してください")
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+        prod_day = date(y, m, d)
+    except (ValueError, IndexError) as e:
+        raise HTTPException(status_code=400, detail="production_day の形式が不正です") from e
+
+    # 去重复：同一範囲の既存実績を削除（source_file=cutting_management & 同日 & 同一切断機なら削除）
+    del_params: dict = {"production_day": prod_day}
+    del_conditions = [
+        "source_file = 'cutting_management'",
+        "DATE(transaction_time) = :production_day",
+    ]
+    if cutting_machine and cutting_machine.strip():
+        del_conditions.append("machine_cd = :cutting_machine")
+        del_params["cutting_machine"] = cutting_machine.strip()
+    del_sql = text("DELETE FROM stock_transaction_logs WHERE " + " AND ".join(del_conditions))
+    await db.execute(del_sql, del_params)
+
+    conditions = ["production_day = :production_day", "production_completed_check = 1"]
+    params: dict = {"production_day": prod_day}
+    if cutting_machine and cutting_machine.strip():
+        conditions.append("cutting_machine = :cutting_machine")
+        params["cutting_machine"] = cutting_machine.strip()
+    sel = text("""
+        SELECT id, product_cd, management_code, cutting_machine, actual_production_quantity, production_day
+        FROM cutting_management
+        WHERE """ + " AND ".join(conditions))
+    res = await db.execute(sel, params)
+    rows = res.mappings().fetchall()
+    if not rows:
+        await db.commit()
+        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
+    # transaction_time: date → datetime (00:00:00)
+    ins = text("""
+        INSERT INTO stock_transaction_logs (
+            stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
+            quantity, unit, transaction_time, source_file
+        ) VALUES (
+            '仕掛品', '実績', :target_cd, '工程中間在庫', :lot_no, 'KT01', :machine_cd,
+            :quantity, '本', :transaction_time, 'cutting_management'
+        )
+    """)
+    inserted = 0
+    total_quantity = 0
+    for row in rows:
+        r = dict(row)
+        product_cd = (r.get("product_cd") or "").strip()
+        if not product_cd:
+            continue
+        prod_day_val = r.get("production_day")
+        if hasattr(prod_day_val, "isoformat"):
+            tx_time = datetime.combine(prod_day_val, datetime.min.time()) if prod_day_val else datetime.now()
+        else:
+            tx_time = datetime.now()
+        qty = r.get("actual_production_quantity")
+        if qty is None:
+            qty = 0
+        await db.execute(ins, {
+            "target_cd": product_cd,
+            "lot_no": r.get("management_code"),
+            "machine_cd": r.get("cutting_machine"),
+            "quantity": qty,
+            "transaction_time": tx_time,
+        })
+        inserted += 1
+        total_quantity += int(qty)
+    await db.commit()
+    return {
+        "success": True,
+        "message": f"実績を {inserted} 件登録しました",
+        "inserted": inserted,
+        "total_quantity": total_quantity,
+    }
+
 
 class MoveBatchToCuttingBody(BaseModel):
     """生産バッチ1件を切断指示へ移行するリクエスト"""
@@ -693,7 +913,7 @@ async def move_batch_to_cutting_management(
     """
     生産バッチ（instruction_plans）1件を切断指示（cutting_management）へ移行する。
     - cutting_management に INSERT
-    - has_chamfering_process が True なら chamfering_management に自動 INSERT
+    - has_chamfering_process が True なら chamfering_plans（面取バッチ一覧）に自動 INSERT
     - 第一工程のため kanban_issuance に status=pending で1件 INSERT（後で手動発行）
     - instruction_plans から該当 id を DELETE
     """
@@ -831,12 +1051,14 @@ async def move_batch_to_cutting_management(
 
         if has_chamfering:
             ins_cham = text("""
-                INSERT INTO chamfering_management (
+                INSERT INTO chamfering_plans (
                     cutting_management_id, production_month, production_day, production_line, production_order,
-                    product_cd, product_name, actual_production_quantity, material_name, management_code, production_completed_check
+                    product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+                    chamfering_length, material_name, management_code, has_sw_process
                 ) VALUES (
                     :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
-                    :product_cd, :product_name, :actual_production_quantity, :material_name, :management_code, 0
+                    :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+                    :chamfering_length, :material_name, :management_code, :has_sw_process
                 )
             """)
             await db.execute(ins_cham, {
@@ -848,16 +1070,56 @@ async def move_batch_to_cutting_management(
                 "product_cd": product_cd,
                 "product_name": product_name,
                 "actual_production_quantity": cutting_params["actual_production_quantity"],
+                "production_lot_size": cutting_params.get("production_lot_size"),
+                "lot_number": cutting_params.get("lot_number"),
+                "chamfering_length": cutting_params.get("chamfering_length"),
                 "material_name": cutting_params["material_name"],
                 "management_code": cutting_params["management_code"],
+                "has_sw_process": 1 if cutting_params.get("has_sw_process") else 0,
             })
 
-        # 第一工程のカンバン：待発行で1件登録（手動発行用）
+        # 第一工程のカンバン：待発行で1件登録（手動発行用）。切断現品票に必要な全フィールドを保存する
         ins_kanban = text("""
-            INSERT INTO kanban_issuance (process_type, source_id, kanban_no, issue_date, status)
-            VALUES ('cutting', :source_id, NULL, NULL, 'pending')
+            INSERT INTO kanban_issuance (
+                process_type, source_id, kanban_no, issue_date, status,
+                product_cd, product_name, production_line, cutting_machine,
+                material_name, standard_specification, management_code,
+                start_date, end_date, planned_quantity, production_lot_size,
+                actual_production_quantity, take_count,
+                cutting_length, chamfering_length, developed_length,
+                has_chamfering_process, lot_number, production_day
+            ) VALUES (
+                'cutting', :source_id, NULL, NULL, 'pending',
+                :product_cd, :product_name, :production_line, :cutting_machine,
+                :material_name, :standard_specification, :management_code,
+                :start_date, :end_date, :planned_quantity, :production_lot_size,
+                :actual_production_quantity, :take_count,
+                :cutting_length, :chamfering_length, :developed_length,
+                :has_chamfering_process, :lot_number, :production_day
+            )
         """)
-        await db.execute(ins_kanban, {"source_id": cutting_id})
+        await db.execute(ins_kanban, {
+            "source_id": cutting_id,
+            "product_cd": cutting_params["product_cd"],
+            "product_name": cutting_params["product_name"],
+            "production_line": cutting_params["production_line"],
+            "cutting_machine": cutting_params["cutting_machine"],
+            "material_name": cutting_params["material_name"],
+            "standard_specification": cutting_params["standard_specification"],
+            "management_code": cutting_params["management_code"],
+            "start_date": cutting_params["start_date"].date() if isinstance(cutting_params.get("start_date"), datetime) else cutting_params.get("start_date"),
+            "end_date": cutting_params["end_date"].date() if isinstance(cutting_params.get("end_date"), datetime) else cutting_params.get("end_date"),
+            "planned_quantity": cutting_params["planned_quantity"],
+            "production_lot_size": cutting_params["production_lot_size"],
+            "actual_production_quantity": cutting_params["actual_production_quantity"],
+            "take_count": cutting_params["take_count"],
+            "cutting_length": cutting_params["cutting_length"],
+            "chamfering_length": cutting_params["chamfering_length"],
+            "developed_length": cutting_params["developed_length"],
+            "has_chamfering_process": 1 if cutting_params.get("has_chamfering_process") else 0,
+            "lot_number": cutting_params["lot_number"],
+            "production_day": production_day_date.date() if isinstance(production_day_date, datetime) else production_day_date,
+        })
 
         await db.execute(text("DELETE FROM instruction_plans WHERE id = :plan_id"), {"plan_id": body.plan_id})
         await db.commit()
@@ -874,6 +1136,8 @@ async def move_batch_to_cutting_management(
             ) from e
         if "chamfering_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(status_code=503, detail="chamfering_management テーブルが存在しません。") from e
+        if "chamfering_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(status_code=503, detail="chamfering_plans テーブルが存在しません。マイグレーション 063_chamfering_batch.sql を実行してください。") from e
         if "kanban_issuance" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(status_code=503, detail="kanban_issuance テーブルが存在しません。") from e
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -903,7 +1167,7 @@ async def move_cutting_to_batch(
 ):
     """
     切断指示1件を生産バッチへ戻す。
-    処理順: ①切断指示を読取 ②カンバン発行削除 ③面取指示削除 ④切断指示削除 ⑤instruction_plans に INSERT。
+    処理順: ①切断指示を読取 ②カンバン発行削除 ③面取指示削除 ④面取バッチ一覧（chamfering_plans）削除 ⑤切断指示削除 ⑥instruction_plans に INSERT。
     """
     # ① 切断指示1件を取得（削除前に全項目コピー用。cutting_machine/production_day は削除後の生産順リナンバ用）
     cut_sel = text("""
@@ -1009,6 +1273,12 @@ async def move_cutting_to_batch(
         # ④ 面取指示を削除
         await db.execute(
             text("DELETE FROM chamfering_management WHERE cutting_management_id = :cid"),
+            {"cid": body.cutting_id},
+        )
+
+        # ④' 面取バッチ一覧（chamfering_plans）の該当データを削除
+        await db.execute(
+            text("DELETE FROM chamfering_plans WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
         )
 
@@ -1145,6 +1415,24 @@ async def update_cutting_management(
             """),
             params,
         )
+        # 面取バッチ一覧（chamfering_plans）の同期: production_day / actual_production_quantity を更新
+        chamfering_updates: list[str] = []
+        chamfering_params: dict = {"cid": cutting_id}
+        if "production_day" in params:
+            chamfering_updates.append("production_day = :production_day")
+            chamfering_params["production_day"] = params["production_day"]
+        if "actual_production_quantity" in params:
+            chamfering_updates.append("actual_production_quantity = :actual_production_quantity")
+            chamfering_params["actual_production_quantity"] = params["actual_production_quantity"]
+        if chamfering_updates:
+            await db.execute(
+                text(f"""
+                    UPDATE chamfering_plans
+                    SET {", ".join(chamfering_updates)}
+                    WHERE cutting_management_id = :cid
+                """),
+                chamfering_params,
+            )
         await db.commit()
     except Exception as e:
         await db.rollback()
@@ -1237,6 +1525,11 @@ async def split_cutting_to_next_day(
                 SET actual_production_quantity = :qty
                 WHERE id = :cid
             """),
+            {"cid": cutting_id, "qty": body.today_quantity},
+        )
+        # 1') 面取バッチ一覧（chamfering_plans）の生産数も同期
+        await db.execute(
+            text("UPDATE chamfering_plans SET actual_production_quantity = :qty WHERE cutting_management_id = :cid"),
             {"cid": cutting_id, "qty": body.today_quantity},
         )
         # 2) 翌日・同一切断機での次の production_sequence
@@ -1360,7 +1653,7 @@ async def delete_cutting_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """切断指示1件を削除する（紐づく面取・カンバン発行も削除）。"""
+    """切断指示1件を削除する（紐づく面取・面取バッチ・カンバン発行も削除）。"""
     try:
         chamfering_res = await db.execute(
             text("SELECT id FROM chamfering_management WHERE cutting_management_id = :cid"),
@@ -1377,6 +1670,7 @@ async def delete_cutting_management(
                 {"sid": sid},
             )
         await db.execute(text("DELETE FROM chamfering_management WHERE cutting_management_id = :cid"), {"cid": cutting_id})
+        await db.execute(text("DELETE FROM chamfering_plans WHERE cutting_management_id = :cid"), {"cid": cutting_id})
         await db.execute(text("DELETE FROM cutting_management WHERE id = :cid"), {"cid": cutting_id})
         await db.commit()
     except Exception as e:
@@ -1385,12 +1679,428 @@ async def delete_cutting_management(
     return {"success": True, "message": "削除しました"}
 
 
+# ---------- 面取バッチ一覧（chamfering_plans）----------
+@router.get("/plan/chamfering-plans/list")
+async def get_chamfering_plans_list(
+    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
+    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
+    production_line: Optional[str] = Query(None, description="ライン（部分一致）"),
+    limit: int = Query(5000, ge=1, le=50000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ一覧: chamfering_plans を取得（切断指示登録時・面取工程ありで自動登録された待機データ）。"""
+    conditions = ["1=1"]
+    params = {"limit": limit}
+    if production_month and production_month.strip():
+        try:
+            parts = production_month.strip().split("-")
+            if len(parts) == 2:
+                y, m = int(parts[0]), int(parts[1])
+                if 1 <= m <= 12:
+                    params["production_month"] = date(y, m, 1)
+                    conditions.append("production_month = :production_month")
+        except (ValueError, IndexError):
+            pass
+    if production_day and production_day.strip():
+        try:
+            parts = production_day.strip().split("-")
+            if len(parts) == 3:
+                y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                params["production_day"] = date(y, m, d)
+                conditions.append("production_day = :production_day")
+        except (ValueError, IndexError):
+            pass
+    if production_line and production_line.strip():
+        conditions.append("production_line LIKE :production_line")
+        params["production_line"] = f"%{production_line.strip()}%"
+
+    sql = text(f"""
+        SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
+               product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+               chamfering_length, material_name, management_code, cd, has_sw_process, created_at
+        FROM chamfering_plans
+        WHERE {" AND ".join(conditions)}
+        ORDER BY production_month DESC, production_day DESC, production_line, production_order
+        LIMIT :limit
+    """)
+    try:
+        result = await db.execute(sql, params)
+    except Exception as e:
+        msg = str(e).lower()
+        if "chamfering_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="chamfering_plans テーブルが存在しません。マイグレーション 063_chamfering_batch.sql を実行してください。",
+            ) from e
+        raise
+    rows = result.mappings().fetchall()
+
+    def _v(row, k, default=None):
+        val = row.get(k)
+        if val is None:
+            return default
+        if isinstance(val, Decimal):
+            return float(val)
+        if hasattr(val, "isoformat"):
+            return val.isoformat()[:19] if val else default
+        return val
+
+    def _row(r):
+        row = dict(r)
+        pm = _v(row, "production_month")
+        pd = _v(row, "production_day")
+        return {
+            "id": row.get("id"),
+            "cutting_management_id": row.get("cutting_management_id"),
+            "production_month": (str(pm)[:10] if pm else None),
+            "production_day": (str(pd)[:10] if pd else None),
+            "production_line": row.get("production_line"),
+            "production_order": row.get("production_order"),
+            "product_cd": row.get("product_cd"),
+            "product_name": row.get("product_name"),
+            "actual_production_quantity": row.get("actual_production_quantity"),
+            "production_lot_size": row.get("production_lot_size"),
+            "lot_number": row.get("lot_number"),
+            "chamfering_length": _v(row, "chamfering_length"),
+            "material_name": row.get("material_name"),
+            "management_code": row.get("management_code"),
+            "cd": row.get("cd") or (str(row.get("management_code") or "")[-5:] or None),
+            "has_sw_process": 1 if row.get("has_sw_process") else 0,
+            "created_at": _v(row, "created_at"),
+        }
+    data = [_row(dict(r)) for r in rows]
+    return {"success": True, "data": data, "message": "OK"}
+
+
+class MoveChamferingPlanToChamferingBody(BaseModel):
+    """面取バッチ1件を面取指示へ移行（オプションで生産日・ライン指定。SW時は production_line_2 で2件登録）"""
+    chamfering_plan_id: int
+    production_day: Optional[str] = None  # YYYY-MM-DD、指定時はこれを使用
+    production_line: Optional[str] = None  # ライン/面取機、指定時はこれを使用
+    production_line_2: Optional[str] = None  # SW時用の2台目面取機、指定時は2件INSERT
+
+
+@router.post("/plan/chamfering-plans/move-to-chamfering")
+async def move_chamfering_plan_to_chamfering(
+    body: MoveChamferingPlanToChamferingBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ1件を面取指示（chamfering_management）へ移行し、chamfering_plans から削除。production_line_2 指定時は2件登録。"""
+    res = await db.execute(
+        text("""
+            SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
+                   product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+                   chamfering_length, material_name, management_code, has_sw_process, no_count
+            FROM chamfering_plans WHERE id = :bid
+        """),
+        {"bid": body.chamfering_plan_id},
+    )
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+    row = dict(row)
+
+    def _to_date(v):
+        if v is None:
+            return None
+        if hasattr(v, "date"):
+            return v.date()
+        s = str(v).strip()[:10]
+        if len(s) == 10:
+            try:
+                return date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+            except (ValueError, IndexError):
+                pass
+        return date.today()
+
+    if body.production_day and str(body.production_day).strip()[:10]:
+        production_day_date = _to_date(str(body.production_day).strip()[:10]) or date.today()
+    else:
+        production_day_val = row.get("production_day")
+        production_day_date = _to_date(production_day_val) or date.today()
+
+    production_month_val = row.get("production_month")
+    production_month_date = _to_date(production_month_val) or date.today()
+
+    production_line_val = (body.production_line and str(body.production_line).strip()) or (row.get("production_line") or "").strip() or ""
+    production_line_2_val = (body.production_line_2 and str(body.production_line_2).strip()) or None
+
+    def _params(pl: str, chamfering_machine_val: str, production_sequence_val: int):
+        return {
+            "cutting_management_id": row.get("cutting_management_id"),
+            "production_month": production_month_date,
+            "production_day": production_day_date,
+            "production_line": (row.get("production_line") or "").strip() or "",  # ライン：面取バッチのラインをそのまま使用（面取機ではない）
+            "chamfering_machine": chamfering_machine_val or pl,
+            "production_order": row.get("production_order"),
+            "production_sequence": production_sequence_val,
+            "product_cd": (row.get("product_cd") or "").strip() or "",
+            "product_name": (row.get("product_name") or "").strip() or "",
+            "actual_production_quantity": row.get("actual_production_quantity") or 0,
+            "production_lot_size": row.get("production_lot_size"),
+            "lot_number": (row.get("lot_number") or "").strip() or None,
+            "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+            "production_time": None,
+            "material_name": (row.get("material_name") or "").strip() or None,
+            "management_code": (row.get("management_code") or "").strip() or None,
+            "has_sw_process": 1 if row.get("has_sw_process") else 0,
+            "remarks": None,
+            "no_count": 1 if row.get("no_count") else 0,
+        }
+
+    ins = text("""
+        INSERT INTO chamfering_management (
+            cutting_management_id, production_month, production_day, production_line, chamfering_machine, production_order, production_sequence,
+            product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+            chamfering_length, production_time, material_name, management_code, has_sw_process, production_completed_check, no_count, remarks
+        ) VALUES (
+            :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine, :production_order, :production_sequence,
+            :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+            :chamfering_length, :production_time, :material_name, :management_code, :has_sw_process, 0, :no_count, :remarks
+        )
+    """)
+    try:
+        order_res = await db.execute(
+            text("""
+                SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_seq
+                FROM chamfering_management
+                WHERE chamfering_machine = :cm AND production_day = :pd
+            """),
+            {"cm": production_line_val, "pd": production_day_date},
+        )
+        next_seq_1 = int(order_res.scalar() or 1)
+        await db.execute(ins, _params(production_line_val, production_line_val, next_seq_1))
+        if production_line_2_val:
+            order_res2 = await db.execute(
+                text("""
+                    SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_seq
+                    FROM chamfering_management
+                    WHERE chamfering_machine = :cm AND production_day = :pd
+                """),
+                {"cm": production_line_2_val, "pd": production_day_date},
+            )
+            next_seq_2 = int(order_res2.scalar() or 1)
+            await db.execute(ins, _params(production_line_2_val, production_line_2_val, next_seq_2))
+        await db.execute(text("DELETE FROM chamfering_plans WHERE id = :bid"), {"bid": body.chamfering_plan_id})
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "面取指示に登録しました"}
+
+
+class UpdateChamferingPlanSwBody(BaseModel):
+    """面取バッチのSW工程フラグ更新"""
+    has_sw_process: bool
+
+
+@router.patch("/plan/chamfering-plans/{plan_id}")
+async def update_chamfering_plan_sw(
+    plan_id: int,
+    body: UpdateChamferingPlanSwBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ1件のhas_sw_processを更新。"""
+    try:
+        await db.execute(
+            text("UPDATE chamfering_plans SET has_sw_process = :v WHERE id = :pid"),
+            {"v": 1 if body.has_sw_process else 0, "pid": plan_id},
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "更新しました"}
+
+
+@router.delete("/plan/chamfering-plans/{plan_id}")
+async def delete_chamfering_plan(
+    plan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ1件を削除。"""
+    res = await db.execute(
+        text("SELECT id FROM chamfering_plans WHERE id = :pid"),
+        {"pid": plan_id},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+    try:
+        await db.execute(text("DELETE FROM chamfering_plans WHERE id = :pid"), {"pid": plan_id})
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "削除しました"}
+
+
+@router.post("/plan/chamfering-plans/{plan_id}/copy")
+async def copy_chamfering_plan(
+    plan_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ1件を複製（同内容で新規1件追加）。"""
+    res = await db.execute(
+        text("""
+            SELECT cutting_management_id, production_month, production_day, production_line, production_order,
+                   product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+                   chamfering_length, material_name, management_code, has_sw_process
+            FROM chamfering_plans WHERE id = :pid
+        """),
+        {"pid": plan_id},
+    )
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+    row = dict(row)
+
+    def _to_date(v):
+        if v is None:
+            return None
+        if hasattr(v, "date"):
+            return v.date()
+        s = str(v).strip()[:10]
+        if len(s) == 10:
+            try:
+                return date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+            except (ValueError, IndexError):
+                pass
+        return date.today()
+
+    production_month_date = _to_date(row.get("production_month")) or date.today()
+    production_day_date = _to_date(row.get("production_day")) or date.today()
+
+    ins = text("""
+        INSERT INTO chamfering_plans (
+            cutting_management_id, production_month, production_day, production_line, production_order,
+            product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+            chamfering_length, material_name, management_code, has_sw_process
+        ) VALUES (
+            :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
+            :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+            :chamfering_length, :material_name, :management_code, :has_sw_process
+        )
+    """)
+    params = {
+        "cutting_management_id": row.get("cutting_management_id"),
+        "production_month": production_month_date,
+        "production_day": production_day_date,
+        "production_line": (row.get("production_line") or "").strip() or "",
+        "production_order": row.get("production_order"),
+        "product_cd": (row.get("product_cd") or "").strip() or "",
+        "product_name": (row.get("product_name") or "").strip() or "",
+        "actual_production_quantity": row.get("actual_production_quantity") or 0,
+        "production_lot_size": row.get("production_lot_size"),
+        "lot_number": (row.get("lot_number") or "").strip() or None,
+        "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+        "material_name": (row.get("material_name") or "").strip() or None,
+        "management_code": (row.get("management_code") or "").strip() or None,
+        "has_sw_process": 1 if row.get("has_sw_process") else 0,
+    }
+    try:
+        await db.execute(ins, params)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "複製しました"}
+
+
+class MoveChamferingManagementToBatchBody(BaseModel):
+    """面取指示1件を面取バッチ一覧へ戻す"""
+    chamfering_management_id: int
+
+
+@router.post("/plan/chamfering-plans/move-from-chamfering")
+async def move_chamfering_management_to_batch(
+    body: MoveChamferingManagementToBatchBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示1件を面取バッチ一覧（chamfering_plans）へ戻し、chamfering_management から削除。"""
+    res = await db.execute(
+        text("""
+            SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
+                   product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+                   chamfering_length, material_name, management_code, has_sw_process
+            FROM chamfering_management WHERE id = :mid
+        """),
+        {"mid": body.chamfering_management_id},
+    )
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
+    row = dict(row)
+
+    def _to_date(v):
+        if v is None:
+            return None
+        if hasattr(v, "date"):
+            return v.date()
+        s = str(v).strip()[:10]
+        if len(s) == 10:
+            try:
+                return date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+            except (ValueError, IndexError):
+                pass
+        return date.today()
+
+    production_month_date = _to_date(row.get("production_month")) or date.today()
+    production_day_date = _to_date(row.get("production_day")) or date.today()
+
+    ins = text("""
+        INSERT INTO chamfering_plans (
+            cutting_management_id, production_month, production_day, production_line, production_order,
+            product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+            chamfering_length, material_name, management_code, has_sw_process
+        ) VALUES (
+            :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
+            :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+            :chamfering_length, :material_name, :management_code, :has_sw_process
+        )
+    """)
+    params = {
+        "cutting_management_id": row.get("cutting_management_id"),
+        "production_month": production_month_date,
+        "production_day": production_day_date,
+        "production_line": (row.get("production_line") or "").strip() or "",
+        "production_order": row.get("production_order"),
+        "product_cd": (row.get("product_cd") or "").strip() or "",
+        "product_name": (row.get("product_name") or "").strip() or "",
+        "actual_production_quantity": row.get("actual_production_quantity") or 0,
+        "production_lot_size": row.get("production_lot_size"),
+        "lot_number": (row.get("lot_number") or "").strip() or None,
+        "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+        "material_name": (row.get("material_name") or "").strip() or None,
+        "management_code": (row.get("management_code") or "").strip() or None,
+        "has_sw_process": 1 if row.get("has_sw_process") else 0,
+    }
+    try:
+        await db.execute(ins, params)
+        await db.execute(
+            text("DELETE FROM kanban_issuance WHERE process_type = 'chamfering' AND source_id = :sid"),
+            {"sid": body.chamfering_management_id},
+        )
+        await db.execute(text("DELETE FROM chamfering_management WHERE id = :mid"), {"mid": body.chamfering_management_id})
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "面取バッチ一覧に戻しました"}
+
+
 # ---------- 面取指示（chamfering_management）----------
 @router.get("/plan/chamfering-management/list")
 async def get_chamfering_management_list(
     production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
     production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
     production_line: Optional[str] = Query(None, description="ライン（部分一致）"),
+    chamfering_machine: Optional[str] = Query(None, description="面取機（完全一致）"),
     limit: int = Query(2000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
@@ -1420,14 +2130,18 @@ async def get_chamfering_management_list(
     if production_line and production_line.strip():
         conditions.append("production_line LIKE :production_line")
         params["production_line"] = f"%{production_line.strip()}%"
+    if chamfering_machine is not None and chamfering_machine.strip():
+        conditions.append("chamfering_machine = :chamfering_machine")
+        params["chamfering_machine"] = chamfering_machine.strip()
 
     sql = text(f"""
-        SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
-               product_cd, product_name, actual_production_quantity, chamfering_length, production_time,
-               material_name, management_code, production_completed_check, cd, created_at
+        SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+               chamfering_length, production_time, material_name, management_code, has_sw_process,
+               production_completed_check, no_count, remarks, cd, created_at
         FROM chamfering_management
         WHERE {" AND ".join(conditions)}
-        ORDER BY production_day DESC, production_line, production_order
+        ORDER BY production_day DESC, chamfering_machine ASC, production_sequence ASC
         LIMIT :limit
     """)
     try:
@@ -1462,20 +2176,558 @@ async def get_chamfering_management_list(
             "production_month": (str(pm)[:10] if pm else None),
             "production_day": (str(pd)[:10] if pd else None),
             "production_line": row.get("production_line"),
+            "chamfering_machine": row.get("chamfering_machine"),
             "production_order": row.get("production_order"),
+            "production_sequence": row.get("production_sequence"),
             "product_cd": row.get("product_cd"),
             "product_name": row.get("product_name"),
             "actual_production_quantity": row.get("actual_production_quantity"),
+            "production_lot_size": row.get("production_lot_size"),
+            "lot_number": row.get("lot_number"),
             "chamfering_length": _v(row, "chamfering_length"),
             "production_time": _v(row, "production_time"),
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
+            "has_sw_process": 1 if row.get("has_sw_process") else 0,
             "production_completed_check": row.get("production_completed_check"),
+            "no_count": 1 if row.get("no_count") else 0,
+            "remarks": row.get("remarks"),
             "cd": row.get("cd"),
             "created_at": _v(row, "created_at"),
         }
     data = [_cham_row(dict(r)) for r in rows]
     return {"success": True, "data": data, "message": "OK"}
+
+
+@router.post("/plan/chamfering-management/confirm-actual")
+async def confirm_chamfering_actual(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
+    chamfering_machine: Optional[str] = Query(None, description="面取機（省略時は全機）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    面取指示-今日の「実績確定」: production_completed_check=1 かつ no_count=0 の chamfering_management を
+    stock_transaction_logs に保存する。去重复：同一範囲の既存 chamfering_management 実績を先に削除してから挿入。
+    """
+    try:
+        parts = production_day.strip().split("-")
+        if len(parts) != 3:
+            raise HTTPException(status_code=400, detail="production_day は YYYY-MM-DD で指定してください")
+        y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+        prod_day = date(y, m, d)
+    except (ValueError, IndexError) as e:
+        raise HTTPException(status_code=400, detail="production_day の形式が不正です") from e
+
+    # 去重复：同一範囲の既存実績を削除
+    del_params: dict = {"production_day": prod_day}
+    del_conditions = [
+        "source_file = 'chamfering_management'",
+        "DATE(transaction_time) = :production_day",
+    ]
+    if chamfering_machine and chamfering_machine.strip():
+        del_conditions.append("machine_cd = :chamfering_machine")
+        del_params["chamfering_machine"] = chamfering_machine.strip()
+    del_sql = text("DELETE FROM stock_transaction_logs WHERE " + " AND ".join(del_conditions))
+    await db.execute(del_sql, del_params)
+
+    conditions = [
+        "production_day = :production_day",
+        "production_completed_check = 1",
+        "(no_count IS NULL OR no_count = 0)",
+    ]
+    params = {"production_day": prod_day}
+    if chamfering_machine and chamfering_machine.strip():
+        conditions.append("chamfering_machine = :chamfering_machine")
+        params["chamfering_machine"] = chamfering_machine.strip()
+    sel = text("""
+        SELECT id, product_cd, management_code, chamfering_machine, actual_production_quantity, production_day
+        FROM chamfering_management
+        WHERE """ + " AND ".join(conditions))
+    res = await db.execute(sel, params)
+    rows = res.mappings().fetchall()
+    if not rows:
+        await db.commit()
+        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
+    ins = text("""
+        INSERT INTO stock_transaction_logs (
+            stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
+            quantity, unit, transaction_time, source_file
+        ) VALUES (
+            '仕掛品', '実績', :target_cd, '工程中間在庫', :lot_no, 'KT02', :machine_cd,
+            :quantity, '本', :transaction_time, 'chamfering_management'
+        )
+    """)
+    inserted = 0
+    total_quantity = 0
+    for row in rows:
+        r = dict(row)
+        product_cd = (r.get("product_cd") or "").strip()
+        if not product_cd:
+            continue
+        prod_day_val = r.get("production_day")
+        if hasattr(prod_day_val, "isoformat"):
+            tx_time = datetime.combine(prod_day_val, datetime.min.time()) if prod_day_val else datetime.now()
+        else:
+            tx_time = datetime.now()
+        qty = r.get("actual_production_quantity")
+        if qty is None:
+            qty = 0
+        await db.execute(ins, {
+            "target_cd": product_cd,
+            "lot_no": r.get("management_code"),
+            "machine_cd": r.get("chamfering_machine"),
+            "quantity": qty,
+            "transaction_time": tx_time,
+        })
+        inserted += 1
+        total_quantity += int(qty)
+    await db.commit()
+    return {
+        "success": True,
+        "message": f"実績を {inserted} 件登録しました",
+        "inserted": inserted,
+        "total_quantity": total_quantity,
+    }
+
+
+@router.delete("/plan/chamfering-management/{chamfering_id}")
+async def delete_chamfering_management(
+    chamfering_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示1件を削除。関連するカンバン発行も削除。"""
+    res = await db.execute(
+        text("SELECT id FROM chamfering_management WHERE id = :mid"),
+        {"mid": chamfering_id},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
+    try:
+        await db.execute(
+            text("DELETE FROM kanban_issuance WHERE process_type = 'chamfering' AND source_id = :sid"),
+            {"sid": chamfering_id},
+        )
+        await db.execute(text("DELETE FROM chamfering_management WHERE id = :mid"), {"mid": chamfering_id})
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "削除しました"}
+
+
+class CreateChamferingManagementBody(BaseModel):
+    """面取指示の新規追加（chamfering_management 1件挿入）"""
+    production_day: str  # YYYY-MM-DD
+    production_line: str = ""
+    chamfering_machine: str = ""
+    product_cd: str = ""
+    product_name: str = ""
+    actual_production_quantity: Optional[int] = 0
+    production_sequence: Optional[int] = None  # 省略時は同一面取機・同一生産日の最大+1
+    material_name: Optional[str] = None
+    management_code: Optional[str] = None
+    remarks: Optional[str] = None
+
+
+@router.post("/plan/chamfering-management")
+async def create_chamfering_management(
+    body: CreateChamferingManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示を1件新規追加。production_month は production_day の年月の初日に設定。"""
+    production_day_s = (body.production_day or "").strip()[:10]
+    if len(production_day_s) != 10:
+        raise HTTPException(status_code=400, detail="生産日は YYYY-MM-DD で指定してください")
+    try:
+        y, m, d = int(production_day_s[:4]), int(production_day_s[5:7]), int(production_day_s[8:10])
+        prod_day = date(y, m, d)
+        production_month = date(y, m, 1)
+    except (ValueError, IndexError) as e:
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です") from e
+    chamfering_machine = (body.chamfering_machine or "").strip() or None
+    if not chamfering_machine:
+        raise HTTPException(status_code=400, detail="面取機を指定してください")
+    product_cd = (body.product_cd or "").strip() or ""
+    product_name = (body.product_name or "").strip() or ""
+    if not product_cd or not product_name:
+        raise HTTPException(status_code=400, detail="製品CD・製品名は必須です")
+    production_line = (body.production_line or "").strip() or ""
+    production_sequence = body.production_sequence
+    if production_sequence is None:
+        next_seq = await db.execute(
+            text(
+                "SELECT COALESCE(MAX(production_sequence), 0) + 1 AS n FROM chamfering_management "
+                "WHERE chamfering_machine = :cm AND production_day = :pd"
+            ),
+            {"cm": chamfering_machine, "pd": prod_day},
+        )
+        production_sequence = next_seq.scalar() or 1
+    # 管理コード未指定時は自動生成（YYMM + product_cd + ライン下2桁 + 生産順2桁、不足は0埋め）
+    management_code_val = (body.management_code or "").strip() or None
+    if not management_code_val:
+        yy = str(prod_day.year)[-2:]
+        mm = str(prod_day.month).zfill(2)
+        line_suffix = (production_line or "").strip()[-2:] if (production_line or "").strip() else "00"
+        if len(line_suffix) < 2:
+            line_suffix = line_suffix.ljust(2, "0")
+        seq_s = str(production_sequence).zfill(2)
+        management_code_val = f"{yy}{mm}{product_cd}{line_suffix}{seq_s}"
+    try:
+        ins = text("""
+            INSERT INTO chamfering_management (
+                cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                has_sw_process, production_completed_check, no_count, remarks
+            ) VALUES (
+                NULL, :production_month, :production_day, :production_line, :chamfering_machine,
+                NULL, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                NULL, NULL, NULL, NULL, :material_name, :management_code,
+                0, 0, 0, :remarks
+            )
+        """)
+        params = {
+            "production_month": production_month,
+            "production_day": prod_day,
+            "production_line": production_line,
+            "chamfering_machine": chamfering_machine,
+            "production_sequence": production_sequence,
+            "product_cd": product_cd,
+            "product_name": product_name,
+            "actual_production_quantity": body.actual_production_quantity or 0,
+            "material_name": (body.material_name or "").strip() or None,
+            "management_code": management_code_val,
+            "remarks": (body.remarks or "").strip() or None,
+        }
+        await db.execute(ins, params)
+        await db.commit()
+        res = await db.execute(text("SELECT LAST_INSERT_ID() AS id"))
+        new_id = res.scalar()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "登録しました", "id": new_id}
+
+
+class UpdateChamferingManagementBody(BaseModel):
+    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・生産順・備考）"""
+    production_completed_check: Optional[bool] = None
+    no_count: Optional[bool] = None
+    chamfering_machine: Optional[str] = None
+    actual_production_quantity: Optional[int] = None
+    production_sequence: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+@router.patch("/plan/chamfering-management/{chamfering_id}")
+async def update_chamfering_management(
+    chamfering_id: int,
+    body: UpdateChamferingManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示1件の production_completed_check / no_count / chamfering_machine / actual_production_quantity / production_sequence / remarks を更新。"""
+    res = await db.execute(
+        text("SELECT id FROM chamfering_management WHERE id = :mid"),
+        {"mid": chamfering_id},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
+    updates = []
+    params: dict = {"mid": chamfering_id}
+    if body.production_completed_check is not None:
+        updates.append("production_completed_check = :production_completed_check")
+        params["production_completed_check"] = 1 if body.production_completed_check else 0
+    if body.no_count is not None:
+        updates.append("no_count = :no_count")
+        params["no_count"] = 1 if body.no_count else 0
+    if body.chamfering_machine is not None:
+        updates.append("chamfering_machine = :chamfering_machine")
+        params["chamfering_machine"] = body.chamfering_machine.strip() or None
+    if body.actual_production_quantity is not None:
+        updates.append("actual_production_quantity = :actual_production_quantity")
+        params["actual_production_quantity"] = body.actual_production_quantity
+    if body.production_sequence is not None:
+        updates.append("production_sequence = :production_sequence")
+        params["production_sequence"] = body.production_sequence
+    if body.remarks is not None:
+        updates.append("remarks = :remarks")
+        params["remarks"] = body.remarks.strip() or None
+    if not updates:
+        return {"success": True, "message": "変更なし"}
+    try:
+        await db.execute(
+            text(f"UPDATE chamfering_management SET {', '.join(updates)} WHERE id = :mid"),
+            params,
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "更新しました"}
+
+
+class SplitToNextDayChamferingBody(BaseModel):
+    """面取指示の未完了分を翌日へ順延するリクエスト"""
+    today_quantity: int  # 当日完成数
+    next_day: Optional[str] = None  # 翌日 YYYY-MM-DD（省略時は production_day + 1 日）
+
+
+@router.post("/plan/chamfering-management/{chamfering_id}/split-to-next-day")
+async def split_chamfering_to_next_day(
+    chamfering_id: int,
+    body: SplitToNextDayChamferingBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示1件の生産数を当日分と翌日分に分割。当日行は完了にし、翌日行を新規追加。"""
+    if body.today_quantity < 0:
+        raise HTTPException(status_code=400, detail="当日完成数は0以上を指定してください")
+    sel = text("""
+        SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+               production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+               has_sw_process, production_completed_check, no_count, remarks
+        FROM chamfering_management WHERE id = :mid
+    """)
+    res = await db.execute(sel, {"mid": chamfering_id})
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+    r = dict(row)
+    total = int(r.get("actual_production_quantity") or 0)
+    if body.today_quantity >= total:
+        raise HTTPException(
+            status_code=400,
+            detail=f"当日完成数は、現在の生産数（{total}）より少ない値を指定してください",
+        )
+    remainder = total - body.today_quantity
+
+    pd = r.get("production_day")
+    if hasattr(pd, "isoformat"):
+        pd_str = pd.isoformat()[:10]
+    else:
+        pd_str = str(pd)[:10] if pd else ""
+    if body.next_day and len((body.next_day or "").strip()) >= 10:
+        next_day_str = body.next_day.strip()[:10]
+    else:
+        if pd:
+            if hasattr(pd, "year"):
+                next_d = pd + timedelta(days=1)
+                next_day_str = next_d.isoformat()[:10]
+            else:
+                parts = pd_str.split("-")
+                if len(parts) == 3:
+                    next_d = date(int(parts[0]), int(parts[1]), int(parts[2])) + timedelta(days=1)
+                    next_day_str = next_d.isoformat()[:10]
+                else:
+                    raise HTTPException(status_code=400, detail="生産日が不正です")
+        else:
+            raise HTTPException(status_code=400, detail="生産日が空のため翌日を算出できません")
+    parts = next_day_str.split("-")
+    if len(parts) != 3:
+        raise HTTPException(status_code=400, detail="翌日の形式は YYYY-MM-DD です")
+    next_day_date = date(int(parts[0]), int(parts[1]), int(parts[2]))
+    next_month_date = date(next_day_date.year, next_day_date.month, 1)
+    cm = (r.get("chamfering_machine") or "").strip()
+    if not cm:
+        raise HTTPException(status_code=400, detail="面取機が空のため順延できません")
+
+    try:
+        await db.execute(
+            text("""
+                UPDATE chamfering_management
+                SET actual_production_quantity = :qty, production_completed_check = 1
+                WHERE id = :mid
+            """),
+            {"mid": chamfering_id, "qty": body.today_quantity},
+        )
+        seq_res = await db.execute(
+            text("""
+                SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_seq
+                FROM chamfering_management
+                WHERE chamfering_machine = :cm AND production_day = :nd
+            """),
+            {"cm": cm, "nd": next_day_date},
+        )
+        seq_row = seq_res.mappings().fetchone()
+        next_seq = int(seq_row["next_seq"]) if seq_row and seq_row.get("next_seq") is not None else 1
+        params = {
+            "cutting_management_id": r.get("cutting_management_id"),
+            "production_month": next_month_date,
+            "production_day": next_day_date,
+            "production_line": r.get("production_line") or "",
+            "chamfering_machine": cm,
+            "production_order": r.get("production_order"),
+            "production_sequence": next_seq,
+            "product_cd": r.get("product_cd") or "",
+            "product_name": r.get("product_name") or "",
+            "actual_production_quantity": remainder,
+            "production_lot_size": r.get("production_lot_size"),
+            "lot_number": r.get("lot_number"),
+            "chamfering_length": r.get("chamfering_length"),
+            "production_time": r.get("production_time"),
+            "material_name": r.get("material_name"),
+            "management_code": r.get("management_code"),
+            "has_sw_process": 1 if r.get("has_sw_process") else 0,
+            "no_count": 1 if r.get("no_count") else 0,
+            "remarks": r.get("remarks"),
+        }
+        ins = text("""
+            INSERT INTO chamfering_management (
+                cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                has_sw_process, production_completed_check, no_count, remarks
+            ) VALUES (
+                :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
+                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
+                :has_sw_process, 0, :no_count, :remarks
+            )
+        """)
+        await db.execute(ins, params)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "順延しました（当日分を完了にし、残りを翌日へ追加しました）"}
+
+
+@router.post("/plan/chamfering-management/{chamfering_id}/duplicate")
+async def duplicate_chamfering_management(
+    chamfering_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示1件を複製し、同一面取機・同一生産日内で直下に挿入。"""
+    sel = text("""
+        SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+               production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+               has_sw_process, production_completed_check, no_count, remarks
+        FROM chamfering_management WHERE id = :mid
+    """)
+    res = await db.execute(sel, {"mid": chamfering_id})
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+    r = dict(row)
+    cm = (r.get("chamfering_machine") or "").strip()
+    pd = r.get("production_day")
+    if not cm:
+        raise HTTPException(status_code=400, detail="面取機が空のため複製できません")
+    if hasattr(pd, "isoformat"):
+        pd_date = pd
+    else:
+        s = str(pd)[:10] if pd else ""
+        if len(s) != 10:
+            raise HTTPException(status_code=400, detail="生産日が不正です")
+        pd_date = date(int(s[:4]), int(s[5:7]), int(s[8:10]))
+    current_seq = int(r.get("production_sequence") or 0)
+
+    try:
+        await db.execute(
+            text("""
+                UPDATE chamfering_management SET production_sequence = production_sequence + 1
+                WHERE chamfering_machine = :cm AND production_day = :pd AND production_sequence > :seq
+            """),
+            {"cm": cm, "pd": pd_date, "seq": current_seq},
+        )
+        params = {
+            "cutting_management_id": r.get("cutting_management_id"),
+            "production_month": r.get("production_month"),
+            "production_day": pd_date,
+            "production_line": r.get("production_line") or "",
+            "chamfering_machine": cm,
+            "production_order": r.get("production_order"),
+            "production_sequence": current_seq + 1,
+            "product_cd": r.get("product_cd") or "",
+            "product_name": r.get("product_name") or "",
+            "actual_production_quantity": r.get("actual_production_quantity") or 0,
+            "production_lot_size": r.get("production_lot_size"),
+            "lot_number": r.get("lot_number"),
+            "chamfering_length": r.get("chamfering_length"),
+            "production_time": r.get("production_time"),
+            "material_name": r.get("material_name"),
+            "management_code": r.get("management_code"),
+            "has_sw_process": 1 if r.get("has_sw_process") else 0,
+            "no_count": 1 if r.get("no_count") else 0,
+            "remarks": r.get("remarks"),
+        }
+        ins = text("""
+            INSERT INTO chamfering_management (
+                cutting_management_id, production_month, production_day, production_line, chamfering_machine,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                has_sw_process, production_completed_check, no_count, remarks
+            ) VALUES (
+                :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
+                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
+                :has_sw_process, 0, :no_count, :remarks
+            )
+        """)
+        await db.execute(ins, params)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "複製しました"}
+
+
+class ReorderChamferingBody(BaseModel):
+    """面取指示の生産順を変更するリクエスト（同一面取機・同一生産日内）"""
+    chamfering_machine: str
+    production_day: str  # YYYY-MM-DD
+    ordered_ids: list[int]
+
+
+@router.post("/plan/chamfering-management/reorder")
+async def reorder_chamfering_management(
+    body: ReorderChamferingBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取指示の生産順（production_sequence）を、同一面取機・同一生産日内で指定した ID 順に更新する。"""
+    chamfering_machine = (body.chamfering_machine or "").strip()
+    if not chamfering_machine:
+        raise HTTPException(status_code=400, detail="面取機を指定してください")
+    production_day_s = (body.production_day or "").strip()[:10]
+    if len(production_day_s) != 10:
+        raise HTTPException(status_code=400, detail="生産日を指定してください（YYYY-MM-DD）")
+    try:
+        production_day_date = date(
+            int(production_day_s[:4]), int(production_day_s[5:7]), int(production_day_s[8:10])
+        )
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+    if not body.ordered_ids:
+        return {"success": True, "message": "変更なし"}
+
+    try:
+        for idx, row_id in enumerate(body.ordered_ids):
+            await db.execute(
+                text("""
+                    UPDATE chamfering_management
+                    SET production_sequence = :production_sequence
+                    WHERE id = :id AND chamfering_machine = :chamfering_machine AND production_day = :production_day
+                """),
+                {
+                    "production_sequence": idx + 1,
+                    "id": row_id,
+                    "chamfering_machine": chamfering_machine,
+                    "production_day": production_day_date,
+                },
+            )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "生産順を更新しました"}
 
 
 class GenerateChamferingFromCuttingBody(BaseModel):
@@ -1548,27 +2800,49 @@ async def generate_chamfering_from_cutting(
 async def get_kanban_issuance_list(
     process_type: Optional[str] = Query(None, description="工程 cutting / chamfering"),
     issue_date: Optional[str] = Query(None, description="発行日 YYYY-MM-DD"),
+    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
+    status: Optional[str] = Query(None, description="状態 pending / issued / completed"),
+    product_name: Optional[str] = Query(None, description="製品名（部分一致）"),
     limit: int = Query(1000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """カンバン発行一覧"""
+    """カンバン発行一覧（instruction_plans と同様の項目を cutting/chamfering から結合）"""
     conditions = ["1=1"]
     params = {"limit": limit}
     if process_type and process_type.strip():
         params["process_type"] = process_type.strip()
-        conditions.append("process_type = :process_type")
+        conditions.append("k.process_type = :process_type")
     if issue_date and len(issue_date.strip()) >= 10:
         try:
             params["issue_date"] = date.fromisoformat(issue_date.strip()[:10])
-            conditions.append("issue_date = :issue_date")
+            conditions.append("k.issue_date = :issue_date")
         except ValueError:
             pass
+    if production_day and len(production_day.strip()) >= 10:
+        try:
+            params["production_day"] = date.fromisoformat(production_day.strip()[:10])
+            conditions.append("k.production_day = :production_day")
+        except ValueError:
+            pass
+    if status and status.strip():
+        params["status"] = status.strip().lower()
+        conditions.append("k.status = :status")
+    if product_name and product_name.strip():
+        params["product_name"] = f"%{product_name.strip()}%"
+        conditions.append("k.product_name LIKE :product_name")
     sql = text(f"""
-        SELECT id, process_type, source_id, kanban_no, issue_date, status, created_at
-        FROM kanban_issuance
+        SELECT
+            k.id, k.process_type, k.source_id, k.kanban_no, k.issue_date, k.status, k.created_at,
+            k.product_cd, k.product_name, k.production_line, k.cutting_machine,
+            k.material_name, k.standard_specification, k.management_code,
+            k.start_date, k.end_date, k.planned_quantity, k.production_lot_size,
+            k.actual_production_quantity, k.take_count,
+            k.cutting_length, k.chamfering_length, k.developed_length,
+            k.has_chamfering_process, k.lot_number, k.production_day
+        FROM kanban_issuance k
         WHERE {" AND ".join(conditions)}
-        ORDER BY created_at DESC
+        ORDER BY k.created_at DESC
         LIMIT :limit
     """)
     try:
@@ -1600,15 +2874,123 @@ async def get_kanban_issuance_list(
             "issue_date": _v(r, "issue_date"),
             "status": r.get("status"),
             "created_at": _v(dict(r), "created_at"),
+            "product_cd": r.get("product_cd"),
+            "product_name": r.get("product_name"),
+            "production_line": r.get("production_line"),
+            "cutting_machine": r.get("cutting_machine"),
+            "material_name": r.get("material_name"),
+            "standard_specification": r.get("standard_specification"),
+            "management_code": r.get("management_code"),
+            "start_date": _v(r, "start_date"),
+            "end_date": _v(r, "end_date"),
+            "planned_quantity": r.get("planned_quantity"),
+            "production_lot_size": r.get("production_lot_size"),
+            "actual_production_quantity": r.get("actual_production_quantity"),
+            "take_count": r.get("take_count"),
+            "cutting_length": float(r["cutting_length"]) if r.get("cutting_length") is not None else None,
+            "chamfering_length": float(r["chamfering_length"]) if r.get("chamfering_length") is not None else None,
+            "developed_length": float(r["developed_length"]) if r.get("developed_length") is not None else None,
+            "has_chamfering_process": bool(r.get("has_chamfering_process")),
+            "lot_number": r.get("lot_number"),
+            "production_day": _v(r, "production_day"),
         }
         for r in rows
     ]
     return {"success": True, "data": data, "message": "OK"}
 
 
+@router.get("/plan/kanban-issuance/product-names")
+async def get_kanban_issuance_product_names(
+    limit: int = Query(500, ge=1, le=2000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """カンバン発行一覧で使用されている製品名の一覧（製品名下拉用）"""
+    sql = text("""
+        SELECT DISTINCT product_name
+        FROM kanban_issuance
+        WHERE product_name IS NOT NULL AND TRIM(product_name) != ''
+        ORDER BY product_name
+        LIMIT :limit
+    """)
+    try:
+        result = await db.execute(sql, {"limit": limit})
+        rows = result.mappings().fetchall()
+    except Exception as e:
+        msg = str(e).lower()
+        if "kanban_issuance" in msg:
+            return {"success": True, "data": []}
+        raise
+    data = [r.get("product_name") for r in rows if r.get("product_name")]
+    return {"success": True, "data": data}
+
+
 class IssueKanbanBody(BaseModel):
     process_type: str  # cutting / chamfering
     source_id: int
+
+
+class BatchIssueKanbanBody(BaseModel):
+    kanban_ids: list[int]
+
+
+class UpdateKanbanIssuanceBody(BaseModel):
+    """カンバン発行1件の更新（全項目任意）"""
+    product_cd: Optional[str] = None
+    product_name: Optional[str] = None
+    production_line: Optional[str] = None
+    cutting_machine: Optional[str] = None
+    material_name: Optional[str] = None
+    standard_specification: Optional[str] = None
+    management_code: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    planned_quantity: Optional[int] = None
+    production_lot_size: Optional[int] = None
+    actual_production_quantity: Optional[int] = None
+    take_count: Optional[int] = None
+    cutting_length: Optional[float] = None
+    chamfering_length: Optional[float] = None
+    developed_length: Optional[float] = None
+    has_chamfering_process: Optional[bool] = None
+    lot_number: Optional[str] = None
+    production_day: Optional[str] = None
+
+
+@router.patch("/plan/kanban-issuance/{kanban_id:int}")
+async def update_kanban_issuance(
+    kanban_id: int,
+    body: UpdateKanbanIssuanceBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """カンバン発行1件のデータを更新する。"""
+    res = await db.execute(text("SELECT id FROM kanban_issuance WHERE id = :kid"), {"kid": kanban_id})
+    if not res.mappings().fetchone():
+        raise HTTPException(status_code=404, detail="カンバンが見つかりません")
+    body_dict = body.model_dump(exclude_unset=True)
+    if not body_dict:
+        return {"success": True, "message": "変更なし"}
+    set_parts = []
+    params = {"kid": kanban_id}
+    date_fields = ("start_date", "end_date", "production_day")
+    for k, v in body_dict.items():
+        if k in date_fields and v is not None:
+            try:
+                params[k] = date.fromisoformat(str(v).strip()[:10])
+            except ValueError:
+                continue
+        else:
+            params[k] = v
+        set_parts.append(f"`{k}` = :{k}")
+    if not set_parts:
+        return {"success": True, "message": "変更なし"}
+    if "has_chamfering_process" in params and isinstance(params["has_chamfering_process"], bool):
+        params["has_chamfering_process"] = 1 if params["has_chamfering_process"] else 0
+    sql = text(f"UPDATE kanban_issuance SET {', '.join(set_parts)} WHERE id = :kid")
+    await db.execute(sql, params)
+    await db.commit()
+    return {"success": True, "message": "更新しました"}
 
 
 @router.post("/plan/kanban-issuance/issue")
@@ -1670,6 +3052,119 @@ async def issue_pending_kanban(
     await db.execute(upd, {"kanban_no": kanban_no, "issue_date": today, "kid": kanban_id})
     await db.commit()
     return {"success": True, "message": "カンバンを発行しました", "kanban_no": kanban_no}
+
+
+@router.post("/plan/kanban-issuance/{kanban_id:int}/reissue")
+async def reissue_kanban(
+    kanban_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """発行済のカンバンを再発行する（現場で紛失した場合など）。新しい kanban_no と issue_date で更新。"""
+    sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
+    res = await db.execute(sel, {"kid": kanban_id})
+    row = res.mappings().fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="カンバンが見つかりません")
+    row = dict(row)
+    status = (row.get("status") or "").strip().lower()
+    if status not in ("pending", "issued"):
+        raise HTTPException(
+            status_code=400,
+            detail="待発行または発行済のカンバンのみ再発行できます（完了済は再発行不可）",
+        )
+    today = date.today()
+    pt = (row.get("process_type") or "cutting").strip()
+    src_id = row.get("source_id") or 0
+    kanban_no = f"{pt.upper()}-{src_id}-{today.isoformat().replace('-', '')}"
+    upd = text("""
+        UPDATE kanban_issuance SET kanban_no = :kanban_no, issue_date = :issue_date, status = 'issued'
+        WHERE id = :kid
+    """)
+    await db.execute(upd, {"kanban_no": kanban_no, "issue_date": today, "kid": kanban_id})
+    await db.commit()
+    return {"success": True, "message": "カンバンを再発行しました", "kanban_no": kanban_no}
+
+
+@router.post("/plan/kanban-issuance/sync-production-day")
+async def sync_kanban_production_day(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """kanban_issuance の production_day を source_id で cutting_management / chamfering_management から取得して更新する。"""
+    # process_type='cutting' → source_id = cutting_management.id
+    upd_cutting = text("""
+        UPDATE kanban_issuance k
+        INNER JOIN cutting_management c ON k.source_id = c.id AND k.process_type = 'cutting'
+        SET k.production_day = c.production_day
+    """)
+    # process_type='chamfering' → source_id = chamfering_management.id, production_day は chamfering_management から
+    upd_chamfering = text("""
+        UPDATE kanban_issuance k
+        INNER JOIN chamfering_management ch ON k.source_id = ch.id AND k.process_type = 'chamfering'
+        SET k.production_day = ch.production_day
+    """)
+    try:
+        r1 = await db.execute(upd_cutting)
+        r2 = await db.execute(upd_chamfering)
+        await db.commit()
+        # rowcount は DB によっては UPDATE 件数が返らない場合がある
+        updated = getattr(r1, "rowcount", None) or 0
+        updated += getattr(r2, "rowcount", None) or 0
+        return {"success": True, "message": "生産日を更新しました", "updated": updated}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/plan/kanban-issuance/batch-issue")
+async def batch_issue_pending_kanban(
+    body: BatchIssueKanbanBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """待発行（pending）・発行済（issued）のカンバンを一括発行する。発行済は再発行扱いで新 kanban_no を付与。"""
+    if not body.kanban_ids:
+        return {"success": True, "message": "発行対象がありません", "issued": 0, "skipped": 0, "errors": [], "issued_items": []}
+    today = date.today()
+    sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
+    upd = text("""
+        UPDATE kanban_issuance SET kanban_no = :kanban_no, issue_date = :issue_date, status = 'issued'
+        WHERE id = :kid
+    """)
+    issued = 0
+    skipped = 0
+    errors = []
+    issued_items: list[dict] = []
+    for kid in body.kanban_ids:
+        res = await db.execute(sel, {"kid": kid})
+        row = res.mappings().fetchone()
+        if not row:
+            errors.append(f"id={kid}: カンバンが見つかりません")
+            continue
+        row = dict(row)
+        status = (row.get("status") or "").strip().lower()
+        if status not in ("pending", "issued"):
+            skipped += 1
+            continue
+        pt = (row.get("process_type") or "cutting").strip()
+        src_id = row.get("source_id") or 0
+        kanban_no = f"{pt.upper()}-{src_id}-{today.isoformat().replace('-', '')}"
+        try:
+            await db.execute(upd, {"kanban_no": kanban_no, "issue_date": today, "kid": kid})
+            issued += 1
+            issued_items.append({"id": kid, "kanban_no": kanban_no})
+        except Exception as e:
+            errors.append(f"id={kid}: {e}")
+    await db.commit()
+    return {
+        "success": True,
+        "message": f"一括発行完了（発行: {issued} 件、スキップ: {skipped} 件）",
+        "issued": issued,
+        "skipped": skipped,
+        "errors": errors,
+        "issued_items": issued_items,
+    }
 
 
 @router.post("/plan/batch/generate-from-schedule")

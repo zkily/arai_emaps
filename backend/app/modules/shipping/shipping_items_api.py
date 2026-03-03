@@ -2,6 +2,7 @@
 出荷明細 API (shipping_items テーブル)
 - GET /items: 一覧取得（shipping_date / end_date / destination_cd / status 等でフィルタ）
 - POST /items/bulk: 一括登録（パレット割当て案 → shipping_items）
+- POST /items/{shipping_no}/issue: 出荷番号を発行（該当 shipping_no の status を「発行済」に更新）
 - POST /items/{id}/cancel: shipping_no_p で order_daily/picking_tasks を整理後、shipping_items を物理削除
 """
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -309,4 +310,27 @@ async def cancel_shipping_item(
         raise HTTPException(
             status_code=500,
             detail=f"キャンセル処理に失敗しました: {type(e).__name__}: {e}",
+        ) from e
+
+
+# ---------- POST /items/{shipping_no}/issue ----------
+@router.post("/{shipping_no}/issue")
+async def issue_shipping(
+    shipping_no: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """出荷番号を発行：該当 shipping_no の全 shipping_items の status を「発行済」に更新"""
+    try:
+        upd = text(
+            "UPDATE shipping_items SET status = '発行済' WHERE shipping_no = :shipping_no"
+        )
+        await db.execute(upd, {"shipping_no": shipping_no.strip()})
+        await db.commit()
+        return {"success": True, "shipping_no": shipping_no.strip()}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"発行処理に失敗しました: {type(e).__name__}: {e}",
         ) from e

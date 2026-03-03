@@ -161,10 +161,6 @@
                 <el-icon><Operation /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_CUTTING')">{{ t('menu.ERP_PRODUCTION_INSTR_CUTTING') }}</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/production/instruction/surface">
-                <el-icon><Operation /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_SURFACE')">{{ t('menu.ERP_PRODUCTION_INSTR_SURFACE') }}</span></template>
-              </el-menu-item>
               <el-menu-item index="/erp/production/instruction/forming">
                 <el-icon><Operation /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_FORMING')">{{ t('menu.ERP_PRODUCTION_INSTR_FORMING') }}</span></template>

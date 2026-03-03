@@ -25,15 +25,28 @@ async def save_print_record(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """出荷番号の印刷記録を shipping_records に保存（重複は無視または更新）"""
+    """出荷番号の印刷記録を shipping_records に保存し、該当 shipping_items の status を「発行済」に更新"""
     if not body.shipping_numbers:
         return {"success": True, "count": 0}
+    numbers = [str(n).strip() for n in body.shipping_numbers if n and str(n).strip()]
+    if not numbers:
+        return {"success": True, "count": 0}
+
+    # 1) shipping_records に印刷済を保存
     q = text(
         "INSERT INTO shipping_records (shipping_no, status) VALUES (:shipping_no, '印刷済') "
         "ON DUPLICATE KEY UPDATE status = '印刷済'"
     )
-    for no in body.shipping_numbers:
-        if no and str(no).strip():
-            await db.execute(q, {"shipping_no": str(no).strip()})
+    for no in numbers:
+        await db.execute(q, {"shipping_no": no})
+
+    # 2) 該当出荷番号の shipping_items の status を「発行済」に更新（一覧の状態欄と一致させる）
+    placeholders = ", ".join([f":n{i}" for i in range(len(numbers))])
+    params = {f"n{i}": no for i, no in enumerate(numbers)}
+    upd_items = text(
+        f"UPDATE shipping_items SET status = '発行済' WHERE shipping_no IN ({placeholders})"
+    )
+    await db.execute(upd_items, params)
+
     await db.commit()
-    return {"success": True, "count": len([n for n in body.shipping_numbers if n and str(n).strip()])}
+    return {"success": True, "count": len(numbers)}
