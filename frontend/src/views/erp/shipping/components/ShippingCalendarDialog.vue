@@ -1386,7 +1386,7 @@ function handleClose() {
 }
 
 .calendar-inline-header {
-  padding: 12px 18px;
+  padding: 14px 18px;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
   display: flex;
@@ -1399,12 +1399,13 @@ function handleClose() {
   font-size: 17px;
   color: #0f172a;
   letter-spacing: 0.02em;
+  line-height: 1.45;
 }
 
 .calendar-inline-subtitle {
   font-size: 13px;
   color: #475569;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .shipping-calendar-inline .calendar-container {

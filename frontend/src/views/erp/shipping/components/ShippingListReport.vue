@@ -35,7 +35,7 @@
               <td class="col-product-name product-name-cell">{{ item.product_name || '-' }}</td>
               <td class="col-product-type">{{ item.product_type || '量産品' }}</td>
               <td class="col-box-type">{{ item.box_type || '-' }}</td>
-              <td class="col-pallet-no">{{ item.no || '-' }}</td>
+              <td class="col-pallet-no">{{ baleNo(item.shipping_no) }}</td>
               <td class="col-qty">{{ formatNum(item.quantity) }}</td>
               <td class="col-units">{{ formatNum(item.units) }}</td>
               <td class="col-delivery">{{ formatDateSlash(item.delivery_date) }}</td>
@@ -98,6 +98,14 @@ function formatDateSlash(dateStr: string | undefined | null) {
 function formatNum(v: number | undefined | null): string {
   if (v == null || v === undefined) return '-'
   return String(Number(v))
+}
+
+/** バレNO = 出荷NO の下2桁 */
+function baleNo(shippingNo: string | undefined | null): string {
+  if (shippingNo == null || shippingNo === '') return '-'
+  const s = String(shippingNo)
+  const last2 = s.slice(-2)
+  return last2 || '-'
 }
 
 const groupedData = computed(() => {

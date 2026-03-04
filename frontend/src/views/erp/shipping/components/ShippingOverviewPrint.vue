@@ -19,13 +19,13 @@
           </div>
         </div>
 
-        <!-- 页面内容：列数由单页最优分配结果决定 -->
+        <!-- 页面内容：列数由单页最优分配结果决定，单个納入先可拆成多块跨列显示 -->
         <div class="print-body" :style="getPrintBodyStyle(pageData)">
           <div class="column" v-for="colIndex in getColumnCount(pageData)" :key="colIndex">
-            <div v-for="destGroup in getColumnData(pageData, colIndex - 1)"
-              :key="`${destGroup.destination_name}-${pageIndex}-${colIndex}`" class="destination-group">
+            <div v-for="(block, blockIdx) in getColumnData(pageData, colIndex - 1)"
+              :key="`${block.destination_name}-${block.blockIndex}-${pageIndex}-${colIndex}`" class="destination-group">
               <div class="destination-header">
-                <h2 class="destination-name">{{ destGroup.destination_name }}</h2>
+                <h2 class="destination-name">{{ block.destination_name }}{{ block.isContinuation ? '（続き）' : '' }}</h2>
               </div>
               <table class="print-table">
                 <thead>
@@ -37,7 +37,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="(item, index) in destGroup.items" :key="index" class="data-row">
+                  <tr v-for="(item, index) in block.items" :key="index" class="data-row">
                     <td class="col-product">{{ item.product_name || '-' }}</td>
                     <td class="col-quantity">{{ item.quantity || '0' }}</td>
                     <td class="col-shipping">
@@ -139,19 +139,132 @@ const groupedData = computed(() => {
 // 与现有 CSS 一致的“行高”单位（不改变字体与行高）：表头约 1 行，每数据行 1 行，目的地标题+间距约 2 行
 const ROWS_HEADER = 2
 const ROWS_PER_ITEM = 1
+/** “続き” 续块表头占 1 行 */
+const ROWS_CONTINUATION_HEADER = 1
 
-/** 计算单个納入先块的高度（行单位，与当前样式一致） */
+/** 计算单个納入先的总高度（行单位） */
 function getDestinationHeightInRows(dest) {
   if (!dest || !dest.items || !Array.isArray(dest.items)) return ROWS_HEADER + 2
   return ROWS_HEADER + dest.items.length * ROWS_PER_ITEM
 }
 
-/** 单页可用的每列最大行数（A4 竖版 body 高度换算，字体/行高不变） */
+/** 单页可用的每列最大行数（设为 40 行） */
 function getMaxRowsPerColumn() {
-  // 270mm - header ~22px，约 260mm 可用；按 24px/行 估算
-  const mmPerRow = 6
-  const bodyMm = 260
-  return Math.floor(bodyMm / mmPerRow)
+  return 40
+}
+
+/**
+ * 将单个納入先按列高拆成多块：超出单列时在第二列（及后续列）继续显示。
+ * 每块：{ destination_name, items, isContinuation, blockIndex }
+ */
+function splitDestinationIntoBlocks(dest, maxRowsPerColumn) {
+  if (!dest || !dest.items || !Array.isArray(dest.items)) return []
+  const name = dest.destination_name || ''
+  const items = dest.items
+  const blocks = []
+  const firstChunkSize = Math.max(0, maxRowsPerColumn - ROWS_HEADER)
+  const continuationChunkSize = Math.max(0, maxRowsPerColumn - ROWS_CONTINUATION_HEADER)
+
+  if (items.length <= firstChunkSize) {
+    blocks.push({ destination_name: name, items: [...items], isContinuation: false, blockIndex: 0 })
+    return blocks
+  }
+
+  let offset = 0
+  let blockIndex = 0
+  blocks.push({
+    destination_name: name,
+    items: items.slice(offset, offset + firstChunkSize),
+    isContinuation: false,
+    blockIndex: blockIndex++,
+  })
+  offset += firstChunkSize
+
+  while (offset < items.length) {
+    const chunk = items.slice(offset, offset + continuationChunkSize)
+    if (chunk.length === 0) break
+    blocks.push({
+      destination_name: name,
+      items: chunk,
+      isContinuation: true,
+      blockIndex: blockIndex++,
+    })
+    offset += chunk.length
+  }
+  return blocks
+}
+
+/** 计算单块占用的行数 */
+function getBlockHeightInRows(block) {
+  const headerRows = block.isContinuation ? ROWS_CONTINUATION_HEADER : ROWS_HEADER
+  return headerRows + (block.items?.length || 0) * ROWS_PER_ITEM
+}
+
+/**
+ * 将全部納入先转为可跨列分配的块（大納入先拆成多块），再按列高贪心分配。
+ * 支持单个納入先数据超出一列时在第二列（及后续列）继续显示。
+ */
+function getBlocksFromDestinations(destinations, maxRowsPerColumn) {
+  if (!destinations || destinations.length === 0) return []
+  const blocks = []
+  for (const dest of destinations) {
+    blocks.push(...splitDestinationIntoBlocks(dest, maxRowsPerColumn))
+  }
+  return blocks
+}
+
+/**
+ * 单页排版：先按列高将大納入先拆成多块，再贪心分配块到各列，使各列高度尽量均衡。
+ * 块可来自同一納入先的“続き”，从而实现同一納入先在第二列继续显示。
+ */
+function allocateBlocksToColumns(blocks, maxRowsPerColumn, numCols = 2) {
+  if (!blocks || blocks.length === 0) return Array.from({ length: numCols }, () => [])
+
+  const columns = Array.from({ length: numCols }, () => [])
+  const columnHeights = Array(numCols).fill(0)
+  const blockHeights = blocks.map((b) => getBlockHeightInRows(b))
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i]
+    const height = blockHeights[i]
+    let bestCol = 0
+    let minH = columnHeights[0]
+    for (let c = 1; c < numCols; c++) {
+      if (columnHeights[c] < minH) {
+        minH = columnHeights[c]
+        bestCol = c
+      }
+    }
+    columns[bestCol].push(block)
+    columnHeights[bestCol] += height
+  }
+  return columns
+}
+
+/**
+ * 单页最优排版：納入先可拆块跨列；先拆块再分配，优先 2 列，放不下则尝试 3、4 列。
+ */
+function allocateDestinationsToOnePage(destinations) {
+  if (!destinations || destinations.length === 0) return [[], []]
+
+  const maxRowsPerColumn = getMaxRowsPerColumn()
+  const blocks = getBlocksFromDestinations(destinations, maxRowsPerColumn)
+  if (blocks.length === 0) return [[], []]
+
+  const totalRows = blocks.reduce((sum, b) => sum + getBlockHeightInRows(b), 0)
+
+  for (const numCols of [2, 3, 4]) {
+    const capacity = maxRowsPerColumn * numCols
+    if (totalRows > capacity) continue
+
+    const columns = allocateBlocksToColumns(blocks, maxRowsPerColumn, numCols)
+    const columnHeights = columns.map((col) => col.reduce((s, b) => s + getBlockHeightInRows(b), 0))
+    const maxH = Math.max(...columnHeights)
+    if (maxH <= maxRowsPerColumn) return columns
+  }
+
+  // 仍用 2 列，尽量均衡（可能超出一页时也只出一页）
+  return allocateBlocksToColumns(blocks, maxRowsPerColumn, 2)
 }
 
 function getColumnData(pageData, columnIndex) {
@@ -175,58 +288,6 @@ function getPrintBodyStyle(pageData) {
   return n > 2 ? { display: 'flex', gap: '8px', flexWrap: 'nowrap' } : {}
 }
 
-/**
- * 单页最优排版：先算各納入先高度，再从左侧列开始分配，使两列高度尽量均衡（贪心：每次放入当前高度较小的列）。
- * 若两列放不下则尝试 3 列、4 列，保证只出一页。
- */
-function allocateDestinationsToOnePage(destinations) {
-  if (!destinations || destinations.length === 0) return [[], []]
-
-  const maxRowsPerColumn = getMaxRowsPerColumn()
-  const heights = destinations.map((d) => getDestinationHeightInRows(d))
-  const totalRows = heights.reduce((a, b) => a + b, 0)
-
-  for (const numCols of [2, 3, 4]) {
-    const capacity = maxRowsPerColumn * numCols
-    if (totalRows > capacity) continue
-
-    const columns = Array.from({ length: numCols }, () => [])
-    const columnHeights = Array(numCols).fill(0)
-
-    // 按高度降序，优先放大的块，有利于平衡
-    const indexed = destinations.map((d, i) => ({ dest: d, height: heights[i] }))
-    indexed.sort((a, b) => b.height - a.height)
-
-    for (const { dest, height } of indexed) {
-      let bestCol = 0
-      let minH = columnHeights[0]
-      for (let c = 1; c < numCols; c++) {
-        if (columnHeights[c] < minH) {
-          minH = columnHeights[c]
-          bestCol = c
-        }
-      }
-      columns[bestCol].push(dest)
-      columnHeights[bestCol] += height
-    }
-
-    const maxH = Math.max(...columnHeights)
-    if (maxH <= maxRowsPerColumn) return columns
-  }
-
-  // 仍用 2 列，尽量均衡（可能超出一页时也只出一页）
-  const columns = [[], []]
-  const columnHeights = [0, 0]
-  const indexed = destinations.map((d, i) => ({ dest: d, height: heights[i] }))
-  indexed.sort((a, b) => b.height - a.height)
-  for (const { dest, height } of indexed) {
-    const bestCol = columnHeights[0] <= columnHeights[1] ? 0 : 1
-    columns[bestCol].push(dest)
-    columnHeights[bestCol] += height
-  }
-  return columns
-}
-
 /** 每个出荷日只出一页，所有納入先都在这一页内按最优列分配 */
 function getPaginatedData(dateGroup) {
   if (!dateGroup || !dateGroup.destinations || dateGroup.destinations.length === 0) {
@@ -243,11 +304,10 @@ function getPaginatedData(dateGroup) {
 </script>
 
 <style scoped>
-/* 页面设置 */
+/* 页面设置：缩小页边距以增加可打印区域 */
 @page {
   size: A4 portrait;
-  margin: 18mm 10mm 0mm 10mm;
-  /* 页面上方保留 1cm 空白 */
+  margin: 10mm 8mm 8mm 8mm;
 }
 
 /* 全局重置 */
@@ -267,17 +327,17 @@ function getPaginatedData(dateGroup) {
   color: #000;
 }
 
-/* 页面容器 */
+/* 页面容器：底部留白缩小，避免裁切的同时减少空白 */
 .page-container {
   width: 100%;
   height: 260mm;
-  /* 调整页面高度 A4-调整后的上下边距 */
+  box-sizing: border-box;
+  padding-bottom: 8px;
   page-break-after: always;
   page-break-inside: avoid;
   display: flex;
   flex-direction: column;
   position: relative;
-  /* overflow: hidden;  */
 }
 
 .page-container:last-child {
@@ -341,25 +401,27 @@ function getPaginatedData(dateGroup) {
   letter-spacing: 1px;
 }
 
-/* 页面主体 */
+/* 页面主体：预留少量底部空间，减少空白 */
 .print-body {
   flex: 1;
   display: flex;
   gap: 8px;
   margin-top: 4px;
-  margin-bottom: 4px;
-  height: calc(260mm - 22px);
-  /* 页面高度减去头部高度 */
-  /* overflow: hidden;  */
+  margin-bottom: 0;
+  min-height: 0;
+  height: calc(260mm - 22px - 8px);
+  box-sizing: border-box;
+  padding-bottom: 6px;
 }
 
 .column {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   max-height: 100%;
-  /* 限制列的最大高度 */
   overflow: hidden;
-  /* 防止单列内容溢出 */
+  padding-bottom: 4px;
+  box-sizing: border-box;
 }
 
 /* 目的地组 */
@@ -464,24 +526,27 @@ function getPaginatedData(dateGroup) {
   display: inline-block;
 }
 
-/* 打印优化 */
+/* 打印优化：缩小留白，提高可打印区域利用率 */
 @media print {
   .page-container {
     margin: 0;
     box-shadow: none;
-    height: 270mm !important;
-    /* 强制固定页面高度 */
-    /* overflow: hidden !important; */
+    height: 271mm !important;
+    padding-bottom: 8px !important;
+    box-sizing: border-box !important;
+    break-after: page;
   }
 
   .print-body {
-    height: calc(270mm - 22px) !important;
-    /* overflow: hidden !important; */
+    height: calc(271mm - 22px - 8px) !important;
+    padding-bottom: 6px !important;
+    box-sizing: border-box !important;
   }
 
   .column {
-    max-height: calc(260mm - 22px) !important;
-    /* overflow: hidden !important; */
+    max-height: calc(271mm - 22px - 8px - 6px) !important;
+    padding-bottom: 4px !important;
+    box-sizing: border-box !important;
   }
 
   .destination-group {

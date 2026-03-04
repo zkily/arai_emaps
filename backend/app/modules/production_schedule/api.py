@@ -270,7 +270,9 @@ async def get_instruction_plans_list(
                created_at, updated_at
         FROM instruction_plans
         WHERE {" AND ".join(conditions)}
-        ORDER BY production_month DESC, production_line, priority_order, lot_number
+        ORDER BY production_month DESC, production_line, priority_order,
+                 CAST(COALESCE(lot_number, '0') AS UNSIGNED),
+                 lot_number
         LIMIT :limit
     """)
     result = await db.execute(sql, params)
@@ -1532,18 +1534,17 @@ async def split_cutting_to_next_day(
             text("UPDATE chamfering_plans SET actual_production_quantity = :qty WHERE cutting_management_id = :cid"),
             {"cid": cutting_id, "qty": body.today_quantity},
         )
-        # 2) 翌日・同一切断機での次の production_sequence
-        seq_res = await db.execute(
+        # 2) 翌日・同一切断機の既存行の production_sequence を +1 して、順延行を先頭（1）に挿入
+        await db.execute(
             text("""
-                SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_seq
-                FROM cutting_management
+                UPDATE cutting_management
+                SET production_sequence = production_sequence + 1
                 WHERE cutting_machine = :cm AND production_day = :nd
             """),
             {"cm": cm, "nd": next_day_date},
         )
-        seq_row = seq_res.mappings().fetchone()
-        next_seq = int(seq_row["next_seq"]) if seq_row and seq_row.get("next_seq") is not None else 1
-        # 3) 翌日行を INSERT（残り数量）
+        next_seq = 1  # 順延データを翌日の先頭に
+        # 3) 翌日行を INSERT（残り数量、生産順=1）
         params = {k: r.get(k) for k in (
             "production_line", "cutting_machine", "priority_order",
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",

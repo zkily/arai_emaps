@@ -139,10 +139,10 @@
               </template>
             </el-table-column>
 
-            <el-table-column label="納入先" prop="destination_name" width="200" show-overflow-tooltip>
+            <el-table-column label="納入先" prop="destination_name" width="200">
               <template #default="{ row }">
                 <template v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader">
-                  <div class="destination-cell">
+                  <div class="destination-cell destination-cell-wrap">
                     <el-icon class="destination-icon"><Location /></el-icon>
                     <span class="destination-name">{{ (row as ShippingOverviewData).destination_name }}</span>
                   </div>
@@ -152,16 +152,16 @@
 
             <el-table-column label="出荷No" prop="shipping_no" width="220">
               <template #default="{ row }">
-                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="shipping-no-cell">
+                <div v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader" class="shipping-no-cell shipping-cell-wrap">
                   {{ (row as ShippingOverviewData).shipping_no }}
                 </div>
               </template>
             </el-table-column>
 
-            <el-table-column label="製品名" prop="product_name" min-width="300" show-overflow-tooltip>
+            <el-table-column label="製品名" prop="product_name" min-width="300">
               <template #default="{ row }">
                 <template v-if="!(row as TableRow & { _groupHeader?: boolean })._groupHeader">
-                  {{ (row as ShippingOverviewData).product_name }}
+                  <div class="product-name-wrap">{{ (row as ShippingOverviewData).product_name }}</div>
                 </template>
               </template>
             </el-table-column>
@@ -190,7 +190,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { getJSTToday as getJSTTodayUtil, formatDateJST, localeForIntl } from '@/utils/dateFormat'
@@ -309,11 +309,24 @@ const hasGroups = computed(() => {
   return destinationGroups.value.some((group) => group?.destinations?.length > 0)
 })
 
-// メソッド
+// メソッド：进入页面时把主内容区滚回顶部，避免顶部内容留在「上一页」
+function scrollContentToTop() {
+  nextTick(() => {
+    const content = document.querySelector('.layout-content') as HTMLElement | null
+    if (content) content.scrollTop = 0
+  })
+}
+
 onMounted(() => {
+  scrollContentToTop()
   fetchDestinationOptions()
   loadDestinationGroups()
   fetchOverviewData()
+})
+
+// 从其他标签切回本页时也滚回顶部（keep-alive 下 onMounted 不会再次执行）
+onActivated(() => {
+  scrollContentToTop()
 })
 
 // 納入先オプションを取得（与报告页统一 API）
@@ -596,7 +609,7 @@ function handleGroupChange() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 10px 14px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.85) 0%, rgba(139, 92, 246, 0.85) 100%);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
@@ -630,6 +643,8 @@ function handleGroupChange() {
   color: #fff;
   margin: 0;
   letter-spacing: 0.02em;
+  line-height: 1.45;
+  padding: 2px 0;
 }
 
 /* ---- 筛选区・玻璃 ---- */
@@ -904,13 +919,15 @@ function handleGroupChange() {
   font-size: 12px;
   font-weight: 600;
   color: #475569;
-  padding: 8px 0;
+  padding: 10px 8px;
   border-bottom: 1px solid #e2e8f0;
+  line-height: 1.45;
 }
 
 .table-container :deep(.el-table__body td) {
-  padding: 8px 0;
+  padding: 8px;
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .table-container :deep(.el-table__body tr:hover) {
@@ -945,9 +962,19 @@ function handleGroupChange() {
   font-weight: 500;
   color: #374151;
   font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* 单元格内容过长时自动换行到下一行 */
+.destination-cell-wrap,
+.shipping-cell-wrap,
+.product-name-wrap {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.destination-cell-wrap .destination-name {
+  white-space: normal;
+  word-break: break-word;
 }
 
 .shipping-no-cell {

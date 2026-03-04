@@ -126,7 +126,24 @@
                 <div class="plan-batch-td">{{ row.lot_number ?? '-' }}</div>
                 <div class="plan-batch-td">{{ row.actual_production_quantity ?? '-' }}</div>
                 <div class="plan-batch-td plan-batch-td-actions">
-                  <el-button type="danger" link size="small" title="削除" @click.stop="deletePlanBatch(row)">
+                  <el-button
+                    type="primary"
+                    link
+                    size="small"
+                    title="複製"
+                    :loading="planBatchActionLoading === row.id"
+                    @click.stop="copyPlanBatch(row)"
+                  >
+                    <el-icon><DocumentCopy /></el-icon>
+                  </el-button>
+                  <el-button
+                    type="danger"
+                    link
+                    size="small"
+                    title="削除"
+                    :loading="planBatchActionLoading === row.id"
+                    @click.stop="deletePlanBatch(row)"
+                  >
                     <el-icon><Delete /></el-icon>
                   </el-button>
                 </div>
@@ -933,6 +950,7 @@
               </el-table-column>
               <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
               <el-table-column prop="production_line" label="ライン" width="70" align="center" show-overflow-tooltip />
+              <el-table-column prop="management_code" label="管理コード" min-width="120" show-overflow-tooltip />
               <el-table-column prop="lot_number" label="ロットNo." width="90" show-overflow-tooltip />
               <el-table-column prop="actual_production_quantity" label="ロット本数" width="84" align="right" />
               <el-table-column label="操作" width="110" align="center" fixed="right">
@@ -1104,52 +1122,62 @@
     <!-- バッチ→切断：生産日・切断機指定ダイアログ -->
     <el-dialog
       v-model="moveToCuttingDialogVisible"
-      width="480px"
+      width="440px"
       :close-on-click-modal="false"
-      class="move-to-cutting-dialog"
+      class="mt-dialog"
       @close="pendingBatchRow = null"
     >
       <template #header>
-        <div class="move-to-cutting-dialog__header">
-          <span class="move-to-cutting-dialog__title">切断指示の登録</span>
+        <div class="mt-dialog-header mt-dialog-header--cutting">
+          <div class="mt-dialog-title-wrap">
+            <span class="mt-dialog-title">切断指示の登録</span>
+            <span class="mt-dialog-subtitle">生産日と切断機を指定してバッチを移行します</span>
+          </div>
         </div>
       </template>
-      <el-form :model="moveToCuttingForm" label-width="72px" label-position="left" class="move-to-cutting-form">
-        <el-form-item label="生産日" class="move-to-cutting-form-item">
-          <div class="move-to-cutting-date-row">
+      <div class="mt-dialog-body">
+        <div class="mt-field-row">
+          <div class="mt-field-label">生産日</div>
+          <div class="mt-date-control">
+            <el-button size="small" circle @click="moveToCuttingForm.production_day = shiftDate(moveToCuttingForm.production_day || getTodayString(), -1)">
+              <el-icon><ArrowLeft/></el-icon>
+            </el-button>
             <el-date-picker
               v-model="moveToCuttingForm.production_day"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="生産日"
+              placeholder="生産日を選択"
               size="small"
-              class="move-to-cutting-date-picker"
+              class="mt-date-picker"
             />
-            <div class="move-to-cutting-date-shortcuts">
-              <el-button size="small" @click="moveToCuttingForm.production_day = shiftDate(moveToCuttingForm.production_day || getTodayString(), -1)">前日</el-button>
-              <el-button size="small" type="primary" @click="moveToCuttingForm.production_day = getTodayString()">今日</el-button>
-              <el-button size="small" @click="moveToCuttingForm.production_day = shiftDate(moveToCuttingForm.production_day || getTodayString(), 1)">翌日</el-button>
-            </div>
+            <el-button size="small" circle @click="moveToCuttingForm.production_day = shiftDate(moveToCuttingForm.production_day || getTodayString(), 1)">
+              <el-icon><ArrowRight/></el-icon>
+            </el-button>
+            <el-button size="small" plain class="mt-today-btn" @click="moveToCuttingForm.production_day = getTodayString()">今日</el-button>
           </div>
-        </el-form-item>
-        <el-form-item label="切断機" class="move-to-cutting-form-item">
-          <div class="move-to-cutting-machine-btns">
+        </div>
+        <div class="mt-field-row mt-machine-row">
+          <div class="mt-field-label">切断機</div>
+          <div class="mt-machine-grid">
             <el-button
               v-for="m in cuttingMachineOptionsFiltered"
               :key="m.machine_name"
               size="small"
               :type="moveToCuttingForm.cutting_machine === m.machine_name ? 'primary' : 'default'"
+              class="mt-machine-btn"
               @click="moveToCuttingForm.cutting_machine = m.machine_name"
             >
               {{ m.machine_name }}
             </el-button>
           </div>
-        </el-form-item>
-      </el-form>
+        </div>
+      </div>
       <template #footer>
-        <div class="move-to-cutting-dialog__footer">
-          <el-button size="small" @click="moveToCuttingDialogVisible = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="moveToCuttingSubmitting" @click="submitMoveToCutting">登録</el-button>
+        <div class="mt-dialog-footer">
+          <el-button size="small" @click="moveToCuttingDialogVisible = false">キャンセル</el-button>
+          <el-button type="primary" size="small" :loading="moveToCuttingSubmitting" class="mt-submit-btn" @click="submitMoveToCutting">
+            <el-icon style="margin-right:4px"><Check /></el-icon>登録
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -1157,94 +1185,85 @@
     <!-- 面取バッチ→面取指示：生産日・面取機指定ダイアログ -->
     <el-dialog
       v-model="moveToChamferingDialogVisible"
-      width="480px"
+      width="440px"
       :close-on-click-modal="false"
-      class="move-to-chamfering-dialog"
+      class="mt-dialog"
       @close="pendingChamferingBatchRow = null; moveToChamferingForm.production_line_2 = ''"
     >
       <template #header>
-        <div class="move-to-cutting-dialog__header">
-          <span class="move-to-cutting-dialog__title">面取指示の登録</span>
+        <div class="mt-dialog-header mt-dialog-header--chamfering">
+          <div class="mt-dialog-title-wrap">
+            <span class="mt-dialog-title">面取指示の登録</span>
+            <span class="mt-dialog-subtitle">生産日と面取機を指定してバッチを移行します</span>
+          </div>
         </div>
       </template>
-      <el-form :model="moveToChamferingForm" label-width="72px" label-position="left" class="move-to-cutting-form">
-        <el-form-item label="生産日" class="move-to-cutting-form-item">
-          <div class="move-to-cutting-date-row">
+      <div class="mt-dialog-body">
+        <div class="mt-field-row">
+          <div class="mt-field-label">生産日</div>
+          <div class="mt-date-control">
+            <el-button size="small" circle @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), -1)">
+              <el-icon><ArrowLeft/></el-icon>
+            </el-button>
             <el-date-picker
               v-model="moveToChamferingForm.production_day"
               type="date"
               value-format="YYYY-MM-DD"
-              placeholder="生産日"
+              placeholder="生産日を選択"
               size="small"
-              class="move-to-cutting-date-picker"
+              class="mt-date-picker"
             />
-            <div class="move-to-cutting-date-shortcuts">
-              <el-button size="small" @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), -1)">前日</el-button>
-              <el-button size="small" type="primary" @click="moveToChamferingForm.production_day = getTodayString()">今日</el-button>
-              <el-button size="small" @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), 1)">翌日</el-button>
-            </div>
+            <el-button size="small" circle @click="moveToChamferingForm.production_day = shiftDate(moveToChamferingForm.production_day || getTodayString(), 1)">
+              <el-icon><ArrowRight/></el-icon>
+            </el-button>
+            <el-button size="small" plain class="mt-today-btn" @click="moveToChamferingForm.production_day = getTodayString()">今日</el-button>
           </div>
-        </el-form-item>
-        <template v-if="!pendingChamferingBatchRow?.has_sw_process">
-          <el-form-item label="面取機" class="move-to-cutting-form-item">
-            <el-select
-              v-model="moveToChamferingForm.production_line"
-              placeholder="面取機を選択"
-              filterable
-              clearable
-              size="small"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="m in chamferingMachineOptions"
-                :key="m.machine_name"
-                :label="m.machine_name"
-                :value="m.machine_name"
-              />
-            </el-select>
-          </el-form-item>
-        </template>
-        <template v-else>
-          <el-form-item label="面取機" class="move-to-cutting-form-item">
-            <el-select
-              v-model="moveToChamferingForm.production_line"
-              placeholder="面取機を選択"
-              filterable
-              clearable
-              size="small"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="m in chamferingMachineOptions"
-                :key="m.machine_name"
-                :label="m.machine_name"
-                :value="m.machine_name"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="面取機（SW）" class="move-to-cutting-form-item">
-            <el-select
-              v-model="moveToChamferingForm.production_line_2"
-              placeholder="面取機（SW）を選択"
-              filterable
-              clearable
-              size="small"
-              style="width: 100%"
-            >
-              <el-option
-                v-for="m in chamferingMachineOptions"
-                :key="m.machine_name"
-                :label="m.machine_name"
-                :value="m.machine_name"
-              />
-            </el-select>
-          </el-form-item>
-        </template>
-      </el-form>
+        </div>
+
+        <div class="mt-field-row" :class="{'mt-field-col': true}">
+          <div class="mt-field-label">面取機</div>
+          <el-select
+            v-model="moveToChamferingForm.production_line"
+            placeholder="面取機を選択"
+            filterable
+            clearable
+            size="small"
+            class="mt-select-full"
+          >
+            <el-option
+              v-for="m in chamferingMachineOptions"
+              :key="m.machine_name"
+              :label="m.machine_name"
+              :value="m.machine_name"
+            />
+          </el-select>
+        </div>
+
+        <div class="mt-field-row mt-field-col" v-if="pendingChamferingBatchRow?.has_sw_process">
+          <div class="mt-field-label">面取機（SW）</div>
+          <el-select
+            v-model="moveToChamferingForm.production_line_2"
+            placeholder="面取機（SW）を選択"
+            filterable
+            clearable
+            size="small"
+            class="mt-select-full"
+          >
+            <el-option
+              v-for="m in chamferingMachineOptions"
+              :key="m.machine_name"
+              :label="m.machine_name"
+              :value="m.machine_name"
+            />
+          </el-select>
+        </div>
+      </div>
       <template #footer>
-        <div class="move-to-cutting-dialog__footer">
-          <el-button size="small" @click="moveToChamferingDialogVisible = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="moveToChamferingSubmitting" @click="submitMoveToChamfering">登録</el-button>
+        <div class="mt-dialog-footer">
+          <el-button size="small" @click="moveToChamferingDialogVisible = false">キャンセル</el-button>
+          <el-button type="primary" size="small" :loading="moveToChamferingSubmitting" class="mt-submit-btn mt-submit-btn--chamfering" @click="submitMoveToChamfering">
+            <el-icon style="margin-right:4px"><Check /></el-icon>登録
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -1639,7 +1658,7 @@
           <div class="ped-grid ped-grid-3">
             <div class="ped-field">
               <label class="ped-label">管理コード</label>
-              <el-input v-model="planEditForm.management_code" placeholder="管理コード" size="small" clearable />
+              <el-input v-model="planEditForm.management_code" placeholder="自動生成（保存時に再計算）" size="small" readonly />
             </div>
             <div class="ped-field">
               <label class="ped-label">取数</label>
@@ -2317,12 +2336,13 @@ const planSearchForm = reactive({
 
 const planPagination = reactive({
   currentPage: 1,
-  pageSize: 20,
+  pageSize: 50,
   total: 0,
 })
 
 const plans = ref<CuttingPlanRow[]>([])
 const planLoading = ref(false)
+const planBatchActionLoading = ref<number | null>(null)
 
 /** 左下：切断指示（cutting_management 表） */
 /** cutting_management: instruction_plans と同様の項目 + production_day, cutting_machine, production_sequence, cd, production_completed_check */
@@ -3295,6 +3315,67 @@ function onPlanCardClick(row: CuttingPlanRow) {
   loadEquipmentEfficiency(cd)
 }
 
+/** 生産バッチ1件を複製（同内容で新規1件追加） */
+async function copyPlanBatch(row: CuttingPlanRow) {
+  const productionMonthRaw = row.production_month ? String(row.production_month) : ''
+  const productionMonth = productionMonthRaw ? productionMonthRaw.slice(0, 7) : ''
+  const productCd = (row.product_cd ?? '').toString().trim()
+  const productName = (row.product_name ?? '').toString().trim()
+  if (!productionMonth || !productCd || !productName) {
+    ElMessage.error('複製元のデータが不足しているため複製できません')
+    return
+  }
+  const id = row.id ?? null
+  planBatchActionLoading.value = id
+  try {
+    const payload: Record<string, unknown> = {
+      production_month: productionMonth,
+      production_line: row.production_line ?? '',
+      priority_order: row.priority_order ?? 0,
+      product_cd: productCd,
+      product_name: productName,
+      material_name: row.material_name ?? '',
+      material_manufacturer: row.material_manufacturer ?? '',
+      standard_specification: row.standard_specification ?? '',
+      planned_quantity: row.planned_quantity ?? 0,
+      production_lot_size: row.production_lot_size ?? null,
+      lot_number: row.lot_number ?? '',
+      actual_production_quantity: row.actual_production_quantity ?? 0,
+      take_count: row.take_count ?? null,
+      cutting_length: row.cutting_length ?? null,
+      chamfering_length: row.chamfering_length ?? null,
+      developed_length: row.developed_length ?? null,
+      scrap_length: row.scrap_length ?? null,
+      start_date: row.start_date ? String(row.start_date).slice(0, 10) : '',
+      end_date: row.end_date ? String(row.end_date).slice(0, 10) : '',
+      has_chamfering_process: row.has_chamfering_process ?? 0,
+      has_sw_process: row.has_sw_process ?? 0,
+    }
+    const result = await request.post<{ success?: boolean; message?: string }>(
+      '/api/plan/batch/create',
+      payload
+    )
+    if ((result as any)?.success) {
+      ElMessage.success('複製しました')
+      loadPlans()
+    } else {
+      throw new Error((result as any)?.message ?? '複製に失敗しました')
+    }
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string | unknown[] } }; message?: string }
+    const detail = err.response?.data?.detail
+    let msg: string
+    if (typeof detail === 'string') msg = detail
+    else if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string } | unknown
+      msg = (first && typeof first === 'object' && 'msg' in first ? (first as { msg: string }).msg : String(first))
+    } else msg = err.message ?? '複製に失敗しました'
+    ElMessage.error(msg)
+  } finally {
+    planBatchActionLoading.value = null
+  }
+}
+
 /** 生産バッチ1件を削除（確認ダイアログ後） */
 async function deletePlanBatch(row: CuttingPlanRow) {
   const id = row.id
@@ -3305,15 +3386,21 @@ async function deletePlanBatch(row: CuttingPlanRow) {
       '削除の確認',
       { confirmButtonText: '削除', cancelButtonText: 'キャンセル', type: 'warning' }
     )
+  } catch {
+    return
+  }
+  planBatchActionLoading.value = id
+  try {
     await request.delete(`/api/plan/batch/${id}`)
     ElMessage.success('削除しました')
     loadPlans()
   } catch (e) {
-    if ((e as string) === 'cancel') return
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (e as { message?: string })?.message
       ?? '削除に失敗しました'
     ElMessage.error(String(msg))
+  } finally {
+    planBatchActionLoading.value = null
   }
 }
 
@@ -3868,7 +3955,7 @@ async function savePlanEdit() {
       is_chamfering_instructed: planEditForm.is_chamfering_instructed,
       has_sw_process: planEditForm.has_sw_process,
       is_sw_instructed: planEditForm.is_sw_instructed,
-      management_code: planEditForm.management_code || null,
+      // management_code は instruction_plans のトリガーで自動生成・更新のため送信しない
       take_count: planEditForm.take_count,
       cutting_length: planEditForm.cutting_length,
       chamfering_length: planEditForm.chamfering_length,
@@ -5019,8 +5106,8 @@ async function confirmCuttingActual() {
   }
   confirmCuttingActualLoading.value = true
   try {
+    // 指定日付の全設備の合計で実績確定（当前選択の切断機に限定しない）
     const params: Record<string, string> = { production_day: day }
-    if (cuttingMachineFilter.value) params.cutting_machine = cuttingMachineFilter.value
     const res = await request.post<{ success?: boolean; message?: string; inserted?: number; total_quantity?: number }>(
       '/api/plan/cutting-management/confirm-actual',
       null,
@@ -7260,82 +7347,168 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
-/* 切断指示の登録：生産日快捷・切断機按钮・紧凑UI（body 直下 teleport のため global） */
-.move-to-cutting-dialog .el-dialog {
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 12px 40px rgba(30, 58, 95, 0.18), 0 4px 12px rgba(0, 0, 0, 0.06);
+/* ============================================================
+   切断指示・面取指示 登録ダイアログ (.mt-dialog)
+   ============================================================ */
+.mt-dialog .el-dialog {
+  border-radius: 12px !important;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15) !important;
+  overflow: hidden !important;
 }
-.move-to-cutting-dialog .el-dialog__header {
-  padding: 0;
-  margin: 0;
-  border: none;
+.mt-dialog .el-dialog__header {
+  padding: 0 !important;
+  margin-right: 0 !important;
+  border-bottom: 1px solid #e8edf3 !important;
 }
-.move-to-cutting-dialog .el-dialog__headerbtn {
-  top: 10px;
-  right: 12px;
-  width: 28px;
-  height: 28px;
-  color: rgba(255, 255, 255, 0.85);
+.mt-dialog .el-dialog__headerbtn {
+  top: 12px !important;
+  right: 14px !important;
+  z-index: 10;
 }
-.move-to-cutting-dialog .el-dialog__headerbtn:hover {
-  color: #fff;
+.mt-dialog .el-dialog__headerbtn .el-icon {
+  color: rgba(255, 255, 255, 0.8) !important;
 }
-.move-to-cutting-dialog__header {
-  padding: 10px 14px 10px 16px;
-  background: linear-gradient(135deg, #334155 0%, #475569 50%, #64748b 100%);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+.mt-dialog .el-dialog__headerbtn:hover .el-icon {
+  color: #ffffff !important;
 }
-.move-to-cutting-dialog__title { opacity: 0.98; }
-.move-to-cutting-dialog .el-dialog__body {
-  padding: 10px 14px 12px;
+.mt-dialog .el-dialog__body {
+  padding: 16px 20px !important;
   background: #fafbfc;
 }
-.move-to-cutting-form .el-form-item.move-to-cutting-form-item {
-  margin-bottom: 10px;
+.mt-dialog-header {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
-.move-to-cutting-form .el-form-item:last-child { margin-bottom: 0; }
-.move-to-cutting-form .el-form-item__label {
-  font-size: 12px;
-  color: #64748b;
-  padding-right: 10px;
+.mt-dialog-header--cutting {
+  background: linear-gradient(135deg, #3730a3 0%, #4f46e5 100%);
 }
-.move-to-cutting-date-row {
+.mt-dialog-header--chamfering {
+  background: linear-gradient(135deg, #065f46 0%, #059669 100%);
+}
+.mt-dialog-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mt-dialog-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+}
+.mt-dialog-subtitle {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.mt-field-row {
+  margin-bottom: 16px;
+}
+.mt-field-row:last-child {
+  margin-bottom: 0;
+}
+.mt-field-col {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  width: 100%;
 }
-.move-to-cutting-date-picker { width: 100% !important; max-width: 100%; }
-.move-to-cutting-date-picker .el-input__wrapper { border-radius: 6px; }
-.move-to-cutting-date-shortcuts {
+.mt-field-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+}
+.mt-field-col .mt-field-label {
+  margin-bottom: 0; /* for column layout, gap handles it */
+}
+.mt-date-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+}
+.mt-date-picker {
+  flex: 1;
+}
+.mt-date-picker .el-input__wrapper {
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 4px !important;
+}
+.mt-date-picker .el-input__inner {
+  text-align: center;
+  font-weight: 600;
+  color: #1e293b;
+}
+.mt-today-btn {
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  height: 24px !important;
+  border-radius: 4px !important;
+}
+.mt-machine-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
 }
-.move-to-cutting-date-shortcuts .el-button { margin-left: 0; }
-.move-to-cutting-machine-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.mt-machine-btn {
+  margin-left: 0 !important;
+  border-radius: 6px !important;
+  font-size: 11.5px !important;
+  padding: 6px 14px !important;
+  min-height: 30px !important;
+  transition: all 0.2s ease !important;
 }
-.move-to-cutting-machine-btns .el-button {
-  margin-left: 0;
-  min-height: 28px;
-  padding: 4px 12px;
-  font-size: 12px;
-  border-radius: 6px;
+.mt-machine-btn.el-button--default {
+  background: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
 }
-.move-to-cutting-dialog__footer {
+.mt-machine-btn.el-button--default:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #1e293b !important;
+}
+.mt-select-full {
+  width: 100% !important;
+}
+.mt-select-full .el-input__wrapper {
+  border-radius: 6px !important;
+  box-shadow: 0 0 0 1px #e2e8f0 !important;
+}
+.mt-select-full .el-input__wrapper:focus-within {
+  box-shadow: 0 0 0 2px #3b82f6 !important;
+}
+.mt-dialog-footer {
+  padding: 12px 20px 14px;
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 8px 14px 10px;
-  background: #fff;
-  border-top: 1px solid #e2e8f0;
+  gap: 10px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
+}
+.mt-dialog-footer .el-button {
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+}
+.mt-submit-btn--chamfering {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+  border-color: #059669 !important;
+}
+.mt-submit-btn--chamfering:hover {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%) !important;
 }
 
 /* 切断指示の編集：现代精美UI（body 直下 teleport のため global） */
