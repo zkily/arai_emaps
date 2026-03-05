@@ -245,6 +245,7 @@
             </div>
           </div>
           <div v-loading="cuttingManagementLoading" class="cutting-mgmt-table-wrap">
+            <div class="cutting-mgmt-h-scroll">
             <div class="cutting-mgmt-table-inner">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -255,6 +256,7 @@
                   <div class="cutting-mgmt-th">製品名</div>
                   <div class="cutting-mgmt-th">原材料</div>
                   <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">不良</div>
                   <div class="cutting-mgmt-th">完了</div>
                   <div class="cutting-mgmt-th">生産順</div>
                   <div class="cutting-mgmt-th">生産時間</div>
@@ -320,6 +322,7 @@
                   <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.material_name ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.defect_qty ?? '-' }}</div>
                   <div class="cutting-mgmt-td cutting-mgmt-td-switch">
                     <el-switch
                       :model-value="!!row.production_completed_check"
@@ -359,22 +362,12 @@
               </div>
               </div>
             </div>
+            </div>
             <div v-if="cuttingManagementList.length" class="cutting-mgmt-tfoot-wrap">
-              <div class="cutting-mgmt-tfoot">
-                <div class="cutting-mgmt-tr">
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTodayTotal.quantity }}</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTodayTotal.time ?? '-' }}</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-actions"></div>
-                </div>
+              <div class="cutting-mgmt-tfoot cutting-mgmt-tfoot-summary">
+                <span class="cutting-mgmt-tfoot-item">生産数合計：{{ cuttingTodayTotal.quantity }}</span>
+                <span class="cutting-mgmt-tfoot-item">不良合計：{{ cuttingTodayTotal.defect }}</span>
+                <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ cuttingTodayTotal.time ?? '-' }}</span>
               </div>
             </div>
             <div v-if="!cuttingManagementList.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -398,6 +391,7 @@
             </div>
           </div>
           <div v-loading="cuttingManagementLoading" class="cutting-mgmt-table-wrap">
+            <div class="cutting-mgmt-h-scroll">
             <div class="cutting-mgmt-table-inner cutting-mgmt-table-inner--tomorrow">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -406,6 +400,7 @@
                   <div class="cutting-mgmt-th">切断機</div>
                   <div class="cutting-mgmt-th">製品名</div>
                   <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">不良</div>
                   <div class="cutting-mgmt-th">生産順</div>
                   <div class="cutting-mgmt-th">生産時間</div>
                 </div>
@@ -466,6 +461,7 @@
                   <div class="cutting-mgmt-td">{{ row.cutting_machine ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.defect_qty ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_sequence ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_time ?? '-' }}</div>
                 </div>
@@ -477,17 +473,12 @@
               </div>
               </div>
             </div>
+            </div>
             <div v-if="cuttingManagementListTomorrow.length" class="cutting-mgmt-tfoot-wrap cutting-mgmt-tfoot-wrap--tomorrow">
-              <div class="cutting-mgmt-tfoot">
-                <div class="cutting-mgmt-tr">
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTomorrowTotal.quantity }}</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ cuttingTomorrowTotal.time ?? '-' }}</div>
-                </div>
+              <div class="cutting-mgmt-tfoot cutting-mgmt-tfoot-summary">
+                <span class="cutting-mgmt-tfoot-item">生産数合計：{{ cuttingTomorrowTotal.quantity }}</span>
+                <span class="cutting-mgmt-tfoot-item">不良合計：{{ cuttingTomorrowTotal.defect }}</span>
+                <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ cuttingTomorrowTotal.time ?? '-' }}</span>
               </div>
             </div>
             <div v-if="!cuttingManagementListTomorrow.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -500,6 +491,9 @@
           <div class="chamfering-batch-section-card">
             <div class="cutting-mgmt-header">
               <span class="cutting-mgmt-title">面取バッチ一覧</span>
+              <div class="cutting-mgmt-header-right">
+                <el-button type="primary" size="small" @click="openChamferingPlanNewDialog">新規追加</el-button>
+              </div>
             </div>
             <div
               v-loading="chamferingBatchLoading"
@@ -534,6 +528,7 @@
                     :class="{ 'plan-batch-row-selected': selectedChamferingProductCd === (row.product_cd ?? '') }"
                     draggable="true"
                     @click.stop="onChamferingBatchRowClick(row)"
+                    @dblclick.stop="openChamferingPlanEditDialog(row)"
                     @dragstart="onChamferingBatchDragStart($event, row)"
                     @dragend="onChamferingDragEnd"
                   >
@@ -686,6 +681,7 @@
                   <div class="cutting-mgmt-th">製品名</div>
                   <div class="cutting-mgmt-th">原材料</div>
                   <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">不良</div>
                   <div class="cutting-mgmt-th">完了</div>
                   <div class="cutting-mgmt-th">カ無</div>
                   <div class="cutting-mgmt-th">生産順</div>
@@ -712,11 +708,37 @@
                 >
                   <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_line ?? '-' }}</div>
-                  <div class="cutting-mgmt-td">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</div>
+                  <div
+                    class="cutting-mgmt-td cutting-mgmt-td-production-day"
+                    :class="{ 'is-editing-production-day': editingChamferingProductionDayId === row.id }"
+                    @dblclick.stop="startEditChamferingProductionDay(row)"
+                  >
+                    <template v-if="editingChamferingProductionDayId === row.id">
+                      <span class="production-day-editor">
+                        <el-button type="default" size="small" circle title="前日" @click.stop="editingChamferingProductionDayValue = shiftDate(editingChamferingProductionDayValue, -1); saveChamferingProductionDay(row, editingChamferingProductionDayValue)">
+                          <el-icon><ArrowLeft /></el-icon>
+                        </el-button>
+                        <el-date-picker
+                          v-model="editingChamferingProductionDayValue"
+                          type="date"
+                          value-format="YYYY-MM-DD"
+                          size="small"
+                          class="production-day-picker-inline"
+                          @change="(v: string) => v && saveChamferingProductionDay(row, v)"
+                        />
+                        <el-button type="default" size="small" circle title="翌日" @click.stop="editingChamferingProductionDayValue = shiftDate(editingChamferingProductionDayValue, 1); saveChamferingProductionDay(row, editingChamferingProductionDayValue)">
+                          <el-icon><ArrowRight /></el-icon>
+                        </el-button>
+                        <el-button type="info" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditChamferingProductionDay">×</el-button>
+                      </span>
+                    </template>
+                    <template v-else>{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
+                  </div>
                   <div class="cutting-mgmt-td">{{ row.chamfering_machine ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.material_name ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.defect_qty ?? '-' }}</div>
                   <div class="cutting-mgmt-td cutting-mgmt-td-switch">
                     <el-switch
                       :model-value="!!row.production_completed_check"
@@ -764,21 +786,10 @@
               </div>
             </div>
             <div v-if="chamferingManagementListToday.length" class="cutting-mgmt-tfoot-wrap">
-              <div class="cutting-mgmt-tfoot">
-                <div class="cutting-mgmt-tr">
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTodayTotal.quantity }}</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTodayTotal.time ?? '-' }}</div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-actions"></div>
-                </div>
+              <div class="cutting-mgmt-tfoot cutting-mgmt-tfoot-summary">
+                <span class="cutting-mgmt-tfoot-item">生産数合計：{{ chamferingTodayTotal.quantity }}</span>
+                <span class="cutting-mgmt-tfoot-item">不良合計：{{ chamferingTodayTotal.defect }}</span>
+                <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ chamferingTodayTotal.time ?? '-' }}</span>
               </div>
             </div>
             <div v-if="!chamferingManagementListToday.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -819,6 +830,7 @@
                   <div class="cutting-mgmt-th">面取機</div>
                   <div class="cutting-mgmt-th">製品名</div>
                   <div class="cutting-mgmt-th">生産数</div>
+                  <div class="cutting-mgmt-th">不良</div>
                   <div class="cutting-mgmt-th">生産順</div>
                   <div class="cutting-mgmt-th">生産時間</div>
                 </div>
@@ -840,10 +852,36 @@
                   @dragover="onDragoverChamferingRow($event)"
                 >
                   <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
-                  <div class="cutting-mgmt-td">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</div>
+                  <div
+                    class="cutting-mgmt-td cutting-mgmt-td-production-day"
+                    :class="{ 'is-editing-production-day': editingChamferingProductionDayId === row.id }"
+                    @dblclick.stop="startEditChamferingProductionDay(row)"
+                  >
+                    <template v-if="editingChamferingProductionDayId === row.id">
+                      <span class="production-day-editor">
+                        <el-button type="default" size="small" circle title="前日" @click.stop="editingChamferingProductionDayValue = shiftDate(editingChamferingProductionDayValue, -1); saveChamferingProductionDay(row, editingChamferingProductionDayValue)">
+                          <el-icon><ArrowLeft /></el-icon>
+                        </el-button>
+                        <el-date-picker
+                          v-model="editingChamferingProductionDayValue"
+                          type="date"
+                          value-format="YYYY-MM-DD"
+                          size="small"
+                          class="production-day-picker-inline"
+                          @change="(v: string) => v && saveChamferingProductionDay(row, v)"
+                        />
+                        <el-button type="default" size="small" circle title="翌日" @click.stop="editingChamferingProductionDayValue = shiftDate(editingChamferingProductionDayValue, 1); saveChamferingProductionDay(row, editingChamferingProductionDayValue)">
+                          <el-icon><ArrowRight /></el-icon>
+                        </el-button>
+                        <el-button type="info" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditChamferingProductionDay">×</el-button>
+                      </span>
+                    </template>
+                    <template v-else>{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
+                  </div>
                   <div class="cutting-mgmt-td">{{ row.chamfering_machine ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.product_name ?? row.product_cd ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                  <div class="cutting-mgmt-td">{{ row.defect_qty ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_sequence ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_time ?? '-' }}</div>
                 </div>
@@ -855,16 +893,10 @@
               </div>
             </div>
             <div v-if="chamferingManagementListTomorrow.length" class="cutting-mgmt-tfoot-wrap cutting-mgmt-tfoot-wrap--tomorrow">
-              <div class="cutting-mgmt-tfoot">
-                <div class="cutting-mgmt-tr">
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-label">合計</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTomorrowTotal.quantity }}</div>
-                  <div class="cutting-mgmt-td"></div>
-                  <div class="cutting-mgmt-td cutting-mgmt-td-total-value">{{ chamferingTomorrowTotal.time ?? '-' }}</div>
-                </div>
+              <div class="cutting-mgmt-tfoot cutting-mgmt-tfoot-summary">
+                <span class="cutting-mgmt-tfoot-item">生産数合計：{{ chamferingTomorrowTotal.quantity }}</span>
+                <span class="cutting-mgmt-tfoot-item">不良合計：{{ chamferingTomorrowTotal.defect }}</span>
+                <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ chamferingTomorrowTotal.time ?? '-' }}</span>
               </div>
             </div>
             <div v-if="!chamferingManagementListTomorrow.length && !chamferingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -877,6 +909,14 @@
           <div class="cutting-mgmt-header">
             <span class="cutting-mgmt-title">カンバン発行</span>
             <div class="cutting-mgmt-date-wrap">
+              <el-button
+                size="small"
+                circle
+                title="前日"
+                @click="shiftKanbanFilterDay(-1)"
+              >
+                ‹
+              </el-button>
               <el-date-picker
                 v-model="kanbanFilterProductionDay"
                 type="date"
@@ -888,6 +928,22 @@
                 style="width: 130px;"
                 @change="loadKanbanIssuance"
               />
+              <el-button
+                size="small"
+                plain
+                class="mt-today-btn"
+                @click="setKanbanFilterToday"
+              >
+                今日
+              </el-button>
+              <el-button
+                size="small"
+                circle
+                title="翌日"
+                @click="shiftKanbanFilterDay(1)"
+              >
+                ›
+              </el-button>
               <el-select
                 v-model="kanbanFilterStatus"
                 placeholder="状態"
@@ -926,7 +982,7 @@
           </div>
           <div v-loading="kanbanIssuanceLoading" class="cutting-mgmt-table-wrap">
             <el-table
-              :data="kanbanIssuanceList"
+              :data="kanbanIssuanceListPaged"
               size="small"
               class="cutting-mgmt-table"
               max-height="260"
@@ -948,8 +1004,9 @@
               <el-table-column prop="production_day" label="生産日" width="110" align="center">
                 <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
               </el-table-column>
-              <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
+              <el-table-column prop="product_name" label="製品名" min-width="140" show-overflow-tooltip />
               <el-table-column prop="production_line" label="ライン" width="70" align="center" show-overflow-tooltip />
+              <el-table-column prop="cutting_machine" label="切断機" width="90" align="center" show-overflow-tooltip />
               <el-table-column prop="management_code" label="管理コード" min-width="120" show-overflow-tooltip />
               <el-table-column prop="lot_number" label="ロットNo." width="90" show-overflow-tooltip />
               <el-table-column prop="actual_production_quantity" label="ロット本数" width="84" align="right" />
@@ -979,6 +1036,16 @@
                 </template>
               </el-table-column>
             </el-table>
+            <el-pagination
+              v-if="kanbanIssuanceList.length > 0"
+              v-model:current-page="kanbanPage"
+              v-model:page-size="kanbanPageSize"
+              :total="kanbanIssuanceList.length"
+              :page-sizes="[30, 50, 100, 200]"
+              layout="total, sizes, prev, pager, next"
+              small
+              class="kanban-pagination"
+            />
             <div v-if="!kanbanIssuanceList.length && !kanbanIssuanceLoading" class="cutting-mgmt-empty">データなし</div>
           </div>
         </div>
@@ -1307,6 +1374,14 @@
             clearable
           />
         </el-form-item>
+        <el-form-item label="不良数" class="cutting-edit-form-item">
+          <el-input
+            v-model="cuttingEditForm.defect_qty"
+            placeholder="不良数"
+            size="small"
+            clearable
+          />
+        </el-form-item>
         <el-form-item label="生産順" class="cutting-edit-form-item">
           <el-input-number
             v-model="cuttingEditForm.production_sequence"
@@ -1321,6 +1396,7 @@
           <div class="cutting-edit-remarks-btns">
             <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ・試作')">取合せ・試作</el-button>
             <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ')">取合せ</el-button>
+            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('成型17号用')">成型17号用</el-button>
           </div>
           <el-input
             v-model="cuttingEditForm.remarks"
@@ -1375,7 +1451,16 @@
         <el-form-item label="生産数" class="cutting-edit-form-item">
           <el-input
             v-model="chamferingEditForm.actual_production_quantity"
-            placeholder="生産数"
+            placeholder="生産数（変更時、差を不良数に自動反映）"
+            size="small"
+            clearable
+            @input="onChamferingEditProductionQuantityInput"
+          />
+        </el-form-item>
+        <el-form-item label="不良数" class="cutting-edit-form-item">
+          <el-input
+            v-model="chamferingEditForm.defect_qty"
+            placeholder="不良数（手動変更可）"
             size="small"
             clearable
           />
@@ -1553,13 +1638,14 @@
       width="min(96vw, 900px)"
       :close-on-click-modal="false"
       class="plan-edit-dialog"
-      @close="editingPlanId = null"
+      @close="editingPlanId = null; editingChamferingPlanId = null"
     >
       <template #header>
         <div class="ped-header">
           <div class="ped-header-icon"><el-icon size="16"><Calendar /></el-icon></div>
           <div class="ped-header-text">
             <span class="ped-title">バッチ内容編集</span>
+            <span v-if="editingChamferingPlanId" class="ped-badge">面取バッチ</span>
             <span class="ped-subtitle" v-if="planEditForm.product_name">{{ planEditForm.product_name }}</span>
           </div>
         </div>
@@ -1750,6 +1836,7 @@
             <div class="snd-field">
               <label class="snd-field-label">当日完成数 <span class="snd-required">*</span></label>
               <el-input
+                ref="splitTodayQuantityInputRef"
                 v-model="splitTodayQuantityInput"
                 type="text"
                 inputmode="numeric"
@@ -1849,6 +1936,7 @@
             <div class="snd-field">
               <label class="snd-field-label">当日完成数 <span class="snd-required">*</span></label>
               <el-input
+                ref="chamferingSplitTodayQuantityInputRef"
                 v-model="chamferingSplitTodayQuantityInput"
                 type="text"
                 inputmode="numeric"
@@ -2273,13 +2361,131 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 面取バッチ一覧：新規追加ダイアログ（chamfering_plans 項目・新規バッチ追加と同様の nr スタイル） -->
+    <el-dialog
+      v-model="chamferingPlanNewDialogVisible"
+      width="min(96vw, 580px)"
+      :close-on-click-modal="false"
+      class="new-record-dialog chamfering-plan-new-dialog"
+      :show-close="false"
+      @closed="resetChamferingPlanNewForm"
+    >
+      <template #header>
+        <div class="nr-header nr-header--normal">
+          <div class="nr-header-icon">
+            <el-icon size="16"><DocumentCopy /></el-icon>
+          </div>
+          <div class="nr-header-text">
+            <span class="nr-title">面取バッチ 新規追加</span>
+            <span class="nr-subtitle">chamfering_plans</span>
+          </div>
+          <el-button class="nr-close-btn" text @click="chamferingPlanNewDialogVisible = false">
+            <el-icon size="15"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></el-icon>
+          </el-button>
+        </div>
+      </template>
+
+      <div class="nr-body">
+        <div class="nr-section">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-blue"></span>基本情報</div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">生産月<em>*</em></span>
+              <el-date-picker v-model="chamferingPlanNewForm.production_month" type="month" value-format="YYYY-MM" placeholder="YYYY-MM" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">生産日<em>*</em></span>
+              <el-date-picker v-model="chamferingPlanNewForm.production_day" type="date" value-format="YYYY-MM-DD" placeholder="YYYY-MM-DD" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">ライン（面取機）<em>*</em></span>
+              <el-select v-model="chamferingPlanNewForm.production_line" placeholder="面取機を選択" filterable clearable size="small" style="width:100%">
+                <el-option v-for="m in chamferingMachineOptions" :key="m.machine_name" :label="m.machine_name" :value="m.machine_name" />
+              </el-select>
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">順位</span>
+              <el-input-number v-model="chamferingPlanNewForm.production_order" :min="0" :max="9999" controls-position="right" size="small" style="width:100%" placeholder="省略可" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">製品<em>*</em></span>
+              <el-select v-model="chamferingPlanNewForm.product_cd" placeholder="製品を選択" filterable clearable size="small" style="width:100%" @change="onChamferingPlanNewProductChange">
+                <el-option v-for="p in chamferingProductOptions" :key="p.product_cd" :label="`${p.product_name ?? ''}  [${p.product_cd}]`" :value="p.product_cd" />
+              </el-select>
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">製品名（確認）</span>
+              <el-input v-model="chamferingPlanNewForm.product_name" size="small" readonly style="background:#f8fafc" />
+            </div>
+          </div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">ロットNo</span>
+              <el-input v-model="chamferingPlanNewForm.lot_number" placeholder="ロットNo" size="small" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">原材料</span>
+              <el-input v-model="chamferingPlanNewForm.material_name" placeholder="原材料名" size="small" />
+            </div>
+            <div class="nr-col"></div>
+          </div>
+        </div>
+
+        <div class="nr-section">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-green"></span>数量・寸法</div>
+          <div class="nr-row3">
+            <div class="nr-col">
+              <span class="nr-lbl">生産数</span>
+              <el-input-number v-model="chamferingPlanNewForm.actual_production_quantity" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">ロット数</span>
+              <el-input-number v-model="chamferingPlanNewForm.production_lot_size" :min="0" controls-position="right" size="small" style="width:100%" />
+            </div>
+            <div class="nr-col">
+              <span class="nr-lbl">面取長</span>
+              <el-input-number v-model="chamferingPlanNewForm.chamfering_length" :min="0" :precision="2" controls-position="right" size="small" style="width:100%" />
+            </div>
+          </div>
+        </div>
+
+        <div class="nr-section nr-section--last">
+          <div class="nr-sec-hd"><span class="nr-sec-dot nr-dot-amber"></span>工程</div>
+          <div class="nr-row3 nr-row-align-end">
+            <div class="nr-col">
+              <span class="nr-lbl">SW工程</span>
+              <div class="nr-switches">
+                <label class="nr-sw-item">
+                  <el-switch v-model="chamferingPlanNewForm.has_sw_process" :active-value="1" :inactive-value="0" size="small" />
+                  <span>SW</span>
+                </label>
+              </div>
+            </div>
+            <div class="nr-col"></div>
+            <div class="nr-col"></div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="nr-footer">
+          <el-button size="small" @click="chamferingPlanNewDialogVisible = false">キャンセル</el-button>
+          <el-button type="primary" size="small" :loading="chamferingPlanNewSubmitting" class="nr-save-btn" @click="saveChamferingPlanNew">
+            <el-icon style="margin-right:3px"><Check /></el-icon>保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'CuttingInstruction' })
 
-import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning } from '@element-plus/icons-vue'
 import request from '@/utils/request'
@@ -2368,6 +2574,7 @@ interface CuttingManagementRow {
   is_sw_instructed?: number | null
   management_code?: string | null
   actual_production_quantity?: number | null
+  defect_qty?: number | null
   take_count?: number | null
   cutting_length?: number | null
   chamfering_length?: number | null
@@ -2429,10 +2636,11 @@ const cuttingMachineOptions = ref<{ machine_name: string }[]>([])
 const cuttingMachineOptionsFiltered = computed(() =>
   cuttingMachineOptions.value.filter((m) => m.machine_name !== '外注切断')
 )
-/** 切断指示-今日：生産数・生産時間の合計 */
+/** 切断指示-今日：生産数・不良・生産時間の合計 */
 const cuttingTodayTotal = computed(() => {
   const list = cuttingManagementList.value
   let qty = 0
+  let defect = 0
   let time = 0
   for (const row of list) {
     const n = row.actual_production_quantity
@@ -2441,18 +2649,21 @@ const cuttingTodayTotal = computed(() => {
       const v = Number(String(n).trim())
       if (!Number.isNaN(v)) qty += v
     }
+    const d = row.defect_qty
+    if (d != null && typeof d === 'number' && !Number.isNaN(d)) defect += d
     const t = row.production_time
     if (t != null && (typeof t === 'number' || typeof t === 'string')) {
       const tv = typeof t === 'number' ? t : parseFloat(String(t))
       if (!Number.isNaN(tv)) time += tv
     }
   }
-  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+  return { quantity: qty, defect, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
-/** 切断指示-翌日：生産数・生産時間の合計 */
+/** 切断指示-翌日：生産数・不良・生産時間の合計 */
 const cuttingTomorrowTotal = computed(() => {
   const list = cuttingManagementListTomorrow.value
   let qty = 0
+  let defect = 0
   let time = 0
   for (const row of list) {
     const n = row.actual_production_quantity
@@ -2461,18 +2672,21 @@ const cuttingTomorrowTotal = computed(() => {
       const v = Number(String(n).trim())
       if (!Number.isNaN(v)) qty += v
     }
+    const d = row.defect_qty
+    if (d != null && typeof d === 'number' && !Number.isNaN(d)) defect += d
     const t = row.production_time
     if (t != null && (typeof t === 'number' || typeof t === 'string')) {
       const tv = typeof t === 'number' ? t : parseFloat(String(t))
       if (!Number.isNaN(tv)) time += tv
     }
   }
-  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+  return { quantity: qty, defect, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
-/** 面取指示-今日：生産数・生産時間の合計 */
+/** 面取指示-今日：生産数・不良・生産時間の合計 */
 const chamferingTodayTotal = computed(() => {
   const list = chamferingManagementListToday.value
   let qty = 0
+  let defect = 0
   let time = 0
   for (const row of list) {
     const n = row.actual_production_quantity
@@ -2481,18 +2695,21 @@ const chamferingTodayTotal = computed(() => {
       const v = Number(String(n).trim())
       if (!Number.isNaN(v)) qty += v
     }
+    const d = row.defect_qty
+    if (d != null && typeof d === 'number' && !Number.isNaN(d)) defect += d
     const t = row.production_time
     if (t != null && (typeof t === 'number' || typeof t === 'string')) {
       const tv = typeof t === 'number' ? t : parseFloat(String(t))
       if (!Number.isNaN(tv)) time += tv
     }
   }
-  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+  return { quantity: qty, defect, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
-/** 面取指示-翌日：生産数・生産時間の合計 */
+/** 面取指示-翌日：生産数・不良・生産時間の合計 */
 const chamferingTomorrowTotal = computed(() => {
   const list = chamferingManagementListTomorrow.value
   let qty = 0
+  let defect = 0
   let time = 0
   for (const row of list) {
     const n = row.actual_production_quantity
@@ -2501,13 +2718,15 @@ const chamferingTomorrowTotal = computed(() => {
       const v = Number(String(n).trim())
       if (!Number.isNaN(v)) qty += v
     }
+    const d = row.defect_qty
+    if (d != null && typeof d === 'number' && !Number.isNaN(d)) defect += d
     const t = row.production_time
     if (t != null && (typeof t === 'number' || typeof t === 'string')) {
       const tv = typeof t === 'number' ? t : parseFloat(String(t))
       if (!Number.isNaN(tv)) time += tv
     }
   }
-  return { quantity: qty, time: time === 0 ? null : Math.round(time * 10) / 10 }
+  return { quantity: qty, defect, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
 /** バッチ→切断にドロップ時：生産日・切断機を指定するダイアログ */
 const moveToCuttingDialogVisible = ref(false)
@@ -2525,6 +2744,7 @@ const editingCuttingId = ref<number | null>(null)
 const cuttingEditForm = reactive({
   cutting_machine: '',
   actual_production_quantity: '' as string,
+  defect_qty: '' as string,
   production_sequence: 1,
   remarks: '',
 })
@@ -2532,9 +2752,12 @@ const cuttingEditSubmitting = ref(false)
 /** 面取指示：双击编辑弹窗 */
 const chamferingEditDialogVisible = ref(false)
 const editingChamferingId = ref<number | null>(null)
+/** 面取指示編集：打开时的生産数基准，修改生産数时 不良数 = 基准 - 生産数 */
+const chamferingEditBaselineQuantity = ref(0)
 const chamferingEditForm = reactive({
   chamfering_machine: '',
   actual_production_quantity: '' as string,
+  defect_qty: '' as string,
   production_sequence: 1,
   remarks: '',
 })
@@ -2570,14 +2793,18 @@ watch(chamferingManagementCodePreview, (v) => { chamferingNewForm.management_cod
 /** 生産日セル：双击でインライン編集（±1日ボタン + 日期选择） */
 const editingProductionDayId = ref<number | null>(null)
 const editingProductionDayValue = ref('')
+/** 面取指示：生産日インライン編集用 */
+const editingChamferingProductionDayId = ref<number | null>(null)
+const editingChamferingProductionDayValue = ref('')
 /** 完了切替 loading：当前正在请求的行 id，用于显示该行的 switch loading */
 const cuttingCompletedLoading = ref<number>(0)
 /** 面取指示 完了/カウント無 切替 loading */
 const chamferingCompletedLoading = ref<number | null>(null)
 const chamferingNoCountLoading = ref<number | null>(null)
-/** 生産バッチ双击编辑 */
+/** 生産バッチ双击编辑（面取バッチ一覧から開く場合は editingChamferingPlanId を設定） */
 const planEditDialogVisible = ref(false)
 const editingPlanId = ref<number | null>(null)
+const editingChamferingPlanId = ref<number | null>(null)
 const planEditSubmitting = ref(false)
 const planEditForm = reactive({
   production_month: '',
@@ -2850,6 +3077,7 @@ interface ChamferingManagementRow {
   product_cd?: string | null
   product_name?: string | null
   actual_production_quantity?: number | null
+  defect_qty?: number | null
   production_lot_size?: number | null
   lot_number?: string | null
   chamfering_length?: number | null
@@ -2896,6 +3124,24 @@ const chamferingBatchLoading = ref(false)
 const chamferingBatchActionLoading = ref<number | null>(null)
 const chamferingSwLoading = ref<number | null>(null)
 
+/** 面取バッチ一覧：新規追加ダイアログ */
+const chamferingPlanNewDialogVisible = ref(false)
+const chamferingPlanNewSubmitting = ref(false)
+const chamferingPlanNewForm = reactive({
+  production_month: '',
+  production_day: '',
+  production_line: '',
+  production_order: null as number | null,
+  product_cd: '',
+  product_name: '',
+  actual_production_quantity: 0,
+  production_lot_size: null as number | null,
+  lot_number: '',
+  chamfering_length: null as number | null,
+  material_name: '',
+  has_sw_process: 0 as number,
+})
+
 /** カンバン発行（kanban_issuance）：切断現品票に必要な全フィールド */
 interface KanbanIssuanceRow {
   id?: number
@@ -2930,11 +3176,20 @@ const kanbanIssuanceLoading = ref(false)
 const kanbanIssuePendingLoading = ref<number | null>(null)
 const kanbanReissueLoading = ref<number | null>(null)
 /** カンバン発行筛选：生産日・状態・製品名 */
-const kanbanFilterProductionDay = ref<string>('')
-const kanbanFilterStatus = ref<string>('')
+const kanbanFilterProductionDay = ref<string>(getTodayString())
+const kanbanFilterStatus = ref<string>('pending')
 const kanbanFilterProductName = ref<string>('')
 const kanbanIssuanceProductNameOptions = ref<string[]>([])
 const kanbanIssuanceSelection = ref<KanbanIssuanceRow[]>([])
+/** カンバン発行：分页（默认每页30件） */
+const kanbanPage = ref(1)
+const kanbanPageSize = ref(30)
+const kanbanIssuanceListPaged = computed(() => {
+  const list = kanbanIssuanceList.value
+  const size = kanbanPageSize.value
+  const start = (kanbanPage.value - 1) * size
+  return list.slice(start, start + size)
+})
 const kanbanBatchIssueLoading = ref(false)
 const kanbanSyncProductionDayLoading = ref(false)
 /** カンバン発行：双击编辑弹窗 */
@@ -3683,13 +3938,14 @@ async function onDropChamferingManagement(e: DragEvent) {
   }
   if (payload.source !== 'chamferingBatch' || !payload.row?.id) return
   const row = payload.row
-  const today = new Date()
-  moveToChamferingForm.production_day = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0')
+  moveToChamferingForm.production_day = (selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : '') || getTodayString()
   const opts = chamferingMachineOptions.value
+  const selectedInToday = (selectedChamferingMachineFilter.value || '').trim()
+  const defaultMachine = opts.some((m) => m.machine_name === selectedInToday) ? selectedInToday : (opts[0]?.machine_name ?? '')
   const firstChamfering = opts[0]?.machine_name ?? ''
   const secondChamfering = opts[1]?.machine_name ?? firstChamfering
   const rowLine = (row.production_line ?? '').trim()
-  moveToChamferingForm.production_line = opts.some((m) => m.machine_name === rowLine) ? rowLine : firstChamfering
+  moveToChamferingForm.production_line = defaultMachine || (opts.some((m) => m.machine_name === rowLine) ? rowLine : firstChamfering)
   moveToChamferingForm.production_line_2 = row.has_sw_process ? (opts.some((m) => m.machine_name === rowLine) ? secondChamfering : (opts[1] ? opts[1].machine_name : firstChamfering)) : ''
   pendingChamferingBatchRow.value = row
   moveToChamferingDialogVisible.value = true
@@ -3849,9 +4105,13 @@ async function onDropCuttingManagement(e: DragEvent) {
     ElMessage.warning('生産月が不正です')
     return
   }
-  const today = new Date()
-  moveToCuttingForm.production_day = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0')
-  moveToCuttingForm.cutting_machine = cuttingMachineOptionsFiltered.value[0]?.machine_name ?? ''
+  moveToCuttingForm.production_day = (selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : '') || getTodayString()
+  const selectedInToday = (cuttingMachineFilter.value || '').trim()
+  const opts = cuttingMachineOptionsFiltered.value
+  const defaultMachine = opts.some((m) => m.machine_name === selectedInToday)
+    ? selectedInToday
+    : (opts[0]?.machine_name ?? '')
+  moveToCuttingForm.cutting_machine = defaultMachine
   pendingBatchRow.value = row
   moveToCuttingDialogVisible.value = true
 }
@@ -3884,14 +4144,33 @@ async function submitMoveToCutting() {
       cutting_machine: moveToCuttingForm.cutting_machine.trim(),
       has_chamfering_process: !!(row.has_chamfering_process ?? 0),
     })
-    ElMessage.success('切断指示に登録しました（面取工程ありの場合は面取指示・カンバン待発行も登録）')
     moveToCuttingDialogVisible.value = false
     pendingBatchRow.value = null
     loadPlans()
-    loadCuttingManagement()
+    await loadCuttingManagement()
     loadChamferingManagement()
     loadChamferingBatchList()
     loadKanbanIssuance()
+    const cm = moveToCuttingForm.cutting_machine.trim()
+    const dayStr = productionDay.slice(0, 10)
+    const isToday = dayStr === (selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : '')
+    const isTomorrow = dayStr === (selectedDateTomorrow.value ? String(selectedDateTomorrow.value).slice(0, 10) : '')
+    const list = isToday ? cuttingManagementList.value : isTomorrow ? cuttingManagementListTomorrow.value : []
+    const sameMachine = list.filter((r) => (r.cutting_machine || '').trim() === cm)
+    if (sameMachine.length > 0) {
+      const sorted = [...sameMachine].sort((a, b) => {
+        const sa = (a.production_sequence ?? 0)
+        const sb = (b.production_sequence ?? 0)
+        if (sa !== sb) return sa - sb
+        return (a.id ?? 0) - (b.id ?? 0)
+      })
+      const orderedIds = sorted.map((r) => r.id!).filter((id) => id != null)
+      if (orderedIds.length > 0) {
+        await request.post('/api/plan/cutting-management/reorder', { cutting_machine: cm, ordered_ids: orderedIds })
+        await loadCuttingManagement()
+      }
+    }
+    ElMessage.success('切断指示に登録しました（面取工程ありの場合は面取指示・カンバン待発行も登録）')
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -3904,6 +4183,7 @@ async function submitMoveToCutting() {
 
 function openPlanEditDialog(row: CuttingPlanRow) {
   if (isDragging.value || row.id == null) return
+  editingChamferingPlanId.value = null
   editingPlanId.value = row.id
   planEditForm.production_month = row.production_month ? formatDateOnly(String(row.production_month)) : ''
   planEditForm.production_line = row.production_line ?? ''
@@ -3933,7 +4213,72 @@ function openPlanEditDialog(row: CuttingPlanRow) {
   planEditDialogVisible.value = true
 }
 
+/** 面取バッチ一覧：双击でバッチ内容編集ダイアログを開く（同窗体で編集・保存は chamfering-plans API） */
+function openChamferingPlanEditDialog(row: ChamferingBatchRow) {
+  if (isDragging.value || row.id == null) return
+  editingPlanId.value = null
+  editingChamferingPlanId.value = row.id
+  planEditForm.production_month = row.production_month ? formatDateOnly(String(row.production_month)) : ''
+  planEditForm.production_line = row.production_line ?? ''
+  planEditForm.priority_order = row.production_order ?? null
+  planEditForm.product_cd = row.product_cd ?? ''
+  planEditForm.product_name = row.product_name ?? ''
+  planEditForm.planned_quantity = null
+  planEditForm.actual_production_quantity = row.actual_production_quantity ?? null
+  planEditForm.start_date = row.production_day ? formatDateOnly(String(row.production_day)) : ''
+  planEditForm.end_date = ''
+  planEditForm.production_lot_size = row.production_lot_size ?? null
+  planEditForm.lot_number = row.lot_number != null ? String(row.lot_number) : ''
+  planEditForm.is_cutting_instructed = 0
+  planEditForm.has_chamfering_process = 1
+  planEditForm.is_chamfering_instructed = 0
+  planEditForm.has_sw_process = row.has_sw_process ? 1 : 0
+  planEditForm.is_sw_instructed = 0
+  planEditForm.management_code = row.management_code ?? ''
+  planEditForm.take_count = null
+  planEditForm.cutting_length = null
+  planEditForm.chamfering_length = row.chamfering_length != null ? Number(row.chamfering_length) : null
+  planEditForm.developed_length = null
+  planEditForm.scrap_length = null
+  planEditForm.material_name = row.material_name ?? ''
+  planEditForm.material_manufacturer = ''
+  planEditForm.standard_specification = ''
+  planEditDialogVisible.value = true
+}
+
 async function savePlanEdit() {
+  const chamferingId = editingChamferingPlanId.value
+  if (chamferingId != null) {
+    planEditSubmitting.value = true
+    try {
+      await request.put(`/api/plan/chamfering-plans/${chamferingId}/content`, {
+        production_month: planEditForm.production_month || null,
+        production_day: planEditForm.start_date || null,
+        production_line: planEditForm.production_line || null,
+        production_order: planEditForm.priority_order,
+        product_cd: planEditForm.product_cd || null,
+        product_name: planEditForm.product_name || null,
+        actual_production_quantity: planEditForm.actual_production_quantity,
+        production_lot_size: planEditForm.production_lot_size,
+        lot_number: planEditForm.lot_number || null,
+        chamfering_length: planEditForm.chamfering_length,
+        material_name: planEditForm.material_name || null,
+        has_sw_process: !!planEditForm.has_sw_process,
+      })
+      ElMessage.success('保存しました')
+      planEditDialogVisible.value = false
+      editingChamferingPlanId.value = null
+      loadChamferingBatchList()
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+        ?? (err as { message?: string })?.message
+        ?? '保存に失敗しました'
+      ElMessage.error(String(msg))
+    } finally {
+      planEditSubmitting.value = false
+    }
+    return
+  }
   const id = editingPlanId.value
   if (id == null) return
   planEditSubmitting.value = true
@@ -4151,6 +4496,7 @@ function openCuttingEditDialog(row: CuttingManagementRow) {
   editingCuttingId.value = row.id
   cuttingEditForm.cutting_machine = (row.cutting_machine ?? '') || ''
   cuttingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
+  cuttingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
   cuttingEditForm.production_sequence = row.production_sequence ?? 1
   cuttingEditForm.remarks = (row.remarks ?? '') || ''
   cuttingEditDialogVisible.value = true
@@ -4169,9 +4515,12 @@ async function saveCuttingEdit() {
   try {
     const qty = cuttingEditForm.actual_production_quantity
     const qtyNum = qty === '' || qty === null || qty === undefined ? 0 : parseInt(String(qty).trim(), 10)
+    const defectStr = cuttingEditForm.defect_qty
+    const defectNum = defectStr === '' || defectStr === null || defectStr === undefined ? 0 : parseInt(String(defectStr).trim(), 10)
     await request.patch(`/api/plan/cutting-management/${id}`, {
       cutting_machine: cuttingEditForm.cutting_machine?.trim() || null,
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
+      defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
       production_sequence: cuttingEditForm.production_sequence,
       remarks: cuttingEditForm.remarks?.trim() || null,
     })
@@ -4192,11 +4541,23 @@ async function saveCuttingEdit() {
 function openChamferingEditDialog(row: ChamferingManagementRow) {
   if (row.id == null) return
   editingChamferingId.value = row.id
+  const baseQty = row.actual_production_quantity != null ? Number(row.actual_production_quantity) : 0
+  chamferingEditBaselineQuantity.value = Number.isNaN(baseQty) ? 0 : baseQty
   chamferingEditForm.chamfering_machine = (row.chamfering_machine ?? '') || ''
   chamferingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
+  chamferingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
   chamferingEditForm.production_sequence = row.production_sequence ?? 1
   chamferingEditForm.remarks = (row.remarks ?? '') || ''
   chamferingEditDialogVisible.value = true
+}
+
+/** 面取指示編集：生産数変更時、差（基準 - 生産数）を不良数に自動反映 */
+function onChamferingEditProductionQuantityInput() {
+  const raw = chamferingEditForm.actual_production_quantity
+  const parsed = raw === '' || raw === null || raw === undefined ? 0 : parseInt(String(raw).trim(), 10)
+  const qty = Number.isNaN(parsed) ? 0 : Math.max(0, parsed)
+  const baseline = chamferingEditBaselineQuantity.value
+  chamferingEditForm.defect_qty = String(Math.max(0, baseline - qty))
 }
 
 async function saveChamferingEdit() {
@@ -4206,9 +4567,12 @@ async function saveChamferingEdit() {
   try {
     const qty = chamferingEditForm.actual_production_quantity
     const qtyNum = qty === '' || qty === null || qty === undefined ? 0 : parseInt(String(qty).trim(), 10)
+    const defectStr = chamferingEditForm.defect_qty
+    const defectNum = defectStr === '' || defectStr === null || defectStr === undefined ? 0 : parseInt(String(defectStr).trim(), 10)
     await request.patch(`/api/plan/chamfering-management/${id}`, {
       chamfering_machine: chamferingEditForm.chamfering_machine?.trim() || null,
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
+      defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
       production_sequence: chamferingEditForm.production_sequence,
       remarks: chamferingEditForm.remarks?.trim() || null,
     })
@@ -4337,12 +4701,47 @@ function cancelEditProductionDay() {
   editingProductionDayId.value = null
 }
 
+/** 面取指示：生産日セル双击でインライン編集開始 */
+function startEditChamferingProductionDay(row: ChamferingManagementRow) {
+  if (row.id == null) return
+  editingChamferingProductionDayId.value = row.id
+  editingChamferingProductionDayValue.value = formatDateOnly(String(row.production_day ?? '')) || getTodayString()
+}
+
+/** 面取指示：生産日を保存（PATCH）して編集終了 */
+async function saveChamferingProductionDay(row: ChamferingManagementRow, dateStr: string) {
+  const id = row.id
+  if (id == null) return
+  const d = dateStr.slice(0, 10)
+  if (!d) return
+  try {
+    await request.patch(`/api/plan/chamfering-management/${id}`, { production_day: d })
+    ;(row as { production_day?: string }).production_day = d
+    ElMessage.success('生産日を更新しました')
+    editingChamferingProductionDayId.value = null
+    loadChamferingManagement()
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (err as { message?: string })?.message
+      ?? '更新に失敗しました'
+    ElMessage.error(String(msg))
+  }
+}
+
+/** 面取指示：生産日編集をキャンセル */
+function cancelEditChamferingProductionDay() {
+  editingChamferingProductionDayId.value = null
+}
+
 /** 顺延：未完了分を翌日へ分割（当日完成数 + 翌日行を新規） */
 const splitToNextDayDialogVisible = ref(false)
 const splitDialogRow = ref<CuttingManagementRow | null>(null)
 const splitTodayQuantityInput = ref('0')
 const splitNextDay = ref('')
 const splitToNextDaySubmitting = ref(false)
+/** 順延ダイアログ：当日完成数入力にフォーカス用 */
+const splitTodayQuantityInputRef = ref<{ focus: () => void } | null>(null)
+const chamferingSplitTodayQuantityInputRef = ref<{ focus: () => void } | null>(null)
 /** 面取指示 順延用 */
 const chamferingSplitDialogVisible = ref(false)
 const chamferingSplitDialogRow = ref<ChamferingManagementRow | null>(null)
@@ -4362,6 +4761,7 @@ function openSplitToNextDayDialog(row: CuttingManagementRow) {
   splitTodayQuantityInput.value = '0'
   splitNextDay.value = shiftDate(String(row.production_day ?? ''), 1)
   splitToNextDayDialogVisible.value = true
+  nextTick(() => splitTodayQuantityInputRef.value?.focus())
 }
 
 async function confirmSplitToNextDay() {
@@ -4481,6 +4881,7 @@ function openChamferingSplitDialog(row: ChamferingManagementRow) {
   chamferingSplitTodayQuantityInput.value = '0'
   chamferingSplitNextDay.value = shiftDate(String(row.production_day ?? ''), 1)
   chamferingSplitDialogVisible.value = true
+  nextTick(() => chamferingSplitTodayQuantityInputRef.value?.focus())
 }
 
 async function confirmChamferingSplit() {
@@ -4562,11 +4963,12 @@ async function loadChamferingManagement() {
 async function loadChamferingBatchList() {
   chamferingBatchLoading.value = true
   try {
-    const params: Record<string, string> = {}
+    const params: Record<string, string | number> = {}
     if (selectedScheduleMonth.value) params.production_month = selectedScheduleMonth.value
+    params.limit = 50000
     const result = await request.get<{ success?: boolean; data?: ChamferingBatchRow[] }>(
       '/api/plan/chamfering-plans/list',
-      { params: { ...params, limit: 5000 } }
+      { params }
     )
     chamferingBatchList.value = (result as any)?.success ? ((result as any).data ?? []) : []
   } catch (e) {
@@ -4639,6 +5041,109 @@ async function deleteChamferingPlan(row: ChamferingBatchRow) {
   }
 }
 
+function resetChamferingPlanNewForm() {
+  chamferingPlanNewForm.production_month = ''
+  chamferingPlanNewForm.production_day = ''
+  chamferingPlanNewForm.production_line = ''
+  chamferingPlanNewForm.production_order = null
+  chamferingPlanNewForm.product_cd = ''
+  chamferingPlanNewForm.product_name = ''
+  chamferingPlanNewForm.actual_production_quantity = 0
+  chamferingPlanNewForm.production_lot_size = null
+  chamferingPlanNewForm.lot_number = ''
+  chamferingPlanNewForm.chamfering_length = null
+  chamferingPlanNewForm.material_name = ''
+  chamferingPlanNewForm.has_sw_process = 0
+}
+
+function openChamferingPlanNewDialog() {
+  resetChamferingPlanNewForm()
+  chamferingPlanNewForm.production_month = selectedScheduleMonth.value || ''
+  chamferingPlanNewForm.production_day = getTodayString()
+  loadChamferingMachineOptions()
+  loadChamferingProductOptions()
+  chamferingPlanNewDialogVisible.value = true
+}
+
+async function onChamferingPlanNewProductChange(productCd: string) {
+  if (!productCd) {
+    chamferingPlanNewForm.product_name = ''
+    chamferingPlanNewForm.material_name = ''
+    chamferingPlanNewForm.chamfering_length = null
+    return
+  }
+  const opt = chamferingProductOptions.value.find((p) => p.product_cd === productCd)
+  if (opt) chamferingPlanNewForm.product_name = opt.product_name ?? ''
+  try {
+    const res = await request.get<{ success?: boolean; data?: Record<string, unknown> }>(
+      `/api/master/products/batch-detail/${encodeURIComponent(productCd)}`
+    )
+    const data = (res as any)?.data
+    if (data) {
+      chamferingPlanNewForm.material_name = (data.material_name ?? '') as string
+      chamferingPlanNewForm.chamfering_length = (data.chamfering_length ?? null) as number | null
+    }
+  } catch (e) {
+    console.error('製品詳細取得失敗:', e)
+  }
+}
+
+async function saveChamferingPlanNew() {
+  const month = (chamferingPlanNewForm.production_month ?? '').toString().trim()
+  const day = (chamferingPlanNewForm.production_day ?? '').toString().trim().slice(0, 10)
+  const line = (chamferingPlanNewForm.production_line ?? '').toString().trim()
+  const productCd = (chamferingPlanNewForm.product_cd ?? '').toString().trim()
+  const productName = (chamferingPlanNewForm.product_name ?? '').toString().trim()
+  if (!month || month.length < 7) {
+    ElMessage.warning('生産月を選択してください')
+    return
+  }
+  if (!day || day.length < 10) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  if (!line) {
+    ElMessage.warning('ライン（面取機）を選択してください')
+    return
+  }
+  if (!productCd || !productName) {
+    ElMessage.warning('製品を選択してください')
+    return
+  }
+  chamferingPlanNewSubmitting.value = true
+  try {
+    await request.post('/api/plan/chamfering-plans', {
+      production_month: month,
+      production_day: day,
+      production_line: line,
+      production_order: chamferingPlanNewForm.production_order ?? undefined,
+      product_cd: productCd,
+      product_name: productName,
+      actual_production_quantity: chamferingPlanNewForm.actual_production_quantity ?? 0,
+      production_lot_size: chamferingPlanNewForm.production_lot_size ?? undefined,
+      lot_number: chamferingPlanNewForm.lot_number?.trim() || undefined,
+      chamfering_length: chamferingPlanNewForm.chamfering_length ?? undefined,
+      material_name: chamferingPlanNewForm.material_name?.trim() || undefined,
+      has_sw_process: chamferingPlanNewForm.has_sw_process ?? 0,
+    })
+    ElMessage.success('登録しました')
+    chamferingPlanNewDialogVisible.value = false
+    loadChamferingBatchList()
+  } catch (err: unknown) {
+    const errResp = err as { response?: { data?: { detail?: string | unknown[] } }; message?: string }
+    const detail = errResp.response?.data?.detail
+    let msg: string
+    if (typeof detail === 'string') msg = detail
+    else if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string } | unknown
+      msg = (first && typeof first === 'object' && 'msg' in first ? (first as { msg: string }).msg : String(first))
+    } else msg = errResp.message ?? '登録に失敗しました'
+    ElMessage.error(msg)
+  } finally {
+    chamferingPlanNewSubmitting.value = false
+  }
+}
+
 async function loadKanbanIssuance() {
   kanbanIssuanceLoading.value = true
   try {
@@ -4651,6 +5156,7 @@ async function loadKanbanIssuance() {
       { params }
     )
     kanbanIssuanceList.value = (result as any)?.success ? ((result as any).data ?? []) : []
+    kanbanPage.value = 1
   } catch (e) {
     console.error('カンバン発行一覧の取得に失敗:', e)
     kanbanIssuanceList.value = []
@@ -4672,6 +5178,19 @@ async function loadKanbanProductNames() {
   }
 }
 
+function setKanbanFilterToday() {
+  kanbanFilterProductionDay.value = getTodayString()
+  loadKanbanIssuance()
+}
+
+function shiftKanbanFilterDay(delta: number) {
+  kanbanFilterProductionDay.value = shiftDate(
+    kanbanFilterProductionDay.value || getTodayString(),
+    delta
+  )
+  loadKanbanIssuance()
+}
+
 /** 1枚分の切断現品票HTML（上中下で同じ内容を3回使う） */
 function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): string {
   const esc = (v: unknown) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -4686,6 +5205,10 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
   const lotNoFromMgmt = esc(String(row.management_code ?? '').slice(-5))
   const productCdForQr = encodeURIComponent(String(row.product_cd ?? ''))
   const qrSrc = productCdForQr ? `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${productCdForQr}` : ''
+  const managementCode = String(row.management_code ?? '').trim()
+  const mgmtQrSrc = managementCode
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(managementCode)}`
+    : ''
   return `
     <div class="ticket-top">
       <div>
@@ -4693,7 +5216,13 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
         <div class="ticket-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR" width="32" height="32" />` : '<span>QR</span>'}</div>
       </div>
       <div class="ticket-product">${esc(row.product_name)}</div>
-      <div class="ticket-machine">${lineDisplay}</div>
+      <div class="ticket-top-right">
+        <div class="ticket-machine">${lineDisplay}</div>
+        <div class="ticket-mgmt-qr-wrap">
+          <div class="ticket-mgmt-qr">${mgmtQrSrc ? `<img src="${mgmtQrSrc}" alt="管理コードQR" width="32" height="32" />` : ''}</div>
+          <span class="ticket-mgmt-qr-label">管理コード</span>
+        </div>
+      </div>
     </div>
     <table class="tbl">
       <tr>
@@ -4780,7 +5309,12 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
     .ticket-title { font-size: 16px; font-weight: bold; }
     .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
-    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; min-width: 80px; text-align: right; }
+    .ticket-top-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 80px; }
+    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; text-align: right; }
+    .ticket-mgmt-qr-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+    .ticket-mgmt-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ticket-mgmt-qr img { display: block; width: 32px; height: 32px; object-fit: contain; }
+    .ticket-mgmt-qr-label { font-size: 6px; color: #666; margin-top: 2px; }
     .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
@@ -4795,7 +5329,7 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .tbl th:nth-child(6), .tbl td:nth-child(6) { width: 95px; }
     .tbl th:nth-child(7), .tbl td:nth-child(7) { width: 85px; }
     .tbl th:nth-child(8), .tbl td:nth-child(8) { width: 95px; }
-    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.5; }
+    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.05; }
     .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
     .red { color: #cc0000; font-weight: bold; font-size: 12px; }
     .big { font-size: 12px; font-weight: bold; }
@@ -4828,6 +5362,18 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
 function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: string }[]) {
   if (!items.length) return
   const pagesHtml = items
+    .slice()
+    .sort((a, b) => {
+      const ad = String(a.row.production_day ?? '')
+      const bd = String(b.row.production_day ?? '')
+      if (ad && bd && ad !== bd) return ad.localeCompare(bd)
+      const am = String(a.row.cutting_machine ?? '')
+      const bm = String(b.row.cutting_machine ?? '')
+      if (am !== bm) return am.localeCompare(bm)
+      const asrc = a.row.source_id ?? a.row.id ?? 0
+      const bsrc = b.row.source_id ?? b.row.id ?? 0
+      return asrc - bsrc
+    })
     .map(({ row, kanbanNo }) => {
       const oneTicket = buildOneKanbanTicketHtml(row, kanbanNo)
       return `<div class="page ticket-page">
@@ -4857,7 +5403,12 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .ticket-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 3px; border: 1px solid #333; padding: 4px; }
     .ticket-title { font-size: 16px; font-weight: bold; }
     .ticket-product { font-size: 42px; font-weight: bold; text-align: center; flex: 1; }
-    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; min-width: 80px; text-align: right; }
+    .ticket-top-right { display: flex; flex-direction: column; align-items: flex-end; min-width: 80px; }
+    .ticket-machine { font-size: 20px; font-weight: bold; color: #cc0000; text-align: right; }
+    .ticket-mgmt-qr-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+    .ticket-mgmt-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .ticket-mgmt-qr img { display: block; width: 32px; height: 32px; object-fit: contain; }
+    .ticket-mgmt-qr-label { font-size: 6px; color: #666; margin-top: 2px; }
     .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
@@ -4871,7 +5422,7 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .tbl th:nth-child(6), .tbl td:nth-child(6) { width: 95px; }
     .tbl th:nth-child(7), .tbl td:nth-child(7) { width: 85px; }
     .tbl th:nth-child(8), .tbl td:nth-child(8) { width: 95px; }
-    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.5; }
+    .tbl .tbl-row-lotno th, .tbl .tbl-row-lotno td { line-height: 3.14; }
     .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
     .red { color: #cc0000; font-weight: bold; font-size: 12px; }
     .big { font-size: 12px; font-weight: bold; }
@@ -5124,7 +5675,7 @@ async function confirmCuttingActual() {
   }
 }
 
-/** 面取指示-今日：実績確定（chamfering_management → stock_transaction_logs） */
+/** 面取指示-今日：実績確定（chamfering_management → stock_transaction_logs）。当前日期的全设备数据を対象とする（面取機筛选に依存しない） */
 const confirmChamferingActualLoading = ref(false)
 async function confirmChamferingActual() {
   const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
@@ -5135,7 +5686,6 @@ async function confirmChamferingActual() {
   confirmChamferingActualLoading.value = true
   try {
     const params: Record<string, string> = { production_day: day }
-    if (selectedChamferingMachineFilter.value) params.chamfering_machine = selectedChamferingMachineFilter.value
     const res = await request.post<{ success?: boolean; message?: string; inserted?: number; total_quantity?: number }>(
       '/api/plan/chamfering-management/confirm-actual',
       null,
@@ -5313,7 +5863,7 @@ async function issueChamferingInstructionSheet() {
       const trs = list.map((r) => {
         const qty = r.actual_production_quantity ?? 0
         totalQty += qty
-        const noCountDisplay = r.no_count ? '〇' : '--'
+        const noCountDisplay = r.no_count ? 'あり' : '--'
         return `<tr>
           <td>${escapeHtml(r.cd ?? r.management_code ?? '')}</td>
           <td>${escapeHtml(r.production_line ?? '')}</td>
@@ -5415,8 +5965,12 @@ watch(selectedScheduleMonth, () => {
 })
 
 function onProductionDayEditorKeydown(e: KeyboardEvent) {
-  if (editingProductionDayId.value != null && e.key === 'Escape') {
+  if (e.key !== 'Escape') return
+  if (editingProductionDayId.value != null) {
     cancelEditProductionDay()
+  }
+  if (editingChamferingProductionDayId.value != null) {
+    cancelEditChamferingProductionDay()
   }
 }
 
@@ -5817,7 +6371,14 @@ onUnmounted(() => {
   flex: 1 1 100%;
 }
 
-.chamfering-management-section,
+/* 面取指示-今日・翌日：容器高さは切断指示-今日と同じ（448px） */
+.chamfering-management-section {
+  height: 100%;
+  min-height: 448px;
+  display: flex;
+  flex-direction: column;
+}
+
 .kanban-issuance-section {
   height: 100%;
   min-height: 260px;
@@ -5860,6 +6421,11 @@ onUnmounted(() => {
 
 .instruction-col.kanban-issuance-section .cutting-mgmt-header {
   border-bottom-color: #ffedd5;
+}
+
+.kanban-pagination {
+  margin-top: 10px;
+  justify-content: flex-end;
 }
 
 .cutting-mgmt-header {
@@ -6003,7 +6569,8 @@ onUnmounted(() => {
   overflow: auto;
 }
 
-/* 切断指示：表形式（ヘッダ固定・データ行）、高さ 40% 増（320→448px） */
+/* 切断指示：表形式（ヘッダ固定・データ行）、高さ 40% 増（320→448px）。
+   面取指示と同様に、カード高さ固定＋ヘッダ固定＋内容区域のみスクロール＋合計行固定下部。 */
 .cutting-management-section .cutting-mgmt-table-wrap {
   flex: 1;
   min-height: 0;
@@ -6011,8 +6578,24 @@ onUnmounted(() => {
   flex-direction: column;
   max-height: 448px;
   position: relative;
+  overflow-y: hidden;
+  overflow-x: hidden;
 }
 
+.cutting-management-section .cutting-mgmt-h-scroll {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+.cutting-management-section .cutting-mgmt-table-inner {
+  overflow: visible;
+  flex: 0 0 auto;
+}
+
+/* 面取指示-今日・翌日：表ラップの高さを切断指示と同じ（448px）に統一 */
 .cutting-mgmt-table-inner {
   flex: 1;
   min-height: 0;
@@ -6036,15 +6619,34 @@ onUnmounted(() => {
   border-color: #a7f3d0;
 }
 
+/* 面取指示：卡片高度固定，表头固定，内容区域可滚动，合計行固定在卡片底部 */
+.chamfering-management-section .cutting-mgmt-table-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 448px;
+  position: relative;
+  overflow-y: hidden;
+  overflow-x: hidden;
+}
+
+.chamfering-management-section .cutting-mgmt-table-inner {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
 .cutting-mgmt-thead {
   flex-shrink: 0;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
-
 .cutting-management-section .cutting-mgmt-thead {
   background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
   border-bottom-color: #c7d2fe;
@@ -6057,22 +6659,25 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-thead {
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
   border-bottom-color: #a7f3d0;
+  z-index: 10;
 }
 
 .chamfering-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
   color: #047857;
 }
 
-/* バッチ→切断のドロップゾーン：12行分の高さで固定、超過時は縦スクロール */
+/* バッチ→切断のドロップゾーン（切断指示-今日/翌日：縦スクロールは wrap で行うためここでは高さは内容に合わせる） */
 .cutting-mgmt-tbody-drop-zone {
   flex: 0 0 auto;
-  height: 376px;
-  min-height: 376px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   transition: background-color 0.15s ease, box-shadow 0.15s ease;
   border-radius: 0 0 6px 6px;
+}
+.cutting-management-section .cutting-mgmt-tbody-drop-zone {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
 }
 .cutting-mgmt-tbody-drop-zone.drop-zone-active {
   border-radius: 0 0 5px 5px;
@@ -6096,57 +6701,24 @@ onUnmounted(() => {
   flex-shrink: 0;
   width: 100%;
 }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) {
-  min-width: 810px;
-}
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-tr {
-  min-width: 810px;
-}
-/* 切断指示-今日：合計行 12 列与表头同幅で对齐 */
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 50px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 75px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 55px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 100px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 105px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 55px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 44px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 45px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 60px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 90px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 70px; }
-
-.cutting-mgmt-tfoot-wrap--tomorrow {
-  min-width: 460px;
-}
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow {
-  min-width: 400px;
-}
-/* 切断指示-翌日：合計行 7 列与表头同幅で对齐 */
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-tr {
-  min-width: 400px;
-}
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 41px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(2) { flex: 0 0 75px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(3) { flex: 0 0 50px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 30px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 52px; }
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 62px; }
 .cutting-mgmt-tfoot {
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
-}
-.cutting-mgmt-tfoot .cutting-mgmt-tr {
+  padding: 8px 12px;
+  font-size: 12px;
   font-weight: 600;
   color: #334155;
 }
-.cutting-mgmt-tfoot .cutting-mgmt-td-total-label {
-  color: #475569;
+/* 合計行：生産数合計・不良合計・生産時間合計（字段不对齐，仅展示三项合计） */
+.cutting-mgmt-tfoot-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
 }
-.cutting-mgmt-tfoot .cutting-mgmt-td-total-value {
-  justify-content: flex-end;
-  text-align: right;
+.cutting-mgmt-tfoot-summary .cutting-mgmt-tfoot-item {
+  white-space: nowrap;
+  color: #475569;
 }
 
 /* 表头下・表尾上的放置区：拖到第一位/最后位 */
@@ -6167,6 +6739,7 @@ onUnmounted(() => {
 .cutting-mgmt-thead .cutting-mgmt-tr {
   font-weight: 600;
   color: #475569;
+  box-sizing: border-box;
 }
 
 .cutting-mgmt-th,
@@ -6187,40 +6760,42 @@ onUnmounted(() => {
   border-right: none;
 }
 
-/* 切断指示-今日：12列 表・合計行 同幅（810px） */
+/* 切断指示-今日：13列 min-width 795px */
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
   min-width: 795px;
 }
 
-/* 11列: CD, ライン, 生産日, 切断機, 製品名, 原材料, 生産数, 完了, 生産順, 生産時間, 備考 */
+/* 13列: CD, ライン, 生産日, 切断機, 製品名, 原材料, 生産数, 不良, 完了, 生産順, 生産時間, 備考, 操作 */
 .cutting-mgmt-th:nth-child(1),
-.cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
+.cutting-mgmt-td:nth-child(1) { flex: 0 0 42px; }
 .cutting-mgmt-th:nth-child(2),
-.cutting-mgmt-td:nth-child(2) { flex: 0 0 50px; }
+.cutting-mgmt-td:nth-child(2) { flex: 0 0 46px; }
 .cutting-mgmt-th:nth-child(3),
 .cutting-mgmt-td:nth-child(3) { flex: 0 0 75px; }
 .cutting-mgmt-th:nth-child(4),
-.cutting-mgmt-td:nth-child(4) { flex: 0 0 55px; }
+.cutting-mgmt-td:nth-child(4) { flex: 0 0 46px; }
 .cutting-mgmt-th:nth-child(5),
-.cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 100px; }
+.cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 60px; }
 .cutting-mgmt-th:nth-child(6),
-.cutting-mgmt-td:nth-child(6) { flex: 0 0 105px; }
+.cutting-mgmt-td:nth-child(6) { flex: 0 0 100px; }
 .cutting-mgmt-th:nth-child(7),
-.cutting-mgmt-td:nth-child(7) { flex: 0 0 55px; }
+.cutting-mgmt-td:nth-child(7) { flex: 0 0 50px; }
 .cutting-mgmt-th:nth-child(8),
 .cutting-mgmt-td:nth-child(8) { flex: 0 0 44px; }
 .cutting-mgmt-th:nth-child(9),
 .cutting-mgmt-td:nth-child(9) { flex: 0 0 45px; }
 .cutting-mgmt-th:nth-child(10),
-.cutting-mgmt-td:nth-child(10) { flex: 0 0 60px; }
+.cutting-mgmt-td:nth-child(10) { flex: 0 0 46px; }
 .cutting-mgmt-th:nth-child(11),
-.cutting-mgmt-td:nth-child(11) { flex: 0 0 90px; }
+.cutting-mgmt-td:nth-child(11) { flex: 0 0 50px; }
 .cutting-mgmt-th:nth-child(12),
-.cutting-mgmt-td:nth-child(12) { flex: 0 0 70px; }
+.cutting-mgmt-td:nth-child(12) { flex: 0 0 75px; }
+.cutting-mgmt-th:nth-child(13),
+.cutting-mgmt-td:nth-child(13) { flex: 0 0 90px; }
 
-/* 翌日テーブル：7列（CD, 生産日, 切断機, 製品名, 生産数, 生産順, 生産時間）※原材料なし */
+/* 翌日テーブル：8列（CD, 生産日, 切断機, 製品名, 生産数, 不良, 生産順, 生産時間） */
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-tr {
-  min-width: 400px;
+  min-width: 444px;
 }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(1),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 41px; }
@@ -6231,24 +6806,28 @@ onUnmounted(() => {
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(4),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(5),
-.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 30px; }
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 52px; }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(6),
-.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 52px; }
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 44px; }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(7),
-.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 62px; }
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(8),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(8) { flex: 0 0 62px; }
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(5),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(6),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(7),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(8),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(5),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(6),
-.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7) {
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(8) {
   justify-content: center;
   text-align: center;
 }
 
-/* 面取指示-今日：12列（CD, ライン, 生産日, 面取機, 製品名, 原材料, 生産数, 完了, カ無, 生産順, 生産時間, 操作）min-width 730px */
+/* 面取指示-今日：13列（CD, ライン, 生産日, 面取機, 製品名, 原材料, 生産数, 不良, 完了, カ無, 生産順, 生産時間, 操作） */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
-  min-width: 730px;
+  min-width: 772px;
 }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(1),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
@@ -6265,19 +6844,21 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 44px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 42px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 42px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 44px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 68px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) { flex: 0 0 110px; }
 
-/* 面取指示-翌日：7列（CD, 生産日, 面取機, 製品名, 生産数, 生産順, 生産時間） */
+/* 面取指示-翌日：8列（CD, 生産日, 面取機, 製品名, 生産数, 不良, 生産順, 生産時間） */
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-tr {
-  min-width: 460px;
+  min-width: 504px;
 }
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(1),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
@@ -6290,72 +6871,40 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 55px; }
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
-.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 44px; }
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
-.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 60px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 45px; }
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(8),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(8) { flex: 0 0 60px; }
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6),
-.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) {
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(8) {
   justify-content: center;
   text-align: center;
 }
 
-/* 面取指示-今日：生産数(7)、完了(8)、カ無(9)、生産順(10)、生産時間(11)、操作(12) 居中 */
+/* 面取指示-今日：生産数(7)、不良(8)、完了(9)、カ無(10)、生産順(11)、生産時間(12)、操作(13) 居中 */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) {
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) {
   justify-content: center;
   text-align: center;
-}
-
-/* 面取指示-今日：合計行与表头列宽一致（12列 730px） */
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) {
-  min-width: 730px;
-}
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-tr {
-  min-width: 730px;
-}
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 48px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 72px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 52px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 60px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 100px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 42px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 42px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 44px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 56px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 68px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap.cutting-mgmt-tfoot-wrap--tomorrow {
-  min-width: 460px;
-}
-/* 面取指示-翌日：合計行 7 列与表头同宽对齐 */
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-tr {
-  min-width: 460px;
-}
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) { flex: 0 0 45px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(2) { flex: 0 0 75px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(3) { flex: 0 0 55px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(4) { flex: 1 1 0; min-width: 90px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5) { flex: 0 0 55px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(6) { flex: 0 0 45px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) { flex: 0 0 60px; }
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td-total-value {
-  justify-content: flex-end;
-  text-align: right;
 }
 
 .cutting-mgmt-th-actions,
@@ -6363,6 +6912,31 @@ onUnmounted(() => {
   justify-content: center;
   gap: 0;
 }
+
+/* 操作列：横向滚动时固定在右侧 */
+.cutting-management-section .cutting-mgmt-th-actions,
+.cutting-management-section .cutting-mgmt-td-actions,
+.chamfering-management-section .cutting-mgmt-th-actions,
+.chamfering-management-section .cutting-mgmt-td-actions {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  flex-shrink: 0;
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.06);
+}
+.cutting-management-section .cutting-mgmt-thead .cutting-mgmt-th-actions {
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+}
+.cutting-management-section .cutting-mgmt-td-actions {
+  background: #fff;
+}
+.chamfering-management-section .cutting-mgmt-thead .cutting-mgmt-th-actions {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+}
+.chamfering-management-section .cutting-mgmt-td-actions {
+  background: #fff;
+}
+
 .cutting-mgmt-td-actions .el-button {
   padding: 2px 4px;
   min-width: auto;
@@ -6372,13 +6946,13 @@ onUnmounted(() => {
 }
 
 /* ========== 4表共通：列对齐（表头・数据・合計一致） ========== */
-/* 切断指示-今日：12列 — 左: 製品名(5), 原材料(6), 備考(11)；右: 生産数(7)；中: 其余 */
+/* 切断指示-今日：13列 — 左: 製品名(5), 原材料(6), 備考(12)；右: 生産数(7)；中: 其余 */
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6),
-.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
-.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) {
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) {
   justify-content: flex-start;
   text-align: left;
 }
@@ -6394,7 +6968,9 @@ onUnmounted(() => {
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(2),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(3),
@@ -6402,17 +6978,13 @@ onUnmounted(() => {
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
-.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) {
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12),
+.cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) {
   justify-content: center;
   text-align: center;
 }
-/* 切断指示-今日：合計行 左/右/中 与数据列一致 */
-.cutting-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) {
-  justify-content: flex-start;
-  text-align: left;
-}
-
-/* 切断指示-翌日：7列 — 左: 製品名(4)；右: 生産数(5)；中: 其余 */
+/* 切断指示-翌日：8列 — 左: 製品名(4)；右: 生産数(5)、生産時間(8)；中: 其余 */
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(4),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(4) {
   justify-content: flex-start;
@@ -6428,26 +7000,17 @@ onUnmounted(() => {
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(3),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(6),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(7),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-th:nth-child(8),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(1),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(2),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(3),
 .cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(6),
-.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7) {
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(7),
+.cutting-mgmt-table-inner--tomorrow .cutting-mgmt-td:nth-child(8) {
   justify-content: center;
   text-align: center;
 }
-/* 切断指示-翌日 合計行 */
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) {
-  justify-content: flex-start;
-  text-align: left;
-}
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5),
-.cutting-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-/* 面取指示-今日：12列 — 左: 製品名(5), 原材料(6)；右: 生産数(7)；中: 其余（7,8,9,10,11,12 原已居中，覆盖 7 为右） */
+/* 面取指示-今日：13列 — 左: 製品名(5), 原材料(6)；右: 生産数(7)；中: 其余 */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
@@ -6460,13 +7023,7 @@ onUnmounted(() => {
   justify-content: flex-end;
   text-align: right;
 }
-/* 面取指示-今日 合計行 */
-.chamfering-management-section .cutting-mgmt-tfoot-wrap:not(.cutting-mgmt-tfoot-wrap--tomorrow) .cutting-mgmt-td:nth-child(1) {
-  justify-content: flex-start;
-  text-align: left;
-}
-
-/* 面取指示-翌日：7列 — 左: 製品名(4)；右: 生産数(5)；中: 其余 */
+/* 面取指示-翌日：8列 — 左: 製品名(4)；右: 生産数(5)、生産時間(8)；中: 其余 */
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(4),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(4) {
   justify-content: flex-start;
@@ -6482,25 +7039,16 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(3),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(6),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-th:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(1),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(2),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(3),
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(6),
-.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7) {
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-td:nth-child(8) {
   justify-content: center;
   text-align: center;
 }
-/* 面取翌日 合計行 */
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(1) {
-  justify-content: flex-start;
-  text-align: left;
-}
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(5),
-.chamfering-management-section .cutting-mgmt-tfoot-wrap--tomorrow .cutting-mgmt-td:nth-child(7) {
-  justify-content: flex-end;
-  text-align: right;
-}
-
 /* 生産数(7)、生産順(9)、生産時間(10)：切断今日 表头与数据居中（与上不冲突，7 已设为右） */
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .cutting-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
@@ -6649,6 +7197,15 @@ onUnmounted(() => {
   font-weight: 700;
   color: #fff;
   line-height: 1.3;
+}
+.ped-badge {
+  margin-left: 8px;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  vertical-align: middle;
 }
 .ped-subtitle {
   font-size: 11px;
@@ -7187,6 +7744,88 @@ onUnmounted(() => {
   }
   .header-title h1 {
     font-size: 16px;
+  }
+}
+
+/* 切断指示-今日・翌日：响应式（中屏以下左右改为上下堆叠，小屏进一步优化） */
+@media (max-width: 1024px) {
+  .instruction-row.instruction-cols-6-4 {
+    flex-direction: column;
+  }
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1),
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 380px;
+    max-width: 100%;
+  }
+  .cutting-management-section .cutting-mgmt-table-wrap {
+    max-height: 380px;
+  }
+}
+
+@media (max-width: 768px) {
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1),
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
+    min-height: 300px;
+  }
+  .cutting-management-section {
+    min-height: 300px;
+  }
+  .cutting-management-section .cutting-mgmt-table-wrap {
+    max-height: 320px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .cutting-mgmt-table-wrap {
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cutting-mgmt-header-left {
+    flex: 1 1 100%;
+  }
+  .cutting-mgmt-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1),
+  .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
+    min-height: 260px;
+    padding: 10px 12px;
+  }
+  .cutting-management-section {
+    min-height: 260px;
+  }
+  .cutting-management-section .cutting-mgmt-table-wrap {
+    max-height: 280px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .cutting-management-section .cutting-mgmt-tbody-drop-zone {
+    height: auto;
+    min-height: 0;
+  }
+  .cutting-mgmt-tbody-drop-zone {
+    height: 280px;
+    min-height: 280px;
+  }
+  .cutting-mgmt-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .cutting-mgmt-header-right {
+    width: 100%;
+  }
+  .cutting-mgmt-machine-btns {
+    flex-wrap: wrap;
+  }
+  .cutting-mgmt-machine-btns .el-button {
+    margin-bottom: 4px;
   }
 }
 

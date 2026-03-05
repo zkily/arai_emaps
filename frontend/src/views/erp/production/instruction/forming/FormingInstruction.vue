@@ -3039,12 +3039,12 @@ const openSetupSchedulePreview = async () => {
   }
 }
 
-/** 操業度を小数第1位にフォーマット（段取予定プレビュー用） */
+/** 操業度を整数でフォーマット（段取予定プレビュー用） */
 const formatOperationVarianceToOneDecimal = (row: { operationVariance?: string | number }) => {
   const v = row.operationVariance
   if (v === undefined || v === null || v === '') return
   const n = Number(v)
-  if (!isNaN(n)) row.operationVariance = n.toFixed(1)
+  if (!isNaN(n)) row.operationVariance = String(Math.round(n))
 }
 
 /** プレビューダイアログから印刷（編集後のデータで印刷） */
@@ -5143,12 +5143,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       ? ''
       : ((currentProduct as any)?.operator || '').toString().trim()
 
-    // 操業度：production_plan_rate より machine_name（ライン）で取得（小数第1位まで）
+    // 操業度：production_plan_rate より machine_name（ライン）で取得（整数）
     const rawOp = productionPlanRateMap.get(machineName)
     let operationVariance: string = ''
     if (rawOp !== undefined && rawOp !== null && rawOp !== '') {
       const n = Number(rawOp)
-      operationVariance = isNaN(n) ? String(rawOp) : n.toFixed(1)
+      operationVariance = isNaN(n) ? String(rawOp) : String(Math.round(n))
     }
 
     // 行データを返却
@@ -5490,7 +5490,7 @@ const buildSetupSchedulePrintHtml = (data: {
               <th rowspan="2" style="width: 5%;">能率</th>
               <th rowspan="2" style="width: 7%;">当日計画数</th>
               <th rowspan="2" style="width: 6%;">残生産時間</th>
-              <th rowspan="2" style="width: 11%;">予測段取開始時間</th>
+              <th rowspan="2" style="width: 11%;">予測段取開始時間<br>（検証中:時計時間）</th>
               <th rowspan="2" style="width: 10%;">次生産品種</th>
               <th rowspan="2" style="width: 8%;">次品種計画数</th>
               <th rowspan="2" style="width: 17%;">備考</th>
@@ -5511,7 +5511,7 @@ const buildSetupSchedulePrintHtml = (data: {
                 <td class="numeric-cell bold-border-col">${row.remainingProduction ? row.remainingProduction.toLocaleString('ja-JP') : ''}</td>
                 <td class="blank-col"> </td>
                 <td class="line-col">${row.line}</td>
-                <td class="${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : n.toFixed(1); })()}</td>
+                <td class="${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : String(Math.round(n)); })()}</td>
                 <td class="numeric-cell">${row.operator || ''}</td>
                 <td>${row.productName}</td>
                 <td class="numeric-cell">${row.efficiency || ''}</td>

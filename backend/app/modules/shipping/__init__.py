@@ -15,8 +15,10 @@ from app.modules.shipping.shipping_overview_api import router as overview_router
 from app.modules.shipping.print_history_api import router as print_history_router
 from app.modules.shipping.welding_api import router as welding_router
 from app.modules.shipping.picking_api import router as picking_router
+from app.modules.shipping.quick_update_api import router as quick_update_router
 
 router = APIRouter()
+router.include_router(quick_update_router, tags=["出荷クイック編集"])
 router.include_router(destination_groups_router, prefix="/destination-groups", tags=["出荷・納入先分组"])
 router.include_router(welding_router, prefix="/welding", tags=["溶接出荷管理"])
 router.include_router(picking_router, prefix="/picking", tags=["ピッキング管理"])

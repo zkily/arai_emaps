@@ -93,6 +93,7 @@ import { Document, Box, Loading, Check } from '@element-plus/icons-vue'
 
 // 出荷アイテムのインターフェース定義
 interface ShippingItem {
+  id?: number
   shipping_no: string
   product_cd: string
   product_name: string
@@ -140,7 +141,7 @@ const handleClose = () => {
 const handleSave = async () => {
   loading.value = true
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       shipping_no: props.shippingItem.shipping_no,
       product_cd: props.shippingItem.product_cd,
       product_name: form.value.product_name,
@@ -148,7 +149,9 @@ const handleSave = async () => {
       confirmed_boxes: form.value.confirmed_boxes,
       confirmed_units: form.value.confirmed_units,
     }
-    // This API endpoint needs to be created on the backend.
+    if (props.shippingItem.id != null) {
+      payload.id = props.shippingItem.id
+    }
     await request.patch('/api/shipping/quick-update', payload)
     ElMessage.success('更新しました。')
     emit('refresh')

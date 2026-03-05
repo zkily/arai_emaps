@@ -690,7 +690,7 @@ async def get_cutting_management_list(
                `cutting_management`.production_lot_size, `cutting_management`.lot_number,
                `cutting_management`.is_cutting_instructed, `cutting_management`.has_chamfering_process,
                `cutting_management`.is_chamfering_instructed, `cutting_management`.has_sw_process, `cutting_management`.is_sw_instructed,
-               `cutting_management`.management_code, `cutting_management`.actual_production_quantity, `cutting_management`.take_count,
+               `cutting_management`.management_code, `cutting_management`.actual_production_quantity, `cutting_management`.defect_qty, `cutting_management`.take_count,
                `cutting_management`.cutting_length, `cutting_management`.chamfering_length, `cutting_management`.developed_length,
                `cutting_management`.scrap_length, `cutting_management`.material_name, `cutting_management`.material_manufacturer,
                `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.cd,
@@ -773,6 +773,7 @@ async def get_cutting_management_list(
             "is_sw_instructed": row.get("is_sw_instructed"),
             "management_code": row.get("management_code"),
             "actual_production_quantity": row.get("actual_production_quantity"),
+            "defect_qty": row.get("defect_qty"),
             "take_count": row.get("take_count"),
             "cutting_length": _v(row, "cutting_length"),
             "chamfering_length": _v(row, "chamfering_length"),
@@ -838,7 +839,7 @@ async def confirm_cutting_actual(
         conditions.append("cutting_machine = :cutting_machine")
         params["cutting_machine"] = cutting_machine.strip()
     sel = text("""
-        SELECT id, product_cd, management_code, cutting_machine, actual_production_quantity, production_day
+        SELECT id, product_cd, management_code, cutting_machine, actual_production_quantity, defect_qty, production_day
         FROM cutting_management
         WHERE """ + " AND ".join(conditions))
     res = await db.execute(sel, params)
@@ -852,7 +853,7 @@ async def confirm_cutting_actual(
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '仕掛品', '実績', :target_cd, '工程中間在庫', :lot_no, 'KT01', :machine_cd,
+            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT01', :machine_cd,
             :quantity, '本', :transaction_time, 'cutting_management'
         )
     """)
@@ -871,15 +872,29 @@ async def confirm_cutting_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
+        # 良品：transaction_type='実績'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("cutting_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
+            "transaction_type": "実績",
         })
         inserted += 1
         total_quantity += int(qty)
+        # 不良数：transaction_type='不良'
+        defect_qty = r.get("defect_qty")
+        if defect_qty is not None and int(defect_qty) > 0:
+            await db.execute(ins, {
+                "target_cd": product_cd,
+                "lot_no": r.get("management_code"),
+                "machine_cd": r.get("cutting_machine"),
+                "quantity": int(defect_qty),
+                "transaction_time": tx_time,
+                "transaction_type": "不良",
+            })
+            inserted += 1
     await db.commit()
     return {
         "success": True,
@@ -988,13 +1003,13 @@ async def move_batch_to_cutting_management(
             production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
             product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-            management_code, actual_production_quantity, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
+            management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
             material_name, material_manufacturer, standard_specification, production_completed_check
         ) VALUES (
             :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
             :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-            :management_code, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
+            :management_code, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
             :material_name, :material_manufacturer, :standard_specification, 0
         )
     """)
@@ -1369,6 +1384,7 @@ class UpdateCuttingManagementBody(BaseModel):
     production_sequence: Optional[int] = None
     production_completed_check: Optional[bool] = None
     remarks: Optional[str] = None
+    defect_qty: Optional[int] = None
 
 
 @router.patch("/plan/cutting-management/{cutting_id}")
@@ -1406,6 +1422,9 @@ async def update_cutting_management(
     if body.remarks is not None:
         updates.append("remarks = :remarks")
         params["remarks"] = (body.remarks or "").strip() or None
+    if body.defect_qty is not None:
+        updates.append("defect_qty = :defect_qty")
+        params["defect_qty"] = max(0, body.defect_qty)
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
@@ -1466,7 +1485,7 @@ async def split_cutting_to_next_day(
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-               management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+               management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                production_completed_check, remarks
         FROM cutting_management WHERE id = :cid
@@ -1556,19 +1575,20 @@ async def split_cutting_to_next_day(
         params["production_day"] = next_day_date
         params["production_sequence"] = next_seq
         params["actual_production_quantity"] = remainder
+        params["defect_qty"] = r.get("defect_qty") or 0
         ins = text("""
             INSERT INTO cutting_management (
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                 product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                 production_completed_check, remarks
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-                :management_code, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length,
+                :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
                 0, :remarks
             )
@@ -1592,7 +1612,7 @@ async def duplicate_cutting_management(
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-               management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+               management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                production_completed_check, remarks
         FROM cutting_management WHERE id = :cid
@@ -1620,14 +1640,14 @@ async def duplicate_cutting_management(
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                 product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                 production_completed_check, remarks
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-                :management_code, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length,
+                :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
                 0, :remarks
             )
@@ -1636,7 +1656,7 @@ async def duplicate_cutting_management(
             "production_month", "production_day", "production_line", "cutting_machine", "priority_order",
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
             "is_cutting_instructed", "has_chamfering_process", "is_chamfering_instructed", "has_sw_process", "is_sw_instructed",
-            "management_code", "actual_production_quantity", "take_count", "cutting_length", "chamfering_length",
+            "management_code", "actual_production_quantity", "defect_qty", "take_count", "cutting_length", "chamfering_length",
             "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks"
         )}
         params["production_sequence"] = current_seq + 1
@@ -1774,6 +1794,77 @@ async def get_chamfering_plans_list(
     return {"success": True, "data": data, "message": "OK"}
 
 
+class CreateChamferingPlanBody(BaseModel):
+    """面取バッチ一覧：新規追加（chamfering_plans に1件INSERT、cutting_management_id は NULL）"""
+    production_month: str  # YYYY-MM
+    production_day: str  # YYYY-MM-DD
+    production_line: str  # ライン（面取機）
+    production_order: Optional[int] = None
+    product_cd: str
+    product_name: str
+    actual_production_quantity: Optional[int] = 0
+    production_lot_size: Optional[int] = None
+    lot_number: Optional[str] = None
+    chamfering_length: Optional[float] = None
+    material_name: Optional[str] = None
+    has_sw_process: Optional[int] = 0
+
+
+@router.post("/plan/chamfering-plans")
+async def create_chamfering_plan(
+    body: CreateChamferingPlanBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ一覧に新規1件追加（cutting_management_id は NULL）。management_code / cd はトリガーで自動設定。"""
+    production_month_date = _parse_date_ymd(body.production_month)
+    production_day_date = _parse_date_ymd(body.production_day)
+    if production_month_date is None:
+        raise HTTPException(status_code=400, detail="生産月（production_month）を YYYY-MM 形式で指定してください")
+    if production_day_date is None:
+        raise HTTPException(status_code=400, detail="生産日（production_day）を YYYY-MM-DD 形式で指定してください")
+    line = (body.production_line or "").strip()
+    if not line:
+        raise HTTPException(status_code=400, detail="ラインを指定してください")
+    product_cd = (body.product_cd or "").strip()
+    product_name = (body.product_name or "").strip()
+    if not product_cd or not product_name:
+        raise HTTPException(status_code=400, detail="製品CD・製品名を指定してください")
+
+    ins = text("""
+        INSERT INTO chamfering_plans (
+            cutting_management_id, production_month, production_day, production_line, production_order,
+            product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+            chamfering_length, material_name, has_sw_process
+        ) VALUES (
+            NULL, :production_month, :production_day, :production_line, :production_order,
+            :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+            :chamfering_length, :material_name, :has_sw_process
+        )
+    """)
+    params = {
+        "production_month": production_month_date,
+        "production_day": production_day_date,
+        "production_line": line,
+        "production_order": body.production_order,
+        "product_cd": product_cd,
+        "product_name": product_name,
+        "actual_production_quantity": body.actual_production_quantity if body.actual_production_quantity is not None else 0,
+        "production_lot_size": body.production_lot_size,
+        "lot_number": (body.lot_number or "").strip() or None,
+        "chamfering_length": body.chamfering_length,
+        "material_name": (body.material_name or "").strip() or None,
+        "has_sw_process": 1 if body.has_sw_process else 0,
+    }
+    try:
+        await db.execute(ins, params)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "登録しました"}
+
+
 class MoveChamferingPlanToChamferingBody(BaseModel):
     """面取バッチ1件を面取指示へ移行（オプションで生産日・ライン指定。SW時は production_line_2 で2件登録）"""
     chamfering_plan_id: int
@@ -1854,11 +1945,11 @@ async def move_chamfering_plan_to_chamfering(
     ins = text("""
         INSERT INTO chamfering_management (
             cutting_management_id, production_month, production_day, production_line, chamfering_machine, production_order, production_sequence,
-            product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+            product_cd, product_name, actual_production_quantity, defect_qty, production_lot_size, lot_number,
             chamfering_length, production_time, material_name, management_code, has_sw_process, production_completed_check, no_count, remarks
         ) VALUES (
             :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine, :production_order, :production_sequence,
-            :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
+            :product_cd, :product_name, :actual_production_quantity, 0, :production_lot_size, :lot_number,
             :chamfering_length, :production_time, :material_name, :management_code, :has_sw_process, 0, :no_count, :remarks
         )
     """)
@@ -1895,6 +1986,22 @@ async def move_chamfering_plan_to_chamfering(
 class UpdateChamferingPlanSwBody(BaseModel):
     """面取バッチのSW工程フラグ更新"""
     has_sw_process: bool
+
+
+class UpdateChamferingPlanContentBody(BaseModel):
+    """面取バッチ内容編集（バッチ内容編集窗体と同様の項目のうち chamfering_plans に存在するもの）"""
+    production_month: Optional[str] = None
+    production_day: Optional[str] = None
+    production_line: Optional[str] = None
+    production_order: Optional[int] = None
+    product_cd: Optional[str] = None
+    product_name: Optional[str] = None
+    actual_production_quantity: Optional[int] = None
+    production_lot_size: Optional[int] = None
+    lot_number: Optional[str] = None
+    chamfering_length: Optional[float] = None
+    material_name: Optional[str] = None
+    has_sw_process: Optional[bool] = None
 
 
 @router.patch("/plan/chamfering-plans/{plan_id}")
@@ -1937,6 +2044,77 @@ async def delete_chamfering_plan(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"success": True, "message": "削除しました"}
+
+
+@router.put("/plan/chamfering-plans/{plan_id}/content")
+async def update_chamfering_plan_content(
+    plan_id: int,
+    body: UpdateChamferingPlanContentBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """面取バッチ1件の内容を更新（バッチ内容編集と同様の項目）。"""
+    res = await db.execute(
+        text("SELECT id FROM chamfering_plans WHERE id = :pid"),
+        {"pid": plan_id},
+    )
+    if not res.scalar():
+        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+    updates = []
+    params = {"pid": plan_id}
+    if body.production_month is not None:
+        d = _parse_date_ymd(body.production_month)
+        if d is not None:
+            updates.append("production_month = :production_month")
+            params["production_month"] = d
+    if body.production_day is not None:
+        d = _parse_date_ymd(body.production_day)
+        if d is not None:
+            updates.append("production_day = :production_day")
+            params["production_day"] = d
+    if body.production_line is not None:
+        updates.append("production_line = :production_line")
+        params["production_line"] = body.production_line.strip() or None
+    if body.production_order is not None:
+        updates.append("production_order = :production_order")
+        params["production_order"] = body.production_order
+    if body.product_cd is not None:
+        updates.append("product_cd = :product_cd")
+        params["product_cd"] = body.product_cd.strip() or None
+    if body.product_name is not None:
+        updates.append("product_name = :product_name")
+        params["product_name"] = body.product_name.strip() or None
+    if body.actual_production_quantity is not None:
+        updates.append("actual_production_quantity = :actual_production_quantity")
+        params["actual_production_quantity"] = body.actual_production_quantity
+    if body.production_lot_size is not None:
+        updates.append("production_lot_size = :production_lot_size")
+        params["production_lot_size"] = body.production_lot_size
+    if body.lot_number is not None:
+        updates.append("lot_number = :lot_number")
+        params["lot_number"] = body.lot_number.strip() or None
+    if body.chamfering_length is not None:
+        updates.append("chamfering_length = :chamfering_length")
+        params["chamfering_length"] = body.chamfering_length
+    if body.material_name is not None:
+        updates.append("material_name = :material_name")
+        params["material_name"] = body.material_name.strip() or None
+    if body.has_sw_process is not None:
+        updates.append("has_sw_process = :has_sw_process")
+        params["has_sw_process"] = 1 if body.has_sw_process else 0
+    if not updates:
+        return {"success": True, "message": "変更なし"}
+    set_clause = ", ".join(updates)
+    try:
+        await db.execute(
+            text(f"UPDATE chamfering_plans SET {set_clause} WHERE id = :pid"),
+            params,
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "保存しました"}
 
 
 @router.post("/plan/chamfering-plans/{plan_id}/copy")
@@ -2137,7 +2315,7 @@ async def get_chamfering_management_list(
 
     sql = text(f"""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-               production_order, production_sequence, product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty, production_lot_size, lot_number,
                chamfering_length, production_time, material_name, management_code, has_sw_process,
                production_completed_check, no_count, remarks, cd, created_at
         FROM chamfering_management
@@ -2183,6 +2361,7 @@ async def get_chamfering_management_list(
             "product_cd": row.get("product_cd"),
             "product_name": row.get("product_name"),
             "actual_production_quantity": row.get("actual_production_quantity"),
+            "defect_qty": row.get("defect_qty"),
             "production_lot_size": row.get("production_lot_size"),
             "lot_number": row.get("lot_number"),
             "chamfering_length": _v(row, "chamfering_length"),
@@ -2242,7 +2421,7 @@ async def confirm_chamfering_actual(
         conditions.append("chamfering_machine = :chamfering_machine")
         params["chamfering_machine"] = chamfering_machine.strip()
     sel = text("""
-        SELECT id, product_cd, management_code, chamfering_machine, actual_production_quantity, production_day
+        SELECT id, product_cd, management_code, chamfering_machine, actual_production_quantity, defect_qty, production_day
         FROM chamfering_management
         WHERE """ + " AND ".join(conditions))
     res = await db.execute(sel, params)
@@ -2255,7 +2434,7 @@ async def confirm_chamfering_actual(
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '仕掛品', '実績', :target_cd, '工程中間在庫', :lot_no, 'KT02', :machine_cd,
+            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT02', :machine_cd,
             :quantity, '本', :transaction_time, 'chamfering_management'
         )
     """)
@@ -2274,15 +2453,29 @@ async def confirm_chamfering_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
+        # 良品：transaction_type='実績'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("chamfering_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
+            "transaction_type": "実績",
         })
         inserted += 1
         total_quantity += int(qty)
+        # 不良数：transaction_type='不良'
+        defect_qty = r.get("defect_qty")
+        if defect_qty is not None and int(defect_qty) > 0:
+            await db.execute(ins, {
+                "target_cd": product_cd,
+                "lot_no": r.get("management_code"),
+                "machine_cd": r.get("chamfering_machine"),
+                "quantity": int(defect_qty),
+                "transaction_time": tx_time,
+                "transaction_type": "不良",
+            })
+            inserted += 1
     await db.commit()
     return {
         "success": True,
@@ -2380,12 +2573,12 @@ async def create_chamfering_management(
         ins = text("""
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
                 production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 NULL, :production_month, :production_day, :production_line, :chamfering_machine,
-                NULL, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                NULL, :production_sequence, :product_cd, :product_name, :actual_production_quantity, 0,
                 NULL, NULL, NULL, NULL, :material_name, :management_code,
                 0, 0, 0, :remarks
             )
@@ -2414,13 +2607,15 @@ async def create_chamfering_management(
 
 
 class UpdateChamferingManagementBody(BaseModel):
-    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・生産順・備考）"""
+    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・不良数・生産順・備考・生産日）"""
     production_completed_check: Optional[bool] = None
     no_count: Optional[bool] = None
     chamfering_machine: Optional[str] = None
     actual_production_quantity: Optional[int] = None
+    defect_qty: Optional[int] = None
     production_sequence: Optional[int] = None
     remarks: Optional[str] = None
+    production_day: Optional[str] = None  # YYYY-MM-DD
 
 
 @router.patch("/plan/chamfering-management/{chamfering_id}")
@@ -2451,12 +2646,22 @@ async def update_chamfering_management(
     if body.actual_production_quantity is not None:
         updates.append("actual_production_quantity = :actual_production_quantity")
         params["actual_production_quantity"] = body.actual_production_quantity
+    if body.defect_qty is not None:
+        updates.append("defect_qty = :defect_qty")
+        params["defect_qty"] = max(0, body.defect_qty)
     if body.production_sequence is not None:
         updates.append("production_sequence = :production_sequence")
         params["production_sequence"] = body.production_sequence
     if body.remarks is not None:
         updates.append("remarks = :remarks")
         params["remarks"] = body.remarks.strip() or None
+    if body.production_day is not None:
+        d = _parse_date_ymd(body.production_day)
+        if d is not None:
+            updates.append("production_month = :production_month")
+            params["production_month"] = d.replace(day=1)  # production_month = 当月1日
+            updates.append("production_day = :production_day")
+            params["production_day"] = d
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
@@ -2489,7 +2694,7 @@ async def split_chamfering_to_next_day(
         raise HTTPException(status_code=400, detail="当日完成数は0以上を指定してください")
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-               production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
                has_sw_process, production_completed_check, no_count, remarks
         FROM chamfering_management WHERE id = :mid
@@ -2546,16 +2751,7 @@ async def split_chamfering_to_next_day(
             """),
             {"mid": chamfering_id, "qty": body.today_quantity},
         )
-        seq_res = await db.execute(
-            text("""
-                SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_seq
-                FROM chamfering_management
-                WHERE chamfering_machine = :cm AND production_day = :nd
-            """),
-            {"cm": cm, "nd": next_day_date},
-        )
-        seq_row = seq_res.mappings().fetchone()
-        next_seq = int(seq_row["next_seq"]) if seq_row and seq_row.get("next_seq") is not None else 1
+        # 翌日行は順位1で挿入し、既存の翌日行の production_sequence を +1 して自動ソート
         params = {
             "cutting_management_id": r.get("cutting_management_id"),
             "production_month": next_month_date,
@@ -2563,10 +2759,11 @@ async def split_chamfering_to_next_day(
             "production_line": r.get("production_line") or "",
             "chamfering_machine": cm,
             "production_order": r.get("production_order"),
-            "production_sequence": next_seq,
+            "production_sequence": 1,
             "product_cd": r.get("product_cd") or "",
             "product_name": r.get("product_name") or "",
             "actual_production_quantity": remainder,
+            "defect_qty": r.get("defect_qty") or 0,
             "production_lot_size": r.get("production_lot_size"),
             "lot_number": r.get("lot_number"),
             "chamfering_length": r.get("chamfering_length"),
@@ -2580,17 +2777,29 @@ async def split_chamfering_to_next_day(
         ins = text("""
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
                 production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
-                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity, :defect_qty,
                 :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
                 :has_sw_process, 0, :no_count, :remarks
             )
         """)
         await db.execute(ins, params)
+        lid_res = await db.execute(text("SELECT LAST_INSERT_ID() AS new_id"))
+        lid_row = lid_res.mappings().fetchone()
+        new_id = int(lid_row["new_id"]) if lid_row and lid_row.get("new_id") is not None else None
+        if new_id is not None:
+            await db.execute(
+                text("""
+                    UPDATE chamfering_management
+                    SET production_sequence = production_sequence + 1
+                    WHERE chamfering_machine = :cm AND production_day = :nd AND id != :new_id
+                """),
+                {"cm": cm, "nd": next_day_date, "new_id": new_id},
+            )
         await db.commit()
     except Exception as e:
         await db.rollback()
@@ -2607,7 +2816,7 @@ async def duplicate_chamfering_management(
     """面取指示1件を複製し、同一面取機・同一生産日内で直下に挿入。"""
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-               production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+               production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
                has_sw_process, production_completed_check, no_count, remarks
         FROM chamfering_management WHERE id = :mid
@@ -2649,6 +2858,7 @@ async def duplicate_chamfering_management(
             "product_cd": r.get("product_cd") or "",
             "product_name": r.get("product_name") or "",
             "actual_production_quantity": r.get("actual_production_quantity") or 0,
+            "defect_qty": r.get("defect_qty") or 0,
             "production_lot_size": r.get("production_lot_size"),
             "lot_number": r.get("lot_number"),
             "chamfering_length": r.get("chamfering_length"),
@@ -2662,12 +2872,12 @@ async def duplicate_chamfering_management(
         ins = text("""
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-                production_order, production_sequence, product_cd, product_name, actual_production_quantity,
+                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
                 production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
-                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity,
+                :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity, :defect_qty,
                 :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
                 :has_sw_process, 0, :no_count, :remarks
             )
@@ -2843,7 +3053,11 @@ async def get_kanban_issuance_list(
             k.has_chamfering_process, k.lot_number, k.production_day
         FROM kanban_issuance k
         WHERE {" AND ".join(conditions)}
-        ORDER BY k.created_at DESC
+        ORDER BY
+            k.production_day ASC,
+            k.cutting_machine ASC,
+            k.source_id ASC,
+            k.id ASC
         LIMIT :limit
     """)
     try:
