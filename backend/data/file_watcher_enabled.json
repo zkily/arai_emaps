@@ -1,0 +1,17 @@
+{
+  "StockIn.csv": true,
+  "StockOut.csv": true,
+  "MoldingRecord.csv": true,
+  "CutRecord.csv": true,
+  "ChamferingRecord.csv": true,
+  "WeldingRecord.csv": true,
+  "PlatingRecord.csv": true,
+  "InspectionRecord.csv": true,
+  "PreWeldingInspection.csv": true,
+  "ChamferingNG.csv": true,
+  "InspectionNG.csv": true,
+  "Material_Maruiti.csv": true,
+  "Material_Nagoya.csv": true,
+  "Material_JFE.csv": true,
+  "Material_Okajima.csv": true
+}

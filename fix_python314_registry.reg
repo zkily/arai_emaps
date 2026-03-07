@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; 将 Python 3.14 的注册表路径从已删除的 C:\Python314 改为实际安装路径
+; 请右键此文件 -> 以管理员身份运行
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Python\PythonCore\3.14\InstallPath]
+@="C:\\Program Files\\Python314\\"
+"ExecutablePath"="C:\\Program Files\\Python314\\python.exe"
+"WindowedExecutablePath"="C:\\Program Files\\Python314\\pythonw.exe"
