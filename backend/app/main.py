@@ -10,6 +10,7 @@ from datetime import datetime
 from app.core.config import settings
 from app.core.datetime_utils import JST
 from app.modules import auth, erp, aps, mes, websocket, system, master, order, database, shipping, excel_monitor, machine_work_time_config, production_schedule, plan_baseline, outsourcing
+from app.modules import material
 
 
 @asynccontextmanager
@@ -89,6 +90,7 @@ app.include_router(system.router, prefix="/api/system", tags=["システム管�
 app.include_router(order.router, prefix="/api/order", tags=["受注バッチ"])
 app.include_router(database.router, prefix="/api/database", tags=["データベース"])
 app.include_router(outsourcing.router, prefix="/api/outsourcing", tags=["外注管理"])
+app.include_router(material.router, prefix="/api/material", tags=["材料管理"])
 app.include_router(shipping.router, prefix="/api/shipping", tags=["出荷管理"])
 app.include_router(excel_monitor.router, prefix="/api/excel-monitor", tags=["Excel監視・計画データ"])
 app.include_router(machine_work_time_config.router, prefix="/api/machine-work-time-config", tags=["設備運行時間設定"])

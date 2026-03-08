@@ -6377,6 +6377,7 @@ onUnmounted(() => {
   min-height: 448px;
   display: flex;
   flex-direction: column;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fefb 100%);
 }
 
 .kanban-issuance-section {
@@ -6407,10 +6408,16 @@ onUnmounted(() => {
   border-left: 4px solid var(--chamfering-accent);
   border-color: #d1fae5;
   box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.06), 0 2px 4px -2px rgba(5, 150, 105, 0.04);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+.instruction-col.chamfering-management-section:hover {
+  box-shadow: 0 8px 24px -4px rgba(5, 150, 105, 0.12), 0 4px 8px -2px rgba(5, 150, 105, 0.06);
 }
 
 .instruction-col.chamfering-management-section .cutting-mgmt-header {
   border-bottom-color: #d1fae5;
+  padding: 4px 0 6px;
+  margin-bottom: 4px;
 }
 
 .instruction-col.kanban-issuance-section {
@@ -6455,23 +6462,23 @@ onUnmounted(() => {
 .chamfering-mgmt-header-two-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   width: 100%;
   align-self: stretch;
 }
 .chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   flex-wrap: nowrap;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
 }
 .chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 .cutting-mgmt-header-left {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 .chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row1 .cutting-mgmt-header-right {
@@ -6480,8 +6487,10 @@ onUnmounted(() => {
 }
 .chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row2 {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
+  padding: 2px 0;
+  border-top: 1px solid rgba(5, 150, 105, 0.08);
 }
 .chamfering-mgmt-header-two-rows .chamfering-mgmt-header-row2 .chamfering-machine-btns {
   margin-right: 0;
@@ -6523,6 +6532,21 @@ onUnmounted(() => {
 
 .chamfering-management-section .cutting-mgmt-title {
   color: #047857;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.chamfering-management-section .cutting-mgmt-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  flex-shrink: 0;
 }
 
 .kanban-issuance-section .cutting-mgmt-title {
@@ -6617,6 +6641,8 @@ onUnmounted(() => {
 
 .chamfering-management-section .cutting-mgmt-table-inner {
   border-color: #a7f3d0;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(5, 150, 105, 0.06);
 }
 
 /* 面取指示：卡片高度固定，表头固定，内容区域可滚动，合計行固定在卡片底部 */
@@ -6658,12 +6684,17 @@ onUnmounted(() => {
 
 .chamfering-management-section .cutting-mgmt-thead {
   background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
-  border-bottom-color: #a7f3d0;
+  border-bottom: 2px solid #6ee7b7;
   z-index: 10;
+  backdrop-filter: blur(4px);
 }
 
 .chamfering-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
   color: #047857;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
 }
 
 /* バッチ→切断のドロップゾーン（切断指示-今日/翌日：縦スクロールは wrap で行うためここでは高さは内容に合わせる） */
@@ -6935,6 +6966,97 @@ onUnmounted(() => {
 }
 .chamfering-management-section .cutting-mgmt-td-actions {
   background: #fff;
+}
+
+/* ── 面取指示-今日：データ行ホバー効果強化 ── */
+.chamfering-management-section .cutting-mgmt-data-row {
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+  border-bottom: 1px solid #ecfdf5;
+}
+.chamfering-management-section .cutting-mgmt-data-row:hover {
+  background: linear-gradient(90deg, #f0fdf4 0%, #ecfdf5 40%, #ffffff 100%) !important;
+  box-shadow: inset 3px 0 0 #10b981;
+}
+.chamfering-management-section .cutting-mgmt-data-row:nth-child(even) {
+  background: rgba(236, 253, 245, 0.35);
+}
+
+/* ── 面取指示-今日：合計行スタイル強化 ── */
+.chamfering-management-section .cutting-mgmt-tfoot {
+  background: linear-gradient(90deg, #ecfdf5 0%, #d1fae5 100%);
+  border-top: 2px solid #6ee7b7;
+  padding: 6px 10px;
+  font-size: 11px;
+}
+.chamfering-management-section .cutting-mgmt-tfoot-summary .cutting-mgmt-tfoot-item {
+  color: #047857;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.65);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* ── 面取指示-今日：面取機ボタン美化 ── */
+.chamfering-management-section .chamfering-machine-btns :deep(.el-button) {
+  border-radius: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 10px;
+  min-height: 22px;
+  transition: all 0.18s ease;
+}
+.chamfering-management-section .chamfering-machine-btns :deep(.el-button--primary) {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  border-color: #059669 !important;
+  color: #fff !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.30);
+}
+.chamfering-management-section .chamfering-machine-btns :deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%) !important;
+  box-shadow: 0 3px 10px rgba(16, 185, 129, 0.40);
+  transform: translateY(-1px);
+}
+.chamfering-management-section .chamfering-machine-btns :deep(.el-button--default) {
+  background: #fff !important;
+  border-color: #d1fae5 !important;
+  color: #047857 !important;
+}
+.chamfering-management-section .chamfering-machine-btns :deep(.el-button--default:hover) {
+  border-color: #10b981 !important;
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+}
+
+/* ── 面取指示-今日：ヘッダーボタン美化 ── */
+.chamfering-management-section .cutting-mgmt-header-right :deep(.el-button) {
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  min-height: 26px;
+}
+
+/* ── 面取指示-今日：空状態美化 ── */
+.chamfering-management-section .cutting-mgmt-empty {
+  padding: 20px 16px;
+  font-size: 12px;
+  color: #6ee7b7;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px dashed #a7f3d0;
+  border-radius: 8px;
+  text-align: center;
+  margin: 6px;
+  font-weight: 500;
+}
+
+/* ── 面取指示-今日：セル内スイッチ compact ── */
+.chamfering-management-section .cutting-mgmt-td-switch {
+  padding: 2px 4px;
+}
+.chamfering-management-section .cutting-mgmt-td-switch :deep(.el-switch) {
+  --el-switch-on-color: #10b981;
+  height: 18px;
 }
 
 .cutting-mgmt-td-actions .el-button {

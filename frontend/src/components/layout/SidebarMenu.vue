@@ -56,7 +56,54 @@
               <el-icon><ShoppingCart /></el-icon>
               <span :title="t('menu.ERP_PURCHASE')">{{ t('menu.ERP_PURCHASE') }}</span>
             </template>
-            <el-sub-menu index="erp-purchase-outsourcing">
+            <el-sub-menu index="erp-purchase-material">
+              <template #title>
+                <el-icon><Collection /></el-icon>
+                <span>材料管理</span>
+              </template>
+              <el-menu-item index="/erp/purchase/material" class="menu-item-home">
+                <el-icon><HomeFilled /></el-icon>
+                <template #title><span>材料管理ホーム</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/master">
+                <el-icon><List /></el-icon>
+                <template #title><span>材料マスタ</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/stock-entry">
+                <el-icon><DocumentAdd /></el-icon>
+                <template #title><span>在庫登録</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/stock-materials">
+                <el-icon><Box /></el-icon>
+                <template #title><span>在庫管理</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/receiving">
+                <el-icon><Download /></el-icon>
+                <template #title><span>受入管理</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/receiving-history">
+                <el-icon><DataLine /></el-icon>
+                <template #title><span>受入履歴</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/receiving-inspection">
+                <el-icon><CircleCheck /></el-icon>
+                <template #title><span>受入検品</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/inspection-master">
+                <el-icon><Tickets /></el-icon>
+                <template #title><span>検品マスタ</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/forecast">
+                <el-icon><TrendCharts /></el-icon>
+                <template #title><span>内示管理</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/material/order">
+                <el-icon><ShoppingCart /></el-icon>
+                <template #title><span>材料発注</span></template>
+              </el-menu-item>
+            </el-sub-menu>
+
+          <el-sub-menu index="erp-purchase-outsourcing">
               <template #title>
                 <el-icon><OfficeBuilding /></el-icon>
                 <span>外注管理</span>
