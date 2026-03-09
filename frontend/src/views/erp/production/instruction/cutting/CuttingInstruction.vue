@@ -313,7 +313,7 @@
                         <el-button type="default" size="small" circle title="翌日" @click.stop="editingProductionDayValue = shiftDate(editingProductionDayValue, 1); saveProductionDay(row, editingProductionDayValue)">
                           <el-icon><ArrowRight /></el-icon>
                         </el-button>
-                        <el-button type="info" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditProductionDay">×</el-button>
+                        <el-button type="danger" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditProductionDay">×</el-button>
                       </span>
                     </template>
                     <template v-else>{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
@@ -453,7 +453,7 @@
                         <el-button type="default" size="small" circle title="翌日" @click.stop="editingProductionDayValue = shiftDate(editingProductionDayValue, 1); saveProductionDay(row, editingProductionDayValue)">
                           <el-icon><ArrowRight /></el-icon>
                         </el-button>
-                        <el-button type="info" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditProductionDay">×</el-button>
+                        <el-button type="danger" link size="small" title="キャンセル（Esc）" @click.stop="cancelEditProductionDay">×</el-button>
                       </span>
                     </template>
                     <template v-else>{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
@@ -4675,19 +4675,49 @@ function startEditProductionDay(row: CuttingManagementRow) {
   editingProductionDayValue.value = formatDateOnly(String(row.production_day ?? '')) || getTodayString()
 }
 
-/** 生産日を保存（PATCH）して編集終了 */
+/** 生産日を保存（PATCH）して編集終了。修改后日期＞修改前则自动排到该日同機種第一位，修改后＜修改前则排到最后一位 */
 async function saveProductionDay(row: CuttingManagementRow, dateStr: string) {
   const id = row.id
   if (id == null) return
   const d = dateStr.slice(0, 10)
   if (!d) return
+  const oldDate = formatDateOnly(String(row.production_day ?? '')) || ''
+  const putFirst = !!oldDate && d > oldDate  // 修改后日期 > 修改前 → 该日内排第一位
+  const putLast = !!oldDate && d < oldDate  // 修改后日期 < 修改前 → 该日内排最后一位
   try {
     await request.patch(`/api/plan/cutting-management/${id}`, { production_day: d })
     ;(row as { production_day?: string }).production_day = d
     ElMessage.success('生産日を更新しました')
     editingProductionDayId.value = null
-    loadCuttingManagement()
+    await loadCuttingManagement()
     loadChamferingBatchList()
+
+    // 生産順：修改后日期在「今日」或「翌日」视图中时，自动排到该日期同一切断機的第一位或最后一位
+    if (putFirst || putLast) {
+      const todayStr = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
+      const tomorrowStr = selectedDateTomorrow.value ? String(selectedDateTomorrow.value).slice(0, 10) : ''
+      if (d === todayStr || d === tomorrowStr) {
+        const list = d === todayStr ? cuttingManagementList.value : cuttingManagementListTomorrow.value
+        const cm = (row.cutting_machine || '').trim()
+        if (cm) {
+          const sameMachine = list.filter((r) => (r.cutting_machine || '').trim() === cm)
+          const sorted = [...sameMachine].sort((a, b) => {
+            const sa = (a.production_sequence ?? 0)
+            const sb = (b.production_sequence ?? 0)
+            if (sa !== sb) return sa - sb
+            return (a.id ?? 0) - (b.id ?? 0)
+          })
+          const orderedIds = sorted.map((r) => r.id!).filter((rid) => rid != null)
+          if (orderedIds.length > 0 && orderedIds.includes(id)) {
+            const newOrderedIds = putFirst
+              ? [id, ...orderedIds.filter((rid) => rid !== id)]
+              : [...orderedIds.filter((rid) => rid !== id), id]
+            await request.post('/api/plan/cutting-management/reorder', { cutting_machine: cm, ordered_ids: newOrderedIds })
+            await loadCuttingManagement()
+          }
+        }
+      }
+    }
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -4708,18 +4738,51 @@ function startEditChamferingProductionDay(row: ChamferingManagementRow) {
   editingChamferingProductionDayValue.value = formatDateOnly(String(row.production_day ?? '')) || getTodayString()
 }
 
-/** 面取指示：生産日を保存（PATCH）して編集終了 */
+/** 面取指示：生産日を保存（PATCH）して編集終了。修改后日期＞修改前则自动排到该日同面取機第一位，修改后＜修改前则排到最后一位 */
 async function saveChamferingProductionDay(row: ChamferingManagementRow, dateStr: string) {
   const id = row.id
   if (id == null) return
   const d = dateStr.slice(0, 10)
   if (!d) return
+  const oldDate = formatDateOnly(String(row.production_day ?? '')) || ''
+  const putFirst = !!oldDate && d > oldDate
+  const putLast = !!oldDate && d < oldDate
   try {
     await request.patch(`/api/plan/chamfering-management/${id}`, { production_day: d })
     ;(row as { production_day?: string }).production_day = d
     ElMessage.success('生産日を更新しました')
     editingChamferingProductionDayId.value = null
-    loadChamferingManagement()
+    await loadChamferingManagement()
+
+    if (putFirst || putLast) {
+      const todayStr = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
+      const tomorrowStr = selectedChamferingDateTomorrow.value ? String(selectedChamferingDateTomorrow.value).slice(0, 10) : ''
+      if (d === todayStr || d === tomorrowStr) {
+        const list = d === todayStr ? chamferingManagementListToday.value : chamferingManagementListTomorrow.value
+        const cm = (row.chamfering_machine || '').trim()
+        if (cm) {
+          const sameMachine = list.filter((r) => (r.chamfering_machine || '').trim() === cm)
+          const sorted = [...sameMachine].sort((a, b) => {
+            const sa = (a.production_sequence ?? 0)
+            const sb = (b.production_sequence ?? 0)
+            if (sa !== sb) return sa - sb
+            return (a.id ?? 0) - (b.id ?? 0)
+          })
+          const orderedIds = sorted.map((r) => r.id!).filter((rid) => rid != null)
+          if (orderedIds.length > 0 && orderedIds.includes(id)) {
+            const newOrderedIds = putFirst
+              ? [id, ...orderedIds.filter((rid) => rid !== id)]
+              : [...orderedIds.filter((rid) => rid !== id), id]
+            await request.post('/api/plan/chamfering-management/reorder', {
+              chamfering_machine: cm,
+              production_day: d,
+              ordered_ids: newOrderedIds,
+            })
+            await loadChamferingManagement()
+          }
+        }
+      }
+    }
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
@@ -5213,7 +5276,10 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
     <div class="ticket-top">
       <div>
         <div class="ticket-title">切断現品票</div>
-        <div class="ticket-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR" width="32" height="32" />` : '<span>QR</span>'}</div>
+        <div class="ticket-qr-wrap">
+          <div class="ticket-qr">${qrSrc ? `<img src="${qrSrc}" alt="QR" width="32" height="32" />` : '<span>QR</span>'}</div>
+          <span class="ticket-qr-label">製品CD</span>
+        </div>
       </div>
       <div class="ticket-product">${esc(row.product_name)}</div>
       <div class="ticket-top-right">
@@ -5314,8 +5380,10 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .ticket-mgmt-qr-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
     .ticket-mgmt-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .ticket-mgmt-qr img { display: block; width: 32px; height: 32px; object-fit: contain; }
-    .ticket-mgmt-qr-label { font-size: 6px; color: #666; margin-top: 2px; }
-    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
+    .ticket-mgmt-qr-label { font-size: 6px; color: #666; margin-top: 0px; }
+    .ticket-qr-wrap { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; margin-bottom: 1px; }
+    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; }
+    .ticket-qr-label { font-size: 6px; color: #666; margin-top: 0px; }
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
     .tbl th { background: transparent; font-weight: bold; text-align: left; }
@@ -5409,7 +5477,9 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .ticket-mgmt-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .ticket-mgmt-qr img { display: block; width: 32px; height: 32px; object-fit: contain; }
     .ticket-mgmt-qr-label { font-size: 6px; color: #666; margin-top: 2px; }
-    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; margin-top: 10px; margin-bottom: 3px; }
+    .ticket-qr-wrap { display: flex; flex-direction: column; align-items: flex-start; margin-top: 10px; margin-bottom: 3px; }
+    .ticket-qr { width: 30px; height: 30px; border: 1px solid #999; display: flex; align-items: center; justify-content: center; font-size: 6px; color: #aaa; }
+    .ticket-qr-label { font-size: 6px; color: #666; margin-top: 2px; }
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
     .tbl th { background: transparent; font-weight: bold; text-align: left; }
@@ -5787,15 +5857,15 @@ async function issueCuttingInstructionSheet() {
       .instruction-sheet-table-wrap { overflow: auto; }
       .instruction-sheet-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       .instruction-sheet-table th:nth-child(1), .instruction-sheet-table td:nth-child(1) { width: 4%; }
-      .instruction-sheet-table th:nth-child(2), .instruction-sheet-table td:nth-child(2) { width: 13%; }
+      .instruction-sheet-table th:nth-child(2), .instruction-sheet-table td:nth-child(2) { width: 15%; }
       .instruction-sheet-table th:nth-child(3), .instruction-sheet-table td:nth-child(3) { width: 4%; }
-      .instruction-sheet-table th:nth-child(4), .instruction-sheet-table td:nth-child(4) { width: 16%; }
+      .instruction-sheet-table th:nth-child(4), .instruction-sheet-table td:nth-child(4) { width: 15%; }
       .instruction-sheet-table th:nth-child(5), .instruction-sheet-table td:nth-child(5) { width: 5%; }
       .instruction-sheet-table th:nth-child(6), .instruction-sheet-table td:nth-child(6) { width: 5%; }
       .instruction-sheet-table th:nth-child(7), .instruction-sheet-table td:nth-child(7) { width: 4%; }
       .instruction-sheet-table th:nth-child(8), .instruction-sheet-table td:nth-child(8) { width: 4%; }
       .instruction-sheet-table th:nth-child(9), .instruction-sheet-table td:nth-child(9) { width: 4%; }
-      .instruction-sheet-table th:nth-child(10), .instruction-sheet-table td:nth-child(10) { width: 5%; }
+      .instruction-sheet-table th:nth-child(10), .instruction-sheet-table td:nth-child(10) { width: 4%; }
       .instruction-sheet-table th:nth-child(11), .instruction-sheet-table td:nth-child(11) { width: 5%; }
       .instruction-sheet-table th:nth-child(12), .instruction-sheet-table td:nth-child(12) { width: 10%; }
       .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
@@ -5838,8 +5908,8 @@ async function issueChamferingInstructionSheet() {
   }
   issueChamferingInstructionSheetLoading.value = true
   try {
+    // 指示書発行は選択日の全面取機を対象とする（当前面取機筛选に依存しない）
     const params: Record<string, string> = { production_day: day, limit: '2000' }
-    if (selectedChamferingMachineFilter.value) params.chamfering_machine = selectedChamferingMachineFilter.value
     const res = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
       '/api/plan/chamfering-management/list',
       { params }
@@ -7214,7 +7284,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 .cutting-mgmt-td-production-day.is-editing-production-day {
-  min-width: 200px;
+  min-width: 260px;
 }
 .production-day-editor {
   display: flex;
@@ -7223,8 +7293,8 @@ onUnmounted(() => {
   flex-wrap: nowrap;
 }
 .production-day-editor .el-button.is-circle { padding: 4px; width: 24px; height: 24px; }
-.production-day-editor .production-day-picker-inline { width: 108px; }
-.production-day-editor :deep(.el-date-editor) { width: 108px !important; }
+.production-day-editor .production-day-picker-inline { width: 160px; }
+.production-day-editor :deep(.el-date-editor) { width: 160px !important; }
 
 .cutting-mgmt-table :deep(.el-table__header th),
 .cutting-mgmt-table :deep(.el-table__body td) {

@@ -185,3 +185,9 @@ git push -u origin main
 3. **分支名**：推送时 `分支名` 需与本地当前分支一致（如 `git branch` 显示的 `* 当前分支`）。
 
 按上述步骤即可将项目代码上传或更新到 GitHub。若仓库地址或分支名不同，将文档中的 `zkily/arai_emaps` 和分支名替换为你的实际信息即可。
+
+
+echo "# arai_emaps" >> README.md
+git add .
+git commit -m "first commit"
+git push -u origin main

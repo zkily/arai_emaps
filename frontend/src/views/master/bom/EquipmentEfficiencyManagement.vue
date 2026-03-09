@@ -1,195 +1,149 @@
 <template>
-  <div class="equipment-efficiency-container fade-in">
+  <div class="ee-container">
     <!-- 页面头部 -->
-    <div class="page-header surface-card fade-card">
-      <div class="header-content">
-        <div class="title-section">
-          <h1 class="main-title">
-            <el-icon class="title-icon">
-              <Tools />
-            </el-icon>
-            設備能率管理
-          </h1>
-          <p class="subtitle">設備ごとの加工製品別能率設定・管理を行います</p>
+    <div class="ee-header">
+      <div class="ee-header-left">
+        <div class="ee-title-row">
+          <span class="ee-title-icon"><el-icon :size="20"><Tools /></el-icon></span>
+          <h1 class="ee-title">設備能率管理</h1>
         </div>
-        <div class="header-stats">
-          <div class="stat-card">
-            <div class="stat-number">{{ efficiencyList?.length || 0 }}</div>
-            <div class="stat-label">設定数</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number">{{ uniqueEquipmentCount }}</div>
-            <div class="stat-label">設備数</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number">{{ uniqueProductCount }}</div>
-            <div class="stat-label">製品数</div>
-          </div>
+        <p class="ee-subtitle">設備ごとの加工製品別能率設定・管理</p>
+      </div>
+      <div class="ee-stats">
+        <div class="ee-stat" v-for="s in [
+          { n: efficiencyList?.length || 0, l: '設定数' },
+          { n: uniqueEquipmentCount, l: '設備数' },
+          { n: uniqueProductCount, l: '製品数' }
+        ]" :key="s.l">
+          <span class="ee-stat-num">{{ s.n }}</span>
+          <span class="ee-stat-lbl">{{ s.l }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 功能操作区域 -->
-    <div class="action-section surface-card fade-card">
-      <div class="filter-header">
-        <div class="filter-title">
-          <el-icon class="filter-icon">
-            <Filter />
-          </el-icon>
-          <span>検索・絞り込み</span>
-        </div>
-        <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
-            クリア
-          </el-button>
-          <el-button type="primary" @click="openDialog()" :icon="Plus" class="add-btn">
-            新規登録
-          </el-button>
-        </div>
-      </div>
-      <div class="filters-content">
-        <div class="keyword-search">
-          <el-input
-            v-model="filters.keyword"
-            placeholder="製品名または設備名で検索"
-            clearable
-            @input="handleFilter"
-            class="keyword-input"
-          >
-            <template #prefix>
-              <el-icon>
-                <Search />
-              </el-icon>
-            </template>
-          </el-input>
-        </div>
+    <!-- 工具栏：搜索 + 操作 -->
+    <div class="ee-toolbar">
+      <el-input
+        v-model="filters.keyword"
+        placeholder="製品名・設備名で検索…"
+        clearable
+        @input="handleFilter"
+        class="ee-search"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+      <div class="ee-toolbar-actions">
+        <el-button @click="clearFilters" :icon="Refresh" class="ee-btn-clear">クリア</el-button>
+        <el-button type="primary" @click="openDialog()" :icon="Plus" class="ee-btn-add">
+          <span class="btn-label">新規登録</span>
+        </el-button>
       </div>
     </div>
 
     <!-- 数据表格 -->
-    <div class="table-section surface-card fade-card">
-      <el-card class="table-card elevated-card" shadow="never">
-        <el-tabs v-model="activeProcessTab" @tab-change="handleTabChange" class="process-tabs">
-          <el-tab-pane
-            v-for="process in processTypes"
-            :key="process.value"
-            :label="`${process.label} (${getProcessCount(process.value)})`"
-            :name="process.value"
+    <div class="ee-table-wrap">
+      <el-tabs v-model="activeProcessTab" @tab-change="handleTabChange" class="ee-tabs">
+        <el-tab-pane
+          v-for="process in processTypes"
+          :key="process.value"
+          :label="`${process.label} (${getProcessCount(process.value)})`"
+          :name="process.value"
+        >
+          <el-table
+            :data="getFilteredListByProcess(process.value)"
+            v-loading="loading"
+            stripe
+            border
+            style="width: 100%"
+            :empty-text="'データがありません'"
+            :default-sort="{ prop: 'machines_name', order: 'ascending' }"
+            :row-class-name="getRowClassName"
+            :header-cell-style="{ background: '#f0f2f8', color: '#374151', fontWeight: 600, fontSize: '12px', padding: '6px 10px' }"
+            :cell-style="{ padding: '5px 10px', fontSize: '13px' }"
+            height="calc(100vh - 280px)"
           >
-            <el-table
-              :data="getFilteredListByProcess(process.value)"
-              v-loading="loading"
-              stripe
-              border
-              style="width: 100%"
-              :empty-text="'データがありません'"
-              :default-sort="{ prop: 'machines_name', order: 'ascending' }"
-              :row-class-name="getRowClassName"
-              height="600"
-            >
-              <el-table-column type="index" label="No." width="80" align="center" />
-              <el-table-column
-                prop="machine_cd"
-                label="設備コード"
-                width="120"
-                align="center"
-                sortable
-              />
-              <el-table-column prop="machines_name" label="設備名" width="150" sortable />
-              <el-table-column
-                prop="product_cd"
-                label="製品コード"
-                width="120"
-                align="center"
-                sortable
-              />
-              <el-table-column prop="product_name" label="製品名" min-width="150" sortable />
-              <el-table-column prop="efficiency_rate" label="能率" width="120" align="center">
-                <template #default="{ row }">
-                  <div class="efficiency-cell">
-                    <span class="efficiency-value">{{ row.efficiency_rate?.toFixed(1) }}</span>
-                    <span v-if="row.unit" class="efficiency-unit">{{ row.unit }}</span>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column prop="step_time" label="段取時間（分）" width="130" align="center" />
-              <el-table-column prop="status" label="状態" width="120" align="center">
-                <template #default="{ row }">
-                  <div class="status-cell">
-                    <el-switch
-                      v-model="row.status"
-                      :active-value="1"
-                      :inactive-value="0"
-                      :loading="statusUpdatingId === row.id"
-                      @change="(value) => handleStatusChange(row, value)"
-                    />
-                    <span class="status-label" :class="{ active: row.status === 1 }">
-                      {{ row.status === 1 ? '有効' : '無効' }}
-                    </span>
-                  </div>
-                </template>
-              </el-table-column>
-              <el-table-column prop="remarks" label="備考" min-width="200" show-overflow-tooltip />
-              <el-table-column label="操作" fixed="right" width="180" align="center">
-                <template #default="{ row }">
-                  <div class="action-buttons-table">
-                    <el-button
-                      size="small"
-                      type="primary"
-                      link
-                      @click="openDialog(row)"
-                      :icon="Edit"
-                    >
-                      編集
-                    </el-button>
-                    <el-button
-                      size="small"
-                      type="danger"
-                      link
-                      @click="handleDelete(row.id)"
-                      :icon="Delete"
-                    >
-                      削除
-                    </el-button>
-                  </div>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-tab-pane>
-        </el-tabs>
-      </el-card>
-    </div>
-
-    <div class="result-section surface-card fade-card">
-      <div class="result-info">
-        表示件数: {{ getFilteredListByProcess(activeProcessTab).length }} /
-        {{ efficiencyList?.length || 0 }}
-        <span v-if="activeProcessTab !== 'all'" class="process-info">
-          （{{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程）
+            <el-table-column type="index" label="No." width="55" align="center" />
+            <el-table-column prop="machine_cd" label="設備CD" width="100" align="center" sortable />
+            <el-table-column prop="machines_name" label="設備名" width="140" sortable show-overflow-tooltip />
+            <el-table-column prop="product_cd" label="製品CD" width="100" align="center" sortable />
+            <el-table-column prop="product_name" label="製品名" min-width="140" sortable show-overflow-tooltip />
+            <el-table-column prop="efficiency_rate" label="能率" width="100" align="center">
+              <template #default="{ row }">
+                <div class="ee-eff-cell">
+                  <span class="ee-eff-val">{{ row.efficiency_rate?.toFixed(1) }}</span>
+                  <span v-if="row.unit" class="ee-eff-unit">{{ row.unit }}</span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="step_time" label="段取時間" width="90" align="center">
+              <template #default="{ row }">
+                <span v-if="row.step_time != null">{{ row.step_time }}<small class="ee-min">分</small></span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="status" label="状態" width="100" align="center">
+              <template #default="{ row }">
+                <div class="ee-status-cell">
+                  <el-switch
+                    v-model="row.status"
+                    :active-value="1"
+                    :inactive-value="0"
+                    :loading="statusUpdatingId === row.id"
+                    @change="(value) => handleStatusChange(row, value)"
+                    size="small"
+                  />
+                  <span class="ee-status-lbl" :class="{ on: row.status === 1 }">
+                    {{ row.status === 1 ? '有効' : '無効' }}
+                  </span>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column prop="remarks" label="備考" min-width="160" show-overflow-tooltip />
+            <el-table-column label="操作" fixed="right" width="130" align="center">
+              <template #default="{ row }">
+                <div class="ee-row-actions">
+                  <el-button size="small" type="primary" link @click="openDialog(row)" :icon="Edit">編集</el-button>
+                  <el-button size="small" type="danger" link @click="handleDelete(row.id)" :icon="Delete">削除</el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
+      <!-- 結果バー -->
+      <div class="ee-result-bar">
+        <span>表示: <b>{{ getFilteredListByProcess(activeProcessTab).length }}</b> / {{ efficiencyList?.length || 0 }}</span>
+        <span v-if="activeProcessTab !== 'all'" class="ee-proc-tag">
+          {{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程
         </span>
       </div>
     </div>
 
+    <!-- ダイアログ -->
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '能率設定編集' : '能率設定新規登録'"
-      width="600px"
+      width="580px"
       :close-on-click-modal="false"
-      class="efficiency-dialog"
+      class="ee-dialog"
+      destroy-on-close
     >
       <el-form
         ref="formRef"
         :model="formData"
         :rules="formRules"
-        label-width="120px"
+        label-width="110px"
         label-position="left"
-        class="efficiency-form"
+        class="ee-form"
+        size="default"
       >
-        <div class="form-grid">
-          <el-form-item label="設備" prop="machine_cd" class="span-2">
+        <div class="ee-form-section">
+          <div class="ee-form-section-title">設備・製品</div>
+          <el-form-item label="設備" prop="machine_cd">
             <el-select
               v-model="formData.machine_cd"
-              placeholder="設備を選択"
+              placeholder="選択…"
               filterable
               style="width: 100%"
               @change="handleEquipmentChange"
@@ -202,13 +156,13 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="設備名" prop="machines_name" class="span-2">
+          <el-form-item label="設備名">
             <el-input v-model="formData.machines_name" disabled />
           </el-form-item>
-          <el-form-item label="製品" prop="product_cd" class="span-2">
+          <el-form-item label="製品" prop="product_cd">
             <el-select
               v-model="formData.product_cd"
-              placeholder="製品を選択"
+              placeholder="選択…"
               filterable
               style="width: 100%"
               @change="handleProductChange"
@@ -221,44 +175,49 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="製品名" prop="product_name" class="span-2">
+          <el-form-item label="製品名">
             <el-input v-model="formData.product_name" disabled />
           </el-form-item>
-          <el-form-item label="能率" prop="efficiency_rate">
-            <el-input-number
-              v-model="formData.efficiency_rate"
-              :min="0"
-              :max="10000"
-              :precision="1"
-              :step="0.1"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="段取時間（分）" prop="step_time">
-            <el-input-number
-              v-model="formData.step_time"
-              :min="0"
-              :max="9999"
-              :precision="0"
-              style="width: 100%"
-              placeholder="段取時間を入力"
-            />
-          </el-form-item>
-          <el-form-item label="状態" prop="status" class="span-2 status-group">
+        </div>
+        <div class="ee-form-section">
+          <div class="ee-form-section-title">能率設定</div>
+          <div class="ee-form-row">
+            <el-form-item label="能率" prop="efficiency_rate" class="ee-form-half">
+              <el-input-number
+                v-model="formData.efficiency_rate"
+                :min="0"
+                :max="10000"
+                :precision="1"
+                :step="0.1"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-form-item label="段取時間" prop="step_time" class="ee-form-half">
+              <el-input-number
+                v-model="formData.step_time"
+                :min="0"
+                :max="9999"
+                :precision="0"
+                style="width: 100%"
+                placeholder="分"
+              />
+            </el-form-item>
+          </div>
+          <el-form-item label="状態" prop="status">
             <el-radio-group v-model="formData.status">
               <el-radio :label="1">有効</el-radio>
               <el-radio :label="0">無効</el-radio>
             </el-radio-group>
           </el-form-item>
+          <el-form-item label="備考" prop="remarks">
+            <el-input v-model="formData.remarks" type="textarea" :rows="2" placeholder="備考を入力…" />
+          </el-form-item>
         </div>
-        <el-form-item label="備考" prop="remarks" class="remarks-item">
-          <el-input v-model="formData.remarks" type="textarea" :rows="3" placeholder="備考を入力" />
-        </el-form-item>
       </el-form>
       <template #footer>
-        <div class="dialog-footer">
+        <div class="ee-dialog-footer">
           <el-button @click="dialogVisible = false">キャンセル</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="submitting"> 保存 </el-button>
+          <el-button type="primary" @click="handleSubmit" :loading="submitting">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -393,7 +352,7 @@ const getProcessCount = (processType: string): number => {
 
 const handleTabChange = () => {}
 
-const getRowClassName = () => 'compact-table-row'
+const getRowClassName = () => 'ee-row'
 
 const handleStatusChange = async (row: EquipmentEfficiency, value: number | string | boolean) => {
   if (!row.id) return
@@ -551,340 +510,462 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.equipment-efficiency-container {
+/* ===== Layout ===== */
+.ee-container {
   min-height: 100vh;
-  background: radial-gradient(circle at top, #fdfbff 0%, #f2f4f8 45%, #edf1f7 100%);
-  padding: 18px 24px 32px;
-}
-
-.surface-card {
-  background: #ffffff;
-  border-radius: 16px;
-  border: 1px solid rgba(210, 214, 233, 0.6);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
-  backdrop-filter: blur(6px);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.surface-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
-}
-
-.fade-card {
-  animation: fadeUp 0.45s ease;
-}
-
-.page-header {
-  background: linear-gradient(135deg, rgba(101, 116, 205, 0.95), rgba(118, 75, 162, 0.92));
-  padding: 24px 32px;
-  margin-bottom: 18px;
-  color: #fff;
-}
-
-.header-content {
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef1f5 50%, #e8ecf3 100%);
+  padding: 12px 16px 20px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.title-section {
-  flex: 1;
-}
-
-.main-title {
-  display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  font-size: 26px;
-  font-weight: 700;
-  margin: 0 0 6px 0;
+  font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.title-icon {
-  font-size: 30px;
-}
-
-.subtitle {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.85);
-  margin: 0;
-}
-
-.header-stats {
-  display: flex;
-  gap: 12px;
-}
-
-.stat-card {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(8px);
+/* ===== Header ===== */
+.ee-header {
+  background: linear-gradient(135deg, #5b5ea6 0%, #7c3aed 60%, #6d28d9 100%);
   border-radius: 12px;
-  padding: 14px 18px;
-  text-align: center;
-  min-width: 90px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 28px rgba(255, 255, 255, 0.2);
-}
-
-.stat-number {
-  font-size: 22px;
-  font-weight: 700;
-  color: white;
-  margin-bottom: 2px;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
-  letter-spacing: 0.05em;
-}
-
-.action-section {
-  padding: 18px 24px;
-  margin-bottom: 18px;
-}
-
-.filter-header {
+  padding: 14px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  gap: 12px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(91, 94, 166, 0.3);
+  animation: slideDown 0.35s ease;
 }
 
-.filter-title {
+.ee-header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.ee-title-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.filter-icon {
-  font-size: 18px;
-}
-
-.filter-actions {
-  display: flex;
   gap: 8px;
 }
 
-.filter-actions .el-button:hover {
-  transform: translateY(-1px);
-}
-
-.filters-content {
+.ee-title-icon {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.keyword-search {
-  flex: 1;
-  min-width: 260px;
-}
-
-.keyword-input :deep(.el-input__wrapper) {
-  border-radius: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
-}
-
-.keyword-input :deep(.el-input__wrapper.is-focus) {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
-}
-
-.status-cell {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.ee-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.ee-subtitle {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 3px 0 0 40px;
+}
+
+.ee-stats {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ee-stat {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 14px;
+  text-align: center;
+  min-width: 64px;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.ee-stat:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.ee-stat-num {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ee-stat-lbl {
+  display: block;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 2px;
+  letter-spacing: 0.04em;
+}
+
+/* ===== Toolbar ===== */
+.ee-toolbar {
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  animation: slideDown 0.4s ease;
+}
+
+.ee-search {
+  flex: 1;
+  max-width: 360px;
+}
+
+.ee-search :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: none;
+  border: 1px solid #e5e7eb;
+  height: 32px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.ee-search :deep(.el-input__wrapper.is-focus) {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.12);
+}
+
+.ee-toolbar-actions {
+  display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
-.status-label {
+.ee-btn-clear {
+  --el-button-hover-bg-color: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
   font-size: 12px;
-  color: #8b8fa3;
-  white-space: nowrap;
+  height: 32px;
 }
 
-.status-label.active {
-  color: #34d399;
-  font-weight: 600;
-}
-
-.table-section {
-  padding: 0;
-  margin-bottom: 18px;
-}
-
-.table-card {
+.ee-btn-add {
+  border-radius: 8px;
+  font-size: 12px;
+  height: 32px;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
   border: none;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.ee-btn-add:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+}
+
+/* ===== Table Section ===== */
+.ee-table-wrap {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideDown 0.45s ease;
+}
+
+.ee-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ee-tabs :deep(.el-tabs__header) {
+  margin: 0;
+  padding: 0 14px;
+  background: #fafbfc;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.ee-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
   background: transparent;
 }
 
-.process-tabs :deep(.el-tabs__header) {
-  margin-bottom: 10px;
-}
-
-.process-tabs :deep(.el-tabs__item) {
-  font-size: 13px;
-  font-weight: 500;
-  padding: 0 16px;
-}
-
-.process-tabs :deep(.el-tabs__item.is-active) {
-  color: #6366f1;
-  font-weight: 600;
-}
-
-:deep(.compact-table-row td) {
-  padding: 10px 12px;
-  font-size: 13px;
-}
-
-:deep(.el-table__body tr:hover > td) {
-  background: rgba(99, 102, 241, 0.08);
-}
-
-.efficiency-cell {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  justify-content: center;
-}
-
-.efficiency-value {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.efficiency-unit {
+.ee-tabs :deep(.el-tabs__item) {
   font-size: 12px;
+  font-weight: 500;
+  height: 36px;
+  line-height: 36px;
+  padding: 0 12px;
+  color: #6b7280;
+  transition: color 0.2s;
+}
+
+.ee-tabs :deep(.el-tabs__item.is-active) {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+.ee-tabs :deep(.el-tabs__active-bar) {
+  background: #7c3aed;
+  height: 2px;
+  border-radius: 2px;
+}
+
+.ee-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  padding: 0;
+}
+
+.ee-tabs :deep(.el-tab-pane) {
+  height: 100%;
+}
+
+/* Table styles */
+.ee-table-wrap :deep(.el-table) {
+  --el-table-border-color: #eef0f4;
+  --el-table-row-hover-bg-color: rgba(124, 58, 237, 0.04);
+  font-size: 13px;
+}
+
+.ee-table-wrap :deep(.el-table__header) th {
+  background: #f0f2f8 !important;
+  color: #374151;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-bottom: 2px solid #e2e5ed;
+}
+
+.ee-table-wrap :deep(.el-table__body) .ee-row td {
+  padding: 5px 10px;
+  transition: background 0.15s;
+}
+
+.ee-table-wrap :deep(.el-table__body tr:hover > td) {
+  background: rgba(124, 58, 237, 0.04) !important;
+}
+
+.ee-table-wrap :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background: #fafbfd;
+}
+
+/* Cells */
+.ee-eff-cell {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.ee-eff-val {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.ee-eff-unit {
+  font-size: 10px;
   color: #94a3b8;
 }
 
-.action-buttons-table {
+.ee-min {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-left: 1px;
+}
+
+.ee-status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ee-status-lbl {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.ee-status-lbl.on {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.ee-row-actions {
   display: flex;
-  gap: 6px;
+  gap: 2px;
   justify-content: center;
 }
 
-.result-section {
-  padding: 12px 18px;
+.ee-row-actions .el-button {
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+/* Result bar */
+.ee-result-bar {
+  padding: 6px 16px;
+  font-size: 12px;
+  color: #6b7280;
+  background: #fafbfc;
+  border-top: 1px solid #eef0f4;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
 }
 
-.result-info {
-  font-size: 13px;
-  color: #5f6477;
-  letter-spacing: 0.03em;
+.ee-proc-tag {
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.02em;
 }
 
-.process-info {
-  margin-left: 6px;
-  color: #6366f1;
+/* ===== Dialog ===== */
+.ee-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.ee-dialog :deep(.el-dialog__header) {
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #5b5ea6, #7c3aed);
+  margin: 0;
+}
+
+.ee-dialog :deep(.el-dialog__title) {
+  color: #fff;
+  font-size: 15px;
   font-weight: 600;
 }
 
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.ee-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.8);
 }
 
-.efficiency-dialog :deep(.el-dialog__header) {
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+.ee-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #fff;
 }
 
-.efficiency-dialog :deep(.el-dialog__body) {
-  padding: 20px 24px;
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+.ee-dialog :deep(.el-dialog__body) {
+  padding: 16px 20px;
+  background: #fafbfc;
 }
 
-.efficiency-form {
+.ee-dialog :deep(.el-dialog__footer) {
+  padding: 10px 20px 14px;
+  border-top: 1px solid #eef0f4;
+}
+
+.ee-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+.ee-form :deep(.el-form-item) {
+  margin-bottom: 12px;
 }
 
-.form-grid .span-2 {
-  grid-column: span 2;
+.ee-form :deep(.el-form-item__label) {
+  font-size: 12px;
+  color: #4b5563;
+  font-weight: 500;
 }
 
-@media (max-width: 600px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .form-grid .span-2 {
-    grid-column: span 1;
-  }
+.ee-form-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 14px 4px;
+  margin-bottom: 10px;
+  border: 1px solid #eef0f4;
 }
 
-.status-group :deep(.el-radio-group) {
-  display: inline-flex;
+.ee-form-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #7c3aed;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ee-form-section-title::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: linear-gradient(180deg, #7c3aed, #a78bfa);
+  border-radius: 2px;
+}
+
+.ee-form-row {
+  display: flex;
   gap: 12px;
 }
 
-.remarks-item :deep(textarea) {
-  min-height: 100px;
-  border-radius: 12px;
+.ee-form-half {
+  flex: 1;
 }
 
-.efficiency-dialog :deep(.el-input__wrapper),
-.efficiency-dialog :deep(.el-textarea__inner),
-.efficiency-dialog :deep(.el-select .el-input__wrapper) {
-  border-radius: 12px;
-  border: 1px solid rgba(99, 102, 241, 0.2);
-  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+.ee-form :deep(.el-input__wrapper),
+.ee-form :deep(.el-textarea__inner),
+.ee-form :deep(.el-select .el-input__wrapper) {
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.efficiency-dialog :deep(.el-input__wrapper.is-focus),
-.efficiency-dialog :deep(.el-select .el-input__wrapper.is-focus),
-.efficiency-dialog :deep(.el-textarea__inner:focus) {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+.ee-form :deep(.el-input__wrapper.is-focus),
+.ee-form :deep(.el-select .el-input__wrapper.is-focus),
+.ee-form :deep(.el-textarea__inner:focus) {
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
 }
 
-.efficiency-dialog :deep(.el-radio.is-checked .el-radio__label) {
-  color: #4f46e5;
-  font-weight: 600;
+.ee-form :deep(.el-input.is-disabled .el-input__wrapper) {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
 }
 
-.table-section :deep(.el-table) {
-  --el-table-border-color: rgba(226, 232, 240, 0.8);
+.ee-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.table-section :deep(.el-table__header) th {
-  background: #f8f9fc;
-  color: #475467;
-  font-weight: 600;
+.ee-dialog-footer .el-button--primary {
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
 }
 
-.fade-in {
-  animation: fadeUp 0.4s ease both;
+.ee-dialog-footer .el-button--primary:hover {
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
 }
 
-@keyframes fadeUp {
+/* ===== Animations ===== */
+@keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(-8px);
   }
   to {
     opacity: 1;
@@ -892,17 +973,37 @@ onMounted(async () => {
   }
 }
 
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
-  .header-content {
+  .ee-container {
+    padding: 8px 10px 16px;
+  }
+  .ee-header {
     flex-direction: column;
     align-items: flex-start;
+    padding: 12px 16px;
   }
-  .header-stats {
+  .ee-stats {
     width: 100%;
     flex-wrap: wrap;
   }
-  .filters-content {
+  .ee-stat {
+    flex: 1;
+    min-width: 56px;
+  }
+  .ee-toolbar {
+    flex-wrap: wrap;
+  }
+  .ee-search {
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+  .btn-label {
+    display: none;
+  }
+  .ee-form-row {
     flex-direction: column;
+    gap: 0;
   }
 }
 </style>
