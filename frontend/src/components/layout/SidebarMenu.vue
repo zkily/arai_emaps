@@ -65,10 +65,6 @@
                 <el-icon><HomeFilled /></el-icon>
                 <template #title><span>材料管理ホーム</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/master">
-                <el-icon><List /></el-icon>
-                <template #title><span>材料マスタ</span></template>
-              </el-menu-item>
               <el-menu-item index="/erp/purchase/material/stock-entry">
                 <el-icon><DocumentAdd /></el-icon>
                 <template #title><span>在庫登録</span></template>

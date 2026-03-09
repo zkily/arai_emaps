@@ -240,50 +240,72 @@ export function toggleStockMaterialUsage(id: number): Promise<{ success?: boolea
 }
 
 // ─────────────────────────────────────────────
-// 内示 (forecast)
+// 内示 (forecast) - order_monthly + products + materials + suppliers
 // ─────────────────────────────────────────────
 
-export function getForecastSummary(params?: {
-  target_year?: number
-  target_month?: number
-}): Promise<{
-  success?: boolean
-  data?: {
-    material_count: number
-    supplier_count: number
-    total_planned_usage: number
-    total_order_amount: number
-  }
-}> {
-  return request.get(`${PREFIX}/forecast/summary`, { params }) as Promise<{
-    success?: boolean
-    data?: {
-      material_count: number
-      supplier_count: number
-      total_planned_usage: number
-      total_order_amount: number
-    }
-  }>
-}
-
-export function getForecastMonthly(params: {
+/** 製品別明细（list） */
+export function getForecastList(params: {
   target_year: number
   target_month: number
   page?: number
   pageSize?: number
+  supplier_cd?: string
+  keyword?: string
 }): Promise<{ success?: boolean; data?: { list: unknown[]; total: number } }> {
-  return request.get(`${PREFIX}/forecast/monthly`, { params }) as Promise<{
+  return request.get(`${PREFIX}/forecast/list`, { params }) as Promise<{
     success?: boolean
     data?: { list: unknown[]; total: number }
   }>
 }
 
-export function getForecastBySupplier(params: {
+/** 按 supplier+material 分组汇总（summary） */
+export function getForecastSummary(params: {
   target_year: number
   target_month: number
+  supplier_cd?: string
+  keyword?: string
 }): Promise<{ success?: boolean; data?: unknown[] }> {
-  return request.get(`${PREFIX}/forecast/by-supplier`, { params }) as Promise<{
+  return request.get(`${PREFIX}/forecast/summary`, { params }) as Promise<{
     success?: boolean
     data?: unknown[]
+  }>
+}
+
+/** 统计：製品種類数、材料種類数、仕入先数、内示合計、材料必要数合計（stats） */
+export function getForecastStats(params?: {
+  target_year?: number
+  target_month?: number
+  supplier_cd?: string
+  keyword?: string
+}): Promise<{
+  success?: boolean
+  data?: {
+    total_products: number
+    total_materials: number
+    total_suppliers: number
+    total_forecast_units: number
+    total_material_required: number
+  }
+}> {
+  return request.get(`${PREFIX}/forecast/stats`, { params }) as Promise<{
+    success?: boolean
+    data?: {
+      total_products: number
+      total_materials: number
+      total_suppliers: number
+      total_forecast_units: number
+      total_material_required: number
+    }
+  }>
+}
+
+/** 筛选用仕入先列表（forecast/suppliers） */
+export function getForecastSuppliers(params?: {
+  target_year?: number
+  target_month?: number
+}): Promise<{ success?: boolean; data?: { supplier_cd: string; supplier_name: string }[] }> {
+  return request.get(`${PREFIX}/forecast/suppliers`, { params }) as Promise<{
+    success?: boolean
+    data?: { supplier_cd: string; supplier_name: string }[]
   }>
 }

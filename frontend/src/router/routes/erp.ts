@@ -146,7 +146,7 @@ export const erpRoutes: RouteRecordRaw[] = [
         meta: { title: '材料管理', group: '購買管理 > 材料管理', requiresAuth: true },
         children: [
           { path: '', name: 'MaterialHome', component: () => import('@/views/erp/purchase/material/MaterialHome.vue'), meta: { title: '材料管理ホーム', group: '材料管理', requiresAuth: true } },
-          { path: 'master', name: 'MaterialList', component: () => import('@/views/erp/purchase/material/materialMaster/MaterialList.vue'), meta: { title: '材料マスタ', group: '材料マスタ管理', requiresAuth: true } },
+          { path: 'master', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', group: '材料マスタ管理', requiresAuth: true } },
           { path: 'stock-entry', name: 'MaterialStockEntry', component: () => import('@/views/erp/purchase/material/materialStock/MaterialStockEntry.vue'), meta: { title: '在庫登録', group: '在庫管理', requiresAuth: true } },
           { path: 'stock-materials', name: 'StockMaterialsManagement', component: () => import('@/views/erp/purchase/material/materialStock/StockMaterialsManagement.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
           { path: 'receiving', name: 'MaterialReceivingHome', component: () => import('@/views/erp/purchase/material/materialReceiving/MaterialReceivingHome.vue'), meta: { title: '受入管理', group: '受入管理', requiresAuth: true } },

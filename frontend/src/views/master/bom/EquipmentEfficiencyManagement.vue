@@ -56,20 +56,21 @@
             v-loading="loading"
             stripe
             border
+            size="small"
             style="width: 100%"
             :empty-text="'データがありません'"
             :default-sort="{ prop: 'machines_name', order: 'ascending' }"
             :row-class-name="getRowClassName"
-            :header-cell-style="{ background: '#f0f2f8', color: '#374151', fontWeight: 600, fontSize: '12px', padding: '6px 10px' }"
-            :cell-style="{ padding: '5px 10px', fontSize: '13px' }"
-            height="calc(100vh - 280px)"
+            :header-cell-style="{ background: '#f0f2f8', color: '#374151', fontWeight: 600, fontSize: '11px', padding: '4px 8px', lineHeight: '1.3' }"
+            :cell-style="{ padding: '2px 8px', fontSize: '12px', lineHeight: '1.4' }"
+            height="calc(100vh - 260px)"
           >
-            <el-table-column type="index" label="No." width="55" align="center" />
-            <el-table-column prop="machine_cd" label="設備CD" width="100" align="center" sortable />
-            <el-table-column prop="machines_name" label="設備名" width="140" sortable show-overflow-tooltip />
-            <el-table-column prop="product_cd" label="製品CD" width="100" align="center" sortable />
-            <el-table-column prop="product_name" label="製品名" min-width="140" sortable show-overflow-tooltip />
-            <el-table-column prop="efficiency_rate" label="能率" width="100" align="center">
+            <el-table-column type="index" label="#" width="48" align="center" />
+            <el-table-column prop="machine_cd" label="設備CD" width="90" align="center" sortable />
+            <el-table-column prop="machines_name" label="設備名" min-width="120" sortable show-overflow-tooltip />
+            <el-table-column prop="product_cd" label="製品CD" width="90" align="center" sortable />
+            <el-table-column prop="product_name" label="製品名" min-width="130" sortable show-overflow-tooltip />
+            <el-table-column prop="efficiency_rate" label="能率" width="80" align="center">
               <template #default="{ row }">
                 <div class="ee-eff-cell">
                   <span class="ee-eff-val">{{ row.efficiency_rate?.toFixed(1) }}</span>
@@ -77,12 +78,12 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="step_time" label="段取時間" width="90" align="center">
+            <el-table-column prop="step_time" label="段取" width="65" align="center">
               <template #default="{ row }">
                 <span v-if="row.step_time != null">{{ row.step_time }}<small class="ee-min">分</small></span>
               </template>
             </el-table-column>
-            <el-table-column prop="status" label="状態" width="100" align="center">
+            <el-table-column prop="status" label="状態" width="85" align="center">
               <template #default="{ row }">
                 <div class="ee-status-cell">
                   <el-switch
@@ -99,8 +100,8 @@
                 </div>
               </template>
             </el-table-column>
-            <el-table-column prop="remarks" label="備考" min-width="160" show-overflow-tooltip />
-            <el-table-column label="操作" fixed="right" width="130" align="center">
+            <el-table-column prop="remarks" label="備考" min-width="120" show-overflow-tooltip />
+            <el-table-column label="操作" fixed="right" width="110" align="center">
               <template #default="{ row }">
                 <div class="ee-row-actions">
                   <el-button size="small" type="primary" link @click="openDialog(row)" :icon="Edit">編集</el-button>
@@ -227,7 +228,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Tools, Filter, Refresh, Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
+import { Tools, Refresh, Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
 import {
   fetchEquipmentEfficiencyList,
   createEquipmentEfficiency,
@@ -730,23 +731,41 @@ onMounted(async () => {
 
 /* Table styles */
 .ee-table-wrap :deep(.el-table) {
-  --el-table-border-color: #eef0f4;
+  --el-table-border-color: #e8eaf0;
   --el-table-row-hover-bg-color: rgba(124, 58, 237, 0.04);
-  font-size: 13px;
+  --el-table-header-bg-color: #f0f2f8;
+  font-size: 12px;
+}
+
+.ee-table-wrap :deep(.el-table .el-table__cell) {
+  padding: 2px 0;
 }
 
 .ee-table-wrap :deep(.el-table__header) th {
   background: #f0f2f8 !important;
   color: #374151;
   font-weight: 600;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-bottom: 2px solid #e2e5ed;
+  font-size: 11px;
+  padding: 4px 8px;
+  line-height: 1.3;
+  border-bottom: 1.5px solid #dde0ea;
 }
 
-.ee-table-wrap :deep(.el-table__body) .ee-row td {
-  padding: 5px 10px;
+.ee-table-wrap :deep(.el-table__header) th .cell {
+  padding: 0 4px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ee-table-wrap :deep(.el-table__body) td {
+  padding: 2px 8px;
+  line-height: 1.4;
   transition: background 0.15s;
+}
+
+.ee-table-wrap :deep(.el-table__body) td .cell {
+  padding: 0 4px;
+  line-height: 1.5;
 }
 
 .ee-table-wrap :deep(.el-table__body tr:hover > td) {
@@ -754,29 +773,33 @@ onMounted(async () => {
 }
 
 .ee-table-wrap :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background: #fafbfd;
+  background: #f8f9fc;
+}
+
+.ee-table-wrap :deep(.el-table--small td, .el-table--small th) {
+  padding: 2px 0;
 }
 
 /* Cells */
 .ee-eff-cell {
   display: inline-flex;
   align-items: baseline;
-  gap: 3px;
+  gap: 2px;
 }
 
 .ee-eff-val {
   font-weight: 700;
   color: #1e293b;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .ee-eff-unit {
-  font-size: 10px;
+  font-size: 9px;
   color: #94a3b8;
 }
 
 .ee-min {
-  font-size: 10px;
+  font-size: 9px;
   color: #94a3b8;
   margin-left: 1px;
 }
@@ -784,11 +807,11 @@ onMounted(async () => {
 .ee-status-cell {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .ee-status-lbl {
-  font-size: 11px;
+  font-size: 10px;
   color: #9ca3af;
 }
 
@@ -799,13 +822,17 @@ onMounted(async () => {
 
 .ee-row-actions {
   display: flex;
-  gap: 2px;
+  gap: 0;
   justify-content: center;
 }
 
 .ee-row-actions .el-button {
-  font-size: 12px;
-  padding: 2px 6px;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.ee-row-actions .el-button + .el-button {
+  margin-left: 2px;
 }
 
 /* Result bar */

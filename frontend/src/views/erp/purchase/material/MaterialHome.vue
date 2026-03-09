@@ -1,629 +1,262 @@
 <template>
-  <div class="master-home">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-content">
-        <h1 class="main-title">
-          <el-icon class="title-icon">
-            <Document />
-          </el-icon>
-          材料管理システム
-        </h1>
-        <p class="subtitle">材料のマスタ・在庫・受け入れ管理を行います</p>
-      </div>
-      <div class="header-decoration">
-        <div class="decoration-circle circle-1"></div>
-        <div class="decoration-circle circle-2"></div>
-        <div class="decoration-circle circle-3"></div>
-      </div>
+  <div class="material-home">
+    <!-- 動的背景 -->
+    <div class="dynamic-background">
+      <div class="gradient-orb orb-1"></div>
+      <div class="gradient-orb orb-2"></div>
+      <div class="gradient-orb orb-3"></div>
     </div>
 
-    <!-- 主要内容区域 -->
-    <div class="content-container">
-      <transition-group name="fade-slide" tag="div" class="groups-container">
-        <div
-          v-for="(routes, group) in groupedRoutes"
-          :key="group"
-          class="group-section"
-          :class="groupClass(group)"
-        >
-          <div class="group-header">
-            <h3 class="group-title">
-              <el-icon class="group-icon">
-                <component :is="getGroupIcon(group)" />
-              </el-icon>
-              {{ group }}
-            </h3>
-            <div class="group-badge">{{ routes.length }}</div>
+    <!-- ページヘッダー -->
+    <div class="modern-header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="header-icon">
+            <el-icon size="32"><Box /></el-icon>
           </div>
-
-          <div class="button-grid">
-            <div
-              v-for="item in routes"
-              :key="item.name"
-              class="button-card"
-              @click="goTo(item.name)"
-            >
-              <div class="card-content">
-                <div class="card-icon">
-                  <el-icon class="animated-icon">
-                    <Document />
-                  </el-icon>
-                </div>
-                <div class="card-text">
-                  <h4 class="card-title">{{ item.title }}</h4>
-                  <p class="card-description">{{ getRouteDescription(item.name) }}</p>
-                </div>
-              </div>
-              <div class="card-arrow">
-                <el-icon>
-                  <ArrowRight />
-                </el-icon>
-              </div>
-            </div>
+          <div class="header-text">
+            <h1 class="header-title">材料管理</h1>
+            <div class="header-subtitle">Material Management</div>
           </div>
         </div>
-      </transition-group>
+      </div>
     </div>
 
-    <!-- 底部信息 -->
-    <div class="footer-info">
-      <p>© 2024 Smart Manufacturing System - Material Management</p>
+    <!-- 統計カード（オプション） -->
+    <div class="stats-grid" v-if="statsCards.length">
+      <div class="stat-card modern-card" v-for="stat in statsCards" :key="stat.key">
+        <div class="stat-icon" :style="{ background: stat.gradient }">
+          <el-icon :size="24"><component :is="stat.icon" /></el-icon>
+        </div>
+        <div class="stat-content">
+          <div class="stat-label">{{ stat.label }}</div>
+          <div class="stat-value">{{ stat.value }}</div>
+        </div>
+      </div>
     </div>
 
+    <!-- 在庫管理 -->
+    <div class="section-title">在庫管理</div>
+    <div class="module-grid">
+      <router-link v-for="m in stockModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <!-- 受入管理 -->
+    <div class="section-title">受入管理</div>
+    <div class="module-grid">
+      <router-link v-for="m in receivingModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <!-- 材料マスタ管理 -->
+    <div class="section-title">材料マスタ管理</div>
+    <div class="module-grid">
+      <router-link v-for="m in masterModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <!-- 発注管理 -->
+    <div class="section-title">発注管理</div>
+    <div class="module-grid">
+      <router-link v-for="m in orderModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { computed } from 'vue'
-import type { RouteRecordName } from 'vue-router'
+import { ref, markRaw } from 'vue'
+import type { Component } from 'vue'
 import {
-  Document,
-  ArrowRight,
-  DataBoard,
-  Tools,
-  Warning,
-  Upload,
-  Download,
+  Box, ArrowRight, DocumentAdd, DataLine, Download, CircleCheck,
+  Tickets, TrendCharts, ShoppingCart,
 } from '@element-plus/icons-vue'
 
-const router = useRouter()
-
-/** 材料管理サブメニュー（扁平ルートのため静的に定義） */
-const materialMenuItems = [
-  { name: 'MaterialList' as const, title: '材料マスタ', group: '材料マスタ管理' },
-  { name: 'MaterialStockEntry' as const, title: '在庫登録', group: '在庫管理' },
-  { name: 'StockMaterialsManagement' as const, title: '在庫管理', group: '在庫管理' },
-  { name: 'MaterialReceivingHome' as const, title: '受入管理', group: '受入管理' },
-  { name: 'MaterialReceivingHistory' as const, title: '受入履歴', group: '受入管理' },
-  { name: 'MaterialReceivingInspection' as const, title: '受入検品', group: '受入管理' },
-  { name: 'MaterialInspectionMaster' as const, title: '検品マスタ', group: '材料マスタ管理' },
-  { name: 'MaterialForecast' as const, title: '内示管理', group: '発注管理' },
-  { name: 'MaterialOrder' as const, title: '材料発注', group: '発注管理' },
-]
-
-const groupedRoutes = computed(() => {
-  const groups: Record<string, typeof materialMenuItems> = {}
-  for (const r of materialMenuItems) {
-    if (r.group === 'メインメニュー') continue
-    if (!groups[r.group]) groups[r.group] = []
-    groups[r.group].push(r)
-  }
-  return groups
-})
-
-const getGroupIcon = (group: string) => {
-  if (group.includes('計画')) return DataBoard
-  if (group.includes('履歴') || group.includes('ログ')) return Tools
-  if (group.includes('警告') || group.includes('異常')) return Warning
-  if (group.includes('入力')) return Upload
-  return Document
+interface ModuleItem {
+  path: string
+  title: string
+  description: string
+  icon: Component
+  gradient: string
 }
 
-const getRouteDescription = (routeName: string) => {
-  const descriptions: Record<string, string> = {
-    MaterialList: '材料マスタの管理・編集',
-    MaterialStockEntry: '材料の入出庫登録',
-    StockMaterialsManagement: '在庫材料の一覧・使用状態管理',
-    MaterialReceivingHome: '受け入れ管理のメインメニュー',
-    MaterialReceivingHistory: '受け入れ履歴の確認・検索',
-    MaterialReceivingInspection: '受け入れ検品の実施・管理',
-    MaterialInspectionMaster: '材料検品マスタの登録・編集・削除管理',
-    MaterialOrder: '材料の在庫状況と将来使用量を参考に受注数量を決定',
-    MaterialForecast: '月別受注から材料必要数量を算出・管理',
-  }
-  return descriptions[routeName] || '材料データの管理・操作'
-}
+const statsCards = ref<{ key: string; label: string; value: string; gradient: string; icon: Component }[]>([])
 
-const groupClass = (group: string) => {
-  if (group.includes('計画')) return 'group-product'
-  if (group.includes('履歴') || group.includes('ログ')) return 'group-log'
-  if (group.includes('警告') || group.includes('異常')) return 'group-alert'
-  if (group.includes('入力')) return 'group-input'
-  if (group.includes('受注')) return 'group-order'
-  return 'group-default'
-}
+const stockModules = ref<ModuleItem[]>([
+  { path: '/erp/purchase/material/stock-entry', title: '在庫登録', description: '材料の入出庫登録', icon: markRaw(DocumentAdd), gradient: 'linear-gradient(135deg, #409eff, #67c23a)' },
+  { path: '/erp/purchase/material/stock-materials', title: '在庫管理', description: '在庫材料の一覧・使用状態管理', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
+])
 
-const goTo = (routeName: RouteRecordName | undefined) => {
-  if (routeName) router.replace({ name: routeName })
-}
+const receivingModules = ref<ModuleItem[]>([
+  { path: '/erp/purchase/material/receiving', title: '受入管理', description: '受け入れ管理のメインメニュー', icon: markRaw(Download), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
+  { path: '/erp/purchase/material/receiving-history', title: '受入履歴', description: '受け入れ履歴の確認・検索', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
+  { path: '/erp/purchase/material/receiving-inspection', title: '受入検品', description: '受け入れ検品の実施・管理', icon: markRaw(CircleCheck), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
+])
+
+const masterModules = ref<ModuleItem[]>([
+  { path: '/erp/purchase/material/inspection-master', title: '検品マスタ', description: '材料検品マスタの登録・編集・削除管理', icon: markRaw(Tickets), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },
+])
+
+const orderModules = ref<ModuleItem[]>([
+  { path: '/erp/purchase/material/forecast', title: '内示管理', description: '月別受注から材料必要数量を算出・管理', icon: markRaw(TrendCharts), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
+  { path: '/erp/purchase/material/order', title: '材料発注', description: '材料の在庫状況と将来使用量を参考に受注数量を決定', icon: markRaw(ShoppingCart), gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
+])
 </script>
 
 <style scoped>
-.master-home {
+.material-home {
   min-height: 100vh;
-  background: linear-gradient(135deg, #3a74d8 0%, #6dd5ed 100%);
+  background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+  padding: 20px;
   position: relative;
-  overflow-x: hidden;
 }
 
-.page-header {
-  position: relative;
-  padding: 40px 20px 60px;
-  text-align: center;
-  color: white;
-  overflow: hidden;
+.dynamic-background {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 0; overflow: hidden;
 }
 
-.header-content {
-  position: relative;
-  z-index: 2;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.main-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin: 0 0 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.title-icon {
-  font-size: 2.2rem;
-  animation: rotate 3s linear infinite;
-}
-
-@keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.subtitle {
-  font-size: 1.1rem;
-  opacity: 0.9;
-  margin: 0;
-  font-weight: 300;
-}
-
-.header-decoration {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-}
-
-.decoration-circle {
+.gradient-orb {
   position: absolute;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  animation: float 6s ease-in-out infinite;
+  background: linear-gradient(45deg, rgba(255,255,255,0.03), rgba(255,255,255,0.08));
+  animation: floatOrb 20s ease-in-out infinite;
 }
 
-.circle-1 {
-  width: 100px;
-  height: 100px;
-  top: 20%;
-  left: 10%;
-  animation-delay: 0s;
+.orb-1 { width: 300px; height: 300px; top: -100px; right: -100px; }
+.orb-2 { width: 200px; height: 200px; bottom: 100px; left: -50px; animation-delay: -7s; }
+.orb-3 { width: 150px; height: 150px; top: 50%; right: 20%; animation-delay: -14s; }
+
+@keyframes floatOrb {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-30px) rotate(180deg); }
 }
 
-.circle-2 {
-  width: 150px;
-  height: 150px;
-  top: 60%;
-  right: 15%;
-  animation-delay: 2s;
-}
-
-.circle-3 {
-  width: 80px;
-  height: 80px;
-  top: 40%;
-  left: 80%;
-  animation-delay: 4s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-
-  50% {
-    transform: translateY(-20px) rotate(180deg);
-  }
-}
-
-.content-container {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 20px 40px;
-  position: relative;
-  z-index: 1;
-}
-
-.groups-container {
-  display: grid;
-  gap: 32px;
-}
-
-.group-section {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 20px;
-  padding: 32px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+.modern-header {
+  position: relative; z-index: 1;
+  background: rgba(255,255,255,0.08);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.group-section::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #3a74d8, #6dd5ed);
-  border-radius: 20px 20px 0 0;
-}
-
-.group-section:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-}
-
-.group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  border-radius: 16px;
+  padding: 24px;
   margin-bottom: 24px;
 }
 
-.group-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin: 0;
-  color: #2c3e50;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+.header-content { display: flex; align-items: center; }
+.header-left { display: flex; align-items: center; gap: 16px; }
+.header-icon { width: 60px; height: 60px; background: rgba(255,255,255,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; }
+.header-title { margin: 0; font-size: 24px; color: white; }
+.header-subtitle { color: rgba(255,255,255,0.7); font-size: 14px; }
 
-.group-icon {
-  font-size: 1.4rem;
-  color: #3a74d8;
-}
-
-.group-badge {
-  background: linear-gradient(135deg, #3a74d8, #6dd5ed);
-  color: white;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  min-width: 30px;
-  text-align: center;
-}
-
-.button-grid {
+.stats-grid {
+  position: relative; z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.button-card {
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  border: 2px solid transparent;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  position: relative;
-  overflow: hidden;
-}
-
-.button-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
-  transition: left 0.5s ease;
-}
-
-.button-card:hover::before {
-  left: 100%;
-}
-
-.button-card:hover {
-  transform: translateY(-3px);
-  border-color: #3a74d8;
-  box-shadow: 0 8px 25px rgba(58, 116, 216, 0.15);
-}
-
-.card-content {
+.stat-card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
-  flex: 1;
 }
 
-.card-icon {
-  width: 50px;
-  height: 50px;
+.stat-icon {
+  width: 48px; height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3a74d8, #6dd5ed);
+  display: flex; align-items: center; justify-content: center;
+  color: white;
+}
+
+.stat-label { font-size: 12px; color: #909399; }
+.stat-value { font-size: 20px; font-weight: bold; color: #303133; }
+
+.section-title {
+  position: relative; z-index: 1;
+  font-size: 18px; font-weight: bold; color: white;
+  margin: 24px 0 16px;
+  padding-left: 12px;
+  border-left: 4px solid rgba(255,255,255,0.5);
+}
+
+.module-grid {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+.module-card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 12px;
+  padding: 20px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 16px;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.module-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.module-icon {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
   color: white;
-  font-size: 1.5rem;
-  transition: transform 0.3s ease;
+  flex-shrink: 0;
 }
 
-.button-card:hover .card-icon {
-  transform: scale(1.1) rotate(5deg);
-}
-
-.animated-icon {
-  transition: transform 0.3s ease;
-}
-
-.card-text {
-  flex: 1;
-}
-
-.card-title {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin: 0 0 4px;
-  color: #2c3e50;
-}
-
-.card-description {
-  font-size: 0.9rem;
-  color: #7f8c8d;
-  margin: 0;
-}
-
-.card-arrow {
-  color: #bdc3c7;
-  font-size: 1.2rem;
-  transition: all 0.3s ease;
-}
-
-.button-card:hover .card-arrow {
-  color: #3a74d8;
-  transform: translateX(5px);
-}
-
-/* 组别颜色主题 */
-.group-product .group-icon {
-  color: #3a74d8;
-}
-
-.group-product .group-badge {
-  background: linear-gradient(135deg, #3a74d8, #6dd5ed);
-}
-
-.group-product .card-icon {
-  background: linear-gradient(135deg, #3a74d8, #6dd5ed);
-}
-
-.group-log .group-icon {
-  color: #00b8d9;
-}
-
-.group-log .group-badge {
-  background: linear-gradient(135deg, #00b8d9, #43e97b);
-}
-
-.group-log .card-icon {
-  background: linear-gradient(135deg, #00b8d9, #43e97b);
-}
-
-.group-alert .group-icon {
-  color: #ff6b6b;
-}
-
-.group-alert .group-badge {
-  background: linear-gradient(135deg, #ff6b6b, #ffd166);
-}
-
-.group-alert .card-icon {
-  background: linear-gradient(135deg, #ff6b6b, #ffd166);
-}
-
-.group-input .group-icon {
-  color: #69db7c;
-}
-
-.group-input .group-badge {
-  background: linear-gradient(135deg, #69db7c, #38d9a9);
-}
-
-.group-input .card-icon {
-  background: linear-gradient(135deg, #69db7c, #38d9a9);
-}
-
-.group-order .group-icon {
-  color: #ff8c00;
-}
-
-.group-order .group-badge {
-  background: linear-gradient(135deg, #ff8c00, #ffa500);
-}
-
-.group-order .card-icon {
-  background: linear-gradient(135deg, #ff8c00, #ffa500);
-}
-
-.group-default .group-icon {
-  color: #bdbdbd;
-}
-
-.group-default .group-badge {
-  background: linear-gradient(135deg, #bdbdbd, #e0e0e0);
-}
-
-.group-default .card-icon {
-  background: linear-gradient(135deg, #bdbdbd, #e0e0e0);
-}
-
-.footer-info {
-  text-align: center;
-  padding: 20px;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 0.9rem;
-}
-
-.fade-slide-enter-active,
-.fade-slide-leave-active {
-  transition: all 0.6s ease;
-}
-
-.fade-slide-enter-from {
-  opacity: 0;
-  transform: translateY(30px);
-}
-
-.fade-slide-leave-to {
-  opacity: 0;
-  transform: translateY(-30px);
-}
-
-.fade-slide-move {
-  transition: transform 0.6s ease;
-}
+.module-info { flex: 1; }
+.module-title { margin: 0 0 4px; font-size: 16px; color: #303133; }
+.module-desc { margin: 0; font-size: 12px; color: #909399; }
+.module-arrow { color: #c0c4cc; }
 
 @media (max-width: 1200px) {
-  .button-grid {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .module-grid { grid-template-columns: repeat(2, 1fr); }
 }
-
 @media (max-width: 768px) {
-  .page-header {
-    padding: 30px 15px 40px;
-  }
-
-  .main-title {
-    font-size: 2rem;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .subtitle {
-    font-size: 1rem;
-  }
-
-  .content-container {
-    padding: 0 15px 30px;
-  }
-
-  .group-section {
-    padding: 24px 20px;
-  }
-
-  .button-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .button-card {
-    padding: 20px;
-  }
-
-  .card-content {
-    gap: 12px;
-  }
-
-  .card-icon {
-    width: 45px;
-    height: 45px;
-    font-size: 1.3rem;
-  }
-
-  .card-title {
-    font-size: 1rem;
-  }
-
-  .card-description {
-    font-size: 0.85rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .main-title {
-    font-size: 1.8rem;
-  }
-
-  .group-section {
-    padding: 20px 16px;
-  }
-
-  .group-title {
-    font-size: 1.3rem;
-  }
-
-  .button-card {
-    padding: 16px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  .group-section {
-    background: rgba(45, 55, 72, 0.95);
-    color: #e2e8f0;
-  }
-
-  .card-title {
-    color: #e2e8f0;
-  }
-
-  .card-description {
-    color: #a0aec0;
-  }
-
-  .button-card {
-    background: rgba(26, 32, 44, 0.8);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .button-card:hover {
-    border-color: #3a74d8;
-  }
+  .stats-grid, .module-grid { grid-template-columns: 1fr; }
 }
 </style>

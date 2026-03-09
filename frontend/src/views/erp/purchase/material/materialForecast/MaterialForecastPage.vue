@@ -152,8 +152,8 @@
               <el-option
                 v-for="supplier in suppliers"
                 :key="supplier.supplier_cd"
-                :label="supplier.supplier_name"
-                :value="supplier.supplier_cd"
+                :label="supplier.supplier_name || supplier.supplier_cd"
+                :value="supplier.supplier_cd ?? ''"
               />
             </el-select>
           </div>
@@ -340,10 +340,10 @@ import {
   ArrowRight,
 } from '@element-plus/icons-vue'
 import {
+  getForecastList,
   getForecastSummary,
-  getForecastMonthly,
-  getForecastBySupplier,
-  getSupplierList,
+  getForecastStats,
+  getForecastSuppliers,
 } from '@/api/material'
 
 // 响应式数据
@@ -525,24 +525,19 @@ const handleKeywordSearch = () => {
   }, 300)
 }
 
-// 获取数据
+// 获取数据（设计方案：/list = 製品別明细）
 const fetchDetailData = async () => {
   try {
     loading.value = true
-    const params: any = {
+    const year = Number(searchForm.year) || new Date().getFullYear()
+    const month = Number(searchForm.month) || new Date().getMonth() + 1
+    const res = await getForecastList({
+      target_year: year,
+      target_month: month,
       page: 1,
-      pageSize: 10000, // 获取所有数据
-    }
-    if (searchForm.year) params.year = searchForm.year
-    if (searchForm.month) params.month = searchForm.month
-    if (searchForm.supplier_cd) params.supplier_cd = searchForm.supplier_cd
-    if (searchForm.keyword) params.keyword = searchForm.keyword
-
-    const res = await getForecastMonthly({
-      target_year: Number(searchForm.year) || new Date().getFullYear(),
-      target_month: Number(searchForm.month) || new Date().getMonth() + 1,
-      page: params.page,
-      pageSize: params.pageSize,
+      pageSize: 10000,
+      supplier_cd: searchForm.supplier_cd || undefined,
+      keyword: searchForm.keyword || undefined,
     })
     const data = (res as any)?.data
     if (data?.list) {
@@ -560,18 +555,13 @@ const fetchDetailData = async () => {
 const fetchSummaryData = async () => {
   try {
     loading.value = true
-    const params: any = {
-      page: 1,
-      pageSize: 10000, // 获取所有数据
-    }
-    if (searchForm.year) params.year = searchForm.year
-    if (searchForm.month) params.month = searchForm.month
-    if (searchForm.supplier_cd) params.supplier_cd = searchForm.supplier_cd
-    if (searchForm.keyword) params.keyword = searchForm.keyword
-
-    const res = await getForecastBySupplier({
-      target_year: Number(searchForm.year) || new Date().getFullYear(),
-      target_month: Number(searchForm.month) || new Date().getMonth() + 1,
+    const year = Number(searchForm.year) || new Date().getFullYear()
+    const month = Number(searchForm.month) || new Date().getMonth() + 1
+    const res = await getForecastSummary({
+      target_year: year,
+      target_month: month,
+      supplier_cd: searchForm.supplier_cd || undefined,
+      keyword: searchForm.keyword || undefined,
     })
     const data = (res as any)?.data
     if (Array.isArray(data)) {
@@ -591,18 +581,20 @@ const fetchSummaryData = async () => {
 
 const fetchStats = async () => {
   try {
-    const res = await getForecastSummary({
+    const res = await getForecastStats({
       target_year: searchForm.year ? Number(searchForm.year) : undefined,
       target_month: searchForm.month ? Number(searchForm.month) : undefined,
+      supplier_cd: searchForm.supplier_cd || undefined,
+      keyword: searchForm.keyword || undefined,
     })
     const d = (res as any)?.data
     if (d) {
       stats.value = {
-        total_products: d.material_count ?? 0,
-        total_materials: d.material_count ?? 0,
-        total_suppliers: d.supplier_count ?? 0,
-        total_forecast_units: d.total_planned_usage ?? 0,
-        total_material_required: d.total_order_amount ?? 0,
+        total_products: d.total_products ?? 0,
+        total_materials: d.total_materials ?? 0,
+        total_suppliers: d.total_suppliers ?? 0,
+        total_forecast_units: d.total_forecast_units ?? 0,
+        total_material_required: d.total_material_required ?? 0,
       }
     }
   } catch (err) {
@@ -612,8 +604,13 @@ const fetchStats = async () => {
 
 const fetchSuppliers = async () => {
   try {
-    const res = await getSupplierList()
-    suppliers.value = (res as any)?.data ?? []
+    const year = searchForm.year ? Number(searchForm.year) : new Date().getFullYear()
+    const month = searchForm.month ? Number(searchForm.month) : new Date().getMonth() + 1
+    const res = await getForecastSuppliers({ target_year: year, target_month: month })
+    const raw = (res as any)?.data ?? []
+    suppliers.value = raw
+      .filter((s: any) => s?.supplier_cd != null && s.supplier_cd !== '')
+      .map((s: any) => ({ supplier_cd: s.supplier_cd, supplier_name: s.supplier_name || s.supplier_cd }))
   } catch (err) {
     console.error('获取仕入先列表失败:', err)
   }
@@ -622,6 +619,7 @@ const fetchSuppliers = async () => {
 // 事件处理
 const handleSearch = () => {
   pagination.page = 1
+  fetchSuppliers()
   fetchData()
   fetchStats()
 }
@@ -670,20 +668,26 @@ const handlePrint = async () => {
     ElMessage.info('データを取得中...')
 
     // 获取所有数据（只按年月筛选，不分页）
+    const year = Number(searchForm.year)
+    const month = Number(searchForm.month)
     let allPrintData: any[] = []
     if (activeTab.value === 'detail') {
-      const res = await getForecastMonthly({
-        target_year: Number(searchForm.year),
-        target_month: Number(searchForm.month),
+      const res = await getForecastList({
+        target_year: year,
+        target_month: month,
         page: 1,
         pageSize: 10000,
+        supplier_cd: searchForm.supplier_cd || undefined,
+        keyword: searchForm.keyword || undefined,
       })
       const data = (res as any)?.data
       if (data?.list) allPrintData = data.list
     } else {
-      const res = await getForecastBySupplier({
-        target_year: Number(searchForm.year),
-        target_month: Number(searchForm.month),
+      const res = await getForecastSummary({
+        target_year: year,
+        target_month: month,
+        supplier_cd: searchForm.supplier_cd || undefined,
+        keyword: searchForm.keyword || undefined,
       })
       const data = (res as any)?.data
       if (Array.isArray(data)) allPrintData = data
@@ -697,18 +701,20 @@ const handlePrint = async () => {
 
     ElMessage.info('印刷プレビューを生成中...')
 
-    const statsRes = await getForecastSummary({
-      target_year: Number(searchForm.year),
-      target_month: Number(searchForm.month),
+    const statsRes = await getForecastStats({
+      target_year: year,
+      target_month: month,
+      supplier_cd: searchForm.supplier_cd || undefined,
+      keyword: searchForm.keyword || undefined,
     })
     const printStatsData = (statsRes as any)?.data
     const printStats = printStatsData
       ? {
-          total_products: printStatsData.material_count ?? 0,
-          total_materials: printStatsData.material_count ?? 0,
-          total_suppliers: printStatsData.supplier_count ?? 0,
-          total_forecast_units: printStatsData.total_planned_usage ?? 0,
-          total_material_required: printStatsData.total_order_amount ?? 0,
+          total_products: printStatsData.total_products ?? 0,
+          total_materials: printStatsData.total_materials ?? 0,
+          total_suppliers: printStatsData.total_suppliers ?? 0,
+          total_forecast_units: printStatsData.total_forecast_units ?? 0,
+          total_material_required: printStatsData.total_material_required ?? 0,
         }
       : stats.value
 
