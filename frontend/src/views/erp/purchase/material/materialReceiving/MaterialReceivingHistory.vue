@@ -500,9 +500,6 @@ import {
   Calendar,
   Operation,
   List,
-  Refresh,
-  Setting,
-  Upload,
   Sort,
   Printer,
 } from '@element-plus/icons-vue'
@@ -586,14 +583,14 @@ const fetchSuppliers = async () => {
 const fetchLogs = async () => {
   loading.value = true
   try {
-    // 处理多选供应商：如果是数组且不为空，转换为逗号分隔的字符串
-    const supplierParam =
+    // 处理多选供应商：如果是数组且不为空，转换为逗号分隔的字符串；否则传 undefined 以符合 ReceivingListParams.supplier (string | undefined)
+    const supplierParam: string | undefined =
       Array.isArray(filters.value.supplier) && filters.value.supplier.length > 0
         ? filters.value.supplier.join(',')
-        : filters.value.supplier || undefined
+        : undefined
 
-    const params = {
-      keyword: filters.value.keyword,
+    const params: import('@/api/material').ReceivingListParams = {
+      keyword: filters.value.keyword || undefined,
       startDate: filters.value.start_date || undefined,
       endDate: filters.value.end_date || undefined,
       supplier: supplierParam,
@@ -662,7 +659,7 @@ const importCSVData = async () => {
     })
 
     importLoading.value = true
-    const result = await importMaterialLogsFromCSV()
+    const result = await importMaterialLogsFromCSV([]) as { success?: boolean; data?: { fileResults?: { fileName: string; processedCount?: number; success?: boolean; error?: string }[]; totalProcessed?: number }; message?: string }
 
     // 检查响应是否成功
     if (result && result.success === true) {
@@ -683,7 +680,7 @@ const importCSVData = async () => {
             }
           },
         )
-        detailMessage += `合計: ${result.data.totalProcessed ?? 0}件処理`
+        detailMessage += `合計: ${result.data?.totalProcessed ?? 0}件処理`
 
         ElMessage.success({
           message: detailMessage,
@@ -692,14 +689,14 @@ const importCSVData = async () => {
         })
       } else {
         // 如果没有详细数据，使用后端返回的消息
-        ElMessage.success(result.message || 'データ読取が完了しました')
+        ElMessage.success(result?.message || 'データ読取が完了しました')
       }
 
       // データ読取後、自動的にテーブルを更新
       fetchLogs()
     } else {
       // 失败情况
-      ElMessage.error(result?.message || 'データ読取に失敗しました')
+      ElMessage.error((result as any)?.message || 'データ読取に失敗しました')
     }
   } catch (error: any) {
     if (error !== 'cancel') {

@@ -136,64 +136,62 @@
     <div class="search-section">
       <div class="search-container">
         <div class="search-row">
-          <!-- 日付フィルター条件は半端材料リストタブ以外の時のみ表示 -->
-          <div class="search-group date-group" v-if="activeTab !== 'sub'">
-            <label class="search-label">期間</label>
-            <div class="date-controls">
-              <el-date-picker
-                v-model="searchForm.dateRange"
-                type="daterange"
-                range-separator="~"
-                start-placeholder="開始日"
-                end-placeholder="終了日"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                @change="handleDateRangeSearch"
-                class="date-picker"
-                size="default"
-              />
-              <div class="date-buttons">
-                <el-button size="small" class="date-btn" @click="setDateRange(-1)">
-                  <el-icon><ArrowLeft /></el-icon>
-                  -1日
-                </el-button>
-                <el-button size="small" class="date-btn today-btn" @click="setDateRange(0)">
-                  今日
-                </el-button>
-                <el-button size="small" class="date-btn" @click="setDateRange(1)">
-                  +1日
-                  <el-icon><ArrowRight /></el-icon>
-                </el-button>
-              </div>
+
+          <!-- 期間 (日別在庫・注文・初期在庫のみ) -->
+          <div class="filter-item date-group" v-if="activeTab !== 'sub'">
+            <span class="filter-label">
+              <el-icon><Calendar /></el-icon>期間
+            </span>
+            <el-date-picker
+              v-model="searchForm.dateRange"
+              type="daterange"
+              range-separator="~"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              @change="handleDateRangeSearch"
+              class="filter-date-picker"
+              size="small"
+            />
+            <div class="date-nav-group">
+              <el-button size="small" class="date-nav-btn" @click="setDateRange(-1)">
+                <el-icon><ArrowLeft /></el-icon>
+              </el-button>
+              <el-button size="small" class="date-nav-btn today-btn" @click="setDateRange(0)">今日</el-button>
+              <el-button size="small" class="date-nav-btn" @click="setDateRange(1)">
+                <el-icon><ArrowRight /></el-icon>
+              </el-button>
             </div>
           </div>
 
-          <div class="search-group">
-            <label class="search-label">キーワード</label>
+          <!-- キーワード -->
+          <div class="filter-item">
+            <span class="filter-label">
+              <el-icon><Search /></el-icon>キーワード
+            </span>
             <el-input
               v-model="searchForm.keyword"
-              placeholder="材料名または材料CD"
+              placeholder="材料名 / 材料CD"
               clearable
               @input="handleKeywordSearch"
-              class="search-input"
-              size="default"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
+              class="filter-input"
+              size="small"
+            />
           </div>
 
-          <!-- 使用状態フィルター条件は半端材料リストタブの時のみ表示 -->
-          <div class="search-group" v-if="activeTab === 'sub'">
-            <label class="search-label">使用状態</label>
+          <!-- 使用状態 (半端材料タブのみ) -->
+          <div class="filter-item" v-if="activeTab === 'sub'">
+            <span class="filter-label">
+              <el-icon><Operation /></el-icon>使用状態
+            </span>
             <el-select
               v-model="searchForm.usageStatus"
               placeholder="全て"
               clearable
               @change="handleUsageStatusSearch"
-              class="usage-status-select"
-              size="default"
+              class="filter-select"
+              size="small"
             >
               <el-option label="全て" value="" />
               <el-option label="使用済" value="used" />
@@ -201,8 +199,11 @@
             </el-select>
           </div>
 
-          <div class="search-group">
-            <label class="search-label">仕入先</label>
+          <!-- 仕入先 -->
+          <div class="filter-item supplier-item">
+            <span class="filter-label">
+              <el-icon><User /></el-icon>仕入先
+            </span>
             <el-select
               v-model="searchForm.supplier"
               placeholder="全て"
@@ -211,8 +212,8 @@
               collapse-tags
               collapse-tags-tooltip
               @change="handleSupplierSearch"
-              class="supplier-select"
-              size="default"
+              class="filter-select"
+              size="small"
             >
               <el-option
                 v-for="supplier in supplierOptions"
@@ -223,19 +224,10 @@
             </el-select>
           </div>
 
-          <div class="search-actions">
-            <el-button type="primary" @click="handleSearch" class="search-btn">
-              <el-icon><Search /></el-icon>
-              検索
-            </el-button>
-            <el-button @click="handleReset" class="reset-btn">
-              <el-icon><Refresh /></el-icon>
-              リセット
-            </el-button>
-          </div>
         </div>
       </div>
     </div>
+
 
     <!-- 材料受注テーブル -->
     <div class="table-section">
@@ -302,8 +294,8 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'material_name', order: 'ascending' }"
-            height="calc(100vh - 420px)"
-            :max-height="700"
+            height="calc(100vh - 280px)"
+            :max-height="800"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -412,8 +404,8 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'material_name', order: 'ascending' }"
-            height="calc(100vh - 420px)"
-            :max-height="700"
+            height="calc(100vh - 280px)"
+            :max-height="800"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
@@ -492,8 +484,8 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'created_at', order: 'descending' }"
-            height="calc(100vh - 420px)"
-            :max-height="700"
+            height="calc(100vh - 280px)"
+            :max-height="800"
           >
             <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
             <el-table-column
@@ -585,8 +577,8 @@
             border
             class="modern-table"
             :default-sort="{ prop: 'date', order: 'descending' }"
-            height="calc(100vh - 420px)"
-            :max-height="700"
+            height="calc(100vh - 280px)"
+            :max-height="800"
           >
             <el-table-column prop="date" label="日付" width="120" align="center" sortable />
             <el-table-column
@@ -1237,7 +1229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, h, nextTick } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ShoppingCart,
@@ -1251,7 +1243,6 @@ import {
   ArrowRight,
   Printer,
   User,
-  Edit,
   EditPen,
   Close,
   Calendar,
@@ -1270,10 +1261,7 @@ import {
   getStockMaterialsList,
   toggleStockMaterialUsage,
 } from '@/api/material'
-import {
-  calculateMaterialStock,
-  getCurrentMaterialStockStatus,
-} from '@/api/materialStockCalculation'
+import { calculateMaterialStock } from '@/api/materialStockCalculation'
 import { generateMaterialStockData } from '@/api/materialDataGeneration'
 import { updateMaterialQuantities, updateMaterialRemarks } from '@/api/materialStockUpdate'
 import type { MaterialQuantityUpdate } from '@/api/materialStockUpdate'
@@ -1532,7 +1520,7 @@ const totalStockQuantity = computed(() => {
   return stockMaterialsList.value.reduce((total, item) => total + (item.quantity || 0), 0)
 })
 
-const totalStockValue = computed(() => {
+const _totalStockValue = computed(() => {
   // stock_materials表没有单价字段，这里暂时返回0或者可以去掉这个统计
   return 0
 })
@@ -1820,8 +1808,13 @@ const updateStats = () => {
 
 const fetchSupplierOptions = async () => {
   try {
-    const result = await getSupplierList()
-    supplierOptions.value = result || []
+    const result = await getSupplierList() as { success?: boolean; data?: string[] | { supplier_cd?: string; supplier_name?: string }[] }
+    const raw = result?.data ?? []
+    supplierOptions.value = raw.map((item: string | { supplier_cd?: string; supplier_name?: string }) =>
+      typeof item === 'string'
+        ? { label: item, value: item }
+        : { label: item.supplier_name || item.supplier_cd || '', value: item.supplier_cd || '' }
+    ).filter((s) => s.value)
   } catch (error) {
     console.error('仕入先オプションの取得に失敗しました:', error)
     supplierOptions.value = []
@@ -1885,10 +1878,7 @@ const handleSetMonthStart = () => {
   const year = japanTime.getFullYear()
   const month = japanTime.getMonth()
 
-  // 创建当月1号的日期（日本时区）
-  const monthStart = new Date(year, month, 1)
-
-  // 格式化为YYYY-MM-DD格式
+  // 格式化为YYYY-MM-DD格式（当月1号）
   const monthStartStr = `${year}-${String(month + 1).padStart(2, '0')}-01`
 
   // 设置日期范围为当月1号
@@ -1965,7 +1955,7 @@ const handleUsageQuantityChange = async (row: any) => {
       await fetchSubData()
     } else {
       console.error('API返却失敗:', response)
-      ElMessage.error(`使用数の更新に失敗しました: ${response.message || '未知のエラー'}`)
+      ElMessage.error(`使用数の更新に失敗しました: ${(response as any)?.message || '未知のエラー'}`)
     }
   } catch (error: any) {
     console.error('使用数更新失敗:', error)
@@ -2008,11 +1998,11 @@ const handleInitialStockChange = async (row: InitialStockItem) => {
     try {
       const response = await updateMaterialQuantities(updateParams)
 
-      if (response && response.success) {
+      if (response && (response as any).success) {
         console.log(`成功更新材料 ${row.material_cd} 的初期在庫`)
         ElMessage.success('初期在庫を更新しました')
       } else {
-        const errorMessage = response?.message || '未知错误'
+        const errorMessage = (response as any)?.message || '未知错误'
         console.error(`更新材料 ${row.material_cd} 的初期在庫失败:`, errorMessage)
         ElMessage.warning(`保存失败: ${errorMessage}`)
       }
@@ -2041,11 +2031,11 @@ const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
     try {
       const response = await updateMaterialQuantities(updateParams)
 
-      if (response && response.success) {
+      if (response && (response as any).success) {
         console.log(`成功更新材料 ${row.material_cd} 的調整数`)
         ElMessage.success('調整数を更新しました')
       } else {
-        const errorMessage = response?.message || '未知错误'
+        const errorMessage = (response as any)?.message || '未知错误'
         console.error(`更新材料 ${row.material_cd} 的調整数失败:`, errorMessage)
         ElMessage.warning(`保存失败: ${errorMessage}`)
       }
@@ -2079,12 +2069,12 @@ const handleDeleteSubItem = async (row: any) => {
       // 重新获取数据
       await fetchSubData()
     } else {
-      ElMessage.error(`削除に失敗しました: ${response.message || '未知错误'}`)
+      ElMessage.error(`削除に失敗しました: ${(response as any)?.message || '未知错误'}`)
     }
   } catch (error: any) {
     if (error !== 'cancel') {
       console.error('删除失败:', error)
-      ElMessage.error(`削除に失敗しました: ${error.message || '网络错误'}`)
+      ElMessage.error(`削除に失敗しました: ${error?.message || '网络错误'}`)
     }
   }
 }
@@ -2125,8 +2115,8 @@ const handleCurrentChange = (page: number) => {
 }
 
 // Tab切换处理
-// 格式化数字，添加3位数逗号
-const formatNumber = (num: number): string => {
+// 格式化数字，添加3位数逗号（未使用时可删除）
+const _formatNumber = (num: number): string => {
   return num.toLocaleString('ja-JP')
 }
 
@@ -2151,8 +2141,8 @@ const formatCurrency = (num: number): string => {
   return `¥${Math.round(num).toLocaleString('ja-JP')}`
 }
 
-// 格式化日期时间
-const formatDateTime = (dateTime: string): string => {
+// 格式化日期时间（未使用时可删除）
+const _formatDateTime = (dateTime: string): string => {
   if (!dateTime) return '-'
   const date = new Date(dateTime)
   return date.toLocaleString('ja-JP', {
@@ -2251,7 +2241,7 @@ const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
   }
 }
 
-const saveRemarksToDatabase = async (row: MaterialOrderItem) => {
+const _saveRemarksToDatabase = async (row: MaterialOrderItem) => {
   try {
     console.log('开始保存備考到数据库:', {
       material_cd: row.material_cd,
@@ -2280,7 +2270,7 @@ const saveRemarksToDatabase = async (row: MaterialOrderItem) => {
   }
 }
 
-const handleClearAll = async () => {
+const _handleClearAll = async () => {
   // 批量更新所有行的数量为0
   const updatePromises = tableData.value.map(async (row) => {
     row.order_quantity = 0
@@ -2323,9 +2313,9 @@ const handleConfirmOrder = async () => {
       total_value: totalOrderValue.value,
     }
 
-    const response = await request.post('/api/material-order/create', orderData)
+    const response = await request.post('/api/material-order/create', orderData) as any
 
-    if (response.success) {
+    if (response?.data?.success ?? response?.success) {
       ElMessage.success('受注が確定されました')
       orderConfirmDialogVisible.value = false
       orderNotes.value = ''
@@ -2348,7 +2338,7 @@ const handleConfirmOrder = async () => {
   }
 }
 
-const handleRefresh = () => {
+const _handleRefresh = () => {
   fetchData()
 }
 
@@ -2362,10 +2352,12 @@ const handleStockCalculation = async () => {
 
     stockCalculationLoading.value = true
 
-    const response = await calculateMaterialStock()
+    const response = await calculateMaterialStock() as any
+    const data = response?.data ?? response
 
-    if (response.success) {
-      const { calculated_count, updated_count, details } = response.data
+    if (data?.success !== false) {
+      const calculated_count = (data?.data ?? data)?.calculated_count ?? 0
+      const updated_count = (data?.data ?? data)?.updated_count ?? 0
 
       ElMessage.success(
         `在庫計算が完了しました！\n計算材料数: ${calculated_count}件\n更新レコード数: ${updated_count}件`,
@@ -2406,8 +2398,10 @@ const getMergedOrderData = async () => {
 
     const subResponse = await request.get('/api/material-stock-sub/list', {
       params: subTableParams,
-    })
-    const subTableData = subResponse.success ? subResponse.data : []
+    }) as any
+    const subBody = subResponse?.data ?? subResponse
+    const rawSub = subBody?.success !== false ? (subBody?.data ?? subBody) : null
+    const subTableData = Array.isArray(rawSub) ? rawSub : []
 
     // 筛选子表中符合条件的供应商数据
     const filteredSubData = subTableData.filter(
@@ -2853,11 +2847,15 @@ const confirmDataGeneration = async () => {
       start_date: startDate,
       end_date: endDate,
       overwrite_existing: false, // 改为false，不覆盖现有数据
-    })
+    }) as any
 
-    if (response.success) {
-      const { generated_count, updated_count, skipped_count, duplicate_count, details } =
-        response.data
+    const resData = response?.data ?? response
+    if (resData?.success !== false) {
+      const payload = resData?.data ?? resData ?? {}
+      const generated_count = payload.generated_count ?? 0
+      const updated_count = payload.updated_count ?? 0
+      const skipped_count = payload.skipped_count ?? 0
+      const duplicate_count = payload.duplicate_count ?? 0
 
       // 构建详细的结果消息
       let message = `データ生成が完了しました！\n\n`
@@ -2973,23 +2971,23 @@ const loadMaterials = async () => {
     }
 
     console.log('材料データレスポンス:', response)
-    console.log('响应状态:', response?.success)
-    console.log('响应数据:', response?.data)
+    // 处理后端响应格式 - axios 返回 { data: 后端body }，后端可能是 { success: true, data: [...] } 或直接数组
+    const resBody = (response as any)?.data ?? response
+    console.log('响应状态:', resBody?.success)
+    console.log('响应数据:', resBody?.data)
     console.log('完整响应对象:', JSON.stringify(response, null, 2))
-
-    // 处理后端响应格式 - 可能是 { success: true, data: [...] } 或直接是数组
     if (response) {
-      if (response.success && Array.isArray(response.data)) {
+      if (resBody?.success !== false && Array.isArray(resBody?.data)) {
         // 标准格式: { success: true, data: [...] }
-        materialOptions.value = response.data
+        materialOptions.value = resBody.data
         console.log('成功获取材料数据 (标准格式):', materialOptions.value.length, '条')
-      } else if (Array.isArray(response)) {
+      } else if (Array.isArray(resBody)) {
         // 直接数组格式: [...]
-        materialOptions.value = response
+        materialOptions.value = resBody
         console.log('成功获取材料数据 (数组格式):', materialOptions.value.length, '条')
-      } else if (response.data && Array.isArray(response.data)) {
+      } else if (resBody?.data && Array.isArray(resBody.data)) {
         // 其他可能的格式: { data: [...] }
-        materialOptions.value = response.data
+        materialOptions.value = resBody.data
         console.log('成功获取材料数据 (data格式):', materialOptions.value.length, '条')
       } else {
         console.error('材料数据响应格式错误:', response)
@@ -3119,9 +3117,10 @@ const handleConfirmManualOrder = async () => {
       remarks: manualOrderForm.remarks,
     }
 
-    const response = await request.post('/api/material-stock-update/manual-create', orderData)
+    const response = await request.post('/api/material-stock-update/manual-create', orderData) as any
+    const resData = response?.data ?? response
 
-    if (response.success) {
+    if (resData?.success !== false) {
       ElMessage.success('材料注文が正常に登録されました')
       manualOrderDialogVisible.value = false
       // 刷新数据
@@ -3217,8 +3216,8 @@ const handleFilterChange = (filterType: string) => {
 
 <style scoped>
 .material-order-container {
-  padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #eef2f7 0%, #dce4f0 100%);
   min-height: 100vh;
 }
 
@@ -3227,12 +3226,12 @@ const handleFilterChange = (filterType: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 32px;
-  margin-bottom: 16px;
+  padding: 10px 18px;
+  margin-bottom: 8px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
+  border-radius: 10px;
   color: white;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 18px rgba(102, 126, 234, 0.35);
   position: relative;
   overflow: hidden;
 }
@@ -3257,18 +3256,18 @@ const handleFilterChange = (filterType: string) => {
 .title-section {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .title-icon {
-  width: 48px;
-  height: 48px;
+  width: 34px;
+  height: 34px;
   background: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 24px;
+  font-size: 18px;
   backdrop-filter: blur(10px);
 }
 
@@ -3278,29 +3277,30 @@ const handleFilterChange = (filterType: string) => {
 }
 
 .main-title {
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 700;
   margin: 0;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
 }
 
 .subtitle {
-  font-size: 14px;
-  opacity: 0.9;
-  margin: 4px 0 0 0;
+  font-size: 11px;
+  opacity: 0.85;
+  margin: 2px 0 0 0;
   font-weight: 400;
 }
 
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   z-index: 1;
 }
 
 .action-btn {
-  padding: 12px 20px;
-  border-radius: 10px;
+  padding: 6px 14px;
+  border-radius: 7px;
   font-weight: 600;
+  font-size: 12px;
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -3330,28 +3330,28 @@ const handleFilterChange = (filterType: string) => {
 
 /* 统计卡片样式 */
 .stats-container {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 8px;
 }
 
 .stat-card {
   background: white;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 8px;
+  padding: 8px 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  transition: all 0.25s ease;
   border: 1px solid rgba(0, 0, 0, 0.05);
   position: relative;
   overflow: hidden;
-  min-height: 80px;
+  min-height: 56px;
 }
 
 .stat-card::before {
@@ -3359,19 +3359,19 @@ const handleFilterChange = (filterType: string) => {
   position: absolute;
   top: 0;
   left: 0;
-  width: 4px;
+  width: 3px;
   height: 100%;
   background: var(--card-color);
   transition: width 0.3s ease;
 }
 
 .stat-card:hover::before {
-  width: 8px;
+  width: 5px;
 }
 
 .stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.11);
 }
 
 .stat-card.primary {
@@ -3407,144 +3407,237 @@ const handleFilterChange = (filterType: string) => {
 }
 
 .stat-card .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   background: var(--card-color);
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
 .stat-content {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 16px;
   font-weight: 700;
   color: #2d3748;
-  margin-bottom: 4px;
-  line-height: 1;
+  margin-bottom: 2px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-value .unit {
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 500;
   color: #718096;
-  margin-left: 4px;
+  margin-left: 2px;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 10px;
   color: #718096;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 搜索区域样式 */
+/* ===== Filter Bar ===== */
 .search-section {
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .search-container {
   background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+  padding: 6px 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+  border: 1px solid rgba(102, 126, 234, 0.1);
 }
 
+/* 全フィルターアイテムを1行に並べる */
 .search-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  align-items: end;
-}
-
-.search-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 200px;
-}
-
-.search-group.date-group {
-  min-width: 400px;
-}
-
-.search-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: #4a5568;
-  margin-bottom: 4px;
-}
-
-.date-controls {
-  display: flex;
-  gap: 12px;
+  gap: 0;
   align-items: center;
+  height: 36px;
 }
 
-.date-picker {
-  flex: 1;
-}
-
-.date-buttons {
+/* 各フィルターアイテム: ラベル + 入力欄 を横並び */
+.filter-item {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-right: 1px solid #e5e7eb;
+  height: 100%;
 }
 
-.date-btn {
-  padding: 8px 12px;
-  border-radius: 8px;
+.filter-item:first-child {
+  padding-left: 0;
+}
+
+.filter-item:last-child {
+  border-right: none;
+}
+
+.filter-item.date-group {
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.filter-item.supplier-item {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ラベル: アイコン + テキスト */
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.filter-label .el-icon {
   font-size: 12px;
-  font-weight: 500;
+  color: #667eea;
+}
+
+/* 統一された入力欄スタイル */
+.filter-input,
+.filter-select {
+  min-width: 140px;
+}
+
+.filter-input :deep(.el-input__wrapper),
+.filter-select :deep(.el-select__wrapper) {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  background: #f8fafc;
+}
+
+.filter-input :deep(.el-input__wrapper:hover),
+.filter-select :deep(.el-select__wrapper:hover) {
+  border-color: #667eea;
+  background: white;
+}
+
+.filter-input :deep(.el-input__wrapper.is-focus),
+.filter-select :deep(.el-select__wrapper.is-focused) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.12);
+  background: white;
+}
+
+.filter-input :deep(.el-input__inner),
+.filter-select :deep(.el-select__placeholder),
+.filter-select :deep(.el-select__selected-item) {
+  font-size: 11px;
+  height: 24px;
+  line-height: 24px;
+}
+
+/* 日付ピッカー */
+.filter-date-picker {
+  width: 200px;
+}
+
+.filter-date-picker :deep(.el-input__wrapper) {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+  background: #f8fafc;
   transition: all 0.2s ease;
 }
 
-.date-btn.today-btn {
+.filter-date-picker :deep(.el-input__wrapper:hover) {
+  border-color: #667eea;
+  background: white;
+}
+
+.filter-date-picker :deep(.el-range-input) {
+  font-size: 11px;
+}
+
+.filter-date-picker :deep(.el-range-separator) {
+  font-size: 11px;
+  color: #94a3b8;
+  padding: 0 2px;
+}
+
+/* 日付ナビゲーションボタン */
+.date-nav-group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.date-nav-btn {
+  height: 24px;
+  min-height: 24px;
+  padding: 0 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-nav-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.06);
+}
+
+.date-nav-btn.today-btn {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
+  padding: 0 10px;
 }
 
-.search-input,
-.supplier-select {
-  border-radius: 10px;
+.date-nav-btn.today-btn:hover {
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  transform: translateY(-1px);
 }
 
-.search-actions {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
 
-.search-btn,
-.reset-btn {
-  padding: 10px 20px;
-  border-radius: 10px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-}
-
-.search-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-}
-
-.search-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
-}
 
 /* 表格区域样式 */
 .table-section {
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
   border: 1px solid rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
@@ -3557,25 +3650,26 @@ const handleFilterChange = (filterType: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 8px 12px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-bottom: 1px solid #dee2e6;
 }
 
 .table-tabs {
   display: flex;
-  gap: 4px;
+  gap: 3px;
 }
 
 .tab-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 10px;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   color: #6b7280;
   background: transparent;
 }
@@ -3588,17 +3682,18 @@ const handleFilterChange = (filterType: string) => {
 .tab-item.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
 }
 
 .table-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .print-btn {
-  padding: 10px 16px;
-  border-radius: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -3660,8 +3755,8 @@ const handleFilterChange = (filterType: string) => {
 }
 
 .pagination-wrapper {
-  padding: 20px 24px;
-  background: #f8f9fa;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-top: 1px solid #dee2e6;
   display: flex;
   justify-content: center;
@@ -4023,15 +4118,16 @@ const handleFilterChange = (filterType: string) => {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   border: none;
   color: white;
-  border-radius: 8px;
-  padding: 10px 16px;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
   font-weight: 600;
   transition: all 0.3s ease;
 }
 
 .add-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 16px rgba(16, 185, 129, 0.4);
 }
 
 /* 数据生成确认对话框样式 */
@@ -4128,10 +4224,191 @@ const handleFilterChange = (filterType: string) => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
 }
 
-/* 响应式设计 */
+/* =============================================
+   Responsive Design - 5 Breakpoints
+   1280px / 1024px / 768px / 640px / 480px
+   ============================================= */
+
+/* Large screen: <= 1280px */
+@media (max-width: 1280px) {
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .stat-value {
+    font-size: 15px;
+  }
+
+  .search-group.date-group {
+    min-width: 300px;
+  }
+}
+
+/* Laptop: <= 1024px */
+@media (max-width: 1024px) {
+  .material-order-container {
+    padding: 8px 10px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 7px;
+  }
+
+  .search-row {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 6px;
+  }
+
+  .filter-item {
+    border-right: none;
+    padding: 0 8px 0 0;
+  }
+
+  .filter-item.date-group {
+    flex-shrink: 1;
+  }
+
+  .filter-date-picker {
+    width: 160px;
+  }
+
+  .tab-item {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  .tab-item span {
+    display: none;
+  }
+
+  .tab-item .el-icon {
+    font-size: 15px;
+  }
+
+  .tab-item.active span {
+    display: inline;
+  }
+}
+
+/* Tablet / Large phone: <= 768px */
 @media (max-width: 768px) {
+  .material-order-container {
+    padding: 6px 8px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 6px;
+    align-items: stretch;
+    padding: 8px 12px;
+  }
+
+  .header-left {
+    justify-content: center;
+  }
+
+  .header-actions {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    flex: 1;
+    justify-content: center;
+    min-width: 100px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+  }
+
+  .stat-card {
+    padding: 6px 8px;
+    min-height: 48px;
+    gap: 6px;
+  }
+
+  .stat-card .stat-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .stat-value {
+    font-size: 13px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+  }
+
+  .search-container {
+    padding: 6px 10px;
+  }
+
+  .search-row {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 4px;
+  }
+
+  .filter-item {
+    flex: 1 1 auto;
+    border-right: none;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 4px 0;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .filter-item:last-child {
+    border-bottom: none;
+  }
+
+  .filter-date-picker {
+    flex: 1;
+    width: auto;
+  }
+
+  .filter-input,
+  .filter-select {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .table-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .table-tabs {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .table-actions {
+    justify-content: flex-end;
+  }
+
+  .pagination-wrapper {
+    padding: 6px 8px;
+    overflow-x: auto;
+  }
+
+  :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+  }
+
   :deep(.data-generation-confirm-dialog) {
-    width: 90% !important;
+    width: 95% !important;
     margin: 0 auto !important;
   }
 
@@ -4143,51 +4420,126 @@ const handleFilterChange = (filterType: string) => {
   :deep(.data-generation-confirm-dialog .el-button) {
     width: 100% !important;
   }
+
+  .summary-card-compact {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .summary-item-compact {
+    flex-direction: row;
+    justify-content: space-between;
+  }
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .page-header {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-    padding: 20px;
+/* Phone: <= 640px */
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5px;
   }
 
-  .header-actions {
-    width: 100%;
+  .stat-card {
+    padding: 5px 6px;
+    min-height: 44px;
+    border-radius: 6px;
+  }
+
+  .stat-card::before {
+    width: 2px;
+  }
+
+  .stat-value {
+    font-size: 12px;
+  }
+
+  .stat-label {
+    font-size: 8px;
+  }
+
+  .stat-card .stat-icon {
+    display: none;
+  }
+
+  .main-title {
+    font-size: 14px;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .tab-item span {
+    display: none;
+  }
+
+  .tab-item.active span {
+    display: inline;
+  }
+
+  .search-btn,
+  .reset-btn {
+    flex: 1;
     justify-content: center;
   }
+}
 
-  .search-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .search-group {
-    min-width: auto;
-  }
-
-  .search-group.date-group {
-    min-width: auto;
-  }
-
-  .date-controls {
-    flex-direction: column;
-    gap: 8px;
+/* Small phone: <= 480px */
+@media (max-width: 480px) {
+  .material-order-container {
+    padding: 4px 6px;
   }
 
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    gap: 5px;
   }
-}
 
-/* 更小屏幕 */
-@media (max-width: 640px) {
-  .stats-grid {
-    grid-template-columns: 1fr;
-    gap: 8px;
+  .stat-card .stat-icon {
+    display: flex;
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+
+  .stat-value {
+    font-size: 14px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+  }
+
+  .title-icon {
+    display: none;
+  }
+
+  .page-header {
+    padding: 6px 10px;
+  }
+
+  .action-btn {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .tab-item span {
+    display: none;
+  }
+
+  .tab-item.active span {
+    display: none;
+  }
+
+  .manual-order-dialog :deep(.el-dialog) {
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .print-confirm-dialog :deep(.el-dialog) {
+    width: 100% !important;
+    margin: 0 !important;
   }
 }
 
@@ -4203,8 +4555,8 @@ const handleFilterChange = (filterType: string) => {
   background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
   color: #2d3748;
   font-weight: 700;
-  font-size: 13px;
-  padding: 12px 8px;
+  font-size: 12px;
+  padding: 8px 6px;
   border-bottom: 2px solid #cbd5e0;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -4223,10 +4575,10 @@ const handleFilterChange = (filterType: string) => {
 }
 
 :deep(.el-table td.el-table__cell) {
-  padding: 8px;
+  padding: 4px 6px;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.3;
   transition: all 0.2s ease;
 }
 
@@ -4244,10 +4596,10 @@ const handleFilterChange = (filterType: string) => {
 }
 
 :deep(.el-input-number .el-input__inner) {
-  padding: 4px 8px;
-  font-size: 12px;
-  height: 28px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  height: 20px;
+  border-radius: 5px;
   border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
 }
@@ -4311,12 +4663,12 @@ const handleFilterChange = (filterType: string) => {
 }
 
 :deep(.el-input .el-input__inner) {
-  padding: 4px 8px;
-  height: 28px;
-  border-radius: 6px;
+  padding: 2px 6px;
+  height: 20px;
+  border-radius: 5px;
   border: 1px solid #e2e8f0;
   transition: all 0.2s ease;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 :deep(.el-input .el-input__inner):focus {
@@ -4326,8 +4678,8 @@ const handleFilterChange = (filterType: string) => {
 
 /* 表格内文本样式优化 */
 :deep(.el-table .cell) {
-  padding: 4px 8px;
-  line-height: 1.4;
+  padding: 2px 6px;
+  line-height: 1.3;
   font-size: 12px;
 }
 
@@ -4358,23 +4710,23 @@ const handleFilterChange = (filterType: string) => {
 /* 表格容器优化 */
 .table-section {
   background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
   border: 1px solid rgba(0, 0, 0, 0.05);
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 /* 表格头部优化 */
 .table-header {
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-bottom: 1px solid #dee2e6;
-  padding: 16px 20px;
+  padding: 8px 12px;
 }
 
 /* 分页样式优化 */
 .pagination-wrapper {
-  padding: 16px 20px;
+  padding: 8px 16px;
   background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
   border-top: 1px solid #dee2e6;
   display: flex;
@@ -4749,12 +5101,12 @@ const handleFilterChange = (filterType: string) => {
   color: #2d3748;
   font-weight: 600;
   font-size: 12px;
-  padding: 8px 6px;
+  padding: 6px 4px;
   border-bottom: 2px solid #dee2e6;
 }
 
 .compact-table :deep(.el-table td) {
-  padding: 6px 6px;
+  padding: 4px 4px;
   font-size: 12px;
   border-bottom: 1px solid #f1f3f4;
 }
@@ -4951,20 +5303,5 @@ const handleFilterChange = (filterType: string) => {
   width: 100%;
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .material-detail-dialog {
-    width: 95% !important;
-  }
 
-  .summary-card {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .summary-item {
-    flex-direction: row;
-    justify-content: space-between;
-  }
-}
 </style>

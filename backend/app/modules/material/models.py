@@ -6,6 +6,7 @@
   - material_stock              (材料在庫メイン)
   - material_stock_sub          (材料在庫サブ / 手動注文)
   - stock_materials             (在庫材料管理)
+  - material_usage_record       (材料使用済テーブル)
 """
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Date, Numeric, Time
 from sqlalchemy.sql import func
@@ -129,3 +130,21 @@ class StockMaterial(Base):
     note = Column(String(255), comment="备注")
     created_at = Column(DateTime, default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
+
+
+class MaterialUsageRecord(Base):
+    """材料使用済テーブル（material_usage_record）
+    切断工程の日次材料使用数を記録し、material_stock.planned_usage の更新ソースとなる。
+    """
+    __tablename__ = "material_usage_record"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    usage_date = Column(Date, nullable=False, index=True, comment="使用日（生産日）")
+    material_cd = Column(String(50), nullable=False, index=True, comment="材料CD")
+    material_name = Column(String(255), nullable=False, comment="材料名")
+    usage_count = Column(Integer, nullable=False, default=0, comment="使用数（不重複管理コード数）")
+    source = Column(String(50), nullable=False, default="cutting", index=True, comment="来源区分")
+    management_codes = Column(Text, nullable=True, comment="管理コード（複数はカンマ区切り）")
+    reflected = Column(Boolean, nullable=False, default=False, index=True, comment="反映済")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")

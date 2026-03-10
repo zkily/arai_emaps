@@ -5,7 +5,7 @@
       <div class="header-content">
         <h1 class="main-title">
           <el-icon class="title-icon">
-            <Truck />
+            <Download />
           </el-icon>
           材料受入管理
         </h1>
@@ -25,7 +25,7 @@
         <div class="feature-card history-card" @click="goToHistory">
           <div class="card-icon">
             <el-icon class="animated-icon">
-              <FileText />
+              <Document />
             </el-icon>
           </div>
           <div class="card-content">
@@ -48,7 +48,7 @@
         <div class="feature-card inspection-card" @click="goToInspection">
           <div class="card-icon">
             <el-icon class="animated-icon">
-              <Eye />
+              <View />
             </el-icon>
           </div>
           <div class="card-content">
@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { Truck, FileText, Eye, ArrowRight } from 'lucide-vue-next'
+import { Download, Document, View, ArrowRight } from '@element-plus/icons-vue'
 
 const router = useRouter()
 

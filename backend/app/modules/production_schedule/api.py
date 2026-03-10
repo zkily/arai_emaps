@@ -693,7 +693,7 @@ async def get_cutting_management_list(
                `cutting_management`.management_code, `cutting_management`.actual_production_quantity, `cutting_management`.defect_qty, `cutting_management`.take_count,
                `cutting_management`.cutting_length, `cutting_management`.chamfering_length, `cutting_management`.developed_length,
                `cutting_management`.scrap_length, `cutting_management`.material_name, `cutting_management`.material_manufacturer,
-               `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.cd,
+               `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.material_usage_reflected, `cutting_management`.cd,
                `cutting_management`.created_at, `cutting_management`.updated_at, `cutting_management`.remarks,
                `equipment_efficiency`.efficiency_rate AS efficiency_rate
         FROM `cutting_management`
@@ -783,6 +783,7 @@ async def get_cutting_management_list(
             "material_manufacturer": row.get("material_manufacturer"),
             "standard_specification": row.get("standard_specification"),
             "production_completed_check": row.get("production_completed_check"),
+            "material_usage_reflected": row.get("material_usage_reflected") or "未反映",
             "cd": row.get("cd"),
             "created_at": _v(row, "created_at"),
             "updated_at": _v(row, "updated_at"),

@@ -444,7 +444,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { View, Document, Setting, Printer } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { getMaterialLogs, getSupplierList } from '@/api/material'
@@ -861,8 +861,13 @@ const fetchInspectionHistory = async (): Promise<void> => {
 // 获取仕入先选项
 const fetchSupplierOptions = async (): Promise<void> => {
   try {
-    const result = await getSupplierList()
-    supplierOptions.value = result?.data ?? []
+    const result = await getSupplierList() as { success?: boolean; data?: string[] | { supplier_cd?: string; supplier_name?: string }[] }
+    const raw = result?.data ?? []
+    supplierOptions.value = raw.map((item: string | { supplier_cd?: string; supplier_name?: string }) =>
+      typeof item === 'string'
+        ? { label: item, value: item }
+        : { label: item.supplier_name || item.supplier_cd || '', value: item.supplier_cd || '' }
+    ).filter((s) => s.value)
   } catch (error) {
     console.error('获取仕入先列表错误:', error)
   }
@@ -1224,7 +1229,7 @@ const createPrintPage = (
   dayData: any[],
   date: string,
   pageNumber: number,
-  totalPages: number,
+  _totalPages: number,
 ): string => {
   return `
     <div class="page-container ${pageNumber > 1 ? 'page-break' : ''}">

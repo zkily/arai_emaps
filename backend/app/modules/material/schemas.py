@@ -2,7 +2,7 @@
 材料管理 Pydantic スキーマ
 """
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date, time
 from decimal import Decimal
 
@@ -263,3 +263,54 @@ class StockMaterialResponse(StockMaterialBase):
 
     class Config:
         from_attributes = True
+
+
+# ─────────────────────────────────────────────
+# 材料使用済テーブル (material_usage_record)
+# ─────────────────────────────────────────────
+
+class MaterialUsageRecordBase(BaseModel):
+    usage_date: date
+    material_cd: str
+    material_name: str
+    usage_count: int = 0
+    source: str = "cutting_management"
+    management_codes: Optional[str] = None
+    management_code: Optional[str] = None
+    reflected: bool = False
+
+
+class MaterialUsageRecordCreate(MaterialUsageRecordBase):
+    pass
+
+
+class MaterialUsageRecordResponse(MaterialUsageRecordBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialUsagePreviewItem(BaseModel):
+    """使用数プレビュー（確認ダイアログ表示用）"""
+    usage_date: date
+    material_cd: str
+    material_name: str
+    usage_count: int
+    already_recorded: bool = False
+
+
+class MaterialUsageCommitRequest(BaseModel):
+    """使用数反映確定リクエスト"""
+    today_date: str
+    tomorrow_date: Optional[str] = None
+    source: str = "cutting_management"
+
+
+class MaterialUsagePreviewRequest(BaseModel):
+    """使用数プレビューリクエスト"""
+    today_date: str
+    tomorrow_date: Optional[str] = None
+    source: str = "cutting_management"

@@ -448,7 +448,7 @@ const getTransactionTypeColor = (
 .page-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 12px;
+  padding: 8px;
   position: relative;
 }
 
@@ -470,27 +470,27 @@ const getTransactionTypeColor = (
 .header-section {
   position: relative;
   z-index: 1;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   max-width: 800px;
   margin: 0 auto;
 }
 
 .header-icon {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border-radius: 16px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   color: #667eea;
 }
 
@@ -499,7 +499,7 @@ const getTransactionTypeColor = (
 }
 
 .page-title {
-  font-size: 2rem;
+  font-size: 1.3rem;
   font-weight: 700;
   color: #ffffff;
   margin: 0;
@@ -508,9 +508,9 @@ const getTransactionTypeColor = (
 }
 
 .page-subtitle {
-  font-size: 1rem;
+  font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.8);
-  margin: 4px 0 0 0;
+  margin: 2px 0 0 0;
   font-weight: 400;
 }
 
@@ -530,7 +530,7 @@ const getTransactionTypeColor = (
 }
 
 .result-card {
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
 .card-header {
@@ -551,14 +551,14 @@ const getTransactionTypeColor = (
 
 /* 表单样式 */
 .modern-form {
-  padding: 4px;
+  padding: 2px;
 }
 
 .form-section {
-  margin-bottom: 16px;
-  padding: 16px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
   background: rgba(248, 250, 252, 0.5);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(226, 232, 240, 0.5);
   transition: all 0.3s ease;
 }
@@ -573,8 +573,8 @@ const getTransactionTypeColor = (
 .modern-form :deep(.el-form-item__label) {
   font-weight: 600;
   color: #374151;
-  font-size: 0.8rem;
-  margin-bottom: 6px;
+  font-size: 0.75rem;
+  margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -602,7 +602,7 @@ const getTransactionTypeColor = (
 .modern-radio-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 5px;
 }
 
 .modern-radio-group :deep(.el-radio-button) {
@@ -610,13 +610,13 @@ const getTransactionTypeColor = (
 }
 
 .modern-radio-group :deep(.el-radio-button__inner) {
-  border-radius: 8px !important;
-  padding: 8px 16px;
+  border-radius: 7px !important;
+  padding: 5px 12px;
   background: #ffffff;
   color: #6b7280;
   border: 1.5px solid #e5e7eb;
   font-weight: 500;
-  min-width: 80px;
+  min-width: 64px;
   text-align: center;
   transition: all 0.3s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
@@ -775,10 +775,10 @@ const getTransactionTypeColor = (
 /* 按钮样式 */
 .form-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
-  padding: 20px 16px 16px;
-  margin-top: 16px;
+  padding: 10px 16px 10px;
+  margin-top: 8px;
 }
 
 .submit-button {
@@ -832,12 +832,12 @@ const getTransactionTypeColor = (
 
 .modern-table :deep(.el-table td) {
   border-bottom: 1px solid #f1f5f9;
-  padding: 12px 8px;
+  padding: 6px 8px;
 }
 
 .modern-table :deep(.el-table th) {
   border-bottom: 2px solid #e2e8f0;
-  padding: 12px 8px;
+  padding: 6px 8px;
 }
 
 /* 工具类 */
@@ -857,7 +857,7 @@ const getTransactionTypeColor = (
   }
 
   .page-title {
-    font-size: 2rem;
+    font-size: 1.3rem;
   }
 
   .form-card,

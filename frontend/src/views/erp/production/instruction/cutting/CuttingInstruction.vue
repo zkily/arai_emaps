@@ -368,6 +368,7 @@
                 <span class="cutting-mgmt-tfoot-item">生産数合計：{{ cuttingTodayTotal.quantity }}</span>
                 <span class="cutting-mgmt-tfoot-item">不良合計：{{ cuttingTodayTotal.defect }}</span>
                 <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ cuttingTodayTotal.time ?? '-' }}</span>
+                <span class="cutting-mgmt-tfoot-item usage-count-item">使用材料数：{{ cuttingTodayUsageSummary.totalCount }} 束</span>
               </div>
             </div>
             <div v-if="!cuttingManagementList.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
@@ -479,12 +480,119 @@
                 <span class="cutting-mgmt-tfoot-item">生産数合計：{{ cuttingTomorrowTotal.quantity }}</span>
                 <span class="cutting-mgmt-tfoot-item">不良合計：{{ cuttingTomorrowTotal.defect }}</span>
                 <span class="cutting-mgmt-tfoot-item">生産時間合計：{{ cuttingTomorrowTotal.time ?? '-' }}</span>
+                <span class="cutting-mgmt-tfoot-item usage-count-item">使用材料数（新増）：{{ cuttingTomorrowUsageSummary.totalCount }} 束</span>
               </div>
             </div>
             <div v-if="!cuttingManagementListTomorrow.length && !cuttingManagementLoading" class="cutting-mgmt-empty">データなし</div>
           </div>
         </div>
       </div>
+
+      <!-- 材料別使用数汇总行（切断指示-今日/翌日の下・独立日付筛选） -->
+      <div class="instruction-row instruction-two-cols instruction-cols-6-4 usage-summary-row">
+        <!-- 今日：材料別使用数汇总表（独立日付筛选） -->
+        <div class="instruction-col usage-summary-col">
+          <div class="usage-summary-wrap">
+            <div class="usage-summary-title-row usage-summary-title-row--with-date">
+              <span class="usage-summary-title">使用材料数（材料別）- 今日</span>
+              <div class="cutting-mgmt-date-wrap usage-summary-date-wrap">
+                <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftUsageSummaryDateToday(-1)" />
+                <el-date-picker
+                  v-model="usageSummaryDateToday"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="生産日"
+                  size="small"
+                  class="cutting-mgmt-date-picker"
+                  @change="loadUsageSummaryCuttingList"
+                />
+                <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftUsageSummaryDateToday(1)" />
+              </div>
+              <div class="usage-summary-title-actions">
+                <el-button type="warning" size="small" :loading="usageReflectionLoading" @click="confirmUsageReflection">使用数反映</el-button>
+                <el-button type="info" size="small" @click="openSpecifiedDateDialog">指定日材料数</el-button>
+              </div>
+            </div>
+            <div v-loading="usageSummaryCuttingLoading" class="usage-summary-table-wrap">
+              <table v-if="usageSummaryCuttingList.length" class="usage-summary-table usage-summary-table--list">
+                <thead>
+                  <tr>
+                    <th>製品名</th>
+                    <th>原材料</th>
+                    <th>管理コード</th>
+                    <th>使用材料反映</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, idx) in usageSummaryCuttingList" :key="row.id ?? `usage-${idx}`">
+                    <td>{{ row.product_name ?? '-' }}</td>
+                    <td>{{ row.material_name ?? '-' }}</td>
+                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td>
+                      <span :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
+                        {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else-if="!usageSummaryCuttingLoading" class="usage-summary-empty">該当日のデータがありません</div>
+            </div>
+            <div v-if="usageSummaryCuttingList.length" class="usage-summary-footer">
+              <span class="usage-summary-footer-item">合计件数：{{ usageSummaryTodayCounts.total }}</span>
+              <span class="usage-summary-footer-item usage-summary-footer--reflected">反映済：{{ usageSummaryTodayCounts.reflected }}</span>
+              <span class="usage-summary-footer-item usage-summary-footer--not-reflected">未反映：{{ usageSummaryTodayCounts.notReflected }}</span>
+            </div>
+          </div>
+        </div>
+        <!-- 翌日：使用材料数（材料別）- 翌日（独立日付筛选） -->
+        <div class="instruction-col usage-summary-col">
+          <div class="usage-summary-wrap usage-summary-wrap--tomorrow">
+            <div class="usage-summary-title-row usage-summary-title-row--with-date">
+              <span class="usage-summary-title">使用材料数（材料別）- 翌日</span>
+              <div class="cutting-mgmt-date-wrap usage-summary-date-wrap">
+                <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftUsageSummaryDateTomorrow(-1)" />
+                <el-date-picker
+                  v-model="usageSummaryDateTomorrow"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  placeholder="生産日"
+                  size="small"
+                  class="cutting-mgmt-date-picker"
+                  @change="loadUsageSummaryCuttingListTomorrow"
+                />
+                <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftUsageSummaryDateTomorrow(1)" />
+              </div>
+            </div>
+            <div v-loading="usageSummaryCuttingLoadingTomorrow" class="usage-summary-table-wrap">
+              <table v-if="usageSummaryCuttingListTomorrow.length" class="usage-summary-table usage-summary-table--list">
+                <thead>
+                  <tr>
+                    <th>製品名</th>
+                    <th>原材料</th>
+                    <th>管理コード</th>
+                    <th>使用材料反映</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(row, idx) in usageSummaryCuttingListTomorrow" :key="'tm-' + (row.id ?? idx)">
+                    <td>{{ row.product_name ?? '-' }}</td>
+                    <td>{{ row.material_name ?? '-' }}</td>
+                    <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td>
+                      <span :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
+                        {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-else-if="!usageSummaryCuttingLoadingTomorrow" class="usage-summary-empty">該当日のデータがありません</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 面取バッチ一覧（面取指示の上）：レイアウト・幅は生産バッチ一覧と同様、右に製品情報・設備能率 -->
       <div class="plan-row chamfering-plan-row">
         <div class="plan-section plan-section-left">
@@ -1043,7 +1151,7 @@
               :total="kanbanIssuanceList.length"
               :page-sizes="[30, 50, 100, 200]"
               layout="total, sizes, prev, pager, next"
-              small
+              size="small"
               class="kanban-pagination"
             />
             <div v-if="!kanbanIssuanceList.length && !kanbanIssuanceLoading" class="cutting-mgmt-empty">データなし</div>
@@ -2479,6 +2587,84 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- ■ 指定日 材料数 確認ダイアログ -->
+    <el-dialog
+      v-model="specifiedDateDialogVisible"
+      title="指定日 — 所需材料数"
+      width="520px"
+      class="specified-date-dialog"
+      :close-on-click-modal="false"
+    >
+      <div class="specified-date-dialog-body">
+        <div class="specified-date-controls">
+          <el-button type="default" size="small" circle :icon="ArrowLeft" title="前日" @click="shiftSpecifiedDate(-1)" />
+          <el-date-picker
+            v-model="specifiedDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="日付を選択"
+            size="small"
+            class="specified-date-picker"
+            @change="loadSpecifiedDateUsage"
+          />
+          <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftSpecifiedDate(1)" />
+          <el-button size="small" plain class="specified-date-today-btn" @click="setSpecifiedDateToday">今日</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            :loading="specifiedDateLoading"
+            @click="loadSpecifiedDateUsage"
+          >
+            検索
+          </el-button>
+        </div>
+        <div v-if="specifiedDateLoading" class="usage-dialog-loading">集計中...</div>
+        <template v-else-if="specifiedDate">
+          <div class="usage-preview-desc">{{ specifiedDate }} の使用材料数（材料別）</div>
+          <el-table
+            :data="specifiedDateUsageSummarySorted.byMaterial"
+            size="small"
+            border
+            max-height="340"
+            class="usage-preview-table specified-date-table"
+          >
+            <el-table-column label="原材料" min-width="160" align="center">
+              <template #default="{ row }">
+                <el-tooltip
+                  placement="right"
+                  :show-after="200"
+                  popper-class="usage-product-tooltip"
+                >
+                  <template #content>
+                    <div class="usage-tooltip-title">使用製品</div>
+                    <div v-for="p in row.products" :key="p.productCd" class="usage-tooltip-row">
+                      <span class="usage-tooltip-cd">{{ p.productCd }}</span>
+                      <span class="usage-tooltip-name">{{ p.productName }}</span>
+                    </div>
+                    <div v-if="!row.products.length" class="usage-tooltip-row">-</div>
+                  </template>
+                  <span class="usage-material-label">{{ row.materialName }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+            <el-table-column prop="usageCount" label="使用数（管理コード数）" width="160" align="center" />
+          </el-table>
+          <div v-if="!specifiedDateUsageSummarySorted.byMaterial.length" class="usage-preview-empty">データなし</div>
+          <div v-if="specifiedDateUsageSummarySorted.byMaterial.length" class="specified-date-total">
+            合計：{{ specifiedDateUsageSummarySorted.totalCount }} 束
+          </div>
+        </template>
+      </div>
+      <template #footer>
+        <div class="specified-date-dialog-footer">
+          <el-button size="small" @click="specifiedDateDialogVisible = false">閉じる</el-button>
+          <el-button type="primary" size="small" :disabled="!specifiedDateUsageSummarySorted.byMaterial.length" @click="printSpecifiedDateUsage">
+            打印
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -2584,6 +2770,7 @@ interface CuttingManagementRow {
   material_manufacturer?: string | null
   standard_specification?: string | null
   production_completed_check?: number | null
+  material_usage_reflected?: string | null
   cd?: string | null
   production_time?: number | string | null
   remarks?: string | null
@@ -2728,6 +2915,372 @@ const chamferingTomorrowTotal = computed(() => {
   }
   return { quantity: qty, defect, time: time === 0 ? null : Math.round(time * 10) / 10 }
 })
+// ─────────────────────────────────────────────
+// 材料使用数：計算属性（今日・翌日联合去重）
+// ─────────────────────────────────────────────
+
+/** 材料別集計の1行 */
+interface UsageByMaterial {
+  materialName: string
+  usageCount: number
+  /** この材料を使用している製品リスト（tooltip 用） */
+  products: Array<{ productCd: string; productName: string }>
+}
+interface UsageSummary { byMaterial: UsageByMaterial[]; totalCount: number }
+
+/** 材料別集計ヘルパー：rows から materialName 別に集計し totalCount を返す */
+function buildUsageSummaryByMaterial(rows: CuttingManagementRow[]): UsageSummary {
+  // materialName → { codes: Set<management_code>, products: Map<productCd, productName> }
+  const map = new Map<string, { codes: Set<string>; products: Map<string, string> }>()
+  for (const row of rows) {
+    const code = row.management_code
+    if (!code) continue
+    const matKey = row.material_name?.trim() || '不明'
+    if (!map.has(matKey)) map.set(matKey, { codes: new Set(), products: new Map() })
+    const entry = map.get(matKey)!
+    entry.codes.add(code)
+    const pcd = row.product_cd ?? ''
+    const pname = row.product_name ?? pcd
+    if (pcd) entry.products.set(pcd, pname)
+  }
+  const byMaterial: UsageByMaterial[] = []
+  let totalCount = 0
+  for (const [materialName, v] of map) {
+    const products = Array.from(v.products.entries()).map(([productCd, productName]) => ({ productCd, productName }))
+    byMaterial.push({ materialName, usageCount: v.codes.size, products })
+    totalCount += v.codes.size
+  }
+  return { byMaterial, totalCount }
+}
+
+/** 今日の使用材料数（材料別）。management_code で去重 */
+const cuttingTodayUsageSummary = computed<UsageSummary>(() =>
+  buildUsageSummaryByMaterial(cuttingManagementList.value)
+)
+
+// ─────────────────────────────────────────────
+// 使用材料数（材料別）- 今日：独立した日付筛选
+// ─────────────────────────────────────────────
+const usageSummaryDateToday = ref(getTodayString())
+const usageSummaryCuttingList = ref<CuttingManagementRow[]>([])
+const usageSummaryCuttingLoading = ref(false)
+/** いずれかの日付で反映済となった management_code の集合（同一コードが別日でも「反映済」表示するため） */
+const reflectedManagementCodesSet = ref<Set<string>>(new Set())
+
+async function loadReflectedManagementCodes() {
+  try {
+    const res = await request.get<{ success?: boolean; management_codes?: string[] }>(
+      '/api/material/usage/reflected-management-codes',
+      { params: { source: 'cutting_management' } }
+    )
+    const list = (res as any)?.management_codes ?? []
+    reflectedManagementCodesSet.value = new Set(list.map((c: string) => String(c).trim()).filter(Boolean))
+  } catch {
+    reflectedManagementCodesSet.value = new Set()
+  }
+}
+
+/** 行が「反映済」と表示すべきか（当該日の反映済 or 別日で既に反映済の管理コード） */
+function isUsageRowReflected(row: CuttingManagementRow): boolean {
+  if (row.material_usage_reflected === '反映済') return true
+  const code = row.management_code != null ? String(row.management_code).trim() : ''
+  return code !== '' && reflectedManagementCodesSet.value.has(code)
+}
+
+/** 使用材料数（材料別）- 今日：合计件数・反映済件数・未反映件数 */
+const usageSummaryTodayCounts = computed(() => {
+  const list = usageSummaryCuttingList.value
+  const total = list.length
+  const reflected = list.filter(row => isUsageRowReflected(row)).length
+  return { total, reflected, notReflected: total - reflected }
+})
+
+async function loadUsageSummaryCuttingList() {
+  const dayStr = normalizeDateStr(usageSummaryDateToday.value)
+  if (!dayStr) return
+  usageSummaryCuttingLoading.value = true
+  try {
+    await loadReflectedManagementCodes()
+    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { production_day: dayStr, limit: 2000 } }
+    )
+    usageSummaryCuttingList.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+  } catch {
+    usageSummaryCuttingList.value = []
+  } finally {
+    usageSummaryCuttingLoading.value = false
+    fetchUsageReflectedStatus()
+  }
+}
+
+function shiftUsageSummaryDateToday(delta: number) {
+  usageSummaryDateToday.value = shiftDate(usageSummaryDateToday.value, delta)
+  loadUsageSummaryCuttingList()
+}
+
+watch(usageSummaryDateToday, loadUsageSummaryCuttingList, { immediate: true })
+
+// ─────────────────────────────────────────────
+// 使用材料数（材料別）- 翌日：独立した日付筛选
+// ─────────────────────────────────────────────
+const usageSummaryDateTomorrow = ref(getTomorrowString())
+const usageSummaryCuttingListTomorrow = ref<CuttingManagementRow[]>([])
+const usageSummaryCuttingLoadingTomorrow = ref(false)
+
+async function loadUsageSummaryCuttingListTomorrow() {
+  const dayStr = normalizeDateStr(usageSummaryDateTomorrow.value)
+  if (!dayStr) return
+  usageSummaryCuttingLoadingTomorrow.value = true
+  try {
+    await loadReflectedManagementCodes()
+    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { production_day: dayStr, limit: 2000 } }
+    )
+    usageSummaryCuttingListTomorrow.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+  } catch {
+    usageSummaryCuttingListTomorrow.value = []
+  } finally {
+    usageSummaryCuttingLoadingTomorrow.value = false
+    fetchUsageReflectedStatus()
+  }
+}
+
+function shiftUsageSummaryDateTomorrow(delta: number) {
+  usageSummaryDateTomorrow.value = shiftDate(usageSummaryDateTomorrow.value, delta)
+  loadUsageSummaryCuttingListTomorrow()
+}
+
+watch(usageSummaryDateTomorrow, loadUsageSummaryCuttingListTomorrow, { immediate: true })
+
+/** 翌日の使用材料数（材料別・今日にない管理コードのみ） */
+const cuttingTomorrowUsageSummary = computed<UsageSummary>(() => {
+  const todayCodes = new Set(
+    cuttingManagementList.value
+      .map(r => r.management_code)
+      .filter((c): c is string => !!c)
+  )
+  const filtered = cuttingManagementListTomorrow.value.filter(
+    r => !!r.management_code && !todayCodes.has(r.management_code!)
+  )
+  return buildUsageSummaryByMaterial(filtered)
+})
+
+// ─────────────────────────────────────────────
+// 指定日：使用材料数
+// ─────────────────────────────────────────────
+const specifiedDateDialogVisible = ref(false)
+const specifiedDate = ref('')
+const specifiedDateLoading = ref(false)
+const specifiedDateRows = ref<CuttingManagementRow[]>([])
+
+const specifiedDateUsageSummary = computed<UsageSummary>(() =>
+  buildUsageSummaryByMaterial(specifiedDateRows.value)
+)
+
+/** 指定日材料数：原材料で昇順ソートした表示用（ダイアログ・印刷共通） */
+const specifiedDateUsageSummarySorted = computed(() => {
+  const s = specifiedDateUsageSummary.value
+  const byMaterial = [...(s.byMaterial || [])].sort((a, b) =>
+    (a.materialName || '').localeCompare(b.materialName || '', 'ja')
+  )
+  return { ...s, byMaterial }
+})
+
+function openSpecifiedDateDialog() {
+  specifiedDateDialogVisible.value = true
+  if (!specifiedDate.value) specifiedDate.value = getTodayString()
+  loadSpecifiedDateUsage()
+}
+
+function shiftSpecifiedDate(delta: number) {
+  specifiedDate.value = shiftDate(specifiedDate.value || getTodayString(), delta)
+  loadSpecifiedDateUsage()
+}
+
+function setSpecifiedDateToday() {
+  specifiedDate.value = getTodayString()
+  loadSpecifiedDateUsage()
+}
+
+/** 指定日材料数窗体を印刷 */
+function printSpecifiedDateUsage() {
+  const dateStr = specifiedDate.value || ''
+  const summary = specifiedDateUsageSummarySorted.value
+  const rows = summary.byMaterial || []
+  const total = summary.totalCount ?? 0
+
+  const rowsHtml = rows
+    .map(
+      (r) =>
+        `<tr><td style="text-align:center;padding:5px 10px;border:1px solid #ddd">${escapeHtml(r.materialName)}</td><td style="text-align:center;padding:5px 10px;border:1px solid #ddd">${r.usageCount}</td></tr>`
+    )
+    .join('')
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>指定日 — 所需材料数</title><style>
+    body { font-family: sans-serif; padding: 10px; margin: 0; }
+    h2 { margin: 0 0 4px; font-size: 17px; }
+    .print-date { color: #666; margin-bottom: 6px; font-size: 13px; }
+    table { border-collapse: collapse; width: 100%; max-width: 400px; margin: 0 auto; }
+    th { background: #f5f5f5; padding: 6px 10px; border: 1px solid #ddd; text-align: center; font-size: 13px; }
+    td { font-size: 13px; }
+    .print-total { margin-top: 6px; font-weight: 700; text-align: center; font-size: 13px; }
+  </style></head><body>
+    <h2>指定日 — 所需材料数</h2>
+    <div class="print-date">${escapeHtml(dateStr)} の使用材料数（材料別）</div>
+    <table>
+      <thead><tr><th>原材料</th><th>使用数（管理コード数）</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+    <div class="print-total">合計：${total} 束</div>
+  </body></html>`
+
+  const w = window.open('', '_blank')
+  if (!w) {
+    ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
+    return
+  }
+  w.document.write(html)
+  w.document.close()
+  w.focus()
+  setTimeout(() => {
+    w.print()
+    w.close()
+  }, 250)
+}
+
+async function loadSpecifiedDateUsage() {
+  if (!specifiedDate.value) return
+  specifiedDateLoading.value = true
+  try {
+    const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { production_day: specifiedDate.value, limit: 2000 } }
+    )
+    specifiedDateRows.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
+  } catch (e) {
+    specifiedDateRows.value = []
+    ElMessage.error('指定日データの取得に失敗しました')
+  } finally {
+    specifiedDateLoading.value = false
+  }
+}
+
+// ─────────────────────────────────────────────
+// 使用数反映：確認ダイアログ → コミット（表の日付で反映）
+// ─────────────────────────────────────────────
+const usageReflectionLoading = ref(false)
+/** 使用材料数（材料別）- 今日・翌日の反映済みバッジ用 */
+const usageReflectedToday = ref<boolean | null>(null)
+const usageReflectedTomorrow = ref<boolean | null>(null)
+
+/** 使用材料数（材料別）- 今日・翌日の反映済みバッジ用（今日は usageSummaryDateToday、翌日は usageSummaryDateTomorrow） */
+async function fetchUsageReflectedStatus() {
+  const todayStr = normalizeDateStr(usageSummaryDateToday.value)
+  const tomorrowStr = normalizeDateStr(usageSummaryDateTomorrow.value)
+  if (!todayStr) {
+    usageReflectedToday.value = null
+    usageReflectedTomorrow.value = null
+    return
+  }
+  try {
+    const [todayRes, tomorrowRes] = await Promise.all([
+      request.get<{ success?: boolean; reflected?: boolean }>('/api/material/usage/reflected', {
+        params: { date: todayStr, source: 'cutting_management' },
+      }),
+      tomorrowStr
+        ? request.get<{ success?: boolean; reflected?: boolean }>('/api/material/usage/reflected', {
+            params: { date: tomorrowStr, source: 'cutting_management' },
+          })
+        : Promise.resolve({ reflected: false }),
+    ])
+    usageReflectedToday.value = (todayRes as any)?.reflected ?? false
+    usageReflectedTomorrow.value = tomorrowStr ? ((tomorrowRes as any)?.reflected ?? false) : null
+  } catch {
+    usageReflectedToday.value = null
+    usageReflectedTomorrow.value = null
+  }
+}
+
+function normalizeDateStr(val: unknown): string {
+  if (val == null) return ''
+  if (typeof val === 'string') {
+    const s = val.trim()
+    const match = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)
+    if (match) return `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`
+    return s.slice(0, 10)
+  }
+  if (typeof (val as Date).getFullYear === 'function') {
+    const d = val as Date
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  return String(val).trim().slice(0, 10)
+}
+
+/** 使用数反映：確認ダイアログのみ表示し、OKで表の日付データを反映 */
+async function confirmUsageReflection() {
+  const todayParam = normalizeDateStr(usageSummaryDateToday.value)
+  if (!todayParam) {
+    ElMessage.warning('使用材料数（材料別）- 今日の日付を選択してください')
+    return
+  }
+  if (!usageSummaryCuttingList.value.length) {
+    ElMessage.warning('反映対象のデータがありません。指定日に切断指示があるか確認してください。')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `使用材料数（材料別）- 表示中の ${todayParam} のデータを材料在庫に反映します。反映済の管理コードは反映しません。よろしいですか？`,
+      '使用数反映の確認',
+      {
+        confirmButtonText: '反映する',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+      }
+    )
+  } catch {
+    return
+  }
+  await commitUsageReflection()
+}
+
+async function commitUsageReflection() {
+  const todayParam = normalizeDateStr(usageSummaryDateToday.value)
+  const tomorrowParam = shiftDate(usageSummaryDateToday.value, 1)
+  usageReflectionLoading.value = true
+  try {
+    const res = await request.post<{ success?: boolean; message?: string; inserted?: number; upserted?: number; stock_updated?: number }>(
+      '/api/material/usage/commit',
+      {
+        today_date: todayParam,
+        tomorrow_date: tomorrowParam,
+        source: 'cutting_management',
+      }
+    )
+    const isOk = (res as any)?.success === true
+    const msg = (res as any)?.message ?? '使用数を反映しました'
+    if (isOk) {
+      ElMessage.success(msg)
+    } else {
+      ElMessage.warning(msg)
+    }
+    await fetchUsageReflectedStatus()
+    await loadCuttingManagement()
+    await loadUsageSummaryCuttingList()
+  } catch (e) {
+    const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (e as { message?: string })?.message
+      ?? '使用数反映に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    usageReflectionLoading.value = false
+  }
+}
+
 /** バッチ→切断にドロップ時：生産日・切断機を指定するダイアログ */
 const moveToCuttingDialogVisible = ref(false)
 const pendingBatchRow = ref<CuttingPlanRow | null>(null)
@@ -5686,8 +6239,8 @@ async function loadCuttingManagement() {
   const baseParams: Record<string, string> = {}
   if (selectedScheduleMonth.value) baseParams.production_month = selectedScheduleMonth.value
   if (cuttingMachineFilter.value) baseParams.cutting_machine = cuttingMachineFilter.value
-  const todayParam = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
-  const tomorrowParam = selectedDateTomorrow.value ? String(selectedDateTomorrow.value).slice(0, 10) : ''
+  const todayParam = normalizeDateStr(selectedDateToday.value)
+  const tomorrowParam = normalizeDateStr(selectedDateTomorrow.value)
   try {
     const [resToday, resTomorrow] = await Promise.all([
       request.get<{ success?: boolean; data?: CuttingManagementRow[]; message?: string }>(
@@ -5711,10 +6264,9 @@ async function loadCuttingManagement() {
     cuttingManagementListTomorrow.value = []
   } finally {
     cuttingManagementLoading.value = false
+    fetchUsageReflectedStatus()
   }
 }
-
-/** 実績確定：production_completed_check=1 の切断指示を stock_transaction_logs に保存 */
 const confirmCuttingActualLoading = ref(false)
 const confirmActualResultVisible = ref(false)
 const confirmActualResultCount = ref(0)
@@ -9038,5 +9590,313 @@ onUnmounted(() => {
   outline-offset: -2px;
   background: rgba(37,99,235,0.04) !important;
   transition: background 0.15s ease !important;
+}
+
+/* ── 使用材料数 汇总表 ── */
+.usage-count-item {
+  color: #d97706;
+  font-weight: 600;
+}
+.usage-summary-row {
+  margin-top: 0;
+}
+.usage-summary-col {
+  padding: 0;
+}
+.usage-summary-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  flex-shrink: 0;
+}
+.usage-summary-title-row--with-date {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.usage-summary-date-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.usage-summary-date-wrap .el-date-editor { width: 120px; }
+.usage-summary-table-wrap {
+  min-height: 48px;
+  overflow-x: auto;
+  overflow-y: auto;
+  height: 340px;
+  flex-shrink: 0;
+}
+.usage-summary-table--list th,
+.usage-summary-table--list td {
+  min-width: 70px;
+}
+.usage-summary-table--list th:first-child,
+.usage-summary-table--list td:first-child { min-width: 80px; }
+.usage-summary-table--list th:nth-child(2),
+.usage-summary-table--list td:nth-child(2) { min-width: 100px; }
+.usage-summary-table--list th:nth-child(3),
+.usage-summary-table--list td:nth-child(3) { min-width: 100px; }
+.usage-summary-table--list th:nth-child(4),
+.usage-summary-table--list td:nth-child(4) { min-width: 100px; }
+.usage-summary-table--list td.usage-mgmt-empty {
+  color: #999;
+  font-style: italic;
+}
+.usage-summary-empty {
+  padding: 8px 0;
+  color: #888;
+  font-size: 12px;
+}
+.usage-summary-footer {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0 4px;
+  font-size: 12px;
+  color: #555;
+  flex-shrink: 0;
+  border-top: 1px solid #eee;
+  margin-top: 4px;
+}
+.usage-summary-footer-item {
+  white-space: nowrap;
+}
+.usage-summary-footer--reflected {
+  color: #15803d;
+}
+.usage-summary-footer--not-reflected {
+  color: #b45309;
+}
+.usage-summary-title-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.usage-reflected-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.usage-reflected-badge.is-reflected {
+  color: #16a34a;
+  background: #dcfce7;
+}
+.usage-reflected-badge.is-not-reflected {
+  color: #b45309;
+  background: #fffbeb;
+}
+/* 切断指示テーブル内の使用材料反映列 */
+.usage-reflected-tag {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 11px;
+}
+.usage-not-reflected-tag {
+  color: #b45309;
+  font-size: 11px;
+}
+.usage-summary-wrap--tomorrow .usage-reflected-badge.is-reflected {
+  color: #15803d;
+  background: #bbf7d0;
+}
+.usage-summary-wrap--tomorrow .usage-reflected-badge.is-not-reflected {
+  color: #9a3412;
+  background: #fed7aa;
+}
+.usage-summary-wrap {
+  padding: 8px 10px 10px;
+  border-top: 2px solid #e0e7ff;
+  background: #fafafa;
+  border-radius: 0 0 6px 6px;
+  height: 380px;
+  display: flex;
+  flex-direction: column;
+  min-height: 380px;
+}
+.usage-summary-wrap--tomorrow {
+  background: #f0fdf4;
+  border-top-color: #bbf7d0;
+}
+.usage-summary-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6366f1;
+  margin-bottom: 0;
+}
+.usage-summary-wrap--tomorrow .usage-summary-title {
+  color: #16a34a;
+}
+.usage-summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.usage-summary-table th,
+.usage-summary-table td {
+  padding: 3px 8px;
+  border: 1px solid #e0e7ff;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.usage-count-col {
+  width: 120px;
+  text-align: right;
+}
+.usage-summary-wrap--tomorrow .usage-summary-table th,
+.usage-summary-wrap--tomorrow .usage-summary-table td {
+  border-color: #bbf7d0;
+}
+.usage-summary-table th {
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+.usage-summary-wrap--tomorrow .usage-summary-table th {
+  background: #dcfce7;
+  color: #15803d;
+}
+.usage-count-cell {
+  text-align: right;
+  font-weight: 600;
+  color: #d97706;
+}
+.usage-summary-total-row td {
+  background: #f5f3ff;
+  font-weight: 700;
+  color: #4338ca;
+}
+.usage-summary-wrap--tomorrow .usage-summary-total-row td {
+  background: #f0fdf4;
+  color: #15803d;
+}
+/* 材料ラベル（ホバーで下線ヒント） */
+.usage-material-label {
+  cursor: default;
+  text-decoration: underline dotted #94a3b8;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.usage-material-label:hover {
+  color: #4338ca;
+  text-decoration-color: #4338ca;
+}
+
+/* ── 材料 tooltip（グローバル）── */
+:global(.usage-product-tooltip) {
+  max-width: 300px !important;
+  padding: 8px 10px !important;
+}
+.usage-tooltip-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #c7d2fe;
+  margin-bottom: 4px;
+  letter-spacing: 0.02em;
+}
+.usage-tooltip-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.usage-tooltip-cd {
+  color: #fbbf24;
+  font-family: monospace;
+  white-space: nowrap;
+  min-width: 60px;
+}
+.usage-tooltip-name {
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 使用数反映ダイアログ ── */
+.usage-overwrite-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.usage-preview-desc {
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+.usage-preview-table {
+  font-size: 12px;
+}
+.usage-preview-empty {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  padding: 20px 0;
+}
+.usage-dialog-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  padding: 30px 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+/* ── 指定日ダイアログ ── */
+.specified-date-dialog .el-dialog__body {
+  padding: 16px 20px;
+}
+.specified-date-dialog-body {
+  min-height: 120px;
+}
+.specified-date-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.specified-date-picker {
+  width: 180px;
+}
+.specified-date-today-btn {
+  margin-right: 4px;
+}
+.specified-date-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.usage-preview-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+.usage-preview-table.specified-date-table .el-table__cell {
+  text-align: center;
+}
+.usage-preview-table.specified-date-table .cell {
+  text-align: center;
+  justify-content: center;
+}
+.specified-date-total {
+  text-align: center;
+  font-weight: 700;
+  color: #d97706;
+  font-size: 14px;
+  margin-top: 12px;
+  padding: 8px 0 0;
 }
 </style>
