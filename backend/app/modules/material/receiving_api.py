@@ -62,7 +62,7 @@ async def get_suppliers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """仕入先一覧（受入ログから抽出）"""
+    """仕入先一覧（material_logs の supplier から抽出。ここには仕入先名称が格納される）"""
     q = select(distinct(MaterialLog.supplier)).where(MaterialLog.supplier.isnot(None)).order_by(MaterialLog.supplier)
     result = await db.execute(q)
     suppliers = [row[0] for row in result.all() if row[0]]

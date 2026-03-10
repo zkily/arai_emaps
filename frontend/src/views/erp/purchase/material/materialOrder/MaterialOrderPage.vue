@@ -344,13 +344,13 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.usage_quantity"
+                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
                   :min="0"
                   :max="20"
                   :precision="0"
                   size="small"
                   class="usage-quantity-input"
-                  @change="handleUsageQuantityChange(row)"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
                 />
               </template>
             </el-table-column>
@@ -362,26 +362,26 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.order_quantity"
+                  :model-value="(row.order_quantity === 0 ? undefined : row.order_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="order-quantity-input"
-                  @change="handleOrderQuantityChange(row)"
+                  @update:model-value="(val) => { row.order_quantity = val ?? 0; handleOrderQuantityChange(row); }"
                 />
               </template>
             </el-table-column>
             <el-table-column label="注文本数" width="140" align="center">
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.order_bundle_quantity"
+                  :model-value="(row.order_bundle_quantity === 0 ? undefined : row.order_bundle_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   :controls="false"
-                  @change="handleOrderBundleQuantityChange(row)"
+                  @update:model-value="(val) => { row.order_bundle_quantity = val ?? 0; handleOrderBundleQuantityChange(row); }"
                 />
               </template>
             </el-table-column>
@@ -431,13 +431,13 @@
             >
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.order_quantity"
+                  :model-value="(row.order_quantity === 0 ? undefined : row.order_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   class="order-quantity-input"
-                  @change="handleOrderQuantityChange(row)"
+                  @update:model-value="(val) => { row.order_quantity = val ?? 0; handleOrderQuantityChange(row); }"
                 />
               </template>
             </el-table-column>
@@ -515,14 +515,14 @@
             <el-table-column label="使用数" width="140" align="center">
               <template #default="{ row }">
                 <el-input-number
-                  v-model="row.usage_quantity"
+                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
                   :min="0"
                   :max="999999"
                   :precision="0"
                   size="small"
                   :controls="true"
                   :step="1"
-                  @change="handleUsageQuantityChange(row)"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
                   class="usage-quantity-input"
                 />
               </template>
@@ -1256,6 +1256,7 @@ import {
   getSupplierList,
   getMaterialStockList,
   getMaterialStockSubList,
+  updateMaterialStock,
   updateMaterialStockSub,
   deleteMaterialStockSub,
   getStockMaterialsList,
@@ -1566,12 +1567,14 @@ const fetchData = async () => {
 
     console.log('发送到后端的参数:', params)
 
-    const apiParams = {
+    const apiParams: Record<string, unknown> = {
       page: params.page ?? pagination.page,
       pageSize: params.page_size ?? pagination.page_size,
       keyword: params.keyword,
-      supplier_cd: Array.isArray(searchForm.supplier) && searchForm.supplier[0] ? searchForm.supplier[0] : params.suppliers,
       target_date: searchForm.dateRange?.[0] || params.start_date,
+    }
+    if (searchForm.supplier && searchForm.supplier.length > 0) {
+      apiParams.suppliers = searchForm.supplier.join(',')
     }
     const result = await getMaterialStockList(apiParams)
     const list = (result as any)?.data?.list ?? []
@@ -1639,10 +1642,13 @@ const fetchSubData = async () => {
 
     console.log('获取半端材料リスト数据，参数:', params)
 
-    const apiParams = {
+    const apiParams: Record<string, unknown> = {
       page: params.page ?? pagination.page,
       pageSize: params.page_size ?? pagination.page_size,
       keyword: params.keyword,
+    }
+    if (searchForm.supplier && searchForm.supplier.length > 0) {
+      apiParams.suppliers = searchForm.supplier.join(',')
     }
     const result = await getMaterialStockSubList(apiParams)
     const list = (result as any)?.data?.list ?? []
@@ -1721,12 +1727,14 @@ const fetchInitialStockData = async () => {
     console.log('初期在庫管理データを取得、パラメータ:', params)
 
     try {
-      const apiParams = {
+      const apiParams: Record<string, unknown> = {
         page: params.page,
         pageSize: params.page_size,
         keyword: params.keyword,
-        supplier_cd: searchForm.supplier?.[0],
         target_date: params.start_date,
+      }
+      if (searchForm.supplier && searchForm.supplier.length > 0) {
+        apiParams.suppliers = searchForm.supplier.join(',')
       }
       const result = await getMaterialStockList(apiParams)
       const list = (result as any)?.data?.list ?? []
@@ -1806,6 +1814,7 @@ const updateStats = () => {
   stats.value.totalBundleWeight = totalBundleWeight.value
 }
 
+// 仕入先选项来自 /api/material/receiving/suppliers（material_logs.supplier 去重、名称排序）。label/value 均为仕入先名称（supplier_name）
 const fetchSupplierOptions = async () => {
   try {
     const result = await getSupplierList() as { success?: boolean; data?: string[] | { supplier_cd?: string; supplier_name?: string }[] }
@@ -1813,7 +1822,7 @@ const fetchSupplierOptions = async () => {
     supplierOptions.value = raw.map((item: string | { supplier_cd?: string; supplier_name?: string }) =>
       typeof item === 'string'
         ? { label: item, value: item }
-        : { label: item.supplier_name || item.supplier_cd || '', value: item.supplier_cd || '' }
+        : { label: item.supplier_name ?? item.supplier_cd ?? '', value: item.supplier_name ?? item.supplier_cd ?? '' }
     ).filter((s) => s.value)
   } catch (error) {
     console.error('仕入先オプションの取得に失敗しました:', error)
@@ -1938,21 +1947,26 @@ const handleUsageStatusSearch = () => {
   }
 }
 
-// 处理使用数编辑
+// 处理使用数编辑（材料一覧用 main stock / 半端材料用 sub）
 const handleUsageQuantityChange = async (row: any) => {
   try {
     console.log('更新使用数:', row.id, row.usage_quantity)
 
-    const response = await updateMaterialStockSub(row.id, {
-      planned_usage: row.usage_quantity || 0,
-    })
+    const body = { planned_usage: row.usage_quantity ?? 0 }
+    const isSubTab = activeTab.value === 'sub'
+    const response = isSubTab
+      ? await updateMaterialStockSub(row.id, body)
+      : await updateMaterialStock(row.id, body)
 
     console.log('APIレスポンス:', response)
 
     if ((response as any)?.success) {
       ElMessage.success('使用数を更新しました')
-      // 使用状態を更新するためにデータを再取得
-      await fetchSubData()
+      if (isSubTab) {
+        await fetchSubData()
+      } else {
+        await fetchData()
+      }
     } else {
       console.error('API返却失敗:', response)
       ElMessage.error(`使用数の更新に失敗しました: ${(response as any)?.message || '未知のエラー'}`)
@@ -1963,14 +1977,16 @@ const handleUsageQuantityChange = async (row: any) => {
   }
 }
 
-// 備考編集処理
+// 備考編集処理（材料注文＝main / 半端材料＝sub）
 const handleRemarksChange = async (row: any) => {
   try {
     console.log('備考更新:', row.id, row.remarks)
 
-    const response = await updateMaterialStockSub(row.id, {
-      remarks: row.remarks || '',
-    })
+    const body = { remarks: row.remarks ?? '' }
+    const isSubTab = activeTab.value === 'sub'
+    const response = isSubTab
+      ? await updateMaterialStockSub(row.id, body)
+      : await updateMaterialStock(row.id, body)
 
     if ((response as any)?.success) {
       ElMessage.success('備考を更新しました')
@@ -4555,7 +4571,7 @@ const handleFilterChange = (filterType: string) => {
   background: linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%);
   color: #2d3748;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
   padding: 8px 6px;
   border-bottom: 2px solid #cbd5e0;
   text-transform: uppercase;
@@ -4577,7 +4593,7 @@ const handleFilterChange = (filterType: string) => {
 :deep(.el-table td.el-table__cell) {
   padding: 4px 6px;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.3;
   transition: all 0.2s ease;
 }
@@ -4597,7 +4613,7 @@ const handleFilterChange = (filterType: string) => {
 
 :deep(.el-input-number .el-input__inner) {
   padding: 2px 6px;
-  font-size: 11px;
+  font-size: 12px;
   height: 20px;
   border-radius: 5px;
   border: 1px solid #e2e8f0;
@@ -5100,14 +5116,14 @@ const handleFilterChange = (filterType: string) => {
   background-color: transparent;
   color: #2d3748;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   padding: 6px 4px;
   border-bottom: 2px solid #dee2e6;
 }
 
 .compact-table :deep(.el-table td) {
   padding: 4px 4px;
-  font-size: 12px;
+  font-size: 13px;
   border-bottom: 1px solid #f1f3f4;
 }
 

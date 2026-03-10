@@ -520,7 +520,7 @@
                     <th>製品名</th>
                     <th>原材料</th>
                     <th>管理コード</th>
-                    <th>使用材料反映</th>
+                    <th>使用材料</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -571,7 +571,7 @@
                     <th>製品名</th>
                     <th>原材料</th>
                     <th>管理コード</th>
-                    <th>使用材料反映</th>
+                    <th>使用材料</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -630,7 +630,7 @@
                 </div>
                 <div class="plan-batch-tbody">
                   <div
-                    v-for="(row, idx) in chamferingBatchList"
+                    v-for="(row, idx) in chamferingBatchListSorted"
                     :key="row.id ?? `cb-${idx}`"
                     class="plan-batch-tr plan-batch-data-row"
                     :class="{ 'plan-batch-row-selected': selectedChamferingProductCd === (row.product_cd ?? '') }"
@@ -3676,6 +3676,17 @@ const chamferingBatchList = ref<ChamferingBatchRow[]>([])
 const chamferingBatchLoading = ref(false)
 const chamferingBatchActionLoading = ref<number | null>(null)
 const chamferingSwLoading = ref<number | null>(null)
+
+/** 面取バッチ一覧：製品名昇順 → CD 昇順でソートした表示用 */
+const chamferingBatchListSorted = computed(() =>
+  [...chamferingBatchList.value].sort((a, b) => {
+    const cmpName = (a.product_name || '').localeCompare(b.product_name || '', 'ja')
+    if (cmpName !== 0) return cmpName
+    const cdA = (a.cd ?? (a.management_code ? String(a.management_code).slice(-5) : '') ?? '').toString()
+    const cdB = (b.cd ?? (b.management_code ? String(b.management_code).slice(-5) : '') ?? '').toString()
+    return cdA.localeCompare(cdB, 'ja')
+  })
+)
 
 /** 面取バッチ一覧：新規追加ダイアログ */
 const chamferingPlanNewDialogVisible = ref(false)

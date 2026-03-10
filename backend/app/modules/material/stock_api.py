@@ -6,6 +6,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, distinct
+from collections import defaultdict
 from typing import Optional
 from datetime import date
 
@@ -63,10 +64,11 @@ def _stock_to_dict(r: MaterialStock) -> dict:
 @router.get("")
 async def list_material_stocks(
     page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=500),
+    pageSize: int = Query(50, ge=1, le=10000),
     keyword: Optional[str] = Query(None),
     material_cd: Optional[str] = Query(None),
     supplier_cd: Optional[str] = Query(None),
+    suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り。指定時は supplier_name で IN 検索"),
     target_date: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
@@ -86,6 +88,10 @@ async def list_material_stocks(
         q = q.where(MaterialStock.material_cd == material_cd)
     if supplier_cd:
         q = q.where(MaterialStock.supplier_cd == supplier_cd)
+    if suppliers:
+        supplier_list = [s.strip() for s in suppliers.split(",") if s.strip()]
+        if supplier_list:
+            q = q.where(MaterialStock.supplier_name.in_(supplier_list))
     if target_date:
         q = q.where(MaterialStock.date == date.fromisoformat(target_date))
 
@@ -116,6 +122,62 @@ async def get_latest_stocks(
     )
     rows = (await db.execute(q)).scalars().all()
     return {"success": True, "data": [_stock_to_dict(r) for r in rows]}
+
+
+@router.post("/calculate")
+async def calculate_material_stock(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    在庫計算: material_stock の current_stock を再計算する。
+    各 material_cd について、initial_stock > 0 の最終日を起点に、
+    current_stock = initial_stock + order_quantity + adjustment_quantity - planned_usage + 前日の current_stock
+    で日付昇順に計算し、DB を更新する。
+    """
+    q = select(MaterialStock).order_by(MaterialStock.material_cd, MaterialStock.date.asc())
+    rows = (await db.execute(q)).scalars().all()
+    if not rows:
+        return {"success": True, "data": {"calculated_count": 0, "updated_count": 0}}
+
+    # material_cd ごとにグループ化
+    by_material: dict[str, list[MaterialStock]] = defaultdict(list)
+    for r in rows:
+        by_material[r.material_cd].append(r)
+
+    updates: dict[int, int] = {}  # id -> new current_stock
+    calculated_count = 0
+
+    for material_cd, list_rows in by_material.items():
+        # initial_stock > 0 のうち最終日を取得（日付昇順なので、last が最新日）
+        base_dates = [r for r in list_rows if (r.initial_stock or 0) > 0]
+        if not base_dates:
+            continue
+        base_date = max(r.date for r in base_dates)
+        # base_date 以降の行を日付昇順で計算
+        to_calc = sorted([r for r in list_rows if r.date >= base_date], key=lambda x: x.date)
+        prev_current = 0
+        for r in to_calc:
+            init = r.initial_stock or 0
+            order_qty = r.order_quantity or 0
+            adj = r.adjustment_quantity or 0
+            usage = r.planned_usage or 0
+            new_current = init + order_qty + adj - usage + prev_current
+            updates[r.id] = new_current
+            prev_current = new_current
+        calculated_count += 1
+
+    # 一括更新
+    updated_count = 0
+    for row in rows:
+        if row.id in updates and row.current_stock != updates[row.id]:
+            row.current_stock = updates[row.id]
+            updated_count += 1
+    await db.commit()
+    return {
+        "success": True,
+        "data": {"calculated_count": calculated_count, "updated_count": updated_count},
+    }
 
 
 @router.get("/summary")
@@ -230,6 +292,7 @@ async def list_stock_sub(
     page: int = Query(1, ge=1),
     pageSize: int = Query(50, ge=1, le=500),
     keyword: Optional[str] = Query(None),
+    suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り。指定時は supplier_name で IN 検索"),
     target_date: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
@@ -244,6 +307,10 @@ async def list_stock_sub(
                 MaterialStockSub.material_name.ilike(kw),
             )
         )
+    if suppliers:
+        supplier_list = [s.strip() for s in suppliers.split(",") if s.strip()]
+        if supplier_list:
+            q = q.where(MaterialStockSub.supplier_name.in_(supplier_list))
     if target_date:
         q = q.where(MaterialStockSub.date == date.fromisoformat(target_date))
 

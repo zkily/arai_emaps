@@ -153,7 +153,7 @@ export function importMaterialLogsFromCSV(
   }>
 }
 
-/** 仕入先一覧（受入・在庫材料で使用） */
+/** 仕入先一覧（material_logs.supplier 去重・按名称排序。返回仕入先名称数组，用于下拉 label/value 均为 supplier_name） */
 export function getSupplierList(): Promise<{ success?: boolean; data?: string[] }> {
   return request.get(`${PREFIX}/receiving/suppliers`) as Promise<{
     success?: boolean
@@ -171,7 +171,11 @@ export function getMaterialStockList(params?: {
   keyword?: string
   material_cd?: string
   supplier_cd?: string
+  /** 仕入先名称のカンマ区切り。material_stock.supplier_name で IN 検索 */
+  suppliers?: string
   target_date?: string
+  start_date?: string
+  end_date?: string
 }): Promise<{ success?: boolean; data?: { list: unknown[]; total: number } }> {
   return request.get(`${PREFIX}/stock`, { params }) as Promise<{
     success?: boolean
@@ -179,10 +183,22 @@ export function getMaterialStockList(params?: {
   }>
 }
 
+export function updateMaterialStock(
+  id: number,
+  body: Record<string, unknown>
+): Promise<{ success?: boolean; data?: unknown }> {
+  return request.put(`${PREFIX}/stock/${id}`, body) as Promise<{
+    success?: boolean
+    data?: unknown
+  }>
+}
+
 export function getMaterialStockSubList(params?: {
   page?: number
   pageSize?: number
   keyword?: string
+  /** 仕入先名称のカンマ区切り。material_stock_sub.supplier_name で IN 検索 */
+  suppliers?: string
   target_date?: string
 }): Promise<{ success?: boolean; data?: { list: unknown[]; total: number } }> {
   return request.get(`${PREFIX}/stock/sub`, { params }) as Promise<{

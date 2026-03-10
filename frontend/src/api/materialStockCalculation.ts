@@ -1,5 +1,7 @@
 /**
- * 材料在庫計算（現状は backend の /api/material/stock を利用したスタブ）
+ * 材料在庫計算
+ * - getCurrentMaterialStockStatus: 現在の在庫状態取得
+ * - calculateMaterialStock: 在庫再計算（initial_stock>0 の最終日から current_stock を算出し DB 更新）
  */
 import request from '@/shared/api/request'
 
@@ -20,15 +22,30 @@ export async function getCurrentMaterialStockStatus(): Promise<{
   }
 }
 
-/** 材料在庫計算（一覧取得のラッパー） */
-export async function calculateMaterialStock(): Promise<{ success?: boolean; data?: unknown[] }> {
+export interface CalculateMaterialStockResult {
+  success?: boolean
+  data?: {
+    calculated_count: number
+    updated_count: number
+  }
+}
+
+/** 材料在庫計算: 各材料で initial_stock>0 の最終日から current_stock を再計算し DB を更新 */
+export async function calculateMaterialStock(): Promise<CalculateMaterialStockResult> {
   try {
-    const res = await request.get(`${PREFIX}`, { params: { page: 1, pageSize: 10000 } })
+    const res = await request.post(`${PREFIX}/calculate`)
     const raw = (res as any)?.data ?? res
-    const list = raw?.list ?? (Array.isArray(raw) ? raw : [])
-    return { success: true, data: list }
+    const success = raw?.success !== false
+    const data = raw?.data ?? raw
+    return {
+      success,
+      data: {
+        calculated_count: data?.calculated_count ?? 0,
+        updated_count: data?.updated_count ?? 0,
+      },
+    }
   } catch (e) {
     console.warn('calculateMaterialStock:', e)
-    return { success: false, data: [] }
+    return { success: false, data: { calculated_count: 0, updated_count: 0 } }
   }
 }
