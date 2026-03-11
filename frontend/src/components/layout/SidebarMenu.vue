@@ -73,10 +73,6 @@
                 <el-icon><Box /></el-icon>
                 <template #title><span>在庫管理</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/receiving">
-                <el-icon><Download /></el-icon>
-                <template #title><span>受入管理</span></template>
-              </el-menu-item>
               <el-menu-item index="/erp/purchase/material/receiving-history">
                 <el-icon><DataLine /></el-icon>
                 <template #title><span>受入履歴</span></template>
@@ -84,10 +80,6 @@
               <el-menu-item index="/erp/purchase/material/receiving-inspection">
                 <el-icon><CircleCheck /></el-icon>
                 <template #title><span>受入検品</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/inspection-master">
-                <el-icon><Tickets /></el-icon>
-                <template #title><span>検品マスタ</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/material/forecast">
                 <el-icon><TrendCharts /></el-icon>
@@ -317,6 +309,7 @@
             <el-menu-item index="/master" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.MASTER_HOME')">{{ t('menu.MASTER_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/master/product"><el-icon><Box /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT')">{{ t('menu.MASTER_PRODUCT') }}</span></template></el-menu-item>
             <el-menu-item index="/master/material"><el-icon><Collection /></el-icon><template #title><span :title="t('menu.MASTER_MATERIAL')">{{ t('menu.MASTER_MATERIAL') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/material-inspection"><el-icon><Tickets /></el-icon><template #title><span :title="t('menu.MASTER_MATERIAL_INSPECTION')">{{ t('menu.MASTER_MATERIAL_INSPECTION') }}</span></template></el-menu-item>
             <el-menu-item index="/master/customer"><el-icon><User /></el-icon><template #title><span :title="t('menu.MASTER_CUSTOMER')">{{ t('menu.MASTER_CUSTOMER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/supplier"><el-icon><ShoppingCart /></el-icon><template #title><span :title="t('menu.MASTER_SUPPLIER')">{{ t('menu.MASTER_SUPPLIER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/destination"><el-icon><FolderOpened /></el-icon><template #title><span :title="t('menu.MASTER_DESTINATION')">{{ t('menu.MASTER_DESTINATION') }}</span></template></el-menu-item>

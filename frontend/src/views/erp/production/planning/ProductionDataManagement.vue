@@ -615,7 +615,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">production_plan_updates の集計を production_summarys の plan 列に反映し、actual_plan を更新します。</span>
+              <span class="detail-value">当月月初～+3ヶ月の plan 列をいったんクリアしたうえで、production_plan_updates の集計を production_summarys の plan 列に反映し、actual_plan を更新します。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>
@@ -849,7 +849,7 @@
               />
             </div>
             <div class="detail-row" style="margin-top: 8px;">
-              <span class="detail-value">product_machine_config と machines から production_summarys の各工程設備名を同期します。</span>
+              <span class="detail-value">product_machine_config と machines から production_summarys の各工程設備名を同期します。sw機は product_machine_config の sw_machine（機器CD）を machines の machine_name（例：面取07）に変換して反映します。</span>
             </div>
           </div>
         </div>
@@ -1193,6 +1193,7 @@ import {
   updateProductionSummarysOnHold,
   updateProductionSummarysProductionDates,
   clearProductionSummarysCalculatedFields,
+  clearProductionSummarysPlanFields,
   updateProductionSummarysPlan,
   updateProductionSummarysInventory,
   updateProductionSummarysTrend,
@@ -1404,18 +1405,20 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   cutting_actual_plan_trend: { label: '切断実計推移', group: '切断', width: 90 },
 
   // 面取
-  chamfering_carry_over: { label: '面取繰越', group: '面取', width: 70 },
-  chamfering_actual: { label: '面取実績', group: '面取', width: 70 },
-  chamfering_defect: { label: '面取不良', group: '面取', width: 70 },
+  chamfering_carry_over: { label: '面取繰越', group: '面取', width: 85 },
+  chamfering_actual: { label: '面取実績', group: '面取', width: 85 },
+  chamfering_defect: { label: '面取不良', group: '面取', width: 85 },
   chamfering_scrap: { label: '面取廃棄', group: '面取', width: 70 },
   chamfering_on_hold: { label: '面取保留品', group: '面取', width: 80 },
-  chamfering_inventory: { label: '面取在庫', group: '面取', width: 70 },
-  chamfering_trend: { label: '面取推移', group: '面取', width: 70 },
+  chamfering_inventory: { label: '面取在庫', group: '面取', width: 85 },
+  chamfering_trend: { label: '面取推移', group: '面取', width: 85 },
   chamfering_production_date: { label: '面取生産日', group: '面取', type: 'date', width: 100 },
   chamfering_machine: { label: '面取機', group: '面取', type: 'text', width: 80 },
-  chamfering_plan: { label: '面取計画', group: '面取', width: 70 },
-  chamfering_actual_plan: { label: '面取実計', group: '面取', width: 70 },
-  chamfering_actual_plan_trend: { label: '面取実計推移', group: '面取', width: 90 },
+  sw_machine: { label: 'sw機', group: '面取', type: 'text', width: 80 },
+  sw_plan: { label: 'sw計画', group: '面取', width: 80 },
+  chamfering_plan: { label: '面取計画', group: '面取', width: 85 },
+  chamfering_actual_plan: { label: '面取実計', group: '面取', width: 85 },
+  chamfering_actual_plan_trend: { label: '面取実計推移', group: '面取', width: 110 },
 
   // 成型
   molding_carry_over: { label: '成型繰越', group: '成型', width: 70 },
@@ -1427,8 +1430,8 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   molding_trend: { label: '成型推移', group: '成型', width: 70 },
   molding_production_date: { label: '成型生産日', group: '成型', type: 'date', width: 100 },
   molding_machine: { label: '成型機', group: '成型', type: 'text', width: 80 },
-  molding_plan: { label: '成型計画', group: '成型', width: 70 },
-  molding_actual_plan: { label: '成型実計', group: '成型', width: 70 },
+  molding_plan: { label: '成型計画', group: '成型', width: 85 },
+  molding_actual_plan: { label: '成型実計', group: '成型', width: 85 },
   molding_actual_plan_trend: { label: '成型実計推移', group: '成型', width: 90 },
 
   // メッキ
@@ -2260,13 +2263,16 @@ const handleUpdatePlan = () => {
 const confirmUpdatePlan = async () => {
   showPlanConfirmDialog.value = false
   updatingPlan.value = true
-  const startDate = calculateStartDate()
-  if (startDate) {
-    try {
-      await clearProductionSummarysCalculatedFields(startDate)
-    } catch (_e) {
-      console.warn('計算フィールドのクリアに失敗しました', _e)
-    }
+  const startDate = getFirstDayOfCurrentMonth()
+  try {
+    await clearProductionSummarysCalculatedFields(startDate)
+  } catch (_e) {
+    console.warn('計算フィールドのクリアに失敗しました', _e)
+  }
+  try {
+    await clearProductionSummarysPlanFields(startDate)
+  } catch (_e) {
+    console.warn('計画列のクリアに失敗しました', _e)
   }
   showProgressDialog.value = true
   progressPercentage.value = 0
@@ -2278,7 +2284,7 @@ const confirmUpdatePlan = async () => {
       if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 8, 90)
     }, 200)
     progressText.value = '計画データを更新中...'
-    const res = await updateProductionSummarysPlan()
+    const res = await updateProductionSummarysPlan(startDate)
     if (progressTimer) clearInterval(progressTimer)
     progressTimer = null
     progressPercentage.value = 100

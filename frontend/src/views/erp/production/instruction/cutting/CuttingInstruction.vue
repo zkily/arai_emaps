@@ -239,7 +239,8 @@
                 </el-button>
               </div>
             </div>
-            <div class="cutting-mgmt-header-right">
+            <div class="cutting-mgmt-header-right cutting-mgmt-header-actions">
+              <el-button type="default" size="small" :loading="printCuttingPlanLoading" @click="printCuttingPlanList">計画印刷</el-button>
               <el-button type="primary" size="small" :loading="issueCuttingInstructionSheetLoading" @click="issueCuttingInstructionSheet">指示書発行</el-button>
               <el-button type="success" size="small" :loading="confirmCuttingActualLoading" @click="confirmCuttingActual">実績確定</el-button>
             </div>
@@ -742,8 +743,9 @@
                   <el-button type="default" size="small" circle :icon="ArrowRight" title="翌日" @click="shiftChamferingDateToday(1)" />
                 </div>
               </div>
-              <div class="cutting-mgmt-header-right">
+              <div class="cutting-mgmt-header-right chamfering-mgmt-header-actions">
                 <el-button type="default" size="small" @click="openChamferingNewDialog">新規追加</el-button>
+                <el-button type="default" size="small" :loading="printChamferingPlanLoading" @click="printChamferingPlanList">計画印刷</el-button>
                 <el-button type="primary" size="small" :loading="issueChamferingInstructionSheetLoading" @click="issueChamferingInstructionSheet">指示書発行</el-button>
                 <el-button type="success" size="small" :loading="confirmChamferingActualLoading" @click="confirmChamferingActual">実績確定</el-button>
               </div>
@@ -6337,6 +6339,152 @@ async function confirmChamferingActual() {
 
 /** 指示書発行：指定日の全データを切断機ごとに1ページずつ A5 横向で印刷 */
 const issueCuttingInstructionSheetLoading = ref(false)
+const printCuttingPlanLoading = ref(false)
+/** 切断計画リスト印刷：指定日の各切断機データ＋材料在庫・材料バラ在庫（A4縦・余白小） */
+async function printCuttingPlanList() {
+  const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  printCuttingPlanLoading.value = true
+  try {
+    const [cuttingRes, stockRes, stockSubRes] = await Promise.all([
+      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+        '/api/plan/cutting-management/list',
+        { params: { production_day: day, limit: 2000 } }
+      ),
+      request.get<{ success?: boolean; data?: { list?: { supplier_name?: string; material_name?: string; current_stock?: number }[] } }>(
+        '/api/material/stock',
+        { params: { target_date: day, page: 1, pageSize: 10000 } }
+      ),
+      request.get<{ success?: boolean; data?: { list?: { supplier_name?: string; material_name?: string; current_stock?: number }[]; total?: number } }>(
+        '/api/material/stock/sub',
+        { params: { page: 1, pageSize: 500 } }
+      ),
+    ])
+    const rows = (cuttingRes as any)?.success ? ((cuttingRes as any).data ?? []) as CuttingManagementRow[] : []
+    const stockListRaw = (stockRes as any)?.success ? ((stockRes as any).data?.list ?? []) : []
+    const stockSubListRaw = (stockSubRes as any)?.success ? ((stockSubRes as any).data?.list ?? []) : []
+    const stockList = [...stockListRaw].sort((a: { supplier_name?: string; material_name?: string }, b: { supplier_name?: string; material_name?: string }) => {
+      const sa = String(a.supplier_name ?? '')
+      const sb = String(b.supplier_name ?? '')
+      if (sa !== sb) return sa.localeCompare(sb)
+      return String(a.material_name ?? '').localeCompare(String(b.material_name ?? ''))
+    })
+    const stockSubList = stockSubListRaw.filter((r: { current_stock?: number }) => (Number(r.current_stock) || 0) > 0)
+
+    const byMachine = new Map<string, CuttingManagementRow[]>()
+    for (const r of rows) {
+      const key = (r.cutting_machine || '').trim() || '（未設定）'
+      if (!byMachine.has(key)) byMachine.set(key, [])
+      byMachine.get(key)!.push(r)
+    }
+    for (const [, list] of byMachine) {
+      list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
+    }
+    const machineNames = Array.from(byMachine.keys()).sort()
+
+    const dayDisplay = day.replace(/-/g, '/')
+    const leftBlocks: string[] = []
+    for (const machineName of machineNames) {
+      const list = byMachine.get(machineName)!
+      const trs = list.map((r) => `
+        <tr>
+          <td>${escapeHtml(String(r.cd ?? ''))}</td>
+          <td>${escapeHtml(String(r.product_name ?? ''))}</td>
+          <td>${escapeHtml(String(r.material_name ?? ''))}</td>
+          <td>${r.production_sequence ?? ''}</td>
+          <td>${r.actual_production_quantity ?? ''}</td>
+          <td>${r.production_time ?? ''}</td>
+          <td>${escapeHtml(String(r.production_line ?? ''))}</td>
+          <td>${escapeHtml(String(r.remarks ?? ''))}</td>
+        </tr>`).join('')
+      leftBlocks.push(`
+        <div class="print-cut-block">
+          <div class="print-cut-block-title">${escapeHtml(machineName)}</div>
+          <table class="print-cut-table"><thead><tr>
+            <th>コード</th><th>製品名</th><th>原材料</th><th>順位</th><th>生産数</th><th>時間</th><th>ライン</th><th>備考</th>
+          </tr></thead><tbody>${trs}</tbody></table>
+        </div>`)
+    }
+
+    const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
+      `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.current_stock ?? ''}</td></tr>`
+    ).join('')
+    const stockSubRows = stockSubList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
+      `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.current_stock ?? ''}</td></tr>`
+    ).join('')
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断計画リスト</title><style>
+      @page { size: A4 portrait; margin: 8mm; }
+      body { font-family: 'MS Gothic', 'Yu Gothic', sans-serif; font-size: 10px; margin: 0; padding: 6px; }
+      .print-layout { display: flex; gap: 12px; width: 100%; min-height: 100vh; box-sizing: border-box; }
+      .print-left { flex: 1; min-width: 0; }
+      .print-right { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+      .print-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; font-size: 14px; border-bottom: 1px solid #333; }
+      .print-header-row .print-title { font-weight: bold; }
+      .print-header-row .print-date { }
+      .print-cut-block { margin-bottom: 10px; break-inside: avoid; }
+      .print-cut-block-title { font-weight: bold; margin-bottom: 4px; font-size: 11px; }
+      .print-cut-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      .print-cut-table th, .print-cut-table td { border: 1px solid #333; padding: 4px 2px; text-align: center; font-size: 11px; line-height: 1.2; }
+      .print-cut-table th { background: #f0f0f0; }
+      .print-cut-table th:nth-child(1), .print-cut-table td:nth-child(1) { width: 8%; }
+      .print-cut-table th:nth-child(2), .print-cut-table td:nth-child(2) { width: 18%; }
+      .print-cut-table th:nth-child(3), .print-cut-table td:nth-child(3) { width: 19%; }
+      .print-cut-table th:nth-child(4), .print-cut-table td:nth-child(4) { width: 6%; }
+      .print-cut-table th:nth-child(5), .print-cut-table td:nth-child(5) { width: 8%; }
+      .print-cut-table th:nth-child(6), .print-cut-table td:nth-child(6) { width: 6%; }
+      .print-cut-table th:nth-child(7), .print-cut-table td:nth-child(7) { width: 8%; }
+      .print-cut-table th:nth-child(8), .print-cut-table td:nth-child(8) { width: 12%; }
+      .print-cut-table td:nth-child(2), .print-cut-table td:nth-child(3), .print-cut-table td:nth-child(8) { text-align: left; }
+      .print-stock-section { break-inside: avoid; }
+      .print-stock-section h3 { margin: 0 0 6px; font-size: 11px; }
+      .print-stock-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
+      .print-stock-table th, .print-stock-table td { border: 1px solid #333; padding: 2.5px 4px; line-height: 1.44; }
+      .print-stock-table th { background: #f0f0f0; }
+      .print-stock-table th:nth-child(1), .print-stock-table td:nth-child(1) { width: 32%; }
+      .print-stock-table th:nth-child(2), .print-stock-table td:nth-child(2) { width: 48%; text-align: center;}
+      .print-stock-table th:nth-child(3), .print-stock-table td:nth-child(3) { width: 20%; text-align: center; }
+      @media print { .print-layout { min-height: auto; } }
+    </style></head><body>
+      <div class="print-header-row"><span class="print-title">切断計画リスト</span><span class="print-date">生産日 ${escapeHtml(dayDisplay)}</span></div>
+      <div class="print-layout">
+        <div class="print-left">${leftBlocks.join('')}</div>
+        <div class="print-right">
+          <div class="print-stock-section">
+            <h3>材料在庫</h3>
+            <table class="print-stock-table"><thead><tr><th>仕入先</th><th>材料名</th><th>在庫</th></tr></thead><tbody>${stockRows || '<tr><td colspan="3">-</td></tr>'}</tbody></table>
+          </div>
+          <div class="print-stock-section">
+            <h3>材料バラ在庫</h3>
+            <table class="print-stock-table"><thead><tr><th>仕入先</th><th>材料名</th><th>在庫</th></tr></thead><tbody>${stockSubRows || '<tr><td colspan="3">-</td></tr>'}</tbody></table>
+          </div>
+        </div>
+      </div>
+    </body></html>`
+
+    const w = window.open('', '_blank')
+    if (!w) {
+      ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print(); w.close() }, 300)
+    ElMessage.success('印刷用ウィンドウを開きました')
+  } catch (e) {
+    const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (e as { message?: string })?.message
+      ?? '印刷データの取得に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    printCuttingPlanLoading.value = false
+  }
+}
+
 async function issueCuttingInstructionSheet() {
   const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
   if (!day) {
@@ -6458,6 +6606,101 @@ async function issueCuttingInstructionSheet() {
     ElMessage.error(String(msg))
   } finally {
     issueCuttingInstructionSheetLoading.value = false
+  }
+}
+
+/** 面取計画リスト印刷：指定日の各面取機データ（A4縦・余白小・样式参考切断計画） */
+const printChamferingPlanLoading = ref(false)
+async function printChamferingPlanList() {
+  const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
+  if (!day) {
+    ElMessage.warning('生産日を選択してください')
+    return
+  }
+  printChamferingPlanLoading.value = true
+  try {
+    const res = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+      '/api/plan/chamfering-management/list',
+      { params: { production_day: day, limit: 2000 } }
+    )
+    const rows = (res as any)?.success ? ((res as any).data ?? []) as ChamferingManagementRow[] : []
+    const byMachine = new Map<string, ChamferingManagementRow[]>()
+    for (const r of rows) {
+      const key = (r.chamfering_machine || '').trim() || '（未設定）'
+      if (!byMachine.has(key)) byMachine.set(key, [])
+      byMachine.get(key)!.push(r)
+    }
+    for (const [, list] of byMachine) {
+      list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
+    }
+    const machineNames = Array.from(byMachine.keys()).sort()
+    const dayDisplay = day.replace(/-/g, '/')
+    const blocks: string[] = []
+    for (const machineName of machineNames) {
+      const list = byMachine.get(machineName)!
+      const trs = list.map((r) => {
+        const noCountDisplay = r.no_count ? 'Yes' : 'No'
+        return `
+        <tr>
+          <td>${escapeHtml(String(r.cd ?? r.management_code ?? ''))}</td>
+          <td>${escapeHtml(String(r.product_name ?? ''))}</td>
+          <td>${r.production_sequence ?? ''}</td>
+          <td>${r.actual_production_quantity ?? ''}</td>
+          <td>${noCountDisplay}</td>
+          <td>${r.production_time ?? ''}</td>
+          <td>${escapeHtml(String(r.production_line ?? ''))}</td>
+        </tr>`
+      }).join('')
+      blocks.push(`
+        <div class="print-chamfer-block">
+          <div class="print-chamfer-block-title">${escapeHtml(machineName)}</div>
+          <table class="print-chamfer-table"><thead><tr>
+            <th>コード</th><th>製品名</th><th>順位</th><th>生産数</th><th>カ無</th><th>時間</th><th>ライン</th>
+          </tr></thead><tbody>${trs}</tbody></table>
+        </div>`)
+    }
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>面取計画リスト</title><style>
+      @page { size: A4 portrait; margin: 8mm; }
+      body { font-family: 'MS Gothic', 'Yu Gothic', sans-serif; font-size: 10px; margin: 0; padding: 6px; }
+      .print-chamfer-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding-bottom: 6px; font-size: 14px; border-bottom: 1px solid #333; }
+      .print-chamfer-header .print-title { font-weight: bold; }
+      .print-chamfer-body { display: flex; flex-wrap: wrap; gap: 12px 16px; width: 100%; }
+      .print-chamfer-block { width: calc(50% - 8px); min-width: 280px; break-inside: avoid; margin-bottom: 4px; }
+      .print-chamfer-block-title { font-weight: bold; margin-bottom: 4px; font-size: 11px; }
+      .print-chamfer-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
+      .print-chamfer-table th, .print-chamfer-table td { border: 1px solid #333; padding: 4px 2px; text-align: center; line-height: 1.2; }
+      .print-chamfer-table th { background: #f0f0f0; font-size: 11px; }
+      .print-chamfer-table th:nth-child(1), .print-chamfer-table td:nth-child(1) { width: 11%; }
+      .print-chamfer-table th:nth-child(2), .print-chamfer-table td:nth-child(2) { width: 20%; }
+      .print-chamfer-table th:nth-child(3), .print-chamfer-table td:nth-child(3) { width: 8%; }
+      .print-chamfer-table th:nth-child(4), .print-chamfer-table td:nth-child(4) { width: 11%; }
+      .print-chamfer-table th:nth-child(5), .print-chamfer-table td:nth-child(5) { width: 8%; }
+      .print-chamfer-table th:nth-child(6), .print-chamfer-table td:nth-child(6) { width: 8%; }
+      .print-chamfer-table th:nth-child(7), .print-chamfer-table td:nth-child(7) { width: 16%;text-align: center; }
+      .print-chamfer-table td:nth-child(2) { text-align: left; }
+      .print-chamfer-table td:nth-child(7) { text-align: left; }
+      @media print { .print-chamfer-block { break-inside: avoid; } }
+    </style></head><body>
+      <div class="print-chamfer-header"><span class="print-title">面取計画リスト</span><span class="print-date">生産日 ${escapeHtml(dayDisplay)}</span></div>
+      <div class="print-chamfer-body">${blocks.join('')}</div>
+    </body></html>`
+    const w = window.open('', '_blank')
+    if (!w) {
+      ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
+      return
+    }
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(() => { w.print(); w.close() }, 300)
+    ElMessage.success('印刷用ウィンドウを開きました')
+  } catch (e) {
+    const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
+      ?? (e as { message?: string })?.message
+      ?? '印刷データの取得に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    printChamferingPlanLoading.value = false
   }
 }
 
@@ -7090,6 +7333,54 @@ onUnmounted(() => {
   gap: 6px;
   flex-shrink: 0;
 }
+/* 切断指示-今日：右側3按钮 间距缩小・样式统一・颜色区分 */
+.cutting-mgmt-header-actions {
+  gap: 4px;
+}
+.cutting-mgmt-header-actions :deep(.el-button) {
+  margin: 0;
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  min-height: 28px;
+  transition: opacity 0.2s, box-shadow 0.2s;
+}
+.cutting-mgmt-header-actions :deep(.el-button:hover) {
+  opacity: 0.92;
+}
+/* 計画印刷：灰底描边，次要操作 */
+.cutting-mgmt-header-actions :deep(.el-button--default) {
+  color: #ffffff;
+  border-color: #c0c4cc;
+  background-color: #e49604;
+}
+.cutting-mgmt-header-actions :deep(.el-button--default:hover) {
+  color: #409eff;
+  border-color: #b3d8ff;
+  background-color: #ecf5ff;
+}
+/* 指示書発行：蓝色主按钮 */
+.cutting-mgmt-header-actions :deep(.el-button--primary) {
+  color: #fff;
+  border-color: #409eff;
+  background-color: #409eff;
+  font-weight: 500;
+}
+.cutting-mgmt-header-actions :deep(.el-button--primary:hover) {
+  border-color: #66b1ff;
+  background-color: #66b1ff;
+}
+/* 実績確定：绿色成功按钮 */
+.cutting-mgmt-header-actions :deep(.el-button--success) {
+  color: #fff;
+  border-color: #67c23a;
+  background-color: #67c23a;
+  font-weight: 500;
+}
+.cutting-mgmt-header-actions :deep(.el-button--success:hover) {
+  border-color: #85ce61;
+  background-color: #85ce61;
+}
 
 /* 面取指示-今日：第一排＝标题左、日期在标题右侧、指示書発行・実績確定最右侧；第二排＝面取機按钮居中 */
 .chamfering-mgmt-header-two-rows {
@@ -7661,13 +7952,64 @@ onUnmounted(() => {
   color: #059669 !important;
 }
 
-/* ── 面取指示-今日：ヘッダーボタン美化 ── */
-.chamfering-management-section .cutting-mgmt-header-right :deep(.el-button) {
+/* ── 面取指示-今日：ヘッダー4按钮 间距・颜色区分 ── */
+.chamfering-mgmt-header-actions {
+  gap: 4px;
+}
+.chamfering-mgmt-header-actions :deep(.el-button) {
+  margin: 0;
+  padding: 5px 12px;
+  font-size: 12px;
   border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 4px 12px;
-  min-height: 26px;
+  min-height: 28px;
+  transition: opacity 0.2s;
+}
+.chamfering-mgmt-header-actions :deep(.el-button:hover) {
+  opacity: 0.92;
+}
+/* 新規追加：灰底描边 */
+.chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(1)) {
+  color: #fdfdfd;
+  border-color: #c0c4cc;
+  background-color: #f83e47;
+}
+.chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(1):hover) {
+  color: #409eff;
+  border-color: #b3d8ff;
+  background-color: #fffeec;
+}
+/* 計画印刷：浅蓝描边 */
+.chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(2)) {
+  color: #fcfcfc;
+  border-color: #b3d8ff;
+  background-color: #fdc407;
+}
+.chamfering-mgmt-header-actions :deep(.el-button--default:nth-child(2):hover) {
+  color: #66b1ff;
+  border-color: #66b1ff;
+  background-color: #d9ecff;
+}
+/* 指示書発行：蓝色主按钮 */
+.chamfering-mgmt-header-actions :deep(.el-button--primary) {
+  color: #fff;
+  border-color: #409eff;
+  background-color: #409eff;
+  font-weight: 500;
+}
+.chamfering-mgmt-header-actions :deep(.el-button--primary:hover) {
+  border-color: #66b1ff;
+  background-color: #66b1ff;
+}
+/* 実績確定：绿色成功按钮 */
+.chamfering-mgmt-header-actions :deep(.el-button--success) {
+  color: #fff;
+  border-color: #67c23a;
+  background-color: #67c23a;
+  font-weight: 500;
+}
+.chamfering-mgmt-header-actions :deep(.el-button--success:hover) {
+  border-color: #85ce61;
+  background-color: #85ce61;
 }
 
 /* ── 面取指示-今日：空状態美化 ── */

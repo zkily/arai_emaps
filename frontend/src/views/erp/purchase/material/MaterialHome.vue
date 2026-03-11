@@ -121,13 +121,12 @@ const stockModules = ref<ModuleItem[]>([
 ])
 
 const receivingModules = ref<ModuleItem[]>([
-  { path: '/erp/purchase/material/receiving', title: '受入管理', description: '受け入れ管理のメインメニュー', icon: markRaw(Download), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
   { path: '/erp/purchase/material/receiving-history', title: '受入履歴', description: '受け入れ履歴の確認・検索', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
   { path: '/erp/purchase/material/receiving-inspection', title: '受入検品', description: '受け入れ検品の実施・管理', icon: markRaw(CircleCheck), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
 ])
 
 const masterModules = ref<ModuleItem[]>([
-  { path: '/erp/purchase/material/inspection-master', title: '検品マスタ', description: '材料検品マスタの登録・編集・削除管理', icon: markRaw(Tickets), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },
+  { path: '/master/material-inspection', title: '材料検品マスタ', description: '材料検品マスタの登録・編集・削除管理', icon: markRaw(Tickets), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },
 ])
 
 const orderModules = ref<ModuleItem[]>([

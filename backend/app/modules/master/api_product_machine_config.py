@@ -21,6 +21,7 @@ def _row_to_dict(row: ProductMachineConfig) -> dict:
         "product_name": row.product_name,
         "cutting_machine": row.cutting_machine,
         "chamfering_machine": row.chamfering_machine,
+        "sw_machine": row.sw_machine,
         "molding_machine": row.molding_machine,
         "plating_machine": row.plating_machine,
         "welding_machine": row.welding_machine,
@@ -109,6 +110,7 @@ async def create_product_machine_config(
         product_name=product_name,
         cutting_machine=body.get("cutting_machine"),
         chamfering_machine=body.get("chamfering_machine"),
+        sw_machine=body.get("sw_machine"),
         molding_machine=body.get("molding_machine"),
         plating_machine=body.get("plating_machine"),
         welding_machine=body.get("welding_machine"),
@@ -135,7 +137,7 @@ async def update_product_machine_config(
     if not row:
         raise HTTPException(status_code=404, detail="製品機器設定が見つかりません")
     allowed = {
-        "product_name", "cutting_machine", "chamfering_machine", "molding_machine",
+        "product_name", "cutting_machine", "chamfering_machine", "sw_machine", "molding_machine",
         "plating_machine", "welding_machine", "inspector_machine",
         "outsourced_plating_machine", "outsourced_welding_machine",
     }

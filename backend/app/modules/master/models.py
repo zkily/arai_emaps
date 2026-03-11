@@ -326,6 +326,7 @@ class ProductMachineConfig(Base):
     product_name = Column(String(255), nullable=False, index=True)
     cutting_machine = Column(String(100))
     chamfering_machine = Column(String(100))
+    sw_machine = Column(String(100))
     molding_machine = Column(String(100))
     plating_machine = Column(String(100))
     welding_machine = Column(String(100))

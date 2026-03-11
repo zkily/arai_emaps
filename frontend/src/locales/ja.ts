@@ -128,6 +128,7 @@ export default {
     MASTER_HOME: 'マスタホーム',
     MASTER_PRODUCT: '製品マスタ',
     MASTER_MATERIAL: '材料マスタ',
+    MASTER_MATERIAL_INSPECTION: '材料検品マスタ',
     MASTER_SUPPLIER: '仕入先マスタ',
     MASTER_PROCESS: '工程マスタ',
     MASTER_PROCESS_ROUTE: '工程ルートマスタ',

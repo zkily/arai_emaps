@@ -255,6 +255,17 @@ export function toggleStockMaterialUsage(id: number): Promise<{ success?: boolea
   }>
 }
 
+/** 材料マスタ更新: materials → material_stock へ同期（オプションで期間指定） */
+export function syncMaterialStockFromMaster(params?: {
+  start_date?: string
+  end_date?: string
+}): Promise<{ success?: boolean; data?: { updated_count: number } }> {
+  return request.post(`${PREFIX}/stock/sync-material-master`, params) as Promise<{
+    success?: boolean
+    data?: { updated_count: number }
+  }>
+}
+
 // ─────────────────────────────────────────────
 // 内示 (forecast) - order_monthly + products + materials + suppliers
 // ─────────────────────────────────────────────

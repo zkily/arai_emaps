@@ -146,6 +146,8 @@ PLAN_PROCESS_MAPPING = {
     "面取": "chamfering_plan",
     "検査": "inspection_plan",
 }
+# 計画列クリア用（本月月初起き先清空 plan で使用）
+PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + ["sw_plan"]
 # 清空计算字段（在庫・推移・actual_plan_trend・安全在庫）：date >= startDate 时置 0
 CALCULATED_FIELDS_TO_CLEAR = [
     "safety_stock",
@@ -531,6 +533,37 @@ async def clear_production_summarys_calculated_fields(
         "code": 200,
         "data": {"cleared": cleared, "startDate": body.startDate[:10], "endDate": end_d.isoformat()},
         "message": f"計算フィールドをクリアしました（{cleared}件）",
+    }
+
+
+@router.post("/clear-plan-fields")
+async def clear_production_summarys_plan_fields(
+    body: ClearCalculatedFieldsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    startDate 必須。date >= startDate かつ date <= startDate+3ヶ月 の行について、
+    各工程 plan 列を 0 にクリアする（計画データ更新で「先清空 plan 再更新」用）。
+    """
+    if not (body.startDate and body.startDate.strip()):
+        raise HTTPException(status_code=400, detail="startDate は必須です（YYYY-MM-DD）")
+    try:
+        start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+    end_d = _parse_end_date(start_d, 3)
+    set_parts = ", ".join([f"`{col}` = 0" for col in PLAN_FIELDS_TO_CLEAR])
+    sql = text(
+        f"UPDATE production_summarys SET {set_parts} WHERE date >= :start_date AND date <= :end_date"
+    )
+    res = await db.execute(sql, {"start_date": start_d, "end_date": end_d})
+    await db.commit()
+    cleared = res.rowcount if hasattr(res, "rowcount") else 0
+    return {
+        "code": 200,
+        "data": {"cleared": cleared, "startDate": body.startDate[:10], "endDate": end_d.isoformat()},
+        "message": f"計画列をクリアしました（{cleared}件）",
     }
 
 
@@ -1336,14 +1369,24 @@ async def update_production_summarys_production_dates(
 
 @router.post("/update-plan")
 async def update_production_summarys_plan(
+    body: OptionalStartDateBody = Body(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
     production_plan_updates を product_cd・date・process_name で集計し、
     production_summarys の各工程 plan 列に反映。続けて actual/plan から actual_plan を更新する。
+    startDate を指定した場合はその日～+3ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
     """
     start_time = time.perf_counter()
+    start_d = None
+    end_d = None
+    if body and body.startDate and body.startDate.strip():
+        try:
+            start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
+            end_d = _parse_end_date(start_d, 3)
+        except ValueError:
+            pass
     # 1) 集計: ppu × ps INNER JOIN, GROUP BY product_cd, date, process_name
     agg_sql = text("""
         SELECT ppu.product_cd AS product_cd, DATE(ppu.plan_date) AS dt, ppu.process_name AS process_name,
@@ -1353,9 +1396,11 @@ async def update_production_summarys_plan(
         WHERE ppu.process_name IN ('成型','溶接','メッキ','切断','面取','検査')
           AND ppu.product_cd IS NOT NULL AND TRIM(ppu.product_cd) <> ''
           AND ppu.plan_date IS NOT NULL
+          AND (:start_date IS NULL OR (DATE(ppu.plan_date) >= :start_date AND DATE(ppu.plan_date) <= :end_date))
         GROUP BY ppu.product_cd, DATE(ppu.plan_date), ppu.process_name
     """)
-    result = await db.execute(agg_sql)
+    params = {"start_date": start_d, "end_date": end_d}
+    result = await db.execute(agg_sql, params)
     plan_rows = result.fetchall()
     if not plan_rows:
         return {
@@ -1417,14 +1462,53 @@ async def update_production_summarys_plan(
                     except Exception:
                         skipped_count += 1
 
-    # 2) actual_plan: 先用 actual 填，再用 plan 补空/零
+    # 2) actual_plan: 先用 actual 填，再用 plan 补空/零（startDate 指定時は対象範囲のみ）
+    date_filter = " AND date >= :range_start AND date <= :range_end" if (start_d is not None and end_d is not None) else ""
+    range_params = {"range_start": start_d, "range_end": end_d} if (start_d is not None and end_d is not None) else {}
     for actual_col, plan_col, target_col in ACTUAL_PLAN_COLUMNS:
         await db.execute(
-            text(f"UPDATE production_summarys SET {target_col} = {actual_col} WHERE {actual_col} IS NOT NULL")
+            text(f"UPDATE production_summarys SET {target_col} = {actual_col} WHERE {actual_col} IS NOT NULL" + date_filter),
+            range_params if range_params else {}
         )
         await db.execute(
-            text(f"UPDATE production_summarys SET {target_col} = {plan_col} WHERE ({target_col} IS NULL OR {target_col} = 0) AND {plan_col} IS NOT NULL")
+            text(f"UPDATE production_summarys SET {target_col} = {plan_col} WHERE ({target_col} IS NULL OR {target_col} = 0) AND {plan_col} IS NOT NULL" + date_filter),
+            range_params if range_params else {}
         )
+
+    # 3) molding_actual_plan 更新後、sw_plan / chamfering_plan / cutting_plan を molding_actual_plan で上書き
+    #    更新前に該当範囲でこれら3列をいったんクリアし、該当工程を持つ製品の行のみ更新する。
+    await db.execute(
+        text("UPDATE production_summarys SET sw_plan = 0, chamfering_plan = 0, cutting_plan = 0" + date_filter),
+        range_params if range_params else {}
+    )
+    # 切断工程を持つルートの行のみ cutting_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT01'
+            SET ps.cutting_plan = ps.molding_actual_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # 面取工程を持つルートの行のみ chamfering_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT02'
+            SET ps.chamfering_plan = ps.molding_actual_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # sw_machine が設定されている製品の行のみ sw_plan を molding_actual_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN product_machine_config pmc ON pmc.product_cd = ps.product_cd
+              AND pmc.sw_machine IS NOT NULL AND TRIM(COALESCE(pmc.sw_machine, '')) <> ''
+            SET ps.sw_plan = ps.molding_actual_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
 
     await db.commit()
     elapsed = round(time.perf_counter() - start_time, 2)
@@ -2262,6 +2346,8 @@ async def update_production_summarys_machine(
           ON pmc.cutting_machine COLLATE utf8mb4_unicode_ci = m_cutting.machine_cd COLLATE utf8mb4_unicode_ci
         LEFT JOIN machines m_chamfering
           ON pmc.chamfering_machine COLLATE utf8mb4_unicode_ci = m_chamfering.machine_cd COLLATE utf8mb4_unicode_ci
+        LEFT JOIN machines m_sw
+          ON pmc.sw_machine COLLATE utf8mb4_unicode_ci = m_sw.machine_cd COLLATE utf8mb4_unicode_ci
         LEFT JOIN machines m_molding
           ON pmc.molding_machine COLLATE utf8mb4_unicode_ci = m_molding.machine_cd COLLATE utf8mb4_unicode_ci
         LEFT JOIN machines m_plating
@@ -2277,6 +2363,7 @@ async def update_production_summarys_machine(
         SET
           ps.cutting_machine = COALESCE(m_cutting.machine_name, pmc.cutting_machine, ps.cutting_machine),
           ps.chamfering_machine = COALESCE(m_chamfering.machine_name, pmc.chamfering_machine, ps.chamfering_machine),
+          ps.sw_machine = COALESCE(m_sw.machine_name, pmc.sw_machine, ps.sw_machine),
           ps.molding_machine = COALESCE(m_molding.machine_name, pmc.molding_machine, ps.molding_machine),
           ps.plating_machine = COALESCE(m_plating.machine_name, pmc.plating_machine, ps.plating_machine),
           ps.welding_machine = COALESCE(m_welding.machine_name, pmc.welding_machine, ps.welding_machine),

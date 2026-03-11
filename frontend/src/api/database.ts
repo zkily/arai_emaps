@@ -168,12 +168,17 @@ export function clearProductionSummarysCalculatedFields(startDate: string) {
   return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate })
 }
 
-/** 計画データ更新：production_plan_updates を集計して production_summarys の plan / actual_plan を更新 */
-export function updateProductionSummarysPlan() {
+/** 計画列を date >= startDate ～ +3ヶ月 で 0 にクリア（計画データ更新で「先清空 plan 再更新」用） */
+export function clearProductionSummarysPlanFields(startDate: string) {
+  return request.post<{ message?: string; data?: { cleared?: number } }>(`${BASE}/clear-plan-fields`, { startDate })
+}
+
+/** 計画データ更新：production_plan_updates を集計して production_summarys の plan / actual_plan を更新。startDate 指定時はその日～+3ヶ月のみ対象 */
+export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }
     message?: string
-  }>(`${BASE}/update-plan`)
+  }>(`${BASE}/update-plan`, startDate != null ? { startDate } : {})
 }
 
 /** 在庫・推移更新は処理時間がかかるため 5 分タイムアウト */

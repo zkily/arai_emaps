@@ -98,6 +98,7 @@
             width="120"
             align="center"
           />
+          <el-table-column prop="sw_machine" label="sw機" width="120" align="center" />
           <el-table-column prop="molding_machine" label="成型機" width="120" align="center" />
           <el-table-column prop="plating_machine" label="メッキ治具" width="120" align="center" />
           <el-table-column prop="welding_machine" label="溶接機" width="120" align="center" />
@@ -224,6 +225,22 @@
               <el-select
                 v-model="formData.chamfering_machine"
                 placeholder="面取機を選択"
+                filterable
+                clearable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="machine in machineOptions"
+                  :key="machine.value"
+                  :label="machine.label"
+                  :value="machine.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="sw機" prop="sw_machine">
+              <el-select
+                v-model="formData.sw_machine"
+                placeholder="sw機を選択"
                 filterable
                 clearable
                 style="width: 100%"
@@ -416,6 +433,7 @@ const formData = ref<Partial<ProductMachineConfig>>({
   product_name: '',
   cutting_machine: '',
   chamfering_machine: '',
+  sw_machine: '',
   molding_machine: '',
   plating_machine: '',
   welding_machine: '',
@@ -529,6 +547,7 @@ const openDialog = (row?: ProductMachineConfig) => {
       product_name: '',
       cutting_machine: '',
       chamfering_machine: '',
+      sw_machine: '',
       molding_machine: '',
       plating_machine: '',
       welding_machine: '',

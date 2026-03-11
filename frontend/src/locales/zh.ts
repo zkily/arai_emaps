@@ -127,6 +127,7 @@ export default {
     MASTER_HOME: '主数据首页',
     MASTER_PRODUCT: '制品主数据',
     MASTER_MATERIAL: '材料主数据',
+    MASTER_MATERIAL_INSPECTION: '材料检品主数据',
     MASTER_SUPPLIER: '供应商主数据',
     MASTER_PROCESS: '工程主数据',
     MASTER_PROCESS_ROUTE: '工艺路线主数据',

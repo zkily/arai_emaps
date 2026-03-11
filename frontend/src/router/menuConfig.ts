@@ -113,6 +113,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_HOME', name: 'マスタホーム', path: '/master', parentCode: 'MASTER_LIST', sortOrder: 0 },
   { code: 'MASTER_PRODUCT', name: '製品マスタ', path: '/master/product', parentCode: 'MASTER_LIST', sortOrder: 1 },
   { code: 'MASTER_MATERIAL', name: '材料マスタ', path: '/master/material', parentCode: 'MASTER_LIST', sortOrder: 2 },
+  { code: 'MASTER_MATERIAL_INSPECTION', name: '材料検品マスタ', path: '/master/material-inspection', parentCode: 'MASTER_LIST', sortOrder: 2.5 },
   { code: 'MASTER_SUPPLIER', name: '仕入先マスタ', path: '/master/supplier', parentCode: 'MASTER_LIST', sortOrder: 3 },
   { code: 'MASTER_PROCESS', name: '工程マスタ', path: '/master/process', parentCode: 'MASTER_LIST', sortOrder: 4 },
   { code: 'MASTER_PROCESS_ROUTE', name: '工程ルートマスタ', path: '/master/process-route', parentCode: 'MASTER_LIST', sortOrder: 5 },

@@ -4,7 +4,7 @@
     <el-card class="header-card" shadow="never">
       <div class="header-content">
         <div class="title-section">
-          <h1>材料検品マスタ管理</h1>
+          <h1>材料検品マスタ</h1>
           <p>仕入先の材料マスタを管理します</p>
         </div>
         <div class="stats-section">

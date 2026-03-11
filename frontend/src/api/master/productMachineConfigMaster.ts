@@ -9,6 +9,7 @@ export interface ProductMachineConfig {
   product_name: string
   cutting_machine?: string
   chamfering_machine?: string
+  sw_machine?: string
   molding_machine?: string
   plating_machine?: string
   welding_machine?: string

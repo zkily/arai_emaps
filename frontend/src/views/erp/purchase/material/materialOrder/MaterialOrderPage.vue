@@ -15,6 +15,14 @@
       </div>
       <div class="header-actions">
         <el-button
+          class="action-btn"
+          @click="handleSyncMaterialMaster"
+          :loading="materialMasterSyncLoading"
+        >
+          <el-icon><Refresh /></el-icon>
+          材料マスタ更新
+        </el-button>
+        <el-button
           class="action-btn success-btn"
           @click="handleDataGeneration"
           :loading="dataGenerationLoading"
@@ -329,7 +337,13 @@
                 <span>{{ formatValue(row.safety_stock) }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="current_stock" label="現在在庫" width="100" align="center">
+            <el-table-column
+              prop="current_stock"
+              label="現在在庫"
+              width="100"
+              align="center"
+              class-name="current-stock-column"
+            >
               <template #default="{ row }">
                 <span :class="{ 'negative-number': row.current_stock < 0 }">{{
                   formatValue(row.current_stock)
@@ -502,7 +516,12 @@
               show-overflow-tooltip
             />
             <el-table-column prop="standard_spec" label="規格" width="150" show-overflow-tooltip />
-            <el-table-column label="注文束数" width="120" align="center">
+            <el-table-column
+              label="注文束数"
+              width="120"
+              align="center"
+              class-name="order-quantity-column"
+            >
               <template #default="{ row }">
                 <span>{{ formatValue(row.order_quantity) }}</span>
               </template>
@@ -512,7 +531,12 @@
                 <span>{{ formatValue(row.order_bundle_quantity) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="使用数" width="140" align="center">
+            <el-table-column
+              label="使用数"
+              width="140"
+              align="center"
+              class-name="usage-quantity-column"
+            >
               <template #default="{ row }">
                 <el-input-number
                   :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
@@ -1253,6 +1277,7 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
+  syncMaterialStockFromMaster,
   getSupplierList,
   getMaterialStockList,
   getMaterialStockSubList,
@@ -1346,6 +1371,7 @@ const initialStockData = ref<InitialStockItem[]>([])
 const orderConfirmDialogVisible = ref(false)
 const orderNotes = ref('')
 const activeTab = ref('stock') // 默认显示材料日別在庫tab
+const materialMasterSyncLoading = ref(false)
 
 // 材料详情弹窗相关数据
 const materialDetailDialogVisible = ref(false)
@@ -1366,13 +1392,19 @@ const stats = ref({
   totalBundleWeight: 0,
 })
 
-// 搜索表单
+// 検索表单（默认日期为「日本时间」的当天）
+const getTodayJapanStr = () => {
+  const now = new Date()
+  const japanTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  const year = japanTime.getFullYear()
+  const month = String(japanTime.getMonth() + 1).padStart(2, '0')
+  const day = String(japanTime.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const searchForm = reactive({
   keyword: '',
-  dateRange: [
-    new Date().toISOString().split('T')[0],
-    new Date().toISOString().split('T')[0],
-  ] as string[], // 默认为当天日期
+  dateRange: [getTodayJapanStr(), getTodayJapanStr()] as string[], // 默认为日本当天日期
   supplier: [] as string[],
   usageStatus: '', // 使用状態筛选条件
 })
@@ -1859,19 +1891,36 @@ const handleReset = () => {
   }
 }
 
-// 设置日期范围快捷按钮
+// 设置日期范围快捷按钮（today=日本时间的当天）
 const setDateRange = (days: number) => {
-  // 获取当前选择的日期，如果没有选择则使用当天日期
-  let currentDate: Date
-  if (searchForm.dateRange && searchForm.dateRange.length === 2) {
-    currentDate = new Date(searchForm.dateRange[0])
-  } else {
-    currentDate = new Date() // 使用当天日期
+  // days=0 时，无论当前选择什么日期，强制设为「日本时间的今日」
+  if (days === 0) {
+    const today = getTodayJapanStr()
+    searchForm.dateRange = [today, today]
+    pagination.page = 1
+    fetchData()
+    return
   }
 
-  // 在当前日期基础上加减天数
+  // 获取当前选择的日期，如果没有选择则使用「日本时间」的当天日期
+  let currentDate: Date
+  if (searchForm.dateRange && searchForm.dateRange.length === 2) {
+    // 已选日期时，以当前开始日为基準
+    currentDate = new Date(searchForm.dateRange[0])
+  } else {
+    // 未选日期时，以日本时间的今日为基準
+    const now = new Date()
+    currentDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  }
+
+  // 在当前日期基础上加减天数（单位：日）
   currentDate.setDate(currentDate.getDate() + days)
-  const dateStr = currentDate.toISOString().split('T')[0]
+
+  // 按 YYYY-MM-DD 组装日期字符串（不使用 toISOString，避免时区偏移导致的前后一天问题）
+  const year = currentDate.getFullYear()
+  const month = String(currentDate.getMonth() + 1).padStart(2, '0')
+  const day = String(currentDate.getDate()).padStart(2, '0')
+  const dateStr = `${year}-${month}-${day}`
 
   searchForm.dateRange = [dateStr, dateStr]
   pagination.page = 1
@@ -2358,6 +2407,47 @@ const _handleRefresh = () => {
   fetchData()
 }
 
+// 材料マスタ更新（materials → material_stock）
+const handleSyncMaterialMaster = async () => {
+  try {
+    if (!searchForm.dateRange || searchForm.dateRange.length !== 2) {
+      ElMessage.error('まず日付（期間）を選択してください')
+      return
+    }
+    const startDate = searchForm.dateRange[0]
+    const endDate = searchForm.dateRange[1]
+
+    await ElMessageBox.confirm(
+      `材料マスタ（materials）の情報を材料在庫（material_stock）に同期しますか？\n\n対象期間: ${startDate} ～ ${endDate}\n\n同期対象項目:\n・材料名 (material_name)\n・安全在庫 (safety_stock)\n・仕入先CD (supplier_cd)\n・束本数 (bundle_quantity)\n・束重量 (bundle_weight)`,
+      '材料マスタ更新確認',
+      {
+        confirmButtonText: '実行',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+      },
+    )
+
+    materialMasterSyncLoading.value = true
+    const res = await syncMaterialStockFromMaster({
+      start_date: startDate,
+      end_date: endDate,
+    })
+    const updated = (res as any)?.data?.updated_count ?? 0
+
+    ElMessage.success(`材料マスタ更新が完了しました。更新件数: ${updated}件`)
+
+    await fetchData()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('材料マスタ更新に失敗しました:', error)
+      const detail = error?.response?.data?.detail || error?.message || '材料マスタ更新に失敗しました'
+      ElMessage.error(detail)
+    }
+  } finally {
+    materialMasterSyncLoading.value = false
+  }
+}
+
 const handleStockCalculation = async () => {
   try {
     await ElMessageBox.confirm('在庫計算を実行しますか？', '在庫計算確認', {
@@ -2406,18 +2496,14 @@ const getMergedOrderData = async () => {
         (item.supplier_name === '丸一NST' || item.supplier_name === '丸一ﾒﾀﾙｱｸﾄ'),
     )
 
-    // 获取子表数据
-    const subTableParams = {
-      start_date: searchForm.dateRange[0],
-      end_date: searchForm.dateRange[0],
-    }
-
-    const subResponse = await request.get('/api/material-stock-sub/list', {
-      params: subTableParams,
+    // 获取子表数据（半端材料リスト）- 使用 GET /api/material/stock/sub，参数 target_date
+    const subResult = await getMaterialStockSubList({
+      target_date: searchForm.dateRange[0],
+      page: 1,
+      pageSize: 500,
     }) as any
-    const subBody = subResponse?.data ?? subResponse
-    const rawSub = subBody?.success !== false ? (subBody?.data ?? subBody) : null
-    const subTableData = Array.isArray(rawSub) ? rawSub : []
+    const subPayload = subResult?.data ?? subResult
+    const subTableData = Array.isArray(subPayload?.list) ? subPayload.list : (subPayload?.data?.list ?? [])
 
     // 筛选子表中符合条件的供应商数据
     const filteredSubData = subTableData.filter(
@@ -3514,8 +3600,14 @@ const handleFilterChange = (filterType: string) => {
 }
 
 .filter-item.supplier-item {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
+  width: 240px;
+}
+
+.filter-item.supplier-item .filter-select {
+  width: 100%;
+  width: 240px;
 }
 
 /* ラベル: アイコン + テキスト */
@@ -4596,6 +4688,51 @@ const handleFilterChange = (filterType: string) => {
   font-size: 13px;
   line-height: 1.3;
   transition: all 0.2s ease;
+}
+
+/* 現在在庫：字号加大一号、粗体、纯黑 */
+:deep(.el-table td.current-stock-column) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table td.current-stock-column .cell) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+/* 使用数・注文束数：字号加大一号、粗体、纯黑（与現在在庫一致） */
+:deep(.el-table td.usage-quantity-column) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table td.usage-quantity-column .cell) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table td.order-quantity-column) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table td.order-quantity-column .cell) {
+  font-size: 14px;
+  font-weight: bold;
+  color: #000000;
+}
+
+:deep(.el-table td.usage-quantity-column .el-input-number .el-input__inner),
+:deep(.el-table td.order-quantity-column .el-input-number .el-input__inner) {
+  font-size: 14px !important;
+  font-weight: bold !important;
+  color: #000000 !important;
 }
 
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {

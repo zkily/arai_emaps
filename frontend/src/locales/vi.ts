@@ -127,6 +127,7 @@ export default {
     MASTER_HOME: 'Trang chủ Master',
     MASTER_PRODUCT: 'Sản phẩm chính',
     MASTER_MATERIAL: 'Vật liệu chính',
+    MASTER_MATERIAL_INSPECTION: 'Master kiểm tra vật liệu',
     MASTER_SUPPLIER: 'Nhà cung cấp',
     MASTER_PROCESS: 'Công đoạn chính',
     MASTER_PROCESS_ROUTE: 'Quy trình định tuyến',

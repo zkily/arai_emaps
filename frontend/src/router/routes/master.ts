@@ -21,6 +21,12 @@ export const masterRoutes: RouteRecordRaw[] = [
     meta: { title: '材料マスタ', requiresAuth: true },
   },
   {
+    path: 'master/material-inspection',
+    name: 'MaterialInspectionMaster',
+    component: () => import('@/views/master/materialInspection/MaterialInspectionMaster.vue'),
+    meta: { title: '材料検品マスタ', requiresAuth: true },
+  },
+  {
     path: 'master/supplier',
     name: 'SupplierList',
     component: () => import('@/views/master/supplier/SupplierList.vue'),

@@ -128,6 +128,7 @@ export default {
     MASTER_HOME: 'Master Home',
     MASTER_PRODUCT: 'Product Master',
     MASTER_MATERIAL: 'Material Master',
+    MASTER_MATERIAL_INSPECTION: 'Material Inspection Master',
     MASTER_SUPPLIER: 'Supplier Master',
     MASTER_PROCESS: 'Process Master',
     MASTER_PROCESS_ROUTE: 'Process Route Master',

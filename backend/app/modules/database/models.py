@@ -41,6 +41,8 @@ class ProductionSummary(Base):
     chamfering_trend = Column(Integer, default=0)
     chamfering_production_date = Column(Date)
     chamfering_machine = Column(String(50))
+    sw_machine = Column(String(100))
+    sw_plan = Column(Integer, default=0)
     chamfering_plan = Column(Integer, default=0)
     chamfering_actual_plan = Column(Integer, default=0)
     chamfering_actual_plan_trend = Column(Integer, default=0)
