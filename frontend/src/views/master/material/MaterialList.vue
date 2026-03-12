@@ -63,6 +63,16 @@
           >
             {{ t('master.material.csvExport') }}
           </el-button>
+          <el-button
+            type="primary"
+            @click="calcSinglePrice"
+            :icon="Operation"
+            :loading="calcPriceLoading"
+            :disabled="materialList.length === 0"
+            class="calc-price-btn"
+          >
+            単価計算
+          </el-button>
           <el-button type="primary" @click="openForm()" :icon="Plus" class="add-material-btn"
             >{{ t('master.material.addMaterial') }}</el-button
           >
@@ -762,6 +772,7 @@ import {
   Setting,
   Printer,
   Download,
+  Operation,
 } from '@element-plus/icons-vue'
 import MaterialEditDialog from './MaterialForm.vue'
 import {
@@ -790,6 +801,7 @@ const filters = ref({
   storage_location: '',
 })
 const loading = ref(false)
+const calcPriceLoading = ref(false)
 const materialList = ref<Material[]>([])
 const formVisible = ref(false)
 const editId = ref<number | null>(null)
@@ -1359,6 +1371,57 @@ async function toggleStatus(row: Material) {
   }
 }
 
+/** 単価計算: long_weight = ((diameter-thickness)*thickness*length*0.02466)/1000, single_price = long_weight*unit_price */
+async function calcSinglePrice() {
+  const list = materialList.value
+  const d = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : Number(v) || 0)
+  const canCalc = (row: Material) => {
+    const dia = d(row.diameter)
+    const thick = d(row.thickness)
+    const len = d(row.length)
+    return row.id != null && dia > 0 && thick >= 0 && len > 0
+  }
+  const toUpdate = list.filter(canCalc)
+  if (toUpdate.length === 0) {
+    ElMessage.warning('直径・厚さ・長さ・単重単価が入力された材料がありません')
+    return
+  }
+  calcPriceLoading.value = true
+  let ok = 0
+  let err = 0
+  try {
+    for (const row of toUpdate) {
+      const diameter = d(row.diameter)
+      const thickness = d(row.thickness)
+      const length = d(row.length)
+      const unit_price = d(row.unit_price)
+      const long_weight = ((diameter - thickness) * thickness * length * 0.02466) / 1000
+      const single_price = long_weight * unit_price
+      const roundedLongWeight = Math.round(long_weight * 1000) / 1000
+      const roundedSinglePrice = Math.round(single_price * 100) / 100
+      try {
+        await updateMaterial({
+          ...row,
+          long_weight: roundedLongWeight,
+          single_price: roundedSinglePrice,
+        })
+        row.long_weight = roundedLongWeight
+        row.single_price = roundedSinglePrice
+        ok += 1
+      } catch {
+        err += 1
+      }
+    }
+    if (err > 0) {
+      ElMessage.warning(`単価計算: ${ok}件更新、${err}件失敗`)
+    } else {
+      ElMessage.success(`${ok}件の単価を計算・更新しました`)
+    }
+  } finally {
+    calcPriceLoading.value = false
+  }
+}
+
 // ユーティリティ関数
 function getMaterialTypeColor(type: string): 'primary' | 'success' | 'info' | 'warning' | 'danger' {
   const colorMap: Record<string, 'primary' | 'success' | 'info' | 'warning' | 'danger'> = {
@@ -1879,6 +1942,23 @@ onMounted(fetchList)
 .add-material-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+/* 単価計算：与材料追加同样式，仅颜色区分（青系） */
+.calc-price-btn {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  transition: all 0.2s;
+}
+
+.calc-price-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
 }
 
 .qr-code-btn {

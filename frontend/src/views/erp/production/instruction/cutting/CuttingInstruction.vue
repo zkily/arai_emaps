@@ -7182,20 +7182,27 @@ onUnmounted(() => {
 .plan-section .section-card {
   border-radius: 12px;
   border: 1px solid #e0e7ff;
-  box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.06), 0 2px 4px -2px rgba(37, 99, 235, 0.04);
+  box-shadow: 0 4px 12px -2px rgba(37, 99, 235, 0.1), 0 2px 8px -1px rgba(37, 99, 235, 0.06);
   overflow: hidden;
   border-left: 4px solid var(--batch-accent);
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.plan-section .section-card:hover {
+  box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.16), 0 4px 12px -2px rgba(37, 99, 235, 0.10);
+  transform: translateY(-1px);
 }
 
 .plan-section .section-card :deep(.el-card__header) {
-  padding: 14px 18px;
+  padding: 8px 12px;
   font-size: 13px;
   border-bottom: 1px solid #eef2ff;
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.04) 0%, transparent 100%);
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.06) 0%, transparent 100%);
 }
 
 .plan-section .section-card :deep(.el-card__body) {
-  padding: 14px 18px;
+  padding: 8px 12px;
 }
 
 /* 下部：第1行＝切断指示（左|右）、第2行＝面取指示|カンバン発行 */
@@ -7224,24 +7231,27 @@ onUnmounted(() => {
 .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(1) {
   flex: 6.6;
   min-width: 0;
+  min-height: 440px;
 }
 .instruction-row.instruction-cols-6-4 .instruction-col:nth-child(2) {
   flex: 4.1;
   min-width: 0;
+  min-height: 440px;
 }
 
 .instruction-row .instruction-col {
   flex: 1;
   min-width: 0;
   min-height: 240px;
-  background: #fff;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
   border: 1px solid #e2e8f0;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 8px 10px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: shadow 0.25s ease, transform 0.25s ease, background 0.2s ease;
 }
 .instruction-row .instruction-col.instruction-col-full {
   flex: 1 1 100%;
@@ -7268,10 +7278,16 @@ onUnmounted(() => {
   min-height: 448px;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
   border-left: 4px solid var(--cutting-accent);
   border-color: #e0e7ff;
-  box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.06), 0 2px 4px -2px rgba(79, 70, 229, 0.04);
+  box-shadow: 0 4px 12px -2px rgba(79, 70, 229, 0.1), 0 2px 8px -1px rgba(79, 70, 229, 0.06);
+  border-radius: 10px;
+  transition: box-shadow 0.25s ease;
+}
+
+.cutting-management-section:hover {
+  box-shadow: 0 8px 20px -4px rgba(79, 70, 229, 0.15), 0 4px 12px -2px rgba(79, 70, 229, 0.10);
 }
 
 .cutting-management-section .cutting-mgmt-header {
@@ -7283,11 +7299,14 @@ onUnmounted(() => {
 .instruction-col.chamfering-management-section {
   border-left: 4px solid var(--chamfering-accent);
   border-color: #d1fae5;
-  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.06), 0 2px 4px -2px rgba(5, 150, 105, 0.04);
+  box-shadow: 0 4px 12px -2px rgba(5, 150, 105, 0.1), 0 2px 8px -1px rgba(5, 150, 105, 0.06);
   transition: box-shadow 0.25s ease, transform 0.25s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
+  border-radius: 10px;
 }
 .instruction-col.chamfering-management-section:hover {
-  box-shadow: 0 8px 24px -4px rgba(5, 150, 105, 0.12), 0 4px 8px -2px rgba(5, 150, 105, 0.06);
+  box-shadow: 0 8px 20px -4px rgba(5, 150, 105, 0.16), 0 4px 12px -2px rgba(5, 150, 105, 0.10);
+  transform: translateY(-1px);
 }
 
 .instruction-col.chamfering-management-section .cutting-mgmt-header {
@@ -7299,7 +7318,14 @@ onUnmounted(() => {
 .instruction-col.kanban-issuance-section {
   border-left: 4px solid var(--kanban-accent);
   border-color: #ffedd5;
-  box-shadow: 0 4px 6px -1px rgba(217, 119, 6, 0.06), 0 2px 4px -2px rgba(217, 119, 6, 0.04);
+  box-shadow: 0 4px 12px -2px rgba(217, 119, 6, 0.1), 0 2px 8px -1px rgba(217, 119, 6, 0.06);
+  transition: box-shadow 0.25s ease;
+  background: linear-gradient(135deg, #ffffff 0%, #fffbeb 100%);
+  border-radius: 10px;
+}
+
+.instruction-col.kanban-issuance-section:hover {
+  box-shadow: 0 8px 20px -4px rgba(217, 119, 6, 0.15), 0 4px 12px -2px rgba(217, 119, 6, 0.10);
 }
 
 .instruction-col.kanban-issuance-section .cutting-mgmt-header {
@@ -7555,7 +7581,7 @@ onUnmounted(() => {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-gutter: stable;
-  background: #fff;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
@@ -7600,10 +7626,12 @@ onUnmounted(() => {
 .cutting-management-section .cutting-mgmt-thead {
   background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
   border-bottom-color: #c7d2fe;
+  box-shadow: 0 3px 6px rgba(79, 70, 229, 0.06);
 }
 
 .cutting-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
   color: #3730a3;
+  font-weight: 800;
 }
 
 .chamfering-management-section .cutting-mgmt-thead {
@@ -7611,12 +7639,13 @@ onUnmounted(() => {
   border-bottom: 2px solid #6ee7b7;
   z-index: 10;
   backdrop-filter: blur(4px);
+  box-shadow: 0 3px 6px rgba(5, 150, 105, 0.08);
 }
 
 .chamfering-management-section .cutting-mgmt-thead .cutting-mgmt-tr {
   color: #047857;
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.02em;
   text-transform: none;
 }
@@ -8555,16 +8584,18 @@ onUnmounted(() => {
   overflow-x: auto;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  background: #fff;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .plan-batch-thead {
   flex-shrink: 0;
   background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-  border-bottom: 1px solid #c7d2fe;
+  border-bottom: 2px solid #c7d2fe;
   position: sticky;
   top: 0;
   z-index: 1;
+  box-shadow: 0 3px 6px rgba(79, 70, 229, 0.06);
 }
 
 .plan-batch-tbody {
@@ -8691,12 +8722,17 @@ onUnmounted(() => {
   min-height: 288px;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%);
   border: 1px solid #d1fae5;
   border-left: 4px solid var(--chamfering-accent);
   border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: 0 4px 6px -1px rgba(5, 150, 105, 0.06), 0 2px 4px -2px rgba(5, 150, 105, 0.04);
+  padding: 10px 12px;
+  box-shadow: 0 4px 12px -2px rgba(5, 150, 105, 0.1), 0 2px 8px -1px rgba(5, 150, 105, 0.06);
+  transition: box-shadow 0.25s ease;
+}
+
+.chamfering-batch-section-card:hover {
+  box-shadow: 0 8px 20px -4px rgba(5, 150, 105, 0.15), 0 4px 12px -2px rgba(5, 150, 105, 0.10);
 }
 
 .chamfering-batch-section-card .cutting-mgmt-header {
@@ -9703,72 +9739,79 @@ onUnmounted(() => {
 
 /* ── コンテナ余白を縮小 ── */
 .cutting-instruction-container {
-  padding: 12px 16px !important;
+  padding: 8px 12px !important;
   font-feature-settings: 'tnum' on, 'lnum' on;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  min-height: 100vh;
 }
 
 /* ── ページヘッダー compact ── */
 .page-header {
-  margin-bottom: 10px !important;
-  padding: 12px 18px !important;
-  border-radius: 10px !important;
+  margin-bottom: 8px !important;
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid #e0e7ff;
+  box-shadow: 0 2px 8px rgba(37,99,235,0.08),inset 0 1px 2px rgba(255,255,255,0.5);
 }
-.header-title h1 { font-size: 18px !important; letter-spacing: -0.04em !important; }
-.header-title .header-desc { font-size: 11.5px !important; margin: 4px 0 0 !important; }
-.page-header-badge { font-size: 10px !important; padding: 3px 8px !important; margin-bottom: 5px !important; }
+.header-title h1 { font-size: 16px !important; letter-spacing: -0.04em !important; font-weight: 800 !important; }
+.header-title .header-desc { font-size: 11px !important; margin: 3px 0 0 !important; color: #64748b !important; }
+.page-header-badge { font-size: 9px !important; padding: 2px 6px !important; margin-bottom: 4px !important; background: linear-gradient(135deg, #3b82f6, #2563eb); color: #fff !important; border-radius: 6px !important; font-weight: 700 !important; }
 
 /* ── カード padding compact ── */
-.plan-section .section-card :deep(.el-card__header) { padding: 10px 16px !important; }
-.plan-section .section-card :deep(.el-card__body)   { padding: 10px 16px !important; }
+.plan-section .section-card :deep(.el-card__header) { padding: 8px 12px !important; }
+.plan-section .section-card :deep(.el-card__body)   { padding: 8px 12px !important; }
 
 /* ── カード hover lift ── */
 .plan-section .section-card {
-  transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease !important;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
 }
 .plan-section .section-card:hover {
-  box-shadow: 0 8px 20px -4px rgba(37,99,235,0.13), 0 3px 8px -2px rgba(37,99,235,0.08) !important;
-  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -6px rgba(37,99,235,0.18), 0 4px 12px -2px rgba(37,99,235,0.12) !important;
+  transform: translateY(-2px);
 }
 
 /* ── instruction-col hover lift ── */
 .instruction-row .instruction-col {
-  padding: 10px 12px !important;
-  transition: box-shadow 0.22s ease, transform 0.22s ease !important;
+  padding: 8px 10px !important;
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease, background 0.2s ease !important;
 }
 .instruction-row .instruction-col:hover {
-  box-shadow: 0 6px 18px -3px rgba(0,0,0,0.10) !important;
+  box-shadow: 0 8px 20px -4px rgba(0,0,0,0.12) !important;
   transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.95) !important;
 }
 
 /* ── gap compact ── */
-.plan-row { gap: 10px !important; margin-bottom: 10px !important; }
-.instruction-section { gap: 10px !important; margin-bottom: 10px !important; }
-.instruction-row.instruction-two-cols { gap: 10px !important; }
-.cutting-mgmt-header { margin-bottom: 6px !important; gap: 6px !important; }
+.plan-row { gap: 8px !important; margin-bottom: 8px !important; }
+.instruction-section { gap: 8px !important; margin-bottom: 8px !important; }
+.instruction-row.instruction-two-cols { gap: 8px !important; }
+.cutting-mgmt-header { margin-bottom: 4px !important; gap: 4px !important; }
 .search-section { padding: 0 !important; }
-.search-section :deep(.el-form--inline .el-form-item) { margin-bottom: 6px !important; }
+.search-section :deep(.el-form--inline .el-form-item) { margin-bottom: 4px !important; }
 
 /* ── バッチ行 hover ── */
 .plan-batch-data-row {
   transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 .plan-batch-data-row:hover {
-  background: #eff6ff !important;
-  box-shadow: inset 2px 0 0 #2563eb !important;
+  background: linear-gradient(90deg, #eff6ff 0%, #f3f4f6 100%) !important;
+  box-shadow: inset 3px 0 0 #2563eb !important;
 }
 
 /* ── 切断指示行 hover ── */
-.cutting-mgmt-data-row { transition: background-color 0.15s ease !important; }
-.cutting-mgmt-data-row:hover { background: #f8faff !important; }
+.cutting-mgmt-data-row { transition: background-color 0.15s ease, box-shadow 0.12s ease !important; }
+.cutting-mgmt-data-row:hover { background: linear-gradient(90deg, #f8faff 0%, #f3f4f6 100%) !important; box-shadow: inset 2px 0 0 #3b82f6; }
 
 /* ── table header 強化 ── */
 .plan-batch-th, .cutting-mgmt-th {
   background: linear-gradient(180deg, #f1f5f9 0%, #e8edf5 100%) !important;
   color: #3730a3 !important;
-  font-size: 10.5px !important;
+  font-size: 10px !important;
   font-weight: 700 !important;
   letter-spacing: 0.03em !important;
   border-bottom: 2px solid #c7d2fe !important;
@@ -9778,9 +9821,12 @@ onUnmounted(() => {
 .cutting-instruction-container :deep(.el-button) {
   transition: background-color 0.18s ease, border-color 0.18s ease,
               box-shadow 0.18s ease, transform 0.15s ease !important;
+  border-radius: 6px !important;
+  font-weight: 600 !important;
 }
 .cutting-instruction-container :deep(.el-button:not(:disabled)):hover {
   transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
 }
 .cutting-instruction-container :deep(.el-button:not(:disabled)):active {
   transform: translateY(0) scale(0.97) !important;
@@ -9790,56 +9836,62 @@ onUnmounted(() => {
 .cutting-instruction-container :deep(.el-button--primary) {
   background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
   border-color: #1d4ed8 !important;
-  box-shadow: 0 2px 6px rgba(37,99,235,0.30) !important;
+  box-shadow: 0 3px 8px rgba(37,99,235,0.32) !important;
+  color: #fff !important;
 }
 .cutting-instruction-container :deep(.el-button--primary:hover) {
   background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
-  box-shadow: 0 4px 12px rgba(37,99,235,0.40) !important;
+  box-shadow: 0 6px 16px rgba(37,99,235,0.45) !important;
 }
 
 /* success – 緑 */
 .cutting-instruction-container :deep(.el-button--success) {
   background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
   border-color: #15803d !important;
-  box-shadow: 0 2px 6px rgba(22,163,74,0.28) !important;
+  box-shadow: 0 3px 8px rgba(22,163,74,0.30) !important;
+  color: #fff !important;
 }
 .cutting-instruction-container :deep(.el-button--success:hover) {
   background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
-  box-shadow: 0 4px 12px rgba(22,163,74,0.38) !important;
+  box-shadow: 0 6px 16px rgba(22,163,74,0.40) !important;
 }
 
 /* danger – 赤 */
 .cutting-instruction-container :deep(.el-button--danger) {
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
   border-color: #b91c1c !important;
-  box-shadow: 0 2px 4px rgba(220,38,38,0.25) !important;
+  box-shadow: 0 3px 8px rgba(220,38,38,0.28) !important;
+  color: #fff !important;
 }
 .cutting-instruction-container :deep(.el-button--danger:hover) {
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-  box-shadow: 0 4px 10px rgba(220,38,38,0.35) !important;
+  box-shadow: 0 6px 16px rgba(220,38,38,0.38) !important;
 }
 
 /* warning – オレンジ */
 .cutting-instruction-container :deep(.el-button--warning) {
   background: linear-gradient(135deg, #d97706 0%, #b45309 100%) !important;
   border-color: #b45309 !important;
-  box-shadow: 0 2px 6px rgba(217,119,6,0.28) !important;
+  box-shadow: 0 3px 8px rgba(217,119,6,0.32) !important;
+  color: #fff !important;
 }
 .cutting-instruction-container :deep(.el-button--warning:hover) {
   background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-  box-shadow: 0 4px 12px rgba(217,119,6,0.38) !important;
+  box-shadow: 0 6px 16px rgba(217,119,6,0.40) !important;
 }
 
 /* default – グレー */
 .cutting-instruction-container :deep(.el-button--default) {
-  background: #fff !important;
-  border-color: #d1d5db !important;
+  background: linear-gradient(135deg, #fff 0%, #f9fafb 100%) !important;
+  border-color: #e5e7eb !important;
   color: #374151 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
 }
 .cutting-instruction-container :deep(.el-button--default:hover) {
-  border-color: #6366f1 !important;
-  color: #4f46e5 !important;
-  background: #f5f3ff !important;
+  border-color: #4f46e5 !important;
+  color: #2563eb !important;
+  background: linear-gradient(135deg, #f3f4f6 0%, #eff6ff 100%) !important;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.18) !important;
 }
 
 /* 試作追加ボタン */
@@ -9847,56 +9899,59 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
   border-color: #6d28d9 !important;
   color: #fff !important;
-  box-shadow: 0 2px 6px rgba(124,58,237,0.28) !important;
+  box-shadow: 0 3px 8px rgba(124,58,237,0.32) !important;
 }
 .btn-trial-add:hover {
   background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%) !important;
-  box-shadow: 0 4px 12px rgba(124,58,237,0.38) !important;
+  box-shadow: 0 6px 16px rgba(124,58,237,0.40) !important;
 }
 
 /* データ管理ボタン */
 .title-right-btn {
-  background: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-  color: #475569 !important;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e0e7ff 100%) !important;
+  border-color: #bfdbfe !important;
+  color: #3730a3 !important;
   font-size: 11px !important;
+  box-shadow: 0 1px 3px rgba(37,99,235,0.1) !important;
 }
 .title-right-btn:hover {
-  background: #e0e7ff !important;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
   border-color: #818cf8 !important;
-  color: #3730a3 !important;
+  color: #2563eb !important;
+  box-shadow: 0 3px 8px rgba(37,99,235,0.2) !important;
 }
 
 /* ── card section-title ── */
 .card-header .section-title {
-  font-size: 13px !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   color: #1e1b4b !important;
   display: flex !important;
   align-items: center !important;
-  gap: 7px !important;
+  gap: 6px !important;
+  letter-spacing: 0.01em !important;
 }
 
 /* ── right-panel hover ── */
 .right-panel { transition: box-shadow 0.22s ease !important; }
-.right-panel:hover { box-shadow: 0 4px 14px rgba(37,99,235,0.10) !important; }
+.right-panel:hover { box-shadow: 0 6px 16px rgba(37,99,235,0.12) !important; }
 
 /* ── 製品詳細リスト compact & hover ── */
 .product-detail-list-item {
   transition: background-color 0.12s ease !important;
-  padding: 4px 8px !important;
-  min-height: 24px !important;
+  padding: 3px 6px !important;
+  min-height: 22px !important;
 }
-.product-detail-list-item:hover { background: #f8faff !important; }
-.product-detail-list-item .detail-label { font-size: 10.5px !important; font-weight: 600 !important; }
-.product-detail-list-item .detail-value { font-size: 11px !important; font-weight: 500 !important; }
+.product-detail-list-item:hover { background: #f0f9ff !important; }
+.product-detail-list-item .detail-label { font-size: 10px !important; font-weight: 700 !important; }
+.product-detail-list-item .detail-value { font-size: 10px !important; font-weight: 500 !important; }
 
 /* ── ページネーション compact ── */
-.pagination-wrap { padding: 6px 0 2px !important; }
-.pagination-wrap :deep(.el-pagination) { font-size: 11px !important; }
+.pagination-wrap { padding: 4px 0 0 !important; }
+.pagination-wrap :deep(.el-pagination) { font-size: 10px !important; }
 
 /* ── セクションタイトルアンダーライン ── */
-.cutting-mgmt-title { position: relative; padding-bottom: 2px; }
+.cutting-mgmt-title { position: relative; padding-bottom: 2px; display: flex; align-items: center; }
 .cutting-mgmt-title::after {
   content: '';
   display: block;
@@ -9913,42 +9968,46 @@ onUnmounted(() => {
 
 /* ── el-table global polish ── */
 .cutting-instruction-container :deep(.el-table th.el-table__cell) {
-  background: linear-gradient(180deg, #f1f5f9 0%, #e8edf5 100%) !important;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%) !important;
   font-weight: 700 !important;
-  font-size: 11px !important;
-  color: #374151 !important;
-  padding: 5px 0 !important;
+  font-size: 10px !important;
+  color: #3730a3 !important;
+  padding: 4px 0 !important;
+  letter-spacing: 0.02em !important;
 }
 .cutting-instruction-container :deep(.el-table td.el-table__cell) {
-  padding: 4px 0 !important;
-  font-size: 11px !important;
+  padding: 3px 0 !important;
+  font-size: 10px !important;
 }
 .cutting-instruction-container :deep(.el-table .el-table__row:hover > td) {
-  background: #eff6ff !important;
+  background: linear-gradient(90deg, #f0f9ff 0%, #f3f4f6 100%) !important;
   transition: background-color 0.15s ease !important;
 }
 
 /* ── input/select focus glow ── */
 .cutting-instruction-container :deep(.el-input__wrapper:focus-within) {
-  box-shadow: 0 0 0 2px rgba(37,99,235,0.20) !important;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.25) !important;
   transition: box-shadow 0.18s ease !important;
 }
 .cutting-instruction-container :deep(.el-select .el-input__wrapper:focus-within) {
-  box-shadow: 0 0 0 2px rgba(37,99,235,0.20) !important;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.25) !important;
 }
 
 /* ── drop-zone ── */
 .drop-zone-active {
   outline: 2px dashed #2563eb !important;
   outline-offset: -2px;
-  background: rgba(37,99,235,0.04) !important;
+  background: rgba(37,99,235,0.06) !important;
   transition: background 0.15s ease !important;
 }
 
 /* ── 使用材料数 汇总表 ── */
 .usage-count-item {
-  color: #d97706;
-  font-weight: 600;
+  color: #dc2626;
+  font-weight: 700;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 .usage-summary-row {
   margin-top: 0;

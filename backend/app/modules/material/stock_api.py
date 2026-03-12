@@ -275,6 +275,10 @@ async def sync_material_master_to_stock(
         - supplier_cd
         - bundle_quantity
         - bundle_weight
+        - standard_spec
+        - unit_price
+        - pieces_per_bundle
+        - long_weight
     期間指定:
       body.start_date, body.end_date が指定された場合、その期間内 (date BETWEEN start_date AND end_date)
       の material_stock のみを更新対象とする。
@@ -298,6 +302,8 @@ async def sync_material_master_to_stock(
                 Material.material_name,
                 Material.safety_stock,
                 Material.supplier_cd,
+                Material.standard_spec,
+                Material.unit_price,
                 Material.pieces_per_bundle,
                 Material.long_weight,
             )
@@ -314,7 +320,7 @@ async def sync_material_master_to_stock(
 
         # material_cd -> マスタ情報 のマップ
         master_map: dict[str, tuple] = {
-            row[0]: row for row in mat_rows  # (material_cd, name, safety, supplier_cd, pieces_per_bundle, long_weight)
+            row[0]: row for row in mat_rows  # (material_cd, name, safety, supplier_cd, standard_spec, unit_price, pieces_per_bundle, long_weight)
         }
 
         # 対象となる material_stock 行を取得（materials.status=1 の material_cd のみ、必要なら期間で絞り込み）
@@ -330,21 +336,28 @@ async def sync_material_master_to_stock(
             m = master_map.get(stock.material_cd)
             if not m:
                 continue
-            _, material_name, safety_stock, supplier_cd, pieces_per_bundle, long_weight = m
+            _, material_name, safety_stock, supplier_cd, standard_spec, unit_price, pieces_per_bundle, long_weight = m
 
             # マスタの値で上書き（None や 0 は 0 として扱う）
             stock.material_name = material_name
             stock.safety_stock = int(safety_stock or 0)
             stock.supplier_cd = supplier_cd
-
-            # 束本数・束重量は材料マスタから算出・同期
-            # 束本数: pieces_per_bundle をそのまま利用
-            stock.bundle_quantity = int(pieces_per_bundle or 0)
-            # 束重量: 一本重量(long_weight) × 束本数
+            stock.standard_spec = (standard_spec or "").strip() or ""
+            try:
+                stock.unit_price = float(unit_price or 0)
+            except (TypeError, ValueError):
+                stock.unit_price = 0.0
+            stock.pieces_per_bundle = int(pieces_per_bundle or 0)
             try:
                 lw = float(long_weight or 0)
             except (TypeError, ValueError):
                 lw = 0.0
+            stock.long_weight = lw
+
+            # 束本数・束重量は材料マスタから算出・同期
+            # 束本数: pieces_per_bundle をそのまま利用
+            stock.bundle_quantity = stock.pieces_per_bundle
+            # 束重量: 一本重量(long_weight) × 束本数
             stock.bundle_weight = lw * stock.bundle_quantity
 
             updated_count += 1

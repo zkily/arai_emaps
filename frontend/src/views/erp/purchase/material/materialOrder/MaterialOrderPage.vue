@@ -815,18 +815,18 @@
     <el-dialog
       v-model="manualOrderDialogVisible"
       title="材料注文追加"
-      width="800px"
+      width="640px"
       :close-on-click-modal="false"
-      class="manual-order-dialog"
+      class="manual-order-dialog manual-order-dialog--compact"
     >
-      <div class="manual-order-content">
-        <div class="dialog-header">
-          <div class="header-icon">
+      <div class="manual-order-content manual-order-content--compact">
+        <div class="manual-order-header-compact">
+          <div class="manual-order-header-compact__icon">
             <el-icon><Plus /></el-icon>
           </div>
-          <div class="header-text">
+          <div class="manual-order-header-compact__text">
             <h3>材料注文追加</h3>
-            <p>新しい材料注文を手動で入力してください</p>
+            <p>新しい材料注文を手動で入力</p>
           </div>
         </div>
 
@@ -834,36 +834,31 @@
           :model="manualOrderForm"
           :rules="manualOrderRules"
           ref="manualOrderFormRef"
-          label-width="120px"
-          class="manual-order-form"
+          label-position="top"
+          label-width="auto"
+          class="manual-order-form manual-order-form--compact"
         >
-          <div class="form-section">
-            <div class="section-header">
-              <el-icon><Calendar /></el-icon>
-              <span>基本情報</span>
-            </div>
-
-            <el-form-item label="日付" prop="date">
+          <div class="manual-order-grid manual-order-grid--main">
+            <el-form-item label="日付" prop="date" class="manual-order-field">
               <el-date-picker
                 v-model="manualOrderForm.date"
                 type="date"
                 placeholder="日付を選択"
                 format="YYYY-MM-DD"
                 value-format="YYYY-MM-DD"
-                class="form-date-picker"
-                size="large"
+                class="manual-order-input"
+                size="default"
               />
             </el-form-item>
-
-            <el-form-item label="材料" prop="material_cd">
+            <el-form-item label="材料" prop="material_cd" class="manual-order-field manual-order-field--span2">
               <el-select
                 v-model="manualOrderForm.material_cd"
                 placeholder="材料を選択"
                 filterable
                 :loading="materialSearchLoading"
                 @change="handleMaterialChange"
-                class="form-select"
-                size="large"
+                class="manual-order-input"
+                size="default"
               >
                 <el-option
                   v-for="material in materialOptions"
@@ -876,113 +871,94 @@
             </el-form-item>
           </div>
 
-          <div class="form-section">
-            <div class="section-header">
-              <el-icon><ShoppingCart /></el-icon>
-              <span>注文情報</span>
-            </div>
-
-            <el-form-item label="注文束数" prop="order_quantity">
+          <div class="manual-order-grid manual-order-grid--order">
+            <el-form-item label="注文束数" prop="order_quantity" class="manual-order-field">
               <el-input-number
                 v-model="manualOrderForm.order_quantity"
                 :min="0"
                 :max="999999"
                 :precision="0"
-                placeholder="注文束数を入力"
-                class="form-input-number"
-                size="large"
+                placeholder="束数"
+                class="manual-order-input"
+                size="default"
+                controls-position="right"
                 @change="calculateOrderDetails"
               />
             </el-form-item>
-
-            <el-form-item label="注文本数" prop="order_bundle_quantity">
+            <el-form-item label="注文本数" prop="order_bundle_quantity" class="manual-order-field">
               <el-input-number
                 v-model="manualOrderForm.order_bundle_quantity"
                 :min="0"
                 :max="999999"
                 :precision="0"
-                placeholder="注文本数を入力"
-                class="form-input-number"
-                size="large"
+                placeholder="本数"
+                class="manual-order-input"
+                size="default"
+                controls-position="right"
                 :controls="false"
                 @change="handleManualOrderBundleQuantityChange"
               />
             </el-form-item>
-
-            <el-form-item label="備考">
+            <el-form-item label="備考" class="manual-order-field manual-order-field--full">
               <el-input
                 v-model="manualOrderForm.remarks"
                 type="textarea"
-                :rows="3"
-                placeholder="備考を入力（任意）"
-                class="form-textarea"
+                :rows="2"
+                placeholder="備考（任意）"
+                class="manual-order-input"
+                size="default"
               />
             </el-form-item>
           </div>
 
-          <div class="form-section" v-if="selectedMaterial">
-            <div class="section-header">
+          <div class="manual-order-detail" v-if="selectedMaterial">
+            <div class="manual-order-detail__title">
               <el-icon><InfoFilled /></el-icon>
-              <span>材料詳細情報</span>
-              <span style="margin-left: auto; font-size: 12px; color: #666">
-                调试: {{ selectedMaterial ? '已选择' : '未选择' }}
+              <span>材料詳細</span>
+              <span class="manual-order-detail__summary" v-if="calculatedWeight > 0 || calculatedAmount > 0">
+                重量 {{ Math.round(calculatedWeight) }}kg · 金額 {{ formatCurrency(calculatedAmount) }}
               </span>
             </div>
-
-            <div class="material-info">
-              <div class="info-row">
-                <span class="info-label">材料CD:</span>
-                <span class="info-value">{{ selectedMaterial.material_cd || '-' }}</span>
+            <div class="manual-order-detail__grid">
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">材料CD</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.material_cd || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">材料名:</span>
-                <span class="info-value">{{ selectedMaterial.material_name || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">材料名</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.material_name || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">仕入先:</span>
-                <span class="info-value">{{ selectedMaterial.supplier_name || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">仕入先</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.supplier_name || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">規格:</span>
-                <span class="info-value">{{ selectedMaterial.standard_spec || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">規格</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.standard_spec || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">単価:</span>
-                <span class="info-value">{{
-                  formatCurrency(selectedMaterial.unit_price || 0)
-                }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">単価</span>
+                <span class="manual-order-detail__value">{{ formatCurrency(selectedMaterial.unit_price || 0) }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">每捆件数:</span>
-                <span class="info-value">{{ selectedMaterial.pieces_per_bundle || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">束本数</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.pieces_per_bundle ?? '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">长重量:</span>
-                <span class="info-value">{{ selectedMaterial.long_weight || '-' }}kg</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">一本重量</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.long_weight ?? '—' }}<template v-if="selectedMaterial.long_weight">kg</template></span>
               </div>
-              <div class="info-row">
-                <span class="info-label">安全在庫:</span>
-                <span class="info-value">{{ selectedMaterial.safety_stock || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">安全/最大在庫</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.safety_stock ?? '—' }} / {{ selectedMaterial.max_stock ?? '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">最大在庫:</span>
-                <span class="info-value">{{ selectedMaterial.max_stock || '-' }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">単位</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.unit || '—' }}</span>
               </div>
-              <div class="info-row">
-                <span class="info-label">単位:</span>
-                <span class="info-value">{{ selectedMaterial.unit || '-' }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">リードタイム:</span>
-                <span class="info-value">{{ selectedMaterial.lead_time || '-' }}日</span>
-              </div>
-              <div class="info-row" v-if="calculatedWeight > 0">
-                <span class="info-label">計算重量:</span>
-                <span class="info-value">{{ Math.round(calculatedWeight) }}kg</span>
-              </div>
-              <div class="info-row" v-if="calculatedAmount > 0">
-                <span class="info-label">計算金額:</span>
-                <span class="info-value">{{ formatCurrency(calculatedAmount) }}</span>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">リードタイム</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.lead_time ?? '—' }}<template v-if="selectedMaterial.lead_time != null">日</template></span>
               </div>
             </div>
           </div>
@@ -990,16 +966,17 @@
       </div>
 
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="handleCancelManualOrder" class="cancel-btn">
+        <div class="manual-order-footer manual-order-footer--compact">
+          <el-button @click="handleCancelManualOrder" size="default" class="manual-order-btn manual-order-btn--cancel">
             <el-icon><Close /></el-icon>
             キャンセル
           </el-button>
           <el-button
             type="primary"
             @click="handleConfirmManualOrder"
-            class="confirm-btn"
             :loading="manualOrderLoading"
+            size="default"
+            class="manual-order-btn manual-order-btn--confirm"
           >
             <el-icon><Check /></el-icon>
             登録
@@ -1283,6 +1260,7 @@ import {
   getMaterialStockSubList,
   updateMaterialStock,
   updateMaterialStockSub,
+  createMaterialStockSub,
   deleteMaterialStockSub,
   getStockMaterialsList,
   toggleStockMaterialUsage,
@@ -2418,7 +2396,7 @@ const handleSyncMaterialMaster = async () => {
     const endDate = searchForm.dateRange[1]
 
     await ElMessageBox.confirm(
-      `材料マスタ（materials）の情報を材料在庫（material_stock）に同期しますか？\n\n対象期間: ${startDate} ～ ${endDate}\n\n同期対象項目:\n・材料名 (material_name)\n・安全在庫 (safety_stock)\n・仕入先CD (supplier_cd)\n・束本数 (bundle_quantity)\n・束重量 (bundle_weight)`,
+      `材料マスタ（materials）の情報を材料在庫（material_stock）に同期しますか？\n\n対象期間: ${startDate} ～ ${endDate}\n\n同期対象項目:\n・材料名 (material_name)\n・安全在庫 (safety_stock)\n・仕入先CD (supplier_cd)\n・束本数 (bundle_quantity)\n・束重量 (bundle_weight)\n・規格 (standard_spec)\n・単価 (unit_price)\n・束当たり本数 (pieces_per_bundle)\n・一本重量 (long_weight)`,
       '材料マスタ更新確認',
       {
         confirmButtonText: '実行',
@@ -3073,16 +3051,21 @@ const loadMaterials = async () => {
     }
 
     console.log('材料データレスポンス:', response)
-    // 处理后端响应格式 - axios 返回 { data: 后端body }，后端可能是 { success: true, data: [...] } 或直接数组
+    // 处理后端响应格式 - axios 返回 { data: 后端body }，后端可能是 { success: true, data: { list, total } } 或 { data: [...] } 或直接数组
     const resBody = (response as any)?.data ?? response
     console.log('响应状态:', resBody?.success)
     console.log('响应数据:', resBody?.data)
     console.log('完整响应对象:', JSON.stringify(response, null, 2))
     if (response) {
+      const list = resBody?.data?.list ?? resBody?.data ?? resBody?.list
       if (resBody?.success !== false && Array.isArray(resBody?.data)) {
         // 标准格式: { success: true, data: [...] }
         materialOptions.value = resBody.data
         console.log('成功获取材料数据 (标准格式):', materialOptions.value.length, '条')
+      } else if (Array.isArray(list)) {
+        // 格式: { success: true, data: { list: [...] } } 或 { data: { list: [...] } }
+        materialOptions.value = list
+        console.log('成功获取材料数据 (list格式):', materialOptions.value.length, '条')
       } else if (Array.isArray(resBody)) {
         // 直接数组格式: [...]
         materialOptions.value = resBody
@@ -3198,41 +3181,44 @@ const handleConfirmManualOrder = async () => {
 
     manualOrderLoading.value = true
 
+    const dateStr =
+      typeof manualOrderForm.date === 'string'
+        ? manualOrderForm.date
+        : (manualOrderForm.date as Date)?.toISOString?.()?.slice(0, 10) ?? ''
+
     const orderData = {
-      date: manualOrderForm.date,
-      material_cd: manualOrderForm.material_cd,
-      material_name: manualOrderForm.material_name,
-      order_quantity: manualOrderForm.order_quantity,
-      order_bundle_quantity: manualOrderForm.order_bundle_quantity,
-      safety_stock: manualOrderForm.safety_stock,
-      max_stock: manualOrderForm.max_stock,
-      unit: manualOrderForm.unit,
-      unit_price: manualOrderForm.unit_price,
-      supplier_cd: manualOrderForm.supplier_cd,
-      supplier_name: manualOrderForm.supplier_name,
-      standard_spec: manualOrderForm.standard_spec,
-      pieces_per_bundle: manualOrderForm.pieces_per_bundle,
-      long_weight: manualOrderForm.long_weight,
-      lead_time: manualOrderForm.lead_time,
-      bundle_weight: calculatedWeight.value,
-      order_amount: calculatedAmount.value,
-      remarks: manualOrderForm.remarks,
+      date: dateStr,
+      material_cd: manualOrderForm.material_cd || '',
+      material_name: manualOrderForm.material_name || '',
+      current_stock: 0,
+      safety_stock: manualOrderForm.safety_stock ?? 0,
+      max_stock: manualOrderForm.max_stock ?? 0,
+      unit: manualOrderForm.unit || undefined,
+      unit_price: manualOrderForm.unit_price ?? 0,
+      supplier_cd: manualOrderForm.supplier_cd || undefined,
+      supplier_name: manualOrderForm.supplier_name || undefined,
+      lead_time: manualOrderForm.lead_time ?? 0,
+      planned_usage: 0,
+      order_quantity: manualOrderForm.order_quantity ?? 0,
+      order_bundle_quantity: manualOrderForm.order_bundle_quantity ?? 0,
+      bundle_weight: calculatedWeight.value ?? 0,
+      order_amount: calculatedAmount.value ?? 0,
+      standard_spec: manualOrderForm.standard_spec || undefined,
+      pieces_per_bundle: manualOrderForm.pieces_per_bundle ?? 0,
+      long_weight: manualOrderForm.long_weight ?? undefined,
+      remarks: manualOrderForm.remarks || undefined,
     }
 
-    const response = await request.post('/api/material-stock-update/manual-create', orderData) as any
-    const resData = response?.data ?? response
-
-    if (resData?.success !== false) {
+    const result = await createMaterialStockSub(orderData) as any
+    if (result?.success !== false) {
       ElMessage.success('材料注文が正常に登録されました')
       manualOrderDialogVisible.value = false
-      // 刷新数据
       await fetchData()
     } else {
       ElMessage.error('材料注文の登録に失敗しました')
     }
   } catch (error) {
     if (error !== false) {
-      // 表单验证失败时error为false
       console.error('材料注文登録に失敗しました:', error)
       ElMessage.error('材料注文の登録に失敗しました')
     }
@@ -4077,54 +4063,282 @@ const handleFilterChange = (filterType: string) => {
   font-size: 12px;
 }
 
-/* 手录入材料注文对话框样式 */
-.manual-order-dialog {
+/* 手录入材料注文对话框样式 - 紧凑现代UI */
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog) {
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__header) {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+  border: none;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__title) {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn) {
+  top: 12px;
+  width: 28px;
+  height: 28px;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__body) {
+  padding: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__footer) {
+  padding: 10px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* 紧凑头部 */
+.manual-order-content--compact {
+  padding: 12px 16px 16px;
+}
+
+.manual-order-header-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.manual-order-header-compact__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.manual-order-header-compact__text h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.manual-order-header-compact__text p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* 表单紧凑 */
+.manual-order-form--compact {
+  margin-top: 0;
+}
+
+.manual-order-form--compact :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.manual-order-form--compact :deep(.el-form-item__label) {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  padding-bottom: 4px;
+  line-height: 1.3;
+}
+
+.manual-order-grid {
+  display: grid;
+  gap: 0 12px;
+  margin-bottom: 12px;
+}
+
+.manual-order-grid--main {
+  grid-template-columns: 120px 1fr;
+}
+
+.manual-order-grid--main .manual-order-field--span2 {
+  grid-column: span 1;
+}
+
+.manual-order-grid--order {
+  grid-template-columns: 1fr 1fr;
+}
+
+.manual-order-grid--order .manual-order-field--full {
+  grid-column: 1 / -1;
+}
+
+.manual-order-field :deep(.el-input-number),
+.manual-order-field :deep(.el-date-editor),
+.manual-order-field :deep(.el-select) {
+  width: 100%;
+}
+
+.manual-order-input :deep(.el-input__wrapper),
+.manual-order-input :deep(.el-input__inner),
+.manual-order-input :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.manual-order-input :deep(.el-input__wrapper:hover),
+.manual-order-input :deep(.el-textarea__inner:hover) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.manual-order-input :deep(.el-input__wrapper.is-focus),
+.manual-order-input :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
+}
+
+/* 材料詳細ブロック */
+.manual-order-detail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.manual-order-detail__title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.manual-order-detail__title .el-icon {
+  font-size: 14px;
+  color: #6366f1;
+}
+
+.manual-order-detail__summary {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: #4f46e5;
+}
+
+.manual-order-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 12px;
+}
+
+.manual-order-detail__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.manual-order-detail__label {
+  font-size: 10px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.manual-order-detail__value {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 500;
+}
+
+/* フッターボタン */
+.manual-order-footer--compact {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.manual-order-btn {
+  min-width: 88px;
+}
+
+.manual-order-btn :deep(.el-icon) {
+  margin-right: 4px;
+  font-size: 14px;
+}
+
+.manual-order-btn--confirm {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  border: none;
+}
+
+.manual-order-btn--confirm:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  border: none;
+}
+
+/* 旧样式保留兼容（其他可能引用） */
+.manual-order-dialog:not(.manual-order-dialog--compact) {
   border-radius: 16px;
   overflow: hidden;
 }
 
-.manual-order-dialog :deep(.el-dialog) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog) {
   border-radius: 16px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
-.manual-order-dialog :deep(.el-dialog__header) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__header) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: 20px 24px;
   border-radius: 16px 16px 0 0;
 }
 
-.manual-order-dialog :deep(.el-dialog__title) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__title) {
   color: white;
   font-weight: 600;
   font-size: 18px;
 }
 
-.manual-order-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: white;
   font-size: 20px;
 }
 
-.manual-order-dialog :deep(.el-dialog__body) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__body) {
   padding: 0;
 }
 
-.manual-order-dialog :deep(.el-dialog__footer) {
+.manual-order-dialog:not(.manual-order-dialog--compact) :deep(.el-dialog__footer) {
   padding: 20px 24px;
   background-color: #f8f9fa;
   border-radius: 0 0 16px 16px;
 }
 
-.manual-order-content {
+.manual-order-content:not(.manual-order-content--compact) {
   padding: 24px;
 }
 
-.manual-order-form {
+.manual-order-form:not(.manual-order-form--compact) {
   margin-top: 20px;
 }
 
-.manual-order-form .form-section {
+.manual-order-form:not(.manual-order-form--compact) .form-section {
   background: white;
   border-radius: 12px;
   border: 1px solid #e9ecef;
@@ -4133,7 +4347,7 @@ const handleFilterChange = (filterType: string) => {
   margin-bottom: 20px;
 }
 
-.manual-order-form .section-header {
+.manual-order-form:not(.manual-order-form--compact) .section-header {
   display: flex;
   align-items: center;
   padding: 16px 20px;
@@ -4144,23 +4358,23 @@ const handleFilterChange = (filterType: string) => {
   font-size: 14px;
 }
 
-.manual-order-form .section-header .el-icon {
+.manual-order-form:not(.manual-order-form--compact) .section-header .el-icon {
   margin-right: 8px;
   color: #667eea;
   font-size: 16px;
 }
 
-.manual-order-form .el-form-item {
+.manual-order-form:not(.manual-order-form--compact) .el-form-item {
   padding: 16px 20px;
   margin-bottom: 0;
   border-bottom: 1px solid #f1f3f4;
 }
 
-.manual-order-form .el-form-item:last-child {
+.manual-order-form:not(.manual-order-form--compact) .el-form-item:last-child {
   border-bottom: none;
 }
 
-.manual-order-form :deep(.el-form-item__label) {
+.manual-order-form:not(.manual-order-form--compact) :deep(.el-form-item__label) {
   font-weight: 600;
   color: #495057;
 }

@@ -221,6 +221,35 @@ export function deleteMaterialStockSub(id: number): Promise<{ success?: boolean 
   return request.delete(`${PREFIX}/stock/sub/${id}`) as Promise<{ success?: boolean }>
 }
 
+/** 手動注文登録：material_stock_sub 新規作成 */
+export function createMaterialStockSub(body: {
+  material_cd: string
+  material_name: string
+  date: string
+  current_stock?: number
+  safety_stock?: number
+  max_stock?: number
+  unit?: string
+  unit_price?: number
+  supplier_cd?: string
+  supplier_name?: string
+  lead_time?: number
+  planned_usage?: number
+  order_quantity?: number
+  order_bundle_quantity?: number
+  bundle_weight?: number
+  order_amount?: number
+  standard_spec?: string
+  pieces_per_bundle?: number
+  long_weight?: number
+  remarks?: string
+}): Promise<{ success?: boolean; data?: unknown }> {
+  return request.post(`${PREFIX}/stock/sub`, body) as Promise<{
+    success?: boolean
+    data?: unknown
+  }>
+}
+
 export function getStockMaterialsList(params?: {
   page?: number
   pageSize?: number
