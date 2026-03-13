@@ -35,21 +35,6 @@
       </div>
     </div>
 
-    <!-- 在庫管理 -->
-    <div class="section-title">在庫管理</div>
-    <div class="module-grid">
-      <router-link v-for="m in stockModules" :key="m.path" :to="m.path" class="module-card modern-card">
-        <div class="module-icon" :style="{ background: m.gradient }">
-          <el-icon :size="32"><component :is="m.icon" /></el-icon>
-        </div>
-        <div class="module-info">
-          <h3 class="module-title">{{ m.title }}</h3>
-          <p class="module-desc">{{ m.description }}</p>
-        </div>
-        <el-icon class="module-arrow"><ArrowRight /></el-icon>
-      </router-link>
-    </div>
-
     <!-- 受入管理 -->
     <div class="section-title">受入管理</div>
     <div class="module-grid">
@@ -101,7 +86,7 @@
 import { ref, markRaw } from 'vue'
 import type { Component } from 'vue'
 import {
-  Box, ArrowRight, DocumentAdd, DataLine, Download, CircleCheck,
+  Box, ArrowRight, DataLine, Download, CircleCheck,
   Tickets, TrendCharts, ShoppingCart,
 } from '@element-plus/icons-vue'
 
@@ -115,11 +100,6 @@ interface ModuleItem {
 
 const statsCards = ref<{ key: string; label: string; value: string; gradient: string; icon: Component }[]>([])
 
-const stockModules = ref<ModuleItem[]>([
-  { path: '/erp/purchase/material/stock-entry', title: '在庫登録', description: '材料の入出庫登録', icon: markRaw(DocumentAdd), gradient: 'linear-gradient(135deg, #409eff, #67c23a)' },
-  { path: '/erp/purchase/material/stock-materials', title: '在庫管理', description: '在庫材料の一覧・使用状態管理', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
-])
-
 const receivingModules = ref<ModuleItem[]>([
   { path: '/erp/purchase/material/receiving-history', title: '受入履歴', description: '受け入れ履歴の確認・検索', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
   { path: '/erp/purchase/material/receiving-inspection', title: '受入検品', description: '受け入れ検品の実施・管理', icon: markRaw(CircleCheck), gradient: 'linear-gradient(135deg, #67c23a, #85ce61)' },
@@ -131,7 +111,7 @@ const masterModules = ref<ModuleItem[]>([
 
 const orderModules = ref<ModuleItem[]>([
   { path: '/erp/purchase/material/forecast', title: '内示管理', description: '月別受注から材料必要数量を算出・管理', icon: markRaw(TrendCharts), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
-  { path: '/erp/purchase/material/order', title: '材料発注', description: '材料の在庫状況と将来使用量を参考に受注数量を決定', icon: markRaw(ShoppingCart), gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
+  { path: '/erp/purchase/material/order', title: '材料在庫管理', description: '材料の在庫状況と将来使用量を参考に受注数量を決定', icon: markRaw(ShoppingCart), gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
 ])
 </script>
 

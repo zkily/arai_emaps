@@ -91,7 +91,7 @@ async def get_material_names(
 @router.get("")
 async def list_receiving_logs(
     page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=1000),
+    pageSize: int = Query(50, ge=1, le=20000),
     keyword: Optional[str] = Query(None),
     material_cd: Optional[str] = Query(None),
     supplier: Optional[str] = Query(None),
@@ -117,7 +117,12 @@ async def list_receiving_logs(
     if material_cd:
         q = q.where(MaterialLog.material_cd == material_cd)
     if supplier:
-        q = q.where(MaterialLog.supplier == supplier)
+        # 複数仕入先対応: カンマ区切りなら IN 条件、単一なら等号
+        parts = [p.strip() for p in supplier.split(",") if p and p.strip()]
+        if len(parts) == 1:
+            q = q.where(MaterialLog.supplier == parts[0])
+        elif len(parts) > 1:
+            q = q.where(MaterialLog.supplier.in_(parts))
     if startDate:
         q = q.where(MaterialLog.log_date >= date.fromisoformat(startDate))
     if endDate:

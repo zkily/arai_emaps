@@ -134,7 +134,7 @@
               <span>{{ row.outer_diameter2 || '-' }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="inspector_name" label="検品者" width="100" align="center">
+          <el-table-column prop="inspector_name" label="検品者" width="120" align="center">
             <template #default="{ row }">
               <span class="inspector-name">{{ row.inspector_name || '-' }}</span>
             </template>
@@ -261,156 +261,171 @@
     <!-- 品質基準編集ダイアログ -->
     <el-dialog
       v-model="editDialogVisible"
-      title="品質基準編集"
-      width="800px"
-      class="edit-dialog"
+      width="720px"
+      class="quality-edit-dialog"
       :close-on-click-modal="false"
+      align-center
+      destroy-on-close
     >
-      <div v-if="editingStandard" class="edit-form">
-        <!-- 材料情報表示 -->
-        <div class="material-info-section">
-          <h4 class="section-title">材料情報</h4>
-          <div class="info-display">
-            <div class="info-item">
-              <label>材料名:</label>
-              <span>{{ editingStandard.material_name }}</span>
+      <template #header>
+        <div class="quality-dialog-header">
+          <div class="quality-dialog-header-icon">
+            <el-icon :size="22"><Setting /></el-icon>
+          </div>
+          <div class="quality-dialog-header-text">
+            <span class="quality-dialog-title">品質基準編集</span>
+            <span v-if="editingStandard" class="quality-dialog-subtitle">{{ editingStandard.material_name }}</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="editingStandard" class="quality-edit-body">
+        <!-- 材料情報カード -->
+        <div class="quality-material-card">
+          <div class="quality-material-card-label">材料情報</div>
+          <div class="quality-material-card-content">
+            <div class="quality-material-badge">
+              <span class="quality-material-badge-key">材料名</span>
+              <span class="quality-material-badge-value">{{ editingStandard.material_name }}</span>
             </div>
-            <div class="info-item">
-              <label>標準仕様:</label>
-              <span>{{ editingStandard.standard_spec }}</span>
+            <div class="quality-material-badge">
+              <span class="quality-material-badge-key">標準仕様</span>
+              <span class="quality-material-badge-value">{{ editingStandard.standard_spec || '—' }}</span>
             </div>
-            <div class="info-item">
-              <label>仕入先:</label>
-              <span>{{ editingStandard.supplier_name }}</span>
+            <div class="quality-material-badge">
+              <span class="quality-material-badge-key">仕入先</span>
+              <span class="quality-material-badge-value">{{ editingStandard.supplier_name || '—' }}</span>
             </div>
           </div>
         </div>
 
         <!-- 編集フォーム -->
-        <div class="edit-form-section">
-          <h4 class="section-title">品質基準編集</h4>
+        <div class="quality-form-card">
+          <div class="quality-form-card-label">許容・範囲</div>
           <el-form
             ref="editFormRef"
             :model="editForm"
             :rules="editFormRules"
-            label-width="120px"
-            class="edit-form-content"
+            label-position="top"
+            class="quality-form"
+            size="default"
           >
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="許容範囲" prop="tolerance_range">
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="許容範囲" prop="tolerance_range" class="quality-form-item">
                   <el-input v-model="editForm.tolerance_range" placeholder="例: ±0.1" clearable />
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
-                <el-form-item label="範囲値" prop="range_value">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="範囲値" prop="range_value" class="quality-form-item">
                   <el-input v-model="editForm.range_value" placeholder="範囲値を入力" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
 
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="許容値1" prop="tolerance_1">
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="許容値1" prop="tolerance_1" class="quality-form-item">
                   <el-input-number
                     v-model="editForm.tolerance_1"
                     :precision="3"
                     :step="0.1"
                     placeholder="許容値1"
-                    style="width: 100%"
+                    controls-position="right"
+                    class="quality-input-number"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
-                <el-form-item label="許容値2" prop="tolerance_2">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="許容値2" prop="tolerance_2" class="quality-form-item">
                   <el-input-number
                     v-model="editForm.tolerance_2"
                     :precision="3"
                     :step="0.1"
                     placeholder="許容値2"
-                    style="width: 100%"
+                    controls-position="right"
+                    class="quality-input-number"
                   />
                 </el-form-item>
               </el-col>
             </el-row>
 
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="最小値" prop="min_value">
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="最小値" prop="min_value" class="quality-form-item">
                   <el-input-number
                     v-model="editForm.min_value"
                     :precision="3"
                     :step="0.1"
                     placeholder="最小値"
-                    style="width: 100%"
+                    controls-position="right"
+                    class="quality-input-number"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="12">
-                <el-form-item label="最大値" prop="max_value">
+              <el-col :xs="24" :sm="12">
+                <el-form-item label="最大値" prop="max_value" class="quality-form-item">
                   <el-input-number
                     v-model="editForm.max_value"
                     :precision="3"
                     :step="0.1"
                     placeholder="最大値"
-                    style="width: 100%"
+                    controls-position="right"
+                    class="quality-input-number"
                   />
                 </el-form-item>
               </el-col>
             </el-row>
 
-            <el-row :gutter="20">
-              <el-col :span="8">
-                <el-form-item label="実測値1" prop="actual_value_1">
+            <div class="quality-form-divider">実測値</div>
+            <el-row :gutter="16">
+              <el-col :xs="24" :sm="8">
+                <el-form-item label="実測値1" prop="actual_value_1" class="quality-form-item">
                   <el-input
                     v-model="editForm.actual_value_1"
                     placeholder="実測値1"
-                    style="width: 120px"
                     maxlength="10"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="8">
-                <el-form-item label="実測値2" prop="actual_value_2">
+              <el-col :xs="24" :sm="8">
+                <el-form-item label="実測値2" prop="actual_value_2" class="quality-form-item">
                   <el-input
                     v-model="editForm.actual_value_2"
                     placeholder="実測値2"
-                    style="width: 120px"
                     maxlength="10"
                   />
                 </el-form-item>
               </el-col>
-              <el-col :span="8">
-                <el-form-item label="実測値3" prop="actual_value_3">
+              <el-col :xs="24" :sm="8">
+                <el-form-item label="実測値3" prop="actual_value_3" class="quality-form-item">
                   <el-input
                     v-model="editForm.actual_value_3"
                     placeholder="実測値3"
-                    style="width: 120px"
                     maxlength="10"
                   />
                 </el-form-item>
               </el-col>
             </el-row>
 
-            <el-row>
-              <el-col :span="24">
-                <el-form-item label="代表モデル" prop="representative_model">
-                  <el-input
-                    v-model="editForm.representative_model"
-                    placeholder="代表モデルを入力"
-                    clearable
-                  />
-                </el-form-item>
-              </el-col>
-            </el-row>
+            <el-form-item label="代表モデル" prop="representative_model" class="quality-form-item">
+              <el-input
+                v-model="editForm.representative_model"
+                placeholder="代表モデルを入力"
+                clearable
+              />
+            </el-form-item>
           </el-form>
         </div>
       </div>
 
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="cancelEdit">キャンセル</el-button>
-          <el-button type="primary" @click="saveEdit" :loading="saving"> 保存 </el-button>
+        <div class="quality-dialog-footer">
+          <el-button @click="cancelEdit" class="quality-dialog-btn-cancel">キャンセル</el-button>
+          <el-button type="primary" @click="saveEdit" :loading="saving" class="quality-dialog-btn-save">
+            <el-icon v-if="!saving" class="btn-icon"><Document /></el-icon>
+            保存
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -593,9 +608,11 @@ const selectedMaterialName = ref<string>('')
 const fetchQualityStandards = async (): Promise<void> => {
   try {
     loading.value = true
-    const res = await request.get<{ success?: boolean; data?: any[] }>('/api/master/materials')
+    const res = await request.get<{ success?: boolean; data?: { list?: any[]; total?: number } }>('/api/master/materials')
     const raw = (res as any)?.data ?? res
-    const list = Array.isArray((raw as any)?.data) ? (raw as any).data : (Array.isArray(raw) ? raw : [])
+    // API returns { success, data: { list: [...], total } }
+    const data = (raw as any)?.data ?? raw
+    const list = Array.isArray((data as any)?.list) ? (data as any).list : (Array.isArray(data) ? data : [])
     if (list.length >= 0) {
       qualityStandards.value = list.map((material: any) => ({
         id: material.id,
@@ -979,74 +996,64 @@ const applyFilters = (): void => {
   filteredInspectionHistory.value = filtered.slice(start, end)
 }
 
-// 获取所有筛选数据（不分页）
+// 获取所有筛选数据（不分页）- 印刷用に /api/material/receiving を使用
 const fetchAllFilteredData = async (): Promise<any[]> => {
   try {
-    // 构建查询参数 - 获取所有数据，不分页
-    const params = new URLSearchParams()
-    params.append('page', '1')
-    params.append('page_size', '10000') // 设置一个很大的数字获取所有数据
-
-    // 日期范围筛选（可选）
+    const params: Record<string, number | string | undefined> = {
+      page: 1,
+      pageSize: 10000,
+    }
     if (historyDateRange.value && historyDateRange.value.length === 2) {
-      params.append('start_date', historyDateRange.value[0])
-      params.append('end_date', historyDateRange.value[1])
+      params.startDate = historyDateRange.value[0]
+      params.endDate = historyDateRange.value[1]
     }
 
-    const response = await fetch(`/api/material-logs?${params.toString()}`)
-    const result = await response.json()
+    const result = await getMaterialLogs(params)
+    const list = result?.data?.list ?? []
+    let allData = list.map((log: any) => ({
+      id: log.id,
+      inspection_date: log.log_date,
+      material_cd: log.material_cd,
+      material_name: log.material_name,
+      material_quality: log.material_quality,
+      inspector_name: log.inspector_name || log.item || '検品者',
+      result: log.material_quality || '合格',
+      log_time: log.log_time,
+      hd_no: log.hd_no,
+      manufacture_no: log.manufacture_no,
+      manufacture_date: log.manufacture_date,
+      pieces_per_bundle: log.pieces_per_bundle,
+      length: log.length,
+      quantity: log.quantity,
+      bundle_quantity: log.bundle_quantity,
+      outer_diameter1: log.outer_diameter1,
+      outer_diameter2: log.outer_diameter2,
+      supplier: log.supplier,
+      magnetic: log.magnetic,
+      appearance: log.appearance,
+      remarks: log.remarks,
+      note: log.note,
+      created_at: log.created_at,
+      updated_at: log.updated_at,
+    }))
 
-    if (result.success && result.data) {
-      let allData = result.data.map((log: any) => ({
-        id: log.id,
-        inspection_date: log.log_date,
-        material_cd: log.material_cd,
-        material_name: log.material_name,
-        material_quality: log.material_quality,
-        inspector_name: log.inspector_name || log.item || '検品者',
-        result: log.material_quality || '合格',
-        log_time: log.log_time,
-        hd_no: log.hd_no,
-        manufacture_no: log.manufacture_no,
-        manufacture_date: log.manufacture_date,
-        pieces_per_bundle: log.pieces_per_bundle,
-        length: log.length,
-        quantity: log.quantity,
-        bundle_quantity: log.bundle_quantity,
-        outer_diameter1: log.outer_diameter1,
-        outer_diameter2: log.outer_diameter2,
-        supplier: log.supplier,
-        magnetic: log.magnetic,
-        appearance: log.appearance,
-        remarks: log.remarks,
-        note: log.note,
-        created_at: log.created_at,
-        updated_at: log.updated_at,
-      }))
-
-      // 应用仕入先筛选
-      if (
-        selectedSupplier.value &&
-        Array.isArray(selectedSupplier.value) &&
-        selectedSupplier.value.length > 0
-      ) {
-        // 根据选中的ID找到对应的供应商名称
-        const selectedSupplierNames = selectedSupplier.value.map((selectedId) => {
-          const option = supplierOptions.value.find((opt) => opt.value === selectedId)
-          return option ? option.label : selectedId
-        })
-
-        allData = allData.filter((item: any) => {
-          const supplierValue = item.supplier || item.supplier_name || item.supplierName
-          return supplierValue && selectedSupplierNames.includes(supplierValue)
-        })
-      }
-
-      return allData
-    } else {
-      console.error('获取所有数据失败:', result.message)
-      return []
+    // 应用仕入先筛选（複数選択時はクライアント側で絞り込み）
+    if (
+      selectedSupplier.value &&
+      Array.isArray(selectedSupplier.value) &&
+      selectedSupplier.value.length > 0
+    ) {
+      const selectedSupplierNames = selectedSupplier.value.map((selectedId) => {
+        const option = supplierOptions.value.find((opt) => opt.value === selectedId)
+        return option ? option.label : selectedId
+      })
+      allData = allData.filter((item: any) => {
+        const supplierValue = item.supplier || (item as any).supplier_name || (item as any).supplierName
+        return supplierValue && selectedSupplierNames.includes(supplierValue)
+      })
     }
+
+    return allData
   } catch (error) {
     console.error('获取所有数据错误:', error)
     return []
@@ -1215,8 +1222,13 @@ const printInspectionHistory = async (): Promise<void> => {
       printWindow.document.write(printContent)
       printWindow.document.close()
       printWindow.focus()
-      printWindow.print()
-      printWindow.close()
+      // レンダリング後に印刷ダイアログを表示
+      setTimeout(() => {
+        printWindow.print()
+        setTimeout(() => printWindow.close(), 800)
+      }, 150)
+    } else {
+      ElMessage.error('ポップアップがブロックされました。印刷を許可してください。')
     }
   } catch (error) {
     console.error('打印失败:', error)
@@ -1992,19 +2004,213 @@ onMounted((): void => {
   padding: 12px 0;
 }
 
-.material-info-section {
-  background: #f8fafc;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
+/* ========== 品質基準編集ダイアログ - 現代UI ========== */
+.quality-edit-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.quality-edit-dialog :deep(.el-dialog__header) {
+  padding: 0;
+  margin: 0;
+}
+
+.quality-edit-dialog :deep(.el-dialog__body) {
+  padding: 0 24px 20px;
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.quality-edit-dialog :deep(.el-dialog__footer) {
+  padding: 14px 24px 20px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.quality-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+
+.quality-dialog-header-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quality-dialog-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quality-dialog-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.quality-dialog-subtitle {
+  font-size: 0.8rem;
+  opacity: 0.9;
+  font-weight: 500;
+}
+
+.quality-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.quality-material-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  padding: 14px 18px;
   border: 1px solid #e2e8f0;
 }
 
-.material-info-section .section-title {
-  font-size: 1rem;
+.quality-material-card-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
   margin-bottom: 10px;
 }
 
+.quality-material-card-content {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.quality-material-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.quality-material-badge-key {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.quality-material-badge-value {
+  font-size: 0.85rem;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.quality-form-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.quality-form-card-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  margin-bottom: 14px;
+}
+
+.quality-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.quality-form-item :deep(.el-form-item__label) {
+  font-weight: 600;
+  color: #475569;
+  font-size: 0.8rem;
+  padding-bottom: 4px;
+}
+
+.quality-form :deep(.el-input__wrapper),
+.quality-input-number :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.quality-form :deep(.el-input__wrapper:hover),
+.quality-input-number :deep(.el-input__wrapper:hover) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2);
+}
+
+.quality-form :deep(.el-input__wrapper.is-focus),
+.quality-input-number :deep(.el-input__wrapper.is-focus) {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+}
+
+.quality-input-number {
+  width: 100%;
+}
+
+.quality-input-number :deep(.el-input__inner) {
+  text-align: left;
+}
+
+.quality-form-divider {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 8px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.quality-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.quality-dialog-btn-cancel {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.quality-dialog-btn-save {
+  border-radius: 8px;
+  font-weight: 600;
+  padding-left: 18px;
+  padding-right: 18px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+}
+
+.quality-dialog-btn-save:hover {
+  opacity: 0.95;
+  background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+}
+
+.quality-dialog-btn-save .btn-icon {
+  margin-right: 6px;
+  vertical-align: -0.15em;
+}
+
+/* 既存: info-display / info-item（他で参照されている場合用） */
 .info-display {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2028,46 +2234,6 @@ onMounted((): void => {
   color: #2d3748;
   flex: 1;
   font-size: 0.875rem;
-}
-
-.edit-form-section {
-  background: white;
-  border-radius: 8px;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-}
-
-.edit-form-section .section-title {
-  font-size: 1rem;
-  margin-bottom: 12px;
-}
-
-.edit-form-content {
-  margin-top: 8px;
-}
-
-.edit-form-content :deep(.el-form-item) {
-  margin-bottom: 12px;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* フォームアイテムスタイル */
-:deep(.el-form-item__label) {
-  font-weight: 600;
-  color: #4a5568;
-}
-
-:deep(.el-input-number) {
-  width: 100%;
-}
-
-:deep(.el-input-number .el-input__inner) {
-  text-align: left;
 }
 
 /* 品質基準設定テーブルスタイル */
@@ -2114,22 +2280,30 @@ onMounted((): void => {
 
 /* レスポンシブデザイン */
 @media (max-width: 768px) {
-  .edit-dialog {
+  .quality-edit-dialog :deep(.el-dialog) {
     width: 95% !important;
     margin: 0 auto;
   }
 
-  .edit-dialog :deep(.el-dialog__body) {
-    padding: 12px 16px;
+  .quality-edit-dialog :deep(.el-dialog__body) {
+    padding: 0 16px 16px;
+  }
+
+  .quality-dialog-header {
+    padding: 14px 16px;
+  }
+
+  .quality-material-card-content {
+    flex-direction: column;
+  }
+
+  .quality-form :deep(.el-col) {
+    margin-bottom: 4px;
   }
 
   .info-display {
     grid-template-columns: 1fr;
     gap: 8px;
-  }
-
-  .edit-form-content :deep(.el-col) {
-    margin-bottom: 12px;
   }
 
   .quality-standards-table {

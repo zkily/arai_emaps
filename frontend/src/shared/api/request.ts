@@ -50,6 +50,10 @@ const service: AxiosInstance = axios.create({
 // リクエストインターセプター
 service.interceptors.request.use(
   (config) => {
+    // FormData の場合は Content-Type を削除し、ブラウザに multipart/form-data を付与させる
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     const userStore = useUserStore()
     const token = userStore.token
     if (token) {

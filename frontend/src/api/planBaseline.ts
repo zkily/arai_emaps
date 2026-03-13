@@ -105,3 +105,20 @@ export async function updatePlanBaselinePlanQuantity(params: {
     planQuantity: params.planQuantity,
   })
 }
+
+/** 工程別PDFを指定フォルダに保存（FormData: baselineMonth + files） */
+export async function exportPlanBaselinePdfToFolder(
+  baselineMonth: string,
+  files: { processName: string; blob: Blob }[],
+): Promise<{ success: boolean; message?: string; saved?: string[]; errors?: string[] }> {
+  const form = new FormData()
+  form.append('baselineMonth', baselineMonth)
+  files.forEach(({ processName, blob }) => {
+    form.append('files', blob, `${processName}.pdf`)
+  })
+  const res = await request.post<{ success: boolean; message?: string; saved?: string[]; errors?: string[] }>(
+    '/api/plan-baseline/export-pdf-to-folder',
+    form,
+  )
+  return res ?? { success: false, message: 'レスポンスがありません' }
+}

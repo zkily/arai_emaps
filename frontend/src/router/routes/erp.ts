@@ -147,13 +147,11 @@ export const erpRoutes: RouteRecordRaw[] = [
         children: [
           { path: '', name: 'MaterialHome', component: () => import('@/views/erp/purchase/material/MaterialHome.vue'), meta: { title: '材料管理ホーム', group: '材料管理', requiresAuth: true } },
           { path: 'master', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', group: '材料マスタ管理', requiresAuth: true } },
-          { path: 'stock-entry', name: 'MaterialStockEntry', component: () => import('@/views/erp/purchase/material/materialStock/MaterialStockEntry.vue'), meta: { title: '在庫登録', group: '在庫管理', requiresAuth: true } },
-          { path: 'stock-materials', name: 'StockMaterialsManagement', component: () => import('@/views/erp/purchase/material/materialStock/StockMaterialsManagement.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
           { path: 'receiving', redirect: { name: 'MaterialReceivingHistory' } },
           { path: 'receiving-history', name: 'MaterialReceivingHistory', component: () => import('@/views/erp/purchase/material/materialReceiving/MaterialReceivingHistory.vue'), meta: { title: '受入履歴', group: '受入管理', requiresAuth: true } },
           { path: 'receiving-inspection', name: 'MaterialReceivingInspection', component: () => import('@/views/erp/purchase/material/materialReceiving/MaterialReceivingInspection.vue'), meta: { title: '受入検品', group: '受入管理', requiresAuth: true } },
           { path: 'forecast', name: 'MaterialForecast', component: () => import('@/views/erp/purchase/material/materialForecast/MaterialForecastPage.vue'), meta: { title: '内示管理', group: '発注管理', requiresAuth: true } },
-          { path: 'order', name: 'MaterialOrder', component: () => import('@/views/erp/purchase/material/materialOrder/MaterialOrderPage.vue'), meta: { title: '材料発注', group: '発注管理', requiresAuth: true } },
+          { path: 'order', name: 'MaterialOrder', component: () => import('@/views/erp/purchase/material/materialOrder/MaterialOrderPage.vue'), meta: { title: '材料在庫管理', group: '発注管理', requiresAuth: true } },
         ],
       },
 

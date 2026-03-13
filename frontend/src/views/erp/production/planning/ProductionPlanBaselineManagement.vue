@@ -179,6 +179,17 @@
             <el-tag v-if="totalItemsCount > 0" type="primary" size="small" class="count-tag">
               総件数: {{ totalItemsCount }}
             </el-tag>
+            <el-button
+              type="primary"
+              plain
+              :icon="Download"
+              @click="handleExportPdfToFolder"
+              :loading="exportPdfLoading"
+              :disabled="!comparisonResult?.baselineMonth || processTabs.length === 0"
+              size="default"
+            >
+              工程別報告書発行
+            </el-button>
           </div>
         </div>
       </template>
@@ -520,6 +531,35 @@
       </div>
     </template>
   </el-dialog>
+
+  <!-- 工程別PDF発行 进度弹窗 -->
+  <el-dialog
+    v-model="exportProgressVisible"
+    title="工程別PDF発行"
+    width="420px"
+    align-center
+    :close-on-click-modal="false"
+    :close-on-press-escape="false"
+    :show-close="false"
+    class="export-pdf-progress-dialog"
+  >
+    <div class="export-progress-content">
+      <div class="export-progress-icon-wrap">
+        <el-icon class="export-progress-icon"><Download /></el-icon>
+      </div>
+      <p class="export-progress-title">PDFを生成・保存しています</p>
+      <p class="export-progress-current">{{ exportProgressCurrent }}</p>
+      <div class="export-progress-bar-wrap">
+        <el-progress
+          :percentage="exportProgressPercent"
+          :stroke-width="12"
+          :format="(p) => `${p}%`"
+          status="success"
+          class="export-progress-bar"
+        />
+      </div>
+    </div>
+  </el-dialog>
   </div>
 </template>
 
@@ -544,6 +584,7 @@ import {
   CircleCheck,
   DataLine,
   EditPen,
+  Download,
 } from '@element-plus/icons-vue'
 import {
   generatePlanBaseline,
@@ -551,10 +592,14 @@ import {
   deletePlanBaseline,
   fetchPlanBaselineRecords,
   updatePlanBaselinePlanQuantity,
+  exportPlanBaselinePdfToFolder,
   type PlanBaselineComparisonItem,
   type PlanBaselineComparisonResult,
   type PlanBaselineRecord,
 } from '@/api/planBaseline'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
+import * as echarts from 'echarts'
 
 const today = dayjs().startOf('month').format('YYYY-MM-DD')
 
@@ -583,6 +628,10 @@ const processOptions = [
 const generating = ref(false)
 const deleting = ref(false)
 const tableLoading = ref(false)
+const exportPdfLoading = ref(false)
+const exportProgressVisible = ref(false)
+const exportProgressPercent = ref(0)
+const exportProgressCurrent = ref('')
 const comparisonResult = ref<PlanBaselineComparisonResult | null>(null)
 const comparisonItems = ref<PlanBaselineComparisonItem[]>([])
 const activeTab = ref('all')
@@ -1014,6 +1063,326 @@ const handleDeleteBaseline = async () => {
   }
 }
 
+/** 工程別の比較表をHTMLで描画してキャプチャし、PDFのBlobで返す（日本語フォント対応） */
+async function buildProcessPdf(
+  processName: string,
+  baselineMonth: string,
+  items: PlanBaselineComparisonItem[],
+  totals: { currentPlan: number; planDiff: number; currentActual: number; actualDiff: number } | undefined,
+): Promise<Blob> {
+  const monthLabel = dayjs(baselineMonth).format('YYYY年MM月')
+  const headers = ['日付', '基準計画', '現行計画', '計画差異', '現行実績合計', '計画対実績差']
+
+  const baselinePlanTotal = items.reduce((sum, row) => sum + Number(row.baseline_plan ?? 0), 0)
+  const workingDays = items.length
+  const avgDailyProduction = workingDays > 0 ? Math.round(baselinePlanTotal / workingDays) : 0
+  const statsText =
+    workingDays > 0 ? `稼働日数: ${workingDays}日　平均日当たり生産数: ${formatNumber(avgDailyProduction)}` : ''
+
+  const numCell = (value: number | string | null | undefined) => {
+    const n = value != null && value !== '' ? Number(value) : NaN
+    const red = !Number.isNaN(n) && n < 0 ? ' color: #c62828;' : ''
+    return `style="border: 1px solid #bdbdbd; padding: 5px 7px; text-align: right;${red}"`
+  }
+
+  let rowsHtml = ''
+  items.forEach((row, idx) => {
+    const rowBg = idx % 2 === 0 ? '#fafafa' : '#fff'
+    rowsHtml += `
+      <tr style="background: ${rowBg};">
+        <td style="border: 1px solid #bdbdbd; padding: 5px 7px;">${formatDate(row.plan_date ?? '') || '-'}</td>
+        <td ${numCell(row.baseline_plan)}>${formatNumber(row.baseline_plan) as string}</td>
+        <td ${numCell(row.current_plan)}>${formatNumber(row.current_plan) as string}</td>
+        <td ${numCell(row.plan_diff)}>${formatNumber(row.plan_diff) as string}</td>
+        <td ${numCell(row.current_actual)}>${row.current_actual != null ? (formatNumber(row.current_actual) as string) : '-'}</td>
+        <td ${numCell(row.actual_diff)}>${row.actual_diff != null ? (formatNumber(row.actual_diff) as string) : '-'}</td>
+      </tr>
+    `
+  })
+  if (totals && items.length > 0) {
+    rowsHtml += `
+      <tr style="background: #eceff1; font-weight: bold; border-top: 2px solid #78909c;">
+        <td style="border: 1px solid #bdbdbd; padding: 5px 7px;">合計</td>
+        <td ${numCell(baselinePlanTotal)}>${formatNumber(baselinePlanTotal)}</td>
+        <td ${numCell(totals.currentPlan)}>${formatNumber(totals.currentPlan) as string}</td>
+        <td ${numCell(totals.planDiff)}>${formatNumber(totals.planDiff) as string}</td>
+        <td ${numCell(totals.currentActual)}>${formatNumber(totals.currentActual) as string}</td>
+        <td ${numCell(totals.actualDiff)}>${formatNumber(totals.actualDiff) as string}</td>
+      </tr>
+    `
+  }
+
+  const html = `
+    <div class="baseline-pdf-root" style="
+      font-family: 'Meiryo', 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      padding: 20px; background: #fff; width: 650px; box-sizing: border-box;">
+      <div class="pdf-title" style="font-size: 17px; font-weight: bold; color: #1565c0; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 2px solid #e3f2fd;">ベースライン計画 - 現行実績 - ${processName}</div>
+      <div class="pdf-month-row" style="font-size: 12px; color: #546e7a; margin-bottom: 14px; display: flex; justify-content: space-between;">
+        <span>${monthLabel}</span>
+        ${statsText ? `<span>${statsText}</span>` : ''}
+      </div>
+      <table style="width: 100%; border-collapse: collapse; font-size: 12px; line-height: 1.4; border: 1px solid #90a4ae; border-radius: 4px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08);">
+        <thead>
+          <tr style="background: linear-gradient(180deg, #37474f 0%, #455a64 100%); color: #fff; font-weight: bold;">
+            <th style="border: 1px solid #546e7a; padding: 6px 8px; text-align: left;">${headers[0]}</th>
+            ${headers.slice(1).map((h) => `<th style="border: 1px solid #546e7a; padding: 6px 8px; text-align: right;">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+  `
+
+  const wrap = document.createElement('div')
+  wrap.style.cssText = 'position: fixed; left: -9999px; top: 0; z-index: -1;'
+  wrap.innerHTML = html
+  document.body.appendChild(wrap)
+
+  const el = wrap.querySelector('.baseline-pdf-root') as HTMLElement
+  if (!el) {
+    document.body.removeChild(wrap)
+    throw new Error('PDF用要素の作成に失敗しました')
+  }
+
+  try {
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#ffffff',
+    })
+    document.body.removeChild(wrap)
+
+    const imgW = canvas.width
+    const imgH = canvas.height
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageW = 210
+    const pageH = 297
+    const margin = 10
+    const contentW = pageW - margin * 2
+    const contentH = pageH - margin * 2
+
+    const scale = contentW / imgW
+    const scaledH = imgH * scale
+
+    if (scaledH <= contentH) {
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, scaledH)
+    } else {
+      let drawn = 0
+      let pageIndex = 0
+      while (drawn < imgH) {
+        if (pageIndex > 0) doc.addPage([pageW, pageH], 'p')
+        const sliceH = Math.min(contentH / scale, imgH - drawn)
+        const sy = drawn
+        const sourceCanvas = document.createElement('canvas')
+        sourceCanvas.width = imgW
+        sourceCanvas.height = Math.ceil(sliceH)
+        const ctx = sourceCanvas.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(canvas, 0, sy, imgW, sliceH, 0, 0, imgW, sliceH)
+          doc.addImage(sourceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, sliceH * scale)
+        }
+        drawn += sliceH
+        pageIndex++
+      }
+    }
+
+    // --- 2ページ目: 日別折れ線 + 差異棒グラフ（ECharts で描画・画像取得） ---
+    if (items.length > 0) {
+      doc.addPage([pageW, pageH], 'p')
+
+      const labels = items.map((row) => formatDate(row.plan_date ?? '') || '')
+      const baselineSeries = items.map((row) => Number(row.baseline_plan ?? 0))
+      const currentPlanSeries = items.map((row) => Number(row.current_plan ?? 0))
+      const currentActualSeries = items.map((row) => Number(row.current_actual ?? 0))
+      const planDiffSeries = items.map((row) => Number(row.plan_diff ?? 0))
+      const diffColors = planDiffSeries.map((v) => (v >= 0 ? '#4caf50' : '#e53935'))
+
+      const chartDiv = document.createElement('div')
+      chartDiv.style.cssText =
+        'position: fixed; left: -9999px; top: 0; width: 900px; height: 520px; z-index: -1;'
+      document.body.appendChild(chartDiv)
+
+      const chartInstance = echarts.init(chartDiv, null, { renderer: 'canvas' })
+      chartInstance.setOption({
+        animation: false,
+        title: {
+          text: `日別計画・実績推移（${monthLabel}／${processName}）`,
+          left: 'center',
+          textStyle: { fontSize: 14 },
+        },
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params: any) => {
+            if (!Array.isArray(params) || params.length === 0) return ''
+            const idx = params[0].dataIndex
+            const dateStr = labels[idx]
+            const baseline = baselineSeries[idx]
+            const currentPlan = currentPlanSeries[idx]
+            const actual = currentActualSeries[idx]
+            const diff = planDiffSeries[idx]
+            const rate =
+              currentPlan > 0 && actual != null ? ((actual / currentPlan) * 100).toFixed(1) : '-'
+            return [
+              `日付: ${dateStr}`,
+              `基準計画: ${formatNumber(baseline)}`,
+              `現行計画: ${formatNumber(currentPlan)}`,
+              `現行実績合計: ${actual != null ? formatNumber(actual) : '-'}`,
+              `計画差異: ${formatNumber(diff)}`,
+              rate !== '-' ? `達成率: ${rate}%` : '',
+            ]
+              .filter(Boolean)
+              .join('<br/>')
+          },
+        },
+        legend: {
+          data: ['基準計画', '現行計画', '現行実績合計', '計画差異'],
+          top: 28,
+        },
+        grid: { left: 48, right: 48, top: 56, bottom: 40 },
+        xAxis: {
+          type: 'category',
+          data: labels,
+          axisLabel: { rotate: 0, maxInterval: 0 },
+        },
+        yAxis: [
+          {
+            type: 'value',
+            name: '数量',
+            position: 'left',
+            axisLabel: { formatter: '{value}' },
+            min: 0,
+            splitLine: { show: true, lineStyle: { type: 'dashed', opacity: 0.3 } },
+          },
+          {
+            type: 'value',
+            name: '計画差異',
+            position: 'right',
+            axisLabel: { formatter: '{value}' },
+            splitLine: { show: false },
+          },
+        ],
+        series: [
+          {
+            name: '計画差異',
+            type: 'bar',
+            yAxisIndex: 1,
+            z: 1,
+            data: planDiffSeries.map((v, i) => ({ value: v, itemStyle: { color: diffColors[i] } })),
+            barMaxWidth: 24,
+          },
+          {
+            name: '基準計画',
+            type: 'line',
+            yAxisIndex: 0,
+            z: 2,
+            data: baselineSeries,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { width: 2.5 },
+            itemStyle: { color: '#1976d2' },
+            emphasis: { scale: true, itemStyle: { borderColor: '#fff', borderWidth: 2 } },
+          },
+          {
+            name: '現行計画',
+            type: 'line',
+            yAxisIndex: 0,
+            z: 2,
+            data: currentPlanSeries,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { width: 2.5 },
+            itemStyle: { color: '#fb8c00' },
+            emphasis: { scale: true, itemStyle: { borderColor: '#fff', borderWidth: 2 } },
+          },
+          {
+            name: '現行実績合計',
+            type: 'line',
+            yAxisIndex: 0,
+            z: 2,
+            data: currentActualSeries,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 8,
+            lineStyle: { width: 2.5 },
+            itemStyle: { color: '#388e3c' },
+            emphasis: { scale: true, itemStyle: { borderColor: '#fff', borderWidth: 2 } },
+          },
+        ],
+      })
+
+      await new Promise((r) => setTimeout(r, 80))
+      const chartImg = chartInstance.getDataURL({
+        type: 'png',
+        pixelRatio: 2,
+        backgroundColor: '#fff',
+      })
+      chartInstance.dispose()
+      document.body.removeChild(chartDiv)
+
+      if (chartImg) {
+        const chartWmm = contentW
+        const chartHmm = (520 / 900) * chartWmm
+        const chartY = margin + (contentH - chartHmm) / 2
+        doc.addImage(chartImg, 'PNG', margin, chartY, chartWmm, chartHmm)
+      }
+    }
+
+    return doc.output('blob')
+  } catch (e) {
+    document.body.removeChild(wrap)
+    throw e
+  }
+}
+
+const handleExportPdfToFolder = async () => {
+  if (!comparisonResult.value?.baselineMonth || processTabs.value.length === 0) {
+    ElMessage.warning('比較データがありません。先に検索を実行してください。')
+    return
+  }
+  const tabs = processTabs.value
+  const total = tabs.length
+  exportPdfLoading.value = true
+  exportProgressVisible.value = true
+  exportProgressPercent.value = 0
+  exportProgressCurrent.value = '準備中...'
+  try {
+    const baselineMonth = comparisonResult.value.baselineMonth
+    const files: { processName: string; blob: Blob }[] = []
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i]
+      exportProgressCurrent.value = `「${tab.name}」を生成中（${i + 1} / ${total}）`
+      exportProgressPercent.value = Math.round(((i + 0.5) / total) * 100)
+      const totals = processTotals.value.get(tab.name)
+      const blob = await buildProcessPdf(tab.name, baselineMonth, tab.items, totals)
+      files.push({ processName: tab.name, blob })
+    }
+    exportProgressCurrent.value = 'サーバーに保存しています...'
+    exportProgressPercent.value = 95
+    const res = await exportPlanBaselinePdfToFolder(baselineMonth, files)
+    exportProgressPercent.value = 100
+    exportProgressCurrent.value = '完了'
+    if (res.success) {
+      ElMessage.success(res.message ?? `${res.saved?.length ?? 0}件のPDFを保存しました`)
+    } else {
+      ElMessage.error(res.message ?? '保存に失敗しました')
+      if (res.errors?.length) console.error('export errors', res.errors)
+    }
+  } catch (error: any) {
+    ElMessage.error(error?.message ?? '工程別PDFの保存に失敗しました')
+    console.error(error)
+  } finally {
+    exportPdfLoading.value = false
+    setTimeout(() => {
+      exportProgressVisible.value = false
+      exportProgressPercent.value = 0
+      exportProgressCurrent.value = ''
+    }, 400)
+  }
+}
+
 const resetForm = () => {
   queryForm.baselineMonth = today
   queryForm.processName = ''
@@ -1035,6 +1404,81 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 工程別PDF発行 进度弹窗 */
+.export-progress-content {
+  padding: 8px 0 16px;
+  text-align: center;
+}
+.export-progress-icon-wrap {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: export-pulse 1.5s ease-in-out infinite;
+}
+.export-progress-icon {
+  font-size: 28px;
+  color: #1976d2;
+}
+.export-progress-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #37474f;
+}
+.export-progress-current {
+  margin: 0 0 20px;
+  font-size: 13px;
+  color: #546e7a;
+  min-height: 20px;
+}
+.export-progress-bar-wrap {
+  padding: 0 8px;
+}
+.export-progress-bar {
+  --el-progress-bar-height: 12px;
+  --el-progress-text-size: 13px;
+}
+:deep(.export-progress-bar .el-progress-bar__outer) {
+  border-radius: 6px;
+  background-color: #e8eaf6;
+}
+:deep(.export-progress-bar .el-progress-bar__inner) {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #5c6bc0 0%, #7986cb 50%, #9fa8da 100%) !important;
+  transition: width 0.35s ease;
+}
+
+.export-pdf-progress-dialog :deep(.el-dialog__header) {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #e8eaf6;
+  margin-right: 0;
+}
+.export-pdf-progress-dialog :deep(.el-dialog__title) {
+  font-size: 16px;
+  font-weight: 600;
+  color: #37474f;
+}
+.export-pdf-progress-dialog :deep(.el-dialog__body) {
+  padding: 20px 24px 24px;
+}
+
+@keyframes export-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(25, 118, 210, 0.2);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 8px rgba(25, 118, 210, 0);
+  }
+}
+
 /* 页面基础样式 */
 .plan-baseline-root {
   display: block;

@@ -5,11 +5,13 @@
 - GET /comparison: 基準 vs 現行計画・実績の比較
 - GET /records: 修正用レコード一覧
 - PUT /plan-quantity: 計画数量の更新
+- POST /export-pdf-to-folder: 工程別PDFを指定フォルダに保存
 """
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from fastapi import APIRouter, Body, Depends, Query
+from pathlib import Path
+from fastapi import APIRouter, Body, Depends, File, Form, Query, UploadFile
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any, Optional
@@ -403,3 +405,45 @@ async def update_plan_baseline_plan_quantity(
     if result.rowcount == 0:
         return {"success": False, "message": "該当するベースラインがありません"}
     return {"success": True, "message": "更新しました"}
+
+
+# 工程別PDF保存先（社内共有フォルダ）
+BASELINE_PDF_SAVE_DIR = Path(r"\\192.168.1.200\社内共有\02_生産管理部\Data\BT-data\保存データ")
+
+
+@router.post("/export-pdf-to-folder")
+async def export_pdf_to_folder(
+    baselineMonth: str = Form(..., description="基準月 YYYY-MM-DD"),
+    files: list[UploadFile] = File(..., description="工程別PDF（ファイル名が工程名.pdf）"),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """工程別PDFを指定フォルダに保存する。files は各工程のPDF（ファイル名例: 切断.pdf）"""
+    if not baselineMonth or len(baselineMonth) < 7:
+        return {"success": False, "message": "baselineMonth を指定してください"}
+    month_label = baselineMonth[:7].replace("-", "")  # YYYYMM
+    try:
+        save_dir = BASELINE_PDF_SAVE_DIR
+        save_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.exception("ベースラインPDF保存フォルダの作成に失敗: %s", e)
+        return {"success": False, "message": f"保存フォルダにアクセスできません: {e}"}
+    saved: list[str] = []
+    errors: list[str] = []
+    for f in files:
+        if not f.filename or not f.filename.endswith(".pdf"):
+            continue
+        # ファイル名から拡張子を除いた部分を工程名として使用
+        process_name = f.filename[:-4].strip() or "未指定"
+        safe_name = "".join(c if c not in r'<>:"/\|?*' else "_" for c in process_name)
+        out_name = f"ベースライン比較_{month_label}_{safe_name}.pdf"
+        out_path = save_dir / out_name
+        try:
+            content = await f.read()
+            out_path.write_bytes(content)
+            saved.append(out_name)
+        except Exception as e:
+            logger.exception("PDF保存失敗 %s: %s", out_name, e)
+            errors.append(f"{out_name}: {e}")
+    if errors:
+        return {"success": False, "message": "一部保存に失敗しました", "saved": saved, "errors": errors}
+    return {"success": True, "message": f"{len(saved)}件のPDFを保存しました", "saved": saved}

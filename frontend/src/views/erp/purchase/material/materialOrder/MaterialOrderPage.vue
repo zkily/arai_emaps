@@ -8,8 +8,7 @@
             <el-icon><ShoppingCart /></el-icon>
           </div>
           <div class="title-text">
-            <h1 class="main-title">材料受注管理</h1>
-            <p class="subtitle">Material Order Management</p>
+            <h1 class="main-title">材料在庫管理(発注・使用)</h1>
           </div>
         </div>
       </div>
@@ -244,6 +243,14 @@
           <div class="table-tabs">
             <div
               class="tab-item"
+              :class="{ active: activeTab === 'initial' }"
+              @click="handleTabChange('initial')"
+            >
+              <el-icon><Box /></el-icon>
+              <span>初期在庫管理</span>
+            </div>
+            <div
+              class="tab-item"
               :class="{ active: activeTab === 'stock' }"
               @click="handleTabChange('stock')"
             >
@@ -260,19 +267,19 @@
             </div>
             <div
               class="tab-item"
+              :class="{ active: activeTab === 'usage' }"
+              @click="handleTabChange('usage')"
+            >
+              <el-icon><Operation /></el-icon>
+              <span>材料使用管理</span>
+            </div>
+            <div
+              class="tab-item"
               :class="{ active: activeTab === 'order' }"
               @click="handleTabChange('order')"
             >
               <el-icon><ShoppingCart /></el-icon>
               <span>材料注文</span>
-            </div>
-            <div
-              class="tab-item"
-              :class="{ active: activeTab === 'initial' }"
-              @click="handleTabChange('initial')"
-            >
-              <el-icon><Box /></el-icon>
-              <span>初期在庫管理</span>
             </div>
           </div>
           <div class="table-actions" v-if="activeTab === 'order'">
@@ -409,6 +416,71 @@
           </el-table>
         </div>
 
+        <!-- 材料使用管理テーブル -->
+        <div class="table-content" v-if="activeTab === 'usage'">
+          <el-table
+            v-loading="loading"
+            :data="filteredTableData"
+            stripe
+            border
+            class="modern-table"
+            :default-sort="{ prop: 'material_name', order: 'ascending' }"
+            height="calc(100vh - 280px)"
+            :max-height="800"
+          >
+            <el-table-column prop="date" label="日付" width="120" align="center" sortable />
+            <el-table-column
+              prop="supplier_name"
+              label="仕入先"
+              width="150"
+              show-overflow-tooltip
+              sortable
+              
+            />
+            <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
+            <el-table-column
+              prop="material_name"
+              label="材料名"
+              width="180"
+              show-overflow-tooltip
+              sortable
+              align="center"
+              
+            />
+            <el-table-column
+              prop="current_stock"
+              label="現在在庫"
+              width="120"
+              align="center"
+              class-name="current-stock-column"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': row.current_stock < 0 }">{{
+                  formatValue(row.current_stock)
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              label="使用数"
+              width="140"
+              align="center"
+              class-name="usage-quantity-column"
+            >
+              <template #default="{ row }">
+                <el-input-number
+                  :model-value="(row.usage_quantity === 0 ? undefined : row.usage_quantity)"
+                  :min="0"
+                  :max="999999"
+                  :precision="0"
+                  size="small"
+                  class="usage-quantity-input"
+                  @update:model-value="(val) => { row.usage_quantity = val ?? 0; handleUsageQuantityChange(row); }"
+                />
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
         <!-- 材料注文テーブル -->
         <div class="table-content" v-if="activeTab === 'order'">
           <el-table
@@ -437,6 +509,19 @@
               show-overflow-tooltip
             />
             <el-table-column prop="standard_spec" label="規格" width="150" show-overflow-tooltip />
+            <el-table-column
+              prop="current_stock"
+              label="現在在庫"
+              width="100"
+              align="center"
+              class-name="current-stock-column"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': row.current_stock < 0 }">{{
+                  formatValue(row.current_stock)
+                }}</span>
+              </template>
+            </el-table-column>
             <el-table-column
               label="注文束数"
               width="140"
@@ -1348,7 +1433,7 @@ const subTableData = ref<MaterialOrderItem[]>([])
 const initialStockData = ref<InitialStockItem[]>([])
 const orderConfirmDialogVisible = ref(false)
 const orderNotes = ref('')
-const activeTab = ref('stock') // 默认显示材料日別在庫tab
+const activeTab = ref('initial') // 默认显示初期在庫管理tab
 const materialMasterSyncLoading = ref(false)
 
 // 材料详情弹窗相关数据

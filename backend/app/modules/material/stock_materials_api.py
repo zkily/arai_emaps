@@ -67,7 +67,7 @@ async def get_summary(
 @router.get("")
 async def list_stock_materials(
     page: int = Query(1, ge=1),
-    pageSize: int = Query(50, ge=1, le=500),
+    pageSize: int = Query(50, ge=1, le=2000),
     keyword: Optional[str] = Query(None),
     supplier: Optional[str] = Query(None),
     is_used: Optional[str] = Query(None),

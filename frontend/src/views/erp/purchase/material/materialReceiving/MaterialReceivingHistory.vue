@@ -748,24 +748,23 @@ const handlePrint = async () => {
 
   printLoading.value = true
   try {
-    // 仕入先パラメータ（複数選択対応）
-    const supplierParam =
+    // 仕入先パラメータ（複数選択対応: カンマ区切りでAPIに送信）
+    const supplierParam: string | undefined =
       Array.isArray(filters.value.supplier) && filters.value.supplier.length > 0
         ? filters.value.supplier.join(',')
-        : (filters.value.supplier as string | undefined) || undefined
+        : undefined
 
-    // 全件取得用のパラメータ（同じフィルター・並び順、page=1, page_size=totalCount）
-    const params = {
-      ...filters.value,
+    const params: import('@/api/material').ReceivingListParams = {
+      keyword: filters.value.keyword || undefined,
+      startDate: filters.value.start_date || undefined,
+      endDate: filters.value.end_date || undefined,
       supplier: supplierParam,
       page: 1,
-      page_size: totalCount.value || 10000,
-      sort_field: sortField.value || undefined,
-      sort_order: sortField.value ? sortOrder.value : undefined,
+      pageSize: Math.max(totalCount.value, 10000),
     }
 
     const result = await getMaterialLogs(params)
-    const allData = Array.isArray(result?.data) ? result.data : []
+    const allData = result?.data?.list ?? []
 
     if (!allData.length) {
       ElMessage.warning('印刷するデータがありません')

@@ -65,13 +65,9 @@
                 <el-icon><HomeFilled /></el-icon>
                 <template #title><span>材料管理ホーム</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/stock-entry">
-                <el-icon><DocumentAdd /></el-icon>
-                <template #title><span>在庫登録</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/stock-materials">
-                <el-icon><Box /></el-icon>
-                <template #title><span>在庫管理</span></template>
+              <el-menu-item index="/erp/purchase/material/order">
+                <el-icon><ShoppingCart /></el-icon>
+                <template #title><span>材料在庫管理</span></template>
               </el-menu-item>
               <el-menu-item index="/erp/purchase/material/receiving-history">
                 <el-icon><DataLine /></el-icon>
@@ -84,10 +80,6 @@
               <el-menu-item index="/erp/purchase/material/forecast">
                 <el-icon><TrendCharts /></el-icon>
                 <template #title><span>内示管理</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/purchase/material/order">
-                <el-icon><ShoppingCart /></el-icon>
-                <template #title><span>材料発注</span></template>
               </el-menu-item>
             </el-sub-menu>
 
@@ -532,11 +524,19 @@ const toggleCollapse = () => {
   justify-content: flex-start !important;
 }
 
-/* 带「ホーム」的菜单项 - 橘黄色（含选中态） */
+/* 带「ホーム」的菜单项 - 橘黄色（含选中态）；需覆盖各层级叶子的白色，故提高特异性 */
 :deep(.sidebar-el-menu .menu-item-home),
 :deep(.sidebar-el-menu .menu-item-home .el-menu-tooltip__trigger),
 :deep(.sidebar-el-menu .menu-item-home.is-active),
 :deep(.sidebar-el-menu .menu-item-home.is-active .el-menu-tooltip__trigger) {
+  color: #f8f66b !important;
+  font-weight: 700 !important;
+}
+/* 購買・外注管理下二级子菜单内的ホーム（材料管理ホーム、外注ホーム） */
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home),
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home .el-menu-tooltip__trigger),
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home.is-active),
+:deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home.is-active .el-menu-tooltip__trigger) {
   color: #f8f66b !important;
   font-weight: 700 !important;
 }
@@ -1011,6 +1011,20 @@ const toggleCollapse = () => {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
   color: #fff !important;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35) !important;
+}
+
+/* 带「ホーム」的弹出菜单项 - 橘黄色（含选中态） */
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-item-home,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-item-home .el-menu-tooltip__trigger,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-item-home.is-active,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-menu-item.menu-item-home.is-active .el-menu-tooltip__trigger {
+  color: #f8f66b !important;
+  font-weight: 700 !important;
+}
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu .el-menu .el-menu-item.menu-item-home,
+.el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu .el-menu .el-menu-item.menu-item-home.is-active {
+  color: #f8f66b !important;
+  font-weight: 700 !important;
 }
 
 .el-menu--vertical.el-menu--popup-container .el-menu--popup .el-sub-menu__title {
