@@ -267,6 +267,7 @@ async def get_instruction_plans_list(
                has_sw_process, is_sw_instructed, management_code, actual_production_quantity,
                take_count, cutting_length, chamfering_length, developed_length, scrap_length,
                material_name, material_manufacturer, standard_specification,
+               use_material_stock_sub, usage_count,
                created_at, updated_at
         FROM instruction_plans
         WHERE {" AND ".join(conditions)}
@@ -317,6 +318,8 @@ async def get_instruction_plans_list(
             "material_name": _v(row, "material_name"),
             "material_manufacturer": _v(row, "material_manufacturer"),
             "standard_specification": _v(row, "standard_specification"),
+            "use_material_stock_sub": row.get("use_material_stock_sub"),
+            "usage_count": _v(row, "usage_count", 1),
             "created_at": _v(row, "created_at"),
             "updated_at": _v(row, "updated_at"),
         }
@@ -352,6 +355,8 @@ class UpdatePlanBody(BaseModel):
     chamfering_length: Optional[float] = None
     developed_length: Optional[float] = None
     scrap_length: Optional[float] = None
+    use_material_stock_sub: Optional[int] = None  # 0/1
+    usage_count: Optional[float] = None  # 1=1本, <1=按分
 
 
 class CreatePlanBody(BaseModel):
@@ -377,6 +382,8 @@ class CreatePlanBody(BaseModel):
     end_date: Optional[str] = None
     has_chamfering_process: Optional[int] = None  # 0/1
     has_sw_process: Optional[int] = None  # 0/1
+    use_material_stock_sub: Optional[int] = None  # 0/1
+    usage_count: Optional[float] = None  # 1=1本, <1=按分
 
 
 def _parse_date_ymd(s: Optional[str]):
@@ -441,6 +448,17 @@ async def create_instruction_plan(
     has_chamfering_process = 1 if (body.has_chamfering_process == 1) else 0
     has_sw_process = 1 if (body.has_sw_process == 1) else 0
 
+    use_material_stock_sub = 1 if getattr(body, "use_material_stock_sub", 0) == 1 else 0
+    usage_count_val = getattr(body, "usage_count", None)
+    if usage_count_val is None:
+        usage_count_val = 1.0
+    try:
+        usage_count_val = float(usage_count_val)
+    except (TypeError, ValueError):
+        usage_count_val = 1.0
+    if usage_count_val <= 0:
+        usage_count_val = 1.0
+
     sql = text("""
         INSERT INTO instruction_plans (
             production_month, production_line, priority_order, product_cd, product_name,
@@ -448,13 +466,15 @@ async def create_instruction_plan(
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed,
             has_sw_process, is_sw_instructed, actual_production_quantity,
             take_count, cutting_length, chamfering_length, developed_length, scrap_length,
-            material_name, material_manufacturer, standard_specification
+            material_name, material_manufacturer, standard_specification,
+            use_material_stock_sub, usage_count
         ) VALUES (
             :production_month, :production_line, :priority_order, :product_cd, :product_name,
             :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             0, :has_chamfering_process, 0, :has_sw_process, 0, :actual_production_quantity,
             :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
-            :material_name, :material_manufacturer, :standard_specification
+            :material_name, :material_manufacturer, :standard_specification,
+            :use_material_stock_sub, :usage_count
         )
     """)
     params = {
@@ -479,6 +499,8 @@ async def create_instruction_plan(
         "standard_specification": standard_specification,
         "has_chamfering_process": has_chamfering_process,
         "has_sw_process": has_sw_process,
+        "use_material_stock_sub": use_material_stock_sub,
+        "usage_count": usage_count_val,
     }
     await db.execute(sql, params)
     await db.commit()
@@ -599,6 +621,17 @@ async def update_instruction_plan(
     if body.scrap_length is not None:
         updates.append("scrap_length = :scrap_length")
         params["scrap_length"] = body.scrap_length
+    if body.use_material_stock_sub is not None:
+        updates.append("use_material_stock_sub = :use_material_stock_sub")
+        params["use_material_stock_sub"] = 1 if body.use_material_stock_sub == 1 else 0
+    if body.usage_count is not None:
+        try:
+            uc = float(body.usage_count)
+            if uc > 0:
+                updates.append("usage_count = :usage_count")
+                params["usage_count"] = uc
+        except (TypeError, ValueError):
+            pass
 
     if not updates:
         return {"success": True, "message": "変更なし"}
@@ -693,7 +726,9 @@ async def get_cutting_management_list(
                `cutting_management`.management_code, `cutting_management`.actual_production_quantity, `cutting_management`.defect_qty, `cutting_management`.take_count,
                `cutting_management`.cutting_length, `cutting_management`.chamfering_length, `cutting_management`.developed_length,
                `cutting_management`.scrap_length, `cutting_management`.material_name, `cutting_management`.material_manufacturer,
-               `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.material_usage_reflected, `cutting_management`.cd,
+               `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.material_usage_reflected,
+               `cutting_management`.use_material_stock_sub, `cutting_management`.usage_count,
+               `cutting_management`.cd,
                `cutting_management`.created_at, `cutting_management`.updated_at, `cutting_management`.remarks,
                `equipment_efficiency`.efficiency_rate AS efficiency_rate
         FROM `cutting_management`
@@ -784,6 +819,8 @@ async def get_cutting_management_list(
             "standard_specification": row.get("standard_specification"),
             "production_completed_check": row.get("production_completed_check"),
             "material_usage_reflected": row.get("material_usage_reflected") or "未反映",
+            "use_material_stock_sub": row.get("use_material_stock_sub"),
+            "usage_count": _v(row, "usage_count", 1),
             "cd": row.get("cd"),
             "created_at": _v(row, "created_at"),
             "updated_at": _v(row, "updated_at"),
@@ -973,7 +1010,8 @@ async def move_batch_to_cutting_management(
                    planned_quantity, start_date, end_date, production_lot_size, lot_number,
                    is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                    management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
-                   developed_length, scrap_length, material_name, material_manufacturer, standard_specification
+                   developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
+                   use_material_stock_sub, usage_count
             FROM instruction_plans WHERE id = :plan_id
         """),
         {"plan_id": body.plan_id},
@@ -1005,13 +1043,15 @@ async def move_batch_to_cutting_management(
             product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
             management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
-            material_name, material_manufacturer, standard_specification, production_completed_check
+            material_name, material_manufacturer, standard_specification, production_completed_check,
+            use_material_stock_sub, usage_count
         ) VALUES (
             :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
             :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
             :management_code, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
-            :material_name, :material_manufacturer, :standard_specification, 0
+            :material_name, :material_manufacturer, :standard_specification, 0,
+            :use_material_stock_sub, :usage_count
         )
     """)
     def _to_date(v):
@@ -1054,6 +1094,8 @@ async def move_batch_to_cutting_management(
         "material_name": (plan.get("material_name") or "").strip() or None,
         "material_manufacturer": (plan.get("material_manufacturer") or "").strip() or None,
         "standard_specification": (plan.get("standard_specification") or "").strip() or None,
+        "use_material_stock_sub": 1 if plan.get("use_material_stock_sub") == 1 else 0,
+        "usage_count": float(plan["usage_count"]) if plan.get("usage_count") is not None else 1.0,
     }
 
     try:
@@ -1194,6 +1236,7 @@ async def move_cutting_to_batch(
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
+               use_material_stock_sub, usage_count,
                cutting_machine, production_day
         FROM cutting_management WHERE id = :cid
     """)
@@ -1230,13 +1273,15 @@ async def move_cutting_to_batch(
             planned_quantity, start_date, end_date, production_lot_size, lot_number,
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
             management_code, actual_production_quantity, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
-            material_name, material_manufacturer, standard_specification
+            material_name, material_manufacturer, standard_specification,
+            use_material_stock_sub, usage_count
         ) VALUES (
             :production_month, :production_line, :priority_order, :product_cd, :product_name,
             :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
             :management_code, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
-            :material_name, :material_manufacturer, :standard_specification
+            :material_name, :material_manufacturer, :standard_specification,
+            :use_material_stock_sub, :usage_count
         )
     """)
     pm = cut.get("production_month")
@@ -1267,6 +1312,8 @@ async def move_cutting_to_batch(
         "material_name": (cut.get("material_name") or "").strip() or None,
         "material_manufacturer": (cut.get("material_manufacturer") or "").strip() or None,
         "standard_specification": (cut.get("standard_specification") or "").strip() or None,
+        "use_material_stock_sub": 1 if cut.get("use_material_stock_sub") == 1 else 0,
+        "usage_count": _to_float(cut.get("usage_count")) if cut.get("usage_count") is not None else 1.0,
     }
 
     try:
@@ -1386,6 +1433,8 @@ class UpdateCuttingManagementBody(BaseModel):
     production_completed_check: Optional[bool] = None
     remarks: Optional[str] = None
     defect_qty: Optional[int] = None
+    use_material_stock_sub: Optional[int] = None  # 0/1
+    usage_count: Optional[float] = None  # 1=1本, <1=按分
 
 
 @router.patch("/plan/cutting-management/{cutting_id}")
@@ -1426,6 +1475,17 @@ async def update_cutting_management(
     if body.defect_qty is not None:
         updates.append("defect_qty = :defect_qty")
         params["defect_qty"] = max(0, body.defect_qty)
+    if body.use_material_stock_sub is not None:
+        updates.append("use_material_stock_sub = :use_material_stock_sub")
+        params["use_material_stock_sub"] = 1 if body.use_material_stock_sub == 1 else 0
+    if body.usage_count is not None:
+        try:
+            uc = float(body.usage_count)
+            if uc > 0:
+                updates.append("usage_count = :usage_count")
+                params["usage_count"] = uc
+        except (TypeError, ValueError):
+            pass
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
@@ -1488,7 +1548,7 @@ async def split_cutting_to_next_day(
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-               production_completed_check, remarks
+               production_completed_check, remarks, use_material_stock_sub, usage_count
         FROM cutting_management WHERE id = :cid
     """)
     res = await db.execute(sel, {"cid": cutting_id})
@@ -1570,13 +1630,18 @@ async def split_cutting_to_next_day(
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
             "is_cutting_instructed", "has_chamfering_process", "is_chamfering_instructed", "has_sw_process", "is_sw_instructed",
             "management_code", "take_count", "cutting_length", "chamfering_length",
-            "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks"
+            "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks",
+            "use_material_stock_sub", "usage_count"
         )}
         params["production_month"] = next_month_date
         params["production_day"] = next_day_date
         params["production_sequence"] = next_seq
         params["actual_production_quantity"] = remainder
         params["defect_qty"] = r.get("defect_qty") or 0
+        if params.get("use_material_stock_sub") is None:
+            params["use_material_stock_sub"] = 0
+        if params.get("usage_count") is None:
+            params["usage_count"] = 1.0
         ins = text("""
             INSERT INTO cutting_management (
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
@@ -1584,14 +1649,14 @@ async def split_cutting_to_next_day(
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                 management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-                production_completed_check, remarks
+                production_completed_check, remarks, use_material_stock_sub, usage_count
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
                 :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
-                0, :remarks
+                0, :remarks, :use_material_stock_sub, :usage_count
             )
         """)
         await db.execute(ins, params)
@@ -1615,7 +1680,7 @@ async def duplicate_cutting_management(
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-               production_completed_check, remarks
+               production_completed_check, remarks, use_material_stock_sub, usage_count
         FROM cutting_management WHERE id = :cid
     """)
     res = await db.execute(sel, {"cid": cutting_id})
@@ -1643,14 +1708,14 @@ async def duplicate_cutting_management(
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
                 management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
-                production_completed_check, remarks
+                production_completed_check, remarks, use_material_stock_sub, usage_count
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
                 :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
-                0, :remarks
+                0, :remarks, :use_material_stock_sub, :usage_count
             )
         """)
         params = {k: r.get(k) for k in (
@@ -1658,9 +1723,14 @@ async def duplicate_cutting_management(
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
             "is_cutting_instructed", "has_chamfering_process", "is_chamfering_instructed", "has_sw_process", "is_sw_instructed",
             "management_code", "actual_production_quantity", "defect_qty", "take_count", "cutting_length", "chamfering_length",
-            "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks"
+            "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks",
+            "use_material_stock_sub", "usage_count"
         )}
         params["production_sequence"] = current_seq + 1
+        if params.get("use_material_stock_sub") is None:
+            params["use_material_stock_sub"] = 0
+        if params.get("usage_count") is None:
+            params["usage_count"] = 1.0
         await db.execute(ins, params)
         await db.commit()
     except Exception as e:

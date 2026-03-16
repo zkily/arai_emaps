@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     FILE_WATCH_POLL_INTERVAL: float = 1.0  # ネットワークパスは 1 秒推奨
     FILE_WATCH_DEBOUNCE_SEC: int = 2
     FILE_WATCH_EXCEL_WORKERS: int = 3  # 同時処理は最大 3 ファイル
+    FILE_WATCH_INSPECTION_EXCEL_PATH: str = ""  # 検査管理指標 Excel のフルパス
     
     class Config:
         env_file = ".env"

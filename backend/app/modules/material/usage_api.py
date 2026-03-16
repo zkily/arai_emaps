@@ -128,6 +128,8 @@ async def _fetch_cutting_rows(db: AsyncSession, day_str: Optional[str]) -> list:
             cm.production_lot_size,
             cm.lot_number,
             cm.material_name,
+            cm.use_material_stock_sub,
+            cm.usage_count,
             p.material_cd
         FROM cutting_management cm
         LEFT JOIN products p
@@ -402,12 +404,27 @@ async def commit_material_usage(
     inserted = 0
     try:
         for row in rows:
+            # use_material_stock_sub=1 の行は使用数反映対象外（material_stock_sub は手動）
+            if _row_val(row, "use_material_stock_sub") == 1:
+                continue
+
             mgmt_code = str(_row_val(row, "management_code") or "").strip()
             if not mgmt_code:
                 continue
 
             mat_name = str(_row_val(row, "material_name") or "").strip()
             production_day = _row_val(row, "production_day") or today_d
+
+            # usage_count: 行の値（デフォルト1、按分時は<1）
+            usage_count_val = _row_val(row, "usage_count")
+            if usage_count_val is None:
+                usage_count_val = 1
+            try:
+                usage_count_val = float(usage_count_val)
+            except (TypeError, ValueError):
+                usage_count_val = 1
+            if usage_count_val <= 0:
+                continue
 
             # material_cd を material_name から解決（products 経由でも試みる）
             mat_cd = str(_row_val(row, "material_cd") or "").strip()
@@ -429,23 +446,25 @@ async def commit_material_usage(
                     (usage_date, material_cd, material_name, usage_count,
                      source, management_codes, management_code, reflected)
                 VALUES
-                    (:usage_date, :material_cd, :material_name, 1,
+                    (:usage_date, :material_cd, :material_name, :usage_count,
                      :source, :management_code, :management_code, 0)
             """)
             result = await db.execute(insert_sql, {
                 "usage_date": production_day,
                 "material_cd": mat_cd,
                 "material_name": mat_name or "不明",
+                "usage_count": usage_count_val,
                 "source": source,
                 "management_code": mgmt_code,
             })
             inserted += result.rowcount
 
-        # cutting_management を「反映済」に更新
+        # 反映対象（use_material_stock_sub=0）の行のみ「反映済」に更新
         update_cm_sql = text("""
             UPDATE cutting_management
             SET material_usage_reflected = '反映済'
             WHERE production_day = :prod_day
+              AND COALESCE(use_material_stock_sub, 0) = 0
         """)
         await db.execute(update_cm_sql, {"prod_day": today_d})
 
@@ -473,7 +492,10 @@ async def commit_material_usage(
     for agg_row in agg_rows:
         agg_date = agg_row[0]
         agg_mat_cd = agg_row[1]
-        agg_count = int(agg_row[2] or 0)
+        try:
+            agg_count = int(round(float(agg_row[2] or 0)))
+        except (TypeError, ValueError):
+            agg_count = 0
 
         if not agg_mat_cd or agg_mat_cd == "__unknown__":
             continue

@@ -44,6 +44,7 @@ from app.modules.material.schemas import (
     MaterialStockSubCreate,
     MaterialStockSubUpdate,
     MaterialStockSubResponse,
+    TransferToSubBody,
 )
 
 router = APIRouter()
@@ -389,6 +390,59 @@ async def create_material_stock(
     return {"success": True, "data": _stock_to_dict(row)}
 
 
+@router.post("/transfer-to-sub")
+async def transfer_to_sub(
+    body: TransferToSubBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """主表在庫を半端（material_stock_sub）へ転送。主表 current_stock を減算し、sub に新規行を作成。"""
+    if body.quantity < 1:
+        raise HTTPException(status_code=400, detail="転送数量は1以上で指定してください")
+    result = await db.execute(select(MaterialStock).where(MaterialStock.id == body.stock_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="レコードが見つかりません")
+    if (row.current_stock or 0) < body.quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"現在在庫（{row.current_stock or 0}）を超える数量は転送できません",
+        )
+    pieces_per_bundle = row.pieces_per_bundle or 0
+    long_weight = float(row.long_weight) if row.long_weight is not None else 0.0
+    unit_price = float(row.unit_price) if row.unit_price is not None else 0.0
+    order_bundle_quantity = body.quantity * pieces_per_bundle
+    bundle_weight = order_bundle_quantity * long_weight
+    order_amount = bundle_weight * unit_price
+    sub_row = MaterialStockSub(
+        material_cd=row.material_cd,
+        material_name=row.material_name or "",
+        date=row.date,
+        current_stock=0,
+        safety_stock=float(row.safety_stock) if row.safety_stock is not None else 0,
+        max_stock=float(row.max_stock) if row.max_stock is not None else 0,
+        unit=row.unit,
+        unit_price=row.unit_price,
+        supplier_cd=row.supplier_cd,
+        supplier_name=row.supplier_name,
+        lead_time=row.lead_time or 0,
+        planned_usage=0,
+        order_quantity=body.quantity,
+        order_bundle_quantity=order_bundle_quantity,
+        bundle_weight=bundle_weight,
+        order_amount=order_amount,
+        standard_spec=row.standard_spec,
+        pieces_per_bundle=pieces_per_bundle,
+        long_weight=row.long_weight,
+        remarks=row.remarks,
+    )
+    db.add(sub_row)
+    row.current_stock = (row.current_stock or 0) - body.quantity
+    await db.commit()
+    await db.refresh(sub_row)
+    return {"success": True, "data": _sub_to_dict(sub_row)}
+
+
 @router.put("/{item_id}")
 async def update_material_stock(
     item_id: int,
@@ -451,6 +505,7 @@ def _sub_to_dict(r: MaterialStockSub) -> dict:
         "pieces_per_bundle": r.pieces_per_bundle,
         "long_weight": float(r.long_weight) if r.long_weight is not None else None,
         "remarks": r.remarks,
+        "label_color": r.label_color,
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "last_updated": r.last_updated.isoformat() if r.last_updated else None,
     }

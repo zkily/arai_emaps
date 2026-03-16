@@ -7,6 +7,7 @@ from watchdog.events import FileSystemEventHandler
 from app.core.config import settings
 from app.services.file_watcher.sync_services import STOCK_FILES, MATERIAL_FILES, PICKING_FILES
 from app.services.file_watcher.excel_processor import EXCEL_FILES, is_excel_target_file
+from app.services.file_watcher.inspection_excel_processor import is_inspection_excel_file
 from app.services.file_watcher.enabled_config import is_file_enabled
 
 logger = logging.getLogger(__name__)
@@ -50,10 +51,10 @@ class UnifiedHandler(FileSystemEventHandler):
         if now - self.last_processed.get(path_key, 0) < self.debounce_sec:
             logger.debug("デバウンスのためスキップ: %s (%.1fs 以内に発生)", filename, self.debounce_sec)
             return
-        if not is_excel_target_file(filename) and filename not in STOCK_FILES and filename not in MATERIAL_FILES and filename not in PICKING_FILES:
+        if not is_excel_target_file(filename) and not is_inspection_excel_file(filename) and filename not in STOCK_FILES and filename not in MATERIAL_FILES and filename not in PICKING_FILES:
             logger.debug("監視対象外のため無視: %s", filename)
             return
-        if is_excel_target_file(filename):
+        if is_excel_target_file(filename) or is_inspection_excel_file(filename):
             if not self.excel_watcher_enabled:
                 logger.debug("Excel 監視は無効のためスキップ: %s", filename)
                 return
@@ -66,12 +67,12 @@ class UnifiedHandler(FileSystemEventHandler):
         if self.task_queue is None:
             return
         self.last_processed[path_key] = now
-        if is_excel_target_file(filename):
+        if is_excel_target_file(filename) or is_inspection_excel_file(filename):
             self.in_queue_filenames.add(filename)
         logger.info("ファイル変更を検知、キューに投入: %s", filename)
         try:
             self.task_queue.put((filepath, filename))
         except Exception as e:
-            if is_excel_target_file(filename):
+            if is_excel_target_file(filename) or is_inspection_excel_file(filename):
                 self.in_queue_filenames.discard(filename)
             logger.warning("キュー投入失敗 %s: %s", filename, e)

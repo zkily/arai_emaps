@@ -21,6 +21,10 @@ from app.services.file_watcher.excel_processor import (
     EXCEL_FILES,
     is_excel_target_file,
 )
+from app.services.file_watcher.inspection_excel_processor import (
+    InspectionExcelProcessor,
+    is_inspection_excel_file,
+)
 from app.services.file_watcher.utils import wait_for_file_stable
 from app.services.file_watcher.enabled_config import is_file_enabled, is_excel_watcher_enabled
 
@@ -104,12 +108,42 @@ def _excel_polling_loop(base_path, task_queue, poll_interval, stop_event, in_que
             logger.debug("Excel 轮询异常: %s", e)
 
 
+def _inspection_excel_polling_loop(file_path, task_queue, poll_interval, stop_event, in_queue_filenames):
+    """検査管理指標 Excel の mtime ポーリング（ネットワークドライブ対応）"""
+    last_mtime = None
+    filename = os.path.basename(file_path)
+    while not stop_event.is_set():
+        try:
+            stop_event.wait(timeout=poll_interval)
+            if stop_event.is_set():
+                break
+            if not os.path.isfile(file_path):
+                continue
+            if filename in in_queue_filenames:
+                continue
+            try:
+                mtime = os.path.getmtime(file_path)
+            except OSError:
+                continue
+            if last_mtime is not None and mtime > last_mtime:
+                logger.info("検査管理指標 Excel 変更検知: %s", filename)
+                in_queue_filenames.add(filename)
+                try:
+                    task_queue.put((file_path, filename))
+                except Exception:
+                    in_queue_filenames.discard(filename)
+            last_mtime = mtime
+        except Exception as e:
+            logger.debug("検査管理指標ポーリング異常: %s", e)
+
+
 def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
     """ワーカー：キューから (filepath, filename) を取得し、ファイル安定後に種別で処理；同一 Excel は 1 ワーカーのみ"""
     stock_svc = StockService()
     material_svc = MaterialService()
     picking_svc = PickingLogService()
     excel_processor = ExcelProcessor()
+    inspection_processor = InspectionExcelProcessor()
     while True:
         try:
             item = task_queue.get()
@@ -120,7 +154,7 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
             if filepath is None or filename is None:
                 continue
             in_queue_filenames.discard(filename)
-            if is_excel_target_file(filename):
+            if is_excel_target_file(filename) or is_inspection_excel_file(filename):
                 with excel_lock:
                     if filename in processing_excel:
                         logger.debug("Excel は他ワーカーで処理中のためスキップ: %s", filename)
@@ -140,7 +174,9 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
                 logger.warning("ファイルが存在しないためスキップ: %s", filename)
                 continue
             logger.info("処理開始: %s", filename)
-            if is_excel_target_file(filename):
+            if is_inspection_excel_file(filename):
+                inspection_processor.process_file(filepath)
+            elif is_excel_target_file(filename):
                 excel_processor.process_file(filepath)
             elif filename in PICKING_FILES:
                 if is_file_enabled(filename):
@@ -160,7 +196,7 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
         except Exception as e:
             logger.error("処理失敗 %s: %s", filename, e, exc_info=True)
         finally:
-            if is_excel_target_file(filename):
+            if is_excel_target_file(filename) or is_inspection_excel_file(filename):
                 processing_excel.discard(filename)
             try:
                 task_queue.task_done()
@@ -180,14 +216,23 @@ def run_watcher():
     if excel_path and excel_path != csv_path and not os.path.exists(excel_path):
         logger.error("❌ Excel 監視パスが存在しません: %s", excel_path)
         return
+    inspection_excel_path = (
+        os.environ.get("FILE_WATCH_INSPECTION_EXCEL_PATH")
+        or getattr(settings, "FILE_WATCH_INSPECTION_EXCEL_PATH", "")
+        or ""
+    ).strip()
     logger.info("🚀 ファイル監視サービスを起動しています...")
     logger.info("📂 CSV 受信監視パス: %s", csv_path)
     if excel_path and excel_path != csv_path:
         logger.info("📂 Excel 計画監視パス: %s", excel_path)
     else:
         logger.info("📂 Excel 計画与 CSV 共用路径")
+    if inspection_excel_path:
+        logger.info("📂 検査管理指標 Excel パス: %s", inspection_excel_path)
     logger.info("📊 ポーリング間隔: %.1f 秒、ワーカー: %s 個", POLL_INTERVAL, WORKER_COUNT)
-    logger.info("📑 監視対象: 在庫 %s 件、材料 %s 件、ピッキング %s 件、Excel 計画 %s 件", len(STOCK_FILES), len(MATERIAL_FILES), len(PICKING_FILES), len(EXCEL_FILES))
+    logger.info("📑 監視対象: 在庫 %s 件、材料 %s 件、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s",
+                len(STOCK_FILES), len(MATERIAL_FILES), len(PICKING_FILES), len(EXCEL_FILES),
+                "有効" if inspection_excel_path else "未設定")
     excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     if not excel_watcher_enabled:
         logger.info("📌 Excel 監視は無効です（環境変数またはシステム設定）")
@@ -215,6 +260,13 @@ def run_watcher():
     observer.schedule(handler, csv_path, recursive=False)
     if excel_path and excel_path != csv_path:
         observer.schedule(handler, excel_path, recursive=False)
+    if inspection_excel_path:
+        inspection_dir = os.path.dirname(inspection_excel_path)
+        if inspection_dir and inspection_dir not in (csv_path, excel_path):
+            try:
+                observer.schedule(handler, inspection_dir, recursive=False)
+            except Exception as e:
+                logger.warning("検査管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
     observer.start()
 
     stop_polling = threading.Event()
@@ -225,7 +277,18 @@ def run_watcher():
             daemon=True,
         )
         excel_poll_thread.start()
-        logger.info("✅ ポーリング開始（2 ディレクトリ Watchdog + Excel mtime）、ファイル変更を待機中...")
+    if excel_watcher_enabled and inspection_excel_path and os.path.isfile(inspection_excel_path):
+        inspection_poll_thread = threading.Thread(
+            target=_inspection_excel_polling_loop,
+            args=(inspection_excel_path, task_queue, POLL_INTERVAL, stop_polling, in_queue_filenames),
+            daemon=True,
+        )
+        inspection_poll_thread.start()
+        logger.info("✅ 検査管理指標 Excel ポーリング開始: %s", os.path.basename(inspection_excel_path))
+    elif inspection_excel_path and not os.path.isfile(inspection_excel_path):
+        logger.warning("⚠️ 検査管理指標 Excel が見つかりません: %s", inspection_excel_path)
+    if excel_watcher_enabled and excel_path:
+        logger.info("✅ ポーリング開始（Watchdog + Excel mtime）、ファイル変更を待機中...")
     else:
         logger.info("✅ ポーリング開始、ファイル変更を待機中...")
     try:

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="header-left">
         <div class="header-title">
-          <span class="page-header-badge">生産指示</span>
+          <!-- <span class="page-header-badge">生産指示</span> -->
           <h1>切断・面取指示管理</h1>
           <p class="header-desc">バッチ一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
@@ -100,6 +100,8 @@
                 <div class="plan-batch-th">ロット数</div>
                 <div class="plan-batch-th">No</div>
                 <div class="plan-batch-th">生産数</div>
+                <div class="plan-batch-th">材料区分</div>
+                <div class="plan-batch-th">材料使用数</div>
                 <div class="plan-batch-th plan-batch-th-actions">操作</div>
               </div>
             </div>
@@ -125,6 +127,18 @@
                 <div class="plan-batch-td">{{ row.production_lot_size ?? '-' }}</div>
                 <div class="plan-batch-td">{{ row.lot_number ?? '-' }}</div>
                 <div class="plan-batch-td">{{ row.actual_production_quantity ?? '-' }}</div>
+                <div class="plan-batch-td">
+                  <el-switch
+                    :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
+                    :active-value="1"
+                    :inactive-value="0"
+                    size="small"
+                    @change="val => saveDataManagementCell(row, 'use_material_stock_sub', val)"
+                  />
+                </div>
+                <div class="plan-batch-td" @dblclick.stop="onDblClickUsageCount(row)">
+                  {{ formatUsageCountDisplay(row as { usage_count?: number | null }) }}
+                </div>
                 <div class="plan-batch-td plan-batch-td-actions">
                   <el-button
                     type="primary"
@@ -521,6 +535,8 @@
                     <th>製品名</th>
                     <th>原材料</th>
                     <th>管理コード</th>
+                    <th>在庫区分</th>
+                    <th>材料使用数</th>
                     <th>使用材料</th>
                   </tr>
                 </thead>
@@ -529,8 +545,21 @@
                     <td>{{ row.product_name ?? '-' }}</td>
                     <td>{{ row.material_name ?? '-' }}</td>
                     <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td class="usage-summary-stock-td">
+                      <el-switch
+                        :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
+                        :active-value="1"
+                        :inactive-value="0"
+                        size="small"
+                        @change="onChangeUsageSummaryStock(row, $event)"
+                      />
+                    </td>
+                    <td class="usage-summary-usage-td" @dblclick.stop="onDblClickUsageSummaryUsageCount(row)">
+                      {{ formatUsageCountDisplay(row as { usage_count?: number | null }) }}
+                    </td>
                     <td>
-                      <span :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
+                      <span v-if="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1" class="usage-sub-manual-tag">サブ・手動</span>
+                      <span v-else :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
                         {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
                       </span>
                     </td>
@@ -572,6 +601,8 @@
                     <th>製品名</th>
                     <th>原材料</th>
                     <th>管理コード</th>
+                    <th>在庫区分</th>
+                    <th>材料使用数</th>
                     <th>使用材料</th>
                   </tr>
                 </thead>
@@ -580,8 +611,21 @@
                     <td>{{ row.product_name ?? '-' }}</td>
                     <td>{{ row.material_name ?? '-' }}</td>
                     <td :class="{ 'usage-mgmt-empty': !row.management_code || !String(row.management_code).trim() }">{{ row.management_code?.trim() || '-' }}</td>
+                    <td class="usage-summary-stock-td">
+                      <el-switch
+                        :model-value="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0"
+                        :active-value="1"
+                        :inactive-value="0"
+                        size="small"
+                        @change="onChangeUsageSummaryStock(row, $event)"
+                      />
+                    </td>
+                    <td class="usage-summary-usage-td" @dblclick.stop="onDblClickUsageSummaryUsageCount(row)">
+                      {{ formatUsageCountDisplay(row as { usage_count?: number | null }) }}
+                    </td>
                     <td>
-                      <span :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
+                      <span v-if="(row as { use_material_stock_sub?: number }).use_material_stock_sub === 1" class="usage-sub-manual-tag">サブ・手動</span>
+                      <span v-else :class="{ 'usage-reflected-tag': isUsageRowReflected(row), 'usage-not-reflected-tag': !isUsageRowReflected(row) }">
                         {{ isUsageRowReflected(row) ? '反映済' : '未反映' }}
                       </span>
                     </td>
@@ -1099,6 +1143,7 @@
               stripe
               row-key="id"
               @selection-change="kanbanIssuanceSelection = $event"
+              @select-all="onKanbanSelectAll"
               @row-dblclick="openKanbanEdit"
             >
               <el-table-column type="selection" width="40" align="center" :selectable="(row) => row.status === 'pending' || row.status === 'issued'" />
@@ -1459,54 +1504,98 @@
         </div>
       </template>
       <el-form :model="cuttingEditForm" label-width="72px" label-position="left" class="cutting-edit-form">
-        <el-form-item label="切断機" class="cutting-edit-form-item">
-          <el-select
-            v-model="cuttingEditForm.cutting_machine"
-            placeholder="切断機を選択"
-            filterable
-            clearable
-            size="small"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="m in cuttingMachineOptionsFiltered"
-              :key="m.machine_name"
-              :label="m.machine_name"
-              :value="m.machine_name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="生産数" class="cutting-edit-form-item">
-          <el-input
-            v-model="cuttingEditForm.actual_production_quantity"
-            placeholder="生産数"
-            size="small"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item label="不良数" class="cutting-edit-form-item">
-          <el-input
-            v-model="cuttingEditForm.defect_qty"
-            placeholder="不良数"
-            size="small"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item label="生産順" class="cutting-edit-form-item">
-          <el-input-number
-            v-model="cuttingEditForm.production_sequence"
-            :min="1"
-            :max="9999"
-            controls-position="right"
-            size="small"
-            style="width: 100%"
-          />
-        </el-form-item>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="切断機" class="cutting-edit-form-item">
+              <el-select
+                v-model="cuttingEditForm.cutting_machine"
+                placeholder="切断機を選択"
+                filterable
+                clearable
+                size="small"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in cuttingMachineOptionsFiltered"
+                  :key="m.machine_name"
+                  :label="m.machine_name"
+                  :value="m.machine_name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生産順" class="cutting-edit-form-item">
+              <el-input-number
+                v-model="cuttingEditForm.production_sequence"
+                :min="1"
+                :max="9999"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="生産数" class="cutting-edit-form-item cutting-edit-form-item--qty">
+              <el-input
+                v-model="cuttingEditForm.actual_production_quantity"
+                placeholder="生産数"
+                size="small"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="不良数" class="cutting-edit-form-item cutting-edit-form-item--defect">
+              <el-input
+                v-model="cuttingEditForm.defect_qty"
+                placeholder="不良数"
+                size="small"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="使用サブ在庫" class="cutting-edit-form-item">
+              <el-switch
+                v-model="cuttingEditForm.use_material_stock_sub"
+                :active-value="1"
+                :inactive-value="0"
+                size="small"
+                active-text="サブ"
+                inactive-text="主表"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="材料使用数" class="cutting-edit-form-item">
+              <el-input-number
+                v-model="cuttingEditForm.usage_count"
+                :min="0.01"
+                :max="9999"
+                :step="0.1"
+                :precision="4"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="備考" class="cutting-edit-remarks cutting-edit-form-item">
           <div class="cutting-edit-remarks-btns">
             <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ・試作')">取合せ・試作</el-button>
             <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('取合せ')">取合せ</el-button>
             <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('成型17号用')">成型17号用</el-button>
+            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('青ニス')">青ニス</el-button>
+            <el-button size="small" class="cutting-edit-tag-btn" @click="appendCuttingRemark('半端材本')">半端材本</el-button>
           </div>
           <el-input
             v-model="cuttingEditForm.remarks"
@@ -1540,51 +1629,65 @@
           <span class="cutting-edit-dialog__title">面取指示編集</span>
         </div>
       </template>
-      <el-form :model="chamferingEditForm" label-width="72px" label-position="left" class="cutting-edit-form">
-        <el-form-item label="面取機" class="cutting-edit-form-item">
-          <el-select
-            v-model="chamferingEditForm.chamfering_machine"
-            placeholder="面取機を選択"
-            filterable
-            clearable
-            size="small"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="m in chamferingMachineOptions"
-              :key="m.machine_name"
-              :label="m.machine_name"
-              :value="m.machine_name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="生産数" class="cutting-edit-form-item">
-          <el-input
-            v-model="chamferingEditForm.actual_production_quantity"
-            placeholder="生産数（変更時、差を不良数に自動反映）"
-            size="small"
-            clearable
-            @input="onChamferingEditProductionQuantityInput"
-          />
-        </el-form-item>
-        <el-form-item label="不良数" class="cutting-edit-form-item">
-          <el-input
-            v-model="chamferingEditForm.defect_qty"
-            placeholder="不良数（手動変更可）"
-            size="small"
-            clearable
-          />
-        </el-form-item>
-        <el-form-item label="生産順" class="cutting-edit-form-item">
-          <el-input-number
-            v-model="chamferingEditForm.production_sequence"
-            :min="1"
-            :max="9999"
-            controls-position="right"
-            size="small"
-            style="width: 100%"
-          />
-        </el-form-item>
+      <el-form :model="chamferingEditForm" label-width="72px" label-position="left" class="cutting-edit-form chamfering-edit-form">
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="面取機" class="cutting-edit-form-item">
+              <el-select
+                v-model="chamferingEditForm.chamfering_machine"
+                placeholder="面取機を選択"
+                filterable
+                clearable
+                size="small"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in chamferingMachineOptions"
+                  :key="m.machine_name"
+                  :label="m.machine_name"
+                  :value="m.machine_name"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="生産順" class="cutting-edit-form-item">
+              <el-input-number
+                v-model="chamferingEditForm.production_sequence"
+                :min="1"
+                :max="9999"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="生産数" class="cutting-edit-form-item cutting-edit-form-item--qty">
+              <el-input
+                v-model="chamferingEditForm.actual_production_quantity"
+                placeholder="生産数"
+                size="small"
+                clearable
+                style="width: 100%"
+                @input="onChamferingEditProductionQuantityInput"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="不良数" class="cutting-edit-form-item cutting-edit-form-item--defect">
+              <el-input
+                v-model="chamferingEditForm.defect_qty"
+                placeholder="不良数"
+                size="small"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="備考" class="cutting-edit-form-item">
           <el-input
             v-model="chamferingEditForm.remarks"
@@ -1600,7 +1703,7 @@
       <template #footer>
         <div class="cutting-edit-dialog__footer">
           <el-button size="small" @click="chamferingEditDialogVisible = false">取消</el-button>
-          <el-button type="primary" size="small" :loading="chamferingEditSubmitting" class="cutting-edit-save-btn" @click="saveChamferingEdit">保存</el-button>
+          <el-button type="primary" size="small" :loading="chamferingEditSubmitting" class="cutting-edit-save-btn chamfering-edit-save-btn" @click="saveChamferingEdit">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -1888,6 +1991,21 @@
               <label class="ped-label">規格</label>
               <el-input v-model="planEditForm.standard_specification" placeholder="規格" size="small" clearable />
             </div>
+            <div class="ped-field">
+              <label class="ped-label">使用サブ在庫</label>
+              <el-switch v-model="planEditForm.use_material_stock_sub" :active-value="1" :inactive-value="0" size="small" active-text="サブ" inactive-text="主表" />
+            </div>
+            <div class="ped-field">
+              <label class="ped-label">材料使用数</label>
+              <el-input
+                v-model.number="planEditForm.usage_count"
+                type="number"
+                size="small"
+                style="width:100%"
+                min="0.01"
+                max="9999"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1978,6 +2096,7 @@
               placeholder="省略時は自動（+1日）"
               size="small"
               style="width:100%"
+              :disabled-date="disabledWeekendDate"
             />
           </div>
         </div>
@@ -2078,6 +2197,7 @@
               placeholder="省略時は自動（+1日）"
               size="small"
               style="width:100%"
+              :disabled-date="disabledWeekendDate"
             />
           </div>
         </div>
@@ -2379,6 +2499,21 @@
             <div class="nr-col">
               <span class="nr-lbl">規格</span>
               <el-input v-model="newRecordForm.standard_specification" placeholder="規格" size="small" />
+            </div>
+            <div class="nr-field">
+              <label class="nr-label">使用サブ在庫</label>
+              <el-switch v-model="newRecordForm.use_material_stock_sub" :active-value="1" :inactive-value="0" size="small" active-text="サブ" inactive-text="主表" />
+            </div>
+            <div class="nr-field">
+              <label class="nr-label">材料使用数</label>
+              <el-input
+                v-model.number="newRecordForm.usage_count"
+                type="number"
+                size="small"
+                style="width:100%"
+                min="0.01"
+                max="9999"
+              />
             </div>
           </div>
         </div>
@@ -2710,6 +2845,12 @@ interface CuttingPlanRow {
   updated_at?: string | null
 }
 
+function formatUsageCountDisplay(row: { usage_count?: number | null }): string {
+  const v = row.usage_count
+  const num = v != null && !isNaN(Number(v)) ? Number(v) : 1
+  return num.toFixed(1)
+}
+
 /** 日付文字列を YYYY-MM-DD で表示（ISO の先頭10文字） */
 const formatDateOnly = (v: string | null | undefined) => {
   if (v == null || v === '') return ''
@@ -2989,11 +3130,12 @@ function isUsageRowReflected(row: CuttingManagementRow): boolean {
   return code !== '' && reflectedManagementCodesSet.value.has(code)
 }
 
-/** 使用材料数（材料別）- 今日：合计件数・反映済件数・未反映件数 */
+/** 使用材料数（材料別）- 今日：反映対象（use_material_stock_sub=0）のみで合计・反映済・未反映。サブ行は除外 */
 const usageSummaryTodayCounts = computed(() => {
   const list = usageSummaryCuttingList.value
-  const total = list.length
-  const reflected = list.filter(row => isUsageRowReflected(row)).length
+  const reflectTargetList = list.filter((row: CuttingManagementRow) => (row as { use_material_stock_sub?: number }).use_material_stock_sub !== 1)
+  const total = reflectTargetList.length
+  const reflected = reflectTargetList.filter(row => isUsageRowReflected(row)).length
   return { total, reflected, notReflected: total - reflected }
 })
 
@@ -3055,6 +3197,22 @@ function shiftUsageSummaryDateTomorrow(delta: number) {
 }
 
 watch(usageSummaryDateTomorrow, loadUsageSummaryCuttingListTomorrow, { immediate: true })
+
+/** 使用材料数（材料別）一覧の在庫区分スイッチ変更時：cutting_management.use_material_stock_sub を更新 */
+async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number | boolean | string) {
+  const id = (row as { id?: number }).id
+  if (id == null) return
+  const newVal = val === 1 || val === true ? 1 : 0
+  try {
+    await request.patch(`/api/plan/cutting-management/${id}`, { use_material_stock_sub: newVal })
+    ;(row as { use_material_stock_sub?: number }).use_material_stock_sub = newVal
+    // サマリの合計値・反映対象件数にも影響するため、最新状態を再取得
+    await loadUsageSummaryCuttingList()
+  } catch (e) {
+    console.error('在庫区分の更新に失敗:', e)
+    ElMessage.error('在庫区分の更新に失敗しました')
+  }
+}
 
 /** 翌日の使用材料数（材料別・今日にない管理コードのみ） */
 const cuttingTomorrowUsageSummary = computed<UsageSummary>(() => {
@@ -3230,8 +3388,8 @@ async function confirmUsageReflection() {
     ElMessage.warning('使用材料数（材料別）- 今日の日付を選択してください')
     return
   }
-  if (!usageSummaryCuttingList.value.length) {
-    ElMessage.warning('反映対象のデータがありません。指定日に切断指示があるか確認してください。')
+  if (usageSummaryTodayCounts.value.total === 0) {
+    ElMessage.warning('反映対象のデータがありません（使用サブ在庫の行は対象外）。指定日に切断指示があるか確認してください。')
     return
   }
   try {
@@ -3302,6 +3460,8 @@ const cuttingEditForm = reactive({
   defect_qty: '' as string,
   production_sequence: 1,
   remarks: '',
+  use_material_stock_sub: 0 as number,
+  usage_count: 1 as number,
 })
 const cuttingEditSubmitting = ref(false)
 /** 面取指示：双击编辑弹窗 */
@@ -3387,6 +3547,8 @@ const planEditForm = reactive({
   material_name: '',
   material_manufacturer: '',
   standard_specification: '',
+  use_material_stock_sub: 0 as number,
+  usage_count: 1 as number,
 })
 /** データ管理ダイアログ（instruction_plans 全件＋筛选） */
 const dataManagementDialogVisible = ref(false)
@@ -3459,6 +3621,8 @@ const newRecordFormDefault = () => ({
   end_date: '',
   has_chamfering_process: 0 as number,
   has_sw_process: 0 as number,
+  use_material_stock_sub: 0 as number,
+  usage_count: 1 as number,
 })
 const newRecordForm = reactive(newRecordFormDefault())
 
@@ -3508,6 +3672,7 @@ async function loadNewRecordProductOptions() {
         return lastChar1 && noKagyo
       })
       .map((p) => ({ product_cd: String(p.product_cd ?? ''), product_name: (p.product_name ?? p.product_cd ?? '').toString() }))
+      .sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ja'))
   } catch (e) {
     console.error('製品一覧取得失敗:', e)
     newRecordProductOptions.value = []
@@ -3750,6 +3915,8 @@ const kanbanIssuanceSelection = ref<KanbanIssuanceRow[]>([])
 /** カンバン発行：分页（默认每页30件） */
 const kanbanPage = ref(1)
 const kanbanPageSize = ref(30)
+/** カンバン発行：全ページ一括選択フラグ（ヘッダチェックボックスで制御） */
+const kanbanSelectAllAllPages = ref(false)
 const kanbanIssuanceListPaged = computed(() => {
   const list = kanbanIssuanceList.value
   const size = kanbanPageSize.value
@@ -4171,6 +4338,8 @@ async function copyPlanBatch(row: CuttingPlanRow) {
       end_date: row.end_date ? String(row.end_date).slice(0, 10) : '',
       has_chamfering_process: row.has_chamfering_process ?? 0,
       has_sw_process: row.has_sw_process ?? 0,
+      use_material_stock_sub: (row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0,
+      usage_count: (row as { usage_count?: number }).usage_count != null ? Number((row as { usage_count?: number }).usage_count) : 1,
     }
     const result = await request.post<{ success?: boolean; message?: string }>(
       '/api/plan/batch/create',
@@ -4222,6 +4391,54 @@ async function deletePlanBatch(row: CuttingPlanRow) {
     ElMessage.error(String(msg))
   } finally {
     planBatchActionLoading.value = null
+  }
+}
+
+/** 生産バッチ一覧：材料使用数セルをダブルクリックして編集 */
+async function onDblClickUsageCount(row: CuttingPlanRow) {
+  const current = formatUsageCountDisplay(row as { usage_count?: number | null })
+  try {
+    const { value } = await ElMessageBox.prompt('材料使用数を入力してください（小数1桁まで）', '材料使用数の編集', {
+      inputValue: current,
+      inputPattern: /^(?:\d+)(?:\.\d)?$/,
+      inputErrorMessage: '0.0以上の数値（小数1桁まで）を入力してください',
+      confirmButtonText: '保存',
+      cancelButtonText: 'キャンセル',
+    })
+    const num = Number(value)
+    if (isNaN(num) || num <= 0) {
+      ElMessage.error('0より大きい数値を入力してください')
+      return
+    }
+    await saveDataManagementCell(row, 'usage_count', num)
+  } catch {
+    // キャンセル時などは何もしない
+  }
+}
+
+/** 使用材料数（材料別）：材料使用数セルをダブルクリックして編集（cutting_management.usage_count を更新） */
+async function onDblClickUsageSummaryUsageCount(row: CuttingManagementRow) {
+  const id = (row as { id?: number }).id
+  if (id == null) return
+  const current = formatUsageCountDisplay(row as { usage_count?: number | null })
+  try {
+    const { value } = await ElMessageBox.prompt('材料使用数を入力してください（小数1桁まで）', '材料使用数の編集', {
+      inputValue: current,
+      inputPattern: /^(?:\d+)(?:\.\d)?$/,
+      inputErrorMessage: '0.0以上の数値（小数1桁まで）を入力してください',
+      confirmButtonText: '保存',
+      cancelButtonText: 'キャンセル',
+    })
+    const num = Number(value)
+    if (isNaN(num) || num <= 0) {
+      ElMessage.error('0より大きい数値を入力してください')
+      return
+    }
+    await request.patch(`/api/plan/cutting-management/${id}`, { usage_count: num })
+    ;(row as { usage_count?: number | null }).usage_count = num
+    await loadUsageSummaryCuttingList()
+  } catch {
+    // キャンセル等は無視
   }
 }
 
@@ -4776,6 +4993,9 @@ function openPlanEditDialog(row: CuttingPlanRow) {
   planEditForm.material_name = row.material_name ?? ''
   planEditForm.material_manufacturer = row.material_manufacturer ?? ''
   planEditForm.standard_specification = row.standard_specification ?? ''
+  planEditForm.use_material_stock_sub = (row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0
+  const planUsage = (row as { usage_count?: number }).usage_count
+  planEditForm.usage_count = planUsage != null && Number(planUsage) > 0 ? Number(planUsage) : 1
   planEditDialogVisible.value = true
 }
 
@@ -4875,6 +5095,8 @@ async function savePlanEdit() {
       material_name: planEditForm.material_name || null,
       material_manufacturer: planEditForm.material_manufacturer || null,
       standard_specification: planEditForm.standard_specification || null,
+      use_material_stock_sub: planEditForm.use_material_stock_sub,
+      usage_count: planEditForm.usage_count,
     })
     ElMessage.success('保存しました')
     planEditDialogVisible.value = false
@@ -5065,6 +5287,9 @@ function openCuttingEditDialog(row: CuttingManagementRow) {
   cuttingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
   cuttingEditForm.production_sequence = row.production_sequence ?? 1
   cuttingEditForm.remarks = (row.remarks ?? '') || ''
+  cuttingEditForm.use_material_stock_sub = (row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0
+  const rowUsage = (row as { usage_count?: number }).usage_count
+  cuttingEditForm.usage_count = rowUsage != null && Number(rowUsage) > 0 ? Number(rowUsage) : 1
   cuttingEditDialogVisible.value = true
 }
 
@@ -5089,6 +5314,8 @@ async function saveCuttingEdit() {
       defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
       production_sequence: cuttingEditForm.production_sequence,
       remarks: cuttingEditForm.remarks?.trim() || null,
+      use_material_stock_sub: cuttingEditForm.use_material_stock_sub,
+      usage_count: cuttingEditForm.usage_count,
     })
     ElMessage.success('保存しました')
     cuttingEditDialogVisible.value = false
@@ -5378,6 +5605,22 @@ const chamferingSplitTodayQuantityInput = ref('0')
 const chamferingSplitNextDay = ref('')
 const chamferingSplitSubmitting = ref(false)
 
+/** 翌日順延の生産日：土日を選択不可にする */
+function disabledWeekendDate(date: Date) {
+  const d = date.getDay()
+  return d === 0 || d === 6
+}
+
+/** 指定日から +1 日し、土日なら翌月曜にする（翌日順延の初期値用） */
+function nextWeekdayFrom(dateStr: string): string {
+  let s = shiftDate(dateStr, 1)
+  const d = new Date(s.slice(0, 10) + 'T12:00:00')
+  const day = d.getDay()
+  if (day === 0) d.setDate(d.getDate() + 1)
+  else if (day === 6) d.setDate(d.getDate() + 2)
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+
 function onSplitTodayQuantityInput(val: string) {
   const s = val.replace(/\D/g, '')
   splitTodayQuantityInput.value = s
@@ -5388,7 +5631,7 @@ function openSplitToNextDayDialog(row: CuttingManagementRow) {
   if (total <= 0) return
   splitDialogRow.value = row
   splitTodayQuantityInput.value = '0'
-  splitNextDay.value = shiftDate(String(row.production_day ?? ''), 1)
+  splitNextDay.value = nextWeekdayFrom(String(row.production_day ?? ''))
   splitToNextDayDialogVisible.value = true
   nextTick(() => splitTodayQuantityInputRef.value?.focus())
 }
@@ -5508,7 +5751,7 @@ function openChamferingSplitDialog(row: ChamferingManagementRow) {
   if (total <= 0) return
   chamferingSplitDialogRow.value = row
   chamferingSplitTodayQuantityInput.value = '0'
-  chamferingSplitNextDay.value = shiftDate(String(row.production_day ?? ''), 1)
+  chamferingSplitNextDay.value = nextWeekdayFrom(String(row.production_day ?? ''))
   chamferingSplitDialogVisible.value = true
   nextTick(() => chamferingSplitTodayQuantityInputRef.value?.focus())
 }
@@ -5791,6 +6034,9 @@ async function loadKanbanIssuance() {
     kanbanIssuanceList.value = []
   } finally {
     kanbanIssuanceLoading.value = false
+    // フィルタ変更時などは全ページ一括選択フラグ・選択状態をクリア
+    kanbanSelectAllAllPages.value = false
+    kanbanIssuanceSelection.value = []
   }
 }
 
@@ -6120,9 +6366,19 @@ async function reissueKanban(kanbanId: number) {
   }
 }
 
+/** カンバン発行：ヘッダの「全選択」チェックボックスの状態変更 */
+function onKanbanSelectAll(selection: KanbanIssuanceRow[]) {
+  // selection は「現在ページ」に表示されている行のみ
+  // 1件以上選択された場合は「全ページ分を対象」とみなす
+  kanbanSelectAllAllPages.value = selection.length > 0
+}
+
 /** 選択した待発行カンバンを一括発行 */
 async function batchIssueKanban() {
-  const pending = kanbanIssuanceSelection.value.filter(
+  // ヘッダーのチェックボックスで「全選択」が有効な場合は、現在のフィルタに合致する
+  // 全ページ分のカンバンを対象とする。それ以外は、手動選択された行のみ。
+  const sourceList = kanbanSelectAllAllPages.value ? kanbanIssuanceList.value : kanbanIssuanceSelection.value
+  const pending = sourceList.filter(
     (r) => (r.status === 'pending' || r.status === 'issued') && r.id != null
   )
   if (!pending.length) {
@@ -8646,7 +8902,7 @@ onUnmounted(() => {
   text-align: left;
 }
 
-/* 10列: 生産月, ライン, 順位, 製品名, 計画数, 原材料, ロット数, ロットNo, 生産数, 操作 */
+/* 12列: 生産月, ライン, 順位, 製品名, 計画数, 原材料, ロット数, ロットNo, 生産数, 在庫区分, 材料使用数, 操作 */
 .plan-batch-th:nth-child(1),
 .plan-batch-td:nth-child(1) { flex: 0 0 72px; }
 .plan-batch-th:nth-child(2),
@@ -8666,7 +8922,11 @@ onUnmounted(() => {
 .plan-batch-th:nth-child(9),
 .plan-batch-td:nth-child(9) { flex: 0 0 55px; }
 .plan-batch-th:nth-child(10),
-.plan-batch-td:nth-child(10) { flex: 0 0 50px; }
+.plan-batch-td:nth-child(10) { flex: 0 0 70px; }
+.plan-batch-th:nth-child(11),
+.plan-batch-td:nth-child(11) { flex: 0 0 80px; }
+.plan-batch-th:nth-child(12),
+.plan-batch-td:nth-child(12) { flex: 0 0 60px; }
 
 .plan-batch-th-actions,
 .plan-batch-td-actions {
@@ -9322,6 +9582,12 @@ onUnmounted(() => {
 .cutting-edit-form .el-form-item.cutting-edit-form-item {
   margin-bottom: 8px;
 }
+.cutting-edit-form .cutting-edit-form-row {
+  margin-bottom: 8px;
+}
+.cutting-edit-form .cutting-edit-form-row .cutting-edit-form-item {
+  margin-bottom: 0;
+}
 .cutting-edit-form .el-form-item:last-child {
   margin-bottom: 0;
 }
@@ -9342,6 +9608,32 @@ onUnmounted(() => {
 .cutting-edit-form .el-input__wrapper.is-focus,
 .cutting-edit-form .el-textarea__inner:focus {
   box-shadow: 0 0 0 2px #3b82f6;
+}
+/* 生産数：青系で区別 */
+.cutting-edit-form-item--qty .el-input__wrapper {
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 1px #bfdbfe;
+}
+.cutting-edit-form-item--qty .el-input__wrapper:hover {
+  background-color: #dbeafe;
+  box-shadow: 0 0 0 1px #93c5fd;
+}
+.cutting-edit-form-item--qty .el-input__wrapper.is-focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px #3b82f6;
+}
+/* 不良数：琥珀系で区別 */
+.cutting-edit-form-item--defect .el-input__wrapper {
+  background-color: #fffbeb;
+  box-shadow: 0 0 0 1px #fde68a;
+}
+.cutting-edit-form-item--defect .el-input__wrapper:hover {
+  background-color: #fef3c7;
+  box-shadow: 0 0 0 1px #fcd34d;
+}
+.cutting-edit-form-item--defect .el-input__wrapper.is-focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px #d97706;
 }
 .cutting-edit-remarks .el-form-item__content {
   display: flex;
@@ -9376,6 +9668,74 @@ onUnmounted(() => {
   padding: 8px 14px 10px;
   background: #fff;
   border-top: 1px solid #e2e8f0;
+}
+
+/* 面取指示編集：同レイアウト＋緑テーマで区別・入力しやすく */
+.chamfering-edit-dialog .el-dialog__header {
+  padding: 0;
+}
+.chamfering-edit-dialog .cutting-edit-dialog__header {
+  background: linear-gradient(135deg, #047857 0%, #059669 50%, #10b981 100%);
+}
+.chamfering-edit-dialog .el-dialog__body {
+  padding: 14px 16px 16px;
+  background: #f0fdf4;
+}
+.chamfering-edit-dialog .cutting-edit-form .el-form-item__label {
+  color: #065f46;
+  font-weight: 500;
+}
+.chamfering-edit-dialog .cutting-edit-form .el-input__wrapper,
+.chamfering-edit-dialog .cutting-edit-form .el-textarea__inner {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #a7f3d0;
+  min-height: 32px;
+}
+.chamfering-edit-dialog .cutting-edit-form .el-input__wrapper:hover,
+.chamfering-edit-dialog .cutting-edit-form .el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px #6ee7b7;
+}
+.chamfering-edit-dialog .cutting-edit-form .el-input__wrapper.is-focus,
+.chamfering-edit-dialog .cutting-edit-form .el-textarea__inner:focus {
+  box-shadow: 0 0 0 2px #059669;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--qty .el-input__wrapper {
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 1px #93c5fd;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--qty .el-input__wrapper:hover {
+  background-color: #dbeafe;
+  box-shadow: 0 0 0 1px #60a5fa;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--qty .el-input__wrapper.is-focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px #2563eb;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--defect .el-input__wrapper {
+  background-color: #fffbeb;
+  box-shadow: 0 0 0 1px #fcd34d;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--defect .el-input__wrapper:hover {
+  background-color: #fef3c7;
+  box-shadow: 0 0 0 1px #f59e0b;
+}
+.chamfering-edit-dialog .cutting-edit-form-item--defect .el-input__wrapper.is-focus {
+  background-color: #fff;
+  box-shadow: 0 0 0 2px #d97706;
+}
+.chamfering-edit-dialog .cutting-edit-form-row {
+  margin-bottom: 10px;
+}
+.chamfering-edit-dialog .cutting-edit-form .cutting-edit-form-row .cutting-edit-form-item {
+  margin-bottom: 0;
+}
+.chamfering-edit-save-btn {
+  background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+  border-color: #059669 !important;
+}
+.chamfering-edit-save-btn:hover {
+  background: linear-gradient(135deg, #047857 0%, #34d399 100%) !important;
+  border-color: #047857 !important;
 }
 
 /* 面取指示 新規追加ダイアログ：紧凑・现代UI */
@@ -10050,7 +10410,11 @@ onUnmounted(() => {
 .usage-summary-table--list th:nth-child(3),
 .usage-summary-table--list td:nth-child(3) { min-width: 100px; }
 .usage-summary-table--list th:nth-child(4),
-.usage-summary-table--list td:nth-child(4) { min-width: 100px; }
+.usage-summary-table--list td:nth-child(4) { min-width: 80px; }
+.usage-summary-table--list th:nth-child(5),
+.usage-summary-table--list td:nth-child(5) { min-width: 80px; }
+.usage-summary-table--list th:nth-child(6),
+.usage-summary-table--list td:nth-child(6) { min-width: 100px; }
 .usage-summary-table--list td.usage-mgmt-empty {
   color: #999;
   font-style: italic;
@@ -10108,6 +10472,11 @@ onUnmounted(() => {
 .usage-not-reflected-tag {
   color: #b45309;
   font-size: 11px;
+}
+.usage-sub-manual-tag {
+  color: #64748b;
+  font-size: 11px;
+  font-style: italic;
 }
 .usage-summary-wrap--tomorrow .usage-reflected-badge.is-reflected {
   color: #15803d;

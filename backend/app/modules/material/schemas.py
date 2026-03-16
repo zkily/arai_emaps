@@ -165,6 +165,12 @@ class MaterialStockResponse(MaterialStockBase):
         from_attributes = True
 
 
+class TransferToSubBody(BaseModel):
+    """主表在庫を半端（sub）へ転送するリクエスト"""
+    stock_id: int
+    quantity: int = 1
+
+
 # ─────────────────────────────────────────────
 # 材料在庫サブ (material_stock_sub)
 # ─────────────────────────────────────────────
@@ -189,6 +195,7 @@ class MaterialStockSubBase(BaseModel):
     pieces_per_bundle: Optional[int] = 0
     long_weight: Optional[Decimal] = None
     remarks: Optional[str] = None
+    label_color: Optional[str] = None
 
 
 class MaterialStockSubCreate(MaterialStockSubBase):
@@ -216,6 +223,7 @@ class MaterialStockSubUpdate(BaseModel):
     pieces_per_bundle: Optional[int] = None
     long_weight: Optional[Decimal] = None
     remarks: Optional[str] = None
+    label_color: Optional[str] = None
 
 
 class MaterialStockSubResponse(MaterialStockSubBase):

@@ -111,6 +111,7 @@ class MaterialStockSub(Base):
     pieces_per_bundle = Column(Integer, default=0, comment="每捆件数")
     long_weight = Column(Numeric(10, 2), default=0.00, comment="长重量")
     remarks = Column(Text, comment="備考")
+    label_color = Column(String(20), comment="ラベル色（白/緑）")
     created_at = Column(DateTime, nullable=False, default=func.now(), comment="作成日時")
     last_updated = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment="最終更新日時")
 
@@ -142,7 +143,7 @@ class MaterialUsageRecord(Base):
     usage_date = Column(Date, nullable=False, index=True, comment="使用日（生産日）")
     material_cd = Column(String(50), nullable=False, index=True, comment="材料CD")
     material_name = Column(String(255), nullable=False, comment="材料名")
-    usage_count = Column(Integer, nullable=False, default=0, comment="使用数（不重複管理コード数）")
+    usage_count = Column(Numeric(10, 4), nullable=False, default=1, comment="使用数（行のusage_count、按分時は<1）")
     source = Column(String(50), nullable=False, default="cutting", index=True, comment="来源区分")
     management_codes = Column(Text, nullable=True, comment="管理コード（複数はカンマ区切り）")
     reflected = Column(Boolean, nullable=False, default=False, index=True, comment="反映済")

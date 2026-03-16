@@ -413,6 +413,18 @@
                 }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="操作" width="120" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  type="primary"
+                  size="small"
+                  :disabled="(row.current_stock || 0) < 1"
+                  @click="openTransferDialog(row)"
+                >
+                  半端へ転送
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </div>
 
@@ -650,6 +662,21 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="ラベル色" width="120" align="center">
+              <template #default="{ row }">
+                <el-select
+                  v-model="row.label_color"
+                  placeholder="選択"
+                  size="small"
+                  clearable
+                  @change="handleLabelColorChange(row)"
+                  class="label-color-select"
+                >
+                  <el-option label="白" value="白" />
+                  <el-option label="緑" value="緑" />
+                </el-select>
+              </template>
+            </el-table-column>
             <el-table-column label="備考" width="200" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-input
@@ -771,7 +798,7 @@
               {{ formatCurrency(totalOrderValue) }}
             </el-descriptions-item>
             <el-descriptions-item label="受注日">
-              {{ new Date().toLocaleDateString('ja-JP') }}
+              {{ new Date().toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }}
             </el-descriptions-item>
           </el-descriptions>
         </div>
@@ -1070,7 +1097,7 @@
       </template>
     </el-dialog>
 
-    <!-- 打印确认对话框 -->
+    <!-- 印刷確認ダイアログ -->
     <el-dialog
       v-model="printConfirmDialogVisible"
       width="650px"
@@ -1177,7 +1204,7 @@
       </div>
     </el-dialog>
 
-    <!-- 材料详情对话框 -->
+    <!-- 材料詳細ダイアログ -->
     <el-dialog
       v-model="materialDetailDialogVisible"
       :title="`材料詳細情報 - ${selectedMaterialDetail?.material_name || ''}`"
@@ -1196,7 +1223,7 @@
           </div>
         </div>
 
-        <!-- 筛选按钮 -->
+        <!-- フィルターボタン -->
         <div class="filter-buttons">
           <el-button-group size="small">
             <el-button
@@ -1236,7 +1263,7 @@
           >
             <el-table-column prop="log_date" label="入荷日" width="100" align="center" sortable>
               <template #default="{ row }">
-                {{ row.log_date ? new Date(row.log_date).toLocaleDateString('ja-JP') : '-' }}
+                {{ row.log_date ? new Date(row.log_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '-' }}
               </template>
             </el-table-column>
             <el-table-column prop="supplier" label="仕入先" width="100" show-overflow-tooltip />
@@ -1311,6 +1338,37 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 半端へ転送ダイアログ -->
+    <el-dialog
+      v-model="transferDialogVisible"
+      title="半端へ転送"
+      width="400px"
+      destroy-on-close
+      @close="transferRow = null; transferQuantity = 1"
+    >
+      <div v-if="transferRow" class="transfer-dialog-body">
+        <p class="transfer-info">
+          材料: {{ transferRow.material_name }}（{{ transferRow.material_cd }}）
+        </p>
+        <p class="transfer-info">現在在庫: {{ transferRow.current_stock ?? 0 }} 束</p>
+        <el-form-item label="転送数量">
+          <el-input-number
+            v-model="transferQuantity"
+            :min="1"
+            :max="Math.max(1, transferRow.current_stock ?? 0)"
+            :precision="0"
+            size="default"
+          />
+        </el-form-item>
+      </div>
+      <template #footer>
+        <el-button @click="transferDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" :loading="transferLoading" @click="confirmTransfer">
+          確認
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1347,6 +1405,7 @@ import {
   updateMaterialStockSub,
   createMaterialStockSub,
   deleteMaterialStockSub,
+  transferMaterialStockToSub,
   getStockMaterialsList,
   toggleStockMaterialUsage,
 } from '@/api/material'
@@ -1433,15 +1492,19 @@ const subTableData = ref<MaterialOrderItem[]>([])
 const initialStockData = ref<InitialStockItem[]>([])
 const orderConfirmDialogVisible = ref(false)
 const orderNotes = ref('')
-const activeTab = ref('initial') // 默认显示初期在庫管理tab
+const activeTab = ref('stock') // デフォルトは材料日別在庫タブ
 const materialMasterSyncLoading = ref(false)
 
 // 材料详情弹窗相关数据
 const materialDetailDialogVisible = ref(false)
+const transferDialogVisible = ref(false)
+const transferRow = ref<MaterialOrderItem | null>(null)
+const transferQuantity = ref(1)
+const transferLoading = ref(false)
 const stockMaterialsLoading = ref(false)
 const stockMaterialsList = ref<any[]>([])
 const selectedMaterialDetail = ref<any>(null)
-const stockMaterialsFilter = ref('all') // 筛选状态：all, used, unused
+const stockMaterialsFilter = ref('all') // フィルター: all, used, unused
 
 // 统计数据
 const stats = ref({
@@ -1467,9 +1530,9 @@ const getTodayJapanStr = () => {
 
 const searchForm = reactive({
   keyword: '',
-  dateRange: [getTodayJapanStr(), getTodayJapanStr()] as string[], // 默认为日本当天日期
+  dateRange: [getTodayJapanStr(), getTodayJapanStr()] as string[], // デフォルトは日本時間の当日
   supplier: [] as string[],
-  usageStatus: '', // 使用状態筛选条件
+  usageStatus: '', // 使用状態フィルター
 })
 
 // 分页数据
@@ -1493,7 +1556,7 @@ const printForm = reactive({
     '2.支払期日・支払方法・検査完了期日・有償支給原材料代金の決済期日及び方法については、令和8年1月1日の「支払方法等について」によります。',
 })
 
-// 手录入材料注文表单数据
+// 手入力材料注文フォームデータ
 const manualOrderForm = reactive({
   date: '',
   material_cd: '',
@@ -1938,12 +2001,9 @@ const handleSearch = () => {
 
 const handleReset = () => {
   searchForm.keyword = ''
-  searchForm.dateRange = [
-    new Date().toISOString().split('T')[0],
-    new Date().toISOString().split('T')[0],
-  ] // 重置为当天日期
+  searchForm.dateRange = [getTodayJapanStr(), getTodayJapanStr()] // 日本時間の当日にリセット
   searchForm.supplier = []
-  searchForm.usageStatus = '' // 重置使用状態筛选
+  searchForm.usageStatus = ''
   pagination.page = 1
   if (activeTab.value === 'sub') {
     fetchSubData()
@@ -2081,7 +2141,7 @@ const handleUsageQuantityChange = async (row: any) => {
       }
     } else {
       console.error('API返却失敗:', response)
-      ElMessage.error(`使用数の更新に失敗しました: ${(response as any)?.message || '未知のエラー'}`)
+      ElMessage.error(`使用数の更新に失敗しました: ${(response as any)?.message || '不明なエラー'}`)
     }
   } catch (error: any) {
     console.error('使用数更新失敗:', error)
@@ -2111,6 +2171,70 @@ const handleRemarksChange = async (row: any) => {
   }
 }
 
+// ラベル色変更（半端材料のみ）
+const handleLabelColorChange = async (row: any) => {
+  try {
+    const body = { label_color: row.label_color ?? null }
+    const response = await updateMaterialStockSub(row.id, body)
+    if ((response as any)?.success) {
+      ElMessage.success('ラベル色を更新しました')
+    } else {
+      ElMessage.error('ラベル色の更新に失敗しました')
+    }
+  } catch (error) {
+    console.error('ラベル色更新失敗:', error)
+    ElMessage.error('ラベル色の更新に失敗しました')
+  }
+}
+
+// 半端へ転送ダイアログを開く
+const openTransferDialog = (row: MaterialOrderItem) => {
+  transferRow.value = row
+  transferQuantity.value = 1
+  transferDialogVisible.value = true
+}
+
+// 转移到半端：确认提交
+const confirmTransfer = async () => {
+  const row = transferRow.value
+  if (!row || !row.id) return
+  const qty = transferQuantity.value
+  const maxQty = row.current_stock ?? 0
+  if (qty < 1 || qty > maxQty) {
+    ElMessage.warning(`転送数量は1～${maxQty}の範囲で入力してください`)
+    return
+  }
+  try {
+    transferLoading.value = true
+    const response = await transferMaterialStockToSub(row.id, qty)
+    if ((response as any)?.success) {
+      ElMessage.success('半端材料へ転送しました')
+      transferDialogVisible.value = false
+      transferRow.value = null
+      transferQuantity.value = 1
+      await fetchData()
+      try {
+        await ElMessageBox.confirm('転送しました。半端材料を表示しますか？', '確認', {
+          confirmButtonText: '表示する',
+          cancelButtonText: 'このまま',
+          type: 'info',
+        })
+        activeTab.value = 'sub'
+        await fetchSubData()
+      } catch {
+        // ユーザーがキャンセルをクリックした場合はタブを切り替えない
+      }
+    } else {
+      ElMessage.error((response as any)?.message || '半端への転送に失敗しました')
+    }
+  } catch (error: any) {
+    console.error('半端への転送に失敗:', error)
+    ElMessage.error(error?.response?.data?.detail || error?.message || '半端への転送に失敗しました')
+  } finally {
+    transferLoading.value = false
+  }
+}
+
 // 初期在庫変化処理
 const handleInitialStockChange = async (row: InitialStockItem) => {
   try {
@@ -2127,29 +2251,29 @@ const handleInitialStockChange = async (row: InitialStockItem) => {
       const response = await updateMaterialQuantities(updateParams)
 
       if (response && (response as any).success) {
-        console.log(`成功更新材料 ${row.material_cd} 的初期在庫`)
+        console.log(`材料 ${row.material_cd} の初期在庫を更新しました`)
         ElMessage.success('初期在庫を更新しました')
       } else {
-        const errorMessage = (response as any)?.message || '未知错误'
-        console.error(`更新材料 ${row.material_cd} 的初期在庫失败:`, errorMessage)
-        ElMessage.warning(`保存失败: ${errorMessage}`)
+        const errorMessage = (response as any)?.message || '不明なエラー'
+        console.error(`材料 ${row.material_cd} の初期在庫更新失敗:`, errorMessage)
+        ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
       }
     } catch (apiError: any) {
-      console.warn('初期在庫更新API暂未实现，使用备用方案:', apiError)
+      console.warn('初期在庫更新APIは未実装のため代替処理を使用:', apiError)
       ElMessage.info('初期在庫管理機能は開発中です。変更は一時的に保存されています。')
     }
   } catch (error: any) {
-    console.error(`更新材料 ${row.material_cd} 的初期在庫时发生错误:`, error)
-    ElMessage.error(`保存时发生错误: ${error.message || '未知错误'}`)
+    console.error(`材料 ${row.material_cd} の初期在庫更新エラー:`, error)
+    ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
   }
 }
 
-// 处理調整数变化
+// 調整数変更処理
 const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
   try {
     console.log('更新調整数:', row.material_cd, row.adjustment_quantity)
 
-    // 使用与材料日別在庫相同的API更新数据
+    // 材料日別在庫と同じAPIで更新
     const updateParams: MaterialQuantityUpdate = {
       material_cd: row.material_cd,
       date: row.date,
@@ -2160,20 +2284,20 @@ const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
       const response = await updateMaterialQuantities(updateParams)
 
       if (response && (response as any).success) {
-        console.log(`成功更新材料 ${row.material_cd} 的調整数`)
+        console.log(`材料 ${row.material_cd} の調整数を更新しました`)
         ElMessage.success('調整数を更新しました')
       } else {
-        const errorMessage = (response as any)?.message || '未知错误'
-        console.error(`更新材料 ${row.material_cd} 的調整数失败:`, errorMessage)
-        ElMessage.warning(`保存失败: ${errorMessage}`)
+        const errorMessage = (response as any)?.message || '不明なエラー'
+        console.error(`材料 ${row.material_cd} の調整数更新失敗:`, errorMessage)
+        ElMessage.warning(`保存に失敗しました: ${errorMessage}`)
       }
     } catch (apiError: any) {
-      console.warn('調整数更新API暂未实现，使用备用方案:', apiError)
+      console.warn('調整数更新APIは未実装のため、代替処理を使用:', apiError)
       ElMessage.info('初期在庫管理機能は開発中です。変更は一時的に保存されています。')
     }
   } catch (error: any) {
     console.error(`更新材料 ${row.material_cd} 的調整数时发生错误:`, error)
-    ElMessage.error(`保存时发生错误: ${error.message || '未知错误'}`)
+    ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
   }
 }
 
@@ -2197,7 +2321,7 @@ const handleDeleteSubItem = async (row: any) => {
       // 重新获取数据
       await fetchSubData()
     } else {
-      ElMessage.error(`削除に失敗しました: ${(response as any)?.message || '未知错误'}`)
+      ElMessage.error(`削除に失敗しました: ${(response as any)?.message || '不明なエラー'}`)
     }
   } catch (error: any) {
     if (error !== 'cancel') {
@@ -2269,11 +2393,12 @@ const formatCurrency = (num: number): string => {
   return `¥${Math.round(num).toLocaleString('ja-JP')}`
 }
 
-// 格式化日期时间（未使用时可删除）
+// 日時フォーマット（日本時区）
 const _formatDateTime = (dateTime: string): string => {
   if (!dateTime) return '-'
   const date = new Date(dateTime)
   return date.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -2286,15 +2411,12 @@ const _formatDateTime = (dateTime: string): string => {
 const handleTabChange = (tabName: string | number) => {
   activeTab.value = String(tabName)
 
-  // 根据不同的tab获取不同的数据
+  // タブに応じてデータ取得
   if (tabName === 'sub') {
-    // 切换到半端材料リスト时，获取sub表数据
     fetchSubData()
   } else if (tabName === 'initial') {
-    // 切换到初期在庫管理时，获取初期在庫数据
     fetchInitialStockData()
   } else {
-    // 切换到其他tab时，获取主表数据
     fetchData()
   }
 }
@@ -2359,13 +2481,13 @@ const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
     if (response && response.success) {
       console.log(`成功保存材料 ${row.material_cd} 的数量到数据库`)
     } else {
-      const errorMessage = response?.message || '未知错误'
+      const errorMessage = response?.message || '不明なエラー'
       console.error(`保存材料 ${row.material_cd} 的数量失败:`, errorMessage)
       ElMessage.warning(`保存失败: ${errorMessage}`)
     }
   } catch (error: any) {
     console.error(`保存材料 ${row.material_cd} 的数量时发生错误:`, error)
-    ElMessage.error(`保存时发生错误: ${error.message || '未知错误'}`)
+    ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
   }
 }
 
@@ -2388,13 +2510,13 @@ const _saveRemarksToDatabase = async (row: MaterialOrderItem) => {
     if (response && response.success) {
       console.log(`成功保存材料 ${row.material_cd} 的備考到数据库`)
     } else {
-      const errorMessage = response?.message || '未知错误'
+      const errorMessage = response?.message || '不明なエラー'
       console.error(`保存材料 ${row.material_cd} 的備考失败:`, errorMessage)
       ElMessage.warning(`保存失败: ${errorMessage}`)
     }
   } catch (error: any) {
     console.error(`保存材料 ${row.material_cd} 的備考时发生错误:`, error)
-    ElMessage.error(`保存时发生错误: ${error.message || '未知错误'}`)
+    ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
   }
 }
 
@@ -2587,7 +2709,7 @@ const getMergedOrderData = async () => {
 
     return mergedData
   } catch (error) {
-    console.error('获取合并注文数据失败:', error)
+    console.error('注文データの取得に失敗:', error)
     ElMessage.error('注文データの取得に失敗しました')
     return []
   }
@@ -2608,7 +2730,7 @@ const handlePrintOrder = async () => {
     return
   }
 
-  // 显示打印确认对话框
+  // 印刷確認ダイアログを表示
   printConfirmDialogVisible.value = true
 }
 
@@ -2854,6 +2976,7 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
   )
 
   const issuedDateTime = new Date().toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -2866,10 +2989,10 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
 
   let tableRowsHtml = ''
   sortedOrderItems.forEach((row) => {
-    // 构建サイズ字段：使用material_name作为尺寸信息
+    // サイズ: material_name をそのまま使用
     const size = row.material_name || ''
 
-    // 构建長さ字段：从material_name中提取后4位数字
+    // 長さ: material_name の末尾4桁を抽出
     const materialName = row.material_name || ''
     const lengthMatch = materialName.match(/(\d{4})$/)
     const length = lengthMatch ? lengthMatch[1] : ''
@@ -2955,7 +3078,7 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
   `
 }
 
-// 数据生成处理函数
+// データ生成処理
 const handleDataGeneration = async () => {
   // 重置日期
   dataGenerationStartDate.value = ''
@@ -2964,7 +3087,7 @@ const handleDataGeneration = async () => {
   dataGenerationDialogVisible.value = true
 }
 
-// 确认数据生成
+// データ生成確認
 const confirmDataGeneration = async () => {
   try {
     // 验证日期选择
@@ -3022,7 +3145,7 @@ const confirmDataGeneration = async () => {
       const skipped_count = payload.skipped_count ?? 0
       const duplicate_count = payload.duplicate_count ?? 0
 
-      // 构建详细的结果消息
+      // 結果メッセージを組み立て
       let message = `データ生成が完了しました！\n\n`
       message += `✅ 新規生成: ${generated_count}件\n`
       message += `🔄 更新: ${updated_count}件\n`
@@ -3067,13 +3190,13 @@ const confirmDataGeneration = async () => {
 
 // 工具方法 - formatCurrency已在上面定义，这里删除重复定义
 
-// 手录入材料注文相关方法
+// 手入力材料注文まわり
 const handleAddManualOrder = async () => {
-  console.log('打开手录入材料注文对话框')
+  console.log('手入力材料注文ダイアログを開く')
 
   // 重置表单
   Object.assign(manualOrderForm, {
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayJapanStr(),
     material_cd: '',
     material_name: '',
     order_quantity: 0,
@@ -3088,23 +3211,18 @@ const handleAddManualOrder = async () => {
     pieces_per_bundle: 0,
     long_weight: 0,
     lead_time: 0,
-    remarks: 'バラ束', // 默认備考为'バラ束'
+    remarks: 'バラ束', // デフォルト備考
   })
 
-  // 重置选中的材料
   selectedMaterial.value = null
-  console.log('重置后的selectedMaterial:', selectedMaterial.value)
 
-  // 加载材料数据
   await loadMaterials()
 
-  // 打开对话框
   manualOrderDialogVisible.value = true
-  console.log('对话框已打开')
 }
 
 const handleCancelManualOrder = () => {
-  console.log('取消手录入材料注文')
+  console.log('手入力材料注文をキャンセル')
 
   // 关闭对话框
   manualOrderDialogVisible.value = false
@@ -3131,7 +3249,7 @@ const loadMaterials = async () => {
       response = await request.get('/api/master/materials')
       console.log('成功获取材料数据，使用 /api/master/materials')
     } catch (error) {
-      console.log('获取材料数据失败:', error)
+      console.log('材料データ取得失敗:', error)
       throw error
     }
 
@@ -3246,7 +3364,7 @@ const fillMaterialData = (material: Material) => {
 }
 
 const calculateOrderDetails = () => {
-  // 注文本数以手录入的数值为准，不再自动计算
+  // 注文本数は手入力値を優先（自動計算しない）
   // 只重新计算重量和金额
   console.log('重新计算订单详情，注文本数:', manualOrderForm.order_bundle_quantity)
 }
@@ -3349,13 +3467,13 @@ const fetchStockMaterials = async (materialName: string) => {
       }))
       console.log('成功获取stock_materials数据:', stockMaterialsList.value.length, '条')
     } else {
-      console.error('获取stock_materials数据失败')
+      console.error('stock_materialsデータの取得に失敗')
       ElMessage.error('在庫材料データの取得に失敗しました')
       stockMaterialsList.value = []
     }
   } catch (error: any) {
     console.error('获取stock_materials数据时发生错误:', error)
-    ElMessage.error(`在庫材料データの取得に失敗しました: ${error?.message || '未知错误'}`)
+    ElMessage.error(`在庫材料データの取得に失敗しました: ${error?.message || '不明なエラー'}`)
     stockMaterialsList.value = []
   } finally {
     stockMaterialsLoading.value = false
@@ -3946,7 +4064,7 @@ const handleFilterChange = (filterType: string) => {
   --el-pagination-hover-color: #667eea;
 }
 
-/* 数据生成对话框样式 - 紧凑版 */
+/* データ生成ダイアログ - コンパクト */
 .data-generation-dialog {
   border-radius: 12px;
   overflow: hidden;
@@ -4148,7 +4266,7 @@ const handleFilterChange = (filterType: string) => {
   font-size: 12px;
 }
 
-/* 手录入材料注文对话框样式 - 紧凑现代UI */
+/* 手入力材料注文ダイアログ - コンパクトUI */
 .manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog) {
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
@@ -4537,7 +4655,7 @@ const handleFilterChange = (filterType: string) => {
   box-shadow: 0 5px 16px rgba(16, 185, 129, 0.4);
 }
 
-/* 数据生成确认对话框样式 */
+/* データ生成確認ダイアログ */
 :deep(.data-generation-confirm-dialog) {
   border-radius: 16px !important;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15) !important;
@@ -5228,7 +5346,7 @@ const handleFilterChange = (filterType: string) => {
   font-weight: 700 !important;
 }
 
-/* 打印确认对话框样式 */
+/* 印刷確認ダイアログ */
 .print-confirm-dialog {
   border-radius: 12px;
   overflow: hidden;
@@ -5306,7 +5424,7 @@ const handleFilterChange = (filterType: string) => {
   border-radius: 0 0 12px 12px;
 }
 
-/* 打印确认对话框 - 紧凑精美样式 */
+/* 印刷確認ダイアログ - コンパクト */
 .print-confirm-content-compact {
   padding: 10px 14px;
 }
@@ -5426,7 +5544,7 @@ const handleFilterChange = (filterType: string) => {
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
 
-/* 材料详情对话框样式 */
+/* 材料詳細ダイアログ */
 .material-detail-dialog {
   border-radius: 16px;
   overflow: hidden;
@@ -5509,7 +5627,7 @@ const handleFilterChange = (filterType: string) => {
   margin: 12px 0;
 }
 
-/* 筛选按钮样式 */
+/* フィルターボタン */
 .filter-buttons {
   margin: 16px 0 12px 0;
   display: flex;
@@ -5678,6 +5796,10 @@ const handleFilterChange = (filterType: string) => {
     flex-direction: row;
     justify-content: space-between;
   }
+}
+
+.transfer-dialog-body .transfer-info {
+  margin: 0 0 8px 0;
 }
 
 /* 材料名可点击样式 */

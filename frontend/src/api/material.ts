@@ -221,6 +221,17 @@ export function deleteMaterialStockSub(id: number): Promise<{ success?: boolean 
   return request.delete(`${PREFIX}/stock/sub/${id}`) as Promise<{ success?: boolean }>
 }
 
+/** 主表在庫を半端（material_stock_sub）へ転送 */
+export function transferMaterialStockToSub(
+  stockId: number,
+  quantity: number = 1
+): Promise<{ success?: boolean; data?: unknown }> {
+  return request.post(`${PREFIX}/stock/transfer-to-sub`, {
+    stock_id: stockId,
+    quantity,
+  }) as Promise<{ success?: boolean; data?: unknown }>
+}
+
 /** 手動注文登録：material_stock_sub 新規作成 */
 export function createMaterialStockSub(body: {
   material_cd: string
@@ -243,6 +254,7 @@ export function createMaterialStockSub(body: {
   pieces_per_bundle?: number
   long_weight?: number
   remarks?: string
+  label_color?: string
 }): Promise<{ success?: boolean; data?: unknown }> {
   return request.post(`${PREFIX}/stock/sub`, body) as Promise<{
     success?: boolean
