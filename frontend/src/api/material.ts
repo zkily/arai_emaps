@@ -377,3 +377,15 @@ export function getForecastSuppliers(params?: {
     data?: { supplier_cd: string; supplier_name: string }[]
   }>
 }
+
+/** 丸一注文書（画像PDF）を社内共有フォルダへ保存（multipart: file） */
+export function saveMaruichiOrderPdf(
+  blob: Blob,
+  filename: string,
+): Promise<{ success?: boolean; message?: string; path?: string; detail?: string }> {
+  const form = new FormData()
+  form.append('file', blob, filename)
+  return request.post(`${PREFIX}/stock/maruichi-order-pdf`, form, {
+    timeout: 120000,
+  }) as Promise<{ success?: boolean; message?: string; path?: string; detail?: string }>
+}

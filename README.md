@@ -27,7 +27,7 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 
 | カテゴリ              | 技術                               |
 | --------------------- | ---------------------------------- |
-| **言語**              | Python 3.14                        |
+| **言語**              | Python 3.10+                       |
 | **Webフレームワーク** | FastAPI 0.109+                     |
 | **ASGIサーバー**      | Uvicorn 0.27+                      |
 | **ORM**               | SQLAlchemy 2.0+                    |
@@ -43,6 +43,15 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 - **RDBMS**: MySQL 8.0+
 - **文字セット**: utf8mb4 (Unicode完全対応)
 - **接続**: 非同期接続プール (aiomysql)
+
+### 開発言語・主要ライブラリ
+
+| レイヤー       | 主な言語・ライブラリ                                                                 |
+| -------------- | ------------------------------------------------------------------------------------ |
+| フロントエンド | TypeScript, Vue 3, Element Plus, Pinia, Vue Router, ECharts, Axios, Vite            |
+| バックエンド   | Python, FastAPI, SQLAlchemy, Pydantic, Uvicorn, Alembic, python-jose, Passlib       |
+| インフラ       | MySQL, dotenv(.env), systemd/Windows Service (運用環境での常駐化を想定)              |
+| ツール         | npm, pip, alembic, pytest, ESLint, Prettier, stylelint, commitlint (一部導入予定含む) |
 
 ## 📁 プロジェクト構造
 
@@ -98,6 +107,44 @@ Smart-EMAPs/
 ```
 
 詳細なプロジェクト構造については、[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) を参照してください。
+
+## 🧩 アーキテクチャ詳細
+
+### フロントエンド詳細
+
+- **エントリーポイント**: `frontend/src/main.ts`, ルートコンポーネントは `App.vue`
+- **ルーティング**: `frontend/src/router` で画面ごとにルートを定義し、ERP / APS / MES / System などドメイン単位でモジュール分割
+- **状態管理**: `frontend/src/stores` の Pinia ストアでグローバル状態（ログイン情報、権限、共通マスタなど）を集中管理
+- **API クライアント**: `frontend/src/api` で Axios ベースの API ラッパを定義し、エラーハンドリング・トークン付与・共通レスポンス形式を統一
+- **UI コンポーネント**:
+  - 共通フォーム・検索条件パネル・一覧テーブル・ダイアログなどを `components` に共通化
+  - `views/erp` 以下は販売・購買・在庫・生産などドメインごとの画面を配置
+
+### バックエンド詳細
+
+- **エントリーポイント**: `backend/app/main.py`
+- **設定**: `backend/app/core/config.py` の `Settings` クラスで `.env` を読み込み、DB 接続・CORS・ファイル監視などの設定を一元管理
+- **DB 接続**: `backend/app/core/database.py`（存在する場合）で SQLAlchemy セッションおよび接続プールを管理
+- **ドメインモジュール** (`backend/app/modules`):
+  - `erp`: 受注・購買・在庫・生産・原価など ERP 領域の API
+  - `aps`: 生産計画・負荷計画・スケジューリング関連 API
+  - `mes`: 実績収集・品質管理・設備稼働など現場系 API
+  - `system`: ユーザー・権限・メニュー・ファイル監視設定などシステム管理 API
+- **スキーマとモデル**:
+  - `models/`: SQLAlchemy モデル（テーブル定義）
+  - `schemas/`: Pydantic スキーマ（リクエスト/レスポンス、内部 DTO）
+- **ファイル監視サービス**:
+  - `app/services/file_watcher/` 以下で CSV / Excel ファイル監視と DB 同期を実装
+  - `inspection_excel_processor.py`: 検査工程 Excel から `stock_transaction_logs` への取り込みロジック
+
+### データベース詳細
+
+- **マイグレーション管理**: `backend/alembic` と `backend/database/migrations` でテーブル・インデックス・トリガーなどを管理
+- **主なテーブル例**:
+  - `stock_transaction_logs`: 在庫受払履歴（製品/材料/仕掛品の入出庫・実績・不良）
+  - `materials`, `products`, `machines`, `processes`: 基本マスタ群
+  - `production_orders`, `production_schedules`, `production_results`: 生産指図・スケジュール・実績
+- **接続文字列**: `.env` の `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` から生成（`Settings.get_database_url()`）
 
 ## ✨ 主要機能
 
@@ -338,6 +385,36 @@ npm run build
 npm run preview
 ```
 
+## 🧰 開発環境・推奨エディタ/プラグイン
+
+### 推奨エディタ
+
+- **Visual Studio Code / Cursor**（本リポジトリ想定）
+
+### VSCode/Cursor 推奨拡張機能
+
+- **フロントエンド**
+  - Vue Language Features (Volar)
+  - TypeScript Vue Plugin
+  - ESLint
+  - Prettier - Code formatter
+  - Stylelint
+- **バックエンド**
+  - Python
+  - Pylance
+  - isort
+- **共通**
+  - GitLens — Git 履歴と差分確認
+  - Error Lens — エラー・警告のインライン表示
+  - TODO Highlight — TODO/FIXME の可視化
+
+### コードフォーマット・Lint
+
+- **フロントエンド**
+  - ESLint + Prettier による統一フォーマット（`.eslintrc` / `.prettierrc` に準拠）
+- **バックエンド**
+  - `black` / `isort` / `flake8`（または同等ツール）による Python コード整形・静的解析（導入済み/導入予定の環境に応じて利用）
+
 ## 🎨 モダンUI/UXデザイン
 
 Smart-EMAPsは、最先端のグラスモーフィズム（Glassmorphism）デザインを採用した、プレミアムで洗練されたユーザーインターフェースを提供します：
@@ -383,6 +460,5 @@ Smart-EMAPs開発チーム
 
 ---
 
-**最終更新日時**: 2026年2月10日（日本時間）
-#   a r a i _ e m a p s  
  
+**最終更新日時**: 2026年3月16日（日本時間）

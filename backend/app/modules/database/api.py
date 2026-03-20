@@ -49,8 +49,8 @@ PROCESS_CARRY_OVER_MAPPING = {
     "KT06": "outsourced_plating_carry_over",
     "KT08": "outsourced_welding_carry_over",
     "KT11": "pre_welding_inspection_carry_over",
-    "KT17": "pre_inspection_carry_over",
-    "KT16": "pre_outsourcing_carry_over",
+    "KT16": "pre_inspection_carry_over",
+    "KT17": "pre_outsourcing_carry_over",
 }
 
 # 実績更新：process_cd → production_summarys の actual 列（一般工程 11 + KT13/KT15 は別クエリ）
@@ -64,8 +64,8 @@ PROCESS_ACTUAL_MAPPING = {
     "KT06": "outsourced_plating_actual",
     "KT08": "outsourced_welding_actual",
     "KT11": "pre_welding_inspection_actual",
-    "KT17": "pre_inspection_actual",
-    "KT16": "pre_outsourcing_actual",
+    "KT16": "pre_inspection_actual",
+    "KT17": "pre_outsourcing_actual",
 }
 ACTUAL_CLEAR_COLUMNS = [
     "cutting_actual", "chamfering_actual", "molding_actual", "plating_actual",
@@ -100,8 +100,8 @@ PROCESS_SCRAP_MAPPING = {
     "KT06": "outsourced_plating_scrap",
     "KT08": "outsourced_welding_scrap",
     "KT11": "pre_welding_inspection_scrap",
-    "KT17": "pre_inspection_scrap",
-    "KT16": "pre_outsourcing_scrap",
+    "KT16": "pre_inspection_scrap",
+    "KT17": "pre_outsourcing_scrap",
 }
 SCRAP_PROCESS_CDS = list(PROCESS_SCRAP_MAPPING.keys())
 
@@ -123,7 +123,7 @@ PROCESS_CD_TO_PREFIX = {
     "KT01": "cutting", "KT02": "chamfering", "KT04": "molding", "KT05": "plating",
     "KT07": "welding", "KT09": "inspection", "KT13": "warehouse", "KT15": "outsourced_warehouse",
     "KT06": "outsourced_plating", "KT08": "outsourced_welding",
-    "KT11": "pre_welding_inspection", "KT17": "pre_inspection", "KT16": "pre_outsourcing",
+    "KT11": "pre_welding_inspection", "KT16": "pre_inspection", "KT17": "pre_outsourcing",
 }
 # process_cd → actual 列（下一工程実績用；KT15 は outsourced_warehouse_actual）
 PROCESS_CD_TO_ACTUAL = {**PROCESS_ACTUAL_MAPPING, "KT15": "outsourced_warehouse_actual"}
@@ -251,6 +251,7 @@ async def get_production_summarys_list(
     total_result = await db.execute(count_q)
     total = total_result.scalar() or 0
     list_data = [_row_to_dict(r) for r in rows]
+    await _enrich_production_summary_rows_pre_plating_inventory(db, list_data)
     return {
         "data": {
             "list": list_data,
@@ -1549,6 +1550,108 @@ def _get_process_config_by_key(key: str) -> Optional[dict]:
         if c["key"] == key:
             return c
     return None
+
+
+def _find_plating_step_index(sequence: list) -> Optional[int]:
+    """工程順序内で社内メッキ(plating)または外注メッキ(outsourced_plating)の位置（0-based）。無ければ None。"""
+    if not sequence:
+        return None
+    for k in ("plating", "outsourced_plating"):
+        try:
+            return sequence.index(k)
+        except ValueError:
+            continue
+    return None
+
+
+def _find_molding_step_index(sequence: list) -> Optional[int]:
+    """工程順序内で成型(molding)の位置（0-based）。無ければ None。"""
+    if not sequence:
+        return None
+    try:
+        return sequence.index("molding")
+    except ValueError:
+        return None
+
+
+def _pre_plating_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
+    """メッキ（または外注メッキ）直前工程の当日在庫。戻り: (値, 直前工程 key)。該当なしは (None, None)。"""
+    idx = _find_plating_step_index(sequence)
+    if idx is None or idx <= 0:
+        return None, None
+    prev_key = sequence[idx - 1]
+    cfg = _get_process_config_by_key(prev_key)
+    if not cfg:
+        return None, None
+    inv_f = cfg.get("fields", {}).get("inventory")
+    if not inv_f:
+        return None, None
+    raw = row_dict.get(inv_f)
+    if raw is None:
+        return 0, prev_key
+    try:
+        return int(raw), prev_key
+    except (TypeError, ValueError):
+        return 0, prev_key
+
+
+def _pre_molding_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
+    """成型直前工程の当日在庫。戻り: (値, 直前工程 key)。該当なしは (None, None)。"""
+    idx = _find_molding_step_index(sequence)
+    if idx is None or idx <= 0:
+        return None, None
+    prev_key = sequence[idx - 1]
+    cfg = _get_process_config_by_key(prev_key)
+    if not cfg:
+        return None, None
+    inv_f = cfg.get("fields", {}).get("inventory")
+    if not inv_f:
+        return None, None
+    raw = row_dict.get(inv_f)
+    if raw is None:
+        return 0, prev_key
+    try:
+        return int(raw), prev_key
+    except (TypeError, ValueError):
+        return 0, prev_key
+
+
+async def _enrich_production_summary_rows_pre_plating_inventory(
+    db: AsyncSession, rows: list[dict]
+) -> None:
+    """一覧各行に pre_plating / pre_molding 系を付与（ルート順は _get_route_sequence と同一）。"""
+    if not rows:
+        return
+    route_cds = {(r.get("route_cd") or "").strip() for r in rows if (r.get("route_cd") or "").strip()}
+    desc_map: dict[str, str] = {}
+    if route_cds:
+        pr_res = await db.execute(
+            select(ProcessRoute.route_cd, ProcessRoute.description).where(
+                ProcessRoute.route_cd.in_(route_cds)
+            )
+        )
+        for rc, desc in pr_res.all():
+            desc_map[str(rc or "").strip()] = (desc or "").strip()
+    seq_cache: dict[tuple, list] = {}
+
+    async def _seq_for(route_cd: Optional[str], route_description: str) -> list:
+        cache_key = ((route_cd or "").strip(), (route_description or "").strip())
+        if cache_key not in seq_cache:
+            seq_cache[cache_key] = await _get_route_sequence(
+                db, (route_cd or "").strip(), route_description or None
+            )
+        return seq_cache[cache_key]
+
+    for r in rows:
+        rc = (r.get("route_cd") or "").strip() or None
+        rd = desc_map.get(rc, "") if rc else ""
+        sequence = await _seq_for(rc, rd)
+        val, prev = _pre_plating_inventory_from_row(r, sequence)
+        r["pre_plating_inventory"] = val
+        r["pre_plating_prev_process"] = prev
+        mv, mprev = _pre_molding_inventory_from_row(r, sequence)
+        r["pre_molding_inventory"] = mv
+        r["pre_molding_prev_process"] = mprev
 
 
 def _parse_route_sequence_from_description(description: Optional[str]) -> list:

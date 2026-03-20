@@ -19,11 +19,11 @@
           >
             <el-button
               size="small"
-              :icon="MoreFilled"
+              :icon="RefreshRight"
               :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
               class="modern-btn others-btn"
             >
-              その他
+              各種更新機能
               <el-icon class="el-icon--right"><ArrowDown /></el-icon>
             </el-button>
             <template #dropdown>
@@ -154,7 +154,7 @@
         <template v-else>
           <el-button
             size="small"
-            :icon="MoreFilled"
+            :icon="RefreshRight"
             :loading="generating || updatingCarryOver || updatingOrder || updatingAll || updatingFromOrderDaily || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
             :disabled="generating || updatingCarryOver || updatingOrder || updatingAll || updatingActual || updatingDefect || updatingScrap || updatingOnHold || updatingProductionDates || updatingPlan || updatingInventoryTrend || updatingProductMaster || updatingMachine"
             class="modern-btn others-btn"
@@ -286,6 +286,18 @@
                 <el-icon><DocumentCopy /></el-icon>
                 <span>実績一括登録</span>
               </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-plating')">
+                <el-icon><Printer /></el-icon>
+                <span>メッキ推奨生産日（印刷）</span>
+              </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-molding')">
+                <el-icon><Printer /></el-icon>
+                <span>成型推奨生産日（印刷）</span>
+              </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-molding-plan')">
+                <el-icon><Printer /></el-icon>
+                <span>成型計画推奨生産日（印刷）</span>
+              </div>
             </div>
           </el-drawer>
         </template>
@@ -314,6 +326,24 @@
         >
           <span>工程別計画確認印刷</span>
         </el-button>
+        <el-dropdown
+          trigger="click"
+          placement="bottom-start"
+          class="recommended-print-dropdown"
+          @command="handleRecommendedPrintCommand"
+        >
+          <el-button size="small" :icon="Printer" class="modern-btn recommended-print-dropdown-btn">
+            <span>推奨生産日印刷</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="print-rec-plating">メッキ推奨生産日</el-dropdown-item>
+              <el-dropdown-item command="print-rec-molding">成型推奨生産日</el-dropdown-item>
+              <el-dropdown-item command="print-rec-molding-plan">成型計画推奨生産日</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button
           size="small"
           :icon="Setting"
@@ -536,17 +566,37 @@
                     {{ row[col.prop] ? formatDate(row[col.prop]) : '-' }}
                   </span>
                   <span v-else-if="col.type === 'text'" class="text-cell">
-                    {{ row[col.prop] || '-' }}
+                    {{
+                      col.prop === 'pre_plating_prev_process' || col.prop === 'pre_molding_prev_process'
+                        ? formatPrePlatingPrevKey(row[col.prop])
+                        : (row[col.prop] || '-')
+                    }}
                   </span>
                   <span
                     v-else
                     class="number-cell"
                     :class="{
-                      negative: (row[col.prop] ?? 0) < 0,
-                      positive: (row[col.prop] ?? 0) > 0,
+                      negative:
+                        col.prop !== 'pre_plating_inventory' &&
+                        col.prop !== 'pre_molding_inventory' &&
+                        (row[col.prop] ?? 0) < 0,
+                      positive:
+                        col.prop !== 'pre_plating_inventory' &&
+                        col.prop !== 'pre_molding_inventory' &&
+                        (row[col.prop] ?? 0) > 0,
                     }"
                   >
-                    {{ row[col.prop] != null && row[col.prop] !== 0 ? Number(row[col.prop]).toLocaleString() : '' }}
+                    <template
+                      v-if="
+                        (col.prop === 'pre_plating_inventory' && row.pre_plating_inventory == null) ||
+                        (col.prop === 'pre_molding_inventory' && row.pre_molding_inventory == null)
+                      "
+                    >
+                      —
+                    </template>
+                    <template v-else>{{
+                      row[col.prop] != null && row[col.prop] !== 0 ? Number(row[col.prop]).toLocaleString() : ''
+                    }}</template>
                   </span>
                 </template>
               </el-table-column>
@@ -694,7 +744,7 @@
               <el-icon class="transaction-panel-icon"><CircleCheck /></el-icon>
               <span class="transaction-panel-label">入庫</span>
             </div>
-            <el-input-number v-model="transactionForm.actual" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+            <el-input-number v-model="transactionForm.actual" :precision="0" placeholder="数量を入力（負数可）" class="transaction-panel-input" />
           </div>
           <div class="transaction-panel transaction-panel--red">
             <div class="transaction-panel-head">
@@ -712,7 +762,7 @@
               <el-icon class="transaction-panel-icon"><CircleCheck /></el-icon>
               <span class="transaction-panel-label">実績</span>
             </div>
-            <el-input-number v-model="transactionForm.actual" :min="0" :precision="0" placeholder="数量を入力" class="transaction-panel-input" />
+            <el-input-number v-model="transactionForm.actual" :precision="0" placeholder="数量を入力（負数可）" class="transaction-panel-input" />
           </div>
           <div class="transaction-panel transaction-panel--orange">
             <div class="transaction-panel-head">
@@ -1176,7 +1226,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, Setting, Printer, MoreFilled, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation, CircleCheck } from '@element-plus/icons-vue'
+import { Search, Refresh, Setting, Printer, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import {
   getProductionSummarysList,
@@ -1433,6 +1483,9 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   molding_plan: { label: '成型計画', group: '成型', width: 85 },
   molding_actual_plan: { label: '成型実計', group: '成型', width: 85 },
   molding_actual_plan_trend: { label: '成型実計推移', group: '成型', width: 90 },
+  /** API 計算: ルート上成型の直前工程の在庫列の値 */
+  pre_molding_inventory: { label: '成型前在庫', group: '成型', width: 88 },
+  pre_molding_prev_process: { label: '成型直前工程', group: '成型', type: 'text', width: 100 },
 
   // メッキ
   plating_carry_over: { label: 'メッキ繰越', group: 'メッキ', width: 80 },
@@ -1441,12 +1494,15 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   plating_scrap: { label: 'メッキ廃棄', group: 'メッキ', width: 80 },
   plating_on_hold: { label: 'メッキ保留品', group: 'メッキ', width: 80 },
   plating_inventory: { label: 'メッキ在庫', group: 'メッキ', width: 80 },
-  plating_trend: { label: 'メッキ推移', group: 'メッキ', width: 80 },
+  plating_trend: { label: 'メッキ推移', group: 'メッキ', width: 100 },
   plating_production_date: { label: 'メッキ生産日', group: 'メッキ', type: 'date', width: 110 },
-  plating_machine: { label: 'メッキ治具', group: 'メッキ', type: 'text', width: 90 },
+  plating_machine: { label: 'メッキ治具', group: 'メッキ', type: 'text', width: 110 },
   plating_plan: { label: 'メッキ計画', group: 'メッキ', width: 80 },
   plating_actual_plan: { label: 'メッキ実計', group: 'メッキ', width: 80 },
   plating_actual_plan_trend: { label: 'メッキ実計推移', group: 'メッキ', width: 90 },
+  /** API 計算: ルート上メッキ/外注メッキ直前工程の在庫列の値 */
+  pre_plating_inventory: { label: 'メッキ前在庫', group: 'メッキ', width: 88 },
+  pre_plating_prev_process: { label: 'メッキ直前工程', group: 'メッキ', type: 'text', width: 100 },
 
   // 溶接
   welding_carry_over: { label: '溶接繰越', group: '溶接', width: 70 },
@@ -1564,8 +1620,8 @@ const processFieldToProcessCd: Record<string, string> = {
   outsourced_welding: 'KT08',
   outsourced_warehouse: 'KT15',
   pre_welding_inspection: 'KT11',
-  pre_inspection: 'KT17',
-  pre_outsourcing: 'KT16',
+  pre_inspection: 'KT16',
+  pre_outsourcing: 'KT17',
 }
 
 const columnKeys = Object.keys(columnDefinitions)
@@ -1691,6 +1747,27 @@ const formatDate = (dateValue: string | Date | null) => {
   if (typeof dateValue === 'string') return dateValue.split('T')[0]
   return formatDateToString(new Date(dateValue))
 }
+
+/** pre_plating_prev_process（API の工程 key）を短い表示用ラベルに */
+const prePlatingPrevLabels: Record<string, string> = {
+  cutting: '切断',
+  chamfering: '面取',
+  molding: '成型',
+  plating: 'メッキ',
+  welding: '溶接',
+  inspection: '検査',
+  warehouse: '倉庫',
+  outsourced_warehouse: '外注倉庫',
+  outsourced_plating: '外注メッキ',
+  outsourced_welding: '外注溶接',
+  pre_welding_inspection: '溶接前検査',
+  pre_inspection: '外注支給前',
+  pre_outsourcing: '外注検査前',
+}
+function formatPrePlatingPrevKey(v: string | null | undefined) {
+  if (v == null || v === '') return '—'
+  return prePlatingPrevLabels[v] || v
+}
 const getWeekdayType = (dayOfWeek: string) => {
   if (dayOfWeek === '土') return 'primary'
   if (dayOfWeek === '日') return 'danger'
@@ -1780,9 +1857,9 @@ const handleUpdateFromOrderDaily = async () => {
   try {
     updatingFromOrderDaily.value = true
     const res = await updateProductionSummarysFromOrderDaily({
-      updateMode: 'changed',
-      days: 30,
-      clearBeforeUpdate: false,
+      updateMode: 'recent',
+      days: 10,
+      clearBeforeUpdate: true,
     }) as { data?: { updated?: number; unchanged?: number; skipped?: number; total?: number }; message?: string }
     const info = (res?.data ?? res ?? {}) as { updated?: number; unchanged?: number; skipped?: number; total?: number }
     const msg =
@@ -1849,6 +1926,64 @@ const handleUpdateCarryOver = async () => {
   }
 }
 
+/**
+ * 実績データ更新 — 算法总结与字段对应
+ * =============================================================================
+ * 一、前端流程（本画面）
+ * -----------------------------------------------------------------------------
+ * 1. 入口：「その他」→「実績データ更新」→ 确认对话框「実績データ更新確認」→ 点击「実行」
+ * 2. API：POST /production-summarys/update-actual（无请求体）
+ * 3. 返回：{ data: { updated, skipped, cleared, clearPeriod }, message }；成功后自动 fetchData() 刷新表
+ *
+ * 二、后端算法概要
+ * -----------------------------------------------------------------------------
+ * 1. 数据来源：stock_transaction_logs（在庫取引履歴）
+ * 2. 产品码换算：target_cd 取前 4 位 + '1' → product_cd（与 production_summarys.product_cd 对应）
+ * 3. 日期：DATE(transaction_time) → production_summarys.date
+ * 4. 处理范围：当月 1 日～今日（日本时区）；先对该范围内所有「実績列」清零，再按日志重新汇总写回
+ *
+ * 三、数据分类与计算方式
+ * -----------------------------------------------------------------------------
+ * （A）一般工程（12 个 process_cd）
+ *     - 条件：transaction_type IN ('実績', '不良')，且 process_cd 在 GENERAL_PROCESS_CDS 内
+ *     - 数量：按 (product_cd, date, process_cd) 分组，SUM(quantity)
+ *     - 写回：见下「字段对应表」的 process_cd → production_summarys 列
+ *
+ * （B）製品倉庫（KT13）
+ *     - 条件：transaction_type IN ('入庫','出庫')，process_cd = 'KT13'
+ *     - 数量：入庫 quantity 为正、出庫为负，按 (product_cd, date) 分组 SUM
+ *     - 写回：production_summarys.warehouse_actual
+ *
+ * （C）外注倉庫（KT15）
+ *     - 条件：transaction_type IN ('入庫','出庫')，process_cd = 'KT15'
+ *     - 数量：同上，入庫−出庫
+ *     - 写回：production_summarys.outsourced_warehouse_actual
+ *
+ * 四、字段对应表（stock_transaction_logs.process_cd → production_summarys 列）
+ * -----------------------------------------------------------------------------
+ * | process_cd | production_summarys 列（実績） | 画面表示名     |
+ * |------------|----------------------------------|----------------|
+ * | KT01       | cutting_actual                   | 切断実績        |
+ * | KT02       | chamfering_actual                 | 面取実績        |
+ * | KT04       | molding_actual                    | 成型実績        |
+ * | KT05       | plating_actual                    | メッキ実績      |
+ * | KT06       | outsourced_plating_actual         | 外注メッキ実績  |
+ * | KT07       | welding_actual                   | 溶接実績        |
+ * | KT08       | outsourced_welding_actual         | 外注溶接実績    |
+ * | KT09       | inspection_actual                 | 検査実績        |
+ * | KT11       | pre_welding_inspection_actual     | 溶接前検査実績  |
+ * | KT16       | pre_inspection_actual             | 外注支給前実績  |
+ * | KT17       | pre_outsourcing_actual            | 外注検査前実績  |
+ * | KT13       | （非 process 汇总）入出庫净额 → warehouse_actual           | 倉庫実績        |
+ * | KT15       | （非 process 汇总）入出庫净额 → outsourced_warehouse_actual | 外注倉庫実績    |
+ *
+ * 五、被清零的列（ACTUAL_CLEAR_COLUMNS，当月 1 日～今日）
+ * -----------------------------------------------------------------------------
+ * cutting_actual, chamfering_actual, molding_actual, plating_actual, welding_actual,
+ * inspection_actual, warehouse_actual, outsourced_plating_actual, outsourced_welding_actual,
+ * pre_welding_inspection_actual, pre_inspection_actual, pre_outsourcing_actual,
+ * outsourced_warehouse_actual
+ */
 const handleUpdateActual = async () => {
   try {
     await ElMessageBox.confirm('実績データを更新します。', '実績データ更新確認', {
@@ -2096,7 +2231,6 @@ const handleUpdateProductionDates = async () => {
  *    - 清空：POST clear-calculated-fields(当月月初) → 范围 当月月初～当月月初+3ヶ月 的计算字段置 0
  *    - 在庫：POST update-inventory(当月月初) → 同上区间按公式重算
  *    - 推移：POST update-trend(当月月初) → 当月月初～表内最大日
- *    - 另 calculateStartDate() 仍用于计划更新等，按繰越列最后 >0 的最早日。
  * 3. 执行顺序：先 clear-calculated-fields(当月月初)，再 update-inventory(当月月初)，再 update-trend(当月月初)
  * 4. 计算期间说明：在庫・清空＝当月月初～当月月初+3ヶ月；推移＝当月月初～表内最大日
  *
@@ -2150,27 +2284,7 @@ const handleUpdateProductionDates = async () => {
  * - 対象: 製品マスタで safety_days IS NOT NULL AND safety_days > 0 の製品のみ
  * - 平均日出荷数: production_summarys の内示数(forecast_quantity)を、当該行の翌日から30営業日分で平均
  * - 安全在庫列の合計: product_cd ごとに「最新日付の行」の safety_stock のみを合算（表の合計行）
- *
- * 以下は正式な趨勢データがない場合の表示用・他画面用の备用計算（表の主列「安全在庫」の算出には使わない）:
- * - calculateSafetyStockForDisplay: 前30件の (出庫+出荷) 日均 × 7 × 1.5 を ceil
- * - calculateSafetyStockForProduct: 当該製品の直近30件 (出庫+出荷) 日均 × 7 × 1.5 を ceil
- * - calculateSimpleSafetyStock: 当前在庫 ≤ 0 → 10、否则 max(10, ceil(当前在庫 × 0.2))
  */
-function calculateSafetyStockForDisplay(rows: Array<{ [k: string]: number }>, outKey = 'warehouse_actual', shipKey = 'warehouse_actual'): number {
-  const recent = rows.slice(-30)
-  if (recent.length === 0) return 0
-  const total = recent.reduce((a, r) => a + (Number(r[outKey]) || 0) + (Number(r[shipKey]) || 0), 0)
-  const avg = total / recent.length
-  return Math.ceil(avg * 7 * 1.5)
-}
-function calculateSafetyStockForProduct(rows: Array<{ [k: string]: unknown }>, productCd: string, outKey = 'warehouse_actual', shipKey = 'warehouse_actual'): number {
-  const byProduct = rows.filter((r) => String(r.product_cd ?? '') === String(productCd)).slice(-30) as Array<{ [k: string]: number }>
-  return calculateSafetyStockForDisplay(byProduct, outKey, shipKey)
-}
-function calculateSimpleSafetyStock(currentInventory: number): number {
-  if (currentInventory <= 0) return 10
-  return Math.max(10, Math.ceil(currentInventory * 0.2))
-}
 
 /**
  * 推移更新（在庫・推移更新中的「推移」部分）— 算法总结
@@ -2221,12 +2335,6 @@ function calculateSimpleSafetyStock(currentInventory: number): number {
  * - 每 100 行一批，用 CASE id 批量 UPDATE 各 *_trend、*_actual_plan_trend 列
  * - 允许 trend 为负数
  */
-const CARRY_OVER_COLUMNS = [
-  'cutting_carry_over', 'chamfering_carry_over', 'molding_carry_over', 'plating_carry_over',
-  'welding_carry_over', 'inspection_carry_over', 'warehouse_carry_over', 'outsourced_warehouse_carry_over',
-  'outsourced_plating_carry_over', 'outsourced_welding_carry_over',
-  'pre_welding_inspection_carry_over', 'pre_inspection_carry_over', 'pre_outsourcing_carry_over',
-]
 
 /** 当月月初（当月1日）YYYY-MM-DD。在庫・推移更新では「当月月初以降」を清空してから再計算する。 */
 function getFirstDayOfCurrentMonth(): string {
@@ -2234,26 +2342,6 @@ function getFirstDayOfCurrentMonth(): string {
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}-01`
-}
-
-/** 各工程繰越で「最后に >0 の日付」のうち最も早い日を startDate とする（計画更新等で使用） */
-function calculateStartDate(): string | null {
-  const rows = tableData.value || []
-  if (rows.length === 0) return null
-  const lastDates: string[] = []
-  for (const col of CARRY_OVER_COLUMNS) {
-    const datesWithPositive = rows
-      .filter((r: any) => (r[col] != null && Number(r[col]) > 0) && r.date)
-      .map((r: any) => (typeof r.date === 'string' ? r.date : (r.date && r.date.substring) ? r.date.substring(0, 10) : ''))
-      .filter(Boolean)
-    if (datesWithPositive.length > 0) {
-      const maxDate = datesWithPositive.sort().pop()
-      if (maxDate) lastDates.push(maxDate)
-    }
-  }
-  if (lastDates.length === 0) return null
-  lastDates.sort()
-  return lastDates[0]
 }
 
 const handleUpdatePlan = () => {
@@ -2556,8 +2644,33 @@ const handleDropdownCommand = (command: string) => {
     case 'batch-actual':
       handleOpenBatchActualDialog()
       break
+    case 'print-rec-plating':
+      handleRecommendedProductionPrint('plating')
+      break
+    case 'print-rec-molding':
+      handleRecommendedProductionPrint('molding')
+      break
+    case 'print-rec-molding-plan':
+      handleRecommendedProductionPrint('molding', {
+        trendKeyOverride: 'molding_actual_plan_trend',
+        titleOverride: '成型計画推奨生産日リスト',
+        pickDateKeyOverride: 'molding_production_date',
+      })
+      break
     default:
       break
+  }
+}
+
+const handleRecommendedPrintCommand = (command: string) => {
+  if (command === 'print-rec-plating') handleRecommendedProductionPrint('plating')
+  else if (command === 'print-rec-molding') handleRecommendedProductionPrint('molding')
+  else if (command === 'print-rec-molding-plan') {
+    handleRecommendedProductionPrint('molding', {
+      trendKeyOverride: 'molding_actual_plan_trend',
+      titleOverride: '成型計画推奨生産日リスト',
+      pickDateKeyOverride: 'molding_production_date',
+    })
   }
 }
 
@@ -2928,6 +3041,13 @@ function handleCellDoubleClick(
 ) {
   const prop = column?.property
   if (!prop || basicColumns.has(prop)) return
+  if (
+    prop === 'pre_plating_inventory' ||
+    prop === 'pre_plating_prev_process' ||
+    prop === 'pre_molding_inventory' ||
+    prop === 'pre_molding_prev_process'
+  )
+    return
   const parts = prop.split('_')
   let processCd: string | null = null
   for (let i = 1; i <= parts.length; i++) {
@@ -3161,6 +3281,120 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
 const handlePageChange = () => fetchData()
 const handleRefresh = () => fetchData()
 
+/** プレビュー用ウィンドウに HTML を描画した後、短い遅延で print() する（描画→印刷ダイアログの順） */
+const PRINT_PREVIEW_BEFORE_DIALOG_MS = 400
+
+/** 印刷ダイアログ／プレビューを閉じたあと子 window を閉じる（子 document 内で確実に afterprint 等を取る） */
+function appendAutoClosePrintWindowScript(html: string): string {
+  const snippet =
+    '<script>(function(){var done=0;function z(){if(done)return;done=1;setTimeout(function(){try{window.close()}catch(e){}},100);}' +
+    'window.addEventListener("afterprint",z);window.onafterprint=z;' +
+    'try{var mq=window.matchMedia("print");var saw=0;var q=function(){if(mq.matches)saw=1;else if(saw){z();mq.removeEventListener("change",q);}};' +
+    '(mq.addEventListener?mq.addEventListener("change",q):mq.addListener(q));}catch(e){}' +
+    'var bp=0;window.addEventListener("beforeprint",function(){bp=1});' +
+    'document.addEventListener("visibilitychange",function(){if(done)return;if(bp&&document.visibilityState==="visible")setTimeout(z,500);});' +
+    '})();<\\/script>'
+  if (/<\/body>\s*<\/html>/i.test(html)) {
+    return html.replace(/<\/body>\s*<\/html>/i, `${snippet}</body></html>`)
+  }
+  if (/<\/body>/i.test(html)) {
+    return html.replace(/<\/body>/i, `${snippet}</body>`)
+  }
+  return html + snippet
+}
+
+function openPrintPreviewThenDialog(html: string, options?: { closeAfterPrint?: boolean }): Window | null {
+  const closeAfter = options?.closeAfterPrint !== false
+  const w = window.open('', '_blank')
+  if (!w) return null
+  const htmlWithClose = closeAfter ? appendAutoClosePrintWindowScript(html) : html
+  w.document.open()
+  w.document.write(htmlWithClose)
+  w.document.close()
+
+  let printScheduled = false
+  const schedulePrint = () => {
+    if (printScheduled) return
+    printScheduled = true
+    window.setTimeout(() => {
+      try {
+        w.focus()
+        w.print()
+      } catch {
+        /* ignore */
+      }
+    }, PRINT_PREVIEW_BEFORE_DIALOG_MS)
+  }
+
+  w.addEventListener('load', schedulePrint, { once: true })
+  window.setTimeout(() => {
+    try {
+      if (w.document.readyState === 'complete') schedulePrint()
+    } catch {
+      schedulePrint()
+    }
+  }, 0)
+
+  if (closeAfter) {
+    let popupCloseDone = false
+    const closePopup = () => {
+      if (popupCloseDone) return
+      popupCloseDone = true
+      window.setTimeout(() => {
+        try {
+          if (!w.closed) w.close()
+        } catch {
+          /* ignore */
+        }
+      }, 150)
+    }
+    // 印刷実行・キャンセルいずれもダイアログ閉後に発火（Chromium / Firefox 想定）
+    w.addEventListener('afterprint', closePopup)
+    w.onafterprint = closePopup
+
+    // 補助: 子窓の matchMedia（親でも登録。子の inline スクリプトと二重だが close は冪等）
+    try {
+      const mq = w.matchMedia('print')
+      let sawPrintMedia = false
+      const onPrintMq = () => {
+        if (mq.matches) {
+          sawPrintMedia = true
+        } else if (sawPrintMedia) {
+          closePopup()
+          if (typeof mq.removeEventListener === 'function') {
+            mq.removeEventListener('change', onPrintMq)
+          } else {
+            mq.removeListener(onPrintMq as (this: MediaQueryList, ev: MediaQueryListEvent) => void)
+          }
+        }
+      }
+      if (typeof mq.addEventListener === 'function') {
+        mq.addEventListener('change', onPrintMq)
+      } else {
+        mq.addListener(onPrintMq as (this: MediaQueryList, ev: MediaQueryListEvent) => void)
+      }
+    } catch {
+      /* ignore */
+    }
+
+    let sawBeforePrint = false
+    try {
+      w.addEventListener('beforeprint', () => {
+        sawBeforePrint = true
+      })
+      w.document.addEventListener('visibilitychange', () => {
+        if (popupCloseDone || !sawBeforePrint) return
+        if (w.document.visibilityState === 'visible') {
+          window.setTimeout(closePopup, 600)
+        }
+      })
+    } catch {
+      /* ignore */
+    }
+  }
+  return w
+}
+
 const handlePrint = () => {
   const printData = tableData.value
   const baseCols = [
@@ -3183,16 +3417,15 @@ const handlePrint = () => {
       return '<tr><td>' + cells.join('</td><td>') + '</td></tr>'
     })
     .join('')
-  const win = window.open('', '_blank')
-  if (!win) return
-  win.document.write(`
+  const html = `
     <!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>生産データ管理</title>
     <style>table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:center}th{background:#eef2ff;font-weight:600}</style>
     </head><body><h1>生産データ管理</h1><p>${dateRange.value ? dateRange.value.join(' ～ ') : ''} / ${printData.length}件</p>
-    <table><thead><tr><th>${thead}</th></tr></thead><tbody>${tbody}</tbody></table></body></html>`)
-  win.document.close()
-  win.print()
-  win.close()
+    <table><thead><tr><th>${thead}</th></tr></thead><tbody>${tbody}</tbody></table></body></html>`
+  const win = openPrintPreviewThenDialog(html)
+  if (!win) {
+    ElMessage.warning('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。')
+  }
 }
 
 // ---------- 工程別計画確認印刷 ----------
@@ -3218,10 +3451,56 @@ function buildProcessPrintHtml(allData: any[], targetDate: string): string {
   const num = (v: any) => (v != null && v !== '' ? Number(v) : null as number | null)
   const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
 
+  /** 同一製品で推移が最小の行を保つ（同値なら後に見つかった行＝従来の reduce と同じ） */
+  const pickMinTrendRow = (prev: any | undefined, row: any, trendKey: string): any => {
+    if (!prev) return row
+    const tr = num(row[trendKey])
+    const tp = num(prev[trendKey])
+    if (tr == null) return prev
+    if (tp == null) return row
+    return tp < tr ? prev : row
+  }
+
   const todayDataMap = new Map<string, any>()
+  const moldingBest = new Map<string, any>()
+  const platingBest = new Map<string, any>()
+  const weldingBest = new Map<string, any>()
+  const warehouseRows: any[] = []
+  const warehouseSeen = new Set<string>()
+
   for (const row of allData) {
-    const d = row.date != null ? (typeof row.date === 'string' ? row.date.substring(0, 10) : toStr(row.date)) : ''
-    if (d === targetDate && row.product_cd) todayDataMap.set(row.product_cd, row)
+    const pid = row.product_cd
+    const calD = row.date != null ? (typeof row.date === 'string' ? row.date.substring(0, 10) : toStr(row.date)) : ''
+
+    if (pid && calD === targetDate) {
+      todayDataMap.set(pid, row)
+      const inv = num(row.warehouse_inventory) ?? num(row.inspection_inventory)
+      if (inv != null && inv < 0 && !warehouseSeen.has(pid)) {
+        warehouseSeen.add(pid)
+        warehouseRows.push(row)
+      }
+    }
+
+    if (!pid) continue
+
+    if (dateStr(row, 'molding_production_date') === targetDate) {
+      const tr = num(row.molding_trend)
+      if (tr != null && tr < 0) moldingBest.set(pid, pickMinTrendRow(moldingBest.get(pid), row, 'molding_trend'))
+    }
+    if (dateStr(row, 'plating_production_date') === targetDate) {
+      const tr = num(row.plating_trend)
+      if (tr != null && tr < 0) platingBest.set(pid, pickMinTrendRow(platingBest.get(pid), row, 'plating_trend'))
+    }
+    if (dateStr(row, 'welding_production_date') === targetDate) {
+      const tr = num(row.welding_trend)
+      if (tr != null && tr < 0) weldingBest.set(pid, pickMinTrendRow(weldingBest.get(pid), row, 'welding_trend'))
+    }
+  }
+
+  const bestRowsByProcessKey: Record<string, Map<string, any>> = {
+    molding_production_date: moldingBest,
+    plating_production_date: platingBest,
+    welding_production_date: weldingBest,
   }
 
   const processConfigs = [
@@ -3275,30 +3554,9 @@ function buildProcessPrintHtml(allData: any[], targetDate: string): string {
   for (const cfg of processConfigs) {
     let rows: any[] = []
     if (cfg.hasPlan && cfg.productionDateKey && cfg.trendKey) {
-      const byProduct = new Map<string, any[]>()
-      for (const row of allData) {
-        const prodDate = dateStr(row, cfg.productionDateKey)
-        if (prodDate !== targetDate || !row.product_cd) continue
-        const trendVal = num(row[cfg.trendKey])
-        if (trendVal == null || trendVal >= 0) continue
-        if (!byProduct.has(row.product_cd)) byProduct.set(row.product_cd, [])
-        byProduct.get(row.product_cd)!.push(row)
-      }
-      for (const [, arr] of byProduct) {
-        const best = arr.reduce((a, b) => (num(a[cfg.trendKey])! < num(b[cfg.trendKey])! ? a : b))
-        rows.push(best)
-      }
+      rows = Array.from(bestRowsByProcessKey[cfg.productionDateKey].values())
     } else {
-      const seen = new Set<string>()
-      for (const row of allData) {
-        const d = row.date != null ? (typeof row.date === 'string' ? row.date.substring(0, 10) : toStr(row.date)) : ''
-        if (d !== targetDate || !row.product_cd) continue
-        const inv = num(row.warehouse_inventory) ?? num(row.inspection_inventory)
-        if (inv == null || inv >= 0) continue
-        if (seen.has(row.product_cd)) continue
-        seen.add(row.product_cd)
-        rows.push(row)
-      }
+      rows = warehouseRows
     }
     rows = rows.sort((a, b) => (toStr(a.product_name || a.product_cd)).localeCompare(toStr(b.product_name || b.product_cd)))
 
@@ -3382,21 +3640,329 @@ async function handleConfirmPrintDate() {
       return
     }
     const html = buildProcessPrintHtml(allData, selectedDate)
-    const printWindow = window.open('', '_blank')
+    const printWindow = openPrintPreviewThenDialog(html)
     if (!printWindow) {
       ElMessage.warning('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。')
       return
     }
-    printWindow.document.write(html)
-    printWindow.document.close()
-    printWindow.print()
-    printWindow.onafterprint = () => {
-      setTimeout(() => { printWindow.close() }, 300)
-    }
-    ElMessage.success('印刷ダイアログを開きました')
+    ElMessage.success('プレビューを表示しました。しばらくして印刷ダイアログが開きます')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '印刷データの取得に失敗しました')
   } finally {
+    showProgressDialog.value = false
+  }
+}
+
+/** 日別行のカレンダー日付 YYYY-MM-DD */
+function rowCalendarDateStr(row: any): string {
+  const v = row?.date
+  if (v == null) return ''
+  if (typeof v === 'string') return v.slice(0, 10)
+  return String(v).slice(0, 10)
+}
+
+function numForRecommendedPrint(v: any): number | null {
+  return v != null && v !== '' ? Number(v) : null
+}
+
+function escapeHtmlRecommended(s: string) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/** YYYY-MM-DD 比較用（空は最後） */
+function productionDateYmdKey(row: any, prop: string): string {
+  const v = row[prop]
+  if (v == null || v === '') return '\uffff'
+  if (typeof v === 'string') return v.slice(0, 10)
+  return String(v).slice(0, 10)
+}
+
+function pickYmdForRecommendedPick(row: any, key: string): string {
+  if (key === 'date') return rowCalendarDateStr(row) || '\uffff'
+  return productionDateYmdKey(row, key)
+}
+
+/**
+ * 推奨行 1 件に絞る（同一製品）：
+ * - 过滤后的候选行里，先按「主キー」（最早日期）对比
+ * - 主キー相同再按「副キー」对比
+ * - 仍相同则按 trend 的更小值（更负）优先
+ */
+function pickBetterRecommendedRow(
+  prev: any,
+  row: any,
+  trendKey: string,
+  primaryDateKeyForPick: string,
+  secondaryDateKeyForPick: string,
+): any {
+  const pa = pickYmdForRecommendedPick(row, primaryDateKeyForPick)
+  const pb = pickYmdForRecommendedPick(prev, primaryDateKeyForPick)
+  if (pa < pb) return row
+  if (pb < pa) return prev
+
+  const sa = pickYmdForRecommendedPick(row, secondaryDateKeyForPick)
+  const sb = pickYmdForRecommendedPick(prev, secondaryDateKeyForPick)
+  if (sa < sb) return row
+  if (sb < sa) return prev
+
+  const ta = numForRecommendedPrint(prev[trendKey]) ?? 0
+  const tb = numForRecommendedPrint(row[trendKey]) ?? 0
+  return ta <= tb ? prev : row
+}
+
+/**
+ * 当月月初（JST）～取得終了日までの日別行から、製品ごとに trend&lt;0 の行から1行を選ぶ。
+ * メッキ・成型とも **日付列 date が最も早い**行（同日内なら当工程 production_date 昇順、同順なら推移がより小さい方＝先勝ち）。
+ */
+function collectRecommendedProductionRows(
+  allData: any[],
+  monthStart: string,
+  trendKey: string,
+  kind: 'plating' | 'molding',
+  options?: { primaryDateKeyForPick?: string },
+): any[] {
+  const productionDateKey = kind === 'plating' ? 'plating_production_date' : 'molding_production_date'
+  const primaryDateKeyForPick = options?.primaryDateKeyForPick ?? 'date'
+  const secondaryDateKeyForPick = primaryDateKeyForPick === 'date' ? productionDateKey : 'date'
+  const bestByProduct = new Map<string, any>()
+  for (const row of allData) {
+    if (!row.product_cd) continue
+    const d = rowCalendarDateStr(row)
+    if (!d || d < monthStart) continue
+    const trendVal = numForRecommendedPrint(row[trendKey])
+    if (trendVal == null || trendVal >= 0) continue
+    const pid = row.product_cd
+    const prev = bestByProduct.get(pid)
+    if (!prev) {
+      bestByProduct.set(pid, row)
+      continue
+    }
+    bestByProduct.set(
+      pid,
+      pickBetterRecommendedRow(prev, row, trendKey, primaryDateKeyForPick, secondaryDateKeyForPick),
+    )
+  }
+  return Array.from(bestByProduct.values())
+}
+
+/** 治具／成型機名 → 推奨生産日 の順（メッキ・成型で同一ルール） */
+function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding'): any[] {
+  const machineKey = kind === 'plating' ? 'plating_machine' : 'molding_machine'
+  const dateKey = kind === 'plating' ? 'plating_production_date' : 'molding_production_date'
+  const dateKeyForSort = (row: any, key: string) => {
+    const v = row[key]
+    if (v == null || v === '') return '\uffff'
+    if (typeof v === 'string') return v.slice(0, 10)
+    return String(v).slice(0, 10)
+  }
+  const sortMachine = (m: string) => (m === '' ? '\uffff' : m)
+  const copy = [...rows]
+  copy.sort((a, b) => {
+    const ma = sortMachine(String(a[machineKey] ?? '').trim())
+    const mb = sortMachine(String(b[machineKey] ?? '').trim())
+    const c = ma.localeCompare(mb, 'ja')
+    if (c !== 0) return c
+    const da = dateKeyForSort(a, dateKey)
+    const db = dateKeyForSort(b, dateKey)
+    return da.localeCompare(db)
+  })
+  return copy
+}
+
+function buildRecommendedProductionPrintHtml(
+  rows: any[],
+  kind: 'plating' | 'molding',
+  monthStart: string,
+  rangeEnd: string,
+  options?: { titleOverride?: string },
+): string {
+  const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
+  const pc =
+    kind === 'plating'
+      ? {
+          title: 'メッキ推奨生産日リスト',
+          machineHeading: 'メッキ治具',
+          machineKey: 'plating_machine' as const,
+          dateKey: 'plating_production_date' as const,
+          dateLabel: '推奨生産日',
+          preInvField: 'pre_plating_inventory' as const,
+          prePrevField: 'pre_plating_prev_process' as const,
+          invColHeader: 'メッキ前在庫',
+          sumLabel: 'メッキ前在庫合計',
+          footNote:
+            'メッキ前在庫・直前工程は、工程ルート上でメッキ（または外注メッキ）の直前工程の前日15時の集計在庫です（一覧と同じ計算）。',
+        }
+      : {
+          title: '成型推奨生産日リスト',
+          machineHeading: '成型機',
+          machineKey: 'molding_machine' as const,
+          dateKey: 'molding_production_date' as const,
+          dateLabel: '推奨生産日',
+          preInvField: 'pre_molding_inventory' as const,
+          prePrevField: 'pre_molding_prev_process' as const,
+          invColHeader: '成型前在庫',
+          sumLabel: '成型前在庫合計',
+          footNote:
+            '成型前在庫・直前工程は、工程ルート上で成型の直前工程の集計在庫です（一覧・メッキ前在庫と同じ算出方式）。',
+        }
+
+  const sheetTitle = options?.titleOverride ?? pc.title
+
+  const dateCellPlain = (row: any, key: string) => {
+    const v = row[key]
+    if (v == null || v === '') return '—'
+    if (typeof v === 'string') return escapeHtmlRecommended(v.substring(0, 10))
+    return escapeHtmlRecommended(String(v))
+  }
+
+  const recommendedProdDateYmd = (row: any, key: string): string | null => {
+    const v = row[key]
+    if (v == null || v === '') return null
+    if (typeof v === 'string') return v.length >= 10 ? v.slice(0, 10) : null
+    const s = String(v)
+    return s.length >= 10 ? s.slice(0, 10) : null
+  }
+  const todayJstYmdForPrint = (): string => {
+    const { year, month, date } = getCurrentJSTInfo()
+    return getJSTDateString(year, month, date)
+  }
+  const isRecommendedDateDueOrPast = (row: any, key: string): boolean => {
+    const d = recommendedProdDateYmd(row, key)
+    if (!d || d.length !== 10) return false
+    return d <= todayJstYmdForPrint()
+  }
+
+  const sharedPageCss = `
+@page { size: A4 portrait; margin: 10mm; }
+*{box-sizing:border-box;}
+body{font-family:sans-serif;margin:0;padding:12px;font-size:10.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+@media print{body{padding:0;}}
+h1.sheet-title{font-size:14pt;margin:0 0 6px 0;font-weight:700;}
+p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
+`
+
+  const printGridColumns = 'minmax(0, 1.25fr) 70px 70px 5.0em'
+
+  const preInvPlain = (row: any) => {
+    const v = row[pc.preInvField]
+    if (v == null || v === '') return '—'
+    const n = Number(v)
+    if (Number.isNaN(n)) return '—'
+    return escapeHtmlRecommended(n.toLocaleString('ja-JP'))
+  }
+  const prePrevPlain = (row: any) =>
+    escapeHtmlRecommended(formatPrePlatingPrevKey(row[pc.prePrevField]))
+
+  let blocks = ''
+  let prevGroupKey: string | null = null
+  for (const row of rows) {
+    const mRaw = String(row[pc.machineKey] ?? '').trim()
+    const groupKey = mRaw || '__empty__'
+    if (groupKey !== prevGroupKey) {
+      if (prevGroupKey !== null) {
+        blocks += '</div></section>'
+      }
+      prevGroupKey = groupKey
+      const mHeading = mRaw || '（未設定）'
+      blocks += `<section class="machine-group"><header class="machine-title">${pc.machineHeading}: ${escapeHtmlRecommended(mHeading)}</header>`
+      blocks += `<div class="machine-body">`
+      blocks += `<div class="col-head"><span class="ch-pname">製品名</span><span class="ch-date">${pc.dateLabel}</span>`
+      blocks += `<span class="ch-inv">${pc.invColHeader}</span><span class="ch-prev">直前工程</span></div>`
+    }
+    const pname = row.product_name || row.product_cd || ''
+    const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
+    blocks += `<div class="item-row"><span class="cell-pname">${escapeHtmlRecommended(String(pname))}</span>`
+    blocks += `<span class="cell-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</span>`
+    blocks += `<span class="cell-inv">${preInvPlain(row)}</span><span class="cell-prev">${prePrevPlain(row)}</span></div>`
+  }
+  if (prevGroupKey !== null) {
+    blocks += '</div></section>'
+  }
+
+  if (!rows.length) {
+    blocks = '<p class="empty-msg">該当データがありません</p>'
+  }
+
+  const preInvSum = rows.reduce((sum, row) => {
+    const v = row[pc.preInvField]
+    if (v == null || v === '') return sum
+    const n = Number(v)
+    return Number.isNaN(n) ? sum : sum + n
+  }, 0)
+  const preInvSumStr = preInvSum.toLocaleString('ja-JP')
+
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>${sheetTitle}</title>
+<style>${sharedPageCss}
+.print-meta-row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px 20px;margin:0 0 10px 0;}
+.print-meta-row .subtitle{flex:1;min-width:220px;margin:0;}
+.subtitle-total{margin:0;padding-top:1px;font-size:9pt;color:#334155;text-align:right;white-space:nowrap;}
+.subtitle-total strong{font-variant-numeric:tabular-nums;font-size:10pt;color:#0f172a;}
+.columns-wrap{column-count:2;column-gap:14px;column-fill:auto;}
+.machine-group{break-inside:avoid-page;page-break-inside:avoid;margin-bottom:12px;}
+.machine-title{font-weight:700;background:#e2e8f0;padding:5px 8px;border:1px solid #94a3b8;border-bottom:none;}
+.machine-body{padding:4px 8px 6px 14px;border:1px solid #cbd5e1;border-top:none;background:#fff;}
+.col-head,.item-row{display:grid;grid-template-columns:${printGridColumns};column-gap:6px;row-gap:2px;font-size:9pt;}
+.col-head{align-items:end;padding:2px 0 4px;border-bottom:1px solid #e2e8f0;margin-bottom:2px;font-size:8pt;color:#475569;font-weight:600;}
+.item-row{align-items:center;padding:3px 0;border-bottom:1px solid #f1f5f9;font-size:9.5pt;}
+.item-row:last-child{border-bottom:none;}
+.ch-pname,.cell-pname{text-align:left;min-width:0;word-break:break-word;overflow-wrap:anywhere;}
+.ch-date,.ch-inv,.ch-prev{text-align:center;justify-self:stretch;}
+.ch-inv,.ch-prev{font-size:8.5pt;}
+.cell-date,.cell-inv,.cell-prev{text-align:right;font-variant-numeric:tabular-nums;justify-self:stretch;}
+.cell-date.cell-date--due{color:#dc2626;font-weight:700;}
+.empty-msg{color:#64748b;font-size:10pt;}
+.print-note{font-size:8pt;color:#64748b;margin:4px 0 0 0;line-height:1.35;}
+</style></head><body>
+<h1 class="sheet-title">${sheetTitle}</h1>
+<div class="print-meta-row">
+<p class="subtitle">対象期間: ${monthStart} ～ ${rangeEnd} / 出力: ${now}</p>
+<p class="subtitle-total">${pc.sumLabel}: <strong>${preInvSumStr}</strong></p>
+</div>
+<p class="print-note">${pc.footNote}</p>
+<div class="columns-wrap">${blocks}</div>
+</body></html>`
+}
+
+async function handleRecommendedProductionPrint(
+  kind: 'plating' | 'molding',
+  options?: { trendKeyOverride?: string; titleOverride?: string; pickDateKeyOverride?: string },
+) {
+  const { start: monthStart, end: rangeEnd } = getGenerateDateRange()
+  const prevTitle = progressDialogTitle.value
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressDialogTitle.value = '推奨生産日'
+  progressText.value = 'リスト用データを取得しています...'
+  try {
+    const res = await getProductionSummarysList({
+      page: 1,
+      limit: 50000,
+      startDate: monthStart,
+      endDate: rangeEnd,
+    })
+    const data = (res as any)?.data ?? res
+    const list = data?.list ?? []
+    const trendKey = options?.trendKeyOverride ?? (kind === 'plating' ? 'plating_trend' : 'molding_trend')
+    const rawRows = collectRecommendedProductionRows(list, monthStart, trendKey, kind, {
+      primaryDateKeyForPick: options?.pickDateKeyOverride,
+    })
+    const rows = sortRecommendedPrintRows(rawRows, kind)
+    const html = buildRecommendedProductionPrintHtml(rows, kind, monthStart, rangeEnd, { titleOverride: options?.titleOverride })
+    const printWindow = openPrintPreviewThenDialog(html)
+    if (!printWindow) {
+      ElMessage.warning('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。')
+      return
+    }
+    ElMessage.success(
+      rows.length
+        ? `プレビューを表示しました（${rows.length} 件）。しばらくして印刷ダイアログが開きます`
+        : '該当行はありません。プレビュー後に印刷ダイアログが開きます',
+    )
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? 'データの取得に失敗しました')
+  } finally {
+    progressDialogTitle.value = prevTitle
     showProgressDialog.value = false
   }
 }
@@ -3445,7 +4011,7 @@ function openBatchInitialStockDialog() {
   batchInitialStockData.value = []
   batchQtyInputRefs.value = []
   if (!processOptions.value.length) {
-    request.get<Array<{ cd: string; name: string }>>('/api/master/processes/options').then((res) => {
+    request.get<Array<{ cd: string; name: string }>>('/api/master/processes/options').then((res: unknown) => {
       processOptions.value = Array.isArray(res) ? res : (res as { data?: Array<{ cd: string; name: string }> })?.data ?? []
     }).catch(() => { processOptions.value = [] })
   }

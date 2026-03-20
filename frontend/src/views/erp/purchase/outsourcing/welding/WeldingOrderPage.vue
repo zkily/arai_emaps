@@ -109,13 +109,6 @@
           </el-select>
         </div>
 
-        <!-- リセットボタン -->
-        <div class="filter-group filter-actions">
-          <el-button @click="resetFilters" class="reset-btn">
-            <el-icon><Refresh /></el-icon>
-            リセット
-          </el-button>
-        </div>
       </el-form>
     </el-card>
 
@@ -157,7 +150,7 @@
             <el-link type="primary" @click="viewDetail(row)">{{ row.orderNo || '-' }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="orderDate" label="注文日" width="90" align="center">
+        <el-table-column prop="orderDate" label="納入日" width="90" align="center">
           <template #default="{ row }">
             {{ row.orderDate || '-' }}
           </template>
@@ -179,7 +172,7 @@
             {{ row.productName || '-' }}
           </template>
         </el-table-column>
-        <el-table-column
+        <!-- <el-table-column
           prop="content"
           label="内容"
           width="120"
@@ -200,7 +193,7 @@
           <template #default="{ row }">
             {{ row.category || '-' }}
           </template>
-        </el-table-column>
+        </el-table-column> -->
         <el-table-column prop="quantity" label="数量" width="70" align="right">
           <template #default="{ row }">
             {{ formatNumber(row.quantity) }}
@@ -345,8 +338,8 @@
               border
               stripe
               highlight-current-row
-              max-height="420"
-              :row-style="{ height: '38px' }"
+              max-height="380"
+              :row-style="{ height: '34px' }"
               size="small"
             >
               <el-table-column
@@ -456,7 +449,6 @@
       destroy-on-close
       class="order-dialog batch-dialog batch-dialog--styled"
       :close-on-click-modal="false"
-      center
     >
       <template #header>
         <div class="batch-dialog__header">
@@ -511,15 +503,22 @@
                 </el-select>
               </el-form-item>
               <el-form-item label="期間" class="batch-dialog__form-item batch-dialog__form-item--date">
-                <el-date-picker
-                  v-model="batchFormData.dateRange"
-                  type="daterange"
-                  range-separator="〜"
-                  start-placeholder="開始日"
-                  end-placeholder="終了日"
-                  value-format="YYYY-MM-DD"
-                  class="batch-dialog__date-picker"
-                />
+                <div class="batch-dialog__date-row">
+                  <el-date-picker
+                    v-model="batchFormData.dateRange"
+                    type="daterange"
+                    range-separator="〜"
+                    start-placeholder="開始日"
+                    end-placeholder="終了日"
+                    value-format="YYYY-MM-DD"
+                    class="batch-dialog__date-picker"
+                  />
+                  <div class="batch-dialog__date-shortcuts">
+                    <el-button size="small" @click="setBatchDateRangePrevMonth">前月</el-button>
+                    <el-button size="small" type="primary" @click="setBatchDateRangeThisMonth">今月</el-button>
+                    <el-button size="small" @click="setBatchDateRangeNextMonth">翌月</el-button>
+                  </div>
+                </div>
               </el-form-item>
               <el-form-item label=" " class="batch-dialog__form-item batch-dialog__form-item--action">
                 <el-button
@@ -550,8 +549,8 @@
               border
               stripe
               highlight-current-row
-              max-height="420"
-              :row-style="{ height: '44px' }"
+              max-height="360"
+              :row-style="{ height: '36px' }"
               size="small"
             >
               <el-table-column
@@ -575,15 +574,13 @@
               </el-table-column>
               <el-table-column prop="content" label="内容" min-width="100" show-overflow-tooltip align="center" />
               <el-table-column prop="deliveryDate" label="納期" width="140" align="center">
-                <template #default="{ row }">
-                  <el-date-picker
-                    v-model="row.deliveryDate"
-                    type="date"
-                    value-format="YYYY-MM-DD"
-                    placeholder="納期"
+                <template #default="{ $index }">
+                  <el-input
+                    v-model="batchOrderList[$index].deliveryDate"
+                    type="text"
                     size="small"
-                    class="batch-dialog__delivery-picker"
-                    :editable="false"
+                    class="batch-dialog__delivery-input"
+                    placeholder="納期"
                   />
                 </template>
               </el-table-column>
@@ -1059,7 +1056,6 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Refresh,
   Plus,
   Download,
   Edit,
@@ -1368,6 +1364,8 @@ const orderList = ref<OrderItem[]>([])
 
 // 外注先选项（value为supplier_cd）
 const supplierOptions = ref<Array<{ value: string; label: string }>>([])
+// 外注先コード → lead_time_days（outsourcing_suppliers.lead_time_days，用于納期计算）
+const supplierLeadTimeByCd = ref<Record<string, number>>({})
 
 // 加载外注先列表（outsourcing_suppliers 表、種別 welding）
 const loadSuppliers = async () => {
@@ -1389,6 +1387,16 @@ const loadSuppliers = async () => {
         label: supplierCd ? `${supplierCd} - ${supplierName}` : supplierName,
       }
     })
+    // 从 outsourcing_suppliers.lead_time_days 构建映射，供納期计算使用
+    const map: Record<string, number> = {}
+    suppliers.forEach((s) => {
+      const cd = s.supplier_cd || s.code || ''
+      if (cd) {
+        const days = s.lead_time_days ?? 7
+        map[cd] = typeof days === 'number' ? days : parseInt(String(days), 10) || 7
+      }
+    })
+    supplierLeadTimeByCd.value = map
   } catch (error) {
     console.error('外注先取得エラー:', error)
     ElMessage.error('外注先データの取得に失敗しました')
@@ -1596,14 +1604,6 @@ const handleSearch = async () => {
   }
 }
 
-const resetFilters = () => {
-  filters.dateRange = getTodayDateRange()
-  filters.supplier = ''
-  filters.productName = ''
-  filters.status = ''
-  handleSearch()
-}
-
 // 日期快捷操作方法
 const setDateToday = () => {
   const today = formatDate(getJapanDate())
@@ -1665,17 +1665,47 @@ const debouncedSearch = () => {
 const openCreateDialog = () => {
   isEdit.value = false
   currentEditId.value = undefined
+  const today = new Date().toISOString().split('T')[0]
   Object.assign(formData, {
-    supplierCd: undefined,
-    orderDate: new Date().toISOString().split('T')[0],
+    supplierCd: 'OS-005', // 新規注文默认外注先
+    orderDate: today,
     deliveryDate: '',
     remarks: '',
   })
   // 清空产品列表
   productList.value = []
-  currentSupplierLeadTime.value = 7
+  // 納期用 lead time：从 outsourcing_suppliers.lead_time_days 读取，无则默认 7
+  currentSupplierLeadTime.value = supplierLeadTimeByCd.value['OS-005'] ?? 7
+  formData.deliveryDate = addBusinessDays(today, currentSupplierLeadTime.value)
   productLoading.value = false
   dialogVisible.value = true
+}
+
+// 一括注文：期間快捷（前月・今月・翌月）
+const getMonthRange = (year: number, month: number): [string, string] => {
+  const first = new Date(year, month - 1, 1)
+  const last = new Date(year, month, 0)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return [fmt(first), fmt(last)]
+}
+const setBatchDateRangePrevMonth = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth()
+  const [prevY, prevM] = m === 0 ? [y - 1, 12] : [y, m]
+  batchFormData.dateRange = getMonthRange(prevY, prevM)
+}
+const setBatchDateRangeThisMonth = () => {
+  const d = new Date()
+  batchFormData.dateRange = getMonthRange(d.getFullYear(), d.getMonth() + 1)
+}
+const setBatchDateRangeNextMonth = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const [nextY, nextM] = m === 12 ? [y + 1, 1] : [y, m + 1]
+  batchFormData.dateRange = getMonthRange(nextY, nextM)
 }
 
 // 打开一括注文对话框
@@ -1702,7 +1732,7 @@ const loadBatchProductOptions = async () => {
     const res = await getProcessProducts({
       processType: 'welding',
       supplierCd: batchFormData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
     const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
     let products: any[] = []
@@ -1738,6 +1768,17 @@ watch(
   },
 )
 
+// 新規注文：外注先变更时，从 outsourcing_suppliers.lead_time_days 更新 lead time 并重算納期
+watch(
+  () => formData.supplierCd,
+  (cd) => {
+    if (cd) {
+      currentSupplierLeadTime.value = supplierLeadTimeByCd.value[cd] ?? 7
+      calculateDeliveryDate()
+    }
+  },
+)
+
 // 一括注文：読込按钮处理（注文日に対応する既存データがあれば数量・納期を反映、なければ新規行を生成）
 const fetchBatchProducts = async () => {
   if (!batchFormData.supplierCd) {
@@ -1761,7 +1802,7 @@ const fetchBatchProducts = async () => {
     const res = await getProcessProducts({
       processType: 'welding',
       supplierCd: batchFormData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
     const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
     let products: any[] = []
@@ -1811,13 +1852,16 @@ const fetchBatchProducts = async () => {
       }
     }
 
-    // 生成期间内的日期列表
+    // 生成期间内的日期列表（去掉土日，仅工作日）
     const startDate = new Date(batchFormData.dateRange[0])
     const endDate = new Date(batchFormData.dateRange[1])
     const dateList: string[] = []
     const currentDate = new Date(startDate)
     while (currentDate <= endDate) {
-      dateList.push(formatDate(currentDate))
+      const dayOfWeek = currentDate.getDay()
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        dateList.push(formatDate(currentDate))
+      }
       currentDate.setDate(currentDate.getDate() + 1)
     }
 
@@ -2115,7 +2159,7 @@ const fetchProducts = async () => {
     const res = await getProcessProducts({
       processType: 'welding',
       supplierCd: formData.supplierCd,
-      isActive: true,
+      isActive: 'true',
     })
     const body = res?.data as { success?: boolean; data?: unknown[] } | unknown[] | undefined
     let products: any[] = []
@@ -2148,17 +2192,7 @@ const fetchProducts = async () => {
         quantity: '',
       }))
 
-    // 设置默认的delivery_lead_time（取平均值）
-    if (productList.value.length > 0) {
-      const leadTimes = productList.value.map((p) => p.deliveryLeadTime).filter((lt) => lt > 0)
-      if (leadTimes.length > 0) {
-        currentSupplierLeadTime.value = Math.round(
-          leadTimes.reduce((sum, lt) => sum + lt, 0) / leadTimes.length,
-        )
-      }
-    }
-
-    // 重新计算納期
+    // 納期使用外注先マスタ的 lead_time_days，不在此处用产品平均覆盖；仅按当前 lead time 重算一次
     calculateDeliveryDate()
 
     ElMessage.success(`${productList.value.length}件の製品データを取得しました`)
@@ -2325,7 +2359,7 @@ const submitEditForm = async () => {
     }
 
     await updateWeldingOrder(editFormData.id, updateData as any)
-    ElMessage.success('注文を更新しました')
+    ElMessage.success('注文を更新しました（該当する受入データも同期更新済み）')
     editDialogVisible.value = false
     handleSearch()
   } catch (error: any) {
@@ -2512,7 +2546,7 @@ const confirmPrint = async () => {
           <style>
             body {
               font-family: 'Meiryo', 'Yu Gothic', sans-serif;
-              margin: 0.5cm;
+              margin: 0.8cm;
               font-size: 10pt;
               line-height: 1.4;
               background-color: #ffffff;
@@ -2524,7 +2558,7 @@ const confirmPrint = async () => {
             margin: 6mm 0 4mm;
             font-size: 18pt;
             font-weight: 600;
-            color: #2c3e50;
+            color: #000000;
           }
           .delivery-meta-left,
           .delivery-meta-right {
@@ -2537,7 +2571,7 @@ const confirmPrint = async () => {
             margin: 3mm 0 2mm;
             font-size: 11pt;
             font-weight: 600;
-            color: #2c3e50;
+            color: #000000;
           }
             .order-sheet {
               width: 100%;
@@ -2546,7 +2580,7 @@ const confirmPrint = async () => {
               box-sizing: border-box;
               display: flex;
               flex-direction: column;
-              min-height: 100%;
+              min-height: 100vh;
             }
             .header {
               margin-bottom: 1mm;
@@ -2560,7 +2594,7 @@ const confirmPrint = async () => {
               font-size: 13pt;
               font-weight: 600;
               margin-bottom: 1mm;
-              color: #2c3e50;
+              color: #000000;
             }
           .title {
               text-align: center;
@@ -2673,7 +2707,7 @@ const confirmPrint = async () => {
             .summary-item {
               font-weight: bold;
               font-size: 11pt;
-              color: #2c3e50;
+              color: #000000;
               padding: 2mm 4mm;
               background-color: #ffffff;
               border-radius: 4px;
@@ -2684,7 +2718,7 @@ const confirmPrint = async () => {
               font-size: 9pt;
               line-height: 1.6;
               position: relative;
-              margin-top: 8mm;
+              margin-top: auto;
               margin-bottom: 0;
               background-color: #f8f9fa;
               padding: 4mm 6mm;
@@ -2695,7 +2729,7 @@ const confirmPrint = async () => {
             }
             .notes p {
               margin: 2mm 0;
-              color: #495057;
+              color: #000000;
               font-weight: 400;
             }
             .notes p:first-child {
@@ -2709,12 +2743,12 @@ const confirmPrint = async () => {
             }
             @page {
               size: A4;
-              margin: 2.5cm 1cm 1cm 1cm;
+              margin: 1.8cm 1.3cm 1.1cm 1.3cm;
             }
             @media print {
               @page {
                 size: A4;
-                margin: 2.5cm 1cm 1cm 1cm;
+                margin: 1.8cm 1.3cm 1.1cm 1.3cm;
               }
               body {
                 margin: 0;
@@ -2758,17 +2792,6 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
     if (val == null || isNaN(val)) return '¥0.00'
     return `¥${val.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
-
-  // 使用日本时区格式化日期时间
-  const now = getJapanDate()
-  const _issuedDateTime = now.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
 
   // 按照外注先和注文日进行分组
   const groupedOrders = new Map<string, OrderItem[]>()
@@ -2926,6 +2949,15 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
 
 // 页面初始化标志
 const isInitialized = ref(false)
+
+// 以下为模板 ref 或预留逻辑，引用以消除未使用告警
+if (import.meta.env.DEV && (false as boolean)) {
+  void tableRef
+  void _formRef
+  void _formRules
+  void _convertOrderToBackend
+  void _formatCurrencyDecimal
+}
 
 // 监听筛选条件变化，自动执行搜索（初始化后生效）
 watch(
@@ -3248,25 +3280,6 @@ onMounted(async () => {
   margin-left: auto;
 }
 
-.reset-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  background: white;
-  color: #667eea;
-  transition: all 0.2s;
-}
-
-.reset-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: #667eea;
-}
-
-.reset-btn :deep(.el-icon) {
-  margin-right: 4px;
-}
-
 .action-bar {
   display: flex;
   justify-content: space-between;
@@ -3457,34 +3470,34 @@ onMounted(async () => {
 }
 
 .order-dialog :deep(.el-dialog) {
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 .order-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   color: white;
   margin: 0;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
+  padding: 10px 14px;
+  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .order-dialog :deep(.el-dialog__title) {
   color: white;
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .order-dialog :deep(.el-dialog__headerbtn) {
-  top: 12px;
-  right: 16px;
+  top: 10px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
 }
 
 .order-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
@@ -3498,9 +3511,7 @@ onMounted(async () => {
 
 .order-dialog :deep(.el-dialog__body) {
   padding: 0;
-  background: rgba(248, 249, 252, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: #f8f9fc;
 }
 
 .order-dialog :deep(.el-dialog) {
@@ -3508,32 +3519,32 @@ onMounted(async () => {
 }
 
 .batch-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(102, 126, 234, 0.18), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1), 0 0 1px rgba(0, 0, 0, 0.06);
   animation: cardFadeIn 0.35s ease-out;
 }
 
 .batch-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   color: white;
   margin: 0;
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.15) inset;
+  padding: 10px 14px;
+  border-bottom: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-/* 新規一括注文 美化样式 */
+/* 新規一括注文 紧凑样式 */
 .batch-dialog--styled :deep(.el-dialog__header) {
-  padding: 18px 24px;
+  padding: 10px 16px;
+  text-align: left;
 }
 
 .batch-dialog__header {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: flex-start;
+  gap: 10px;
   width: 100%;
 }
 
@@ -3541,51 +3552,45 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  background: rgba(255, 255, 255, 0.22);
-  border-radius: 12px;
-  font-size: 22px;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-size: 18px;
 }
 
 .batch-dialog__header-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
 }
 
 .batch-dialog__title {
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
 
 .batch-dialog__subtitle {
-  font-size: 12px;
-  opacity: 0.92;
+  font-size: 11px;
+  opacity: 0.9;
   font-weight: 400;
+  margin-top: 1px;
 }
 
 .batch-dialog__body {
-  padding: 20px 24px 16px;
-  background: rgba(248, 249, 252, 0.9);
-  backdrop-filter: blur(8px);
-  min-height: 200px;
+  padding: 12px 16px 10px;
+  background: #f8f9fc;
+  min-height: 160px;
 }
 
 .batch-dialog__section {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.6) inset;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  transition: box-shadow 0.25s ease;
-}
-.batch-dialog__section:hover {
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.7) inset;
+  background: #fff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  border: 1px solid #ebeef5;
 }
 
 .batch-dialog__section:last-child {
@@ -3595,18 +3600,18 @@ onMounted(async () => {
 .batch-dialog__section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 6px;
+  font-size: 12px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid #ebeef5;
 }
 
 .batch-dialog__section-icon {
-  color: #667eea;
-  font-size: 16px;
+  color: #5b6bc0;
+  font-size: 14px;
 }
 
 .batch-dialog__form {
@@ -3616,12 +3621,15 @@ onMounted(async () => {
 .batch-dialog__form :deep(.el-form-item) {
   margin-bottom: 0;
 }
+.batch-dialog__form :deep(.el-form-item__content) {
+  line-height: 28px;
+}
 
 .batch-dialog__form-row {
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
-  gap: 16px 20px;
+  gap: 10px 14px;
 }
 
 .batch-dialog__form-item {
@@ -3630,13 +3638,30 @@ onMounted(async () => {
 }
 
 .batch-dialog__form-item :deep(.el-form-item__label) {
-  font-size: 13px;
+  font-size: 12px;
   color: #606266;
   font-weight: 500;
 }
 
+.batch-dialog__form-item :deep(.el-form-item) {
+  margin-bottom: 0;
+}
+
 .batch-dialog__form-item--date {
-  min-width: 260px;
+  min-width: 240px;
+}
+
+.batch-dialog__date-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.batch-dialog__date-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .batch-dialog__form-item--action {
@@ -3645,14 +3670,16 @@ onMounted(async () => {
 
 .batch-dialog__select,
 .batch-dialog__date-picker {
-  width: 100%;
+  flex: 1;
   min-width: 180px;
+  max-width: 280px;
 }
 
 .batch-dialog__select :deep(.el-input__wrapper),
 .batch-dialog__date-picker :deep(.el-input__wrapper) {
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 0 0 1px #e4e7ed inset;
+  min-height: 28px;
   transition: box-shadow 0.2s;
 }
 
@@ -3663,48 +3690,48 @@ onMounted(async () => {
 
 .batch-dialog__select :deep(.el-input.is-focus .el-input__wrapper),
 .batch-dialog__date-picker :deep(.el-input.is-focus .el-input__wrapper) {
-  box-shadow: 0 0 0 2px rgba(245, 87, 108, 0.25);
+  box-shadow: 0 0 0 2px rgba(91, 107, 192, 0.25);
 }
 
 .batch-dialog__load-btn {
-  border-radius: 8px;
-  padding: 8px 20px;
+  border-radius: 6px;
+  padding: 4px 14px;
   font-weight: 500;
-  font-size: 13px;
-  height: 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  font-size: 12px;
+  height: 28px;
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+  box-shadow: 0 1px 4px rgba(91, 107, 192, 0.3);
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .batch-dialog__load-btn:hover {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45);
+  box-shadow: 0 2px 8px rgba(91, 107, 192, 0.4);
   transform: translateY(-1px);
 }
 
 .batch-dialog__table-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .batch-dialog__table-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: #303133;
 }
 
 .batch-dialog__table-wrap {
-  border-radius: 8px;
+  border-radius: 6px;
   overflow: hidden;
   border: 1px solid #ebeef5;
-  min-height: 120px;
+  min-height: 100px;
 }
 
 .batch-dialog__table-wrap :deep(.el-table) {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .batch-dialog__table-wrap :deep(th.el-table__cell) {
@@ -3713,21 +3740,15 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.batch-dialog__delivery-picker {
-  width: 120px !important;
-  max-width: 120px;
+.batch-dialog__delivery-input {
+  width: 100%;
 }
-.batch-dialog__delivery-picker :deep(.el-input) {
-  width: 130px !important;
-  max-width: 130px;
-}
-.batch-dialog__delivery-picker :deep(.el-input__wrapper) {
-  width: 130px !important;
-  max-width: 130px;
+.batch-dialog__delivery-input :deep(.el-input__wrapper) {
   border-radius: 6px;
+  min-height: 28px;
 }
-.batch-dialog__delivery-picker :deep(.el-input__inner) {
-  cursor: pointer;
+.batch-dialog__delivery-input :deep(.el-input__inner) {
+  text-align: center;
 }
 
 .batch-dialog__qty-input :deep(.el-input__wrapper) {
@@ -3745,49 +3766,49 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 220px;
-  padding: 32px;
+  min-height: 140px;
+  padding: 20px;
   color: #909399;
   text-align: center;
 }
 
 .batch-dialog__empty--loading {
-  min-height: 200px;
+  min-height: 120px;
 }
 
 .batch-dialog__empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
+  font-size: 32px;
+  margin-bottom: 8px;
   color: #c0c4cc;
 }
 
 .batch-dialog__empty--loading .batch-dialog__empty-icon {
-  color: #667eea;
+  color: #5b6bc0;
 }
 
 .batch-dialog__empty-text {
-  font-size: 13px;
+  font-size: 12px;
   margin: 0;
   line-height: 1.5;
-  max-width: 320px;
+  max-width: 280px;
 }
 
 .batch-dialog__footer {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  padding: 14px 24px;
+  gap: 8px;
+  padding: 8px 16px;
   background: #fff;
   border-top: 1px solid #ebeef5;
 }
 
 .batch-dialog__btn {
-  min-width: 100px;
-  border-radius: 8px;
+  min-width: 80px;
+  border-radius: 6px;
   font-weight: 500;
-  padding: 8px 20px;
-  height: 36px;
-  font-size: 13px;
+  padding: 4px 14px;
+  height: 30px;
+  font-size: 12px;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -3804,30 +3825,31 @@ onMounted(async () => {
 }
 
 .batch-dialog__btn--submit {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.35);
+  box-shadow: 0 1px 4px rgba(91, 107, 192, 0.3);
 }
 
 .batch-dialog__btn--submit:hover {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.45);
+  box-shadow: 0 2px 8px rgba(91, 107, 192, 0.4);
   transform: translateY(-1px);
 }
 
 .compact-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .dialog-icon {
-  font-size: 18px;
+  font-size: 16px;
+  opacity: 0.95;
 }
 
 .dialog-title {
   font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.2px;
+  letter-spacing: 0.02em;
 }
 
 .order-dialog :deep(.el-dialog__body) {
@@ -3860,9 +3882,10 @@ onMounted(async () => {
 }
 
 .compact-form {
-  background: white;
+  background: #fff;
   border-radius: 8px;
-  padding: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .form-section {
@@ -4074,8 +4097,8 @@ onMounted(async () => {
 }
 
 .batch-form {
-  padding: 10px 14px;
-  background: #ffffff;
+  padding: 8px 12px;
+  background: #fff;
   border-radius: 8px;
 }
 
@@ -4086,15 +4109,15 @@ onMounted(async () => {
 .form-row-inline {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .form-row-inline.date-row {
   margin-bottom: 0;
-  padding-top: 6px;
-  border-top: 1px solid #f0f0f0;
+  padding-top: 4px;
+  border-top: 1px solid #eee;
 }
 
 .inline-form-item {
@@ -4106,13 +4129,13 @@ onMounted(async () => {
   font-size: 12px;
   font-weight: 500;
   color: #606266;
-  padding: 0 6px 0 0;
-  line-height: 30px;
+  padding: 0 4px 0 0;
+  line-height: 28px;
 }
 
 .inline-form-item :deep(.el-form-item__content) {
-  line-height: 30px;
-  padding-left: 6px;
+  line-height: 28px;
+  padding-left: 4px;
 }
 
 .inline-form-item.flex-item {
@@ -4151,11 +4174,11 @@ onMounted(async () => {
 
 .supplier-select :deep(.el-input__wrapper),
 .date-select :deep(.el-input__wrapper) {
-  border-radius: 5px;
-  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #e4e7ed inset;
   transition: all 0.2s;
-  padding: 3px 10px;
-  min-height: 30px;
+  padding: 2px 8px;
+  min-height: 28px;
 }
 
 .supplier-select :deep(.el-input__inner),
@@ -4175,50 +4198,44 @@ onMounted(async () => {
 
 .load-btn {
   white-space: nowrap;
-  border-radius: 5px;
-  padding: 6px 14px;
+  border-radius: 6px;
+  padding: 4px 12px;
   font-weight: 500;
-  font-size: 13px;
-  box-shadow: 0 2px 4px rgba(78, 205, 196, 0.2);
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(91, 107, 192, 0.25);
   transition: all 0.2s;
-  height: 30px;
-  background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+  height: 28px;
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   border: none;
 }
 
 .load-btn:hover {
-  background: linear-gradient(135deg, #337ecc 0%, #2b6cb0 100%);
-  box-shadow: 0 3px 6px rgba(64, 158, 255, 0.3);
-  transform: translateY(-1px);
-}
-
-.load-btn:hover {
-  box-shadow: 0 4px 8px rgba(78, 205, 196, 0.3);
+  box-shadow: 0 2px 6px rgba(91, 107, 192, 0.35);
   transform: translateY(-1px);
 }
 
 .table-container {
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .dialog-footer-compact {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 10px 14px;
-  background: #fafbfc;
+  padding: 8px 12px;
+  background: #fff;
   border-top: 1px solid #ebeef5;
 }
 
 .cancel-btn,
 .register-btn {
-  min-width: 90px;
-  border-radius: 5px;
+  min-width: 80px;
+  border-radius: 6px;
   font-weight: 500;
-  padding: 6px 16px;
+  padding: 4px 12px;
   transition: all 0.2s;
-  height: 32px;
-  font-size: 13px;
+  height: 30px;
+  font-size: 12px;
 }
 
 .cancel-btn {
@@ -4232,14 +4249,13 @@ onMounted(async () => {
 }
 
 .register-btn {
-  background: linear-gradient(135deg, #409eff 0%, #337ecc 100%);
+  background: linear-gradient(135deg, #5b6bc0 0%, #7c4dff 100%);
   border: none;
-  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.25);
+  box-shadow: 0 1px 4px rgba(91, 107, 192, 0.3);
 }
 
 .register-btn:hover {
-  background: linear-gradient(135deg, #337ecc 0%, #2b6cb0 100%);
-  box-shadow: 0 4px 10px rgba(64, 158, 255, 0.35);
+  box-shadow: 0 2px 8px rgba(91, 107, 192, 0.4);
   transform: translateY(-1px);
 }
 
@@ -4249,28 +4265,28 @@ onMounted(async () => {
 
 .loading-placeholder,
 .empty-placeholder {
-  padding: 20px 16px;
+  padding: 14px 12px;
   text-align: center;
   color: #909399;
-  background: #f9fafb;
+  background: #f8f9fc;
   border-radius: 6px;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed #e4e7ed;
 }
 
 .compact-placeholder {
-  padding: 18px 12px;
+  padding: 12px 10px;
 }
 
 .compact-placeholder p {
-  margin: 10px 0 0;
-  font-size: 13px;
+  margin: 6px 0 0;
+  font-size: 12px;
   color: #909399;
 }
 
 .loading-placeholder .el-icon {
-  font-size: 24px;
-  margin-bottom: 10px;
-  color: #409eff;
+  font-size: 20px;
+  margin-bottom: 6px;
+  color: #5b6bc0;
 }
 
 .batch-product-table {

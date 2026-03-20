@@ -4,7 +4,11 @@
   material_stock_sub → /api/material/stock/sub
 """
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query
+import os
+import re
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, distinct, update
 from collections import defaultdict
@@ -597,3 +601,54 @@ async def delete_stock_sub(
     await db.delete(row)
     await db.commit()
     return {"success": True, "message": "削除しました"}
+
+
+# 丸一注文書PDF（フロントで画像化したPDF）保存先 — 環境変数 MARUICHI_ORDER_PDF_DIR で上書き可
+_MARUICHI_ORDER_PDF_DIR = Path(
+    os.environ.get(
+        "MARUICHI_ORDER_PDF_DIR",
+        r"\\192.168.1.200\99_電子取引データ\4生産管理部\1.丸一注文書",
+    )
+)
+_MARUICHI_ORDER_PDF_NAME_RE = re.compile(r"^\d{8}注文書_丸一鋼管\.pdf$")
+
+
+def _validate_maruichi_order_pdf_filename(name: str) -> str:
+    if not name or not isinstance(name, str):
+        raise HTTPException(status_code=400, detail="ファイル名が不正です")
+    base = name.strip()
+    if "/" in base or "\\" in base or ".." in base:
+        raise HTTPException(status_code=400, detail="ファイル名が不正です")
+    if not _MARUICHI_ORDER_PDF_NAME_RE.match(base):
+        raise HTTPException(
+            status_code=400,
+            detail="ファイル名は YYYYMMDD注文書_丸一鋼管.pdf 形式である必要があります",
+        )
+    return base
+
+
+@router.post("/maruichi-order-pdf")
+async def save_maruichi_order_pdf(
+    file: UploadFile = File(...),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """丸一注文書PDFを共有フォルダへ保存する。同名ファイルは上書き。"""
+    _ = current_user
+    safe_name = _validate_maruichi_order_pdf_filename(file.filename or "")
+    try:
+        _MARUICHI_ORDER_PDF_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.exception("丸一注文書PDF: フォルダ作成・参照に失敗: %s", e)
+        raise HTTPException(status_code=500, detail=f"保存フォルダにアクセスできません: {e}") from e
+    dest = _MARUICHI_ORDER_PDF_DIR / safe_name
+    try:
+        content = await file.read()
+        if len(content) < 8 or not content.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="PDFファイルではありません")
+        dest.write_bytes(content)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("丸一注文書PDF保存失敗: %s", e)
+        raise HTTPException(status_code=500, detail=f"保存に失敗しました: {e}") from e
+    return {"success": True, "message": "保存しました", "path": str(dest)}

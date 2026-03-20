@@ -102,22 +102,6 @@
           </el-select>
         </div>
 
-        <!-- キーワードフィルタ -->
-        <div class="filter-group">
-          <span class="filter-label">キーワード</span>
-          <el-input
-            v-model="filters.keyword"
-            placeholder="製品名で検索..."
-            clearable
-            class="keyword-input"
-            @input="debouncedSearch"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-        </div>
-
         <!-- 検収状態フィルタ -->
         <div class="filter-group">
           <span class="filter-label">状態</span>
@@ -132,14 +116,6 @@
             <el-option label="一部検収" value="一部検収" />
             <el-option label="検収済" value="検収済" />
           </el-select>
-        </div>
-
-        <!-- リセットボタン -->
-        <div class="filter-group filter-actions">
-          <el-button @click="resetFilters" class="reset-btn">
-            <el-icon><Refresh /></el-icon>
-            リセット
-          </el-button>
         </div>
       </el-form>
     </el-card>
@@ -194,7 +170,7 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="productCode" label="製品CD" width="90" />
+        <!-- <el-table-column prop="productCode" label="製品CD" width="90" /> -->
         <el-table-column prop="productName" label="製品名" min-width="130" show-overflow-tooltip />
         <el-table-column prop="orderQty" label="注文数" width="80" align="right">
           <template #default="{ row }">
@@ -539,8 +515,6 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Search,
-  Refresh,
   Plus,
   Download,
   Edit,
@@ -660,18 +634,6 @@ const filters = reactive({
 const productNameOptions = ref<string[]>([])
 
 // 防抖搜索定时器
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-
-// 防抖搜索函数
-const debouncedSearch = () => {
-  if (searchTimer) {
-    clearTimeout(searchTimer)
-  }
-  searchTimer = setTimeout(() => {
-    handleSearch()
-  }, 300)
-}
-
 // 获取日本时区的当前日期
 const getJapanDate = (): Date => {
   const now = new Date()
@@ -1033,10 +995,6 @@ const handleSearch = async () => {
       params.productName = filters.productName
     }
 
-    if (filters.keyword) {
-      params.keyword = filters.keyword
-    }
-
     // 注意：状态筛选在前端进行，因为状态是根据受入数和注文数计算的
     // 不向后端传递状态筛选参数
 
@@ -1077,18 +1035,6 @@ const handleSearch = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const resetFilters = () => {
-  const today = formatDate(getJapanDate())
-  Object.assign(filters, {
-    dateRange: [today, today],
-    supplier: '',
-    productName: '',
-    keyword: '',
-    status: '',
-  })
-  handleSearch()
 }
 
 const openReceivingDialog = async () => {
@@ -1335,7 +1281,7 @@ const handlePrint = () => {
         <style>
           @page {
             size: A4 portrait;
-            margin: 12mm;
+            margin: 10mm;
           }
           body {
             font-family: 'Meiryo', 'Yu Gothic', sans-serif;
@@ -1886,23 +1832,6 @@ onMounted(async () => {
   box-shadow: 0 0 0 1px #667eea inset;
 }
 
-.keyword-input {
-  width: 160px;
-}
-
-.keyword-input :deep(.el-input__wrapper) {
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.2) inset;
-}
-
-.keyword-input :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #667eea inset;
-}
-
-.keyword-input :deep(.el-input__prefix) {
-  color: #667eea;
-}
-
 .status-select {
   width: 100px;
 }
@@ -1918,25 +1847,6 @@ onMounted(async () => {
 
 .filter-actions {
   margin-left: auto;
-}
-
-.reset-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  background: white;
-  color: #667eea;
-  transition: all 0.2s;
-}
-
-.reset-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: #667eea;
-}
-
-.reset-btn :deep(.el-icon) {
-  margin-right: 4px;
 }
 
 .filter-form :deep(.el-form-item) {

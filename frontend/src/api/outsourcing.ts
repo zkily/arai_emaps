@@ -11,6 +11,8 @@ export interface OutsourcingSupplier {
   supplier_cd: string
   supplier_name: string
   supplier_type: string
+  /** 納期计算用：注文日 + lead_time_days 工作日 */
+  lead_time_days?: number
   is_active?: boolean
   [key: string]: unknown
 }

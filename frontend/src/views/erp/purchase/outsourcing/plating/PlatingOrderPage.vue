@@ -109,13 +109,6 @@
           </el-select>
         </div>
 
-        <!-- リセットボタン -->
-        <div class="filter-group filter-actions">
-          <el-button @click="resetFilters" class="reset-btn">
-            <el-icon><Refresh /></el-icon>
-            リセット
-          </el-button>
-        </div>
       </el-form>
     </el-card>
 
@@ -162,7 +155,7 @@
             {{ row.orderDate || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="supplier" label="外注先" width="140" align="center">
+        <el-table-column prop="supplier" label="外注先" width="150" align="center">
           <template #default="{ row }">
             <el-tag
               :type="getSupplierTagType(row.supplierCd || row.supplier) || undefined"
@@ -179,7 +172,7 @@
             {{ row.productName || '-' }}
           </template>
         </el-table-column>
-        <el-table-column
+        <!-- <el-table-column
           prop="content"
           label="内容"
           width="100"
@@ -200,7 +193,7 @@
           <template #default="{ row }">
             {{ row.category || '-' }}
           </template>
-        </el-table-column>
+        </el-table-column> -->
         <el-table-column prop="quantity" label="数量" width="70" align="right">
           <template #default="{ row }">
             {{ formatNumber(row.quantity) }}
@@ -523,16 +516,22 @@
             </div>
             <div class="form-row-inline date-row">
               <el-form-item label="期間" class="inline-form-item">
-                <el-date-picker
-                  v-model="batchFormData.dateRange"
-                  type="daterange"
-                  range-separator="〜"
-                  start-placeholder="開始日"
-                  end-placeholder="終了日"
-                  value-format="YYYY-MM-DD"
-                  class="date-select"
-                  style="width: 100%"
-                />
+                <div class="batch-date-row">
+                  <el-date-picker
+                    v-model="batchFormData.dateRange"
+                    type="daterange"
+                    range-separator="〜"
+                    start-placeholder="開始日"
+                    end-placeholder="終了日"
+                    value-format="YYYY-MM-DD"
+                    class="date-select batch-date-picker"
+                  />
+                  <div class="batch-date-shortcuts">
+                    <el-button size="small" @click="setBatchDateRangePrevMonth">前月</el-button>
+                    <el-button size="small" type="primary" @click="setBatchDateRangeThisMonth">今月</el-button>
+                    <el-button size="small" @click="setBatchDateRangeNextMonth">翌月</el-button>
+                  </div>
+                </div>
               </el-form-item>
             </div>
           </el-form>
@@ -1077,7 +1076,6 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Refresh,
   Plus,
   Download,
   Edit,
@@ -1343,6 +1341,8 @@ const orderList = ref<OrderItem[]>([])
 
 // 外注先选项（value为supplier_cd）
 const supplierOptions = ref<Array<{ value: string; label: string }>>([])
+// 外注先コード → lead_time_days（outsourcing_suppliers.lead_time_days，用于納期计算，与 WeldingOrderPage 一致）
+const supplierLeadTimeByCd = ref<Record<string, number>>({})
 
 // 加载外注先列表（outsourcing_suppliers、種別 plating）
 const loadSuppliers = async () => {
@@ -1364,6 +1364,16 @@ const loadSuppliers = async () => {
         label: supplierCd ? `${supplierCd} - ${supplierName}` : supplierName,
       }
     })
+    // 从 outsourcing_suppliers.lead_time_days 构建映射，供納期计算使用（与 WeldingOrderPage 一致）
+    const map: Record<string, number> = {}
+    suppliers.forEach((s) => {
+      const cd = s.supplier_cd || s.code || ''
+      if (cd) {
+        const days = s.lead_time_days ?? 7
+        map[cd] = typeof days === 'number' ? days : parseInt(String(days), 10) || 7
+      }
+    })
+    supplierLeadTimeByCd.value = map
   } catch (error) {
     console.error('外注先取得エラー:', error)
     ElMessage.error('外注先データの取得に失敗しました')
@@ -1571,14 +1581,6 @@ const handleSearch = async () => {
   }
 }
 
-const resetFilters = () => {
-  filters.dateRange = getTodayDateRange()
-  filters.supplier = ''
-  filters.productName = ''
-  filters.status = ''
-  handleSearch()
-}
-
 // 日期快捷操作方法
 const setDateToday = () => {
   const today = formatDate(getJapanDate())
@@ -1640,17 +1642,47 @@ const debouncedSearch = () => {
 const openCreateDialog = () => {
   isEdit.value = false
   currentEditId.value = undefined
+  const today = new Date().toISOString().split('T')[0]
   Object.assign(formData, {
     supplierCd: undefined,
-    orderDate: new Date().toISOString().split('T')[0],
+    orderDate: today,
     deliveryDate: '',
     remarks: '',
   })
   // 清空产品列表
   productList.value = []
+  // 納期算法与 WeldingOrderPage 一致：lead time 从 outsourcing_suppliers.lead_time_days 读取，无则默认 7
   currentSupplierLeadTime.value = 7
+  formData.deliveryDate = addBusinessDays(today, currentSupplierLeadTime.value)
   productLoading.value = false
   dialogVisible.value = true
+}
+
+// 一括注文：期間快捷（前月・今月・翌月）
+const getMonthRange = (year: number, month: number): [string, string] => {
+  const first = new Date(year, month - 1, 1)
+  const last = new Date(year, month, 0)
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return [fmt(first), fmt(last)]
+}
+const setBatchDateRangePrevMonth = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth()
+  const [prevY, prevM] = m === 0 ? [y - 1, 12] : [y, m]
+  batchFormData.dateRange = getMonthRange(prevY, prevM)
+}
+const setBatchDateRangeThisMonth = () => {
+  const d = new Date()
+  batchFormData.dateRange = getMonthRange(d.getFullYear(), d.getMonth() + 1)
+}
+const setBatchDateRangeNextMonth = () => {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const [nextY, nextM] = m === 12 ? [y + 1, 1] : [y, m + 1]
+  batchFormData.dateRange = getMonthRange(nextY, nextM)
 }
 
 // 打开一括注文对话框
@@ -1711,6 +1743,17 @@ watch(
     } else {
       batchProductOptions.value = []
       batchFormData.productCd = ''
+    }
+  },
+)
+
+// 新規注文：外注先变更时，从 outsourcing_suppliers.lead_time_days 更新 lead time 并重算納期（与 WeldingOrderPage 一致）
+watch(
+  () => formData.supplierCd,
+  (cd) => {
+    if (cd) {
+      currentSupplierLeadTime.value = supplierLeadTimeByCd.value[cd] ?? 7
+      calculateDeliveryDate()
     }
   },
 )
@@ -1794,13 +1837,16 @@ const fetchBatchProducts = async () => {
       }
     }
 
-    // 生成期间内的日期列表
+    // 生成期间内的日期列表（去掉土日，仅工作日）
     const startDate = new Date(batchFormData.dateRange[0])
     const endDate = new Date(batchFormData.dateRange[1])
     const dateList: string[] = []
     const currentDate = new Date(startDate)
     while (currentDate <= endDate) {
-      dateList.push(formatDate(currentDate))
+      const dayOfWeek = currentDate.getDay()
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        dateList.push(formatDate(currentDate))
+      }
       currentDate.setDate(currentDate.getDate() + 1)
     }
 
@@ -2120,17 +2166,7 @@ const fetchProducts = async () => {
         quantity: '',
       }))
 
-    // 设置默认的delivery_lead_time（取平均值）
-    if (productList.value.length > 0) {
-      const leadTimes = productList.value.map((p) => p.deliveryLeadTime).filter((lt) => lt > 0)
-      if (leadTimes.length > 0) {
-        currentSupplierLeadTime.value = Math.round(
-          leadTimes.reduce((sum, lt) => sum + lt, 0) / leadTimes.length,
-        )
-      }
-    }
-
-    // 重新计算納期
+    // 納期使用外注先マスタ的 lead_time_days，不在此处用产品平均覆盖；仅按当前 lead time 重算一次（与 WeldingOrderPage 一致）
     calculateDeliveryDate()
 
     ElMessage.success(`${productList.value.length}件の製品データを取得しました`)
@@ -2489,7 +2525,7 @@ const confirmPrint = async () => {
           <style>
             body {
               font-family: 'Meiryo', 'Yu Gothic', sans-serif;
-              margin: 0.5cm;
+              margin: 1.0cm;
               font-size: 10pt;
               line-height: 1.4;
               background-color: #ffffff;
@@ -2501,7 +2537,7 @@ const confirmPrint = async () => {
             margin: 6mm 0 4mm;
             font-size: 18pt;
             font-weight: 600;
-            color: #2c3e50;
+            color: #000000;
           }
           .delivery-meta-left,
           .delivery-meta-right {
@@ -2514,14 +2550,14 @@ const confirmPrint = async () => {
             margin: 3mm 0 2mm;
             font-size: 11pt;
             font-weight: 600;
-            color: #2c3e50;
+            color: #000000;
           }
             .order-sheet {
               width: 100%;
               margin: 0 auto;
               position: relative;
-              min-height: 287mm; /* A4高度297mm - 上下边距10mm */
-              height: 287mm;
+              min-height: 281mm; /* A4高度297mm - 上下边距16mm */
+              height: 281mm;
               box-sizing: border-box;
             }
             .header {
@@ -2536,7 +2572,7 @@ const confirmPrint = async () => {
               font-size: 13pt;
               font-weight: 600;
               margin-bottom: 1mm;
-              color: #2c3e50;
+              color: #000000;
             }
           .title {
               text-align: center;
@@ -2649,7 +2685,7 @@ const confirmPrint = async () => {
             .summary-item {
               font-weight: bold;
               font-size: 11pt;
-              color: #2c3e50;
+              color: #000000;
               padding: 2mm 4mm;
               background-color: #ffffff;
               border-radius: 4px;
@@ -2660,7 +2696,7 @@ const confirmPrint = async () => {
               font-size: 9pt;
               line-height: 1.6;
               position: absolute;
-              bottom: 0.5cm;
+              bottom: 1cm;
               left: 0.5cm;
               right: 0.5cm;
               background-color: #f8f9fa;
@@ -2672,7 +2708,7 @@ const confirmPrint = async () => {
             }
             .notes p {
               margin: 2mm 0;
-              color: #495057;
+              color: #000000;
               font-weight: 400;
             }
             .notes p:first-child {
@@ -2689,12 +2725,12 @@ const confirmPrint = async () => {
             }
             @page {
               size: A4;
-              margin: 0.5cm;
+              margin: 0.8cm;
             }
             @media print {
               @page {
                 size: A4;
-                margin: 0.5cm;
+                margin: 0.8cm;
               }
               body {
                 margin: 0;
@@ -2738,17 +2774,6 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
     if (val == null || isNaN(val)) return '¥0.00'
     return `¥${val.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
-
-  // 使用日本时区格式化日期时间
-  const now = getJapanDate()
-  const issuedDateTime = now.toLocaleString('ja-JP', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
 
   // 按照外注先和注文日进行分组
   const groupedOrders = new Map<string, OrderItem[]>()
@@ -2837,7 +2862,7 @@ const generatePrintHtml = (orderItems: OrderItem[]) => {
 
     pagesHtml += `
       <div class="order-sheet ${pageBreakClass}">
-        <div class="issued-info">注文日: ${orderDateDisplay}　発行日時: ${issuedDateTime}</div>
+        <div class="issued-info">注文日: ${orderDateDisplay}</div>
 
         <div class="title">注 文 書</div>
 
@@ -3171,25 +3196,6 @@ onMounted(async () => {
 
 .filter-actions {
   margin-left: auto;
-}
-
-.reset-btn {
-  padding: 6px 12px;
-  font-size: 12px;
-  border-radius: 6px;
-  border: 1px solid rgba(102, 126, 234, 0.3);
-  background: white;
-  color: #667eea;
-  transition: all 0.2s;
-}
-
-.reset-btn:hover {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: #667eea;
-}
-
-.reset-btn :deep(.el-icon) {
-  margin-right: 4px;
 }
 
 .action-bar {
@@ -3698,6 +3704,23 @@ onMounted(async () => {
   margin-bottom: 0;
   padding-top: 6px;
   border-top: 1px solid #f0f0f0;
+}
+
+.batch-date-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.batch-date-picker {
+  flex: 1;
+  min-width: 180px;
+  max-width: 280px;
+}
+.batch-date-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .inline-form-item {

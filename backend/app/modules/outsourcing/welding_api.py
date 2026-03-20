@@ -375,6 +375,8 @@ async def update_welding_order(
     for key, attr in [
         ("order_date", "order_date"),
         ("orderDate", "order_date"),
+        ("supplier_cd", "supplier_cd"),
+        ("supplierCd", "supplier_cd"),
         ("product_cd", "product_cd"),
         ("productCode", "product_cd"),
         ("product_name", "product_name"),
@@ -398,6 +400,24 @@ async def update_welding_order(
     ]:
         if key in body and body[key] is not None:
             setattr(row, attr, body[key])
+    await db.flush()
+
+    # 注文更新に合わせて、該当する受入レコード（outsourcing_welding_receivings）を同内容で同期更新
+    rec_q = select(WeldingReceiving).where(WeldingReceiving.order_id == order_id)
+    rec_res = await db.execute(rec_q)
+    for rec in rec_res.scalars().all():
+        rec.order_no = row.order_no
+        rec.supplier_cd = row.supplier_cd
+        rec.product_cd = row.product_cd
+        rec.product_name = row.product_name
+        rec.welding_type = row.welding_type
+        rec.welding_points = row.welding_points or 0
+        rec.delivery_location = row.delivery_location
+        rec.category = row.category
+        rec.content = row.content
+        rec.specification = row.specification
+        rec.order_qty = row.quantity
+
     await db.flush()
     await db.refresh(row)
     return {"success": True, "data": _order_to_dict(row)}

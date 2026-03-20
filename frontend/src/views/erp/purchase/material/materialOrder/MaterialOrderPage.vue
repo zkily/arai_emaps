@@ -1108,7 +1108,13 @@
       <template #header>
         <div class="dialog-header-with-button">
           <span class="dialog-title">注文書印刷確認</span>
-          <el-button type="primary" @click="confirmPrint" class="confirm-btn-header" size="small">
+          <el-button
+            type="primary"
+            @click="confirmPrint"
+            class="confirm-btn-header"
+            size="small"
+            :loading="printPdfSaving"
+          >
             <el-icon><Printer /></el-icon>
             印刷実行
           </el-button>
@@ -1408,7 +1414,11 @@ import {
   transferMaterialStockToSub,
   getStockMaterialsList,
   toggleStockMaterialUsage,
+  saveMaruichiOrderPdf,
 } from '@/api/material'
+import html2canvas from 'html2canvas'
+import { jsPDF } from 'jspdf'
+import { MARUICHI_ORDER_SHEET_STYLES } from '@/utils/maruichiOrderSheetStyles'
 import { calculateMaterialStock } from '@/api/materialStockCalculation'
 import { generateMaterialStockData } from '@/api/materialDataGeneration'
 import { updateMaterialQuantities, updateMaterialRemarks } from '@/api/materialStockUpdate'
@@ -1481,6 +1491,7 @@ const dataGenerationStartDate = ref('')
 const dataGenerationEndDate = ref('')
 const dataGenerationDialogVisible = ref(false)
 const printConfirmDialogVisible = ref(false)
+const printPdfSaving = ref(false)
 const manualOrderDialogVisible = ref(false)
 const manualOrderLoading = ref(false)
 const materialSearchLoading = ref(false)
@@ -1526,6 +1537,14 @@ const getTodayJapanStr = () => {
   const month = String(japanTime.getMonth() + 1).padStart(2, '0')
   const day = String(japanTime.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+/** 納入日（検索日付範囲の開始日＝画面の納入日）→ YYYYMMDD。共有フォルダの PDF ファイル名用 */
+const getNonyuDateYmdForPdf = (): string | null => {
+  const raw = searchForm.dateRange?.[0]?.trim() ?? ''
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (m) return `${m[1]}${m[2]}${m[3]}`
+  return null
 }
 
 const searchForm = reactive({
@@ -2737,7 +2756,6 @@ const handlePrintOrder = async () => {
 // 确认打印
 const confirmPrint = async () => {
   try {
-    // 获取合并后的注文数据
     const mergedOrderItems = await getMergedOrderData()
 
     if (mergedOrderItems.length === 0) {
@@ -2745,10 +2763,37 @@ const confirmPrint = async () => {
       return
     }
 
-    // 显示加载状态
-    ElMessage.info('印刷プレビューを生成中...')
+    const deliveryYmd = getNonyuDateYmdForPdf()
+    if (!deliveryYmd) {
+      ElMessage.error('納入日（日付範囲の開始日）が不正です。日付を選択してください。')
+      return
+    }
 
-    // 同时进行打印预览
+    printPdfSaving.value = true
+    const pdfName = `${deliveryYmd}注文書_丸一鋼管.pdf`
+    try {
+      ElMessage.info('画像PDFを生成し、共有フォルダへ保存しています…')
+      const pdfBlob = await generateOrderSheetImagePdfBlob(mergedOrderItems)
+      const res = (await saveMaruichiOrderPdf(pdfBlob, pdfName)) as {
+        success?: boolean
+        message?: string
+        detail?: string
+      }
+      if (res?.success === false) {
+        ElMessage.error(res?.message || 'PDFの保存に失敗しました')
+      } else {
+        ElMessage.success(`共有フォルダに保存しました（${pdfName}）`)
+      }
+    } catch (e: unknown) {
+      console.error('丸一注文書PDF保存エラー:', e)
+      const ax = e as { response?: { data?: { detail?: string } }; message?: string }
+      const detail = ax?.response?.data?.detail || ax?.message || 'PDFの保存に失敗しました'
+      ElMessage.error(detail)
+    } finally {
+      printPdfSaving.value = false
+    }
+
+    ElMessage.info('印刷プレビューを生成中...')
     const printContent = generatePrintHtml(mergedOrderItems)
     const printWindow = window.open('', '_blank')
     if (printWindow) {
@@ -2757,201 +2802,25 @@ const confirmPrint = async () => {
         <head>
           <title>注文書</title>
           <meta charset="UTF-8">
-          <style>
-            body {
-              font-family: 'Meiryo', 'Yu Gothic', sans-serif;
-              margin: 0.5cm;
-              font-size: 10pt;
-              line-height: 1.4;
-              background-color: #ffffff;
-              color: #000000;
-            }
-            .order-sheet {
-              width: 100%;
-              margin: 0 auto;
-            }
-            .header {
-              margin-bottom: 1mm;
-              position: relative;
-            }
-            .issued-info {
-              text-align: left;
-              font-size: 9pt;
-              margin-bottom: 1mm;
-            }
-            .title {
-              text-align: center;
-              font-size: 20pt;
-              font-weight: bold;
-              margin: 1mm 0;
-              color: #000000;
-              text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-              letter-spacing: 2px;
-            }
-            .info-row {
-              display: flex;
-              justify-content: space-between;
-              margin-bottom: 2mm;
-            }
-            .info-item {
-              flex: 1;
-            }
-            .info-item.right {
-              text-align: right;
-            }
-            .recipient-block {
-              margin-bottom: 4mm;
-              margin-top: 4mm;
-            }
-            .recipient-block div {
-              margin-bottom: 2mm;
-              font-size: 18pt;
-              font-weight: bold;
-              color: #000000;
-            }
-            .sender-block {
-              text-align: right;
-              margin-bottom: 1mm;
-              margin-top: -12mm;
-            }
-            .sender-block div {
-              margin-bottom: 2mm;
-              font-size: 10pt;
-              color: #000000;
-            }
-            .approval-box {
-              border: 2px solid #34495e;
-              width: 120px;
-              margin-left: auto;
-              text-align: center;
-              margin-top: 1mm;
-              border-collapse: collapse;
-              border-radius: 4px;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .approval-box table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 0;
-            }
-            .approval-box td {
-              border: 1px solid #34495e;
-              padding: 1mm;
-              text-align: center;
-              font-size: 8pt;
-              width: 50%;
-              background-color: #f8f9fa;
-              font-weight: 500;
-            }
-            .delivery-info {
-              margin: 5mm 0;
-              display: flex;
-              justify-content: space-between;
-            }
-            .delivery-info div {
-              font-size: 13pt;
-              font-weight: bold;
-              color: #000000;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin: 2mm 0;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              border-radius: 6px;
-              overflow: hidden;
-            }
-            th, td {
-              border: 1px solid #dee2e6;
-              padding: 2mm 3mm;
-              text-align: left;
-              font-size: 9pt;
-            }
-            th {
-              background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-              text-align: center;
-              font-weight: bold;
-              color: #000000;
-              border-bottom: 2px solid #dee2e6;
-            }
-            .text-center {
-              text-align: center;
-            }
-            .text-right {
-              text-align: right;
-            }
-            .summary-row {
-              display: flex;
-              justify-content: flex-end;
-              margin-top: 4mm;
-              gap: 8mm;
-              padding: 4mm 0;
-              border-top: 2px solid #dee2e6;
-              background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-              border-radius: 6px;
-              padding: 4mm 8mm;
-            }
-            .summary-item {
-              font-weight: bold;
-              font-size: 11pt;
-              color: #2c3e50;
-              padding: 2mm 4mm;
-              background-color: #ffffff;
-              border-radius: 4px;
-              box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-              border: 1px solid #dee2e6;
-            }
-            .notes {
-              margin-top: 12mm;
-              font-size: 9pt;
-              line-height: 1.6;
-              position: absolute;
-              bottom: 0.5cm;
-              left: 0.5cm;
-              right: 0.5cm;
-              background-color: #f8f9fa;
-              padding: 4mm 6mm;
-              border-radius: 6px;
-              border-left: 4px solid #6c757d;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .notes p {
-              margin: 2mm 0;
-              color: #495057;
-              font-weight: 400;
-            }
-            .notes p:first-child {
-              margin-top: 0;
-            }
-            .notes p:last-child {
-              margin-bottom: 0;
-            }
-            @page {
-              size: A4;
-              margin: 0.5cm;
-            }
-          </style>
+          <style>${MARUICHI_ORDER_SHEET_STYLES}</style>
         </head>
         <body>${printContent}</body>
         </html>
       `)
       printWindow.document.close()
 
-      // 等待页面加载完成后打印并关闭
       printWindow.onload = function () {
         printWindow.print()
-        // 打印完成后延迟关闭窗口
         setTimeout(function () {
           printWindow.close()
         }, 1000)
       }
     }
   } catch (error) {
-    console.error('PDF生成エラー:', error)
-    ElMessage.error('PDF生成中にエラーが発生しました')
+    console.error('印刷・PDFエラー:', error)
+    ElMessage.error('処理中にエラーが発生しました')
   }
 
-  // 关闭对话框
   printConfirmDialogVisible.value = false
 }
 
@@ -3076,6 +2945,104 @@ const generatePrintHtml = (filteredOrderItems: MaterialOrderItem[]) => {
         </div>
     </div>
   `
+}
+
+/** PDF キャプチュラ用：iframe を内容高さに閉じ、余白のないキャンバスにする */
+const ORDER_SHEET_CAPTURE_EXTRA_CSS = `
+html.sheet-capture-doc, html.sheet-capture-doc body {
+  height: auto !important;
+  min-height: 0 !important;
+}
+html.sheet-capture-doc body.order-pdf-capture {
+  margin: 3mm !important;
+  padding: 0 !important;
+}
+html.sheet-capture-doc .order-sheet {
+  /* 捕获时给左右留白，避免 PDF 内容贴到页面左右边缘 */
+  padding-left: 6mm !important;
+  padding-right: 6mm !important;
+  box-sizing: border-box !important;
+}
+html.sheet-capture-doc .order-sheet .notes {
+  margin-top: 5mm !important;
+}
+`
+
+/** html2canvas + jsPDF で画像ベースの PDF を生成（1ページに収まらない場合は複数ページ） */
+const generateOrderSheetImagePdfBlob = (mergedOrderItems: MaterialOrderItem[]): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const printContent = generatePrintHtml(mergedOrderItems)
+    const iframe = document.createElement('iframe')
+    iframe.setAttribute('title', 'order-sheet-capture')
+    // min-height / 大きな固定高を付けない（body が無駄に伸び、下端空白＋2ページ目が真っ白になる原因）
+    iframe.style.cssText =
+      'position:fixed;left:-12000px;top:0;width:210mm;border:0;opacity:0;pointer-events:none'
+    document.body.appendChild(iframe)
+    const doc = iframe.contentDocument
+    if (!doc) {
+      iframe.remove()
+      reject(new Error('iframe document'))
+      return
+    }
+    const html = `<!DOCTYPE html><html class="sheet-capture-doc"><head><meta charset="UTF-8"><style>${MARUICHI_ORDER_SHEET_STYLES}${ORDER_SHEET_CAPTURE_EXTRA_CSS}</style></head><body class="order-pdf-capture">${printContent}</body></html>`
+    doc.open()
+    doc.write(html)
+    doc.close()
+
+    const cleanup = () => {
+      iframe.remove()
+    }
+
+    const runCapture = async () => {
+      try {
+        const target = doc.querySelector('.order-sheet') as HTMLElement | null
+        if (!target) {
+          cleanup()
+          reject(new Error('.order-sheet not found'))
+          return
+        }
+        await new Promise((r) => setTimeout(r, 280))
+        const canvas = await html2canvas(target, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        })
+        const imgData = canvas.toDataURL('image/jpeg', 0.92)
+        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
+        const pageWidth = pdf.internal.pageSize.getWidth()
+        const pageHeight = pdf.internal.pageSize.getHeight()
+        // キャンバス縦横比から mm 高さを直接算出（JPEG メタデータとの不一致による誤分割を防ぐ）
+        const imgWidthMm = pageWidth
+        const imgHeightMm = (canvas.height / canvas.width) * imgWidthMm
+        const MM_EPS = 0.8
+        if (imgHeightMm <= pageHeight + MM_EPS) {
+          pdf.addImage(imgData, 'JPEG', 0, 0, imgWidthMm, imgHeightMm, undefined, 'FAST')
+        } else {
+          let heightLeft = imgHeightMm
+          let position = 0
+          pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
+          heightLeft -= pageHeight
+          while (heightLeft > MM_EPS) {
+            position = heightLeft - imgHeightMm
+            pdf.addPage()
+            pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
+            heightLeft -= pageHeight
+          }
+        }
+        const blob = pdf.output('blob')
+        cleanup()
+        resolve(blob)
+      } catch (e) {
+        cleanup()
+        reject(e)
+      }
+    }
+
+    requestAnimationFrame(() => {
+      void runCapture()
+    })
+  })
 }
 
 // データ生成処理
