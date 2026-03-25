@@ -176,6 +176,8 @@ export function getMaterialStockList(params?: {
   target_date?: string
   start_date?: string
   end_date?: string
+  /** true: 注文数>0 の行のみ（材料注文履歴） */
+  order_only?: boolean
 }): Promise<{ success?: boolean; data?: { list: unknown[]; total: number } }> {
   return request.get(`${PREFIX}/stock`, { params }) as Promise<{
     success?: boolean

@@ -179,7 +179,7 @@
             </span>
             <el-input
               v-model="searchForm.keyword"
-              placeholder="材料名 / 材料CD"
+              :placeholder="activeTab === 'orderHistory' ? '材料名 / 材料CD / 仕入先' : '材料名 / 材料CD'"
               clearable
               @input="handleKeywordSearch"
               class="filter-input"
@@ -280,6 +280,14 @@
             >
               <el-icon><ShoppingCart /></el-icon>
               <span>材料注文</span>
+            </div>
+            <div
+              class="tab-item"
+              :class="{ active: activeTab === 'orderHistory' }"
+              @click="handleTabChange('orderHistory')"
+            >
+              <el-icon><List /></el-icon>
+              <span>材料注文履歴</span>
             </div>
           </div>
           <div class="table-actions" v-if="activeTab === 'order'">
@@ -583,6 +591,78 @@
                 />
               </template>
             </el-table-column>
+          </el-table>
+        </div>
+
+        <!-- 材料注文履歴（期間・キーワードで注文数>0の material_stock のみ、参照専用） -->
+        <div class="table-content" v-if="activeTab === 'orderHistory'">
+          <el-table
+            v-loading="loading"
+            :data="filteredTableData"
+            stripe
+            border
+            class="modern-table order-history-table"
+            :default-sort="{ prop: 'date', order: 'descending' }"
+            height="calc(100vh - 280px)"
+            :max-height="800"
+            show-summary
+            :summary-method="getOrderHistorySummaries"
+          >
+            <el-table-column prop="date" label="日付" width="120" align="center" sortable />
+            <el-table-column prop="material_cd" label="材料CD" width="120" align="center" />
+            <el-table-column
+              prop="material_name"
+              label="材料名"
+              min-width="180"
+              show-overflow-tooltip
+              sortable
+            />
+            <el-table-column
+              prop="supplier_name"
+              label="仕入先"
+              width="150"
+              show-overflow-tooltip
+            />
+            <el-table-column prop="standard_spec" label="規格" width="150" show-overflow-tooltip />
+            <el-table-column
+              prop="current_stock"
+              label="現在在庫"
+              width="100"
+              align="center"
+            >
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': row.current_stock < 0 }">{{
+                  formatValue(row.current_stock)
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="order_quantity" label="注文束数" width="110" align="center" sortable>
+              <template #default="{ row }">
+                {{ formatValue(row.order_quantity) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="order_bundle_quantity" label="注文本数" width="110" align="center">
+              <template #default="{ row }">
+                {{ formatValue(row.order_bundle_quantity) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="bundle_weight" label="重量(kg)" width="110" align="center">
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': (row.bundle_weight || 0) < 0 }">{{
+                  formatValue(Math.round(row.bundle_weight || 0))
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="order_amount" label="注文金額" width="120" align="center">
+              <template #default="{ row }">
+                <span :class="{ 'negative-number': (row.order_amount || 0) < 0 }">{{
+                  formatValue(Math.round(row.order_amount || 0))
+                    ? '¥' + Math.round(row.order_amount || 0).toLocaleString('ja-JP')
+                    : ''
+                }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="remarks" label="備考" min-width="160" show-overflow-tooltip />
           </el-table>
         </div>
 
@@ -1400,6 +1480,7 @@ import {
   Plus,
   Check,
   Delete,
+  List,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
@@ -1501,6 +1582,8 @@ const manualOrderFormRef = ref()
 const tableData = ref<MaterialOrderItem[]>([])
 const subTableData = ref<MaterialOrderItem[]>([])
 const initialStockData = ref<InitialStockItem[]>([])
+/** 材料注文履歴タブ用（期間・キーワードで material_stock かつ注文数>0） */
+const orderHistoryData = ref<MaterialOrderItem[]>([])
 const orderConfirmDialogVisible = ref(false)
 const orderNotes = ref('')
 const activeTab = ref('stock') // デフォルトは材料日別在庫タブ
@@ -1624,6 +1707,9 @@ const filteredTableData = computed(() => {
   if (activeTab.value === 'initial') {
     return initialStockData.value
   }
+  if (activeTab.value === 'orderHistory') {
+    return orderHistoryData.value
+  }
   return tableData.value
 })
 
@@ -1721,6 +1807,27 @@ const filteredStockMaterialsList = computed(() => {
   return stockMaterialsList.value // 'all'
 })
 
+const mapMaterialStockRow = (item: any): MaterialOrderItem => {
+  const usage_quantity = item.planned_usage || 0
+  const order_quantity = item.order_quantity || 0
+  let order_bundle_quantity = 0
+  let bundle_weight = 0
+  let order_amount = 0
+  if (order_quantity > 0 && item.pieces_per_bundle && item.long_weight) {
+    order_bundle_quantity = order_quantity * item.pieces_per_bundle
+    bundle_weight = order_bundle_quantity * item.long_weight
+    order_amount = bundle_weight * (item.unit_price || 0)
+  }
+  return {
+    ...item,
+    usage_quantity,
+    order_quantity,
+    order_bundle_quantity,
+    bundle_weight,
+    order_amount,
+  }
+}
+
 // 方法
 const fetchData = async () => {
   try {
@@ -1758,31 +1865,7 @@ const fetchData = async () => {
     const total = (result as any)?.data?.total ?? 0
 
     if ((result as any)?.success !== false && list) {
-      tableData.value = list.map((item: any) => {
-        // 初始化可编辑字段 - 从数据库字段读取
-        const usage_quantity = item.planned_usage || 0
-        const order_quantity = item.order_quantity || 0
-
-        // 根据注文束数重新计算注文本数和重量
-        let order_bundle_quantity = 0
-        let bundle_weight = 0
-        let order_amount = 0
-
-        if (order_quantity > 0 && item.pieces_per_bundle && item.long_weight) {
-          order_bundle_quantity = order_quantity * item.pieces_per_bundle
-          bundle_weight = order_bundle_quantity * item.long_weight
-          order_amount = bundle_weight * (item.unit_price || 0)
-        }
-
-        return {
-          ...item,
-          usage_quantity,
-          order_quantity,
-          order_bundle_quantity,
-          bundle_weight,
-          order_amount,
-        }
-      })
+      tableData.value = list.map((item: any) => mapMaterialStockRow(item))
       pagination.total = total
       updateStats()
     } else {
@@ -1791,6 +1874,48 @@ const fetchData = async () => {
   } catch (error) {
     console.error('データ取得に失敗しました:', error)
     ElMessage.error('データ取得に失敗しました')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 指定期間・条件で注文数>0の material_stock 一覧（材料注文履歴タブ） */
+const fetchOrderHistory = async () => {
+  if (!searchForm.dateRange || searchForm.dateRange.length !== 2) {
+    orderHistoryData.value = []
+    pagination.total = 0
+    ElMessage.warning('期間を選択してください')
+    return
+  }
+  try {
+    loading.value = true
+    const apiParams: Record<string, unknown> = {
+      page: pagination.page,
+      pageSize: pagination.page_size,
+      keyword: searchForm.keyword || undefined,
+      start_date: searchForm.dateRange[0],
+      end_date: searchForm.dateRange[1],
+      order_only: true,
+    }
+    if (searchForm.supplier && searchForm.supplier.length > 0) {
+      apiParams.suppliers = searchForm.supplier.join(',')
+    }
+    const result = await getMaterialStockList(apiParams)
+    const list = (result as any)?.data?.list ?? []
+    const total = (result as any)?.data?.total ?? 0
+    if ((result as any)?.success !== false && list) {
+      orderHistoryData.value = list.map((item: any) => mapMaterialStockRow(item))
+      pagination.total = total
+    } else {
+      ElMessage.error('注文履歴の取得に失敗しました')
+      orderHistoryData.value = []
+      pagination.total = 0
+    }
+  } catch (error) {
+    console.error('注文履歴の取得に失敗しました:', error)
+    ElMessage.error('注文履歴の取得に失敗しました')
+    orderHistoryData.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }
@@ -1980,6 +2105,18 @@ const fetchInitialStockData = async () => {
   }
 }
 
+const refreshListForActiveTab = () => {
+  if (activeTab.value === 'sub') {
+    fetchSubData()
+  } else if (activeTab.value === 'initial') {
+    fetchInitialStockData()
+  } else if (activeTab.value === 'orderHistory') {
+    fetchOrderHistory()
+  } else {
+    fetchData()
+  }
+}
+
 const updateStats = () => {
   stats.value.totalMaterials = totalMaterials.value
   stats.value.totalCurrentStock = totalCurrentStock.value
@@ -2009,13 +2146,7 @@ const fetchSupplierOptions = async () => {
 
 const handleSearch = () => {
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 const handleReset = () => {
@@ -2024,13 +2155,7 @@ const handleReset = () => {
   searchForm.supplier = []
   searchForm.usageStatus = ''
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 // 设置日期范围快捷按钮（today=日本时间的当天）
@@ -2040,7 +2165,7 @@ const setDateRange = (days: number) => {
     const today = getTodayJapanStr()
     searchForm.dateRange = [today, today]
     pagination.page = 1
-    fetchData()
+    refreshListForActiveTab()
     return
   }
 
@@ -2066,7 +2191,7 @@ const setDateRange = (days: number) => {
 
   searchForm.dateRange = [dateStr, dateStr]
   pagination.page = 1
-  fetchData()
+  refreshListForActiveTab()
 }
 
 // 设置日期为当月月初1号（日本时区）
@@ -2085,14 +2210,7 @@ const handleSetMonthStart = () => {
   searchForm.dateRange = [monthStartStr, monthStartStr]
   pagination.page = 1
 
-  // 根据当前tab调用相应的数据获取函数
-  if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 
   ElMessage.success(`日付を当月月初（${monthStartStr}）に設定しました`)
 }
@@ -2110,32 +2228,20 @@ const handleKeywordSearch = () => {
   // 设置新的定时器，500ms后执行搜索
   keywordSearchTimer = setTimeout(() => {
     pagination.page = 1
-    fetchData()
+    refreshListForActiveTab()
   }, 500)
 }
 
 // 仕入先选择搜索
 const handleSupplierSearch = () => {
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 // 使用状態筛选搜索
 const handleUsageStatusSearch = () => {
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 // 处理使用数编辑（材料一覧用 main stock / 半端材料用 sub）
@@ -2353,36 +2459,18 @@ const handleDeleteSubItem = async (row: any) => {
 // 日期范围选择搜索
 const handleDateRangeSearch = () => {
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 const handleSizeChange = (size: number) => {
   pagination.page_size = size
   pagination.page = 1
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 const handleCurrentChange = (page: number) => {
   pagination.page = page
-  if (activeTab.value === 'sub') {
-    fetchSubData()
-  } else if (activeTab.value === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 // Tab切换处理
@@ -2412,6 +2500,48 @@ const formatCurrency = (num: number): string => {
   return `¥${Math.round(num).toLocaleString('ja-JP')}`
 }
 
+/** 材料注文履歴テーブル合計行（表示中ページの行のみ集計） */
+const getOrderHistorySummaries = (param: {
+  columns: { property?: string }[]
+  data: MaterialOrderItem[]
+}) => {
+  const { columns, data } = param
+  const sums: string[] = []
+  columns.forEach((column, index) => {
+    const prop = column.property
+    if (index === 0) {
+      sums[index] = '合計'
+      return
+    }
+    if (prop === 'material_cd') {
+      sums[index] = data.length ? `${data.length}件` : ''
+      return
+    }
+    if (prop === 'order_quantity') {
+      const t = data.reduce((s, r) => s + (Number(r.order_quantity) || 0), 0)
+      sums[index] = t ? String(t) : ''
+      return
+    }
+    if (prop === 'order_bundle_quantity') {
+      const t = data.reduce((s, r) => s + (Number(r.order_bundle_quantity) || 0), 0)
+      sums[index] = t ? String(t) : ''
+      return
+    }
+    if (prop === 'bundle_weight') {
+      const t = data.reduce((s, r) => s + Math.round(Number(r.bundle_weight) || 0), 0)
+      sums[index] = t ? String(t) : ''
+      return
+    }
+    if (prop === 'order_amount') {
+      const t = data.reduce((s, r) => s + Math.round(Number(r.order_amount) || 0), 0)
+      sums[index] = t ? formatCurrency(t) : ''
+      return
+    }
+    sums[index] = ''
+  })
+  return sums
+}
+
 // 日時フォーマット（日本時区）
 const _formatDateTime = (dateTime: string): string => {
   if (!dateTime) return '-'
@@ -2429,15 +2559,7 @@ const _formatDateTime = (dateTime: string): string => {
 
 const handleTabChange = (tabName: string | number) => {
   activeTab.value = String(tabName)
-
-  // タブに応じてデータ取得
-  if (tabName === 'sub') {
-    fetchSubData()
-  } else if (tabName === 'initial') {
-    fetchInitialStockData()
-  } else {
-    fetchData()
-  }
+  refreshListForActiveTab()
 }
 
 const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
@@ -3971,6 +4093,11 @@ const handleFilterChange = (filterType: string) => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   border: 1px solid #e2e8f0;
   background: white;
+}
+
+.order-history-table :deep(.el-table__footer-wrapper .el-table__cell) {
+  font-weight: 600;
+  background: #f8fafc;
 }
 
 /* 现代化滚动条样式 */

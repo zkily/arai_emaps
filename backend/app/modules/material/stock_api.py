@@ -98,6 +98,9 @@ async def list_material_stocks(
     supplier_cd: Optional[str] = Query(None),
     suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り。指定時は supplier_name で IN 検索"),
     target_date: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None, description="期間開始（YYYY-MM-DD、以上）"),
+    end_date: Optional[str] = Query(None, description="期間終了（YYYY-MM-DD、以下）"),
+    order_only: bool = Query(False, description="true のとき注文数>0の行のみ（材料注文履歴用）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -127,7 +130,23 @@ async def list_material_stocks(
             supplier_list = [s.strip() for s in suppliers.split(",") if s.strip()]
             if supplier_list:
                 q = q.where(MaterialStock.supplier_name.in_(supplier_list))
-        if target_date and target_date.strip():
+        has_range = bool(start_date and start_date.strip()) or bool(end_date and end_date.strip())
+        if has_range:
+            if start_date and start_date.strip():
+                try:
+                    sd = date.fromisoformat(start_date.strip())
+                    q = q.where(MaterialStock.date >= sd)
+                except ValueError as e:
+                    logger.warning("list_material_stocks invalid start_date=%s: %s", start_date, e)
+                    raise HTTPException(status_code=400, detail=f"無効な開始日: {start_date}") from e
+            if end_date and end_date.strip():
+                try:
+                    ed = date.fromisoformat(end_date.strip())
+                    q = q.where(MaterialStock.date <= ed)
+                except ValueError as e:
+                    logger.warning("list_material_stocks invalid end_date=%s: %s", end_date, e)
+                    raise HTTPException(status_code=400, detail=f"無効な終了日: {end_date}") from e
+        elif target_date and target_date.strip():
             try:
                 filter_date = date.fromisoformat(target_date.strip())
                 q = q.where(MaterialStock.date == filter_date)
@@ -135,10 +154,16 @@ async def list_material_stocks(
                 logger.warning("list_material_stocks invalid target_date=%s: %s", target_date, e)
                 raise HTTPException(status_code=400, detail=f"無効な日付: {target_date}") from e
 
+        if order_only:
+            q = q.where(MaterialStock.order_quantity > 0)
+
         total_q = select(func.count()).select_from(q.subquery())
         total = (await db.execute(total_q)).scalar() or 0
 
-        q = q.order_by(MaterialStock.material_cd, MaterialStock.date.desc())
+        if order_only:
+            q = q.order_by(MaterialStock.date.desc(), MaterialStock.material_cd)
+        else:
+            q = q.order_by(MaterialStock.material_cd, MaterialStock.date.desc())
         q = q.offset((page - 1) * pageSize).limit(pageSize)
         rows = (await db.execute(q)).scalars().all()
 

@@ -3,8 +3,9 @@
 月別受注（量産品）から日別受注を生成。工作日按納入先の休日・臨時出勤で計算。
 """
 from datetime import date, datetime, timedelta
+from bisect import bisect_left
 from typing import Dict, List, Optional, Set
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, delete, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.erp import models as erp_models
@@ -31,21 +32,21 @@ def _is_weekend(d: date) -> bool:
 
 async def build_working_days_cache(
     db: AsyncSession,
-    year: int,
-    month: int,
+    start_date: date,
+    end_date: date,
     destination_cds: List[str],
 ) -> Dict[str, List[date]]:
-    """按納入先计算该年月的営業日列表（排除周末与休日，包含臨時出勤日）。"""
-    first = date(year, month, 1)
-    last = _last_day_of_month(year, month)
-    all_days = [first + timedelta(days=i) for i in range((last - first).days + 1)]
+    """按納入先计算指定期间的営業日列表（排除周末与休日，包含臨時出勤日）。"""
+    if start_date > end_date:
+        return {cd: [] for cd in destination_cds}
+    all_days = [start_date + timedelta(days=i) for i in range((end_date - start_date).days + 1)]
 
     # 休日
     holidays_q = select(DestinationHoliday.destination_cd, DestinationHoliday.holiday_date).where(
         and_(
             DestinationHoliday.destination_cd.in_(destination_cds),
-            DestinationHoliday.holiday_date >= first,
-            DestinationHoliday.holiday_date <= last,
+            DestinationHoliday.holiday_date >= start_date,
+            DestinationHoliday.holiday_date <= end_date,
         )
     )
     hol_result = await db.execute(holidays_q)
@@ -57,8 +58,8 @@ async def build_working_days_cache(
     workdays_q = select(DestinationWorkday.destination_cd, DestinationWorkday.work_date).where(
         and_(
             DestinationWorkday.destination_cd.in_(destination_cds),
-            DestinationWorkday.work_date >= first,
-            DestinationWorkday.work_date <= last,
+            DestinationWorkday.work_date >= start_date,
+            DestinationWorkday.work_date <= end_date,
         )
     )
     wd_result = await db.execute(workdays_q)
@@ -107,7 +108,7 @@ async def run_generate_daily(
         return {"success": False, "detail": "対象の月受注が見つかりません", "insertedCount": 0, "updatedCount": 0, "total": 0}
 
     dest_cds = list({r.destination_cd for r in monthly_rows})
-    workdays_cache = await build_working_days_cache(db, year, month, dest_cds)
+    order_ids = [r.order_id for r in monthly_rows]
 
     # 製品 unit_per_box（products テーブル）
     product_cds = list({r.product_cd for r in monthly_rows})
@@ -122,15 +123,78 @@ async def run_generate_daily(
     dr = await db.execute(dq)
     lead_time_map = {row.destination_cd: (row.delivery_lead_time or 0) for row in dr.all()}
 
-    inserted = 0
-    updated = 0
     first = date(year, month, 1)
     last = _last_day_of_month(year, month)
+
+    # === 生成前の整合チェック ===
+    # 1) destination_holidays に含まれる production日（order_daily.date）は削除（ただし destination_workdays に含まれるなら除外）
+    # 2) destination_workdays に含まれる日が缺失なら、下面の「営業日キャッシュ + 生成」で自动补充される（追加ロジックは再生成で吸収）
+    holiday_exists = exists(
+        select(1).select_from(DestinationHoliday).where(
+            and_(
+                DestinationHoliday.destination_cd == od.destination_cd,
+                DestinationHoliday.holiday_date == od.date,
+                DestinationHoliday.destination_cd.in_(dest_cds),
+                DestinationHoliday.holiday_date >= first,
+                DestinationHoliday.holiday_date <= last,
+            )
+        )
+    )
+    workday_exists = exists(
+        select(1).select_from(DestinationWorkday).where(
+            and_(
+                DestinationWorkday.destination_cd == od.destination_cd,
+                DestinationWorkday.work_date == od.date,
+                DestinationWorkday.destination_cd.in_(dest_cds),
+                DestinationWorkday.work_date >= first,
+                DestinationWorkday.work_date <= last,
+            )
+        )
+    )
+    del_stmt = (
+        delete(od)
+        .where(
+            and_(
+                od.monthly_order_id.in_(order_ids),
+                od.date >= first,
+                od.date <= last,
+                holiday_exists,
+                ~workday_exists,  # workdays があるなら holiday で削除しない
+            )
+        )
+    )
+    await db.execute(del_stmt)
+    await db.flush()
+
+    # delivery_date 推导需要跨越 lead_time（営業日口径），因此将営業日缓存区间扩展到足够覆盖。
+    max_lead = max(lead_time_map.values()) if lead_time_map else 0
+    # lead_time 是「営業日」口径：为了确保 idx + lead_time 不越界，需要给缓存留出足够的自然日余量。
+    extra_days = max(14, max_lead * 3 + 14)
+    # 保底：避免异常 lead_time 导致范围过大
+    extra_days = min(extra_days, 180)
+
+    workdays_cache = await build_working_days_cache(
+        db,
+        start_date=first,
+        end_date=last + timedelta(days=extra_days),
+        destination_cds=dest_cds,
+    )
+
+    inserted = 0
+    updated = 0
+
+    # 为了计算「纳入日（営業日）= 生産営業日序号 + lead_time」，
+    # 需要快速获得每个纳入先在 full_work_days 里的索引。
+    work_day_index_map: Dict[str, Dict[date, int]] = {
+        dest: {d: i for i, d in enumerate(ds)} for dest, ds in workdays_cache.items()
+    }
 
     for row in monthly_rows:
         order_id = row.order_id
         dest_cd = row.destination_cd
-        work_days = workdays_cache.get(dest_cd) or []
+        # 月内営業日：用于数量分配
+        full_work_days = workdays_cache.get(dest_cd) or []
+        work_days = [d for d in full_work_days if first <= d <= last]
         if not work_days:
             continue
         unit_per_box = unit_per_box_map.get(row.product_cd, 0) or 0
@@ -164,8 +228,17 @@ async def run_generate_daily(
 
         for i, d in enumerate(work_days):
             qty = per_day[i] if i < len(per_day) else 0
-            # delivery_date: 工作日 + lead_time 営業日（此处简化为自然日）
-            delivery = d + timedelta(days=lead_time) if lead_time else d
+            # delivery_date: 纳入先営業日（日曜/休日を排除・臨時出勤を追加）で lead_time を加算
+            idx = work_day_index_map.get(dest_cd, {}).get(d)
+            if idx is None:
+                delivery = d
+            else:
+                delivery_idx = idx + lead_time
+                if 0 <= delivery_idx < len(full_work_days):
+                    delivery = full_work_days[delivery_idx]
+                else:
+                    # 缓存区间不够时的兜底：使用最后一个已知営業日
+                    delivery = full_work_days[-1]
             weekday_ja = WEEKDAY_JA[d.weekday()]
             existing = existing_list.get(d)
             if existing:

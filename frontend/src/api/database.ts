@@ -168,9 +168,17 @@ export function clearProductionSummarysCalculatedFields(startDate: string) {
   return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate })
 }
 
-/** 計画列を date >= startDate ～ +3ヶ月 で 0 にクリア（計画データ更新で「先清空 plan 再更新」用） */
+/** 計画列（_plan / _actual_plan）を date >= startDate ～ +3ヶ月 で 0 にクリア（計画データ更新前初期化用） */
 export function clearProductionSummarysPlanFields(startDate: string) {
   return request.post<{ message?: string; data?: { cleared?: number } }>(`${BASE}/clear-plan-fields`, { startDate })
+}
+
+/** 成型計画：date >= startDate の行で molding_plan・molding_actual_plan を 0 にクリア（終了日なし） */
+export function clearProductionSummarysMoldingPlan(startDate: string) {
+  return request.post<{ message?: string; data?: { cleared?: number; startDate?: string } }>(
+    `${BASE}/clear-molding-plan`,
+    { startDate },
+  )
 }
 
 /** 計画データ更新：production_plan_updates を集計して production_summarys の plan / actual_plan を更新。startDate 指定時はその日～+3ヶ月のみ対象 */

@@ -1,8 +1,15 @@
 <template>
   <div class="production-data-management">
-    <div class="page-header-row">
+    <div class="page-header-shell">
+      <div class="page-header-row">
       <div class="title-group">
-        <h1 class="page-title">生産データ管理</h1>
+        <div class="page-title-mark" aria-hidden="true">
+          <el-icon :size="22"><DataBoard /></el-icon>
+        </div>
+        <div class="title-text-block">
+          <h1 class="page-title">生産データ管理</h1>
+          <p class="page-subtitle">受注・実績・在庫を一元管理</p>
+        </div>
         <el-tag type="info" size="small" class="record-count">
           {{ total.toLocaleString() }} 件
         </el-tag>
@@ -344,6 +351,23 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-dropdown
+          trigger="click"
+          placement="bottom-start"
+          class="production-plan-dropdown"
+          @command="handleProductionPlanCommand"
+        >
+          <el-button size="small" :icon="DocumentAdd" class="modern-btn production-plan-dropdown-btn">
+            <span>生産計画印刷</span>
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="molding-plan-create">成型計画作成</el-dropdown-item>
+              <el-dropdown-item command="welding-plan-create" disabled>溶接計画作成</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button
           size="small"
           :icon="Setting"
@@ -352,6 +376,7 @@
         >
           <span>列設定</span>
         </el-button>
+      </div>
       </div>
     </div>
     <el-card class="table-card" shadow="hover">
@@ -979,6 +1004,401 @@
       </template>
     </el-dialog>
 
+    <!-- 成型計画作成ダイアログ -->
+    <el-dialog
+      v-model="showMoldingPlanDialog"
+      width="1100px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="molding-plan-dialog"
+      align-center
+    >
+      <template #header>
+        <div class="molding-plan-dlg-header">
+          <div class="molding-plan-dlg-header__mark" aria-hidden="true">
+            <el-icon><DocumentAdd /></el-icon>
+          </div>
+          <div class="molding-plan-dlg-header__meta">
+            <span class="molding-plan-dlg-header__title">成型計画作成</span>
+            <span class="molding-plan-dlg-header__sub">条件入力・計画クリア・計算結果</span>
+          </div>
+        </div>
+      </template>
+      <div class="molding-plan-inner">
+        <div class="molding-plan-panel">
+          <div class="molding-plan-panel__title">条件</div>
+          <el-form
+            :inline="true"
+            label-position="right"
+            label-width="90px"
+            size="small"
+            class="molding-plan-form-grid molding-plan-form-grid--cond-row"
+          >
+            <el-form-item label="生産計画月">
+              <el-date-picker
+                v-model="moldingPlanMonth"
+                type="month"
+                format="YYYY-MM"
+                value-format="YYYY-MM"
+                placeholder="月選択"
+                class="molding-plan-field--month"
+                :style="moldingPlanMonthPickerStyle"
+                @change="onMoldingPlanMonthChange"
+              />
+            </el-form-item>
+            <el-form-item label="基準日">
+              <el-date-picker
+                v-model="moldingPlanBaseDate"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                placeholder="翌月1日"
+                class="molding-plan-field--base"
+                :style="moldingPlanBaseDatePickerStyle"
+              />
+            </el-form-item>
+            <el-form-item label="稼働日">
+              <el-input-number
+                v-model="moldingPlanWorkingDays"
+                :min="1"
+                :max="31"
+                controls-position="right"
+                class="molding-plan-field molding-plan-field--num"
+              />
+            </el-form-item>
+            <el-form-item label="加工減耗係数">
+              <el-input-number
+                v-model="moldingPlanCoefficient"
+                :min="1"
+                :max="2"
+                :step="0.001"
+                :precision="3"
+                controls-position="right"
+                class="molding-plan-field molding-plan-field--coef"
+              />
+            </el-form-item>
+          </el-form>
+          <div class="molding-plan-actions">
+            <el-button class="molding-plan-btn molding-plan-btn--secondary" @click="openMoldingMachineConfigDialog">
+              <el-icon><Monitor /></el-icon>
+              <span>成型機器設定</span>
+            </el-button>
+            <el-button class="molding-plan-btn molding-plan-btn--secondary" @click="openMoldingBomDialog">
+              <el-icon><Setting /></el-icon>
+              <span>製品工程BOM</span>
+            </el-button>
+            <el-button
+              class="molding-plan-btn molding-plan-btn--primary"
+              :loading="moldingPlanLoading"
+              @click="executeMoldingPlanCreate"
+            >
+              <el-icon><DocumentAdd /></el-icon>
+              <span>成型計画作成</span>
+            </el-button>
+          </div>
+          <div class="molding-plan-clear-panel">
+            <div class="molding-plan-panel__title molding-plan-panel__title--sub">計画クリア</div>
+            <p class="molding-plan-clear-hint">
+              指定日以降の生産サマリーで molding_plan / molding_actual_plan を 0 にクリアします。
+            </p>
+            <div class="molding-plan-clear-row">
+              <el-form :inline="true" label-position="right" label-width="120px" size="small" class="molding-plan-form-grid molding-plan-form-grid--tight">
+                <el-form-item label="計画クリア開始日">
+                  <el-date-picker
+                    v-model="moldingPlanClearFromDate"
+                    type="date"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    placeholder="開始日を選択"
+                    class="molding-plan-field molding-plan-field--wide"
+                  />
+                </el-form-item>
+              </el-form>
+              <el-button
+                class="molding-plan-btn molding-plan-btn--warn"
+                :loading="moldingPlanClearLoading"
+                :disabled="!moldingPlanClearFromDate"
+                @click="executeMoldingPlanClear"
+              >
+                <el-icon><Delete /></el-icon>
+                <span>計画クリア実行</span>
+              </el-button>
+              <el-button
+                class="molding-plan-btn molding-plan-btn--sync"
+                :loading="moldingPlanInventoryTrendLoading"
+                :disabled="moldingPlanClearLoading || moldingPlanInventoryTrendLoading || updatingInventoryTrend"
+                @click="executeMoldingPlanInventoryTrend"
+              >
+                <el-icon><Refresh /></el-icon>
+                <span>在庫・推移更新</span>
+              </el-button>
+            </div>
+            <p class="molding-plan-clear-hint molding-plan-clear-hint--sub">
+              在庫・推移は当月月初基準（メニューと同じ）。計画クリア開始日とは連動しません。
+            </p>
+          </div>
+        </div>
+
+        <div v-if="moldingPlanResult.length" class="molding-plan-result-panel">
+          <div class="molding-plan-result__head">
+            <div class="molding-plan-result__head-left">
+              <span class="molding-plan-result__title">計算結果</span>
+              <el-tag type="primary" size="small" effect="light" round class="molding-plan-result__tag">
+                {{ moldingPlanResult.length }} 件
+              </el-tag>
+            </div>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              class="molding-plan-result__print"
+              @click="printMoldingPlanResult"
+            >
+              <el-icon><Printer /></el-icon>
+              印刷
+            </el-button>
+          </div>
+          <el-table
+            :data="moldingPlanResult"
+            border
+            stripe
+            size="small"
+            max-height="460"
+            class="molding-plan-table"
+            :default-sort="{ prop: 'molding_machine', order: 'ascending' }"
+            highlight-current-row
+          >
+            <el-table-column prop="lookup_date" label="対応日" width="112" align="center" sortable />
+            <el-table-column
+              prop="molding_machine"
+              label="成型機"
+              min-width="120"
+              align="center"
+              sortable
+              show-overflow-tooltip
+            />
+            <el-table-column prop="product_name" label="製品名" min-width="168" show-overflow-tooltip />
+            <el-table-column prop="product_cd" label="製品CD" width="104" align="center" sortable />
+            <el-table-column prop="trend_raw" label="実計推移" width="100" align="right" sortable>
+              <template #default="{ row }">
+                <span :class="{ 'molding-plan-num--neg': row.trend_raw < 0 }">{{ row.trend_raw }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="必要数" width="104" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.required_qty) }}</template>
+            </el-table-column>
+            <el-table-column label="ロットサイズ" width="112" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.lot_size) }}</template>
+            </el-table-column>
+            <el-table-column prop="lot_count" label="ロット数" width="92" align="right" sortable />
+            <el-table-column label="計画数" width="108" align="right" sortable>
+              <template #default="{ row }">
+                <span class="molding-plan-batch">{{ formatMoldingPlanInt(row.batch_qty) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="日当り" width="96" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.daily_qty) }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+      <template #footer>
+        <div class="molding-plan-footer">
+          <el-button class="molding-plan-btn molding-plan-btn--close" @click="showMoldingPlanDialog = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 成型機器設定（product_machine_config：成型機のみ） -->
+    <el-dialog
+      v-model="showMoldingMachineConfigDialog"
+      width="720px"
+      align-center
+      class="molding-machine-config-dialog"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <template #header>
+        <div class="molding-machine-config-dlg-header">
+          <div class="molding-machine-config-dlg-header__mark" aria-hidden="true">
+            <el-icon><Monitor /></el-icon>
+          </div>
+          <div class="molding-machine-config-dlg-header__meta">
+            <span class="molding-machine-config-dlg-header__eyebrow">product_machine_config</span>
+            <span class="molding-machine-config-dlg-header__title">成型機器設定</span>
+            <span class="molding-machine-config-dlg-header__sub">成型機を変更すると自動保存されます</span>
+          </div>
+        </div>
+      </template>
+      <div v-loading="moldingMachineConfigLoading" class="molding-machine-config-body">
+        <el-table
+          :data="moldingMachineConfigRows"
+          border
+          stripe
+          size="small"
+          max-height="480"
+          class="molding-machine-config-table"
+          :default-sort="{ prop: 'product_name', order: 'ascending' }"
+          empty-text="データがありません"
+        >
+          <el-table-column prop="product_cd" label="製品CD" width="112" align="center" sortable />
+          <el-table-column prop="product_name" label="製品名" min-width="160" sortable show-overflow-tooltip />
+          <el-table-column label="成型機" min-width="220" align="left">
+            <template #default="{ row }">
+              <el-select
+                :model-value="row.molding_machine ?? ''"
+                filterable
+                clearable
+                placeholder="成型機を選択"
+                class="molding-machine-config-select"
+                :loading="moldingMachineConfigSavingId === row.id"
+                @update:model-value="(v) => onMoldingMachineConfigUpdate(row, v)"
+              >
+                <el-option
+                  v-for="opt in moldingMachineSelectOptionsWithLegacy"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button class="molding-plan-btn molding-plan-btn--close" @click="showMoldingMachineConfigDialog = false">
+          閉じる
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 成型計画作成：製品工程BOM（簡易編集） -->
+    <el-dialog
+      v-model="showMoldingBomDialog"
+      width="680px"
+      align-center
+      class="molding-bom-compact-dialog"
+      destroy-on-close
+      :close-on-click-modal="false"
+      @closed="clearMoldingBomSaveTimers"
+    >
+      <template #header>
+        <div class="molding-bom-dlg-header">
+          <div class="molding-bom-dlg-header__mark" aria-hidden="true">
+            <el-icon><Setting /></el-icon>
+          </div>
+          <div class="molding-bom-dlg-header__meta">
+            <span class="molding-bom-dlg-header__eyebrow">product_process_bom</span>
+            <span class="molding-bom-dlg-header__title">製品工程BOM</span>
+            <span class="molding-bom-dlg-header__sub">安全在庫日数・成型リードタイム</span>
+          </div>
+        </div>
+      </template>
+      <div v-loading="moldingBomLoading" class="molding-bom-dialog-body">
+        <div class="molding-bom-panel">
+          <p class="molding-bom-dialog-hint">
+            セルを編集すると自動保存されます。対象フィールドを選んで +1 / -1 で一括更新できます。
+          </p>
+          <div class="molding-bom-bulk-bar">
+            <span class="molding-bom-bulk-bar__label">一括対象</span>
+            <el-select
+              v-model="moldingBomBulkField"
+              size="small"
+              class="molding-bom-bulk-field-select"
+              :teleported="false"
+            >
+              <el-option label="安全在庫日数" value="safety" />
+              <el-option label="成型LT" value="forming" />
+              <el-option label="両方" value="both" />
+            </el-select>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :loading="moldingBomBulkLoading"
+              :disabled="moldingBomBulkLoading"
+              @click="applyMoldingBomBulkDelta(1)"
+            >
+              選択行 +1
+            </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              :loading="moldingBomBulkLoading"
+              :disabled="moldingBomBulkLoading"
+              @click="applyMoldingBomBulkDelta(-1)"
+            >
+              選択行 -1
+            </el-button>
+          </div>
+          <div class="molding-bom-table-wrap">
+            <el-table
+              ref="moldingBomTableRef"
+              :data="moldingBomList"
+              border
+              stripe
+              size="small"
+              max-height="400"
+              row-key="product_cd"
+              class="molding-bom-table"
+              highlight-current-row
+              :default-sort="{ prop: 'product_name', order: 'ascending' }"
+            >
+              <el-table-column type="selection" width="46" align="center" fixed />
+              <el-table-column prop="product_cd" label="製品CD" width="96" align="center" fixed />
+              <el-table-column prop="product_name" label="製品名" min-width="200" sortable show-overflow-tooltip />
+              <el-table-column label="安全在庫日数" width="132" align="center">
+                <template #default="{ row, $index }">
+                  <div
+                    class="molding-bom-nav-cell"
+                    :data-row="$index"
+                    data-col="0"
+                    @keydown.capture="(e) => onMoldingBomInputKeydown(e, $index, 0)"
+                  >
+                    <el-input-number
+                      v-model="row.safety_stock_days"
+                      :min="0"
+                      :max="9999"
+                      :controls="false"
+                      size="small"
+                      class="molding-bom-input-num"
+                      @change="onMoldingBomFieldChange(row)"
+                    />
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="成型LT" width="116" align="center">
+                <template #default="{ row, $index }">
+                  <div
+                    class="molding-bom-nav-cell"
+                    :data-row="$index"
+                    data-col="1"
+                    @keydown.capture="(e) => onMoldingBomInputKeydown(e, $index, 1)"
+                  >
+                    <el-input-number
+                      v-model="row.forming_process_lt"
+                      :min="0"
+                      :max="9999"
+                      :controls="false"
+                      size="small"
+                      class="molding-bom-input-num"
+                      @change="onMoldingBomFieldChange(row)"
+                    />
+                  </div>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="molding-bom-footer">
+          <el-button type="primary" plain round @click="showMoldingBomDialog = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- データ生成・一括更新進度ダイアログ（在庫不足管理と同様のスタイル） -->
     <el-dialog
       v-model="showProgressDialog"
@@ -1226,7 +1646,27 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Refresh, Setting, Printer, ArrowDown, DocumentAdd, InfoFilled, Loading, DocumentCopy, RefreshRight, WarningFilled, Delete, Clock, Calendar, Goods, Monitor, Operation, CircleCheck } from '@element-plus/icons-vue'
+import {
+  Search,
+  Refresh,
+  Setting,
+  Printer,
+  ArrowDown,
+  DocumentAdd,
+  InfoFilled,
+  Loading,
+  DocumentCopy,
+  RefreshRight,
+  WarningFilled,
+  Delete,
+  Clock,
+  Calendar,
+  Goods,
+  Monitor,
+  Operation,
+  CircleCheck,
+  DataBoard,
+} from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
 import {
   getProductionSummarysList,
@@ -1244,6 +1684,7 @@ import {
   updateProductionSummarysProductionDates,
   clearProductionSummarysCalculatedFields,
   clearProductionSummarysPlanFields,
+  clearProductionSummarysMoldingPlan,
   updateProductionSummarysPlan,
   updateProductionSummarysInventory,
   updateProductionSummarysTrend,
@@ -1252,6 +1693,13 @@ import {
   updateProductionSummarysMachine,
 } from '@/api/database'
 import request from '@/utils/request'
+import { fetchProductProcessBOMList, updateProductProcessBOM } from '@/api/master/productProcessBomMaster'
+import {
+  fetchProductMachineConfigList,
+  updateProductMachineConfig,
+  type ProductMachineConfig,
+} from '@/api/master/productMachineConfigMaster'
+import { fetchMachines } from '@/api/master/machineMaster'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 
 const STOCK_LOGS_BASE = '/api/erp/stock-transaction-logs'
@@ -1477,12 +1925,12 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   molding_scrap: { label: '成型廃棄', group: '成型', width: 70 },
   molding_on_hold: { label: '成型保留品', group: '成型', width: 80 },
   molding_inventory: { label: '成型在庫', group: '成型', width: 70 },
-  molding_trend: { label: '成型推移', group: '成型', width: 70 },
+  molding_trend: { label: '成型推移', group: '成型', width: 90 },
   molding_production_date: { label: '成型生産日', group: '成型', type: 'date', width: 100 },
   molding_machine: { label: '成型機', group: '成型', type: 'text', width: 80 },
   molding_plan: { label: '成型計画', group: '成型', width: 85 },
   molding_actual_plan: { label: '成型実計', group: '成型', width: 85 },
-  molding_actual_plan_trend: { label: '成型実計推移', group: '成型', width: 90 },
+  molding_actual_plan_trend: { label: '成型実計推移', group: '成型', width: 110 },
   /** API 計算: ルート上成型の直前工程の在庫列の値 */
   pre_molding_inventory: { label: '成型前在庫', group: '成型', width: 88 },
   pre_molding_prev_process: { label: '成型直前工程', group: '成型', type: 'text', width: 100 },
@@ -2344,6 +2792,61 @@ function getFirstDayOfCurrentMonth(): string {
   return `${y}-${m}-01`
 }
 
+/** 在庫→推移→安全在庫（計算フィールドクリア後）。メニュー「在庫・推移更新」と同一処理 */
+async function runInventoryTrendUpdateSequence(startDate: string) {
+  try {
+    await clearProductionSummarysCalculatedFields(startDate)
+  } catch (_e) {
+    console.warn('計算フィールドのクリアに失敗しました', _e)
+  }
+  showProgressDialog.value = true
+  progressPercentage.value = 0
+  progressStatus.value = ''
+  progressText.value = '在庫・推移データを取得中...'
+  let progressTimer: ReturnType<typeof setInterval> | null = null
+  try {
+    progressTimer = setInterval(() => {
+      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 4, 90)
+    }, 200)
+    progressText.value = '在庫データを更新中...'
+    const invRes = await updateProductionSummarysInventory(startDate)
+    progressPercentage.value = 50
+    progressText.value = '推移データを更新中...'
+    const trendRes = await updateProductionSummarysTrend(startDate)
+    progressPercentage.value = 75
+    progressText.value = '安全在庫を更新中...'
+    const safetyRes = await updateProductionSummarysSafetyStock(startDate)
+    if (progressTimer) clearInterval(progressTimer)
+    progressTimer = null
+    progressPercentage.value = 100
+    progressStatus.value = 'success'
+    const invBody = (invRes as any)?.data ?? {}
+    const invD = invBody?.data ?? invBody
+    const trendBody = (trendRes as any)?.data ?? {}
+    const trendD = trendBody?.data ?? trendBody
+    const safetyBody = (safetyRes as any)?.data ?? {}
+    const safetyD = safetyBody?.data ?? safetyBody
+    const calcPeriod = `計算期間: ${startDate}～（当月月初から）`
+    const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件\n安全在庫: 更新 ${safetyD?.updated ?? 0} 件`
+    progressText.value = msg
+    ElMessage.success('在庫・推移の更新が完了しました')
+    setTimeout(() => {
+      showProgressDialog.value = false
+      setTimeout(() => fetchData(), 500)
+    }, 1500)
+  } catch (error: any) {
+    if (progressTimer) clearInterval(progressTimer)
+    progressPercentage.value = 100
+    progressStatus.value = 'exception'
+    progressText.value = '在庫・推移更新に失敗しました'
+    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '在庫・推移更新に失敗しました')
+    setTimeout(() => {
+      showProgressDialog.value = false
+    }, 2000)
+    throw error
+  }
+}
+
 const handleUpdatePlan = () => {
   showPlanConfirmDialog.value = true
 }
@@ -2405,55 +2908,11 @@ const handleInventoryTrendUpdate = () => {
 const confirmInventoryTrendUpdate = async () => {
   showInventoryTrendUpdateConfirmDialog.value = false
   updatingInventoryTrend.value = true
-  // 当月月初から先の在庫・推移を清空してから再計算
   const startDate = getFirstDayOfCurrentMonth()
   try {
-    await clearProductionSummarysCalculatedFields(startDate)
+    await runInventoryTrendUpdateSequence(startDate)
   } catch (_e) {
-    console.warn('計算フィールドのクリアに失敗しました', _e)
-  }
-  showProgressDialog.value = true
-  progressPercentage.value = 0
-  progressStatus.value = ''
-  progressText.value = '在庫・推移データを取得中...'
-  let progressTimer: ReturnType<typeof setInterval> | null = null
-  try {
-    progressTimer = setInterval(() => {
-      if (progressPercentage.value < 90) progressPercentage.value = Math.min(progressPercentage.value + 4, 90)
-    }, 200)
-    progressText.value = '在庫データを更新中...'
-    const invRes = await updateProductionSummarysInventory(startDate)
-    progressPercentage.value = 50
-    progressText.value = '推移データを更新中...'
-    const trendRes = await updateProductionSummarysTrend(startDate)
-    progressPercentage.value = 75
-    progressText.value = '安全在庫を更新中...'
-    const safetyRes = await updateProductionSummarysSafetyStock(startDate)
-    if (progressTimer) clearInterval(progressTimer)
-    progressTimer = null
-    progressPercentage.value = 100
-    progressStatus.value = 'success'
-    const invBody = (invRes as any)?.data ?? {}
-    const invD = invBody?.data ?? invBody
-    const trendBody = (trendRes as any)?.data ?? {}
-    const trendD = trendBody?.data ?? trendBody
-    const safetyBody = (safetyRes as any)?.data ?? {}
-    const safetyD = safetyBody?.data ?? safetyBody
-    const calcPeriod = `計算期間: ${startDate}～（当月月初から）`
-    const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件\n安全在庫: 更新 ${safetyD?.updated ?? 0} 件`
-    progressText.value = msg
-    ElMessage.success('在庫・推移の更新が完了しました')
-    setTimeout(() => {
-      showProgressDialog.value = false
-      setTimeout(() => fetchData(), 500)
-    }, 1500)
-  } catch (error: any) {
-    if (progressTimer) clearInterval(progressTimer)
-    progressPercentage.value = 100
-    progressStatus.value = 'exception'
-    progressText.value = '在庫・推移更新に失敗しました'
-    ElMessage.error(error?.response?.data?.detail ?? error?.response?.data?.message ?? error?.message ?? '在庫・推移更新に失敗しました')
-    setTimeout(() => { showProgressDialog.value = false }, 2000)
+    /* runInventoryTrendUpdateSequence 内でメッセージ表示済み */
   } finally {
     updatingInventoryTrend.value = false
   }
@@ -2655,6 +3114,7 @@ const handleDropdownCommand = (command: string) => {
         trendKeyOverride: 'molding_actual_plan_trend',
         titleOverride: '成型計画推奨生産日リスト',
         pickDateKeyOverride: 'molding_production_date',
+        hidePreInventoryColumns: true,
       })
       break
     default:
@@ -2670,6 +3130,7 @@ const handleRecommendedPrintCommand = (command: string) => {
       trendKeyOverride: 'molding_actual_plan_trend',
       titleOverride: '成型計画推奨生産日リスト',
       pickDateKeyOverride: 'molding_production_date',
+      hidePreInventoryColumns: true,
     })
   }
 }
@@ -2734,7 +3195,15 @@ const confirmAllUpdate = async () => {
     () => updateProductionSummarysDefect(),
     () => updateProductionSummarysScrap(),
     () => updateProductionSummarysOnHold(),
-    () => updateProductionSummarysPlan(),
+    async () => {
+      const startDate = getFirstDayOfCurrentMonth()
+      try {
+        await clearProductionSummarysPlanFields(startDate)
+      } catch (_e) {
+        // クリア失敗時も更新を継続
+      }
+      await updateProductionSummarysPlan(startDate)
+    },
   ]
   try {
     for (let i = 0; i < steps.length; i++) {
@@ -2771,7 +3240,7 @@ const confirmAllUpdate = async () => {
       results.push({ name: '推移更新', success: false })
     }
     await new Promise(r => setTimeout(r, 300))
-    progressText.value = '安全在庫を更新中... (8/8)'
+    progressText.value = '安全在庫を更新中...'
     try {
       await updateProductionSummarysSafetyStock(startDate)
       results.push({ name: '安全在庫更新', success: true })
@@ -3774,7 +4243,7 @@ function buildRecommendedProductionPrintHtml(
   kind: 'plating' | 'molding',
   monthStart: string,
   rangeEnd: string,
-  options?: { titleOverride?: string },
+  options?: { titleOverride?: string; hidePreInventoryColumns?: boolean },
 ): string {
   const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
   const pc =
@@ -3807,6 +4276,7 @@ function buildRecommendedProductionPrintHtml(
         }
 
   const sheetTitle = options?.titleOverride ?? pc.title
+  const hidePreInvCols = options?.hidePreInventoryColumns === true
 
   const dateCellPlain = (row: any, key: string) => {
     const v = row[key]
@@ -3841,7 +4311,9 @@ h1.sheet-title{font-size:14pt;margin:0 0 6px 0;font-weight:700;}
 p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
 `
 
-  const printGridColumns = 'minmax(0, 1.25fr) 70px 70px 5.0em'
+  const printGridColumns = hidePreInvCols
+    ? 'minmax(0, 1.25fr) 70px'
+    : 'minmax(0, 1.25fr) 70px 70px 5.0em'
 
   const preInvPlain = (row: any) => {
     const v = row[pc.preInvField]
@@ -3867,13 +4339,19 @@ p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
       blocks += `<section class="machine-group"><header class="machine-title">${pc.machineHeading}: ${escapeHtmlRecommended(mHeading)}</header>`
       blocks += `<div class="machine-body">`
       blocks += `<div class="col-head"><span class="ch-pname">製品名</span><span class="ch-date">${pc.dateLabel}</span>`
-      blocks += `<span class="ch-inv">${pc.invColHeader}</span><span class="ch-prev">直前工程</span></div>`
+      if (!hidePreInvCols) {
+        blocks += `<span class="ch-inv">${pc.invColHeader}</span><span class="ch-prev">直前工程</span>`
+      }
+      blocks += `</div>`
     }
     const pname = row.product_name || row.product_cd || ''
     const dateDueClass = isRecommendedDateDueOrPast(row, pc.dateKey) ? ' cell-date--due' : ''
     blocks += `<div class="item-row"><span class="cell-pname">${escapeHtmlRecommended(String(pname))}</span>`
     blocks += `<span class="cell-date${dateDueClass}">${dateCellPlain(row, pc.dateKey)}</span>`
-    blocks += `<span class="cell-inv">${preInvPlain(row)}</span><span class="cell-prev">${prePrevPlain(row)}</span></div>`
+    if (!hidePreInvCols) {
+      blocks += `<span class="cell-inv">${preInvPlain(row)}</span><span class="cell-prev">${prePrevPlain(row)}</span>`
+    }
+    blocks += `</div>`
   }
   if (prevGroupKey !== null) {
     blocks += '</div></section>'
@@ -3916,16 +4394,21 @@ p.subtitle{font-size:9pt;color:#64748b;margin:0 0 12px 0;}
 <h1 class="sheet-title">${sheetTitle}</h1>
 <div class="print-meta-row">
 <p class="subtitle">対象期間: ${monthStart} ～ ${rangeEnd} / 出力: ${now}</p>
-<p class="subtitle-total">${pc.sumLabel}: <strong>${preInvSumStr}</strong></p>
+${hidePreInvCols ? '' : `<p class="subtitle-total">${pc.sumLabel}: <strong>${preInvSumStr}</strong></p>`}
 </div>
-<p class="print-note">${pc.footNote}</p>
+${hidePreInvCols ? '' : `<p class="print-note">${pc.footNote}</p>`}
 <div class="columns-wrap">${blocks}</div>
 </body></html>`
 }
 
 async function handleRecommendedProductionPrint(
   kind: 'plating' | 'molding',
-  options?: { trendKeyOverride?: string; titleOverride?: string; pickDateKeyOverride?: string },
+  options?: {
+    trendKeyOverride?: string
+    titleOverride?: string
+    pickDateKeyOverride?: string
+    hidePreInventoryColumns?: boolean
+  },
 ) {
   const { start: monthStart, end: rangeEnd } = getGenerateDateRange()
   const prevTitle = progressDialogTitle.value
@@ -3948,7 +4431,10 @@ async function handleRecommendedProductionPrint(
       primaryDateKeyForPick: options?.pickDateKeyOverride,
     })
     const rows = sortRecommendedPrintRows(rawRows, kind)
-    const html = buildRecommendedProductionPrintHtml(rows, kind, monthStart, rangeEnd, { titleOverride: options?.titleOverride })
+    const html = buildRecommendedProductionPrintHtml(rows, kind, monthStart, rangeEnd, {
+      titleOverride: options?.titleOverride,
+      hidePreInventoryColumns: options?.hidePreInventoryColumns,
+    })
     const printWindow = openPrintPreviewThenDialog(html)
     if (!printWindow) {
       ElMessage.warning('ポップアップがブロックされました。ブラウザの設定でポップアップを許可してください。')
@@ -3964,6 +4450,730 @@ async function handleRecommendedProductionPrint(
   } finally {
     progressDialogTitle.value = prevTitle
     showProgressDialog.value = false
+  }
+}
+
+// ---------- 生産計画印刷（成型計画作成 / 溶接計画作成） ----------
+
+const handleProductionPlanCommand = (command: string) => {
+  if (command === 'molding-plan-create') openMoldingPlanDialog()
+}
+
+const showMoldingPlanDialog = ref(false)
+const moldingPlanBaseDate = ref('')
+const moldingPlanMonth = ref('')
+const moldingPlanWorkingDays = ref(20)
+const moldingPlanCoefficient = ref(1.043)
+const moldingPlanLoading = ref(false)
+const moldingPlanClearFromDate = ref('')
+const moldingPlanClearLoading = ref(false)
+const moldingPlanInventoryTrendLoading = ref(false)
+
+/** 成型機器設定（product_machine_config）ダイアログ */
+const showMoldingMachineConfigDialog = ref(false)
+const moldingMachineConfigLoading = ref(false)
+const moldingMachineConfigRows = ref<ProductMachineConfig[]>([])
+const moldingMachineCdOptions = ref<Array<{ label: string; value: string }>>([])
+const moldingMachineConfigSavingId = ref<number | null>(null)
+
+function extractProductMachineConfigListResponse(response: any): ProductMachineConfig[] {
+  if (!response) return []
+  if (response.success && response.data?.list) return response.data.list
+  if (Array.isArray(response.list)) return response.list
+  if (Array.isArray(response)) return response
+  return []
+}
+
+function extractMachinesListResponse(response: any): any[] {
+  if (!response) return []
+  if (Array.isArray(response)) return response
+  if (Array.isArray(response.data?.list)) return response.data.list
+  if (Array.isArray(response.list)) return response.list
+  if (Array.isArray(response.data)) return response.data
+  return []
+}
+
+const moldingMachineSelectOptionsWithLegacy = computed(() => {
+  const base = moldingMachineCdOptions.value
+  const seen = new Set(base.map((o) => o.value))
+  const extra: { label: string; value: string }[] = []
+  for (const r of moldingMachineConfigRows.value) {
+    const v = (r.molding_machine ?? '').trim()
+    if (v && !seen.has(v)) {
+      seen.add(v)
+      extra.push({ label: `${v}（マスタ外）`, value: v })
+    }
+  }
+  return [...base, ...extra]
+})
+
+async function loadMoldingMachineConfigDialogData() {
+  moldingMachineConfigLoading.value = true
+  try {
+    const [cfgRes, machRes] = await Promise.all([
+      fetchProductMachineConfigList({ limit: 99999 }),
+      fetchMachines(),
+    ])
+    const cfgList = extractProductMachineConfigListResponse(cfgRes)
+    cfgList.sort((a, b) =>
+      (a.product_name || '').localeCompare(b.product_name || '', 'ja', { sensitivity: 'base' }),
+    )
+    moldingMachineConfigRows.value = cfgList
+    const machineList = extractMachinesListResponse(machRes)
+    moldingMachineCdOptions.value = machineList
+      .map((m: any) => ({
+        label: `${m.machine_name || ''} (${m.machine_cd || ''})`,
+        value: String(m.machine_cd || '').trim(),
+      }))
+      .filter((o: { value: string }) => o.value)
+  } catch (e: any) {
+    console.error(e)
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? 'データの取得に失敗しました')
+    moldingMachineConfigRows.value = []
+    moldingMachineCdOptions.value = []
+  } finally {
+    moldingMachineConfigLoading.value = false
+  }
+}
+
+async function openMoldingMachineConfigDialog() {
+  showMoldingMachineConfigDialog.value = true
+  await loadMoldingMachineConfigDialogData()
+}
+
+async function onMoldingMachineConfigUpdate(row: ProductMachineConfig, val: string | null | undefined) {
+  if (row.id == null) return
+  const prev = row.molding_machine ?? ''
+  const next = val == null || val === '' ? '' : String(val)
+  if (next === prev) return
+  row.molding_machine = next
+  moldingMachineConfigSavingId.value = row.id
+  try {
+    await updateProductMachineConfig(row.id, { molding_machine: next || undefined })
+    ElMessage.success('成型機を保存しました')
+  } catch (e: any) {
+    row.molding_machine = prev
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '保存に失敗しました')
+  } finally {
+    moldingMachineConfigSavingId.value = null
+  }
+}
+
+/** 日付ピッカー幅（変更はここ。scoped だけだと dialog teleport で効かないことがあるため inline style 併用） */
+const MOLDING_PLAN_PICKER_W_MONTH = '112px'
+const MOLDING_PLAN_PICKER_W_BASE = '132px'
+const moldingPlanMonthPickerStyle = {
+  width: MOLDING_PLAN_PICKER_W_MONTH,
+  maxWidth: MOLDING_PLAN_PICKER_W_MONTH,
+  minWidth: '0',
+}
+const moldingPlanBaseDatePickerStyle = {
+  width: MOLDING_PLAN_PICKER_W_BASE,
+  maxWidth: MOLDING_PLAN_PICKER_W_BASE,
+  minWidth: '0',
+}
+
+interface MoldingPlanRow {
+  lookup_date: string
+  molding_machine: string
+  product_cd: string
+  product_name: string
+  trend_raw: number
+  required_qty: number
+  lot_size: number
+  lot_count: number
+  batch_qty: number
+  daily_qty: number
+}
+const moldingPlanResult = ref<MoldingPlanRow[]>([])
+
+/** 成型計画ダイアログ内：製品工程BOM 簡易行 */
+interface MoldingBomRow {
+  product_cd: number
+  product_name: string
+  safety_stock_days: number
+  forming_process_lt: number
+}
+
+const showMoldingBomDialog = ref(false)
+const moldingBomList = ref<MoldingBomRow[]>([])
+const moldingBomLoading = ref(false)
+const moldingBomTableRef = ref<InstanceType<typeof import('element-plus').ElTable> | null>(null)
+const moldingBomBulkField = ref<'safety' | 'forming' | 'both'>('safety')
+const moldingBomBulkLoading = ref(false)
+const moldingBomSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function clearMoldingBomSaveTimers() {
+  for (const t of moldingBomSaveTimers.values()) clearTimeout(t)
+  moldingBomSaveTimers.clear()
+}
+
+/** products 全件から product_cd → type/status（製品工程BOM 絞り込み用） */
+async function fetchProductsTypeStatusMap(): Promise<Map<string, { product_type?: string; status?: string }>> {
+  const map = new Map<string, { product_type?: string; status?: string }>()
+  const pageSize = 10000
+  let page = 1
+  let total = 0
+  do {
+    const prodRes: any = await request.get('/api/master/products', {
+      params: { page, pageSize },
+    })
+    const payload = prodRes?.data
+    const list: any[] = payload?.list ?? []
+    total = Number(payload?.total ?? 0) || list.length
+    for (const p of list) {
+      if (p.product_cd == null) continue
+      const cd = String(p.product_cd).trim()
+      if (!cd) continue
+      map.set(cd, { product_type: p.product_type, status: p.status })
+    }
+    if (list.length < pageSize) break
+    if (total > 0 && page * pageSize >= total) break
+    page += 1
+  } while (true)
+  return map
+}
+
+/** 製品工程BOM 一覧の表示条件（製品CD 末尾1・名称除外・量産品かつ active） */
+function filterMoldingBomRows(
+  rows: MoldingBomRow[],
+  productMap: Map<string, { product_type?: string; status?: string }>,
+): MoldingBomRow[] {
+  const out: MoldingBomRow[] = []
+  for (const r of rows) {
+    const cdStr = String(r.product_cd).trim()
+    if (!cdStr) continue
+    if (!cdStr.endsWith('1')) continue
+    const name = r.product_name ?? ''
+    if (name.includes('加工') || name.includes('アーチ')) continue
+    const p = productMap.get(cdStr)
+    if (!p) continue
+    if (String(p.product_type ?? '') !== '量産品') continue
+    if (String(p.status ?? '') !== 'active') continue
+    out.push(r)
+  }
+  out.sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ja'))
+  return out
+}
+
+async function openMoldingBomDialog() {
+  showMoldingBomDialog.value = true
+  moldingBomLoading.value = true
+  moldingBomList.value = []
+  try {
+    const [productMap, rawRows] = await Promise.all([
+      fetchProductsTypeStatusMap(),
+      (async () => {
+        const limit = 100
+        const rows: MoldingBomRow[] = []
+        let page = 1
+        while (true) {
+          const res = (await fetchProductProcessBOMList({
+            page,
+            limit,
+            sort_by: 'product_name',
+            sort_order: 'asc',
+          })) as any
+          const list = res?.data?.list ?? []
+          for (const r of list) {
+            rows.push({
+              product_cd: r.product_cd,
+              product_name: r.product_name != null ? String(r.product_name) : '',
+              safety_stock_days: Number(r.safety_stock_days ?? 0),
+              forming_process_lt: Number(r.forming_process_lt ?? 0),
+            })
+          }
+          if (!list.length || list.length < limit) break
+          page += 1
+        }
+        return rows
+      })(),
+    ])
+    moldingBomList.value = filterMoldingBomRows(rawRows, productMap)
+    nextTick(() => moldingBomTableRef.value?.clearSelection?.())
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '読み込みに失敗しました')
+    showMoldingBomDialog.value = false
+  } finally {
+    moldingBomLoading.value = false
+  }
+}
+
+function clampMoldingBomNum(n: number): number {
+  return Math.min(9999, Math.max(0, Math.round(Number(n)) || 0))
+}
+
+async function saveMoldingBomRowImmediate(row: MoldingBomRow) {
+  const cd = row.product_cd
+  const prev = moldingBomSaveTimers.get(cd)
+  if (prev) clearTimeout(prev)
+  moldingBomSaveTimers.delete(cd)
+  await updateProductProcessBOM(cd, {
+    safety_stock_days: row.safety_stock_days,
+    forming_process_lt: row.forming_process_lt,
+  })
+}
+
+async function applyMoldingBomBulkDelta(delta: 1 | -1) {
+  const table = moldingBomTableRef.value
+  const selected = (table?.getSelectionRows?.() ?? []) as MoldingBomRow[]
+  if (!selected.length) {
+    ElMessage.warning('行を選択してください')
+    return
+  }
+  const field = moldingBomBulkField.value
+  const clamp = clampMoldingBomNum
+  for (const row of selected) {
+    if (field === 'safety' || field === 'both') {
+      row.safety_stock_days = clamp(row.safety_stock_days + delta)
+    }
+    if (field === 'forming' || field === 'both') {
+      row.forming_process_lt = clamp(row.forming_process_lt + delta)
+    }
+  }
+  moldingBomBulkLoading.value = true
+  try {
+    const results = await Promise.allSettled(selected.map((row) => saveMoldingBomRowImmediate(row)))
+    const failed = results.filter((r) => r.status === 'rejected').length
+    if (failed === 0) {
+      ElMessage.success(`${selected.length}件を更新しました`)
+    } else {
+      ElMessage.warning(`一部失敗: 成功 ${selected.length - failed} / 失敗 ${failed}`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '一括更新に失敗しました')
+  } finally {
+    moldingBomBulkLoading.value = false
+  }
+}
+
+function onMoldingBomFieldChange(row: MoldingBomRow) {
+  const cd = row.product_cd
+  const prev = moldingBomSaveTimers.get(cd)
+  if (prev) clearTimeout(prev)
+  const t = setTimeout(async () => {
+    try {
+      await updateProductProcessBOM(cd, {
+        safety_stock_days: row.safety_stock_days,
+        forming_process_lt: row.forming_process_lt,
+      })
+      ElMessage.success({ message: '保存しました', duration: 1500, showClose: false })
+    } catch (e: any) {
+      ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '保存に失敗しました')
+    } finally {
+      moldingBomSaveTimers.delete(cd)
+    }
+  }, 600)
+  moldingBomSaveTimers.set(cd, t)
+}
+
+const MOLDING_BOM_COL_SAFETY = 0
+const MOLDING_BOM_COL_FORMING = 1
+
+function focusMoldingBomCell(rowIndex: number, colIndex: number) {
+  nextTick(() => {
+    const wrap = document.querySelector(
+      `.molding-bom-table-wrap .molding-bom-nav-cell[data-row="${rowIndex}"][data-col="${colIndex}"]`,
+    ) as HTMLElement | null
+    const input = wrap?.querySelector('input') as HTMLInputElement | undefined
+    if (input) {
+      input.focus()
+      input.select?.()
+    }
+  })
+}
+
+function onMoldingBomInputKeydown(e: KeyboardEvent, rowIndex: number, colIndex: number) {
+  const list = moldingBomList.value
+  const n = list.length
+  if (n === 0) return
+
+  const keys = ['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+  if (!keys.includes(e.key)) return
+
+  e.preventDefault()
+  e.stopPropagation()
+
+  const lastRow = n - 1
+
+  if (e.key === 'Enter' || e.key === 'ArrowDown') {
+    if (rowIndex < lastRow) focusMoldingBomCell(rowIndex + 1, colIndex)
+    return
+  }
+
+  if (e.key === 'ArrowUp') {
+    if (rowIndex > 0) focusMoldingBomCell(rowIndex - 1, colIndex)
+    return
+  }
+
+  if (e.key === 'ArrowRight') {
+    if (colIndex === MOLDING_BOM_COL_SAFETY) {
+      focusMoldingBomCell(rowIndex, MOLDING_BOM_COL_FORMING)
+    } else if (rowIndex < lastRow) {
+      focusMoldingBomCell(rowIndex + 1, MOLDING_BOM_COL_SAFETY)
+    }
+    return
+  }
+
+  if (e.key === 'ArrowLeft') {
+    if (colIndex === MOLDING_BOM_COL_FORMING) {
+      focusMoldingBomCell(rowIndex, MOLDING_BOM_COL_SAFETY)
+    } else if (rowIndex > 0) {
+      focusMoldingBomCell(rowIndex - 1, MOLDING_BOM_COL_FORMING)
+    }
+  }
+}
+
+/** 基準日から n 営業日後（土日除く）。database/api の _subtract_business_days と対称。 */
+function addBusinessDays(dateStr: string, days: number): string {
+  if (!dateStr || days <= 0) return dateStr
+  const parts = dateStr.split('-').map(Number)
+  const d = new Date(parts[0]!, parts[1]! - 1, parts[2]!)
+  let remaining = Math.floor(days)
+  while (remaining > 0) {
+    d.setDate(d.getDate() + 1)
+    const wd = d.getDay()
+    if (wd !== 0 && wd !== 6) remaining -= 1
+  }
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function summaryRowDateStr(row: any): string {
+  const v = row?.date
+  if (v == null) return ''
+  if (typeof v === 'string') return v.slice(0, 10)
+  return String(v).slice(0, 10)
+}
+
+/** product_process_bom 全件（ページング limit=100） */
+async function fetchAllProductProcessBomRows(): Promise<any[]> {
+  const limit = 100
+  const all: any[] = []
+  let page = 1
+  while (true) {
+    const res: any = await request.get('/api/master/product-process-bom', { params: { page, limit } })
+    const list: any[] = res?.data?.list ?? []
+    if (!list.length) break
+    all.push(...list)
+    if (list.length < limit) break
+    page += 1
+  }
+  return all
+}
+
+function calcWorkingDays(yearMonth: string): number {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const daysInMonth = new Date(y, m, 0).getDate()
+  let count = 0
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(y, m - 1, d).getDay()
+    if (dow !== 0 && dow !== 6) count++
+  }
+  return count
+}
+
+/** 生産計画月の「月末＋1日」＝翌月1日（例: 2026-04 → 2026-05-01） */
+function baseDateFromPlanMonth(yearMonth: string): string {
+  if (!yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth.trim())) return ''
+  const [y, mm] = yearMonth.split('-').map(Number)
+  const d = new Date(y, mm, 1)
+  const yy = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${yy}-${m}-${day}`
+}
+
+function onMoldingPlanMonthChange() {
+  if (moldingPlanMonth.value) {
+    moldingPlanBaseDate.value = baseDateFromPlanMonth(moldingPlanMonth.value)
+    moldingPlanWorkingDays.value = calcWorkingDays(moldingPlanMonth.value)
+    moldingPlanClearFromDate.value = moldingPlanBaseDate.value
+  }
+}
+
+function openMoldingPlanDialog() {
+  const { year, month } = getCurrentJSTInfo()
+  const mStr = `${year}-${String(month + 1).padStart(2, '0')}`
+  moldingPlanMonth.value = mStr
+  moldingPlanBaseDate.value = baseDateFromPlanMonth(mStr)
+  moldingPlanWorkingDays.value = calcWorkingDays(mStr)
+    moldingPlanCoefficient.value = 1.043
+    moldingPlanResult.value = []
+  moldingPlanClearFromDate.value = baseDateFromPlanMonth(mStr)
+  showMoldingPlanDialog.value = true
+}
+
+function formatMoldingPlanInt(n: number): string {
+  if (n == null || Number.isNaN(Number(n))) return '—'
+  return Number(n).toLocaleString('ja-JP')
+}
+
+/** 計算結果テーブルを印刷（画面のデフォルト並び：成型機昇順に合わせる） */
+function printMoldingPlanResult() {
+  const rows = moldingPlanResult.value
+  if (!rows.length) {
+    ElMessage.warning('印刷するデータがありません')
+    return
+  }
+  const sorted = [...rows].sort((a, b) => {
+    const ma = (a.molding_machine || '\uffff').localeCompare(b.molding_machine || '\uffff', 'ja')
+    if (ma !== 0) return ma
+    return String(a.product_cd || '').localeCompare(String(b.product_cd || ''), 'ja')
+  })
+  const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
+  const metaLine = [
+    `生産計画月：${moldingPlanMonth.value || '—'}`,
+    `基準日：${moldingPlanBaseDate.value || '—'}`,
+    `稼働日：${moldingPlanWorkingDays.value ?? '—'}`,
+    `加工減耗係数：${moldingPlanCoefficient.value ?? '—'}`,
+  ].join('　')
+  const totalPlanQty = sorted.reduce((sum, r) => {
+    const n = Number(r.batch_qty)
+    return Number.isNaN(n) ? sum : sum + n
+  }, 0)
+  let body = ''
+  let prevMachine = ''
+  for (const r of sorted) {
+    const machineName = String(r.molding_machine || '').trim() || '（未設定）'
+    if (machineName !== prevMachine) {
+      if (prevMachine) body += '</tbody></table></section>'
+      body += `<section class="machine-group">
+<h2 class="machine-title">成型機：${escapeHtmlRecommended(machineName)}</h2>
+<table>
+<thead><tr><th>対応日</th><th>製品名</th><th>必要数</th><th>ロットサイズ</th><th>ロット数</th><th>計画数</th></tr></thead>
+<tbody>`
+      prevMachine = machineName
+    }
+    body += `<tr>
+      <td class="indent">${escapeHtmlRecommended(String(r.lookup_date || ''))}</td>
+      <td>${escapeHtmlRecommended(String(r.product_name || ''))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.required_qty)))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.lot_size)))}</td>
+      <td class="num">${escapeHtmlRecommended(String(r.lot_count ?? ''))}</td>
+      <td class="num batch">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.batch_qty)))}</td>
+    </tr>`
+  }
+  if (prevMachine) body += '</tbody></table></section>'
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>成型計画計算結果</title>
+<style>
+@page { size: A4 portrait; margin: 10mm; }
+body{font-family:sans-serif;margin:0;padding:12px;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+h1{font-size:13pt;margin:0 0 6px;font-weight:700;}
+.meta{color:#475569;font-size:8.5pt;margin:0 0 8px;line-height:1.45;}
+.sub{font-size:8pt;color:#64748b;margin:0 0 10px;}
+table{border-collapse:collapse;width:100%;}
+th,td{border:1px solid #cbd5e1;padding:4px 6px;}
+th{background:#f1f5f9;font-weight:600;text-align:center;font-size:8pt;}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.batch{font-weight:700;}
+.machine-group{margin-bottom:10px;break-inside:avoid-page;page-break-inside:avoid;}
+.machine-title{font-size:10pt;margin:0;padding:6px 8px;background:#e2e8f0;border:1px solid #cbd5e1;border-bottom:none;}
+td.indent{padding-left:16px;}
+</style></head><body>
+<h1>成型計画作成 — 計算結果</h1>
+<p class="meta">${escapeHtmlRecommended(metaLine)}</p>
+<p class="sub">計画数合計：<strong>${escapeHtmlRecommended(formatMoldingPlanInt(totalPlanQty))}</strong>　／　出力：${escapeHtmlRecommended(now)}　／　${sorted.length} 件</p>
+${body || '<p class="sub">印刷対象データがありません。</p>'}
+</body></html>`
+  const win = openPrintPreviewThenDialog(html)
+  if (!win) {
+    ElMessage.warning('ポップアップがブロックされました。ブラウザでポップアップを許可してください。')
+    return
+  }
+  ElMessage.success('印刷プレビューを表示しました')
+}
+
+async function executeMoldingPlanClear() {
+  const d = moldingPlanClearFromDate.value
+  if (!d) {
+    ElMessage.warning('計画クリア開始日を選択してください')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `<p>この日付以降の<strong>成型計画（molding_plan）</strong>および<strong>実績計画（molding_actual_plan）</strong>をすべて 0 にクリアします。</p><p>開始日：<strong>${d}</strong></p>
+<p style="margin-top:8px;color:#64748b;font-size:12px;">※ 他工程の計画列は変更しません。再集計が必要な場合は「計画データ更新」を実行してください。</p>`,
+      '計画クリアの確認',
+      {
+        confirmButtonText: '実行',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+      },
+    )
+  } catch {
+    return
+  }
+  moldingPlanClearLoading.value = true
+  try {
+    const res: any = await clearProductionSummarysMoldingPlan(d)
+    const cleared = res?.data?.cleared
+    const msg = res?.message ?? `成型計画をクリアしました（${cleared ?? 0}件）`
+    ElMessage.success(msg)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? 'クリアに失敗しました')
+  } finally {
+    moldingPlanClearLoading.value = false
+  }
+}
+
+async function executeMoldingPlanInventoryTrend() {
+  const startDate = getFirstDayOfCurrentMonth()
+  try {
+    await ElMessageBox.confirm(
+      `<p>当月月初から先の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は当月月初～+3ヶ月、推移は当月月初～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</p><p style="margin-top:10px">計算開始日（月初）：<strong>${startDate}</strong></p>`,
+      '在庫・推移更新の確認',
+      {
+        confirmButtonText: '更新',
+        cancelButtonText: 'キャンセル',
+        type: 'info',
+        dangerouslyUseHTMLString: true,
+      },
+    )
+  } catch {
+    return
+  }
+  moldingPlanInventoryTrendLoading.value = true
+  updatingInventoryTrend.value = true
+  try {
+    await runInventoryTrendUpdateSequence(startDate)
+  } catch (_e) {
+    /* runInventoryTrendUpdateSequence 内でメッセージ表示済み */
+  } finally {
+    moldingPlanInventoryTrendLoading.value = false
+    updatingInventoryTrend.value = false
+  }
+}
+
+async function executeMoldingPlanCreate() {
+  if (!moldingPlanBaseDate.value) {
+    ElMessage.warning('基準日を選択してください')
+    return
+  }
+  moldingPlanLoading.value = true
+  try {
+    const baseDate = moldingPlanBaseDate.value
+    const coeff = moldingPlanCoefficient.value
+    const workDays = moldingPlanWorkingDays.value
+
+    const bomRows = await fetchAllProductProcessBomRows()
+    if (!bomRows.length) {
+      ElMessage.info('製品工程BOMのデータがありません')
+      moldingPlanResult.value = []
+      return
+    }
+
+    /** 対応日 = 基準日 + forming_process_lt + safety_stock_days（営業日加算、土日除く） */
+    const lookups: { product_cd: string; product_name: string; lookup_date: string; biz_days: number }[] = []
+    for (const bom of bomRows) {
+      const cd = bom.product_cd != null ? String(bom.product_cd).trim() : ''
+      if (!cd) continue
+      const formingLt = Number(bom.forming_process_lt ?? 0) || 0
+      const safety = Number(bom.safety_stock_days ?? 0) || 0
+      const bizDays = formingLt + safety
+      const lookupDate = addBusinessDays(baseDate, bizDays)
+      lookups.push({
+        product_cd: cd,
+        product_name: (bom.product_name as string) ?? '',
+        lookup_date: lookupDate,
+        biz_days: bizDays,
+      })
+    }
+
+    const dates = [...new Set(lookups.map((l) => l.lookup_date))].filter(Boolean).sort()
+    if (!dates.length) {
+      moldingPlanResult.value = []
+      return
+    }
+    const minD = dates[0]!
+    const maxD = dates[dates.length - 1]!
+
+    const res = await getProductionSummarysList({
+      page: 1,
+      limit: 50000,
+      startDate: minD,
+      endDate: maxD,
+    })
+    const data = (res as any)?.data ?? res
+    const summaryRows: any[] = data?.list ?? []
+
+    const summaryByDateProduct = new Map<string, any>()
+    for (const row of summaryRows) {
+      const pcd = row.product_cd != null ? String(row.product_cd).trim() : ''
+      if (!pcd) continue
+      const ds = summaryRowDateStr(row)
+      if (!ds) continue
+      summaryByDateProduct.set(`${ds}|${pcd}`, row)
+    }
+
+    const lotSizeMap = new Map<string, number>()
+    const pageSize = 10000
+    let page = 1
+    let total = 0
+    do {
+      const prodRes: any = await request.get('/api/master/products', {
+        params: { page, pageSize },
+      })
+      const payload = prodRes?.data
+      const prodList: any[] = payload?.list ?? []
+      total = Number(payload?.total ?? 0) || prodList.length
+      for (const p of prodList) {
+        if (p.product_cd != null) lotSizeMap.set(String(p.product_cd).trim(), Number(p.lot_size) || 1)
+      }
+      if (prodList.length < pageSize) break
+      if (total > 0 && page * pageSize >= total) break
+      page += 1
+    } while (true)
+
+    const result: MoldingPlanRow[] = []
+    for (const L of lookups) {
+      const row = summaryByDateProduct.get(`${L.lookup_date}|${L.product_cd}`)
+      if (!row) continue
+      const trend = Number(row.molding_actual_plan_trend ?? 0)
+      if (trend >= 0) continue
+      const reqRaw = Math.abs(trend) * coeff
+      const requiredQty = Math.round(reqRaw)
+      const lotSize = lotSizeMap.get(L.product_cd) ?? 1
+      const lotCount = lotSize > 0 ? Math.ceil(requiredQty / lotSize) : requiredQty
+      const batchQty = lotCount * lotSize
+      const dailyQty = workDays > 0 ? Math.ceil(batchQty / workDays) : batchQty
+
+      result.push({
+        lookup_date: L.lookup_date,
+        molding_machine: row.molding_machine ?? '',
+        product_cd: L.product_cd,
+        product_name: row.product_name || L.product_name || '',
+        trend_raw: trend,
+        required_qty: requiredQty,
+        lot_size: lotSize,
+        lot_count: lotCount,
+        batch_qty: batchQty,
+        daily_qty: dailyQty,
+      })
+    }
+
+    /** 成型機 昇順 → 対応日 → 製品名 */
+    result.sort((a, b) => {
+      const ma = (a.molding_machine || '\uffff').localeCompare(b.molding_machine || '\uffff', 'ja')
+      if (ma !== 0) return ma
+      const da = a.lookup_date.localeCompare(b.lookup_date)
+      if (da !== 0) return da
+      return (a.product_name || '').localeCompare(b.product_name || '', 'ja')
+    })
+
+    moldingPlanResult.value = result
+    if (!result.length) {
+      ElMessage.info(
+        '対象データがありません（対応日の production_summarys 行なし、または molding_actual_plan_trend が 0 以上）',
+      )
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '計算に失敗しました')
+  } finally {
+    moldingPlanLoading.value = false
   }
 }
 
@@ -4195,6 +5405,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearMoldingBomSaveTimers()
   if (othersDrawerMql && othersDrawerMqlHandler) {
     othersDrawerMql.removeEventListener('change', othersDrawerMqlHandler)
     othersDrawerMql = null
@@ -4205,78 +5416,220 @@ onUnmounted(() => {
 
 <style scoped>
 .production-data-management {
-  padding: 0.5rem;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 0.65rem 0.75rem 1rem;
   min-height: 100%;
+  background:
+    radial-gradient(1200px 480px at 10% -8%, rgba(99, 102, 241, 0.09), transparent 55%),
+    radial-gradient(900px 400px at 100% 0%, rgba(14, 165, 233, 0.07), transparent 50%),
+    linear-gradient(165deg, #f1f5f9 0%, #e8eef5 45%, #f8fafc 100%);
+}
+.page-header-shell {
+  margin-bottom: 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 4px 24px -10px rgba(15, 23, 42, 0.14),
+    0 0 0 1px rgba(255, 255, 255, 0.65) inset;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .page-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 0.65rem;
 }
 .title-group {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.page-title-mark {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 48%, #4338ca 100%);
+  box-shadow: 0 8px 22px -10px rgba(79, 70, 229, 0.65);
+}
+.title-text-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 .page-title {
   margin: 0;
-  font-size: 1.35rem;
-  font-weight: 700;
+  font-size: 1.28rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   color: #0f172a;
+  line-height: 1.2;
+}
+.page-subtitle {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.04em;
 }
 .title-group :deep(.record-count.el-tag) {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   height: 28px;
   line-height: 26px;
-  padding: 0 8px;
+  padding: 0 10px;
+  border: none;
+  font-weight: 600;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4338ca;
 }
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 .header-actions :deep(.el-button) {
   font-size: 0.75rem;
-  height: 28px;
-  padding: 0 10px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease;
+}
+.header-actions :deep(.el-button:not(.is-disabled):active) {
+  transform: translateY(1px);
+}
+/* ツールバー：操作別カラー */
+.header-actions :deep(.others-btn.el-button) {
+  color: #fff;
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border-color: #4338ca;
+  box-shadow: 0 2px 8px -2px rgba(67, 56, 202, 0.55);
+}
+.header-actions :deep(.others-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  border-color: #4f46e5;
+}
+.header-actions :deep(.refresh-btn.el-button) {
+  color: #fff;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+  border-color: #0284c7;
+  box-shadow: 0 2px 8px -2px rgba(14, 165, 233, 0.5);
+}
+.header-actions :deep(.refresh-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 100%);
+  border-color: #0ea5e9;
+}
+.header-actions :deep(.print-btn.el-button) {
+  color: #f8fafc;
+  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+  border-color: #334155;
+  box-shadow: 0 2px 6px -2px rgba(51, 65, 85, 0.45);
+}
+.header-actions :deep(.print-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+}
+.header-actions :deep(.process-print-btn-primary.el-button) {
+  color: #fff;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  border-color: #047857;
+  box-shadow: 0 2px 10px -2px rgba(5, 150, 105, 0.5);
+}
+.header-actions :deep(.process-print-btn-primary.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #6ee7b7 0%, #10b981 100%);
+  border-color: #059669;
+}
+.header-actions :deep(.recommended-print-dropdown-btn.el-button) {
+  color: #fff;
+  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  border-color: #b45309;
+  box-shadow: 0 2px 10px -2px rgba(217, 119, 6, 0.45);
+}
+.header-actions :deep(.recommended-print-dropdown-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%);
+  border-color: #d97706;
+}
+.header-actions :deep(.production-plan-dropdown-btn.el-button) {
+  color: #fff;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  border-color: #6d28d9;
+  box-shadow: 0 2px 10px -2px rgba(124, 58, 237, 0.45);
+}
+.header-actions :deep(.production-plan-dropdown-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
+  border-color: #7c3aed;
+}
+.header-actions :deep(.settings-btn.el-button) {
+  color: #334155;
+  background: #fff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+.header-actions :deep(.settings-btn.el-button:hover:not(.is-disabled)) {
+  color: #0f172a;
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+.header-actions :deep(.el-button.is-disabled) {
+  opacity: 0.52;
+  filter: grayscale(0.15);
 }
 /* 内容区域：统一字体 0.75rem，组件高度 28px */
 .table-card {
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
   overflow: hidden;
   font-size: 0.75rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 12px 40px -18px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
 }
 .table-card :deep(.el-card__header) {
-  padding: 0.35rem 0.6rem;
+  padding: 0.45rem 0.65rem;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.65) 100%);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
 }
 .table-card :deep(.el-card__body) {
-  padding: 0.35rem 0.6rem;
+  padding: 0.45rem 0.65rem;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 32%);
 }
 .filter-section {
   margin-top: 0.35rem;
-  padding: 0.35rem 0.5rem;
-  background: #fafbfc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.4rem;
   align-items: center;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 .filter-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.35rem;
   background: #fff;
-  padding: 0 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #e5e7eb;
-  height: 28px;
+  padding: 0 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  height: 30px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 .filter-label {
   font-size: 0.75rem;
@@ -4285,10 +5638,10 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .date-filter-item {
-  height: 28px;
+  height: 30px;
 }
 .date-quick-item {
-  height: 28px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
 }
@@ -4303,7 +5656,8 @@ onUnmounted(() => {
 .table-card :deep(.filter-section .el-date-editor .el-input__wrapper),
 .table-card :deep(.filter-section .el-select .el-input__wrapper),
 .table-card :deep(.filter-section .el-input .el-input__wrapper) {
-  min-height: 26px;
+  min-height: 28px;
+  border-radius: 8px;
   padding: 0 8px;
 }
 .table-card :deep(.filter-section .el-date-editor) {
@@ -4311,18 +5665,30 @@ onUnmounted(() => {
 }
 .date-quick-buttons {
   display: flex;
-  gap: 0.15rem;
+  gap: 0.2rem;
   align-items: center;
-  background: #f8fafc;
-  padding: 0 4px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  height: 26px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 0 5px;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  height: 28px;
 }
 .date-quick-buttons :deep(.el-button) {
-  font-size: 0.75rem;
-  height: 22px;
-  padding: 0 6px;
+  font-size: 0.72rem;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.date-quick-buttons :deep(.el-button--primary.is-plain) {
+  color: #fff;
+  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+  border-color: #0284c7;
+}
+.date-quick-buttons :deep(.el-button--primary.is-plain:hover) {
+  background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 100%);
+  border-color: #0ea5e9;
+  color: #fff;
 }
 .filter-select {
   width: 160px;
@@ -4332,10 +5698,14 @@ onUnmounted(() => {
 }
 .summary-table-tabs {
   margin-bottom: 0;
+  padding: 0.15rem 0 0;
 }
 .summary-table-tabs :deep(.el-tabs__header) {
   margin-bottom: 0;
   border: none;
+}
+.summary-table-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
 }
 .summary-table-tabs :deep(.el-tabs__content) {
   padding: 0;
@@ -4345,22 +5715,34 @@ onUnmounted(() => {
   padding: 0;
 }
 .summary-table-tabs :deep(.el-tabs__item) {
-  padding: 0 10px;
-  height: 28px;
-  line-height: 28px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  margin-right: 0.25rem;
-  font-size: 0.75rem;
+  padding: 0 12px;
+  height: 30px;
+  line-height: 30px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  margin-right: 0.35rem;
+  font-size: 0.74rem;
+  background: rgba(255, 255, 255, 0.65);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.summary-table-tabs :deep(.el-tabs__item:hover) {
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #4338ca;
 }
 .summary-table-tabs :deep(.el-tabs__item.is-active) {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: #faf5ff;
+  border-color: rgba(99, 102, 241, 0.55);
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4338ca;
+  font-weight: 700;
+  box-shadow: 0 2px 8px -4px rgba(79, 70, 229, 0.45);
 }
 .tab-text {
-  font-weight: 600;
-  font-size: 0.75rem;
-  color: #475569;
+  font-weight: inherit;
+  font-size: 0.74rem;
+  color: inherit;
 }
 /* テーブル：字体与区域统一 0.75rem */
 .modern-table {
@@ -4368,8 +5750,10 @@ onUnmounted(() => {
 }
 .modern-table :deep(.el-table) {
   --el-table-border-color: #e5e7eb;
-  --el-table-header-bg-color: #f8fafc;
+  --el-table-header-bg-color: #f1f5f9;
   --el-table-row-hover-bg-color: #f1f5f9;
+  border-radius: 10px;
+  overflow: hidden;
 }
 .modern-table :deep(.el-table__header-wrapper th) {
   white-space: nowrap;
@@ -4857,6 +6241,10 @@ onUnmounted(() => {
   .production-data-management {
     padding: 0.4rem;
   }
+  .page-header-shell {
+    padding: 0.55rem 0.65rem;
+    border-radius: 14px;
+  }
   .page-header-row {
     gap: 0.4rem;
   }
@@ -4887,14 +6275,27 @@ onUnmounted(() => {
   .production-data-management {
     padding: 0.35rem;
   }
+  .page-subtitle {
+    display: none;
+  }
   .page-title {
-    font-size: 1.15rem;
+    font-size: 1.12rem;
+  }
+  .page-title-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+  }
+  .page-title-mark :deep(.el-icon) {
+    font-size: 18px;
+  }
+  .page-header-shell {
+    padding: 0.5rem 0.55rem;
   }
   .page-header-row {
     flex-direction: column;
     align-items: stretch;
     gap: 0.35rem;
-    margin-bottom: 0.35rem;
   }
   .title-group {
     justify-content: space-between;
@@ -5035,5 +6436,612 @@ onUnmounted(() => {
     line-height: 24px;
     font-size: 0.65rem;
   }
+}
+
+/* 成型計画作成（本体は下のグローバルブロックで teleport 対応） */
+.molding-plan-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.molding-plan-panel {
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.molding-plan-panel__title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.molding-plan-form-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 2px 10px;
+}
+/** 条件4項目を1行に（狭い画面は横スクロール） */
+.molding-plan-form-grid--cond-row {
+  flex-wrap: nowrap;
+  gap: 4px 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+}
+.molding-plan-form-grid--cond-row :deep(.el-form-item) {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+.molding-plan-form-grid--tight {
+  gap: 2px 8px;
+}
+.molding-plan-form-grid :deep(.el-form-item) {
+  margin-bottom: 4px;
+  margin-right: 0;
+}
+.molding-plan-form-grid :deep(.el-form-item__label) {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+.molding-plan-field {
+  width: 122px;
+}
+/** 生産計画月・基準日（幅は script の MOLDING_PLAN_PICKER_W_* とグローバル .molding-plan-dialog 内ルールと揃える） */
+.molding-plan-field--month {
+  width: 112px;
+  max-width: 112px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.molding-plan-field--month :deep(.el-date-editor),
+.molding-plan-field--month :deep(.el-input__wrapper) {
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0 !important;
+}
+.molding-plan-field--base {
+  width: 132px;
+  max-width: 132px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+.molding-plan-field--base :deep(.el-date-editor),
+.molding-plan-field--base :deep(.el-input__wrapper) {
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0 !important;
+}
+.molding-plan-field--wide {
+  width: 168px;
+}
+.molding-plan-field--num {
+  width: 96px;
+}
+.molding-plan-field--coef {
+  width: 112px;
+}
+.molding-plan-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+.molding-plan-panel__title--sub {
+  margin-top: 2px;
+}
+.molding-plan-clear-panel {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+}
+.molding-plan-clear-hint {
+  margin: 0 0 6px 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: #64748b;
+}
+.molding-plan-clear-hint--sub {
+  margin-top: 6px;
+  margin-bottom: 0;
+  font-size: 0.65rem;
+  color: #94a3b8;
+}
+.molding-plan-clear-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.molding-plan-result-panel {
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid #c7d2fe;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.06);
+}
+.molding-plan-result__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.molding-plan-result__head-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.molding-plan-result__print {
+  flex-shrink: 0;
+}
+.molding-plan-result__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+.molding-plan-result__tag {
+  font-weight: 600;
+}
+.molding-plan-table :deep(.el-table__header th) {
+  background: #f1f5f9 !important;
+  color: #334155;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+.molding-plan-table :deep(.el-table__body td) {
+  font-size: 0.78rem;
+}
+.molding-plan-table :deep(.el-table__row:hover > td) {
+  background: #f8fafc !important;
+}
+.molding-plan-batch {
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+.molding-plan-num--neg {
+  color: #dc2626;
+  font-weight: 700;
+}
+.molding-bom-dialog-body {
+  padding: 0;
+}
+.molding-bom-panel {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+.molding-bom-dialog-hint {
+  margin: 0;
+  padding: 12px 16px 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  color: #475569;
+  border-bottom: 1px solid #f1f5f9;
+  background: rgba(248, 250, 252, 0.85);
+}
+.molding-bom-bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.molding-bom-bulk-bar__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #475569;
+}
+.molding-bom-bulk-field-select {
+  width: 148px;
+}
+.molding-bom-table-wrap {
+  padding: 0;
+}
+.molding-bom-input-num {
+  width: 100%;
+  max-width: 104px;
+}
+.molding-bom-input-num :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+  transition: box-shadow 0.15s ease;
+}
+.molding-bom-input-num :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #cbd5e1 inset;
+}
+.molding-bom-input-num :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #6366f1 inset, 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+</style>
+
+<style lang="scss">
+/* 成型計画作成ダイアログ：teleport 先にも効くようグローバル */
+.molding-plan-dialog.el-dialog {
+  max-width: calc(100vw - 20px);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+.molding-plan-dialog .el-dialog__header {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(125deg, #f8fafc 0%, #eef2ff 45%, #f5f3ff 100%);
+}
+.molding-plan-dialog .el-dialog__headerbtn {
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  transition: background 0.15s ease;
+}
+.molding-plan-dialog .el-dialog__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+.molding-plan-dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 14px;
+  padding-right: 44px;
+}
+.molding-plan-dlg-header__mark {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #4f46e5 0%, #4338ca 100%);
+  color: #fff;
+  font-size: 20px;
+  box-shadow: 0 6px 16px -4px rgba(79, 70, 229, 0.55);
+}
+.molding-plan-dlg-header__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.molding-plan-dlg-header__title {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.molding-plan-dlg-header__sub {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.02em;
+}
+.molding-plan-dialog .el-dialog__body {
+  padding: 10px 12px 8px;
+  background: linear-gradient(180deg, #eef2ff 0%, #e2e8f0 100%);
+}
+/* 条件フォーム日付：Teleport 先でも効くようグローバル。EP .el-date-editor の既定幅を上書き */
+.molding-plan-dialog .molding-plan-field--month.el-date-editor.el-input,
+.molding-plan-dialog .molding-plan-field--month.el-input {
+  width: 112px !important;
+  min-width: 0 !important;
+  max-width: 112px !important;
+}
+.molding-plan-dialog .molding-plan-field--base.el-date-editor.el-input,
+.molding-plan-dialog .molding-plan-field--base.el-input {
+  width: 132px !important;
+  min-width: 0 !important;
+  max-width: 132px !important;
+}
+.molding-plan-dialog .molding-plan-form-grid--cond-row.el-form--inline .el-form-item__content {
+  min-width: 0 !important;
+}
+.molding-plan-dialog .el-dialog__footer {
+  padding: 0;
+  border-top: none;
+}
+.molding-plan-footer {
+  padding: 8px 12px 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+}
+/* 统一按钮：高度・圆角・字重 */
+.molding-plan-dialog .molding-plan-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-width: 1px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.molding-plan-dialog .molding-plan-btn .el-icon {
+  margin-right: 4px;
+}
+.molding-plan-dialog .molding-plan-btn--secondary {
+  color: #334155;
+  background: #fff;
+  border-color: #cbd5e1;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+.molding-plan-dialog .molding-plan-btn--secondary:hover {
+  color: #1e293b;
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+.molding-plan-dialog .molding-plan-btn--primary {
+  color: #fff;
+  background: linear-gradient(180deg, #4f46e5 0%, #4338ca 100%);
+  border-color: #4338ca;
+  box-shadow: 0 1px 2px rgba(67, 56, 202, 0.35);
+}
+.molding-plan-dialog .molding-plan-btn--primary:hover {
+  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  border-color: #4f46e5;
+}
+.molding-plan-dialog .molding-plan-btn--warn {
+  color: #9a3412;
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+.molding-plan-dialog .molding-plan-btn--warn:hover {
+  background: #fef3c7;
+  border-color: #fbbf24;
+}
+.molding-plan-dialog .molding-plan-btn--warn.is-disabled {
+  opacity: 0.55;
+}
+.molding-plan-dialog .molding-plan-btn--sync {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #5eead4;
+}
+.molding-plan-dialog .molding-plan-btn--sync:hover {
+  background: #ccfbf1;
+  border-color: #2dd4bf;
+}
+.molding-plan-dialog .molding-plan-btn--sync.is-disabled {
+  opacity: 0.55;
+}
+.molding-plan-dialog .molding-plan-btn--close {
+  min-width: 88px;
+  color: #475569;
+  background: #fff;
+  border-color: #cbd5e1;
+}
+.molding-plan-dialog .molding-plan-btn--close:hover {
+  color: #1e293b;
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+/* 成型機器設定ダイアログ（product_machine_config） */
+.molding-machine-config-dialog.el-dialog {
+  max-width: calc(100vw - 24px);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+.molding-machine-config-dialog .el-dialog__header {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(125deg, #f8fafc 0%, #ecfeff 40%, #eef2ff 100%);
+}
+.molding-machine-config-dialog .el-dialog__headerbtn {
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+.molding-machine-config-dialog .el-dialog__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+.molding-machine-config-dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 14px;
+  padding-right: 44px;
+}
+.molding-machine-config-dlg-header__mark {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #0d9488 0%, #0f766e 100%);
+  color: #fff;
+  font-size: 20px;
+  box-shadow: 0 6px 16px -4px rgba(13, 148, 136, 0.45);
+}
+.molding-machine-config-dlg-header__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.molding-machine-config-dlg-header__eyebrow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.molding-machine-config-dlg-header__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.molding-machine-config-dlg-header__sub {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: #64748b;
+}
+.molding-machine-config-dialog .el-dialog__body {
+  padding: 12px 16px 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+.molding-machine-config-dialog .el-dialog__footer {
+  padding: 0;
+  border-top: none;
+}
+.molding-machine-config-dialog .molding-plan-btn--close {
+  margin: 8px 12px 10px;
+}
+.molding-machine-config-body {
+  min-height: 120px;
+}
+.molding-machine-config-table.el-table {
+  border-radius: 10px;
+  overflow: hidden;
+}
+.molding-machine-config-select {
+  width: 100%;
+}
+
+.molding-bom-compact-dialog.el-dialog {
+  max-width: calc(100vw - 32px);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(148, 163, 184, 0.12);
+}
+.molding-bom-compact-dialog .el-dialog__header {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(125deg, #f8fafc 0%, #eef2ff 45%, #f5f3ff 100%);
+}
+.molding-bom-compact-dialog .el-dialog__headerbtn {
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+}
+.molding-bom-compact-dialog .el-dialog__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.65);
+}
+.molding-bom-compact-dialog .el-dialog__body {
+  padding: 16px 20px 12px;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+}
+.molding-bom-compact-dialog .el-dialog__footer {
+  padding: 0;
+  border-top: none;
+}
+.molding-bom-dlg-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 48px 18px 20px;
+}
+.molding-bom-dlg-header__mark {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
+  font-size: 22px;
+  box-shadow: 0 8px 20px -6px rgba(79, 70, 229, 0.55);
+}
+.molding-bom-dlg-header__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.molding-bom-dlg-header__eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI', sans-serif;
+}
+.molding-bom-dlg-header__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #0f172a;
+  line-height: 1.3;
+}
+.molding-bom-dlg-header__sub {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #475569;
+  line-height: 1.35;
+}
+.molding-bom-footer {
+  padding: 14px 20px 16px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-top: 1px solid #e2e8f0;
+}
+.molding-bom-compact-dialog .molding-bom-table.el-table {
+  font-size: 0.8125rem;
+  --el-table-header-text-color: #334155;
+}
+.molding-bom-compact-dialog .molding-bom-table .el-table__header th {
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%) !important;
+  color: #334155 !important;
+}
+.molding-bom-compact-dialog .molding-bom-table .el-table__body td {
+  font-weight: 500;
+  color: #1e293b;
+}
+.molding-bom-compact-dialog .molding-bom-table .el-table__row:hover > td {
+  background: rgba(238, 242, 255, 0.65) !important;
+}
+.molding-bom-compact-dialog .molding-bom-table .el-table__body tr.current-row > td {
+  background: rgba(224, 231, 255, 0.5) !important;
 }
 </style>

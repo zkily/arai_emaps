@@ -146,7 +146,7 @@ PLAN_PROCESS_MAPPING = {
     "面取": "chamfering_plan",
     "検査": "inspection_plan",
 }
-# 計画列クリア用（本月月初起き先清空 plan で使用）
+# 計画データ更新前クリア用（_plan + _actual_plan）
 PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + ["sw_plan"]
 # 清空计算字段（在庫・推移・actual_plan_trend・安全在庫）：date >= startDate 时置 0
 CALCULATED_FIELDS_TO_CLEAR = [
@@ -174,6 +174,8 @@ ACTUAL_PLAN_COLUMNS = [
     ("welding_actual", "welding_plan", "welding_actual_plan"),
     ("inspection_actual", "inspection_plan", "inspection_actual_plan"),
 ]
+ACTUAL_PLAN_FIELDS_TO_CLEAR = [target_col for _, _, target_col in ACTUAL_PLAN_COLUMNS]
+PLAN_AND_ACTUAL_PLAN_FIELDS_TO_CLEAR = PLAN_FIELDS_TO_CLEAR + ACTUAL_PLAN_FIELDS_TO_CLEAR
 
 # 生産計画日更新：production_summarys の *_production_date と product_process_bom の *_process_lt 対応
 # (production_date 列名, BOM の lt 列名) — 注: BOM は cuting の typo
@@ -545,7 +547,7 @@ async def clear_production_summarys_plan_fields(
 ):
     """
     startDate 必須。date >= startDate かつ date <= startDate+3ヶ月 の行について、
-    各工程 plan 列を 0 にクリアする（計画データ更新で「先清空 plan 再更新」用）。
+    各工程の _plan / _actual_plan 列を 0 にクリアする（計画データ更新前の初期化用）。
     """
     if not (body.startDate and body.startDate.strip()):
         raise HTTPException(status_code=400, detail="startDate は必須です（YYYY-MM-DD）")
@@ -554,7 +556,7 @@ async def clear_production_summarys_plan_fields(
     except ValueError:
         raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
     end_d = _parse_end_date(start_d, 3)
-    set_parts = ", ".join([f"`{col}` = 0" for col in PLAN_FIELDS_TO_CLEAR])
+    set_parts = ", ".join([f"`{col}` = 0" for col in PLAN_AND_ACTUAL_PLAN_FIELDS_TO_CLEAR])
     sql = text(
         f"UPDATE production_summarys SET {set_parts} WHERE date >= :start_date AND date <= :end_date"
     )
@@ -564,7 +566,35 @@ async def clear_production_summarys_plan_fields(
     return {
         "code": 200,
         "data": {"cleared": cleared, "startDate": body.startDate[:10], "endDate": end_d.isoformat()},
-        "message": f"計画列をクリアしました（{cleared}件）",
+        "message": f"計画列（_plan / _actual_plan）をクリアしました（{cleared}件）",
+    }
+
+
+@router.post("/clear-molding-plan")
+async def clear_production_summarys_molding_plan(
+    body: ClearCalculatedFieldsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    startDate 必須。date >= startDate の全行について molding_plan と molding_actual_plan を 0 にクリアする（終了日の上限なし）。
+    """
+    if not (body.startDate and body.startDate.strip()):
+        raise HTTPException(status_code=400, detail="startDate は必須です（YYYY-MM-DD）")
+    try:
+        start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+    sql = text(
+        "UPDATE production_summarys SET molding_plan = 0, molding_actual_plan = 0 WHERE date >= :start_date"
+    )
+    res = await db.execute(sql, {"start_date": start_d})
+    await db.commit()
+    cleared = res.rowcount if hasattr(res, "rowcount") else 0
+    return {
+        "code": 200,
+        "data": {"cleared": cleared, "startDate": body.startDate[:10]},
+        "message": f"成型計画（molding_plan / molding_actual_plan）をクリアしました（{cleared}件）",
     }
 
 
