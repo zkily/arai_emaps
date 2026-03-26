@@ -24,6 +24,7 @@
     "pinia": "^2.1.7",
     "pinia-plugin-persistedstate": "^3.2.1",
     "qrcode": "^1.5.4",
+    "sortablejs": "^1.15.7",
     "vue": "^3.4.0",
     "vue-chartjs": "^5.3.3",
     "vue-echarts": "^6.6.8",
@@ -35,6 +36,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/sortablejs": "^1.15.9",
     "@types/node": "^20.10.0",
     "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^5.2.4",

@@ -48,6 +48,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/order', name: 'Order', component: () => import('@/views/erp/Order.vue'), meta: { title: '受注管理', group: '受注管理', requiresAuth: true } },
       { path: 'erp/order/monthly', name: 'OrderMonthlyList', component: () => import('@/views/erp/order/OrderMonthlyList.vue'), meta: { title: '月受注管理', group: '受注管理 > 月受注管理', requiresAuth: true } },
       { path: 'erp/order/daily', name: 'OrderDailyList', component: () => import('@/views/erp/order/OrderDailyList.vue'), meta: { title: '日受注管理', group: '受注管理 > 日受注管理', requiresAuth: true } },
+      { path: 'erp/order/destination-history', name: 'OrderDestinationHistory', component: () => import('@/views/erp/order/OrderDestinationHistory.vue'), meta: { title: '納入先別受注履歴', group: '受注管理 > 納入先別受注履歴', requiresAuth: true } },
 
       // ========== ERP - 購買・外注管理 (Procurement / MM) ==========
       { path: 'erp/purchase', name: 'Purchase', component: () => import('@/views/erp/Purchase.vue'), meta: { title: '購買・外注管理', group: '購買・外注管理', requiresAuth: true } },
@@ -95,6 +96,51 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-entry', name: 'StockEntryManagement', component: () => import('@/views/erp/inventory/stockEntry/UnifiedStockEntry.vue'), meta: { title: '在庫登録管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-transaction-logs', name: 'StockTransactionLog', component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'), meta: { title: '在庫取引記録', group: '在庫管理', requiresAuth: true } },
+      {
+        path: 'erp/inventory/stocktake',
+        name: 'StocktakeManagement',
+        component: () => import('@/views/erp/inventory/stocktake/StocktakeLayout.vue'),
+        meta: { title: '棚卸管理', group: '在庫管理', requiresAuth: true },
+        redirect: { name: 'StocktakeHome' },
+        children: [
+          {
+            path: '',
+            name: 'StocktakeHome',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryHome.vue'),
+            meta: { title: '棚卸管理ホーム', group: 'メインメニュー', requiresAuth: true },
+          },
+          {
+            path: 'list',
+            name: 'StocktakeList',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryList.vue'),
+            meta: { title: '棚卸リスト一覧', group: '棚卸業務', description: '棚卸データの一覧表示と管理', requiresAuth: true },
+          },
+          {
+            path: 'entry',
+            name: 'StocktakeEntry',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryEntry.vue'),
+            meta: { title: '棚卸登録', group: '棚卸業務', description: '材料、部品、ステーの棚卸データを手動入力', requiresAuth: true },
+          },
+          {
+            path: 'statistics',
+            name: 'StocktakeStatistics',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryStatistics.vue'),
+            meta: { title: '棚卸分析', group: '棚卸分析', description: '棚卸データの統計分析とレポート', requiresAuth: true },
+          },
+          {
+            path: 'value',
+            name: 'StocktakeValue',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryValueManagement.vue'),
+            meta: { title: '棚卸金額管理', group: '棚卸分析', description: '在庫金額の計算・分析・レポート管理', requiresAuth: true },
+          },
+          {
+            path: 'carryover',
+            name: 'StocktakeCarryover',
+            component: () => import('@/views/erp/inventory/stocktake/InventoryCarryoverManagement.vue'),
+            meta: { title: '棚卸繰越管理', group: '棚卸業務', description: '月末棚卸データの翌月期初繰越', requiresAuth: true },
+          },
+        ],
+      },
       // ========== ERP - 生産管理 (Production Control / PP) ==========
       { path: 'erp/production', name: 'Production', component: () => import('@/views/erp/Production.vue'), meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
@@ -128,8 +174,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/shipping/inventory-kpi', name: 'InventoryKpi', component: () => import('@/views/erp/shipping/InventoryKpi.vue'), meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true } },
 
       // ========== APS モジュール ==========
-      { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '生産計画', requiresAuth: true } },
+      { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
+      { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
+      { path: 'aps/daily-report', name: 'DailyReport', component: () => import('@/views/aps/DailyReport.vue'), meta: { title: '日別設備計画表', requiresAuth: true } },
+      { path: 'aps/batch-plans', name: 'ApsBatchPlans', component: () => import('@/views/aps/BatchPlans.vue'), meta: { title: 'APSバッチ計画', requiresAuth: true } },
 
       // ========== MES モジュール ==========
       { path: 'mes/execution', name: 'Execution', component: () => import('@/views/mes/Execution.vue'), meta: { title: '製造実行', requiresAuth: true } },

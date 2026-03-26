@@ -236,6 +236,8 @@ class Machine(Base):
     machine_cd = Column(String(50), unique=True, nullable=False, index=True)
     machine_name = Column(String(100), nullable=False)
     machine_type = Column(String(50))
+    default_work_hours = Column(Numeric(4, 2), nullable=True)
+    is_active = Column(Boolean, nullable=True)
     status = Column(String(20), default="active")  # active / inactive / maintenance
     available_from = Column(Time, default=None)
     available_to = Column(Time, default=None)

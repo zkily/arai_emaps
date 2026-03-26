@@ -36,13 +36,13 @@
                 v-model="searchForm.lineId"
                 placeholder="全て"
                 clearable
-                style="width: 180px"
+                style="width: 260px"
               >
                 <el-option
                   v-for="line in lines"
                   :key="line.id"
                   :value="line.id"
-                  :label="line.line_code"
+                  :label="productionLineOptionLabel(line)"
                 />
               </el-select>
             </el-form-item>
@@ -215,6 +215,7 @@ import {
   fetchLines,
   fetchSchedulingGrid,
   runAllSchedules,
+  productionLineOptionLabel,
   type LineGridBlock,
   type ProductionLine,
   type ScheduleGridRow,

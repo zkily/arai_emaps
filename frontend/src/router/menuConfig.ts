@@ -14,7 +14,7 @@ export interface MenuConfigItem {
 /** 全メニュー定義（親→子の順で並べる） */
 export const menuConfig: MenuConfigItem[] = [
   { code: 'DASHBOARD', name: 'ダッシュボード', path: '/dashboard', icon: 'HomeFilled', sortOrder: 0 },
-  { code: 'ERP', name: '総合管理メニュー', icon: 'Management', sortOrder: 1 },
+  { code: 'ERP', name: 'ERP管理メニュー', icon: 'Management', sortOrder: 1 },
 
   // ===== 1. 販売管理 (Sales / SD) =====
   { code: 'ERP_SALES', name: '販売管理', path: '/erp/sales', icon: 'Sell', parentCode: 'ERP', sortOrder: 1 },
@@ -35,6 +35,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_ORDER_HOME', name: '受注ホーム', path: '/erp/order', parentCode: 'ERP_ORDER', sortOrder: 0 },
   { code: 'ERP_ORDER_MONTHLY', name: '月受注管理', path: '/erp/order/monthly', parentCode: 'ERP_ORDER', sortOrder: 1 },
   { code: 'ERP_ORDER_DAILY', name: '日受注管理', path: '/erp/order/daily', parentCode: 'ERP_ORDER', sortOrder: 2 },
+  { code: 'ERP_ORDER_DEST_HIST', name: '納入先別受注履歴', path: '/erp/order/destination-history', parentCode: 'ERP_ORDER', sortOrder: 3 },
 
   // ===== 2. 購買・外注管理 (Procurement & Subcontracting) =====
   { code: 'ERP_PURCHASE', name: '購買・外注管理', path: '/erp/purchase', icon: 'ShoppingCart', parentCode: 'ERP', sortOrder: 3 },
@@ -55,6 +56,13 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY', name: '在庫管理', path: '/erp/inventory', icon: 'Box', parentCode: 'ERP', sortOrder: 5 },
   { code: 'ERP_INVENTORY_HOME', name: '在庫ホーム', path: '/erp/inventory', parentCode: 'ERP_INVENTORY', sortOrder: 0 },
   { code: 'ERP_INVENTORY_LIST', name: '在庫照会', path: '/erp/inventory/list', parentCode: 'ERP_INVENTORY', sortOrder: 1 },
+  { code: 'ERP_INVENTORY_STOCKTAKE', name: '棚卸管理', path: '/erp/inventory/stocktake', parentCode: 'ERP_INVENTORY', sortOrder: 2 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_HOME', name: '棚卸管理ホーム', path: '/erp/inventory/stocktake', icon: 'HomeFilled', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 0 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_LIST', name: '棚卸リスト一覧', path: '/erp/inventory/stocktake/list', icon: 'List', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 1 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_ENTRY', name: '棚卸登録', path: '/erp/inventory/stocktake/entry', icon: 'DocumentAdd', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 2 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_STATISTICS', name: '棚卸分析', path: '/erp/inventory/stocktake/statistics', icon: 'DataAnalysis', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 3 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_VALUE', name: '棚卸金額管理', path: '/erp/inventory/stocktake/value', icon: 'Coin', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 4 },
+  { code: 'ERP_INVENTORY_STOCKTAKE_CARRYOVER', name: '棚卸繰越管理', path: '/erp/inventory/stocktake/carryover', icon: 'Tools', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 5 },
   { code: 'ERP_INVENTORY_STOCK_ENTRY', name: '在庫登録管理', path: '/erp/inventory/stock-entry', parentCode: 'ERP_INVENTORY', sortOrder: 3 },
   { code: 'ERP_INVENTORY_STOCK_TX_LOG', name: '在庫取引記録', path: '/erp/inventory/stock-transaction-logs', parentCode: 'ERP_INVENTORY', sortOrder: 9 },
 
@@ -102,10 +110,13 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_ABC', name: 'ABC分析', path: '/erp/shipping/abc-analysis', parentCode: 'ERP_SHIPPING', sortOrder: 8 },
   { code: 'ERP_SHIPPING_INVENTORY_KPI', name: '在庫KPI・アラート', path: '/erp/shipping/inventory-kpi', parentCode: 'ERP_SHIPPING', sortOrder: 9 },
 
-  { code: 'APS', name: '生産スケジューラ', icon: 'DataAnalysis', sortOrder: 2 },
-  { code: 'APS_PLANNING', name: '生産計画', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },
+  { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },
+  { code: 'APS_PLANNING', name: '成型計画作成', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
-  { code: 'MES', name: '製造実行メニュー', icon: 'Monitor', sortOrder: 3 },
+  { code: 'APS_CAPACITY', name: '設備稼働設定', path: '/aps/capacity', parentCode: 'APS', sortOrder: 3 },
+  { code: 'APS_DAILY_REPORT', name: '日別設備計画表', path: '/aps/daily-report', parentCode: 'APS', sortOrder: 4 },
+  { code: 'APS_BATCH_PLANS', name: 'APSバッチ計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
+  { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
   { code: 'MES_EXECUTION', name: '製造実行', path: '/mes/execution', parentCode: 'MES', sortOrder: 1 },
   { code: 'MES_QUALITY', name: '品質管理', path: '/mes/quality', parentCode: 'MES', sortOrder: 2 },
   { code: 'MASTER', name: 'マスタ管理', icon: 'Collection', sortOrder: 4 },

@@ -10,8 +10,28 @@ const BASE = '/api/aps'
 export interface ProductionLine {
   id: number
   line_code: string
+  /** 設備名（machines.machine_name） */
+  line_name?: string
   default_work_hours: number
   is_active: boolean
+}
+
+/** 設備プルダウン表示：コード + 設備名 */
+export function productionLineOptionLabel(line: ProductionLine): string {
+  const name = (line.line_name || '').trim()
+  if (name) return `${line.line_code} — ${name}`
+  return line.line_code
+}
+
+/** equipment_efficiency（APS 品名プルダウン） */
+export interface EquipmentEfficiencyProduct {
+  id: number
+  product_cd: string | null
+  product_name: string | null
+  efficiency_rate: number
+  step_time: number | null
+  /** products.lot_size（製品マスタ、product_cd 一致時） */
+  lot_size?: number | null
 }
 
 export interface LineCapacity {
@@ -34,9 +54,12 @@ export interface ScheduleCreateBody {
   order_no?: number | null
   order_id?: number | null
   item_name: string
+  product_cd?: string | null
   material_shortage?: boolean
   lot_qty?: number
-  planned_process_qty: number
+  planned_batch_count?: number
+  lot_size_snapshot?: number
+  planned_process_qty?: number
   prev_month_carryover?: number
   due_date?: string | null
   material_date?: string | null
@@ -52,8 +75,11 @@ export interface ScheduleUpdateBody {
   order_no?: number | null
   order_id?: number | null
   item_name?: string | null
+  product_cd?: string | null
   material_shortage?: boolean | null
   lot_qty?: number | null
+  planned_batch_count?: number | null
+  lot_size_snapshot?: number | null
   planned_process_qty?: number | null
   prev_month_carryover?: number | null
   due_date?: string | null
@@ -71,8 +97,11 @@ export interface ScheduleOut {
   order_no?: number | null
   order_id?: number | null
   item_name: string
+  product_cd?: string | null
   material_shortage: boolean
   lot_qty: number
+  planned_batch_count: number
+  lot_size_snapshot: number
   planned_process_qty: number
   prev_month_carryover: number
   due_date?: string | null
@@ -87,18 +116,87 @@ export interface ScheduleOut {
   status: string
 }
 
+// ──────────── Time Slots ────────────
+
+export interface TimeSlotItem {
+  start_time: string
+  end_time: string
+  sort_order?: number
+}
+
+export interface DaySlotsBody {
+  line_id: number
+  work_date: string
+  slots: TimeSlotItem[]
+}
+
+export interface TimeSlotOut {
+  id: number
+  start_time: string
+  end_time: string
+  sort_order: number
+}
+
+export interface DaySlotsOut {
+  work_date: string
+  available_hours: number
+  slots: TimeSlotOut[]
+}
+
+export interface DaySlotsBatchBody {
+  line_id: number
+  days: DaySlotsBody[]
+}
+
+// ──────────── Line Product Standard ────────────
+
+export interface LineProductStandardBody {
+  line_id: number
+  product_cd: string
+  std_qty_per_hour: number
+  setup_time_min?: number
+  efficiency_pct?: number
+}
+
+export interface LineProductStandardOut {
+  id: number
+  line_id: number
+  product_cd: string
+  std_qty_per_hour: number
+  setup_time_min: number
+  efficiency_pct: number
+}
+
+// ──────────── Daily Equipment Report ────────────
+
+export interface DailyEquipmentReportRow {
+  schedule_date: string
+  line_id: number
+  line_code: string
+  order_no: number | null
+  item_name: string
+  product_cd: string | null
+  planned_qty: number
+  actual_qty: number
+  available_hours: number | null
+}
+
 export interface ScheduleGridRow {
   id: number
   order_no?: number | null
   item_name: string
   material_shortage: boolean
   lot_qty: number
+  planned_batch_count: number
+  lot_size_snapshot: number
   planned_process_qty: number
   prev_month_carryover: number
   due_date?: string | null
   material_date?: string | null
   setup_time: number
   efficiency: number
+  /** equipment_efficiency 能率（本/H）、ガント表示用 */
+  efficiency_rate?: number | null
   daily_capacity: number
   planned_output_qty: number
   start_date?: string | null
@@ -125,10 +223,60 @@ export interface SchedulingGridResponse {
   blocks: LineGridBlock[]
 }
 
+/** 時間別ガント列・行（schedule_slice_allocations） */
+export interface HourlyGridColumn {
+  key: string
+  work_date: string
+  period_start: string
+  period_end: string
+}
+
+export interface HourlyGridRow {
+  schedule_id: number
+  order_no?: number | null
+  planned_batch_count?: number
+  lot_size_snapshot?: number
+  planned_process_qty?: number
+  /** equipment_efficiency 能率（本/H） */
+  efficiency_rate?: number | null
+  item_name: string
+  slice_qty: Record<string, number>
+}
+
+export interface SchedulingHourlyGridResponse {
+  columns: HourlyGridColumn[]
+  rows: HourlyGridRow[]
+}
+
+// ──────────── APS Batch Plans（aps_batch_plans） ────────────
+export interface ApsBatchPlanOut {
+  id: number
+  aps_schedule_id: number
+  production_month: string
+  production_line: string
+  priority_order?: number | null
+  product_cd: string
+  product_name: string
+  planned_quantity: number
+  production_lot_size: number
+  lot_number: string
+  start_date?: string | null
+  end_date?: string | null
+  status: string
+}
+
 // ──────────── API calls ────────────
 
-export function fetchLines(): Promise<ProductionLine[]> {
-  return request.get(`${BASE}/lines`)
+export function fetchLines(processCd?: string | null): Promise<ProductionLine[]> {
+  const params: Record<string, string> = {}
+  if (processCd != null && String(processCd).trim() !== '') {
+    params.processCd = String(processCd).trim()
+  }
+  return request.get(`${BASE}/lines`, { params: Object.keys(params).length ? params : undefined })
+}
+
+export function fetchEquipmentEfficiencyProducts(machineId: number): Promise<EquipmentEfficiencyProduct[]> {
+  return request.get(`${BASE}/equipment-efficiency-products`, { params: { machineId } })
 }
 
 export function createLine(lineCode: string, defaultWorkHours = 0): Promise<any> {
@@ -187,8 +335,85 @@ export function fetchSchedulingGrid(
   return request.get(`${BASE}/scheduling/grid`, { params })
 }
 
-export function runAllSchedules(lineId?: number): Promise<any> {
+export function fetchSchedulingHourlyGrid(
+  startDate: string,
+  endDate: string,
+  lineId: number,
+): Promise<SchedulingHourlyGridResponse> {
+  return request.get(`${BASE}/scheduling/hourly-grid`, {
+    params: { startDate, endDate, lineId },
+  })
+}
+
+export function fetchApsBatchPlans(params: {
+  productionMonth?: string | null
+  lineId?: number | null
+  productCd?: string | null
+}): Promise<ApsBatchPlanOut[]> {
+  const p: Record<string, any> = {}
+  if (params.productionMonth != null) p.productionMonth = params.productionMonth
+  if (params.lineId != null) p.lineId = params.lineId
+  if (params.productCd != null) p.productCd = params.productCd
+  return request.get(`${BASE}/batch-plans`, { params: p })
+}
+
+export function runAllSchedules(lineId?: number, sequential?: boolean): Promise<any> {
   const params: Record<string, any> = {}
   if (lineId != null) params.lineId = lineId
+  if (sequential) params.sequential = true
   return request.post(`${BASE}/run-all`, null, { params })
+}
+
+export function replanLineSequence(lineId: number, anchorStartDate?: string): Promise<any> {
+  const params: Record<string, any> = {}
+  if (anchorStartDate) params.anchorStartDate = anchorStartDate
+  return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
+}
+
+// ──────────── Time Slots ────────────
+
+export function fetchLineCapacitySlots(
+  lineId: number,
+  startDate: string,
+  endDate: string,
+): Promise<DaySlotsOut[]> {
+  return request.get(`${BASE}/line-capacity-slots`, {
+    params: { lineId, startDate, endDate },
+  })
+}
+
+export function batchUpsertLineCapacitySlots(body: DaySlotsBatchBody): Promise<any> {
+  return request.put(`${BASE}/line-capacity-slots/batch`, body)
+}
+
+// ──────────── Line Product Standard ────────────
+
+export function fetchLineProductStandards(lineId?: number): Promise<LineProductStandardOut[]> {
+  const params: Record<string, any> = {}
+  if (lineId != null) params.lineId = lineId
+  return request.get(`${BASE}/line-product-standards`, { params })
+}
+
+export function createLineProductStandard(body: LineProductStandardBody): Promise<LineProductStandardOut> {
+  return request.post(`${BASE}/line-product-standards`, body)
+}
+
+export function updateLineProductStandard(id: number, body: LineProductStandardBody): Promise<LineProductStandardOut> {
+  return request.put(`${BASE}/line-product-standards/${id}`, body)
+}
+
+export function deleteLineProductStandard(id: number): Promise<any> {
+  return request.delete(`${BASE}/line-product-standards/${id}`)
+}
+
+// ──────────── Daily Equipment Report ────────────
+
+export function fetchDailyEquipmentReport(
+  startDate: string,
+  endDate: string,
+  lineId?: number,
+): Promise<{ success: boolean; data: DailyEquipmentReportRow[] }> {
+  const params: Record<string, any> = { startDate, endDate }
+  if (lineId != null) params.lineId = lineId
+  return request.get(`${BASE}/daily-equipment-report`, { params })
 }

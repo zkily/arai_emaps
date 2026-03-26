@@ -40,6 +40,17 @@
         </div>
         <el-icon class="module-arrow"><ArrowRight /></el-icon>
       </router-link>
+
+      <router-link to="/erp/order/destination-history" class="module-card modern-card">
+        <div class="module-icon" style="background: linear-gradient(135deg, #8b5cf6 0%, #22d3ee 100%);">
+          <el-icon :size="32"><Document /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">納入先別受注履歴</h3>
+          <p class="module-desc">納入先ごとの受注データ分析・履歴管理</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
     </div>
   </div>
 </template>

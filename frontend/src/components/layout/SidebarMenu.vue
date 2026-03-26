@@ -143,6 +143,7 @@
             <el-menu-item index="/erp/order" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_ORDER_HOME')">{{ t('menu.ERP_ORDER_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/order/monthly"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.ERP_ORDER_MONTHLY')">{{ t('menu.ERP_ORDER_MONTHLY') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/order/daily"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_ORDER_DAILY')">{{ t('menu.ERP_ORDER_DAILY') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/order/destination-history"><el-icon><OfficeBuilding /></el-icon><template #title><span :title="t('menu.ERP_ORDER_DEST_HIST')">{{ t('menu.ERP_ORDER_DEST_HIST') }}</span></template></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-inventory">
@@ -152,6 +153,48 @@
             </template>
             <el-menu-item index="/erp/inventory" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_HOME')">{{ t('menu.ERP_INVENTORY_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/inventory/list"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_LIST')">{{ t('menu.ERP_INVENTORY_LIST') }}</span></template></el-menu-item>
+            <el-sub-menu index="erp-inventory-stocktake">
+              <template #title>
+                <el-icon><Memo /></el-icon>
+                <span :title="t('menu.ERP_INVENTORY_STOCKTAKE')">{{ t('menu.ERP_INVENTORY_STOCKTAKE') }}</span>
+              </template>
+              <el-menu-item index="/erp/inventory/stocktake" class="menu-item-home">
+                <el-icon><HomeFilled /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_HOME')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_HOME') }}</span>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="/erp/inventory/stocktake/list">
+                <el-icon><List /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_LIST')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_LIST') }}</span>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="/erp/inventory/stocktake/entry">
+                <el-icon><DocumentAdd /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_ENTRY')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_ENTRY') }}</span>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="/erp/inventory/stocktake/statistics">
+                <el-icon><DataAnalysis /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_STATISTICS')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_STATISTICS') }}</span>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="/erp/inventory/stocktake/value">
+                <el-icon><Coin /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_VALUE')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_VALUE') }}</span>
+                </template>
+              </el-menu-item>
+              <el-menu-item index="/erp/inventory/stocktake/carryover">
+                <el-icon><Tools /></el-icon>
+                <template #title>
+                  <span :title="t('menu.ERP_INVENTORY_STOCKTAKE_CARRYOVER')">{{ t('menu.ERP_INVENTORY_STOCKTAKE_CARRYOVER') }}</span>
+                </template>
+              </el-menu-item>
+            </el-sub-menu>
             <el-menu-item index="/erp/inventory/stock-entry"><el-icon><DocumentAdd /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_ENTRY')">{{ t('menu.ERP_INVENTORY_STOCK_ENTRY') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/inventory/stock-transaction-logs"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_TX_LOG')">{{ t('menu.ERP_INVENTORY_STOCK_TX_LOG') }}</span></template></el-menu-item>
           </el-sub-menu>
@@ -270,6 +313,18 @@
           <el-menu-item index="/aps/scheduling">
             <el-icon><Timer /></el-icon>
             <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/aps/capacity">
+            <el-icon><Setting /></el-icon>
+            <template #title><span :title="t('menu.APS_CAPACITY')">{{ t('menu.APS_CAPACITY') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/aps/daily-report">
+            <el-icon><Document /></el-icon>
+            <template #title><span :title="t('menu.APS_DAILY_REPORT')">{{ t('menu.APS_DAILY_REPORT') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/aps/batch-plans">
+            <el-icon><Tickets /></el-icon>
+            <template #title><span :title="t('menu.APS_BATCH_PLANS')">{{ t('menu.APS_BATCH_PLANS') }}</span></template>
           </el-menu-item>
         </el-sub-menu>
         

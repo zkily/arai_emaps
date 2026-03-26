@@ -15,8 +15,8 @@
             <el-icon size="32"><Box /></el-icon>
           </div>
           <div class="header-text">
-            <h1 class="header-title">在庫管理</h1>
-            <div class="header-subtitle">Inventory Management</div>
+            <h1 class="header-title">棚卸管理</h1>
+            <div class="header-subtitle">Physical Inventory Management</div>
           </div>
         </div>
       </div>
@@ -58,154 +58,111 @@
         <el-icon class="module-arrow"><ArrowRight /></el-icon>
       </router-link>
     </div>
-
-    <!-- 库存预警 -->
-    <div class="alert-section modern-card">
-      <div class="section-header">
-        <el-icon><Warning /></el-icon>
-        <span>在庫アラート</span>
-        <el-badge :value="alerts.length" type="danger" v-if="alerts.length > 0" />
-      </div>
-      <el-table :data="alerts" v-loading="loading" stripe class="modern-table">
-        <el-table-column prop="product_code" label="品番" width="120" />
-        <el-table-column prop="product_name" label="品名" min-width="150" />
-        <el-table-column prop="warehouse_name" label="倉庫" width="120" />
-        <el-table-column prop="alert_type_name" label="アラート種別" width="120">
-          <template #default="{ row }">
-            <el-tag :type="getAlertType(row.alert_type)">{{ row.alert_type_name }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="current_quantity" label="現在数量" width="100" align="right" />
-        <el-table-column prop="threshold_quantity" label="しきい値" width="100" align="right" />
-        <el-table-column label="操作" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" type="primary" @click="handleAlert(row)">対応</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, markRaw } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, markRaw } from 'vue'
 import {
-  Box, ArrowRight, Warning, Top, Bottom,
-  List, DataAnalysis, Document, Memo
+  Box,
+  ArrowRight,
+  Warning,
+  Top,
+  Bottom,
+  List,
+  DataAnalysis,
+  Document,
+  HomeFilled,
+  DocumentAdd,
+  Coin,
+  Tools,
 } from '@element-plus/icons-vue'
-import { getInventoryStats, getStockAlerts } from '@/api/erp/inventory'
-import type { InventoryStats, StockAlert } from '@/types/erp/inventory'
 
-const loading = ref(false)
-const stats = ref<InventoryStats | null>(null)
-const alerts = ref<StockAlert[]>([])
+const modules = [
+  {
+    path: '/erp/inventory/stocktake',
+    title: '棚卸管理ホーム',
+    description: '棚卸メニュー一覧',
+    icon: markRaw(HomeFilled),
+    gradient: 'linear-gradient(135deg, #667eea, #764ba2)',
+  },
+  {
+    path: '/erp/inventory/stocktake/list',
+    title: '棚卸リスト一覧',
+    description: '棚卸データの一覧表示と管理',
+    icon: markRaw(List),
+    gradient: 'linear-gradient(135deg, #409eff, #67c23a)',
+  },
+  {
+    path: '/erp/inventory/stocktake/entry',
+    title: '棚卸登録',
+    description: '材料、部品、ステーの実地棚卸入力',
+    icon: markRaw(DocumentAdd),
+    gradient: 'linear-gradient(135deg, #67c23a, #85ce61)',
+  },
+  {
+    path: '/erp/inventory/stocktake/statistics',
+    title: '棚卸分析',
+    description: '棚卸データの統計分析とレポート',
+    icon: markRaw(DataAnalysis),
+    gradient: 'linear-gradient(135deg, #27ae60, #229954)',
+  },
+  {
+    path: '/erp/inventory/stocktake/value',
+    title: '棚卸金額管理',
+    description: '在庫金額の計算・分析・レポート管理',
+    icon: markRaw(Coin),
+    gradient: 'linear-gradient(135deg, #f59e0b, #fbbf24)',
+  },
+  {
+    path: '/erp/inventory/stocktake/carryover',
+    title: '棚卸繰越管理',
+    description: '月末棚卸データの翌月期初繰越',
+    icon: markRaw(Tools),
+    gradient: 'linear-gradient(135deg, #10b981, #059669)',
+  },
+]
 
-// 统计卡片配置
+const categoryCount = 2 // 棚卸業務 / 棚卸分析（現状のメタグループ）
+
 const statsCards = computed(() => [
   {
     key: 'total_items',
-    label: '在庫品目数',
-    value: stats.value?.total_items?.toLocaleString() || '0',
+    label: '棚卸機能数',
+    value: modules.length.toLocaleString(),
     icon: markRaw(Box),
-    gradient: 'linear-gradient(135deg, #409eff, #67c23a)',
-    change: '+12%',
-    changeType: 'up'
+    gradient: 'linear-gradient(135deg, #667eea, #764ba2)',
+    change: '+0',
+    changeType: 'up',
   },
   {
     key: 'total_value',
-    label: '在庫総額',
-    value: `¥${(stats.value?.total_value || 0).toLocaleString()}`,
+    label: 'カテゴリ数',
+    value: categoryCount.toString(),
     icon: markRaw(DataAnalysis),
     gradient: 'linear-gradient(135deg, #67c23a, #85ce61)',
-    change: '+8%',
-    changeType: 'up'
+    change: '+0',
+    changeType: 'up',
   },
   {
     key: 'low_stock',
-    label: '在庫不足',
-    value: stats.value?.low_stock_count?.toString() || '0',
+    label: '登録機能',
+    value: '1',
     icon: markRaw(Warning),
     gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)',
-    change: '-3',
-    changeType: 'down'
+    change: '-0',
+    changeType: 'down',
   },
   {
     key: 'expiring',
-    label: '期限切迫',
-    value: stats.value?.expiring_soon_count?.toString() || '0',
+    label: '分析・金額',
+    value: '3',
     icon: markRaw(Document),
     gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)',
-    change: '+2',
-    changeType: 'up'
-  }
+    change: '+0',
+    changeType: 'up',
+  },
 ])
-
-// 機能モジュール - 在庫管理
-const locationModules = [
-  {
-    path: '/erp/inventory/list',
-    title: '在庫照会',
-    description: 'リアルタイム在庫照会・有効在庫照会',
-    icon: markRaw(List),
-    gradient: 'linear-gradient(135deg, #409eff, #67c23a)'
-  },
-  {
-    path: '/erp/inventory/stocktake',
-    title: '棚卸管理',
-    description: '棚卸一覧・登録・分析・金額・繰越（実地棚卸）',
-    icon: markRaw(Memo),
-    gradient: 'linear-gradient(135deg, #667eea, #764ba2)'
-  },
-  {
-    path: '/erp/inventory/stock-entry',
-    title: '在庫登録管理',
-    description: '製品・材料・部品・仕掛品の入出庫一元登録',
-    icon: markRaw(Document),
-    gradient: 'linear-gradient(135deg, #67c23a, #85ce61)'
-  }
-]
-
-// 全機能モジュール
-const modules = [...locationModules]
-
-// 获取预警类型样式（el-tag 的 type）
-type AlertTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
-const getAlertType = (type: string): AlertTagType => {
-  const typeMap: Record<string, AlertTagType> = {
-    low_stock: 'warning',
-    overstock: 'info',
-    expiring: 'danger',
-    expired: 'danger'
-  }
-  return typeMap[type] ?? 'info'
-}
-
-// 处理预警
-const handleAlert = (row: StockAlert) => {
-  ElMessage.info(`アラート ID: ${row.id} の対応画面へ遷移します`)
-}
-
-// 加载数据
-const fetchData = async () => {
-  loading.value = true
-  try {
-    const [statsRes, alertsRes] = await Promise.all([
-      getInventoryStats(),
-      getStockAlerts({ status: 'active', page_size: 10 })
-    ])
-    stats.value = statsRes.data || statsRes
-    alerts.value = (alertsRes.data?.items ?? []) as StockAlert[]
-  } catch (error) {
-    console.error('データ取得に失敗しました', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(() => {
-  fetchData()
-})
 </script>
 
 <style scoped>
@@ -229,18 +186,49 @@ onMounted(() => {
 .gradient-orb {
   position: absolute;
   border-radius: 50%;
-  background: linear-gradient(45deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+  background: linear-gradient(
+    45deg,
+    rgba(102, 126, 234, 0.1),
+    rgba(118, 75, 162, 0.1)
+  );
   animation: float 20s ease-in-out infinite;
 }
 
-.orb-1 { width: 300px; height: 300px; top: -150px; right: -150px; }
-.orb-2 { width: 200px; height: 200px; bottom: -100px; left: -100px; animation-delay: -10s; }
-.orb-3 { width: 250px; height: 250px; top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -15s; }
+.orb-1 {
+  width: 300px;
+  height: 300px;
+  top: -150px;
+  right: -150px;
+}
+
+.orb-2 {
+  width: 200px;
+  height: 200px;
+  bottom: -100px;
+  left: -100px;
+  animation-delay: -10s;
+}
+
+.orb-3 {
+  width: 250px;
+  height: 250px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: -15s;
+}
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33% { transform: translateY(-30px) rotate(120deg); }
-  66% { transform: translateY(30px) rotate(240deg); }
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-30px) rotate(120deg);
+  }
+  66% {
+    transform: translateY(30px) rotate(240deg);
+  }
 }
 
 .modern-header {
@@ -349,8 +337,13 @@ onMounted(() => {
   margin-top: 4px;
 }
 
-.stat-change.up { color: #67c23a; }
-.stat-change.down { color: #f56c6c; }
+.stat-change.up {
+  color: #67c23a;
+}
+
+.stat-change.down {
+  color: #f56c6c;
+}
 
 /* 功能模块 */
 .module-grid {
@@ -401,35 +394,17 @@ onMounted(() => {
   font-size: 20px;
 }
 
-/* 预警区域 */
-.alert-section {
-  padding: 24px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #2c3e50;
-}
-
-.modern-table {
-  border-radius: 8px;
-  overflow: hidden;
-}
-
 /* 响应式 */
 @media (max-width: 1200px) {
-  .stats-grid, .module-grid {
+  .stats-grid,
+  .module-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .stats-grid, .module-grid {
+  .stats-grid,
+  .module-grid {
     grid-template-columns: 1fr;
   }
 }

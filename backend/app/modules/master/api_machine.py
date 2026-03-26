@@ -45,11 +45,16 @@ def _machine_to_dict(row: Machine) -> dict:
     eff = row.efficiency
     if eff is not None and hasattr(eff, "__float__"):
         eff = float(eff)
+    dwh = getattr(row, "default_work_hours", None)
+    if dwh is not None and hasattr(dwh, "__float__"):
+        dwh = float(dwh)
     return {
         "id": row.id,
         "machine_cd": row.machine_cd,
         "machine_name": row.machine_name,
         "machine_type": row.machine_type,
+        "default_work_hours": dwh,
+        "is_active": getattr(row, "is_active", None),
         "status": row.status or "active",
         "available_from": _time_to_str(row.available_from),
         "available_to": _time_to_str(row.available_to),
