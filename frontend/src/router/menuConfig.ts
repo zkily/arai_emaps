@@ -115,7 +115,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
   { code: 'APS_CAPACITY', name: '設備稼働設定', path: '/aps/capacity', parentCode: 'APS', sortOrder: 3 },
   { code: 'APS_DAILY_REPORT', name: '日別設備計画表', path: '/aps/daily-report', parentCode: 'APS', sortOrder: 4 },
-  { code: 'APS_BATCH_PLANS', name: 'APSバッチ計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
+  { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
   { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
   { code: 'MES_EXECUTION', name: '製造実行', path: '/mes/execution', parentCode: 'MES', sortOrder: 1 },
   { code: 'MES_QUALITY', name: '品質管理', path: '/mes/quality', parentCode: 'MES', sortOrder: 2 },

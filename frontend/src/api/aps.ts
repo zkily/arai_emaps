@@ -204,6 +204,8 @@ export interface ScheduleGridRow {
   completion_rate?: number | null
   status: string
   daily: Record<string, number>
+  actual_daily?: Record<string, number>
+  remaining_daily?: Record<string, number>
 }
 
 export interface LineGridBlock {
@@ -263,6 +265,30 @@ export interface ApsBatchPlanOut {
   start_date?: string | null
   end_date?: string | null
   status: string
+}
+
+// ──────────── Production Progress（生産進捗） ────────────
+
+export interface ProgressLotItem {
+  batch_plan_id: number
+  aps_schedule_id: number
+  product_cd: string
+  product_name: string
+  lot_number: string
+  planned_quantity: number
+  order_no?: number | null
+  start_date?: string | null
+  end_date?: string | null
+  predicted_completion?: string | null
+  progress_status: 'PLANNED' | 'RELEASED' | 'IN_PROGRESS' | 'COMPLETED'
+  management_code?: string | null
+  production_line: string
+}
+
+export interface ProductionProgressResponse {
+  lots: ProgressLotItem[]
+  dates: string[]
+  lot_daily: Record<string, Record<string, number>>
 }
 
 // ──────────── API calls ────────────
@@ -407,6 +433,10 @@ export function deleteLineProductStandard(id: number): Promise<any> {
 }
 
 // ──────────── Daily Equipment Report ────────────
+
+export function fetchProductionProgress(lineId: number): Promise<ProductionProgressResponse> {
+  return request.get(`${BASE}/production-progress`, { params: { lineId } })
+}
 
 export function fetchDailyEquipmentReport(
   startDate: string,

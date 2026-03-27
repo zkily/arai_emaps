@@ -1,16 +1,16 @@
-<template>
+﻿<template>
   <div class="cutting-instruction-container">
     <div class="page-header">
       <div class="header-left">
         <div class="header-title">
           <!-- <span class="page-header-badge">生産指示</span> -->
           <h1>切断・面取指示管理</h1>
-          <p class="header-desc">バッチ一覧・切断指示・面取指示・カンバン発行を一括管理</p>
+          <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
       </div>
     </div>
 
-    <!-- 上部：生産バッチ 50% + 右侧 50% -->
+    <!-- 上部：生産ロット 50% + 右侧 50% -->
     <div class="plan-row">
       <div class="plan-section plan-section-left">
         <el-card class="section-card" shadow="never">
@@ -18,7 +18,7 @@
           <div class="card-header">
             <div class="section-title">
               <el-icon size="18"><Calendar /></el-icon>
-              <span>生産バッチ一覧</span>
+              <span>生産ロット一覧</span>
               <el-button type="default" size="small" class="title-right-btn" @click="openDataManagementDialog">
                 データ管理
               </el-button>
@@ -87,7 +87,7 @@
           @dragenter="onDragEnter('batchList')"
           @dragleave="onDragLeave('batchList')"
         >
-          <div v-if="dragOverZone === 'batchList'" class="plan-batch-drop-hint">ここにドロップで切断指示をバッチへ戻す</div>
+          <div v-if="dragOverZone === 'batchList'" class="plan-batch-drop-hint">ここにドロップで切断指示をロットへ戻す</div>
           <div v-show="planListForTable.length > 0" class="plan-batch-table-inner">
             <div class="plan-batch-thead">
               <div class="plan-batch-tr">
@@ -287,7 +287,7 @@
                 @dragenter="onDragEnter('cuttingManagement')"
                 @dragleave="onDragLeave('cuttingManagement')"
               >
-                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでバッチを切断指示へ移行</div>
+                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでロットを切断指示へ移行</div>
                 <div class="cutting-mgmt-tbody">
                 <div
                   class="cutting-mgmt-drop-edge"
@@ -429,7 +429,7 @@
                 @dragenter="onDragEnter('cuttingManagement')"
                 @dragleave="onDragLeave('cuttingManagement')"
               >
-                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでバッチを切断指示へ移行</div>
+                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでロットを切断指示へ移行</div>
                 <div class="cutting-mgmt-tbody">
                 <div
                   class="cutting-mgmt-drop-edge"
@@ -638,12 +638,12 @@
         </div>
       </div>
 
-      <!-- 面取バッチ一覧（面取指示の上）：レイアウト・幅は生産バッチ一覧と同様、右に製品情報・設備能率 -->
+      <!-- 面取ロット一覧（面取指示の上）：レイアウト・幅は生産ロット一覧と同様、右に製品情報・設備能率 -->
       <div class="plan-row chamfering-plan-row">
         <div class="plan-section plan-section-left">
           <div class="chamfering-batch-section-card">
             <div class="cutting-mgmt-header">
-              <span class="cutting-mgmt-title">面取バッチ一覧</span>
+              <span class="cutting-mgmt-title">面取ロット一覧</span>
               <div class="cutting-mgmt-header-right">
                 <el-button type="primary" size="small" @click="openChamferingPlanNewDialog">新規追加</el-button>
               </div>
@@ -657,7 +657,7 @@
               @dragenter="onDragEnterChamfering('chamferingBatchList')"
               @dragleave="onDragLeaveChamfering('chamferingBatchList')"
             >
-              <div v-if="dragOverZone === 'chamferingBatchList'" class="plan-batch-drop-hint">ここにドロップで面取指示をバッチへ戻す</div>
+              <div v-if="dragOverZone === 'chamferingBatchList'" class="plan-batch-drop-hint">ここにドロップで面取指示をロットへ戻す</div>
               <div v-show="chamferingBatchList.length > 0" class="plan-batch-table-inner">
                 <div class="plan-batch-thead">
                   <div class="plan-batch-tr">
@@ -824,7 +824,7 @@
             @dragenter="onDragEnterChamfering('chamferingManagement')"
             @dragleave="onDragLeaveChamfering('chamferingManagement')"
           >
-            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取バッチを面取指示へ移行</div>
+            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
             <div class="cutting-mgmt-table-inner">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -975,7 +975,7 @@
             @dragenter="onDragEnterChamfering('chamferingManagement')"
             @dragleave="onDragLeaveChamfering('chamferingManagement')"
           >
-            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取バッチを面取指示へ移行</div>
+            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
             <div class="cutting-mgmt-table-inner cutting-mgmt-table-inner--tomorrow cutting-mgmt-table-inner--chamfering-tomorrow">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -1341,7 +1341,7 @@
       </template>
     </el-dialog>
 
-    <!-- バッチ→切断：生産日・切断機指定ダイアログ -->
+    <!-- ロット→切断：生産日・切断機指定ダイアログ -->
     <el-dialog
       v-model="moveToCuttingDialogVisible"
       width="440px"
@@ -1353,7 +1353,7 @@
         <div class="mt-dialog-header mt-dialog-header--cutting">
           <div class="mt-dialog-title-wrap">
             <span class="mt-dialog-title">切断指示の登録</span>
-            <span class="mt-dialog-subtitle">生産日と切断機を指定してバッチを移行します</span>
+            <span class="mt-dialog-subtitle">生産日と切断機を指定してロットを移行します</span>
           </div>
         </div>
       </template>
@@ -1404,7 +1404,7 @@
       </template>
     </el-dialog>
 
-    <!-- 面取バッチ→面取指示：生産日・面取機指定ダイアログ -->
+    <!-- 面取ロット→面取指示：生産日・面取機指定ダイアログ -->
     <el-dialog
       v-model="moveToChamferingDialogVisible"
       width="440px"
@@ -1416,7 +1416,7 @@
         <div class="mt-dialog-header mt-dialog-header--chamfering">
           <div class="mt-dialog-title-wrap">
             <span class="mt-dialog-title">面取指示の登録</span>
-            <span class="mt-dialog-subtitle">生産日と面取機を指定してバッチを移行します</span>
+            <span class="mt-dialog-subtitle">生産日と面取機を指定してロットを移行します</span>
           </div>
         </div>
       </template>
@@ -1845,7 +1845,7 @@
       </template>
     </el-dialog>
 
-    <!-- 生産バッチ：双击编辑（テーブル全項目） -->
+    <!-- 生産ロット：双击编辑（テーブル全項目） -->
     <el-dialog
       v-model="planEditDialogVisible"
       width="min(96vw, 900px)"
@@ -1857,8 +1857,8 @@
         <div class="ped-header">
           <div class="ped-header-icon"><el-icon size="16"><Calendar /></el-icon></div>
           <div class="ped-header-text">
-            <span class="ped-title">バッチ内容編集</span>
-            <span v-if="editingChamferingPlanId" class="ped-badge">面取バッチ</span>
+            <span class="ped-title">ロット内容編集</span>
+            <span v-if="editingChamferingPlanId" class="ped-badge">面取ロット</span>
             <span class="ped-subtitle" v-if="planEditForm.product_name">{{ planEditForm.product_name }}</span>
           </div>
         </div>
@@ -2436,7 +2436,7 @@
             <el-icon size="16"><DocumentCopy v-if="newRecordIsTrialMode" /><Calendar v-else /></el-icon>
           </div>
           <div class="nr-header-text">
-            <span class="nr-title">{{ newRecordIsTrialMode ? '試作バッチ追加' : '新規バッチ追加' }}</span>
+            <span class="nr-title">{{ newRecordIsTrialMode ? '試作ロット追加' : '新規ロット追加' }}</span>
             <span class="nr-subtitle">{{ newRecordIsTrialMode ? '試作品' : '量産品' }}</span>
           </div>
           <el-button class="nr-close-btn" text @click="newRecordDialogVisible = false">
@@ -2607,7 +2607,7 @@
       </template>
     </el-dialog>
 
-    <!-- 面取バッチ一覧：新規追加ダイアログ（chamfering_plans 項目・新規バッチ追加と同様の nr スタイル） -->
+    <!-- 面取ロット一覧：新規追加ダイアログ（chamfering_plans 項目・新規ロット追加と同様の nr スタイル） -->
     <el-dialog
       v-model="chamferingPlanNewDialogVisible"
       width="min(96vw, 580px)"
@@ -2622,7 +2622,7 @@
             <el-icon size="16"><DocumentCopy /></el-icon>
           </div>
           <div class="nr-header-text">
-            <span class="nr-title">面取バッチ 新規追加</span>
+            <span class="nr-title">面取ロット 新規追加</span>
             <span class="nr-subtitle">chamfering_plans</span>
           </div>
           <el-button class="nr-close-btn" text @click="chamferingPlanNewDialogVisible = false">
@@ -2858,7 +2858,7 @@ const formatDateOnly = (v: string | null | undefined) => {
   return s.slice(0, 10)
 }
 
-/** 生産バッチ一覧：順位ごとの浅色背景クラス（順位数字で区別） */
+/** 生産ロット一覧：順位ごとの浅色背景クラス（順位数字で区別） */
 function getPlanBatchPriorityClass(order: number | null | undefined): string {
   if (order == null || order === undefined) return 'plan-batch-priority-none'
   const idx = (Number(order) - 1) % 5
@@ -3441,12 +3441,12 @@ async function commitUsageReflection() {
   }
 }
 
-/** バッチ→切断にドロップ時：生産日・切断機を指定するダイアログ */
+/** ロット→切断にドロップ時：生産日・切断機を指定するダイアログ */
 const moveToCuttingDialogVisible = ref(false)
 const pendingBatchRow = ref<CuttingPlanRow | null>(null)
 const moveToCuttingForm = reactive({ production_day: '', cutting_machine: '' })
 const moveToCuttingSubmitting = ref(false)
-/** 面取バッチ→面取指示にドロップ時：生産日・面取機を指定するダイアログ */
+/** 面取ロット→面取指示にドロップ時：生産日・面取機を指定するダイアログ */
 const moveToChamferingDialogVisible = ref(false)
 const pendingChamferingBatchRow = ref<ChamferingBatchRow | null>(null)
 const moveToChamferingForm = reactive({ production_day: '', production_line: '', production_line_2: '' })
@@ -3516,7 +3516,7 @@ const cuttingCompletedLoading = ref<number>(0)
 /** 面取指示 完了/カウント無 切替 loading */
 const chamferingCompletedLoading = ref<number | null>(null)
 const chamferingNoCountLoading = ref<number | null>(null)
-/** 生産バッチ双击编辑（面取バッチ一覧から開く場合は editingChamferingPlanId を設定） */
+/** 生産ロット双击编辑（面取ロット一覧から開く場合は editingChamferingPlanId を設定） */
 const planEditDialogVisible = ref(false)
 const editingPlanId = ref<number | null>(null)
 const editingChamferingPlanId = ref<number | null>(null)
@@ -3626,7 +3626,7 @@ const newRecordFormDefault = () => ({
 })
 const newRecordForm = reactive(newRecordFormDefault())
 
-/** 新規バッチ追加：ライン（成型設備）オプション */
+/** 新規ロット追加：ライン（成型設備）オプション */
 const newRecordLineOptions = ref<{ value: string; label: string }[]>([])
 async function loadNewRecordLineOptions() {
   try {
@@ -3644,7 +3644,7 @@ async function loadNewRecordLineOptions() {
   }
 }
 
-/** 新規バッチ追加：製品オプション
+/** 新規ロット追加：製品オプション
  * 試作追加（試作品）：product_type=試作品、且つ (製品CD末位が1 または 製品名に「加工」を含まない)
  * 新規追加（量産品）：product_type=量産品、且つ 製品CD末位が1 且つ 製品名に「加工」を含まない
  */
@@ -3779,7 +3779,7 @@ async function createDataManagementRecord() {
 /** 編集中セル: { rowId, prop } */
 const dataManagementEditingCell = ref<{ rowId: number; prop: string } | null>(null)
 const dataManagementSavingCell = ref(false)
-/** 拖拽放置区：バッチ一覧（左）、切断指示、面取バッチ一覧、面取指示 */
+/** 拖拽放置区：ロット一覧（左）、切断指示、面取ロット一覧、面取指示 */
 const dragOverZone = ref<'batchList' | 'cuttingManagement' | 'chamferingBatchList' | 'chamferingManagement' | null>(null)
 /** 当前拖拽来源：仅用于控制是否显示放置提示 */
 const dragSourceRef = ref<'batchList' | 'cuttingManagement' | 'chamferingBatch' | 'chamferingManagement' | null>(null)
@@ -3819,7 +3819,7 @@ const selectedChamferingDateToday = ref(getTodayString())
 const selectedChamferingMachineFilter = ref<string>('')
 const selectedChamferingDateTomorrow = ref(getTomorrowString())
 
-/** 面取バッチ一覧（chamfering_plans）：切断登録時・面取工程ありで自動登録された待機データ */
+/** 面取ロット一覧（chamfering_plans）：切断登録時・面取工程ありで自動登録された待機データ */
 interface ChamferingBatchRow {
   id?: number
   cutting_management_id?: number | null
@@ -3844,7 +3844,7 @@ const chamferingBatchLoading = ref(false)
 const chamferingBatchActionLoading = ref<number | null>(null)
 const chamferingSwLoading = ref<number | null>(null)
 
-/** 面取バッチ一覧：製品名昇順 → CD 昇順でソートした表示用 */
+/** 面取ロット一覧：製品名昇順 → CD 昇順でソートした表示用 */
 const chamferingBatchListSorted = computed(() =>
   [...chamferingBatchList.value].sort((a, b) => {
     const cmpName = (a.product_name || '').localeCompare(b.product_name || '', 'ja')
@@ -3855,7 +3855,7 @@ const chamferingBatchListSorted = computed(() =>
   })
 )
 
-/** 面取バッチ一覧：新規追加ダイアログ */
+/** 面取ロット一覧：新規追加ダイアログ */
 const chamferingPlanNewDialogVisible = ref(false)
 const chamferingPlanNewSubmitting = ref(false)
 const chamferingPlanNewForm = reactive({
@@ -4010,7 +4010,7 @@ const equipmentEfficiencyListFiltered = computed(() => {
   })
 })
 
-/** 面取バッチ一覧用：右側製品情報・設備能率 */
+/** 面取ロット一覧用：右側製品情報・設備能率 */
 const selectedChamferingProductCd = ref<string | null>(null)
 const chamferingProductDetail = ref<ProductDetail | null>(null)
 const chamferingProductDetailLoading = ref(false)
@@ -4031,7 +4031,7 @@ const chamferingEquipmentEfficiencyListFiltered = computed(() => {
 /** 拖拽中不触发点击 */
 const isDragging = ref(false)
 
-/** 生産バッチ一覧のクライアント側ページネーション用 */
+/** 生産ロット一覧のクライアント側ページネーション用 */
 const planListForTable = computed(() => {
   const start = (planPagination.currentPage - 1) * planPagination.pageSize
   return plans.value.slice(start, start + planPagination.pageSize)
@@ -4168,8 +4168,8 @@ const generateFromSchedule = async () => {
   }
   try {
     await ElMessageBox.confirm(
-      `「${scheduleMonths.value.find((m) => m.value === selectedScheduleMonth.value)?.label ?? selectedScheduleMonth.value}」の計画から生産バッチを生成しますか？同一月の既存バッチ（計画由来）は上書きされます。`,
-      'バッチ生成の確認',
+      `「${scheduleMonths.value.find((m) => m.value === selectedScheduleMonth.value)?.label ?? selectedScheduleMonth.value}」の計画から生産ロットを生成しますか？同一月の既存ロット（計画由来）は上書きされます。`,
+      'ロット生成の確認',
       { confirmButtonText: '生成', cancelButtonText: '取消', type: 'warning' }
     )
   } catch {
@@ -4182,17 +4182,17 @@ const generateFromSchedule = async () => {
       { month: selectedScheduleMonth.value }
     )
     if ((result as any)?.success) {
-      ElMessage.success((result as any).message ?? '生産バッチを生成しました')
+      ElMessage.success((result as any).message ?? '生産ロットを生成しました')
       loadPlans()
     } else {
       const errMsg =
         (typeof (result as any)?.detail === 'string' ? (result as any).detail : (result as any)?.message) ??
-        'バッチ生成に失敗しました'
+        'ロット生成に失敗しました'
       ElMessage.error(errMsg)
     }
   } catch (e) {
-    console.error('バッチ生成に失敗:', e)
-    ElMessage.error('バッチ生成に失敗しました')
+    console.error('ロット生成に失敗:', e)
+    ElMessage.error('ロット生成に失敗しました')
   } finally {
     generateFromScheduleLoading.value = false
   }
@@ -4303,7 +4303,7 @@ function onPlanCardClick(row: CuttingPlanRow) {
   loadEquipmentEfficiency(cd)
 }
 
-/** 生産バッチ1件を複製（同内容で新規1件追加） */
+/** 生産ロット1件を複製（同内容で新規1件追加） */
 async function copyPlanBatch(row: CuttingPlanRow) {
   const productionMonthRaw = row.production_month ? String(row.production_month) : ''
   const productionMonth = productionMonthRaw ? productionMonthRaw.slice(0, 7) : ''
@@ -4366,13 +4366,13 @@ async function copyPlanBatch(row: CuttingPlanRow) {
   }
 }
 
-/** 生産バッチ1件を削除（確認ダイアログ後） */
+/** 生産ロット1件を削除（確認ダイアログ後） */
 async function deletePlanBatch(row: CuttingPlanRow) {
   const id = row.id
   if (id == null) return
   try {
     await ElMessageBox.confirm(
-      `このバッチ（製品: ${row.product_name ?? row.product_cd ?? ''}）を削除しますか？`,
+      `このロット（製品: ${row.product_name ?? row.product_cd ?? ''}）を削除しますか？`,
       '削除の確認',
       { confirmButtonText: '削除', cancelButtonText: 'キャンセル', type: 'warning' }
     )
@@ -4394,7 +4394,7 @@ async function deletePlanBatch(row: CuttingPlanRow) {
   }
 }
 
-/** 生産バッチ一覧：材料使用数セルをダブルクリックして編集 */
+/** 生産ロット一覧：材料使用数セルをダブルクリックして編集 */
 async function onDblClickUsageCount(row: CuttingPlanRow) {
   const current = formatUsageCountDisplay(row as { usage_count?: number | null })
   try {
@@ -4501,7 +4501,7 @@ async function loadChamferingProductDetail(productCd: string) {
       chamferingProductDetail.value = (result as any).data.list[0] as ProductDetail
     }
   } catch (e) {
-    console.error('面取バッチ用・製品詳細の取得に失敗:', e)
+    console.error('面取ロット用・製品詳細の取得に失敗:', e)
     ElMessage.error('製品データの取得に失敗しました')
   } finally {
     chamferingProductDetailLoading.value = false
@@ -4520,7 +4520,7 @@ async function loadChamferingEquipmentEfficiency(productCd: string) {
     const list = ((result as any)?.data?.list ?? (result as any)?.list ?? []) as EquipmentEfficiencyRow[]
     chamferingEquipmentEfficiencyList.value = list.filter((r) => r.product_cd === productCd)
   } catch (e) {
-    console.error('面取バッチ用・設備能率の取得に失敗:', e)
+    console.error('面取ロット用・設備能率の取得に失敗:', e)
     ElMessage.error('設備能率データの取得に失敗しました')
   } finally {
     chamferingEquipmentEfficiencyLoading.value = false
@@ -4552,7 +4552,7 @@ function onDragOver(e: DragEvent, zone?: 'batchList' | 'cuttingManagement') {
 
 function onDragEnter(zone: 'batchList' | 'cuttingManagement') {
   dragEnterCount.value += 1
-  // 切断指示内拖拽排序时不显示「バッチを切断指示へ移行」提示；仅从バッチ拖入时显示
+  // 切断指示内拖拽排序时不显示「ロットを切断指示へ移行」提示；仅从ロット拖入时显示
   if (zone === 'cuttingManagement' && dragSourceRef.value === 'cuttingManagement') return
   if (zone === 'batchList' && dragSourceRef.value === 'batchList') return
   dragOverZone.value = zone
@@ -4797,14 +4797,14 @@ async function onDropChamferingBatchList(e: DragEvent) {
   const id = payload.row.id
   try {
     await request.post('/api/plan/chamfering-plans/move-from-chamfering', { chamfering_management_id: id })
-    ElMessage.success('面取バッチ一覧に戻しました')
+    ElMessage.success('面取ロット一覧に戻しました')
     loadChamferingBatchList()
     loadChamferingManagement()
     loadKanbanIssuance()
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
-      ?? '面取バッチへの戻しに失敗しました'
+      ?? '面取ロットへの戻しに失敗しました'
     ElMessage.error(String(msg))
   } finally {
     onChamferingDragEnd()
@@ -4827,7 +4827,7 @@ async function onDropBatchList(e: DragEvent) {
   const row = payload.row
   const cuttingId = row.id
   if (cuttingId == null) {
-    ElMessage.warning('このデータはバッチに戻せません（IDがありません）')
+    ElMessage.warning('このデータはロットに戻せません（IDがありません）')
     return
   }
   const productionMonth = String(row.production_month ?? '').slice(0, 7)
@@ -4848,7 +4848,7 @@ async function onDropBatchList(e: DragEvent) {
       production_day: row.production_day ? formatDateOnly(String(row.production_day)) : null,
       production_order: row.priority_order ?? null,
     })
-    ElMessage.success('生産バッチに戻しました（切断・面取・カンバンを削除済み）')
+    ElMessage.success('生産ロットに戻しました（切断・面取・カンバンを削除済み）')
     loadPlans()
     loadCuttingManagement()
     loadChamferingManagement()
@@ -4857,7 +4857,7 @@ async function onDropBatchList(e: DragEvent) {
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (err as { message?: string })?.message
-      ?? 'バッチへの戻しに失敗しました'
+      ?? 'ロットへの戻しに失敗しました'
     ElMessage.error(String(msg))
   }
 }
@@ -4880,7 +4880,7 @@ async function onDropCuttingManagement(e: DragEvent) {
   const row = payload as CuttingPlanRow
   const planId = row.id
   if (planId == null) {
-    ElMessage.warning('このバッチは移行できません（IDがありません）')
+    ElMessage.warning('このロットは移行できません（IDがありません）')
     return
   }
   const productionMonth = String(row.production_month ?? '').slice(0, 7)
@@ -4999,7 +4999,7 @@ function openPlanEditDialog(row: CuttingPlanRow) {
   planEditDialogVisible.value = true
 }
 
-/** 面取バッチ一覧：双击でバッチ内容編集ダイアログを開く（同窗体で編集・保存は chamfering-plans API） */
+/** 面取ロット一覧：双击でロット内容編集ダイアログを開く（同窗体で編集・保存は chamfering-plans API） */
 function openChamferingPlanEditDialog(row: ChamferingBatchRow) {
   if (isDragging.value || row.id == null) return
   editingPlanId.value = null
@@ -5694,7 +5694,7 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
   if (id == null) return
   try {
     await ElMessageBox.confirm(
-      'この切断指示を削除しますか？紐づく面取指示・面取バッチ一覧・カンバン発行も削除されます。',
+      'この切断指示を削除しますか？紐づく面取指示・面取ロット一覧・カンバン発行も削除されます。',
       '削除の確認',
       { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
     )
@@ -5844,7 +5844,7 @@ async function loadChamferingBatchList() {
     )
     chamferingBatchList.value = (result as any)?.success ? ((result as any).data ?? []) : []
   } catch (e) {
-    console.error('面取バッチ一覧の取得に失敗:', e)
+    console.error('面取ロット一覧の取得に失敗:', e)
     chamferingBatchList.value = []
   } finally {
     chamferingBatchLoading.value = false
@@ -5891,7 +5891,7 @@ async function deleteChamferingPlan(row: ChamferingBatchRow) {
   if (id == null) return
   try {
     await ElMessageBox.confirm(
-      'この面取バッチを削除しますか？',
+      'この面取ロットを削除しますか？',
       '削除の確認',
       { type: 'warning', confirmButtonText: '削除', cancelButtonText: 'キャンセル' }
     )
@@ -7205,7 +7205,7 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* 右侧製品情報容器：与生産バッチ一覧（左列）同高で stretch。左：右＝6：4 を維持 */
+/* 右侧製品情報容器：与生産ロット一覧（左列）同高で stretch。左：右＝6：4 を維持 */
 .right-panel {
   flex: 1;
   min-height: 0;
@@ -7906,7 +7906,7 @@ onUnmounted(() => {
   text-transform: none;
 }
 
-/* バッチ→切断のドロップゾーン（切断指示-今日/翌日：縦スクロールは wrap で行うためここでは高さは内容に合わせる） */
+/* ロット→切断のドロップゾーン（切断指示-今日/翌日：縦スクロールは wrap で行うためここでは高さは内容に合わせる） */
 .cutting-mgmt-tbody-drop-zone {
   flex: 0 0 auto;
   display: flex;
@@ -8546,7 +8546,7 @@ onUnmounted(() => {
 }
 
 /* ============================
-   バッチ編集ダイアログ (ped-*)
+   ロット編集ダイアログ (ped-*)
    el-dialog overrides → グローバル style に移動済み
    ============================ */
 
@@ -8803,7 +8803,7 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-/* 生産バッチ一覧：表头固定・数据行表格模式 */
+/* 生産ロット一覧：表头固定・数据行表格模式 */
 .plan-batch-table-wrap {
   flex: 1;
   min-height: 0;
@@ -8972,7 +8972,7 @@ onUnmounted(() => {
   margin: 8px;
 }
 
-/* 面取バッチ一覧：生産バッチ一覧と同じレイアウト（plan-row + 右パネル） */
+/* 面取ロット一覧：生産ロット一覧と同じレイアウト（plan-row + 右パネル） */
 .chamfering-plan-row {
   align-items: stretch;
 }
@@ -9012,7 +9012,7 @@ onUnmounted(() => {
   max-height: 288px;
 }
 
-/* 面取バッチ一覧：10列（CD, 生産月, ライン, 製品名, 原材料, 生産数, ロット数, ロットNo, SW, 操作） */
+/* 面取ロット一覧：10列（CD, 生産月, ライン, 製品名, 原材料, 生産数, ロット数, ロットNo, SW, 操作） */
 .chamfering-batch-table-wrap .plan-batch-tr {
   min-width: 620px;
 }
@@ -9048,7 +9048,7 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-/* 面取行右パネルも左列（面取バッチ一覧）と同高で stretch（.right-panel の flex:1 を継承） */
+/* 面取行右パネルも左列（面取ロット一覧）と同高で stretch（.right-panel の flex:1 を継承） */
 
 /* 放置区 */
 .drop-zone {
@@ -9879,7 +9879,7 @@ onUnmounted(() => {
 }
 
 /* ==================================================
-   バッチ編集ダイアログ: el-dialog overrides (global)
+   ロット編集ダイアログ: el-dialog overrides (global)
    ダイアログは body 直下にテレポートされるため
    scoped の :deep() が効かない → global style で上書き
    ================================================== */
@@ -9913,7 +9913,7 @@ onUnmounted(() => {
 }
 
 /* ============================================================
-   新規バッチ追加 / 試作バッチ追加 ダイアログ（global styles）
+   新規ロット追加 / 試作ロット追加 ダイアログ（global styles）
    ============================================================ */
 .new-record-dialog .el-dialog {
   border-radius: 12px !important;
@@ -10154,7 +10154,7 @@ onUnmounted(() => {
 .search-section { padding: 0 !important; }
 .search-section :deep(.el-form--inline .el-form-item) { margin-bottom: 4px !important; }
 
-/* ── バッチ行 hover ── */
+/* ── ロット行 hover ── */
 .plan-batch-data-row {
   transition: background-color 0.15s ease, box-shadow 0.15s ease !important;
 }

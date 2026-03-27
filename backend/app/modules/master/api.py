@@ -2,13 +2,13 @@
 製品マスタ API
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import Optional
 import io
 import csv
+import os
 
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
@@ -17,6 +17,9 @@ from app.modules.master.models import Product, Material, Supplier, ProductRouteS
 from app.modules.master.schemas import ProductCreate, ProductUpdate
 
 router = APIRouter()
+_DEFAULT_PRODUCT_CSV_DIR = "//192.168.1.200/社内共有/02_生産管理部/Data/BT-data/送信"
+PRODUCT_CSV_OUTPUT_DIR = os.environ.get("PRODUCT_CSV_OUTPUT_DIR", _DEFAULT_PRODUCT_CSV_DIR)
+PRODUCT_CSV_FILENAME = "ProductMaster.csv"
 
 
 def _row_to_dict(row: Product) -> dict:
@@ -167,7 +170,7 @@ async def get_product_batch_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """新規バッチ追加用：製品の製品CD・製品名・原材料・規格・材料メーカー・取数・切断長・面取長・展開長・端材長・面取工程・SW工程を返す。"""
+    """新規ロット追加用：製品の製品CD・製品名・原材料・規格・材料メーカー・取数・切断長・面取長・展開長・端材長・面取工程・SW工程を返す。"""
     q = select(Product).where(Product.product_cd == product_cd)
     res = await db.execute(q)
     product = res.scalar_one_or_none()
@@ -307,6 +310,7 @@ async def export_products_csv(
 ):
     """CSV出力（body: [{ product_cd, product_name, unit_per_box }]）"""
     output = io.StringIO()
+    output.write("\uFEFF")  # UTF-8 BOM（Excel で日本語文字化け防止）
     writer = csv.writer(output)
     writer.writerow(["product_cd", "product_name", "unit_per_box"])
     for item in body:
@@ -315,9 +319,23 @@ async def export_products_csv(
             item.product_name or "",
             item.unit_per_box if item.unit_per_box is not None else "",
         ])
-    output.seek(0)
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=products.csv"},
-    )
+    csv_content = output.getvalue()
+
+    if not PRODUCT_CSV_OUTPUT_DIR:
+        raise HTTPException(status_code=500, detail="CSV出力先が未設定です")
+
+    try:
+        os.makedirs(PRODUCT_CSV_OUTPUT_DIR, exist_ok=True)
+        output_path = os.path.join(PRODUCT_CSV_OUTPUT_DIR, PRODUCT_CSV_FILENAME)
+        with open(output_path, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CSV保存失敗: {str(e)}")
+
+    return {
+        "success": True,
+        "message": "ProductMaster.csv を共有フォルダに保存しました",
+        "fileName": PRODUCT_CSV_FILENAME,
+        "csvFilePath": output_path,
+        "rowCount": len(body),
+    }

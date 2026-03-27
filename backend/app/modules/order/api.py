@@ -1,5 +1,5 @@
 """
-受注バッチ API
+受注ロット API
 - GET /products: 納入先+年月で製品一覧（order_monthly と LEFT JOIN で forecast_units）
 - GET /check-combination-exists: 納入先名・製品名・年月の組み合わせが既存か
 - POST /batch-create-monthly: 一括登録（INSERT IGNORE 相当）

@@ -513,7 +513,7 @@
                 <p style="color: #67c23a; margin-top: 8px">
                   <strong
                     >✓
-                    最適化：バッチ更新を使用し、更新が必要なレコードのみを更新して更新速度を向上</strong
+                    最適化：ロット更新を使用し、更新が必要なレコードのみを更新して更新速度を向上</strong
                   >
                 </p>
                 <p style="color: #e6a23c; margin-top: 8px">

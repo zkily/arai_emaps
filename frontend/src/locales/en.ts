@@ -129,7 +129,7 @@ export default {
     APS_SCHEDULING: 'Scheduling',
     APS_CAPACITY: 'Equipment Capacity',
     APS_DAILY_REPORT: 'Daily Equipment Report',
-    APS_BATCH_PLANS: 'APS Batch Plans',
+    APS_BATCH_PLANS: 'APS Lot Plans',
     MES: 'MES',
     MES_EXECUTION: 'Execution',
     MES_QUALITY: 'Quality',

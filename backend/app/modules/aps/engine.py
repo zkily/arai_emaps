@@ -214,6 +214,7 @@ async def run_engine(
     schedule_id: int,
     override_start_date: Optional[date] = None,
     override_start_time: Optional[time] = None,
+    actual_done_qty: int = 0,
 ) -> ProductionSchedule:
     """
     指定された工単に対して排産推算を実行する。
@@ -232,6 +233,26 @@ async def run_engine(
     if line is None:
         raise ValueError(f"Machine id={ps.line_id} not found")
 
+    # 基準開始日（再計算の対象開始）
+    start = override_start_date or ps.start_date or now_jst().date()
+
+    # 既存実績を保持（再計算で schedule_details を削除しても actual_qty を失わない）
+    old_detail_res = await db.execute(
+        select(ScheduleDetail).where(ScheduleDetail.schedule_id == schedule_id)
+    )
+    old_details = old_detail_res.scalars().all()
+    old_actual_by_date: Dict[date, int] = defaultdict(int)
+    old_rows_before_start: List[tuple[date, int, int, int]] = []
+    for od in old_details:
+        old_actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
+        if od.schedule_date < start:
+            old_rows_before_start.append((
+                od.schedule_date,
+                int(od.planned_qty or 0),
+                int(od.actual_qty or 0),
+                int(getattr(od, "remaining_qty", 0) or 0),
+            ))
+
     # 既存明細・時間帯配分の削除（冪等性）
     await db.execute(
         delete(ScheduleSliceAllocation).where(
@@ -243,9 +264,20 @@ async def run_engine(
     )
     await db.flush()
 
+    # 再計算対象より前の日次は復元（履歴保持）
+    for d0, p0, a0, r0 in old_rows_before_start:
+        db.add(
+            ScheduleDetail(
+                schedule_id=schedule_id,
+                schedule_date=d0,
+                planned_qty=p0,
+                actual_qty=a0,
+                remaining_qty=max(0, int(r0 if r0 is not None else (p0 - a0))),
+            )
+        )
+
     # 基本パラメータ
-    start = override_start_date or ps.start_date or now_jst().date()
-    remaining = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
+    remaining = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0) - max(0, int(actual_done_qty or 0))
     if remaining <= 0:
         ps.start_date = start
         ps.end_date = start
@@ -362,6 +394,8 @@ async def run_engine(
                         schedule_id=schedule_id,
                         schedule_date=current_date,
                         planned_qty=placed,
+                        actual_qty=int(old_actual_by_date.get(current_date, 0)),
+                        remaining_qty=max(0, int(placed - int(old_actual_by_date.get(current_date, 0)))),
                     )
                 )
                 remaining -= placed

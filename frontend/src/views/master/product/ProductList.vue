@@ -104,6 +104,15 @@
           >
             QRコード印刷
           </el-button>
+          <el-button
+            type="warning"
+            @click="printCuttingLengthReport"
+            :icon="Printer"
+            :disabled="productList.length === 0"
+            class="cutting-print-btn"
+          >
+            切断長印刷
+          </el-button>
           <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-product-btn">
             製品追加
           </el-button>
@@ -1445,13 +1454,285 @@ const exportToCSV = async () => {
       unit_per_box: product.unit_per_box != null ? Number(product.unit_per_box) : undefined,
     }))
 
-    // 调用后端API导出CSV
-    await exportProductToCSV(exportData)
-
-    ElMessage.success(`${exportData.length}件のデータをCSVファイルに出力しました`)
+    // 调用后端API并直接保存到共享文件夹
+    const result = await exportProductToCSV(exportData)
+    if (result?.success) {
+      ElMessage.success(
+        `${exportData.length}件を${result.fileName || 'ProductMaster.csv'}として共有フォルダに保存しました`,
+      )
+    } else {
+      ElMessage.error(result?.message || 'CSVファイルの保存に失敗しました')
+    }
   } catch (error) {
     console.error('CSV出力エラー:', error)
     ElMessage.error('CSVファイルの出力に失敗しました')
+  } finally {
+    loading.value = false
+  }
+}
+
+const escapeHtml = (value: unknown): string => {
+  const text = String(value ?? '')
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+const formatLengthValue = (value: number | undefined): string => {
+  if (value === undefined || value === null || Number.isNaN(Number(value))) {
+    return '—'
+  }
+  const formatted = Number(value).toFixed(2)
+  return formatted === '0.00' ? '--' : formatted
+}
+
+const printCuttingLengthReport = async () => {
+  try {
+    loading.value = true
+
+    const response = await getProductList({
+      ...filters,
+      page: 1,
+      pageSize: 10000,
+    })
+
+    const productsToPrint: Product[] =
+      response.success && response.data ? response.data.list || [] : response.list || []
+
+    if (productsToPrint.length === 0) {
+      ElMessage.warning('印刷するデータがありません')
+      return
+    }
+
+    const groupedByMaterial = productsToPrint.reduce(
+      (acc, product) => {
+        const key = product.material_cd || '未設定'
+        if (!acc[key]) {
+          acc[key] = []
+        }
+        acc[key].push(product)
+        return acc
+      },
+      {} as Record<string, Product[]>,
+    )
+
+    const materialNameMap = materialOptions.value.reduce(
+      (acc, item) => {
+        if (item.cd) {
+          acc[item.cd] = item.name || ''
+        }
+        return acc
+      },
+      {} as Record<string, string>,
+    )
+
+    const sortedMaterials = Object.keys(groupedByMaterial).sort((a, b) => {
+      const nameA = materialNameMap[a] || a
+      const nameB = materialNameMap[b] || b
+      const byName = nameA.localeCompare(nameB, 'ja')
+      if (byName !== 0) {
+        return byName
+      }
+      return a.localeCompare(b, 'ja')
+    })
+    sortedMaterials.forEach((material) => {
+      groupedByMaterial[material].sort((a, b) => {
+        const nameA = a.product_name || ''
+        const nameB = b.product_name || ''
+        return nameA.localeCompare(nameB, 'ja')
+      })
+    })
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください')
+      return
+    }
+
+    const generatedAt = new Date().toLocaleString('ja-JP')
+    let sectionsHtml = ''
+
+    sortedMaterials.forEach((material) => {
+      const materialName = materialNameMap[material] || ''
+      const materialLabel = materialName ? `${material}｜${materialName}` : material
+      const rows = groupedByMaterial[material]
+        .map((item) => {
+          return `
+            <tr>
+              <td>${escapeHtml(item.product_cd || '')}</td>
+              <td>${escapeHtml(item.product_name || '')}</td>
+              <td class="num">${formatLengthValue(item.cut_length)}</td>
+              <td class="num">${formatLengthValue(item.chamfer_length)}</td>
+              <td class="num">${formatLengthValue(item.developed_length)}</td>
+              <td class="num">${formatLengthValue(item.scrap_length)}</td>
+              <td class="num">${item.take_count ?? '—'}</td>
+            </tr>
+          `
+        })
+        .join('')
+
+      sectionsHtml += `
+        <section class="material-section">
+          <div class="material-title">材料: ${escapeHtml(materialLabel)}</div>
+          <table>
+            <thead>
+              <tr>
+                <th>製品CD</th>
+                <th>製品名称</th>
+                <th>切断長さ(mm)</th>
+                <th>面取り長さ(mm)</th>
+                <th>展開長さ(mm)</th>
+                <th>端材長さ(mm)</th>
+                <th>取り数</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </section>
+      `
+    })
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>切断長印刷</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+          body {
+            margin: 0;
+            font-family: "Yu Gothic UI", "Meiryo", sans-serif;
+            color: #111827;
+            font-size: 11px;
+          }
+          .report-header {
+            margin-bottom: 10px;
+          }
+          .report-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 4px;
+          }
+          .report-meta {
+            font-size: 11px;
+            color: #4b5563;
+          }
+          .material-section {
+            margin-top: 8px;
+            break-inside: avoid-page;
+            page-break-inside: avoid;
+          }
+          .material-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin: 0 0 6px;
+            padding: 4px 6px;
+            background: #f3f4f6;
+            border-left: 4px solid #2563eb;
+            break-after: avoid-page;
+            page-break-after: avoid;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            break-before: avoid-page;
+            page-break-before: avoid;
+          }
+          th, td {
+            border: 1px solid #d1d5db;
+            padding: 4px 6px;
+            vertical-align: middle;
+            word-break: break-word;
+          }
+          tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          th {
+            background: #f9fafb;
+            font-weight: 700;
+            text-align: center;
+          }
+          td.num {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="report-header">
+          <h1 class="report-title">切断長印刷</h1>
+          <div class="report-meta">出力日時: ${escapeHtml(generatedAt)} / 総件数: ${productsToPrint.length}</div>
+        </div>
+        ${sectionsHtml}
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.onload = () => {
+      setTimeout(() => {
+        let isClosed = false
+        let fallbackTimeout: ReturnType<typeof setTimeout> | null = null
+
+        const closeWindow = () => {
+          if (!isClosed) {
+            isClosed = true
+            if (fallbackTimeout) {
+              clearTimeout(fallbackTimeout)
+              fallbackTimeout = null
+            }
+            setTimeout(() => {
+              try {
+                printWindow.close()
+              } catch (closeError) {
+                console.error('切断長印刷ウィンドウクローズエラー:', closeError)
+              }
+            }, 100)
+          }
+        }
+
+        printWindow.addEventListener('afterprint', closeWindow)
+
+        let focusTimeout: ReturnType<typeof setTimeout> | null = null
+        printWindow.addEventListener('focus', () => {
+          if (focusTimeout) {
+            clearTimeout(focusTimeout)
+          }
+          focusTimeout = setTimeout(() => {
+            closeWindow()
+          }, 300)
+        })
+
+        fallbackTimeout = setTimeout(() => {
+          if (!isClosed) {
+            closeWindow()
+          }
+        }, 5000)
+
+        printWindow.print()
+      }, 250)
+    }
+  } catch (error) {
+    console.error('切断長印刷エラー:', error)
+    ElMessage.error('切断長印刷に失敗しました')
   } finally {
     loading.value = false
   }
@@ -1683,7 +1964,8 @@ onMounted(async () => {
 .export-csv-btn,
 .column-selector-btn,
 .add-product-btn,
-.qr-code-btn {
+.qr-code-btn,
+.cutting-print-btn {
   border: none;
   border-radius: 8px;
   padding: 7px 12px !important;
@@ -1746,6 +2028,21 @@ onMounted(async () => {
 .qr-code-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.cutting-print-btn {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.25);
+}
+
+.cutting-print-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.35);
+}
+
+.cutting-print-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .filters-grid {

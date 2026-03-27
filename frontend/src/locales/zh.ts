@@ -128,7 +128,7 @@ export default {
     APS_SCHEDULING: '排程',
     APS_CAPACITY: '设备稼动设定',
     APS_DAILY_REPORT: '日别设备计划表',
-    APS_BATCH_PLANS: 'APS 批次计划',
+    APS_BATCH_PLANS: 'APS 批量计划',
     MES: 'MES',
     MES_EXECUTION: '制造执行',
     MES_QUALITY: '质量管理',

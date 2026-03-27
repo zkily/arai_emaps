@@ -2018,7 +2018,7 @@ async def update_production_summarys_inventory(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """在庫更新（CASE WHEN バッチ最適化版）"""
+    """在庫更新（CASE WHEN 一括最適化版）"""
     start_time = time.perf_counter()
     try:
         global_start_d, product_start_dates, route_desc_by_cd, by_product, product_route_by_cd = \
@@ -2142,7 +2142,7 @@ async def update_production_summarys_trend(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """推移更新（CASE WHEN バッチ最適化版）"""
+    """推移更新（CASE WHEN 一括最適化版）"""
     start_time = time.perf_counter()
     try:
         # 推移更新：startDate 指定時は date >= startDate の全行を対象（終了日なし）

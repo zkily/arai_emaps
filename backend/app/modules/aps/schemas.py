@@ -211,6 +211,8 @@ class ScheduleGridRow(BaseModel):
     completion_rate: Optional[float] = None
     status: str
     daily: Dict[str, int] = Field(default_factory=dict)
+    actual_daily: Dict[str, int] = Field(default_factory=dict)
+    remaining_daily: Dict[str, int] = Field(default_factory=dict)
 
 
 class LineGridBlock(BaseModel):
@@ -270,3 +272,31 @@ class ApsBatchPlanOut(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: str
+
+
+# ──────────────────── Production Progress（生産進捗） ────────────────────
+
+class ProgressLotItem(BaseModel):
+    """ロット単位の生産進捗（instruction_plans / cutting_management を照合）"""
+    batch_plan_id: int
+    aps_schedule_id: int
+    product_cd: str
+    product_name: str
+    lot_number: str
+    planned_quantity: int
+    order_no: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    predicted_completion: Optional[str] = Field(None, description="予測完了日時 = end_date")
+    progress_status: str = Field("PLANNED", description="PLANNED / RELEASED / IN_PROGRESS / COMPLETED")
+    management_code: Optional[str] = None
+    production_line: str = ""
+
+
+class ProductionProgressResponse(BaseModel):
+    lots: List[ProgressLotItem] = Field(default_factory=list)
+    dates: List[str] = Field(default_factory=list, description="日別タイムライン用日付列")
+    lot_daily: Dict[str, Dict[str, int]] = Field(
+        default_factory=dict,
+        description="lot_number -> { 'YYYY-MM-DD': qty } 日別割当（ガント表示用）",
+    )

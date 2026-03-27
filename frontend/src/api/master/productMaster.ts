@@ -51,17 +51,16 @@ export function deleteProduct(id: number): Promise<{ message: string }> {
   return request.delete(`/api/master/products/${id}`) as Promise<{ message: string }>
 }
 
+export interface ExportProductCsvResult {
+  success: boolean
+  message?: string
+  fileName?: string
+  csvFilePath?: string
+  rowCount?: number
+}
+
 export async function exportProductToCSV(
   rows: Array<{ product_cd?: string; product_name?: string; unit_per_box?: number }>
-): Promise<void> {
-  const res = await request.post('/api/master/products/export-csv', rows, {
-    responseType: 'blob',
-  })
-  const blob = res as unknown as Blob
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = 'products.csv'
-  a.click()
-  window.URL.revokeObjectURL(url)
+): Promise<ExportProductCsvResult> {
+  return request.post('/api/master/products/export-csv', rows) as Promise<ExportProductCsvResult>
 }

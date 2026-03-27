@@ -1,8 +1,8 @@
 <template>
   <div class="batch-plans-page">
     <div class="plan-hd">
-      <h2 class="plan-hd-title">APS バッチ計画</h2>
-      <p class="plan-hd-sub">APS 工単をバッチ（lot_number）へ展開した計画一覧</p>
+      <h2 class="plan-hd-title">APS ロット計画</h2>
+      <p class="plan-hd-sub">APS 工単をロット（lot_number）へ展開した計画一覧</p>
     </div>
 
     <div class="plan-card filter-card">
@@ -45,7 +45,7 @@
 
     <div class="plan-card table-card">
       <div class="plan-sec-hd">
-        バッチ一覧
+        ロット一覧
         <span class="plan-sec-badge">{{ rows.length }}</span>
       </div>
 
@@ -62,7 +62,7 @@
             {{ row.planned_quantity?.toLocaleString() ?? '—' }}
           </template>
         </el-table-column>
-        <el-table-column prop="production_lot_size" label="総バッチ数" width="120" align="right" />
+        <el-table-column prop="production_lot_size" label="総ロット数" width="120" align="right" />
         <el-table-column label="期間" min-width="210">
           <template #default="{ row }">
             <div class="period-cell">

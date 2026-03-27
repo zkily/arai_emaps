@@ -868,7 +868,7 @@ async def sync_menus(
     for item in body.items:
         parent_id = None
         if item.parent_code:
-            # 既存の親があればその id、なければ今回の items 内の code から解決（同バッチ内の親）
+            # 既存の親があればその id、なければ今回の items 内の code から解決（同一ロット内の親）
             parent_id = existing_by_code.get(item.parent_code)
             if parent_id:
                 parent_id = parent_id.id

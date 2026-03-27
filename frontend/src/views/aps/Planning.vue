@@ -7,9 +7,9 @@
     </div>
 
     <!-- ─── Filter Bar ─── -->
-    <div class="plan-card">
+    <div class="plan-card setup-section">
       <div class="setup-bar">
-        <el-form :inline="true" label-position="left">
+        <el-form :inline="true" label-position="left" class="setup-form">
           <el-form-item label="基準開始月">
             <el-date-picker
               v-model="anchorMonth"
@@ -54,7 +54,7 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item>
+          <el-form-item class="setup-fi-btn" label-width="0">
             <el-button type="primary" :loading="loadingSchedules" @click="loadSchedules">
               計画を取得
             </el-button>
@@ -71,79 +71,166 @@
 
     <!-- ─── Add Plan ─── -->
     <div v-if="selectedLineId" class="plan-card add-section">
-      <div class="plan-sec-hd">計画追加</div>
+      <div class="plan-sec-hd add-section-hd">計画追加</div>
       <div class="add-plan-block">
-        <el-form :inline="true" :model="newEntry" label-position="left" class="add-form">
-          <el-form-item label="製品名" required>
-            <el-select
-              v-model="selectedEeId"
-              filterable
-              clearable
-              placeholder="製品を選択"
-              style="width: 250px"
-              :loading="loadingEeProducts"
-              @change="onEeProductChange"
-            >
-              <el-option
-                v-for="row in eeProducts"
-                :key="row.id"
-                :value="row.id"
-                :label="eeOptionLabel(row)"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="入力方式">
+        <div class="add-row add-row--top">
+          <el-form :inline="true" :model="newEntry" label-position="left" class="add-form add-form--top">
+            <el-form-item label="製品名" required class="add-fi-product">
+              <el-select
+                v-model="selectedEeId"
+                filterable
+                clearable
+                placeholder="製品を選択"
+                class="add-select-product"
+                :loading="loadingEeProducts"
+                @change="onEeProductChange"
+              >
+                <el-option
+                  v-for="row in eeProducts"
+                  :key="row.id"
+                  :value="row.id"
+                  :label="eeOptionLabel(row)"
+                />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <div v-if="eeStatsDisplay" class="ee-stats-chip">
+            <div class="ee-stat-chip">
+              <span class="ee-stat-label">能率</span>
+              <span class="ee-readonly">{{ eeStatsDisplay.efficiency_rate }}</span>
+              <span class="ee-readonly-unit">本/H</span>
+            </div>
+            <div class="ee-stat-chip">
+              <span class="ee-stat-label">段取</span>
+              <span class="ee-readonly">{{ eeStatsDisplay.step_time ?? '—' }}</span>
+              <span class="ee-readonly-unit">分</span>
+            </div>
+            <div class="ee-stat-chip">
+              <span class="ee-stat-label">ロット</span>
+              <span class="ee-readonly">{{ eeStatsDisplay.lot_size ?? '—' }}</span>
+              <span class="ee-readonly-unit">本/ロット</span>
+            </div>
+            <div class="ee-stat-chip ee-stat-chip--wide">
+              <span class="ee-stat-label">最大日産</span>
+              <span class="ee-readonly">{{ eeStatsDisplay.maxDaily }}</span>
+              <span class="ee-readonly-unit">個/（⌊能率×{{ EE_DAILY_HOURS_MAX }}⌋）</span>
+            </div>
+          </div>
+        </div>
+
+        <el-form :inline="true" :model="newEntry" label-position="left" class="add-form add-form--main">
+          <el-form-item label="入力方式" class="add-fi-tight">
             <el-radio-group v-model="addQtyMode" size="small">
-              <el-radio-button label="batch">バッチ数</el-radio-button>
+              <el-radio-button label="batch">ロット数</el-radio-button>
               <el-radio-button label="piece">本数</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item :label="addQtyMode === 'batch' ? 'バッチ数' : '本数'" required>
-            <el-input
-              v-model="plannedQtyInput"
-              clearable
-              :placeholder="addQtyMode === 'batch' ? 'バッチ数' : '本数'"
-              style="width: 90px"
-              maxlength="6"
-            />
+          <el-form-item label="追加先" class="add-fi-tight">
+            <div class="add-merge-row">
+              <el-radio-group v-model="addMergeMode" size="small">
+                <el-radio-button label="new">新規行</el-radio-button>
+                <el-radio-button
+                  label="merge"
+                  :disabled="mergeableSchedules.length === 0"
+                >
+                  既存に合算
+                </el-radio-button>
+              </el-radio-group>
+              <span
+                v-if="schedules.length > 0 && mergeableSchedules.length === 0 && (newEntry.product_cd || newEntry.item_name)"
+                class="add-merge-hint"
+              >
+                計画一覧に同一製品がありません
+              </span>
+            </div>
           </el-form-item>
-          <el-form-item v-if="addQtySummary" label-width="0">
-            <span class="batch-summary">{{ addQtySummary }}</span>
-          </el-form-item>
-          <el-form-item label-width="0">
-            <el-button
-              type="success"
-              :loading="adding"
-              :disabled="!canAddQty"
-              @click="addSchedule"
-            >追加</el-button>
-          </el-form-item>
+          <!-- 既存に合算：合算先セレクトのすぐ右にロット数・追加（行末へ押し出さない） -->
+          <template v-if="addMergeMode === 'merge'">
+            <div class="add-merge-qty-group">
+              <el-form-item
+                label="合算先"
+                required
+                class="add-fi-merge add-fi-merge--inline"
+              >
+                <el-select
+                  v-model="mergeTargetScheduleId"
+                  filterable
+                  clearable
+                  placeholder="同一製品の行を選択"
+                  class="add-select-merge add-select-merge--inline"
+                  :disabled="mergeableSchedules.length === 0"
+                >
+                  <el-option
+                    v-for="s in mergeableSchedules"
+                    :key="s.id"
+                    :label="mergeTargetOptionLabel(s)"
+                    :value="s.id"
+                  />
+                </el-select>
+              </el-form-item>
+              <el-form-item
+                :label="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+                required
+                class="add-fi-qty add-fi-qty--inline"
+              >
+                <div class="add-qty-stack">
+                  <el-input
+                    v-model="plannedQtyInput"
+                    clearable
+                    size="small"
+                    :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+                    class="add-input-qty"
+                    maxlength="6"
+                  />
+                  <div v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</div>
+                </div>
+              </el-form-item>
+              <el-form-item label-width="0" class="add-fi-btn add-fi-btn--inline">
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="adding"
+                  :disabled="!canAddQty"
+                  @click="addSchedule"
+                >
+                  追加
+                </el-button>
+              </el-form-item>
+            </div>
+          </template>
+          <template v-else>
+            <el-form-item
+              :label="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+              required
+              class="add-fi-qty"
+            >
+              <div class="add-qty-stack">
+                <el-input
+                  v-model="plannedQtyInput"
+                  clearable
+                  size="small"
+                  :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+                  class="add-input-qty"
+                  maxlength="6"
+                />
+                <div v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</div>
+              </div>
+            </el-form-item>
+            <el-form-item label-width="0" class="add-fi-btn">
+              <el-button
+                type="success"
+                size="small"
+                :loading="adding"
+                :disabled="!canAddQty"
+                @click="addSchedule"
+              >
+                追加
+              </el-button>
+            </el-form-item>
+          </template>
         </el-form>
-
-        <div v-if="eeStatsDisplay" class="ee-stats-below">
-          <div class="ee-stat-row">
-            <span class="ee-stat-label">能率</span>
-            <span class="ee-readonly">{{ eeStatsDisplay.efficiency_rate }}</span>
-            <span class="ee-readonly-unit">本/H</span>
-          </div>
-          <div class="ee-stat-row">
-            <span class="ee-stat-label">段取</span>
-            <span class="ee-readonly">{{ eeStatsDisplay.step_time ?? '—' }}</span>
-            <span class="ee-readonly-unit">分</span>
-          </div>
-          <div class="ee-stat-row">
-            <span class="ee-stat-label">ロットサイズ</span>
-            <span class="ee-readonly">{{ eeStatsDisplay.lot_size ?? '—' }}</span>
-            <span class="ee-readonly-unit">本/批</span>
-          </div>
-          <div class="ee-stat-row">
-            <span class="ee-stat-label">最大日産</span>
-            <span class="ee-readonly">{{ eeStatsDisplay.maxDaily }}</span>
-            <span class="ee-readonly-unit">個/日（⌊能率×{{ EE_DAILY_HOURS_MAX }}⌋）</span>
-          </div>
-        </div>
       </div>
-      <p v-if="selectedLineId && !loadingEeProducts && eeProducts.length === 0" class="ee-empty-hint">
+      <p v-if="selectedLineId && !loadingEeProducts && eeProducts.length === 0" class="ee-empty-hint add-empty-hint">
         この設備に紐づく設備能率（equipment_efficiency）の製品がありません。
       </p>
     </div>
@@ -158,10 +245,23 @@
 
     <!-- ─── Schedule List ─── -->
     <div v-if="schedules.length > 0" class="plan-card schedule-section">
-      <div class="plan-sec-hd">
-        計画一覧
-        <span class="plan-sec-badge">{{ schedules.length }}</span>
-        <span class="plan-sec-sub">行をドラッグして順序を変更</span>
+      <div class="plan-sec-hd plan-sec-hd--schedule">
+        <div class="plan-sec-hd-left">
+          計画一覧
+          <span class="plan-sec-badge">{{ schedules.length }}</span>
+          <span class="plan-sec-sub">行をドラッグして順序を変更</span>
+        </div>
+        <div class="schedule-actions">
+          <el-button
+            type="warning"
+            size="small"
+            class="schedule-replan-btn"
+            :loading="replanning"
+            @click="replanAll"
+          >
+            ライン順で再計算
+          </el-button>
+        </div>
       </div>
       <el-table
         ref="scheduleTableRef"
@@ -177,7 +277,7 @@
           width="64"
           align="center"
         >
-          <template #header>
+      <template #header>
             <span class="schedule-order-head" title="行をドラッグして順序を変更">順位</span>
           </template>
           <template #default="{ row }">
@@ -186,32 +286,33 @@
         </el-table-column>
         <el-table-column prop="item_name" label="製品名" width="130" />
         <!-- <el-table-column prop="product_cd" label="製品CD" width="110" /> -->
-        <el-table-column label="入力数" width="150" align="center">
+        <el-table-column label="合計(本)" width="128" align="right">
           <template #default="{ row }">
-            <div class="qty-cell">
+            <div
+              v-if="editingScheduleTotalId === row.id"
+              class="total-qty-edit-wrap"
+              :data-total-edit-id="row.id"
+            >
               <el-input
                 v-model="plannedQtyDrafts[row.id]"
-                clearable
                 size="small"
-                style="width: 60px"
-                maxlength="6"
-                :placeholder="(row.lot_size_snapshot ?? 0) > 0 ? 'バッチ数' : '本数'"
+                class="total-qty-input"
+                maxlength="10"
+                :disabled="savingScheduleId === row.id"
+                @keydown.esc.stop.prevent="cancelEditTotalQty"
+                @keyup.enter.prevent="onTotalQtyEnter(row)"
+                @blur="onTotalQtyBlur(row)"
               />
-              <el-button
-                type="primary"
-                size="small"
-                :loading="savingScheduleId === row.id"
-                @click="savePlannedQty(row)"
-              >
-                保存
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="合計(本)" width="100" align="right">
-          <template #default="{ row }">
-            <span class="total-qty-cell">{{ row.planned_process_qty?.toLocaleString() ?? '—' }}</span>
-          </template>
+        </div>
+            <span
+              v-else
+              class="total-qty-cell total-qty-editable"
+              title="ダブルクリックで数量を変更"
+              @dblclick="startEditTotalQty(row)"
+            >
+              {{ row.planned_process_qty?.toLocaleString() ?? '—' }}
+            </span>
+      </template>
         </el-table-column>
         <el-table-column prop="daily_capacity" label="標準日産能力" width="110" align="right" />
         <el-table-column prop="setup_time" label="段取（分）" width="98" align="right" />
@@ -222,6 +323,25 @@
             <el-tag :type="statusType(row.status)" size="small">{{ statusLabelJa(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="進捗" width="120" align="center">
+          <template #default="{ row }">
+            <div class="schedule-progress-cell">
+              <template v-if="scheduleProgressMap[row.id]">
+                <el-tag
+                  v-for="st in scheduleProgressMap[row.id]"
+                  :key="st.status"
+                  :type="progressStatusType(st.status)"
+                  size="small"
+                  effect="dark"
+                  class="schedule-progress-tag"
+                >
+                  {{ progressStatusLabel(st.status) }}{{ st.count > 1 ? `×${st.count}` : '' }}
+                </el-tag>
+              </template>
+              <span v-else class="schedule-progress-none">—</span>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="80" align="center">
           <template #default="{ row }">
             <el-button type="danger" size="small" text @click="removeSchedule(row.id)">
@@ -230,16 +350,31 @@
           </template>
         </el-table-column>
       </el-table>
-
-      <div class="action-bar">
-        <el-button type="warning" size="large" :loading="replanning" @click="replanAll">
-          ライン順で再計算
-        </el-button>
-      </div>
     </div>
 
     <!-- ─── Gantt ─── -->
-    <div v-if="ganttDates.length > 0" class="plan-card gantt-section">
+    <div v-if="ganttDates.length > 0 || progressLots.length > 0" class="plan-card gantt-section">
+      <div class="gantt-status-legend">
+        <span class="legend-item"><i class="legend-dot legend-dot--planned" />計画中</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--released" />指示済</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--in-progress" />生産中</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--completed" />完了</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--actual" />実績あり</span>
+        <div class="gantt-range-wrap">
+          <span class="gantt-range-label">表示期間</span>
+          <el-date-picker
+            v-model="ganttRange"
+            type="daterange"
+            unlink-panels
+            range-separator="～"
+            start-placeholder="開始日"
+            end-placeholder="終了日"
+            value-format="YYYY-MM-DD"
+            class="gantt-range-picker"
+            @change="onGanttRangeChange"
+          />
+        </div>
+      </div>
       <el-tabs v-model="activeGanttTab" class="gantt-tabs">
         <el-tab-pane label="ガント（日別）" name="daily">
           <div class="gantt-scroll">
@@ -251,6 +386,7 @@
                   <th class="gantt-sticky gantt-sticky-name">品名</th>
                   <th class="gantt-sticky gantt-sticky-eff">能率</th>
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
+                  <th class="gantt-sticky gantt-sticky-actual">実績数</th>
                   <th
                     v-for="d in ganttDates"
                     :key="d"
@@ -264,15 +400,16 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(row, idx) in ganttRows"
+                  v-for="row in ganttRows"
                   :key="row.id"
-                  :class="['gantt-row', `gantt-rc-${idx % 10}`]"
+                  :class="['gantt-row', productPaletteClass(row)]"
                 >
                   <td class="gantt-sticky gantt-sticky-line">{{ selectedLineDisplayName }}</td>
                   <td class="gantt-sticky gantt-sticky-order">{{ row.order_no ?? '—' }}</td>
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualForRow(row).toLocaleString() }}</td>
                   <td
                     v-for="d in ganttDates"
                     :key="d"
@@ -280,7 +417,14 @@
                     :class="ganttCellClass(row, d)"
                     :title="ganttCellTitle(row, d)"
                   >
-                    <span v-if="(row.daily[d] || 0) > 0" class="gantt-qty">{{ row.daily[d] }}</span>
+                    <div
+                      v-if="(row.daily[d] || 0) > 0 || (row.actual_daily?.[d] || 0) > 0 || (row.remaining_daily?.[d] || 0) > 0"
+                      class="gantt-layered"
+                    >
+                      <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
+                      <span class="gantt-layer gantt-layer--actual"><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
+                      <span class="gantt-layer gantt-layer--remain"><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -288,9 +432,6 @@
           </div>
         </el-tab-pane>
         <el-tab-pane label="ガント（時間別）" name="hourly">
-          <p v-if="hourlyColumns.length > 0" class="hourly-toolbar-hint">
-            各セルは当該時間区間の計画個数（再計算で <code>schedule_slice_allocations</code> を更新）。非稼働帯は列がありません。
-          </p>
           <div v-if="hourlyColumns.length === 0" class="gantt-hourly-placeholder">
             <el-empty description="時間帯別データがありません">
               <template #default>
@@ -309,6 +450,7 @@
                   <th class="gantt-sticky gantt-sticky-name">品名</th>
                   <th class="gantt-sticky gantt-sticky-eff">能率</th>
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
+                  <th class="gantt-sticky gantt-sticky-actual">実績数</th>
                   <th
                     v-for="col in hourlyColumns"
                     :key="col.key"
@@ -322,23 +464,88 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(row, idx) in hourlyRows"
+                  v-for="row in hourlyRows"
                   :key="row.schedule_id"
-                  :class="['gantt-row', `gantt-rc-${idx % 10}`]"
+                  :class="['gantt-row', productPaletteClassByName(row.item_name)]"
                 >
                   <td class="gantt-sticky gantt-sticky-line">{{ selectedLineDisplayName }}</td>
                   <td class="gantt-sticky gantt-sticky-order">{{ row.order_no ?? '—' }}</td>
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty ?? 0 }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualByScheduleId(row.schedule_id).toLocaleString() }}</td>
                   <td
                     v-for="col in hourlyColumns"
                     :key="col.key"
                     class="gantt-cell gantt-hour-cell"
-                    :class="{ 'gantt-active': (row.slice_qty[col.key] || 0) > 0 }"
+                    :class="hourlyCellClass(row, col)"
                     :title="hourlyCellTitle(row, col)"
                   >
                     <span v-if="(row.slice_qty[col.key] || 0) > 0" class="gantt-qty">{{ row.slice_qty[col.key] }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </el-tab-pane>
+
+        <!-- ─── 生産進捗（ロット別ステータス甘特） ─── -->
+        <el-tab-pane label="生産進捗" name="progress">
+          <div v-if="progressLots.length === 0 && !loadingProgress" class="gantt-hourly-placeholder">
+            <el-empty description="進捗データがありません（ライン順で再計算後に表示されます）" />
+          </div>
+          <div v-else class="gantt-scroll">
+            <table class="gantt-table gantt-progress-table">
+              <thead>
+                <tr>
+                  <th class="gantt-sticky gantt-sticky-line">ライン</th>
+                  <th class="gantt-sticky gantt-sticky-order">順位</th>
+                  <th class="gantt-sticky gantt-sticky-name">品名</th>
+                  <th class="gantt-sticky gantt-sticky-eff">ロット</th>
+                  <th class="gantt-sticky gantt-sticky-planned">計画数</th>
+                  <th class="gantt-sticky gantt-sticky-actual">実績数</th>
+                  <th class="pgs-th-status">ステータス</th>
+                  <th class="pgs-th-prediction">完了予測</th>
+                  <th
+                    v-for="d in progressDates"
+                    :key="d"
+                    class="gantt-date-col"
+                    :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
+                  >
+                    <div class="gantt-date-text">{{ d.slice(5) }}</div>
+                    <div class="gantt-wd-text">{{ getWeekday(d) }}</div>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="(lot, idx) in progressLots"
+                  :key="`${lot.aps_schedule_id}_${lot.lot_number}`"
+                  :class="['gantt-row', `gantt-rc-${idx % 10}`]"
+                >
+                  <td class="gantt-sticky gantt-sticky-line">{{ lot.production_line || selectedLineDisplayName }}</td>
+                  <td class="gantt-sticky gantt-sticky-order">{{ lot.order_no ?? '—' }}</td>
+                  <td class="gantt-sticky gantt-sticky-name gantt-name">{{ lot.product_name }}</td>
+                  <td class="gantt-sticky gantt-sticky-eff pgs-lot-num">#{{ lot.lot_number }}</td>
+                  <td class="gantt-sticky gantt-sticky-planned">{{ lot.planned_quantity?.toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">{{ lotActualQty(lot).toLocaleString() }}</td>
+                  <td class="pgs-status-cell">
+                    <el-tag :type="progressStatusType(lot.progress_status)" size="small" effect="dark">
+                      {{ progressStatusLabel(lot.progress_status) }}
+                    </el-tag>
+                  </td>
+                  <td class="pgs-prediction-cell">{{ formatPrediction(lot.predicted_completion) }}</td>
+                  <td
+                    v-for="d in progressDates"
+                    :key="d"
+                    class="gantt-cell"
+                    :class="progressCellClass(lot, d)"
+                    :title="`${lot.product_name} #${lot.lot_number}: ${((progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d]) || ''}個`"
+                  >
+                    <span
+                      v-if="((progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d] || 0) > 0"
+                      class="gantt-qty"
+                    >{{ (progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d] }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -366,6 +573,7 @@ import {
   fetchSchedulingGrid,
   fetchSchedulingHourlyGrid,
   fetchEquipmentEfficiencyProducts,
+  fetchProductionProgress,
   productionLineOptionLabel,
   type ProductionLine,
   type ScheduleOut,
@@ -373,12 +581,22 @@ import {
   type HourlyGridColumn,
   type HourlyGridRow,
   type EquipmentEfficiencyProduct,
+  type ProgressLotItem,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 
 function firstDayOfMonthIso(month: string): string {
   return `${month}-01`
+}
+
+function lastDayOfMonthOffsetIso(month: string, offset: number): string {
+  const [y, m] = month.split('-').map((v) => Number(v))
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return `${month}-28`
+  const d = new Date(y, m + offset, 0)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
 }
 
 const lines = ref<ProductionLine[]>([])
@@ -390,14 +608,22 @@ const loadingLines = ref(false)
 const DEFAULT_ANCHOR_MONTH = '2026-04'
 const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
+const ganttRange = ref<[string, string]>([
+  firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH),
+  lastDayOfMonthOffsetIso(DEFAULT_ANCHOR_MONTH, 2),
+])
 const loadingSchedules = ref(false)
 const adding = ref(false)
 const replanning = ref(false)
 const savingScheduleId = ref<number | null>(null)
 const reordering = ref(false)
 const schedules = ref<ScheduleOut[]>([])
-/** 計画数（一覧）編集用：把 input 値当作文字暂存（保存时再转整数） */
+/** 合計(本) インライン編集用の下書き */
 const plannedQtyDrafts = ref<Record<number, string>>({})
+/** 合計(本) を編集中のスケジュール id（ダブルクリックで編集） */
+const editingScheduleTotalId = ref<number | null>(null)
+/** Enter 確定直後の blur で二重保存しない */
+const skipNextTotalQtyBlur = ref(false)
 /** el-table インスタンス（行ドラッグ用） */
 const scheduleTableRef = ref<{ $el?: HTMLElement } | null>(null)
 let scheduleSortable: Sortable | null = null
@@ -406,32 +632,12 @@ const loadingEeProducts = ref(false)
 /** equipment_efficiency.id */
 const selectedEeId = ref<number | null>(null)
 
-/** 計画追加：バッチ数（テキスト入力→追加時に整数化） */
+/** 計画追加：ロット数（テキスト入力→追加時に整数化） */
 const plannedQtyInput = ref('')
 const addQtyMode = ref<'batch' | 'piece'>('batch')
-
-/** 計画追加：バッチ数→合計本数を表示 */
-const addQtySummary = computed(() => {
-  const qtyNum = parseInt((plannedQtyInput.value || '').trim(), 10)
-  if (!Number.isFinite(qtyNum) || qtyNum < 1) return ''
-  if (addQtyMode.value === 'piece') {
-    return `追加予定: ${qtyNum.toLocaleString()} 本`
-  }
-  const lotSize = eeStatsDisplay.value?.lot_size
-  if (lotSize == null || lotSize <= 0) return ''
-  const total = qtyNum * lotSize
-  return `${lotSize.toLocaleString()} × ${qtyNum} = ${total.toLocaleString()} 本`
-})
-
-/** 計画追加 ボタン有効判定 */
-const canAddQty = computed(() => {
-  if (selectedEeId.value == null || !newEntry.value.item_name) return false
-  const qtyNum = parseInt((plannedQtyInput.value || '').trim(), 10)
-  if (!Number.isFinite(qtyNum) || qtyNum < 1) return false
-  if (addQtyMode.value === 'piece') return true
-  const lotSize = eeStatsDisplay.value?.lot_size
-  return lotSize != null && lotSize > 0
-})
+/** 計画追加：新規行 or 同一製品の既存行へ合計(本)を加算 */
+const addMergeMode = ref<'new' | 'merge'>('new')
+const mergeTargetScheduleId = ref<number | null>(null)
 
 const newEntry = ref({
   item_name: '',
@@ -465,14 +671,40 @@ const ganttDates = ref<string[]>([])
 const ganttRows = ref<ScheduleGridRow[]>([])
 const hourlyColumns = ref<HourlyGridColumn[]>([])
 const hourlyRows = ref<HourlyGridRow[]>([])
-/** ガント表示タブ：daily | hourly */
+/** 生産進捗 */
+const progressLots = ref<ProgressLotItem[]>([])
+const progressDates = ref<string[]>([])
+const progressLotDaily = ref<Record<string, Record<string, number>>>({})
+const loadingProgress = ref(false)
+/** ガント表示タブ：daily | hourly | progress */
 const activeGanttTab = ref('daily')
 /** 計画を取得 API を一度でも成功で呼んだか（空配列含む） */
 const schedulesFetched = ref(false)
 
+/** 計画一覧の各行に対応するロット進捗サマリ（{ status, count }[] per schedule id） */
+const scheduleProgressMap = computed(() => {
+  const map: Record<number, { status: string; count: number }[]> = {}
+  if (progressLots.value.length === 0) return map
+  const bySchedule: Record<number, Record<string, number>> = {}
+  for (const lot of progressLots.value) {
+    const sid = lot.aps_schedule_id
+    if (!bySchedule[sid]) bySchedule[sid] = {}
+    bySchedule[sid][lot.progress_status] = (bySchedule[sid][lot.progress_status] || 0) + 1
+  }
+  const order = ['IN_PROGRESS', 'RELEASED', 'PLANNED', 'COMPLETED']
+  for (const [sid, counts] of Object.entries(bySchedule)) {
+    const arr = Object.entries(counts)
+      .map(([status, count]) => ({ status, count }))
+      .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status))
+    map[Number(sid)] = arr
+  }
+  return map
+})
+
 watch(anchorMonth, (v) => {
   if (!v) return
   anchorDate.value = firstDayOfMonthIso(v)
+  ganttRange.value = [firstDayOfMonthIso(v), lastDayOfMonthOffsetIso(v, 2)]
 })
 
 /** order_no → id 安定ソート（一覧・移動用） */
@@ -483,6 +715,86 @@ const sortedSchedules = computed(() => {
     if (oa !== ob) return oa - ob
     return a.id - b.id
   })
+})
+
+/** 計画一覧のうち、追加フォームで選んだ製品と同一の行（product_cd 優先、無ければ品名一致） */
+const mergeableSchedules = computed((): ScheduleOut[] => {
+  const ep = (newEntry.value.product_cd || '').trim()
+  const en = (newEntry.value.item_name || '').trim()
+  if (!ep && !en) return []
+  return sortedSchedules.value.filter((s) => {
+    const sp = (s.product_cd || '').trim()
+    if (ep && sp) return sp === ep
+    if (ep || sp) return false
+    return en !== '' && (s.item_name || '').trim() === en
+  })
+})
+
+function mergeTargetOptionLabel(s: ScheduleOut): string {
+  const ord = s.order_no ?? '—'
+  const qty = Number(s.planned_process_qty ?? 0)
+  const name = (s.item_name || '').trim()
+  const shortName = name.length > 28 ? `${name.slice(0, 28)}…` : name
+  return `順位 ${ord} · ${shortName || '—'} · 合計 ${qty.toLocaleString()} 本`
+}
+
+watch(mergeableSchedules, (list) => {
+  if (addMergeMode.value === 'merge' && list.length === 0) {
+    addMergeMode.value = 'new'
+  }
+  if (mergeTargetScheduleId.value != null && !list.some((s) => s.id === mergeTargetScheduleId.value)) {
+    mergeTargetScheduleId.value = null
+  }
+})
+
+watch([addMergeMode, mergeableSchedules], () => {
+  if (addMergeMode.value !== 'merge') return
+  const list = mergeableSchedules.value
+  if (list.length === 1) {
+    mergeTargetScheduleId.value = list[0].id
+  }
+})
+
+/** 計画追加：ロット数→合計本数・合算プレビュー */
+const addQtySummary = computed(() => {
+  const qtyNum = parseInt((plannedQtyInput.value || '').trim(), 10)
+  if (!Number.isFinite(qtyNum) || qtyNum < 1) return ''
+  let delta = 0
+  let base = ''
+  if (addQtyMode.value === 'piece') {
+    delta = qtyNum
+    base = `追加予定: ${qtyNum.toLocaleString()} 本`
+  } else {
+    const lotSize = eeStatsDisplay.value?.lot_size
+    if (lotSize == null || lotSize <= 0) return ''
+    delta = qtyNum * lotSize
+    base = `${lotSize.toLocaleString()} × ${qtyNum} = ${delta.toLocaleString()} 本`
+  }
+  if (addMergeMode.value === 'merge' && mergeTargetScheduleId.value != null && delta > 0) {
+    const t = schedules.value.find((s) => s.id === mergeTargetScheduleId.value)
+    if (t && mergeableSchedules.value.some((s) => s.id === t.id)) {
+      const cur = Number(t.planned_process_qty ?? 0)
+      return `${base} → 合算後 ${(cur + delta).toLocaleString()} 本`
+    }
+  }
+  return base
+})
+
+/** 計画追加 ボタン有効判定 */
+const canAddQty = computed(() => {
+  if (selectedEeId.value == null || !newEntry.value.item_name) return false
+  const qtyNum = parseInt((plannedQtyInput.value || '').trim(), 10)
+  if (!Number.isFinite(qtyNum) || qtyNum < 1) return false
+  if (addQtyMode.value === 'batch') {
+    const lotSize = eeStatsDisplay.value?.lot_size
+    if (lotSize == null || lotSize <= 0) return false
+  }
+  if (addMergeMode.value === 'merge') {
+    if (mergeableSchedules.value.length === 0) return false
+    if (mergeTargetScheduleId.value == null) return false
+    if (!mergeableSchedules.value.some((s) => s.id === mergeTargetScheduleId.value)) return false
+  }
+  return true
 })
 
 /** ガント左列：現在選択設備の表示名 */
@@ -512,7 +824,7 @@ function initScheduleSortable() {
       ghostClass: 'schedule-sortable-ghost',
       dragClass: 'schedule-sortable-drag',
       filter:
-        'input, textarea, button, .el-input-number, .el-input, .el-button, .el-select, .el-tag, a',
+        'input, textarea, button, .el-input-number, .el-input, .el-button, .el-select, .el-radio, .el-radio-group, .el-tag, a',
       // 仅禁止拖拽启动，不阻断输入框的点击/键入
       preventOnFilter: false,
       onEnd: (evt: SortableEvent) => {
@@ -644,6 +956,7 @@ async function loadEeProducts() {
 }
 
 function onEeProductChange(id: number | string | null | undefined) {
+  mergeTargetScheduleId.value = null
   if (id === '' || id === null || id === undefined) {
     plannedQtyInput.value = ''
     newEntry.value.item_name = ''
@@ -685,12 +998,8 @@ async function loadSchedules() {
   try {
     const data = await fetchSchedules({ lineId: selectedLineId.value })
     schedules.value = Array.isArray(data) ? data : []
-    plannedQtyDrafts.value = Object.fromEntries(
-      schedules.value.map((s) => [
-        s.id,
-        String(s.planned_batch_count > 0 ? s.planned_batch_count : s.planned_process_qty ?? ''),
-      ]),
-    )
+    editingScheduleTotalId.value = null
+    plannedQtyDrafts.value = {}
     schedulesFetched.value = true
     await loadGantt()
   } catch (e: unknown) {
@@ -722,16 +1031,67 @@ async function addSchedule() {
   }
   const rawQty = (plannedQtyInput.value || '').trim().replace(/[,，]/g, '')
   if (!rawQty) {
-    ElMessage.warning(addQtyMode.value === 'batch' ? 'バッチ数を入力してください' : '本数を入力してください')
+    ElMessage.warning(addQtyMode.value === 'batch' ? 'ロット数を入力してください' : '本数を入力してください')
     return
   }
   const qtyInputNum = parseInt(rawQty, 10)
   if (!Number.isFinite(qtyInputNum) || qtyInputNum < 1) {
-    ElMessage.warning(addQtyMode.value === 'batch' ? 'バッチ数は 1 以上の整数を入力してください' : '本数は 1 以上の整数を入力してください')
+    ElMessage.warning(addQtyMode.value === 'batch' ? 'ロット数は 1 以上の整数を入力してください' : '本数は 1 以上の整数を入力してください')
     return
   }
+
+  let deltaPieces: number
+  if (addQtyMode.value === 'batch') {
+    const lotSize = eeStatsDisplay.value?.lot_size
+    if (lotSize == null || lotSize <= 0) {
+      ElMessage.warning('ロットサイズが未設定です。製品マスタで lot_size を登録してください。')
+      return
+    }
+    deltaPieces = qtyInputNum * lotSize
+  } else {
+    deltaPieces = qtyInputNum
+  }
+
+  if (addMergeMode.value === 'merge') {
+    const targetId = mergeTargetScheduleId.value
+    if (targetId == null) {
+      ElMessage.warning('合算先の計画行を選択してください')
+      return
+    }
+    if (!mergeableSchedules.value.some((s) => s.id === targetId)) {
+      ElMessage.warning('同一製品の計画のみ合算できます')
+      return
+    }
+    const target = schedules.value.find((s) => s.id === targetId)
+    if (!target) {
+      ElMessage.warning('対象の計画が見つかりません。計画を取得してください')
+      return
+    }
+  }
+
   adding.value = true
   try {
+    if (addMergeMode.value === 'merge') {
+      const targetId = mergeTargetScheduleId.value!
+      const tg = schedules.value.find((s) => s.id === targetId)!
+      const newTotal = Number(tg.planned_process_qty ?? 0) + deltaPieces
+      await updateSchedule(targetId, { planned_process_qty: newTotal, run_immediately: false })
+      await replanLineSequence(selectedLineId.value!, anchorDate.value || undefined)
+
+      selectedEeId.value = null
+      plannedQtyInput.value = ''
+      newEntry.value.item_name = ''
+      newEntry.value.product_cd = ''
+      newEntry.value.daily_capacity = 0
+      newEntry.value.setup_time = 0
+      addMergeMode.value = 'new'
+      mergeTargetScheduleId.value = null
+
+      await loadSchedules()
+      ElMessage.success('既存計画の合計(本)に加算しました')
+      return
+    }
+
     const nextOrder = schedules.value.length > 0
       ? Math.max(...schedules.value.map(s => s.order_no ?? 0)) + 1
       : 1
@@ -747,11 +1107,7 @@ async function addSchedule() {
       run_immediately: false,
     }
     if (addQtyMode.value === 'batch') {
-      const lotSize = eeStatsDisplay.value?.lot_size
-      if (lotSize == null || lotSize <= 0) {
-        ElMessage.warning('ロットサイズが未設定です。製品マスタで lot_size を登録してください。')
-        return
-      }
+      const lotSize = eeStatsDisplay.value?.lot_size!
       const plannedTotalQty = qtyInputNum * lotSize
       payload.planned_batch_count = qtyInputNum
       payload.lot_size_snapshot = lotSize
@@ -770,6 +1126,8 @@ async function addSchedule() {
     newEntry.value.setup_time = 0
 
     await loadSchedules()
+    addMergeMode.value = 'new'
+    mergeTargetScheduleId.value = null
     ElMessage.success('追加しました')
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e) || '追加に失敗しました')
@@ -791,38 +1149,99 @@ async function removeSchedule(id: number) {
   } catch { /* cancel */ }
 }
 
-async function savePlannedQty(row: ScheduleOut) {
+function startEditTotalQty(row: ScheduleOut) {
+  if (savingScheduleId.value != null) return
+  editingScheduleTotalId.value = row.id
+  plannedQtyDrafts.value[row.id] = String(row.planned_process_qty ?? '')
+  nextTick(() => {
+    const wrap = document.querySelector(`[data-total-edit-id="${row.id}"]`) as HTMLElement | null
+    const input = wrap?.querySelector('input') as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelEditTotalQty() {
+  skipNextTotalQtyBlur.value = true
+  editingScheduleTotalId.value = null
+  nextTick(() => {
+    skipNextTotalQtyBlur.value = false
+  })
+}
+
+function onTotalQtyEnter(row: ScheduleOut) {
+  skipNextTotalQtyBlur.value = true
+  void saveTotalPlannedQty(row).finally(() => {
+    nextTick(() => {
+      skipNextTotalQtyBlur.value = false
+    })
+  })
+}
+
+function onTotalQtyBlur(row: ScheduleOut) {
+  void nextTick(() => {
+    if (skipNextTotalQtyBlur.value) {
+      skipNextTotalQtyBlur.value = false
+      return
+    }
+    void saveTotalPlannedQty(row)
+  })
+}
+
+/** 合計(本) を planned_process_qty として保存（排産は本数が唯一の真理） */
+async function saveTotalPlannedQty(row: ScheduleOut) {
+  if (editingScheduleTotalId.value !== row.id) return
   const draft = plannedQtyDrafts.value[row.id] ?? ''
   const raw = draft.trim().replace(/[,，]/g, '')
   const val = parseInt(raw, 10)
   if (!Number.isFinite(val) || val < 1) {
-    const hasBatch = (row.lot_size_snapshot ?? 0) > 0
-    ElMessage.warning(hasBatch ? 'バッチ数は 1 以上の整数を入力してください' : '本数は 1 以上の整数を入力してください')
+    ElMessage.warning('合計(本)は 1 以上の整数を入力してください')
+    return
+  }
+  const cur = Number(row.planned_process_qty ?? 0)
+  if (val === cur) {
+    editingScheduleTotalId.value = null
     return
   }
   if (!selectedLineId.value) return
   savingScheduleId.value = row.id
   try {
-    const hasBatch = (row.lot_size_snapshot ?? 0) > 0
-    if (hasBatch) {
-      await updateSchedule(row.id, {
-        planned_batch_count: val,
-        run_immediately: false,
-      })
-    } else {
-      await updateSchedule(row.id, {
-        planned_process_qty: val,
-        run_immediately: false,
-      })
-    }
+    await updateSchedule(row.id, {
+      planned_process_qty: val,
+      run_immediately: false,
+    })
     await replanLineSequence(selectedLineId.value, anchorDate.value || undefined)
     await loadSchedules()
-    ElMessage.success('計画を更新しました')
+    ElMessage.success('合計(本)を更新しました')
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e))
-    await loadSchedules()
+    await loadSchedulesEditingPreserve(row.id)
   } finally {
     savingScheduleId.value = null
+  }
+}
+
+/** エラー時は一覧だけ再取得し、合計(本)の編集状態を可能なら維持 */
+async function loadSchedulesEditingPreserve(scheduleId: number) {
+  if (!selectedLineId.value) return
+  loadingSchedules.value = true
+  try {
+    const data = await fetchSchedules({ lineId: selectedLineId.value })
+    schedules.value = Array.isArray(data) ? data : []
+    await loadGantt()
+    const still = schedules.value.some((s) => s.id === scheduleId)
+    if (still && editingScheduleTotalId.value === scheduleId) {
+      const s = schedules.value.find((x) => x.id === scheduleId)
+      if (s) plannedQtyDrafts.value[scheduleId] = String(s.planned_process_qty ?? '')
+    } else {
+      editingScheduleTotalId.value = null
+    }
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e))
+    editingScheduleTotalId.value = null
+  } finally {
+    loadingSchedules.value = false
+    initScheduleSortable()
   }
 }
 
@@ -862,21 +1281,48 @@ function hourlyCellTitle(row: HourlyGridRow, col: HourlyGridColumn): string {
   return `${row.item_name}: ${q}個（${col.work_date} ${formatHm(col.period_start)}–${formatHm(col.period_end)}）`
 }
 
+function hourlyCellClass(row: HourlyGridRow, col: HourlyGridColumn): Record<string, boolean> {
+  const active = (row.slice_qty[col.key] || 0) > 0
+  const actual = periodActualByScheduleIdAndDate(row.schedule_id, col.work_date)
+  return { 'gantt-active': active, 'gantt-has-actual': active && actual > 0 }
+}
+
+function periodActualForRow(row: ScheduleGridRow): number {
+  const m = row.actual_daily || {}
+  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
+function periodActualByScheduleId(scheduleId: number): number {
+  const row = ganttRows.value.find((r) => r.id === scheduleId)
+  if (!row) return 0
+  return periodActualForRow(row)
+}
+
+function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number {
+  const row = ganttRows.value.find((r) => r.id === scheduleId)
+  if (!row) return 0
+  return Number(row.actual_daily?.[d] || 0)
+}
+
+function lotActualQty(lot: ProgressLotItem): number {
+  const key = `${lot.aps_schedule_id}_${lot.lot_number}`
+  const m = progressLotDaily.value[key] || {}
+  const dates = progressDates.value.length > 0 ? progressDates.value : Object.keys(m)
+  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
 async function loadGantt() {
   hourlyColumns.value = []
   hourlyRows.value = []
-  if (!selectedLineId.value || schedules.value.length === 0) {
+  if (!selectedLineId.value) {
     ganttDates.value = []
     ganttRows.value = []
     return
   }
-  const startDates = schedules.value.map(s => s.start_date).filter(Boolean) as string[]
-  const endDates = schedules.value.map(s => s.end_date).filter(Boolean) as string[]
-  if (startDates.length === 0) return
-
-  const sd = startDates.sort()[0]
-  const edRaw = endDates.sort().pop() || sd
-  const ed = addDays(edRaw, 3)
+  const month = (anchorMonth.value || DEFAULT_ANCHOR_MONTH).trim()
+  const sd = (ganttRange.value?.[0] || anchorDate.value || firstDayOfMonthIso(month)).trim()
+  const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 2)).trim()
 
   try {
     const grid = await fetchSchedulingGrid(sd, ed, selectedLineId.value)
@@ -897,12 +1343,59 @@ async function loadGantt() {
     hourlyColumns.value = []
     hourlyRows.value = []
   }
+  void loadProgress()
 }
 
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr)
-  d.setDate(d.getDate() + n)
-  return d.toISOString().slice(0, 10)
+async function onGanttRangeChange() {
+  if (!selectedLineId.value) return
+  await loadGantt()
+}
+
+async function loadProgress() {
+  if (!selectedLineId.value) {
+    progressLots.value = []
+    progressDates.value = []
+    progressLotDaily.value = {}
+    return
+  }
+  loadingProgress.value = true
+  try {
+    const res = await fetchProductionProgress(selectedLineId.value)
+    progressLots.value = res.lots ?? []
+    progressDates.value = res.dates ?? []
+    progressLotDaily.value = res.lot_daily ?? {}
+  } catch {
+    progressLots.value = []
+    progressDates.value = []
+    progressLotDaily.value = {}
+  } finally {
+    loadingProgress.value = false
+  }
+}
+
+function progressStatusLabel(s: string): string {
+  const m: Record<string, string> = {
+    PLANNED: '計画中',
+    RELEASED: '指示済',
+    IN_PROGRESS: '生産中',
+    COMPLETED: '完了',
+  }
+  return m[s] ?? s
+}
+function progressStatusType(s: string): 'info' | 'warning' | 'primary' | 'success' {
+  if (s === 'COMPLETED') return 'success'
+  if (s === 'IN_PROGRESS') return 'primary'
+  if (s === 'RELEASED') return 'warning'
+  return 'info'
+}
+function progressCellClass(lot: ProgressLotItem, d: string): Record<string, boolean> {
+  const key = `${lot.aps_schedule_id}_${lot.lot_number}`
+  const qty = (progressLotDaily.value[key] || {})[d] || 0
+  return { 'gantt-active': qty > 0, [`pgs-${lot.progress_status.toLowerCase()}`]: qty > 0 }
+}
+function formatPrediction(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  return iso.replace('T', ' ').slice(0, 16)
 }
 
 function statusType(s: string): 'success' | 'warning' | 'info' {
@@ -937,352 +1430,916 @@ function getWeekday(d: string): string {
 
 function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean> {
   const qty = row.daily[d] || 0
+  const actual = row.actual_daily?.[d] || 0
+  const remain = row.remaining_daily?.[d] || 0
+  const active = qty > 0 || actual > 0 || remain > 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
   return {
-    'gantt-active': qty > 0,
-    'gantt-range': !!inRange && qty === 0,
+    'gantt-active': active,
+    'gantt-has-actual': actual > 0,
+    'gantt-range': !!inRange && !active,
     'is-weekend': isWeekend(d),
     'is-today': isToday(d),
   }
 }
 
+function productPaletteClass(row: ScheduleGridRow): string {
+  const base = (row.item_name || '').trim()
+  return productPaletteClassByName(base)
+}
+
+function productPaletteClassByName(name: string): string {
+  const base = (name || '').trim()
+  if (!base) return 'gpc-0'
+  let h = 0
+  for (let i = 0; i < base.length; i += 1) {
+    h = ((h << 5) - h + base.charCodeAt(i)) | 0
+  }
+  return `gpc-${Math.abs(h) % 10}`
+}
+
 function ganttCellTitle(row: ScheduleGridRow, d: string): string {
-  const qty = row.daily[d] || 0
-  if (qty > 0) return `${row.item_name}: ${qty}個`
+  const planned = row.daily[d] || 0
+  const actual = row.actual_daily?.[d] || 0
+  const remain = row.remaining_daily?.[d] || 0
+  if (planned > 0 || actual > 0 || remain > 0) {
+    return `${row.item_name}: 計画 ${planned} / 実績 ${actual} / 残 ${remain}`
+  }
   return ''
 }
 </script>
 
 <style scoped>
-/* ─── Page Shell ─── */
+/* ══════════════════════════════════════════════════
+   Design Tokens
+   ══════════════════════════════════════════════════ */
 .planning-page {
-  padding: 16px 20px;
-  background: #f0f2f5;
+  /* UI フォント（日本語可読性優先：Windows / macOS ともにクリアなサンセリフ） */
+  --font-sans: YuGothic,system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", YuGothic,
+    "Meiryo", "Hiragino Sans", Arial, sans-serif;
+  --font-mono: Consolas, "Courier New", monospace;
+  /* colors */
+  --c-bg:        #f4f6f9;
+  --c-surface:   #ffffff;
+  --c-border:    #e2e6ed;
+  --c-border-l:  #edf0f5;
+  --c-text-h:    #0f172a;
+  --c-text:      #334155;
+  --c-text-m:    #475569;
+  --c-text-s:    #64748b;
+  --c-accent:    #3b82f6;
+  --c-success:   #10b981;
+  --c-warn:      #f59e0b;
+  --c-danger:    #ef4444;
+  /* typography */
+  --fs-xs:  10.5px;
+  --fs-s:   11.5px;
+  --fs-base: 13px;
+  --fs-m:   14px;
+  --fs-lg:  18px;
+  /* controls */
+  --ctrl-h:  28px;
+  --ctrl-fs: 13px;
+  --ctrl-px: 10px;
+  --ctrl-r:  5px;
+  /* spacing */
+  --gap-xs:  4px;
+  --gap-s:   8px;
+  --gap:    12px;
+  --gap-l:  16px;
+  /* card */
+  --card-r:  8px;
+  --card-p: 12px 14px;
+  --card-sh: 0 1px 4px rgba(0,21,41,.06), 0 2px 10px rgba(0,21,41,.04);
+}
+
+/* ══════════════════════════════════════════════════
+   Page Shell
+   ══════════════════════════════════════════════════ */
+.planning-page {
+  padding: 14px 18px;
+  background: var(--c-bg);
   min-height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--gap-s);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--c-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+.planning-page :deep(.el-table),
+.planning-page :deep(.el-form-item__label),
+.planning-page :deep(.el-button),
+.planning-page :deep(.el-input__inner),
+.planning-page :deep(.el-select__selected-item),
+.planning-page :deep(.el-radio-button__inner),
+.planning-page :deep(.el-tabs__item),
+.planning-page :deep(.el-tag) {
+  font-family: inherit;
 }
 
-/* ─── Page Header ─── */
+/* ══════════════════════════════════════════════════
+   Page Header
+   ══════════════════════════════════════════════════ */
 .plan-hd {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 4px 2px 0;
+  align-items: center;
+  gap: var(--gap);
+  padding: 2px 0 4px;
 }
 .plan-hd-title {
-  font-size: 18px;
+  font-size: var(--fs-lg);
   font-weight: 700;
-  color: #1f2329;
+  color: var(--c-text-h);
   margin: 0;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  flex-shrink: 0;
 }
 .plan-hd-sub {
-  font-size: 12px;
-  color: #8f959e;
+  font-size: var(--fs-s);
+  color: var(--c-text-m);
   margin: 0;
+  line-height: 1.55;
 }
 
-/* ─── Section Cards ─── */
+/* ══════════════════════════════════════════════════
+   Cards
+   ══════════════════════════════════════════════════ */
 .plan-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 1px 3px rgba(0, 21, 41, 0.06), 0 4px 12px rgba(0, 21, 41, 0.04);
+  background: var(--c-surface);
+  border-radius: var(--card-r);
+  padding: var(--card-p);
+  box-shadow: var(--card-sh);
+  border: 1px solid var(--c-border-l);
 }
 
-/* ─── Section Heading ─── */
+/* ══════════════════════════════════════════════════
+   Section Heading
+   ══════════════════════════════════════════════════ */
 .plan-sec-hd {
-  font-size: 13px;
+  font-size: var(--fs-m);
   font-weight: 700;
-  color: #1f2329;
-  margin: 0 0 10px;
-  padding-left: 9px;
-  border-left: 3px solid #409eff;
+  color: var(--c-text-h);
+  margin: 0 0 9px;
+  padding-left: 8px;
+  border-left: 3px solid var(--c-accent);
   display: flex;
   align-items: center;
-  gap: 8px;
-  line-height: 1.3;
+  gap: var(--gap-s);
+  line-height: 1.45;
+  letter-spacing: 0.01em;
 }
 .plan-sec-badge {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
-  background: #409eff;
+  background: var(--c-accent);
   color: #fff;
   padding: 1px 7px;
   border-radius: 10px;
-  line-height: 18px;
+  line-height: 17px;
 }
 .plan-sec-sub {
-  font-size: 11px;
-  color: #b0b8c4;
+  font-size: var(--fs-xs);
+  color: var(--c-text-s);
   font-weight: 400;
   margin-left: auto;
 }
-
-/* ─── Setup Bar ─── */
-.setup-bar :deep(.el-form--inline .el-form-item) {
-  margin-bottom: 0;
+/* 計画一覧：タイトル行に再計算ボタン（右側） */
+.plan-sec-hd--schedule {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--gap-s);
+}
+.plan-sec-hd-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap-s);
+  min-width: 0;
+  flex: 1;
+}
+.plan-sec-hd--schedule .plan-sec-sub {
+  margin-left: 0;
+}
+.schedule-replan-btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+.schedule-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.schedule-section .schedule-replan-btn {
+  height: var(--ctrl-h);
+  min-height: var(--ctrl-h);
+  padding: 0 12px;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  border-radius: var(--ctrl-r);
+}
+.schedule-section .schedule-replan-btn :deep(.el-loading-spinner) {
+  width: 14px;
+  height: 14px;
 }
 
-/* ─── Add Section ─── */
-.add-form { flex-wrap: wrap; }
-.add-plan-block { margin-bottom: 2px; }
-.ee-stats-below {
+/* ══════════════════════════════════════════════════
+   Setup Bar（基準開始月・工程・ライン）— 計画追加と同一の高さ・字サイズ
+   ══════════════════════════════════════════════════ */
+.setup-bar :deep(.el-form--inline) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--gap-s);
+  row-gap: 4px;
+}
+.setup-bar :deep(.el-form--inline .el-form-item) {
+  margin-bottom: 0;
+  margin-right: 0;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.setup-bar :deep(.el-form-item__label) {
+  display: inline-flex;
+  align-items: center;
+  height: var(--add-h);
+  line-height: var(--add-h);
+  font-size: var(--add-fs);
+  color: var(--c-text-m);
+  padding-right: 5px;
+}
+.setup-bar :deep(.el-form-item__content) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--add-h);
+  line-height: var(--add-h);
+}
+.setup-fi-btn :deep(.el-button) {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  padding: 0 14px;
+  font-size: var(--add-fs);
+  border-radius: var(--ctrl-r);
+}
+.setup-section .ee-empty-hint {
+  margin: 6px 0 0;
+}
+
+/* ══════════════════════════════════════════════════
+   Add Section
+   ══════════════════════════════════════════════════ */
+.plan-card.add-section,
+.plan-card.setup-section {
+  padding: 10px 14px;
+  /* 計画追加・検索条件で共通のコントロール寸法 */
+  --add-h:  var(--ctrl-h);
+  --add-fs: var(--fs-base);
+}
+.add-section-hd {
+  margin-bottom: 8px !important;
+  padding-left: 8px !important;
+  font-size: var(--fs-base) !important;
+}
+
+/* ── block layout ── */
+.add-plan-block { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── row 1: product + stats chip ── */
+.add-row--top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap-s) var(--gap);
+}
+
+/* ── form wrapper ── */
+.add-form {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  margin: 6px 0 2px;
-  padding: 5px 12px;
-  background: linear-gradient(135deg, #f8faff 0%, #f2f6ff 100%);
-  border-radius: 8px;
-  border: 1px solid #dbeafe;
-}
-.ee-stat-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  padding: 3px 14px 3px 0;
-  border-right: 1px solid #dbeafe;
-  line-height: 1.6;
-}
-.ee-stat-row:last-child { border-right: none; padding-right: 0; }
-.ee-stat-row:not(:first-child) { padding-left: 14px; }
-.ee-stat-label { color: #6b7280; white-space: nowrap; }
-.ee-readonly { font-weight: 700; color: #1f2329; font-variant-numeric: tabular-nums; }
-.ee-readonly-unit { color: #9ca3af; font-size: 11px; }
-.ee-empty-hint { margin: 4px 0 0; font-size: 12px; color: #e6a23c; }
-.batch-summary {
-  font-size: 12px;
-  font-weight: 600;
-  color: #409eff;
-  white-space: nowrap;
-}
-.total-qty-cell {
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  gap: 0;
 }
 
-/* ─── Schedule List ─── */
+/* ── every form-item: inline-flex, vertically centered ── */
+.add-form :deep(.el-form-item) {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 0;
+  margin-right: var(--gap);
+  vertical-align: middle;
+}
+.add-form :deep(.el-form-item):last-child { margin-right: 0; }
+
+/* ── labels ── */
+.add-form :deep(.el-form-item__label) {
+  display: inline-flex;
+  align-items: center;
+  height: var(--add-h);
+  line-height: var(--add-h);
+  padding-right: 5px;
+  font-size: var(--add-fs);
+  color: var(--c-text-m);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── content wrapper ── */
+.add-form :deep(.el-form-item__content) {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--add-h);
+  line-height: var(--add-h);
+}
+
+/* ── input / select height & font ── */
+.plan-card.add-section :deep(.el-input__wrapper),
+.plan-card.add-section :deep(.el-select__wrapper),
+.plan-card.setup-section :deep(.el-input__wrapper),
+.plan-card.setup-section :deep(.el-select__wrapper) {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  box-shadow: 0 0 0 1px var(--c-border) inset;
+  border-radius: var(--ctrl-r);
+  padding: 0 var(--ctrl-px);
+  transition: box-shadow .15s;
+}
+.plan-card.add-section :deep(.el-input__wrapper:hover),
+.plan-card.add-section :deep(.el-select__wrapper:hover),
+.plan-card.setup-section :deep(.el-input__wrapper:hover),
+.plan-card.setup-section :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c0c4cc inset;
+}
+.plan-card.add-section :deep(.el-input__wrapper.is-focus),
+.plan-card.add-section :deep(.el-select__wrapper.is-focus),
+.plan-card.setup-section :deep(.el-input__wrapper.is-focus),
+.plan-card.setup-section :deep(.el-select__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--c-accent) inset;
+}
+.plan-card.add-section :deep(.el-input__inner),
+.plan-card.add-section :deep(.el-select__selected-item),
+.plan-card.add-section :deep(.el-select__placeholder),
+.plan-card.setup-section :deep(.el-input__inner),
+.plan-card.setup-section :deep(.el-select__selected-item),
+.plan-card.setup-section :deep(.el-select__placeholder) {
+  font-size: var(--add-fs);
+  height: var(--add-h);
+  line-height: var(--add-h);
+}
+
+/* ── radio-button group ── */
+.add-section :deep(.el-radio-group) {
+  display: inline-flex;
+  align-items: center;
+  height: var(--add-h);
+}
+.add-section :deep(.el-radio-button__inner) {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  line-height: calc(var(--add-h) - 2px);
+  padding: 0 10px;
+  font-size: var(--add-fs);
+  border-radius: 0;
+}
+.add-section :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: var(--ctrl-r) 0 0 var(--ctrl-r);
+}
+.add-section :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 0 var(--ctrl-r) var(--ctrl-r) 0;
+}
+
+/* ── 追加 button ── */
+.add-fi-btn :deep(.el-button) {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  padding: 0 14px;
+  font-size: var(--add-fs);
+  border-radius: var(--ctrl-r);
+}
+
+/* ── widths ── */
+.add-select-product { width: 210px; }
+.add-select-merge   { width: min(100%, 300px); }
+.add-input-qty      { width: 82px; }
+.add-fi-merge       { flex: 1 1 auto; }
+
+/* 既存に合算：合算先・数量・追加を 1 かたまりにし、合算先の右隣に配置（親 flex の行末まで伸ばさない） */
+.add-merge-qty-group {
+  display: contents;
+}
+.add-section .add-fi-merge--inline,
+.add-section .add-fi-qty--inline,
+.add-section .add-fi-btn--inline {
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+.add-select-merge--inline {
+  width: 240px;
+  min-width: 180px;
+  max-width: min(320px, 42vw);
+}
+
+/* ── qty stack (input + hint) ── */
+.add-qty-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.add-qty-hint {
+  font-size: var(--fs-xs);
+  line-height: 1.35;
+  color: var(--c-text-m);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── merge row ── */
+.add-merge-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--gap-xs) var(--gap-s);
+}
+.add-merge-hint {
+  font-size: var(--fs-xs);
+  color: var(--c-text-s);
+  white-space: nowrap;
+}
+
+/* ── stats chip bar ── */
+.ee-stats-chip {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  height: var(--add-h);
+  padding: 0 10px 0 12px;
+  background: linear-gradient(90deg, #f8fafc 0%, #eff6ff 100%);
+  border-radius: var(--ctrl-r);
+  border: 1px solid #dde3f0;
+  gap: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ee-stat-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  font-size: var(--fs-xs);
+  padding: 0 10px 0 0;
+  margin-right: 8px;
+  border-right: 1px solid #e4e9f0;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.ee-stat-chip:last-child { border-right: none; margin-right: 0; padding-right: 0; }
+.ee-stat-label    { color: var(--c-text-m); font-size: var(--fs-xs); }
+.ee-readonly      { font-weight: 600; color: var(--c-text-h); font-variant-numeric: tabular-nums; font-size: var(--fs-xs); }
+.ee-readonly-unit { color: var(--c-text-s); font-size: var(--fs-xs); }
+
+.ee-empty-hint   { margin: 4px 0 0; font-size: var(--fs-base); color: #e6a23c; }
+.add-empty-hint  { margin-top: 6px; margin-bottom: 0; }
+
+/* ══════════════════════════════════════════════════
+   Schedule List
+   ══════════════════════════════════════════════════ */
 .schedule-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
+  min-height: 100px;
 }
 .schedule-table { width: 100%; }
-.schedule-table :deep(.el-table__header th),
-.schedule-table :deep(.el-table__cell){
-  padding: 6px 6px;
+.schedule-table :deep(.el-table__header th) {
+  padding: 5px 6px;
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--c-text-m);
+  background: #f7f8fa;
 }
-.schedule-table :deep(.el-table__body-wrapper tbody td){
-  height: 34px;
+.schedule-table :deep(.el-table__cell) { padding: 4px 6px; }
+.schedule-table :deep(.el-table__body-wrapper tbody td) { height: 36px; }
+.schedule-table :deep(.el-table__body .cell) {
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+.schedule-table :deep(.el-table__body-wrapper tbody tr:hover td) {
+  background: #f0f6ff !important;
 }
 .schedule-table-draggable :deep(.el-table__body-wrapper tbody tr) { cursor: grab; }
 .schedule-table-draggable :deep(.el-table__body-wrapper tbody tr:active) { cursor: grabbing; }
-.schedule-sortable-ghost { opacity: 0.5; background: #ecf5ff !important; }
-.schedule-sortable-drag { opacity: 0.98; }
+.schedule-sortable-ghost { opacity: .4; background: #e8f3ff !important; }
+.schedule-sortable-drag  { opacity: .97; }
 .schedule-order-head { cursor: help; }
-.schedule-drag-hint { font-size: 13px; font-weight: 600; }
-.order-num { font-size: 13px; font-weight: 600; }
-.qty-cell {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-}
-.action-bar { margin-top: 12px; text-align: center; }
+.schedule-drag-hint  { font-size: var(--fs-base); font-weight: 700; color: var(--c-text-h); }
+.order-num           { font-size: var(--fs-base); font-weight: 700; color: var(--c-text-h); }
 
-/* ─── Gantt Section ─── */
-.gantt-tabs :deep(.el-tabs__content) { padding: 0; }
-.gantt-tabs :deep(.el-tabs__header) { margin-bottom: 10px; }
-.hourly-toolbar-hint {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.5;
+/* ── 進捗列（計画一覧） ── */
+.schedule-progress-cell { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; align-items: center; }
+.schedule-progress-tag  { font-size: 10px !important; padding: 0 5px !important; height: 18px !important; line-height: 18px !important; }
+.schedule-progress-none { color: var(--c-text-s); font-size: var(--fs-s); }
+
+/* ── 合計(本) inline-edit ── */
+.total-qty-cell {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-h);
 }
+.total-qty-editable {
+  display: inline-block;
+  min-width: 3.5em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s, color .15s;
+}
+.total-qty-editable:hover {
+  background: #eef4ff;
+  color: var(--c-accent);
+}
+.total-qty-edit-wrap { display: flex; justify-content: flex-end; width: 100%; }
+.total-qty-input { width: 90px; }
+.total-qty-input :deep(.el-input__inner) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-base);
+}
+
+/* ══════════════════════════════════════════════════
+   Gantt Section
+   ══════════════════════════════════════════════════ */
+.gantt-tabs :deep(.el-tabs__content)  { padding: 0; }
+.gantt-tabs :deep(.el-tabs__header)   { margin-bottom: 10px; }
+.gantt-tabs :deep(.el-tabs__item) {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  height: 36px;
+  line-height: 36px;
+  letter-spacing: 0.02em;
+  transition: color .2s;
+}
+.gantt-tabs :deep(.el-tabs__active-bar) { height: 3px; border-radius: 2px; }
 .gantt-hourly-placeholder {
-  min-height: 180px;
+  min-height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .hourly-hint {
-  max-width: 480px;
-  font-size: 12px;
-  color: #606266;
-  line-height: 1.55;
+  max-width: 460px;
+  font-size: var(--fs-base);
+  color: var(--c-text-m);
+  line-height: 1.6;
   margin: 0 auto;
   text-align: center;
 }
 
-/* ─── Gantt Table ─── */
-.gantt-scroll { overflow-x: auto; }
+/* ── Gantt Table ── */
+.gantt-scroll {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid var(--c-border-l);
+}
+.gantt-scroll::-webkit-scrollbar { height: 7px; }
+.gantt-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+.gantt-scroll::-webkit-scrollbar-thumb { background: #c1c9d4; border-radius: 4px; }
+.gantt-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 .gantt-table {
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-base);
+  font-family: var(--font-sans);
   white-space: nowrap;
+  -webkit-font-smoothing: antialiased;
 }
 .gantt-table th,
 .gantt-table td {
-  border: 1px solid #e8ecf0;
-  padding: 0 4px;
+  border: 1px solid #e8ecf2;
+  padding: 0 5px;
   text-align: center;
-  height: 26px;
+  height: 30px;
   vertical-align: middle;
 }
 .gantt-table thead th {
-  background: #f5f7fb;
-  font-weight: 600;
-  color: #4b5563;
-  font-size: 11px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  font-weight: 700;
+  color: var(--c-text-m);
+  font-size: var(--fs-s);
+  letter-spacing: 0.02em;
+  border-bottom: 2px solid #d4dae5;
+}
+.gantt-table tbody tr { transition: background .12s ease; }
+.gantt-table tbody tr:hover td:not(.gantt-active):not(.gantt-has-actual) {
+  background: #f8fafd;
 }
 
-/* ─── Sticky Columns ─── */
+/* ── Sticky Columns ── */
 .gantt-sticky {
   position: sticky;
-  background: #fafbfc;
-  background-color: #fafbfc !important;
+  background: #fbfcfe;
+  background-color: #fbfcfe !important;
   z-index: 100;
   text-align: left;
-  border-right: 0 !important; /* 避免 border-collapse + sticky 造成底色透出 */
+  border-right: 0 !important;
   box-sizing: border-box;
   background-clip: padding-box;
   overflow: hidden;
-  box-shadow: inset -1px 0 0 #e8ecf0, 2px 0 0 #fafbfc; /* 外阴影补齐边界缝隙 */
+  box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
 }
 .gantt-table thead .gantt-sticky {
-  background: #edf1f7 !important;
-  background-color: #edf1f7 !important;
+  background: #e8edf5 !important;
+  background-color: #e8edf5 !important;
   z-index: 110;
   border-right: 0 !important;
-  box-shadow: inset -1px 0 0 #e8ecf0, 2px 0 0 #edf1f7;
+  box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5;
 }
 .gantt-sticky-line {
-  left: 0;
-  width: 80px;
-  min-width: 80px;
-  max-width: 80px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  left: 0; width: 80px; min-width: 80px; max-width: 80px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; color: var(--c-text-m); font-size: var(--fs-s);
 }
 .gantt-sticky-order {
-  left: 80px;
-  width: 44px;
-  min-width: 44px;
-  max-width: 44px;
-  text-align: center;
-}
-.gantt-sticky-planned {
-  left: 326px;
-  width: 56px;
-  min-width: 56px;
-  max-width: 56px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.gantt-sticky-eff {
-  left: 256px;
-  width: 70px;
-  min-width: 70px;
-  max-width: 70px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+  left: 80px; width: 44px; min-width: 44px; max-width: 44px; text-align: center;
+  color: var(--c-text-s); font-size: var(--fs-s);
 }
 .gantt-sticky-name {
-  left: 124px;
-  width: 132px;
-  min-width: 132px;
-  max-width: 132px;
-  text-align: left;
-  padding-left: 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  left: 124px; width: 132px; min-width: 132px; max-width: 132px;
+  text-align: left; padding-left: 8px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.gantt-name { font-weight: 600; }
+.gantt-sticky-eff {
+  left: 256px; width: 70px; min-width: 70px; max-width: 70px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 600; font-size: var(--fs-s);
+  font-family: var(--font-mono); color: var(--c-text-m);
+}
+.gantt-sticky-planned {
+  left: 326px; width: 56px; min-width: 56px; max-width: 56px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 600; font-size: var(--fs-s);
+  font-family: var(--font-mono); color: var(--c-text-h);
+}
+.gantt-sticky-actual {
+  left: 382px; width: 72px; min-width: 72px; max-width: 72px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--fs-s);
+  font-family: var(--font-mono); color: #0f766e;
+  box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06);
+}
+.gantt-table thead .gantt-sticky-actual {
+  box-shadow: inset -1px 0 0 #c9d1de, 3px 0 6px rgba(0,21,41,.06);
+}
+.gantt-name {
+  font-weight: 700; color: var(--c-text-h);
+  letter-spacing: 0.01em; font-size: var(--fs-s);
+}
 
-/* ─── Date Columns ─── */
-.gantt-date-col { min-width: 42px; }
-.gantt-date-text { font-size: 11px; font-weight: 600; }
-.gantt-wd-text   { font-size: 9px; color: #9ca3af; margin-top: 1px; }
-
-/* Saturday/Sunday header */
+/* ── Date Columns ── */
+.gantt-date-col { min-width: 44px; padding: 4px 2px 3px !important; }
+.gantt-date-text {
+  font-size: var(--fs-s); font-weight: 700;
+  font-family: var(--font-mono); letter-spacing: -0.02em;
+  color: var(--c-text-m);
+}
+.gantt-wd-text {
+  font-size: 9.5px; color: var(--c-text-s); margin-top: 1px;
+  font-weight: 600; letter-spacing: 0.04em;
+}
 .gantt-date-col.is-weekend .gantt-date-text,
-.gantt-date-col.is-weekend .gantt-wd-text {
-  color: #ef4444;
-  font-weight: 700;
-}
-
-.gantt-date-col.is-weekend {
-  background: transparent;
-}
-
-/* Today header */
+.gantt-date-col.is-weekend .gantt-wd-text { color: #dc2626; font-weight: 800; }
+.gantt-date-col.is-weekend { background: transparent; }
 .gantt-date-col.is-today {
-  background: #fffbeb;
+  background: linear-gradient(180deg, #fefce8 0%, #fef3c7 100%);
+  border-bottom: 2px solid #f59e0b !important;
 }
 
-/* ─── Data Cells ─── */
-.gantt-cell { min-width: 42px; height: 26px; transition: background 0.12s; }
-.gantt-qty  { font-size: 11px; font-weight: 600; line-height: 1; }
+/* ── Data Cells ── */
+.gantt-cell {
+  min-width: 44px; height: 38px;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+.gantt-qty {
+  font-size: var(--fs-s); font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; font-family: var(--font-mono);
+}
+.gantt-table tbody td.gantt-cell {
+  text-align: left;
+  padding-left: 4px;
+}
+.gantt-layered {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  line-height: 1;
+  padding: 2px 0;
+}
+.gantt-layer {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.gantt-layer--plan {
+  color: rgba(255, 255, 255, 0.97);
+  font-weight: 800;
+  font-size: 10.5px;
+}
+.gantt-layer--actual {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.gantt-layer--remain {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.gl-lbl {
+  font-weight: 500; opacity: .7;
+  margin-right: 1px; font-size: 9px;
+  font-family: var(--font-sans);
+}
 .gantt-cell.is-weekend:not(.gantt-active) { background: transparent; }
-.gantt-cell.is-today { background: #fffbeb; box-shadow: none; }
+.gantt-cell.is-today:not(.gantt-active):not(.gantt-has-actual) {
+  background: #fefce8; box-shadow: none;
+}
 .gantt-cell.gantt-range { background: #f0f5ff; }
+.gantt-cell.gantt-active {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.15), inset 0 -1px 0 rgba(0,0,0,.08);
+}
 
-/* ─── Hourly Columns ─── */
-.gantt-hour-col { min-width: 52px; vertical-align: bottom; padding-bottom: 3px; }
-.gantt-hour-date  { font-size: 10px; color: #6b7280; font-weight: 600; }
-.gantt-hour-range { font-size: 9px; color: #9ca3af; }
-.gantt-hour-cell  { min-width: 52px; }
-.gantt-hour-col.is-today { background: #fffbeb; box-shadow: none; }
+/* ── Hourly Columns ── */
+.gantt-hour-col {
+  min-width: 54px; vertical-align: bottom; padding: 4px 2px 3px !important;
+}
+.gantt-hour-date {
+  font-size: var(--fs-xs); color: var(--c-text-m); font-weight: 700;
+  font-family: var(--font-mono); letter-spacing: -0.02em;
+}
+.gantt-hour-range {
+  font-size: 9.5px; color: var(--c-text-s); font-weight: 600;
+  font-family: var(--font-mono);
+}
+.gantt-hour-cell { min-width: 54px; }
+.gantt-hour-col.is-today {
+  background: linear-gradient(180deg, #fefce8 0%, #fef3c7 100%);
+  border-bottom: 2px solid #f59e0b !important;
+}
 
-/* ─── Per-Row Color Palette (10 colors) ─── */
-/* 0 · Blue */
+/* ─── Per-Row Color Palette (10 colors, used in progress Gantt) ─── */
 .gantt-rc-0 td.gantt-active { background: #3b82f6; color: #fff; }
 .gantt-rc-0 td.gantt-range  { background: #eff6ff; }
-.gantt-rc-0 td.gantt-active.is-weekend { background: #60a5fa; }
-/* 1 · Emerald */
 .gantt-rc-1 td.gantt-active { background: #10b981; color: #fff; }
 .gantt-rc-1 td.gantt-range  { background: #ecfdf5; }
-.gantt-rc-1 td.gantt-active.is-weekend { background: #34d399; }
-/* 2 · Violet */
 .gantt-rc-2 td.gantt-active { background: #8b5cf6; color: #fff; }
 .gantt-rc-2 td.gantt-range  { background: #f5f3ff; }
-.gantt-rc-2 td.gantt-active.is-weekend { background: #a78bfa; }
-/* 3 · Amber */
 .gantt-rc-3 td.gantt-active { background: #f59e0b; color: #fff; }
 .gantt-rc-3 td.gantt-range  { background: #fffbeb; }
-.gantt-rc-3 td.gantt-active.is-weekend { background: #fbbf24; }
-/* 4 · Pink */
 .gantt-rc-4 td.gantt-active { background: #ec4899; color: #fff; }
 .gantt-rc-4 td.gantt-range  { background: #fdf2f8; }
-.gantt-rc-4 td.gantt-active.is-weekend { background: #f472b6; }
-/* 5 · Sky */
 .gantt-rc-5 td.gantt-active { background: #0ea5e9; color: #fff; }
 .gantt-rc-5 td.gantt-range  { background: #f0f9ff; }
-.gantt-rc-5 td.gantt-active.is-weekend { background: #38bdf8; }
-/* 6 · Rose */
 .gantt-rc-6 td.gantt-active { background: #f43f5e; color: #fff; }
 .gantt-rc-6 td.gantt-range  { background: #fff1f2; }
-.gantt-rc-6 td.gantt-active.is-weekend { background: #fb7185; }
-/* 7 · Lime */
 .gantt-rc-7 td.gantt-active { background: #84cc16; color: #fff; }
 .gantt-rc-7 td.gantt-range  { background: #f7fee7; }
-.gantt-rc-7 td.gantt-active.is-weekend { background: #a3e635; }
-/* 8 · Indigo */
 .gantt-rc-8 td.gantt-active { background: #6366f1; color: #fff; }
 .gantt-rc-8 td.gantt-range  { background: #eef2ff; }
-.gantt-rc-8 td.gantt-active.is-weekend { background: #818cf8; }
-/* 9 · Teal */
 .gantt-rc-9 td.gantt-active { background: #14b8a6; color: #fff; }
 .gantt-rc-9 td.gantt-range  { background: #f0fdfa; }
-.gantt-rc-9 td.gantt-active.is-weekend { background: #2dd4bf; }
+
+/* 状态图例 + 表示期间 */
+.gantt-status-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  font-size: var(--fs-s);
+  color: var(--c-text-m);
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #edf0f5;
+}
+.legend-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  white-space: nowrap; font-weight: 500;
+}
+.gantt-range-wrap {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.gantt-range-label {
+  font-size: var(--fs-xs);
+  color: var(--c-text-m);
+  white-space: nowrap;
+  font-weight: 600;
+}
+.gantt-range-picker { width: 240px; }
+.gantt-range-picker :deep(.el-input__wrapper) {
+  min-height: 24px; height: 24px;
+  font-size: var(--fs-s);
+  padding-top: 0; padding-bottom: 0;
+  border-radius: 5px;
+}
+.gantt-range-picker :deep(.el-range-input) {
+  font-size: var(--fs-s); font-family: var(--font-mono);
+}
+.gantt-range-picker :deep(.el-range-separator) { font-size: var(--fs-xs); }
+.legend-dot {
+  width: 10px; height: 10px; border-radius: 3px;
+  display: inline-block; box-shadow: 0 1px 2px rgba(0,0,0,.12);
+}
+.legend-dot--planned { background: linear-gradient(135deg, #94a3b8, #64748b); }
+.legend-dot--released { background: linear-gradient(135deg, #fbbf24, #d97706); }
+.legend-dot--in-progress { background: linear-gradient(135deg, #60a5fa, #2563eb); }
+.legend-dot--completed { background: linear-gradient(135deg, #34d399, #059669); }
+.legend-dot--actual { background: linear-gradient(135deg, #0f766e, #115e59); }
+
+.gantt-row.grs-planned td.gantt-active { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
+.gantt-row.grs-released td.gantt-active { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
+.gantt-row.grs-in_progress td.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }
+.gantt-row.grs-completed td.gantt-active { background: linear-gradient(135deg, #34d399, #059669) !important; color: #fff; }
+
+/* 日別 / 時間別 甘特：按产品着色（同产品稳定同色・10色） */
+.gantt-row.gpc-0 td.gantt-active { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; }
+.gantt-row.gpc-1 td.gantt-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; }
+.gantt-row.gpc-2 td.gantt-active { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: #fff; }
+.gantt-row.gpc-3 td.gantt-active { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #fff; }
+.gantt-row.gpc-4 td.gantt-active { background: linear-gradient(135deg, #ec4899 0%, #db2777 100%); color: #fff; }
+.gantt-row.gpc-5 td.gantt-active { background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); color: #fff; }
+.gantt-row.gpc-6 td.gantt-active { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); color: #fff; }
+.gantt-row.gpc-7 td.gantt-active { background: linear-gradient(135deg, #84cc16 0%, #65a30d 100%); color: #fff; }
+.gantt-row.gpc-8 td.gantt-active { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); color: #fff; }
+.gantt-row.gpc-9 td.gantt-active { background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%); color: #fff; }
+
+/* 有实绩时统一用深青色覆盖 */
+td.gantt-has-actual {
+  background: linear-gradient(135deg, #0f766e 0%, #115e59 100%) !important;
+  color: #fff !important;
+}
+
+/* ══════════════════════════════════════════════════
+   Progress Gantt (生産進捗)
+   ══════════════════════════════════════════════════ */
+.pgs-th-status,
+.pgs-th-prediction {
+  position: sticky;
+  z-index: 100;
+  background: #e8edf5 !important;
+  background-color: #e8edf5 !important;
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  font-weight: 700;
+}
+.pgs-th-status     { left: 454px; width: 80px; min-width: 80px; max-width: 80px;
+  box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5; }
+.pgs-th-prediction { left: 534px; width: 110px; min-width: 110px; max-width: 110px;
+  box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06); }
+.pgs-status-cell {
+  position: sticky;
+  left: 454px; width: 80px; min-width: 80px; max-width: 80px;
+  z-index: 100;
+  background: #fbfcfe;
+  background-color: #fbfcfe !important;
+  box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
+  text-align: center;
+}
+.pgs-prediction-cell {
+  position: sticky;
+  left: 534px; width: 110px; min-width: 110px; max-width: 110px;
+  z-index: 100;
+  background: #fbfcfe;
+  background-color: #fbfcfe !important;
+  box-shadow: inset -1px 0 0 #e2e6ed, 3px 0 6px rgba(0,21,41,.06);
+  text-align: center;
+  font-size: var(--fs-xs);
+  color: var(--c-text-m);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.pgs-lot-num { font-weight: 700; text-align: center; font-family: var(--font-mono); }
+
+/* Status-aware cell colors */
+.gantt-progress-table td.pgs-planned.gantt-active   { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
+.gantt-progress-table td.pgs-released.gantt-active   { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
+.gantt-progress-table td.pgs-in_progress.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }
+.gantt-progress-table td.pgs-completed.gantt-active   { background: linear-gradient(135deg, #34d399, #059669) !important; color: #fff; }
 </style>

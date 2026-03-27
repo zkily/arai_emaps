@@ -120,12 +120,13 @@ class ScheduleDetail(Base):
     schedule_date = Column(Date, nullable=False)
     planned_qty = Column(Integer, nullable=False, default=0)
     actual_qty = Column(Integer, nullable=False, default=0)
+    remaining_qty = Column(Integer, nullable=False, default=0)
 
     schedule = relationship("ProductionSchedule", back_populates="details")
 
 
 class ApsBatchPlan(Base):
-    """APS バッチ（lot_number）計画表（instruction_plans へ同期可能）"""
+    """APS ロット（lot_number）計画表（instruction_plans へ同期可能）"""
     __tablename__ = "aps_batch_plans"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

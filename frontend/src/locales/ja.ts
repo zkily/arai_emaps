@@ -129,7 +129,7 @@ export default {
     APS_SCHEDULING: 'スケジューリング',
     APS_CAPACITY: '設備稼働設定',
     APS_DAILY_REPORT: '日別設備計画表',
-    APS_BATCH_PLANS: 'APSバッチ計画',
+    APS_BATCH_PLANS: 'APSロット計画',
     MES: 'MES管理メニュー',
     MES_EXECUTION: '製造実行',
     MES_QUALITY: '品質管理',

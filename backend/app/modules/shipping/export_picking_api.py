@@ -120,7 +120,7 @@ async def export_picking_csv(
             # 5) ディレクトリ存在確認・ファイル書き込み
             os.makedirs(PICKING_CSV_OUTPUT_DIR, exist_ok=True)
             out_path = os.path.join(PICKING_CSV_OUTPUT_DIR, PICKING_CSV_FILENAME)
-            with open(out_path, "w", encoding="utf-8") as f:
+            with open(out_path, "w", encoding="utf-8", newline="") as f:
                 f.write(content)
             csv_path = out_path
 

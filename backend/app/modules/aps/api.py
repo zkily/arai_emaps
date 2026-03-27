@@ -18,7 +18,7 @@ from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 
-from app.modules.master.models import Machine, EquipmentEfficiency, Process, Product
+from app.modules.master.models import Machine, EquipmentEfficiency, Process, Product, Material, Supplier
 from app.modules.aps.models import (
     LineCapacity,
     LineCapacityTimeSlot,
@@ -49,6 +49,8 @@ from app.modules.aps.schemas import (
     HourlyGridColumnOut,
     HourlyGridRowOut,
     ApsBatchPlanOut,
+    ProgressLotItem,
+    ProductionProgressResponse,
 )
 from app.modules.aps.engine import run_engine, replan_line_sequential
 
@@ -765,7 +767,7 @@ async def update_schedule(
                 raise HTTPException(
                     400,
                     f"既に {already_produced} 本の実績があるため、"
-                    f"批次数は {min_batches} 以上にしてください。",
+                    f"ロット数は {min_batches} 以上にしてください。",
                 )
             ps.planned_process_qty = new_total
 
@@ -894,11 +896,23 @@ async def get_scheduling_grid(
                     ScheduleDetail.schedule_date <= ed,
                 )
             )
+            details = detail_result.scalars().all()
             daily: dict[str, int] = {}
-            for det in detail_result.scalars().all():
+            for det in details:
                 key = det.schedule_date.isoformat()
                 daily[key] = int(det.planned_qty)
                 daily_totals[key] += int(det.planned_qty)
+
+            actual_daily: dict[str, int] = {}
+            remaining_daily: dict[str, int] = {}
+            for det in details:
+                key = det.schedule_date.isoformat()
+                actual_daily[key] = actual_daily.get(key, 0) + int(det.actual_qty or 0)
+                remaining_daily[key] = remaining_daily.get(key, 0) + int(getattr(det, "remaining_qty", 0) or 0)
+
+            for k, planned_q in daily.items():
+                if k not in remaining_daily:
+                    remaining_daily[k] = max(0, int(planned_q or 0) - int(actual_daily.get(k, 0) or 0))
 
             rows.append(ScheduleGridRow(
                 id=ps.id,
@@ -922,6 +936,8 @@ async def get_scheduling_grid(
                 completion_rate=_dec(ps.completion_rate) if ps.completion_rate is not None else None,
                 status=ps.status or "PLANNING",
                 daily=daily,
+                actual_daily=actual_daily,
+                remaining_daily=remaining_daily,
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
             sum_planned_output += int(ps.planned_output_qty or 0)
@@ -1083,21 +1099,105 @@ async def replan_sequence(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
+    """
+    ライン順で再計算（実績考慮を統合）。
+    ステップ 1: anchor から通常の順次排産（ガント生成）
+    ステップ 2: stock_transaction_logs → schedule_details.actual_qty 同期
+    ステップ 3: 実績のある工単は「最後の actual>0 の翌日」から残数で再排産
+    """
     anchor = None
     if anchorStartDate:
         try:
             anchor = date.fromisoformat(anchorStartDate)
         except ValueError:
             raise HTTPException(400, "anchorStartDate は YYYY-MM-DD 形式")
+
+    # ── Step 1: 通常の順次排産 ──
     updated = await replan_line_sequential(db, line_id, anchor)
-    # APS バッチ（lot_number）を instruction_plans へ同期（選択 B：時間精算は schedule_slice_allocations 起点）
+    await db.flush()
+
+    # ── Step 2: stock_transaction_logs → schedule_details.actual_qty 同期 ──
+    for ps in updated:
+        await _sync_actual_from_stock_logs(db, ps)
+    await db.flush()
+
+    # ── Step 3: 実績がある工単は残数ベースで再排産 ──
+    schedules_with_actual: list[ProductionSchedule] = []
+    for ps in updated:
+        has_actual = await _schedule_has_actual(db, ps.id)
+        if has_actual:
+            schedules_with_actual.append(ps)
+
+    if schedules_with_actual:
+        cursor_date_r = anchor or updated[0].start_date or now_jst().date()
+        cursor_time_r = time(0, 0, 0)
+
+        for ps in updated:
+            if ps in schedules_with_actual:
+                last_actual_date = await _last_actual_date_for_schedule(db, ps.id)
+                if last_actual_date is not None:
+                    replan_start = last_actual_date + timedelta(days=1)
+                    if replan_start > cursor_date_r:
+                        cursor_date_r = replan_start
+
+                period_planned = await _sum_planned_qty_in_details(db, ps.id)
+                period_actual = await _sum_actual_qty(db, ps.id)
+                remaining = max(0, period_planned - period_actual)
+
+                planned_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
+                actual_done_for_engine = max(0, planned_total - remaining)
+
+                ps = await run_engine(
+                    db,
+                    ps.id,
+                    override_start_date=cursor_date_r,
+                    override_start_time=cursor_time_r,
+                    actual_done_qty=actual_done_for_engine,
+                )
+            else:
+                ps = await run_engine(
+                    db,
+                    ps.id,
+                    override_start_date=cursor_date_r,
+                    override_start_time=cursor_time_r,
+                )
+
+            await db.flush()
+            last_q = await db.execute(
+                select(ScheduleSliceAllocation)
+                .where(ScheduleSliceAllocation.schedule_id == ps.id)
+                .order_by(
+                    ScheduleSliceAllocation.work_date.desc(),
+                    ScheduleSliceAllocation.period_end.desc(),
+                    ScheduleSliceAllocation.sort_order.desc(),
+                )
+                .limit(1)
+            )
+            last = last_q.scalars().first()
+            if last is not None:
+                cursor_date_r = last.work_date
+                cursor_time_r = last.period_end
+                if cursor_time_r == time(0, 0, 0) and last.period_start != time(0, 0, 0):
+                    cursor_date_r = cursor_date_r + timedelta(days=1)
+                    cursor_time_r = time(0, 0, 0)
+            else:
+                cursor_date_r = ps.end_date or (cursor_date_r + timedelta(days=1))
+                cursor_time_r = time(0, 0, 0)
+
+        # Step 2 再执行：重排后再同步一次 actual_qty
+        for ps in updated:
+            await _sync_actual_from_stock_logs(db, ps)
+        await db.flush()
+
+    # instruction_plans 同期
     for ps in updated:
         await _sync_instruction_plans_from_aps_schedule(db, ps)
     await db.flush()
+
     return {
         "success": True,
         "data": {"count": len(updated)},
-        "message": f"{len(updated)}件の工単を順次再計算しました",
+        "message": f"{len(updated)}件の工単を再計算しました（実績考慮済み）",
     }
 
 
@@ -1182,6 +1282,149 @@ async def get_daily_equipment_report(
     return {"success": True, "data": report}
 
 
+# ═══════════════════ Production Progress（生産進捗） ═══════════════════
+
+
+@router.get("/production-progress", response_model=ProductionProgressResponse)
+async def get_production_progress(
+    lineId: int = Query(..., description="対象設備 ID"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    指定ラインの APS ロットごとに instruction_plans / cutting_management を照合し、
+    リアルタイムの生産進捗ステータス＋日別数量を返す。
+    ステータス: PLANNED → RELEASED → IN_PROGRESS → COMPLETED
+    """
+    sched_result = await db.execute(
+        select(ProductionSchedule)
+        .where(ProductionSchedule.line_id == lineId)
+        .order_by(ProductionSchedule.order_no, ProductionSchedule.id)
+    )
+    schedules = sched_result.scalars().all()
+    if not schedules:
+        return ProductionProgressResponse(lots=[], dates=[], lot_daily={})
+
+    schedule_map = {s.id: s for s in schedules}
+    schedule_ids = list(schedule_map.keys())
+
+    batch_result = await db.execute(
+        select(ApsBatchPlan)
+        .where(ApsBatchPlan.aps_schedule_id.in_(schedule_ids))
+        .order_by(ApsBatchPlan.aps_schedule_id, ApsBatchPlan.lot_number)
+    )
+    batches = batch_result.scalars().all()
+    if not batches:
+        return ProductionProgressResponse(lots=[], dates=[], lot_daily={})
+
+    slice_result = await db.execute(
+        select(ScheduleSliceAllocation)
+        .where(ScheduleSliceAllocation.schedule_id.in_(schedule_ids))
+        .order_by(
+            ScheduleSliceAllocation.schedule_id,
+            ScheduleSliceAllocation.work_date,
+            ScheduleSliceAllocation.period_start,
+            ScheduleSliceAllocation.sort_order,
+        )
+    )
+    all_slices = slice_result.scalars().all()
+    slices_by_sched: dict[int, list] = defaultdict(list)
+    for s in all_slices:
+        slices_by_sched[s.schedule_id].append(s)
+
+    all_dates_set: set[str] = set()
+    lots: list[ProgressLotItem] = []
+    lot_daily: dict[str, dict[str, int]] = {}
+
+    for batch in batches:
+        ps = schedule_map.get(batch.aps_schedule_id)
+        if not ps:
+            continue
+
+        mc = _instruction_management_code(
+            production_month=batch.production_month,
+            production_line=batch.production_line,
+            product_cd=batch.product_cd,
+            priority_order=batch.priority_order,
+            production_lot_size=batch.production_lot_size,
+            lot_number=batch.lot_number,
+        )
+
+        progress_status = "PLANNED"
+        try:
+            cut_q = await db.execute(
+                text("SELECT id FROM cutting_management WHERE management_code = :mc LIMIT 1"),
+                {"mc": mc},
+            )
+            if cut_q.scalar() is not None:
+                progress_status = "IN_PROGRESS"
+            else:
+                ins_q = await db.execute(
+                    text(
+                        "SELECT id FROM instruction_plans "
+                        "WHERE aps_batch_plan_id = :bid OR management_code = :mc "
+                        "ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"bid": batch.id, "mc": mc},
+                )
+                if ins_q.scalar() is not None:
+                    # 从 cutting_management 撤回后回到指示済，不新增状态
+                    progress_status = "RELEASED"
+        except (OperationalError, ProgrammingError):
+            pass
+
+        start_iso = batch.start_date.isoformat() if batch.start_date else None
+        end_iso = batch.end_date.isoformat() if batch.end_date else None
+
+        lots.append(ProgressLotItem(
+            batch_plan_id=batch.id,
+            aps_schedule_id=batch.aps_schedule_id,
+            product_cd=batch.product_cd,
+            product_name=batch.product_name,
+            lot_number=batch.lot_number,
+            planned_quantity=batch.planned_quantity,
+            order_no=ps.order_no,
+            start_date=start_iso,
+            end_date=end_iso,
+            predicted_completion=end_iso,
+            progress_status=progress_status,
+            management_code=mc,
+            production_line=batch.production_line or "",
+        ))
+
+        lot_key = f"{batch.aps_schedule_id}_{batch.lot_number}"
+        daily_map: dict[str, int] = {}
+
+        slices = slices_by_sched.get(ps.id, [])
+        if slices and batch.start_date and batch.end_date:
+            b_start = batch.start_date
+            b_end = batch.end_date
+            for sl in slices:
+                sl_start = _combine_work_date_and_time(sl.work_date, sl.period_start, end_of_day=False)
+                is_eod = sl.period_end == time(0, 0, 0) and sl.period_start != time(0, 0, 0)
+                sl_end = _combine_work_date_and_time(sl.work_date, sl.period_end, end_of_day=is_eod)
+                if sl_end <= b_start or sl_start >= b_end:
+                    continue
+                sq = int(sl.planned_qty or 0)
+                if sq <= 0:
+                    continue
+                overlap_start = max(sl_start, b_start)
+                overlap_end = min(sl_end, b_end)
+                sl_dur = max(1.0, (sl_end - sl_start).total_seconds())
+                overlap_dur = max(0.0, (overlap_end - overlap_start).total_seconds())
+                portion = int(round(sq * overlap_dur / sl_dur))
+                if portion <= 0:
+                    continue
+                d_key = sl.work_date.isoformat()
+                daily_map[d_key] = daily_map.get(d_key, 0) + portion
+                all_dates_set.add(d_key)
+
+        lot_daily[lot_key] = daily_map
+
+    dates = sorted(all_dates_set)
+    return ProductionProgressResponse(lots=lots, dates=dates, lot_daily=lot_daily)
+
+
 # ═══════════════════ helpers ═══════════════════
 
 
@@ -1190,6 +1433,129 @@ async def _sum_actual_qty(db: AsyncSession, schedule_id: int) -> int:
     from sqlalchemy import func as sa_func
     res = await db.execute(
         select(sa_func.coalesce(sa_func.sum(ScheduleDetail.actual_qty), 0))
+        .where(ScheduleDetail.schedule_id == schedule_id)
+    )
+    return int(res.scalar() or 0)
+
+
+async def _actual_daily_from_schedule_details(
+    db: AsyncSession,
+    schedule_id: int,
+    start_date: date,
+    end_date: date,
+) -> dict[str, int]:
+    """
+    schedule_details から実績を日別集計（YYYY-MM-DD -> qty）。
+    """
+    q = await db.execute(
+        select(ScheduleDetail).where(
+            ScheduleDetail.schedule_id == schedule_id,
+            ScheduleDetail.schedule_date >= start_date,
+            ScheduleDetail.schedule_date <= end_date,
+        )
+    )
+    out: dict[str, int] = {}
+    for det in q.scalars().all():
+        k = det.schedule_date.isoformat()
+        out[k] = out.get(k, 0) + int(det.actual_qty or 0)
+    return out
+
+
+async def _sum_actual_qty_until(
+    db: AsyncSession,
+    schedule_id: int,
+    start_date: date,
+    end_date: date,
+) -> int:
+    if end_date < start_date:
+        return 0
+    res = await db.execute(
+        select(ScheduleDetail).where(
+            ScheduleDetail.schedule_id == schedule_id,
+            ScheduleDetail.schedule_date >= start_date,
+            ScheduleDetail.schedule_date <= end_date,
+        )
+    )
+    return sum(int(r.actual_qty or 0) for r in res.scalars().all())
+
+
+async def _last_actual_date_for_line(db: AsyncSession, line_id: int) -> Optional[date]:
+    rows = await db.execute(
+        select(ScheduleDetail.schedule_date)
+        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+        .where(
+            ProductionSchedule.line_id == line_id,
+            ScheduleDetail.actual_qty > 0,
+        )
+        .order_by(ScheduleDetail.schedule_date.desc())
+        .limit(1)
+    )
+    return rows.scalar_one_or_none()
+
+
+async def _sync_actual_from_stock_logs(db: AsyncSession, ps: ProductionSchedule):
+    """
+    stock_transaction_logs → schedule_details.actual_qty を手動同期。
+    run_engine 後に schedule_details が再作成されるため、
+    DB トリガーが効かないケースを補完する。
+    """
+    from sqlalchemy import func as sa_func
+
+    machine = await db.get(Machine, ps.line_id)
+    if machine is None:
+        return
+
+    details_res = await db.execute(
+        select(ScheduleDetail).where(ScheduleDetail.schedule_id == ps.id)
+    )
+    details = details_res.scalars().all()
+    if not details:
+        return
+
+    from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+
+    for det in details:
+        agg_res = await db.execute(
+            select(sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0))
+            .where(
+                StockTransactionLog.transaction_type == '実績',
+                StockTransactionLog.transaction_time.isnot(None),
+                sa_func.date(StockTransactionLog.transaction_time) == det.schedule_date,
+                StockTransactionLog.machine_cd == machine.machine_cd,
+                StockTransactionLog.target_cd == ps.product_cd,
+            )
+        )
+        actual = int(agg_res.scalar() or 0)
+        det.actual_qty = actual
+        det.remaining_qty = max(0, int(det.planned_qty or 0) - actual)
+
+
+async def _schedule_has_actual(db: AsyncSession, schedule_id: int) -> bool:
+    from sqlalchemy import func as sa_func
+    res = await db.execute(
+        select(sa_func.coalesce(sa_func.sum(ScheduleDetail.actual_qty), 0))
+        .where(ScheduleDetail.schedule_id == schedule_id)
+    )
+    return int(res.scalar() or 0) > 0
+
+
+async def _last_actual_date_for_schedule(db: AsyncSession, schedule_id: int) -> Optional[date]:
+    rows = await db.execute(
+        select(ScheduleDetail.schedule_date)
+        .where(
+            ScheduleDetail.schedule_id == schedule_id,
+            ScheduleDetail.actual_qty > 0,
+        )
+        .order_by(ScheduleDetail.schedule_date.desc())
+        .limit(1)
+    )
+    return rows.scalar_one_or_none()
+
+
+async def _sum_planned_qty_in_details(db: AsyncSession, schedule_id: int) -> int:
+    from sqlalchemy import func as sa_func
+    res = await db.execute(
+        select(sa_func.coalesce(sa_func.sum(ScheduleDetail.planned_qty), 0))
         .where(ScheduleDetail.schedule_id == schedule_id)
     )
     return int(res.scalar() or 0)
@@ -1222,19 +1588,56 @@ def _instruction_management_code(
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
 
 
+# instruction_plans へ書き込むのは「成型」(KT04) の設備に限る（get_lines の processCd 判定と同一）。aps_batch_plans は全工程で更新する。
+_APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD = "KT04"
+
+
+async def _machine_matches_process_cd(
+    db: AsyncSession,
+    machine: Machine,
+    process_cd: str,
+) -> bool:
+    """設備の machine_type が指定工程の名称または工程CDと一致するか（/lines?processCd= と同じ）。"""
+    pc = (process_cd or "").strip()
+    if not pc:
+        return False
+    proc_result = await db.execute(select(Process).where(Process.process_cd == pc))
+    proc = proc_result.scalar_one_or_none()
+    if proc is None:
+        return False
+    pn = (proc.process_name or "").strip()
+    pcc = (proc.process_cd or "").strip()
+    mt = (machine.machine_type or "").strip()
+    if not mt:
+        return False
+    if pn and mt == pn:
+        return True
+    if pcc and mt == pcc:
+        return True
+    return False
+
+
 async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: ProductionSchedule) -> None:
     """
-    APS の工単スケジュールをバッチ（lot_number）に展開し、instruction_plans へ同期する。
+    APS の工単スケジュールをロット（lot_number）に展開し、instruction_plans へ同期する。
 
     実装方針:
+    - instruction_plans は工程 KT04（成型）設備の計画のみ。aps_batch_plans は設備の工程に関わらず更新する。
     - 時間範囲は schedule_slice_allocations（時間別ガント）から切替点を精算して作成（選択 B）。
     - instruction_plans:
       - aps_batch_plan_id が紐づく行のみ上書き（手作業は維持）
-      - cutting_management に既に存在する management_code のバッチは skip（既に移行済み）
+      - cutting_management に既に存在する management_code のロットは skip（既に移行済み）
     """
-    # schedule は APS バッチ単位に分解できる前提
+    # schedule は APS ロット単位に分解できる前提
     if not ps.product_cd:
         return
+
+    machine = await db.get(Machine, ps.line_id)
+    if machine is None:
+        return
+    sync_instruction_plans = await _machine_matches_process_cd(
+        db, machine, _APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD
+    )
 
     # schedule_slice_allocations を取得（時間順）
     slice_result = await db.execute(
@@ -1256,15 +1659,48 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
         return
 
     # 生産月/ライン/製品情報（管理コードと整合させるため機械側情報を優先）
-    machine = await db.get(Machine, ps.line_id)
-    if machine is None:
-        return
-
     # instruction_plans の management_code トリガーは RIGHT(production_line,2) を使うため、
     # instruction_plans 側に保存する production_line は「設備名」に揃える
     production_line = (machine.machine_name or '').strip() or (machine.machine_cd or str(machine.id))
     production_name = ps.item_name or ""
     production_product_cd = (ps.product_cd or "").strip()
+
+    # cutting/scrap/material 情報（products -> materials）
+    # APS schedule は products/material のキー（product_cd/material_cd）を持つ前提で同期する。
+    cutting_length = None
+    chamfering_length = None
+    developed_length = None
+    scrap_length = None
+    take_count = None
+    material_name = None
+    material_manufacturer = None
+    standard_specification = None
+
+    prod = None
+    if production_product_cd:
+        prod_res = await db.execute(select(Product).where(Product.product_cd == production_product_cd))
+        prod = prod_res.scalars().first()
+
+    if prod is not None:
+        cutting_length = float(prod.cut_length) if prod.cut_length is not None else None
+        chamfering_length = float(prod.chamfer_length) if prod.chamfer_length is not None else None
+        developed_length = float(prod.developed_length) if prod.developed_length is not None else None
+        scrap_length = float(prod.scrap_length) if prod.scrap_length is not None else None
+        take_count = int(prod.take_count) if prod.take_count is not None else None
+
+        if prod.material_cd:
+            mat_res = await db.execute(select(Material).where(Material.material_cd == prod.material_cd))
+            mat = mat_res.scalars().first()
+            if mat is not None:
+                material_name = mat.material_name
+                supplier_cd = (mat.supplier_cd or "").strip() if mat.supplier_cd else ""
+                if supplier_cd:
+                    sup_res = await db.execute(select(Supplier).where(Supplier.supplier_cd == supplier_cd))
+                    sup = sup_res.scalars().first()
+                    material_manufacturer = (sup.supplier_name or "").strip() if sup is not None else supplier_cd
+                else:
+                    material_manufacturer = None
+                standard_specification = mat.standard_spec
 
     # lot_size：スケジュール側のスナップショットが無い場合は products から取得
     lot_size_snapshot = int(getattr(ps, "lot_size_snapshot", 0) or 0)
@@ -1277,7 +1713,7 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
     production_lot_size = int(math.ceil(total_qty / float(lot_size_snapshot)))
     production_lot_size = max(1, production_lot_size)
 
-    # バッチ planned_quantity（最後のみ不足を許容）
+    # ロット planned_quantity（最後のみ不足を許容）
     batch_qtys: List[tuple[int, int]] = []
     for i in range(1, production_lot_size + 1):
         if i < production_lot_size:
@@ -1285,7 +1721,7 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
         else:
             remain = total_qty - lot_size_snapshot * (production_lot_size - 1)
             batch_qtys.append((i, max(0, int(remain))))
-    # バッチ数が極端に崩れる場合はガード
+    # ロット数が極端に崩れる場合はガード
     batch_qtys = [(i, q) for i, q in batch_qtys if q > 0]
     if not batch_qtys:
         return
@@ -1294,7 +1730,7 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
     min_work_date = min(s.work_date for s in slices)
     production_month = date(min_work_date.year, min_work_date.month, 1)
 
-    # バッチへ時間を割当（数量の順番に沿って部分スライスも按分）
+    # ロットへ時間を割当（数量の順番に沿って部分スライスも按分）
     # schedule_slice_allocations は同一 schedule 内で時系列順に並んでいる前提
     batches = []
     batch_idx = 0
@@ -1360,10 +1796,15 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
     if not batches:
         return
 
-    # バッチをアップサートして instruction_plans を同期
+    # instruction_plans.planned_quantity は「合計(本)」＝スケジュール全体の計画本数（Planning 一覧の合計と一致）
+    instruction_planned_qty = int(ps.planned_process_qty or 0)
+    if instruction_planned_qty <= 0:
+        instruction_planned_qty = int(total_qty)
+
+    # ロットをアップサートして instruction_plans を同期
     for b in batches:
         lot_number = b["lot_number"]
-        planned_quantity = int(b["planned_quantity"])
+        batch_planned_qty = int(b["planned_quantity"])
         start_dt = b["start_date"]
         end_dt = b["end_date"]
 
@@ -1383,7 +1824,7 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                 priority_order=ps.order_no,
                 product_cd=production_product_cd,
                 product_name=production_name,
-                planned_quantity=planned_quantity,
+                planned_quantity=batch_planned_qty,
                 production_lot_size=production_lot_size,
                 lot_number=lot_number,
                 start_date=start_dt,
@@ -1399,12 +1840,15 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
             existing.priority_order = ps.order_no
             existing.product_cd = production_product_cd
             existing.product_name = production_name
-            existing.planned_quantity = planned_quantity
+            existing.planned_quantity = batch_planned_qty
             existing.production_lot_size = production_lot_size
             existing.start_date = start_dt
             existing.end_date = end_dt
             await db.flush()
             batch_plan_id = existing.id
+
+        if not sync_instruction_plans:
+            continue
 
         # skip if already moved to cutting_management
         mc = _instruction_management_code(
@@ -1435,7 +1879,11 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                     "UPDATE instruction_plans SET "
                     "production_month=:production_month, production_line=:production_line, "
                     "priority_order=:priority_order, product_cd=:product_cd, product_name=:product_name, "
-                    "planned_quantity=:planned_quantity, actual_production_quantity=:planned_quantity, start_date=:start_date, end_date=:end_date, "
+                    "planned_quantity=:instruction_planned_qty, actual_production_quantity=:batch_planned_qty, "
+                    "take_count=:take_count, "
+                    "cutting_length=:cutting_length, chamfering_length=:chamfering_length, developed_length=:developed_length, scrap_length=:scrap_length, "
+                    "material_name=:material_name, material_manufacturer=:material_manufacturer, standard_specification=:standard_specification, "
+                    "start_date=:start_date, end_date=:end_date, "
                     "production_lot_size=:production_lot_size, lot_number=:lot_number, "
                     "aps_batch_plan_id=:aps_batch_plan_id "
                     "WHERE id=:ins_id"
@@ -1447,7 +1895,16 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                     "priority_order": ps.order_no,
                     "product_cd": production_product_cd,
                     "product_name": production_name,
-                    "planned_quantity": planned_quantity,
+                    "instruction_planned_qty": instruction_planned_qty,
+                    "batch_planned_qty": batch_planned_qty,
+                    "take_count": take_count,
+                    "cutting_length": cutting_length,
+                    "chamfering_length": chamfering_length,
+                    "developed_length": developed_length,
+                    "scrap_length": scrap_length,
+                    "material_name": material_name,
+                    "material_manufacturer": material_manufacturer,
+                    "standard_specification": standard_specification,
                     "start_date": start_dt,
                     "end_date": end_dt,
                     "production_lot_size": production_lot_size,
@@ -1472,7 +1929,11 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                         "UPDATE instruction_plans SET "
                         "production_month=:production_month, production_line=:production_line, "
                         "priority_order=:priority_order, product_cd=:product_cd, product_name=:product_name, "
-                        "planned_quantity=:planned_quantity, actual_production_quantity=:planned_quantity, start_date=:start_date, end_date=:end_date, "
+                        "planned_quantity=:instruction_planned_qty, actual_production_quantity=:batch_planned_qty, "
+                        "take_count=:take_count, "
+                        "cutting_length=:cutting_length, chamfering_length=:chamfering_length, developed_length=:developed_length, scrap_length=:scrap_length, "
+                        "material_name=:material_name, material_manufacturer=:material_manufacturer, standard_specification=:standard_specification, "
+                        "start_date=:start_date, end_date=:end_date, "
                         "production_lot_size=:production_lot_size, lot_number=:lot_number, "
                         "aps_batch_plan_id=:aps_batch_plan_id "
                         "WHERE id=:ins_id"
@@ -1484,7 +1945,16 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                         "priority_order": ps.order_no,
                         "product_cd": production_product_cd,
                         "product_name": production_name,
-                        "planned_quantity": planned_quantity,
+                        "instruction_planned_qty": instruction_planned_qty,
+                        "batch_planned_qty": batch_planned_qty,
+                        "take_count": take_count,
+                        "cutting_length": cutting_length,
+                        "chamfering_length": chamfering_length,
+                        "developed_length": developed_length,
+                        "scrap_length": scrap_length,
+                        "material_name": material_name,
+                        "material_manufacturer": material_manufacturer,
+                        "standard_specification": standard_specification,
                         "start_date": start_dt,
                         "end_date": end_dt,
                         "production_lot_size": production_lot_size,
@@ -1512,12 +1982,12 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                       aps_batch_plan_id
                     ) VALUES (
                       :production_month, :production_line, :priority_order, :product_cd, :product_name,
-                      :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
+                      :instruction_planned_qty, :start_date, :end_date, :production_lot_size, :lot_number,
                       0, 0, 0,
                       0, 0,
-                      :planned_quantity, NULL,
-                      NULL, NULL, NULL, NULL,
-                      NULL, NULL, NULL,
+                      :batch_planned_qty, :take_count,
+                      :cutting_length, :chamfering_length, :developed_length, :scrap_length,
+                      :material_name, :material_manufacturer, :standard_specification,
                       :aps_batch_plan_id
                     )
                     """
@@ -1528,11 +1998,20 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                     "priority_order": ps.order_no,
                     "product_cd": production_product_cd,
                     "product_name": production_name,
-                    "planned_quantity": planned_quantity,
+                    "instruction_planned_qty": instruction_planned_qty,
                     "start_date": start_dt,
                     "end_date": end_dt,
                     "production_lot_size": production_lot_size,
                     "lot_number": lot_number,
+                    "batch_planned_qty": batch_planned_qty,
+                    "take_count": take_count,
+                    "cutting_length": cutting_length,
+                    "chamfering_length": chamfering_length,
+                    "developed_length": developed_length,
+                    "scrap_length": scrap_length,
+                    "material_name": material_name,
+                    "material_manufacturer": material_manufacturer,
+                    "standard_specification": standard_specification,
                     "aps_batch_plan_id": batch_plan_id,
                 },
             )

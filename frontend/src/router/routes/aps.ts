@@ -35,7 +35,7 @@ export const apsRoutes: RouteRecordRaw[] = [
         path: 'batch-plans',
         name: 'ApsBatchPlans',
         component: () => import('@/views/aps/BatchPlans.vue'),
-        meta: { title: 'APSバッチ計画' },
+        meta: { title: 'APSロット計画' },
       },
     ],
   },

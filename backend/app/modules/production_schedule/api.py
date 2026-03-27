@@ -239,7 +239,7 @@ async def get_instruction_plans_list(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    生産バッチ一覧: instruction_plans を取得する。
+    生産ロット一覧: instruction_plans を取得する。
     """
     conditions = ["1=1"]
     params = {"limit": limit}
@@ -329,7 +329,7 @@ async def get_instruction_plans_list(
 
 
 class UpdatePlanBody(BaseModel):
-    """生産バッチ（instruction_plans）1件の更新（テーブル全項目対応）"""
+    """生産ロット（instruction_plans）1件の更新（テーブル全項目対応）"""
     production_month: Optional[str] = None  # YYYY-MM-DD
     production_line: Optional[str] = None
     priority_order: Optional[int] = None
@@ -360,7 +360,7 @@ class UpdatePlanBody(BaseModel):
 
 
 class CreatePlanBody(BaseModel):
-    """新規バッチ追加（instruction_plans 1件 INSERT）"""
+    """新規ロット追加（instruction_plans 1件 INSERT）"""
     production_month: Optional[str] = None  # YYYY-MM
     production_line: Optional[str] = None
     priority_order: Optional[int] = None
@@ -514,7 +514,7 @@ async def update_instruction_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """生産バッチ1件を更新。management_code は未送信時のみ再計算。"""
+    """生産ロット1件を更新。management_code は未送信時のみ再計算。"""
     updates = []
     params = {"plan_id": plan_id}
 
@@ -662,11 +662,11 @@ async def delete_instruction_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """生産バッチ1件を削除（instruction_plans のみ。切断指示へ移行済みの場合は一覧に無いため対象外）。"""
+    """生産ロット1件を削除（instruction_plans のみ。切断指示へ移行済みの場合は一覧に無いため対象外）。"""
     result = await db.execute(text("DELETE FROM instruction_plans WHERE id = :plan_id"), {"plan_id": plan_id})
     await db.commit()
     if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="該当するバッチがありません")
+        raise HTTPException(status_code=404, detail="該当するロットがありません")
     return {"success": True, "message": "削除しました"}
 
 
@@ -943,7 +943,7 @@ async def confirm_cutting_actual(
 
 
 class MoveBatchToCuttingBody(BaseModel):
-    """生産バッチ1件を切断指示へ移行するリクエスト"""
+    """生産ロット1件を切断指示へ移行するリクエスト"""
     plan_id: int
     production_month: str  # YYYY-MM
     production_line: str
@@ -954,7 +954,7 @@ class MoveBatchToCuttingBody(BaseModel):
     management_code: Optional[str] = None
     production_day: Optional[str] = None  # 生成日（手動指定）YYYY-MM-DD、未指定時は今日
     start_date: Optional[str] = None  # 旧パラメータ・production_day の別名
-    priority_order: Optional[int] = None  # → production_order（バッチ側順位）
+    priority_order: Optional[int] = None  # → production_order（ロット側順位）
     cutting_machine: str = ""  # 切断機（手動指定）
     has_chamfering_process: Optional[bool] = False  # 面取工程ありなら面取指示へ自動登録
 
@@ -966,9 +966,9 @@ async def move_batch_to_cutting_management(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    生産バッチ（instruction_plans）1件を切断指示（cutting_management）へ移行する。
+    生産ロット（instruction_plans）1件を切断指示（cutting_management）へ移行する。
     - cutting_management に INSERT
-    - has_chamfering_process が True なら chamfering_plans（面取バッチ一覧）に自動 INSERT
+    - has_chamfering_process が True なら chamfering_plans（面取ロット一覧）に自動 INSERT
     - 第一工程のため kanban_issuance に status=pending で1件 INSERT（後で手動発行）
     - instruction_plans から該当 id を DELETE
     """
@@ -1003,7 +1003,7 @@ async def move_batch_to_cutting_management(
 
     has_chamfering = bool(body.has_chamfering_process)
 
-    # バッチ（instruction_plans）1件を取得し、cutting_management に全項目コピー
+    # ロット（instruction_plans）1件を取得し、cutting_management に全項目コピー
     plan_res = await db.execute(
         text("""
             SELECT production_month, production_line, priority_order, product_cd, product_name,
@@ -1018,7 +1018,7 @@ async def move_batch_to_cutting_management(
     )
     plan_row = plan_res.mappings().fetchone()
     if not plan_row:
-        raise HTTPException(status_code=404, detail="指定のバッチが見つかりません")
+        raise HTTPException(status_code=404, detail="指定のロットが見つかりません")
 
     plan = dict(plan_row)
     production_line = (plan.get("production_line") or body.production_line or "").strip() or ""
@@ -1202,11 +1202,11 @@ async def move_batch_to_cutting_management(
             raise HTTPException(status_code=503, detail="kanban_issuance テーブルが存在しません。") from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return {"success": True, "message": "切断指示に登録し、バッチから削除しました"}
+    return {"success": True, "message": "切断指示に登録し、ロットから削除しました"}
 
 
 class MoveCuttingToBatchBody(BaseModel):
-    """切断指示1件を生産バッチへ戻すリクエスト"""
+    """切断指示1件を生産ロットへ戻すリクエスト"""
     cutting_id: int
     production_month: str  # YYYY-MM
     production_line: str
@@ -1226,8 +1226,8 @@ async def move_cutting_to_batch(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    切断指示1件を生産バッチへ戻す。
-    処理順: ①切断指示を読取 ②カンバン発行削除 ③面取指示削除 ④面取バッチ一覧（chamfering_plans）削除 ⑤切断指示削除 ⑥instruction_plans に INSERT。
+    切断指示1件を生産ロットへ戻す。
+    処理順: ①切断指示を読取 ②カンバン発行削除 ③面取指示削除 ④面取ロット一覧（chamfering_plans）削除 ⑤切断指示削除 ⑥instruction_plans に INSERT。
     """
     # ① 切断指示1件を取得（削除前に全項目コピー用。cutting_machine/production_day は削除後の生産順リナンバ用）
     cut_sel = text("""
@@ -1341,7 +1341,7 @@ async def move_cutting_to_batch(
             {"cid": body.cutting_id},
         )
 
-        # ④' 面取バッチ一覧（chamfering_plans）の該当データを削除
+        # ④' 面取ロット一覧（chamfering_plans）の該当データを削除
         await db.execute(
             text("DELETE FROM chamfering_plans WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
@@ -1371,8 +1371,65 @@ async def move_cutting_to_batch(
                         {"seq": seq, "id": rid},
                     )
 
-        # ⑥ 生産バッチへ挿入（cutting の全共通項目をコピー）
+        # ⑥ 生産ロットへ挿入（cutting の全共通項目をコピー）
         await db.execute(insert_sql, insert_params)
+
+        # ⑥' 追加情報を補完
+        # - APS ロットとの紐付けを復元（aps_batch_plan_id）
+        # - 「切断→ロット戻し」を撤回イベントとして記録（release_cancelled_*）
+        ins_id_res = await db.execute(text("SELECT LAST_INSERT_ID() AS id"))
+        ins_id_row = ins_id_res.mappings().fetchone()
+        ins_id = int(ins_id_row["id"]) if ins_id_row and ins_id_row.get("id") is not None else None
+        if ins_id is not None:
+            lot_no = (insert_params.get("lot_number") or "").strip() if insert_params.get("lot_number") else ""
+            pcd = (insert_params.get("product_cd") or "").strip()
+            pline = (insert_params.get("production_line") or "").strip()
+
+            aps_batch_plan_id = None
+            if lot_no and pcd:
+                aps_q = await db.execute(
+                    text(
+                        "SELECT id FROM aps_batch_plans "
+                        "WHERE lot_number = :lot_no AND product_cd = :pcd "
+                        "AND (:pline = '' OR production_line = :pline) "
+                        "ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"lot_no": lot_no, "pcd": pcd, "pline": pline},
+                )
+                aps_batch_plan_id = aps_q.scalar()
+
+            if aps_batch_plan_id is not None:
+                await db.execute(
+                    text("UPDATE instruction_plans SET aps_batch_plan_id = :bid WHERE id = :iid"),
+                    {"bid": int(aps_batch_plan_id), "iid": ins_id},
+                )
+
+            rollback_by = (
+                (getattr(current_user, "user_cd", None) or "")
+                or (getattr(current_user, "username", None) or "")
+                or (getattr(current_user, "name", None) or "")
+                or "system"
+            )
+            try:
+                await db.execute(
+                    text(
+                        "UPDATE instruction_plans SET "
+                        "release_cancelled_at = :ts, "
+                        "release_cancel_reason = :reason, "
+                        "release_cancel_by = :rb "
+                        "WHERE id = :iid"
+                    ),
+                    {
+                        "ts": datetime.now(),
+                        "reason": "cutting_management から instruction_plans へ戻し",
+                        "rb": str(rollback_by)[:64],
+                        "iid": ins_id,
+                    },
+                )
+            except Exception:
+                # 旧スキーマ（103 未適用）では列が存在しないためスキップ
+                pass
+
         await db.commit()
     except Exception as e:
         await db.rollback()
@@ -1383,7 +1440,7 @@ async def move_cutting_to_batch(
             raise HTTPException(status_code=503, detail="cutting_management テーブルが存在しません。") from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return {"success": True, "message": "生産バッチに戻しました（切断・面取・カンバンを削除済み）"}
+    return {"success": True, "message": "生産ロットに戻しました（切断・面取・カンバンを削除済み）"}
 
 
 class ReorderCuttingBody(BaseModel):
@@ -1497,7 +1554,7 @@ async def update_cutting_management(
             """),
             params,
         )
-        # 面取バッチ一覧（chamfering_plans）の同期: production_day / actual_production_quantity を更新
+        # 面取ロット一覧（chamfering_plans）の同期: production_day / actual_production_quantity を更新
         chamfering_updates: list[str] = []
         chamfering_params: dict = {"cid": cutting_id}
         if "production_day" in params:
@@ -1609,7 +1666,7 @@ async def split_cutting_to_next_day(
             """),
             {"cid": cutting_id, "qty": body.today_quantity},
         )
-        # 1') 面取バッチ一覧（chamfering_plans）の生産数も同期
+        # 1') 面取ロット一覧（chamfering_plans）の生産数も同期
         await db.execute(
             text("UPDATE chamfering_plans SET actual_production_quantity = :qty WHERE cutting_management_id = :cid"),
             {"cid": cutting_id, "qty": body.today_quantity},
@@ -1745,7 +1802,7 @@ async def delete_cutting_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """切断指示1件を削除する（紐づく面取・面取バッチ・カンバン発行も削除）。"""
+    """切断指示1件を削除する（紐づく面取・面取ロット・カンバン発行も削除）。"""
     try:
         chamfering_res = await db.execute(
             text("SELECT id FROM chamfering_management WHERE cutting_management_id = :cid"),
@@ -1771,7 +1828,7 @@ async def delete_cutting_management(
     return {"success": True, "message": "削除しました"}
 
 
-# ---------- 面取バッチ一覧（chamfering_plans）----------
+# ---------- 面取ロット一覧（chamfering_plans）----------
 @router.get("/plan/chamfering-plans/list")
 async def get_chamfering_plans_list(
     production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
@@ -1781,7 +1838,7 @@ async def get_chamfering_plans_list(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ一覧: chamfering_plans を取得（切断指示登録時・面取工程ありで自動登録された待機データ）。"""
+    """面取ロット一覧: chamfering_plans を取得（切断指示登録時・面取工程ありで自動登録された待機データ）。"""
     conditions = ["1=1"]
     params = {"limit": limit}
     if production_month and production_month.strip():
@@ -1866,7 +1923,7 @@ async def get_chamfering_plans_list(
 
 
 class CreateChamferingPlanBody(BaseModel):
-    """面取バッチ一覧：新規追加（chamfering_plans に1件INSERT、cutting_management_id は NULL）"""
+    """面取ロット一覧：新規追加（chamfering_plans に1件INSERT、cutting_management_id は NULL）"""
     production_month: str  # YYYY-MM
     production_day: str  # YYYY-MM-DD
     production_line: str  # ライン（面取機）
@@ -1887,7 +1944,7 @@ async def create_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ一覧に新規1件追加（cutting_management_id は NULL）。management_code / cd はトリガーで自動設定。"""
+    """面取ロット一覧に新規1件追加（cutting_management_id は NULL）。management_code / cd はトリガーで自動設定。"""
     production_month_date = _parse_date_ymd(body.production_month)
     production_day_date = _parse_date_ymd(body.production_day)
     if production_month_date is None:
@@ -1937,7 +1994,7 @@ async def create_chamfering_plan(
 
 
 class MoveChamferingPlanToChamferingBody(BaseModel):
-    """面取バッチ1件を面取指示へ移行（オプションで生産日・ライン指定。SW時は production_line_2 で2件登録）"""
+    """面取ロット1件を面取指示へ移行（オプションで生産日・ライン指定。SW時は production_line_2 で2件登録）"""
     chamfering_plan_id: int
     production_day: Optional[str] = None  # YYYY-MM-DD、指定時はこれを使用
     production_line: Optional[str] = None  # ライン/面取機、指定時はこれを使用
@@ -1950,7 +2007,7 @@ async def move_chamfering_plan_to_chamfering(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ1件を面取指示（chamfering_management）へ移行し、chamfering_plans から削除。production_line_2 指定時は2件登録。"""
+    """面取ロット1件を面取指示（chamfering_management）へ移行し、chamfering_plans から削除。production_line_2 指定時は2件登録。"""
     res = await db.execute(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
@@ -1962,7 +2019,7 @@ async def move_chamfering_plan_to_chamfering(
     )
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
     row = dict(row)
 
     def _to_date(v):
@@ -1995,7 +2052,7 @@ async def move_chamfering_plan_to_chamfering(
             "cutting_management_id": row.get("cutting_management_id"),
             "production_month": production_month_date,
             "production_day": production_day_date,
-            "production_line": (row.get("production_line") or "").strip() or "",  # ライン：面取バッチのラインをそのまま使用（面取機ではない）
+            "production_line": (row.get("production_line") or "").strip() or "",  # ライン：面取ロットのラインをそのまま使用（面取機ではない）
             "chamfering_machine": chamfering_machine_val or pl,
             "production_order": row.get("production_order"),
             "production_sequence": production_sequence_val,
@@ -2055,12 +2112,12 @@ async def move_chamfering_plan_to_chamfering(
 
 
 class UpdateChamferingPlanSwBody(BaseModel):
-    """面取バッチのSW工程フラグ更新"""
+    """面取ロットのSW工程フラグ更新"""
     has_sw_process: bool
 
 
 class UpdateChamferingPlanContentBody(BaseModel):
-    """面取バッチ内容編集（バッチ内容編集窗体と同様の項目のうち chamfering_plans に存在するもの）"""
+    """面取ロット内容編集（ロット内容編集窗体と同様の項目のうち chamfering_plans に存在するもの）"""
     production_month: Optional[str] = None
     production_day: Optional[str] = None
     production_line: Optional[str] = None
@@ -2082,7 +2139,7 @@ async def update_chamfering_plan_sw(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ1件のhas_sw_processを更新。"""
+    """面取ロット1件のhas_sw_processを更新。"""
     try:
         await db.execute(
             text("UPDATE chamfering_plans SET has_sw_process = :v WHERE id = :pid"),
@@ -2101,13 +2158,13 @@ async def delete_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ1件を削除。"""
+    """面取ロット1件を削除。"""
     res = await db.execute(
         text("SELECT id FROM chamfering_plans WHERE id = :pid"),
         {"pid": plan_id},
     )
     if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
     try:
         await db.execute(text("DELETE FROM chamfering_plans WHERE id = :pid"), {"pid": plan_id})
         await db.commit()
@@ -2124,13 +2181,13 @@ async def update_chamfering_plan_content(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ1件の内容を更新（バッチ内容編集と同様の項目）。"""
+    """面取ロット1件の内容を更新（ロット内容編集と同様の項目）。"""
     res = await db.execute(
         text("SELECT id FROM chamfering_plans WHERE id = :pid"),
         {"pid": plan_id},
     )
     if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
     updates = []
     params = {"pid": plan_id}
     if body.production_month is not None:
@@ -2194,7 +2251,7 @@ async def copy_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取バッチ1件を複製（同内容で新規1件追加）。"""
+    """面取ロット1件を複製（同内容で新規1件追加）。"""
     res = await db.execute(
         text("""
             SELECT cutting_management_id, production_month, production_day, production_line, production_order,
@@ -2206,7 +2263,7 @@ async def copy_chamfering_plan(
     )
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の面取バッチが見つかりません")
+        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
     row = dict(row)
 
     def _to_date(v):
@@ -2262,7 +2319,7 @@ async def copy_chamfering_plan(
 
 
 class MoveChamferingManagementToBatchBody(BaseModel):
-    """面取指示1件を面取バッチ一覧へ戻す"""
+    """面取指示1件を面取ロット一覧へ戻す"""
     chamfering_management_id: int
 
 
@@ -2272,7 +2329,7 @@ async def move_chamfering_management_to_batch(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取指示1件を面取バッチ一覧（chamfering_plans）へ戻し、chamfering_management から削除。"""
+    """面取指示1件を面取ロット一覧（chamfering_plans）へ戻し、chamfering_management から削除。"""
     res = await db.execute(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
@@ -2341,7 +2398,7 @@ async def move_chamfering_management_to_batch(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "面取バッチ一覧に戻しました"}
+    return {"success": True, "message": "面取ロット一覧に戻しました"}
 
 
 # ---------- 面取指示（chamfering_management）----------
@@ -3460,7 +3517,7 @@ async def generate_cutting_plans_from_schedule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    指定月でバッチ生成: production_plan_schedules の file_name に生産月を含み、
+    指定月でロット生成: production_plan_schedules の file_name に生産月を含み、
     '溶接' を含まない行を取得し、material_lot_count 回分ループして
     instruction_plans に挿入する。
     products / materials を product_name / material_name で結合して

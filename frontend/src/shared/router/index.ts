@@ -178,7 +178,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
       { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
       { path: 'aps/daily-report', name: 'DailyReport', component: () => import('@/views/aps/DailyReport.vue'), meta: { title: '日別設備計画表', requiresAuth: true } },
-      { path: 'aps/batch-plans', name: 'ApsBatchPlans', component: () => import('@/views/aps/BatchPlans.vue'), meta: { title: 'APSバッチ計画', requiresAuth: true } },
+      { path: 'aps/batch-plans', name: 'ApsBatchPlans', component: () => import('@/views/aps/BatchPlans.vue'), meta: { title: 'APSロット計画', requiresAuth: true } },
 
       // ========== MES モジュール ==========
       { path: 'mes/execution', name: 'Execution', component: () => import('@/views/mes/Execution.vue'), meta: { title: '製造実行', requiresAuth: true } },
