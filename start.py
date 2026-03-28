@@ -32,7 +32,8 @@ CONFIG = {
     "frontend_dev_port": 5000,
     "frontend_prod_port": 3005,
     "backend_host": "0.0.0.0",
-    "production_ip": "192.168.1.59",
+    # 起動時に自動検出したローカルIPを設定
+    "production_ip": "127.0.0.1",
 }
 
 class Colors:
@@ -566,6 +567,8 @@ def main():
 
     try:
         print("\n🚀 Smart-EMAP 開発・本番サーバーを起動中...\n")
+        network_ip = get_local_ip()
+        CONFIG["production_ip"] = network_ip
         
         # ポートチェック
         if not check_port(CONFIG["backend_port"], "バックエンド"):
@@ -642,7 +645,6 @@ def main():
             print_color("⚠️  本番サーバーの起動に失敗しました（distフォルダを確認してください）", Colors.YELLOW)
         
         # 起動成功
-        network_ip = get_local_ip()
         print_success_banner(network_ip)
         
         # メインループ

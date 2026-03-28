@@ -507,7 +507,7 @@
                   <th class="pgs-th-status">ステータス</th>
                   <th class="pgs-th-prediction">完了予測</th>
                   <th
-                    v-for="d in progressDates"
+                    v-for="d in progressDisplayDates"
                     :key="d"
                     class="gantt-date-col"
                     :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
@@ -536,7 +536,7 @@
                   </td>
                   <td class="pgs-prediction-cell">{{ formatPrediction(lot.predicted_completion) }}</td>
                   <td
-                    v-for="d in progressDates"
+                    v-for="d in progressDisplayDates"
                     :key="d"
                     class="gantt-cell"
                     :class="progressCellClass(lot, d)"
@@ -599,6 +599,23 @@ function lastDayOfMonthOffsetIso(month: string, offset: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
+/** 表示期間と同じ全日列（日次ガントの dates と一致） */
+function expandDateRangeIso(startIso: string, endIso: string): string[] {
+  const sd = new Date(`${startIso}T12:00:00`)
+  const ed = new Date(`${endIso}T12:00:00`)
+  if (Number.isNaN(sd.getTime()) || Number.isNaN(ed.getTime()) || ed < sd) return []
+  const out: string[] = []
+  const cur = new Date(sd)
+  while (cur <= ed) {
+    const y = cur.getFullYear()
+    const m = String(cur.getMonth() + 1).padStart(2, '0')
+    const d = String(cur.getDate()).padStart(2, '0')
+    out.push(`${y}-${m}-${d}`)
+    cur.setDate(cur.getDate() + 1)
+  }
+  return out
+}
+
 const lines = ref<ProductionLine[]>([])
 const selectedLineId = ref<number | null>(null)
 const selectedProcessCd = ref<string>('KT04')
@@ -610,7 +627,7 @@ const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
 const ganttRange = ref<[string, string]>([
   firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH),
-  lastDayOfMonthOffsetIso(DEFAULT_ANCHOR_MONTH, 2),
+  lastDayOfMonthOffsetIso(DEFAULT_ANCHOR_MONTH, 1),
 ])
 const loadingSchedules = ref(false)
 const adding = ref(false)
@@ -673,13 +690,21 @@ const hourlyColumns = ref<HourlyGridColumn[]>([])
 const hourlyRows = ref<HourlyGridRow[]>([])
 /** 生産進捗 */
 const progressLots = ref<ProgressLotItem[]>([])
-const progressDates = ref<string[]>([])
 const progressLotDaily = ref<Record<string, Record<string, number>>>({})
 const loadingProgress = ref(false)
 /** ガント表示タブ：daily | hourly | progress */
 const activeGanttTab = ref('daily')
 /** 計画を取得 API を一度でも成功で呼んだか（空配列含む） */
 const schedulesFetched = ref(false)
+
+/** 生産進捗の日付列：表示期間起点の全日（日次ガントと揃え、実績ゼロの日も列を出す） */
+const progressDisplayDates = computed(() => {
+  if (ganttDates.value.length > 0) return ganttDates.value
+  const month = (anchorMonth.value || DEFAULT_ANCHOR_MONTH).trim()
+  const sd = (ganttRange.value?.[0] || anchorDate.value || firstDayOfMonthIso(month)).trim()
+  const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 1)).trim()
+  return expandDateRangeIso(sd, ed)
+})
 
 /** 計画一覧の各行に対応するロット進捗サマリ（{ status, count }[] per schedule id） */
 const scheduleProgressMap = computed(() => {
@@ -704,7 +729,7 @@ const scheduleProgressMap = computed(() => {
 watch(anchorMonth, (v) => {
   if (!v) return
   anchorDate.value = firstDayOfMonthIso(v)
-  ganttRange.value = [firstDayOfMonthIso(v), lastDayOfMonthOffsetIso(v, 2)]
+  ganttRange.value = [firstDayOfMonthIso(v), lastDayOfMonthOffsetIso(v, 1)]
 })
 
 /** order_no → id 安定ソート（一覧・移動用） */
@@ -1308,7 +1333,8 @@ function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number 
 function lotActualQty(lot: ProgressLotItem): number {
   const key = `${lot.aps_schedule_id}_${lot.lot_number}`
   const m = progressLotDaily.value[key] || {}
-  const dates = progressDates.value.length > 0 ? progressDates.value : Object.keys(m)
+  const dates =
+    progressDisplayDates.value.length > 0 ? progressDisplayDates.value : Object.keys(m).sort()
   return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
@@ -1322,7 +1348,7 @@ async function loadGantt() {
   }
   const month = (anchorMonth.value || DEFAULT_ANCHOR_MONTH).trim()
   const sd = (ganttRange.value?.[0] || anchorDate.value || firstDayOfMonthIso(month)).trim()
-  const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 2)).trim()
+  const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 1)).trim()
 
   try {
     const grid = await fetchSchedulingGrid(sd, ed, selectedLineId.value)
@@ -1354,7 +1380,6 @@ async function onGanttRangeChange() {
 async function loadProgress() {
   if (!selectedLineId.value) {
     progressLots.value = []
-    progressDates.value = []
     progressLotDaily.value = {}
     return
   }
@@ -1362,11 +1387,9 @@ async function loadProgress() {
   try {
     const res = await fetchProductionProgress(selectedLineId.value)
     progressLots.value = res.lots ?? []
-    progressDates.value = res.dates ?? []
     progressLotDaily.value = res.lot_daily ?? {}
   } catch {
     progressLots.value = []
-    progressDates.value = []
     progressLotDaily.value = {}
   } finally {
     loadingProgress.value = false

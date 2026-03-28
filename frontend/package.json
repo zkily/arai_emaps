@@ -36,9 +36,9 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/sortablejs": "^1.15.9",
     "@types/node": "^20.10.0",
     "@types/qrcode": "^1.5.6",
+    "@types/sortablejs": "^1.15.9",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vue/tsconfig": "^0.5.0",
     "sass": "^1.86.0",
