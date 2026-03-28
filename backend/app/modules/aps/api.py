@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from datetime import date, timedelta, datetime, time
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, and_, or_, delete, text
@@ -900,8 +900,8 @@ async def get_scheduling_grid(
             daily: dict[str, int] = {}
             for det in details:
                 key = det.schedule_date.isoformat()
-                daily[key] = int(det.planned_qty)
-                daily_totals[key] += int(det.planned_qty)
+                daily[key] = daily.get(key, 0) + int(det.planned_qty or 0)
+                daily_totals[key] += int(det.planned_qty or 0)
 
             actual_daily: dict[str, int] = {}
             remaining_daily: dict[str, int] = {}
@@ -1285,6 +1285,394 @@ async def get_daily_equipment_report(
 # ═══════════════════ Production Progress（生産進捗） ═══════════════════
 
 
+def _batch_display_planned_qty(batch: ApsBatchPlan) -> int:
+    """計画一覧で確定したロット本数。original_planned_quantity があれば優先（成型再排産で planned_quantity が変わっても不変）。"""
+    oq = getattr(batch, "original_planned_quantity", None)
+    if oq is not None and int(oq) > 0:
+        return int(oq)
+    return int(batch.planned_quantity or 0)
+
+
+def _split_actual_across_lots(actual_total: int, shares: dict[str, int]) -> dict[str, int]:
+    """
+    工単日次 actual_qty をロット間で按分（スライス計画日別比率）。最大剰余法で合計を一致。
+    shares に正の値が無い場合は先頭ロットに全量を寄せる。
+    """
+    if actual_total <= 0:
+        return {k: 0 for k in shares}
+    keys = list(shares.keys())
+    if not keys:
+        return {}
+    out = {k: 0 for k in keys}
+    positive = [(k, shares[k]) for k in sorted(keys) if shares[k] > 0]
+    if not positive:
+        out[sorted(keys)[0]] = actual_total
+        return out
+    total_share = sum(v for _, v in positive)
+    allocated = 0
+    fractions: list[tuple[float, str]] = []
+    for k, v in positive:
+        exact = actual_total * v / total_share
+        q = int(math.floor(exact))
+        out[k] = q
+        allocated += q
+        fractions.append((exact - q, k))
+    diff = actual_total - allocated
+    fractions.sort(key=lambda x: -x[0])
+    for i in range(diff):
+        out[fractions[i % len(fractions)][1]] += 1
+    return out
+
+
+def _lot_displayed_consumed_before(
+    lot_daily: dict[str, dict[str, int]],
+    lk: str,
+    before_d: str,
+) -> int:
+    dm = lot_daily.get(lk) or {}
+    return sum(int(dm[d]) for d in sorted(dm.keys()) if d < before_d)
+
+
+def _allocate_day_total_across_lots(
+    lot_keys: List[str],
+    target: int,
+    weights: dict[str, int],
+    rooms: dict[str, int],
+) -> dict[str, int]:
+    """
+    target を weights 比でロットに配分。各ロットは rooms[lk] を上限。端数は最大剰余で target まで埋める。
+    """
+    out = {lk: 0 for lk in lot_keys}
+    if target <= 0 or not lot_keys:
+        return out
+    W = sum(max(0, int(weights.get(lk, 0) or 0)) for lk in lot_keys)
+    rem = target
+    fr: list[tuple[float, str]] = []
+    if W <= 0:
+        idx = 0
+        while rem > 0 and idx < len(lot_keys) * (target + 5):
+            progressed = False
+            for lk in sorted(lot_keys):
+                if rem <= 0:
+                    break
+                if out[lk] < max(0, int(rooms.get(lk, 0) or 0)):
+                    out[lk] += 1
+                    rem -= 1
+                    progressed = True
+            if not progressed:
+                break
+            idx += 1
+        return out
+    for lk in lot_keys:
+        w = max(0, int(weights.get(lk, 0) or 0))
+        x = target * w / W if W > 0 else 0.0
+        q = int(math.floor(x))
+        q = min(q, max(0, int(rooms.get(lk, 0) or 0)))
+        out[lk] = q
+        fr.append((x - q, lk))
+        rem -= q
+    fr.sort(key=lambda z: -z[0])
+    guard = 0
+    while rem > 0 and guard < 100000:
+        progressed = False
+        for _, lk in fr:
+            if rem <= 0:
+                break
+            cap_r = max(0, int(rooms.get(lk, 0) or 0))
+            if out[lk] < cap_r:
+                out[lk] += 1
+                rem -= 1
+                progressed = True
+        if not progressed:
+            break
+        guard += 1
+    return out
+
+
+def _align_progress_planned_to_schedule_day_totals(
+    lot_daily: dict[str, dict[str, int]],
+    lot_daily_source: dict[str, dict[str, str]],
+    planned_by_schedule_date: dict[int, dict[str, int]],
+    actual_by_schedule_date: dict[int, dict[str, int]],
+    sched_lot_keys: dict[int, list[str]],
+    lot_planned_daily: dict[str, dict[str, int]],
+    lot_planned_cap: dict[str, int],
+) -> None:
+    """
+    ガント（日別）の schedule_details.planned_qty 日次合計と、生産進捗の「計画」セル合計を一致させる。
+    成型実績のない日は工単日計 P に合わせてロット間で再按分（スライス比率・各ロット残枠を考慮）。
+    ロット残枠の合計が P 未満のときは合計は min(P, 残枠合計) に留まる（データ上の上限）。
+    """
+    for sid, lot_keys in sched_lot_keys.items():
+        uniq_keys = list(dict.fromkeys(lot_keys))
+        all_dates: set[str] = set()
+        for lk in uniq_keys:
+            all_dates |= set((lot_daily.get(lk) or {}).keys())
+        for d_str in sorted(all_dates):
+            if int(actual_by_schedule_date.get(sid, {}).get(d_str, 0) or 0) > 0:
+                continue
+            P = int(planned_by_schedule_date.get(sid, {}).get(d_str, 0) or 0)
+            if P <= 0:
+                continue
+            participating: List[str] = []
+            for lk in uniq_keys:
+                src = (lot_daily_source.get(lk) or {}).get(d_str)
+                if src == "ACTUAL":
+                    continue
+                cap = int(lot_planned_cap.get(lk, 0) or 0)
+                prev = _lot_displayed_consumed_before(lot_daily, lk, d_str)
+                room = max(0, cap - prev)
+                has_cell = d_str in (lot_daily.get(lk) or {})
+                raw_w = int((lot_planned_daily.get(lk) or {}).get(d_str, 0) or 0)
+                if has_cell and src in ("PLANNED", "WAIT_UPSTREAM"):
+                    participating.append(lk)
+                elif not has_cell and room > 0 and raw_w > 0:
+                    participating.append(lk)
+            if not participating:
+                continue
+            Q = sum(int((lot_daily.get(lk) or {}).get(d_str, 0) or 0) for lk in participating)
+            if Q == P:
+                continue
+            rooms = {
+                lk: max(
+                    0,
+                    int(lot_planned_cap.get(lk, 0) or 0) - _lot_displayed_consumed_before(lot_daily, lk, d_str),
+                )
+                for lk in participating
+            }
+            weights = {lk: max(0, int((lot_planned_daily.get(lk) or {}).get(d_str, 0) or 0)) for lk in participating}
+            cap_sum = sum(rooms[lk] for lk in participating)
+            target = min(P, cap_sum)
+            if target <= 0:
+                for lk in participating:
+                    if lk in lot_daily and d_str in lot_daily[lk]:
+                        del lot_daily[lk][d_str]
+                    if lk in lot_daily_source and d_str in lot_daily_source[lk]:
+                        del lot_daily_source[lk][d_str]
+                continue
+            alloc = _allocate_day_total_across_lots(participating, target, weights, rooms)
+            for lk in participating:
+                nq = int(alloc.get(lk, 0) or 0)
+                src_prev = (lot_daily_source.get(lk) or {}).get(d_str, "PLANNED")
+                if nq <= 0:
+                    if lk in lot_daily and d_str in lot_daily[lk]:
+                        del lot_daily[lk][d_str]
+                    if lk in lot_daily_source and d_str in lot_daily_source[lk]:
+                        del lot_daily_source[lk][d_str]
+                else:
+                    if lk not in lot_daily:
+                        lot_daily[lk] = {}
+                    if lk not in lot_daily_source:
+                        lot_daily_source[lk] = {}
+                    lot_daily[lk][d_str] = nq
+                    lot_daily_source[lk][d_str] = src_prev if src_prev in ("PLANNED", "WAIT_UPSTREAM") else "PLANNED"
+
+
+def _enforce_lot_progress_row_sum_cap(
+    lot_daily: dict[str, dict[str, int]],
+    lot_daily_source: dict[str, dict[str, str]],
+    lot_planned_cap: dict[str, int],
+) -> None:
+    """
+    各ロット行の日別セル合計が planned_quantity を超えないようにする。
+    工単日次との整列（_align）と実績按分の組み合わせで、同一ロットの合計が 1956+1400 のように
+    計画数を超えることがあるため、最後に矯正する。
+    新しい日から PLANNED/WAIT_UPSTREAM を削り、足りなければ ACTUAL 表示も削る。
+    """
+    for lk, cap in lot_planned_cap.items():
+        if cap <= 0:
+            continue
+        daily = lot_daily.get(lk)
+        if not daily:
+            continue
+        src_map = lot_daily_source.setdefault(lk, {})
+        total = sum(int(v) for v in daily.values())
+        if total <= cap:
+            continue
+        excess = total - cap
+        for d_str in sorted(daily.keys(), reverse=True):
+            if excess <= 0:
+                break
+            if src_map.get(d_str, "PLANNED") == "ACTUAL":
+                continue
+            q = int(daily[d_str])
+            if q <= 0:
+                continue
+            cut = min(q, excess)
+            excess -= cut
+            nq = q - cut
+            if nq <= 0:
+                del daily[d_str]
+                src_map.pop(d_str, None)
+            else:
+                daily[d_str] = nq
+        for d_str in sorted(daily.keys(), reverse=True):
+            if excess <= 0:
+                break
+            q = int(daily[d_str])
+            if q <= 0:
+                continue
+            cut = min(q, excess)
+            excess -= cut
+            nq = q - cut
+            if nq <= 0:
+                del daily[d_str]
+                src_map.pop(d_str, None)
+            else:
+                daily[d_str] = nq
+
+
+def _sort_lot_keys_in_schedule(uniq_keys: List[str]) -> List[str]:
+    """同一工単内の lot_key（{schedule_id}_{lot_number}）をロット番号昇順で並べる。"""
+
+    def sort_key(lk: str) -> tuple:
+        try:
+            _, lot_rest = lk.split("_", 1)
+        except ValueError:
+            return (1, lk)
+        try:
+            return (0, int(str(lot_rest).strip()))
+        except ValueError:
+            return (1, lot_rest)
+
+    return sorted(uniq_keys, key=sort_key)
+
+
+def _collect_schedule_progress_dates(
+    sid: int,
+    ordered_lks: List[str],
+    lot_planned_daily: dict[str, dict[str, int]],
+    actual_by_schedule_date: dict[int, dict[str, int]],
+    planned_by_schedule_date: dict[int, dict[str, int]],
+) -> List[str]:
+    ds: set[str] = set()
+    for lk in ordered_lks:
+        ds |= set((lot_planned_daily.get(lk) or {}).keys())
+    for dk, aq in (actual_by_schedule_date.get(sid) or {}).items():
+        if int(aq or 0) > 0:
+            ds.add(dk)
+    ds |= set((planned_by_schedule_date.get(sid) or {}).keys())
+    return sorted(ds)
+
+
+def _build_lot_daily_sequential_forming_actuals(
+    sid: int,
+    uniq_keys: List[str],
+    lot_planned_daily: dict[str, dict[str, int]],
+    lot_planned_cap: dict[str, int],
+    lot_progress_status: dict[str, str],
+    actual_by_schedule_date: dict[int, dict[str, int]],
+    planned_by_schedule_date: dict[int, dict[str, int]],
+    material_flag: bool,
+    lot_daily: dict[str, dict[str, int]],
+    lot_daily_source: dict[str, dict[str, str]],
+) -> None:
+    """
+    日次成型実績はロット番号順にのみ割当て：先頭ロットの残 cap を尽くしてから次ロットへ（同日も同様）。
+    スライス比率での横並び按分はしない。残計画は cap 控除後、最終実績日の翌日以降にスライス形状で配分。
+    """
+    ordered = _sort_lot_keys_in_schedule(list(dict.fromkeys(uniq_keys)))
+    if not ordered:
+        return
+    sorted_dates = _collect_schedule_progress_dates(
+        sid, ordered, lot_planned_daily, actual_by_schedule_date, planned_by_schedule_date
+    )
+    if not sorted_dates:
+        return
+
+    rem_cap = {lk: max(0, int(lot_planned_cap.get(lk, 0) or 0)) for lk in ordered}
+
+    for d_str in sorted_dates:
+        a_left = int((actual_by_schedule_date.get(sid) or {}).get(d_str, 0) or 0)
+        if a_left <= 0:
+            continue
+        i = 0
+        while a_left > 0:
+            while i < len(ordered) and rem_cap.get(ordered[i], 0) <= 0:
+                i += 1
+            if i >= len(ordered):
+                break
+            lk = ordered[i]
+            room = rem_cap[lk]
+            x = min(a_left, room)
+            if x <= 0:
+                i += 1
+                continue
+            lot_daily.setdefault(lk, {})
+            lot_daily[lk][d_str] = int(lot_daily[lk].get(d_str, 0) or 0) + x
+            lot_daily_source.setdefault(lk, {})
+            lot_daily_source[lk][d_str] = "ACTUAL"
+            rem_cap[lk] -= x
+            a_left -= x
+
+    for lk in ordered:
+        rem = rem_cap.get(lk, 0)
+        if rem <= 0:
+            continue
+        src_map = lot_daily_source.setdefault(lk, {})
+        dm = lot_daily.setdefault(lk, {})
+        last_actual: Optional[str] = None
+        for d_str in sorted(dm.keys()):
+            if int(dm.get(d_str) or 0) > 0 and src_map.get(d_str) == "ACTUAL":
+                last_actual = d_str
+
+        eligible = [d for d in sorted_dates if last_actual is None or d > last_actual]
+        if not eligible:
+            eligible = sorted_dates
+        weights = {d: max(0, int((lot_planned_daily.get(lk) or {}).get(d, 0) or 0)) for d in eligible}
+        wsum = sum(weights.values())
+        if wsum <= 0:
+            weights = {d: 1 for d in eligible}
+        alloc = _split_actual_across_lots(rem, weights)
+        st = lot_progress_status.get(lk, "PLANNED")
+        src = "WAIT_UPSTREAM" if (material_flag or st == "PLANNED") else "PLANNED"
+        for d_str, q in alloc.items():
+            qn = int(q or 0)
+            if qn <= 0:
+                continue
+            if src_map.get(d_str) == "ACTUAL":
+                continue
+            cur = int(dm.get(d_str, 0) or 0)
+            dm[d_str] = cur + qn
+            src_map[d_str] = src
+
+
+def _trim_lot_progress_by_lot_cap(
+    lot_daily: dict[str, dict[str, int]],
+    lot_daily_source: dict[str, dict[str, str]],
+    lot_cap: dict[str, int],
+) -> None:
+    """
+    各ロットの計画数（aps_batch_plans.planned_quantity）を上限に、日付昇順で処理する。
+    先に出た実績（ACTUAL）で本数を消化し、残りに対してのみ PLANNED / WAIT_UPSTREAM を表示する。
+    例: 計画1956、1日目実績1400 → 2日目のスライス按分が1956でも表示は556に縮む。
+    """
+    for lk, cap in lot_cap.items():
+        if cap <= 0:
+            continue
+        daily = lot_daily.get(lk)
+        if not daily:
+            continue
+        src_map = lot_daily_source.setdefault(lk, {})
+        consumed = 0
+        for d_str in sorted(daily.keys()):
+            q = int(daily.get(d_str) or 0)
+            if q <= 0:
+                continue
+            src = src_map.get(d_str, "PLANNED")
+            if src == "ACTUAL":
+                consumed += q
+                continue
+            room = max(0, cap - consumed)
+            new_q = min(q, room)
+            if new_q <= 0:
+                del daily[d_str]
+                src_map.pop(d_str, None)
+            else:
+                daily[d_str] = new_q
+                consumed += new_q
+
+
 @router.get("/production-progress", response_model=ProductionProgressResponse)
 async def get_production_progress(
     lineId: int = Query(..., description="対象設備 ID"),
@@ -1294,7 +1682,14 @@ async def get_production_progress(
     """
     指定ラインの APS ロットごとに instruction_plans / cutting_management を照合し、
     リアルタイムの生産進捗ステータス＋日別数量を返す。
-    ステータス: PLANNED → RELEASED → IN_PROGRESS → COMPLETED
+    全 aps_batch_plans ロットを返し、本工程（成型）の日別計画・実績を欠かさない。
+    cutting_management / instruction_plans はステータス・切断(本)列のみに使用し、行の有無では落とさない。
+    cutting_management にあれば生産中、instruction_plans のみなら指示済、未同期は PLANNED。
+    日別セルは成型ガント連動（schedule_details の planned/actual）。actual_qty は再計算時に在庫ログから
+    当該設備・製品へ同期される成型実績であり、切断完工の代替ではない。切断の本数・完了は cutting_* フィールドで返す。
+    True のとき成型実績はロット番号順に日次のみ割当（同日も先頭ロットから順に、横並び按分なし）、残計画はスライス再配置。
+    False のときは従来のスライス比率実績按分。
+    計画数表示は original_planned_quantity を維持。上流待ちは WAIT_UPSTREAM。
     """
     sched_result = await db.execute(
         select(ProductionSchedule)
@@ -1303,7 +1698,7 @@ async def get_production_progress(
     )
     schedules = sched_result.scalars().all()
     if not schedules:
-        return ProductionProgressResponse(lots=[], dates=[], lot_daily={})
+        return ProductionProgressResponse(lots=[], dates=[], lot_daily={}, lot_daily_source={})
 
     schedule_map = {s.id: s for s in schedules}
     schedule_ids = list(schedule_map.keys())
@@ -1315,7 +1710,12 @@ async def get_production_progress(
     )
     batches = batch_result.scalars().all()
     if not batches:
-        return ProductionProgressResponse(lots=[], dates=[], lot_daily={})
+        return ProductionProgressResponse(lots=[], dates=[], lot_daily={}, lot_daily_source={})
+
+    if _PRODUCTION_PROGRESS_USE_FORMING_ACTUAL:
+        for ps in schedules:
+            await _sync_actual_from_stock_logs(db, ps)
+        await db.flush()
 
     slice_result = await db.execute(
         select(ScheduleSliceAllocation)
@@ -1332,9 +1732,23 @@ async def get_production_progress(
     for s in all_slices:
         slices_by_sched[s.schedule_id].append(s)
 
-    all_dates_set: set[str] = set()
+    det_result = await db.execute(
+        select(ScheduleDetail).where(ScheduleDetail.schedule_id.in_(schedule_ids))
+    )
+    actual_by_schedule_date: dict[int, dict[str, int]] = defaultdict(dict)
+    planned_by_schedule_date: dict[int, dict[str, int]] = defaultdict(dict)
+    for det in det_result.scalars().all():
+        dkey = det.schedule_date.isoformat()
+        sid = det.schedule_id
+        planned_by_schedule_date[sid][dkey] = planned_by_schedule_date[sid].get(dkey, 0) + int(det.planned_qty or 0)
+        if _PRODUCTION_PROGRESS_USE_FORMING_ACTUAL:
+            actual_by_schedule_date[sid][dkey] = actual_by_schedule_date[sid].get(dkey, 0) + int(det.actual_qty or 0)
+
+    lot_planned_daily: dict[str, dict[str, int]] = {}
+    lot_progress_status: dict[str, str] = {}
+    lot_planned_cap: dict[str, int] = {}
+    sched_lot_keys: dict[int, list[str]] = defaultdict(list)
     lots: list[ProgressLotItem] = []
-    lot_daily: dict[str, dict[str, int]] = {}
 
     for batch in batches:
         ps = schedule_map.get(batch.aps_schedule_id)
@@ -1351,13 +1765,24 @@ async def get_production_progress(
         )
 
         progress_status = "PLANNED"
+        cut_planned: Optional[int] = None
+        cut_actual: Optional[int] = None
+        cut_done: Optional[bool] = None
         try:
-            cut_q = await db.execute(
-                text("SELECT id FROM cutting_management WHERE management_code = :mc LIMIT 1"),
+            cut_res = await db.execute(
+                text(
+                    "SELECT planned_quantity, actual_production_quantity, "
+                    "COALESCE(production_completed_check, 0) AS pcc "
+                    "FROM cutting_management WHERE management_code = :mc LIMIT 1"
+                ),
                 {"mc": mc},
             )
-            if cut_q.scalar() is not None:
+            cut_row = cut_res.mappings().first()
+            if cut_row is not None:
                 progress_status = "IN_PROGRESS"
+                cut_planned = int(cut_row.get("planned_quantity") or 0)
+                cut_actual = int(cut_row.get("actual_production_quantity") or 0)
+                cut_done = bool(int(cut_row.get("pcc") or 0))
             else:
                 ins_q = await db.execute(
                     text(
@@ -1368,7 +1793,6 @@ async def get_production_progress(
                     {"bid": batch.id, "mc": mc},
                 )
                 if ins_q.scalar() is not None:
-                    # 从 cutting_management 撤回后回到指示済，不新增状态
                     progress_status = "RELEASED"
         except (OperationalError, ProgrammingError):
             pass
@@ -1382,7 +1806,7 @@ async def get_production_progress(
             product_cd=batch.product_cd,
             product_name=batch.product_name,
             lot_number=batch.lot_number,
-            planned_quantity=batch.planned_quantity,
+            planned_quantity=_batch_display_planned_qty(batch),
             order_no=ps.order_no,
             start_date=start_iso,
             end_date=end_iso,
@@ -1390,9 +1814,18 @@ async def get_production_progress(
             progress_status=progress_status,
             management_code=mc,
             production_line=batch.production_line or "",
+            cutting_planned_qty=cut_planned,
+            cutting_actual_qty=cut_actual,
+            cutting_completed=cut_done,
         ))
 
         lot_key = f"{batch.aps_schedule_id}_{batch.lot_number}"
+        sched_lot_keys[ps.id].append(lot_key)
+        lot_progress_status[lot_key] = progress_status
+        lot_planned_cap[lot_key] = max(
+            lot_planned_cap.get(lot_key, 0),
+            _batch_display_planned_qty(batch),
+        )
         daily_map: dict[str, int] = {}
 
         slices = slices_by_sched.get(ps.id, [])
@@ -1417,12 +1850,92 @@ async def get_production_progress(
                     continue
                 d_key = sl.work_date.isoformat()
                 daily_map[d_key] = daily_map.get(d_key, 0) + portion
-                all_dates_set.add(d_key)
 
-        lot_daily[lot_key] = daily_map
+        lot_planned_daily[lot_key] = daily_map
 
+    lot_daily: dict[str, dict[str, int]] = {}
+    lot_daily_source: dict[str, dict[str, str]] = {}
+
+    for sid, lot_keys in sched_lot_keys.items():
+        ps = schedule_map.get(sid)
+        if ps is None or not lot_keys:
+            continue
+        uniq_keys = list(dict.fromkeys(lot_keys))
+        material_flag = bool(ps.material_shortage)
+        if _PRODUCTION_PROGRESS_USE_FORMING_ACTUAL:
+            _build_lot_daily_sequential_forming_actuals(
+                sid,
+                uniq_keys,
+                lot_planned_daily,
+                lot_planned_cap,
+                lot_progress_status,
+                actual_by_schedule_date,
+                planned_by_schedule_date,
+                material_flag,
+                lot_daily,
+                lot_daily_source,
+            )
+            continue
+
+        date_keys: set[str] = set()
+        for lk in uniq_keys:
+            date_keys |= set(lot_planned_daily.get(lk, {}).keys())
+        for dk, aq in actual_by_schedule_date.get(sid, {}).items():
+            if aq > 0:
+                date_keys.add(dk)
+
+        for d_str in sorted(date_keys):
+            actual_total = int(actual_by_schedule_date.get(sid, {}).get(d_str, 0) or 0)
+            shares = {lk: lot_planned_daily.get(lk, {}).get(d_str, 0) for lk in uniq_keys}
+
+            if actual_total > 0:
+                split = _split_actual_across_lots(actual_total, shares)
+                for lk in uniq_keys:
+                    q = int(split.get(lk, 0) or 0)
+                    if q <= 0:
+                        continue
+                    if lk not in lot_daily:
+                        lot_daily[lk] = {}
+                    if lk not in lot_daily_source:
+                        lot_daily_source[lk] = {}
+                    lot_daily[lk][d_str] = q
+                    lot_daily_source[lk][d_str] = "ACTUAL"
+                continue
+
+            for lk in uniq_keys:
+                q = int(shares.get(lk, 0) or 0)
+                if q <= 0:
+                    continue
+                st = lot_progress_status.get(lk, "PLANNED")
+                src = "WAIT_UPSTREAM" if (material_flag or st == "PLANNED") else "PLANNED"
+                if lk not in lot_daily:
+                    lot_daily[lk] = {}
+                if lk not in lot_daily_source:
+                    lot_daily_source[lk] = {}
+                lot_daily[lk][d_str] = q
+                lot_daily_source[lk][d_str] = src
+
+    _trim_lot_progress_by_lot_cap(lot_daily, lot_daily_source, lot_planned_cap)
+    _align_progress_planned_to_schedule_day_totals(
+        lot_daily,
+        lot_daily_source,
+        planned_by_schedule_date,
+        actual_by_schedule_date,
+        sched_lot_keys,
+        lot_planned_daily,
+        lot_planned_cap,
+    )
+    _enforce_lot_progress_row_sum_cap(lot_daily, lot_daily_source, lot_planned_cap)
+    all_dates_set: set[str] = set()
+    for dm in lot_daily.values():
+        all_dates_set |= set(dm.keys())
     dates = sorted(all_dates_set)
-    return ProductionProgressResponse(lots=lots, dates=dates, lot_daily=lot_daily)
+    return ProductionProgressResponse(
+        lots=lots,
+        dates=dates,
+        lot_daily=lot_daily,
+        lot_daily_source=lot_daily_source,
+    )
 
 
 # ═══════════════════ helpers ═══════════════════
@@ -1495,9 +2008,9 @@ async def _last_actual_date_for_line(db: AsyncSession, line_id: int) -> Optional
 
 async def _sync_actual_from_stock_logs(db: AsyncSession, ps: ProductionSchedule):
     """
-    stock_transaction_logs → schedule_details.actual_qty を手動同期。
-    run_engine 後に schedule_details が再作成されるため、
-    DB トリガーが効かないケースを補完する。
+    成型実績：stock_transaction_logs（実績・当該設備 machine_cd・製品 target_cd）を
+    schedule_details.actual_qty に日付単位で同期。切断完工ではない。
+    run_engine 後に schedule_details が再作成されるため、DB トリガーが効かないケースを補完する。
     """
     from sqlalchemy import func as sa_func
 
@@ -1588,8 +2101,117 @@ def _instruction_management_code(
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
 
 
+def _aps_build_batch_qty_rows(total_qty: int, lot_size_snapshot: int) -> tuple[int, List[tuple[int, int]]]:
+    """ロット数と [(lot_index, qty), ...]（qty>0 のみ）。"""
+    production_lot_size = max(1, int(math.ceil(total_qty / float(lot_size_snapshot))))
+    batch_qtys: List[tuple[int, int]] = []
+    for i in range(1, production_lot_size + 1):
+        if i < production_lot_size:
+            batch_qtys.append((i, lot_size_snapshot))
+        else:
+            remain = total_qty - lot_size_snapshot * (production_lot_size - 1)
+            batch_qtys.append((i, max(0, int(remain))))
+    batch_qtys = [(i, q) for i, q in batch_qtys if q > 0]
+    return production_lot_size, batch_qtys
+
+
+def _scale_slice_rows_to_instruction_total(
+    slices: List[ScheduleSliceAllocation],
+    slice_total: int,
+    target_total: int,
+) -> List[tuple[ScheduleSliceAllocation, int]]:
+    """
+    成型スライス合計 slice_total を、切断指示用の計画本数 target_total に比例拡大（切断前計画）。
+    成型実績でスライスが「残数」のみでも、instruction_plans は計画一覧の合計本数を表す。
+    """
+    if not slices:
+        return []
+    if slice_total <= 0 or target_total <= 0:
+        return [(s, int(s.planned_qty or 0)) for s in slices]
+    if slice_total == target_total:
+        return [(s, int(s.planned_qty or 0)) for s in slices]
+    out: List[tuple[ScheduleSliceAllocation, int]] = []
+    acc = 0
+    for idx in range(len(slices) - 1):
+        s = slices[idx]
+        q = int(s.planned_qty or 0)
+        sq = int(math.floor(target_total * q / slice_total))
+        out.append((s, sq))
+        acc += sq
+    last_s = slices[-1]
+    out.append((last_s, max(0, target_total - acc)))
+    return out
+
+
+def _walk_slice_pairs_to_batches(
+    slice_pairs: List[tuple[ScheduleSliceAllocation, int]],
+    batch_qtys: List[tuple[int, int]],
+) -> List[Dict[str, Any]]:
+    """スライス（数量付き）をロットへ割当、開始・終了時刻を付与。"""
+    batches: List[Dict[str, Any]] = []
+    if not batch_qtys:
+        return batches
+    batch_idx = 0
+    batch_accum_qty = 0
+    batch_start_dt: Optional[datetime] = None
+    batch_end_dt: Optional[datetime] = None
+
+    for s, slice_total_qty in slice_pairs:
+        if slice_total_qty <= 0:
+            continue
+        slice_allocated_qty_in_current = 0
+        is_end_of_day = s.period_end == time(0, 0, 0) and s.period_start != time(0, 0, 0)
+        slice_start_dt = _combine_work_date_and_time(s.work_date, s.period_start, end_of_day=False)
+        slice_end_dt = _combine_work_date_and_time(s.work_date, s.period_end, end_of_day=is_end_of_day)
+        duration_sec = max(0.0, (slice_end_dt - slice_start_dt).total_seconds())
+
+        slice_remaining_qty = slice_total_qty - slice_allocated_qty_in_current
+        while slice_remaining_qty > 0 and batch_idx < len(batch_qtys):
+            lot_i, qty_i = batch_qtys[batch_idx]
+            batch_need = int(qty_i - batch_accum_qty)
+            if batch_need <= 0:
+                batch_idx += 1
+                batch_accum_qty = 0
+                if batch_idx >= len(batch_qtys):
+                    break
+                batch_start_dt = None
+                batch_end_dt = None
+                continue
+
+            portion_qty = min(slice_remaining_qty, batch_need)
+            start_frac = slice_allocated_qty_in_current / float(slice_total_qty)
+            end_allocated_qty = slice_allocated_qty_in_current + portion_qty
+            end_frac = end_allocated_qty / float(slice_total_qty)
+            portion_start_dt = slice_start_dt + timedelta(seconds=duration_sec * start_frac)
+            portion_end_dt = slice_start_dt + timedelta(seconds=duration_sec * end_frac)
+
+            if batch_start_dt is None:
+                batch_start_dt = portion_start_dt
+            batch_end_dt = portion_end_dt
+            batch_accum_qty += portion_qty
+            slice_allocated_qty_in_current += portion_qty
+            slice_remaining_qty -= portion_qty
+
+            if batch_accum_qty >= qty_i:
+                batches.append(
+                    {
+                        "lot_number": str(lot_i),
+                        "planned_quantity": int(qty_i),
+                        "start_date": batch_start_dt,
+                        "end_date": batch_end_dt,
+                    }
+                )
+                batch_idx += 1
+                batch_accum_qty = 0
+                batch_start_dt = None
+                batch_end_dt = None
+    return batches
+
+
 # instruction_plans へ書き込むのは「成型」(KT04) の設備に限る（get_lines の processCd 判定と同一）。aps_batch_plans は全工程で更新する。
 _APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD = "KT04"
+# 生産進捗：True のとき schedule_details.actual_qty をロット順に割当て、残数を翌日以降に再按分し日別ガントと整列する。
+_PRODUCTION_PROGRESS_USE_FORMING_ACTUAL = True
 
 
 async def _machine_matches_process_cd(
@@ -1623,10 +2245,10 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
 
     実装方針:
     - instruction_plans は工程 KT04（成型）設備の計画のみ。aps_batch_plans は設備の工程に関わらず更新する。
-    - 時間範囲は schedule_slice_allocations（時間別ガント）から切替点を精算して作成（選択 B）。
-    - instruction_plans:
-      - aps_batch_plan_id が紐づく行のみ上書き（手作業は維持）
-      - cutting_management に既に存在する management_code のロットは skip（既に移行済み）
+    - aps_batch_plans: 排産エンジンのスライス（成型実績を考慮した残数）に基づく。
+    - instruction_plans: 切断工程指示前の「計画一覧」＝ planned_process_qty + prev_month_carryover を本数基準とし、
+      成型実績で縮んだスライスは時間軸の形を保ったまま比例拡大してロット割当（実績本数は参照しない）。
+    - cutting_management に既に存在する management_code のロットは instruction 同期を skip。
     """
     # schedule は APS ロット単位に分解できる前提
     if not ps.product_cd:
@@ -1654,9 +2276,13 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
     if not slices:
         return
 
-    total_qty = sum(int(s.planned_qty or 0) for s in slices)
-    if total_qty <= 0:
+    slice_total = sum(int(s.planned_qty or 0) for s in slices)
+    if slice_total <= 0:
         return
+
+    full_plan_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
+    if full_plan_total <= 0:
+        full_plan_total = slice_total
 
     # 生産月/ライン/製品情報（管理コードと整合させるため機械側情報を優先）
     # instruction_plans の management_code トリガーは RIGHT(production_line,2) を使うため、
@@ -1710,105 +2336,36 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
     if lot_size_snapshot <= 0:
         return
 
-    production_lot_size = int(math.ceil(total_qty / float(lot_size_snapshot)))
-    production_lot_size = max(1, production_lot_size)
-
-    # ロット planned_quantity（最後のみ不足を許容）
-    batch_qtys: List[tuple[int, int]] = []
-    for i in range(1, production_lot_size + 1):
-        if i < production_lot_size:
-            batch_qtys.append((i, lot_size_snapshot))
-        else:
-            remain = total_qty - lot_size_snapshot * (production_lot_size - 1)
-            batch_qtys.append((i, max(0, int(remain))))
-    # ロット数が極端に崩れる場合はガード
-    batch_qtys = [(i, q) for i, q in batch_qtys if q > 0]
-    if not batch_qtys:
+    # aps_batch_plans：エンジンスライス（成型実績反映後の残数）
+    production_lot_size_engine, batch_qtys_engine = _aps_build_batch_qty_rows(slice_total, lot_size_snapshot)
+    if not batch_qtys_engine:
         return
+    slice_pairs_engine = [(s, int(s.planned_qty or 0)) for s in slices]
+    batches_engine = _walk_slice_pairs_to_batches(slice_pairs_engine, batch_qtys_engine)
+    if not batches_engine:
+        return
+
+    # instruction_plans：計画一覧合計（切断前。スライスを full_plan_total へ比例拡大してロット・時刻を算出）
+    instruction_planned_qty = full_plan_total
+    production_lot_size_ip, batch_qtys_ip = _aps_build_batch_qty_rows(full_plan_total, lot_size_snapshot)
+    slice_pairs_ip = _scale_slice_rows_to_instruction_total(slices, slice_total, full_plan_total)
+    batches_instruction = (
+        _walk_slice_pairs_to_batches(slice_pairs_ip, batch_qtys_ip)
+        if sync_instruction_plans and batch_qtys_ip
+        else []
+    )
 
     # 生産月はスライスの最初日基準
     min_work_date = min(s.work_date for s in slices)
     production_month = date(min_work_date.year, min_work_date.month, 1)
 
-    # ロットへ時間を割当（数量の順番に沿って部分スライスも按分）
-    # schedule_slice_allocations は同一 schedule 内で時系列順に並んでいる前提
-    batches = []
-    batch_idx = 0
-    batch_lot_number, batch_remaining = batch_qtys[batch_idx]
-    batch_start_dt: Optional[datetime] = None
-    batch_end_dt: Optional[datetime] = None
-    batch_accum_qty = 0
-
-    for s in slices:
-        slice_total_qty = int(s.planned_qty or 0)
-        if slice_total_qty <= 0:
-            continue
-        # 現在スライス内で、すでに割り当て済みの数量（用于部分時間）
-        slice_allocated_qty_in_current = 0
-        is_end_of_day = s.period_end == time(0, 0, 0) and s.period_start != time(0, 0, 0)
-        slice_start_dt = _combine_work_date_and_time(s.work_date, s.period_start, end_of_day=False)
-        slice_end_dt = _combine_work_date_and_time(s.work_date, s.period_end, end_of_day=is_end_of_day)
-        duration_sec = max(0.0, (slice_end_dt - slice_start_dt).total_seconds())
-
-        slice_remaining_qty = slice_total_qty - slice_allocated_qty_in_current
-        while slice_remaining_qty > 0 and batch_idx < len(batch_qtys):
-            lot_i, qty_i = batch_qtys[batch_idx]
-            batch_need = int(qty_i - batch_accum_qty)
-            if batch_need <= 0:
-                # next batch
-                batch_idx += 1
-                batch_accum_qty = 0
-                if batch_idx >= len(batch_qtys):
-                    break
-                batch_lot_number, batch_remaining = batch_qtys[batch_idx]
-                batch_start_dt = None
-                batch_end_dt = None
-                continue
-
-            portion_qty = min(slice_remaining_qty, batch_need)
-            # portion 的时间按数量比例
-            start_frac = slice_allocated_qty_in_current / float(slice_total_qty)
-            end_allocated_qty = slice_allocated_qty_in_current + portion_qty
-            end_frac = end_allocated_qty / float(slice_total_qty)
-            portion_start_dt = slice_start_dt + timedelta(seconds=duration_sec * start_frac)
-            portion_end_dt = slice_start_dt + timedelta(seconds=duration_sec * end_frac)
-
-            if batch_start_dt is None:
-                batch_start_dt = portion_start_dt
-            batch_end_dt = portion_end_dt
-            batch_accum_qty += portion_qty
-            slice_allocated_qty_in_current += portion_qty
-            slice_remaining_qty -= portion_qty
-
-            if batch_accum_qty >= qty_i:
-                batches.append(
-                    {
-                        "lot_number": str(lot_i),
-                        "planned_quantity": int(qty_i),
-                        "start_date": batch_start_dt,
-                        "end_date": batch_end_dt,
-                    }
-                )
-                batch_idx += 1
-                batch_accum_qty = 0
-                batch_start_dt = None
-                batch_end_dt = None
-    if not batches:
-        return
-
-    # instruction_plans.planned_quantity は「合計(本)」＝スケジュール全体の計画本数（Planning 一覧の合計と一致）
-    instruction_planned_qty = int(ps.planned_process_qty or 0)
-    if instruction_planned_qty <= 0:
-        instruction_planned_qty = int(total_qty)
-
-    # ロットをアップサートして instruction_plans を同期
-    for b in batches:
+    # ① aps_batch_plans のみ（成型スライス実値）
+    for b in batches_engine:
         lot_number = b["lot_number"]
         batch_planned_qty = int(b["planned_quantity"])
         start_dt = b["start_date"]
         end_dt = b["end_date"]
 
-        # aps_batch_plans upsert（lot_number で一意）
         existing_q = await db.execute(
             select(ApsBatchPlan).where(
                 ApsBatchPlan.aps_schedule_id == ps.id,
@@ -1825,7 +2382,8 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                 product_cd=production_product_cd,
                 product_name=production_name,
                 planned_quantity=batch_planned_qty,
-                production_lot_size=production_lot_size,
+                original_planned_quantity=batch_planned_qty,
+                production_lot_size=production_lot_size_engine,
                 lot_number=lot_number,
                 start_date=start_dt,
                 end_date=end_dt,
@@ -1833,44 +2391,66 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
             db.add(new_row)
             await db.flush()
             await db.refresh(new_row)
-            batch_plan_id = new_row.id
         else:
+            old_pq = int(existing.planned_quantity or 0)
+            new_pq = int(batch_planned_qty or 0)
+            oq = getattr(existing, "original_planned_quantity", None)
+            if oq is None:
+                existing.original_planned_quantity = max(old_pq, new_pq)
+            else:
+                existing.original_planned_quantity = max(int(oq or 0), new_pq)
             existing.production_month = production_month
             existing.production_line = str(production_line)
             existing.priority_order = ps.order_no
             existing.product_cd = production_product_cd
             existing.product_name = production_name
-            existing.planned_quantity = batch_planned_qty
-            existing.production_lot_size = production_lot_size
+            existing.planned_quantity = new_pq
+            existing.production_lot_size = production_lot_size_engine
             existing.start_date = start_dt
             existing.end_date = end_dt
             await db.flush()
-            batch_plan_id = existing.id
 
-        if not sync_instruction_plans:
-            continue
+    await db.flush()
 
-        # skip if already moved to cutting_management
+    if not sync_instruction_plans or not batches_instruction:
+        return
+
+    bp_map_res = await db.execute(
+        select(ApsBatchPlan).where(ApsBatchPlan.aps_schedule_id == ps.id)
+    )
+    plan_id_by_lot: dict[str, int] = {}
+    for bp in bp_map_res.scalars().all():
+        plan_id_by_lot[str(bp.lot_number)] = int(bp.id)
+
+    # ② instruction_plans（切断工程用。ロットが APS 側に無い場合は aps_batch_plan_id は NULL）
+    for b in batches_instruction:
+        lot_number = b["lot_number"]
+        batch_planned_qty = int(b["planned_quantity"])
+        start_dt = b["start_date"]
+        end_dt = b["end_date"]
+        batch_plan_id = plan_id_by_lot.get(lot_number)
+
         mc = _instruction_management_code(
             production_month=production_month,
             production_line=str(production_line),
             product_cd=production_product_cd,
             priority_order=ps.order_no,
-            production_lot_size=production_lot_size,
+            production_lot_size=production_lot_size_ip,
             lot_number=lot_number,
         )
         cut_q = await db.execute(text("SELECT id FROM cutting_management WHERE management_code = :mc LIMIT 1"), {"mc": mc})
         if cut_q.scalar() is not None:
             continue
 
-        # instruction_plans upsert by aps_batch_plan_id
-        ins_find = await db.execute(
-            text(
-                "SELECT id, aps_batch_plan_id FROM instruction_plans WHERE aps_batch_plan_id = :bid LIMIT 1"
-            ),
-            {"bid": batch_plan_id},
-        )
-        found = ins_find.mappings().first()
+        found = None
+        if batch_plan_id is not None:
+            ins_find = await db.execute(
+                text(
+                    "SELECT id, aps_batch_plan_id FROM instruction_plans WHERE aps_batch_plan_id = :bid LIMIT 1"
+                ),
+                {"bid": batch_plan_id},
+            )
+            found = ins_find.mappings().first()
 
         if found:
             ins_id = found.get("id")
@@ -1907,13 +2487,12 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                     "standard_specification": standard_specification,
                     "start_date": start_dt,
                     "end_date": end_dt,
-                    "production_lot_size": production_lot_size,
+                    "production_lot_size": production_lot_size_ip,
                     "lot_number": lot_number,
                     "aps_batch_plan_id": batch_plan_id,
                 },
             )
         else:
-            # conflict check: if a row already exists by management_code but is manual, don't overwrite
             ins_conf = await db.execute(
                 text(
                     "SELECT id, aps_batch_plan_id FROM instruction_plans WHERE management_code = :mc LIMIT 1"
@@ -1922,7 +2501,6 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
             )
             conf_row = ins_conf.mappings().first()
             if conf_row and conf_row.get("aps_batch_plan_id"):
-                # previously generated, but different batch_plan_id -> update it instead
                 ins_id = conf_row.get("id")
                 await db.execute(
                     text(
@@ -1957,17 +2535,15 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                         "standard_specification": standard_specification,
                         "start_date": start_dt,
                         "end_date": end_dt,
-                        "production_lot_size": production_lot_size,
+                        "production_lot_size": production_lot_size_ip,
                         "lot_number": lot_number,
                         "aps_batch_plan_id": batch_plan_id,
                     },
                 )
                 continue
             if conf_row and not conf_row.get("aps_batch_plan_id"):
-                # manual row -> preserve
                 continue
 
-            # insert new instruction_plans row
             await db.execute(
                 text(
                     """
@@ -2001,7 +2577,7 @@ async def _sync_instruction_plans_from_aps_schedule(db: AsyncSession, ps: Produc
                     "instruction_planned_qty": instruction_planned_qty,
                     "start_date": start_dt,
                     "end_date": end_dt,
-                    "production_lot_size": production_lot_size,
+                    "production_lot_size": production_lot_size_ip,
                     "lot_number": lot_number,
                     "batch_planned_qty": batch_planned_qty,
                     "take_count": take_count,

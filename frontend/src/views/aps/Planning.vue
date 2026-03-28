@@ -173,28 +173,28 @@
                 required
                 class="add-fi-qty add-fi-qty--inline"
               >
-                <div class="add-qty-stack">
-                  <el-input
-                    v-model="plannedQtyInput"
-                    clearable
-                    size="small"
-                    :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
-                    class="add-input-qty"
-                    maxlength="6"
-                  />
-                  <div v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</div>
-                </div>
+                <el-input
+                  v-model="plannedQtyInput"
+                  clearable
+                  size="small"
+                  :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+                  class="add-input-qty"
+                  maxlength="6"
+                />
               </el-form-item>
               <el-form-item label-width="0" class="add-fi-btn add-fi-btn--inline">
-                <el-button
-                  type="success"
-                  size="small"
-                  :loading="adding"
-                  :disabled="!canAddQty"
-                  @click="addSchedule"
-                >
-                  追加
-                </el-button>
+                <div class="add-btn-hint-row">
+                  <el-button
+                    type="success"
+                    size="small"
+                    :loading="adding"
+                    :disabled="!canAddQty"
+                    @click="addSchedule"
+                  >
+                    追加
+                  </el-button>
+                  <span v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</span>
+                </div>
               </el-form-item>
             </div>
           </template>
@@ -204,28 +204,28 @@
               required
               class="add-fi-qty"
             >
-              <div class="add-qty-stack">
-                <el-input
-                  v-model="plannedQtyInput"
-                  clearable
-                  size="small"
-                  :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
-                  class="add-input-qty"
-                  maxlength="6"
-                />
-                <div v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</div>
-              </div>
+              <el-input
+                v-model="plannedQtyInput"
+                clearable
+                size="small"
+                :placeholder="addQtyMode === 'batch' ? 'ロット数' : '本数'"
+                class="add-input-qty"
+                maxlength="6"
+              />
             </el-form-item>
             <el-form-item label-width="0" class="add-fi-btn">
-              <el-button
-                type="success"
-                size="small"
-                :loading="adding"
-                :disabled="!canAddQty"
-                @click="addSchedule"
-              >
-                追加
-              </el-button>
+              <div class="add-btn-hint-row">
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="adding"
+                  :disabled="!canAddQty"
+                  @click="addSchedule"
+                >
+                  追加
+                </el-button>
+                <span v-if="addQtySummary" class="add-qty-hint">{{ addQtySummary }}</span>
+              </div>
             </el-form-item>
           </template>
         </el-form>
@@ -359,7 +359,8 @@
         <span class="legend-item"><i class="legend-dot legend-dot--released" />指示済</span>
         <span class="legend-item"><i class="legend-dot legend-dot--in-progress" />生産中</span>
         <span class="legend-item"><i class="legend-dot legend-dot--completed" />完了</span>
-        <span class="legend-item"><i class="legend-dot legend-dot--actual" />実績あり</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--actual" />実績（成型）</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--wait-upstream" />上流待ち</span>
         <div class="gantt-range-wrap">
           <span class="gantt-range-label">表示期間</span>
           <el-date-picker
@@ -503,7 +504,7 @@
                   <th class="gantt-sticky gantt-sticky-name">品名</th>
                   <th class="gantt-sticky gantt-sticky-eff">ロット</th>
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
-                  <th class="gantt-sticky gantt-sticky-actual">実績数</th>
+                  <th class="pgs-th-cutting" title="cutting_management（上流切断・実績/計画本数）">切断(本)</th>
                   <th class="pgs-th-status">ステータス</th>
                   <th class="pgs-th-prediction">完了予測</th>
                   <th
@@ -528,7 +529,15 @@
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ lot.product_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff pgs-lot-num">#{{ lot.lot_number }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ lot.planned_quantity?.toLocaleString() }}</td>
-                  <td class="gantt-sticky gantt-sticky-actual">{{ lotActualQty(lot).toLocaleString() }}</td>
+                  <td class="pgs-cutting-cell">
+                    <span class="pgs-cutting-qty">{{ cuttingProgressDisplay(lot) }}</span>
+                    <el-tag
+                      v-if="lot.cutting_completed && lot.progress_status === 'IN_PROGRESS'"
+                      type="success"
+                      size="small"
+                      class="pgs-cutting-done-tag"
+                    >確定</el-tag>
+                  </td>
                   <td class="pgs-status-cell">
                     <el-tag :type="progressStatusType(lot.progress_status)" size="small" effect="dark">
                       {{ progressStatusLabel(lot.progress_status) }}
@@ -550,6 +559,10 @@
                 </tr>
               </tbody>
             </table>
+            <p class="pgs-footnote">
+              全ロットを本工程（成型）の計画・実績として表示。日別セルは schedule_details／在庫ログ同期の<strong>成型実績</strong>。
+              「ステータス」「切断(本)」は上流（instruction_plans／cutting_management）のみの情報で、行の表示とは独立します。
+            </p>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -688,9 +701,11 @@ const ganttDates = ref<string[]>([])
 const ganttRows = ref<ScheduleGridRow[]>([])
 const hourlyColumns = ref<HourlyGridColumn[]>([])
 const hourlyRows = ref<HourlyGridRow[]>([])
-/** 生産進捗 */
+/** 生産進捗：全ロットを表示。日別＝成型計画・実績。ステータス・切断(本)列＝上流 instruction/cutting */
 const progressLots = ref<ProgressLotItem[]>([])
 const progressLotDaily = ref<Record<string, Record<string, number>>>({})
+/** 日別セル: ACTUAL | PLANNED | WAIT_UPSTREAM */
+const progressLotDailySource = ref<Record<string, Record<string, string>>>({})
 const loadingProgress = ref(false)
 /** ガント表示タブ：daily | hourly | progress */
 const activeGanttTab = ref('daily')
@@ -1330,14 +1345,6 @@ function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number 
   return Number(row.actual_daily?.[d] || 0)
 }
 
-function lotActualQty(lot: ProgressLotItem): number {
-  const key = `${lot.aps_schedule_id}_${lot.lot_number}`
-  const m = progressLotDaily.value[key] || {}
-  const dates =
-    progressDisplayDates.value.length > 0 ? progressDisplayDates.value : Object.keys(m).sort()
-  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
-}
-
 async function loadGantt() {
   hourlyColumns.value = []
   hourlyRows.value = []
@@ -1381,6 +1388,7 @@ async function loadProgress() {
   if (!selectedLineId.value) {
     progressLots.value = []
     progressLotDaily.value = {}
+    progressLotDailySource.value = {}
     return
   }
   loadingProgress.value = true
@@ -1388,9 +1396,11 @@ async function loadProgress() {
     const res = await fetchProductionProgress(selectedLineId.value)
     progressLots.value = res.lots ?? []
     progressLotDaily.value = res.lot_daily ?? {}
+    progressLotDailySource.value = res.lot_daily_source ?? {}
   } catch {
     progressLots.value = []
     progressLotDaily.value = {}
+    progressLotDailySource.value = {}
   } finally {
     loadingProgress.value = false
   }
@@ -1414,11 +1424,34 @@ function progressStatusType(s: string): 'info' | 'warning' | 'primary' | 'succes
 function progressCellClass(lot: ProgressLotItem, d: string): Record<string, boolean> {
   const key = `${lot.aps_schedule_id}_${lot.lot_number}`
   const qty = (progressLotDaily.value[key] || {})[d] || 0
-  return { 'gantt-active': qty > 0, [`pgs-${lot.progress_status.toLowerCase()}`]: qty > 0 }
+  const src = (progressLotDailySource.value[key] || {})[d] || 'PLANNED'
+  const base: Record<string, boolean> = { 'gantt-active': qty > 0 }
+  if (qty <= 0) return base
+  if (src === 'ACTUAL') {
+    base['pgs-src-actual'] = true
+    return base
+  }
+  if (src === 'WAIT_UPSTREAM') {
+    base['pgs-src-wait-upstream'] = true
+    return base
+  }
+  base[`pgs-${lot.progress_status.toLowerCase()}`] = true
+  return base
 }
 function formatPrediction(iso: string | null | undefined): string {
   if (!iso) return '—'
   return iso.replace('T', ' ').slice(0, 16)
+}
+
+/** cutting_management の実績/計画（成型の日別セル・在庫ログ実績とは別） */
+function cuttingProgressDisplay(lot: ProgressLotItem): string {
+  if (lot.progress_status !== 'IN_PROGRESS') return '—'
+  const p = lot.cutting_planned_qty
+  const a = lot.cutting_actual_qty
+  if (p == null && a == null) return '—'
+  const pn = Number(p ?? 0)
+  const an = Number(a ?? 0)
+  return `${an.toLocaleString()}/${pn.toLocaleString()}`
 }
 
 function statusType(s: string): 'success' | 'warning' | 'info' {
@@ -1869,12 +1902,12 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   max-width: min(320px, 42vw);
 }
 
-/* ── qty stack (input + hint) ── */
-.add-qty-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+/* ── 追加ボタン直後の本数プレビュー ── */
+.add-btn-hint-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .add-qty-hint {
   font-size: var(--fs-xs);
@@ -1883,7 +1916,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  max-width: 300px;
+  max-width: min(480px, 58vw);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -2295,6 +2328,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .legend-dot--in-progress { background: linear-gradient(135deg, #60a5fa, #2563eb); }
 .legend-dot--completed { background: linear-gradient(135deg, #34d399, #059669); }
 .legend-dot--actual { background: linear-gradient(135deg, #0f766e, #115e59); }
+.legend-dot--wait-upstream { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
 
 .gantt-row.grs-planned td.gantt-active { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
 .gantt-row.grs-released td.gantt-active { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
@@ -2332,13 +2366,42 @@ td.gantt-has-actual {
   white-space: nowrap;
   font-weight: 700;
 }
-.pgs-th-status     { left: 454px; width: 80px; min-width: 80px; max-width: 80px;
+/* 生産進捗：計画数右端 382px の次に「切断」、その次ステータス・完了予測 */
+.pgs-th-cutting {
+  position: sticky;
+  left: 382px;
+  width: 88px; min-width: 88px; max-width: 88px;
+  z-index: 100;
+  background: #e8edf5 !important;
+  font-size: var(--fs-s);
+  white-space: nowrap;
+  font-weight: 700;
+  box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5;
+}
+.pgs-th-status     { left: 470px; width: 80px; min-width: 80px; max-width: 80px;
   box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5; }
-.pgs-th-prediction { left: 534px; width: 110px; min-width: 110px; max-width: 110px;
+.pgs-th-prediction { left: 550px; width: 110px; min-width: 110px; max-width: 110px;
   box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06); }
+.pgs-cutting-cell {
+  position: sticky;
+  left: 382px;
+  width: 88px; min-width: 88px; max-width: 88px;
+  z-index: 100;
+  background: #fbfcfe;
+  background-color: #fbfcfe !important;
+  box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
+  text-align: center;
+  vertical-align: middle;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--c-text-h);
+}
+.pgs-cutting-qty { display: block; line-height: 1.25; }
+.pgs-cutting-done-tag { margin-top: 2px; transform: scale(0.92); transform-origin: center top; }
 .pgs-status-cell {
   position: sticky;
-  left: 454px; width: 80px; min-width: 80px; max-width: 80px;
+  left: 470px; width: 80px; min-width: 80px; max-width: 80px;
   z-index: 100;
   background: #fbfcfe;
   background-color: #fbfcfe !important;
@@ -2347,7 +2410,7 @@ td.gantt-has-actual {
 }
 .pgs-prediction-cell {
   position: sticky;
-  left: 534px; width: 110px; min-width: 110px; max-width: 110px;
+  left: 550px; width: 110px; min-width: 110px; max-width: 110px;
   z-index: 100;
   background: #fbfcfe;
   background-color: #fbfcfe !important;
@@ -2358,9 +2421,27 @@ td.gantt-has-actual {
   font-variant-numeric: tabular-nums;
   font-family: var(--font-mono);
 }
+.pgs-footnote {
+  margin: 10px 4px 0;
+  font-size: var(--fs-xs);
+  color: var(--c-text-s);
+  line-height: 1.5;
+  max-width: 920px;
+}
+.pgs-footnote strong { color: var(--c-text-m); font-weight: 600; }
 .pgs-lot-num { font-weight: 700; text-align: center; font-family: var(--font-mono); }
 
-/* Status-aware cell colors */
+/* 実績セル（成型 schedule_details.actual_qty／在庫ログ同期の成型実績） */
+.gantt-progress-table td.pgs-src-actual.gantt-active {
+  background: linear-gradient(135deg, #0f766e, #115e59) !important;
+  color: #fff !important;
+}
+/* 上流待ち：未指示 or 工単欠料、いまは計画按分のみ */
+.gantt-progress-table td.pgs-src-wait-upstream.gantt-active {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed) !important;
+  color: #fff !important;
+}
+/* 成型計画のみ（指示済〜）— ロットステータス別 */
 .gantt-progress-table td.pgs-planned.gantt-active   { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
 .gantt-progress-table td.pgs-released.gantt-active   { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
 .gantt-progress-table td.pgs-in_progress.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }

@@ -267,11 +267,15 @@ class ApsBatchPlanOut(BaseModel):
     product_cd: str
     product_name: str
     planned_quantity: int
+    original_planned_quantity: Optional[int] = None
     production_lot_size: int
     lot_number: str
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     status: str
+
+    class Config:
+        from_attributes = True
 
 
 # ──────────────────── Production Progress（生産進捗） ────────────────────
@@ -283,7 +287,7 @@ class ProgressLotItem(BaseModel):
     product_cd: str
     product_name: str
     lot_number: str
-    planned_quantity: int
+    planned_quantity: int = Field(..., description="計画一覧由来のロット本数（original_planned_quantity、成型実績で変わらない）")
     order_no: Optional[int] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
@@ -291,6 +295,15 @@ class ProgressLotItem(BaseModel):
     progress_status: str = Field("PLANNED", description="PLANNED / RELEASED / IN_PROGRESS / COMPLETED")
     management_code: Optional[str] = None
     production_line: str = ""
+    cutting_planned_qty: Optional[int] = Field(
+        None, description="切断指示 cutting_management.planned_quantity（生産中ロットのみ）"
+    )
+    cutting_actual_qty: Optional[int] = Field(
+        None, description="切断実績 cutting_management.actual_production_quantity"
+    )
+    cutting_completed: Optional[bool] = Field(
+        None, description="切断 production_completed_check（実績確定イメージ）"
+    )
 
 
 class ProductionProgressResponse(BaseModel):
@@ -298,5 +311,9 @@ class ProductionProgressResponse(BaseModel):
     dates: List[str] = Field(default_factory=list, description="日別タイムライン用日付列")
     lot_daily: Dict[str, Dict[str, int]] = Field(
         default_factory=dict,
-        description="lot_number -> { 'YYYY-MM-DD': qty } 日別割当（ガント表示用）",
+        description="lot_key -> 日別数量。成型ガント連動（schedule_details の planned/actual）。切断本数は ProgressLotItem の cutting_* を参照",
+    )
+    lot_daily_source: Dict[str, Dict[str, str]] = Field(
+        default_factory=dict,
+        description="同一キーで ACTUAL / PLANNED / WAIT_UPSTREAM（セル配色用）",
     )

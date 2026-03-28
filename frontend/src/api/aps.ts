@@ -260,6 +260,8 @@ export interface ApsBatchPlanOut {
   product_cd: string
   product_name: string
   planned_quantity: number
+  /** 計画一覧確定時の本数（生産進捗の計画数と同趣旨） */
+  original_planned_quantity?: number | null
   production_lot_size: number
   lot_number: string
   start_date?: string | null
@@ -283,12 +285,20 @@ export interface ProgressLotItem {
   progress_status: 'PLANNED' | 'RELEASED' | 'IN_PROGRESS' | 'COMPLETED'
   management_code?: string | null
   production_line: string
+  /** cutting_management（切断指示）— 生産中ロットのみ */
+  cutting_planned_qty?: number | null
+  cutting_actual_qty?: number | null
+  cutting_completed?: boolean | null
 }
+
+/** 生産進捗日別セル：成型の実績・計画（schedule_details）。切断本数は ProgressLotItem.cutting_* */
+export type ProgressDailySource = 'ACTUAL' | 'PLANNED' | 'WAIT_UPSTREAM'
 
 export interface ProductionProgressResponse {
   lots: ProgressLotItem[]
   dates: string[]
   lot_daily: Record<string, Record<string, number>>
+  lot_daily_source?: Record<string, Record<string, ProgressDailySource>>
 }
 
 // ──────────── API calls ────────────

@@ -112,7 +112,8 @@ CREATE TABLE IF NOT EXISTS `aps_batch_plans` (
   `priority_order` INT NULL DEFAULT NULL COMMENT '順位（APS order_no）',
   `product_cd` VARCHAR(50) NOT NULL COMMENT '製品CD',
   `product_name` VARCHAR(255) NOT NULL COMMENT '製品名',
-  `planned_quantity` INT NOT NULL DEFAULT 0 COMMENT 'このバッチで計画する本数',
+  `planned_quantity` INT NOT NULL DEFAULT 0 COMMENT 'このバッチで計画する本数（エンジン再計算で変動しうる）',
+  `original_planned_quantity` INT NULL DEFAULT NULL COMMENT '計画一覧確定時のロット本数（生産進捗の計画数表示用）',
   `production_lot_size` INT NOT NULL DEFAULT 0 COMMENT '総バッチ数',
   `lot_number` VARCHAR(100) NOT NULL COMMENT 'ロットNo',
   `start_date` DATETIME NULL DEFAULT NULL COMMENT '開始日時',
@@ -176,6 +177,21 @@ SET @sql := IF(
   'SELECT 1'
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @has_col := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = 'aps_batch_plans' AND COLUMN_NAME = 'original_planned_quantity'
+);
+SET @sql := IF(
+  @has_col = 0,
+  'ALTER TABLE `aps_batch_plans` ADD COLUMN `original_planned_quantity` INT NULL DEFAULT NULL COMMENT ''計画一覧確定時のロット本数（生産進捗の計画数表示用）'' AFTER `planned_quantity`',
+  'SELECT 1'
+);
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+UPDATE `aps_batch_plans`
+SET `original_planned_quantity` = `planned_quantity`
+WHERE `original_planned_quantity` IS NULL;
 
 -- =====================================================================
 -- 3) Foreign keys (drop/create safely)
