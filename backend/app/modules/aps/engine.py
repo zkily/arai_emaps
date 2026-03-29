@@ -12,7 +12,7 @@ import math
 from collections import defaultdict
 from datetime import date, time, timedelta
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,16 +35,107 @@ def _time_to_hours(t: time) -> float:
     return t.hour + t.minute / 60.0 + (t.second or 0) / 3600.0
 
 
+def _is_midnight_time(t: time) -> bool:
+    return (
+        t.hour == 0
+        and t.minute == 0
+        and t.second == 0
+        and getattr(t, "microsecond", 0) == 0
+    )
+
+
 def _slot_duration_hours(start_t: time, end_t: time) -> float:
     sh = _time_to_hours(start_t)
     eh = _time_to_hours(end_t)
-    if eh <= sh:
+    if sh == eh:
+        if _is_midnight_time(start_t) and _is_midnight_time(end_t):
+            return 24.0
         return 0.0
-    return eh - sh
+    if eh > sh:
+        return eh - sh
+    return 24.0 - sh + eh
+
+
+def _expand_one_slot_to_minute_parts(start_t: time, end_t: time) -> List[tuple[int, int]]:
+    """カレンダー 1 日 [0,1440) 分の半開区間に展開（21:00→00:00 は夜跨ぎ）。"""
+    sm = _minutes_from_midnight(start_t)
+    em = _minutes_from_midnight(end_t)
+    if sm == em:
+        if _is_midnight_time(start_t) and _is_midnight_time(end_t):
+            return [(0, 24 * 60)]
+        return []
+    if em > sm:
+        return [(sm, em)]
+    parts: List[tuple[int, int]] = [(sm, 24 * 60)]
+    if em > 0:
+        parts.append((0, em))
+    return parts
+
+
+def _merge_minute_intervals(intervals: List[tuple[int, int]]) -> List[tuple[int, int]]:
+    if not intervals:
+        return []
+    intervals = sorted(intervals)
+    merged: List[tuple[int, int]] = [(intervals[0][0], intervals[0][1])]
+    for s, e in intervals[1:]:
+        ps, pe = merged[-1]
+        if s <= pe:
+            merged[-1] = (ps, max(pe, e))
+        else:
+            merged.append((s, e))
+    return merged
+
+
+def _subtract_rest_from_work_minutes(
+    work: List[tuple[int, int]], rest: List[tuple[int, int]]
+) -> List[tuple[int, int]]:
+    if not work:
+        return []
+    if not rest:
+        return list(work)
+    r_sorted = sorted(rest)
+    out: List[tuple[int, int]] = []
+    for ws, we in work:
+        parts = [(ws, we)]
+        for rs, re in r_sorted:
+            new_parts: List[tuple[int, int]] = []
+            for a, b in parts:
+                if re <= a or rs >= b:
+                    new_parts.append((a, b))
+                else:
+                    if a < rs:
+                        new_parts.append((a, min(rs, b)))
+                    if re < b:
+                        new_parts.append((max(re, a), b))
+            parts = new_parts
+        out.extend(parts)
+    return _merge_minute_intervals(out)
+
+
+def productive_minute_intervals_from_slots(
+    day_slots: Sequence[Any],
+) -> List[tuple[int, int]]:
+    """is_rest の行は休憩として、稼働区間（非休憩）の合算から差し引く。"""
+    work_raw: List[tuple[int, int]] = []
+    rest_raw: List[tuple[int, int]] = []
+    for s in sorted(day_slots, key=lambda x: (x.sort_order, x.start_time)):
+        parts = _expand_one_slot_to_minute_parts(s.start_time, s.end_time)
+        if bool(getattr(s, "is_rest", False)):
+            rest_raw.extend(parts)
+        else:
+            work_raw.extend(parts)
+    work_m = _merge_minute_intervals(work_raw)
+    rest_m = _merge_minute_intervals(rest_raw)
+    return _subtract_rest_from_work_minutes(work_m, rest_m)
+
+
+def productive_hours_from_slot_rows(day_slots: Sequence[Any]) -> float:
+    segs = productive_minute_intervals_from_slots(day_slots)
+    return sum((em - sm) / 60.0 for sm, em in segs)
 
 
 def _hours_from_slots(day_slots: List[LineCapacityTimeSlot]) -> float:
-    return sum(_slot_duration_hours(s.start_time, s.end_time) for s in day_slots)
+    return productive_hours_from_slot_rows(day_slots)
 
 
 async def _fetch_slots_by_date(
@@ -104,11 +195,7 @@ def _productive_minute_segments(
     """
     segments: List[tuple[int, int]] = []
     if day_slots:
-        for s in sorted(day_slots, key=lambda x: (x.sort_order, x.start_time)):
-            sm = _minutes_from_midnight(s.start_time)
-            em = _minutes_from_midnight(s.end_time)
-            if em > sm:
-                segments.append((sm, em))
+        segments = productive_minute_intervals_from_slots(day_slots)
     else:
         start_m = 6 * 60
         span_min = max(0, int(round(float(avail_hours) * 60)))

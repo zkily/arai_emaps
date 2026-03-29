@@ -111,7 +111,9 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_INVENTORY_KPI', name: '在庫KPI・アラート', path: '/erp/shipping/inventory-kpi', parentCode: 'ERP_SHIPPING', sortOrder: 9 },
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },
-  { code: 'APS_PLANNING', name: '成型計画作成', path: '/aps/planning', parentCode: 'APS', sortOrder: 1 },
+  { code: 'APS_PRODUCTION_PLAN_CREATE', name: '生産計画作成', icon: 'Calendar', parentCode: 'APS', sortOrder: 1 },
+  { code: 'APS_PLANNING', name: '成型計画作成', path: '/aps/planning', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 1 },
+  { code: 'APS_CUTTING_PLANNING', name: '切断計画作成', path: '/aps/cutting-planning', icon: 'Operation', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 2 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
   { code: 'APS_CAPACITY', name: '設備稼働設定', path: '/aps/capacity', parentCode: 'APS', sortOrder: 3 },
   { code: 'APS_DAILY_REPORT', name: '日別設備計画表', path: '/aps/daily-report', parentCode: 'APS', sortOrder: 4 },

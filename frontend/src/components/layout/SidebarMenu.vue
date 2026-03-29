@@ -306,10 +306,20 @@
             <el-icon><DataAnalysis /></el-icon>
             <span :title="t('menu.APS')">{{ t('menu.APS') }}</span>
           </template>
-          <el-menu-item index="/aps/planning">
-            <el-icon><Calendar /></el-icon>
-            <template #title><span :title="t('menu.APS_PLANNING')">{{ t('menu.APS_PLANNING') }}</span></template>
-          </el-menu-item>
+          <el-sub-menu index="aps-production-plan-create">
+            <template #title>
+              <el-icon><Calendar /></el-icon>
+              <span :title="t('menu.APS_PRODUCTION_PLAN_CREATE')">{{ t('menu.APS_PRODUCTION_PLAN_CREATE') }}</span>
+            </template>
+            <el-menu-item index="/aps/planning">
+              <el-icon><Calendar /></el-icon>
+              <template #title><span :title="t('menu.APS_PLANNING')">{{ t('menu.APS_PLANNING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/aps/cutting-planning">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.APS_CUTTING_PLANNING')">{{ t('menu.APS_CUTTING_PLANNING') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/aps/scheduling">
             <el-icon><Timer /></el-icon>
             <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>

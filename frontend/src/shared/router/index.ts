@@ -174,7 +174,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/shipping/inventory-kpi', name: 'InventoryKpi', component: () => import('@/views/erp/shipping/InventoryKpi.vue'), meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true } },
 
       // ========== APS モジュール ==========
-      { path: 'aps/planning', name: 'Planning', component: () => import('@/views/aps/Planning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
+      { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
+      { path: 'aps/cutting-planning', name: 'CuttingPlanning', component: () => import('@/views/aps/productionPlanCreation/CuttingPlanning.vue'), meta: { title: '切断計画作成', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
       { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
       { path: 'aps/daily-report', name: 'DailyReport', component: () => import('@/views/aps/DailyReport.vue'), meta: { title: '日別設備計画表', requiresAuth: true } },

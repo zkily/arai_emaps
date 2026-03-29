@@ -62,6 +62,7 @@ class TimeSlotItem(BaseModel):
     start_time: time
     end_time: time
     sort_order: int = 0
+    is_rest: bool = False
 
 
 class DaySlotsBody(BaseModel):
@@ -75,6 +76,7 @@ class TimeSlotOut(BaseModel):
     start_time: time
     end_time: time
     sort_order: int
+    is_rest: bool = False
 
     class Config:
         from_attributes = True

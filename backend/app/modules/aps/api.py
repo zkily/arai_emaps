@@ -52,7 +52,7 @@ from app.modules.aps.schemas import (
     ProgressLotItem,
     ProductionProgressResponse,
 )
-from app.modules.aps.engine import run_engine, replan_line_sequential
+from app.modules.aps.engine import run_engine, replan_line_sequential, productive_hours_from_slot_rows
 
 router = APIRouter()
 
@@ -65,7 +65,7 @@ def _dec(v) -> float:
     return float(v)
 
 
-# 設備能率マスタ由来の日産初期値と整合（Planning.vue EE_DAILY_HOURS_STANDARD）
+# 設備能率マスタ由来の日産初期値と整合（productionPlanCreation/FormingPlanning.vue EE_DAILY_HOURS_STANDARD）
 _APS_EE_STANDARD_DAY_HOURS = Decimal("15.3")
 
 
@@ -347,10 +347,13 @@ async def batch_upsert_line_capacities(
 
 # ═══════════════════ Line Capacity Time Slots ═══════════════════
 
-def _calc_slot_hours(start_time, end_time) -> float:
-    s = start_time.hour * 3600 + start_time.minute * 60 + start_time.second
-    e = end_time.hour * 3600 + end_time.minute * 60 + end_time.second
-    return max(0.0, (e - s) / 3600.0)
+def _is_midnight_time(t) -> bool:
+    return (
+        t.hour == 0
+        and t.minute == 0
+        and t.second == 0
+        and getattr(t, "microsecond", 0) == 0
+    )
 
 
 @router.get("/line-capacity-slots", response_model=List[DaySlotsOut])
@@ -387,20 +390,28 @@ async def get_line_capacity_slots(
     )
     cap_map = {r.work_date: _dec(r.available_hours) for r in cap_result.scalars().all()}
 
-    grouped: dict[date, list] = defaultdict(list)
+    grouped_orm: dict[date, list] = defaultdict(list)
     for s in slots:
-        grouped[s.work_date].append(TimeSlotOut(
-            id=s.id,
-            start_time=s.start_time,
-            end_time=s.end_time,
-            sort_order=s.sort_order,
-        ))
+        grouped_orm[s.work_date].append(s)
 
     result = []
     d = sd
     while d <= ed:
-        slot_list = grouped.get(d, [])
-        total = cap_map.get(d, sum(_calc_slot_hours(s.start_time, s.end_time) for s in slot_list))
+        orm_list = grouped_orm.get(d, [])
+        if orm_list:
+            total = productive_hours_from_slot_rows(orm_list)
+        else:
+            total = float(cap_map.get(d, 0))
+        slot_list = [
+            TimeSlotOut(
+                id=s.id,
+                start_time=s.start_time,
+                end_time=s.end_time,
+                sort_order=s.sort_order,
+                is_rest=bool(getattr(s, "is_rest", False)),
+            )
+            for s in orm_list
+        ]
         result.append(DaySlotsOut(work_date=d, available_hours=total, slots=slot_list))
         d += timedelta(days=1)
 
@@ -420,8 +431,9 @@ async def batch_upsert_line_capacity_slots(
     updated_days = 0
     for day_body in body.days:
         for slot in day_body.slots:
-            if slot.end_time <= slot.start_time:
-                raise HTTPException(400, f"{day_body.work_date}: end_time must be > start_time")
+            if slot.start_time == slot.end_time:
+                if not (_is_midnight_time(slot.start_time) and _is_midnight_time(slot.end_time)):
+                    raise HTTPException(400, f"{day_body.work_date}: start_time と end_time が同一です")
 
         await db.execute(
             delete(LineCapacityTimeSlot).where(
@@ -430,7 +442,6 @@ async def batch_upsert_line_capacity_slots(
             )
         )
 
-        total_hours = 0.0
         for idx, slot in enumerate(day_body.slots):
             db.add(LineCapacityTimeSlot(
                 line_id=body.line_id,
@@ -438,8 +449,9 @@ async def batch_upsert_line_capacity_slots(
                 start_time=slot.start_time,
                 end_time=slot.end_time,
                 sort_order=slot.sort_order if slot.sort_order else idx,
+                is_rest=bool(slot.is_rest),
             ))
-            total_hours += _calc_slot_hours(slot.start_time, slot.end_time)
+        total_hours = productive_hours_from_slot_rows(day_body.slots)
 
         existing_cap = await db.execute(
             select(LineCapacity).where(

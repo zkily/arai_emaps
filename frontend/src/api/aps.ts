@@ -122,6 +122,7 @@ export interface TimeSlotItem {
   start_time: string
   end_time: string
   sort_order?: number
+  is_rest?: boolean
 }
 
 export interface DaySlotsBody {
@@ -135,6 +136,7 @@ export interface TimeSlotOut {
   start_time: string
   end_time: string
   sort_order: number
+  is_rest?: boolean
 }
 
 export interface DaySlotsOut {

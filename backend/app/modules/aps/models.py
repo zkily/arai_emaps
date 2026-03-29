@@ -35,6 +35,7 @@ class LineCapacityTimeSlot(Base):
     start_time = Column(Time, nullable=False)
     end_time = Column(Time, nullable=False)
     sort_order = Column(SmallInteger, nullable=False, default=0)
+    is_rest = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 

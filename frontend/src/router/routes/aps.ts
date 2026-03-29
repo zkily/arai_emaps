@@ -9,9 +9,15 @@ export const apsRoutes: RouteRecordRaw[] = [
     children: [
       {
         path: 'planning',
-        name: 'Planning',
-        component: () => import('@/views/aps/Planning.vue'),
-        meta: { title: '生産計画' },
+        name: 'FormingPlanning',
+        component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'),
+        meta: { title: '成型計画作成' },
+      },
+      {
+        path: 'cutting-planning',
+        name: 'CuttingPlanning',
+        component: () => import('@/views/aps/productionPlanCreation/CuttingPlanning.vue'),
+        meta: { title: '切断計画作成' },
       },
       {
         path: 'scheduling',

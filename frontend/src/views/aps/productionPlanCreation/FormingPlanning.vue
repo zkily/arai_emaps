@@ -2,7 +2,7 @@
   <div class="planning-page">
     <!-- ─── Page Header ─── -->
     <div class="plan-hd">
-      <h2 class="plan-hd-title">成型生産計画</h2>
+      <h2 class="plan-hd-title">成型計画作成</h2>
       <p class="plan-hd-sub">基準開始月・工程・設備の順で指定し、品目と数量を登録。ライン上で順次つなげてガントを表示します。</p>
     </div>
 
@@ -382,7 +382,13 @@
             <table class="gantt-table">
               <thead>
                 <tr>
-                  <th class="gantt-sticky gantt-sticky-line">ライン</th>
+                  <th
+                    class="gantt-sticky gantt-sticky-line gantt-line-dbl"
+                    title="ダブルクリックで稼働時間帯を編集"
+                    @dblclick="openLineCapacityFromGantt"
+                  >
+                    ライン
+                  </th>
                   <th class="gantt-sticky gantt-sticky-order">順位</th>
                   <th class="gantt-sticky gantt-sticky-name">品名</th>
                   <th class="gantt-sticky gantt-sticky-eff">能率</th>
@@ -405,7 +411,13 @@
                   :key="row.id"
                   :class="['gantt-row', productPaletteClass(row)]"
                 >
-                  <td class="gantt-sticky gantt-sticky-line">{{ selectedLineDisplayName }}</td>
+                  <td
+                    class="gantt-sticky gantt-sticky-line gantt-line-dbl"
+                    title="ダブルクリックで稼働時間帯を編集"
+                    @dblclick.stop="openLineCapacityFromGantt"
+                  >
+                    {{ selectedLineDisplayName }}
+                  </td>
                   <td class="gantt-sticky gantt-sticky-order">{{ row.order_no ?? '—' }}</td>
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
@@ -566,11 +578,29 @@
           </div>
         </el-tab-pane>
       </el-tabs>
+
+      <el-dialog
+        v-model="lineCapacityDialogVisible"
+        :title="`設備稼働設定 — ${selectedLineDisplayName}`"
+        width="min(960px, 96vw)"
+        top="4vh"
+        destroy-on-close
+        append-to-body
+        class="plan-line-capacity-dialog"
+      >
+        <LineCapacity
+          v-if="lineCapacityDialogVisible && selectedLineId != null && lineCapacityDateRange"
+          embed
+          :preset-line-id="selectedLineId"
+          :preset-date-range="lineCapacityDateRange"
+        />
+      </el-dialog>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'FormingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
@@ -598,6 +628,7 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import LineCapacity from '../LineCapacity.vue'
 
 function firstDayOfMonthIso(month: string): string {
   return `${month}-01`
@@ -846,6 +877,27 @@ const selectedLineDisplayName = computed(() => {
   if (name) return name
   return (ln.line_code?.trim() || String(ln.id))
 })
+
+/** ガント表示期間＝設備稼働ダイアログの期間 */
+const lineCapacityDateRange = computed((): [string, string] | null => {
+  const gr = ganttRange.value
+  if (Array.isArray(gr) && gr.length >= 2 && gr[0] && gr[1]) return [gr[0], gr[1]]
+  return null
+})
+
+const lineCapacityDialogVisible = ref(false)
+
+function openLineCapacityFromGantt() {
+  if (selectedLineId.value == null) {
+    ElMessage.warning('ラインを選択してください')
+    return
+  }
+  if (!lineCapacityDateRange.value) {
+    ElMessage.warning('表示期間が設定されていません')
+    return
+  }
+  lineCapacityDialogVisible.value = true
+}
 
 function destroyScheduleSortable() {
   scheduleSortable?.destroy()
@@ -2124,6 +2176,19 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   left: 0; width: 80px; min-width: 80px; max-width: 80px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   font-weight: 600; color: var(--c-text-m); font-size: var(--fs-s);
+}
+.gantt-line-dbl {
+  cursor: pointer;
+  user-select: none;
+}
+.gantt-table tbody .gantt-line-dbl:hover,
+.gantt-table thead .gantt-line-dbl:hover {
+  background-color: rgba(64, 158, 255, 0.1) !important;
+}
+.plan-line-capacity-dialog :deep(.el-dialog__body) {
+  padding: 8px 12px 14px;
+  max-height: calc(100vh - 130px);
+  overflow-y: auto;
 }
 .gantt-sticky-order {
   left: 80px; width: 44px; min-width: 44px; max-width: 44px; text-align: center;
