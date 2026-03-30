@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="cutting-instruction-container">
     <div class="page-header">
       <div class="header-left">
@@ -6074,9 +6074,10 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
   const lineDisplay = esc(row.production_line || '')
   const cuttingMachineDisplay = esc(row.cutting_machine || '')
   const lineShort = esc((row.production_line || '').replace(/号機$/, ''))
-  const chamferDisplay = row.has_chamfering_process ? '〇' : '--'
+  const chamferDisplay = row.has_chamfering_process ? '有り' : '--'
   const chamferingLengthDisplay = (row.chamfering_length != null && Number(row.chamfering_length) !== 0) ? esc(row.chamfering_length) : '--'
-  const developedLengthDisplay = (row.developed_length != null && Number(row.developed_length) !== 0) ? esc(row.developed_length) : '--'
+  const hasDevelopedLength = row.developed_length != null && Number(row.developed_length) !== 0
+  const developedLengthDisplay = hasDevelopedLength ? esc(row.developed_length) : '--'
   const lotNoFromMgmt = esc(String(row.management_code ?? '').slice(-5))
   const productCdForQr = encodeURIComponent(String(row.product_cd ?? ''))
   const qrSrc = productCdForQr ? `https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${productCdForQr}` : ''
@@ -6113,7 +6114,7 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
         <th>原材料</th>
         <td colspan="3">${esc(row.material_name)}</td>
   
-        <th>成型期間</th>
+        <th>成型予定期間</th>
         <td colspan="1">${fmtDate(row.start_date)}</td>
         <th class="tbl-c">～</th>
         <td colspan="1">${fmtDate(row.end_date)}</td>
@@ -6121,9 +6122,9 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
       <tr>
         <th>製造番号</th>
         <td colspan="3"></td>       
-        <th>成型計画数</th>
+        <th class="tbl-th-normal">成型計画数</th>
         <td class="big tbl-c">${esc(row.planned_quantity)}</td>
-        <th>成型ロット</th>
+        <th class="tbl-th-normal">ロットNo.</th>
         <td class="big tbl-c">${esc(row.production_lot_size)}</td>       
       </tr>
       <tr>
@@ -6132,9 +6133,9 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
         <th>取数</th>
         <td class="big tbl-c">${esc(row.take_count)}</td>
         <th>工程</th>
-        <td class="tbl-c">切断機</td>
-        <td class="tbl-c">面取機</td>
-        <th class="tbl-c">成型ライン</th>
+        <td class="tbl-c">切断工程</td>
+        <td class="tbl-c">面取工程</td>
+        <th class="tbl-c tbl-th-normal">成型ライン</th>
       </tr>
       <tr>
         <th>切断長</th>
@@ -6148,9 +6149,9 @@ function buildOneKanbanTicketHtml(row: KanbanIssuanceRow, kanbanNo: string): str
       </tr>
       <tr>
         <th>展開長</th>
-        <td class="grey tbl-c">${developedLengthDisplay}</td>
+        <td class="tbl-c${hasDevelopedLength ? ' tbl-developed-val' : ''}">${developedLengthDisplay}</td>
         <th>面取</th>
-        <td class="tbl-c"><span class="box">${chamferDisplay}</span></td>
+        <td class="tbl-c">${chamferDisplay}</td>
         <th>実績数</th>
         <td></td>
         <td></td>
@@ -6199,6 +6200,7 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
     .tbl th { background: transparent; font-weight: bold; text-align: left; }
+    .tbl th.tbl-th-normal { font-weight: normal; }
     .tbl .tbl-c { text-align: center; }
     /* 各列宽（第1～8列，px 可改） */
     .tbl th:nth-child(1), .tbl td:nth-child(1) { width: 60px; }
@@ -6213,14 +6215,26 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
     .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
     .red { color: #cc0000; font-weight: bold; font-size: 12px; }
     .big { font-size: 12px; font-weight: bold; }
-    .grey { background: #444; color: #fff; }
-    .box { display: inline-block; width: 12px; height: 12px; border: none; vertical-align: middle; text-align: center; line-height: 10px; font-size: 10px; }
+    .tbl-developed-val {
+      background-color: #555 !important;
+      color: #ffffff !important;
+      font-weight: bold !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
     .kanban-no { font-size: 8px; color: #666; text-align: right; margin-top: 2px; }
     @media print {
       html, body { margin: 0 !important; padding: 0 !important; width: 194mm !important; height: 281mm !important; }
       .page { width: 194mm !important; height: 281mm !important; margin: 0 !important; padding: 0 !important; }
       .ticket-sheet { height: 281mm !important; }
       .ticket-block { flex: 0 0 calc(281mm / 3) !important; height: calc(281mm / 3) !important; }
+      .tbl-developed-val {
+        background-color: #555 !important;
+        color: #ffffff !important;
+        font-weight: bold !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   </style></head><body>
   <div class="page">
@@ -6295,6 +6309,7 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .tbl { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: fixed; }
     .tbl th, .tbl td { border: 1px solid #333; padding: 2.4px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.6; }
     .tbl th { background: transparent; font-weight: bold; text-align: left; }
+    .tbl th.tbl-th-normal { font-weight: normal; }
     .tbl .tbl-c { text-align: center; }
     .tbl th:nth-child(1), .tbl td:nth-child(1) { width: 60px; }
     .tbl th:nth-child(2), .tbl td:nth-child(2) { width: 110px; }
@@ -6308,8 +6323,13 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
     .tbl .tbl-lotno-val { font-size: 14px; line-height: 1.1; }
     .red { color: #cc0000; font-weight: bold; font-size: 12px; }
     .big { font-size: 12px; font-weight: bold; }
-    .grey { background: #444; color: #fff; }
-    .box { display: inline-block; width: 12px; height: 12px; border: none; vertical-align: middle; text-align: center; line-height: 10px; font-size: 10px; }
+    .tbl-developed-val {
+      background-color: #555 !important;
+      color: #ffffff !important;
+      font-weight: bold !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
     .kanban-no { font-size: 8px; color: #666; text-align: right; margin-top: 2px; }
     @media print {
       html, body { margin: 0 !important; padding: 0 !important; }
@@ -6317,6 +6337,13 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
       .page:last-child { page-break-after: auto !important; }
       .ticket-sheet { height: 281mm !important; }
       .ticket-block { flex: 0 0 calc(281mm / 3) !important; height: calc(281mm / 3) !important; }
+      .tbl-developed-val {
+        background-color: #555 !important;
+        color: #ffffff !important;
+        font-weight: bold !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   </style></head><body>
 ${pagesHtml}
