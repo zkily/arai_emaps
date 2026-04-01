@@ -73,11 +73,24 @@ export async function getProcesses(): Promise<ProcessItem[]> {
   return normalizeProcesses(res)
 }
 
+/** システムユーザー一覧 API は page_size 最大 100（超えると 422） */
+const SYSTEM_USERS_PAGE_SIZE_MAX = 100
+
 export async function getUsers(): Promise<User[]> {
-  const res = (await fetchSystemUsers({ page: 1, page_size: 500 })) as any
-  const items = res?.items ?? res?.data?.items ?? []
-  return items.map((u: any) => ({
-    username: u.username,
-    name: u.full_name || u.username,
-  }))
+  const out: User[] = []
+  let page = 1
+  while (true) {
+    const res = (await fetchSystemUsers({ page, page_size: SYSTEM_USERS_PAGE_SIZE_MAX })) as any
+    const items = res?.items ?? res?.data?.items ?? []
+    for (const u of items) {
+      out.push({
+        username: u.username,
+        name: u.full_name || u.username,
+      })
+    }
+    const total = Number(res?.total ?? res?.data?.total ?? 0)
+    if (out.length >= total || items.length < SYSTEM_USERS_PAGE_SIZE_MAX) break
+    page += 1
+  }
+  return out
 }

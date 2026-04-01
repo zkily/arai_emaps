@@ -1514,8 +1514,8 @@
           </template>
         </el-input>
         <el-radio-group v-model="destinationSortOrder" size="small">
-          <el-radio-button label="code">コード順</el-radio-button>
-          <el-radio-button label="name">名称順</el-radio-button>
+          <el-radio-button value="code">コード順</el-radio-button>
+          <el-radio-button value="name">名称順</el-radio-button>
         </el-radio-group>
       </div>
 

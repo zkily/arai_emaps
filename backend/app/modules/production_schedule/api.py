@@ -5,6 +5,7 @@
 - GET /plan/batch/schedule-months: 生産月一覧
 - POST /plan/batch/generate-from-schedule: 生産月で production_plan_schedules から切断指示計画(instruction_plans)を生成
 """
+import logging
 import re
 from decimal import Decimal
 from datetime import date, datetime, timedelta
@@ -20,6 +21,33 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def _table_has_column(db: AsyncSession, table_name: str, column_name: str) -> bool:
+    """現在の DB でテーブルが指定列を持つか（MySQL information_schema）。照会不可時は False（安全側の SQL にフォールバック）。"""
+    try:
+        r = await db.execute(
+            text(
+                """
+                SELECT 1 FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND COLUMN_NAME = :column_name
+                LIMIT 1
+                """
+            ),
+            {"table_name": table_name, "column_name": column_name},
+        )
+        return r.first() is not None
+    except Exception as e:
+        logger.warning(
+            "information_schema 照会失敗 (%s.%s): %s",
+            table_name,
+            column_name,
+            e,
+        )
+        return False
 
 
 class GenerateFromScheduleBody(BaseModel):
@@ -1114,11 +1142,11 @@ async def move_batch_to_cutting_management(
                 INSERT INTO chamfering_plans (
                     cutting_management_id, production_month, production_day, production_line, production_order,
                     product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-                    chamfering_length, material_name, management_code, has_sw_process
+                    cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process
                 ) VALUES (
                     :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
                     :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
-                    :chamfering_length, :material_name, :management_code, :has_sw_process
+                    :cutting_length, :chamfering_length, :developed_length, :material_name, :management_code, :has_sw_process
                 )
             """)
             await db.execute(ins_cham, {
@@ -1132,7 +1160,9 @@ async def move_batch_to_cutting_management(
                 "actual_production_quantity": cutting_params["actual_production_quantity"],
                 "production_lot_size": cutting_params.get("production_lot_size"),
                 "lot_number": cutting_params.get("lot_number"),
+                "cutting_length": cutting_params.get("cutting_length"),
                 "chamfering_length": cutting_params.get("chamfering_length"),
+                "developed_length": cutting_params.get("developed_length"),
                 "material_name": cutting_params["material_name"],
                 "management_code": cutting_params["management_code"],
                 "has_sw_process": 1 if cutting_params.get("has_sw_process") else 0,
@@ -1867,7 +1897,7 @@ async def get_chamfering_plans_list(
     sql = text(f"""
         SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
                product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-               chamfering_length, material_name, management_code, cd, has_sw_process, created_at
+               cutting_length, chamfering_length, developed_length, material_name, management_code, cd, has_sw_process, created_at
         FROM chamfering_plans
         WHERE {" AND ".join(conditions)}
         ORDER BY production_month DESC, production_day DESC, production_line, production_order
@@ -1911,7 +1941,9 @@ async def get_chamfering_plans_list(
             "actual_production_quantity": row.get("actual_production_quantity"),
             "production_lot_size": row.get("production_lot_size"),
             "lot_number": row.get("lot_number"),
+            "cutting_length": _v(row, "cutting_length"),
             "chamfering_length": _v(row, "chamfering_length"),
+            "developed_length": _v(row, "developed_length"),
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
             "cd": row.get("cd") or (str(row.get("management_code") or "")[-5:] or None),
@@ -1933,7 +1965,9 @@ class CreateChamferingPlanBody(BaseModel):
     actual_production_quantity: Optional[int] = 0
     production_lot_size: Optional[int] = None
     lot_number: Optional[str] = None
+    cutting_length: Optional[float] = None
     chamfering_length: Optional[float] = None
+    developed_length: Optional[float] = None
     material_name: Optional[str] = None
     has_sw_process: Optional[int] = 0
 
@@ -1963,11 +1997,11 @@ async def create_chamfering_plan(
         INSERT INTO chamfering_plans (
             cutting_management_id, production_month, production_day, production_line, production_order,
             product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-            chamfering_length, material_name, has_sw_process
+            cutting_length, chamfering_length, developed_length, material_name, has_sw_process
         ) VALUES (
             NULL, :production_month, :production_day, :production_line, :production_order,
             :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
-            :chamfering_length, :material_name, :has_sw_process
+            :cutting_length, :chamfering_length, :developed_length, :material_name, :has_sw_process
         )
     """)
     params = {
@@ -1980,7 +2014,9 @@ async def create_chamfering_plan(
         "actual_production_quantity": body.actual_production_quantity if body.actual_production_quantity is not None else 0,
         "production_lot_size": body.production_lot_size,
         "lot_number": (body.lot_number or "").strip() or None,
+        "cutting_length": body.cutting_length,
         "chamfering_length": body.chamfering_length,
+        "developed_length": body.developed_length,
         "material_name": (body.material_name or "").strip() or None,
         "has_sw_process": 1 if body.has_sw_process else 0,
     }
@@ -2012,7 +2048,7 @@ async def move_chamfering_plan_to_chamfering(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
                    product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-                   chamfering_length, material_name, management_code, has_sw_process, no_count
+                   cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process, no_count
             FROM chamfering_plans WHERE id = :bid
         """),
         {"bid": body.chamfering_plan_id},
@@ -2061,7 +2097,9 @@ async def move_chamfering_plan_to_chamfering(
             "actual_production_quantity": row.get("actual_production_quantity") or 0,
             "production_lot_size": row.get("production_lot_size"),
             "lot_number": (row.get("lot_number") or "").strip() or None,
+            "cutting_length": float(row["cutting_length"]) if row.get("cutting_length") is not None else None,
             "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+            "developed_length": float(row["developed_length"]) if row.get("developed_length") is not None else None,
             "production_time": None,
             "material_name": (row.get("material_name") or "").strip() or None,
             "management_code": (row.get("management_code") or "").strip() or None,
@@ -2074,11 +2112,11 @@ async def move_chamfering_plan_to_chamfering(
         INSERT INTO chamfering_management (
             cutting_management_id, production_month, production_day, production_line, chamfering_machine, production_order, production_sequence,
             product_cd, product_name, actual_production_quantity, defect_qty, production_lot_size, lot_number,
-            chamfering_length, production_time, material_name, management_code, has_sw_process, production_completed_check, no_count, remarks
+            cutting_length, chamfering_length, developed_length, production_time, material_name, management_code, has_sw_process, production_completed_check, no_count, remarks
         ) VALUES (
             :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine, :production_order, :production_sequence,
             :product_cd, :product_name, :actual_production_quantity, 0, :production_lot_size, :lot_number,
-            :chamfering_length, :production_time, :material_name, :management_code, :has_sw_process, 0, :no_count, :remarks
+            :cutting_length, :chamfering_length, :developed_length, :production_time, :material_name, :management_code, :has_sw_process, 0, :no_count, :remarks
         )
     """)
     try:
@@ -2127,7 +2165,9 @@ class UpdateChamferingPlanContentBody(BaseModel):
     actual_production_quantity: Optional[int] = None
     production_lot_size: Optional[int] = None
     lot_number: Optional[str] = None
+    cutting_length: Optional[float] = None
     chamfering_length: Optional[float] = None
+    developed_length: Optional[float] = None
     material_name: Optional[str] = None
     has_sw_process: Optional[bool] = None
 
@@ -2221,9 +2261,15 @@ async def update_chamfering_plan_content(
     if body.lot_number is not None:
         updates.append("lot_number = :lot_number")
         params["lot_number"] = body.lot_number.strip() or None
+    if body.cutting_length is not None:
+        updates.append("cutting_length = :cutting_length")
+        params["cutting_length"] = body.cutting_length
     if body.chamfering_length is not None:
         updates.append("chamfering_length = :chamfering_length")
         params["chamfering_length"] = body.chamfering_length
+    if body.developed_length is not None:
+        updates.append("developed_length = :developed_length")
+        params["developed_length"] = body.developed_length
     if body.material_name is not None:
         updates.append("material_name = :material_name")
         params["material_name"] = body.material_name.strip() or None
@@ -2256,7 +2302,7 @@ async def copy_chamfering_plan(
         text("""
             SELECT cutting_management_id, production_month, production_day, production_line, production_order,
                    product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-                   chamfering_length, material_name, management_code, has_sw_process
+                   cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process
             FROM chamfering_plans WHERE id = :pid
         """),
         {"pid": plan_id},
@@ -2286,11 +2332,11 @@ async def copy_chamfering_plan(
         INSERT INTO chamfering_plans (
             cutting_management_id, production_month, production_day, production_line, production_order,
             product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-            chamfering_length, material_name, management_code, has_sw_process
+            cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process
         ) VALUES (
             :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
             :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
-            :chamfering_length, :material_name, :management_code, :has_sw_process
+            :cutting_length, :chamfering_length, :developed_length, :material_name, :management_code, :has_sw_process
         )
     """)
     params = {
@@ -2304,7 +2350,9 @@ async def copy_chamfering_plan(
         "actual_production_quantity": row.get("actual_production_quantity") or 0,
         "production_lot_size": row.get("production_lot_size"),
         "lot_number": (row.get("lot_number") or "").strip() or None,
+        "cutting_length": float(row["cutting_length"]) if row.get("cutting_length") is not None else None,
         "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+        "developed_length": float(row["developed_length"]) if row.get("developed_length") is not None else None,
         "material_name": (row.get("material_name") or "").strip() or None,
         "management_code": (row.get("management_code") or "").strip() or None,
         "has_sw_process": 1 if row.get("has_sw_process") else 0,
@@ -2334,7 +2382,7 @@ async def move_chamfering_management_to_batch(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
                    product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-                   chamfering_length, material_name, management_code, has_sw_process
+                   cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process
             FROM chamfering_management WHERE id = :mid
         """),
         {"mid": body.chamfering_management_id},
@@ -2364,11 +2412,11 @@ async def move_chamfering_management_to_batch(
         INSERT INTO chamfering_plans (
             cutting_management_id, production_month, production_day, production_line, production_order,
             product_cd, product_name, actual_production_quantity, production_lot_size, lot_number,
-            chamfering_length, material_name, management_code, has_sw_process
+            cutting_length, chamfering_length, developed_length, material_name, management_code, has_sw_process
         ) VALUES (
             :cutting_management_id, :production_month, :production_day, :production_line, :production_order,
             :product_cd, :product_name, :actual_production_quantity, :production_lot_size, :lot_number,
-            :chamfering_length, :material_name, :management_code, :has_sw_process
+            :cutting_length, :chamfering_length, :developed_length, :material_name, :management_code, :has_sw_process
         )
     """)
     params = {
@@ -2382,7 +2430,9 @@ async def move_chamfering_management_to_batch(
         "actual_production_quantity": row.get("actual_production_quantity") or 0,
         "production_lot_size": row.get("production_lot_size"),
         "lot_number": (row.get("lot_number") or "").strip() or None,
+        "cutting_length": float(row["cutting_length"]) if row.get("cutting_length") is not None else None,
         "chamfering_length": float(row["chamfering_length"]) if row.get("chamfering_length") is not None else None,
+        "developed_length": float(row["developed_length"]) if row.get("developed_length") is not None else None,
         "material_name": (row.get("material_name") or "").strip() or None,
         "management_code": (row.get("management_code") or "").strip() or None,
         "has_sw_process": 1 if row.get("has_sw_process") else 0,
@@ -2444,7 +2494,7 @@ async def get_chamfering_management_list(
     sql = text(f"""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty, production_lot_size, lot_number,
-               chamfering_length, production_time, material_name, management_code, has_sw_process,
+               cutting_length, chamfering_length, developed_length, production_time, material_name, management_code, has_sw_process,
                production_completed_check, no_count, remarks, cd, created_at
         FROM chamfering_management
         WHERE {" AND ".join(conditions)}
@@ -2492,7 +2542,9 @@ async def get_chamfering_management_list(
             "defect_qty": row.get("defect_qty"),
             "production_lot_size": row.get("production_lot_size"),
             "lot_number": row.get("lot_number"),
+            "cutting_length": _v(row, "cutting_length"),
             "chamfering_length": _v(row, "chamfering_length"),
+            "developed_length": _v(row, "developed_length"),
             "production_time": _v(row, "production_time"),
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
@@ -2702,12 +2754,12 @@ async def create_chamfering_management(
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                 production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
-                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                production_lot_size, lot_number, cutting_length, chamfering_length, developed_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 NULL, :production_month, :production_day, :production_line, :chamfering_machine,
                 NULL, :production_sequence, :product_cd, :product_name, :actual_production_quantity, 0,
-                NULL, NULL, NULL, NULL, :material_name, :management_code,
+                NULL, NULL, NULL, NULL, NULL, NULL, :material_name, :management_code,
                 0, 0, 0, :remarks
             )
         """)
@@ -2823,7 +2875,7 @@ async def split_chamfering_to_next_day(
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
-               production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+               production_lot_size, lot_number, cutting_length, chamfering_length, developed_length, production_time, material_name, management_code,
                has_sw_process, production_completed_check, no_count, remarks
         FROM chamfering_management WHERE id = :mid
     """)
@@ -2894,7 +2946,9 @@ async def split_chamfering_to_next_day(
             "defect_qty": r.get("defect_qty") or 0,
             "production_lot_size": r.get("production_lot_size"),
             "lot_number": r.get("lot_number"),
+            "cutting_length": r.get("cutting_length"),
             "chamfering_length": r.get("chamfering_length"),
+            "developed_length": r.get("developed_length"),
             "production_time": r.get("production_time"),
             "material_name": r.get("material_name"),
             "management_code": r.get("management_code"),
@@ -2906,12 +2960,12 @@ async def split_chamfering_to_next_day(
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                 production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
-                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                production_lot_size, lot_number, cutting_length, chamfering_length, developed_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
                 :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity, :defect_qty,
-                :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
+                :production_lot_size, :lot_number, :cutting_length, :chamfering_length, :developed_length, :production_time, :material_name, :management_code,
                 :has_sw_process, 0, :no_count, :remarks
             )
         """)
@@ -2945,7 +2999,7 @@ async def duplicate_chamfering_management(
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
-               production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+               production_lot_size, lot_number, cutting_length, chamfering_length, developed_length, production_time, material_name, management_code,
                has_sw_process, production_completed_check, no_count, remarks
         FROM chamfering_management WHERE id = :mid
     """)
@@ -2989,7 +3043,9 @@ async def duplicate_chamfering_management(
             "defect_qty": r.get("defect_qty") or 0,
             "production_lot_size": r.get("production_lot_size"),
             "lot_number": r.get("lot_number"),
+            "cutting_length": r.get("cutting_length"),
             "chamfering_length": r.get("chamfering_length"),
+            "developed_length": r.get("developed_length"),
             "production_time": r.get("production_time"),
             "material_name": r.get("material_name"),
             "management_code": r.get("management_code"),
@@ -3001,12 +3057,12 @@ async def duplicate_chamfering_management(
             INSERT INTO chamfering_management (
                 cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                 production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
-                production_lot_size, lot_number, chamfering_length, production_time, material_name, management_code,
+                production_lot_size, lot_number, cutting_length, chamfering_length, developed_length, production_time, material_name, management_code,
                 has_sw_process, production_completed_check, no_count, remarks
             ) VALUES (
                 :cutting_management_id, :production_month, :production_day, :production_line, :chamfering_machine,
                 :production_order, :production_sequence, :product_cd, :product_name, :actual_production_quantity, :defect_qty,
-                :production_lot_size, :lot_number, :chamfering_length, :production_time, :material_name, :management_code,
+                :production_lot_size, :lot_number, :cutting_length, :chamfering_length, :developed_length, :production_time, :material_name, :management_code,
                 :has_sw_process, 0, :no_count, :remarks
             )
         """)
@@ -3507,6 +3563,145 @@ async def batch_issue_pending_kanban(
         "skipped": skipped,
         "errors": errors,
         "issued_items": issued_items,
+    }
+
+
+@router.post("/plan/batch/sync-lengths-from-products")
+async def sync_batch_lengths_from_products(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    products の cut_length / chamfer_length / developed_length を、同一 product_cd の
+    instruction_plans・cutting_management・chamfering_plans・chamfering_management・
+    kanban_issuance（product_cd がある行）へ反映する。
+    chamfering_plans / chamfering_management に cutting_length・developed_length が無い環境
+    （マイグレーション 208 未実行）では、chamfering_length のみ同期する。
+    """
+    cp_has_cut = await _table_has_column(db, "chamfering_plans", "cutting_length")
+    cm_has_cut = await _table_has_column(db, "chamfering_management", "cutting_length")
+    kanban_has_lengths = await _table_has_column(db, "kanban_issuance", "cutting_length")
+
+    # products 列が utf8mb4_0900_ai_ci、他テーブルが utf8mb4_unicode_ci の環境で JOIN 時に 1267 を避ける
+    _pc = "p.product_cd COLLATE utf8mb4_unicode_ci = {alias}.product_cd COLLATE utf8mb4_unicode_ci"
+
+    stmts: list[tuple[str, object]] = [
+        (
+            "instruction_plans",
+            text(f"""
+                UPDATE instruction_plans ip
+                INNER JOIN products p ON {_pc.format(alias="ip")}
+                SET ip.cutting_length = p.cut_length,
+                    ip.chamfering_length = p.chamfer_length,
+                    ip.developed_length = p.developed_length
+            """),
+        ),
+        (
+            "cutting_management",
+            text(f"""
+                UPDATE cutting_management cm
+                INNER JOIN products p ON {_pc.format(alias="cm")}
+                SET cm.cutting_length = p.cut_length,
+                    cm.chamfering_length = p.chamfer_length,
+                    cm.developed_length = p.developed_length
+            """),
+        ),
+    ]
+    if cp_has_cut:
+        stmts.append(
+            (
+                "chamfering_plans",
+                text(f"""
+                    UPDATE chamfering_plans cp
+                    INNER JOIN products p ON {_pc.format(alias="cp")}
+                    SET cp.cutting_length = p.cut_length,
+                        cp.chamfering_length = p.chamfer_length,
+                        cp.developed_length = p.developed_length
+                """),
+            )
+        )
+    else:
+        stmts.append(
+            (
+                "chamfering_plans",
+                text(f"""
+                    UPDATE chamfering_plans cp
+                    INNER JOIN products p ON {_pc.format(alias="cp")}
+                    SET cp.chamfering_length = p.chamfer_length
+                """),
+            )
+        )
+    if cm_has_cut:
+        stmts.append(
+            (
+                "chamfering_management",
+                text(f"""
+                    UPDATE chamfering_management ch
+                    INNER JOIN products p ON {_pc.format(alias="ch")}
+                    SET ch.cutting_length = p.cut_length,
+                        ch.chamfering_length = p.chamfer_length,
+                        ch.developed_length = p.developed_length
+                """),
+            )
+        )
+    else:
+        stmts.append(
+            (
+                "chamfering_management",
+                text(f"""
+                    UPDATE chamfering_management ch
+                    INNER JOIN products p ON {_pc.format(alias="ch")}
+                    SET ch.chamfering_length = p.chamfer_length
+                """),
+            )
+        )
+    if kanban_has_lengths:
+        stmts.append(
+            (
+                "kanban_issuance",
+                text(f"""
+                    UPDATE kanban_issuance k
+                    INNER JOIN products p ON {_pc.format(alias="k")}
+                    SET k.cutting_length = p.cut_length,
+                        k.chamfering_length = p.chamfer_length,
+                        k.developed_length = p.developed_length
+                    WHERE k.product_cd IS NOT NULL AND TRIM(k.product_cd) != ''
+                """),
+            )
+        )
+
+    counts: dict[str, int] = {}
+    notes: list[str] = []
+    if not cp_has_cut or not cm_has_cut:
+        notes.append(
+            "chamfering_plans / chamfering_management はマイグレーション 208 未適用のため、"
+            "面取長（chamfering_length）のみ同期しました。切断長・展開長も反映する場合は 208_chamfering_plans_management_length_fields.sql を実行してください。"
+        )
+    if not kanban_has_lengths:
+        notes.append(
+            "kanban_issuance に寸法列が無いためスキップしました（マイグレーション 067 等を確認してください）。"
+        )
+
+    try:
+        for name, sql in stmts:
+            res = await db.execute(sql)
+            counts[name] = int(res.rowcount or 0)
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.exception("sync-lengths-from-products failed: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"同期に失敗しました: {e!s}",
+        ) from e
+    total = sum(counts.values())
+    msg = f"製品マスタの寸法を反映しました（更新行数合計: {total}）"
+    if notes:
+        msg += " " + " ".join(notes)
+    return {
+        "success": True,
+        "message": msg,
+        "data": {"counts": counts, "notes": notes},
     }
 
 

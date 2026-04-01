@@ -386,6 +386,8 @@
             <el-menu-item index="/master/bom/product-process"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_PROCESS_BOM')">{{ t('menu.MASTER_PRODUCT_PROCESS_BOM') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-machine-config"><el-icon><Setting /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_MACHINE_CONFIG')">{{ t('menu.MASTER_PRODUCT_MACHINE_CONFIG') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/equipment-efficiency"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.MASTER_EQUIPMENT_EFFICIENCY')">{{ t('menu.MASTER_EQUIPMENT_EFFICIENCY') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/bom/product-bom"><el-icon><Document /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_BOM_DETAIL')">{{ t('menu.MASTER_PRODUCT_BOM_DETAIL') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/bom/product-unit-price"><el-icon><Money /></el-icon><template #title><span :title="t('menu.MASTER_UNIT_PRICE')">{{ t('menu.MASTER_UNIT_PRICE') }}</span></template></el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
         
@@ -441,7 +443,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import {
-  HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document,
+  HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document, Money,
   User, DataAnalysis, Monitor, Setting, Tools, Grid,
   Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,

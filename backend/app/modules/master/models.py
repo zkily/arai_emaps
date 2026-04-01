@@ -370,3 +370,121 @@ class MachineWorkTimeConfig(Base):
     time_slot_6_8 = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 明細BOM
+# ---------------------------------------------------------------------------
+
+class ProductBomHeader(Base):
+    """明細BOMヘッダ（product_bom_headers）"""
+    __tablename__ = "product_bom_headers"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    parent_product_cd = Column(String(50), nullable=False, index=True)
+    bom_type = Column(String(30), nullable=False, default="production")
+    revision = Column(String(20), nullable=False, default="1")
+    status = Column(String(20), nullable=False, default="active")
+    effective_from = Column(Date)
+    effective_to = Column(Date)
+    base_quantity = Column(Numeric(12, 4), nullable=False, default=1)
+    uom = Column(String(20), nullable=False, default="個")
+    remarks = Column(Text)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+class ProductBomLine(Base):
+    """明細BOM行（product_bom_lines）"""
+    __tablename__ = "product_bom_lines"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    header_id = Column(Integer, nullable=False, index=True)
+    parent_line_id = Column(Integer, index=True)
+    line_no = Column(Integer, nullable=False, default=10)
+    component_type = Column(String(30), nullable=False, default="material")
+    component_product_cd = Column(String(50), index=True)
+    component_material_cd = Column(String(50))
+    qty_per = Column(Numeric(12, 6), nullable=False, default=1)
+    uom = Column(String(20), nullable=False, default="個")
+    scrap_rate = Column(Numeric(5, 2), default=0)
+    consume_process_cd = Column(String(50))
+    consume_step_no = Column(Integer)
+    remarks = Column(Text)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 工程別標準原価増分
+# ---------------------------------------------------------------------------
+
+class ProductProcessUnitPrice(Base):
+    """工程別標準原価増分（product_process_unit_prices）"""
+    __tablename__ = "product_process_unit_prices"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    route_cd = Column(String(50), nullable=False, index=True)
+    step_no = Column(Integer, nullable=False)
+    line_seq = Column(Integer, nullable=False, default=1)
+    line_type = Column(String(30), nullable=False, default="process")
+    description = Column(String(200))
+    increment_unit_price = Column(Numeric(18, 6), nullable=False, default=0)
+    currency = Column(String(10), nullable=False, default="JPY")
+    effective_from = Column(Date)
+    effective_to = Column(Date)
+    status = Column(String(20), nullable=False, default="active")
+    bom_line_id = Column(Integer)
+    remarks = Column(Text)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 棚卸金額計算
+# ---------------------------------------------------------------------------
+
+class InventoryValueCalcRun(Base):
+    """棚卸金額計算バッチ（inventory_value_calc_runs）"""
+    __tablename__ = "inventory_value_calc_runs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    calc_date = Column(Date, nullable=False)
+    start_date = Column(Date)
+    end_date = Column(Date)
+    process_cd = Column(String(50))
+    total_amount = Column(Numeric(18, 2), nullable=False, default=0)
+    material_amount = Column(Numeric(18, 2), nullable=False, default=0)
+    component_amount = Column(Numeric(18, 2), nullable=False, default=0)
+    stay_amount = Column(Numeric(18, 2), nullable=False, default=0)
+    total_rows = Column(Integer, nullable=False, default=0)
+    error_rows = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="completed")
+    executed_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+
+
+class InventoryValueCalcDetail(Base):
+    """棚卸金額計算明細（inventory_value_calc_details）"""
+    __tablename__ = "inventory_value_calc_details"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_id = Column(Integer, nullable=False, index=True)
+    inventory_log_id = Column(Integer)
+    product_cd = Column(String(50))
+    process_cd = Column(String(50))
+    item_type = Column(String(30))
+    quantity = Column(Numeric(12, 4), default=0)
+    route_cd = Column(String(50))
+    step_no = Column(Integer)
+    unit_price_snapshot = Column(Numeric(18, 6))
+    amount = Column(Numeric(18, 2))
+    price_rule_id = Column(Integer)
+    error_code = Column(String(50))
+    error_message = Column(String(500))
+    created_at = Column(DateTime, default=func.now())

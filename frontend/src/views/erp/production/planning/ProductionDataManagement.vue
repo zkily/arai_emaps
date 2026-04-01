@@ -836,7 +836,7 @@
           <h3 class="confirm-title">在庫・推移を更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初から先の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は当月月初～+3ヶ月、推移は当月月初～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</span>
+              <span class="detail-value">計算開始日は在庫取引ログで種別「初期」かつ数量&gt;0のうち最新の取引日時の日付です（該当が無い場合は当月月初・サーバー日本時間）。その日以降の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</span>
             </div>
           </div>
         </div>
@@ -1134,7 +1134,7 @@
               </el-button>
             </div>
             <p class="molding-plan-clear-hint molding-plan-clear-hint--sub">
-              在庫・推移は当月月初基準（メニューと同じ）。計画クリア開始日とは連動しません。
+              在庫・推移の開始日は「初期」ログ（数量&gt;0）の最新取引日（無ければ当月月初・JST）。メニュー「在庫・推移更新」と同じ。計画クリア開始日とは連動しません。
             </p>
           </div>
         </div>
@@ -1686,6 +1686,7 @@ import {
   clearProductionSummarysPlanFields,
   clearProductionSummarysMoldingPlan,
   updateProductionSummarysPlan,
+  getInventoryTrendCalcStartDate,
   updateProductionSummarysInventory,
   updateProductionSummarysTrend,
   updateProductionSummarysSafetyStock,
@@ -2675,12 +2676,12 @@ const handleUpdateProductionDates = async () => {
  * 一、前端流程（本画面）
  * -----------------------------------------------------------------------------
  * 1. 入口：「その他」→「在庫・推移更新」→ 确认对话框「在庫・推移更新確認」→ 点击「更新」
- * 2. 开始日：当月月初 getFirstDayOfCurrentMonth()（当月1日 YYYY-MM-DD）。计算前先清空「当月月初之后」的在庫・推移字段，再在该范围内重新计算。
- *    - 清空：POST clear-calculated-fields(当月月初) → 范围 当月月初～当月月初+3ヶ月 的计算字段置 0
- *    - 在庫：POST update-inventory(当月月初) → 同上区间按公式重算
- *    - 推移：POST update-trend(当月月初) → 当月月初～表内最大日
- * 3. 执行顺序：先 clear-calculated-fields(当月月初)，再 update-inventory(当月月初)，再 update-trend(当月月初)
- * 4. 计算期间说明：在庫・清空＝当月月初～当月月初+3ヶ月；推移＝当月月初～表内最大日
+ * 2. 开始日：GET inventory-trend-calc-start-date → stock_transaction_logs で transaction_type=初期 かつ quantity>0 の MAX(transaction_time) の日付（無ければ当月月初 JST）。API 失敗時は getFirstDayOfCurrentMonth()。清空・再計算は当該開始日以降の既定範囲。
+ *    - 清空：POST clear-calculated-fields(startDate) → 范围 startDate～startDate+3ヶ月 的计算字段置 0
+ *    - 在庫：POST update-inventory(startDate) → 同上区间按公式重算
+ *    - 推移：POST update-trend(startDate) → startDate～表内最大日
+ * 3. 执行顺序：先 clear-calculated-fields(startDate)，再 update-inventory(startDate)，再 update-trend(startDate)
+ * 4. 计算期间说明：在庫・清空＝startDate～startDate+3ヶ月；推移＝startDate～表内最大日
  *
  * 二、后端在庫更新范围与数据准备
  * -----------------------------------------------------------------------------
@@ -2739,8 +2740,8 @@ const handleUpdateProductionDates = async () => {
  * =============================================================================
  * 一、前端与执行顺序
  * -----------------------------------------------------------------------------
- * - 入口同「在庫・推移更新」；开始日 = 当月月初 getFirstDayOfCurrentMonth()
- * - 执行顺序：先 clear（当月月初～+3ヶ月 含 trend 列）→ 在庫更新 → 推移更新
+ * - 入口同「在庫・推移更新」；开始日 = resolveInventoryTrendCalcStartDate()（初期ログ基準、詳細は上記）
+ * - 执行顺序：先 clear（startDate～+3ヶ月 含 trend 列）→ 在庫更新 → 推移更新
  * - 推移 API：POST update-trend(startDate)，startDate 指定时后端处理 date >= startDate 的全行（无结束日上限）
  *
  * 二、后端处理范围与数据准备
@@ -2784,12 +2785,24 @@ const handleUpdateProductionDates = async () => {
  * - 允许 trend 为负数
  */
 
-/** 当月月初（当月1日）YYYY-MM-DD。在庫・推移更新では「当月月初以降」を清空してから再計算する。 */
+/** 当月月初（当月1日）YYYY-MM-DD（ブラウザローカル日付）。在庫・推移の API 失敗時フォールバックおよび計画更新などで使用。 */
 function getFirstDayOfCurrentMonth(): string {
   const now = new Date()
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
   return `${y}-${m}-01`
+}
+
+/** 在庫・推移・安全在庫の計算開始日：stock_transaction_logs の初期かつ数量>0 の最新 transaction_time の日付（API）。失敗時は当月月初（ローカル）。 */
+async function resolveInventoryTrendCalcStartDate(): Promise<string> {
+  try {
+    const res: any = await getInventoryTrendCalcStartDate()
+    const raw = res?.data?.startDate
+    if (typeof raw === 'string' && raw.length >= 10) return raw.slice(0, 10)
+  } catch (_e) {
+    console.warn('inventory-trend-calc-start-date の取得に失敗しました', _e)
+  }
+  return getFirstDayOfCurrentMonth()
 }
 
 /** 在庫→推移→安全在庫（計算フィールドクリア後）。メニュー「在庫・推移更新」と同一処理 */
@@ -2826,7 +2839,7 @@ async function runInventoryTrendUpdateSequence(startDate: string) {
     const trendD = trendBody?.data ?? trendBody
     const safetyBody = (safetyRes as any)?.data ?? {}
     const safetyD = safetyBody?.data ?? safetyBody
-    const calcPeriod = `計算期間: ${startDate}～（当月月初から）`
+    const calcPeriod = `計算期間: ${startDate}～`
     const msg = `${calcPeriod}\n在庫: 更新 ${invD?.updated ?? 0} 件\n推移: 更新 ${trendD?.updated ?? 0} 件\n安全在庫: 更新 ${safetyD?.updated ?? 0} 件`
     progressText.value = msg
     ElMessage.success('在庫・推移の更新が完了しました')
@@ -2908,7 +2921,7 @@ const handleInventoryTrendUpdate = () => {
 const confirmInventoryTrendUpdate = async () => {
   showInventoryTrendUpdateConfirmDialog.value = false
   updatingInventoryTrend.value = true
-  const startDate = getFirstDayOfCurrentMonth()
+  const startDate = await resolveInventoryTrendCalcStartDate()
   try {
     await runInventoryTrendUpdateSequence(startDate)
   } catch (_e) {
@@ -3217,8 +3230,8 @@ const confirmAllUpdate = async () => {
       }
       await new Promise(r => setTimeout(r, 300))
     }
-    // 步骤 7: 在庫・推移更新（当月月初以降をクリアしてから再計算）
-    const startDate = getFirstDayOfCurrentMonth()
+    // 步骤 7: 在庫・推移更新（初期ログ基準の開始日以降をクリアしてから再計算）
+    const startDate = await resolveInventoryTrendCalcStartDate()
     try {
       await clearProductionSummarysCalculatedFields(startDate)
     } catch (_e) {
@@ -5021,10 +5034,10 @@ async function executeMoldingPlanClear() {
 }
 
 async function executeMoldingPlanInventoryTrend() {
-  const startDate = getFirstDayOfCurrentMonth()
+  const startDate = await resolveInventoryTrendCalcStartDate()
   try {
     await ElMessageBox.confirm(
-      `<p>当月月初から先の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は当月月初～+3ヶ月、推移は当月月初～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</p><p style="margin-top:10px">計算開始日（月初）：<strong>${startDate}</strong></p>`,
+      `<p>在庫取引「初期」かつ数量&gt;0の最新取引日（無ければ当月月初・JST）以降の在庫・推移・安全在庫をクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</p><p style="margin-top:10px">計算開始日：<strong>${startDate}</strong></p>`,
       '在庫・推移更新の確認',
       {
         confirmButtonText: '更新',

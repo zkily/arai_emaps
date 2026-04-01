@@ -21,15 +21,15 @@
         <!-- 項目类型选择 -->
         <el-form-item label="項目タイプ" prop="item" required>
           <el-radio-group v-model="formData.item" @change="handleItemTypeChange">
-            <el-radio-button label="材料">
+            <el-radio-button value="材料">
               <el-icon><Box /></el-icon>
               材料
             </el-radio-button>
-            <el-radio-button label="部品">
+            <el-radio-button value="部品">
               <el-icon><Tools /></el-icon>
               部品
             </el-radio-button>
-            <el-radio-button label="ステー">
+            <el-radio-button value="ステー">
               <el-icon><Grid /></el-icon>
               ステー
             </el-radio-button>

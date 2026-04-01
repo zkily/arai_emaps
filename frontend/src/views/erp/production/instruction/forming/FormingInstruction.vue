@@ -560,11 +560,6 @@
               <el-input v-model="row.setupAfterHours" size="small" placeholder="" class="setup-preview-input" />
             </template>
           </el-table-column>
-          <el-table-column label="予測段取開始" width="160" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.setupPredictedTime" size="small" placeholder="" class="setup-preview-input" />
-            </template>
-          </el-table-column>
           <el-table-column label="次生産品種" width="130" align="center">
             <template #default="{ row }">
               <el-input v-model="row.nextProductName" size="small" placeholder="" class="setup-preview-input" />
@@ -575,7 +570,7 @@
               <el-input v-model="row.nextQuantity" size="small" type="number" placeholder="" class="setup-preview-input" />
             </template>
           </el-table-column>
-          <el-table-column label="備考" min-width="120" align="center">
+          <el-table-column label="備考" min-width="200" align="center">
             <template #default="{ row }">
               <el-input v-model="row.remarks" size="small" type="textarea" :rows="1" placeholder="" class="setup-preview-input setup-preview-remarks" />
             </template>
@@ -5490,10 +5485,9 @@ const buildSetupSchedulePrintHtml = (data: {
               <th rowspan="2" style="width: 5%;">能率</th>
               <th rowspan="2" style="width: 7%;">当日計画数</th>
               <th rowspan="2" style="width: 6%;">残生産時間</th>
-              <th rowspan="2" style="width: 11%;">予測段取開始時間<br>（検証中:時計時間）</th>
               <th rowspan="2" style="width: 10%;">次生産品種</th>
               <th rowspan="2" style="width: 8%;">次品種計画数</th>
-              <th rowspan="2" style="width: 17%;">備考</th>
+              <th rowspan="2" style="width: 28%;">備考</th>
             </tr>
             <tr>
               <th class="bold-border-col" style="width: 6%;">総計画数</th>
@@ -5517,7 +5511,6 @@ const buildSetupSchedulePrintHtml = (data: {
                 <td class="numeric-cell">${row.efficiency || ''}</td>
                 <td class="numeric-cell">${row.planQuantity ? row.planQuantity.toLocaleString('ja-JP') : ''}</td>
                 <td class="numeric-cell">${row.setupAfterHours || ''}</td>
-                <td>${row.setupPredictedTime || ''}</td>
                 <td>${row.nextProductName || ''}</td>
                 <td class="numeric-cell">${(() => { const v = row.nextQuantity; if (v == null || v === '') return ''; const n = Number(v); return isNaN(n) ? '' : n.toLocaleString('ja-JP'); })()}</td>
                 <td>${row.remarks || ''}</td>

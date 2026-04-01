@@ -113,6 +113,15 @@
           >
             切断長印刷
           </el-button>
+          <el-button
+            type="primary"
+            @click="handleRecalculateScrapLength"
+            :loading="scrapLengthRecalculating"
+            :icon="DataAnalysis"
+            class="scrap-length-calc-btn"
+          >
+            端材長計算
+          </el-button>
           <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-product-btn">
             製品追加
           </el-button>
@@ -683,8 +692,14 @@ import {
   Delete,
   Setting,
   Printer,
+  DataAnalysis,
 } from '@element-plus/icons-vue'
-import { getProductList, deleteProduct, exportProductToCSV } from '@/api/master/productMaster'
+import {
+  getProductList,
+  deleteProduct,
+  exportProductToCSV,
+  recalculateProductScrapLength,
+} from '@/api/master/productMaster'
 import { getProductMasterOptions, getMaterialOptions, getRouteOptions } from '@/api/options'
 import ProductEditDialog from './ProductEditDialog.vue'
 import type { Product, OptionItem } from '@/types/master'
@@ -728,6 +743,7 @@ const locationOptions = ref<OptionItem[]>([
   { cd: 'メッキ倉庫', name: 'メッキ倉庫' },
 ])
 const loading = ref(false)
+const scrapLengthRecalculating = ref(false)
 const dialogVisible = ref(false)
 const selectedRow = ref<Product | null>(null)
 const columnSelectorVisible = ref(false)
@@ -907,6 +923,34 @@ const handleSaved = () => {
   // 重置到第一页并刷新列表
   pagination.page = 1
   fetchList()
+}
+
+// 端材長：材料名末尾4桁を材料長とし scrap_length = 材料長 - (cut_length + 2.5) * take_count で全件更新
+const handleRecalculateScrapLength = async () => {
+  const confirmed = await ElMessageBox.confirm(
+    '全製品の端材長（scrap_length）を一括再計算し、データベースに保存します。よろしいですか？',
+    '端材長計算',
+    {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'warning',
+    },
+  ).catch(() => false)
+  if (!confirmed) return
+  scrapLengthRecalculating.value = true
+  try {
+    const res = await recalculateProductScrapLength()
+    const u = res.updated ?? 0
+    const s = res.skipped ?? 0
+    const tot = res.total ?? u + s
+    ElMessage.success(`端材長を更新しました（更新: ${u} 件 / スキップ: ${s} 件 / 全 ${tot} 件）`)
+    await fetchList()
+  } catch (e) {
+    console.error('端材長一括計算失敗', e)
+    ElMessage.error('端材長の一括計算に失敗しました')
+  } finally {
+    scrapLengthRecalculating.value = false
+  }
 }
 
 // 重置
@@ -1965,13 +2009,17 @@ onMounted(async () => {
 .column-selector-btn,
 .add-product-btn,
 .qr-code-btn,
-.cutting-print-btn {
+.cutting-print-btn,
+.scrap-length-calc-btn {
   border: none;
   border-radius: 8px;
   padding: 7px 12px !important;
   font-weight: 600;
   font-size: 12px !important;
-  transition: all 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
 }
 
 .export-btn {
@@ -2043,6 +2091,36 @@ onMounted(async () => {
 .cutting-print-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 端材長一括計算：スカイ系グラデで他アクションと差別化 */
+.scrap-length-calc-btn {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 45%, #0284c7 100%);
+  box-shadow:
+    0 2px 10px rgba(14, 165, 233, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: #fff !important;
+}
+
+.scrap-length-calc-btn:hover:not(:disabled):not(.is-loading) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 5px 16px rgba(14, 165, 233, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  filter: brightness(1.04);
+}
+
+.scrap-length-calc-btn:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.scrap-length-calc-btn.is-loading {
+  opacity: 0.92;
+}
+
+.scrap-length-calc-btn :deep(.el-icon) {
+  font-size: 15px;
 }
 
 .filters-grid {

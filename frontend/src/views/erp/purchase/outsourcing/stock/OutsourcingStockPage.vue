@@ -165,7 +165,7 @@
           :page-sizes="[20, 50, 100, 200]"
           :total="pagination.total"
           layout="total, sizes, prev, pager, next, jumper"
-          small
+          size="small"
         />
       </div>
     </div>

@@ -10,6 +10,7 @@ import subprocess
 import signal
 import time
 import socket
+import json
 from pathlib import Path
 from typing import List
 import threading
@@ -358,6 +359,27 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, directory=None, **kwargs):
         self.directory = directory or str(DIST_DIR)
         super().__init__(*args, directory=self.directory, **kwargs)
+
+    def _send_bad_gateway(self, exc: BaseException) -> None:
+        """
+        バックエンドへ繋がらない等のプロキシ失敗。
+        send_error(502, str(e)) は Win 等の日本語メッセージで reason phrase が latin-1 に
+        載らず UnicodeEncodeError になるため、ステータス行は ASCII のみ・本文は UTF-8 JSON とする。
+        """
+        detail = str(exc)
+        try:
+            print_color(f"[API proxy] {detail}", Colors.RED)
+        except Exception:
+            print(f"[API proxy] {detail}", file=sys.stderr)
+        payload = json.dumps(
+            {"error": "bad_gateway", "detail": detail},
+            ensure_ascii=False,
+        ).encode("utf-8")
+        self.send_response(502, "Bad Gateway")
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
     
     def _proxy_to_backend(self):
         """APIリクエストをバックエンドにプロキシ（Content-Length で返すとブラウザが正しく JSON を解釈する）"""
@@ -397,7 +419,7 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(err_body)
         except Exception as e:
-            self.send_error(502, f"Bad Gateway: {str(e)}")
+            self._send_bad_gateway(e)
     
     def do_GET(self):
         if self.path.startswith('/api'):

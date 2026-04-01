@@ -77,8 +77,8 @@
                 </el-form-item>
                 <el-form-item label="フォーマット">
                   <el-radio-group v-model="exportForm.format">
-                    <el-radio label="csv">CSV</el-radio>
-                    <el-radio label="xlsx">Excel</el-radio>
+                    <el-radio value="csv">CSV</el-radio>
+                    <el-radio value="xlsx">Excel</el-radio>
                   </el-radio-group>
                 </el-form-item>
                 <el-form-item label="文字コード" v-if="exportForm.format === 'csv'">

@@ -508,6 +508,46 @@ def _parse_end_date(start_d: date, months: int = 3) -> date:
     return date(year, month, min(start_d.day, last_day))
 
 
+def _first_day_of_current_month_jst() -> date:
+    """在庫・推移開始日のフォールバック用：サーバー基準の日本時間の当月1日。"""
+    n = now_jst()
+    return date(n.year, n.month, 1)
+
+
+async def _resolve_inventory_trend_calc_start_date(db: AsyncSession) -> tuple[date, str]:
+    """
+    在庫・推移更新の開始日。
+    stock_transaction_logs で transaction_type='初期' かつ quantity>0 の行のうち、
+    transaction_time が最大の行の日付（日単位）。該当が無い場合は当月月初(JST)。
+    """
+    q = select(func.max(StockTransactionLog.transaction_time)).where(
+        StockTransactionLog.transaction_type == "初期",
+        StockTransactionLog.quantity > 0,
+    )
+    res = await db.execute(q)
+    max_ts = res.scalar_one_or_none()
+    if max_ts is not None:
+        if isinstance(max_ts, datetime):
+            return max_ts.date(), "initial_stock_log"
+        if isinstance(max_ts, date):
+            return max_ts, "initial_stock_log"
+    return _first_day_of_current_month_jst(), "fallback_month_start"
+
+
+@router.get("/inventory-trend-calc-start-date")
+async def get_inventory_trend_calc_start_date(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """フロントの在庫・推移更新で使用する計算開始日（初期在庫ログ基準、無ければ当月月初JST）。"""
+    start_d, source = await _resolve_inventory_trend_calc_start_date(db)
+    return {
+        "code": 200,
+        "data": {"startDate": start_d.isoformat(), "source": source},
+        "message": "OK",
+    }
+
+
 @router.post("/clear-calculated-fields")
 async def clear_production_summarys_calculated_fields(
     body: ClearCalculatedFieldsBody,

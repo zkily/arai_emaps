@@ -1,44 +1,41 @@
 <template>
   <div class="inventory-container">
-    <!-- 動的背景 -->
-    <div class="dynamic-background">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
-      <div class="gradient-orb orb-3"></div>
-    </div>
-    <!-- ページヘッダー -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="header-left">
-          <div class="header-icon">
-            <el-icon size="32"> <DataAnalysis /> </el-icon>
+    <div class="page-ambient" aria-hidden="true" />
+
+    <header class="page-toolbar">
+      <div class="toolbar-inner">
+        <div class="toolbar-brand">
+          <div class="brand-icon">
+            <el-icon :size="20"><DataAnalysis /></el-icon>
           </div>
-          <div class="header-text">
-            <h1 class="main-title">棚卸統計分析</h1>
-            <p class="subtitle">工程別・製品別・月別の棚卸データを分析します</p>
+          <div class="brand-text">
+            <h1 class="toolbar-title">棚卸統計分析</h1>
+            <p class="toolbar-sub">工程別・製品別・月別の棚卸データ</p>
           </div>
         </div>
-        <div class="header-actions">
-          <el-button
-            type="primary"
-            @click="exportStatistics"
-            :loading="exportLoading"
-            :icon="Download"
-            class="export-button"
-            size="large"
-          >
-            統計データ出力
-          </el-button>
-        </div>
+        <el-button
+          type="primary"
+          size="small"
+          @click="exportStatistics"
+          :loading="exportLoading"
+          :icon="Download"
+        >
+          統計データ出力
+        </el-button>
       </div>
-    </div>
-    <!-- メインコンテンツエリア -->
+    </header>
+
     <div class="content-container">
-      <!-- フィルターフォーム -->
-      <el-card class="filter-card" shadow="hover">
-        <el-form :inline="true" :model="filters" class="filter-form" @submit.prevent>
+      <el-card class="filter-card" shadow="never">
+        <template #header>
+          <div class="filter-toolbar">
+            <el-icon class="filter-toolbar-icon"><Search /></el-icon>
+            <span class="filter-toolbar-title">検索条件</span>
+          </div>
+        </template>
+        <el-form :inline="true" :model="filters" size="small" class="filter-form" @submit.prevent>
           <div class="filter-row">
-            <el-form-item label="統計期間" class="filter-item">
+            <el-form-item label="統計期間" class="filter-item filter-item--date">
               <el-date-picker
                 v-model="filters.dateRange"
                 type="daterange"
@@ -50,7 +47,7 @@
                 class="filter-date-picker"
               />
             </el-form-item>
-            <el-form-item label="月選択" class="filter-item">
+            <el-form-item label="月選択" class="filter-item filter-item--month">
               <el-date-picker
                 v-model="filters.monthPicker"
                 type="month"
@@ -61,7 +58,7 @@
                 @change="handleMonthChange"
               />
             </el-form-item>
-            <el-form-item label="工程" class="filter-item">
+            <el-form-item label="工程" class="filter-item filter-item--stage">
               <el-select
                 v-model="filters.stageType"
                 placeholder="工程を選択"
@@ -81,7 +78,7 @@
                 <el-option label="外注検査前" value="pre_outsource_inspection" />
               </el-select>
             </el-form-item>
-            <el-form-item label="製品名" class="filter-item">
+            <el-form-item label="製品名" class="filter-item filter-item--product">
               <el-input
                 v-model="filters.productName"
                 placeholder="製品名で検索"
@@ -91,28 +88,25 @@
               />
             </el-form-item>
             <el-form-item class="filter-item filter-actions-inline">
-              <el-button type="primary" :icon="Search" @click="handleSearch" class="search-button">
+              <el-button type="primary" size="small" :icon="Search" @click="handleSearch">
                 統計実行
               </el-button>
-              <el-button :icon="RefreshLeft" @click="resetFilters" class="reset-button">
-                リセット
-              </el-button>
+              <el-button size="small" :icon="RefreshLeft" @click="resetFilters">リセット</el-button>
             </el-form-item>
           </div>
         </el-form>
       </el-card>
-      <!-- タブ切り替えエリア -->
-      <el-card class="tab-card" shadow="hover">
+      <el-card class="tab-card" shadow="never">
         <el-tabs v-model="activeTab" type="card" @tab-click="handleTabClick" class="custom-tabs">
           <!-- 工程別統計 -->
           <el-tab-pane label="工程別統計" name="stage">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>工程別棚卸統計</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">工程別棚卸統計</h3>
                 <div class="tab-stats">
-                  <span class="tab-count">総工程数: {{ stageStats.length }}工程</span>
-                  <span class="tab-quantity"
-                    >総数量: {{ stageTotalQuantity.toLocaleString() }}個</span
+                  <span class="stat-pill">総工程 {{ stageStats.length }} 工程</span>
+                  <span class="stat-pill stat-pill--qty"
+                    >総数量 {{ stageTotalQuantity.toLocaleString() }} 個</span
                   >
                 </div>
               </div>
@@ -122,6 +116,8 @@
                   <el-table
                     :data="stageStats"
                     stripe
+                    border
+                    size="small"
                     class="statistics-table"
                     @sort-change="handleStageSortChange"
                     :default-sort="{ prop: 'totalQuantity', order: 'descending' }"
@@ -159,21 +155,21 @@
           <!-- 製品別統計 -->
           <el-tab-pane label="製品別統計" name="product">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>製品別棚卸統計</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">製品別棚卸統計</h3>
                 <div class="tab-header-right">
                   <div class="tab-stats">
-                    <span class="tab-count">総製品数: {{ productStats.length }}製品</span>
-                    <span class="tab-quantity"
-                      >総数量: {{ productTotalQuantity.toLocaleString() }}個</span
+                    <span class="stat-pill">総製品 {{ productStats.length }} 件</span>
+                    <span class="stat-pill stat-pill--qty"
+                      >総数量 {{ productTotalQuantity.toLocaleString() }} 個</span
                     >
                   </div>
                   <el-button
-                    type="primary"
+                    type="success"
+                    size="small"
+                    plain
                     @click="printProductStatistics"
                     :icon="Printer"
-                    class="print-button"
-                    size="default"
                   >
                     印刷
                   </el-button>
@@ -185,6 +181,8 @@
                   <el-table
                     :data="productStats"
                     stripe
+                    border
+                    size="small"
                     class="statistics-table"
                     @sort-change="handleProductSortChange"
                     :default-sort="{ prop: 'totalQuantity', order: 'descending' }"
@@ -228,12 +226,12 @@
           <!-- 月別統計 -->
           <el-tab-pane label="月別統計" name="monthly">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>月別棚卸統計</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">月別棚卸統計</h3>
                 <div class="tab-stats">
-                  <span class="tab-count">総月数: {{ monthlyStats.length }}ヶ月</span>
-                  <span class="tab-quantity"
-                    >総数量: {{ monthlyTotalQuantity.toLocaleString() }}個</span
+                  <span class="stat-pill">総月数 {{ monthlyStats.length }} ヶ月</span>
+                  <span class="stat-pill stat-pill--qty"
+                    >総数量 {{ monthlyTotalQuantity.toLocaleString() }} 個</span
                   >
                 </div>
               </div>
@@ -243,6 +241,8 @@
                   <el-table
                     :data="monthlyStats"
                     stripe
+                    border
+                    size="small"
                     class="statistics-table"
                     @sort-change="handleMonthlySortChange"
                     :default-sort="{ prop: 'month', order: 'ascending' }"
@@ -290,7 +290,7 @@ import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts'
 
-import { getInventoryLogs, type InventoryLog, type InventoryFilters } from '@/api/inventory'
+import { getInventoryLogsAll } from '@/api/inventory'
 
 // ✅ Element Plus アイコンコンポーネント
 import { DataAnalysis, Download, Search, RefreshLeft, Printer } from '@element-plus/icons-vue'
@@ -356,12 +356,9 @@ const handleMonthChange = (month: string) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const params: any = {
+    const response = await getInventoryLogsAll({
       ...filters.value,
-      pageSize: 10000, // 統計用に全データを取得
-    }
-
-    const response = await getInventoryLogs(params)
+    })
 
     if (response && response.list) {
       rawData.value = response.list || []
@@ -1320,411 +1317,146 @@ onUnmounted(() => {
 
 <style scoped>
 .inventory-container {
+  --is-surface: rgba(255, 255, 255, 0.92);
+  --is-border: rgba(15, 23, 42, 0.08);
+  --is-accent: #0ea5e9;
+  --is-muted: #64748b;
+  position: relative;
+  z-index: 0;
+  padding: 10px 12px 14px;
+  box-sizing: border-box;
   min-height: 100vh;
-  background: linear-gradient(
-    135deg,
-    #f0f9ff 0%,
-    #e0f2fe 20%,
-    #bae6fd 40%,
-    #7dd3fc 60%,
-    #38bdf8 80%,
-    #0ea5e9 100%
-  );
-  position: relative;
-  overflow-x: hidden;
-  padding: 2px;
-  will-change: transform;
-  animation: backgroundShift 20s ease-in-out infinite;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e8edf3 100%);
 }
 
-@keyframes backgroundShift {
-  0%,
-  100% {
-    background: linear-gradient(
-      135deg,
-      #f0f9ff 0%,
-      #e0f2fe 20%,
-      #bae6fd 40%,
-      #7dd3fc 60%,
-      #38bdf8 80%,
-      #0ea5e9 100%
-    );
-  }
-  50% {
-    background: linear-gradient(
-      135deg,
-      #0ea5e9 0%,
-      #38bdf8 20%,
-      #7dd3fc 40%,
-      #bae6fd 60%,
-      #e0f2fe 80%,
-      #f0f9ff 100%
-    );
-  }
-}
-
-/* 動的背景 */
-.dynamic-background {
+.page-ambient {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  overflow: hidden;
-  will-change: transform;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 12% -10%, rgba(14, 165, 233, 0.12), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 92% 20%, rgba(99, 102, 241, 0.08), transparent 50%);
 }
 
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.7;
-  animation: float 18s ease-in-out infinite;
-  will-change: transform, opacity;
-}
-
-.orb-1 {
-  width: 350px;
-  height: 350px;
-  background: radial-gradient(
-    circle,
-    rgba(14, 165, 233, 0.5) 0%,
-    rgba(56, 189, 248, 0.4) 30%,
-    rgba(125, 211, 252, 0.3) 60%,
-    transparent 80%
-  );
-  top: 8%;
-  left: 12%;
-  animation-delay: 0s;
-}
-
-.orb-2 {
-  width: 400px;
-  height: 400px;
-  background: radial-gradient(
-    circle,
-    rgba(59, 130, 246, 0.45) 0%,
-    rgba(14, 165, 233, 0.35) 30%,
-    rgba(56, 189, 248, 0.25) 60%,
-    transparent 80%
-  );
-  top: 55%;
-  right: 15%;
-  animation-delay: -6s;
-}
-
-.orb-3 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(
-    circle,
-    rgba(125, 211, 252, 0.4) 0%,
-    rgba(186, 230, 253, 0.3) 30%,
-    rgba(224, 242, 254, 0.2) 60%,
-    transparent 80%
-  );
-  bottom: 15%;
-  left: 35%;
-  animation-delay: -12s;
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px) translateX(0px) scale(1) rotate(0deg);
-    opacity: 0.7;
-  }
-  25% {
-    transform: translateY(-25px) translateX(15px) scale(1.08) rotate(90deg);
-    opacity: 0.9;
-  }
-  50% {
-    transform: translateY(-15px) translateX(-20px) scale(0.92) rotate(180deg);
-    opacity: 0.8;
-  }
-  75% {
-    transform: translateY(20px) translateX(8px) scale(1.05) rotate(270deg);
-    opacity: 0.95;
-  }
-}
-
-/* ページヘッダー */
-.page-header {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
-  backdrop-filter: blur(25px);
-  border-radius: 16px;
-  padding: 14px 20px;
-  margin-bottom: 12px;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.08),
-    0 4px 16px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  animation: slideInDown 0.6s ease-out;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.page-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.page-header:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    0 16px 50px rgba(0, 0, 0, 0.15),
-    0 8px 25px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.page-header:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1200px;
-  margin: 0 auto;
-  gap: 20px;
+.page-toolbar,
+.content-container {
   position: relative;
   z-index: 1;
 }
 
-.header-left {
+.page-toolbar {
+  margin-bottom: 10px;
+}
+
+.toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--is-surface);
+  border: 1px solid var(--is-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(10px);
+}
+
+.toolbar-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1;
+  min-width: 0;
 }
 
-.header-icon {
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%);
-  border-radius: 14px;
+.brand-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow:
-    0 6px 20px rgba(14, 165, 233, 0.3),
-    0 3px 10px rgba(56, 189, 248, 0.2);
-  animation: iconPulse 3s ease-in-out infinite;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  flex-shrink: 0;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
-.header-icon::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transform: rotate(45deg);
-  transition: all 0.6s ease;
+.brand-text {
+  min-width: 0;
 }
 
-.header-icon:hover {
-  transform: scale(1.08) rotate(5deg);
-  box-shadow:
-    0 12px 35px rgba(14, 165, 233, 0.45),
-    0 6px 18px rgba(56, 189, 248, 0.3);
-}
-
-.header-icon:hover::before {
-  animation: shimmer 0.6s ease-in-out;
-}
-
-@keyframes iconPulse {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow:
-      0 8px 25px rgba(14, 165, 233, 0.35),
-      0 4px 12px rgba(56, 189, 248, 0.2);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow:
-      0 10px 30px rgba(14, 165, 233, 0.4),
-      0 5px 15px rgba(56, 189, 248, 0.25);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    transform: translateX(-100%) translateY(-100%) rotate(45deg);
-  }
-  100% {
-    transform: translateX(100%) translateY(100%) rotate(45deg);
-  }
-}
-
-.header-text {
-  flex: 1;
-}
-
-.main-title {
-  font-size: 24px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #1e293b 0%, #475569 50%, #64748b 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+.toolbar-title {
   margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 1.25;
+  color: #0f172a;
 }
 
-.subtitle {
-  font-size: 13px;
-  background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  margin: 4px 0 0 0;
-  font-weight: 600;
-  letter-spacing: 0.01em;
+.toolbar-sub {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--is-muted);
   line-height: 1.3;
 }
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-}
-
-.export-button {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%);
-  border: none;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-weight: 700;
-  font-size: 14px;
-  box-shadow:
-    0 4px 14px rgba(14, 165, 233, 0.3),
-    0 2px 6px rgba(2, 132, 199, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.export-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.6s ease;
-}
-
-.export-button:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow:
-    0 8px 25px rgba(14, 165, 233, 0.45),
-    0 4px 12px rgba(2, 132, 199, 0.3);
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
-}
-
-.export-button:hover::before {
-  left: 100%;
-}
-
-/* メインコンテンツエリア */
 .content-container {
   max-width: 1400px;
   margin: 0 auto;
-  position: relative;
-  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-/* フィルターカード */
-.filter-card {
-  border-radius: 14px;
-  border: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
-  backdrop-filter: blur(25px) saturate(180%);
-  box-shadow:
-    0 6px 24px rgba(0, 0, 0, 0.06),
-    0 3px 12px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  animation: slideInLeft 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: transform;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  position: relative;
-  overflow: hidden;
+.filter-card,
+.tab-card {
+  background: var(--is-surface);
+  border: 1px solid var(--is-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+.filter-card:hover,
+.tab-card:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.filter-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(248, 250, 252, 0.6);
 }
 
 .filter-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: 10px 12px 9px;
 }
 
-.filter-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.8s ease;
+.filter-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  min-height: 18px;
 }
 
-.filter-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.12),
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+.filter-toolbar-icon {
+  font-size: 16px;
+  color: var(--is-accent);
+  display: inline-flex;
+  align-items: center;
 }
 
-.filter-card:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
+.filter-toolbar-title {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .filter-form {
@@ -1735,218 +1467,97 @@ onUnmounted(() => {
 .filter-row {
   display: flex;
   flex-wrap: nowrap;
-  gap: 10px;
-  align-items: flex-end;
+  gap: 8px;
+  align-items: center;
   margin: 0;
 }
 
 .filter-item {
   margin-bottom: 0;
-  position: relative;
   flex-shrink: 0;
 }
 
 .filter-item :deep(.el-form-item__label) {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  padding-bottom: 3px;
+  font-size: 11px;
+  color: var(--is-muted);
+  font-weight: 600;
+  line-height: 1.25;
+  padding-bottom: 0;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
 }
 
-.filter-input,
-.filter-select {
+.filter-item :deep(.el-form-item) {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.filter-item :deep(.el-form-item__content) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.filter-item--date .filter-date-picker {
   width: 160px;
-  border-radius: 6px;
 }
 
-.filter-date-picker {
-  width: 144px; /* 缩小10% */
-  border-radius: 6px;
+.filter-item--month .filter-month-picker {
+  width: 90px;
 }
 
-.filter-month-picker {
-  width: 128px; /* 缩小20% */
-  border-radius: 6px;
+.filter-item--stage .filter-select {
+  width: 100px;
+}
+
+.filter-item--product .filter-input {
+  width: 130px;
 }
 
 .filter-input :deep(.el-input__wrapper),
-.filter-select :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  transition: all 0.25s ease;
-}
-
-.filter-input :deep(.el-input__wrapper):hover,
-.filter-select :deep(.el-input__wrapper):hover {
-  border-color: #0ea5e9;
-  background: rgba(255, 255, 255, 0.9);
+.filter-select :deep(.el-input__wrapper),
+.filter-date-picker :deep(.el-input__wrapper),
+.filter-month-picker :deep(.el-input__wrapper) {
+  min-height: 30px;
 }
 
 .filter-actions-inline {
   margin-left: auto;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   flex-shrink: 0;
+  min-height: 30px;
 }
 
 .filter-actions-inline :deep(.el-form-item__content) {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-left: 0 !important;
-  flex-wrap: nowrap;
+  flex-wrap: nowrap !important;
   align-items: center;
 }
 
-.filter-actions-inline :deep(.el-form-item) {
-  margin-bottom: 0;
+.filter-actions-inline :deep(.el-form-item__label) {
+  display: none;
 }
 
-.search-button {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 50%, #0369a1 100%);
-  border: none;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 4px 12px rgba(14, 165, 233, 0.25),
-    0 2px 6px rgba(2, 132, 199, 0.15);
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
-  flex-shrink: 0;
+.tab-card :deep(.el-card__body) {
+  padding: 10px;
 }
 
-.search-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.search-button:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow:
-    0 6px 18px rgba(14, 165, 233, 0.35),
-    0 3px 8px rgba(2, 132, 199, 0.2);
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%);
-}
-
-.search-button:hover::before {
-  left: 100%;
-}
-
-.reset-button {
-  border-radius: 10px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.8) 100%);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  color: #64748b;
-  font-size: 14px;
-  padding: 10px 18px;
-  font-weight: 600;
-  position: relative;
-  overflow: hidden;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.reset-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-  transition: left 0.5s ease;
-}
-
-.reset-button:hover {
-  transform: translateY(-1px) scale(1.02);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.9) 100%);
-  border-color: #0ea5e9;
-  color: #0ea5e9;
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
-}
-
-.reset-button:hover::before {
-  left: 100%;
-}
-
-/* タブカード */
-.tab-card {
-  border-radius: 14px;
-  border: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.9) 100%);
-  backdrop-filter: blur(30px) saturate(180%);
-  box-shadow:
-    0 8px 28px rgba(0, 0, 0, 0.06),
-    0 4px 14px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  animation: slideInRight 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.tab-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.18), transparent);
-  transition: left 0.9s ease;
-}
-
-.tab-card:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    0 15px 45px rgba(0, 0, 0, 0.12),
-    0 8px 25px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.tab-card:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-/* カスタムタブスタイル */
 .custom-tabs {
-  border-radius: 12px;
-  overflow: hidden;
+  border: none;
+  background: transparent;
 }
 
 .custom-tabs :deep(.el-tabs__header) {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.92) 0%, rgba(241, 245, 249, 0.88) 100%);
-  backdrop-filter: blur(12px);
-  margin: 0;
-  padding: 10px 14px 0;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.7);
-  border-radius: 12px 12px 0 0;
+  margin: 0 0 8px;
+  padding: 3px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
 }
 
 .custom-tabs :deep(.el-tabs__nav-wrap) {
@@ -1954,698 +1565,236 @@ onUnmounted(() => {
 }
 
 .custom-tabs :deep(.el-tabs__item) {
-  background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--is-muted);
   font-weight: 600;
-  padding: 8px 16px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 8px;
-  margin: 0 4px 8px 0;
-  font-size: 13px;
-  position: relative;
-  overflow: hidden;
-  border: 1px solid transparent;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  margin: 0 1px;
+  line-height: 1.35;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .custom-tabs :deep(.el-tabs__item:hover) {
-  color: #0ea5e9;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(56, 189, 248, 0.08) 100%);
-  border-color: rgba(14, 165, 233, 0.25);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.08);
 }
 
 .custom-tabs :deep(.el-tabs__item.is-active) {
-  color: #0ea5e9;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(56, 189, 248, 0.12) 100%);
-  backdrop-filter: blur(8px);
-  border-color: rgba(14, 165, 233, 0.35);
-  font-weight: 700;
-  box-shadow:
-    0 6px 18px rgba(14, 165, 233, 0.25),
-    0 3px 8px rgba(56, 189, 248, 0.15);
-  transform: translateY(-1px);
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
 .custom-tabs :deep(.el-tabs__active-bar) {
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%);
-  height: 4px;
-  border-radius: 3px;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  display: none;
 }
 
 .custom-tabs :deep(.el-tabs__content) {
-  padding: 14px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(248, 250, 252, 0.6) 100%);
-  backdrop-filter: blur(12px);
-  border-radius: 0 0 12px 12px;
+  padding: 0;
+  margin-top: 0;
 }
 
-/* タブコンテンツスタイル */
 .tab-content {
-  min-height: 420px;
+  min-height: 280px;
 }
 
 .tab-header {
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
   align-items: center;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid rgba(226, 232, 240, 0.7);
-  gap: 12px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.15);
+}
+
+.tab-header--row {
+  flex-direction: row;
 }
 
 .tab-header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-.tab-header h3 {
+.tab-heading {
   margin: 0;
-  background: linear-gradient(135deg, #1e293b 0%, #475569 50%, #64748b 100%);
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .tab-stats {
   display: flex;
-  gap: 20px;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
 
-.tab-count {
-  color: #64748b;
-  font-size: 14px;
+.stat-pill {
+  font-size: 11px;
   font-weight: 600;
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.85) 100%);
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.7);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.35;
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.1);
+  border: 1px solid rgba(14, 165, 233, 0.2);
 }
 
-.tab-count:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);
+.stat-pill--qty {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.22);
 }
 
-.tab-quantity {
-  color: #0ea5e9;
-  font-size: 14px;
-  font-weight: 600;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(2, 132, 199, 0.08) 100%);
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(14, 165, 233, 0.25);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-  transition: all 0.3s ease;
-}
-
-.tab-quantity:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(2, 132, 199, 0.12) 100%);
-}
-
-.print-button {
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 13px;
-  box-shadow:
-    0 4px 12px rgba(16, 185, 129, 0.3),
-    0 2px 6px rgba(5, 150, 105, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  color: white;
-}
-
-.print-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.print-button:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow:
-    0 6px 18px rgba(16, 185, 129, 0.4),
-    0 3px 8px rgba(5, 150, 105, 0.3);
-  background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%);
-}
-
-.print-button:hover::before {
-  left: 100%;
-}
-
-/* 統計コンテンツスタイル */
 .statistics-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 0;
 }
 
 .chart-container {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 100%);
-  border-radius: 10px;
-  padding: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.7);
-  backdrop-filter: blur(12px);
-  box-shadow:
-    0 3px 12px rgba(0, 0, 0, 0.05),
-    0 1px 6px rgba(0, 0, 0, 0.03);
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.chart-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transition: left 0.6s ease;
-}
-
-.chart-container:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    0 3px 12px rgba(0, 0, 0, 0.06);
-}
-
-.chart-container:hover::before {
-  left: 100%;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  padding: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .chart {
   width: 100%;
-  height: 380px;
-  position: relative;
-  z-index: 1;
-  min-height: 300px;
+  height: 300px;
+  min-height: 220px;
 }
 
 .table-container {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 100%);
-  border-radius: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.7);
-  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
   overflow: hidden;
-  box-shadow:
-    0 3px 12px rgba(0, 0, 0, 0.05),
-    0 1px 6px rgba(0, 0, 0, 0.03);
-  transition: all 0.3s ease;
-  position: relative;
-}
-
-.table-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-  transition: left 0.6s ease;
-  z-index: 0;
-}
-
-.table-container:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    0 3px 12px rgba(0, 0, 0, 0.06);
-}
-
-.table-container:hover::before {
-  left: 100%;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .statistics-table {
   width: 100%;
-  position: relative;
-  z-index: 1;
 }
 
 .statistics-table :deep(.el-table__header) {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);
+  background: #f8fafc;
+}
+
+.statistics-table :deep(.el-table__header th) {
+  background: transparent !important;
+  color: #334155;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.statistics-table :deep(.el-table__cell) {
+  padding: 5px 8px;
+  font-size: 12px;
 }
 
 .statistics-table :deep(.el-table__row) {
-  transition: all 0.3s ease;
+  transition: background-color 0.15s ease;
 }
 
 .statistics-table :deep(.el-table__row:hover) {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.06) 0%, rgba(56, 189, 248, 0.04) 100%);
-  transform: scale(1.001);
-  transition: all 0.3s ease;
+  background-color: rgba(14, 165, 233, 0.06);
 }
 
-.statistics-table :deep(.el-table__body-wrapper) {
-  background: transparent;
-}
-
-.statistics-table :deep(.el-table th) {
-  background: transparent;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid rgba(226, 232, 240, 0.8);
-  transition: all 0.3s ease;
-}
-
-.statistics-table :deep(.el-table th:hover) {
-  background: rgba(14, 165, 233, 0.05);
-  color: #0ea5e9;
-}
-
-.statistics-table :deep(.el-table th.is-sortable) {
-  cursor: pointer;
-}
-
-.statistics-table :deep(.el-table th.is-sortable:hover) {
-  background: rgba(14, 165, 233, 0.08);
-}
-
-.statistics-table :deep(.el-table .sort-caret) {
-  border-color: #0ea5e9;
-}
-
-.statistics-table :deep(.el-table .ascending .sort-caret.ascending) {
-  border-bottom-color: #0ea5e9;
-}
-
-.statistics-table :deep(.el-table .descending .sort-caret.descending) {
-  border-top-color: #0ea5e9;
-}
-
-.statistics-table :deep(.el-table td) {
-  background: transparent;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
-  transition: all 0.3s ease;
-}
-
-/* レスポンシブデザイン */
 @media (max-width: 1200px) {
-  .inventory-container {
-    padding: 3px;
-  }
-
-  .page-header {
-    padding: 16px 18px;
-    margin-bottom: 14px;
-    border-radius: 16px;
-  }
-
-  .header-content {
-    gap: 16px;
-  }
-
-  .header-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 14px;
-  }
-
-  .main-title {
-    font-size: 24px;
-  }
-
-  .subtitle {
-    font-size: 14px;
-  }
-
-  .export-button {
-    padding: 10px 16px;
-    font-size: 14px;
-    border-radius: 10px;
-  }
-
   .content-container {
-    gap: 12px;
-    padding: 0 8px;
-  }
-
-  .filter-card,
-  .tab-card {
-    margin: 0;
-    border-radius: 14px;
+    padding: 0 4px;
   }
 
   .filter-row {
     flex-wrap: wrap;
-    gap: 8px;
   }
 
   .filter-actions-inline {
     margin-left: 0;
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
-  .filter-input,
-  .filter-date-picker,
-  .filter-month-picker,
-  .filter-select {
+  .filter-item--date .filter-date-picker {
     width: 100%;
-  }
-
-  .custom-tabs {
-    border-radius: 10px;
-  }
-
-  .custom-tabs :deep(.el-tabs__header) {
-    padding: 10px 12px 0;
-    border-radius: 10px 10px 0 0;
-  }
-
-  .custom-tabs :deep(.el-tabs__item) {
-    padding: 8px 16px;
-    font-size: 13px;
-    border-radius: 8px;
-  }
-
-  .custom-tabs :deep(.el-tabs__content) {
-    padding: 16px;
-    border-radius: 0 0 10px 10px;
-  }
-
-  .tab-header {
-    flex-direction: column;
-    gap: 6px;
-    align-items: flex-start;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-  }
-
-  .tab-header h3 {
-    font-size: 16px;
-  }
-
-  .tab-stats {
-    gap: 10px;
   }
 
   .statistics-content {
     grid-template-columns: 1fr;
-    gap: 12px;
-  }
-
-  .chart-container,
-  .table-container {
-    border-radius: 10px;
-    padding: 12px;
   }
 
   .chart {
-    height: 300px;
-    min-height: 250px;
+    height: 260px;
+    min-height: 200px;
   }
 }
 
 @media (max-width: 768px) {
   .inventory-container {
-    padding: 2px;
+    padding: 8px;
   }
 
-  .page-header {
-    padding: 12px 16px;
-    margin-bottom: 12px;
-    border-radius: 12px;
-  }
-
-  .header-content {
-    flex-direction: column;
-    gap: 12px;
-    text-align: center;
-  }
-
-  .header-left {
-    justify-content: center;
-    align-items: center;
-  }
-
-  .header-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-  }
-
-  .main-title {
-    font-size: 20px;
-  }
-
-  .subtitle {
-    font-size: 13px;
-  }
-
-  .export-button {
-    padding: 8px 14px;
-    font-size: 13px;
-    border-radius: 8px;
-  }
-
-  .content-container {
-    gap: 10px;
-  }
-
-  .filter-card,
-  .tab-card {
-    border-radius: 12px;
+  .toolbar-inner {
+    align-items: flex-start;
   }
 
   .filter-row {
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .filter-item {
+  .filter-input,
+  .filter-select,
+  .filter-date-picker,
+  .filter-month-picker {
     width: 100%;
-  }
-
-  .filter-actions-inline {
-    margin-left: 0;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .search-button,
-  .reset-button {
-    padding: 8px 14px;
-    font-size: 13px;
-    border-radius: 8px;
-  }
-
-  .custom-tabs {
-    border-radius: 8px;
-  }
-
-  .custom-tabs :deep(.el-tabs__header) {
-    padding: 8px 10px 0;
-    border-radius: 8px 8px 0 0;
-  }
-
-  .custom-tabs :deep(.el-tabs__item) {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 6px;
-    margin: 0 4px 8px 0;
-  }
-
-  .custom-tabs :deep(.el-tabs__content) {
-    padding: 12px;
-    border-radius: 0 0 8px 8px;
-  }
-
-  .tab-content {
-    min-height: 350px;
   }
 
   .tab-header {
-    flex-direction: column;
-    gap: 8px;
     align-items: flex-start;
-    margin-bottom: 14px;
-    padding-bottom: 10px;
-  }
-
-  .tab-header h3 {
-    font-size: 15px;
-  }
-
-  .tab-stats {
-    gap: 12px;
-  }
-
-  .tab-count,
-  .tab-quantity {
-    font-size: 12px;
-    padding: 4px 8px;
-    border-radius: 6px;
-  }
-
-  .statistics-content {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .chart-container,
-  .table-container {
-    border-radius: 8px;
-    padding: 10px;
   }
 
   .chart {
-    height: 240px;
-    min-height: 200px;
+    height: 220px;
+    min-height: 180px;
+  }
+
+  .tab-content {
+    min-height: 240px;
   }
 }
 
 @media (max-width: 480px) {
   .inventory-container {
-    padding: 1px;
+    padding: 6px;
   }
 
-  .page-header {
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    border-radius: 10px;
+  .brand-icon {
+    width: 32px;
+    height: 32px;
   }
 
-  .header-content {
-    gap: 8px;
-  }
-
-  .header-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-  }
-
-  .main-title {
-    font-size: 18px;
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .export-button {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 6px;
-  }
-
-  .header-actions {
-    justify-content: center;
-    gap: 4px;
-  }
-
-  .content-container {
-    gap: 8px;
-  }
-
-  .filter-card,
-  .tab-card {
-    border-radius: 10px;
-  }
-
-  .filter-actions-inline {
-    margin-left: 0;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .search-button,
-  .reset-button {
-    padding: 6px 12px;
-    font-size: 12px;
-    border-radius: 6px;
-  }
-
-  .custom-tabs {
-    border-radius: 6px;
-  }
-
-  .custom-tabs :deep(.el-tabs__header) {
-    padding: 6px 8px 0;
-    border-radius: 6px 6px 0 0;
+  .toolbar-title {
+    font-size: 1rem;
   }
 
   .custom-tabs :deep(.el-tabs__item) {
-    padding: 5px 10px;
+    padding: 5px 8px;
     font-size: 11px;
-    border-radius: 4px;
-    margin: 0 3px 6px 0;
-  }
-
-  .custom-tabs :deep(.el-tabs__content) {
-    padding: 10px;
-    border-radius: 0 0 6px 6px;
-  }
-
-  .tab-content {
-    min-height: 300px;
-  }
-
-  .tab-header {
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    gap: 6px;
-  }
-
-  .tab-header h3 {
-    font-size: 14px;
-  }
-
-  .tab-stats {
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .tab-count,
-  .tab-quantity {
-    font-size: 11px;
-    padding: 3px 6px;
-    border-radius: 4px;
-  }
-
-  .statistics-content {
-    gap: 8px;
-    margin-top: 10px;
-  }
-
-  .chart-container,
-  .table-container {
-    border-radius: 6px;
-    padding: 8px;
   }
 
   .chart {

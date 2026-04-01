@@ -141,6 +141,8 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
   { code: 'MASTER_EQUIPMENT_EFFICIENCY', name: '設備能率管理', path: '/master/bom/equipment-efficiency', parentCode: 'MASTER_BOM', sortOrder: 3 },
+  { code: 'MASTER_PRODUCT_BOM_DETAIL', name: '明細BOM管理', path: '/master/bom/product-bom', parentCode: 'MASTER_BOM', sortOrder: 4 },
+  { code: 'MASTER_UNIT_PRICE', name: '工程別標準原価', path: '/master/bom/product-unit-price', parentCode: 'MASTER_BOM', sortOrder: 5 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
   { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },
   { code: 'SYSTEM_HOME', name: 'システムホーム', path: '/system', parentCode: 'SYSTEM_USER', sortOrder: 0 },

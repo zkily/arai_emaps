@@ -204,6 +204,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
       { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },
+      { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '明細BOM管理', requiresAuth: true } },
+      { path: 'master/bom/product-unit-price', name: 'ProductProcessUnitPriceEditor', component: () => import('@/views/master/bom/ProductProcessUnitPriceEditor.vue'), meta: { title: '工程別標準原価管理', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========
       { path: 'system', name: 'System', component: () => import('@/views/system/SystemHome.vue'), meta: { title: 'システム管理', requiresAuth: true } },

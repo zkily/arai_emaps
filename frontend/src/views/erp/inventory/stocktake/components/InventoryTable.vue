@@ -4,14 +4,15 @@
       :data="data"
       border
       stripe
+      size="small"
       highlight-current-row
       class="data-table"
       v-loading="loading"
       element-loading-spinner="el-icon-loading"
       element-loading-background="rgba(0, 0, 0, 0.8)"
       :default-sort="currentSort"
-      :sort-method="null"
       table-layout="auto"
+      @sort-change="handleSortChange"
     >
       <el-table-column label="項目" prop="item" width="100" align="center">
         <template #default="scope">
@@ -24,10 +25,8 @@
       <el-table-column
         label="製品CD"
         prop="product_cd"
-        width="120"
+        width="90"
         align="center"
-        sortable
-        @sort-change="handleProductCdSort"
       >
         <template #default="scope">
           <div class="product-cd">{{ scope.row.product_cd }}</div>
@@ -37,9 +36,8 @@
       <el-table-column
         label="製品名"
         prop="product_name"
-        min-width="160"
-        sortable
-        @sort-change="handleProductNameSort"
+        min-width="180"
+        sortable="custom"
       >
         <template #default="scope">
           <div class="product-name-cell">
@@ -48,7 +46,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="工程名" prop="process_name" width="120" align="center">
+      <el-table-column label="工程名" prop="process_name" width="90" align="center">
         <template #default="scope">
           <el-tag :type="getProcessTypeColor(scope.row.process_cd)" size="small">
             {{ scope.row.process_name || scope.row.process_cd }}
@@ -61,8 +59,7 @@
         prop="log_date"
         width="120"
         align="center"
-        sortable
-        @sort-change="handleDateSort"
+        sortable="custom"
       >
         <template #default="scope">
           <div class="date-cell">{{ formatDate(scope.row.log_date) }}</div>
@@ -71,7 +68,7 @@
 
       <el-table-column label="時間" prop="log_time" width="100" align="center">
         <template #default="scope">
-          <div class="time-cell">{{ formatTime(scope.row.log_time) }}</div>
+          <div class="time-cell">{{ formatLogTime(scope.row.log_time) }}</div>
         </template>
       </el-table-column>
 
@@ -81,7 +78,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="ケース数" prop="case_qty" width="100" align="center">
+      <el-table-column label="箱数" prop="case_qty" width="80" align="center">
         <template #default="scope">
           <div class="case-count-cell">{{ scope.row.case_qty || '-' }}</div>
         </template>
@@ -90,10 +87,8 @@
       <el-table-column
         label="数量"
         prop="quantity"
-        width="100"
+        width="90"
         align="center"
-        sortable
-        @sort-change="handleQuantitySort"
       >
         <template #default="scope">
           <div class="total-quantity-cell" :class="getQuantityClass(scope.row)">
@@ -102,7 +97,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="作業者" prop="worker_name" width="100" align="center">
+      <el-table-column label="作業者" prop="worker_name" width="90" align="center">
         <template #default="scope">
           <div class="worker-name-cell">
             <span class="worker-name">{{ scope.row.worker_name || scope.row.remarks || '-' }}</span>
@@ -116,7 +111,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="120" align="center" fixed="right">
+      <el-table-column label="操作" width="100" align="center" fixed="right">
         <template #default="scope">
           <el-button
             type="danger"
@@ -173,7 +168,7 @@ interface Props {
 interface Emits {
   (e: 'page-change', page: number): void
   (e: 'size-change', size: number): void
-  (e: 'sort', field: string): void
+  (e: 'sort', field: string, order: 'asc' | 'desc' | null): void
   (e: 'delete', row: any): void
 }
 
@@ -192,8 +187,46 @@ const currentSort = computed(() => {
 // 格式化日期
 const formatDate = (val: string) => dayjs(val).format('YYYY-MM-DD')
 
-// 格式化时间
-const formatTime = (val: string) => dayjs(val, 'HH:mm:ss').format('HH:mm')
+// 时间列仅展示 inventory_logs.log_time，显示为 HH:mm:ss。
+const formatLogTime = (val: unknown) => {
+  if (val === null || val === undefined) return '-'
+  const raw = String(val).trim()
+  if (!raw) return '-'
+
+  // 兼容纯数字时间：秒数（如 48309）或 Excel 小数时间
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const num = Number(raw)
+    if (Number.isFinite(num) && num >= 0) {
+      const toHms = (totalSeconds: number) => {
+        const normalized = ((Math.floor(totalSeconds) % 86400) + 86400) % 86400
+        const hh = String(Math.floor(normalized / 3600)).padStart(2, '0')
+        const mm = String(Math.floor((normalized % 3600) / 60)).padStart(2, '0')
+        const ss = String(normalized % 60).padStart(2, '0')
+        return `${hh}:${mm}:${ss}`
+      }
+
+      // 1~86400 视为“秒”
+      if (num >= 1 && num <= 86400) return toHms(num)
+      // 0~1 视为“天的小数”（Excel 时间）
+      if (num >= 0 && num < 1) return toHms(num * 86400)
+      // >86400：若包含小数，取小数部分作为当天时间（Excel 日期时间）
+      const fraction = num - Math.floor(num)
+      if (fraction > 0) return toHms(fraction * 86400)
+      return '00:00:00'
+    }
+  }
+
+  // 兼容 "HH:mm:ss" / "HH:mm" / "YYYY-MM-DD HH:mm:ss" / "YYYY-MM-DDTHH:mm:ss"
+  const timePart = raw.includes('T') ? raw.split('T').pop() || '' : raw.split(' ').pop() || raw
+  const hhmmss = timePart.split('.')[0]
+
+  if (/^\d{2}:\d{2}:\d{2}$/.test(hhmmss)) return hhmmss
+  if (/^\d{2}:\d{2}$/.test(hhmmss)) return `${hhmmss}:00`
+
+  let parsed = dayjs(hhmmss, 'HH:mm:ss', true)
+  if (!parsed.isValid()) parsed = dayjs(hhmmss, 'HH:mm', true)
+  return parsed.isValid() ? parsed.format('HH:mm:ss') : raw
+}
 
 // 格式化日期时间
 const formatDateTime = (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss')
@@ -237,33 +270,15 @@ const getQuantityClass = (row: any): string => {
   return 'normal-stock'
 }
 
-// 排序处理函数 - 强制服务端排序
-const handleProductNameSort = (sortInfo: any) => {
-  // 阻止默认的客户端排序行为
-  if (sortInfo) {
-    emit('sort', 'product_name')
-  }
-}
-
-const handleProductCdSort = (sortInfo: any) => {
-  // 阻止默认的客户端排序行为
-  if (sortInfo) {
-    emit('sort', 'product_cd')
-  }
-}
-
-const handleQuantitySort = (sortInfo: any) => {
-  // 阻止默认的客户端排序行为
-  if (sortInfo) {
-    emit('sort', 'quantity')
-  }
-}
-
-const handleDateSort = (sortInfo: any) => {
-  // 阻止默认的客户端排序行为
-  if (sortInfo) {
-    emit('sort', 'log_date')
-  }
+// 排序处理（服务端全量排序，前端仅透传排序字段和方向）
+const handleSortChange = (sortInfo: {
+  prop?: string
+  order?: 'ascending' | 'descending' | null
+}) => {
+  if (!sortInfo?.prop) return
+  const order =
+    sortInfo.order === 'ascending' ? 'asc' : sortInfo.order === 'descending' ? 'desc' : null
+  emit('sort', sortInfo.prop, order)
 }
 
 const handleDelete = (row: any) => {
@@ -276,39 +291,49 @@ const handleDelete = (row: any) => {
   width: 100%;
 }
 
-/* 数据表格样式 */
 .data-table {
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .data-table :deep(.el-table__header) {
-  background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+  background: #f8fafc;
 }
 
 .data-table :deep(.el-table__header th) {
-  background: transparent;
-  color: #2c3e50;
+  background: transparent !important;
+  color: #334155;
   font-weight: 600;
-  border-bottom: 2px solid #667eea;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 .data-table :deep(.el-table__row) {
-  transition: all 0.3s ease;
+  transition: background-color 0.15s ease;
 }
 
 .data-table :deep(.el-table__row:hover) {
-  background-color: rgba(102, 126, 234, 0.05);
-  transform: scale(1.001);
+  background-color: rgba(14, 165, 233, 0.06);
 }
 
-/* 表格单元格样式 */
+.data-table :deep(.el-table__cell) {
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.data-table :deep(.el-table__body .el-table__row) {
+  height: 34px;
+}
+
 .item-type-tag {
   font-weight: 600;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 12px;
+  border-radius: 5px;
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .product-cd,
@@ -317,26 +342,26 @@ const handleDelete = (row: any) => {
 .case-count-cell,
 .time-cell {
   font-weight: 500;
-  color: #2c3e50;
+  color: #334155;
 }
 
 .product-name-cell {
-  padding: 0 8px;
+  padding: 0 4px;
 }
 
 .product-name {
-  color: #2c3e50;
+  color: #0f172a;
   font-weight: 500;
 }
 
 .date-cell {
   font-weight: 500;
-  color: #2c3e50;
+  color: #334155;
 }
 
 .total-quantity-cell {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .total-quantity-cell.normal-stock {
@@ -353,7 +378,7 @@ const handleDelete = (row: any) => {
 
 .remarks-cell {
   color: #606266;
-  font-size: 13px;
+  font-size: 12px;
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -362,67 +387,60 @@ const handleDelete = (row: any) => {
 
 .datetime-cell {
   font-weight: 500;
-  color: #2c3e50;
-  font-size: 13px;
+  color: #334155;
+  font-size: 12px;
 }
 
-.edit-button,
 .delete-button {
   border-radius: 6px;
-  padding: 4px 12px;
-  font-size: 12px;
-  transition: all 0.3s ease;
-}
-
-.edit-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .delete-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3);
+  box-shadow: 0 2px 8px rgba(245, 108, 108, 0.22);
 }
 
-/* 分页样式 */
 .pagination-wrapper {
-  margin-top: 24px;
+  margin-top: 8px;
   display: flex;
   justify-content: flex-end;
-  padding: 16px 0;
+  padding: 2px 0 0;
 }
 
 .custom-pagination {
-  border-radius: 8px;
+  font-size: 12px;
 }
 
 .custom-pagination :deep(.el-pagination__jump) {
-  margin-left: 16px;
+  margin-left: 10px;
 }
 
 .custom-pagination :deep(.btn-next),
 .custom-pagination :deep(.btn-prev) {
+  min-width: 26px;
+  height: 26px;
   border-radius: 6px;
-  transition: all 0.3s ease;
 }
 
-.custom-pagination :deep(.btn-next:hover),
-.custom-pagination :deep(.btn-prev:hover) {
-  transform: translateY(-1px);
+.custom-pagination :deep(.el-pager li) {
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  border-radius: 6px;
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
   .data-table {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .item-type-tag {
     font-size: 11px;
-    padding: 3px 6px;
+    padding: 2px 5px;
   }
 
-  .edit-button,
   .delete-button {
     font-size: 11px;
     padding: 3px 8px;
@@ -430,10 +448,6 @@ const handleDelete = (row: any) => {
 }
 
 @media (max-width: 768px) {
-  .data-table {
-    font-size: 12px;
-  }
-
   .pagination-wrapper {
     justify-content: center;
   }
@@ -441,19 +455,19 @@ const handleDelete = (row: any) => {
   .custom-pagination :deep(.el-pagination__sizes) {
     display: none;
   }
+
+  .data-table :deep(.el-table__cell) {
+    padding: 4px 6px;
+    font-size: 11px;
+  }
 }
 
 @media (max-width: 480px) {
-  .data-table {
-    font-size: 11px;
-  }
-
   .item-type-tag {
     font-size: 10px;
-    padding: 2px 4px;
+    padding: 1px 4px;
   }
 
-  .edit-button,
   .delete-button {
     font-size: 10px;
     padding: 2px 6px;

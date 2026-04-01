@@ -16,6 +16,8 @@ from app.modules.master.api_product_process_bom import router as product_process
 from app.modules.master.api_product_machine_config import router as product_machine_config_router
 from app.modules.master.api_equipment_efficiency import router as equipment_efficiency_router
 from app.modules.master.api_options import router as options_router
+from app.modules.master.api_product_bom import router as product_bom_router
+from app.modules.master.api_product_process_unit_price import router as product_unit_price_router
 
 router = APIRouter()
 router.include_router(options_router, prefix="/options", tags=["マスタオプション"])
@@ -36,3 +38,5 @@ router.include_router(
 router.include_router(product_process_bom_router, prefix="/product-process-bom", tags=["製品工程BOM"])
 router.include_router(product_machine_config_router, prefix="/product-machine-config", tags=["製品機器設定"])
 router.include_router(equipment_efficiency_router, prefix="/equipment-efficiency", tags=["設備能率管理"])
+router.include_router(product_bom_router, prefix="/product-bom", tags=["明細BOM"])
+router.include_router(product_unit_price_router, prefix="/product-process-unit-prices", tags=["工程別標準原価"])

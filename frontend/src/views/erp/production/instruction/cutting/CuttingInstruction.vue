@@ -18,18 +18,31 @@
           <div class="card-header">
             <div class="section-title">
               <el-icon size="18"><Calendar /></el-icon>
-              <span>生産ロット一覧</span>
-              <el-button type="default" size="small" class="title-right-btn" @click="openDataManagementDialog">
+              <span class="section-title-label">生産ロット一覧</span>
+              <el-button
+                type="default"
+                size="small"
+                class="title-toolbar-btn title-toolbar-btn--data"
+                @click="openDataManagementDialog"
+              >
                 データ管理
               </el-button>
-            </div>
-            <div class="header-actions">
+              <el-button
+                type="default"
+                size="small"
+                class="title-toolbar-btn title-toolbar-btn--sync"
+                :loading="syncLengthsFromProductsLoading"
+                @click="syncLengthsFromProducts"
+              >
+                <el-icon class="title-toolbar-sync-icon"><Refresh /></el-icon>
+                寸法マスタ同期
+              </el-button>
               <el-select
                 v-model="selectedScheduleMonth"
                 placeholder="生産月"
                 clearable
                 size="small"
-                style="width: 100px"
+                class="title-toolbar-month-select"
                 @change="loadPlans"
               >
                 <el-option
@@ -42,6 +55,7 @@
               <el-button
                 type="primary"
                 size="small"
+                class="title-toolbar-btn title-toolbar-btn--generate"
                 :loading="generateFromScheduleLoading"
                 :disabled="!selectedScheduleMonth"
                 @click="generateFromSchedule"
@@ -2810,7 +2824,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
@@ -3800,7 +3814,9 @@ interface ChamferingManagementRow {
   defect_qty?: number | null
   production_lot_size?: number | null
   lot_number?: string | null
+  cutting_length?: number | null
   chamfering_length?: number | null
+  developed_length?: number | null
   production_time?: number | null
   material_name?: string | null
   management_code?: string | null
@@ -3832,7 +3848,9 @@ interface ChamferingBatchRow {
   actual_production_quantity?: number | null
   production_lot_size?: number | null
   lot_number?: string | null
+  cutting_length?: number | null
   chamfering_length?: number | null
+  developed_length?: number | null
   material_name?: string | null
   management_code?: string | null
   cd?: string | null
@@ -4047,6 +4065,7 @@ const scheduleMonths = ref<{ value: string; label: string }[]>(
 )
 const selectedScheduleMonth = ref('')
 const generateFromScheduleLoading = ref(false)
+const syncLengthsFromProductsLoading = ref(false)
 
 /** 設備下拉：machines 表の machine_name で「成型」を含むもの */
 const machineOptions = ref<{ machine_name: string }[]>([])
@@ -4195,6 +4214,43 @@ const generateFromSchedule = async () => {
     ElMessage.error('ロット生成に失敗しました')
   } finally {
     generateFromScheduleLoading.value = false
+  }
+}
+
+const syncLengthsFromProducts = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '製品マスタの切断長・面取長・展開長を、生産ロット（instruction_plans）・切断/面取関連テーブル・カンバン発行へ一括反映します。よろしいですか？',
+      '寸法マスタ同期',
+      { confirmButtonText: '同期', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  syncLengthsFromProductsLoading.value = true
+  try {
+    const result = await request.post<{
+      success?: boolean
+      message?: string
+      data?: Record<string, number>
+    }>('/api/plan/batch/sync-lengths-from-products', {})
+    if ((result as any)?.success) {
+      ElMessage.success((result as any).message ?? '同期しました')
+      loadPlans()
+      loadCuttingManagement()
+      loadChamferingBatchList()
+      loadChamferingManagement()
+      loadKanbanIssuance()
+    } else {
+      ElMessage.error((result as any)?.message ?? '同期に失敗しました')
+    }
+  } catch (e: unknown) {
+    console.error('寸法マスタ同期に失敗:', e)
+    const ax = e as { response?: { data?: { detail?: string } } }
+    const detail = ax.response?.data?.detail
+    ElMessage.error(typeof detail === 'string' ? detail : '同期に失敗しました')
+  } finally {
+    syncLengthsFromProductsLoading.value = false
   }
 }
 
@@ -8563,9 +8619,68 @@ onUnmounted(() => {
   font-weight: 700;
   color: #1d4ed8;
   letter-spacing: -0.02em;
+  flex: 1;
+  min-width: 0;
 }
-.section-title .title-right-btn {
-  margin-left: 8px;
+.section-title .section-title-label {
+  flex-shrink: 0;
+}
+.card-header .section-title .title-toolbar-btn--data {
+  margin-left: auto;
+}
+.title-toolbar-month-select {
+  width: 108px;
+}
+.title-toolbar-month-select :deep(.el-input__wrapper) {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.title-toolbar-month-select :deep(.el-input__inner) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+.title-toolbar-month-select :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #818cf8 inset !important;
+}
+.title-toolbar-btn {
+  margin: 0 !important;
+  height: 28px !important;
+  padding: 0 12px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  border-radius: 7px !important;
+  letter-spacing: 0.02em !important;
+}
+.title-toolbar-btn--data {
+  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%) !important;
+  border-color: #c7d2fe !important;
+  color: #3730a3 !important;
+  box-shadow: 0 1px 2px rgba(49, 46, 129, 0.08) !important;
+}
+.title-toolbar-btn--data:hover {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  border-color: #818cf8 !important;
+  color: #2563eb !important;
+}
+.title-toolbar-btn--sync {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border-color: #6ee7b7 !important;
+  color: #047857 !important;
+  box-shadow: 0 1px 2px rgba(5, 150, 105, 0.1) !important;
+}
+.title-toolbar-btn--sync:hover {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%) !important;
+  border-color: #34d399 !important;
+  color: #065f46 !important;
+}
+.title-toolbar-sync-icon {
+  margin-right: 4px;
+  font-size: 13px;
+  vertical-align: -2px;
 }
 
 .search-section {
@@ -9387,9 +9502,8 @@ onUnmounted(() => {
     align-items: flex-start;
     padding: 10px 12px;
   }
-  .header-actions {
-    width: 100%;
-    justify-content: flex-end;
+  .card-header .section-title .title-toolbar-btn--data {
+    margin-left: 0;
   }
   .section-title {
     font-size: 13px;
@@ -10281,6 +10395,46 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(37,99,235,0.18) !important;
 }
 
+/* 生産ロット card タイトル：上記 default 上書きを打ち消し */
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--data) {
+  background: linear-gradient(135deg, #f8fafc 0%, #e0e7ff 100%) !important;
+  border-color: #c7d2fe !important;
+  color: #3730a3 !important;
+  box-shadow: 0 1px 2px rgba(49, 46, 129, 0.08) !important;
+}
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--data:hover) {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  border-color: #818cf8 !important;
+  color: #2563eb !important;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.15) !important;
+}
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--sync) {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%) !important;
+  border-color: #6ee7b7 !important;
+  color: #047857 !important;
+  box-shadow: 0 1px 2px rgba(5, 150, 105, 0.1) !important;
+}
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--sync:hover) {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%) !important;
+  border-color: #34d399 !important;
+  color: #065f46 !important;
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2) !important;
+}
+
+/* 切断指示生成（primary コンパクト） */
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--generate) {
+  height: 28px !important;
+  padding: 0 14px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em !important;
+  border-radius: 7px !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35) !important;
+}
+.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--generate:not(:disabled):hover) {
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45) !important;
+}
+
 /* 試作追加ボタン */
 .btn-trial-add {
   background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
@@ -10293,30 +10447,22 @@ onUnmounted(() => {
   box-shadow: 0 6px 16px rgba(124,58,237,0.40) !important;
 }
 
-/* データ管理ボタン */
-.title-right-btn {
-  background: linear-gradient(135deg, #f1f5f9 0%, #e0e7ff 100%) !important;
-  border-color: #bfdbfe !important;
-  color: #3730a3 !important;
-  font-size: 11px !important;
-  box-shadow: 0 1px 3px rgba(37,99,235,0.1) !important;
-}
-.title-right-btn:hover {
-  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
-  border-color: #818cf8 !important;
-  color: #2563eb !important;
-  box-shadow: 0 3px 8px rgba(37,99,235,0.2) !important;
-}
-
-/* ── card section-title ── */
+/* ── card section-title（生産ロット一覧：タイトル + ツールバー） ── */
 .card-header .section-title {
   font-size: 12px !important;
   font-weight: 700 !important;
   color: #1e1b4b !important;
   display: flex !important;
   align-items: center !important;
-  gap: 6px !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  row-gap: 6px !important;
   letter-spacing: 0.01em !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+.card-header .section-title .title-toolbar-month-select {
+  flex-shrink: 0;
 }
 
 /* ── right-panel hover ── */

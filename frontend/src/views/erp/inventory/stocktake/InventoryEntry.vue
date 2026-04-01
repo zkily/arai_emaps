@@ -1,59 +1,40 @@
 <template>
   <div class="inventory-entry-page">
-    <!-- 动态背景 -->
-    <div class="dynamic-background">
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
-      <div class="orb orb-4"></div>
-      <div class="floating-particles">
-        <div class="particle" v-for="i in 20" :key="i" :style="getParticleStyle(i)"></div>
-      </div>
-    </div>
-    <div class="page-header">
-      <div class="header-glow"></div>
-      <div class="header-content">
-        <div class="header-icon">
-          <div class="icon-ring"></div>
-          <el-icon><DocumentAdd /></el-icon>
+    <div class="page-ambient" aria-hidden="true" />
+    <header class="page-toolbar">
+      <div class="toolbar-main">
+        <div class="toolbar-brand">
+          <div class="brand-icon">
+            <el-icon><DocumentAdd /></el-icon>
+          </div>
+          <div class="brand-text">
+            <h1 class="toolbar-title">棚卸登録</h1>
+            <p class="toolbar-sub">材料・部品・ステーの棚卸を入力</p>
+          </div>
         </div>
-        <div class="header-text">
-          <h1 class="page-title">棚卸登録</h1>
-          <p class="page-description">材料、部品、ステーなどの棚卸データを効率的に入力</p>
-          <div class="title-underline"></div>
+        <div class="toolbar-actions">
+          <el-button
+            type="primary"
+            size="default"
+            @click="handleNewInput"
+            v-if="!showForm"
+          >
+            <el-icon><Plus /></el-icon>
+            新規入力
+          </el-button>
+          <el-button type="success" size="default" @click="handleBatchInput" v-if="!showForm">
+            <el-icon><DocumentAdd /></el-icon>
+            一括入力
+          </el-button>
+          <el-button @click="goBack" v-if="showForm" plain>
+            <el-icon><ArrowLeft /></el-icon>
+            一覧に戻る
+          </el-button>
         </div>
       </div>
-      <div class="header-actions">
-        <el-button
-          type="primary"
-          @click="handleNewInput"
-          v-if="!showForm"
-          class="action-btn primary-btn"
-        >
-          <div class="btn-glow"></div>
-          <el-icon><Plus /></el-icon>
-          新規入力
-        </el-button>
-        <el-button
-          type="success"
-          @click="handleBatchInput"
-          v-if="!showForm"
-          class="action-btn success-btn"
-        >
-          <div class="btn-glow"></div>
-          <el-icon><DocumentAdd /></el-icon>
-          一括入力
-        </el-button>
-        <el-button @click="goBack" v-if="showForm" class="action-btn back-btn">
-          <div class="btn-glow"></div>
-          <el-icon><ArrowLeft /></el-icon>
-          一覧に戻る
-        </el-button>
-      </div>
-    </div>
+    </header>
 
-    <!-- 录入表单 -->
-    <div v-if="showForm" class="form-container">
+    <div v-if="showForm" class="form-panel">
       <InventoryEntryForm
         :submitting="submitting"
         :initial-data="lastFormData"
@@ -62,30 +43,32 @@
       />
     </div>
 
-    <!-- 录入历史 -->
-    <div v-else class="history-container">
-      <el-card class="history-card" shadow="hover">
+    <div v-else class="history-panel">
+      <el-card class="history-card" shadow="never">
         <template #header>
-          <div class="history-header">
-            <h3>手入力記録</h3>
-            <div class="header-info">
-              <el-tag type="info" effect="plain" size="small">手入力データのみ表示</el-tag>
-              <div class="filter-controls">
-                <el-date-picker
-                  v-model="selectedMonth"
-                  type="month"
-                  placeholder="月を選択"
-                  format="YYYY-MM"
-                  value-format="YYYY-MM"
-                  @change="handleMonthChange"
-                  class="month-filter"
-                />
-                <el-button link @click="clearFilter">
-                  <el-icon><Close /></el-icon>
-                  クリア
-                </el-button>
-              </div>
-              <el-button link @click="refreshHistory">
+          <div class="history-toolbar">
+            <div class="history-toolbar-left">
+              <h2 class="history-title">手入力記録</h2>
+              <el-tag type="info" effect="light" size="small" class="history-badge">
+                手入力のみ
+              </el-tag>
+            </div>
+            <div class="history-toolbar-right">
+              <el-date-picker
+                v-model="selectedMonth"
+                type="month"
+                placeholder="月"
+                format="YYYY-MM"
+                value-format="YYYY-MM"
+                size="small"
+                @change="handleMonthChange"
+                class="month-picker-compact"
+              />
+              <el-button text size="small" @click="clearFilter">
+                <el-icon><Close /></el-icon>
+                クリア
+              </el-button>
+              <el-button text size="small" @click="refreshHistory">
                 <el-icon><Refresh /></el-icon>
                 更新
               </el-button>
@@ -94,9 +77,10 @@
         </template>
 
         <el-table
-          :data="recentEntries"
+          :data="pagedRecentEntries"
           border
           stripe
+          size="small"
           v-loading="historyLoading"
           class="history-table"
           @sort-change="handleSortChange"
@@ -106,7 +90,7 @@
           <el-table-column
             label="項目"
             prop="item"
-            width="110"
+            width="100"
             align="center"
             header-align="center"
           >
@@ -120,7 +104,7 @@
           <el-table-column
             label="製品CD"
             prop="product_cd"
-            width="160"
+            width="140"
             align="center"
             header-align="center"
             sortable
@@ -128,7 +112,7 @@
           <el-table-column
             label="製品名"
             prop="product_name"
-            min-width="160"
+            min-width="140"
             align="left"
             header-align="center"
             sortable
@@ -136,7 +120,7 @@
           <el-table-column
             label="工程名"
             prop="process_name"
-            width="140"
+            width="120"
             align="center"
             header-align="center"
             sortable
@@ -144,7 +128,7 @@
           <el-table-column
             label="数量"
             prop="quantity"
-            width="130"
+            width="100"
             align="center"
             header-align="center"
             sortable
@@ -156,7 +140,7 @@
           <el-table-column
             label="作業者"
             prop="worker_name"
-            width="120"
+            width="100"
             align="center"
             header-align="center"
           >
@@ -167,7 +151,7 @@
           <el-table-column
             label="入力日時"
             prop="updated_at"
-            width="180"
+            width="160"
             align="center"
             header-align="center"
             sortable
@@ -178,7 +162,7 @@
           </el-table-column>
           <el-table-column
             label="操作"
-            width="120"
+            width="88"
             align="center"
             header-align="center"
             fixed="right"
@@ -198,9 +182,23 @@
           </el-table-column>
         </el-table>
 
+        <div
+          v-if="recentEntries.length > 0"
+          class="history-pagination-wrap"
+        >
+          <el-pagination
+            v-model:current-page="historyCurrentPage"
+            :page-size="HISTORY_PAGE_SIZE"
+            :total="recentEntries.length"
+            layout="total, prev, pager, next"
+            size="small"
+            background
+          />
+        </div>
+
         <div class="empty-state" v-if="recentEntries.length === 0 && !historyLoading">
-          <el-empty description="手入力記録がありません">
-            <el-button type="primary" @click="handleNewInput">
+          <el-empty description="手入力記録がありません" :image-size="72">
+            <el-button type="primary" size="small" @click="handleNewInput">
               <el-icon><Plus /></el-icon>
               入力開始
             </el-button>
@@ -213,7 +211,7 @@
     <el-dialog
       v-model="successDialogVisible"
       title="入力完了"
-      width="480px"
+      width="400px"
       center
       :show-close="false"
       class="success-dialog"
@@ -265,7 +263,7 @@
     <el-dialog
       v-model="deleteDialogVisible"
       title="削除確認"
-      width="480px"
+      width="400px"
       center
       :show-close="false"
       class="delete-dialog"
@@ -320,8 +318,8 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
 import {
   Plus,
   ArrowLeft,
@@ -352,6 +350,16 @@ const lastFormData = ref<any>({})
 
 // 最近录入记录
 const recentEntries = ref<InventoryLog[]>([])
+
+/** 手入力記録：1ページあたり件数 */
+const HISTORY_PAGE_SIZE = 50
+const historyCurrentPage = ref(1)
+
+const pagedRecentEntries = computed(() => {
+  const list = recentEntries.value
+  const start = (historyCurrentPage.value - 1) * HISTORY_PAGE_SIZE
+  return list.slice(start, start + HISTORY_PAGE_SIZE)
+})
 
 // 排序相关状态
 const sortBy = ref('updated_at')
@@ -532,8 +540,7 @@ const filterEntriesByMonth = async () => {
 
   historyLoading.value = true
   try {
-    // 获取更多数据以支持筛选
-    const response = await getRecentEntries(100, '手入力')
+    const response = await getRecentEntries(500, '手入力')
     const allEntries = Array.isArray(response) ? response : response.data || []
 
     // 筛选当前月份的数据
@@ -544,6 +551,7 @@ const filterEntriesByMonth = async () => {
     })
 
     recentEntries.value = filteredEntries
+    historyCurrentPage.value = 1
     console.log(`筛选出 ${filteredEntries.length} 条 ${selectedMonth.value} 的记录`)
   } catch (error: any) {
     console.error('月份筛选失败:', error)
@@ -559,8 +567,7 @@ const refreshHistory = async () => {
 
   try {
     console.log('开始获取最近录入记录...')
-    // 筛选 hd_no 为 '手入力' 的记录
-    const response = await getRecentEntries(50, '手入力') // 增加获取数量以支持筛选
+    const response = await getRecentEntries(500, '手入力')
     console.log('API 响应:', response)
     // 响应拦截器已经处理了数据结构，直接使用 response
     const allEntries = Array.isArray(response) ? response : response.data || []
@@ -574,9 +581,10 @@ const refreshHistory = async () => {
       })
       recentEntries.value = filteredEntries
     } else {
-      recentEntries.value = allEntries.slice(0, 10) // 默认显示最近10条
+      recentEntries.value = allEntries
     }
 
+    historyCurrentPage.value = 1
     console.log('设置到 recentEntries:', recentEntries.value)
   } catch (error: any) {
     console.error('获取历史记录失败:', error)
@@ -617,22 +625,6 @@ const confirmDelete = async () => {
   }
 }
 
-// 生成粒子样式
-const getParticleStyle = (index: number) => {
-  const size = Math.random() * 4 + 2
-  const left = Math.random() * 100
-  const animationDelay = Math.random() * 10
-  const animationDuration = Math.random() * 20 + 10
-
-  return {
-    width: `${size}px`,
-    height: `${size}px`,
-    left: `${left}%`,
-    animationDelay: `${animationDelay}s`,
-    animationDuration: `${animationDuration}s`,
-  }
-}
-
 // 组件挂载时加载历史记录
 onMounted(() => {
   refreshHistory()
@@ -640,98 +632,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 动画定义 */
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg);
-  }
-  33% {
-    transform: translateY(-20px) rotate(120deg);
-  }
-  66% {
-    transform: translateY(10px) rotate(240deg);
-  }
-}
-
-@keyframes particleFloat {
-  0% {
-    transform: translateY(100vh) rotate(0deg);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  90% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-100px) rotate(360deg);
-    opacity: 0;
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes iconPulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-}
-
 @keyframes glow {
   0%,
   100% {
-    box-shadow: 0 0 20px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 0 16px rgba(14, 165, 233, 0.25);
   }
   50% {
-    box-shadow: 0 0 40px rgba(14, 165, 233, 0.6);
+    box-shadow: 0 0 28px rgba(14, 165, 233, 0.45);
   }
 }
 
@@ -781,505 +688,215 @@ onMounted(() => {
 }
 
 .inventory-entry-page {
+  --ie-surface: rgba(255, 255, 255, 0.88);
+  --ie-border: rgba(15, 23, 42, 0.08);
+  --ie-accent: #0ea5e9;
+  --ie-muted: #64748b;
   position: relative;
-  padding: 24px;
-  background: linear-gradient(
-    135deg,
-    #f0f9ff 0%,
-    #e0f2fe 25%,
-    #f0f9ff 50%,
-    #e0f2fe 75%,
-    #f0f9ff 100%
-  );
+  padding: 12px 14px 16px;
+  background:
+    linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e2e8f0 100%);
   min-height: 100vh;
-  overflow: hidden;
+  box-sizing: border-box;
 }
 
-/* 动态背景 */
-.dynamic-background {
+.page-ambient {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   pointer-events: none;
   z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 12% -10%, rgba(14, 165, 233, 0.14), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 92% 20%, rgba(99, 102, 241, 0.1), transparent 50%);
 }
 
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(40px);
-  animation: float 6s ease-in-out infinite;
-}
-
-.orb-1 {
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.3) 0%, rgba(56, 189, 248, 0.1) 70%);
-  top: 10%;
-  left: 10%;
-  animation-delay: 0s;
-}
-
-.orb-2 {
-  width: 200px;
-  height: 200px;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.4) 0%, rgba(125, 211, 252, 0.1) 70%);
-  top: 60%;
-  right: 15%;
-  animation-delay: 2s;
-}
-
-.orb-3 {
-  width: 150px;
-  height: 150px;
-  background: radial-gradient(circle, rgba(125, 211, 252, 0.5) 0%, rgba(186, 230, 253, 0.1) 70%);
-  bottom: 20%;
-  left: 60%;
-  animation-delay: 4s;
-}
-
-.orb-4 {
-  width: 250px;
-  height: 250px;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.1) 70%);
-  top: 50%;
-  right: 30%;
-  animation-delay: 1s;
-}
-
-.floating-particles {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.particle {
-  position: absolute;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.6) 0%, rgba(56, 189, 248, 0.3) 70%);
-  border-radius: 50%;
-  animation: particleFloat linear infinite;
-}
-
-.page-header {
+.page-toolbar,
+.form-panel,
+.history-panel {
   position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 32px;
-  padding: 40px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(25px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 24px;
-  box-shadow:
-    0 12px 40px rgba(14, 165, 233, 0.15),
-    0 6px 20px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: slideInDown 0.8s ease-out;
   z-index: 1;
-  overflow: hidden;
 }
 
-.header-glow {
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.1) 0%, transparent 70%);
-  animation: glow 4s ease-in-out infinite;
-  pointer-events: none;
+.page-toolbar {
+  margin-bottom: 12px;
 }
 
-.page-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.1), transparent);
-  transition: left 0.5s;
-}
-
-.page-header:hover::before {
-  left: 100%;
-}
-
-.header-content {
-  flex: 1;
+.toolbar-main {
   display: flex;
   align-items: center;
-  gap: 24px;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--ie-surface);
+  border: 1px solid var(--ie-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(12px);
 }
 
-.header-text {
-  flex: 1;
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
-.header-icon {
-  position: relative;
+.brand-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 72px;
-  height: 72px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%);
-  border-radius: 20px;
-  box-shadow:
-    0 8px 25px rgba(14, 165, 233, 0.4),
-    0 4px 12px rgba(56, 189, 248, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  animation: iconPulse 3s ease-in-out infinite;
-  overflow: hidden;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
 }
 
-.icon-ring {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  right: -4px;
-  bottom: -4px;
-  border: 2px solid rgba(14, 165, 233, 0.3);
-  border-radius: 24px;
-  animation: iconPulse 3s ease-in-out infinite reverse;
+.brand-icon :deep(.el-icon) {
+  font-size: 20px;
 }
 
-.header-icon::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  animation: shimmer 2s infinite;
+.brand-text {
+  min-width: 0;
 }
 
-.header-icon :deep(.el-icon) {
-  font-size: 24px;
-  color: white;
-  z-index: 1;
-  position: relative;
-}
-
-.header-icon:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 6px 20px rgba(14, 165, 233, 0.4),
-    0 3px 12px rgba(56, 189, 248, 0.3);
-}
-
-.page-title {
-  margin: 0 0 12px 0;
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 32px;
-  font-weight: 900;
-  letter-spacing: -0.8px;
-  position: relative;
-}
-
-.title-underline {
-  width: 60px;
-  height: 4px;
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
-  border-radius: 2px;
-  margin-top: 8px;
-  animation: shimmer 2s ease-in-out infinite;
-}
-
-.page-description {
+.toolbar-title {
   margin: 0;
-  color: #64748b;
-  font-size: 16px;
-  font-weight: 500;
-  opacity: 0.9;
-  line-height: 1.5;
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  line-height: 1.25;
 }
 
-.header-actions {
+.toolbar-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--ie-muted);
+  line-height: 1.3;
+}
+
+.toolbar-actions {
   display: flex;
-  gap: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
-.action-btn {
-  position: relative;
-  border-radius: 16px !important;
-  padding: 16px 28px !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  overflow: hidden !important;
-  border: none !important;
-  backdrop-filter: blur(10px) !important;
+.form-panel {
+  padding: 14px 16px;
+  background: var(--ie-surface);
+  border: 1px solid var(--ie-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(12px);
 }
 
-.btn-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transform: translateX(-100%);
-  transition: transform 0.6s ease;
-}
-
-.action-btn:hover .btn-glow {
-  transform: translateX(100%);
-}
-
-.primary-btn {
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%) !important;
-  box-shadow:
-    0 8px 25px rgba(14, 165, 233, 0.4),
-    0 4px 12px rgba(56, 189, 248, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  color: white !important;
-}
-
-.primary-btn:hover {
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 50%, #38bdf8 100%) !important;
-  transform: translateY(-4px) scale(1.02) !important;
-  box-shadow:
-    0 12px 35px rgba(14, 165, 233, 0.5),
-    0 6px 16px rgba(56, 189, 248, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-}
-
-.success-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%) !important;
-  box-shadow:
-    0 8px 25px rgba(16, 185, 129, 0.4),
-    0 4px 12px rgba(5, 150, 105, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  color: white !important;
-}
-
-.success-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%) !important;
-  transform: translateY(-4px) scale(1.02) !important;
-  box-shadow:
-    0 12px 35px rgba(16, 185, 129, 0.5),
-    0 6px 16px rgba(5, 150, 105, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-}
-
-.back-btn {
-  background: rgba(255, 255, 255, 0.9) !important;
-  border: 2px solid rgba(14, 165, 233, 0.3) !important;
-  color: #0ea5e9 !important;
-  box-shadow:
-    0 6px 20px rgba(14, 165, 233, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
-}
-
-.back-btn:hover {
-  background: rgba(14, 165, 233, 0.1) !important;
-  border-color: rgba(14, 165, 233, 0.5) !important;
-  transform: translateY(-3px) scale(1.02) !important;
-  box-shadow:
-    0 10px 30px rgba(14, 165, 233, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
-}
-
-.form-container {
-  position: relative;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-  backdrop-filter: blur(25px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 28px;
-  padding: 40px;
-  margin-bottom: 40px;
-  box-shadow:
-    0 25px 50px rgba(14, 165, 233, 0.15),
-    0 12px 24px rgba(0, 0, 0, 0.08),
-    0 4px 8px rgba(0, 0, 0, 0.04),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
-  animation: slideInLeft 0.8s ease-out;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 1;
-  overflow: hidden;
-}
-
-.form-container::before {
+.form-panel::before {
   content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc, #38bdf8, #0ea5e9);
-}
-
-.form-container:hover {
-  transform: translateY(-8px) scale(1.01);
-  box-shadow:
-    0 35px 70px rgba(14, 165, 233, 0.2),
-    0 18px 36px rgba(0, 0, 0, 0.12),
-    0 8px 16px rgba(0, 0, 0, 0.06),
-    inset 0 2px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
-  border-color: rgba(255, 255, 255, 0.4);
-}
-
-.history-container {
-  position: relative;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
-  backdrop-filter: blur(25px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 28px;
-  padding: 8px;
-  box-shadow:
-    0 25px 50px rgba(14, 165, 233, 0.15),
-    0 12px 24px rgba(0, 0, 0, 0.08),
-    0 4px 8px rgba(0, 0, 0, 0.04),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
-  z-index: 1;
-  overflow: hidden;
-}
-
-.history-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  display: block;
   height: 3px;
-  background: linear-gradient(90deg, #10b981, #059669, #047857, #059669, #10b981);
+  margin: -14px -16px 14px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #22d3ee);
+}
+
+.history-panel {
+  background: var(--ie-surface);
+  border: 1px solid var(--ie-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 10px 28px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
 }
 
 .history-card {
+  --el-card-border-color: transparent;
   border: none;
-  border-radius: 20px;
+  border-radius: 0;
   background: transparent;
-  box-shadow: none;
+}
+
+.history-card :deep(.el-card__header) {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ie-border);
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.04), transparent);
 }
 
 .history-card :deep(.el-card__body) {
-  padding: 24px;
+  padding: 10px 12px 12px;
 }
 
-.history-header {
+.history-toolbar {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.05) 0%, rgba(56, 189, 248, 0.03) 100%);
-  border-radius: 16px 16px 0 0;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.1);
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.history-header h3 {
+.history-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-title {
   margin: 0;
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 20px;
+  font-size: 0.9375rem;
   font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
-.header-info {
+.history-badge {
+  flex-shrink: 0;
+}
+
+.history-toolbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
-.filter-controls {
+.month-picker-compact {
+  width: 120px;
+}
+
+.month-picker-compact :deep(.el-input__wrapper) {
+  border-radius: 8px;
+}
+
+.history-pagination-wrap {
   display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.month-filter {
-  width: 140px;
-}
-
-.month-filter :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-}
-
-.month-filter :deep(.el-input__wrapper:hover) {
-  border-color: rgba(14, 165, 233, 0.4);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.15);
-}
-
-.month-filter :deep(.el-input__wrapper.is-focus) {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
-}
-
-.header-info :deep(.el-tag) {
-  background: rgba(14, 165, 233, 0.1);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  color: #0ea5e9;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.header-info :deep(.el-button) {
-  color: #0ea5e9;
-  font-weight: 600;
-}
-
-.header-info :deep(.el-button:hover) {
-  color: #0284c7;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .history-table {
-  border-radius: 20px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 2px solid rgba(14, 165, 233, 0.15);
-  box-shadow:
-    0 8px 32px rgba(14, 165, 233, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-  backdrop-filter: blur(15px);
+  border: 1px solid var(--ie-border);
+  --el-table-border-color: var(--ie-border);
+  --el-table-header-bg-color: #f8fafc;
   table-layout: fixed;
   width: 100%;
 }
 
-.history-table :deep(.el-table__header) {
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 50%, #7dd3fc 100%);
-  position: relative;
-}
-
-.history-table :deep(.el-table__header)::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc, #38bdf8, #0ea5e9);
-}
-
 .history-table :deep(.el-table__header th) {
-  background: transparent;
-  color: #1e293b;
-  font-weight: 800;
-  font-size: 15px;
-  border-bottom: none;
-  padding: 24px 20px;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  text-shadow: none;
+  background: #f1f5f9 !important;
+  color: #334155;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 10px !important;
+  letter-spacing: 0.02em;
   cursor: pointer;
   box-sizing: border-box;
   overflow: hidden;
@@ -1288,12 +905,12 @@ onMounted(() => {
 }
 
 .history-table :deep(.el-table__header th:hover) {
-  background: rgba(14, 165, 233, 0.05);
-  color: #0ea5e9;
+  background: #e2e8f0 !important;
+  color: #0f172a;
 }
 
 .history-table :deep(.el-table__sort-caret) {
-  border-color: #0ea5e9;
+  border-color: #94a3b8;
 }
 
 .history-table :deep(.el-table__sort-caret.ascending) {
@@ -1309,13 +926,11 @@ onMounted(() => {
 }
 
 .history-table :deep(.el-table__row) {
-  border-bottom: 1px solid rgba(14, 165, 233, 0.1);
-  background: rgba(255, 255, 255, 0.95);
-  position: relative;
+  background: #fff;
 }
 
-.history-table :deep(.el-table__row:hover) {
-  background: rgba(14, 165, 233, 0.05);
+.history-table :deep(.el-table__row:hover > td) {
+  background: rgba(14, 165, 233, 0.06) !important;
 }
 
 /* 确保表格列宽度对齐 */
@@ -1336,11 +951,10 @@ onMounted(() => {
 }
 
 .history-table :deep(.el-table td) {
-  padding: 22px 20px;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.08);
-  font-size: 15px;
+  padding: 6px 10px !important;
+  font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: #334155;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1348,92 +962,59 @@ onMounted(() => {
 }
 
 .history-table :deep(.el-tag) {
-  border-radius: 8px;
+  border-radius: 6px;
   font-weight: 600;
-  padding: 4px 12px;
-}
-
-.history-table :deep(.el-button) {
-  border-radius: 8px;
-  font-weight: 600;
-}
-
-.history-table :deep(.el-button--danger) {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: none;
-}
-
-.history-table :deep(.el-button--danger:hover) {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  padding: 0 8px;
+  height: 22px;
+  line-height: 22px;
 }
 
 /* 数量样式 */
 .out-of-stock {
-  color: #ef4444;
-  font-weight: 700;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #dc2626;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(254, 226, 226, 0.85);
 }
 
 .low-stock {
-  color: #f59e0b;
-  font-weight: 700;
-  background: rgba(245, 158, 11, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #d97706;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(254, 243, 199, 0.85);
 }
 
 .normal-stock {
-  color: #10b981;
-  font-weight: 700;
-  background: rgba(16, 185, 129, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #059669;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(209, 250, 229, 0.85);
 }
 
 .empty-state {
-  padding: 60px 0;
+  padding: 24px 0 12px;
   text-align: center;
 }
 
 .empty-state :deep(.el-empty) {
-  padding: 40px;
+  padding: 12px;
 }
 
 .empty-state :deep(.el-empty__description) {
-  color: #64748b;
-  font-size: 16px;
-  font-weight: 500;
-  margin-bottom: 24px;
-}
-
-.empty-state :deep(.el-button) {
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
-  border: none;
-  border-radius: 12px;
-  padding: 14px 28px;
-  font-weight: 600;
-  font-size: 15px;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
-  transition: all 0.3s ease;
-}
-
-.empty-state :deep(.el-button:hover) {
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
+  color: var(--ie-muted);
+  font-size: 13px;
+  margin-top: 8px;
 }
 
 /* 成功对话框样式 */
 .success-content {
   text-align: center;
-  padding: 48px 40px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-  border-radius: 24px;
+  padding: 20px 18px 16px;
+  background: #fff;
+  border-radius: 12px;
   position: relative;
   overflow: hidden;
 }
@@ -1450,12 +1031,12 @@ onMounted(() => {
 
 .success-animation {
   position: relative;
-  margin-bottom: 32px;
+  margin-bottom: 14px;
 }
 
 .success-circle {
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
   margin: 0 auto;
   background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%);
   border-radius: 50%;
@@ -1491,10 +1072,10 @@ onMounted(() => {
 .checkmark-stem {
   position: absolute;
   width: 3px;
-  height: 20px;
+  height: 16px;
   background-color: white;
-  left: 18px;
-  top: 15px;
+  left: 13px;
+  top: 11px;
   transform: rotate(45deg);
   border-radius: 2px;
   animation: successCheckmark 0.6s ease-out 0.3s both;
@@ -1503,40 +1084,37 @@ onMounted(() => {
 .checkmark-kick {
   position: absolute;
   width: 3px;
-  height: 12px;
+  height: 9px;
   background-color: white;
-  left: 12px;
-  top: 21px;
+  left: 8px;
+  top: 16px;
   transform: rotate(-45deg);
   border-radius: 2px;
   animation: successCheckmark 0.6s ease-out 0.5s both;
 }
 
 .success-title {
-  font-size: 28px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #059669, #047857);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 16px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #047857;
+  margin-bottom: 6px;
   animation: slideUp 0.6s ease-out 0.5s both;
 }
 
 .success-message {
-  font-size: 18px;
+  font-size: 13px;
   color: #64748b;
-  margin: 20px 0;
+  margin: 8px 0 0;
   font-weight: 500;
   animation: slideUp 0.6s ease-out 0.7s both;
 }
 
 .success-details {
-  background: linear-gradient(145deg, rgba(16, 185, 129, 0.08), rgba(5, 150, 105, 0.05));
-  border: 2px solid rgba(16, 185, 129, 0.2);
-  border-radius: 20px;
-  padding: 28px;
-  margin-top: 32px;
+  background: #f0fdf4;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 16px;
   text-align: left;
   backdrop-filter: blur(10px);
   box-shadow:
@@ -1549,9 +1127,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 16px 0;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(16, 185, 129, 0.1);
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.12);
 }
 
 .detail-item:last-child {
@@ -1560,14 +1138,14 @@ onMounted(() => {
 
 .detail-label {
   color: #64748b;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .detail-value {
   color: #047857;
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .quantity-highlight {
@@ -1581,65 +1159,30 @@ onMounted(() => {
 
 .dialog-footer {
   text-align: center;
-  padding-top: 32px;
+  padding-top: 12px;
   animation: slideUp 0.6s ease-out 1.1s both;
 }
 
 .continue-btn {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(15px) !important;
-  border: 2px solid rgba(16, 185, 129, 0.3) !important;
-  color: #059669 !important;
-  border-radius: 16px !important;
-  padding: 16px 32px !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  margin: 0 12px !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  position: relative !important;
-  overflow: hidden !important;
-}
-
-.continue-btn:hover {
-  background: rgba(16, 185, 129, 0.1) !important;
-  border-color: rgba(16, 185, 129, 0.5) !important;
-  transform: translateY(-3px) scale(1.02) !important;
-  box-shadow: 0 8px 25px rgba(16, 185, 129, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  margin: 0 6px !important;
 }
 
 .confirm-btn {
-  background: linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%) !important;
-  border: none !important;
-  box-shadow:
-    0 8px 25px rgba(16, 185, 129, 0.4),
-    0 4px 12px rgba(5, 150, 105, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  color: white !important;
-  border-radius: 16px !important;
-  padding: 16px 32px !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  margin: 0 12px !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  position: relative !important;
-  overflow: hidden !important;
-}
-
-.confirm-btn:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 50%, #065f46 100%) !important;
-  transform: translateY(-3px) scale(1.02) !important;
-  box-shadow:
-    0 12px 35px rgba(16, 185, 129, 0.5),
-    0 6px 16px rgba(5, 150, 105, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+  border-radius: 8px !important;
+  padding: 8px 18px !important;
+  font-weight: 600 !important;
+  margin: 0 6px !important;
 }
 
 /* 删除对话框样式 */
 .delete-content {
   text-align: center;
-  padding: 48px 40px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.9));
-  border-radius: 24px;
+  padding: 20px 18px 16px;
+  background: #fff;
+  border-radius: 12px;
   position: relative;
   overflow: hidden;
 }
@@ -1656,12 +1199,12 @@ onMounted(() => {
 
 .delete-animation {
   position: relative;
-  margin-bottom: 32px;
+  margin-bottom: 14px;
 }
 
 .warning-circle {
-  width: 100px;
-  height: 100px;
+  width: 72px;
+  height: 72px;
   margin: 0 auto;
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%);
   border-radius: 50%;
@@ -1696,10 +1239,10 @@ onMounted(() => {
 
 .warning-line {
   position: absolute;
-  width: 4px;
-  height: 30px;
+  width: 3px;
+  height: 22px;
   background-color: white;
-  left: 23px;
+  left: 17px;
   top: 8px;
   border-radius: 2px;
   animation: warningPulse 1.5s ease-in-out infinite;
@@ -1707,40 +1250,37 @@ onMounted(() => {
 
 .warning-dot {
   position: absolute;
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background-color: white;
-  left: 22px;
-  top: 42px;
+  left: 16px;
+  top: 33px;
   border-radius: 50%;
   animation: warningPulse 1.5s ease-in-out infinite 0.3s;
 }
 
 .delete-title {
-  font-size: 28px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin-bottom: 16px;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #b91c1c;
+  margin-bottom: 6px;
   animation: slideUp 0.6s ease-out 0.5s both;
 }
 
 .delete-message {
-  font-size: 18px;
+  font-size: 13px;
   color: #64748b;
-  margin: 20px 0;
+  margin: 8px 0 0;
   font-weight: 500;
   animation: slideUp 0.6s ease-out 0.7s both;
 }
 
 .delete-details {
-  background: linear-gradient(145deg, rgba(239, 68, 68, 0.08), rgba(220, 38, 38, 0.05));
-  border: 2px solid rgba(239, 68, 68, 0.2);
-  border-radius: 20px;
-  padding: 28px;
-  margin-top: 32px;
+  background: #fef2f2;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-top: 16px;
   text-align: left;
   backdrop-filter: blur(10px);
   box-shadow:
@@ -1753,9 +1293,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 16px 0;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(239, 68, 68, 0.1);
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.12);
 }
 
 .delete-details .detail-item:last-child {
@@ -1764,115 +1304,89 @@ onMounted(() => {
 
 .delete-details .detail-label {
   color: #64748b;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .delete-details .detail-value {
-  color: #dc2626;
-  font-weight: 700;
-  font-size: 15px;
+  color: #b91c1c;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .delete-warning {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  color: #dc2626;
-  font-size: 15px;
-  margin-top: 24px;
+  gap: 8px;
+  color: #b91c1c;
+  font-size: 12px;
+  margin-top: 12px;
   font-weight: 600;
-  background: linear-gradient(145deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.08));
-  padding: 16px 20px;
-  border-radius: 12px;
-  border: 2px solid rgba(239, 68, 68, 0.2);
-  backdrop-filter: blur(10px);
+  background: rgba(254, 226, 226, 0.6);
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
   animation: slideUp 0.6s ease-out 1.1s both;
 }
 
 .cancel-btn {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(15px) !important;
-  border: 2px solid rgba(107, 114, 128, 0.3) !important;
-  color: #6b7280 !important;
-  border-radius: 16px !important;
-  padding: 16px 32px !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  margin: 0 12px !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.cancel-btn:hover {
-  background: rgba(107, 114, 128, 0.1) !important;
-  border-color: rgba(107, 114, 128, 0.5) !important;
-  transform: translateY(-2px) !important;
-  box-shadow: 0 6px 20px rgba(107, 114, 128, 0.2) !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  margin: 0 6px !important;
 }
 
 .delete-btn {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%) !important;
-  border: none !important;
-  box-shadow:
-    0 8px 25px rgba(239, 68, 68, 0.4),
-    0 4px 12px rgba(220, 38, 38, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-  color: white !important;
-  border-radius: 16px !important;
-  padding: 16px 32px !important;
-  font-weight: 700 !important;
-  font-size: 16px !important;
-  margin: 0 12px !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border-radius: 8px !important;
+  padding: 8px 18px !important;
+  font-weight: 600 !important;
+  margin: 0 6px !important;
 }
 
-.delete-btn:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 50%, #991b1b 100%) !important;
-  transform: translateY(-3px) scale(1.02) !important;
-  box-shadow:
-    0 12px 35px rgba(239, 68, 68, 0.5),
-    0 6px 16px rgba(220, 38, 38, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
   .inventory-entry-page {
-    padding: 16px;
+    padding: 10px 10px 14px;
   }
 
-  .page-header {
+  .toolbar-main {
     flex-direction: column;
-    gap: 16px;
-    text-align: center;
+    align-items: stretch;
   }
 
-  .page-title {
-    font-size: 20px;
+  .toolbar-actions {
+    justify-content: flex-start;
   }
 
-  .header-actions {
-    width: 100%;
-    justify-content: center;
+  .toolbar-title {
+    font-size: 1rem;
   }
 }
 
 @media (max-width: 480px) {
-  .inventory-entry-page {
-    padding: 12px;
+  .history-title {
+    font-size: 0.875rem;
   }
 
-  .page-header {
-    padding: 16px;
-  }
-
-  .page-title {
-    font-size: 18px;
-  }
-
-  .history-table {
+  .history-table :deep(.el-table td) {
     font-size: 12px;
+    padding: 5px 6px !important;
   }
+}
+
+.success-dialog :deep(.el-dialog__header),
+.delete-dialog :deep(.el-dialog__header) {
+  padding: 12px 16px 8px;
+  margin: 0;
+}
+
+.success-dialog :deep(.el-dialog__body),
+.delete-dialog :deep(.el-dialog__body) {
+  padding: 0 16px 12px;
+}
+
+.success-dialog :deep(.el-dialog__footer),
+.delete-dialog :deep(.el-dialog__footer) {
+  padding: 0 16px 14px;
 }
 </style>

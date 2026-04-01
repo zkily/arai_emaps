@@ -64,3 +64,15 @@ export async function exportProductToCSV(
 ): Promise<ExportProductCsvResult> {
   return request.post('/api/master/products/export-csv', rows) as Promise<ExportProductCsvResult>
 }
+
+/** 端材長一括再計算（材料名末尾4桁・cut_length・take_count より scrap_length を更新） */
+export interface RecalculateScrapLengthResult {
+  success?: boolean
+  updated?: number
+  skipped?: number
+  total?: number
+}
+
+export function recalculateProductScrapLength(): Promise<RecalculateScrapLengthResult> {
+  return request.post('/api/master/products/recalculate-scrap-length') as Promise<RecalculateScrapLengthResult>
+}

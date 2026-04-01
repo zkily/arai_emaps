@@ -1,54 +1,40 @@
 <template>
   <div class="inventory-container">
-    <!-- 动态背景 -->
-    <div class="dynamic-background">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
-      <div class="gradient-orb orb-3"></div>
-    </div>
+    <div class="page-ambient" aria-hidden="true" />
 
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="header-left">
-          <div class="header-icon">
-            <el-icon size="32">
-              <Box />
-            </el-icon>
+    <header class="page-toolbar">
+      <div class="toolbar-inner">
+        <div class="toolbar-brand">
+          <div class="brand-icon">
+            <el-icon :size="20"><Box /></el-icon>
           </div>
-          <div class="header-text">
-            <h1 class="main-title">棚卸リスト一覧</h1>
-            <p class="subtitle">棚卸リスト(材料、部品、仕掛品の各工程、製品)</p>
+          <div class="brand-text">
+            <h1 class="toolbar-title">棚卸リスト一覧</h1>
+            <p class="toolbar-sub">材料・部品・ステー（工程別）・製品</p>
           </div>
         </div>
-        <div class="header-actions">
-          <el-button
-            type="primary"
-            @click="handleImport"
-            :loading="loading"
-            :icon="DocumentAdd"
-            class="import-button"
-          >
-            棚卸データ取込
-          </el-button>
-        </div>
+        <el-button
+          type="primary"
+          size="small"
+          @click="handleImport"
+          :loading="loading"
+          :icon="DocumentAdd"
+        >
+          棚卸データ取込
+        </el-button>
       </div>
-    </div>
+    </header>
 
-    <!-- 主要内容区域 -->
     <div class="content-container">
-      <!-- 筛选表单 -->
-      <el-card class="filter-card" shadow="hover">
+      <el-card class="filter-card" shadow="never">
         <template #header>
-          <div class="filter-header">
-            <el-icon class="filter-icon">
-              <Search />
-            </el-icon>
-            <span class="filter-title">検索フィルタ</span>
+          <div class="filter-toolbar">
+            <el-icon class="filter-toolbar-icon"><Search /></el-icon>
+            <span class="filter-toolbar-title">検索条件</span>
           </div>
         </template>
 
-        <el-form :inline="true" :model="filters" class="filter-form" @submit.prevent>
+        <el-form :inline="true" :model="filters" size="small" class="filter-form" @submit.prevent>
           <div class="filter-row">
             <el-form-item label="キーワード" class="filter-item">
               <el-input
@@ -86,29 +72,27 @@
             </el-form-item>
 
             <div class="filter-actions">
-              <el-button type="primary" :icon="Search" @click="handleSearch" class="search-button">
+              <el-button type="primary" size="small" :icon="Search" @click="handleSearch">
                 検索
               </el-button>
-              <el-button :icon="RefreshLeft" @click="resetFilters" class="reset-button">
-                リセット
-              </el-button>
+              <el-button size="small" :icon="RefreshLeft" @click="resetFilters"> リセット </el-button>
             </div>
           </div>
         </el-form>
       </el-card>
 
       <!-- Tab切换区域 -->
-      <el-card class="tab-card" shadow="hover">
+      <el-card class="tab-card" shadow="never">
         <el-tabs v-model="activeTab" type="card" @tab-click="handleTabClick" class="custom-tabs">
           <!-- 全て -->
           <el-tab-pane label="全て" name="all">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>全ての棚卸データ</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">全て</h3>
                 <div class="tab-stats">
-                  <span class="tab-count">総件数: {{ pagination.total }}件</span>
-                  <span class="tab-quantity"
-                    >数量合計: {{ inventoryTotalQuantity.toLocaleString() }}個</span
+                  <span class="stat-pill">{{ pagination.total }} 件</span>
+                  <span class="stat-pill stat-pill--qty"
+                    >計 {{ inventoryTotalQuantity.toLocaleString() }}</span
                   >
                 </div>
               </div>
@@ -130,12 +114,12 @@
           <!-- 材料 -->
           <el-tab-pane label="材料" name="material">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>材料棚卸データ</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">材料</h3>
                 <div class="tab-stats">
-                  <span class="tab-count">総件数: {{ materialPagination.total }}件</span>
-                  <span class="tab-quantity"
-                    >数量合計: {{ materialTotalQuantity.toLocaleString() }}個</span
+                  <span class="stat-pill">{{ materialPagination.total }} 件</span>
+                  <span class="stat-pill stat-pill--qty"
+                    >計 {{ materialTotalQuantity.toLocaleString() }}</span
                   >
                 </div>
               </div>
@@ -157,12 +141,12 @@
           <!-- 部品 -->
           <el-tab-pane label="部品" name="component">
             <div class="tab-content">
-              <div class="tab-header">
-                <h3>部品棚卸データ</h3>
+              <div class="tab-header tab-header--row">
+                <h3 class="tab-heading">部品</h3>
                 <div class="tab-stats">
-                  <span class="tab-count">総件数: {{ componentPagination.total }}件</span>
-                  <span class="tab-quantity"
-                    >数量合計: {{ componentTotalQuantity.toLocaleString() }}個</span
+                  <span class="stat-pill">{{ componentPagination.total }} 件</span>
+                  <span class="stat-pill stat-pill--qty"
+                    >計 {{ componentTotalQuantity.toLocaleString() }}</span
                   >
                 </div>
               </div>
@@ -185,12 +169,12 @@
           <el-tab-pane label="ステー" name="stage">
             <div class="tab-content">
               <div class="tab-header">
-                <div class="tab-header-top">
-                  <h3>ステー棚卸データ</h3>
+                <div class="tab-header-top tab-header--row">
+                  <h3 class="tab-heading">ステー</h3>
                   <div class="tab-stats">
-                    <span class="tab-count">総件数: {{ stagePagination.total }}件</span>
-                    <span class="tab-quantity"
-                      >数量合計: {{ stageTotalQuantity.toLocaleString() }}個</span
+                    <span class="stat-pill">{{ stagePagination.total }} 件</span>
+                    <span class="stat-pill stat-pill--qty"
+                      >計 {{ stageTotalQuantity.toLocaleString() }}</span
                     >
                   </div>
                 </div>
@@ -200,20 +184,20 @@
                     @change="handleStageTabChange"
                     size="small"
                   >
-                    <el-radio-button label="all">全て</el-radio-button>
-                    <el-radio-button label="cutting">切断</el-radio-button>
-                    <el-radio-button label="surface">面取</el-radio-button>
-                    <el-radio-button label="sw">SW</el-radio-button>
-                    <el-radio-button label="forming">成型</el-radio-button>
-                    <el-radio-button label="plating">メッキ</el-radio-button>
-                    <el-radio-button label="welding">溶接</el-radio-button>
-                    <el-radio-button label="inspection">検査</el-radio-button>
-                    <el-radio-button label="warehouse">倉庫</el-radio-button>
-                    <el-radio-button label="outsource_plating">外注メッキ</el-radio-button>
-                    <el-radio-button label="outsource_welding">外注溶接</el-radio-button>
-                    <el-radio-button label="pre_welding_inspection">溶接前検査</el-radio-button>
-                    <el-radio-button label="pre_outsource_inspection">外注検査前</el-radio-button>
-                    <el-radio-button label="pre_outsource_delivery">外注支給前</el-radio-button>
+                    <el-radio-button value="all">全て</el-radio-button>
+                    <el-radio-button value="cutting">切断</el-radio-button>
+                    <el-radio-button value="surface">面取</el-radio-button>
+                    <el-radio-button value="sw">SW</el-radio-button>
+                    <el-radio-button value="forming">成型</el-radio-button>
+                    <el-radio-button value="plating">メッキ</el-radio-button>
+                    <el-radio-button value="welding">溶接</el-radio-button>
+                    <el-radio-button value="inspection">検査</el-radio-button>
+                    <el-radio-button value="warehouse">倉庫</el-radio-button>
+                    <el-radio-button value="outsource_plating">外注メッキ</el-radio-button>
+                    <el-radio-button value="outsource_welding">外注溶接</el-radio-button>
+                    <el-radio-button value="pre_welding_inspection">溶接前検査</el-radio-button>
+                    <el-radio-button value="pre_outsource_inspection">外注検査前</el-radio-button>
+                    <el-radio-button value="pre_outsource_delivery">外注支給前</el-radio-button>
                   </el-radio-group>
                 </div>
               </div>
@@ -238,7 +222,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -247,7 +231,6 @@ import {
   importInventoryCSV,
   deleteInventoryLog,
   type InventoryLog,
-  type InventoryFilters,
 } from '@/api/inventory'
 
 // ✅ Element Plus 图标组件
@@ -329,12 +312,6 @@ const formatDate = (val: string) => dayjs(val).format('YYYY-MM-DD')
 
 // 格式化时间
 const formatTime = (val: string) => dayjs(val, 'HH:mm:ss').format('HH:mm')
-
-// 加载文本
-const loadingText = computed(() => {
-  const texts = ['データを読み込み中...', 'しばらくお待ちください...', '処理中...']
-  return texts[Math.floor(Math.random() * texts.length)]
-})
 
 // 获取所有数据
 const fetchInventory = async () => {
@@ -501,16 +478,11 @@ const handleStageTabChange = () => {
   fetchStage()
 }
 
-// 排序处理
-const handleSort = (field: string) => {
-  if (sortBy.value === field) {
-    // 如果点击的是当前排序字段，切换排序方向
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    // 如果是新字段，设置为降序
-    sortBy.value = field
-    sortOrder.value = 'desc'
-  }
+// 排序处理（服务端全量排序）
+const handleSort = (field: string, order: 'asc' | 'desc' | null) => {
+  sortBy.value = field
+  // Element Plus 第三次点击会回到 null，这里回退为降序，避免状态不明确
+  sortOrder.value = order ?? 'desc'
 
   // 重置所有分页到第一页
   pagination.value.page = 1
@@ -696,476 +668,149 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* 动画定义 */
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
-}
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-@keyframes floatOrb {
-  0%,
-  100% {
-    transform: translateY(0px) rotate(0deg) scale(1);
-  }
-  25% {
-    transform: translateY(-25px) rotate(90deg) scale(1.08);
-  }
-  50% {
-    transform: translateY(-8px) rotate(180deg) scale(0.92);
-  }
-  75% {
-    transform: translateY(18px) rotate(270deg) scale(1.04);
-  }
-}
-
 .inventory-container {
+  --il-surface: rgba(255, 255, 255, 0.92);
+  --il-border: rgba(15, 23, 42, 0.08);
+  --il-accent: #0ea5e9;
+  --il-muted: #64748b;
+  position: relative;
+  z-index: 0;
+  padding: 10px 12px 14px;
+  box-sizing: border-box;
   min-height: 100vh;
-  background: linear-gradient(
-    135deg,
-    rgba(248, 250, 252, 0.95) 0%,
-    rgba(241, 245, 249, 0.98) 25%,
-    rgba(226, 232, 240, 0.95) 50%,
-    rgba(248, 250, 252, 0.98) 75%,
-    rgba(241, 245, 249, 0.95) 100%
-  );
-  position: relative;
-  overflow-x: hidden;
-  padding: 8px;
-  will-change: transform;
-  animation: fadeInUp 0.6s ease-out;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e8edf3 100%);
 }
 
-.inventory-container::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(
-    circle,
-    rgba(14, 165, 233, 0.08) 0%,
-    rgba(6, 182, 212, 0.06) 30%,
-    rgba(34, 211, 238, 0.04) 60%,
-    transparent 80%
-  );
-  animation: float 8s ease-in-out infinite;
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* 动态背景 */
-.dynamic-background {
+.page-ambient {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -2;
-  overflow: hidden;
-  will-change: transform;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 70% 50% at 12% -10%, rgba(14, 165, 233, 0.12), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 92% 20%, rgba(99, 102, 241, 0.08), transparent 50%);
 }
 
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  background: linear-gradient(
-    45deg,
-    rgba(14, 165, 233, 0.06),
-    rgba(6, 182, 212, 0.08),
-    rgba(34, 211, 238, 0.05)
-  );
-  animation: floatOrb 35s ease-in-out infinite;
-  will-change: transform;
-  filter: blur(1px);
-}
-
-.orb-1 {
-  width: 350px;
-  height: 350px;
-  top: -175px;
-  right: -175px;
-  animation-delay: -12s;
-  background: linear-gradient(45deg, rgba(14, 165, 233, 0.08), rgba(6, 182, 212, 0.06));
-}
-
-.orb-2 {
-  width: 280px;
-  height: 280px;
-  bottom: -140px;
-  left: -140px;
-  animation-delay: -24s;
-  background: linear-gradient(45deg, rgba(14, 165, 233, 0.06), rgba(6, 182, 212, 0.08));
-}
-
-.orb-3 {
-  width: 320px;
-  height: 320px;
-  top: 45%;
-  left: 75%;
-  transform: translate(-50%, -50%);
-  animation-delay: -6s;
-  background: linear-gradient(45deg, rgba(6, 182, 212, 0.07), rgba(14, 165, 233, 0.05));
-}
-
-/* 页面头部 */
-.page-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 12px;
-  padding: 12px 20px;
-  margin-bottom: 10px;
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  box-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.04),
-    0 1px 4px rgba(0, 0, 0, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  animation: fadeInUp 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: transform;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+.page-toolbar,
+.content-container {
   position: relative;
-  overflow: hidden;
+  z-index: 1;
 }
 
-.page-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-  transition: left 0.6s;
+.page-toolbar {
+  margin-bottom: 10px;
 }
 
-.page-header:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.page-header:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.header-content {
+.toolbar-inner {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  max-width: 1400px;
-  margin: 0 auto;
-  gap: 16px;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--il-surface);
+  border: 1px solid var(--il-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(10px);
 }
 
-.header-left {
+.toolbar-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex: 1;
-  animation: slideInLeft 0.5s ease-out 0.1s both;
+  gap: 10px;
+  min-width: 0;
 }
 
-.header-icon {
+.brand-icon {
+  flex-shrink: 0;
   width: 36px;
   height: 36px;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #22d3ee);
-  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  box-shadow:
-    0 2px 8px rgba(14, 165, 233, 0.25),
-    0 1px 4px rgba(6, 182, 212, 0.15);
-  animation: iconPulse 4s ease-in-out infinite;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  flex-shrink: 0;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
-.header-icon::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
+.brand-text {
+  min-width: 0;
 }
 
-.header-icon:hover {
-  transform: translateY(-2px) scale(1.08);
-  box-shadow:
-    0 6px 20px rgba(14, 165, 233, 0.4),
-    0 3px 10px rgba(6, 182, 212, 0.3);
-  animation: pulse 2s infinite;
-}
-
-.header-icon:hover::before {
-  left: 100%;
-}
-
-@keyframes iconPulse {
-  0%,
-  100% {
-    transform: scale(1);
-    box-shadow:
-      0 4px 12px rgba(14, 165, 233, 0.3),
-      0 2px 6px rgba(6, 182, 212, 0.2);
-  }
-  50% {
-    transform: scale(1.02);
-    box-shadow:
-      0 6px 16px rgba(14, 165, 233, 0.4),
-      0 3px 8px rgba(6, 182, 212, 0.3);
-  }
-}
-
-.header-text {
-  flex: 1;
-}
-
-.main-title {
-  font-size: 20px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #0891b2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 2px 0;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-  animation: fadeInUp 0.5s ease-out 0.2s both;
-}
-
-.subtitle {
-  font-size: 12px;
-  color: #64748b;
+.toolbar-title {
   margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.toolbar-sub {
+  margin: 2px 0 0;
+  font-size: 11px;
   font-weight: 500;
-  line-height: 1.4;
-  animation: fadeInUp 0.5s ease-out 0.25s both;
+  color: var(--il-muted);
+  line-height: 1.3;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  flex-shrink: 0;
-  animation: slideInRight 0.5s ease-out 0.3s both;
-}
-
-.import-button {
-  background: linear-gradient(135deg, #10b981, #059669, #047857);
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 13px;
-  box-shadow:
-    0 2px 8px rgba(16, 185, 129, 0.25),
-    0 1px 4px rgba(5, 150, 105, 0.15);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(8px);
-  position: relative;
-  overflow: hidden;
-}
-
-.import-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
-}
-
-.import-button:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow:
-    0 6px 20px rgba(16, 185, 129, 0.4),
-    0 3px 10px rgba(5, 150, 105, 0.3);
-  background: linear-gradient(135deg, #059669, #047857, #065f46);
-}
-
-.import-button:hover::before {
-  left: 100%;
-}
-
-/* 主要内容区域 */
 .content-container {
   max-width: 1400px;
   margin: 0 auto;
-  position: relative;
-  z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
-/* 筛选卡片 */
-.filter-card {
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  box-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.04),
-    0 1px 4px rgba(0, 0, 0, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: slideInLeft 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: transform;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+.filter-card,
+.tab-card {
+  background: var(--il-surface);
+  border: 1px solid var(--il-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s ease;
+}
+
+.filter-card:hover,
+.tab-card:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
 }
 
 .filter-card :deep(.el-card__header) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+  padding: 9px 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), rgba(248, 250, 252, 0.62));
 }
 
 .filter-card :deep(.el-card__body) {
-  padding: 12px 16px;
+  padding: 10px 12px 9px;
 }
 
-.filter-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.05), transparent);
-  transition: left 0.8s;
-}
-
-.filter-card:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.filter-card:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-.filter-header {
+.filter-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
-  margin: 0;
-  font-weight: 700;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #0891b2);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 15px;
-  animation: fadeInUp 0.4s ease-out;
-  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  min-height: 18px;
 }
 
-.filter-icon {
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 20px;
-  animation: pulse 2s infinite;
+.filter-toolbar-icon {
+  font-size: 16px;
+  color: var(--il-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.filter-title {
-  font-size: 15px;
-  letter-spacing: -0.02em;
-  font-weight: 700;
+.filter-toolbar-title {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 .filter-form {
@@ -1174,10 +819,10 @@ onMounted(async () => {
 
 .filter-row {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .filter-item {
@@ -1186,204 +831,63 @@ onMounted(async () => {
 }
 
 .filter-item :deep(.el-form-item__label) {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  padding-bottom: 4px;
-  white-space: nowrap;
-  line-height: 1.2;
+  font-size: 11px;
+  color: var(--il-muted);
+  font-weight: 600;
+  line-height: 1.25;
+  padding-bottom: 0;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .filter-item :deep(.el-form-item) {
   margin-bottom: 0;
+  align-items: center;
+}
+
+.filter-item :deep(.el-form-item__content) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
 }
 
 .filter-input,
 .filter-date-picker,
 .filter-month-picker {
-  width: 170px;
-  border-radius: 6px;
+  width: 160px;
 }
 
-.filter-input :deep(.el-input__inner),
-.filter-date-picker :deep(.el-input__inner),
-.filter-month-picker :deep(.el-input__inner) {
-  font-size: 13px;
-  height: 32px;
-  line-height: 32px;
-}
-
-.filter-input :deep(.el-input__wrapper) {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  transition: all 0.25s ease;
-}
-
-.filter-input :deep(.el-input__wrapper):hover {
-  border-color: #0ea5e9;
-  background: rgba(255, 255, 255, 0.9);
+.filter-input :deep(.el-input__wrapper),
+.filter-date-picker :deep(.el-input__wrapper),
+.filter-month-picker :deep(.el-input__wrapper) {
+  min-height: 30px;
 }
 
 .filter-actions {
   display: flex;
   gap: 6px;
-  align-items: flex-end;
+  align-items: center;
   margin-left: auto;
   flex-shrink: 0;
-  animation: fadeInUp 0.5s ease-out 0.2s both;
-}
-
-.search-button {
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #22d3ee);
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-weight: 600;
-  font-size: 12px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow:
-    0 2px 8px rgba(14, 165, 233, 0.25),
-    0 1px 4px rgba(6, 182, 212, 0.15);
-  position: relative;
-  overflow: hidden;
-  height: 32px;
-}
-
-.search-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  transition: left 0.5s;
-}
-
-.search-button:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow:
-    0 6px 24px rgba(14, 165, 233, 0.4),
-    0 3px 12px rgba(6, 182, 212, 0.3);
-  background: linear-gradient(135deg, #0284c7, #06b6d4, #22d3ee);
-}
-
-.search-button:hover::before {
-  left: 100%;
-}
-
-.reset-button {
-  background: rgba(107, 114, 128, 0.08);
-  border: 1px solid rgba(107, 114, 128, 0.2);
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-weight: 600;
-  font-size: 12px;
-  color: #6b7280;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(12px);
-  position: relative;
-  overflow: hidden;
-  height: 32px;
-}
-
-.reset-button::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(107, 114, 128, 0.1), transparent);
-  transition: left 0.5s;
-}
-
-.reset-button:hover {
-  background: rgba(107, 114, 128, 0.15);
-  border-color: rgba(107, 114, 128, 0.3);
-  transform: translateY(-2px) scale(1.02);
-  color: #4b5563;
-  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
-}
-
-.reset-button:hover::before {
-  left: 100%;
-}
-
-/* Tab卡片 */
-.tab-card {
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  box-shadow:
-    0 2px 12px rgba(0, 0, 0, 0.04),
-    0 1px 4px rgba(0, 0, 0, 0.02),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: slideInRight 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
+  min-height: 30px;
 }
 
 .tab-card :deep(.el-card__body) {
-  padding: 12px;
+  padding: 10px;
 }
 
-.tab-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.05), transparent);
-  transition: left 0.8s;
-}
-
-.tab-card:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.06),
-    0 2px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.tab-card:hover::before {
-  left: 100%;
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-}
-
-/* 自定义Tab样式 */
 .custom-tabs {
   border: none;
   background: transparent;
-  border-radius: 14px;
-  overflow: hidden;
 }
 
 .custom-tabs :deep(.el-tabs__header) {
-  background: rgba(248, 250, 252, 0.8);
-  backdrop-filter: blur(12px) saturate(180%);
-  margin: 0;
-  padding: 4px;
-  border-radius: 10px;
-  box-shadow:
-    0 1px 8px rgba(0, 0, 0, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  animation: fadeInUp 0.4s ease-out 0.15s both;
+  margin: 0 0 8px;
+  padding: 3px;
+  background: rgba(241, 245, 249, 0.85);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
 }
 
 .custom-tabs :deep(.el-tabs__nav-wrap) {
@@ -1391,51 +895,26 @@ onMounted(async () => {
 }
 
 .custom-tabs :deep(.el-tabs__item) {
-  background: transparent;
   border: none;
-  color: #64748b;
+  color: var(--il-muted);
   font-weight: 600;
-  padding: 8px 16px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 8px;
-  margin: 0 2px;
-  font-size: 13px;
-  position: relative;
-  overflow: hidden;
-  line-height: 1.4;
-}
-
-.custom-tabs :deep(.el-tabs__item::before) {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.1), transparent);
-  transition: left 0.5s;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  margin: 0 1px;
+  line-height: 1.35;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .custom-tabs :deep(.el-tabs__item:hover) {
-  color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.12);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
-}
-
-.custom-tabs :deep(.el-tabs__item:hover::before) {
-  left: 100%;
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.08);
 }
 
 .custom-tabs :deep(.el-tabs__item.is-active) {
-  color: white;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #22d3ee);
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 4px 16px rgba(14, 165, 233, 0.3),
-    0 2px 8px rgba(6, 182, 212, 0.2);
-  font-weight: 700;
-  transform: translateY(-1px);
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
 .custom-tabs :deep(.el-tabs__active-bar) {
@@ -1444,291 +923,149 @@ onMounted(async () => {
 
 .custom-tabs :deep(.el-tabs__content) {
   padding: 0;
-  margin-top: 12px;
-  animation: fadeInUp 0.4s ease-out 0.3s both;
+  margin-top: 0;
 }
 
-/* Tab内容样式 */
 .tab-content {
-  min-height: 300px;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(12px) saturate(180%);
-  border-radius: 10px;
-  padding: 16px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  box-shadow:
-    0 1px 8px rgba(0, 0, 0, 0.03),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  animation: fadeInUp 0.4s ease-out 0.35s both;
+  min-height: 240px;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .tab-header {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.12);
-  position: relative;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(14, 165, 233, 0.15);
 }
 
-.tab-header::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 50px;
-  height: 2px;
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
-  border-radius: 1px;
+.tab-header--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .tab-header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  gap: 8px;
 }
 
-.tab-header h3 {
+.tab-heading {
   margin: 0;
-  color: #1e293b;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
   letter-spacing: -0.02em;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 .tab-stats {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   align-items: center;
-  animation: slideInRight 0.4s ease-out 0.4s both;
+  flex-wrap: wrap;
 }
 
-.tab-count {
-  color: #0ea5e9;
-  font-size: 12px;
+.stat-pill {
+  font-size: 11px;
   font-weight: 600;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.1), rgba(6, 182, 212, 0.08));
-  padding: 4px 10px;
-  border-radius: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  line-height: 1.35;
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.1);
   border: 1px solid rgba(14, 165, 233, 0.2);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 4px rgba(14, 165, 233, 0.08);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  line-height: 1.4;
 }
 
-.tab-count::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.1), transparent);
-  transition: left 0.5s;
+.stat-pill--qty {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.22);
 }
 
-.tab-count:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(6, 182, 212, 0.12));
-}
-
-.tab-count:hover::before {
-  left: 100%;
-}
-
-.tab-quantity {
-  color: #10b981;
-  font-size: 12px;
-  font-weight: 600;
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.08));
-  padding: 4px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.08);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-  line-height: 1.4;
-}
-
-.tab-quantity::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.1), transparent);
-  transition: left 0.5s;
-}
-
-.tab-quantity:hover {
-  transform: translateY(-1px) scale(1.02);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.12));
-}
-
-.tab-quantity:hover::before {
-  left: 100%;
-}
-
-/* ステー子Tab样式 */
 .stage-subtabs {
-  display: flex;
-  justify-content: center;
-  animation: fadeInUp 0.4s ease-out 0.5s both;
-  padding: 6px 0;
+  padding: 4px 0 0;
+  width: 100%;
 }
 
 .stage-subtabs :deep(.el-radio-group) {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
+  gap: 4px;
+  justify-content: flex-start;
 }
 
 .stage-subtabs :deep(.el-radio-button__inner) {
   border-radius: 6px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
-  color: #64748b;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: #fff;
+  color: #475569;
   font-size: 11px;
-  padding: 4px 10px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 3px 8px;
   font-weight: 600;
-  box-shadow:
-    0 1px 4px rgba(0, 0, 0, 0.04),
-    0 1px 2px rgba(0, 0, 0, 0.02);
-  position: relative;
-  overflow: hidden;
-  line-height: 1.4;
-}
-
-.stage-subtabs :deep(.el-radio-button__inner::before) {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.08), transparent);
-  transition: left 0.5s;
+  line-height: 1.35;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .stage-subtabs :deep(.el-radio-button__inner:hover) {
-  color: #0ea5e9;
-  border-color: #0ea5e9;
-  background: rgba(14, 165, 233, 0.12);
-  transform: translateY(-2px) scale(1.02);
-  box-shadow:
-    0 4px 16px rgba(14, 165, 233, 0.2),
-    0 2px 8px rgba(14, 165, 233, 0.1);
-}
-
-.stage-subtabs :deep(.el-radio-button__inner:hover::before) {
-  left: 100%;
+  color: var(--il-accent);
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(14, 165, 233, 0.06);
 }
 
 .stage-subtabs :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4, #22d3ee);
-  border-color: #0ea5e9;
-  color: white;
-  font-weight: 700;
-  box-shadow:
-    0 4px 16px rgba(14, 165, 233, 0.3),
-    0 2px 8px rgba(6, 182, 212, 0.2);
-  transform: translateY(-2px);
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.2);
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
   .content-container {
-    padding: 0 12px;
+    padding: 0 4px;
   }
 
   .filter-row {
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 6px;
   }
 
   .filter-input,
   .filter-date-picker,
   .filter-month-picker {
-    width: 160px;
+    width: 150px;
   }
 
   .filter-actions {
     margin-left: 0;
-    margin-top: 6px;
-  }
-
-  .stage-subtabs {
-    margin: 0 8px;
-  }
-
-  .stage-subtabs :deep(.el-radio-group) {
-    gap: 4px;
+    margin-top: 4px;
   }
 
   .stage-subtabs :deep(.el-radio-button__inner) {
     font-size: 10px;
-    padding: 4px 8px;
-  }
-
-  .tab-header {
-    gap: 12px;
-  }
-
-  .tab-header-top {
-    flex-direction: column;
-    gap: 8px;
-    align-items: flex-start;
-  }
-
-  .tab-stats {
-    gap: 12px;
+    padding: 3px 6px;
   }
 }
 
 @media (max-width: 768px) {
   .inventory-container {
-    padding: 6px;
+    padding: 8px;
   }
 
-  .page-header {
-    padding: 10px 14px;
-    margin-bottom: 8px;
+  .toolbar-inner {
+    align-items: flex-start;
   }
 
-  .header-content {
-    flex-direction: column;
-    gap: 12px;
-    text-align: center;
-  }
-
-  .header-left {
-    justify-content: center;
-  }
-
-  .main-title {
-    font-size: 18px;
-  }
-
-  .subtitle {
-    font-size: 12px;
-  }
-
-  .header-icon {
-    width: 36px;
-    height: 36px;
+  .toolbar-title {
+    font-size: 1rem;
   }
 
   .custom-tabs :deep(.el-tabs__content) {
@@ -1736,42 +1073,27 @@ onMounted(async () => {
   }
 
   .tab-content {
-    padding: 12px;
+    padding: 8px;
   }
 
-  .tab-header {
-    gap: 8px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-  }
-
-  .tab-header-top {
-    flex-direction: column;
-    gap: 6px;
+  .tab-header--row {
     align-items: flex-start;
   }
 
-  .stage-subtabs {
-    margin: 0;
-    width: 100%;
-  }
-
   .stage-subtabs :deep(.el-radio-group) {
-    justify-content: flex-start;
     overflow-x: auto;
-    padding-bottom: 6px;
-    gap: 3px;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .stage-subtabs :deep(.el-radio-button__inner) {
     white-space: nowrap;
-    font-size: 10px;
-    padding: 3px 6px;
   }
 
   .filter-row {
     flex-direction: column;
-    gap: 6px;
+    align-items: stretch;
   }
 
   .filter-input,
@@ -1781,100 +1103,42 @@ onMounted(async () => {
   }
 
   .filter-actions {
-    justify-content: center;
+    justify-content: flex-start;
     margin-left: 0;
-    margin-top: 6px;
   }
 }
 
 @media (max-width: 480px) {
   .inventory-container {
-    padding: 4px;
+    padding: 6px;
   }
 
-  .page-header {
-    padding: 10px 12px;
-  }
-
-  .header-icon {
+  .brand-icon {
     width: 32px;
     height: 32px;
   }
 
-  .main-title {
-    font-size: 16px;
-  }
-
-  .subtitle {
-    font-size: 11px;
-  }
-
-  .import-button,
-  .refresh-button {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
-
-  .header-actions {
-    justify-content: center;
-    gap: 6px;
-  }
-
-  .filter-row {
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .filter-input,
-  .filter-date-picker,
-  .filter-month-picker {
-    width: 100%;
+  .toolbar-sub {
+    font-size: 10px;
   }
 
   .filter-actions {
-    justify-content: center;
-    margin-left: 0;
-    margin-top: 4px;
+    width: 100%;
     gap: 4px;
-  }
-
-  .custom-tabs :deep(.el-tabs__content) {
-    padding: 10px;
   }
 
   .custom-tabs :deep(.el-tabs__item) {
-    padding: 8px 12px;
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .tab-heading {
     font-size: 12px;
   }
 
-  .tab-header {
-    gap: 6px;
-  }
-
-  .tab-header-top {
-    flex-direction: column;
-    gap: 4px;
-    align-items: flex-start;
-  }
-
-  .tab-header h3 {
-    font-size: 14px;
-  }
-
-  .tab-stats {
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .tab-count,
-  .tab-quantity {
-    font-size: 11px;
-    padding: 3px 8px;
-  }
-
-  .stage-subtabs :deep(.el-radio-button__inner) {
-    font-size: 9px;
-    padding: 2px 4px;
+  .stat-pill {
+    font-size: 10px;
+    padding: 2px 6px;
   }
 }
 </style>

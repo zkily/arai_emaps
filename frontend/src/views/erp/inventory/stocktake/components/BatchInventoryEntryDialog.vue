@@ -2,32 +2,31 @@
   <el-dialog
     v-model="dialogVisible"
     title="一括棚卸登録"
-    width="95%"
+    width="min(1040px, 92vw)"
+    top="5vh"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     class="batch-entry-dialog"
-    :modal-class="'custom-batch-modal'"
+    modal-class="custom-batch-modal"
   >
     <div class="batch-entry-content">
-      <div class="dialog-header">
-        <div class="header-glow"></div>
-        <div class="header-icon">
-          <div class="icon-ring"></div>
-          <el-icon :size="32">
-            <Box />
-          </el-icon>
+      <header class="batch-toolbar">
+        <div class="batch-toolbar-brand">
+          <div class="batch-brand-icon">
+            <el-icon :size="20"><Box /></el-icon>
+          </div>
+          <div class="batch-toolbar-text">
+            <h2 class="batch-title">一括棚卸登録</h2>
+            <p class="batch-subtitle">タイプ選択 → 製品選択 → 数量入力</p>
+          </div>
         </div>
-        <div class="header-text">
-          <h2 class="dialog-title">一括棚卸登録</h2>
-          <p class="dialog-subtitle">効率的な在庫管理のための一括登録システム</p>
-        </div>
-      </div>
+      </header>
 
       <div class="content-wrapper">
         <!-- 第一步：选择类型和工程 -->
         <div v-if="currentStep === 1" class="step-content">
           <div class="step-header">
-            <el-steps :active="currentStep" finish-status="success" simple>
+            <el-steps :active="currentStep" finish-status="success" simple class="batch-steps">
               <el-step title="タイプ選択" />
               <el-step title="製品選択" />
               <el-step title="数量入力" />
@@ -35,17 +34,18 @@
           </div>
 
           <div class="type-selection">
-            <h3>棚卸タイプを選択してください</h3>
+            <h3 class="section-heading">棚卸タイプを選択</h3>
             <div class="type-options">
               <el-card
                 v-for="type in itemTypes"
                 :key="type.value"
+                shadow="never"
                 class="type-card"
                 :class="{ active: selectedType === type.value }"
                 @click="selectType(type.value)"
               >
                 <div class="type-icon">
-                  <el-icon :size="32">
+                  <el-icon :size="22">
                     <component :is="type.icon" />
                   </el-icon>
                 </div>
@@ -58,13 +58,14 @@
 
             <!-- ステー工程选择 -->
             <div v-if="selectedType === 'ステー'" class="process-selection">
-              <h3>工程を選択してください</h3>
+              <h4 class="process-heading">工程を選択</h4>
               <el-select
                 v-model="selectedProcess"
                 placeholder="工程を選択"
+                size="small"
                 clearable
                 filterable
-                style="width: 100%"
+                class="process-select-full"
                 @change="handleProcessChange"
               >
                 <el-option
@@ -85,7 +86,7 @@
         <!-- 第二步：选择产品 -->
         <div v-if="currentStep === 2" class="step-content">
           <div class="step-header">
-            <el-steps :active="currentStep" finish-status="success" simple>
+            <el-steps :active="currentStep" finish-status="success" simple class="batch-steps">
               <el-step title="タイプ選択" />
               <el-step title="製品選択" />
               <el-step title="数量入力" />
@@ -94,7 +95,7 @@
 
           <div class="product-selection">
             <div class="selection-header">
-              <h3>製品を選択してください</h3>
+              <h3 class="section-heading">製品を選択</h3>
               <div class="selection-info">
                 <el-tag type="info" effect="plain">
                   {{
@@ -115,9 +116,11 @@
                 :data="productList"
                 border
                 stripe
+                size="small"
                 v-loading="loading"
+                :height="300"
                 @selection-change="handleSelectionChange"
-                class="product-table"
+                class="batch-data-table"
               >
                 <el-table-column type="selection" width="55" />
                 <el-table-column label="製品CD" prop="product_cd" width="120" align="center" />
@@ -142,7 +145,7 @@
         <!-- 第三步：输入数量 -->
         <div v-if="currentStep === 3" class="step-content">
           <div class="step-header">
-            <el-steps :active="currentStep" finish-status="success" simple>
+            <el-steps :active="currentStep" finish-status="success" simple class="batch-steps">
               <el-step title="タイプ選択" />
               <el-step title="製品選択" />
               <el-step title="数量入力" />
@@ -151,8 +154,17 @@
 
           <div class="quantity-input">
             <div class="input-header">
-              <h3>数量を入力してください</h3>
+              <h3 class="section-heading">数量を入力</h3>
               <div class="input-info">
+                <el-tag type="info" effect="plain">
+                  入力数量1 合計: {{ batchAuxQty1Sum }}
+                </el-tag>
+                <el-tag type="info" effect="plain">
+                  入力数量2 合計: {{ batchAuxQty2Sum }}
+                </el-tag>
+                <el-tag type="success" effect="plain">
+                  数量合計: {{ batchQuantitySum }}
+                </el-tag>
                 <el-tag type="info" effect="plain">
                   選択済み: {{ selectedProducts.length }}件
                 </el-tag>
@@ -163,8 +175,15 @@
               </div>
             </div>
 
-            <div class="quantity-table">
-              <el-table :data="quantityData" border stripe class="quantity-table">
+            <div class="quantity-table-wrap" @keydown.capture="onQtyTableKeydown">
+              <el-table
+                :data="quantityData"
+                border
+                stripe
+                size="small"
+                :height="280"
+                class="batch-data-table"
+              >
                 <el-table-column label="製品CD" prop="product_cd" width="120" align="center" />
                 <el-table-column label="製品名" prop="product_name" min-width="200" />
                 <el-table-column
@@ -179,35 +198,43 @@
                     </el-tag>
                   </template>
                 </el-table-column>
-                <el-table-column label="入力数量1" width="120" align="center">
+                <el-table-column label="入力数量1" width="108" align="center">
                   <template #default="scope">
-                    <el-input-number
-                      v-model="scope.row.aux_qty1"
-                      :min="0"
-                      :max="99999"
-                      placeholder="入力数量1"
-                      style="width: 100%"
-                      :controls="false"
-                      @change="calculateTotal(scope.row)"
-                    />
+                    <div class="qty-nav-cell" :data-row="scope.$index" data-col="1">
+                      <el-input
+                        :model-value="qtyCellDisplay(scope.row.aux_qty1)"
+                        placeholder="数量1"
+                        size="small"
+                        class="qty-text-input"
+                        maxlength="6"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        style="width: 100%"
+                        @update:model-value="(v) => onQtyCellInput(scope.row, 'aux_qty1', v)"
+                      />
+                    </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="入力数量2" width="120" align="center">
+                <el-table-column label="入力数量2" width="108" align="center">
                   <template #default="scope">
-                    <el-input-number
-                      v-model="scope.row.aux_qty2"
-                      :min="0"
-                      :max="99999"
-                      placeholder="入力数量2"
-                      style="width: 100%"
-                      :controls="false"
-                      @change="calculateTotal(scope.row)"
-                    />
+                    <div class="qty-nav-cell" :data-row="scope.$index" data-col="2">
+                      <el-input
+                        :model-value="qtyCellDisplay(scope.row.aux_qty2)"
+                        placeholder="数量2"
+                        size="small"
+                        class="qty-text-input"
+                        maxlength="6"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        style="width: 100%"
+                        @update:model-value="(v) => onQtyCellInput(scope.row, 'aux_qty2', v)"
+                      />
+                    </div>
                   </template>
                 </el-table-column>
-                <el-table-column label="数量" width="120" align="center">
+                <el-table-column label="数量合計" width="120" align="center">
                   <template #default="scope">
-                    <span :class="getQuantityClass(scope.row.quantity)">
+                    <span :class="getQuantityClass(scope.row.quantity)" class="qty-total-cell">
                       {{ scope.row.quantity }}
                     </span>
                   </template>
@@ -218,13 +245,14 @@
             <!-- 作業者和日期选择 -->
             <div class="worker-date-selection">
               <div class="selection-row">
-                <el-form-item label="作業者" required>
+                <el-form-item label="作業者" required class="compact-form-item">
                   <el-select
                     v-model="selectedWorker"
-                    placeholder="作業者を選択してください"
+                    placeholder="作業者を選択"
+                    size="small"
                     clearable
                     filterable
-                    style="width: 300px"
+                    class="worker-select"
                   >
                     <el-option
                       v-for="user in userOptions"
@@ -240,14 +268,15 @@
                   </el-select>
                 </el-form-item>
 
-                <el-form-item label="录入日期" required>
+                <el-form-item label="棚卸日" required class="compact-form-item">
                   <el-date-picker
                     v-model="selectedDate"
                     type="date"
-                    placeholder="录入日期を選択してください"
+                    placeholder="日付を選択"
                     format="YYYY-MM-DD"
                     value-format="YYYY-MM-DD"
-                    style="width: 200px"
+                    size="small"
+                    class="date-picker-compact"
                     :disabled-date="(time: Date) => time.getTime() > Date.now()"
                   />
                 </el-form-item>
@@ -260,12 +289,18 @@
 
     <template #footer>
       <div class="dialog-footer">
-        <el-button @click="handleCancel" v-if="currentStep === 1"> キャンセル </el-button>
-        <el-button @click="goBack" v-if="currentStep > 1">
+        <el-button size="small" @click="handleCancel" v-if="currentStep === 1">キャンセル</el-button>
+        <el-button size="small" @click="goBack" v-if="currentStep > 1">
           <el-icon><ArrowLeft /></el-icon>
           戻る
         </el-button>
-        <el-button type="primary" @click="handleNext" :disabled="!canProceed" :loading="submitting">
+        <el-button
+          type="primary"
+          size="small"
+          @click="handleNext"
+          :disabled="!canProceed"
+          :loading="submitting"
+        >
           <el-icon><ArrowRight /></el-icon>
           {{ currentStep === 3 ? '保存' : '次へ' }}
         </el-button>
@@ -275,7 +310,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
@@ -293,6 +328,16 @@ import {
 } from '@/api/stocktake/common'
 import { createInventoryEntry } from '@/api/inventory'
 import request from '@/utils/request'
+
+/** ERP 在庫ルータ配下（/api/erp/inventory） */
+const ERP_INVENTORY_BASE = '/api/erp/inventory'
+
+/** 製品名昇順（日本語ロケール） */
+function sortByProductNameAsc<T extends { product_name?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) =>
+    String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ja'),
+  )
+}
 
 // 定义props
 interface Props {
@@ -370,6 +415,28 @@ const itemTypes = [
     icon: 'Grid',
   },
 ]
+
+/** 行の補助数量を数値化（未入力は 0） */
+function rowAuxNum(v: unknown): number {
+  if (v == null || v === '') return 0
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+/** 一括入力：入力数量1 の全行合計 */
+const batchAuxQty1Sum = computed(() =>
+  quantityData.value.reduce((sum, item) => sum + rowAuxNum(item.aux_qty1), 0),
+)
+
+/** 一括入力：入力数量2 の全行合計 */
+const batchAuxQty2Sum = computed(() =>
+  quantityData.value.reduce((sum, item) => sum + rowAuxNum(item.aux_qty2), 0),
+)
+
+/** 一括入力：各行の数量合計（1+2）の全行合計 */
+const batchQuantitySum = computed(() =>
+  quantityData.value.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0),
+)
 
 // 是否可以继续下一步
 const canProceed = computed(() => {
@@ -459,12 +526,114 @@ const handleSelectionChange = (selection: any[]) => {
   selectedProducts.value = selection
 }
 
-// 计算总数量
+// 计算总数量（aux は null / 数値、0 は合算時のみ使用）
 const calculateTotal = (row: any) => {
-  const auxQty1 = row.aux_qty1 || 0
-  const auxQty2 = row.aux_qty2 || 0
+  const auxQty1 = row.aux_qty1 == null || row.aux_qty1 === '' ? 0 : Number(row.aux_qty1) || 0
+  const auxQty2 = row.aux_qty2 == null || row.aux_qty2 === '' ? 0 : Number(row.aux_qty2) || 0
   row.quantity = auxQty1 + auxQty2
 }
+
+/** テキスト框表示：未入力・0 は空文字（0 を表示しない） */
+function qtyCellDisplay(v: unknown): string {
+  if (v == null || v === '') return ''
+  const n = Number(v)
+  if (!Number.isFinite(n) || n === 0) return ''
+  return String(Math.trunc(n))
+}
+
+function onQtyCellInput(row: any, key: 'aux_qty1' | 'aux_qty2', raw: string) {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (digits === '') {
+    row[key] = null
+    calculateTotal(row)
+    return
+  }
+  let n = parseInt(digits, 10)
+  if (!Number.isFinite(n)) n = 0
+  n = Math.min(99999, Math.max(0, n))
+  row[key] = n
+  calculateTotal(row)
+}
+
+/** 数量入力：指定セル（入力数量1 / 2）にフォーカス */
+function focusQtyInput(row: number, col: 1 | 2) {
+  nextTick(() => {
+    const wrap = document.querySelector(
+      `.quantity-table-wrap .qty-nav-cell[data-row="${row}"][data-col="${col}"]`,
+    ) as HTMLElement | null
+    const input = wrap?.querySelector('input') as HTMLInputElement | undefined
+    input?.focus()
+    input?.select()
+  })
+}
+
+function focusWorkerField() {
+  nextTick(() => {
+    const el = document.querySelector(
+      '.worker-date-selection .worker-select .el-input__inner',
+    ) as HTMLInputElement | null
+    el?.focus()
+  })
+}
+
+/** Enter・矢印キーでセル間移動（テーブル内キャプチャ） */
+function onQtyTableKeydown(e: KeyboardEvent) {
+  if (currentStep.value !== 3) return
+  if (e.isComposing || e.key === 'Process') return
+
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  const cell = target.closest('.qty-nav-cell') as HTMLElement | null
+  if (!cell) return
+
+  const row = Number(cell.dataset.row)
+  const col = Number(cell.dataset.col)
+  if (Number.isNaN(row) || (col !== 1 && col !== 2)) return
+
+  const maxRow = quantityData.value.length - 1
+  if (maxRow < 0) return
+
+  const navKeys = ['Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
+  if (!navKeys.includes(e.key)) return
+
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    if (row < maxRow) focusQtyInput(row + 1, 1)
+    else focusWorkerField()
+    return
+  }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    if (row < maxRow) focusQtyInput(row + 1, col as 1 | 2)
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (row > 0) focusQtyInput(row - 1, col as 1 | 2)
+    return
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    if (col === 1) focusQtyInput(row, 2)
+    else if (row < maxRow) focusQtyInput(row + 1, 1)
+    return
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    if (col === 2) focusQtyInput(row, 1)
+    else if (row > 0) focusQtyInput(row - 1, 2)
+    return
+  }
+}
+
+watch(currentStep, (s) => {
+  if (s === 3) {
+    nextTick(() => {
+      if (quantityData.value.length > 0) focusQtyInput(0, 1)
+    })
+  }
+})
 
 // 下一步
 const handleNext = async () => {
@@ -513,18 +682,22 @@ const loadProductList = async () => {
         await loadProductsByProcess()
         break
       case '材料':
-        productList.value = materialOptions.value.map((material) => ({
-          product_cd: material.material_cd,
-          product_name: material.material_name,
-          type: 'material',
-        }))
+        productList.value = sortByProductNameAsc(
+          materialOptions.value.map((material) => ({
+            product_cd: material.material_cd,
+            product_name: material.material_name,
+            type: 'material',
+          })),
+        )
         break
       case '部品':
-        productList.value = componentOptions.value.map((component) => ({
-          product_cd: component.component_cd,
-          product_name: component.component_name,
-          type: 'component',
-        }))
+        productList.value = sortByProductNameAsc(
+          componentOptions.value.map((component) => ({
+            product_cd: component.component_cd,
+            product_name: component.component_name,
+            type: 'component',
+          })),
+        )
         break
     }
   } catch (error) {
@@ -540,20 +713,24 @@ const loadProductsByProcess = async () => {
   if (!selectedProcess.value) return
 
   try {
-    const response = await request.get(`/api/inventory/products-by-process`, {
+    const response = await request.get(`${ERP_INVENTORY_BASE}/products-by-process`, {
       params: { process_cd: selectedProcess.value },
       timeout: 15000,
     })
 
-    // 简化响应处理逻辑
-    const products = response?.data || response || []
+    const raw = Array.isArray(response)
+      ? response
+      : (response as { data?: unknown })?.data ?? []
+    const products = Array.isArray(raw) ? raw : []
 
     if (products.length > 0) {
-      productList.value = products.map((product: any) => ({
-        product_cd: product.product_cd,
-        product_name: product.product_name,
-        type: 'product',
-      }))
+      productList.value = sortByProductNameAsc(
+        products.map((product: any) => ({
+          product_cd: product.product_cd,
+          product_name: product.product_name,
+          type: 'product',
+        })),
+      )
       console.log(`✅ 成功加载 ${products.length} 个产品`)
     } else {
       ElMessage.warning('該工程の製品が見つかりませんでした。すべての製品を表示します。')
@@ -574,24 +751,27 @@ const loadProductsByProcess = async () => {
 
 // 加载所有产品作为备选方案
 const loadAllProducts = () => {
-  // productOptions.value 已经过滤并排序过了，直接使用
-  productList.value = productOptions.value.map((product) => ({
-    product_cd: product.product_cd,
-    product_name: product.product_name,
-    type: 'product',
-  }))
-  console.log(`✅ 加载了 ${productOptions.value.length} 个产品`)
+  productList.value = sortByProductNameAsc(
+    productOptions.value.map((product) => ({
+      product_cd: product.product_cd,
+      product_name: product.product_name,
+      type: 'product',
+    })),
+  )
+  console.log(`✅ 加载了 ${productList.value.length} 个产品`)
 }
 
 // 准备数量数据
 const prepareQuantityData = () => {
-  quantityData.value = selectedProducts.value.map((product) => ({
-    product_cd: product.product_cd,
-    product_name: product.product_name,
-    aux_qty1: 0,
-    aux_qty2: 0,
-    quantity: 0,
-  }))
+  quantityData.value = sortByProductNameAsc(
+    selectedProducts.value.map((product) => ({
+      product_cd: product.product_cd,
+      product_name: product.product_name,
+      aux_qty1: null as number | null,
+      aux_qty2: null as number | null,
+      quantity: 0,
+    })),
+  )
 }
 
 // 提交数据
@@ -602,7 +782,7 @@ const handleSubmit = async () => {
   }
 
   if (!selectedDate.value) {
-    ElMessage.error('录入日期を選択してください')
+    ElMessage.error('棚卸日を選択してください')
     return
   }
 
@@ -743,26 +923,27 @@ watch(() => props.visible, watchVisible)
 
 <style scoped>
 .custom-batch-modal {
-  background: rgba(0, 0, 0, 0.6) !important;
-  backdrop-filter: blur(8px) !important;
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(6px) !important;
 }
 
 .batch-entry-dialog {
-  --el-dialog-border-radius: 28px;
+  --be-surface: rgba(255, 255, 255, 0.96);
+  --be-border: rgba(15, 23, 42, 0.08);
+  --be-accent: #0ea5e9;
+  --be-muted: #64748b;
+  --el-dialog-border-radius: 12px;
 }
 
 .batch-entry-dialog :deep(.el-dialog) {
-  border-radius: 28px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.95));
-  backdrop-filter: blur(25px);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow:
-    0 35px 80px rgba(0, 0, 0, 0.2),
-    0 20px 40px rgba(0, 0, 0, 0.15),
-    0 8px 16px rgba(0, 0, 0, 0.1),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  background: var(--be-surface);
+  border: 1px solid var(--be-border);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, 0.14);
   overflow: hidden;
   position: relative;
+  max-width: min(1040px, 92vw);
+  margin: 0 auto;
 }
 
 .batch-entry-dialog :deep(.el-dialog::before) {
@@ -771,10 +952,20 @@ watch(() => props.visible, watchVisible)
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc, #38bdf8, #0ea5e9);
+  height: 3px;
+  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #22d3ee);
   background-size: 200% 100%;
-  animation: shimmer 3s ease-in-out infinite;
+  animation: be-shimmer 4s ease-in-out infinite;
+}
+
+@keyframes be-shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
 }
 
 .batch-entry-dialog :deep(.el-dialog__header) {
@@ -783,216 +974,105 @@ watch(() => props.visible, watchVisible)
 
 .batch-entry-dialog :deep(.el-dialog__body) {
   padding: 0;
-  background: transparent;
 }
 
 .batch-entry-dialog :deep(.el-dialog__footer) {
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 0 0 28px 28px;
-  border-top: 2px solid rgba(14, 165, 233, 0.1);
-  padding: 24px 32px;
-  backdrop-filter: blur(10px);
-}
-
-.dialog-header {
-  position: relative;
-  padding: 40px 48px 32px;
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(56, 189, 248, 0.05));
-  border-bottom: 2px solid rgba(14, 165, 233, 0.1);
-  display: flex;
-  align-items: center;
-  gap: 24px;
-  overflow: hidden;
-}
-
-.header-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(45deg, transparent, rgba(14, 165, 233, 0.05), transparent);
-  animation: glow 3s ease-in-out infinite;
-}
-
-.header-icon {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  box-shadow:
-    0 12px 32px rgba(14, 165, 233, 0.4),
-    0 6px 16px rgba(56, 189, 248, 0.3),
-    inset 0 2px 0 rgba(255, 255, 255, 0.3);
-  animation: iconPulse 3s ease-in-out infinite;
-}
-
-.icon-ring {
-  position: absolute;
-  top: -4px;
-  left: -4px;
-  right: -4px;
-  bottom: -4px;
-  border: 2px solid rgba(14, 165, 233, 0.3);
-  border-radius: 24px;
-  animation: iconPulse 3s ease-in-out infinite;
-}
-
-.header-text {
-  flex: 1;
-  z-index: 1;
-}
-
-.dialog-title {
-  font-size: 32px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.5px;
-}
-
-.dialog-subtitle {
-  font-size: 16px;
-  color: #64748b;
-  margin: 0;
-  font-weight: 500;
-  line-height: 1.5;
-}
-
-@keyframes glow {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: translateX(-100%);
-  }
-  50% {
-    opacity: 1;
-    transform: translateX(100%);
-  }
-}
-
-@keyframes iconPulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
+  padding: 10px 14px;
+  border-top: 1px solid var(--be-border);
+  background: #f8fafc;
+  border-radius: 0 0 12px 12px;
 }
 
 .batch-entry-content {
-  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(82vh, 760px);
+}
+
+.batch-toolbar {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--be-border);
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.05), transparent);
+}
+
+.batch-toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.batch-brand-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 10px rgba(14, 165, 233, 0.35);
+}
+
+.batch-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.batch-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--be-muted);
 }
 
 .content-wrapper {
-  padding: 32px 48px;
-  background: rgba(255, 255, 255, 0.4);
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px 12px;
+  background: #f8fafc;
 }
 
 .step-header {
-  margin-bottom: 40px;
-  padding: 32px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.8));
-  backdrop-filter: blur(15px);
-  border-radius: 20px;
-  border: 2px solid rgba(14, 165, 233, 0.15);
-  box-shadow:
-    0 8px 32px rgba(14, 165, 233, 0.1),
-    0 4px 16px rgba(0, 0, 0, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  position: relative;
-  overflow: hidden;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--be-border);
+  border-radius: 10px;
 }
 
-.step-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8, #7dd3fc, #38bdf8, #0ea5e9);
+.batch-steps :deep(.el-step__title) {
+  font-size: 12px !important;
+  font-weight: 600;
+  color: #64748b !important;
 }
 
-.step-header :deep(.el-steps) {
-  position: relative;
-  z-index: 1;
+.batch-steps :deep(.el-step__title.is-process),
+.batch-steps :deep(.el-step__title.is-finish) {
+  color: #0f172a !important;
 }
 
-.step-header :deep(.el-step__title) {
-  font-weight: 700;
-  color: #0ea5e9;
-  font-size: 16px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.step-header :deep(.el-step__title.is-finish) {
-  color: #10b981;
-  font-weight: 800;
-}
-
-.step-header :deep(.el-step__title.is-process) {
-  color: #0ea5e9;
-  font-weight: 800;
-  font-size: 17px;
-}
-
-.step-header :deep(.el-step__icon) {
-  border: 3px solid currentColor;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
-}
-
-.step-header :deep(.el-step__icon.is-process) {
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
-  color: white;
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
-}
-
-.step-header :deep(.el-step__icon.is-finish) {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+.batch-steps :deep(.el-step__icon) {
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  border-width: 1px;
 }
 
 .step-content {
-  animation: fadeInUp 0.6s ease-out;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.7));
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 40px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.1),
-    0 6px 20px rgba(0, 0, 0, 0.06),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9);
-  position: relative;
-  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--be-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  animation: be-fade-in 0.35s ease-out;
 }
 
-.step-content::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, #10b981, #059669, #047857, #059669, #10b981);
-}
-
-@keyframes fadeInUp {
+@keyframes be-fade-in {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
@@ -1000,131 +1080,90 @@ watch(() => props.visible, watchVisible)
   }
 }
 
-.type-selection h3,
-.product-selection h3,
-.quantity-input h3 {
-  margin: 0 0 32px 0;
-  background: linear-gradient(135deg, #1e293b, #475569);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  font-size: 24px;
-  font-weight: 800;
+.section-heading {
+  margin: 0 0 10px;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: left;
+}
+
+.type-selection .section-heading {
   text-align: center;
-  letter-spacing: -0.5px;
+  margin-bottom: 12px;
 }
 
 .type-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 24px;
-  margin-bottom: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .type-card {
   cursor: pointer;
-  border-radius: 20px;
-  border: 2px solid rgba(14, 165, 233, 0.15);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.8));
-  backdrop-filter: blur(15px);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 32px;
+  border-radius: 10px;
+  border: 1px solid var(--be-border) !important;
+  background: #fff !important;
+  padding: 14px 12px !important;
   text-align: center;
-  position: relative;
-  overflow: hidden;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
 }
 
-.type-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(14, 165, 233, 0.1), transparent);
-  transition: left 0.6s ease;
+.type-card :deep(.el-card__body) {
+  padding: 0 !important;
 }
 
 .type-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow:
-    0 12px 40px rgba(14, 165, 233, 0.25),
-    0 6px 20px rgba(14, 165, 233, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-  border-color: rgba(14, 165, 233, 0.4);
-}
-
-.type-card:hover::before {
-  left: 100%;
+  border-color: rgba(14, 165, 233, 0.45) !important;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.12);
 }
 
 .type-card.active {
-  border-color: #0ea5e9;
-  background: linear-gradient(145deg, rgba(14, 165, 233, 0.12), rgba(56, 189, 248, 0.08));
-  box-shadow:
-    0 16px 50px rgba(14, 165, 233, 0.35),
-    0 8px 25px rgba(14, 165, 233, 0.25),
-    inset 0 2px 0 rgba(255, 255, 255, 0.9);
-  transform: translateY(-4px) scale(1.01);
-}
-
-.type-card.active::before {
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-  animation: shimmer 2s ease-in-out infinite;
+  border-color: #0ea5e9 !important;
+  background: rgba(14, 165, 233, 0.06) !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.15);
 }
 
 .type-icon {
-  margin-bottom: 20px;
-  color: #0ea5e9;
-  position: relative;
-  z-index: 1;
-}
-
-.type-card.active .type-icon {
-  color: #0284c7;
-  animation: iconPulse 2s ease-in-out infinite;
+  margin-bottom: 8px;
+  color: var(--be-accent);
 }
 
 .type-info h4 {
-  margin: 0 0 12px 0;
-  font-size: 18px;
-  font-weight: 800;
-  color: #1e293b;
-  position: relative;
-  z-index: 1;
-}
-
-.type-card.active .type-info h4 {
-  color: #0284c7;
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .type-info p {
   margin: 0;
-  font-size: 15px;
-  color: #64748b;
-  line-height: 1.5;
-  position: relative;
-  z-index: 1;
-  font-weight: 500;
-}
-
-.type-card.active .type-info p {
-  color: #475569;
+  font-size: 12px;
+  color: var(--be-muted);
+  line-height: 1.4;
 }
 
 .process-selection {
-  margin-top: 32px;
-  padding: 24px;
-  background: rgba(14, 165, 233, 0.05);
-  border-radius: 16px;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 1px solid var(--be-border);
 }
 
-.process-selection h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
+.process-heading {
+  margin: 0 0 8px;
+  font-size: 13px;
   font-weight: 600;
-  color: #1e293b;
+  color: #334155;
+}
+
+.process-select-full {
+  width: 100%;
 }
 
 .selection-header,
@@ -1132,255 +1171,173 @@ watch(() => props.visible, watchVisible)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding: 16px 20px;
-  background: rgba(14, 165, 233, 0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid var(--be-border);
+}
+
+.selection-header .section-heading,
+.input-header .section-heading {
+  margin: 0;
 }
 
 .selection-info,
 .input-info {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.product-table,
-.quantity-table {
-  border-radius: 12px;
+.product-list,
+.quantity-table-wrap {
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid rgba(14, 165, 233, 0.1);
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.05);
+  border: 1px solid var(--be-border);
 }
 
-.product-table :deep(.el-table__header),
-.quantity-table :deep(.el-table__header) {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%);
+.quantity-table-wrap:focus-within {
+  outline: none;
 }
 
-.product-table :deep(.el-table__header th),
-.quantity-table :deep(.el-table__header th) {
-  background: transparent;
-  color: #0ea5e9;
-  font-weight: 700;
-  font-size: 14px;
-  border-bottom: 2px solid rgba(14, 165, 233, 0.2);
-  padding: 16px 12px;
+.qty-nav-cell {
+  width: 100%;
+  min-width: 0;
 }
 
-.product-table :deep(.el-table__row),
-.quantity-table :deep(.el-table__row) {
-  transition: all 0.3s ease;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.05);
-}
-
-.product-table :deep(.el-table__row:hover),
-.quantity-table :deep(.el-table__row:hover) {
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.06) 0%, rgba(56, 189, 248, 0.04) 100%);
-  transform: scale(1.001);
-}
-
-.product-table :deep(.el-table td),
-.quantity-table :deep(.el-table td) {
-  padding: 14px 12px;
-  border-bottom: 1px solid rgba(14, 165, 233, 0.05);
-}
-
-.quantity-table :deep(.el-input-number) {
+.qty-nav-cell :deep(.qty-text-input) {
   width: 100%;
 }
 
-.quantity-table :deep(.el-input-number .el-input__wrapper) {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  transition: all 0.3s ease;
+.qty-text-input :deep(.el-input__wrapper) {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
-.quantity-table :deep(.el-input-number .el-input__wrapper:hover) {
-  border-color: rgba(14, 165, 233, 0.4);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
+.batch-data-table {
+  --el-table-border-color: var(--be-border);
+  --el-table-header-bg-color: #f1f5f9;
 }
 
-.quantity-table :deep(.el-input-number .el-input__wrapper.is-focus) {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+.batch-data-table :deep(.el-table__header th) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  padding: 8px 10px !important;
+  background: #f1f5f9 !important;
 }
 
-/* 数量样式 */
-.out-of-stock {
-  color: #ef4444;
-  font-weight: 700;
-  background: rgba(239, 68, 68, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+.batch-data-table :deep(.el-table td) {
+  padding: 6px 10px !important;
+  font-size: 13px;
 }
 
-.low-stock {
-  color: #f59e0b;
-  font-weight: 700;
-  background: rgba(245, 158, 11, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+.batch-data-table :deep(.el-table__row:hover > td) {
+  background: rgba(14, 165, 233, 0.06) !important;
 }
 
-.normal-stock {
-  color: #10b981;
-  font-weight: 700;
-  background: rgba(16, 185, 129, 0.1);
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
 
 .worker-date-selection {
-  margin-top: 24px;
-  padding: 20px;
-  background: rgba(14, 165, 233, 0.05);
-  border-radius: 12px;
-  border: 1px solid rgba(14, 165, 233, 0.1);
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid var(--be-border);
 }
 
 .selection-row {
   display: flex;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 12px 20px;
   align-items: flex-end;
 }
 
-.worker-date-selection :deep(.el-form-item__label) {
+.compact-form-item {
+  margin-bottom: 0 !important;
+}
+
+.compact-form-item :deep(.el-form-item__label) {
+  font-size: 12px;
   font-weight: 600;
-  color: #0ea5e9;
+  color: #475569;
+  padding-bottom: 4px;
 }
 
-.worker-date-selection :deep(.el-select) {
-  width: 100%;
+.worker-select {
+  width: min(260px, 100%);
 }
 
-.worker-date-selection :deep(.el-select .el-input__wrapper) {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  transition: all 0.3s ease;
-}
-
-.worker-date-selection :deep(.el-select .el-input__wrapper:hover) {
-  border-color: rgba(14, 165, 233, 0.4);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-}
-
-.worker-date-selection :deep(.el-select .el-input__wrapper.is-focus) {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
-}
-
-.worker-date-selection :deep(.el-date-editor) {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  transition: all 0.3s ease;
-}
-
-.worker-date-selection :deep(.el-date-editor:hover) {
-  border-color: rgba(14, 165, 233, 0.4);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-}
-
-.worker-date-selection :deep(.el-date-editor.is-active) {
-  border-color: #0ea5e9;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+.date-picker-compact {
+  width: 160px;
 }
 
 .user-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-}
-
-.user-option:hover {
-  background: rgba(14, 165, 233, 0.1);
+  gap: 6px;
+  padding: 4px 0;
 }
 
 .user-name {
   font-weight: 600;
-  color: #0ea5e9;
+  color: #0f172a;
 }
 
 .user-username {
   font-size: 12px;
-  color: #64748b;
+  color: var(--be-muted);
+}
+
+.out-of-stock {
+  color: #dc2626;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(254, 226, 226, 0.85);
+}
+
+.low-stock {
+  color: #d97706;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(254, 243, 199, 0.85);
+}
+
+.normal-stock {
+  color: #059669;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(209, 250, 229, 0.85);
 }
 
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.dialog-footer :deep(.el-button) {
-  border-radius: 12px;
-  padding: 12px 24px;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.3s ease;
-}
-
-.dialog-footer :deep(.el-button--primary) {
-  background: linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%);
-  border: none;
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
-}
-
-.dialog-footer :deep(.el-button--primary:hover) {
-  background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.4);
-}
-
-.dialog-footer :deep(.el-button:not(.el-button--primary)) {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(14, 165, 233, 0.2);
-  color: #0ea5e9;
-}
-
-.dialog-footer :deep(.el-button:not(.el-button--primary):hover) {
-  background: rgba(14, 165, 233, 0.1);
-  border-color: rgba(14, 165, 233, 0.3);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2);
-}
-
-/* 响应式设计 */
 @media (max-width: 768px) {
   .batch-entry-dialog :deep(.el-dialog) {
-    width: 95% !important;
-    margin: 20px auto;
-  }
-
-  .batch-entry-dialog :deep(.el-dialog__body) {
-    padding: 20px;
+    width: min(100%, 96vw) !important;
+    max-width: 96vw !important;
+    margin: 12px auto !important;
   }
 
   .type-options {
     grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .type-card {
-    padding: 20px;
   }
 
   .selection-header,
   .input-header {
     flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
+    align-items: stretch;
   }
 
   .selection-info,
@@ -1389,23 +1346,15 @@ watch(() => props.visible, watchVisible)
     justify-content: space-between;
   }
 
-  .worker-date-selection {
-    padding: 16px;
-  }
-
-  .selection-row {
-    flex-direction: column;
-    gap: 16px;
-    align-items: stretch;
-  }
-
-  .dialog-footer {
-    flex-direction: column;
-    gap: 12px;
+  .worker-select,
+  .date-picker-compact {
+    width: 100%;
   }
 
   .dialog-footer :deep(.el-button) {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
 }
 </style>
+

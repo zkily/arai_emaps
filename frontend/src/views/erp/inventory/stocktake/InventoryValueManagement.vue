@@ -1,6 +1,6 @@
 <template>
   <div class="inventory-value-management">
-    <!-- 页面头部 -->
+    <!-- ページヘッダー -->
     <div class="page-header">
       <div class="header-content">
         <div class="header-left">
@@ -12,7 +12,32 @@
             <p class="page-description">在庫金額の計算・分析・レポート管理</p>
           </div>
         </div>
+        <div class="header-actions">
+          <el-button size="small" @click="goToBom">BOM管理</el-button>
+          <el-button size="small" @click="goToUnitPrice">原価管理</el-button>
+          <el-button type="warning" size="small" :loading="calculating" @click="runCalculation">
+            計算実行
+          </el-button>
+        </div>
       </div>
+    </div>
+
+    <!-- エラー・警告パネル -->
+    <div v-if="errors.length > 0" class="alert-panel">
+      <el-alert type="warning" :closable="false" show-icon>
+        <template #title>
+          <span>未定価・設定不備が {{ errors.length }} 件あります</span>
+        </template>
+        <div class="error-list">
+          <div v-for="(err, idx) in errors.slice(0, 5)" :key="idx" class="error-item">
+            <el-tag :type="errorTagType(err.error_code)" size="small">{{ errorLabel(err.error_code) }}</el-tag>
+            <span class="error-detail">{{ err.product_cd }} / {{ err.process_cd || '—' }}: {{ err.error_message }}</span>
+          </div>
+          <div v-if="errors.length > 5" class="error-more">
+            ...他 {{ errors.length - 5 }} 件
+          </div>
+        </div>
+      </el-alert>
     </div>
 
     <!-- 期间筛选条件 -->
@@ -23,6 +48,7 @@
           <el-date-picker
             v-model="dateRange"
             type="daterange"
+            size="small"
             range-separator="～"
             start-placeholder="開始日"
             end-placeholder="終了日"
@@ -37,6 +63,7 @@
           <el-select
             v-model="selectedProcess"
             placeholder="工程を選択"
+            size="small"
             @change="handleProcessChange"
             class="process-select"
           >
@@ -50,11 +77,11 @@
           </el-select>
         </div>
         <div class="filter-actions">
-          <el-button type="primary" @click="searchData" :loading="loading" class="search-btn">
+          <el-button type="primary" size="small" @click="searchData" :loading="loading" class="search-btn">
             <Search class="btn-icon" />
             検索
           </el-button>
-          <el-button @click="clearFilters" class="clear-btn">
+          <el-button size="small" @click="clearFilters" class="clear-btn">
             <RefreshLeft class="btn-icon" />
             クリア
           </el-button>
@@ -110,7 +137,7 @@
 
     <!-- 标签页切换 -->
     <div class="content-tabs">
-      <el-card class="tabs-card">
+      <el-card class="tabs-card" shadow="never">
         <el-tabs v-model="activeTab" class="main-tabs">
           <el-tab-pane label="材料" name="material">
             <InventoryValueTable
@@ -149,12 +176,14 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Operation, Search, RefreshLeft, Box, Setting, Tools } from '@element-plus/icons-vue'
 import { inventoryValueApi, type InventoryValueParams } from '@/api/inventoryValue'
 import InventoryValueTable from './components/InventoryValueTable.vue'
 
-// 类型定义
+const router = useRouter()
+
 interface ProcessItem {
   process_cd: string
   process_name: string
@@ -171,21 +200,27 @@ interface StatisticsData {
   byProcess: any[]
 }
 
-// 响应式数据
+interface CalcError {
+  product_cd: string
+  process_cd: string | null
+  item_type: string | null
+  error_code: string
+  error_message: string
+}
+
 const loading = ref(false)
+const calculating = ref(false)
 const activeTab = ref('material')
 
-// 组件引用
 const materialTableRef = ref()
 const componentTableRef = ref()
 const stayTableRef = ref()
 
-// 筛选条件
 const dateRange = ref<string[]>([])
 const selectedProcess = ref('all')
 const processList = ref<ProcessItem[]>([])
+const errors = ref<CalcError[]>([])
 
-// 统计数据
 const statistics = ref<StatisticsData>({
   total: {
     total_amount: 0,
@@ -197,7 +232,6 @@ const statistics = ref<StatisticsData>({
   byProcess: [],
 })
 
-// 计算属性
 const currentDateRange = computed(() => {
   if (dateRange.value && dateRange.value.length === 2) {
     return {
@@ -208,7 +242,6 @@ const currentDateRange = computed(() => {
   return { startDate: '', endDate: '' }
 })
 
-// 方法
 const formatNumber = (value: number | string | undefined, decimals = 0): string => {
   if (!value && value !== 0) return '0'
   return Number(value).toLocaleString('ja-JP', {
@@ -217,15 +250,27 @@ const formatNumber = (value: number | string | undefined, decimals = 0): string 
   })
 }
 
-// 处理数据更新
+const errorTagType = (code: string) => {
+  if (code === 'NO_ROUTE') return 'danger'
+  if (code === 'NO_STEP') return 'warning'
+  return 'info'
+}
+
+const errorLabel = (code: string) => {
+  const map: Record<string, string> = {
+    NO_ROUTE: 'ルート未設定',
+    NO_STEP: 'ステップ不明',
+    NO_PRICE: '単価未設定',
+  }
+  return map[code] || code
+}
+
 const handleDataUpdated = (data: any) => {
-  // 更新统计数据
   if (data.statistics) {
     statistics.value = data.statistics
   }
 }
 
-// 数据加载
 const loadStatistics = async () => {
   try {
     const params: InventoryValueParams = {
@@ -234,11 +279,19 @@ const loadStatistics = async () => {
     }
     const response = await inventoryValueApi.getInventoryValueSummary(params)
     if (response.data) {
-      statistics.value = response.data
+      statistics.value = response.data as StatisticsData
     }
   } catch (error) {
-    console.error('统计数据加载失败:', error)
-    ElMessage.error('统计数据加载失败')
+    console.error('統計データ取得失敗:', error)
+  }
+}
+
+const loadErrors = async () => {
+  try {
+    const response = await inventoryValueApi.getErrors()
+    errors.value = ((response as any)?.data ?? []) as CalcError[]
+  } catch {
+    errors.value = []
   }
 }
 
@@ -249,22 +302,46 @@ const loadProcessList = async () => {
       processList.value = response.data as unknown as ProcessItem[]
     }
   } catch (error) {
-    console.error('工程列表加载失败:', error)
+    console.error('工程リスト取得失敗:', error)
   }
 }
 
-// 事件处理
-const handleDateChange = () => {
-  searchData()
+const runCalculation = async () => {
+  if (!dateRange.value || dateRange.value.length < 2) {
+    ElMessage.warning('期間を選択してください')
+    return
+  }
+  calculating.value = true
+  try {
+    const res = await inventoryValueApi.calculateValue({
+      start_date: dateRange.value[0],
+      end_date: dateRange.value[1],
+      process_cd: selectedProcess.value === 'all' ? undefined : selectedProcess.value,
+    })
+    if ((res as any)?.success) {
+      const d = (res as any).data
+      ElMessage.success(
+        `計算完了: ${d.total_rows}件処理 / エラー${d.error_rows}件 / 合計 ¥${formatNumber(d.total_amount)}`
+      )
+      loadStatistics()
+      loadErrors()
+      refreshCurrentTable()
+    } else {
+      ElMessage.error('計算に失敗しました')
+    }
+  } catch {
+    ElMessage.error('計算実行中にエラーが発生しました')
+  } finally {
+    calculating.value = false
+  }
 }
 
-const handleProcessChange = () => {
-  searchData()
-}
+const handleDateChange = () => { searchData() }
+const handleProcessChange = () => { searchData() }
 
 const searchData = () => {
   loadStatistics()
-  // 刷新当前激活的表格
+  loadErrors()
   refreshCurrentTable()
 }
 
@@ -274,338 +351,307 @@ const clearFilters = () => {
   searchData()
 }
 
-// 刷新当前激活的表格
 const refreshCurrentTable = () => {
   switch (activeTab.value) {
     case 'material':
-      if (materialTableRef.value) {
-        materialTableRef.value.refreshTable()
-      }
+      materialTableRef.value?.refreshTable()
       break
     case 'component':
-      if (componentTableRef.value) {
-        componentTableRef.value.refreshTable()
-      }
+      componentTableRef.value?.refreshTable()
       break
     case 'stay':
-      if (stayTableRef.value) {
-        stayTableRef.value.refreshTable()
-      }
+      stayTableRef.value?.refreshTable()
       break
   }
 }
 
-// 初始化
+const goToBom = () => { router.push('/master/bom/product-bom') }
+const goToUnitPrice = () => { router.push('/master/bom/product-unit-price') }
+
 onMounted(() => {
-  // 设置默认日期范围为当月
   const now = new Date()
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-
   dateRange.value = [firstDay.toISOString().split('T')[0], lastDay.toISOString().split('T')[0]]
-
   loadProcessList()
   searchData()
 })
 </script>
 
 <style scoped>
-/* 基础样式 */
 .inventory-value-management {
+  --ivm-surface: rgba(255, 255, 255, 0.92);
+  --ivm-border: rgba(15, 23, 42, 0.08);
+  --ivm-accent: #0ea5e9;
+  --ivm-muted: #64748b;
   min-height: 100vh;
-  background: #f5f7fa;
-  padding: 20px;
+  background: linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #e8edf3 100%);
+  padding: 10px 12px 14px;
+  box-sizing: border-box;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* 页面头部 */
 .page-header {
-  margin-bottom: 24px;
-  padding: 24px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e4e7ed;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: var(--ivm-surface);
+  border-radius: 10px;
+  border: 1px solid var(--ivm-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(10px);
 }
 
 .header-content {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
 }
 
 .header-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #409eff, #67c23a);
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(145deg, #0ea5e9, #0284c7);
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.3);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  flex-shrink: 0;
 }
 
 .header-icon .icon {
-  font-size: 24px;
-  color: white;
+  font-size: 18px;
 }
 
 .header-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: #303133;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
 .page-description {
-  font-size: 14px;
-  color: #909399;
+  font-size: 11px;
+  color: var(--ivm-muted);
   margin: 0;
-  line-height: 1.5;
+  line-height: 1.3;
+  font-weight: 500;
 }
 
-/* 筛选容器 */
+.header-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.alert-panel {
+  margin-bottom: 8px;
+}
+
+.error-list {
+  margin-top: 6px;
+}
+
+.error-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.error-detail {
+  color: #475569;
+}
+
+.error-more {
+  font-size: 12px;
+  color: #94a3b8;
+  padding-top: 4px;
+}
+
 .filter-container {
-  margin-bottom: 24px;
-  padding: 20px;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e4e7ed;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: var(--ivm-surface);
+  border-radius: 10px;
+  border: 1px solid var(--ivm-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .filter-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 16px;
-  align-items: end;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .filter-item {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 2px;
+  margin: 0;
 }
 
 .filter-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #606266;
-  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ivm-muted);
+  margin-bottom: 0;
+  line-height: 1.2;
 }
 
 .date-picker,
 .process-select {
-  width: 100%;
+  width: 180px;
 }
 
 .date-picker :deep(.el-input__wrapper),
 .process-select :deep(.el-input__wrapper) {
-  border-radius: 8px;
-  border: 1px solid #dcdfe6;
-  transition: all 0.3s ease;
-}
-
-.date-picker :deep(.el-input__wrapper):hover,
-.process-select :deep(.el-input__wrapper):hover {
-  border-color: #409eff;
-}
-
-.date-picker :deep(.el-input__wrapper.is-focus),
-.process-select :deep(.el-input__wrapper.is-focus) {
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
-}
-
-.date-picker :deep(.el-input__inner),
-.process-select :deep(.el-input__inner) {
-  color: #606266;
-  font-weight: 400;
+  border-radius: 6px;
+  min-height: 30px;
 }
 
 .filter-actions {
   display: flex;
-  gap: 12px;
-  align-items: end;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
 }
 
-/* 按钮样式 */
 .search-btn,
 .clear-btn {
-  padding: 12px 20px;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-  border: none;
-  cursor: pointer;
+  gap: 6px;
 }
 
 .search-btn {
-  background: #409eff;
-  color: white;
-  box-shadow: 0 2px 4px rgba(64, 158, 255, 0.3);
-}
-
-.search-btn:hover {
-  background: #337ecc;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(64, 158, 255, 0.4);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
 .clear-btn {
-  background: #f5f7fa;
-  color: #606266;
-  border: 1px solid #dcdfe6;
-}
-
-.clear-btn:hover {
-  background: #ecf5ff;
-  color: #409eff;
-  border-color: #409eff;
+  color: #475569;
 }
 
 .btn-icon {
-  font-size: 16px;
+  font-size: 14px;
 }
 
-/* 统计卡片 */
 .stats-container {
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .stat-card {
-  background: white;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  padding: 24px;
+  background: var(--ivm-surface);
+  border: 1px solid var(--ivm-border);
+  border-radius: 10px;
+  padding: 10px;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  position: relative;
-  overflow: hidden;
-}
-
-.stat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .stat-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-self: flex-start;
 }
 
 .stat-badge {
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 600;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  color: #fff;
 }
 
 .stat-badge.material {
-  background: linear-gradient(135deg, #409eff, #337ecc);
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
 }
 
 .stat-badge.component {
-  background: linear-gradient(135deg, #67c23a, #529b2e);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
 }
 
 .stat-badge.stay {
-  background: linear-gradient(135deg, #e6a23c, #cf9236);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover .stat-icon {
-  transform: scale(1.1);
 }
 
 .material-card .stat-icon {
-  background: linear-gradient(135deg, #409eff, #337ecc);
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
 }
 
 .component-card .stat-icon {
-  background: linear-gradient(135deg, #67c23a, #529b2e);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
 }
 
 .stay-card .stat-icon {
-  background: linear-gradient(135deg, #e6a23c, #cf9236);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
 }
 
 .stat-icon .icon {
-  font-size: 24px;
-  color: white;
+  font-size: 16px;
+  color: #fff;
 }
 
 .stat-content {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 18px;
   font-weight: 700;
-  color: #303133;
-  margin-bottom: 8px;
+  color: #0f172a;
+  margin-bottom: 2px;
   line-height: 1.2;
 }
 
 .stat-label {
-  font-size: 16px;
-  color: #606266;
+  font-size: 12px;
+  color: #475569;
   font-weight: 600;
-  margin-bottom: 8px;
 }
 
-.stat-description {
-  font-size: 14px;
-  color: #909399;
-  font-weight: 400;
-  line-height: 1.5;
-}
-
-/* 标签页容器 */
 .content-tabs {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e4e7ed;
+  background: var(--ivm-surface);
+  border-radius: 10px;
+  border: 1px solid var(--ivm-border);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   overflow: hidden;
 }
 
@@ -620,10 +666,11 @@ onMounted(() => {
 }
 
 .main-tabs :deep(.el-tabs__header) {
-  background: #fafafa;
-  border-bottom: 1px solid #e4e7ed;
+  background: rgba(241, 245, 249, 0.85);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   margin: 0;
-  padding: 0 24px;
+  padding: 3px;
+  border-radius: 8px;
 }
 
 .main-tabs :deep(.el-tabs__nav-wrap) {
@@ -631,38 +678,36 @@ onMounted(() => {
 }
 
 .main-tabs :deep(.el-tabs__item) {
-  color: #606266;
-  font-weight: 500;
-  padding: 16px 24px;
-  transition: all 0.3s ease;
-  position: relative;
-  border-radius: 8px 8px 0 0;
-  margin-right: 4px;
+  color: var(--ivm-muted);
+  font-weight: 600;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  margin: 0 1px;
+  line-height: 1.35;
+  border: none;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .main-tabs :deep(.el-tabs__item:hover) {
-  color: #409eff;
-  background: rgba(64, 158, 255, 0.1);
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.08);
 }
 
 .main-tabs :deep(.el-tabs__item.is-active) {
-  color: #409eff;
-  font-weight: 600;
-  background: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #fff;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
 }
 
 .main-tabs :deep(.el-tabs__active-bar) {
-  background: #409eff;
-  height: 3px;
-  border-radius: 2px;
+  display: none;
 }
 
 .main-tabs :deep(.el-tabs__content) {
   padding: 0;
 }
 
-/* 响应式设计 */
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -671,54 +716,58 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .inventory-value-management {
-    padding: 16px;
+    padding: 8px;
   }
 
   .header-content {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
+    gap: 10px;
   }
 
   .filter-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 6px;
+  }
+
+  .date-picker,
+  .process-select {
+    width: 100%;
   }
 
   .filter-actions {
-    justify-content: center;
-    margin-top: 8px;
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .stats-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
+    gap: 8px;
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: 1rem;
   }
 
   .stat-value {
-    font-size: 24px;
+    font-size: 16px;
   }
 }
 
 @media (max-width: 480px) {
   .inventory-value-management {
-    padding: 12px;
+    padding: 6px;
   }
 
-  .page-title {
-    font-size: 18px;
+  .header-icon {
+    width: 32px;
+    height: 32px;
   }
 
   .stat-card {
-    padding: 20px;
+    padding: 8px;
   }
 
   .stat-value {
-    font-size: 20px;
+    font-size: 15px;
   }
 }
 </style>

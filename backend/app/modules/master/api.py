@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from typing import Optional
+from decimal import Decimal, InvalidOperation
 import io
 import csv
 import os
@@ -138,6 +139,77 @@ async def get_product_list(
             "list": [_item_with_material(r) for r in rows],
             "total": total,
         },
+    }
+
+
+def _material_stock_length_from_name(material_name: Optional[str]) -> Optional[Decimal]:
+    """材料名の末尾4文字を材料長（数値）として解釈する。"""
+    if not material_name or not isinstance(material_name, str):
+        return None
+    s = material_name.strip()
+    if len(s) < 4:
+        return None
+    tail = s[-4:].strip()
+    try:
+        return Decimal(tail)
+    except InvalidOperation:
+        return None
+
+
+@router.post("/recalculate-scrap-length")
+async def recalculate_all_scrap_length(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    全製品の端材長（scrap_length）を一括再計算して DB に保存する。
+    材料長 = materials.material_name の末尾4文字を数値化、
+    scrap_length = 材料長 - (cut_length + 2.5) * take_count。
+    material_cd・材料マスタ・cut_length・take_count が揃わない行はスキップ。
+    """
+    result = await db.execute(select(Product))
+    products = result.scalars().all()
+    mat_cds = {p.material_cd for p in products if getattr(p, "material_cd", None)}
+    material_names: dict[str, Optional[str]] = {}
+    if mat_cds:
+        mat_result = await db.execute(
+            select(Material.material_cd, Material.material_name).where(Material.material_cd.in_(mat_cds))
+        )
+        for row in mat_result.all():
+            material_names[row.material_cd] = row.material_name
+
+    updated = 0
+    skipped = 0
+    margin = Decimal("2.5")
+
+    for p in products:
+        if not p.material_cd or p.material_cd not in material_names:
+            skipped += 1
+            continue
+        stock_len = _material_stock_length_from_name(material_names.get(p.material_cd))
+        if stock_len is None:
+            skipped += 1
+            continue
+        if p.cut_length is None or p.take_count is None:
+            skipped += 1
+            continue
+        try:
+            cut = Decimal(str(p.cut_length))
+            take = int(p.take_count)
+        except (InvalidOperation, ValueError, TypeError):
+            skipped += 1
+            continue
+        scrap = stock_len - (cut + margin) * take
+        scrap_q = scrap.quantize(Decimal("0.01"))
+        p.scrap_length = scrap_q
+        updated += 1
+
+    await db.commit()
+    return {
+        "success": True,
+        "updated": updated,
+        "skipped": skipped,
+        "total": len(products),
     }
 
 

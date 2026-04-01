@@ -53,7 +53,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Connection, Tools, ArrowRight, Setting } from '@element-plus/icons-vue'
+import { Connection, Tools, ArrowRight, Setting, Document, Money } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
 
 const { t } = useI18n()
@@ -96,6 +96,24 @@ const bomModules: BomModule[] = [
     icon: markRaw(Tools),
     color: '#E6A23C',
     gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+  },
+  {
+    name: 'productBomDetail',
+    titleKey: 'bomHome.productBomDetailTitle',
+    descKey: 'bomHome.productBomDetailDesc',
+    path: '/master/bom/product-bom',
+    icon: markRaw(Document),
+    color: '#409EFF',
+    gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  },
+  {
+    name: 'productUnitPrice',
+    titleKey: 'bomHome.productUnitPriceTitle',
+    descKey: 'bomHome.productUnitPriceDesc',
+    path: '/master/bom/product-unit-price',
+    icon: markRaw(Money),
+    color: '#F56C6C',
+    gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
   },
 ]
 

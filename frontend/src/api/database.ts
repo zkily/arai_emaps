@@ -192,6 +192,15 @@ export function updateProductionSummarysPlan(startDate?: string) {
 /** 在庫・推移更新は処理時間がかかるため 5 分タイムアウト */
 const LONG_REQUEST_TIMEOUT = 5 * 60 * 1000
 
+/** 在庫・推移・安全在庫の計算開始日（初期ログの最新 transaction_time の日付、無ければ当月月初JST） */
+export function getInventoryTrendCalcStartDate() {
+  return request.get<{
+    code?: number
+    data?: { startDate?: string; source?: string }
+    message?: string
+  }>(`${BASE}/inventory-trend-calc-start-date`)
+}
+
 /** 在庫更新：開始日～+3ヶ月の在庫列を再計算 */
 export function updateProductionSummarysInventory(startDate?: string) {
   return request.post<{

@@ -110,4 +110,16 @@ export const masterRoutes: RouteRecordRaw[] = [
     component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'),
     meta: { title: '設備能率管理', requiresAuth: true },
   },
+  {
+    path: 'master/bom/product-bom',
+    name: 'ProductBomEditor',
+    component: () => import('@/views/master/bom/ProductBomEditor.vue'),
+    meta: { title: '明細BOM管理', requiresAuth: true },
+  },
+  {
+    path: 'master/bom/product-unit-price',
+    name: 'ProductProcessUnitPriceEditor',
+    component: () => import('@/views/master/bom/ProductProcessUnitPriceEditor.vue'),
+    meta: { title: '工程別標準原価管理', requiresAuth: true },
+  },
 ]

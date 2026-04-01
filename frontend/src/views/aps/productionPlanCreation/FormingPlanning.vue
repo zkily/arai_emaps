@@ -121,16 +121,16 @@
         <el-form :inline="true" :model="newEntry" label-position="left" class="add-form add-form--main">
           <el-form-item label="入力方式" class="add-fi-tight">
             <el-radio-group v-model="addQtyMode" size="small">
-              <el-radio-button label="batch">ロット数</el-radio-button>
-              <el-radio-button label="piece">本数</el-radio-button>
+              <el-radio-button value="batch">ロット数</el-radio-button>
+              <el-radio-button value="piece">本数</el-radio-button>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="追加先" class="add-fi-tight">
             <div class="add-merge-row">
               <el-radio-group v-model="addMergeMode" size="small">
-                <el-radio-button label="new">新規行</el-radio-button>
+                <el-radio-button value="new">新規行</el-radio-button>
                 <el-radio-button
-                  label="merge"
+                  value="merge"
                   :disabled="mergeableSchedules.length === 0"
                 >
                   既存に合算

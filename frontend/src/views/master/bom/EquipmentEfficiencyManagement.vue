@@ -206,8 +206,8 @@
           </div>
           <el-form-item label="状態" prop="status">
             <el-radio-group v-model="formData.status">
-              <el-radio :label="1">有効</el-radio>
-              <el-radio :label="0">無効</el-radio>
+              <el-radio :value="1">有効</el-radio>
+              <el-radio :value="0">無効</el-radio>
             </el-radio-group>
           </el-form-item>
           <el-form-item label="備考" prop="remarks">
