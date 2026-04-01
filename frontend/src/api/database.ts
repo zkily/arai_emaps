@@ -66,6 +66,7 @@ export interface InventoryShortagePrintRow {
   destination_name: string
   product_type: string
   box_type: string
+  inspection_inventory?: number | null
   unit_per_box: number | null
   units: number
   box_quantity: number | null

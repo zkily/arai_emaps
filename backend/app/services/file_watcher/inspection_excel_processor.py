@@ -8,6 +8,7 @@
   Part4: 非SD → 製品/不良/KT09 (quantity=AE列)
 """
 import os
+import re
 import logging
 import warnings
 from datetime import datetime, timedelta, date
@@ -16,7 +17,7 @@ from app.services.file_watcher.sync_services import get_db_connection
 
 logger = logging.getLogger(__name__)
 
-INSPECTION_EXCEL_FILENAME = "生産管理指標(2025年度-検査).xlsx"
+INSPECTION_EXCEL_FILENAME_PATTERN = re.compile(r"^生産管理指標\(\d{4}年度-検査\)\.xlsx$")
 SOURCE_FILE_LABEL = "検査管理指標"
 DATE_CUTOFF = date(2026, 3, 1)
 
@@ -36,7 +37,7 @@ def is_inspection_excel_file(filename):
     if not filename:
         return False
     normalized = filename.replace("\uFF08", "(").replace("\uFF09", ")")
-    return normalized == INSPECTION_EXCEL_FILENAME
+    return INSPECTION_EXCEL_FILENAME_PATTERN.match(normalized) is not None
 
 
 def _parse_date(value):

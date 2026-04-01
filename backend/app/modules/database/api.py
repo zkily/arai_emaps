@@ -8,15 +8,17 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, update, tuple_, text
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import math
 import re
 import time
 from typing import Optional
 from datetime import date, timedelta, datetime
+from datetime import time as dt_time
+from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
-from app.core.datetime_utils import now_jst
+from app.core.datetime_utils import now_jst, JST
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
@@ -36,7 +38,7 @@ CARRY_OVER_COLUMNS = [
     "outsourced_plating_carry_over", "outsourced_welding_carry_over",
     "pre_welding_inspection_carry_over", "pre_inspection_carry_over", "pre_outsourcing_carry_over",
 ]
-# process_cd → production_summarys 繰越カラム名（KT13=倉庫, KT15=外注倉庫）
+# process_cd → production_summarys 繰越カラム名（KT13=倉庫, KT10/KT15=外注倉庫）
 PROCESS_CARRY_OVER_MAPPING = {
     "KT01": "cutting_carry_over",
     "KT02": "chamfering_carry_over",
@@ -45,6 +47,7 @@ PROCESS_CARRY_OVER_MAPPING = {
     "KT07": "welding_carry_over",
     "KT09": "inspection_carry_over",
     "KT13": "warehouse_carry_over",
+    "KT10": "outsourced_warehouse_carry_over",
     "KT15": "outsourced_warehouse_carry_over",
     "KT06": "outsourced_plating_carry_over",
     "KT08": "outsourced_welding_carry_over",
@@ -124,6 +127,24 @@ PROCESS_CD_TO_PREFIX = {
     "KT07": "welding", "KT09": "inspection", "KT13": "warehouse", "KT15": "outsourced_warehouse",
     "KT06": "outsourced_plating", "KT08": "outsourced_welding",
     "KT11": "pre_welding_inspection", "KT16": "pre_inspection", "KT17": "pre_outsourcing",
+}
+# process_cd → production_summarys の *_inventory 列（棚卸繰越プレビュー：対象月末日の行を参照）
+# KT10/KT15 はいずれも outsourced_warehouse_inventory（マスタの工程CD差異に対応）
+PROCESS_INVENTORY_MAPPING = {
+    "KT01": "cutting_inventory",
+    "KT02": "chamfering_inventory",
+    "KT04": "molding_inventory",
+    "KT05": "plating_inventory",
+    "KT06": "outsourced_plating_inventory",
+    "KT07": "welding_inventory",
+    "KT08": "outsourced_welding_inventory",
+    "KT09": "inspection_inventory",
+    "KT13": "warehouse_inventory",
+    "KT10": "outsourced_warehouse_inventory",
+    "KT15": "outsourced_warehouse_inventory",
+    "KT11": "pre_welding_inspection_inventory",
+    "KT16": "pre_inspection_inventory",
+    "KT17": "pre_outsourcing_inventory",
 }
 # process_cd → actual 列（下一工程実績用；KT15 は outsourced_warehouse_actual）
 PROCESS_CD_TO_ACTUAL = {**PROCESS_ACTUAL_MAPPING, "KT15": "outsourced_warehouse_actual"}
@@ -286,6 +307,275 @@ async def get_production_summarys_products(
     return {"data": data}
 
 
+def _parse_year_month(month_str: str) -> tuple[int, int]:
+    m = re.match(r"^(\d{4})-(\d{1,2})$", (month_str or "").strip())
+    if not m:
+        raise HTTPException(status_code=400, detail="対象月は YYYY-MM 形式で指定してください")
+    y, mo = int(m.group(1)), int(m.group(2))
+    if mo < 1 or mo > 12:
+        raise HTTPException(status_code=400, detail="対象月の月が不正です")
+    return y, mo
+
+
+def _last_day_of_month(y: int, mo: int) -> date:
+    if mo == 12:
+        return date(y, 12, 31)
+    return date(y, mo + 1, 1) - timedelta(days=1)
+
+
+def _first_day_of_next_month(y: int, mo: int) -> date:
+    if mo == 12:
+        return date(y + 1, 1, 1)
+    return date(y, mo + 1, 1)
+
+
+class StocktakeCarryoverExecuteItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    product_cd: str
+    total_quantity: int = 0
+
+
+class StocktakeCarryoverExecuteBody(BaseModel):
+    month: str
+    process_cd: str
+    selectedData: list[StocktakeCarryoverExecuteItem]
+
+
+# 棚卸繰越→stock_transaction_logs：工程が KT09/KT13/KT15 のとき在庫種別は製品（部品・材料マスタ優先後）
+_STOCKTAKE_CARRYOVER_PRODUCT_PROCESS_CDS = frozenset({"KT09", "KT13", "KT15"})
+
+
+def _stock_type_for_stocktake_carryover(product_type: Optional[str], process_cd: str) -> str:
+    """products.product_type に応じて材料/部品、それ以外は工程で製品/仕掛品。"""
+    pt = (product_type or "").strip()
+    if pt == "材料":
+        return "材料"
+    if pt == "部品":
+        return "部品"
+    pc = (process_cd or "").strip()
+    if pc in _STOCKTAKE_CARRYOVER_PRODUCT_PROCESS_CDS:
+        return "製品"
+    return "仕掛品"
+
+
+def _location_cd_for_stocktake_carryover(
+    stock_type: str,
+    process_cd: str,
+    product_location_cd: Optional[str],
+) -> str:
+    pl = (product_location_cd or "").strip()
+    if stock_type == "材料":
+        return pl or "原材料倉庫"
+    if stock_type == "部品":
+        return pl or "部品倉庫"
+    if stock_type == "製品":
+        pc = (process_cd or "").strip()
+        if pc == "KT15":
+            return "外注倉庫"
+        return pl or "製品倉庫"
+    return "工程中間在庫"
+
+
+@router.get("/stocktake-carryover-preview")
+async def get_stocktake_carryover_preview(
+    month: str = Query(..., description="対象月 YYYY-MM"),
+    process_cd: str = Query(..., description="工程コード（KT01 等）"),
+    page: int = Query(1, ge=1, description="ページ番号"),
+    pageSize: int = Query(20, ge=1, le=500, description="1ページ件数"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    棚卸データ繰越プレビュー。
+    対象月の末日の production_summarys 行から、選択工程に対応する *_inventory を読み取る。
+    合計数量（在庫列）が 0 以下の行は除外。ページネーション付き。
+    total_quantity_sum は上記条件に一致する全行の合計（当該在庫列の合算）。
+    """
+    y, mo = _parse_year_month(month)
+    pc = (process_cd or "").strip()
+    inv_col_name = PROCESS_INVENTORY_MAPPING.get(pc)
+    if not inv_col_name:
+        raise HTTPException(
+            status_code=400,
+            detail=f"工程コードに対応する在庫列がありません: {process_cd}",
+        )
+    inv_col = getattr(ProductionSummary, inv_col_name, None)
+    if inv_col is None:
+        raise HTTPException(status_code=500, detail="在庫列の解決に失敗しました")
+
+    last_d = _last_day_of_month(y, mo)
+    base_conds = [
+        ProductionSummary.date == last_d,
+        ProductionSummary.product_cd.isnot(None),
+        ProductionSummary.product_cd != "",
+        func.coalesce(inv_col, 0) > 0,
+    ]
+    # 同一 collation で JOIN（utf8mb4 系の混在で MySQL が Illegal mix of collations となるのを回避）
+    _collation = "utf8mb4_unicode_ci"
+    join_product = (
+        ProductionSummary.product_cd.collate(_collation)
+        == Product.product_cd.collate(_collation)
+    )
+    try:
+        count_stmt = (
+            select(func.count())
+            .select_from(ProductionSummary)
+            .where(and_(*base_conds))
+        )
+        sum_stmt = (
+            select(func.coalesce(func.sum(inv_col), 0))
+            .select_from(ProductionSummary)
+            .where(and_(*base_conds))
+        )
+        total = int((await db.execute(count_stmt)).scalar_one() or 0)
+        raw_sum = (await db.execute(sum_stmt)).scalar_one()
+        total_quantity_sum = int(raw_sum or 0)
+
+        offset = (page - 1) * pageSize
+        stmt = (
+            select(
+                ProductionSummary.product_cd,
+                ProductionSummary.product_name,
+                inv_col.label("inv_qty"),
+                Product.location_cd,
+            )
+            .select_from(ProductionSummary)
+            .outerjoin(Product, join_product)
+            .where(and_(*base_conds))
+            .order_by(ProductionSummary.product_cd.asc())
+            .offset(offset)
+            .limit(pageSize)
+        )
+        result = await db.execute(stmt)
+        rows = result.all()
+    except Exception as e:
+        logger.exception("stocktake-carryover-preview error: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"棚卸繰越プレビュー取得エラー: {str(e)}",
+        ) from e
+
+    out: list[dict] = []
+    for r in rows:
+        pcd = (r.product_cd or "").strip()
+        if not pcd:
+            continue
+        qty = int(r.inv_qty or 0)
+        out.append(
+            {
+                "product_cd": pcd,
+                "product_name": r.product_name or "",
+                "item": "製品",
+                "total_quantity": qty,
+                "unit": "本",
+                "location_cd": (r.location_cd or "").strip() or "-",
+            }
+        )
+    return {
+        "data": {
+            "list": out,
+            "total": total,
+            "page": page,
+            "pageSize": pageSize,
+            "total_quantity_sum": total_quantity_sum,
+        },
+        "as_of_date": last_d.isoformat(),
+        "inventory_column": inv_col_name,
+        "process_cd": pc,
+    }
+
+
+@router.post("/stocktake-carryover-execute")
+async def execute_stocktake_carryover(
+    body: StocktakeCarryoverExecuteBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    選択行を stock_transaction_logs に INSERT。
+    transaction_type=初期、source_file=production_summarys、target_cd=製品CD、process_cd=画面の工程、
+    quantity=合計数量。stock_type は products.product_type（材料/部品）優先、
+    それ以外は工程 KT09/KT13/KT15 なら製品、それ以外は仕掛品。
+    transaction_time は翌月1日 0:00（JST）。
+    """
+    y, mo = _parse_year_month(body.month)
+    pc = (body.process_cd or "").strip()
+    if not PROCESS_INVENTORY_MAPPING.get(pc):
+        raise HTTPException(
+            status_code=400,
+            detail=f"工程コードに対応する在庫列定義がありません: {body.process_cd}",
+        )
+    target_d = _first_day_of_next_month(y, mo)
+    try:
+        transaction_time = JST.localize(datetime.combine(target_d, dt_time.min))
+    except Exception:
+        transaction_time = now_jst()
+
+    product_cds = list(
+        {
+            (item.product_cd or "").strip()
+            for item in body.selectedData
+            if (item.product_cd or "").strip()
+        }
+    )
+    prod_map: dict[str, tuple[Optional[str], Optional[str]]] = {}
+    if product_cds:
+        pr = await db.execute(
+            select(Product.product_cd, Product.product_type, Product.location_cd).where(
+                Product.product_cd.in_(product_cds)
+            )
+        )
+        for r in pr.all():
+            pkey = (r.product_cd or "").strip()
+            if pkey:
+                prod_map[pkey] = (r.product_type, r.location_cd)
+
+    op_id = getattr(current_user, "user_id", None) or getattr(current_user, "id", None)
+    op_name = getattr(current_user, "username", None) or getattr(current_user, "name", None)
+    op_id_str = str(op_id) if op_id is not None else None
+
+    success = 0
+    skipped = 0
+    for item in body.selectedData:
+        pcd = (item.product_cd or "").strip()
+        if not pcd:
+            skipped += 1
+            continue
+        qty = int(item.total_quantity or 0)
+        if qty <= 0:
+            skipped += 1
+            continue
+
+        prod = prod_map.get(pcd)
+        product_type = (prod[0] if prod else None) or ""
+        product_loc = prod[1] if prod else None
+
+        stock_type = _stock_type_for_stocktake_carryover(product_type, pc)
+        location_cd = _location_cd_for_stocktake_carryover(stock_type, pc, product_loc)
+
+        row = StockTransactionLog(
+            stock_type=stock_type,
+            transaction_type="初期",
+            target_cd=pcd,
+            location_cd=location_cd,
+            process_cd=pc or None,
+            quantity=Decimal(qty),
+            unit="本",
+            transaction_time=transaction_time,
+            source_file="production_summarys",
+            operator_id=op_id_str,
+            operator_name=op_name,
+        )
+        db.add(row)
+        success += 1
+
+    await db.commit()
+    return {
+        "data": {"successCount": success, "skippedCount": skipped},
+        "message": f"{success} 件の在庫履歴（初期）を登録しました（{skipped} 件スキップ）",
+    }
+
+
 @router.get("/inventory-shortage-print")
 async def get_inventory_shortage_print(
     startDate: Optional[str] = Query(None, description="開始日 YYYY-MM-DD"),
@@ -324,6 +614,7 @@ async def get_inventory_shortage_print(
                 ProductionSummary.product_name,
                 ProductionSummary.date,
                 ProductionSummary.warehouse_inventory,
+                ProductionSummary.inspection_inventory,
                 Product.product_type,
                 Product.box_type,
                 Product.unit_per_box,
@@ -368,6 +659,7 @@ async def get_inventory_shortage_print(
                 "destination_name": r.destination_name or "",
                 "product_type": r.product_type or "",
                 "box_type": r.box_type or "",
+                "inspection_inventory": (int(r.inspection_inventory) if r.inspection_inventory is not None else None),
                 "unit_per_box": r.unit_per_box,
                 "units": units,
                 "box_quantity": box_quantity,
@@ -2127,7 +2419,7 @@ async def update_production_summarys_inventory(
                 is_start_date = (dt_str == product_start_str) if product_start_str else False
                 # 扣除数：存在 lastOrderQuantityDate 且 当前 date <= 该日 且 order_quantity > 0 时用 order_quantity，否则用 forecast_quantity（内示）
                 order_qty = _num(r, "order_quantity")
-                if last_order_date is not None and dt_str <= last_order_date and order_qty > 0:
+                if last_order_date is not None and dt_str is not None and dt_str <= last_order_date and order_qty > 0:
                     qty_subtract = order_qty
                 else:
                     qty_subtract = _num(r, "forecast_quantity")

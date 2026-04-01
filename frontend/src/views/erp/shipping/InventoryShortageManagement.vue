@@ -173,6 +173,11 @@
                 <span :class="{ 'cell-negative': (Number(row.outsourced_warehouse_inventory) || 0) < 0 }">{{ formatNumber(row.outsourced_warehouse_inventory) }}</span>
               </template>
             </el-table-column>
+            <el-table-column label="検査在庫" prop="inspection_inventory" width="100" align="right">
+              <template #default="{ row }">
+                <span :class="{ 'cell-negative': (Number(row.inspection_inventory) || 0) < 0 }">{{ formatNumber(row.inspection_inventory) }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="現在在庫合計" width="120" align="right">
               <template #default="{ row }">
                 <span :class="{ 'cell-negative': ((Number(row.warehouse_inventory) || 0) + (Number(row.outsourced_warehouse_inventory) || 0)) < 0 }">
@@ -231,6 +236,7 @@
                       <th class="print-th">製品名</th>
                       <th class="print-th">製品種類</th>
                       <th class="print-th">箱種</th>
+                      <th class="print-th print-th-num">検査済在庫</th>
                       <th class="print-th print-th-num">箱数</th>
                       <th class="print-th print-th-num">本数</th>
                     </tr>
@@ -241,6 +247,7 @@
                       <td class="print-td">{{ row.product_name || '—' }}</td>
                       <td class="print-td">{{ row.product_type || '—' }}</td>
                       <td class="print-td">{{ row.box_type || '—' }}</td>
+                      <td class="print-td print-td-num">{{ row.inspection_inventory != null ? formatNumber(row.inspection_inventory) : '—' }}</td>
                       <td class="print-td print-td-num">{{ row.box_quantity != null ? formatNumber(row.box_quantity) : '—' }}</td>
                       <td class="print-td print-td-num">{{ formatNumber(row.units) }}</td>
                     </tr>
@@ -382,6 +389,7 @@ interface SummaryRow {
   safety_stock?: number
   warehouse_inventory?: number
   outsourced_warehouse_inventory?: number
+  inspection_inventory?: number
 }
 
 const loading = ref(false)
@@ -646,11 +654,12 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Summ
       prop === 'forecast_quantity' ||
       prop === 'safety_stock' ||
       prop === 'warehouse_inventory' ||
-      prop === 'outsourced_warehouse_inventory'
+      prop === 'outsourced_warehouse_inventory' ||
+      prop === 'inspection_inventory'
     ) {
       const v = data.reduce((s, row) => s + (Number((row as any)[prop]) || 0), 0)
       sums[i] = formatNumber(v)
-    } else if (i === 9) {
+    } else if (i === 10) {
       // 現在在庫合計列（倉庫＋外注倉庫）
       const v = data.reduce(
         (s, row) =>

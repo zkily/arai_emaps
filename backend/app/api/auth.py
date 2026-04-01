@@ -127,33 +127,17 @@ async def verify_token_and_get_user(
     request_token = token  # Token_A
     stored_token = user.last_login_token  # Token_B
     
-    # デバッグ情報 - 使用 logger.warning 确保输出
-    verify_msg = f"[SINGLE_DEVICE_VERIFY] User: {user.username}, Request: {request_token[:40] if request_token else 'None'}..., Stored: {stored_token[:40] if stored_token else 'None'}..., Match: {stored_token == request_token if stored_token else 'No stored token'}"
-    logger.warning(verify_msg)  # 使用 WARNING 级别确保输出
-    print(verify_msg, flush=True)
-    import sys
-    sys.stderr.write(verify_msg + "\n")
-    sys.stderr.flush()
-    
     # last_login_tokenがNULLの場合は、まだログインしていない（初回ログイン）とみなす
     # ただし、既にログインしている場合は、トークンが一致する必要がある
     if stored_token is not None and stored_token != request_token:
         mismatch_msg = f"[SINGLE_DEVICE_MISMATCH] ❌ TOKEN MISMATCH! User {user.username} logged in on another device. Stored: {stored_token[:40]}..., Request: {request_token[:40]}..."
-        logger.error(mismatch_msg)  # 使用 ERROR 级别确保输出
-        print(mismatch_msg, flush=True)
-        import sys
-        sys.stderr.write(mismatch_msg + "\n")
-        sys.stderr.flush()
+        logger.error(mismatch_msg)
         
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="このアカウントは他のデバイスでログインされています。再度ログインしてください。",
             headers={"WWW-Authenticate": "Bearer", "X-Force-Logout": "true"},
         )
-    
-    success_msg = f"[SINGLE_DEVICE_VERIFY] ✅ Token verified successfully for user {user.username}"
-    logger.info(success_msg)
-    print(success_msg, flush=True)
     
     return user
 

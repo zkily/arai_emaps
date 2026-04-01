@@ -54,6 +54,26 @@
               </el-tag>
             </div>
             <div class="history-toolbar-right">
+              <el-select
+                v-model="selectedProcessCd"
+                placeholder="工程"
+                clearable
+                filterable
+                size="small"
+                class="process-filter-select"
+                @change="applyDisplayFilters"
+              >
+                <el-option
+                  :label="processFilterNoneLabel"
+                  :value="PROCESS_FILTER_NONE"
+                />
+                <el-option
+                  v-for="p in processFilterOptions"
+                  :key="p.process_cd"
+                  :label="`${p.process_name} (${p.process_cd})`"
+                  :value="p.process_cd"
+                />
+              </el-select>
               <el-date-picker
                 v-model="selectedMonth"
                 type="month"
@@ -84,7 +104,7 @@
           v-loading="historyLoading"
           class="history-table"
           @sort-change="handleSortChange"
-          :default-sort="{ prop: 'updated_at', order: 'descending' }"
+          :default-sort="{ prop: 'log_date', order: 'descending' }"
           table-layout="fixed"
         >
           <el-table-column
@@ -107,7 +127,6 @@
             width="140"
             align="center"
             header-align="center"
-            sortable
           />
           <el-table-column
             label="製品名"
@@ -123,7 +142,6 @@
             width="120"
             align="center"
             header-align="center"
-            sortable
           />
           <el-table-column
             label="数量"
@@ -131,7 +149,6 @@
             width="100"
             align="center"
             header-align="center"
-            sortable
           >
             <template #default="scope">
               <span :class="getQuantityClass(scope.row.quantity)">{{ scope.row.quantity }}</span>
@@ -149,12 +166,22 @@
             </template>
           </el-table-column>
           <el-table-column
+            label="棚卸日"
+            prop="log_date"
+            width="108"
+            align="center"
+            header-align="center"
+          >
+            <template #default="scope">
+              {{ formatLogDate(scope.row.log_date) }}
+            </template>
+          </el-table-column>
+          <el-table-column
             label="入力日時"
             prop="updated_at"
             width="160"
             align="center"
             header-align="center"
-            sortable
           >
             <template #default="scope">
               {{ formatDateTime(scope.row.updated_at) }}
@@ -186,6 +213,18 @@
           v-if="recentEntries.length > 0"
           class="history-pagination-wrap"
         >
+          <div class="history-qty-summary" aria-live="polite">
+            <span class="history-qty-summary-label">数量合計</span>
+            <span
+              class="history-qty-summary-value"
+              :class="getQuantityClass(filteredQuantityTotal)"
+            >
+              {{ filteredQuantityTotal }}
+            </span>
+            <span class="history-qty-summary-meta">
+              （フィルター対象 {{ recentEntries.length }} 件・全ページ集計）
+            </span>
+          </div>
           <el-pagination
             v-model:current-page="historyCurrentPage"
             :page-size="HISTORY_PAGE_SIZE"
@@ -339,6 +378,12 @@ import {
   deleteInventoryLog,
   type InventoryLog,
 } from '@/api/inventory'
+import { getProcesses } from '@/api/stocktake/common'
+import type { ProcessItem } from '@/types/master'
+
+/** 工程フィルター：工程コード未設定の行のみ（材料・部品など） */
+const PROCESS_FILTER_NONE = '__filter_no_process__' as const
+const processFilterNoneLabel = '工程なし（材料・部品など）'
 
 // 响应式数据
 const showForm = ref(false)
@@ -348,11 +393,17 @@ const successDialogVisible = ref(false)
 const lastEntry = ref<any>(null)
 const lastFormData = ref<any>({})
 
-// 最近录入记录
+// 最近录入记录（月・工程フィルター適用後）
 const recentEntries = ref<InventoryLog[]>([])
 
+/** API から取得した直近一覧（クライアント側で月・工程を絞り込み） */
+const historyRawEntries = ref<InventoryLog[]>([])
+
+const processFilterOptions = ref<ProcessItem[]>([])
+const selectedProcessCd = ref<string>('')
+
 /** 手入力記録：1ページあたり件数 */
-const HISTORY_PAGE_SIZE = 50
+const HISTORY_PAGE_SIZE = 25
 const historyCurrentPage = ref(1)
 
 const pagedRecentEntries = computed(() => {
@@ -361,8 +412,13 @@ const pagedRecentEntries = computed(() => {
   return list.slice(start, start + HISTORY_PAGE_SIZE)
 })
 
+/** 現在のフィルターに一致する全行の数量合計（ページ分割前の一覧で集計） */
+const filteredQuantityTotal = computed(() =>
+  recentEntries.value.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0),
+)
+
 // 排序相关状态
-const sortBy = ref('updated_at')
+const sortBy = ref('log_date')
 const sortOrder = ref<'ascending' | 'descending'>('descending')
 
 // 筛选相关状态
@@ -397,6 +453,48 @@ const getQuantityClass = (quantity: number): string => {
 
 // 格式化日期时间
 const formatDateTime = (val: string) => dayjs(val).format('YYYY-MM-DD HH:mm:ss')
+
+/** 棚卸日（log_date）表示 */
+function formatLogDate(val: string | undefined) {
+  if (val == null || String(val).trim() === '') return '-'
+  const d = dayjs(val)
+  return d.isValid() ? d.format('YYYY-MM-DD') : '-'
+}
+
+function applyDisplayFilters() {
+  let rows = [...historyRawEntries.value]
+
+  if (selectedMonth.value) {
+    const selectedYm = dayjs(selectedMonth.value + '-01').format('YYYY-MM')
+    rows = rows.filter((entry: InventoryLog) => {
+      const raw = entry.log_date
+      if (raw == null || String(raw).trim() === '') return false
+      const d = dayjs(raw)
+      if (!d.isValid()) return false
+      return d.format('YYYY-MM') === selectedYm
+    })
+  }
+
+  if (selectedProcessCd.value === PROCESS_FILTER_NONE) {
+    rows = rows.filter(
+      (e) => !e.process_cd || String(e.process_cd).trim() === '',
+    )
+  } else if (selectedProcessCd.value) {
+    rows = rows.filter((e) => (e.process_cd || '') === selectedProcessCd.value)
+  }
+
+  recentEntries.value = rows
+  historyCurrentPage.value = 1
+}
+
+async function loadProcessFilterOptions() {
+  try {
+    processFilterOptions.value = await getProcesses()
+  } catch (error: unknown) {
+    console.error('工程マスタ取得失敗:', error)
+    processFilterOptions.value = []
+  }
+}
 
 // 处理表单提交
 const handleFormSubmit = async (data: any) => {
@@ -528,6 +626,7 @@ const handleMonthChange = async (month: string) => {
 // 清除筛选
 const clearFilter = () => {
   selectedMonth.value = ''
+  selectedProcessCd.value = ''
   refreshHistory()
 }
 
@@ -543,16 +642,9 @@ const filterEntriesByMonth = async () => {
     const response = await getRecentEntries(500, '手入力')
     const allEntries = Array.isArray(response) ? response : response.data || []
 
-    // 筛选当前月份的数据
-    const filteredEntries = allEntries.filter((entry: any) => {
-      const entryDate = dayjs(entry.updated_at)
-      const selectedDate = dayjs(selectedMonth.value)
-      return entryDate.format('YYYY-MM') === selectedDate.format('YYYY-MM')
-    })
-
-    recentEntries.value = filteredEntries
-    historyCurrentPage.value = 1
-    console.log(`筛选出 ${filteredEntries.length} 条 ${selectedMonth.value} 的记录`)
+    historyRawEntries.value = allEntries
+    applyDisplayFilters()
+    console.log(`筛选出 ${recentEntries.value.length} 条 ${selectedMonth.value} 的记录`)
   } catch (error: any) {
     console.error('月份筛选失败:', error)
     ElMessage.error('月別フィルターに失敗しました')
@@ -572,19 +664,8 @@ const refreshHistory = async () => {
     // 响应拦截器已经处理了数据结构，直接使用 response
     const allEntries = Array.isArray(response) ? response : response.data || []
 
-    // 如果有月份筛选，则应用筛选
-    if (selectedMonth.value) {
-      const filteredEntries = allEntries.filter((entry: any) => {
-        const entryDate = dayjs(entry.updated_at)
-        const selectedDate = dayjs(selectedMonth.value)
-        return entryDate.format('YYYY-MM') === selectedDate.format('YYYY-MM')
-      })
-      recentEntries.value = filteredEntries
-    } else {
-      recentEntries.value = allEntries
-    }
-
-    historyCurrentPage.value = 1
+    historyRawEntries.value = allEntries
+    applyDisplayFilters()
     console.log('设置到 recentEntries:', recentEntries.value)
   } catch (error: any) {
     console.error('获取历史记录失败:', error)
@@ -625,9 +706,10 @@ const confirmDelete = async () => {
   }
 }
 
-// 组件挂载时加载历史记录
+// 组件挂载时加载工程选项与历史记录
 onMounted(() => {
-  refreshHistory()
+  void loadProcessFilterOptions()
+  void refreshHistory()
 })
 </script>
 
@@ -864,6 +946,11 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.process-filter-select {
+  width: min(200px, 42vw);
+  min-width: 140px;
+}
+
 .month-picker-compact {
   width: 120px;
 }
@@ -874,10 +961,36 @@ onMounted(() => {
 
 .history-pagination-wrap {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 12px;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px 16px;
+}
+
+.history-qty-summary {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.history-qty-summary-label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.history-qty-summary-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.05rem;
+}
+
+.history-qty-summary-meta {
+  font-size: 12px;
+  color: #64748b;
 }
 
 .history-table {

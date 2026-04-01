@@ -112,7 +112,7 @@
         </div>
       </el-card>
 
-      <el-card class="data-card" shadow="never" v-if="inventoryData.length > 0">
+      <el-card class="data-card" shadow="never" v-if="carryoverSearched && carryoverTotal > 0">
         <div class="data-header">
           <div class="data-title">
             <div class="data-title__icon">
@@ -120,13 +120,19 @@
             </div>
             <div class="data-title__text">
               <h3>棚卸データ</h3>
-              <span class="data-count">{{ inventoryData.length }} 件</span>
+              <span class="data-count">{{ carryoverTotal }} 件</span>
             </div>
           </div>
           <div class="data-actions">
-            <el-button @click="selectAll" class="btn-ghost" size="small">
+            <el-button
+              @click="selectAll"
+              class="btn-ghost"
+              size="small"
+              :loading="selectAllLoading"
+              :disabled="loading"
+            >
               <el-icon><Check /></el-icon>
-              全選択
+              全選択（検索結果全件）
             </el-button>
             <el-button @click="deselectAll" class="btn-ghost" size="small">
               <el-icon><Close /></el-icon>
@@ -148,6 +154,8 @@
 
         <div class="table-container">
           <el-table
+            ref="carryoverTableRef"
+            row-key="product_cd"
             :data="inventoryData"
             v-loading="loading"
             stripe
@@ -270,12 +278,29 @@
             </el-table-column>
           </el-table>
         </div>
+        <div class="carryover-table-footer">
+          <div class="carryover-sum-row">
+            <span class="carryover-sum-label">合計数量（全件）</span>
+            <span class="carryover-sum-value">{{ formatNumber(totalQuantitySum) }}</span>
+          </div>
+          <el-pagination
+            :current-page="carryoverPage"
+            :page-size="carryoverPageSize"
+            :total="carryoverTotal"
+            :disabled="loading"
+            layout="total, prev, pager, next"
+            @current-change="handleCarryoverPageChange"
+          />
+        </div>
       </el-card>
 
       <!-- 空数据状态 -->
       <el-empty
         v-if="
-          !loading && inventoryData.length === 0 && (filterParams.month || filterParams.process_cd)
+          carryoverSearched &&
+          carryoverTotal === 0 &&
+          !loading &&
+          (filterParams.month || filterParams.process_cd)
         "
         description="検索条件に一致するデータが見つかりません"
         :image-size="72"
@@ -304,7 +329,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Share,
@@ -333,6 +358,14 @@ const loading = ref(false)
 const carryoverLoading = ref(false)
 const inventoryData = ref<any[]>([])
 const selectedData = ref<any[]>([])
+const carryoverPage = ref(1)
+const carryoverPageSize = 20
+const carryoverTotal = ref(0)
+const totalQuantitySum = ref(0)
+const carryoverSearched = ref(false)
+const carryoverTableRef = ref<any>(null)
+const syncingTableSelection = ref(false)
+const selectAllLoading = ref(false)
 
 // 筛选参数
 const filterParams = reactive({
@@ -450,6 +483,79 @@ const clearFilters = () => {
   filterParams.process_cd = ''
   inventoryData.value = []
   selectedData.value = []
+  carryoverPage.value = 1
+  carryoverTotal.value = 0
+  totalQuantitySum.value = 0
+  carryoverSearched.value = false
+}
+
+/** 検索条件に一致する全行を API で取得（ページングを跨ぐ） */
+const fetchAllFilteredRows = async () => {
+  const out: any[] = []
+  let page = 1
+  const size = 500
+  while (true) {
+    const payload = await getCarryoverData({
+      month: filterParams.month,
+      process_cd: filterParams.process_cd,
+      page,
+      pageSize: size,
+    })
+    out.push(...payload.list)
+    if (payload.list.length === 0 || out.length >= payload.total) break
+    page += 1
+  }
+  return out
+}
+
+const syncTableSelectionFromSelectedData = () => {
+  const table = carryoverTableRef.value as any
+  if (!table) return
+  const selectedCds = new Set(selectedData.value.map((r: any) => r.product_cd))
+  syncingTableSelection.value = true
+  inventoryData.value.forEach((row: any) => {
+    table.toggleRowSelection(row, selectedCds.has(row.product_cd))
+  })
+  nextTick(() => {
+    syncingTableSelection.value = false
+  })
+}
+
+const loadCarryoverPage = async (page: number, resetSelection = false) => {
+  if (!filterParams.month || !filterParams.process_cd) return
+  loading.value = true
+  try {
+    const payload = await getCarryoverData({
+      month: filterParams.month,
+      process_cd: filterParams.process_cd,
+      page,
+      pageSize: carryoverPageSize,
+    })
+    inventoryData.value = payload.list
+    carryoverTotal.value = payload.total
+    totalQuantitySum.value = payload.total_quantity_sum
+    carryoverPage.value = payload.page
+    carryoverSearched.value = true
+    if (resetSelection) {
+      selectedData.value = []
+    }
+    if (payload.total === 0) {
+      ElMessage.info('指定条件のデータが見つかりませんでした')
+    }
+  } catch (error) {
+    console.error('データ取得エラー:', error)
+    ElMessage.error('データ取得に失敗しました')
+  } finally {
+    loading.value = false
+    await nextTick()
+    if (!resetSelection && inventoryData.value.length > 0 && selectedData.value.length > 0) {
+      syncTableSelectionFromSelectedData()
+    }
+  }
+}
+
+const handleCarryoverPageChange = (page: number) => {
+  loadCarryoverPage(page, false)
 }
 
 // 执行搜索
@@ -458,48 +564,55 @@ const handleSearch = async () => {
     ElMessage.warning('月と工程を選択してください')
     return
   }
-
-  loading.value = true
-  try {
-    const response = await getCarryoverData({
-      month: filterParams.month,
-      process_cd: filterParams.process_cd,
-    })
-
-    console.log('API Response:', response) // デバッグログ追加
-
-    // responseは拦截器によって処理され、成功時は直接dataが返される
-    if (response) {
-      inventoryData.value = response
-      selectedData.value = []
-      if (inventoryData.value.length === 0) {
-        ElMessage.info('指定条件のデータが見つかりませんでした')
-      }
-    } else {
-      console.error('API Response Error:', response) // デバッグログ追加
-      ElMessage.error('データ取得に失敗しました')
-    }
-  } catch (error) {
-    console.error('データ取得エラー:', error)
-    ElMessage.error('データ取得に失敗しました')
-  } finally {
-    loading.value = false
-  }
+  carryoverPage.value = 1
+  await loadCarryoverPage(1, true)
 }
 
-// 全选
-const selectAll = () => {
-  selectedData.value = [...inventoryData.value]
+// 全選択：現在の検索条件で取得できる全件を選択
+const selectAll = async () => {
+  if (!filterParams.month || !filterParams.process_cd) {
+    ElMessage.warning('月と工程を選択してください')
+    return
+  }
+  selectAllLoading.value = true
+  try {
+    const all = await fetchAllFilteredRows()
+    selectedData.value = all
+    await nextTick()
+    syncTableSelectionFromSelectedData()
+  } catch (error) {
+    console.error('全件取得エラー:', error)
+    ElMessage.error('全件取得に失敗しました')
+  } finally {
+    selectAllLoading.value = false
+  }
 }
 
 // 全部取消选择
 const deselectAll = () => {
   selectedData.value = []
+  syncingTableSelection.value = true
+  nextTick(() => {
+    ;(carryoverTableRef.value as any)?.clearSelection()
+    nextTick(() => {
+      syncingTableSelection.value = false
+    })
+  })
 }
 
-// 处理选择变化
+// 当前页勾选变化时与其它页已选项合并（同一 product_cd 去重）
 const handleSelectionChange = (selection: any[]) => {
-  selectedData.value = selection
+  if (syncingTableSelection.value) return
+  const pageCds = new Set(inventoryData.value.map((r: any) => r.product_cd))
+  const kept = selectedData.value.filter((r: any) => !pageCds.has(r.product_cd))
+  const map = new Map<string, any>()
+  for (const r of kept) {
+    if (r?.product_cd) map.set(r.product_cd, r)
+  }
+  for (const r of selection) {
+    if (r?.product_cd) map.set(r.product_cd, r)
+  }
+  selectedData.value = Array.from(map.values())
 }
 
 // 执行繰越
@@ -531,8 +644,13 @@ const handleCarryover = async () => {
     console.log('Carryover Response:', response) // デバッグログ追加
 
     // responseは拦截器によって処理され、成功時は直接dataが返される
-    if (response && response.successCount !== undefined) {
-      ElMessage.success(`${response.successCount} 件のデータを繰越しました`)
+    if (response && typeof response.successCount === 'number') {
+      const skipped = response.skippedCount ?? 0
+      let msg = `${response.successCount} 件のデータを繰越しました`
+      if (skipped > 0) {
+        msg += `（${skipped} 件スキップ：製品CDなしまたは数量0以下）`
+      }
+      ElMessage.success(msg)
       // 刷新数据
       await handleSearch()
     } else {
@@ -1034,6 +1152,45 @@ onMounted(() => {
     background: rgba(15, 23, 42, 0.75);
     padding: 0.12rem 0.45rem;
     border-radius: 999px;
+  }
+}
+
+.carryover-table-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+
+  .carryover-sum-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+  }
+
+  .carryover-sum-label {
+    font-weight: 600;
+    color: var(--icm-muted);
+  }
+
+  .carryover-sum-value {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: #047857;
+    font-variant-numeric: tabular-nums;
+  }
+
+  :deep(.el-pagination) {
+    justify-content: flex-end;
+    margin: 0;
+
+    .el-pagination__total {
+      font-size: 0.75rem;
+    }
   }
 }
 

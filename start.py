@@ -244,7 +244,9 @@ def start_backend(output_buffer: List[str]) -> subprocess.Popen:
             "app.main:app",
             "--host", CONFIG["backend_host"],
             "--port", str(CONFIG["backend_port"]),
-            "--reload"
+            "--reload",
+            "--no-access-log",
+            "--log-level", "warning",
         ],
         cwd=BACKEND_DIR,
         env=env,
@@ -264,6 +266,8 @@ def start_backend(output_buffer: List[str]) -> subprocess.Popen:
                         break
                     line = line.rstrip()
                     output_buffer.append(line)
+                    if line:
+                        print(f"[backend] {line}")
         except Exception:
             pass
     
