@@ -280,6 +280,41 @@
             <el-menu-item index="/erp/shipping/abc-analysis"><el-icon><DataAnalysis /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_ABC')">{{ t('menu.ERP_SHIPPING_ABC') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/inventory-kpi"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_KPI')">{{ t('menu.ERP_SHIPPING_INVENTORY_KPI') }}</span></template></el-menu-item>
           </el-sub-menu>
+          
+          <el-sub-menu index="erp-quality">
+            <template #title>
+              <el-icon><CircleCheck /></el-icon>
+              <span>品質管理</span>
+            </template>
+            <el-sub-menu index="erp-quality-material">
+              <template #title>
+                <el-icon><Collection /></el-icon>
+                <span>材料関連</span>
+              </template>
+              <el-menu-item index="/erp/quality/material-association/receiving-history">
+                <el-icon><DataLine /></el-icon>
+                <template #title><span>材料受入履歴</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/quality/material-association/tolerance-management">
+                <el-icon><Setting /></el-icon>
+                <template #title><span>材料公差管理</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/quality/material-association/cutting-logs">
+                <el-icon><Upload /></el-icon>
+                <template #title><span :title="t('menu.ERP_QUALITY_MATERIAL_CUTTING')">{{ t('menu.ERP_QUALITY_MATERIAL_CUTTING') }}</span></template>
+              </el-menu-item>
+            </el-sub-menu>
+            <el-sub-menu index="erp-quality-product">
+              <template #title>
+                <el-icon><Box /></el-icon>
+                <span>製品関連</span>
+              </template>
+              <el-menu-item index="/erp/quality/product-association">
+                <el-icon><Document /></el-icon>
+                <template #title><span>製品関連</span></template>
+              </el-menu-item>
+            </el-sub-menu>
+          </el-sub-menu>
 
           <el-sub-menu index="erp-costing">
             <template #title>

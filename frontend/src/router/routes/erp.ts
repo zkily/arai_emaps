@@ -284,6 +284,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'),
         meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true },
       },
+      {
+        path: 'erp/production/plan-baseline/help',
+        name: 'ProductionPlanBaselineManagementHelp',
+        component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
+        meta: { title: '生産計画ベースライン管理 操作説明', group: '生産管理 > 生産計画', requiresAuth: true },
+      },
       // ── 生産指示 ──
       {
         path: 'erp/production/instruction/cutting',
@@ -457,6 +463,23 @@ export const erpRoutes: RouteRecordRaw[] = [
         name: 'InventoryKpi',
         component: () => import('@/views/erp/shipping/InventoryKpi.vue'),
         meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true },
+      },
+      {
+        path: 'erp/quality',
+        name: 'ErpQuality',
+        redirect: '/erp/quality/material-association/receiving-history',
+      },
+      {
+        path: 'erp/quality/material-association/receiving-history',
+        name: 'QualityMaterialReceivingHistory',
+        component: () => import('@/views/erp/quality/material-association/MaterialReceivingHistory.vue'),
+        meta: { title: '材料受入履歴', group: '品質管理 > 材料関連', requiresAuth: true },
+      },
+      {
+        path: 'erp/quality/product-association',
+        name: 'QualityProductAssociation',
+        component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'),
+        meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true },
       },
 
       // ── 債権債務（既存互換） ──

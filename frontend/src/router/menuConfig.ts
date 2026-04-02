@@ -109,6 +109,11 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_INVENTORY_SHORTAGE', name: '倉庫在庫管理', path: '/erp/shipping/inventory-shortage', parentCode: 'ERP_SHIPPING', sortOrder: 7 },
   { code: 'ERP_SHIPPING_ABC', name: 'ABC分析', path: '/erp/shipping/abc-analysis', parentCode: 'ERP_SHIPPING', sortOrder: 8 },
   { code: 'ERP_SHIPPING_INVENTORY_KPI', name: '在庫KPI・アラート', path: '/erp/shipping/inventory-kpi', parentCode: 'ERP_SHIPPING', sortOrder: 9 },
+  { code: 'ERP_QUALITY', name: '品質管理', path: '/erp/quality', icon: 'CircleCheck', parentCode: 'ERP', sortOrder: 9 },
+  { code: 'ERP_QUALITY_MATERIAL', name: '材料受入履歴', path: '/erp/quality/material-association/receiving-history', parentCode: 'ERP_QUALITY', sortOrder: 1 },
+  { code: 'ERP_QUALITY_MATERIAL_TOLERANCE', name: '材料公差管理', path: '/erp/quality/material-association/tolerance-management', parentCode: 'ERP_QUALITY', sortOrder: 1.1 },
+  { code: 'ERP_QUALITY_MATERIAL_CUTTING', name: '切断CSV取込', path: '/erp/quality/material-association/cutting-logs', parentCode: 'ERP_QUALITY', sortOrder: 1.15 },
+  { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', path: '/erp/quality/product-association', parentCode: 'ERP_QUALITY', sortOrder: 2 },
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },
   { code: 'APS_PRODUCTION_PLAN_CREATE', name: '生産計画作成', icon: 'Calendar', parentCode: 'APS', sortOrder: 1 },

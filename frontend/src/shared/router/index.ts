@@ -23,6 +23,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/layouts/pages/Redirect.vue'),
     meta: { title: 'リダイレクト' },
   },
+  // 生産計画ベースライン管理 操作説明（公开ページ：无需登录）
+  {
+    path: '/erp/production/plan-baseline/help',
+    name: 'ProductionPlanBaselineManagementHelp',
+    component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
+    meta: { title: '生産計画ベースライン管理 操作説明', requiresAuth: false },
+  },
   // メインレイアウト配下のルート
   {
     path: '/',
@@ -172,6 +179,11 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/shipping/inventory-shortage', name: 'InventoryShortageManagement', component: () => import('@/views/erp/shipping/InventoryShortageManagement.vue'), meta: { title: '倉庫在庫管理', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/abc-analysis', name: 'ShippingAbcAnalysis', component: () => import('@/views/erp/shipping/ShippingAbcAnalysis.vue'), meta: { title: 'ABC分析', group: '出荷管理', requiresAuth: true } },
       { path: 'erp/shipping/inventory-kpi', name: 'InventoryKpi', component: () => import('@/views/erp/shipping/InventoryKpi.vue'), meta: { title: '在庫KPI・アラート', group: '出荷管理 > 在庫KPI', requiresAuth: true } },
+      { path: 'erp/quality', name: 'ErpQuality', redirect: '/erp/quality/material-association/receiving-history' },
+      { path: 'erp/quality/material-association/receiving-history', name: 'QualityMaterialReceivingHistory', component: () => import('@/views/erp/quality/material-association/MaterialReceivingHistory.vue'), meta: { title: '材料受入履歴', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/material-association/tolerance-management', name: 'QualityMaterialToleranceManagement', component: () => import('@/views/erp/quality/material-association/MaterialToleranceManagement.vue'), meta: { title: '材料公差管理', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/material-association/cutting-logs', name: 'QualityMaterialCuttingLogs', component: () => import('@/views/erp/quality/material-association/MaterialCuttingLogs.vue'), meta: { title: '切断CSV取込', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/product-association', name: 'QualityProductAssociation', component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'), meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true } },
 
       // ========== APS モジュール ==========
       { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },

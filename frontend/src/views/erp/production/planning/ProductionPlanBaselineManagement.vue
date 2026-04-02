@@ -1,5 +1,11 @@
 <template>
-  <div class="plan-baseline-root">
+  <div
+    class="plan-baseline-root"
+    :class="{
+      'print-baseline': printTarget === 'baseline',
+      'print-operation': printTarget === 'operation',
+    }"
+  >
   <div class="plan-baseline-page">
     <!-- 紧凑型页面头部 -->
     <div class="page-header">
@@ -11,9 +17,15 @@
           <h2>生産計画ベースライン管理</h2>
           <p>月次計画を固定化し、現行計画・実績と比較して推移を把握します</p>
         </div>
+        <el-tooltip content="操作説明を開く" placement="bottom" :show-after="0">
+          <el-icon class="help-icon" @click="goHelpPage" :size="18">
+            <QuestionFilled />
+          </el-icon>
+        </el-tooltip>
       </div>
       <el-button
         type="primary"
+        class="btn-refresh-modern"
         :icon="Refresh"
         @click="loadComparison"
         :loading="tableLoading"
@@ -61,6 +73,7 @@
             </el-select>
             <el-button
               type="success"
+              class="btn-generate-modern"
               :icon="DocumentAdd"
               @click="handleGenerate"
               :loading="generating"
@@ -70,6 +83,7 @@
             </el-button>
             <el-button
               type="danger"
+              class="btn-delete-modern"
               plain
               :icon="Delete"
               @click="handleDeleteBaseline"
@@ -80,6 +94,7 @@
             </el-button>
             <el-button
               type="warning"
+              class="btn-edit-modern"
               plain
               :icon="EditPen"
               @click="openAdjustmentDialog"
@@ -125,6 +140,7 @@
             </el-select>
             <el-button
               type="primary"
+              class="btn-search-modern"
               :icon="Search"
               @click="loadComparison"
               :loading="tableLoading"
@@ -132,7 +148,14 @@
             >
               検索
             </el-button>
-            <el-button :icon="Refresh" @click="resetForm" size="default">クリア</el-button>
+            <el-button
+              class="btn-clear-modern"
+              :icon="Refresh"
+              @click="resetForm"
+              size="default"
+            >
+              クリア
+            </el-button>
           </div>
         </div>
       </div>
@@ -160,7 +183,7 @@
     </div>
 
     <!-- 紧凑型表格卡片 -->
-    <el-card shadow="hover" class="table-card">
+    <el-card shadow="hover" class="table-card baseline-comparison-card">
       <template #header>
         <div class="card-header">
           <div class="card-header-left">
@@ -182,13 +205,26 @@
             <el-button
               type="primary"
               plain
+              class="btn-export-baseline-modern"
               :icon="Download"
               @click="handleExportPdfToFolder"
               :loading="exportPdfLoading"
-              :disabled="!comparisonResult?.baselineMonth || processTabs.length === 0"
+              :disabled="!canExportBaselinePdf"
               size="default"
             >
               工程別報告書発行
+            </el-button>
+
+            <el-button
+              type="default"
+              plain
+              class="btn-print-baseline-modern"
+              :icon="Printer"
+              @click="handlePrintBaselineComparison"
+              :disabled="totalItemsCount === 0"
+              size="default"
+            >
+              印刷
             </el-button>
           </div>
         </div>
@@ -211,7 +247,7 @@
             :data="process.items"
             border
             stripe
-            height="450"
+            height="380"
             style="width: 100%"
             empty-text="データがありません"
             class="comparison-table"
@@ -248,7 +284,7 @@
                 <div class="column-header">
                   <span>現行計画</span>
                   <el-tooltip
-                    content="production_plan_updates から当月の日次 quantity を再集計"
+                    content="production_plan_updates を優先し、無い工程は production_summarys の各 plan 列を日次合計"
                     placement="top"
                     effect="dark"
                   >
@@ -413,6 +449,102 @@
         </el-tab-pane>
       </el-tabs>
     </el-card>
+
+    <!-- 操業度 production_plan_rate（Excel 取込）— スタイルはベースライン比較カードに合わせる -->
+    <el-card class="table-card operation-rate-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <div class="card-header-left">
+            <el-icon class="card-header-icon"><DataLine /></el-icon>
+            <span class="card-title">操業度</span>
+            <span class="operation-rate-title-meta">production_plan_rate</span>
+            <el-tag v-if="planRateFilter.baselineMonth" type="info" size="small" class="month-tag">
+              {{ dayjs(planRateFilter.baselineMonth).format('YYYY年MM月') }}
+            </el-tag>
+            <el-tag v-if="planRateRows.length > 0" type="primary" size="small" class="count-tag">
+              {{ planRateRows.length }} 件
+            </el-tag>
+          </div>
+          <div class="card-header-right operation-rate-header-actions">
+            <el-date-picker
+              v-model="planRateFilter.baselineMonth"
+              type="month"
+              value-format="YYYY-MM-DD"
+              placeholder="対象月"
+              size="default"
+              class="operation-rate-picker"
+            />
+            <el-select
+              v-model="planRateFilter.processName"
+              placeholder="工程"
+              clearable
+              size="default"
+              class="operation-rate-select"
+            >
+              <el-option
+                v-for="opt in planRateProcessOptions"
+                :key="opt.value === '' ? '_all' : opt.value"
+                :label="opt.label"
+                :value="opt.value"
+              />
+            </el-select>
+            <el-button type="primary" :icon="Search" :loading="planRateLoading" @click="loadPlanOperationRate">
+              検索
+            </el-button>
+
+            <el-button
+              type="default"
+              plain
+              class="btn-print-operation-modern"
+              :icon="Printer"
+              @click="handlePrintOperationRate"
+              :disabled="planRateRows.length === 0"
+              size="default"
+            >
+              印刷
+            </el-button>
+          </div>
+        </div>
+      </template>
+      <div class="operation-rate-body">
+        <el-table
+          v-loading="planRateLoading"
+          :data="planRateRows"
+          border
+          stripe
+          size="small"
+          class="comparison-table operation-rate-table"
+          max-height="360"
+          empty-text="該当データがありません。月・工程を選んで検索してください。"
+        >
+          <el-table-column prop="display_month" label="月" width="72" align="center" />
+          <el-table-column prop="display_process" label="工程" width="88" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.display_process" size="small" type="info" effect="plain">
+                {{ row.display_process }}
+              </el-tag>
+              <span v-else>—</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="machine_cd" label="ラインCD" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="machine_name" label="ライン" min-width="140" show-overflow-tooltip />
+          <el-table-column prop="operation_variance" label="操業度差異" width="120" align="right">
+            <template #default="{ row }">
+              <span
+                v-for="(ov, oi) in [operationVarianceRowView(row.operation_variance)]"
+                :key="oi"
+                class="operation-variance-cell"
+                :class="ov.cls"
+              >
+                {{ ov.text }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="file_name" label="ファイル名" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="processed_at" label="取込日時" width="160" align="center" />
+        </el-table>
+      </div>
+    </el-card>
   </div>
 
   <el-dialog
@@ -507,17 +639,31 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right" align="center">
+      <el-table-column label="操作" width="200" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button
-            type="primary"
-            plain
-            size="small"
-            :loading="row.saving"
-            @click="handleUpdatePlanQuantity(row)"
-          >
-            保存
-          </el-button>
+          <div class="adjustment-actions">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              :loading="row.saving"
+              :disabled="row.deleting"
+              @click="handleUpdatePlanQuantity(row)"
+            >
+              保存
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              size="small"
+              :icon="Delete"
+              :loading="row.deleting"
+              :disabled="row.saving"
+              @click="handleDeleteBaselineRecord(row)"
+            >
+              削除
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -532,12 +678,65 @@
     </template>
   </el-dialog>
 
-  <!-- 工程別PDF発行 进度弹窗 -->
+  <!-- メッキ・検査：平日一律＋土日任意の基準計画入力 -->
+  <el-dialog
+    v-model="fixedBaselineDialogVisible"
+    title="基準計画の入力"
+    width="480px"
+    align-center
+    destroy-on-close
+    class="fixed-baseline-dialog"
+  >
+    <p class="fixed-baseline-desc">
+      工程「<strong>{{ fixedBaselineTargetProcess }}</strong>」は、平日（月〜金）は同じ基準計画を各日に書き込みます。土曜・日曜は通常は書き込みません。必要な場合のみ土日を入力してください。
+    </p>
+    <el-form label-position="top" class="fixed-baseline-form">
+      <el-form-item label="平日（月〜金）の基準計画数（必須）" required>
+        <el-input-number
+          v-model="fixedBaselineForm.weekdayBaseline"
+          :min="1"
+          :max="100000000"
+          :step="1"
+          :controls="true"
+          class="fixed-baseline-input"
+        />
+      </el-form-item>
+      <el-form-item label="土曜（任意・未入力の週末は行を作りません）">
+        <el-input-number
+          v-model="fixedBaselineForm.saturdayBaseline"
+          :min="0"
+          :max="100000000"
+          :step="1"
+          :controls="true"
+          class="fixed-baseline-input"
+        />
+      </el-form-item>
+      <el-form-item label="日曜（任意）">
+        <el-input-number
+          v-model="fixedBaselineForm.sundayBaseline"
+          :min="0"
+          :max="100000000"
+          :step="1"
+          :controls="true"
+          class="fixed-baseline-input"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="fixedBaselineDialogVisible = false">キャンセル</el-button>
+      <el-button type="primary" :loading="generating" @click="submitFixedBaselineGenerate">
+        生成
+      </el-button>
+    </template>
+  </el-dialog>
+
+  <!-- 工程別PDF発行 进度弹窗（append-to-body で即座に最前面へ描画） -->
   <el-dialog
     v-model="exportProgressVisible"
     title="工程別PDF発行"
     width="420px"
     align-center
+    append-to-body
     :close-on-click-modal="false"
     :close-on-press-escape="false"
     :show-close="false"
@@ -585,21 +784,30 @@ import {
   DataLine,
   EditPen,
   Download,
+  Printer,
 } from '@element-plus/icons-vue'
 import {
   generatePlanBaseline,
   fetchPlanBaselineComparison,
   deletePlanBaseline,
+  deletePlanBaselineRecord,
   fetchPlanBaselineRecords,
+  fetchPlanOperationRate,
   updatePlanBaselinePlanQuantity,
   exportPlanBaselinePdfToFolder,
   type PlanBaselineComparisonItem,
   type PlanBaselineComparisonResult,
   type PlanBaselineRecord,
+  type PlanOperationRateRow,
 } from '@/api/planBaseline'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import * as echarts from 'echarts'
+
+const goHelpPage = () => {
+  // 新标签页打开：不替换当前页面；同时避免当前 SPA 热更新导致路由表未刷新。
+  window.open('/erp/production/plan-baseline/help', '_blank', 'noopener')
+}
 
 const today = dayjs().startOf('month').format('YYYY-MM-DD')
 
@@ -611,6 +819,7 @@ const queryForm = reactive({
 interface PlanBaselineAdjustmentItem extends PlanBaselineRecord {
   tempPlanQuantity: number
   saving?: boolean
+  deleting?: boolean
 }
 
 const processOptions = [
@@ -619,11 +828,23 @@ const processOptions = [
   { label: '面取', value: '面取' },
   { label: '成型', value: '成型' },
   { label: 'メッキ', value: 'メッキ' },
-  { label: '外注メッキ', value: '外注メッキ' },
   { label: '溶接', value: '溶接' },
-  { label: '外注溶接', value: '外注溶接' },
   { label: '検査', value: '検査' },
+  { label: '外注メッキ', value: '外注メッキ' },
+  { label: '外注溶接', value: '外注溶接' },
 ]
+
+const planRateFilter = reactive({
+  baselineMonth: today,
+  processName: '' as string,
+})
+const planRateProcessOptions = [
+  { label: '全て', value: '' },
+  { label: '成型', value: '成型' },
+  { label: '溶接', value: '溶接' },
+]
+const planRateRows = ref<PlanOperationRateRow[]>([])
+const planRateLoading = ref(false)
 
 const generating = ref(false)
 const deleting = ref(false)
@@ -632,6 +853,8 @@ const exportPdfLoading = ref(false)
 const exportProgressVisible = ref(false)
 const exportProgressPercent = ref(0)
 const exportProgressCurrent = ref('')
+type PrintTarget = 'baseline' | 'operation' | ''
+const printTarget = ref<PrintTarget>('')
 const comparisonResult = ref<PlanBaselineComparisonResult | null>(null)
 const comparisonItems = ref<PlanBaselineComparisonItem[]>([])
 const activeTab = ref('all')
@@ -645,6 +868,47 @@ const adjustmentForm = reactive({
   processName: '',
 })
 
+/** メッキ・検査は平日一律＋土日任意の手入力でベースライン生成 */
+const FIXED_BASELINE_PROCESS_NAMES = new Set(['メッキ', '検査'])
+const fixedBaselineDialogVisible = ref(false)
+const fixedBaselineTargetProcess = ref('')
+const fixedBaselineForm = reactive({
+  weekdayBaseline: null as number | null,
+  saturdayBaseline: null as number | null,
+  sundayBaseline: null as number | null,
+})
+
+const resetFixedBaselineForm = () => {
+  fixedBaselineForm.weekdayBaseline = null
+  fixedBaselineForm.saturdayBaseline = null
+  fixedBaselineForm.sundayBaseline = null
+}
+
+/** ベースライン比較タブ・報告書PDFの工程表示順 */
+const BASELINE_COMPARISON_PROCESS_ORDER = [
+  '切断',
+  '面取',
+  '成型',
+  'メッキ',
+  '溶接',
+  '検査',
+  '外注メッキ',
+  '外注溶接',
+] as const
+
+/** 比較一覧タブに出さない工程名 */
+const BASELINE_COMPARISON_EXCLUDED_PROCESS_NAMES = new Set([
+  '溶接前検査',
+  '外注検査前',
+  '外注支給前',
+  '外注支給前工程',
+])
+
+function baselineComparisonProcessOrderIndex(name: string): number {
+  const i = (BASELINE_COMPARISON_PROCESS_ORDER as readonly string[]).indexOf(name)
+  return i >= 0 ? i : 1000
+}
+
 // 工程別にデータをグループ化
 const processTabs = computed(() => {
   if (comparisonItems.value.length === 0) {
@@ -656,6 +920,9 @@ const processTabs = computed(() => {
 
   comparisonItems.value.forEach((item) => {
     const processName = item.process_name || '未指定'
+    if (BASELINE_COMPARISON_EXCLUDED_PROCESS_NAMES.has(processName)) {
+      return
+    }
     if (!processMap.has(processName)) {
       processMap.set(processName, [])
     }
@@ -675,11 +942,29 @@ const processTabs = computed(() => {
     }
   })
 
-  // 工程名でソート
-  tabs.sort((a, b) => a.label.localeCompare(b.label, 'ja'))
+  tabs.sort((a, b) => {
+    const ia = baselineComparisonProcessOrderIndex(a.name)
+    const ib = baselineComparisonProcessOrderIndex(b.name)
+    if (ia !== ib) return ia - ib
+    return a.label.localeCompare(b.label, 'ja')
+  })
 
   return tabs
 })
+
+const PDF_EXPORT_PROCESS_ORDER = BASELINE_COMPARISON_PROCESS_ORDER
+
+/** 上記順の対象工程のうち、比較データが1件以上あるタブだけ（PDF 発行用） */
+const pdfExportTargetTabs = computed(() => {
+  const tabMap = new Map(processTabs.value.map((t) => [t.name, t]))
+  return PDF_EXPORT_PROCESS_ORDER.map((name) => tabMap.get(name)).filter(
+    (tab): tab is (typeof processTabs.value)[number] => !!tab && tab.items.length > 0,
+  )
+})
+
+const canExportBaselinePdf = computed(
+  () => !!comparisonResult.value?.baselineMonth && pdfExportTargetTabs.value.length > 0,
+)
 
 // データが更新されたら最初のタブをアクティブに
 const updateActiveTab = () => {
@@ -833,6 +1118,43 @@ const formatNumber = (value: number | string | null | undefined) => {
   return num.toLocaleString('ja-JP')
 }
 
+/** 操業度差異の生文字列を数値化（カンマ・Unicode マイナス対応） */
+function parseOperationVarianceNumber(raw: string): number | null {
+  const s = raw
+    .replace(/,/g, '')
+    .replace(/\u2212/g, '-')
+    .replace(/\uFF0D/g, '-')
+    .trim()
+  if (s === '' || s === '-') return null
+  const n = Number(s)
+  return Number.isNaN(n) ? null : n
+}
+
+/** 操業度差異の表示用テキスト・負数フラグ（一覧・PDF 共通） */
+function getOperationVarianceDisplayMeta(v: string | null | undefined): {
+  text: string
+  negative: boolean
+  isEmpty: boolean
+} {
+  if (v == null || v === '') return { text: '', negative: false, isEmpty: true }
+  const raw = String(v).trim()
+  const n = parseOperationVarianceNumber(raw)
+  if (n !== null) {
+    return { text: formatNumber(n), negative: n < 0, isEmpty: false }
+  }
+  const normalized = raw.replace(/\u2212/g, '-').replace(/\uFF0D/g, '-').replace(/,/g, '').trim()
+  const negative = /^-\d/.test(normalized) || /^-\./.test(normalized)
+  return { text: raw, negative, isEmpty: false }
+}
+
+function operationVarianceRowView(v: string | null | undefined) {
+  const m = getOperationVarianceDisplayMeta(v)
+  return {
+    text: m.isEmpty ? '—' : m.text,
+    cls: m.negative ? 'operation-variance-cell--negative' : '',
+  }
+}
+
 const openAdjustmentDialog = () => {
   adjustmentForm.baselineMonth = queryForm.baselineMonth
   adjustmentForm.processName = queryForm.processName || ''
@@ -868,6 +1190,7 @@ const loadAdjustmentRecords = async () => {
       process_name: record.process_name || '',
       tempPlanQuantity: Number(record.plan_quantity ?? 0),
       saving: false,
+      deleting: false,
     }))
     if (records.length === 0) {
       ElMessage.info('該当データがありません')
@@ -904,6 +1227,50 @@ const handleUpdatePlanQuantity = async (row: PlanBaselineAdjustmentItem) => {
     ElMessage.error(error?.message || '修正に失敗しました')
   } finally {
     row.saving = false
+  }
+}
+
+const handleDeleteBaselineRecord = async (row: PlanBaselineAdjustmentItem) => {
+  if (!adjustmentForm.baselineMonth) {
+    ElMessage.warning('基準月を選択してください')
+    return
+  }
+  const dateLabel = formatDate(row.plan_date)
+  const procLabel = row.process_name || '未指定'
+  try {
+    await ElMessageBox.confirm(
+      `「${dateLabel}」・工程「${procLabel}」のベースライン行を削除します。よろしいですか？`,
+      '削除の確認',
+      {
+        type: 'warning',
+        confirmButtonText: '削除',
+        cancelButtonText: 'キャンセル',
+      },
+    )
+  } catch {
+    return
+  }
+  row.deleting = true
+  try {
+    await deletePlanBaselineRecord({
+      baselineMonth: adjustmentForm.baselineMonth,
+      planDate: row.plan_date,
+      processName: row.process_name || '',
+    })
+    adjustmentItems.value = adjustmentItems.value.filter(
+      (item) =>
+        !(
+          item.plan_date === row.plan_date &&
+          (item.process_name || '') === (row.process_name || '')
+        ),
+    )
+    planInputRefs.value = []
+    ElMessage.success('削除しました')
+    await loadComparison()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '削除に失敗しました')
+  } finally {
+    row.deleting = false
   }
 }
 
@@ -1000,7 +1367,67 @@ const loadComparison = async () => {
   }
 }
 
+const loadPlanOperationRate = async () => {
+  if (!planRateFilter.baselineMonth) {
+    ElMessage.warning('対象月を選択してください')
+    return
+  }
+  planRateLoading.value = true
+  try {
+    const monthNum = dayjs(planRateFilter.baselineMonth).month() + 1
+    planRateRows.value = await fetchPlanOperationRate({
+      monthNum,
+      processName: planRateFilter.processName || undefined,
+    })
+  } catch (error: any) {
+    ElMessage.error(error?.message || '操業度データの取得に失敗しました')
+    planRateRows.value = []
+  } finally {
+    planRateLoading.value = false
+  }
+}
+
+const runGeneratePlanBaseline = async (payload: Parameters<typeof generatePlanBaseline>[0]) => {
+  generating.value = true
+  try {
+    await generatePlanBaseline(payload)
+    ElMessage.success('ベースラインを生成しました')
+    await loadComparison()
+  } catch (error: any) {
+    ElMessage.error(error?.message || 'ベースライン生成に失敗しました')
+  } finally {
+    generating.value = false
+  }
+}
+
+const submitFixedBaselineGenerate = async () => {
+  const w = fixedBaselineForm.weekdayBaseline
+  if (w == null || Number(w) <= 0) {
+    ElMessage.warning('平日の基準計画数を入力してください（1以上の数）')
+    return
+  }
+  const sat = fixedBaselineForm.saturdayBaseline
+  const sun = fixedBaselineForm.sundayBaseline
+  const body: Parameters<typeof generatePlanBaseline>[0] = {
+    baselineMonth: queryForm.baselineMonth,
+    processName: fixedBaselineTargetProcess.value || undefined,
+    weekdayBaseline: Number(w),
+  }
+  if (sat != null && !Number.isNaN(Number(sat))) {
+    body.saturdayBaseline = Number(sat)
+  }
+  if (sun != null && !Number.isNaN(Number(sun))) {
+    body.sundayBaseline = Number(sun)
+  }
+  fixedBaselineDialogVisible.value = false
+  await runGeneratePlanBaseline(body)
+}
+
 const handleGenerate = async () => {
+  if (!queryForm.baselineMonth) {
+    ElMessage.warning('対象月を選択してください')
+    return
+  }
   try {
     await ElMessageBox.confirm(
       '対象月のベースラインを再生成します。既存データは上書きされますがよろしいですか？',
@@ -1015,19 +1442,17 @@ const handleGenerate = async () => {
     return
   }
 
-  generating.value = true
-  try {
-    await generatePlanBaseline({
-      baselineMonth: queryForm.baselineMonth,
-      processName: queryForm.processName || undefined,
-    })
-    ElMessage.success('ベースラインを生成しました')
-    await loadComparison()
-  } catch (error: any) {
-    ElMessage.error(error?.message || 'ベースライン生成に失敗しました')
-  } finally {
-    generating.value = false
+  if (FIXED_BASELINE_PROCESS_NAMES.has(queryForm.processName)) {
+    fixedBaselineTargetProcess.value = queryForm.processName
+    resetFixedBaselineForm()
+    fixedBaselineDialogVisible.value = true
+    return
   }
+
+  await runGeneratePlanBaseline({
+    baselineMonth: queryForm.baselineMonth,
+    processName: queryForm.processName || undefined,
+  })
 }
 
 const handleDeleteBaseline = async () => {
@@ -1063,6 +1488,45 @@ const handleDeleteBaseline = async () => {
   }
 }
 
+/** 限定並列で Promise を実行（同時に複数 html2canvas だとメモリを食うため上限付き） */
+async function runWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results: R[] = new Array(items.length)
+  let next = 0
+  const limit = Math.max(1, Math.min(concurrency, items.length))
+  const runWorker = async () => {
+    while (true) {
+      const i = next++
+      if (i >= items.length) return
+      results[i] = await worker(items[i], i)
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, () => runWorker()))
+  return results
+}
+
+/** 次の描画フレームまで待機（ECharts の初回レンダ完了を待つ。固定 setTimeout より短くなりがち） */
+function nextFrames(n = 2): Promise<void> {
+  return new Promise((resolve) => {
+    let c = 0
+    const step = () => {
+      c++
+      if (c >= n) resolve()
+      else requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  })
+}
+
+/** html2canvas の解像度（速度と可読性のバランス） */
+const PDF_TABLE_CANVAS_SCALE = 1.5
+/** チャート出力の pixelRatio 上限 */
+const PDF_CHART_PIXEL_RATIO = 1.5
+
 /** 工程別の比較表をHTMLで描画してキャプチャし、PDFのBlobで返す（日本語フォント対応） */
 async function buildProcessPdf(
   processName: string,
@@ -1074,10 +1538,14 @@ async function buildProcessPdf(
   const headers = ['日付', '基準計画', '現行計画', '計画差異', '現行実績合計', '計画対実績差']
 
   const baselinePlanTotal = items.reduce((sum, row) => sum + Number(row.baseline_plan ?? 0), 0)
+  // 稼働日数＝当該工程・当月比較表のデータ行数（工程ごとに行数が異なる）
   const workingDays = items.length
-  const avgDailyProduction = workingDays > 0 ? Math.round(baselinePlanTotal / workingDays) : 0
+  const avgDailyBaseline =
+    workingDays > 0 ? Math.round(baselinePlanTotal / workingDays) : 0
   const statsText =
-    workingDays > 0 ? `稼働日数: ${workingDays}日　平均日当たり生産数: ${formatNumber(avgDailyProduction)}` : ''
+    workingDays > 0
+      ? `稼働日数: ${workingDays}日（${processName}・当月データ件数）　平均日当たり基準計画: ${formatNumber(avgDailyBaseline)}`
+      : ''
 
   const numCell = (value: number | string | null | undefined) => {
     const n = value != null && value !== '' ? Number(value) : NaN
@@ -1085,10 +1553,9 @@ async function buildProcessPdf(
     return `style="border: 1px solid #bdbdbd; padding: 5px 7px; text-align: right;${red}"`
   }
 
-  let rowsHtml = ''
-  items.forEach((row, idx) => {
+  const rowHtmlParts = items.map((row, idx) => {
     const rowBg = idx % 2 === 0 ? '#fafafa' : '#fff'
-    rowsHtml += `
+    return `
       <tr style="background: ${rowBg};">
         <td style="border: 1px solid #bdbdbd; padding: 5px 7px;">${formatDate(row.plan_date ?? '') || '-'}</td>
         <td ${numCell(row.baseline_plan)}>${formatNumber(row.baseline_plan) as string}</td>
@@ -1100,7 +1567,7 @@ async function buildProcessPdf(
     `
   })
   if (totals && items.length > 0) {
-    rowsHtml += `
+    rowHtmlParts.push(`
       <tr style="background: #eceff1; font-weight: bold; border-top: 2px solid #78909c;">
         <td style="border: 1px solid #bdbdbd; padding: 5px 7px;">合計</td>
         <td ${numCell(baselinePlanTotal)}>${formatNumber(baselinePlanTotal)}</td>
@@ -1109,8 +1576,9 @@ async function buildProcessPdf(
         <td ${numCell(totals.currentActual)}>${formatNumber(totals.currentActual) as string}</td>
         <td ${numCell(totals.actualDiff)}>${formatNumber(totals.actualDiff) as string}</td>
       </tr>
-    `
+    `)
   }
+  const rowsHtml = rowHtmlParts.join('')
 
   const html = `
     <div class="baseline-pdf-root" style="
@@ -1140,70 +1608,83 @@ async function buildProcessPdf(
 
   const el = wrap.querySelector('.baseline-pdf-root') as HTMLElement
   if (!el) {
-    document.body.removeChild(wrap)
+    wrap.remove()
     throw new Error('PDF用要素の作成に失敗しました')
   }
 
+  let tableCanvas: HTMLCanvasElement | undefined
   try {
-    const canvas = await html2canvas(el, {
-      scale: 2,
+    tableCanvas = await html2canvas(el, {
+      scale: PDF_TABLE_CANVAS_SCALE,
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
     })
-    document.body.removeChild(wrap)
+  } finally {
+    wrap.remove()
+  }
+  if (!tableCanvas) {
+    throw new Error('PDF表のキャプチャに失敗しました')
+  }
 
-    const imgW = canvas.width
-    const imgH = canvas.height
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-    const pageW = 210
-    const pageH = 297
-    const margin = 10
-    const contentW = pageW - margin * 2
-    const contentH = pageH - margin * 2
+  const canvas = tableCanvas
+  const imgW = canvas.width
+  const imgH = canvas.height
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW = 210
+  const pageH = 297
+  const margin = 10
+  const contentW = pageW - margin * 2
+  const contentH = pageH - margin * 2
 
-    const scale = contentW / imgW
-    const scaledH = imgH * scale
+  const scale = contentW / imgW
+  const scaledH = imgH * scale
 
-    if (scaledH <= contentH) {
-      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, scaledH)
-    } else {
-      let drawn = 0
-      let pageIndex = 0
-      while (drawn < imgH) {
-        if (pageIndex > 0) doc.addPage([pageW, pageH], 'p')
-        const sliceH = Math.min(contentH / scale, imgH - drawn)
-        const sy = drawn
-        const sourceCanvas = document.createElement('canvas')
-        sourceCanvas.width = imgW
-        sourceCanvas.height = Math.ceil(sliceH)
-        const ctx = sourceCanvas.getContext('2d')
-        if (ctx) {
-          ctx.drawImage(canvas, 0, sy, imgW, sliceH, 0, 0, imgW, sliceH)
-          doc.addImage(sourceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, sliceH * scale)
-        }
-        drawn += sliceH
-        pageIndex++
+  if (scaledH <= contentH) {
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, scaledH)
+  } else {
+    let drawn = 0
+    let pageIndex = 0
+    while (drawn < imgH) {
+      if (pageIndex > 0) doc.addPage([pageW, pageH], 'p')
+      const sliceH = Math.min(contentH / scale, imgH - drawn)
+      const sy = drawn
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = imgW
+      sourceCanvas.height = Math.ceil(sliceH)
+      const ctx = sourceCanvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(canvas, 0, sy, imgW, sliceH, 0, 0, imgW, sliceH)
+        doc.addImage(sourceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, sliceH * scale)
       }
+      drawn += sliceH
+      pageIndex++
     }
+  }
 
-    // --- 2ページ目: 日別折れ線 + 差異棒グラフ（ECharts で描画・画像取得） ---
-    if (items.length > 0) {
-      doc.addPage([pageW, pageH], 'p')
+  // --- 2ページ目: 日別折れ線 + 差異棒グラフ（ECharts で描画・画像取得） ---
+  if (items.length > 0) {
+    doc.addPage([pageW, pageH], 'p')
 
-      const labels = items.map((row) => formatDate(row.plan_date ?? '') || '')
-      const baselineSeries = items.map((row) => Number(row.baseline_plan ?? 0))
-      const currentPlanSeries = items.map((row) => Number(row.current_plan ?? 0))
-      const currentActualSeries = items.map((row) => Number(row.current_actual ?? 0))
-      const planDiffSeries = items.map((row) => Number(row.plan_diff ?? 0))
-      const diffColors = planDiffSeries.map((v) => (v >= 0 ? '#4caf50' : '#e53935'))
+    const labels = items.map((row) => formatDate(row.plan_date ?? '') || '')
+    const baselineSeries = items.map((row) => Number(row.baseline_plan ?? 0))
+    const currentPlanSeries = items.map((row) => Number(row.current_plan ?? 0))
+    const currentActualSeries = items.map((row) => Number(row.current_actual ?? 0))
+    const planDiffSeries = items.map((row) => Number(row.plan_diff ?? 0))
+    const diffColors = planDiffSeries.map((v) => (v >= 0 ? '#4caf50' : '#e53935'))
 
-      const chartDiv = document.createElement('div')
-      chartDiv.style.cssText =
-        'position: fixed; left: -9999px; top: 0; width: 900px; height: 520px; z-index: -1;'
-      document.body.appendChild(chartDiv)
+    const chartDiv = document.createElement('div')
+    chartDiv.style.cssText =
+      'position: fixed; left: -9999px; top: 0; width: 900px; height: 520px; z-index: -1;'
+    document.body.appendChild(chartDiv)
 
-      const chartInstance = echarts.init(chartDiv, null, { renderer: 'canvas' })
+    let chartImg = ''
+    let chartInstance: echarts.ECharts | undefined
+    try {
+      chartInstance = echarts.init(chartDiv, null, {
+        renderer: 'canvas',
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, PDF_CHART_PIXEL_RATIO),
+      })
       chartInstance.setOption({
         animation: false,
         title: {
@@ -1211,30 +1692,8 @@ async function buildProcessPdf(
           left: 'center',
           textStyle: { fontSize: 14 },
         },
-        tooltip: {
-          trigger: 'axis',
-          formatter: (params: any) => {
-            if (!Array.isArray(params) || params.length === 0) return ''
-            const idx = params[0].dataIndex
-            const dateStr = labels[idx]
-            const baseline = baselineSeries[idx]
-            const currentPlan = currentPlanSeries[idx]
-            const actual = currentActualSeries[idx]
-            const diff = planDiffSeries[idx]
-            const rate =
-              currentPlan > 0 && actual != null ? ((actual / currentPlan) * 100).toFixed(1) : '-'
-            return [
-              `日付: ${dateStr}`,
-              `基準計画: ${formatNumber(baseline)}`,
-              `現行計画: ${formatNumber(currentPlan)}`,
-              `現行実績合計: ${actual != null ? formatNumber(actual) : '-'}`,
-              `計画差異: ${formatNumber(diff)}`,
-              rate !== '-' ? `達成率: ${rate}%` : '',
-            ]
-              .filter(Boolean)
-              .join('<br/>')
-          },
-        },
+        // PDF 用の静的画像のためツールチップはオフ（描画コスト削減）
+        tooltip: { show: false },
         legend: {
           data: ['基準計画', '現行計画', '現行実績合計', '計画差異'],
           top: 28,
@@ -1313,51 +1772,213 @@ async function buildProcessPdf(
         ],
       })
 
-      await new Promise((r) => setTimeout(r, 80))
-      const chartImg = chartInstance.getDataURL({
+      await nextFrames(2)
+      chartImg = chartInstance.getDataURL({
         type: 'png',
-        pixelRatio: 2,
+        pixelRatio: PDF_CHART_PIXEL_RATIO,
         backgroundColor: '#fff',
       })
-      chartInstance.dispose()
-      document.body.removeChild(chartDiv)
-
-      if (chartImg) {
-        const chartWmm = contentW
-        const chartHmm = (520 / 900) * chartWmm
-        const chartY = margin + (contentH - chartHmm) / 2
-        doc.addImage(chartImg, 'PNG', margin, chartY, chartWmm, chartHmm)
-      }
+    } finally {
+      chartInstance?.dispose()
+      chartDiv.remove()
     }
 
-    return doc.output('blob')
-  } catch (e) {
-    document.body.removeChild(wrap)
-    throw e
+    if (chartImg) {
+      const chartWmm = contentW
+      const chartHmm = (520 / 900) * chartWmm
+      const chartY = margin + (contentH - chartHmm) / 2
+      doc.addImage(chartImg, 'PNG', margin, chartY, chartWmm, chartHmm)
+    }
   }
+
+  return doc.output('blob')
+}
+
+/** 操業度を工程ごとに PDF ページ分け（各工程は新規ページから。表が長い工程は縦に続けて複数ページ）。データなしは null */
+async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blob | null> {
+  const monthNum = dayjs(baselineMonth).month() + 1
+  const rows = await fetchPlanOperationRate({ monthNum })
+  if (!rows.length) return null
+
+  const esc = (s: string) =>
+    String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+
+  const processOrder = ['成型', '溶接']
+  const groupMap = new Map<string, PlanOperationRateRow[]>()
+  for (const r of rows) {
+    const key = (r.display_process || '').trim() || 'その他'
+    if (!groupMap.has(key)) groupMap.set(key, [])
+    groupMap.get(key)!.push(r)
+  }
+  const groupKeys = [...groupMap.keys()].sort((a, b) => {
+    const ia = processOrder.indexOf(a)
+    const ib = processOrder.indexOf(b)
+    if (ia !== -1 && ib !== -1) return ia - ib
+    if (ia !== -1) return -1
+    if (ib !== -1) return 1
+    return a.localeCompare(b, 'ja')
+  })
+
+  const monthLabel = dayjs(baselineMonth).format('YYYY年MM月')
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const pageW = 210
+  const pageH = 297
+  const margin = 10
+  const contentW = pageW - margin * 2
+  const contentH = pageH - margin * 2
+
+  const appendSectionCanvas = (canvas: HTMLCanvasElement, isFirstSection: boolean) => {
+    const imgW = canvas.width
+    const imgH = canvas.height
+    const scale = contentW / imgW
+    const scaledH = imgH * scale
+
+    if (scaledH <= contentH) {
+      if (!isFirstSection) doc.addPage([pageW, pageH], 'p')
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, scaledH)
+      return
+    }
+    let drawn = 0
+    let sliceIndex = 0
+    while (drawn < imgH) {
+      if (sliceIndex > 0 || !isFirstSection) {
+        doc.addPage([pageW, pageH], 'p')
+      }
+      const sliceH = Math.min(contentH / scale, imgH - drawn)
+      const sy = drawn
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = imgW
+      sourceCanvas.height = Math.ceil(sliceH)
+      const ctx = sourceCanvas.getContext('2d')
+      if (ctx) {
+        ctx.drawImage(canvas, 0, sy, imgW, sliceH, 0, 0, imgW, sliceH)
+        doc.addImage(sourceCanvas.toDataURL('image/png'), 'PNG', margin, margin, contentW, sliceH * scale)
+      }
+      drawn += sliceH
+      sliceIndex++
+    }
+  }
+
+  let isFirstSection = true
+  let renderedAny = false
+  for (const proc of groupKeys) {
+    const group = groupMap.get(proc)!
+    if (!group.length) continue
+
+    const rowParts = group.map((r, idx) => {
+      const bg = idx % 2 === 0 ? '#fafafa' : '#fff'
+      const meta = getOperationVarianceDisplayMeta(r.operation_variance)
+      const inner = meta.isEmpty ? '-' : esc(meta.text)
+      const varStyle = meta.negative ? ' color:#c62828;' : ''
+      return `<tr style="background:${bg};">
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(r.display_month || '')}</td>
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(r.display_process || '')}</td>
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_cd ?? ''))}</td>
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_name ?? ''))}</td>
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;text-align:right;${varStyle}">${inner}</td>
+      </tr>`
+    })
+
+    const tableBlock = `
+      <div style="margin-bottom:18px;">
+        <div style="font-size:14px;font-weight:700;color:#37474f;margin:12px 0 8px;padding:6px 10px;background:#eceff1;border-left:4px solid #1565c0;">工程：${esc(proc)}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #90a4ae;">
+          <thead>
+            <tr style="background:linear-gradient(180deg,#37474f 0%,#455a64 100%);color:#fff;">
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">月</th>
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">工程</th>
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ラインCD</th>
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ライン</th>
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:right;">操業度差異</th>
+            </tr>
+          </thead>
+          <tbody>${rowParts.join('')}</tbody>
+        </table>
+      </div>`
+
+    const html = `
+    <div class="operation-rate-pdf-root" style="font-family:'Meiryo','Hiragino Sans','Yu Gothic',sans-serif;padding:20px;background:#fff;width:720px;box-sizing:border-box;">
+      <div style="font-size:17px;font-weight:bold;color:#1565c0;margin-bottom:6px;padding-bottom:8px;border-bottom:2px solid #e3f2fd;">操業度（工程別）</div>
+      <div style="font-size:12px;color:#546e7a;margin-bottom:14px;">${esc(monthLabel)}</div>
+      ${tableBlock}
+    </div>`
+
+    const wrap = document.createElement('div')
+    wrap.style.cssText = 'position: fixed; left: -9999px; top: 0; z-index: -1;'
+    wrap.innerHTML = html
+    document.body.appendChild(wrap)
+    const el = wrap.querySelector('.operation-rate-pdf-root') as HTMLElement
+    if (!el) {
+      wrap.remove()
+      throw new Error('操業度PDF用要素の作成に失敗しました')
+    }
+    let tableCanvas: HTMLCanvasElement | undefined
+    try {
+      tableCanvas = await html2canvas(el, {
+        scale: PDF_TABLE_CANVAS_SCALE,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+      })
+    } finally {
+      wrap.remove()
+    }
+    if (!tableCanvas) throw new Error('操業度PDFのキャプチャに失敗しました')
+
+    appendSectionCanvas(tableCanvas, isFirstSection)
+    isFirstSection = false
+    renderedAny = true
+  }
+
+  if (!renderedAny) return null
+  return doc.output('blob')
 }
 
 const handleExportPdfToFolder = async () => {
-  if (!comparisonResult.value?.baselineMonth || processTabs.value.length === 0) {
-    ElMessage.warning('比較データがありません。先に検索を実行してください。')
+  if (!comparisonResult.value?.baselineMonth || pdfExportTargetTabs.value.length === 0) {
+    ElMessage.warning(
+      '切断・面取・成型・メッキ・溶接・検査・外注メッキ・外注溶接のいずれにも比較データがありません。条件を確認し、先に検索を実行してください。',
+    )
     return
   }
-  const tabs = processTabs.value
-  const total = tabs.length
+  const tabs = pdfExportTargetTabs.value
+  const totalSteps = tabs.length + 1
   exportPdfLoading.value = true
   exportProgressVisible.value = true
   exportProgressPercent.value = 0
   exportProgressCurrent.value = '準備中...'
+  // DOM をコミットしモーダルを1〜2フレーム描画してから html2canvas 等の重処理へ（クリック直後に進捗が見えるように）
+  await nextTick()
+  await nextFrames(2)
   try {
     const baselineMonth = comparisonResult.value.baselineMonth
-    const files: { processName: string; blob: Blob }[] = []
-    for (let i = 0; i < tabs.length; i++) {
-      const tab = tabs[i]
-      exportProgressCurrent.value = `「${tab.name}」を生成中（${i + 1} / ${total}）`
-      exportProgressPercent.value = Math.round(((i + 0.5) / total) * 100)
-      const totals = processTotals.value.get(tab.name)
-      const blob = await buildProcessPdf(tab.name, baselineMonth, tab.items, totals)
-      files.push({ processName: tab.name, blob })
+    const totalsSnapshot = new Map(processTotals.value)
+    let completed = 0
+    const blobs = await runWithConcurrency(tabs, 3, async (tab) => {
+      const blob = await buildProcessPdf(
+        tab.name,
+        baselineMonth,
+        tab.items,
+        totalsSnapshot.get(tab.name),
+      )
+      completed++
+      exportProgressCurrent.value = `PDF生成 ${completed} / ${totalSteps}（${tab.name}）`
+      exportProgressPercent.value = Math.min(85, Math.round((completed / totalSteps) * 85))
+      return blob
+    })
+    const files: { processName: string; blob: Blob }[] = tabs.map((tab, i) => ({
+      processName: tab.name,
+      blob: blobs[i],
+    }))
+    exportProgressCurrent.value = `PDF生成 ${tabs.length} / ${totalSteps}（操業度）`
+    exportProgressPercent.value = 88
+    const operationRateBlob = await buildOperationRateCombinedPdf(baselineMonth)
+    if (operationRateBlob) {
+      files.push({ processName: '操業度', blob: operationRateBlob })
     }
     exportProgressCurrent.value = 'サーバーに保存しています...'
     exportProgressPercent.value = 95
@@ -1400,7 +2021,22 @@ watch(
 
 onMounted(() => {
   loadComparison()
+  loadPlanOperationRate()
 })
+
+function handlePrintBaselineComparison() {
+  printTarget.value = 'baseline'
+  nextTick(() => {
+    window.print()
+  })
+}
+
+function handlePrintOperationRate() {
+  printTarget.value = 'operation'
+  nextTick(() => {
+    window.print()
+  })
+}
 </script>
 
 <style scoped>
@@ -1486,9 +2122,104 @@ onMounted(() => {
 }
 
 .plan-baseline-page {
-  padding: 10px;
+  padding: 6px 8px 10px;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   min-height: 100vh;
+}
+
+/* ==== Modern action button variants（颜色区分）==== */
+.btn-refresh-modern,
+.btn-generate-modern,
+.btn-delete-modern,
+.btn-edit-modern,
+.btn-search-modern,
+.btn-export-baseline-modern,
+.btn-print-baseline-modern,
+.btn-print-operation-modern,
+.btn-clear-modern {
+  border-radius: 12px !important;
+  font-weight: 650;
+  transition: all 0.18s ease;
+}
+
+.btn-refresh-modern {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  border: 1px solid rgba(99, 102, 241, 0.55) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(99, 102, 241, 0.18);
+}
+.btn-refresh-modern:hover {
+  filter: brightness(1.03);
+}
+
+.btn-generate-modern {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  border: 1px solid rgba(34, 197, 94, 0.55) !important;
+  color: #ffffff !important;
+}
+.btn-generate-modern:hover {
+  filter: brightness(1.03);
+}
+
+.btn-delete-modern {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
+  color: #991b1b !important;
+}
+.btn-delete-modern:hover {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+.btn-edit-modern {
+  background: rgba(245, 158, 11, 0.10) !important;
+  border: 1px solid rgba(245, 158, 11, 0.35) !important;
+  color: #92400e !important;
+}
+.btn-edit-modern:hover {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.52) !important;
+}
+
+.btn-search-modern {
+  background: rgba(99, 102, 241, 0.10) !important;
+  border: 1px solid rgba(99, 102, 241, 0.35) !important;
+  color: #3730a3 !important;
+}
+.btn-search-modern:hover {
+  background: rgba(99, 102, 241, 0.14) !important;
+  border-color: rgba(99, 102, 241, 0.55) !important;
+}
+
+.btn-clear-modern {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border: 1px solid rgba(148, 163, 184, 0.35) !important;
+  color: #334155 !important;
+}
+.btn-clear-modern:hover {
+  background: rgba(148, 163, 184, 0.18) !important;
+  border-color: rgba(148, 163, 184, 0.55) !important;
+}
+
+.btn-export-baseline-modern {
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.98) 0%, rgba(37, 99, 235, 0.96) 100%) !important;
+  border: 1px solid rgba(37, 99, 235, 0.45) !important;
+  color: #ffffff !important;
+}
+.btn-export-baseline-modern:hover {
+  filter: brightness(1.03);
+}
+
+.btn-print-baseline-modern,
+.btn-print-operation-modern {
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1px solid rgba(37, 99, 235, 0.35) !important;
+  color: #1d4ed8 !important;
+}
+.btn-print-baseline-modern:hover,
+.btn-print-operation-modern:hover {
+  background: rgba(37, 99, 235, 0.12) !important;
+  border-color: rgba(37, 99, 235, 0.55) !important;
 }
 
 /* 紧凑型页面头部 */
@@ -1496,8 +2227,8 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  padding: 12px 16px;
+  margin-bottom: 6px;
+  padding: 8px 12px;
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   border-radius: 8px;
   color: white;
@@ -1508,12 +2239,12 @@ onMounted(() => {
 .title-wrapper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .title-icon-wrapper {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1523,13 +2254,13 @@ onMounted(() => {
 }
 
 .title-icon {
-  font-size: 24px;
+  font-size: 20px;
   color: white;
 }
 
 .title-content h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: white;
   line-height: 1.2;
@@ -1544,7 +2275,7 @@ onMounted(() => {
 
 /* 合并的操作卡片 */
 .action-card {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: white;
@@ -1557,10 +2288,14 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.action-card :deep(.el-card__body) {
+  padding: 8px 12px 10px;
+}
+
 .action-content {
   display: flex;
-  gap: 16px;
-  padding: 4px;
+  gap: 10px;
+  padding: 0;
   align-items: flex-start;
 }
 
@@ -1568,7 +2303,7 @@ onMounted(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .action-divider {
@@ -1580,13 +2315,13 @@ onMounted(() => {
 .section-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 8px;
+  margin-bottom: 2px;
 }
 
 .section-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1629,9 +2364,9 @@ onMounted(() => {
 /* 紧凑型摘要卡片 */
 .summary-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .summary-card {
@@ -1668,20 +2403,20 @@ onMounted(() => {
 }
 
 .summary-card-inner {
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .summary-label {
   font-size: 11px;
   color: #64748b;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .summary-value {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.2;
@@ -1709,7 +2444,7 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   background: white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   animation: fadeInUp 0.6s ease-out;
   transition: box-shadow 0.3s ease;
 }
@@ -1718,11 +2453,68 @@ onMounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
+.table-card:not(.operation-rate-card) :deep(.el-card__header) {
+  padding: 8px 12px 10px;
+}
+
+.table-card:not(.operation-rate-card) :deep(.el-card__body) {
+  padding: 8px 12px 10px;
+}
+
+/* 操業度（production_plan_rate）— ベースライン比較 table-card と同系統のヘッダー・本文・表 */
+.operation-rate-card {
+  animation: fadeInUp 0.65s ease-out 0.06s backwards;
+}
+
+.operation-rate-card :deep(.el-card__header) {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+}
+
+.operation-rate-card :deep(.el-card__body) {
+  padding: 8px 12px 10px;
+}
+
+.operation-rate-title-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  letter-spacing: 0.02em;
+}
+
+.operation-rate-header-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operation-rate-picker {
+  width: 150px;
+}
+
+.operation-rate-select {
+  width: 132px;
+}
+
+.operation-rate-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.operation-rate-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.operation-variance-cell--negative {
+  color: #c62828;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 0;
+  padding: 2px 0;
 }
 
 .card-header-left {
@@ -1737,7 +2529,7 @@ onMounted(() => {
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: #1e293b;
 }
@@ -1749,7 +2541,7 @@ onMounted(() => {
 .card-header-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .count-tag {
@@ -1759,6 +2551,25 @@ onMounted(() => {
 .baseline-adjust-dialog :deep(.el-dialog__body) {
   padding: 16px 20px 12px;
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 80%);
+}
+
+.fixed-baseline-dialog :deep(.el-dialog__body) {
+  padding: 16px 20px 8px;
+}
+
+.fixed-baseline-desc {
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.fixed-baseline-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.fixed-baseline-input {
+  width: 100%;
 }
 
 .adjustment-header {
@@ -1828,6 +2639,14 @@ onMounted(() => {
   transition: background 0.2s ease;
 }
 
+.adjustment-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .adjustment-table :deep(.el-table__row:hover > td) {
   background: rgba(99, 102, 241, 0.08);
 }
@@ -1879,12 +2698,12 @@ onMounted(() => {
 
 /* 标签页样式 */
 :deep(.el-tabs__header) {
-  margin: 0 0 12px 0;
+  margin: 0 0 6px 0;
   border-bottom: 2px solid #e2e8f0;
 }
 
 :deep(.el-tabs__item) {
-  padding: 10px 16px;
+  padding: 6px 12px;
   font-size: 13px;
   font-weight: 500;
   transition: all 0.3s ease;
@@ -1918,8 +2737,8 @@ onMounted(() => {
 
 /* 合計区域美化 */
 .tab-total-wrapper {
-  margin-top: 12px;
-  padding: 14px 16px;
+  margin-top: 8px;
+  padding: 10px 12px;
   background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -1937,9 +2756,9 @@ onMounted(() => {
 .tab-total-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 2px solid #e2e8f0;
 }
 
@@ -1957,12 +2776,12 @@ onMounted(() => {
 
 .tab-total-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
 }
 
 .total-item {
-  padding: 12px 14px;
+  padding: 8px 10px;
   background: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -2162,7 +2981,7 @@ onMounted(() => {
   color: white;
   font-weight: 600;
   font-size: 11px;
-  padding: 6px 10px;
+  padding: 5px 8px;
   border: none;
   text-align: center;
 }
@@ -2177,7 +2996,7 @@ onMounted(() => {
 }
 
 :deep(.comparison-table .el-table__body td) {
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-color: #e2e8f0;
   transition: all 0.2s ease;
 }
@@ -2400,7 +3219,7 @@ onMounted(() => {
     width: 100%;
     height: 1px;
     background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
-    margin: 8px 0;
+    margin: 4px 0;
   }
 
   .section-controls {
@@ -2423,7 +3242,7 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .plan-baseline-page {
-    padding: 8px;
+    padding: 6px;
   }
 
   .page-header {
@@ -2441,15 +3260,55 @@ onMounted(() => {
   }
 
   .tab-total-wrapper {
-    padding: 12px;
+    padding: 8px 10px;
   }
 
   .total-item {
-    padding: 10px 12px;
+    padding: 8px 10px;
   }
 
   .total-item-value {
     font-size: 16px;
+  }
+}
+
+@media print {
+  /* 打印时仅显示指定区域（同时隐藏按钮/筛选控件） */
+  .plan-baseline-root {
+    background: #ffffff !important;
+  }
+
+  .plan-baseline-root .page-header,
+  .plan-baseline-root .action-card,
+  .plan-baseline-root .summary-row,
+  .plan-baseline-root .el-dialog,
+  .plan-baseline-root .el-dialog__wrapper,
+  .plan-baseline-root .table-card {
+    display: none !important;
+  }
+
+  .plan-baseline-root.print-baseline .baseline-comparison-card,
+  .plan-baseline-root.print-operation .operation-rate-card {
+    display: block !important;
+  }
+
+  /* 只保留区域表头左侧信息，隐藏右侧操作（导出/打印/计数等） */
+  .plan-baseline-root.print-baseline .baseline-comparison-card .card-header-right .el-button {
+    display: none !important;
+  }
+
+  .plan-baseline-root.print-operation .operation-rate-card .operation-rate-header-actions > * {
+    display: none !important;
+  }
+
+  /* 取消表格固定高度与滚动，避免打印时只截到可视区域 */
+  .plan-baseline-root.print-baseline .comparison-table,
+  .plan-baseline-root.print-operation .operation-rate-table,
+  .plan-baseline-root.print-baseline .el-table__body-wrapper,
+  .plan-baseline-root.print-operation .el-table__body-wrapper {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
 }
 </style>

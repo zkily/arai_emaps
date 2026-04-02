@@ -1485,7 +1485,7 @@ import {
 import request from '@/utils/request'
 import {
   syncMaterialStockFromMaster,
-  getSupplierList,
+  getMaterialStockSupplierNames,
   getMaterialStockList,
   getMaterialStockSubList,
   updateMaterialStock,
@@ -2128,16 +2128,14 @@ const updateStats = () => {
   stats.value.totalBundleWeight = totalBundleWeight.value
 }
 
-// 仕入先选项来自 /api/material/receiving/suppliers（material_logs.supplier 去重、名称排序）。label/value 均为仕入先名称（supplier_name）
+// 仕入先选项来自 /api/material/stock/supplier-names（material_stock.supplier_name 去重、名称排序）。label/value 均为 supplier_name（与列表筛选 suppliers 一致）
 const fetchSupplierOptions = async () => {
   try {
-    const result = await getSupplierList() as { success?: boolean; data?: string[] | { supplier_cd?: string; supplier_name?: string }[] }
+    const result = await getMaterialStockSupplierNames()
     const raw = result?.data ?? []
-    supplierOptions.value = raw.map((item: string | { supplier_cd?: string; supplier_name?: string }) =>
-      typeof item === 'string'
-        ? { label: item, value: item }
-        : { label: item.supplier_name ?? item.supplier_cd ?? '', value: item.supplier_name ?? item.supplier_cd ?? '' }
-    ).filter((s) => s.value)
+    supplierOptions.value = raw
+      .filter((name): name is string => typeof name === 'string' && !!name.trim())
+      .map((name) => ({ label: name, value: name }))
   } catch (error) {
     console.error('仕入先オプションの取得に失敗しました:', error)
     supplierOptions.value = []
@@ -2744,7 +2742,7 @@ const handleSyncMaterialMaster = async () => {
     const endDate = searchForm.dateRange[1]
 
     await ElMessageBox.confirm(
-      `材料マスタ（materials）の情報を材料在庫（material_stock）に同期しますか？\n\n対象期間: ${startDate} ～ ${endDate}\n\n同期対象項目:\n・材料名 (material_name)\n・安全在庫 (safety_stock)\n・仕入先CD (supplier_cd)\n・束本数 (bundle_quantity)\n・束重量 (bundle_weight)\n・規格 (standard_spec)\n・単価 (unit_price)\n・束当たり本数 (pieces_per_bundle)\n・一本重量 (long_weight)`,
+      `材料マスタ（materials）の情報を材料在庫（material_stock）に同期しますか？\n\n対象期間: ${startDate} ～ ${endDate}\n\n同期対象項目:\n・材料名 (material_name)\n・安全在庫 (safety_stock)\n・仕入先CD (supplier_cd)\n・仕入先名 (supplier_name) ※仕入先マスタを supplier_cd で参照\n・束本数 (bundle_quantity)\n・束重量 (bundle_weight)\n・規格 (standard_spec)\n・単価 (unit_price)\n・束当たり本数 (pieces_per_bundle)\n・一本重量 (long_weight)`,
       '材料マスタ更新確認',
       {
         confirmButtonText: '実行',

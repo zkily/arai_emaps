@@ -322,3 +322,30 @@ class MaterialUsagePreviewRequest(BaseModel):
     today_date: str
     tomorrow_date: Optional[str] = None
     source: str = "cutting_management"
+
+
+# ─────────────────────────────────────────────
+# 材料切断ログ (material_cutting_logs)
+# ─────────────────────────────────────────────
+class MaterialCuttingLogResponse(BaseModel):
+    id: int
+    item: Optional[str] = None
+    log_date: Optional[date] = None
+    log_time: Optional[time] = None
+    hd_no: Optional[str] = None
+    operator_name: Optional[str] = None
+    material_cd: Optional[str] = None
+    management_code: Optional[str] = None
+    raw_line: Optional[str] = None
+    source_file: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class MaterialCuttingImportResult(BaseModel):
+    success: bool
+    imported: int = 0
+    skipped: int = 0
+    errors: List[str] = []

@@ -161,8 +161,15 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
+        const identifierRaw = loginForm.username.trim()
+        // 后端用同一个字段 `username` 同时支持匹配用户名与邮箱，
+        // 这里对邮箱做小写归一化，避免大小写导致的匹配失败。
+        const identifier = identifierRaw.includes('@')
+          ? identifierRaw.toLowerCase()
+          : identifierRaw
+
         const response = await login({
-          username: loginForm.username.trim(),
+          username: identifier,
           password: loginForm.password,
         })
 
@@ -175,7 +182,7 @@ const handleLogin = async () => {
         userStore.setUser(response.user, rememberMe.value)
 
         if (rememberMe.value) {
-          localStorage.setItem(REMEMBER_USERNAME_KEY, loginForm.username.trim())
+          localStorage.setItem(REMEMBER_USERNAME_KEY, identifier)
           localStorage.setItem(REMEMBER_PASSWORD_KEY, loginForm.password)
         } else {
           localStorage.removeItem(REMEMBER_USERNAME_KEY)
@@ -194,7 +201,7 @@ const handleLogin = async () => {
         const { startInactivityCheck } = await import('@/utils/inactivity')
         startInactivityCheck()
 
-        const displayName = response.user.username || loginForm.username.trim()
+        const displayName = response.user.username || identifier
         ElMessage.success({
           message: `ようこそ、${displayName}さん`,
           duration: 2000,

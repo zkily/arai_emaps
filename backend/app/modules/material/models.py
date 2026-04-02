@@ -133,6 +133,23 @@ class StockMaterial(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
 
 
+class MaterialCuttingLog(Base):
+    """材料切断ログ（material_cutting_logs）— materialCutting.csv インポート先"""
+    __tablename__ = "material_cutting_logs"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    item = Column(String(100), comment="項目")
+    log_date = Column(Date, index=True, comment="日付")
+    log_time = Column(Time, comment="時間")
+    hd_no = Column(String(255), index=True, comment="HDNo")
+    operator_name = Column(String(100), comment="担当者")
+    material_cd = Column(String(255), index=True, comment="材料コード")
+    management_code = Column(String(255), index=True, comment="管理コード")
+    raw_line = Column(Text, comment="CSV原始行")
+    source_file = Column(String(500), comment="取込元ファイルパス")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+
+
 class MaterialUsageRecord(Base):
     """材料使用済テーブル（material_usage_record）
     切断工程の日次材料使用数を記録し、material_stock.planned_usage の更新ソースとなる。

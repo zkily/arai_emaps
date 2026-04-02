@@ -39,7 +39,7 @@ def _safe_date_iso(v: Any) -> Optional[str]:
     return str(v)
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
-from app.modules.master.models import Material
+from app.modules.master.models import Material, Supplier
 from app.modules.material.models import MaterialStock, MaterialStockSub
 from app.modules.material.schemas import (
     MaterialStockCreate,
@@ -290,6 +290,24 @@ async def get_stock_summary(
     }
 
 
+@router.get("/supplier-names")
+async def list_distinct_material_stock_supplier_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """仕入先名一覧：material_stock.supplier_name を重複除去（NULL・空文字除く、名称昇順）"""
+    q = (
+        select(distinct(MaterialStock.supplier_name))
+        .where(MaterialStock.supplier_name.isnot(None))
+        .where(MaterialStock.supplier_name != "")
+        .order_by(MaterialStock.supplier_name)
+    )
+    result = await db.execute(q)
+    raw = [row[0] for row in result.all() if row[0] is not None]
+    names = sorted({str(n).strip() for n in raw if str(n).strip()})
+    return {"success": True, "data": names}
+
+
 @router.post("/sync-material-master")
 async def sync_material_master_to_stock(
     body: dict | None = None,
@@ -303,6 +321,7 @@ async def sync_material_master_to_stock(
         - material_name
         - safety_stock
         - supplier_cd
+        - supplier_name（仕入先マスタ suppliers を supplier_cd で参照）
         - bundle_quantity
         - bundle_weight
         - standard_spec
@@ -353,6 +372,17 @@ async def sync_material_master_to_stock(
             row[0]: row for row in mat_rows  # (material_cd, name, safety, supplier_cd, standard_spec, unit_price, pieces_per_bundle, long_weight)
         }
 
+        # supplier_cd -> 仕入先名（material_stock.supplier_name は最大50文字）
+        supplier_cds = {str(row[3]).strip() for row in mat_rows if row[3] is not None and str(row[3]).strip()}
+        supplier_name_map: dict[str, str] = {}
+        if supplier_cds:
+            sup_stmt = select(Supplier.supplier_cd, Supplier.supplier_name).where(
+                Supplier.supplier_cd.in_(supplier_cds)
+            )
+            for scd, sname in (await db.execute(sup_stmt)).all():
+                name = (sname or "").strip()
+                supplier_name_map[str(scd).strip()] = name[:50] if len(name) > 50 else name
+
         # 対象となる material_stock 行を取得（materials.status=1 の material_cd のみ、必要なら期間で絞り込み）
         stock_stmt = select(MaterialStock).where(MaterialStock.material_cd.in_(master_map.keys()))
         if start_date:
@@ -372,6 +402,8 @@ async def sync_material_master_to_stock(
             stock.material_name = material_name
             stock.safety_stock = int(safety_stock or 0)
             stock.supplier_cd = supplier_cd
+            scd_key = (str(supplier_cd).strip() if supplier_cd is not None else "")
+            stock.supplier_name = supplier_name_map.get(scd_key, "") if scd_key else ""
             stock.standard_spec = (standard_spec or "").strip() or ""
             try:
                 stock.unit_price = float(unit_price or 0)

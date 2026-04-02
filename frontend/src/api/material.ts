@@ -161,6 +161,14 @@ export function getSupplierList(): Promise<{ success?: boolean; data?: string[] 
   }>
 }
 
+/** 仕入先名一覧（material_stock.supplier_name 去重・排序。材料在庫画面のフィルタ用） */
+export function getMaterialStockSupplierNames(): Promise<{ success?: boolean; data?: string[] }> {
+  return request.get(`${PREFIX}/stock/supplier-names`) as Promise<{
+    success?: boolean
+    data?: string[]
+  }>
+}
+
 // ─────────────────────────────────────────────
 // 材料在庫 (stock) / 在庫材料 (stock-materials)
 // ─────────────────────────────────────────────
@@ -390,4 +398,76 @@ export function saveMaruichiOrderPdf(
   return request.post(`${PREFIX}/stock/maruichi-order-pdf`, form, {
     timeout: 120000,
   }) as Promise<{ success?: boolean; message?: string; path?: string; detail?: string }>
+}
+
+// ─────────────────────────────────────────────
+// 切断 materialCutting.csv 取込 (cutting)
+// ─────────────────────────────────────────────
+
+export interface MaterialCuttingLogItem {
+  id: number
+  item?: string | null
+  log_date?: string | null
+  log_time?: string | null
+  hd_no?: string | null
+  operator_name?: string | null
+  material_cd?: string | null
+  management_code?: string | null
+  raw_line?: string | null
+  source_file?: string | null
+  created_at?: string | null
+}
+
+export interface MaterialCuttingLogsParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  startDate?: string
+  endDate?: string
+}
+
+export interface ImportMaterialCuttingCsvParams {
+  /** true: TRUNCATE 後に全行取込（最速・CSVに無い行も消える） */
+  full_replace?: boolean
+  /** この日数より古い log_date を先に削除。0 で無視。full_replace 時は無効 */
+  retain_days?: number
+}
+
+export interface ImportMaterialCuttingCsvResult {
+  success?: boolean
+  imported?: number
+  errors_count?: number
+  errors?: string[]
+  full_replace?: boolean
+  deleted_prune?: number
+  deleted_window?: number
+  retain_days?: number
+  csv_date_min?: string | null
+  csv_date_max?: string | null
+  skipped_before_retention?: number
+}
+
+export function importMaterialCuttingCsv(
+  params?: ImportMaterialCuttingCsvParams,
+): Promise<ImportMaterialCuttingCsvResult> {
+  const q: Record<string, boolean | number> = {}
+  if (params?.full_replace === true) q.full_replace = true
+  if (params?.retain_days !== undefined && params.retain_days !== null) {
+    q.retain_days = params.retain_days
+  }
+  return request.post(`${PREFIX}/cutting/import-csv`, undefined, {
+    params: Object.keys(q).length ? q : undefined,
+  }) as Promise<ImportMaterialCuttingCsvResult>
+}
+
+export function getMaterialCuttingLogs(
+  params?: MaterialCuttingLogsParams,
+): Promise<{
+  success?: boolean
+  data?: { list: MaterialCuttingLogItem[]; total: number }
+}> {
+  return request.get(`${PREFIX}/cutting/logs`, { params }) as Promise<{
+    success?: boolean
+    data?: { list: MaterialCuttingLogItem[]; total: number }
+  }>
 }
