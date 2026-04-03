@@ -144,6 +144,7 @@ class MaterialCuttingLog(Base):
     hd_no = Column(String(255), index=True, comment="HDNo")
     operator_name = Column(String(100), comment="担当者")
     material_cd = Column(String(255), index=True, comment="材料コード")
+    manufacture_no = Column(String(255), nullable=True, comment="製造番号（トリガーで material_cd から設定）")
     management_code = Column(String(255), index=True, comment="管理コード")
     raw_line = Column(Text, comment="CSV原始行")
     source_file = Column(String(500), comment="取込元ファイルパス")

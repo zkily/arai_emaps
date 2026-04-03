@@ -112,7 +112,8 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_QUALITY', name: '品質管理', path: '/erp/quality', icon: 'CircleCheck', parentCode: 'ERP', sortOrder: 9 },
   { code: 'ERP_QUALITY_MATERIAL', name: '材料受入履歴', path: '/erp/quality/material-association/receiving-history', parentCode: 'ERP_QUALITY', sortOrder: 1 },
   { code: 'ERP_QUALITY_MATERIAL_TOLERANCE', name: '材料公差管理', path: '/erp/quality/material-association/tolerance-management', parentCode: 'ERP_QUALITY', sortOrder: 1.1 },
-  { code: 'ERP_QUALITY_MATERIAL_CUTTING', name: '切断CSV取込', path: '/erp/quality/material-association/cutting-logs', parentCode: 'ERP_QUALITY', sortOrder: 1.15 },
+  { code: 'ERP_QUALITY_MATERIAL_CUTTING', name: '材料使用取込', path: '/erp/quality/material-association/cutting-logs', parentCode: 'ERP_QUALITY', sortOrder: 1.15 },
+  { code: 'ERP_QUALITY_PRODUCT_MATERIAL', name: '製品材料照会', path: '/erp/quality/material-association/product-material', parentCode: 'ERP_QUALITY', sortOrder: 1.2 },
   { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', path: '/erp/quality/product-association', parentCode: 'ERP_QUALITY', sortOrder: 2 },
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },

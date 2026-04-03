@@ -1,11 +1,5 @@
 <template>
-  <div
-    class="plan-baseline-root"
-    :class="{
-      'print-baseline': printTarget === 'baseline',
-      'print-operation': printTarget === 'operation',
-    }"
-  >
+  <div class="plan-baseline-root">
   <div class="plan-baseline-page">
     <!-- 紧凑型页面头部 -->
     <div class="page-header">
@@ -25,6 +19,7 @@
       </div>
       <el-button
         type="primary"
+        
         class="btn-refresh-modern"
         :icon="Refresh"
         @click="loadComparison"
@@ -528,7 +523,7 @@
           </el-table-column>
           <el-table-column prop="machine_cd" label="ラインCD" min-width="110" show-overflow-tooltip />
           <el-table-column prop="machine_name" label="ライン" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="operation_variance" label="操業度差異" width="120" align="right">
+          <el-table-column prop="operation_variance" label="操業度差異" width="120" align="center">
             <template #default="{ row }">
               <span
                 v-for="(ov, oi) in [operationVarianceRowView(row.operation_variance)]"
@@ -853,8 +848,6 @@ const exportPdfLoading = ref(false)
 const exportProgressVisible = ref(false)
 const exportProgressPercent = ref(0)
 const exportProgressCurrent = ref('')
-type PrintTarget = 'baseline' | 'operation' | ''
-const printTarget = ref<PrintTarget>('')
 const comparisonResult = ref<PlanBaselineComparisonResult | null>(null)
 const comparisonItems = ref<PlanBaselineComparisonItem[]>([])
 const activeTab = ref('all')
@@ -1879,7 +1872,7 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
         <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(r.display_process || '')}</td>
         <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_cd ?? ''))}</td>
         <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_name ?? ''))}</td>
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;text-align:right;${varStyle}">${inner}</td>
+        <td style="border:1px solid #bdbdbd;padding:5px 8px;text-align:center;${varStyle}">${inner}</td>
       </tr>`
     })
 
@@ -1893,7 +1886,7 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
               <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">工程</th>
               <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ラインCD</th>
               <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ライン</th>
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:right;">操業度差異</th>
+              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">操業度差異</th>
             </tr>
           </thead>
           <tbody>${rowParts.join('')}</tbody>
@@ -2024,18 +2017,202 @@ onMounted(() => {
   loadPlanOperationRate()
 })
 
-function handlePrintBaselineComparison() {
-  printTarget.value = 'baseline'
-  nextTick(() => {
-    window.print()
-  })
+/** 印刷用 HTML を隠し iframe で開き、ブラウザの印刷ダイアログのみ出す */
+function printWithIframeDoc(html: string, iframeTitle: string) {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('title', iframeTitle)
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText =
+    'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none'
+  document.body.appendChild(iframe)
+
+  const idoc = iframe.contentDocument
+  const iwin = iframe.contentWindow
+  if (!idoc || !iwin) {
+    iframe.remove()
+    ElMessage.error('印刷を開始できませんでした')
+    return
+  }
+
+  idoc.open()
+  idoc.write(html)
+  idoc.close()
+
+  let done = false
+  const runPrint = () => {
+    if (done) return
+    done = true
+    try {
+      iwin.focus()
+      iwin.print()
+    } finally {
+      setTimeout(() => iframe.remove(), 400)
+    }
+  }
+
+  iframe.onload = runPrint
+  setTimeout(runPrint, 200)
 }
 
+/** 現アクティブタブの比較テーブル行だけを印刷（ページ全体ではない） */
+function handlePrintBaselineComparison() {
+  const tab =
+    processTabs.value.find((t) => t.name === activeTab.value) ?? processTabs.value[0]
+  if (!tab?.items?.length) {
+    ElMessage.warning('印刷するデータがありません')
+    return
+  }
+
+  const esc = (v: unknown) => {
+    const s = v == null || v === '' ? '—' : String(v)
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  const monthSource = comparisonResult.value?.baselineMonth || queryForm.baselineMonth
+  const monthLabel = monthSource ? dayjs(monthSource).format('YYYY年MM月') : '—'
+
+  const headCells = ['日付', '基準計画', '現行計画', '計画差異', '現行実績合計', '計画対実績差']
+  const headerRow = headCells.map((h) => `<th>${esc(h)}</th>`).join('')
+
+  const wrapDiff = (v: number | null | undefined) => {
+    const t = formatNumber(v ?? null)
+    if (v === null || v === undefined) {
+      return `<td class="td-num"><span class="diff-muted">${esc(t)}</span></td>`
+    }
+    const c = getDiffClass(v)
+    const inner =
+      c === 'diff-negative'
+        ? `<span class="diff-neg">${esc(t)}</span>`
+        : c === 'diff-positive'
+          ? `<span class="diff-pos">${esc(t)}</span>`
+          : esc(t)
+    return `<td class="td-num">${inner}</td>`
+  }
+
+  const bodyRows = tab.items
+    .map((row) => {
+      const dateStr = formatDate(row.plan_date ?? '')
+      const actualCell =
+        row.current_actual !== null && row.current_actual !== undefined
+          ? `<td class="td-num">${esc(formatNumber(row.current_actual))}</td>`
+          : `<td class="td-num"><span class="diff-muted">-</span></td>`
+      return `<tr>
+<td class="td-date">${esc(dateStr)}</td>
+<td class="td-num">${esc(formatNumber(row.baseline_plan))}</td>
+<td class="td-num">${esc(formatNumber(row.current_plan))}</td>
+${wrapDiff(row.plan_diff ?? null)}
+${actualCell}
+${wrapDiff(row.actual_diff ?? null)}
+</tr>`
+    })
+    .join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>ベースライン比較</title>
+  <style>
+    @page { margin: 12mm; }
+    body { font-family: 'Segoe UI', 'Meiryo', 'Hiragino Sans', sans-serif; font-size: 11px; color: #111; }
+    h1 { font-size: 15px; margin: 0 0 6px; font-weight: 700; }
+    .meta { font-size: 10px; color: #333; margin: 0 0 10px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #333; padding: 4px 5px; vertical-align: top; word-wrap: break-word; }
+    th { background: #eee; text-align: center; font-weight: 600; }
+    .td-date { text-align: center; }
+    .td-num { text-align: right; }
+    .diff-neg { color: #c62828; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .diff-pos { color: #047857; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .diff-muted { color: #64748b; }
+  </style>
+</head>
+<body>
+  <h1>ベースライン比較一覧</h1>
+  <p class="meta">基準月：${esc(monthLabel)}　工程：${esc(tab.label)}　件数：${tab.items.length}</p>
+  <table>
+    <thead><tr>${headerRow}</tr></thead>
+    <tbody>${bodyRows}</tbody>
+  </table>
+</body>
+</html>`
+
+  printWithIframeDoc(html, 'ベースライン比較印刷')
+}
+
+/** 操業度：ページではなく、現在一覧に表示されている検索結果（planRateRows）だけを印刷 */
 function handlePrintOperationRate() {
-  printTarget.value = 'operation'
-  nextTick(() => {
-    window.print()
-  })
+  const rows = planRateRows.value
+  if (rows.length === 0) return
+
+  const esc = (v: unknown) => {
+    const s = v == null || v === '' ? '—' : String(v)
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  const monthLabel = planRateFilter.baselineMonth
+    ? dayjs(planRateFilter.baselineMonth).format('YYYY年MM月')
+    : '—'
+  const processLabel = planRateFilter.processName?.trim() || '全て'
+
+  const headCells = ['月', '工程', 'ラインCD', 'ライン', '操業度差異', '取込日時']
+  const headerRow = headCells.map((h) => `<th>${esc(h)}</th>`).join('')
+
+  const bodyRows = rows
+    .map((row) => {
+      const ov = operationVarianceRowView(row.operation_variance)
+      const ovHtml = ov.cls
+        ? `<span class="ov-neg">${esc(ov.text)}</span>`
+        : esc(ov.text)
+      return `<tr>
+<td>${esc(row.display_month)}</td>
+<td>${esc(row.display_process)}</td>
+<td>${esc(row.machine_cd)}</td>
+<td>${esc(row.machine_name)}</td>
+<td>${ovHtml}</td>
+<td>${esc(row.processed_at)}</td>
+</tr>`
+    })
+    .join('')
+
+  const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>操業度</title>
+  <style>
+    @page { margin: 12mm; }
+    body { font-family: 'Segoe UI', 'Meiryo', 'Hiragino Sans', sans-serif; font-size: 11px; color: #111; }
+    h1 { font-size: 15px; margin: 0 0 6px; font-weight: 700; }
+    .meta { font-size: 10px; color: #333; margin: 0 0 10px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #333; padding: 4px 5px; vertical-align: top; word-wrap: break-word; }
+    th { background: #eee; text-align: center; font-weight: 600; }
+    td:nth-child(1), td:nth-child(2), td:nth-child(5), td:nth-child(6) { text-align: center; }
+    .ov-neg { color: #c62828; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  </style>
+</head>
+<body>
+  <h1>操業度（production_plan_rate）</h1>
+  <p class="meta">対象月：${esc(monthLabel)}　工程：${esc(processLabel)}　件数：${rows.length}</p>
+  <table>
+    <thead><tr>${headerRow}</tr></thead>
+    <tbody>${bodyRows}</tbody>
+  </table>
+</body>
+</html>`
+
+  printWithIframeDoc(html, '操業度印刷')
 }
 </script>
 
@@ -2506,8 +2683,9 @@ function handlePrintOperationRate() {
   overflow: hidden;
 }
 
-.operation-variance-cell--negative {
-  color: #c62828;
+/* el-table セル既定の色より優先して負数を赤表示 */
+.operation-rate-table :deep(.operation-variance-cell--negative) {
+  color: #c62828 !important;
 }
 
 .card-header {
@@ -3272,43 +3450,4 @@ function handlePrintOperationRate() {
   }
 }
 
-@media print {
-  /* 打印时仅显示指定区域（同时隐藏按钮/筛选控件） */
-  .plan-baseline-root {
-    background: #ffffff !important;
-  }
-
-  .plan-baseline-root .page-header,
-  .plan-baseline-root .action-card,
-  .plan-baseline-root .summary-row,
-  .plan-baseline-root .el-dialog,
-  .plan-baseline-root .el-dialog__wrapper,
-  .plan-baseline-root .table-card {
-    display: none !important;
-  }
-
-  .plan-baseline-root.print-baseline .baseline-comparison-card,
-  .plan-baseline-root.print-operation .operation-rate-card {
-    display: block !important;
-  }
-
-  /* 只保留区域表头左侧信息，隐藏右侧操作（导出/打印/计数等） */
-  .plan-baseline-root.print-baseline .baseline-comparison-card .card-header-right .el-button {
-    display: none !important;
-  }
-
-  .plan-baseline-root.print-operation .operation-rate-card .operation-rate-header-actions > * {
-    display: none !important;
-  }
-
-  /* 取消表格固定高度与滚动，避免打印时只截到可视区域 */
-  .plan-baseline-root.print-baseline .comparison-table,
-  .plan-baseline-root.print-operation .operation-rate-table,
-  .plan-baseline-root.print-baseline .el-table__body-wrapper,
-  .plan-baseline-root.print-operation .el-table__body-wrapper {
-    height: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-  }
-}
 </style>

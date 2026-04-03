@@ -335,6 +335,7 @@ class MaterialCuttingLogResponse(BaseModel):
     hd_no: Optional[str] = None
     operator_name: Optional[str] = None
     material_cd: Optional[str] = None
+    manufacture_no: Optional[str] = None
     management_code: Optional[str] = None
     raw_line: Optional[str] = None
     source_file: Optional[str] = None

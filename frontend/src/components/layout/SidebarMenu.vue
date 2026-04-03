@@ -303,6 +303,10 @@
                 <el-icon><Upload /></el-icon>
                 <template #title><span :title="t('menu.ERP_QUALITY_MATERIAL_CUTTING')">{{ t('menu.ERP_QUALITY_MATERIAL_CUTTING') }}</span></template>
               </el-menu-item>
+              <el-menu-item index="/erp/quality/material-association/product-material">
+                <el-icon><Connection /></el-icon>
+                <template #title><span>製品材料照会</span></template>
+              </el-menu-item>
             </el-sub-menu>
             <el-sub-menu index="erp-quality-product">
               <template #title>

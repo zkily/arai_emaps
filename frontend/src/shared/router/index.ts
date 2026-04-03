@@ -182,7 +182,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/quality', name: 'ErpQuality', redirect: '/erp/quality/material-association/receiving-history' },
       { path: 'erp/quality/material-association/receiving-history', name: 'QualityMaterialReceivingHistory', component: () => import('@/views/erp/quality/material-association/MaterialReceivingHistory.vue'), meta: { title: '材料受入履歴', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/material-association/tolerance-management', name: 'QualityMaterialToleranceManagement', component: () => import('@/views/erp/quality/material-association/MaterialToleranceManagement.vue'), meta: { title: '材料公差管理', group: '品質管理 > 材料関連', requiresAuth: true } },
-      { path: 'erp/quality/material-association/cutting-logs', name: 'QualityMaterialCuttingLogs', component: () => import('@/views/erp/quality/material-association/MaterialCuttingLogs.vue'), meta: { title: '切断CSV取込', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/material-association/cutting-logs', name: 'QualityMaterialCuttingLogs', component: () => import('@/views/erp/quality/material-association/MaterialCuttingLogs.vue'), meta: { title: '材料使用取込', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/material-association/product-material', name: 'QualityProductMaterialAssociation', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociation.vue'), meta: { title: '製品材料照会', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/product-association', name: 'QualityProductAssociation', component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'), meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true } },
 
       // ========== APS モジュール ==========

@@ -2,7 +2,7 @@
  * 材料管理 API（/api/material/* 与后端 material 模块对应）
  */
 import request from '@/shared/api/request'
-import type { MaterialInspectionMaster, MaterialLogItem, StockMaterialItem } from '@/types/material'
+import type { MaterialInspectionMaster, MaterialLogItem, StockMaterialItem, ProductMaterialAssociationItem } from '@/types/material'
 
 const PREFIX = '/api/material'
 
@@ -401,6 +401,45 @@ export function saveMaruichiOrderPdf(
 }
 
 // ─────────────────────────────────────────────
+// 製品ー材料照会 (product-material-association)
+// ─────────────────────────────────────────────
+
+export interface ProductMaterialAssociationParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  product_cd?: string
+  management_code?: string
+  material_name?: string
+  process_type?: string
+  status?: string
+  startDate?: string
+  endDate?: string
+}
+
+export function getProductMaterialAssociation(
+  params?: ProductMaterialAssociationParams,
+): Promise<{
+  success?: boolean
+  data?: { list: ProductMaterialAssociationItem[]; total: number }
+}> {
+  return request.get(`${PREFIX}/product-material-association`, { params }) as Promise<{
+    success?: boolean
+    data?: { list: ProductMaterialAssociationItem[]; total: number }
+  }>
+}
+
+export function getProductMaterialProducts(): Promise<{
+  success?: boolean
+  data?: { product_cd: string; product_name?: string }[]
+}> {
+  return request.get(`${PREFIX}/product-material-association/products`) as Promise<{
+    success?: boolean
+    data?: { product_cd: string; product_name?: string }[]
+  }>
+}
+
+// ─────────────────────────────────────────────
 // 切断 materialCutting.csv 取込 (cutting)
 // ─────────────────────────────────────────────
 
@@ -412,6 +451,8 @@ export interface MaterialCuttingLogItem {
   hd_no?: string | null
   operator_name?: string | null
   material_cd?: string | null
+  /** トリガーで material_cd から算出（荒井/N 接頭辞ルール） */
+  manufacture_no?: string | null
   management_code?: string | null
   raw_line?: string | null
   source_file?: string | null

@@ -292,7 +292,7 @@ class MaterialService:
                         "material_name": "14.0×2.30×4730",
                         "process_cd": "KT19",
                         "quantity": 250,
-                        "supplier": "川崎INOAC",
+                        "supplier": "JFE溶接鋼管",
                         "material_quality": "INOAC55",
                     }
                 )

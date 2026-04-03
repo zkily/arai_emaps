@@ -84,9 +84,9 @@
           </div>
           <div class="stat-content">
             <div class="stat-value">
-              {{ stats.totalSafetyStock || 0 }}<span class="unit">束</span>
+              {{ stats.totalUsageQuantity || 0 }}
             </div>
-            <div class="stat-label">安全在庫数量</div>
+            <div class="stat-label">使用数合計</div>
           </div>
         </div>
 
@@ -1605,7 +1605,7 @@ const stats = ref({
   totalMaterials: 0,
   totalCurrentStock: 0,
   averageUnitPrice: 0,
-  totalSafetyStock: 0,
+  totalUsageQuantity: 0,
   totalOrderQuantity: 0,
   totalOrderValue: 0,
   totalOrderBundleQuantity: 0,
@@ -1763,9 +1763,9 @@ const averageUnitPrice = computed(() => {
   return totalPrice / tableData.value.length
 })
 
-// 安全在庫数量：按照材料种类合计safety_stock字段
-const totalSafetyStock = computed(() => {
-  return tableData.value.reduce((total, row) => total + (row.safety_stock || 0), 0)
+// 使用数合計：当前一覧（tableData）の usage_quantity 合計
+const totalUsageQuantity = computed(() => {
+  return tableData.value.reduce((total, row) => total + (row.usage_quantity || 0), 0)
 })
 
 // 计算重量和金额
@@ -2121,7 +2121,7 @@ const updateStats = () => {
   stats.value.totalMaterials = totalMaterials.value
   stats.value.totalCurrentStock = totalCurrentStock.value
   stats.value.averageUnitPrice = averageUnitPrice.value
-  stats.value.totalSafetyStock = totalSafetyStock.value
+  stats.value.totalUsageQuantity = totalUsageQuantity.value
   stats.value.totalOrderQuantity = totalOrderQuantity.value
   stats.value.totalOrderValue = totalOrderValue.value
   stats.value.totalOrderBundleQuantity = totalOrderBundleQuantity.value

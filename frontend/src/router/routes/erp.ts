@@ -476,6 +476,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         meta: { title: '材料受入履歴', group: '品質管理 > 材料関連', requiresAuth: true },
       },
       {
+        path: 'erp/quality/material-association/product-material',
+        name: 'QualityProductMaterialAssociationErp',
+        component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociation.vue'),
+        meta: { title: '製品材料照会', group: '品質管理 > 材料関連', requiresAuth: true },
+      },
+      {
         path: 'erp/quality/product-association',
         name: 'QualityProductAssociation',
         component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'),

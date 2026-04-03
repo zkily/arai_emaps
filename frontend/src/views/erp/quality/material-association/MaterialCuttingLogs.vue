@@ -3,9 +3,9 @@
     <div class="page-header">
       <div class="header-left">
         <div class="title-wrap">
-          <h2>切断CSV取込</h2>
+          <h2>材料使用取込</h2>
           <p>
-            共有フォルダの materialCutting.csv を手動取込。デフォルトは「5日より古い行を削除 → CSVの日付最小〜最大の範囲を削除 → 取込」で再取込時の重複を防ぎます（log_date インデックス利用で高速）。
+            共有フォルダの materialCutting.csv を手動取込（材料使用ログ）。デフォルトは「5日より古い行を削除 → CSVの日付最小〜最大の範囲を削除 → 取込」で再取込時の重複を防ぎます（log_date インデックス利用で高速）。
           </p>
         </div>
         <div class="header-stats">
@@ -39,7 +39,7 @@
     <div class="filter-bar">
       <el-input
         v-model="keyword"
-        placeholder="材料コード・管理コード・HDNo・担当者で検索"
+        placeholder="材料コード・製造番号・管理コード・HDNo・担当者で検索"
         clearable
         :prefix-icon="Search"
         size="small"
@@ -77,6 +77,11 @@
         <el-table-column label="材料コード" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             {{ toPlainCodeDisplay(row.material_cd) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="製造番号" min-width="140" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ toPlainCodeDisplay(row.manufacture_no) }}
           </template>
         </el-table-column>
         <el-table-column label="管理コード" min-width="140" show-overflow-tooltip>
@@ -165,10 +170,10 @@ const onSizeChange = () => {
 
 const onImport = async () => {
   const msg = fullReplace.value
-    ? 'テーブルを TRUNCATE してから CSV を全件取込します。既存の切断ログはすべて削除されます。続行しますか？'
+    ? 'テーブルを TRUNCATE してから CSV を全件取込します。既存の材料使用ログはすべて削除されます。続行しますか？'
     : `保持日数 ${retainDays.value}：それより古い行を削除し、CSV の日付範囲内を置換してから取込します（重複しません）。よろしいですか？`
   try {
-    await ElMessageBox.confirm(msg, 'CSV取込', {
+    await ElMessageBox.confirm(msg, '材料使用取込', {
       type: 'warning',
       confirmButtonText: '取込',
       cancelButtonText: 'キャンセル',

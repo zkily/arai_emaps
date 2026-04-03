@@ -232,6 +232,7 @@ def _log_to_dict(r: MaterialCuttingLog) -> dict:
         "operator_name": r.operator_name,
         # JSON で数値化され指数表記になるのを防ぐ（常に文字列で返す）
         "material_cd": str(r.material_cd) if r.material_cd is not None else None,
+        "manufacture_no": str(r.manufacture_no) if r.manufacture_no is not None else None,
         "management_code": str(r.management_code) if r.management_code is not None else None,
         "raw_line": r.raw_line,
         "source_file": r.source_file,
@@ -257,6 +258,7 @@ async def list_cutting_logs(
         q = q.where(
             or_(
                 MaterialCuttingLog.material_cd.ilike(kw),
+                MaterialCuttingLog.manufacture_no.ilike(kw),
                 MaterialCuttingLog.management_code.ilike(kw),
                 MaterialCuttingLog.hd_no.ilike(kw),
                 MaterialCuttingLog.operator_name.ilike(kw),
