@@ -152,6 +152,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production', name: 'Production', component: () => import('@/views/erp/Production.vue'), meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
+      { path: 'erp/production/plan-schedules', name: 'ProductionPlanScheduleView', component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'), meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/instruction/cutting', name: 'CuttingInstruction', component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'), meta: { title: '切断・面取指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/instruction/forming', name: 'FormingInstruction', component: () => import('@/views/erp/production/instruction/forming/FormingInstruction.vue'), meta: { title: '成型指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/instruction/welding', name: 'WeldingInstruction', component: () => import('@/views/erp/production/instruction/welding/WeldingInstruction.vue'), meta: { title: '溶接指示', group: '生産管理 > 生産指示', requiresAuth: true } },
@@ -184,6 +185,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/quality/material-association/tolerance-management', name: 'QualityMaterialToleranceManagement', component: () => import('@/views/erp/quality/material-association/MaterialToleranceManagement.vue'), meta: { title: '材料公差管理', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/material-association/cutting-logs', name: 'QualityMaterialCuttingLogs', component: () => import('@/views/erp/quality/material-association/MaterialCuttingLogs.vue'), meta: { title: '材料使用取込', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/material-association/product-material', name: 'QualityProductMaterialAssociation', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociation.vue'), meta: { title: '製品材料照会', group: '品質管理 > 材料関連', requiresAuth: true } },
+      { path: 'erp/quality/material-association/product-material/help', name: 'QualityProductMaterialAssociationHelp', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociationHelp.vue'), meta: { title: '製品材料照会 操作説明', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/product-association', name: 'QualityProductAssociation', component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'), meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true } },
 
       // ========== APS モジュール ==========

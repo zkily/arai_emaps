@@ -72,6 +72,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_PLANNING', name: '生産計画', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION', sortOrder: 5 },
   { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_INSTRUCTION', name: '生産指示', path: '/erp/production/instruction', parentCode: 'ERP_PRODUCTION', sortOrder: 6 },
   { code: 'ERP_PRODUCTION_INSTR_CUTTING', name: '切断・面取指示', path: '/erp/production/instruction/cutting', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_INSTR_FORMING', name: '成型指示', path: '/erp/production/instruction/forming', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 3 },
@@ -114,6 +115,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_QUALITY_MATERIAL_TOLERANCE', name: '材料公差管理', path: '/erp/quality/material-association/tolerance-management', parentCode: 'ERP_QUALITY', sortOrder: 1.1 },
   { code: 'ERP_QUALITY_MATERIAL_CUTTING', name: '材料使用取込', path: '/erp/quality/material-association/cutting-logs', parentCode: 'ERP_QUALITY', sortOrder: 1.15 },
   { code: 'ERP_QUALITY_PRODUCT_MATERIAL', name: '製品材料照会', path: '/erp/quality/material-association/product-material', parentCode: 'ERP_QUALITY', sortOrder: 1.2 },
+  { code: 'ERP_QUALITY_PRODUCT_MATERIAL_HELP', name: '製品材料照会 操作説明', path: '/erp/quality/material-association/product-material/help', parentCode: 'ERP_QUALITY', sortOrder: 1.21 },
   { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', path: '/erp/quality/product-association', parentCode: 'ERP_QUALITY', sortOrder: 2 },
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },

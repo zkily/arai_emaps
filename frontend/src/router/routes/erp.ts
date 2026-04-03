@@ -290,6 +290,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
         meta: { title: '生産計画ベースライン管理 操作説明', group: '生産管理 > 生産計画', requiresAuth: true },
       },
+      {
+        path: 'erp/production/plan-schedules',
+        name: 'ProductionPlanScheduleView',
+        component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'),
+        meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true },
+      },
       // ── 生産指示 ──
       {
         path: 'erp/production/instruction/cutting',

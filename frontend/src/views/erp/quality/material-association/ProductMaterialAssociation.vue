@@ -12,7 +12,11 @@
       </div>
       <div class="pma-bar__right">
         <span class="pma-pill">{{ total.toLocaleString() }} 件</span>
+        <el-button class="pma-btn pma-btn--help" size="small" :icon="Reading" @click="goToHelp">
+          操作説明
+        </el-button>
         <el-button
+          class="pma-btn pma-btn--print"
           size="small"
           :icon="Printer"
           :loading="printLoading"
@@ -21,7 +25,14 @@
         >
           印刷
         </el-button>
-        <el-button type="primary" size="small" :icon="Refresh" :loading="loading" @click="fetchList">
+        <el-button
+          class="pma-btn pma-btn--refresh"
+          type="success"
+          size="small"
+          :icon="Refresh"
+          :loading="loading"
+          @click="fetchList"
+        >
           再読込
         </el-button>
       </div>
@@ -63,8 +74,10 @@
         size="small"
         class="pma-filters__date"
       />
-      <el-button type="primary" size="small" :icon="Search" @click="onSearch">検索</el-button>
-      <el-button size="small" @click="onClear">クリア</el-button>
+      <el-button class="pma-btn pma-btn--search" type="primary" size="small" :icon="Search" @click="onSearch">
+        検索
+      </el-button>
+      <el-button class="pma-btn pma-btn--clear" size="small" @click="onClear">クリア</el-button>
     </section>
 
     <div class="pma-table-shell">
@@ -115,8 +128,9 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Box, Printer, Refresh, Search } from '@element-plus/icons-vue'
+import { Box, Printer, Reading, Refresh, Search } from '@element-plus/icons-vue'
 import {
   getProductMaterialAssociation,
   getProductMaterialProducts,
@@ -166,6 +180,12 @@ const PRINT_DOCUMENT_STYLES = `
       .print-table thead { display: table-header-group; }
     }
 `
+
+const router = useRouter()
+
+const goToHelp = () => {
+  router.push({ name: 'QualityProductMaterialAssociationHelp' })
+}
 
 const loading = ref(false)
 const printLoading = ref(false)
@@ -438,7 +458,113 @@ onMounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+}
+
+/* ツールバー・検索行のボタン（役割ごとに色分け） */
+.pma-btn {
+  font-weight: 600;
+  border-radius: 8px;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
+}
+
+.pma-btn:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.pma-btn--help.el-button {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: #a5b4fc;
+  --el-button-text-color: #4338ca;
+  --el-button-hover-bg-color: #eef2ff;
+  --el-button-hover-border-color: #818cf8;
+  --el-button-hover-text-color: #3730a3;
+  --el-button-active-border-color: #6366f1;
+  background: linear-gradient(180deg, #f5f7ff 0%, #eef2ff 100%);
+  border-width: 1px;
+  box-shadow: 0 1px 2px rgba(67, 56, 202, 0.08);
+}
+
+.pma-btn--help.el-button:hover {
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.18);
+}
+
+.pma-btn--print.el-button {
+  --el-button-bg-color: #ffffff;
+  --el-button-border-color: #cbd5e1;
+  --el-button-text-color: #475569;
+  --el-button-hover-bg-color: #f8fafc;
+  --el-button-hover-border-color: #94a3b8;
+  --el-button-hover-text-color: #334155;
+  --el-button-disabled-bg-color: #f1f5f9;
+  --el-button-disabled-border-color: #e2e8f0;
+  --el-button-disabled-text-color: #94a3b8;
+  border-width: 1px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.pma-btn--print.el-button:hover:not(.is-disabled) {
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.pma-btn--refresh.el-button {
+  --el-button-bg-color: #0d9488;
+  --el-button-border-color: #0f766e;
+  --el-button-hover-bg-color: #0f766e;
+  --el-button-hover-border-color: #115e59;
+  --el-button-active-bg-color: #115e59;
+  --el-button-active-border-color: #134e4a;
+  background: linear-gradient(165deg, #14b8a6 0%, #0d9488 45%, #0f766e 100%);
+  border-width: 1px;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.pma-btn--refresh.el-button:hover:not(.is-disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 3px 12px rgba(13, 148, 136, 0.4);
+}
+
+.pma-btn--refresh.el-button.is-disabled {
+  filter: none;
+  box-shadow: none;
+  opacity: 0.65;
+}
+
+.pma-btn--search.el-button {
+  background: linear-gradient(165deg, #38bdf8 0%, #0ea5e9 48%, #0284c7 100%);
+  border-width: 1px;
+  border-color: #0369a1;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+}
+
+.pma-btn--search.el-button:hover:not(.is-disabled) {
+  filter: brightness(1.04);
+  box-shadow: 0 3px 12px rgba(14, 165, 233, 0.42);
+}
+
+.pma-btn--search.el-button.is-disabled {
+  filter: none;
+  box-shadow: none;
+  opacity: 0.65;
+}
+
+.pma-btn--clear.el-button {
+  --el-button-bg-color: #fffbeb;
+  --el-button-border-color: #fcd34d;
+  --el-button-text-color: #b45309;
+  --el-button-hover-bg-color: #fef3c7;
+  --el-button-hover-border-color: #fbbf24;
+  --el-button-hover-text-color: #92400e;
+  --el-button-active-border-color: #d97706;
+  border-width: 1px;
+  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.08);
+}
+
+.pma-btn--clear.el-button:hover {
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
 }
 
 .pma-pill {

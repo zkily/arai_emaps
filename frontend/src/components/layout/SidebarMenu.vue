@@ -221,6 +221,10 @@
                 <el-icon><TrendCharts /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_BASELINE')">{{ t('menu.ERP_PRODUCTION_BASELINE') }}</span></template>
               </el-menu-item>
+              <el-menu-item index="/erp/production/plan-schedules">
+                <el-icon><DataLine /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_PLAN_SCHEDULES')">{{ t('menu.ERP_PRODUCTION_PLAN_SCHEDULES') }}</span></template>
+              </el-menu-item>
             </el-sub-menu>
             <el-sub-menu index="erp-production-instruction">
               <template #title>

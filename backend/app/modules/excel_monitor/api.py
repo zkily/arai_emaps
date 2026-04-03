@@ -28,8 +28,10 @@ def _row_to_plan_record(row: Any) -> dict:
     plan_date = _val("plan_date")
     if hasattr(plan_date, "isoformat"):
         plan_date = plan_date.isoformat()[:10] if plan_date else None
+    file_n = _val("file_name")
     return {
         "id": _val("id"),
+        "file_name": file_n,
         "plan_date": plan_date,
         "quantity": _val("quantity", 0),
         "machine_name": _val("machine_name"),
@@ -50,6 +52,10 @@ async def get_plan_data(
     processName: Optional[str] = Query(None),
     machineName: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    productNameExact: Optional[str] = Query(
+        None,
+        description="品名と完全一致で絞込（生産スケジュール等からの照会用）",
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(10000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
@@ -57,6 +63,7 @@ async def get_plan_data(
 ):
     """
     計画データ取得。production_plan_updates を読み、equipment_efficiency で能率・段取時間を補完。
+    productNameExact 指定時は品名完全一致（keyword の LIKE とは独立して併用可）。
     """
     if not startDate or not endDate:
         return {
@@ -66,7 +73,7 @@ async def get_plan_data(
         }
     # production_plan_updates LEFT JOIN equipment_efficiency (machine_cd + product_cd)
     sql = text("""
-        SELECT ppu.id, ppu.plan_date, ppu.quantity, ppu.machine_name, ppu.machine_cd,
+        SELECT ppu.id, ppu.file_name, ppu.plan_date, ppu.quantity, ppu.machine_name, ppu.machine_cd,
                ppu.process_name, ppu.operator, ppu.product_name, ppu.product_cd,
                ee.efficiency_rate, ee.step_time AS setup_time
         FROM production_plan_updates ppu
@@ -75,6 +82,7 @@ async def get_plan_data(
         WHERE ppu.plan_date BETWEEN :start_date AND :end_date
           AND (:process_name IS NULL OR ppu.process_name = :process_name)
           AND (:machine_name IS NULL OR ppu.machine_name = :machine_name)
+          AND (:pne IS NULL OR ppu.product_name = :pne)
           AND (
             :keyword IS NULL OR :keyword = ''
             OR ppu.product_name LIKE :kw_like
@@ -84,12 +92,14 @@ async def get_plan_data(
         LIMIT :limit OFFSET :offset
     """)
     kw = keyword.strip() if keyword else ""
+    pne = (productNameExact or "").strip() or None
     offset = (page - 1) * limit
     params = {
         "start_date": startDate,
         "end_date": endDate,
         "process_name": processName or None,
         "machine_name": machineName or None,
+        "pne": pne,
         "keyword": kw or None,
         "kw_like": f"%{kw}%" if kw else "%",
         "limit": limit,
@@ -101,13 +111,23 @@ async def get_plan_data(
         WHERE ppu.plan_date BETWEEN :start_date AND :end_date
           AND (:process_name IS NULL OR ppu.process_name = :process_name)
           AND (:machine_name IS NULL OR ppu.machine_name = :machine_name)
+          AND (:pne IS NULL OR ppu.product_name = :pne)
           AND (
             :keyword IS NULL OR :keyword = ''
             OR ppu.product_name LIKE :kw_like
             OR ppu.product_cd LIKE :kw_like
           )
     """)
-    count_result = await db.execute(count_sql, {k: v for k, v in params.items() if k in ("start_date", "end_date", "process_name", "machine_name", "keyword", "kw_like")})
+    _count_keys = (
+        "start_date",
+        "end_date",
+        "process_name",
+        "machine_name",
+        "pne",
+        "keyword",
+        "kw_like",
+    )
+    count_result = await db.execute(count_sql, {k: v for k, v in params.items() if k in _count_keys})
     total = (count_result.scalar() or 0) or 0
     if hasattr(total, "__int__"):
         total = int(total)
