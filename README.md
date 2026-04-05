@@ -14,14 +14,15 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 | ------------------ | --------------------------------------- |
 | **フレームワーク** | Vue.js 3 (Composition API)              |
 | **言語**           | TypeScript                              |
-| **ビルドツール**   | Vite 5.0+                               |
+| **ビルドツール**   | Vite 6.x                                |
 | **状態管理**       | Pinia (永続化対応)                      |
 | **ルーティング**   | Vue Router 4                            |
 | **UIライブラリ**   | Element Plus 2.5+                       |
 | **チャート**       | ECharts 5.4+, Chart.js 4.5+             |
 | **国際化**         | Vue I18n 11.2+                          |
 | **日時処理**       | Day.js 1.11+                            |
-| **その他**         | Axios, XLSX, QRCode, html2canvas, jsPDF |
+| **テーブル・DnD**  | vxe-table, xe-utils, vuedraggable, SortableJS |
+| **その他**         | Axios, XLSX, file-saver, QRCode, html2canvas, jsPDF, markdown-it |
 
 ### バックエンド
 
@@ -107,6 +108,11 @@ Smart-EMAPs/
 ```
 
 詳細なプロジェクト構造については、[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) を参照してください。
+
+### リポジトリ規約（要約）
+
+- **タイムゾーン**: JST（`Asia/Tokyo`）で統一。バックエンドは `app.core.datetime_utils`、フロントは Day.js + Element Plus `ja` を使用。
+- 詳細は [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) の冒頭「プロジェクト規約」を参照。
 
 ## 🧩 アーキテクチャ詳細
 
@@ -323,6 +329,7 @@ python start.py
 - ✅ バックエンドサーバーの起動（ポート: 8005）
 - ✅ フロントエンド開発サーバーの起動（ポート: 5000）
 - ✅ フロントエンド本番サーバーの起動（ポート: 3005）
+- ✅ **ファイル監視**（`start.py` 内のプロセス名「ファイル監視」）：`.env` の `FILE_WATCH_*` で共有フォルダ上の CSV / 生産計画 Excel を監視する場合に利用（パス未設定・到達不能時はスキップやエラーになることがあります）
 
 起動後、以下のURLでアクセスできます：
 
@@ -336,18 +343,25 @@ python start.py
 #### 1. データベースの初期化
 
 ```bash
-# MySQLにログイン
 mysql -u root -p
-
-# データベースとユーザーの作成
-CREATE DATABASE smart_emap CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'emap_user'@'localhost' IDENTIFIED BY 'emap_password';
-GRANT ALL PRIVILEGES ON smart_emap.* TO 'emap_user'@'localhost';
-FLUSH PRIVILEGES;
-
-# 初期化スクリプトの実行
-mysql -u emap_user -p smart_emap < backend/database/init/01_init.sql
 ```
+
+MySQL クライアント内でユーザーを作成します（**データベース名は `backend/.env` の `DB_NAME` と一致**させてください。`env.example` では `eams_db` の例です）。
+
+```sql
+CREATE DATABASE eams_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'emap_user'@'localhost' IDENTIFIED BY 'emap_password';
+GRANT ALL PRIVILEGES ON eams_db.* TO 'emap_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+シェルから初期化スクリプトを流します。
+
+```bash
+mysql -u emap_user -p eams_db < backend/database/init/01_init.sql
+```
+
+続けて `backend/database/migrations/` 配下の SQL を**番号順**に適用します。APS まわりの新規環境では基線 `200_unified_aps_schema.sql` とその後の増分をどう扱うか、[backend/database/migrations/README.md](backend/database/migrations/README.md) を参照してください。
 
 #### 2. バックエンドセットアップ
 
@@ -383,7 +397,46 @@ npm run dev
 # または本番ビルド
 npm run build
 npm run preview
+
+# 品質チェック（任意）
+npm run lint
+npm run type-check
+npm run build:check
 ```
+
+### バックエンド・フロントエンドの接続
+
+- **開発時**: `frontend/vite.config.ts` の `server.proxy` で `/api` と WebSocket を `http://localhost:8005`（および `ws://localhost:8005`）へ転送します。Axios のベース URL は空（相対パス）でプロキシ経由になります（`frontend/src/shared/api/request.ts`）。
+- **本番ビルド**: 環境変数 `VITE_API_BASE_URL`、または配布時に注入する `api-config.js` の `__API_BASE__` で API の基底 URL を上書きできます。
+
+## 📋 環境変数（バックエンド）
+
+`backend/env.example` を `backend/.env` にコピーして編集します（**本番では `SECRET_KEY` / JWT 系を必ず変更**）。
+
+| 変数 | 説明 |
+|------|------|
+| `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | MySQL 接続。DB 名は作成したデータベースと一致させる |
+| `SECRET_KEY`, `JWT_SECRET` / `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES` | 認証トークン関連 |
+| `CORS_ORIGINS`, `CORS_ALLOW_ALL` | フロントエンドオリジンの許可（LAN から開発する場合は調整） |
+| `TIMEZONE` | 既定 `Asia/Tokyo` |
+| `LOG_LEVEL`, `LOG_FILE` | ログ出力 |
+| `FILE_WATCH_BASE_PATH`, `FILE_WATCH_EXCEL_BASE_PATH`, `FILE_WATCH_POLL_INTERVAL`, `FILE_WATCH_DEBOUNCE_SEC` | 共有フォルダ上の CSV / 生産計画 Excel 監視（未使用なら空またはコメントアウトでよい） |
+
+`.env` は **UTF-8** で保存してください（ファイル監視コメントの通り）。
+
+## 🧪 テスト・静的解析
+
+- **フロントエンド**: `npm run lint`、`npm run type-check`、`npm run build:check`
+- **バックエンド**: `requirements.txt` に Pytest 系が含まれています。テストモジュールを配置したうえで、例として `cd backend && pytest` で実行します（プロジェクト内に `tests/` 等を追加する運用を想定）。
+
+## 🔧 トラブルシューティング（よくある件）
+
+| 現象 | 確認すること |
+|------|----------------|
+| フロントから API が 404 / 接続不可 | バックエンドが `8005` で起動しているか、`vite` 開発サーバを経由しているか（直に `file://` で開いていないか） |
+| CORS エラー | `backend/.env` の `CORS_ORIGINS` にフロントの URL（例: `http://localhost:5000`）が含まれるか。開発のみなら `CORS_ALLOW_ALL=true` の是非を検討 |
+| ポート使用中 | `start.py` が解放を試みます。手動の場合は `8005` / `5000` / `3005` を占有しているプロセスを終了 |
+| ファイル監視が失敗する | `FILE_WATCH_*` のパスが存在し、実行ユーザーから読み取れるか（UNC パスは権限・ネットワークに注意） |
 
 ## 🧰 開発環境・推奨エディタ/プラグイン
 
@@ -460,5 +513,4 @@ Smart-EMAPs開発チーム
 
 ---
 
- 
-**最終更新日時**: 2026年3月16日（日本時間）
+**最終更新日時**: 2026年4月5日（日本時間）
