@@ -418,6 +418,59 @@ class ProductBomLine(Base):
 
 
 # ---------------------------------------------------------------------------
+# 工程加工費マスタ（工程×加工方法別単価）
+# ---------------------------------------------------------------------------
+
+
+class ProcessProcessingFee(Base):
+    """工程加工費（process_processing_fees）— 所属工程と加工方法ごとに加工費が異なる"""
+
+    __tablename__ = "process_processing_fees"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    process_cd = Column(String(50), nullable=False, index=True)
+    method_cd = Column(String(50), nullable=False)
+    method_name = Column(String(100))
+    unit_price = Column(Numeric(18, 4), nullable=False, default=0)
+    currency = Column(String(10), nullable=False, default="JPY")
+    charge_uom = Column(String(20), nullable=False, default="式")
+    effective_from = Column(Date)
+    effective_to = Column(Date)
+    status = Column(String(20), nullable=False, default="active")
+    remarks = Column(Text)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 部品マスタ（標準単価・通貨・為替→JPY換算）
+# ---------------------------------------------------------------------------
+
+
+class PartMaster(Base):
+    """部品マスタ（part_masters）— BOM子品目の標準原価用"""
+
+    __tablename__ = "part_masters"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    part_cd = Column(String(50), unique=True, nullable=False, index=True)
+    part_name = Column(String(200), nullable=False)
+    uom = Column(String(20), nullable=False, default="個")
+    unit_price = Column(Numeric(18, 6), nullable=False, default=0)
+    currency = Column(String(10), nullable=False, default="JPY")
+    exchange_rate = Column(Numeric(18, 6), nullable=False, default=1)
+    supplier_cd = Column(String(50))
+    status = Column(String(20), nullable=False, default="active")
+    remarks = Column(Text)
+    created_by = Column(String(100))
+    updated_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
 # 工程別標準原価増分
 # ---------------------------------------------------------------------------
 

@@ -1,97 +1,94 @@
 <template>
   <div class="product-process-bom-container">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="title-section">
-          <h1 class="main-title">
-            <el-icon class="title-icon">
-              <Tools />
-            </el-icon>
-            製品工程BOM管理
-          </h1>
-          <p class="subtitle">製品工程の設定・管理を行います</p>
+    <!-- 顶部英雄区 -->
+    <header class="ppb-hero">
+      <div class="ppb-hero__accent" aria-hidden="true" />
+      <div class="ppb-hero__grid" />
+      <div class="ppb-hero__inner">
+        <div class="ppb-hero__brand">
+          <div class="ppb-hero__icon-wrap">
+            <el-icon :size="22"><Tools /></el-icon>
+          </div>
+          <div class="ppb-hero__titles">
+            <h1 class="ppb-hero__title">製品工程BOM管理</h1>
+            <p class="ppb-hero__subtitle">工程フラグ・LT を一覧編集（セル変更は自動保存）</p>
+          </div>
         </div>
-        <div class="header-stats">
-          <div class="stat-card">
-            <div class="stat-number">{{ stats.total || 0 }}</div>
-            <div class="stat-label">登録数</div>
+        <div class="ppb-hero__stats">
+          <div class="ppb-stat ppb-stat--total">
+            <el-icon class="ppb-stat__ico"><List /></el-icon>
+            <div class="ppb-stat__body">
+              <span class="ppb-stat__num">{{ stats.total || 0 }}</span>
+              <span class="ppb-stat__lbl">登録数</span>
+            </div>
           </div>
-          <div class="stat-card stat-card-active">
-            <div class="stat-number">{{ stats.active_count || 0 }}</div>
-            <div class="stat-label">现行</div>
+          <div class="ppb-stat ppb-stat--active">
+            <el-icon class="ppb-stat__ico"><CircleCheck /></el-icon>
+            <div class="ppb-stat__body">
+              <span class="ppb-stat__num">{{ stats.active_count || 0 }}</span>
+              <span class="ppb-stat__lbl">現行</span>
+            </div>
           </div>
-          <div class="stat-card stat-card-discontinued">
-            <div class="stat-number">{{ stats.discontinued_count || 0 }}</div>
-            <div class="stat-label">終息</div>
+          <div class="ppb-stat ppb-stat--halt">
+            <el-icon class="ppb-stat__ico"><CircleClose /></el-icon>
+            <div class="ppb-stat__body">
+              <span class="ppb-stat__num">{{ stats.discontinued_count || 0 }}</span>
+              <span class="ppb-stat__lbl">終息</span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </header>
 
-    <!-- 功能操作区域 -->
-    <div class="action-section">
-      <!-- 筛选标题 -->
-      <div class="filter-header">
-        <div class="filter-title">
-          <el-icon class="filter-icon">
-            <Filter />
-          </el-icon>
-          <span>検索・絞り込み</span>
-        </div>
-        <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
-            クリア
-          </el-button>
-          <el-button type="primary" @click="handleFilter" :icon="Search" class="search-btn">
-            検索
-          </el-button>
-          <el-button
-            type="success"
-            @click="handleSync"
-            :icon="Refresh"
-            class="sync-btn"
-            :loading="syncing"
-          >
-            製品情報同期
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 筛选内容 -->
-      <div class="filters-grid">
-        <!-- 关键词搜索 -->
-        <div class="filter-item search-item">
-          <label class="filter-label">
-            <el-icon>
-              <Search />
-            </el-icon>
-            キーワード
-          </label>
+    <!-- 検索（1行コンパクト） -->
+    <section class="ppb-toolbar">
+      <div class="ppb-toolbar__compact">
+        <div class="ppb-toolbar__search-row">
+          <span class="ppb-pill">検索</span>
           <el-input
             v-model="filters.keyword"
-            placeholder="製品コードまたは製品名を入力"
+            placeholder="製品コード・製品名"
             clearable
+            class="ppb-search-input"
             @clear="handleFilter"
             @keyup.enter="handleFilter"
-            class="filter-input"
-          />
+          >
+            <template #prefix>
+              <el-icon class="ppb-input-prefix"><Search /></el-icon>
+            </template>
+          </el-input>
+        </div>
+        <div class="ppb-toolbar__actions">
+          <el-button size="small" @click="clearFilters" :icon="Refresh">クリア</el-button>
+          <el-button type="primary" size="small" @click="handleFilter" :icon="Search">検索</el-button>
+          <el-button type="success" size="small" plain @click="handleSync" :icon="Refresh" :loading="syncing">
+            同期
+          </el-button>
         </div>
       </div>
-    </div>
+    </section>
 
-    <!-- 数据表格 -->
-    <div class="table-section">
-      <el-card class="table-card" shadow="never">
+    <!-- データ一覧 -->
+    <section class="ppb-table-section">
+      <el-card class="ppb-table-card" shadow="never">
+        <template #header>
+          <div class="ppb-table-cap">
+            <div class="ppb-table-cap__left">
+              <span class="ppb-table-cap__dot" />
+              <span class="ppb-table-cap__title">登録一覧</span>
+              <span class="ppb-table-cap__hint">自動保存 · デバウンス</span>
+            </div>
+          </div>
+        </template>
         <el-table
+          class="ppb-el-table"
           :data="bomList"
           v-loading="loading"
           stripe
-          border
           style="width: 100%"
           :empty-text="'データがありません'"
-          height="calc(100vh - 360px)"
-          :row-style="{ height: '40px' }"
+          height="calc(100vh - 300px)"
+          :row-style="{ height: '36px' }"
           @sort-change="handleSortChange"
           :default-sort="{ prop: 'product_name', order: 'ascending' }"
         >
@@ -454,10 +451,10 @@
           </el-table-column>
         </el-table>
       </el-card>
-    </div>
+    </section>
 
-    <!-- 分页组件 -->
-    <div class="pagination-section">
+    <!-- ページネーション -->
+    <div class="ppb-pagination-wrap">
       <el-pagination
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.limit"
@@ -466,18 +463,34 @@
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="handleSizeChange"
         @current-change="handlePageChange"
-        class="pagination"
+        class="ppb-pagination"
       />
     </div>
 
-    <!-- 编辑对话框 -->
+    <!-- 編集ダイアログ -->
     <el-dialog
       v-model="dialogVisible"
-      title="製品工程BOM編集"
-      width="1000px"
+      width="1020px"
       :close-on-click-modal="false"
-      class="product-process-dialog"
+      destroy-on-close
+      align-center
+      append-to-body
+      class="ppb-dialog product-process-dialog"
     >
+      <template #header>
+        <div class="ppb-dlg-header">
+          <div class="ppb-dlg-header__accent" aria-hidden="true" />
+          <div class="ppb-dlg-header__main">
+            <div class="ppb-dlg-header__icon">
+              <el-icon :size="22"><EditPen /></el-icon>
+            </div>
+            <div>
+              <h3 class="ppb-dlg-header__title">製品工程BOM 編集</h3>
+              <p class="ppb-dlg-header__desc">タブごとに工程・LT をまとめて確認・更新できます。</p>
+            </div>
+          </div>
+        </div>
+      </template>
       <el-form :model="formData" label-width="140px" label-position="left" class="edit-form">
         <el-tabs v-model="activeTab" class="edit-tabs">
           <!-- 基本情報 -->
@@ -708,10 +721,11 @@
         </el-tabs>
       </el-form>
       <template #footer>
-        <div class="dialog-footer">
-          <el-button size="small" @click="dialogVisible = false">キャンセル</el-button>
-          <el-button type="primary" size="small" @click="handleSubmit" :loading="submitting">
-            保存
+        <div class="ppb-dlg-footer dialog-footer">
+          <el-button size="small" round @click="dialogVisible = false">キャンセル</el-button>
+          <el-button type="primary" size="small" round @click="handleSubmit" :loading="submitting">
+            <el-icon class="ppb-dlg-footer__ico"><CircleCheck /></el-icon>
+            保存する
           </el-button>
         </div>
       </template>
@@ -720,9 +734,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Tools, Filter, Refresh, Search, Edit, Delete } from '@element-plus/icons-vue'
+import {
+  Tools,
+  Refresh,
+  Search,
+  Edit,
+  Delete,
+  List,
+  CircleCheck,
+  CircleClose,
+  EditPen,
+} from '@element-plus/icons-vue'
 import {
   fetchProductProcessBOMList,
   fetchProductProcessBOMById,
@@ -1098,475 +1122,546 @@ onMounted(async () => {
 <style scoped>
 .product-process-bom-container {
   min-height: 100vh;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 12px;
+  padding: 10px 12px 12px;
+  background:
+    radial-gradient(ellipse 100% 70% at 0% -15%, rgba(99, 102, 241, 0.1), transparent 48%),
+    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(14, 165, 233, 0.08), transparent 42%),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
-/* 页面头部 - 紧凑现代设计 */
-.page-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.25);
+/* —— ヒーロー（コンパクト） —— */
+.ppb-hero {
   position: relative;
+  border-radius: 14px;
+  margin-bottom: 10px;
   overflow: hidden;
+  box-shadow:
+    0 12px 28px -12px rgba(15, 23, 42, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
 }
 
-.page-header::before {
-  content: '';
+.ppb-hero__accent {
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, #6366f1 0%, #8b5cf6 40%, #0ea5e9 100%);
+}
+
+.ppb-hero__grid {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, transparent 100%);
+  inset: 0;
+  opacity: 0.05;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.35) 1px, transparent 1px);
+  background-size: 20px 20px;
   pointer-events: none;
 }
 
-.header-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
+.ppb-hero__inner {
   position: relative;
   z-index: 1;
-}
-
-.title-section {
-  flex: 1;
-  color: white;
-}
-
-.main-title {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 4px 0;
-  color: white;
-  letter-spacing: -0.5px;
-}
-
-.title-icon {
-  font-size: 24px;
-}
-
-.subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-  margin: 0;
-  font-weight: 400;
-}
-
-.header-stats {
-  display: flex;
-  gap: 12px;
-}
-
-.stat-card {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(8px);
-  border-radius: 6px;
-  padding: 10px 16px;
-  text-align: center;
-  min-width: 80px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-}
-
-.stat-card:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
-}
-
-.stat-card-active {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: rgba(16, 185, 129, 0.4);
-}
-
-.stat-card-active:hover {
-  background: rgba(16, 185, 129, 0.35);
-}
-
-.stat-card-discontinued {
-  background: rgba(239, 68, 68, 0.25);
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.stat-card-discontinued:hover {
-  background: rgba(239, 68, 68, 0.35);
-}
-
-.stat-number {
-  font-size: 20px;
-  font-weight: 700;
-  color: white;
-  margin-bottom: 2px;
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.9);
-  font-weight: 500;
-}
-
-/* 功能操作区域 - 紧凑设计 */
-.action-section {
-  background: white;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e5e7eb;
-}
-
-.filter-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+  gap: 12px 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 38%, #4338ca 72%, #4f46e5 100%);
 }
 
-.filter-title {
+.ppb-hero__brand {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2937;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
-.filter-icon {
-  font-size: 16px;
-  color: #667eea;
-}
-
-.filter-actions {
+.ppb-hero__icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+.ppb-hero__title {
+  margin: 0 0 2px;
+  font-size: 1.125rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.ppb-hero__subtitle {
+  margin: 0;
+  max-width: 480px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.ppb-hero__stats {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.filters-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
+.ppb-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  min-width: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  transition: background 0.2s ease;
+}
+
+.ppb-stat:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ppb-stat__ico {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.ppb-stat--active .ppb-stat__ico {
+  color: #6ee7b7;
+}
+
+.ppb-stat--halt .ppb-stat__ico {
+  color: #fca5a5;
+}
+
+.ppb-stat__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ppb-stat__num {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ppb-stat__lbl {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: rgba(226, 232, 240, 0.72);
+}
+
+/* —— ツールバー 1行 —— */
+.ppb-toolbar {
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+}
+
+.ppb-toolbar__compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.ppb-toolbar__search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: min(100%, 220px);
   max-width: 400px;
 }
 
-.filter-item {
+.ppb-pill {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: #4f46e5;
+  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
+  border: 1px solid rgba(99, 102, 241, 0.22);
+}
+
+.ppb-toolbar__actions {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
-.filter-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #6b7280;
+.ppb-toolbar__actions :deep(.el-button--primary) {
+  border: none;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
 
-.filter-input {
+.ppb-toolbar__actions :deep(.el-button--primary:hover) {
+  filter: brightness(1.05);
+}
+
+.ppb-toolbar__actions :deep(.el-button--success.is-plain) {
+  --el-button-hover-bg-color: rgba(16, 185, 129, 0.1);
+  --el-button-hover-border-color: #10b981;
+  --el-button-hover-text-color: #059669;
+}
+
+.ppb-input-prefix {
+  font-size: 15px;
+  color: #94a3b8;
+}
+
+.ppb-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.ppb-search-input :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  padding-left: 10px;
+  min-height: 32px;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3) inset;
+  transition: box-shadow 0.2s ease;
+}
+
+.ppb-search-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4) inset;
+}
+
+.ppb-search-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.28) inset;
+}
+
+/* —— テーブル —— */
+.ppb-table-section {
+  margin-bottom: 10px;
+}
+
+.ppb-table-cap {
+  display: flex;
+  align-items: center;
   width: 100%;
 }
 
-/* 表格区域 - 紧凑现代设计 */
-.table-section {
-  margin-bottom: 12px;
+.ppb-table-cap__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.table-card {
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e5e7eb;
+.ppb-table-cap__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+}
+
+.ppb-table-cap__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ppb-table-cap__hint {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.ppb-table-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
   overflow: hidden;
 }
 
-.table-card :deep(.el-card__body) {
+.ppb-table-card :deep(.el-card__header) {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+}
+
+.ppb-table-card :deep(.el-card__body) {
   padding: 0;
 }
 
-/* 表格样式优化 */
-.table-card :deep(.el-table) {
-  font-size: 13px;
+.ppb-table-card :deep(.el-table) {
+  font-size: 12px;
+  --el-table-border-color: transparent;
+  --el-table-header-bg-color: #f1f5f9;
 }
 
-.table-card :deep(.el-table th) {
-  background: #f9fafb;
-  color: #374151;
-  font-weight: 600;
-  padding: 8px 0;
-  border-bottom: 2px solid #e5e7eb;
-}
-
-.table-card :deep(.el-table td) {
+.ppb-table-card :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: #334155;
+  font-weight: 700;
+  font-size: 11px;
   padding: 6px 0;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
 
-.table-card :deep(.el-table--border) {
-  border: none;
+.ppb-table-card :deep(.el-table td.el-table__cell) {
+  padding: 4px 0;
+  border-bottom: 1px solid #f1f5f9 !important;
 }
 
-.table-card :deep(.el-table--border::after) {
-  display: none;
+.ppb-table-card :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: rgba(99, 102, 241, 0.04) !important;
 }
 
-.table-card :deep(.el-table--border::before) {
-  display: none;
-}
-
-/* 输入框和复选框样式优化 */
-.table-card :deep(.el-input-number) {
-  width: 100%;
-}
-
-.table-card :deep(.el-input-number .el-input__inner) {
-  padding: 4px 8px;
-  font-size: 12px;
-  text-align: center;
-}
-
-.table-card :deep(.el-checkbox) {
-  display: flex;
-  justify-content: center;
-}
-
-.table-card :deep(.el-checkbox__input) {
-  width: 18px;
-  height: 18px;
-}
-
-.table-card :deep(.el-checkbox__inner) {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-}
-
-/* 分页区域 - 紧凑设计 */
-.pagination-section {
-  background: white;
-  border-radius: 8px;
-  padding: 12px 16px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.pagination {
-  justify-content: flex-end;
-}
-
-.pagination :deep(.el-pagination__total) {
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.pagination :deep(.el-pagination__sizes) {
-  margin-right: 16px;
-}
-
-.pagination :deep(.el-pagination__jump) {
-  margin-left: 16px;
-}
-
-/* 对话框样式优化 */
-.product-process-dialog :deep(.el-dialog__body) {
-  padding: 16px;
-}
-
-.product-process-dialog :deep(.el-tabs__content) {
-  padding: 12px 0;
-}
-
-.product-process-dialog :deep(.el-form-item) {
-  margin-bottom: 16px;
-}
-
-/* 按钮样式优化 */
-.filter-actions :deep(.el-button) {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.filter-actions :deep(.el-button--primary) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
-}
-
-.filter-actions :deep(.el-button--primary:hover) {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  transform: translateY(-1px);
-}
-
-.filter-actions :deep(.el-button--success) {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border: none;
-  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
-}
-
-.filter-actions :deep(.el-button--success:hover) {
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-  transform: translateY(-1px);
-}
-
-/* 响应式优化 */
-@media (max-width: 768px) {
-  .product-process-bom-container {
-    padding: 8px;
-  }
-
-  .page-header {
-    padding: 12px 16px;
-  }
-
-  .main-title {
-    font-size: 18px;
-  }
-
-  .filters-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-
-  .action-section {
-    padding: 10px 12px;
-  }
-}
-
-/* 性能优化 - 减少重绘 */
-.table-card :deep(.el-table__body-wrapper) {
+.ppb-table-card :deep(.el-table__body-wrapper) {
   will-change: scroll-position;
 }
 
-/* 滚动条美化 */
-.table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+.ppb-table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-track {
+.ppb-table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-track {
   background: #f1f5f9;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-.table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-thumb {
+.ppb-table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 3px;
+  border-radius: 4px;
 }
 
-.table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-thumb:hover {
+.ppb-table-card :deep(.el-table__body-wrapper)::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* 操作按钮样式 - 美化 */
+.ppb-table-card :deep(.el-input-number .el-input__wrapper) {
+  border-radius: 8px;
+}
+
+.ppb-table-card :deep(.el-input-number .el-input__inner) {
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ppb-table-card :deep(.el-checkbox) {
+  display: flex;
+  justify-content: center;
+}
+
+.ppb-table-card :deep(.el-checkbox__inner) {
+  border-radius: 6px;
+}
+
+/* ページネーション */
+.ppb-pagination-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 6px 10px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.ppb-pagination-wrap :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
+}
+
+.ppb-pagination-wrap :deep(.el-pagination .el-select .el-input__wrapper) {
+  min-height: 28px;
+}
+
+.ppb-pagination :deep(.el-pagination__total) {
+  font-weight: 600;
+  color: #64748b;
+}
+
+/* 行アクション */
 .action-buttons {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   justify-content: center;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .action-btn-edit {
-  padding: 5px 12px;
-  font-size: 12px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  color: white;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
-  transition: all 0.3s ease;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+  box-shadow: 0 1px 6px rgba(79, 70, 229, 0.3);
 }
 
 .action-btn-edit:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
-  transform: translateY(-1px);
+  filter: brightness(1.06);
 }
 
 .action-btn-delete {
-  padding: 5px 12px;
-  font-size: 12px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: none;
-  color: white;
-  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
-  transition: all 0.3s ease;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  box-shadow: 0 1px 6px rgba(239, 68, 68, 0.28);
 }
 
 .action-btn-delete:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.4);
-  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
-/* 对话框样式 - 现代UI美化 */
-.product-process-dialog :deep(.el-dialog) {
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+/* —— ダイアログ —— */
+.product-process-dialog.ppb-dialog :deep(.el-dialog) {
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow:
+    0 20px 50px -14px rgba(15, 23, 42, 0.35),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
 }
 
-.product-process-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 16px 20px;
+.product-process-dialog.ppb-dialog :deep(.el-dialog__header) {
+  padding: 0;
   margin: 0;
   border-bottom: none;
 }
 
-.product-process-dialog :deep(.el-dialog__title) {
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
+.product-process-dialog.ppb-dialog :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  right: 12px;
+  z-index: 2;
 }
 
-.product-process-dialog :deep(.el-dialog__headerbtn) {
-  top: 16px;
-  right: 20px;
-}
-
-.product-process-dialog :deep(.el-dialog__close) {
-  color: white;
+.product-process-dialog.ppb-dialog :deep(.el-dialog__close) {
+  color: #64748b;
   font-size: 18px;
 }
 
-.product-process-dialog :deep(.el-dialog__close:hover) {
-  color: rgba(255, 255, 255, 0.8);
+.product-process-dialog.ppb-dialog :deep(.el-dialog__close:hover) {
+  color: #0f172a;
 }
 
-.product-process-dialog :deep(.el-dialog__body) {
-  padding: 16px;
-  background: #f8fafc;
+.product-process-dialog.ppb-dialog :deep(.el-dialog__body) {
+  padding: 0 12px 12px;
+  background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
 }
 
-/* 表单样式 */
+.ppb-dlg-header {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.ppb-dlg-header__accent {
+  height: 3px;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6, #0ea5e9);
+}
+
+.ppb-dlg-header__main {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 40px 10px 14px;
+}
+
+.ppb-dlg-header__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: linear-gradient(145deg, #7c3aed 0%, #6366f1 100%);
+  box-shadow: 0 8px 20px rgba(124, 58, 237, 0.35);
+}
+
+.ppb-dlg-header__title {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.ppb-dlg-header__desc {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.ppb-dlg-footer.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 12px !important;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%) !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+.ppb-dlg-footer__ico {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.ppb-dlg-footer :deep(.el-button--primary) {
+  border: none;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 4px 16px rgba(79, 70, 229, 0.35);
+}
+
+.ppb-dlg-footer :deep(.el-button--primary:hover) {
+  filter: brightness(1.05);
+}
+
+/* 編集フォーム */
 .edit-form {
-  background: white;
-  border-radius: 8px;
-  padding: 12px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.04);
 }
 
 .edit-tabs {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .edit-tabs :deep(.el-tabs__header) {
   margin: 0;
-  background: #f9fafb;
-  padding: 8px 12px 0;
-  border-bottom: 2px solid #e5e7eb;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  padding: 6px 10px 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .edit-tabs :deep(.el-tabs__nav-wrap::after) {
@@ -1574,33 +1669,33 @@ onMounted(async () => {
 }
 
 .edit-tabs :deep(.el-tabs__item) {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  padding: 10px 20px;
+  padding: 7px 14px;
   color: #6b7280;
   border-radius: 6px 6px 0 0;
-  margin-right: 4px;
+  margin-right: 2px;
   transition: all 0.2s ease;
   border: 1px solid transparent;
 }
 
 .edit-tabs :deep(.el-tabs__item:hover) {
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.08);
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .edit-tabs :deep(.el-tabs__item.is-active) {
-  color: #667eea;
-  background: white;
-  border-color: #e5e7eb;
-  border-bottom-color: white;
+  color: #4f46e5;
+  background: #fff;
+  border-color: #e2e8f0;
+  border-bottom-color: #fff;
   font-weight: 700;
 }
 
 .edit-tabs :deep(.el-tabs__content) {
-  padding: 16px;
-  min-height: 350px;
-  max-height: 450px;
+  padding: 10px 12px;
+  min-height: 280px;
+  max-height: min(52vh, 420px);
   overflow-y: auto;
   background: white;
 }
@@ -1609,7 +1704,7 @@ onMounted(async () => {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px 16px;
+  gap: 8px 12px;
 }
 
 .edit-tabs :deep(.el-form-item) {
@@ -1640,13 +1735,13 @@ onMounted(async () => {
 
 .edit-tabs :deep(.el-input__inner:hover),
 .edit-tabs :deep(.el-input-number .el-input__inner:hover) {
-  border-color: #667eea;
+  border-color: #818cf8;
 }
 
 .edit-tabs :deep(.el-input__inner:focus),
 .edit-tabs :deep(.el-input-number .el-input__inner:focus) {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 .edit-tabs :deep(.el-input.is-disabled .el-input__inner) {
@@ -1671,47 +1766,7 @@ onMounted(async () => {
 }
 
 .edit-tabs :deep(.el-switch.is-checked .el-switch__core) {
-  background-color: #667eea;
-}
-
-/* 对话框底部 */
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 16px;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
-}
-
-.dialog-footer :deep(.el-button) {
-  padding: 8px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.dialog-footer :deep(.el-button--primary) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
-}
-
-.dialog-footer :deep(.el-button--primary:hover) {
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-  transform: translateY(-1px);
-}
-
-.dialog-footer :deep(.el-button--default) {
-  background: white;
-  border: 1px solid #d1d5db;
-  color: #374151;
-}
-
-.dialog-footer :deep(.el-button--default:hover) {
-  background: #f9fafb;
-  border-color: #9ca3af;
+  background-color: #6366f1;
 }
 
 /* 滚动条美化 */
@@ -1733,11 +1788,48 @@ onMounted(async () => {
   background: #94a3b8;
 }
 
-/* 响应式优化 */
 @media (max-width: 1200px) {
   .form-grid {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+}
+
+@media (max-width: 900px) {
+  .ppb-hero__inner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ppb-hero__stats {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .product-process-bom-container {
+    padding: 10px;
+  }
+
+  .ppb-hero__title {
+    font-size: 1.15rem;
+  }
+
+  .ppb-toolbar__compact {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ppb-toolbar__search-row {
+    max-width: none;
+  }
+
+  .ppb-toolbar__actions {
+    justify-content: stretch;
+  }
+
+  .ppb-toolbar__actions :deep(.el-button) {
+    flex: 1;
   }
 }
 </style>

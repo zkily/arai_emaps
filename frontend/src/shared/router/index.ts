@@ -158,7 +158,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/instruction/welding', name: 'WeldingInstruction', component: () => import('@/views/erp/production/instruction/welding/WeldingInstruction.vue'), meta: { title: '溶接指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/instruction/plating', name: 'PlatingInstruction', component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'), meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/actual-management', name: 'ProductionActualManagement', component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'), meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true } },
-      { path: 'erp/production/completion', name: 'CompletionReport', component: () => import('@/views/erp/production/actual/CompletionReport.vue'), meta: { title: '完成報告', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/consumption', name: 'MaterialConsumption', component: () => import('@/views/erp/production/actual/MaterialConsumption.vue'), meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true } },
 
       // ========== ERP - 原価・会計連携 (Costing & Finance) ==========
@@ -205,6 +204,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/product', name: 'ProductList', component: () => import('@/views/master/product/ProductList.vue'), meta: { title: '製品マスタ', requiresAuth: true } },
       { path: 'master/material', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', requiresAuth: true } },
       { path: 'master/material-inspection', name: 'MaterialInspectionMaster', component: () => import('@/views/master/materialInspection/MaterialInspectionMaster.vue'), meta: { title: '材料検品マスタ', requiresAuth: true } },
+      { path: 'master/part', name: 'PartMasterList', component: () => import('@/views/master/part/PartList.vue'), meta: { title: '部品マスタ', requiresAuth: true } },
       { path: 'master/supplier', name: 'SupplierList', component: () => import('@/views/master/supplier/SupplierList.vue'), meta: { title: '仕入先マスタ', requiresAuth: true } },
       { path: 'master/process', name: 'ProcessList', component: () => import('@/views/master/process/ProcessList.vue'), meta: { title: '工程マスタ', requiresAuth: true } },
       { path: 'master/process-route', name: 'ProcessRouteList', component: () => import('@/views/master/processRoute/ProcessRouteList.vue'), meta: { title: '工程ルートマスタ', requiresAuth: true } },
@@ -219,7 +219,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
       { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },
-      { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '明細BOM管理', requiresAuth: true } },
+      { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '製品BOM表管理', requiresAuth: true } },
+      { path: 'master/bom/process-processing-fee', name: 'ProcessProcessingFeeEditor', component: () => import('@/views/master/bom/ProcessProcessingFeeEditor.vue'), meta: { title: '工程加工費マスタ', requiresAuth: true } },
       { path: 'master/bom/product-unit-price', name: 'ProductProcessUnitPriceEditor', component: () => import('@/views/master/bom/ProductProcessUnitPriceEditor.vue'), meta: { title: '工程別標準原価管理', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========

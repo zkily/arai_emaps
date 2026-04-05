@@ -512,3 +512,68 @@ export function getMaterialCuttingLogs(
     data?: { list: MaterialCuttingLogItem[]; total: number }
   }>
 }
+
+// ─────────────────────────────────────────────
+// 材料使用済 material_usage_record
+// ─────────────────────────────────────────────
+
+export interface MaterialUsageRecordItem {
+  id: number
+  usage_date: string | null
+  material_cd: string
+  material_name: string
+  usage_count: number | string
+  source: string
+  management_codes?: string | null
+  management_code?: string | null
+  reflected: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface MaterialUsageRecordsParams {
+  usage_date?: string
+  date_from?: string
+  date_to?: string
+  material_cd?: string
+  material_keyword?: string
+  source?: string
+  reflected?: boolean
+  page?: number
+  page_size?: number
+}
+
+export function getMaterialUsageRecords(params?: MaterialUsageRecordsParams): Promise<{
+  success?: boolean
+  data?: { list: MaterialUsageRecordItem[]; total: number }
+}> {
+  return request.get(`${PREFIX}/usage/records`, { params }) as Promise<{
+    success?: boolean
+    data?: { list: MaterialUsageRecordItem[]; total: number }
+  }>
+}
+
+export function getMaterialUsageRecordsChartSummary(params?: {
+  usage_date?: string
+  date_from?: string
+  date_to?: string
+  material_cd?: string
+  material_keyword?: string
+  source?: string
+  reflected?: boolean
+  material_top_n?: number
+}): Promise<{
+  success?: boolean
+  data?: {
+    by_date: Array<{ usage_date: string | null; total: number }>
+    by_material: Array<{ material_cd: string; material_name: string; total: number }>
+  }
+}> {
+  return request.get(`${PREFIX}/usage/records/chart-summary`, { params }) as Promise<{
+    success?: boolean
+    data?: {
+      by_date: Array<{ usage_date: string | null; total: number }>
+      by_material: Array<{ material_cd: string; material_name: string; total: number }>
+    }
+  }>
+}

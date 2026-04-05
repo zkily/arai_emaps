@@ -22,14 +22,16 @@ export interface InventoryValueData {
 export const inventoryValueApi = {
   async getInventoryValueSummary(params: InventoryValueParams) {
     try {
-      const res = await request.get('/api/erp/inventory-value/summary', {
+      const res = (await request.get('/api/erp/inventory-value/summary', {
         params: {
           start_date: params.startDate,
           end_date: params.endDate,
-          process_cd: params.processCode,
+          process_cd:
+            params.processCode && params.processCode !== 'all' ? params.processCode : undefined,
         },
-      }) as { data?: unknown }
-      return { data: res?.data ?? res }
+      })) as { success?: boolean; data?: unknown }
+      const inner = res && typeof res === 'object' && 'data' in res ? (res as { data: unknown }).data : res
+      return { data: inner }
     } catch {
       return {
         data: {
@@ -44,17 +46,56 @@ export const inventoryValueApi = {
   async getProcessList() {
     try {
       const res = await fetchProcesses({ page: 1, pageSize: 5000 })
-      const list = (res as { list?: unknown[] })?.list ?? []
+      const r = res as { data?: { list?: unknown[] }; list?: unknown[] }
+      const list = r?.data?.list ?? r?.list ?? []
       return { data: list }
     } catch {
       return { data: [] }
     }
   },
 
-  async getValueList(params: { run_id?: number; item_type?: string; page?: number; limit?: number }) {
+  /** 明細一覧（バックエンド: page, limit, item_type, process_cd, run_id） */
+  async getValueList(params: {
+    run_id?: number
+    item_type?: string
+    process_cd?: string
+    page?: number
+    limit?: number
+    /** 旧 UI 互換 */
+    pageSize?: number
+  }) {
     try {
-      const res = await request.get('/api/erp/inventory-value/details', { params }) as { data?: unknown }
-      return { data: res?.data ?? { list: [], total: 0 } }
+      const page = params.page ?? 1
+      const limit = params.limit ?? params.pageSize ?? 50
+      const res = (await request.get('/api/erp/inventory-value/details', {
+        params: {
+          run_id: params.run_id,
+          item_type: params.item_type,
+          process_cd:
+            params.process_cd && params.process_cd !== 'all' ? params.process_cd : undefined,
+          page,
+          limit,
+        },
+      })) as { success?: boolean; data?: { list?: unknown[]; total?: number } }
+      const payload = res?.data ?? { list: [], total: 0 }
+      const list = (payload.list ?? []).map((raw: unknown) => {
+        const row = raw as Record<string, unknown>
+        const amount = row.amount ?? row.total_value
+        const qty = row.quantity
+        const unitPrice = row.unit_price ?? row.unit_price_snapshot
+        return {
+          ...row,
+          quantity: typeof qty === 'number' ? qty : Number(qty) || 0,
+          unit_price: unitPrice != null ? Number(unitPrice) : null,
+          total_value:
+            amount != null
+              ? Number(amount)
+              : row.quantity != null && unitPrice != null
+                ? Number(row.quantity) * Number(unitPrice)
+                : 0,
+        }
+      })
+      return { data: { list, total: payload.total ?? 0 } }
     } catch {
       return { data: { list: [], total: 0 } }
     }
@@ -62,8 +103,16 @@ export const inventoryValueApi = {
 
   async calculateValue(params: { start_date: string; end_date: string; process_cd?: string }) {
     try {
-      const res = await request.post('/api/erp/inventory-value/calculate', params) as { success?: boolean; data?: unknown }
-      return res
+      const body = {
+        start_date: params.start_date,
+        end_date: params.end_date,
+        ...(params.process_cd && params.process_cd !== 'all' ? { process_cd: params.process_cd } : {}),
+      }
+      return (await request.post('/api/erp/inventory-value/calculate', body)) as {
+        success?: boolean
+        data?: unknown
+        message?: string
+      }
     } catch {
       return { success: false }
     }

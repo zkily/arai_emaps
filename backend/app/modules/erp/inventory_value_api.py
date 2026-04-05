@@ -300,6 +300,7 @@ async def get_value_summary(
 async def get_value_details(
     run_id: Optional[int] = Query(None),
     item_type: Optional[str] = Query(None),
+    process_cd: Optional[str] = Query(None),
     error_only: bool = Query(False),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=500),
@@ -318,6 +319,8 @@ async def get_value_details(
     q = select(InventoryValueCalcDetail).where(InventoryValueCalcDetail.run_id == run_id)
     if item_type:
         q = q.where(InventoryValueCalcDetail.item_type == item_type)
+    if process_cd:
+        q = q.where(InventoryValueCalcDetail.process_cd == process_cd)
     if error_only:
         q = q.where(InventoryValueCalcDetail.error_code.isnot(None))
 

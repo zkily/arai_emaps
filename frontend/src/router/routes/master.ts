@@ -27,6 +27,12 @@ export const masterRoutes: RouteRecordRaw[] = [
     meta: { title: '材料検品マスタ', requiresAuth: true },
   },
   {
+    path: 'master/part',
+    name: 'PartMasterList',
+    component: () => import('@/views/master/part/PartList.vue'),
+    meta: { title: '部品マスタ', requiresAuth: true },
+  },
+  {
     path: 'master/supplier',
     name: 'SupplierList',
     component: () => import('@/views/master/supplier/SupplierList.vue'),
@@ -114,7 +120,13 @@ export const masterRoutes: RouteRecordRaw[] = [
     path: 'master/bom/product-bom',
     name: 'ProductBomEditor',
     component: () => import('@/views/master/bom/ProductBomEditor.vue'),
-    meta: { title: '明細BOM管理', requiresAuth: true },
+    meta: { title: '製品BOM表管理', requiresAuth: true },
+  },
+  {
+    path: 'master/bom/process-processing-fee',
+    name: 'ProcessProcessingFeeEditor',
+    component: () => import('@/views/master/bom/ProcessProcessingFeeEditor.vue'),
+    meta: { title: '工程加工費マスタ', requiresAuth: true },
   },
   {
     path: 'master/bom/product-unit-price',

@@ -674,33 +674,135 @@ async def get_reflected_management_codes(
 
 
 # ─────────────────────────────────────────────
-# GET /records  過去の使用済レコード一覧
+# GET /records  過去の使用済レコード一覧（WHERE 共有）
 # ─────────────────────────────────────────────
+
+def _usage_record_filter_conditions(
+    usage_date: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+    material_cd: Optional[str],
+    material_keyword: Optional[str],
+    source: Optional[str],
+    reflected: Optional[bool],
+) -> tuple[str, dict]:
+    conditions = ["1=1"]
+    params: dict = {}
+    if date_from and date_to:
+        conditions.append("usage_date BETWEEN :date_from AND :date_to")
+        params["date_from"] = date_type.fromisoformat(date_from[:10])
+        params["date_to"] = date_type.fromisoformat(date_to[:10])
+    elif date_from:
+        conditions.append("usage_date >= :date_from")
+        params["date_from"] = date_type.fromisoformat(date_from[:10])
+    elif date_to:
+        conditions.append("usage_date <= :date_to")
+        params["date_to"] = date_type.fromisoformat(date_to[:10])
+    elif usage_date:
+        conditions.append("usage_date = :usage_date")
+        params["usage_date"] = date_type.fromisoformat(usage_date[:10])
+    if material_cd:
+        conditions.append("material_cd = :material_cd")
+        params["material_cd"] = material_cd.strip()
+    if material_keyword and material_keyword.strip():
+        conditions.append(
+            "(material_cd LIKE :material_keyword OR material_name LIKE :material_keyword)"
+        )
+        params["material_keyword"] = f"%{material_keyword.strip()}%"
+    if source:
+        conditions.append("source = :source")
+        params["source"] = source
+    if reflected is not None:
+        conditions.append("reflected = :reflected")
+        params["reflected"] = 1 if reflected else 0
+    return " AND ".join(conditions), params
+
+
+@router.get("/records/chart-summary")
+async def usage_records_chart_summary(
+    usage_date: Optional[str] = Query(None),
+    date_from: Optional[str] = Query(None, description="使用日 開始 YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="使用日 終了 YYYY-MM-DD"),
+    material_cd: Optional[str] = Query(None),
+    material_keyword: Optional[str] = Query(None, description="材料CD・材料名 あいまい検索"),
+    source: Optional[str] = Query(None),
+    reflected: Optional[bool] = Query(None),
+    material_top_n: int = Query(15, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """一覧と同一条件で、日別・材料別の使用数合計（チャート用）"""
+    where, params = _usage_record_filter_conditions(
+        usage_date, date_from, date_to, material_cd, material_keyword, source, reflected
+    )
+    try:
+        by_date_sql = text(f"""
+            SELECT usage_date, SUM(usage_count) AS total
+            FROM material_usage_record
+            WHERE {where}
+            GROUP BY usage_date
+            ORDER BY usage_date ASC
+        """)
+        by_mat_sql = text(f"""
+            SELECT material_cd, material_name, SUM(usage_count) AS total
+            FROM material_usage_record
+            WHERE {where}
+            GROUP BY material_cd, material_name
+            ORDER BY total DESC
+            LIMIT :material_top_n
+        """)
+        p2 = {**params, "material_top_n": material_top_n}
+        dr = await db.execute(by_date_sql, params)
+        mr = await db.execute(by_mat_sql, p2)
+        by_date = []
+        for row in dr.mappings().fetchall():
+            d = row["usage_date"]
+            t = row["total"]
+            by_date.append(
+                {
+                    "usage_date": d.isoformat() if d else None,
+                    "total": float(t) if t is not None else 0.0,
+                }
+            )
+        by_material = []
+        for row in mr.mappings().fetchall():
+            t = row["total"]
+            by_material.append(
+                {
+                    "material_cd": row["material_cd"],
+                    "material_name": row["material_name"],
+                    "total": float(t) if t is not None else 0.0,
+                }
+            )
+        return {"success": True, "data": {"by_date": by_date, "by_material": by_material}}
+    except Exception as e:
+        msg = str(e).lower()
+        if "material_usage_record" in msg and ("doesn't exist" in msg or "not exist" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="material_usage_record テーブルが存在しません。Migration 075 を実行してください。",
+            ) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @router.get("/records")
 async def list_usage_records(
-    usage_date: Optional[str] = Query(None, description="使用日 YYYY-MM-DD"),
+    usage_date: Optional[str] = Query(None, description="使用日 YYYY-MM-DD（単日。期間指定時は date_from/date_to を優先）"),
+    date_from: Optional[str] = Query(None, description="使用日 開始 YYYY-MM-DD"),
+    date_to: Optional[str] = Query(None, description="使用日 終了 YYYY-MM-DD"),
     material_cd: Optional[str] = Query(None),
+    material_keyword: Optional[str] = Query(None, description="材料CD・材料名 あいまい検索"),
     source: Optional[str] = Query(None),
+    reflected: Optional[bool] = Query(None, description="在庫反映済み true / 未反映 false"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """材料使用済レコード一覧"""
-    conditions = ["1=1"]
-    params: dict = {}
-    if usage_date:
-        conditions.append("usage_date = :usage_date")
-        params["usage_date"] = date_type.fromisoformat(usage_date)
-    if material_cd:
-        conditions.append("material_cd = :material_cd")
-        params["material_cd"] = material_cd
-    if source:
-        conditions.append("source = :source")
-        params["source"] = source
-
-    where = " AND ".join(conditions)
+    where, params = _usage_record_filter_conditions(
+        usage_date, date_from, date_to, material_cd, material_keyword, source, reflected
+    )
     count_sql = text(f"SELECT COUNT(*) FROM material_usage_record WHERE {where}")
     total = (await db.execute(count_sql, params)).scalar() or 0
 

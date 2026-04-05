@@ -77,6 +77,7 @@ import { useI18n } from 'vue-i18n'
 import {
   Box,
   Coin,
+  Grid,
   User,
   Setting,
   Connection,
@@ -145,6 +146,15 @@ const masterModules: MasterModule[] = [
     icon: markRaw(Coin),
     color: '#67C23A',
     gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+  },
+  {
+    name: 'part',
+    titleKey: 'masterHome.partTitle',
+    descKey: 'masterHome.partDesc',
+    path: '/master/part',
+    icon: markRaw(Grid),
+    color: '#6366f1',
+    gradient: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
   },
   {
     name: 'supplier',

@@ -89,9 +89,23 @@
       </div>
     </div>
 
-    <!-- 金额统计卡片 -->
+    <!-- 金额统计卡片（合計は API の total_amount、内訳は材料・部品・その他） -->
     <div class="stats-container">
       <div class="stats-grid">
+        <div class="stat-card total-card">
+          <div class="stat-header">
+            <div class="stat-badge total">合計</div>
+          </div>
+          <div class="stat-icon">
+            <Money class="icon" />
+          </div>
+          <div class="stat-content">
+            <div class="stat-value">
+              ¥{{ formatNumber(statistics.total?.total_amount || 0) }}
+            </div>
+            <div class="stat-label">棚卸金額合計</div>
+          </div>
+        </div>
         <div class="stat-card material-card">
           <div class="stat-header">
             <div class="stat-badge material">材料</div>
@@ -145,7 +159,6 @@
               :date-range="dateRange"
               item-type="材料"
               :process-code="selectedProcess"
-              @data-updated="handleDataUpdated"
             />
           </el-tab-pane>
 
@@ -155,7 +168,6 @@
               :date-range="dateRange"
               item-type="部品"
               :process-code="selectedProcess"
-              @data-updated="handleDataUpdated"
             />
           </el-tab-pane>
 
@@ -165,7 +177,6 @@
               :date-range="dateRange"
               item-type="ステー"
               :process-code="selectedProcess"
-              @data-updated="handleDataUpdated"
             />
           </el-tab-pane>
         </el-tabs>
@@ -178,7 +189,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Operation, Search, RefreshLeft, Box, Setting, Tools } from '@element-plus/icons-vue'
+import { Operation, Search, RefreshLeft, Box, Setting, Tools, Money } from '@element-plus/icons-vue'
 import { inventoryValueApi, type InventoryValueParams } from '@/api/inventoryValue'
 import InventoryValueTable from './components/InventoryValueTable.vue'
 
@@ -265,21 +276,36 @@ const errorLabel = (code: string) => {
   return map[code] || code
 }
 
-const handleDataUpdated = (data: any) => {
-  if (data.statistics) {
-    statistics.value = data.statistics
-  }
-}
-
 const loadStatistics = async () => {
   try {
     const params: InventoryValueParams = {
       ...currentDateRange.value,
-      processCode: selectedProcess.value,
+      processCode: selectedProcess.value === 'all' ? undefined : selectedProcess.value,
     }
     const response = await inventoryValueApi.getInventoryValueSummary(params)
-    if (response.data) {
-      statistics.value = response.data as StatisticsData
+    const raw = response.data as Partial<StatisticsData> | undefined
+    if (raw?.total) {
+      statistics.value = {
+        total: {
+          total_amount: Number(raw.total.total_amount) || 0,
+          material_amount: Number(raw.total.material_amount) || 0,
+          component_amount: Number(raw.total.component_amount) || 0,
+          stay_amount: Number(raw.total.stay_amount) || 0,
+        },
+        byType: raw.byType ?? [],
+        byProcess: raw.byProcess ?? [],
+      }
+    } else {
+      statistics.value = {
+        total: {
+          total_amount: 0,
+          material_amount: 0,
+          component_amount: 0,
+          stay_amount: 0,
+        },
+        byType: [],
+        byProcess: [],
+      }
     }
   } catch (error) {
     console.error('統計データ取得失敗:', error)
@@ -318,16 +344,20 @@ const runCalculation = async () => {
       end_date: dateRange.value[1],
       process_cd: selectedProcess.value === 'all' ? undefined : selectedProcess.value,
     })
-    if ((res as any)?.success) {
-      const d = (res as any).data
+    if (res?.success) {
+      const d = res.data as {
+        total_rows?: number
+        error_rows?: number
+        total_amount?: number
+      }
       ElMessage.success(
-        `計算完了: ${d.total_rows}件処理 / エラー${d.error_rows}件 / 合計 ¥${formatNumber(d.total_amount)}`
+        `計算完了: ${d?.total_rows ?? 0}件処理 / エラー${d?.error_rows ?? 0}件 / 合計 ¥${formatNumber(d?.total_amount ?? 0)}`,
       )
-      loadStatistics()
-      loadErrors()
+      await loadStatistics()
+      await loadErrors()
       refreshCurrentTable()
     } else {
-      ElMessage.error('計算に失敗しました')
+      ElMessage.error((res as { message?: string })?.message || '計算に失敗しました')
     }
   } catch {
     ElMessage.error('計算実行中にエラーが発生しました')
@@ -563,7 +593,7 @@ onMounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -600,6 +630,14 @@ onMounted(() => {
 
 .stat-badge.stay {
   background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.stat-badge.total {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+}
+
+.total-card .stat-icon {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
 }
 
 .stat-icon {
@@ -710,7 +748,7 @@ onMounted(() => {
 
 @media (max-width: 1200px) {
   .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

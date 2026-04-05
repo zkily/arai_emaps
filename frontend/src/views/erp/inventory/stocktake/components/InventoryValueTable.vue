@@ -114,7 +114,7 @@
           v-if="columnSettings.product_name"
         >
           <template #default="{ row }">
-            <span class="name-text">{{ row.product_name }}</span>
+            <span class="name-text">{{ row.product_name || row.product_cd || '—' }}</span>
           </template>
         </el-table-column>
 
@@ -433,6 +433,7 @@ import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Operation, Refresh, Download, Search, Setting, View, Edit } from '@element-plus/icons-vue'
 import { inventoryValueApi } from '@/api/inventoryValue'
+import { getProcessList } from '@/api/master/processMaster'
 import { useUserStore } from '@/stores/user'
 
 // NOTE: inventoryValueApi は暫定プレースホルダ実装のため、厳密型を避ける。
@@ -598,43 +599,100 @@ const getRowIndex = (index: number) => {
 }
 
 // 获取查询参数
-const getQueryParams = () => {
-  const params: any = {
-    page: currentPage.value,
-    pageSize: pageSize.value,
-    sortField: sortField.value,
-    sortOrder: sortOrder.value,
-  }
+/** エクスポート等プレースホルダ用（将来 API 連携時に利用） */
+const getQueryParams = () => ({
+  page: currentPage.value,
+  pageSize: pageSize.value,
+  sortField: sortField.value,
+  sortOrder: sortOrder.value,
+  keyword: searchKeyword.value,
+  itemType: props.itemType,
+  processCode: props.processCode,
+  dateRange: props.dateRange,
+})
 
-  if (searchKeyword.value) {
-    params.keyword = searchKeyword.value
-  }
+let processNameByCd: Record<string, string> = {}
 
-  if (props.dateRange && props.dateRange.length === 2) {
-    params.startDate = props.dateRange[0]
-    params.endDate = props.dateRange[1]
+async function ensureProcessNameMap() {
+  if (Object.keys(processNameByCd).length > 0) return
+  try {
+    const res = await getProcessList({ page: 1, pageSize: 5000 })
+    const list = (res as { data?: { list?: { process_cd: string; process_name: string }[] }; list?: { process_cd: string; process_name: string }[] })
+      .data?.list ?? (res as { list?: { process_cd: string; process_name: string }[] }).list ?? []
+    processNameByCd = Object.fromEntries(list.map((p) => [p.process_cd, p.process_name]))
+  } catch {
+    processNameByCd = {}
   }
+}
 
-  if (props.itemType && props.itemType !== 'all') {
-    params.itemType = props.itemType
-  }
-
-  if (props.processCode && props.processCode !== 'all') {
-    params.processCode = props.processCode
-  }
-
-  return params
+function sortRows(rows: any[], prop: string, order: string) {
+  if (!prop || !rows.length) return rows
+  const dir = order === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    let av: number | string = a[prop]
+    let bv: number | string = b[prop]
+    if (['total_value', 'quantity', 'unit_price'].includes(prop)) {
+      av = Number(av) || 0
+      bv = Number(bv) || 0
+    } else {
+      av = String(av ?? '')
+      bv = String(bv ?? '')
+    }
+    if (av < bv) return -1 * dir
+    if (av > bv) return 1 * dir
+    return 0
+  })
 }
 
 // 加载表格数据
 const loadTableData = async () => {
   try {
     loading.value = true
-    const params = getQueryParams()
-    const response = await inventoryValueApi.getValueList(params)
+    await ensureProcessNameMap()
 
-    tableData.value = response.data.list
-    totalCount.value = response.data.total
+    const kw = searchKeyword.value.trim().toLowerCase()
+    const baseParams = {
+      item_type: props.itemType && props.itemType !== 'all' ? props.itemType : undefined,
+      process_cd: props.processCode,
+    }
+
+    if (kw) {
+      const response = await inventoryValueApi.getValueList({
+        ...baseParams,
+        page: 1,
+        limit: 500,
+      })
+      let rows = (response.data.list ?? []).map((row: any) => ({
+        ...row,
+        process_name: row.process_name ?? processNameByCd[row.process_cd] ?? row.process_cd ?? '',
+      }))
+      rows = rows.filter(
+        (r) =>
+          String(r.product_cd ?? '')
+            .toLowerCase()
+            .includes(kw) ||
+          String(r.product_name ?? '')
+            .toLowerCase()
+            .includes(kw),
+      )
+      rows = sortRows(rows, sortField.value, sortOrder.value)
+      totalCount.value = rows.length
+      const start = (currentPage.value - 1) * pageSize.value
+      tableData.value = rows.slice(start, start + pageSize.value)
+    } else {
+      const response = await inventoryValueApi.getValueList({
+        ...baseParams,
+        page: currentPage.value,
+        limit: pageSize.value,
+      })
+      let rows = (response.data.list ?? []).map((row: any) => ({
+        ...row,
+        process_name: row.process_name ?? processNameByCd[row.process_cd] ?? row.process_cd ?? '',
+      }))
+      rows = sortRows(rows, sortField.value, sortOrder.value)
+      tableData.value = rows
+      totalCount.value = response.data.total ?? 0
+    }
 
     emit('data-updated', {
       total: totalCount.value,
@@ -662,10 +720,27 @@ const calculateInventoryValue = async () => {
     )
 
     calculating.value = true
-    const params = getQueryParams()
-    await inventoryValueApi.calculateValue(params)
-
-    ElMessage.success('棚卸金額の計算が完了しました')
+    if (!props.dateRange || props.dateRange.length < 2) {
+      ElMessage.warning('期間を選択してください')
+      return
+    }
+    const res = await inventoryValueApi.calculateValue({
+      start_date: props.dateRange[0],
+      end_date: props.dateRange[1],
+      process_cd: props.processCode === 'all' ? undefined : props.processCode,
+    })
+    if (!res?.success) {
+      ElMessage.error((res as { message?: string })?.message || '金額計算に失敗しました')
+      return
+    }
+    const d = res.data as { total_rows?: number; error_rows?: number; total_amount?: number } | undefined
+    if (d) {
+      ElMessage.success(
+        `計算完了: ${d.total_rows ?? 0}件 / エラー${d.error_rows ?? 0}件 / 合計 ¥${formatNumber(d.total_amount ?? 0)}`,
+      )
+    } else {
+      ElMessage.success('棚卸金額の計算が完了しました')
+    }
     await loadTableData()
   } catch (error) {
     if (error !== 'cancel') {

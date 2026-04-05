@@ -18,11 +18,14 @@ from app.modules.master.api_equipment_efficiency import router as equipment_effi
 from app.modules.master.api_options import router as options_router
 from app.modules.master.api_product_bom import router as product_bom_router
 from app.modules.master.api_product_process_unit_price import router as product_unit_price_router
+from app.modules.master.api_process_processing_fee import router as process_processing_fee_router
+from app.modules.master.api_part_master import router as part_master_router
 
 router = APIRouter()
 router.include_router(options_router, prefix="/options", tags=["マスタオプション"])
 router.include_router(product_router, prefix="/products", tags=["製品マスタ"])
 router.include_router(material_router, prefix="/materials", tags=["材料マスタ"])
+router.include_router(part_master_router, prefix="/parts", tags=["部品マスタ"])
 router.include_router(supplier_router, prefix="/suppliers", tags=["仕入先マスタ"])
 router.include_router(process_router, prefix="/processes", tags=["工程マスタ"])
 router.include_router(process_route_router, prefix="/process-routes", tags=["工程ルートマスタ"])
@@ -40,3 +43,4 @@ router.include_router(product_machine_config_router, prefix="/product-machine-co
 router.include_router(equipment_efficiency_router, prefix="/equipment-efficiency", tags=["設備能率管理"])
 router.include_router(product_bom_router, prefix="/product-bom", tags=["明細BOM"])
 router.include_router(product_unit_price_router, prefix="/product-process-unit-prices", tags=["工程別標準原価"])
+router.include_router(process_processing_fee_router, prefix="/process-processing-fees", tags=["工程加工費マスタ"])

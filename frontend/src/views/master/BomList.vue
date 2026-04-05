@@ -53,7 +53,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Connection, Tools, ArrowRight, Setting, Document, Money } from '@element-plus/icons-vue'
+import { Connection, Tools, ArrowRight, Setting, Document, Money, Operation } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
 
 const { t } = useI18n()
@@ -105,6 +105,15 @@ const bomModules: BomModule[] = [
     icon: markRaw(Document),
     color: '#409EFF',
     gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+  },
+  {
+    name: 'processProcessingFee',
+    titleKey: 'bomHome.processProcessingFeeTitle',
+    descKey: 'bomHome.processProcessingFeeDesc',
+    path: '/master/bom/process-processing-fee',
+    icon: markRaw(Operation),
+    color: '#909399',
+    gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
   },
   {
     name: 'productUnitPrice',

@@ -87,7 +87,7 @@ import { ref, markRaw } from 'vue'
 import type { Component } from 'vue'
 import {
   Setting, ArrowRight, Document, DataAnalysis, Tickets,
-  Cpu, TrendCharts, DataLine, Calendar, CircleCheck, Operation, Connection
+  Cpu, TrendCharts, DataLine, Calendar, Operation, Connection
 } from '@element-plus/icons-vue'
 
 interface ModuleItem {
@@ -119,7 +119,6 @@ const instructionModules = ref<ModuleItem[]>([
 
 const resultModules = ref<ModuleItem[]>([
   { path: '/erp/production/actual-management', title: '生産実績管理', description: '実績一覧・進捗・集計・分析', icon: markRaw(TrendCharts), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
-  { path: '/erp/production/completion', title: '完成報告', description: '製品入庫登録・歩留まり記録・品質データ連携', icon: markRaw(CircleCheck), gradient: 'linear-gradient(135deg, #43e97b, #38f9d7)' },
   { path: '/erp/production/consumption', title: '材料消費実績', description: 'バックフラッシュ/実消費選択・差異管理', icon: markRaw(DataAnalysis), gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)' },
 ])
 </script>

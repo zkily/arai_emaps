@@ -329,12 +329,6 @@ export const erpRoutes: RouteRecordRaw[] = [
         meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true },
       },
       {
-        path: 'erp/production/completion',
-        name: 'CompletionReport',
-        component: () => import('@/views/erp/production/actual/CompletionReport.vue'),
-        meta: { title: '完成報告', group: '生産管理 > 生産実績', requiresAuth: true },
-      },
-      {
         path: 'erp/production/consumption',
         name: 'MaterialConsumption',
         component: () => import('@/views/erp/production/actual/MaterialConsumption.vue'),

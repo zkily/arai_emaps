@@ -257,10 +257,6 @@
                 <el-icon><TrendCharts /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_ACTUAL')">{{ t('menu.ERP_PRODUCTION_ACTUAL') }}</span></template>
               </el-menu-item>
-              <el-menu-item index="/erp/production/completion">
-                <el-icon><CircleCheck /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_COMPLETE')">{{ t('menu.ERP_PRODUCTION_COMPLETE') }}</span></template>
-              </el-menu-item>
               <el-menu-item index="/erp/production/consumption">
                 <el-icon><DataLine /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_CONSUME')">{{ t('menu.ERP_PRODUCTION_CONSUME') }}</span></template>
@@ -410,6 +406,7 @@
             <el-menu-item index="/master/product"><el-icon><Box /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT')">{{ t('menu.MASTER_PRODUCT') }}</span></template></el-menu-item>
             <el-menu-item index="/master/material"><el-icon><Collection /></el-icon><template #title><span :title="t('menu.MASTER_MATERIAL')">{{ t('menu.MASTER_MATERIAL') }}</span></template></el-menu-item>
             <el-menu-item index="/master/material-inspection"><el-icon><Tickets /></el-icon><template #title><span :title="t('menu.MASTER_MATERIAL_INSPECTION')">{{ t('menu.MASTER_MATERIAL_INSPECTION') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/part"><el-icon><Grid /></el-icon><template #title><span :title="t('menu.MASTER_PART')">{{ t('menu.MASTER_PART') }}</span></template></el-menu-item>
             <el-menu-item index="/master/customer"><el-icon><User /></el-icon><template #title><span :title="t('menu.MASTER_CUSTOMER')">{{ t('menu.MASTER_CUSTOMER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/supplier"><el-icon><ShoppingCart /></el-icon><template #title><span :title="t('menu.MASTER_SUPPLIER')">{{ t('menu.MASTER_SUPPLIER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/destination"><el-icon><FolderOpened /></el-icon><template #title><span :title="t('menu.MASTER_DESTINATION')">{{ t('menu.MASTER_DESTINATION') }}</span></template></el-menu-item>
@@ -419,6 +416,7 @@
             <el-menu-item index="/master/process"><el-icon><Operation /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS')">{{ t('menu.MASTER_PROCESS') }}</span></template></el-menu-item>
             <el-menu-item index="/master/process-route"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS_ROUTE')">{{ t('menu.MASTER_PROCESS_ROUTE') }}</span></template></el-menu-item>
             <el-menu-item index="/master/product-process-route"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_PROCESS_ROUTE')">{{ t('menu.MASTER_PRODUCT_PROCESS_ROUTE') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/bom/process-processing-fee"><el-icon><Operation /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS_PROCESSING_FEE')">{{ t('menu.MASTER_PROCESS_PROCESSING_FEE') }}</span></template></el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="master-bom">
             <template #title>
