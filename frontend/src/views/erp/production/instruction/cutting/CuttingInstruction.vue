@@ -4055,14 +4055,8 @@ const planListForTable = computed(() => {
   return plans.value.slice(start, start + planPagination.pageSize)
 })
 
-// 生産月：默认 1月～12月（当年），value 格式 YYYY-MM；API 有数据时会被替换
-const currentYear = new Date().getFullYear()
-const scheduleMonths = ref<{ value: string; label: string }[]>(
-  Array.from({ length: 12 }, (_, i) => ({
-    value: `${currentYear}-${String(i + 1).padStart(2, '0')}`,
-    label: `${i + 1}月`,
-  }))
-)
+// 生産月：自动生成当月前后3个月（共7个月），value 格式 YYYY-MM
+const scheduleMonths = ref<{ value: string; label: string }[]>([])
 const selectedScheduleMonth = ref('')
 const generateFromScheduleLoading = ref(false)
 const syncLengthsFromProductsLoading = ref(false)
@@ -4166,19 +4160,32 @@ const handlePlanCurrentChange = (page: number) => {
   loadPlans()
 }
 
-const loadScheduleMonths = async () => {
-  try {
-    const result = (await request.get('/api/plan/batch/schedule-months')) as {
-      success?: boolean
-      data?: { value: string; label: string }[]
+const loadScheduleMonths = () => {
+  const now = new Date()
+  const baseYear = now.getFullYear()
+  const baseMonth = now.getMonth()
+  const currentMonthValue = `${baseYear}-${String(baseMonth + 1).padStart(2, '0')}`
+  scheduleMonths.value = Array.from({ length: 7 }, (_, i) => {
+    const m = new Date(baseYear, baseMonth + (i - 3), 1)
+    const year = m.getFullYear()
+    const month = m.getMonth() + 1
+    return {
+      value: `${year}-${String(month).padStart(2, '0')}`,
+      label: `${month}月`,
     }
-    if (result?.success && Array.isArray(result.data) && result.data.length > 0) {
-      scheduleMonths.value = result.data
-    }
-  } catch (e) {
-    console.error('計画月一覧の取得に失敗:', e)
+  })
+  if (!selectedScheduleMonth.value) {
+    selectedScheduleMonth.value = currentMonthValue
   }
 }
+
+watch(scheduleMonths, (months) => {
+  if (!selectedScheduleMonth.value) return
+  const exists = months.some((m) => m.value === selectedScheduleMonth.value)
+  if (!exists) {
+    selectedScheduleMonth.value = ''
+  }
+})
 
 const generateFromSchedule = async () => {
   if (!selectedScheduleMonth.value) {
@@ -6688,7 +6695,7 @@ async function printCuttingPlanList() {
   }
   printCuttingPlanLoading.value = true
   try {
-    const [cuttingRes, stockRes, stockSubRes] = await Promise.all([
+    const [cuttingRes, stockRes] = await Promise.all([
       request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
         '/api/plan/cutting-management/list',
         { params: { production_day: day, limit: 2000 } }
@@ -6697,21 +6704,41 @@ async function printCuttingPlanList() {
         '/api/material/stock',
         { params: { target_date: day, page: 1, pageSize: 10000 } }
       ),
-      request.get<{ success?: boolean; data?: { list?: { supplier_name?: string; material_name?: string; current_stock?: number }[]; total?: number } }>(
-        '/api/material/stock/sub',
-        { params: { page: 1, pageSize: 500 } }
-      ),
     ])
+    type StockSubPrintRow = {
+      supplier_name?: string
+      material_name?: string
+      current_stock?: number
+      order_bundle_quantity?: number
+      planned_usage?: number
+    }
+    const stockSubListRaw: StockSubPrintRow[] = []
+    const subPageSize = 500
+    for (let subPage = 1; subPage < 200; subPage += 1) {
+      const stockSubRes = await request.get<{ success?: boolean; data?: { list?: StockSubPrintRow[]; total?: number } }>(
+        '/api/material/stock/sub',
+        { params: { page: subPage, pageSize: subPageSize } }
+      )
+      const chunk = (stockSubRes as any)?.success ? ((stockSubRes as any).data?.list ?? []) as StockSubPrintRow[] : []
+      stockSubListRaw.push(...chunk)
+      if (chunk.length < subPageSize) break
+    }
     const rows = (cuttingRes as any)?.success ? ((cuttingRes as any).data ?? []) as CuttingManagementRow[] : []
     const stockListRaw = (stockRes as any)?.success ? ((stockRes as any).data?.list ?? []) : []
-    const stockSubListRaw = (stockSubRes as any)?.success ? ((stockSubRes as any).data?.list ?? []) : []
     const stockList = [...stockListRaw].sort((a: { supplier_name?: string; material_name?: string }, b: { supplier_name?: string; material_name?: string }) => {
       const sa = String(a.supplier_name ?? '')
       const sb = String(b.supplier_name ?? '')
       if (sa !== sb) return sa.localeCompare(sb)
       return String(a.material_name ?? '').localeCompare(String(b.material_name ?? ''))
     })
-    const stockSubList = stockSubListRaw.filter((r: { current_stock?: number }) => (Number(r.current_stock) || 0) > 0)
+    // order_bundle_quantity>0 かつ「計画使用数が正でない」行。planned_usage は DB 上ほぼ 0〜正のため、<0 だけだと一致ゼロになりがち → <=0（未設定は 0 扱い）
+    const stockSubList = stockSubListRaw.filter((r: StockSubPrintRow) => {
+      const ob = Number(r.order_bundle_quantity) || 0
+      if (ob <= 0) return false
+      const pu = r.planned_usage == null ? 0 : Number(r.planned_usage)
+      if (Number.isNaN(pu)) return false
+      return pu <= 0
+    })
 
     const byMachine = new Map<string, CuttingManagementRow[]>()
     for (const r of rows) {
@@ -6751,8 +6778,9 @@ async function printCuttingPlanList() {
     const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
       `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.current_stock ?? ''}</td></tr>`
     ).join('')
-    const stockSubRows = stockSubList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
-      `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.current_stock ?? ''}</td></tr>`
+    const stockSubRows = stockSubList.map(
+      (r: { supplier_name?: string; material_name?: string; order_bundle_quantity?: number }) =>
+        `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.order_bundle_quantity ?? ''}</td></tr>`
     ).join('')
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断計画リスト</title><style>
@@ -6783,9 +6811,9 @@ async function printCuttingPlanList() {
       .print-stock-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
       .print-stock-table th, .print-stock-table td { border: 1px solid #333; padding: 2.5px 4px; line-height: 1.44; }
       .print-stock-table th { background: #f0f0f0; }
-      .print-stock-table th:nth-child(1), .print-stock-table td:nth-child(1) { width: 32%; }
-      .print-stock-table th:nth-child(2), .print-stock-table td:nth-child(2) { width: 48%; text-align: center;}
-      .print-stock-table th:nth-child(3), .print-stock-table td:nth-child(3) { width: 20%; text-align: center; }
+      .print-stock-table th:nth-child(1), .print-stock-table td:nth-child(1) { width: 40%; }
+      .print-stock-table th:nth-child(2), .print-stock-table td:nth-child(2) { width: 46%; text-align: center;}
+      .print-stock-table th:nth-child(3), .print-stock-table td:nth-child(3) { width: 16%; text-align: center; }
       @media print { .print-layout { min-height: auto; } }
     </style></head><body>
       <div class="print-header-row"><span class="print-title">切断計画リスト</span><span class="print-date">生産日 ${escapeHtml(dayDisplay)}</span></div>

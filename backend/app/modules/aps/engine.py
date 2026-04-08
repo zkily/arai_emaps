@@ -27,7 +27,7 @@ from app.modules.aps.models import (
     ScheduleSliceAllocation,
 )
 
-# フロント Planning と同じ基準：日産能力 = floor(能率 × 15.3h)
+# 默认标准工时（仅在线体未配置运行时间时使用）
 SCHEDULE_STANDARD_DAY_HOURS = 15.3
 
 
@@ -181,6 +181,19 @@ def _minutes_to_time(m: int) -> time:
     return time(m // 60, m % 60, 0)
 
 
+def _chunk_length_minutes(start_t: time, end_t: time) -> int:
+    """
+    计算 [start, end) 的分钟数，支持跨午夜（如 23:00 -> 00:00）。
+    """
+    sm = _minutes_from_midnight(start_t)
+    em = _minutes_from_midnight(end_t)
+    if em > sm:
+        return em - sm
+    if em < sm:
+        return (24 * 60 - sm) + em
+    return 0
+
+
 def _productive_minute_segments(
     day_slots: List[LineCapacityTimeSlot],
     avail_hours: float,
@@ -274,7 +287,7 @@ async def _persist_slice_allocations(
     total_placed = 0
     last_alloc: Optional[ScheduleSliceAllocation] = None
     for st, et in chunks:
-        len_min = max(0, _minutes_from_midnight(et) - _minutes_from_midnight(st))
+        len_min = _chunk_length_minutes(st, et)
         chunk_hours = len_min / 60.0
         # 当該区間の理論上限（個）：⌊ 個/h × 能率 × 区間時間(h) ⌋
         cap = int(math.floor(rate * eff_factor * chunk_hours + 1e-9))
@@ -384,10 +397,15 @@ async def run_engine(
     efficiency_pct = float(ps.efficiency or 100)
     setup_minutes = int(ps.setup_time or 0)
 
-    if SCHEDULE_STANDARD_DAY_HOURS <= 0:
-        raise ValueError("SCHEDULE_STANDARD_DAY_HOURS must be > 0")
-    # daily_capacity は「15.3h 標準日の目標日産」とみなし、製品の時間当たり出来高（個/h）を復元
-    hourly_piece_rate = float(daily_capacity) / SCHEDULE_STANDARD_DAY_HOURS
+    base_day_hours = float(line.default_work_hours or 0)
+    if base_day_hours <= 0:
+        base_day_hours = SCHEDULE_STANDARD_DAY_HOURS
+    if base_day_hours <= 0:
+        raise ValueError("base_day_hours must be > 0")
+    # daily_capacity 换算为小时产能：
+    # - 线体有设定运行时间 -> 用线体运行时间
+    # - 未设定 -> 回退到默认 15.3h
+    hourly_piece_rate = float(daily_capacity) / base_day_hours
 
     # 稼働カレンダー・時間帯を先読み（最大 365 日分）
     cal_end = start + timedelta(days=365)
@@ -454,7 +472,7 @@ async def run_engine(
 
         total_cap = 0
         for st, et in chunks:
-            len_min = max(0, _minutes_from_midnight(et) - _minutes_from_midnight(st))
+            len_min = _chunk_length_minutes(st, et)
             chunk_hours = len_min / 60.0
             cap = int(math.floor(rate * eff_factor * chunk_hours + 1e-9))
             total_cap += cap

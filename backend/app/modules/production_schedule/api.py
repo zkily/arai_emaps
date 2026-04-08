@@ -3,6 +3,7 @@
 - GET /processing-status: production_plan_schedules を file_name でフィルタして返す
 - GET /schedule: 設備運行時間スロット（現状スタブ、必要に応じて production_plan_schedules 等から導出可能）
 - GET /plan/batch/schedule-months: 生産月一覧
+- GET /plan/batch/material-requirements-summary: instruction_plans を期間（start_date 優先）で集計し材料所要本数を返す
 - POST /plan/batch/generate-from-schedule: 生産月で production_plan_schedules から切断指示計画(instruction_plans)を生成
 """
 import logging
@@ -354,6 +355,214 @@ async def get_instruction_plans_list(
 
     data = [_row_to_dict(dict(r)) for r in rows]
     return {"success": True, "data": data, "message": "OK"}
+
+
+@router.get("/plan/batch/material-requirements-summary")
+async def get_material_requirements_summary_from_instruction_plans(
+    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（DATE(start_date) で判定、start_date 未設定行は対象外）"),
+    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
+    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    instruction_plans を期間で絞り、材料ごとに件数（行数）を集計する。
+    - start_date が NULL の行は集計対象外
+    - 期間キー: DATE(start_date)
+    - 指標: COUNT(*)（planned_quantity / actual_production_quantity / usage_count は使わない）
+    """
+    d_start = _parse_date_ymd(date_start) if date_start else None
+    d_end = _parse_date_ymd(date_end) if date_end else None
+
+    if production_month and production_month.strip():
+        try:
+            parts = production_month.strip().split("-")
+            if len(parts) == 2:
+                y, m = int(parts[0]), int(parts[1])
+                if 1 <= m <= 12:
+                    if d_start is None:
+                        d_start = date(y, m, 1)
+                    if d_end is None:
+                        if m == 12:
+                            d_end = date(y, 12, 31)
+                        else:
+                            d_end = date(y, m + 1, 1) - timedelta(days=1)
+        except (ValueError, IndexError):
+            pass
+
+    if d_start is None or d_end is None:
+        raise HTTPException(
+            status_code=400,
+            detail="date_start と date_end を指定するか、production_month（YYYY-MM）を指定してください。",
+        )
+    if d_start > d_end:
+        raise HTTPException(status_code=400, detail="date_start は date_end 以下にしてください。")
+
+    conditions = [
+        "start_date IS NOT NULL",
+        "DATE(start_date) >= :d_start",
+        "DATE(start_date) <= :d_end",
+    ]
+    params = {"d_start": d_start, "d_end": d_end}
+
+    sql = text(f"""
+        SELECT
+            COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)') AS material_name,
+            COALESCE(NULLIF(TRIM(material_manufacturer), ''), '') AS material_manufacturer,
+            COALESCE(NULLIF(TRIM(standard_specification), ''), '') AS standard_specification,
+            COUNT(*) AS piece_count
+        FROM instruction_plans
+        WHERE {" AND ".join(conditions)}
+        GROUP BY
+            COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)'),
+            COALESCE(NULLIF(TRIM(material_manufacturer), ''), ''),
+            COALESCE(NULLIF(TRIM(standard_specification), ''), '')
+        ORDER BY material_manufacturer ASC, material_name ASC, standard_specification ASC
+    """)
+
+    try:
+        result = await db.execute(sql, params)
+        rows = result.mappings().fetchall()
+    except Exception as e:
+        msg = str(e).lower()
+        if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="instruction_plans テーブルが存在しません。",
+            ) from e
+        logger.exception("material-requirements-summary 集計失敗")
+        raise HTTPException(status_code=500, detail="材料需要量の集計に失敗しました。") from e
+
+    def _icount(v) -> int:
+        if v is None:
+            return 0
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    items = []
+    total_pieces = 0
+    for r in rows:
+        rd = dict(r)
+        c = _icount(rd.get("piece_count"))
+        total_pieces += c
+        items.append(
+            {
+                "material_name": rd.get("material_name"),
+                "material_manufacturer": rd.get("material_manufacturer"),
+                "standard_specification": rd.get("standard_specification"),
+                "piece_count": c,
+            }
+        )
+
+    # 日別×材料の二次元表用（期間が長すぎると列数過多のため上限）
+    _DAY_MATRIX_MAX_DAYS = 186
+    span_days = (d_end - d_start).days + 1
+    daily_matrix: Optional[dict] = None
+    daily_matrix_omitted = span_days > _DAY_MATRIX_MAX_DAYS
+
+    if not daily_matrix_omitted:
+        daily_sql = text(f"""
+            SELECT
+                DATE(start_date) AS eff_date,
+                COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)') AS material_name,
+                COALESCE(NULLIF(TRIM(material_manufacturer), ''), '') AS material_manufacturer,
+                COALESCE(NULLIF(TRIM(standard_specification), ''), '') AS standard_specification,
+                COUNT(*) AS cnt
+            FROM instruction_plans
+            WHERE {" AND ".join(conditions)}
+            GROUP BY
+                DATE(start_date),
+                COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)'),
+                COALESCE(NULLIF(TRIM(material_manufacturer), ''), ''),
+                COALESCE(NULLIF(TRIM(standard_specification), ''), '')
+            ORDER BY eff_date, material_manufacturer ASC, material_name ASC, standard_specification ASC
+        """)
+        try:
+            dr = await db.execute(daily_sql, params)
+            drows = dr.mappings().fetchall()
+        except Exception as e:
+            msg = str(e).lower()
+            if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+                raise HTTPException(
+                    status_code=503,
+                    detail="instruction_plans テーブルが存在しません。",
+                ) from e
+            logger.exception("material-requirements daily 集計失敗")
+            raise HTTPException(status_code=500, detail="日別材料需要量の集計に失敗しました。") from e
+
+        date_list: list[str] = []
+        cur = d_start
+        while cur <= d_end:
+            date_list.append(cur.isoformat())
+            cur = cur + timedelta(days=1)
+
+        pivot: dict[tuple, dict[str, int]] = {}
+        for r in drows:
+            rd = dict(r)
+            ed = rd.get("eff_date")
+            if ed is None:
+                continue
+            if hasattr(ed, "isoformat"):
+                ds = ed.isoformat()[:10]
+            else:
+                ds = str(ed)[:10]
+            key = (
+                rd.get("material_name"),
+                rd.get("material_manufacturer"),
+                rd.get("standard_specification"),
+            )
+            if key not in pivot:
+                pivot[key] = {d: 0 for d in date_list}
+            qv = _icount(rd.get("cnt"))
+            if ds in pivot[key]:
+                pivot[key][ds] += qv
+
+        # 合計表にのみ存在する材料も日別表に行として出す（該当日が無ければ 0）
+        for it in items:
+            k = (it.get("material_name"), it.get("material_manufacturer"), it.get("standard_specification"))
+            if k not in pivot:
+                pivot[k] = {d: 0 for d in date_list}
+
+        matrix_rows = []
+        # pivot key (material_name, material_manufacturer, standard_specification) → 表示順: メーカー・材料名・規格 昇順
+        for key in sorted(pivot.keys(), key=lambda k: (k[1] or "", k[0] or "", k[2] or "")):
+            mn, mf, sp = key
+            by_date = pivot[key]
+            row_total = sum(by_date.values())
+            matrix_rows.append(
+                {
+                    "material_name": mn,
+                    "material_manufacturer": mf,
+                    "standard_specification": sp,
+                    "by_date": {d: by_date[d] for d in date_list},
+                    "row_total": row_total,
+                }
+            )
+
+        daily_matrix = {
+            "dates": date_list,
+            "rows": matrix_rows,
+        }
+
+    return {
+        "success": True,
+        "message": "OK",
+        "data": {
+            "items": items,
+            "daily_matrix": daily_matrix,
+            "summary": {
+                "date_start": d_start.isoformat(),
+                "date_end": d_end.isoformat(),
+                "production_month_filter": production_month.strip() if production_month and production_month.strip() else None,
+                "total_material_kinds": len(items),
+                "total_piece_count": total_pieces,
+                "effective_date_note": "start_date が設定されている行のみ対象。日別は DATE(start_date) ごとの材料別ロット件数（COUNT(*)）です。",
+                "daily_matrix_omitted": daily_matrix_omitted,
+                "daily_matrix_max_days": _DAY_MATRIX_MAX_DAYS,
+            },
+        },
+    }
 
 
 class UpdatePlanBody(BaseModel):

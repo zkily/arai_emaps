@@ -590,7 +590,7 @@ async function loadPartMasters() {
     const all: PartMasterRow[] = []
     let page = 1
     for (;;) {
-      const res = await getPartList({ page, pageSize, status: 'active' })
+      const res = await getPartList({ page, pageSize, status: 1 })
       const list = res?.data?.list ?? []
       const total = res?.data?.total ?? list.length
       all.push(...list)

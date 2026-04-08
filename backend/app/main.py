@@ -54,11 +54,10 @@ app = FastAPI(
 # 開発環境でネットワークアクセスを許可する場合の設定
 # 開発環境では、すべてのHTTPオリジンを許可（ネットワークアクセス対応）
 if settings.CORS_ALLOW_ALL or settings.APP_ENV == "development":
-    # 開発環境: 正規表現ですべてのHTTPオリジンを許可
-    # これにより、localhost、127.0.0.1、または任意のIPアドレスからのアクセスを許可
+    # 開発環境: 正規表現ですべての HTTP / HTTPS オリジンを許可
     app.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"http://.*",  # すべてのHTTPオリジンを許可
+        allow_origin_regex=r"https?://.*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

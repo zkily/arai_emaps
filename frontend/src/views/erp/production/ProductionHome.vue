@@ -50,7 +50,22 @@
       </router-link>
     </div>
 
-    <!-- 2. 生産指示（instruction 配下の各工程） -->
+    <!-- 2. 生産需要量 -->
+    <div class="section-title">生産需要量</div>
+    <div class="module-grid">
+      <router-link v-for="m in requirementsModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <!-- 3. 生産指示（instruction 配下の各工程） -->
     <div class="section-title">生産指示</div>
     <div class="module-grid">
       <router-link v-for="m in instructionModules" :key="m.path" :to="m.path" class="module-card modern-card">
@@ -65,7 +80,7 @@
       </router-link>
     </div>
 
-    <!-- 3. 生産実績 -->
+    <!-- 4. 生産実績 -->
     <div class="section-title">生産実績</div>
     <div class="module-grid">
       <router-link v-for="m in resultModules" :key="m.path" :to="m.path" class="module-card modern-card">
@@ -87,7 +102,7 @@ import { ref, markRaw } from 'vue'
 import type { Component } from 'vue'
 import {
   Setting, ArrowRight, Document, DataAnalysis, Tickets,
-  Cpu, TrendCharts, DataLine, Calendar, Operation, Connection
+  Cpu, TrendCharts, DataLine, Calendar, Operation, Connection, Box
 } from '@element-plus/icons-vue'
 
 interface ModuleItem {
@@ -108,6 +123,10 @@ const statsCards = ref([
 const planningModules = ref<ModuleItem[]>([
   { path: '/erp/production/data-management', title: '生産データ管理', description: '日別生産サマリ・実績入力・進捗可視化', icon: markRaw(DataLine), gradient: 'linear-gradient(135deg, #409eff, #67c23a)' },
   { path: '/erp/production/plan-baseline', title: '計画ベースライン', description: 'ベースライン登録・計画 vs 実績比較', icon: markRaw(Calendar), gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
+])
+
+const requirementsModules = ref<ModuleItem[]>([
+  { path: '/erp/production-requirements/material', title: '材料需要量', description: 'instruction_plans の start_date 基準で材料別件数・日別二次元表', icon: markRaw(Box), gradient: 'linear-gradient(135deg, #13c2c2, #2f54eb)' },
 ])
 
 const instructionModules = ref<ModuleItem[]>([

@@ -30,8 +30,8 @@
         </el-form-item>
         <el-form-item :label="t('master.common.status')">
           <el-select v-model="filters.status" clearable size="small" class="part-filter__st" @change="fetchList">
-            <el-option :label="t('master.part.statusActive')" value="active" />
-            <el-option :label="t('master.part.statusInactive')" value="inactive" />
+            <el-option :label="t('master.part.statusActive')" :value="1" />
+            <el-option :label="t('master.part.statusInactive')" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -50,11 +50,26 @@
         max-height="calc(100vh - 280px)"
       >
         <el-table-column prop="part_cd" :label="t('master.part.partCd')" width="120" show-overflow-tooltip />
-        <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="category" :label="t('master.part.category')" width="100" show-overflow-tooltip />
+        <el-table-column prop="kind" :label="t('master.part.kind')" width="56" align="center" />
+        <el-table-column :label="t('master.part.settlementType')" min-width="108" show-overflow-tooltip>
+          <template #default="{ row }">{{ settlementOptionLabel(row.settlement_type) }}</template>
+        </el-table-column>
         <el-table-column prop="uom" :label="t('master.part.uom')" width="64" align="center" />
-        <el-table-column :label="t('master.part.unitPriceOrig')" width="120" align="right">
+        <el-table-column :label="t('master.part.unitPriceOrig')" width="112" align="right">
           <template #default="{ row }">
             {{ formatNum(row.unit_price) }} {{ row.currency }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('master.part.materialUnitPrice')" width="112" align="right">
+          <template #default="{ row }">
+            {{ formatNum(row.material_unit_price) }} {{ row.currency }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('master.part.totalUnitPrice')" width="112" align="right">
+          <template #default="{ row }">
+            <strong>{{ formatNum(row.total_unit_price) }} {{ row.currency }}</strong>
           </template>
         </el-table-column>
         <el-table-column prop="exchange_rate" :label="t('master.part.exchangeRate')" width="108" align="right">
@@ -70,7 +85,9 @@
         </el-table-column>
         <el-table-column prop="status" :label="t('master.common.status')" width="88" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small">
+              {{ row.status === 1 ? t('master.part.statusActive') : t('master.part.statusInactive') }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('master.common.actions')" width="120" fixed="right" align="center">
@@ -140,6 +157,32 @@
           <el-form-item :label="t('master.part.partName')" prop="part_name" class="part-dlg__fi">
             <el-input v-model="form.part_name" maxlength="200" show-word-limit />
           </el-form-item>
+          <el-row :gutter="8">
+            <el-col :span="12">
+              <el-form-item :label="t('master.part.category')" class="part-dlg__fi">
+                <el-input v-model="form.category" maxlength="100" show-word-limit clearable />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="t('master.part.kind')" prop="kind" class="part-dlg__fi">
+                <el-select v-model="form.kind" class="part-input-full">
+                  <el-option label="T" value="T" />
+                  <el-option label="N" value="N" />
+                  <el-option label="F" value="F" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-form-item :label="t('master.part.settlementType')" prop="settlement_type" class="part-dlg__fi">
+            <el-select v-model="form.settlement_type" class="part-input-full">
+              <el-option
+                v-for="opt in PART_SETTLEMENT_TYPES"
+                :key="opt"
+                :value="opt"
+                :label="settlementOptionLabel(opt)"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item :label="t('master.part.supplierCd')" class="part-dlg__fi part-dlg__fi--mb0">
             <el-select
               v-model="form.supplier_cd"
@@ -179,6 +222,13 @@
               </el-form-item>
             </el-col>
             <el-col :span="8">
+              <el-form-item :label="t('master.part.materialUnitPrice')" prop="material_unit_price" class="part-dlg__fi">
+                <el-input-number v-model="form.material_unit_price" :min="0" :precision="2" :step="0.01" class="part-input-full" controls-position="right" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+          <el-row :gutter="8">
+            <el-col :span="8">
               <el-form-item :label="t('master.part.exchangeRate')" prop="exchange_rate" class="part-dlg__fi">
                 <el-input-number v-model="form.exchange_rate" :min="0.01" :precision="2" :step="0.01" class="part-input-full" controls-position="right" />
               </el-form-item>
@@ -186,6 +236,10 @@
           </el-row>
           <p class="part-dlg__fx-hint">{{ t('master.part.exchangeHint') }}</p>
           <div class="part-preview-jpy">
+            <span class="part-preview-jpy__lbl">{{ t('master.part.totalUnitPrice') }}</span>
+            <span class="part-preview-jpy__val">{{ formatNum(previewTotalOrig) }} {{ form.currency }}</span>
+          </div>
+          <div class="part-preview-jpy part-preview-jpy--sub">
             <span class="part-preview-jpy__lbl">{{ t('master.part.standardJpy') }}</span>
             <span class="part-preview-jpy__val">¥{{ formatNum(previewJpy) }}</span>
           </div>
@@ -196,8 +250,8 @@
             <el-col :span="24">
               <el-form-item :label="t('master.common.status')" prop="status" class="part-dlg__fi">
                 <el-radio-group v-model="form.status" class="part-dlg__status">
-                  <el-radio-button value="active">{{ t('master.part.statusActive') }}</el-radio-button>
-                  <el-radio-button value="inactive">{{ t('master.part.statusInactive') }}</el-radio-button>
+                  <el-radio-button :value="1">{{ t('master.part.statusActive') }}</el-radio-button>
+                  <el-radio-button :value="0">{{ t('master.part.statusInactive') }}</el-radio-button>
                 </el-radio-group>
               </el-form-item>
             </el-col>
@@ -223,7 +277,16 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Search, Grid } from '@element-plus/icons-vue'
-import { getPartList, createPart, updatePart, deletePart, type PartMasterRow } from '@/api/master/partMaster'
+import {
+  getPartList,
+  createPart,
+  updatePart,
+  deletePart,
+  PART_SETTLEMENT_TYPES,
+  type PartMasterRow,
+  type PartKind,
+  type PartSettlementType,
+} from '@/api/master/partMaster'
 import { getSupplierList } from '@/api/master/supplierMaster'
 import type { Supplier } from '@/types/master'
 
@@ -235,7 +298,7 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = 30
 
-const filters = ref({ keyword: '', status: '' })
+const filters = ref<{ keyword: string; status?: number }>({ keyword: '' })
 
 const dlgVisible = ref(false)
 const isEdit = ref(false)
@@ -246,19 +309,26 @@ const formRef = ref<FormInstance>()
 const form = reactive({
   part_cd: '',
   part_name: '',
+  category: '' as string,
+  kind: 'N' as PartKind,
+  settlement_type: '有償支給' as PartSettlementType,
   uom: '個',
   unit_price: 0,
+  material_unit_price: 0,
   currency: 'JPY',
   exchange_rate: 1,
   supplier_cd: '' as string,
-  status: 'active',
+  status: 1,
   remarks: '' as string,
 })
 
 const rules: FormRules = {
   part_cd: [{ required: true, message: () => t('master.part.ruleCd'), trigger: 'blur' }],
   part_name: [{ required: true, message: () => t('master.part.ruleName'), trigger: 'blur' }],
+  kind: [{ required: true, message: () => t('master.part.ruleKind'), trigger: 'change' }],
+  settlement_type: [{ required: true, message: () => t('master.part.ruleSettlement'), trigger: 'change' }],
   unit_price: [{ required: true, message: () => t('master.part.rulePrice'), trigger: 'change' }],
+  material_unit_price: [{ required: true, message: () => t('master.part.ruleMaterialPrice'), trigger: 'change' }],
   exchange_rate: [{ required: true, message: () => t('master.part.ruleFx'), trigger: 'change' }],
 }
 
@@ -272,7 +342,26 @@ const supplierSelectOptions = computed(() => {
   return [extra, ...supplierRows.value.filter((s) => s.supplier_cd !== extra.supplier_cd)]
 })
 
-const previewJpy = computed(() => (Number(form.unit_price) || 0) * (Number(form.exchange_rate) || 0))
+const previewTotalOrig = computed(
+  () => (Number(form.unit_price) || 0) + (Number(form.material_unit_price) || 0)
+)
+const previewJpy = computed(() => previewTotalOrig.value * (Number(form.exchange_rate) || 0))
+
+function settlementOptionLabel(v: string | undefined | null) {
+  if (!v) return '—'
+  const map: Record<string, string> = {
+    有償支給: t('master.part.stPaid'),
+    無償支給: t('master.part.stFree'),
+    自給: t('master.part.stSelf'),
+    その他: t('master.part.stOther'),
+  }
+  return map[v] || v
+}
+
+function normalizeSettlementType(v: string | undefined | null): PartSettlementType {
+  if (v && (PART_SETTLEMENT_TYPES as readonly string[]).includes(v)) return v as PartSettlementType
+  return '有償支給'
+}
 
 function formatSupplierOption(s: Pick<Supplier, 'supplier_cd' | 'supplier_name'>) {
   const name = (s.supplier_name || '').trim()
@@ -317,7 +406,7 @@ function onCurrencyChange(c: string) {
 }
 
 function clearFilters() {
-  filters.value = { keyword: '', status: '' }
+  filters.value = { keyword: '' }
   page.value = 1
   fetchList()
 }
@@ -325,9 +414,10 @@ function clearFilters() {
 async function fetchList() {
   loading.value = true
   try {
+    const st = filters.value.status
     const res = await getPartList({
       keyword: filters.value.keyword || undefined,
-      status: filters.value.status || undefined,
+      status: st === 0 || st === 1 ? st : undefined,
       page: page.value,
       pageSize: pageSize,
     })
@@ -345,12 +435,16 @@ function resetForm() {
   Object.assign(form, {
     part_cd: '',
     part_name: '',
+    category: '',
+    kind: 'N' as PartKind,
+    settlement_type: '有償支給' as PartSettlementType,
     uom: '個',
     unit_price: 0,
+    material_unit_price: 0,
     currency: 'JPY',
     exchange_rate: 1,
     supplier_cd: '',
-    status: 'active',
+    status: 1,
     remarks: '',
   })
 }
@@ -368,12 +462,16 @@ async function openForm(row?: PartMasterRow) {
     Object.assign(form, {
       part_cd: row.part_cd,
       part_name: row.part_name,
+      category: row.category || '',
+      kind: (row.kind === 'T' || row.kind === 'N' || row.kind === 'F' ? row.kind : 'N') as PartKind,
+      settlement_type: normalizeSettlementType(row.settlement_type),
       uom: row.uom || '個',
       unit_price: row.unit_price,
+      material_unit_price: row.material_unit_price ?? 0,
       currency: row.currency || 'JPY',
       exchange_rate: row.exchange_rate ?? 1,
       supplier_cd: sc,
-      status: row.status || 'active',
+      status: row.status === 0 ? 0 : 1,
       remarks: row.remarks || '',
     })
   } else {
@@ -395,8 +493,12 @@ async function submit() {
     if (isEdit.value && editId.value != null) {
       await updatePart(editId.value, {
         part_name: form.part_name,
+        category: form.category.trim() || null,
+        kind: form.kind,
+        settlement_type: form.settlement_type,
         uom: form.uom,
         unit_price: form.unit_price,
+        material_unit_price: form.material_unit_price,
         currency: form.currency,
         exchange_rate: form.exchange_rate,
         supplier_cd: form.supplier_cd || null,
@@ -408,8 +510,12 @@ async function submit() {
       await createPart({
         part_cd: form.part_cd.trim(),
         part_name: form.part_name.trim(),
+        category: form.category.trim() || null,
+        kind: form.kind,
+        settlement_type: form.settlement_type,
         uom: form.uom,
         unit_price: form.unit_price,
+        material_unit_price: form.material_unit_price,
         currency: form.currency,
         exchange_rate: form.exchange_rate,
         supplier_cd: form.supplier_cd || null,
@@ -562,6 +668,19 @@ onMounted(fetchList)
   border-radius: 8px;
   border: 1px solid rgba(99, 102, 241, 0.22);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.part-preview-jpy--sub {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-color: rgba(100, 116, 139, 0.25);
+}
+
+.part-preview-jpy--sub .part-preview-jpy__lbl {
+  color: #475569;
+}
+
+.part-preview-jpy--sub .part-preview-jpy__val {
+  color: #0f172a;
 }
 
 .part-preview-jpy__lbl {

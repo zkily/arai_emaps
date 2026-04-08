@@ -159,6 +159,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/instruction/plating', name: 'PlatingInstruction', component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'), meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/actual-management', name: 'ProductionActualManagement', component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'), meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/consumption', name: 'MaterialConsumption', component: () => import('@/views/erp/production/actual/MaterialConsumption.vue'), meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true } },
+      { path: 'erp/production-requirements/material', name: 'ProductionMaterialRequirements', component: () => import('@/views/erp/production-requirements/MaterialRequirements.vue'), meta: { title: '材料需要量', group: '生産管理 > 生産需要量', requiresAuth: true } },
 
       // ========== ERP - 原価・会計連携 (Costing & Finance) ==========
       { path: 'erp/costing', name: 'Costing', component: () => import('@/views/erp/Costing.vue'), meta: { title: '原価・会計', group: '原価・会計', requiresAuth: true } },

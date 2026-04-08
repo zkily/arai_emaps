@@ -1,6 +1,5 @@
-#!/bin/bash
-# Smart-EMAP システム起動スクリプト (Linux/Mac)
-
-echo "Smart-EMAP システム起動中..."
-python3 start.py
-
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+echo "Starting Smart-EMAP (backend + Vite dev + dist + optional file watcher)..."
+exec python3 start.py

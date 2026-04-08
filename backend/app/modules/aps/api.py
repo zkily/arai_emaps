@@ -1124,6 +1124,28 @@ async def replan_sequence(
         except ValueError:
             raise HTTPException(400, "anchorStartDate は YYYY-MM-DD 形式")
 
+    # 计划变更时，先清理该线体“今天之后”的旧排产数据，避免旧数据残留混入新排产
+    today = now_jst().date()
+    clear_from = max(anchor, today + timedelta(days=1)) if anchor else (today + timedelta(days=1))
+    line_sched_res = await db.execute(
+        select(ProductionSchedule.id).where(ProductionSchedule.line_id == line_id)
+    )
+    line_schedule_ids = [int(r[0]) for r in line_sched_res.all()]
+    if line_schedule_ids:
+        await db.execute(
+            delete(ScheduleDetail).where(
+                ScheduleDetail.schedule_id.in_(line_schedule_ids),
+                ScheduleDetail.schedule_date >= clear_from,
+            )
+        )
+        await db.execute(
+            delete(ScheduleSliceAllocation).where(
+                ScheduleSliceAllocation.schedule_id.in_(line_schedule_ids),
+                ScheduleSliceAllocation.work_date >= clear_from,
+            )
+        )
+        await db.flush()
+
     # ── Step 1: 通常の順次排産 ──
     updated = await replan_line_sequential(db, line_id, anchor)
     await db.flush()

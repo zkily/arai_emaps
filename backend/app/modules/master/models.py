@@ -1,7 +1,7 @@
 """
 製品マスタ データベースモデル（products テーブル）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Boolean, Text, Numeric, Float  # Date used by DestinationHoliday; Time by Carrier
+from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Boolean, Text, Numeric, Float, SmallInteger, Computed  # Date used by DestinationHoliday; Time by Carrier
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -450,19 +450,24 @@ class ProcessProcessingFee(Base):
 
 
 class PartMaster(Base):
-    """部品マスタ（part_masters）— BOM子品目の標準原価用"""
+    """部品マスタ（parts）— BOM子品目の標準原価用"""
 
-    __tablename__ = "part_masters"
+    __tablename__ = "parts"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     part_cd = Column(String(50), unique=True, nullable=False, index=True)
     part_name = Column(String(200), nullable=False)
+    category = Column(String(100))
+    kind = Column(String(1), nullable=False, default="N")
+    settlement_type = Column(String(20), nullable=False, default="有償支給")
     uom = Column(String(20), nullable=False, default="個")
     unit_price = Column(Numeric(18, 6), nullable=False, default=0)
+    material_unit_price = Column(Numeric(18, 6), nullable=False, default=0)
+    total_unit_price = Column(Numeric(18, 6), Computed("unit_price + material_unit_price", persisted=True))
     currency = Column(String(10), nullable=False, default="JPY")
     exchange_rate = Column(Numeric(18, 6), nullable=False, default=1)
     supplier_cd = Column(String(50))
-    status = Column(String(20), nullable=False, default="active")
+    status = Column(SmallInteger, nullable=False, default=1)
     remarks = Column(Text)
     created_by = Column(String(100))
     updated_by = Column(String(100))

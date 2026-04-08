@@ -1,11 +1,11 @@
 """
-部品マスタ API（part_masters）
-単価は原通貨、exchange_rate は 1 原通貨あたりの JPY。標準原価(円) = unit_price * exchange_rate
+部品マスタ API（parts）
+単価は原通貨、exchange_rate は 1 原通貨あたりの JPY。標準原価(円) = total_unit_price * exchange_rate（total = unit_price + material_unit_price）
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
-from typing import Optional
+from typing import Optional, Literal
 from pydantic import BaseModel, Field
 from decimal import Decimal
 
@@ -16,11 +16,20 @@ from app.modules.master.models import PartMaster, Supplier
 
 router = APIRouter()
 
+KindLiteral = Literal["T", "N", "F"]
+SettlementTypeLiteral = Literal["有償支給", "無償支給", "自給", "その他"]
+
+
+def _total_unit(row: PartMaster) -> Decimal:
+    if row.total_unit_price is not None:
+        return row.total_unit_price
+    return (row.unit_price or Decimal("0")) + (row.material_unit_price or Decimal("0"))
+
 
 def _jpy_standard(row: PartMaster) -> float:
-    up = row.unit_price or Decimal("0")
+    total = _total_unit(row)
     ex = row.exchange_rate or Decimal("1")
-    return float(up * ex)
+    return float(total * ex)
 
 
 def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
@@ -28,13 +37,18 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
         "id": row.id,
         "part_cd": row.part_cd,
         "part_name": row.part_name,
+        "category": row.category,
+        "kind": row.kind,
+        "settlement_type": row.settlement_type,
         "uom": row.uom,
         "unit_price": float(row.unit_price) if row.unit_price is not None else 0.0,
+        "material_unit_price": float(row.material_unit_price) if row.material_unit_price is not None else 0.0,
+        "total_unit_price": float(_total_unit(row)),
         "currency": row.currency or "JPY",
         "exchange_rate": float(row.exchange_rate) if row.exchange_rate is not None else 1.0,
         "standard_price_jpy": _jpy_standard(row),
         "supplier_cd": row.supplier_cd,
-        "status": row.status,
+        "status": int(row.status) if row.status is not None else 1,
         "remarks": row.remarks,
         "created_by": row.created_by,
         "updated_by": row.updated_by,
@@ -49,30 +63,38 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
 class PartIn(BaseModel):
     part_cd: str = Field(..., min_length=1, max_length=50)
     part_name: str = Field(..., min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+    kind: KindLiteral = "N"
+    settlement_type: SettlementTypeLiteral = "有償支給"
     uom: str = Field(default="個", max_length=20)
     unit_price: float = Field(default=0, ge=0)
+    material_unit_price: float = Field(default=0, ge=0)
     currency: str = Field(default="JPY", max_length=10)
     exchange_rate: float = Field(default=1.0, gt=0)
     supplier_cd: Optional[str] = Field(None, max_length=50)
-    status: str = Field(default="active", max_length=20)
+    status: int = Field(default=1, ge=0, le=1)
     remarks: Optional[str] = None
 
 
 class PartPatch(BaseModel):
     part_name: Optional[str] = Field(None, max_length=200)
+    category: Optional[str] = Field(None, max_length=100)
+    kind: Optional[KindLiteral] = None
+    settlement_type: Optional[SettlementTypeLiteral] = None
     uom: Optional[str] = Field(None, max_length=20)
     unit_price: Optional[float] = Field(None, ge=0)
+    material_unit_price: Optional[float] = Field(None, ge=0)
     currency: Optional[str] = Field(None, max_length=10)
     exchange_rate: Optional[float] = Field(None, gt=0)
     supplier_cd: Optional[str] = Field(None, max_length=50)
-    status: Optional[str] = Field(None, max_length=20)
+    status: Optional[int] = Field(None, ge=0, le=1)
     remarks: Optional[str] = None
 
 
 @router.get("")
 async def list_parts(
     keyword: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
+    status: Optional[int] = Query(None, ge=0, le=1),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=10000, alias="pageSize"),
     db: AsyncSession = Depends(get_db),
@@ -82,7 +104,7 @@ async def list_parts(
     if keyword and keyword.strip():
         k = f"%{keyword.strip()}%"
         q = q.where(or_(PartMaster.part_cd.like(k), PartMaster.part_name.like(k)))
-    if status:
+    if status is not None:
         q = q.where(PartMaster.status == status)
     cnt = await db.execute(select(func.count()).select_from(q.subquery()))
     total = cnt.scalar() or 0
@@ -133,12 +155,16 @@ async def create_part(
     row = PartMaster(
         part_cd=body.part_cd.strip(),
         part_name=body.part_name.strip(),
+        category=((body.category or "").strip() or None),
+        kind=body.kind,
+        settlement_type=body.settlement_type,
         uom=body.uom.strip() or "個",
         unit_price=body.unit_price,
+        material_unit_price=body.material_unit_price,
         currency=(body.currency or "JPY").strip().upper()[:10],
         exchange_rate=body.exchange_rate,
         supplier_cd=body.supplier_cd.strip() if body.supplier_cd else None,
-        status=body.status or "active",
+        status=body.status,
         remarks=body.remarks,
         created_by=current_user.username if current_user else None,
         updated_by=current_user.username if current_user else None,
@@ -162,10 +188,19 @@ async def update_part(
     data = body.model_dump(exclude_unset=True)
     if "part_name" in data and data["part_name"] is not None:
         row.part_name = str(data["part_name"]).strip()
+    if "category" in data:
+        v = data["category"]
+        row.category = (str(v).strip() if v is not None else "") or None
+    if "kind" in data and data["kind"] is not None:
+        row.kind = data["kind"]
+    if "settlement_type" in data and data["settlement_type"] is not None:
+        row.settlement_type = data["settlement_type"]
     if "uom" in data and data["uom"] is not None:
         row.uom = str(data["uom"]).strip() or "個"
     if "unit_price" in data and data["unit_price"] is not None:
         row.unit_price = data["unit_price"]
+    if "material_unit_price" in data and data["material_unit_price"] is not None:
+        row.material_unit_price = data["material_unit_price"]
     if "currency" in data and data["currency"] is not None:
         row.currency = str(data["currency"]).strip().upper()[:10]
     if "exchange_rate" in data and data["exchange_rate"] is not None:

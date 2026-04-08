@@ -940,7 +940,7 @@ async function persistScheduleOrderAfterDrag(oldIndex: number, newIndex: number)
     await Promise.all(
       list.map((s, i) => updateSchedule(s.id, { order_no: i + 1, run_immediately: false })),
     )
-    await replanLineSequence(selectedLineId.value, anchorDate.value || undefined)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     ElMessage.success('生産順を更新しました')
   } catch (e: unknown) {
@@ -1168,7 +1168,7 @@ async function addSchedule() {
       const tg = schedules.value.find((s) => s.id === targetId)!
       const newTotal = Number(tg.planned_process_qty ?? 0) + deltaPieces
       await updateSchedule(targetId, { planned_process_qty: newTotal, run_immediately: false })
-      await replanLineSequence(selectedLineId.value!, anchorDate.value || undefined)
+      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
 
       selectedEeId.value = null
       plannedQtyInput.value = ''
@@ -1302,7 +1302,7 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
       planned_process_qty: val,
       run_immediately: false,
     })
-    await replanLineSequence(selectedLineId.value, anchorDate.value || undefined)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     ElMessage.success('合計(本)を更新しました')
   } catch (e: unknown) {
@@ -1341,7 +1341,7 @@ async function replanAll() {
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
   replanning.value = true
   try {
-    await replanLineSequence(selectedLineId.value, anchorDate.value || undefined)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     ElMessage.success('順次再計算が完了しました')
   } catch (e: unknown) {
@@ -1352,6 +1352,18 @@ async function replanAll() {
 }
 
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
+
+/**
+ * 计划变更后的重排锚点：
+ * - 仅重排“今天及以后”，避免回改历史数据
+ * - 若基准开始日晚于今天，则继续使用基准开始日
+ */
+function effectiveReplanAnchorDate(): string {
+  const anchor = (anchorDate.value || '').trim()
+  const today = todayIso.value
+  if (!anchor) return today
+  return anchor >= today ? anchor : today
+}
 
 /** equipment_efficiency.efficiency_rate（本/H） */
 function formatEfficiencyRatePiecesPerH(v: number | null | undefined): string {

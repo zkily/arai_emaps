@@ -1122,7 +1122,7 @@ async function loadMasterLookups() {
       let firstPart = true
       while (firstPart || partRows.length < partTotal) {
         firstPart = false
-        const pr = await getPartList({ page, pageSize, status: 'active' })
+        const pr = await getPartList({ page, pageSize, status: 1 })
         const plist = pr?.data?.list ?? []
         partTotal = pr?.data?.total ?? 0
         partRows.push(...plist)

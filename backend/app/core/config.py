@@ -41,11 +41,20 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3005",
         "http://192.168.1.59:3005",
+        "https://localhost:5000",
+        "https://127.0.0.1:5000",
+        "https://localhost:3005",
+        "https://127.0.0.1:3005",
     ]
     
     # 開発環境でネットワークアクセスを許可する場合
     # 環境変数 CORS_ALLOW_ALL=true で有効化
     CORS_ALLOW_ALL: bool = False
+
+    # HTTPS（uvicorn 直接起動時。証明書パスはプロジェクトルートまたは絶対パス）
+    HTTPS_ENABLED: bool = False
+    SSL_CERTFILE: Optional[str] = None
+    SSL_KEYFILE: Optional[str] = None
     
     # タイムゾーン
     TIMEZONE: str = "Asia/Tokyo"

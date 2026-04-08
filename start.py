@@ -12,7 +12,7 @@ import time
 import socket
 import json
 from pathlib import Path
-from typing import List
+from typing import Any, List, Optional
 import threading
 import http.server
 import socketserver
@@ -25,16 +25,25 @@ DIST_DIR = FRONTEND_DIR / "dist"
 processes: List[subprocess.Popen] = []
 should_exit = False
 PROCESS_NAMES = ("バックエンド", "フロントエンド（開発）", "ファイル監視")
-production_httpd = None  # 本番サーバー（signal で shutdown 用）
+production_httpds: List[Any] = []  # 本番 dist サーバー（複数ポート時は複数。signal で shutdown）
+production_httpds_lock = threading.Lock()
+_prod_static_ssl_ctx: Optional[Any] = None  # main で設定。dist HTTPS 用 SSLContext
 
 # 設定
 CONFIG = {
     "backend_port": 8005,
     "frontend_dev_port": 5000,
     "frontend_prod_port": 3005,
+    # HTTPS 有効時: 3005 は TLS、プレーン HTTP はこのポート（同一 TCP ポートに HTTP/HTTPS 併用不可）
+    "frontend_prod_http_fallback_port": 3004,
     "backend_host": "0.0.0.0",
     # 起動時に自動検出したローカルIPを設定
     "production_ip": "127.0.0.1",
+    # HTTPS_ENABLED + 証明書が有効なとき https
+    "backend_scheme": "http",
+    "backend_use_https": False,
+    # dist が HTTPS で待ち受け（証明書あり。バックエンド TLS とは独立し得る）
+    "frontend_prod_https": False,
 }
 
 class Colors:
@@ -47,6 +56,67 @@ class Colors:
 def print_color(message: str, color: str = Colors.RESET):
     """カラー出力"""
     print(f"{color}{message}{Colors.RESET}")
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _resolve_ssl_path(rel_or_abs: str) -> Path:
+    """SSL パス: 絶対パス、または backend/・プロジェクトルートからの相対"""
+    p = Path(rel_or_abs.strip())
+    if p.is_file():
+        return p
+    cand = BACKEND_DIR / p
+    if cand.is_file():
+        return cand
+    cand = PROJECT_ROOT / p
+    if cand.is_file():
+        return cand
+    return p
+
+
+def build_uvicorn_ssl_args() -> List[str]:
+    """HTTPS_ENABLED かつ証明書が揃うとき uvicorn 用 --ssl-* を返す"""
+    if not _env_truthy("HTTPS_ENABLED"):
+        return []
+    cert = os.environ.get("SSL_CERTFILE", "").strip()
+    key = os.environ.get("SSL_KEYFILE", "").strip()
+    if not cert or not key:
+        print_color(
+            "⚠️  HTTPS_ENABLED ですが SSL_CERTFILE / SSL_KEYFILE が未設定のため、バックエンドは HTTP のままです。",
+            Colors.YELLOW,
+        )
+        return []
+    cpath = _resolve_ssl_path(cert)
+    kpath = _resolve_ssl_path(key)
+    if not cpath.is_file() or not kpath.is_file():
+        print_color(f"⚠️  証明書が見つかりません: cert={cpath} key={kpath}", Colors.YELLOW)
+        return []
+    return ["--ssl-certfile", str(cpath.resolve()), "--ssl-keyfile", str(kpath.resolve())]
+
+
+def build_prod_static_ssl_context():
+    """dist 静的サーバー用 SSL。HTTPS_ENABLED かつ証明書が揃えばバックエンド TLS なしでも使用可。"""
+    if not _env_truthy("HTTPS_ENABLED"):
+        return None
+    import ssl as _ssl
+
+    cert = os.environ.get("SSL_CERTFILE", "").strip()
+    key = os.environ.get("SSL_KEYFILE", "").strip()
+    if not cert or not key:
+        return None
+    cpath = _resolve_ssl_path(cert)
+    kpath = _resolve_ssl_path(key)
+    if not cpath.is_file() or not kpath.is_file():
+        return None
+    ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_SERVER)
+    try:
+        ctx.minimum_version = _ssl.TLSVersion.TLSv1_2
+    except (AttributeError, ValueError):
+        pass
+    ctx.load_cert_chain(str(cpath.resolve()), str(kpath.resolve()))
+    return ctx
 
 
 def is_port_in_use(port: int, host: str = 'localhost') -> bool:
@@ -184,16 +254,19 @@ def check_port(port: int, name: str) -> bool:
 
 def signal_handler(sig, frame):
     """シグナルハンドラー（Ctrl+C）"""
-    global should_exit, production_httpd
+    global should_exit, production_httpds
     should_exit = True
 
     print("\n\n🛑 サーバーを停止中...")
-    if production_httpd:
+    with production_httpds_lock:
+        to_shutdown = list(production_httpds)
+    for h in to_shutdown:
         try:
-            production_httpd.shutdown()
+            h.shutdown()
         except Exception:
             pass
-        production_httpd = None
+    with production_httpds_lock:
+        production_httpds.clear()
 
     for i, process in enumerate(processes):
         if process is None:
@@ -223,8 +296,8 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def start_backend(output_buffer: List[str]) -> subprocess.Popen:
-    """バックエンドサーバーを起動"""
+def start_backend(output_buffer: List[str], ssl_args: Optional[List[str]] = None) -> subprocess.Popen:
+    """バックエンドサーバーを起動（ssl_args に --ssl-certfile / --ssl-keyfile を渡すと HTTPS）"""
     if sys.platform == "win32":
         python_path = BACKEND_DIR / "venv" / "Scripts" / "python.exe"
     else:
@@ -237,17 +310,20 @@ def start_backend(output_buffer: List[str]) -> subprocess.Popen:
     env["PYTHONPATH"] = str(BACKEND_DIR)
     env["PYTHONIOENCODING"] = "utf-8"
     
+    cmd = [
+        str(python_path),
+        "-m", "uvicorn",
+        "app.main:app",
+        "--host", CONFIG["backend_host"],
+        "--port", str(CONFIG["backend_port"]),
+        "--reload",
+        "--no-access-log",
+        "--log-level", "warning",
+    ]
+    if ssl_args:
+        cmd.extend(ssl_args)
     process = subprocess.Popen(
-        [
-            str(python_path),
-            "-m", "uvicorn",
-            "app.main:app",
-            "--host", CONFIG["backend_host"],
-            "--port", str(CONFIG["backend_port"]),
-            "--reload",
-            "--no-access-log",
-            "--log-level", "warning",
-        ],
+        cmd,
         cwd=BACKEND_DIR,
         env=env,
         stdout=subprocess.PIPE,
@@ -276,13 +352,28 @@ def start_backend(output_buffer: List[str]) -> subprocess.Popen:
 
 
 def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
-    """フロントエンド開発サーバーを起動"""
+    """フロントエンド開発サーバーを起動（バックエンド HTTPS 時は Vite のプロキシ先も https に合わせる）"""
     npm_cmd = ["npm", "run", "dev"]
-    
+    env = os.environ.copy()
+    if CONFIG.get("backend_use_https"):
+        env["VITE_API_HTTPS"] = "true"
+        env["VITE_DEV_HTTPS"] = "true"
+        cert = os.environ.get("SSL_CERTFILE", "").strip()
+        key = os.environ.get("SSL_KEYFILE", "").strip()
+        if cert:
+            cp = _resolve_ssl_path(cert)
+            if cp.is_file():
+                env["VITE_SSL_CERTFILE"] = str(cp.resolve())
+        if key:
+            kp = _resolve_ssl_path(key)
+            if kp.is_file():
+                env["VITE_SSL_KEYFILE"] = str(kp.resolve())
+
     if sys.platform == "win32":
         process = subprocess.Popen(
             ["cmd.exe", "/c"] + npm_cmd,
             cwd=FRONTEND_DIR,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -294,6 +385,7 @@ def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
         process = subprocess.Popen(
             npm_cmd,
             cwd=FRONTEND_DIR,
+            env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -362,7 +454,14 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
     
     def __init__(self, *args, directory=None, **kwargs):
         self.directory = directory or str(DIST_DIR)
+        # parse_request 失敗 → send_error → end_headers の時点では未設定になり得る（Py3.14 等）
+        self.path = ""
         super().__init__(*args, directory=self.directory, **kwargs)
+
+    def send_error(self, code, message=None, explain=None):
+        if not hasattr(self, "path"):
+            self.path = ""
+        super().send_error(code, message=message, explain=explain)
 
     def _send_bad_gateway(self, exc: BaseException) -> None:
         """
@@ -390,7 +489,8 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
         import urllib.request
         import urllib.error
 
-        backend_url = f"http://127.0.0.1:{CONFIG['backend_port']}{self.path}"
+        scheme = CONFIG.get("backend_scheme", "http")
+        backend_url = f"{scheme}://127.0.0.1:{CONFIG['backend_port']}{self.path}"
         hop_by_hop = {'connection', 'keep-alive', 'proxy-authenticate',
                      'proxy-authorization', 'te', 'trailers', 'transfer-encoding', 'upgrade'}
 
@@ -402,7 +502,17 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
                 if key.lower() not in hop_by_hop:
                     req.add_header(key, value)
 
-            with urllib.request.urlopen(req, timeout=30) as response:
+            ssl_ctx = None
+            if scheme == "https":
+                import ssl as _ssl
+                ssl_ctx = _ssl.create_default_context()
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = _ssl.CERT_NONE
+
+            open_kw = {"timeout": 30}
+            if ssl_ctx is not None:
+                open_kw["context"] = ssl_ctx
+            with urllib.request.urlopen(req, **open_kw) as response:
                 response_body = response.read()
                 self.send_response(response.status)
                 for key, value in response.headers.items():
@@ -431,7 +541,13 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             return
         # 本番でAPIを直叩きするための設定（プロキシ経由より高速）
         if self.path.rstrip('/') == '/api-config.js':
-            api_base = f"http://{CONFIG['production_ip']}:{CONFIG['backend_port']}"
+            # ページが https で API が http だと混合コンテンツでブロックされるため、
+            # dist のみ TLS・バックエンド HTTP のときは同一オリジン /api プロキシ（空 = 相対）
+            if CONFIG.get("frontend_prod_https") and not CONFIG.get("backend_use_https"):
+                api_base = ""
+            else:
+                sch = CONFIG.get("backend_scheme", "http")
+                api_base = f"{sch}://{CONFIG['production_ip']}:{CONFIG['backend_port']}"
             body = f"window.__API_BASE__={repr(api_base)};\n".encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
@@ -501,46 +617,116 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
     
     def end_headers(self):
-        # ハッシュ付き静的ファイル（/assets/）は長期キャッシュで再訪問を高速化
-        if self.path.startswith("/assets/"):
-            self.send_header("Cache-Control", "public, max-age=31536000, immutable")
-        super().end_headers()
+        try:
+            p = getattr(self, "path", "") or ""
+            if isinstance(p, str) and p.startswith("/assets/"):
+                self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        except Exception:
+            pass
+        try:
+            super().end_headers()
+        except AttributeError:
+            try:
+                http.server.BaseHTTPRequestHandler.end_headers(self)
+            except Exception:
+                pass
 
     def log_message(self, format, *args):
         pass
 
 
-def start_production_server():
-    """本番用静的ファイルサーバー（マルチスレッド + serve_forever で並行受付）"""
-    global should_exit, production_httpd
-
-    if not DIST_DIR.exists():
-        print_color(f"⚠️  distフォルダが見つかりません: {DIST_DIR}", Colors.YELLOW)
-        print_color("   npm run build を実行してビルドしてください", Colors.YELLOW)
-        return False
-
-    port = CONFIG["frontend_prod_port"]
+def _run_prod_server(ssl_context: Optional[Any], port: int, label: str) -> None:
+    """1 ポートで dist を serve_forever（本番用デーモンスレッドから呼ぶ）"""
+    global should_exit
 
     class ProdServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
         allow_reuse_address = True
         daemon_threads = True
 
         def server_activate(self):
-            self.socket.listen(128)  # 接続キューを拡大
+            self.socket.listen(128)
 
     handler = lambda *args, **kwargs: ProductionHandler(*args, directory=str(DIST_DIR), **kwargs)
 
+    if ssl_context:
+
+        class SSLProdServer(ProdServer):
+            def get_request(self):
+                sock, addr = super().get_request()
+                return ssl_context.wrap_socket(sock, server_side=True), addr
+
+        ServerClass = SSLProdServer
+        scheme = "https"
+    else:
+        ServerClass = ProdServer
+        scheme = "http"
+
+    httpd = None
     try:
-        production_httpd = ProdServer(("0.0.0.0", port), handler)
-        print_color(f"✅ 本番サーバー起動: http://{CONFIG['production_ip']}:{port}/", Colors.GREEN)
-        production_httpd.serve_forever()
+        httpd = ServerClass(("0.0.0.0", port), handler)
+        with production_httpds_lock:
+            production_httpds.append(httpd)
+        print_color(
+            f"✅ 本番サーバー起動 [{label}]: {scheme}://{CONFIG['production_ip']}:{port}/",
+            Colors.GREEN,
+        )
+        httpd.serve_forever()
     except Exception as e:
         if not should_exit:
-            print_color(f"❌ 本番サーバーエラー: {e}", Colors.RED)
-        return False
+            print_color(f"❌ 本番サーバー [{label} :{port}] エラー: {e}", Colors.RED)
     finally:
-        production_httpd = None
-    return True
+        if httpd is not None:
+            with production_httpds_lock:
+                try:
+                    production_httpds.remove(httpd)
+                except ValueError:
+                    pass
+            try:
+                httpd.server_close()
+            except Exception:
+                pass
+
+
+def start_production_server():
+    """本番 dist。証明書ありなら {frontend_prod_port}=HTTPS・{frontend_prod_http_fallback_port}=HTTP。無ければ HTTP のみ。"""
+
+    if not DIST_DIR.exists():
+        print_color(f"⚠️  distフォルダが見つかりません: {DIST_DIR}", Colors.YELLOW)
+        print_color("   npm run build を実行してビルドしてください", Colors.YELLOW)
+        if _env_truthy("HTTPS_ENABLED"):
+            bip = CONFIG["production_ip"]
+            if CONFIG.get("backend_use_https"):
+                api_url = f"https://{bip}:{CONFIG['backend_port']}"
+            else:
+                api_url = f"https://{bip}:{CONFIG['frontend_prod_port']}"
+            print_color(
+                f"   HTTPS 向けビルド例: VITE_API_HTTPS=true、VITE_API_BASE_URL={api_url}（API も TLS 時）",
+                Colors.YELLOW,
+            )
+            if sys.platform == "win32":
+                print_color(
+                    f"   cmd: cd frontend && set VITE_API_HTTPS=true&& set VITE_API_BASE_URL={api_url}&& npm run build",
+                    Colors.YELLOW,
+                )
+            else:
+                print_color(
+                    f"   sh: cd frontend && VITE_API_HTTPS=true VITE_API_BASE_URL={api_url} npm run build",
+                    Colors.YELLOW,
+                )
+        return False
+
+    prod_ssl = _prod_static_ssl_ctx
+    if prod_ssl:
+        fb = CONFIG["frontend_prod_http_fallback_port"]
+        threading.Thread(
+            target=_run_prod_server,
+            args=(None, fb, "HTTP"),
+            daemon=True,
+        ).start()
+        time.sleep(0.25)
+        _run_prod_server(prod_ssl, CONFIG["frontend_prod_port"], "HTTPS")
+    else:
+        _run_prod_server(None, CONFIG["frontend_prod_port"], "HTTP")
 
 
 def wait_for_port(port: int, timeout: int = 60) -> bool:
@@ -558,7 +744,12 @@ def print_success_banner(network_ip: str):
     backend_port = CONFIG["backend_port"]
     dev_port = CONFIG["frontend_dev_port"]
     prod_port = CONFIG["frontend_prod_port"]
+    prod_http_fb = CONFIG["frontend_prod_http_fallback_port"]
     prod_ip = CONFIG["production_ip"]
+    be_tls = CONFIG.get("backend_use_https", False)
+    fe_dev_scheme = "https" if be_tls else "http"
+    be_scheme = "https" if be_tls else "http"
+    dist_tls = CONFIG.get("frontend_prod_https", False)
     
     print()
     print("=" * 65)
@@ -566,19 +757,34 @@ def print_success_banner(network_ip: str):
     print("=" * 65)
     print()
     print(f"📱 フロントエンド【開発モード】:")
-    print(f"   ➜  Local:   http://localhost:{dev_port}/")
+    print(f"   ➜  Local:   {fe_dev_scheme}://localhost:{dev_port}/")
     if network_ip != '127.0.0.1':
-        print(f"   ➜  Network: http://{network_ip}:{dev_port}/")
+        print(f"   ➜  Network: {fe_dev_scheme}://{network_ip}:{dev_port}/")
     print()
     print(f"🌐 フロントエンド【本番モード】(dist):")
-    print(f"   ➜  Local:   http://localhost:{prod_port}/")
-    print(f"   ➜  Network: http://{prod_ip}:{prod_port}/")
+    if dist_tls:
+        print(f"   ➜  HTTPS (推奨): https://localhost:{prod_port}/")
+        print(f"   ➜  HTTP:          http://localhost:{prod_http_fb}/")
+        if network_ip != '127.0.0.1':
+            print(f"   ➜  Network HTTPS: https://{prod_ip}:{prod_port}/")
+            print(f"   ➜  Network HTTP:  http://{prod_ip}:{prod_http_fb}/")
+        print(f"   （同一ポートに HTTP と TLS は併用できないため TLS 時は HTTP を {prod_http_fb} に分離）")
+    else:
+        print(f"   ➜  Local:   http://localhost:{prod_port}/")
+        print(f"   ➜  Network: http://{prod_ip}:{prod_port}/")
     print()
     print(f"🔧 バックエンド API:")
-    print(f"   ➜  Local:   http://localhost:{backend_port}")
+    print(f"   ➜  Local:   {be_scheme}://localhost:{backend_port}")
     if network_ip != '127.0.0.1':
-        print(f"   ➜  Network: http://{network_ip}:{backend_port}")
-    print(f"   ➜  Docs:    http://localhost:{backend_port}/docs")
+        print(f"   ➜  Network: {be_scheme}://{network_ip}:{backend_port}")
+    print(f"   ➜  Docs:    {be_scheme}://localhost:{backend_port}/docs")
+    if dist_tls and not be_tls:
+        print(
+            f"   ➜  本番 dist の API: 相対パス /api（api-config は空・{prod_port} 番と同一オリジンでプロキシ）"
+        )
+    else:
+        api_cfg = f"{be_scheme}://{prod_ip}:{backend_port}"
+        print(f"   ➜  本番 dist の API 基址 (api-config.js / __API_BASE__): {api_cfg}")
     print()
     print("=" * 65)
     print("   Ctrl+C で停止")
@@ -595,13 +801,47 @@ def main():
         print("\n🚀 Smart-EMAP 開発・本番サーバーを起動中...\n")
         network_ip = get_local_ip()
         CONFIG["production_ip"] = network_ip
-        
+
+        try:
+            from dotenv import load_dotenv
+            load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
+        except Exception:
+            pass
+        uvicorn_ssl = build_uvicorn_ssl_args()
+        CONFIG["backend_use_https"] = bool(uvicorn_ssl)
+        CONFIG["backend_scheme"] = "https" if uvicorn_ssl else "http"
+
+        global _prod_static_ssl_ctx
+        _prod_static_ssl_ctx = build_prod_static_ssl_context()
+        CONFIG["frontend_prod_https"] = bool(_prod_static_ssl_ctx)
+
+        if uvicorn_ssl:
+            print_color("🔒 バックエンド API: HTTPS（uvicorn TLS）", Colors.GREEN)
+        if _prod_static_ssl_ctx:
+            print_color(
+                f"🔒 dist 本番: https://{CONFIG['production_ip']}:{CONFIG['frontend_prod_port']}/ "
+                f"・HTTP は http://{CONFIG['production_ip']}:{CONFIG['frontend_prod_http_fallback_port']}/",
+                Colors.GREEN,
+            )
+            print_color(
+                "   dist 再ビルド: バナーの API 説明に従い VITE_API_* を設定（詳細は dist 未生成時の案内）",
+                Colors.GREEN,
+            )
+        elif _env_truthy("HTTPS_ENABLED"):
+            print_color(
+                "⚠️  HTTPS_ENABLED ですが dist 用 TLS 証明書が無効のため、本番 dist は HTTP のみです。",
+                Colors.YELLOW,
+            )
+
         # ポートチェック
         if not check_port(CONFIG["backend_port"], "バックエンド"):
             sys.exit(1)
         if not check_port(CONFIG["frontend_dev_port"], "フロントエンド開発"):
             sys.exit(1)
-        if not check_port(CONFIG["frontend_prod_port"], "フロントエンド本番"):
+        if CONFIG["frontend_prod_https"]:
+            if not check_port(CONFIG["frontend_prod_http_fallback_port"], "フロントエンド本番(HTTP)"):
+                sys.exit(1)
+        if not check_port(CONFIG["frontend_prod_port"], "フロントエンド本番(HTTPS/TLS)" if CONFIG["frontend_prod_https"] else "フロントエンド本番"):
             sys.exit(1)
         
         print("\nサービスを起動中...")
@@ -613,7 +853,7 @@ def main():
         
         # バックエンド起動
         print("> dev:backend")
-        backend_proc = start_backend(backend_output)
+        backend_proc = start_backend(backend_output, uvicorn_ssl if uvicorn_ssl else None)
         processes.append(backend_proc)
         
         # フロントエンド開発サーバー起動
@@ -623,11 +863,6 @@ def main():
         processes.append(frontend_proc)
         
         # バックエンド ファイル監視（BT-data受信CSV）。.env の FILE_WATCH_BASE_PATH が空でない場合のみ起動
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
-        except Exception:
-            pass
         watch_path = os.environ.get("FILE_WATCH_BASE_PATH", "").strip()
         file_watcher_output = []
         if watch_path:
@@ -648,6 +883,10 @@ def main():
         backend_ready = wait_for_port(CONFIG["backend_port"], timeout=30)
         dev_ready = wait_for_port(CONFIG["frontend_dev_port"], timeout=60)
         prod_ready = wait_for_port(CONFIG["frontend_prod_port"], timeout=10)
+        if CONFIG["frontend_prod_https"]:
+            prod_ready = prod_ready and wait_for_port(
+                CONFIG["frontend_prod_http_fallback_port"], timeout=10
+            )
         
         if not backend_ready:
             print_color("❌ バックエンドサーバーの起動に失敗しました", Colors.RED)

@@ -226,6 +226,16 @@
                 <template #title><span :title="t('menu.ERP_PRODUCTION_PLAN_SCHEDULES')">{{ t('menu.ERP_PRODUCTION_PLAN_SCHEDULES') }}</span></template>
               </el-menu-item>
             </el-sub-menu>
+            <el-sub-menu index="erp-production-requirements">
+              <template #title>
+                <el-icon><Box /></el-icon>
+                <span :title="t('menu.ERP_PRODUCTION_REQUIREMENTS')">{{ t('menu.ERP_PRODUCTION_REQUIREMENTS') }}</span>
+              </template>
+              <el-menu-item index="/erp/production-requirements/material">
+                <el-icon><Box /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_MAT_REQ')">{{ t('menu.ERP_PRODUCTION_MAT_REQ') }}</span></template>
+              </el-menu-item>
+            </el-sub-menu>
             <el-sub-menu index="erp-production-instruction">
               <template #title>
                 <el-icon><Memo /></el-icon>

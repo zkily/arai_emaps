@@ -13,6 +13,8 @@ declare module 'element-plus/dist/locale/vi.js'
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
+  readonly VITE_API_HTTPS?: string
+  readonly VITE_API_PROXY_TARGET?: string
   readonly DEV: boolean
   readonly PROD: boolean
   readonly MODE: string
