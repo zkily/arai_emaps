@@ -1,220 +1,184 @@
 <template>
-  <div class="scheduling-container">
-    <el-card shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <h3>スケジューリング</h3>
-          <div class="card-subtitle">排産スケジューリンググリッド（カラーマトリックス）</div>
-        </div>
-      </template>
+  <div class="scheduling-page">
+    <div class="plan-hd">
+      <h2 class="plan-hd-title">APS 生産スケジューリングボード</h2>
+      <p class="plan-hd-sub">工程・ライン・期間を指定してスケジュールマトリクスを確認し、条件内の計画を一括で再計算できます。</p>
+    </div>
 
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <el-form
-            :inline="true"
-            :model="searchForm"
-            label-position="left"
-            class="toolbar-form"
+    <div class="plan-card filter-card">
+      <el-form :inline="true" :model="searchForm" class="filter-form compact-form">
+        <el-form-item label="工程">
+          <el-select
+            v-model="searchForm.processCd"
+            clearable
+            filterable
+            placeholder="全工程"
+            style="width: 180px"
+            @change="handleProcessChange"
           >
-            <el-form-item label="期間">
-              <el-date-picker
-                v-model="searchForm.dateRange"
-                type="daterange"
-                unlink-panels
-                range-separator="〜"
-                start-placeholder="開始日"
-                end-placeholder="終了日"
-                value-format="YYYY-MM-DD"
-                format="YYYY-MM-DD"
-                @change="handleDateRangeChange"
-                class="date-picker"
-              />
-            </el-form-item>
+            <el-option
+              v-for="p in processOptions"
+              :key="p.process_cd"
+              :label="`${p.process_cd} — ${p.process_name}`"
+              :value="p.process_cd"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="ライン">
+          <el-select
+            v-model="searchForm.lineId"
+            clearable
+            filterable
+            placeholder="全ライン"
+            style="width: 240px"
+          >
+            <el-option
+              v-for="line in lines"
+              :key="line.id"
+              :value="line.id"
+              :label="productionLineOptionLabel(line)"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="期間" required>
+          <el-date-picker
+            v-model="searchForm.dateRange"
+            type="daterange"
+            unlink-panels
+            range-separator="~"
+            start-placeholder="開始日"
+            end-placeholder="終了日"
+            value-format="YYYY-MM-DD"
+            format="YYYY-MM-DD"
+            style="width: 280px"
+          />
+        </el-form-item>
+      </el-form>
+    </div>
 
-            <el-form-item label="ライン">
-              <el-select
-                v-model="searchForm.lineId"
-                placeholder="全て"
-                clearable
-                style="width: 260px"
-              >
-                <el-option
-                  v-for="line in lines"
-                  :key="line.id"
-                  :value="line.id"
-                  :label="productionLineOptionLabel(line)"
-                />
-              </el-select>
-            </el-form-item>
-          </el-form>
-        </div>
+    <div class="stat-grid compact-grid">
+      <div class="stat-card">
+        <span class="stat-label">ライン数</span>
+        <span class="stat-value">{{ lineCount }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">生産計画合計</span>
+        <span class="stat-value">{{ formatQty(overallPlannedOutputTotal) }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">能率(本/H)平均</span>
+        <span class="stat-value">{{ formatEfficiency(avgEfficiencyRate) }}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">所要生産時間</span>
+        <span class="stat-value">{{ formatHours(requiredProductionHours) }}</span>
+      </div>
+    </div>
 
-        <div class="toolbar-right">
-          <el-button type="primary" :loading="loading" @click="loadGrid">
-            再取得
-          </el-button>
-          <el-button type="success" :loading="runningAll" @click="runAll">
-            一括実行
-          </el-button>
-        </div>
+    <div class="plan-card result-card" v-loading="loading">
+      <div class="result-head">
+        <div class="result-title">スケジューリングマトリクス</div>
+        <div class="result-note">期間：{{ displayDateRangeText }}</div>
       </div>
 
-      <div v-loading="loading" element-loading-text="ロード中..." class="grid-section">
-        <div v-if="gridDates.length === 0" class="empty-state">
-          日付範囲を選択して「再取得」を押してください。
-        </div>
+      <el-empty v-if="!loading && gridDates.length === 0" description="期間を指定して検索してください" />
 
-        <div v-else class="matrix-table-wrapper">
-          <table class="matrix-table scheduling-table">
-            <thead>
-              <tr>
-                <th class="sc-sticky-col sc-line-col">ライン</th>
-                <th class="sc-sticky-col sc-order-col">順位</th>
-                <th class="sc-sticky-col sc-item-col">製品名</th>
-                <th class="sc-sticky-col sc-adjust-col numeric-cell">調整数</th>
-                <th class="sc-sticky-col sc-material-col">材料調達</th>
-                <th class="sc-sticky-col sc-setup-col numeric-cell">段取時間</th>
-                <th class="sc-sticky-col sc-eff-col numeric-cell">能率</th>
-                <th class="sc-sticky-col sc-total-col numeric-cell">計画数</th>
-                <th
-                  v-for="date in gridDates"
-                  :key="date"
-                  class="date-col"
-                  :class="{
-                    'is-weekend': isWeekend(date),
-                    'is-today': isToday(date),
-                  }"
-                >
-                  <div class="date-header">
-                    <div class="date-text">{{ formatMatrixDate(date) }}</div>
-                    <div class="weekday-text">{{ getWeekdayLabel(date) }}</div>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr
-                v-for="row in matrixRows"
-                :key="row.key"
-                :class="[
-                  'matrix-row',
-                  {
-                    'sc-group-header-row': row.type === 'group',
-                    'sc-item-row': row.type === 'item',
-                    'sc-material-shortage-row': row.type === 'item' && row.material_shortage,
-                  },
-                ]"
+      <div v-else class="matrix-table-wrapper modern-scroll">
+        <table class="matrix-table">
+          <thead>
+            <tr>
+              <th class="sc-sticky-col sc-line-col">ライン</th>
+              <th class="sc-sticky-col sc-order-col">順位</th>
+              <th class="sc-sticky-col sc-item-col">製品</th>
+              <th class="sc-sticky-col sc-setup-col numeric-cell">段取(分)</th>
+              <th class="sc-sticky-col sc-eff-col numeric-cell">能率(本/H)</th>
+              <th class="sc-sticky-col sc-total-col numeric-cell">生産計画</th>
+              <th
+                v-for="date in gridDates"
+                :key="date"
+                class="date-col"
+                :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
               >
-                <td
-                  class="sc-sticky-col sc-line-col"
-                  :title="row.type === 'group' ? row.line_code : ''"
-                >
-                  <div class="sc-line-cell">
-                    <span class="sc-line-code">{{ row.line_code }}</span>
-                    <span v-if="row.type === 'group'" class="sc-rate">
-                      {{ formatPercent(row.completion_rate) }}
-                    </span>
-                  </div>
-                </td>
-
-                <td class="sc-sticky-col sc-order-col numeric-cell">
-                  <span v-if="row.type === 'item'">{{ row.order_no ?? '' }}</span>
-                </td>
-
-                <td class="sc-sticky-col sc-item-col">
-                  <div class="sc-item-cell">
-                    <div class="sc-item-name">
-                      {{ row.type === 'item' ? row.item_name : '' }}
-                    </div>
-                    <div v-if="row.type === 'item' && row.material_shortage" class="sc-flag">
-                      資材不足
-                    </div>
-                  </div>
-                </td>
-
-                <td class="sc-sticky-col sc-adjust-col numeric-cell">
-                  <span v-if="row.type === 'item'">{{ formatQty(row.adjust_qty) }}</span>
-                  <span v-else>{{ formatQty(row.sum_adjust_qty) }}</span>
-                </td>
-
-                <td class="sc-sticky-col sc-material-col">
-                  <span v-if="row.type === 'item'">
-                    <span v-if="row.material_shortage" class="sc-flag">不足</span>
-                    <span v-else>{{ formatMaterialDate(row.material_date) }}</span>
-                  </span>
-                  <span v-else>-</span>
-                </td>
-
-                <td class="sc-sticky-col sc-setup-col numeric-cell">
-                  <span v-if="row.type === 'item'">{{ row.setup_time }}分</span>
-                  <span v-else>{{ row.sum_setup_time }}分</span>
-                </td>
-
-                <td class="sc-sticky-col sc-eff-col numeric-cell">
-                  <span v-if="row.type === 'item'">{{ formatEfficiency(row.efficiency) }}</span>
-                  <span v-else>{{ formatEfficiency(row.avg_efficiency) }}</span>
-                </td>
-
-                <td class="sc-sticky-col sc-total-col numeric-cell">
-                  <span v-if="row.type === 'group'">
-                    {{ formatQty(row.sum_planned_output_qty) }}
-                  </span>
-                  <span v-else>
-                    {{ formatQty(row.planned_output_qty) }}
-                  </span>
-                </td>
-
-                <td
-                  v-for="date in gridDates"
-                  :key="row.key + '-' + date"
-                  class="numeric-cell data-cell"
-                  :class="getCellClass(row, date)"
-                  :title="getCellTitle(row, date)"
-                >
-                  <span v-if="getCellValue(row, date) !== 0">
-                    {{ formatQty(getCellValue(row, date)) }}
-                  </span>
-                  <span v-else class="cell-empty"></span>
-                </td>
-              </tr>
-            </tbody>
-
-            <tfoot>
-              <tr class="sc-total-footer-row">
-                <td class="sc-sticky-col sc-line-col">合計</td>
-                <td class="sc-sticky-col sc-order-col"></td>
-                <td class="sc-sticky-col sc-item-col"></td>
-                <td class="sc-sticky-col sc-adjust-col numeric-cell"></td>
-                <td class="sc-sticky-col sc-material-col"></td>
-                <td class="sc-sticky-col sc-setup-col numeric-cell"></td>
-                <td class="sc-sticky-col sc-eff-col numeric-cell"></td>
-                <td class="sc-sticky-col sc-total-col numeric-cell">
-                  {{ formatQty(overallPlannedOutputTotal) }}
-                </td>
-                <td
-                  v-for="date in gridDates"
-                  :key="'total-' + date"
-                  class="numeric-cell"
-                >
-                  {{ formatQty(overallDailyTotals[date] || 0) }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                <div class="date-header">
+                  <div class="date-text">{{ formatMatrixDate(date) }}</div>
+                  <div class="weekday-text">{{ getWeekdayLabel(date) }}</div>
+                </div>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="row in matrixRows"
+              :key="row.key"
+              :class="[
+                row.type === 'group' ? 'sc-group-header-row' : 'sc-item-row',
+                row.type === 'item' && row.material_shortage ? 'sc-material-shortage-row' : '',
+              ]"
+            >
+              <td class="sc-sticky-col sc-line-col">
+                <div class="sc-line-cell">
+                  <span class="sc-line-code">{{ row.type === 'group' ? row.line_name : '' }}</span>
+                  <span v-if="row.type === 'group'" class="sc-rate">{{ formatPercent(row.utilization_rate) }}</span>
+                </div>
+              </td>
+              <td class="sc-sticky-col sc-order-col numeric-cell">
+                {{ row.type === 'item' ? (row.order_no ?? '-') : '' }}
+              </td>
+              <td class="sc-sticky-col sc-item-col">
+                <div class="sc-item-cell">
+                  <div class="sc-item-name">{{ row.type === 'item' ? row.item_name : '' }}</div>
+                  <div v-if="row.type === 'item' && row.material_shortage" class="sc-flag">資材不足</div>
+                </div>
+              </td>
+              <td class="sc-sticky-col sc-setup-col numeric-cell">
+                {{ row.type === 'item' ? row.setup_time : row.sum_setup_time }}
+              </td>
+              <td class="sc-sticky-col sc-eff-col numeric-cell">
+                {{ formatEfficiency(row.type === 'item' ? row.efficiency_rate : row.avg_efficiency) }}
+              </td>
+              <td class="sc-sticky-col sc-total-col numeric-cell">
+                {{ formatQty(row.type === 'item' ? row.planned_output_qty : row.sum_planned_output_qty) }}
+              </td>
+              <td
+                v-for="date in gridDates"
+                :key="`${row.key}-${date}`"
+                class="numeric-cell data-cell"
+                :class="getCellClass(row, date)"
+                :title="getCellTitle(row, date)"
+              >
+                <span v-if="row.type === 'item' && getCellValue(row, date)">
+                  {{ formatQty(getCellValue(row, date)) }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr class="sc-total-footer-row">
+              <td class="sc-sticky-col sc-line-col">合計</td>
+              <td class="sc-sticky-col sc-order-col" />
+              <td class="sc-sticky-col sc-item-col" />
+              <td class="sc-sticky-col sc-setup-col" />
+              <td class="sc-sticky-col sc-eff-col" />
+              <td class="sc-sticky-col sc-total-col numeric-cell">{{ formatQty(overallPlannedOutputTotal) }}</td>
+              <td v-for="date in gridDates" :key="`total-${date}`" class="numeric-cell">
+                {{ formatQty(overallDailyTotals[date] || 0) }}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
-    </el-card>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { fetchProcesses } from '@/api/master/processMaster'
+import type { ProcessItem } from '@/types/master'
 import {
   fetchLines,
   fetchSchedulingGrid,
-  runAllSchedules,
   productionLineOptionLabel,
   type LineGridBlock,
   type ProductionLine,
@@ -227,8 +191,8 @@ type MatrixGroupRow = {
   type: 'group'
   line_id: number
   line_code: string
-  completion_rate?: number | null
-  sum_planned_process_qty: number
+  line_name: string
+  utilization_rate?: number | null
   sum_planned_output_qty: number
   daily_totals: Record<string, number>
   sum_adjust_qty: number
@@ -241,13 +205,14 @@ type MatrixItemRow = {
   type: 'item'
   line_id: number
   line_code: string
+  line_name: string
   order_no?: number | null
   item_name: string
   material_shortage: boolean
   adjust_qty: number
   material_date?: string | null
   setup_time: number
-  efficiency: number
+  efficiency_rate: number
   planned_output_qty: number
   completion_rate?: number | null
   due_date?: string | null
@@ -256,23 +221,57 @@ type MatrixItemRow = {
 
 type MatrixRow = MatrixGroupRow | MatrixItemRow
 
-const searchForm = reactive<{
-  dateRange: [string, string]
-  lineId: number | null
-}>({
-  dateRange: [
-    dayjs().subtract(7, 'day').format('YYYY-MM-DD'),
-    dayjs().add(13, 'day').format('YYYY-MM-DD'),
-  ],
-  lineId: null,
-})
-
+const processOptions = ref<ProcessItem[]>([])
 const lines = ref<ProductionLine[]>([])
 const grid = ref<SchedulingGridResponse | null>(null)
 const loading = ref(false)
-const runningAll = ref(false)
+
+const searchForm = reactive<{
+  processCd: string
+  dateRange: [string, string]
+  lineId: number | null
+}>({
+  processCd: 'KT04',
+  dateRange: [dayjs().subtract(7, 'day').format('YYYY-MM-DD'), dayjs().add(13, 'day').format('YYYY-MM-DD')],
+  lineId: null,
+})
 
 const gridDates = computed(() => grid.value?.dates ?? [])
+
+const matrixRows = computed<MatrixRow[]>(() => {
+  if (!grid.value) return []
+  return buildMatrixRows(grid.value)
+})
+
+const lineCount = computed(() => (grid.value?.blocks ?? []).length)
+
+const overallPlannedOutputTotal = computed(() =>
+  (grid.value?.blocks ?? []).reduce((acc, b) => acc + (b.sum_planned_output_qty ?? 0), 0),
+)
+
+const avgEfficiencyRate = computed(() => {
+  const blocks = grid.value?.blocks ?? []
+  let weightedSum = 0
+  let weightedDenom = 0
+  for (const block of blocks) {
+    for (const row of block.rows ?? []) {
+      const rate = Number(row.efficiency_rate ?? row.efficiency ?? 0)
+      const qty = Number(row.planned_process_qty ?? 0)
+      if (!Number.isFinite(rate) || !Number.isFinite(qty) || qty <= 0) continue
+      weightedSum += rate * qty
+      weightedDenom += qty
+    }
+  }
+  if (weightedDenom <= 0) return null
+  return weightedSum / weightedDenom
+})
+
+const requiredProductionHours = computed(() => {
+  const totalQty = Number(overallPlannedOutputTotal.value ?? 0)
+  const avgRate = Number(avgEfficiencyRate.value ?? 0)
+  if (!Number.isFinite(totalQty) || !Number.isFinite(avgRate) || avgRate <= 0) return null
+  return totalQty / avgRate
+})
 
 const overallDailyTotals = computed(() => {
   const totals: Record<string, number> = {}
@@ -285,43 +284,39 @@ const overallDailyTotals = computed(() => {
   return totals
 })
 
-const overallPlannedOutputTotal = computed(() => {
-  return (grid.value?.blocks ?? []).reduce((acc, b) => acc + (b.sum_planned_output_qty ?? 0), 0)
+const displayDateRangeText = computed(() => {
+  const [s, e] = searchForm.dateRange || []
+  if (!s || !e) return '-'
+  return `${s} ~ ${e}`
 })
 
 function formatQty(v: number) {
   const n = Number(v ?? 0)
-  if (!Number.isFinite(n)) return ''
+  if (!Number.isFinite(n)) return '-'
   return n.toLocaleString()
 }
 
 function formatPercent(v?: number | null) {
-  if (v == null) return ''
-  if (!Number.isFinite(v)) return ''
+  if (v == null || !Number.isFinite(v)) return '-'
   return `${v.toFixed(1)}%`
-}
-
-function formatMaterialDate(iso?: string | null) {
-  if (!iso) return '-'
-  return dayjs(iso).format('MM/DD')
 }
 
 function formatEfficiency(v?: number | null) {
   if (v == null || !Number.isFinite(v)) return '-'
-  // 能率設定画面の表示に合わせて小数 1 桁
   return v.toFixed(1)
 }
 
+function formatHours(v?: number | null) {
+  if (v == null || !Number.isFinite(v)) return '-'
+  return `${v.toFixed(1)}H`
+}
+
 function formatMatrixDate(iso: string) {
-  // iso: YYYY-MM-DD
   return dayjs(iso).format('MM/DD')
 }
 
 function getWeekdayLabel(iso: string) {
-  const d = dayjs(iso)
-  const weekday = d.day()
-  // 日月火水木金土
-  return ['日', '月', '火', '水', '木', '金', '土'][weekday]
+  return ['日', '月', '火', '水', '木', '金', '土'][dayjs(iso).day()]
 }
 
 function isWeekend(iso: string) {
@@ -333,20 +328,17 @@ function isToday(iso: string) {
   return iso === dayjs().format('YYYY-MM-DD')
 }
 
-function handleDateRangeChange() {
-  // 日付条件が変更されても自動で再取得しない（頻繁なAPI呼び出しを防ぐ）
-}
-
 function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
   const rows: MatrixRow[] = []
   res.blocks.forEach((block: LineGridBlock, blockIndex) => {
+    const lineName = resolveLineName(block.line_id, block.line_code)
     const groupRow: MatrixGroupRow = {
       key: `group-${block.line_id}-${blockIndex}`,
       type: 'group',
       line_id: block.line_id,
       line_code: block.line_code,
-      completion_rate: block.completion_rate ?? null,
-      sum_planned_process_qty: block.sum_planned_process_qty ?? 0,
+      line_name: lineName,
+      utilization_rate: null,
       sum_planned_output_qty: block.sum_planned_output_qty ?? 0,
       daily_totals: block.daily_totals ?? {},
       sum_adjust_qty: 0,
@@ -363,12 +355,12 @@ function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
     ;(block.rows ?? []).forEach((r: ScheduleGridRow) => {
       const adjustQty = r.prev_month_carryover ?? 0
       const setupTime = r.setup_time ?? 0
-      const efficiency = r.efficiency ?? 0
+      const efficiencyRate = Number(r.efficiency_rate ?? r.efficiency ?? 0)
       const plannedProcess = r.planned_process_qty ?? 0
 
       adjustSum += adjustQty
       setupSum += setupTime
-      effWeightedSum += efficiency * plannedProcess
+      effWeightedSum += efficiencyRate * plannedProcess
       effWeightedDenom += plannedProcess
 
       rows.push({
@@ -376,13 +368,14 @@ function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
         type: 'item',
         line_id: block.line_id,
         line_code: block.line_code,
+        line_name: lineName,
         order_no: r.order_no ?? null,
         item_name: r.item_name,
         material_shortage: !!r.material_shortage,
         adjust_qty: adjustQty,
         material_date: r.material_date ?? null,
         setup_time: setupTime,
-        efficiency,
+        efficiency_rate: efficiencyRate,
         planned_output_qty: r.planned_output_qty ?? 0,
         completion_rate: r.completion_rate ?? null,
         due_date: r.due_date ?? null,
@@ -393,14 +386,25 @@ function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
     groupRow.sum_adjust_qty = adjustSum
     groupRow.sum_setup_time = setupSum
     groupRow.avg_efficiency = effWeightedDenom > 0 ? effWeightedSum / effWeightedDenom : null
+    const availableHours = Object.values(block.calendar ?? {}).reduce((acc, h) => acc + Number(h || 0), 0)
+    let plannedHours = 0
+    for (const r of block.rows ?? []) {
+      const qty = Number(r.planned_output_qty ?? 0)
+      const rate = Number(r.efficiency_rate ?? r.efficiency ?? 0)
+      if (!Number.isFinite(qty) || !Number.isFinite(rate) || rate <= 0) continue
+      plannedHours += qty / rate
+    }
+    groupRow.utilization_rate = availableHours > 0 ? (plannedHours / availableHours) * 100 : null
   })
   return rows
 }
 
-const matrixRows = computed<MatrixRow[]>(() => {
-  if (!grid.value) return []
-  return buildMatrixRows(grid.value)
-})
+function resolveLineName(lineId: number, fallbackCode: string) {
+  const line = lines.value.find((x) => x.id === lineId)
+  const name = String(line?.line_name || '').trim()
+  if (name) return name
+  return fallbackCode
+}
 
 function getCellValue(row: MatrixRow, date: string): number {
   if (row.type === 'group') return row.daily_totals?.[date] ?? 0
@@ -408,194 +412,263 @@ function getCellValue(row: MatrixRow, date: string): number {
 }
 
 function getCellTitle(row: MatrixRow, date: string): string {
-  const v = getCellValue(row, date) ?? 0
-  if (v === 0) return `${date}：予定なし`
-  if (row.type === 'group') return `${date}：合計 ${v}`
-  return `${date}：${row.item_name} / ${v}`
+  const v = getCellValue(row, date) || 0
+  if (!v) return `${date}: 計画なし`
+  if (row.type === 'group') return `${date}: ライン合計 ${v}`
+  return `${date}: ${row.item_name} / ${v}`
 }
 
 function getCellClass(row: MatrixRow, date: string): string {
-  const v = getCellValue(row, date) ?? 0
+  const v = getCellValue(row, date) || 0
   const dueMatch = row.type === 'item' && row.due_date ? row.due_date === date : false
 
-  if (!v) {
-    return dueMatch ? 'cell-due' : ''
-  }
-
-  // 優先1：資材不足
+  if (!v) return dueMatch ? 'cell-due' : ''
   if (row.type === 'item' && row.material_shortage) return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
 
-  // 優先2：完了率（行全体）で色付け（スクリーンショットの色味に近似）
-  const rate = row.type === 'group' ? row.completion_rate : row.completion_rate
+  const rate = row.type === 'group' ? row.utilization_rate : row.completion_rate
   if (rate != null && Number.isFinite(rate)) {
     if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
     if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
     return dueMatch ? 'tone-low cell-due' : 'tone-low'
   }
-
-  // 完了率がない場合：計画値があるものは緑系
   return dueMatch ? 'tone-active cell-due' : 'tone-active'
+}
+
+async function loadProcessOptions() {
+  try {
+    const res = await fetchProcesses({ page: 1, pageSize: 5000 })
+    const data = (res?.data ?? res) as { list?: ProcessItem[] }
+    processOptions.value = Array.isArray(data.list) ? data.list : []
+    const hasDefault = processOptions.value.some((p) => (p.process_cd || '').trim() === 'KT04')
+    if (!hasDefault && processOptions.value.length) {
+      searchForm.processCd = processOptions.value[0].process_cd || ''
+    }
+  } catch {
+    processOptions.value = []
+  }
+}
+
+async function loadLines() {
+  lines.value = await fetchLines((searchForm.processCd || '').trim() || undefined)
+  if (searchForm.lineId && !lines.value.some((x) => x.id === searchForm.lineId)) {
+    searchForm.lineId = null
+  }
 }
 
 async function loadGrid() {
   const [startDate, endDate] = searchForm.dateRange
   if (!startDate || !endDate) return
-
   loading.value = true
   try {
-    grid.value = await fetchSchedulingGrid(startDate, endDate, searchForm.lineId ?? undefined)
+    grid.value = await fetchSchedulingGrid(
+      startDate,
+      endDate,
+      searchForm.lineId ?? undefined,
+      (searchForm.processCd || '').trim() || undefined,
+    )
   } finally {
     loading.value = false
   }
 }
 
-async function runAll() {
-  const [startDate, endDate] = searchForm.dateRange
-  if (!startDate || !endDate) return
-
-  // 一括実行 -> backend は PLANNING / IN_PROGRESS をすべて再計算して予定を更新する想定
-  // 実行後に現在のグリッドを再取得（期間は変更しない）
-  runningAll.value = true
-  try {
-    await runAllSchedules(searchForm.lineId ?? undefined)
-    await loadGrid()
-  } finally {
-    runningAll.value = false
-  }
-}
-
-async function init() {
-  lines.value = await fetchLines()
+async function handleProcessChange() {
+  await loadLines()
   await loadGrid()
 }
 
-onMounted(() => {
-  init()
+let autoLoadTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleAutoLoad() {
+  if (autoLoadTimer) clearTimeout(autoLoadTimer)
+  autoLoadTimer = setTimeout(() => {
+    void loadGrid()
+  }, 240)
+}
+
+onMounted(async () => {
+  await loadProcessOptions()
+  await loadLines()
+  await loadGrid()
 })
+
+watch(
+  () => searchForm.lineId,
+  () => {
+    scheduleAutoLoad()
+  },
+)
+
+watch(
+  () => searchForm.dateRange,
+  () => {
+    scheduleAutoLoad()
+  },
+  { deep: true },
+)
 </script>
 
 <style scoped>
-.scheduling-container {
-  padding: 20px;
+.scheduling-page {
+  padding: 10px 12px 12px;
+  background:
+    radial-gradient(circle at 10% -20%, rgba(59, 130, 246, 0.1), transparent 35%),
+    radial-gradient(circle at 110% -30%, rgba(16, 185, 129, 0.08), transparent 30%),
+    #f3f6fb;
+  min-height: 100%;
 }
 
-.card-header {
-  display: flex;
-  align-items: baseline;
-  gap: 16px;
+.plan-hd {
+  margin-bottom: 8px;
 }
 
-.card-header h3 {
+.plan-hd-title {
   margin: 0;
   font-size: 18px;
+  font-weight: 800;
+  color: #0b1220;
+  letter-spacing: 0.2px;
 }
 
-.card-subtitle {
+.plan-hd-sub {
+  margin: 4px 0 0;
+  color: #5b6b82;
   font-size: 12px;
-  color: #64748b;
 }
 
-.toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+.plan-card {
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(3px);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
-.toolbar-left {
-  flex: 1;
-}
-
-.toolbar-form :deep(.el-form-item__label) {
+.filter-form :deep(.el-form-item__label) {
   font-weight: 600;
   color: #334155;
+  padding-right: 6px;
 }
 
-.date-picker :deep(.el-input__wrapper) {
-  width: 280px;
-}
-
-.toolbar-right {
+.compact-form {
   display: flex;
-  gap: 10px;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
 }
 
-.grid-section {
-  width: 100%;
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 4px;
+  margin-right: 8px;
 }
 
-.empty-state {
-  padding: 22px 10px;
-  text-align: center;
+.compact-form :deep(.el-input__wrapper),
+.compact-form :deep(.el-select__wrapper) {
+  border-radius: 8px;
+}
+
+.compact-form :deep(.el-button) {
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 8px 14px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.compact-grid {
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.stat-card {
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #6b7a90;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.15;
+}
+
+.stat-value--warn {
+  color: #dc2626;
+}
+
+.result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.result-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.result-note {
+  font-size: 11px;
   color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 999px;
 }
 
 .matrix-table-wrapper {
-  width: 100%;
-  height: 520px;
-  max-height: 520px;
+  height: 620px;
   overflow: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.7);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.modern-scroll {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .matrix-table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  background: #fff;
   font-size: 11px;
 }
 
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid rgba(226, 232, 240, 0.6);
+  border: 1px solid #e6edf5;
   padding: 3px 5px;
-  vertical-align: middle;
-  font-size: 10px;
+  white-space: nowrap;
 }
 
 .matrix-table thead th {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  font-weight: 650;
-  white-space: nowrap;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  font-weight: 700;
+  color: #42526a;
   position: sticky;
   top: 0;
   z-index: 3;
-  color: #475569;
-}
-
-.date-col {
-  min-width: 42px;
-}
-
-.date-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.1;
-  gap: 1px;
-}
-
-.date-text {
-  font-size: 10px;
-  color: #475569;
-  font-weight: 520;
-}
-
-.weekday-text {
-  font-size: 9px;
-  color: #64748b;
-}
-
-.matrix-table tbody tr {
-  height: 26px;
-}
-
-.matrix-table tbody tr:hover {
-  background-color: rgba(248, 250, 252, 0.8);
+  box-shadow: 0 1px 0 #dbe5f1;
 }
 
 .sc-sticky-col {
@@ -603,115 +676,119 @@ onMounted(() => {
   left: 0;
   background: #fff;
   z-index: 2;
-  white-space: nowrap;
-  font-weight: 700;
 }
 
 .matrix-table thead .sc-sticky-col {
   z-index: 4;
 }
 
-/* 左側固定列の幅とオフセット（8列固定） */
 .sc-line-col {
-  width: 90px;
-  min-width: 90px;
+  width: 88px;
+  min-width: 88px;
   left: 0;
 }
+
 .sc-order-col {
-  width: 110px;
-  min-width: 110px;
-  left: 90px;
-}
-.sc-item-col {
-  width: 260px;
-  min-width: 260px;
-  left: 200px;
-}
-.sc-adjust-col {
-  width: 120px;
-  min-width: 120px;
-  left: 460px;
-}
-.sc-material-col {
-  width: 170px;
-  min-width: 170px;
-  left: 580px;
-}
-.sc-setup-col {
-  width: 130px;
-  min-width: 130px;
-  left: 750px;
-}
-.sc-eff-col {
-  width: 110px;
-  min-width: 110px;
-  left: 880px;
-}
-.sc-total-col {
-  width: 140px;
-  min-width: 140px;
-  left: 990px;
+  width: 62px;
+  min-width: 62px;
+  left: 88px;
 }
 
-.matrix-table tbody .sc-sticky-col {
-  background: inherit;
+.sc-item-col {
+  width: 180px;
+  min-width: 180px;
+  left: 150px;
+}
+
+.sc-setup-col {
+  width: 72px;
+  min-width: 72px;
+  left: 330px;
+}
+
+.sc-eff-col {
+  width: 66px;
+  min-width: 66px;
+  left: 402px;
+}
+
+.sc-total-col {
+  width: 90px;
+  min-width: 90px;
+  left: 468px;
 }
 
 .numeric-cell {
   text-align: center;
 }
 
-.cell-empty {
-  color: #cbd5e0;
-  text-align: center;
+.date-col {
+  min-width: 40px;
+}
+
+.date-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+}
+
+.date-text {
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.weekday-text {
+  font-size: 9px;
+  color: #6b7a90;
 }
 
 .sc-group-header-row {
-  background-color: #e3f2fd;
-  font-weight: 750;
+  background: linear-gradient(180deg, #eaf4ff 0%, #e4f0ff 100%);
+  font-weight: 700;
+  border-top: 2px solid #bfdbfe;
+}
+
+.sc-group-header-row .sc-line-code {
+  font-weight: 800;
+  color: #1e3a8a;
+}
+
+.sc-item-row:nth-child(2n) {
+  background: #fcfdff;
+}
+
+.sc-item-row:hover {
+  background: #f1f7ff;
 }
 
 .sc-line-cell {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  align-items: flex-start;
-}
-
-.sc-line-code {
-  color: #0f172a;
+  min-height: 18px;
 }
 
 .sc-rate {
-  font-size: 10px;
   color: #1d4ed8;
-  font-weight: 800;
-}
-
-.sc-item-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .sc-item-name {
-  font-weight: 650;
-  color: #0f172a;
-  max-width: 250px;
+  max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sc-flag {
+  color: #dc2626;
   font-size: 9px;
-  color: #b91c1c;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-/* 色の基調（スクリーンショットの赤/緑のブロックに近似） */
 .tone-active {
-  background: rgba(220, 252, 231, 0.85);
+  background: rgba(187, 247, 208, 0.5);
 }
 
 .tone-high {
@@ -731,38 +808,36 @@ onMounted(() => {
 }
 
 .cell-due {
-  outline: 2px solid rgba(245, 158, 11, 0.9);
+  outline: 1px solid #f59e0b;
   outline-offset: -2px;
 }
 
-/* 周末/当日（カラー強調） */
 .matrix-table thead th.is-weekend .date-text,
 .matrix-table thead th.is-weekend .weekday-text {
-  color: #e53e3e;
+  color: #dc2626;
 }
 
 .matrix-table thead th.is-today {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
+  background: linear-gradient(180deg, #fff3d4 0%, #ffeab0 100%);
 }
 
-.matrix-table thead th.is-today .date-text,
-.matrix-table thead th.is-today .weekday-text {
-  color: #92400e;
-  font-weight: 850;
-}
-
-/* フッター合計行 */
 .sc-total-footer-row td {
-  background: #f7fafc !important;
-  font-weight: 800;
-  border-top: 2px solid #cbd5e0;
+  background: #f3f8ff;
+  font-weight: 700;
   position: sticky;
   bottom: 0;
   z-index: 3;
+  box-shadow: 0 -1px 0 #dbe5f1;
 }
 
 .sc-total-footer-row .sc-sticky-col {
-  z-index: 5;
+  z-index: 4;
+}
+
+@media (max-width: 1400px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
 }
 </style>
 

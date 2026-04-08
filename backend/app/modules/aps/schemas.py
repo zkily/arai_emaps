@@ -188,6 +188,12 @@ class ScheduleOut(BaseModel):
         from_attributes = True
 
 
+class ScheduleWithLineOut(ScheduleOut):
+    """GET /schedules：設備コード・名称を付与した工単行"""
+    line_code: str = ""
+    line_name: str = ""
+
+
 # ──────────────────── Scheduling Grid ────────────────────
 
 class ScheduleGridRow(BaseModel):

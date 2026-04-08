@@ -369,6 +369,16 @@
               <template #title><span :title="t('menu.APS_CUTTING_PLANNING')">{{ t('menu.APS_CUTTING_PLANNING') }}</span></template>
             </el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="aps-production-plan-view">
+            <template #title>
+              <el-icon><List /></el-icon>
+              <span :title="t('menu.APS_PRODUCTION_PLAN_VIEW')">{{ t('menu.APS_PRODUCTION_PLAN_VIEW') }}</span>
+            </template>
+            <el-menu-item index="/aps/planning-list">
+              <el-icon><List /></el-icon>
+              <template #title><span :title="t('menu.APS_FORMING_PLAN_LIST')">{{ t('menu.APS_FORMING_PLAN_LIST') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/aps/scheduling">
             <el-icon><Timer /></el-icon>
             <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>
@@ -376,6 +386,10 @@
           <el-menu-item index="/aps/capacity">
             <el-icon><Setting /></el-icon>
             <template #title><span :title="t('menu.APS_CAPACITY')">{{ t('menu.APS_CAPACITY') }}</span></template>
+          </el-menu-item>
+          <el-menu-item index="/aps/capacity-matrix">
+            <el-icon><Document /></el-icon>
+            <template #title><span :title="t('menu.APS_CAPACITY_MATRIX')">{{ t('menu.APS_CAPACITY_MATRIX') }}</span></template>
           </el-menu-item>
           <el-menu-item index="/aps/daily-report">
             <el-icon><Document /></el-icon>

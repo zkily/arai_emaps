@@ -20,6 +20,12 @@ export const apsRoutes: RouteRecordRaw[] = [
         meta: { title: '切断計画作成' },
       },
       {
+        path: 'planning-list',
+        name: 'FormingPlanningList',
+        component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'),
+        meta: { title: '成型計画一覧' },
+      },
+      {
         path: 'scheduling',
         name: 'Scheduling',
         component: () => import('@/views/aps/Scheduling.vue'),
@@ -30,6 +36,12 @@ export const apsRoutes: RouteRecordRaw[] = [
         name: 'LineCapacity',
         component: () => import('@/views/aps/LineCapacity.vue'),
         meta: { title: '設備稼働設定' },
+      },
+      {
+        path: 'capacity-matrix',
+        name: 'CapacityMatrix',
+        component: () => import('@/views/aps/CapacityMatrix.vue'),
+        meta: { title: '設備稼働時間表' },
       },
       {
         path: 'daily-report',

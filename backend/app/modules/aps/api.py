@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, and_, or_, delete, text
+from sqlalchemy import select, and_, or_, delete, text, exists
 from sqlalchemy.exc import OperationalError, ProgrammingError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +42,7 @@ from app.modules.aps.schemas import (
     ScheduleCreateBody,
     ScheduleUpdateBody,
     ScheduleOut,
+    ScheduleWithLineOut,
     ScheduleGridRow,
     LineGridBlock,
     SchedulingGridResponse,
@@ -570,19 +571,112 @@ async def delete_line_product_standard(
 
 # ═══════════════════ Production Schedules (CRUD) ═══════════════════
 
-@router.get("/schedules", response_model=List[ScheduleOut])
+def _schedule_month_overlap_clause(month_yyyy_mm: str):
+    """当該暦月と start/end または schedule_details の日付が重なる条件"""
+    from calendar import monthrange
+
+    parts = month_yyyy_mm.strip().split("-")
+    if len(parts) != 2:
+        raise ValueError("productionMonth は YYYY-MM 形式で指定してください")
+    try:
+        y = int(parts[0])
+        m = int(parts[1])
+    except ValueError as e:
+        raise ValueError("productionMonth が無効です") from e
+    if m < 1 or m > 12:
+        raise ValueError("月が無効です")
+    month_start = date(y, m, 1)
+    month_end = date(y, m, monthrange(y, m)[1])
+    detail_in_month = exists().where(
+        and_(
+            ScheduleDetail.schedule_id == ProductionSchedule.id,
+            ScheduleDetail.schedule_date >= month_start,
+            ScheduleDetail.schedule_date <= month_end,
+        )
+    )
+    return or_(
+        and_(
+            ProductionSchedule.start_date.isnot(None),
+            ProductionSchedule.end_date.isnot(None),
+            ProductionSchedule.start_date <= month_end,
+            ProductionSchedule.end_date >= month_start,
+        ),
+        and_(
+            ProductionSchedule.start_date.isnot(None),
+            ProductionSchedule.end_date.is_(None),
+            ProductionSchedule.start_date <= month_end,
+        ),
+        and_(
+            ProductionSchedule.start_date.is_(None),
+            ProductionSchedule.end_date.isnot(None),
+            ProductionSchedule.end_date >= month_start,
+        ),
+        detail_in_month,
+    )
+
+
+async def _machine_ids_for_process_cd(db: AsyncSession, process_cd: str) -> List[int]:
+    pc = process_cd.strip()
+    proc_result = await db.execute(select(Process).where(Process.process_cd == pc))
+    proc = proc_result.scalar_one_or_none()
+    if proc is None:
+        return []
+    pn = (proc.process_name or "").strip()
+    pcc = (proc.process_cd or "").strip()
+    type_conds = []
+    if pn:
+        type_conds.append(Machine.machine_type == pn)
+    if pcc:
+        type_conds.append(Machine.machine_type == pcc)
+    if not type_conds:
+        return []
+    q = select(Machine.id).where(_aps_machine_selectable_clause()).where(or_(*type_conds))
+    result = await db.execute(q)
+    return [row[0] for row in result.all()]
+
+
+def _schedule_with_line_out(ps: ProductionSchedule, machine: Machine) -> ScheduleWithLineOut:
+    base = _schedule_to_out(ps)
+    return ScheduleWithLineOut(
+        **base.model_dump(),
+        line_code=(machine.machine_cd or "").strip(),
+        line_name=(machine.machine_name or "").strip(),
+    )
+
+
+@router.get("/schedules", response_model=List[ScheduleWithLineOut])
 async def list_schedules(
     lineId: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    processCd: Optional[str] = Query(
+        None,
+        description="工程CD（指定時は当該工程の設備に紐づく工単のみ）",
+    ),
+    productionMonth: Optional[str] = Query(
+        None,
+        description="YYYY-MM。当該月と開始/終了日または日別明細が重なる工単のみ",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    q = select(ProductionSchedule)
+    if processCd and processCd.strip():
+        proc_line_ids = await _machine_ids_for_process_cd(db, processCd.strip())
+        if not proc_line_ids:
+            return []
+
+    q = select(ProductionSchedule, Machine).join(Machine, Machine.id == ProductionSchedule.line_id)
     conditions = []
     if lineId is not None:
         conditions.append(ProductionSchedule.line_id == lineId)
     if status:
         conditions.append(ProductionSchedule.status == status)
+    if processCd and processCd.strip():
+        conditions.append(ProductionSchedule.line_id.in_(proc_line_ids))
+    if productionMonth and productionMonth.strip():
+        try:
+            conditions.append(_schedule_month_overlap_clause(productionMonth.strip()))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
     if conditions:
         q = q.where(and_(*conditions))
     q = q.order_by(ProductionSchedule.line_id, ProductionSchedule.order_no, ProductionSchedule.id)
@@ -596,7 +690,7 @@ async def list_schedules(
         if getattr(e, "orig", None):
             msg = f"{msg} ({e.orig!s})"
         raise HTTPException(status_code=500, detail=msg) from e
-    return [_schedule_to_out(r) for r in result.scalars().all()]
+    return [_schedule_with_line_out(ps, m) for ps, m in result.all()]
 
 
 @router.post("/schedules", response_model=ScheduleOut)
@@ -847,6 +941,10 @@ async def get_scheduling_grid(
     startDate: str = Query(...),
     endDate: str = Query(...),
     lineId: Optional[int] = Query(None),
+    processCd: Optional[str] = Query(
+        None,
+        description="工程CD（lineId 未指定時、当該工程の設備のみをグリッド対象に）",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -866,6 +964,11 @@ async def get_scheduling_grid(
     line_q = select(Machine).where(_aps_machine_selectable_clause())
     if lineId is not None:
         line_q = line_q.where(Machine.id == lineId)
+    elif processCd and processCd.strip():
+        proc_ids = await _machine_ids_for_process_cd(db, processCd.strip())
+        if not proc_ids:
+            return SchedulingGridResponse(dates=dates_list, blocks=[])
+        line_q = line_q.where(Machine.id.in_(proc_ids))
     line_q = line_q.order_by(Machine.machine_cd)
     lines_result = await db.execute(line_q)
     lines = lines_result.scalars().all()

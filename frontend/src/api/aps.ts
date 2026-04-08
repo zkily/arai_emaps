@@ -114,6 +114,9 @@ export interface ScheduleOut {
   end_date?: string | null
   completion_rate?: number | null
   status: string
+  /** GET /schedules で machines と JOIN 時に付与 */
+  line_code?: string
+  line_name?: string
 }
 
 // ──────────── Time Slots ────────────
@@ -340,6 +343,8 @@ export function batchUpsertLineCapacities(items: LineCapacityItem[]): Promise<an
 export function fetchSchedules(params?: {
   lineId?: number
   status?: string
+  processCd?: string
+  productionMonth?: string
 }): Promise<ScheduleOut[]> {
   return request.get(`${BASE}/schedules`, { params })
 }
@@ -367,9 +372,12 @@ export function fetchSchedulingGrid(
   startDate: string,
   endDate: string,
   lineId?: number,
+  processCd?: string,
 ): Promise<SchedulingGridResponse> {
   const params: Record<string, any> = { startDate, endDate }
   if (lineId != null) params.lineId = lineId
+  const pc = processCd?.trim()
+  if (pc) params.processCd = pc
   return request.get(`${BASE}/scheduling/grid`, { params })
 }
 
