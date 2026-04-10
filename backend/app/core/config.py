@@ -2,8 +2,11 @@
 アプリケーション設定
 環境変数から設定を読み込み
 """
+import os
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 
 class Settings(BaseSettings):
@@ -67,12 +70,23 @@ class Settings(BaseSettings):
 
     # ファイル監視：CSV 受信 + 生産計画 Excel（2 ディレクトリを別々に指定可）
     FILE_WATCH_BASE_PATH: str = ""  # CSV 受信ディレクトリ（いずれか必須）
+    # True: FastAPI 起動時に run_file_watcher と同等の監視をバックグラウンドスレッドで開始（別途 python run_file_watcher.py 不要）
+    FILE_WATCH_START_WITH_API: bool = False
     FILE_WATCH_EXCEL_BASE_PATH: str = ""  # Excel 計画ディレクトリ（省略時は BASE と共用）
     FILE_WATCH_POLL_INTERVAL: float = 1.0  # ネットワークパスは 1 秒推奨
     FILE_WATCH_DEBOUNCE_SEC: int = 2
     FILE_WATCH_EXCEL_WORKERS: int = 3  # 同時処理は最大 3 ファイル
     FILE_WATCH_INSPECTION_EXCEL_PATH: str = ""  # 検査管理指標 Excel のフルパス
-    
+    # 材料切断ログ CSV（material_cutting_logs 取込・監視）。空なら FILE_WATCH_BASE_PATH/materialCutting.csv
+    MATERIAL_CUTTING_CSV_PATH: str = ""
+    # 材料受入ログ：フルパスをカンマ区切りで指定（最優先。位置変更時はここだけ直せばよい）
+    # 例（Windows）: MATERIAL_RECEIVING_CSV_PATHS=\\server\share\受信\Material_Maruiti.csv,\\server\share\受信\Material_Nagoya.csv
+    MATERIAL_RECEIVING_CSV_PATHS: str = ""
+    # 材料受入 CSV のディレクトリ（MATERIAL_RECEIVING_CSV_PATHS 未指定時に使用）。空＝FILE_WATCH_BASE_PATH と同じ
+    MATERIAL_RECEIVING_WATCH_BASE_PATH: str = ""
+    # 上記ディレクトリ内のファイル名（カンマ区切り）。空＝デフォルト4種（Maruiti/Nagoya/JFE/Okajima）
+    MATERIAL_RECEIVING_WATCH_FILES: str = ""
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -92,6 +106,61 @@ class Settings(BaseSettings):
         if self.JWT_SECRET:
             return self.JWT_SECRET
         return self.JWT_SECRET_KEY
+
+    def get_material_cutting_csv_path(self) -> str:
+        """materialCutting.csv の絶対パス（UNC 可）。MATERIAL_CUTTING_CSV_PATH 優先。"""
+        explicit = (self.MATERIAL_CUTTING_CSV_PATH or "").strip()
+        if explicit:
+            return explicit
+        base = (self.FILE_WATCH_BASE_PATH or "").strip()
+        if base:
+            return str(Path(base) / "materialCutting.csv")
+        return r"\\192.168.1.200\社内共有\02_生産管理部\Data\BT-data\受信\materialCutting.csv"
+
+    def get_material_receiving_watch_base(self) -> str:
+        """材料受入 CSV のベースディレクトリ（フルパス一覧未使用時）。"""
+        p = (self.MATERIAL_RECEIVING_WATCH_BASE_PATH or "").strip()
+        if p:
+            return os.path.normpath(os.path.expandvars(p))
+        fb = (self.FILE_WATCH_BASE_PATH or "").strip()
+        return os.path.normpath(os.path.expandvars(fb)) if fb else ""
+
+    def get_material_receiving_csv_entries(self) -> List[Tuple[str, str]]:
+        """
+        材料受入 CSV の (絶対パスに正規化したパス, ファイル名) のリスト。
+        MATERIAL_RECEIVING_CSV_PATHS がある場合はそのフルパス一覧。
+        ない場合は get_material_receiving_watch_base() + ファイル名。
+        """
+        paths_raw = (self.MATERIAL_RECEIVING_CSV_PATHS or "").strip()
+        if paths_raw:
+            out: List[Tuple[str, str]] = []
+            for part in paths_raw.split(","):
+                p = part.strip().strip('"').strip("'")
+                if not p:
+                    continue
+                full = os.path.normpath(os.path.expandvars(p))
+                out.append((full, os.path.basename(full)))
+            return out
+
+        base = self.get_material_receiving_watch_base()
+        raw_names = (self.MATERIAL_RECEIVING_WATCH_FILES or "").strip()
+        if raw_names:
+            name_list = [x.strip() for x in raw_names.split(",") if x.strip()]
+        else:
+            name_list = [
+                "Material_Maruiti.csv",
+                "Material_Nagoya.csv",
+                "Material_JFE.csv",
+                "Material_Okajima.csv",
+            ]
+        if not base:
+            return []
+        nb = os.path.normpath(os.path.expandvars(base))
+        return [(os.path.normpath(os.path.join(nb, n)), n) for n in name_list]
+
+    def get_material_receiving_watch_filenames(self) -> List[str]:
+        """監視・有効フラグ用のファイル名一覧（ベース名）。"""
+        return [b for _, b in self.get_material_receiving_csv_entries()]
 
 
 # 設定インスタンスの作成

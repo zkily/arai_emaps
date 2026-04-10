@@ -37,6 +37,11 @@ async def lifespan(app: FastAPI):
     # 起動時の処理
     print(f"🚀 Smart-EMAP システム起動中...")
     print(f"⏰ 現在時刻 (JST): {datetime.now(JST).strftime('%Y年%m月%d日 %H:%M:%S')}")
+    if getattr(settings, "FILE_WATCH_START_WITH_API", False):
+        from app.services.file_watcher.run import start_file_watcher_background
+
+        start_file_watcher_background()
+        print("📂 ファイル監視: API プロセス内バックグラウンドを有効にしました（FILE_WATCH_START_WITH_API）")
     yield
     # シャットダウン時の処理
     print(f"🛑 Smart-EMAP システム停止中...")

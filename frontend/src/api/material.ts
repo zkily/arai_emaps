@@ -66,10 +66,14 @@ export interface ReceivingListParams {
   page?: number
   pageSize?: number
   keyword?: string
+  /** material_logs.material_name 完全一致 */
+  materialNameExact?: string
   material_cd?: string
   supplier?: string
   startDate?: string
   endDate?: string
+  /** material_cutting_logs と製造番号突合し used_in_cutting を返す */
+  includeCuttingUsage?: boolean
 }
 
 export function getMaterialLogs(params?: ReceivingListParams): Promise<{
@@ -276,6 +280,8 @@ export function getStockMaterialsList(params?: {
   page?: number
   pageSize?: number
   keyword?: string
+  /** 材料名完全一致（日別在庫からの詳細ダイアログ用） */
+  materialNameExact?: string
   supplier?: string
   is_used?: string
   startDate?: string
@@ -467,6 +473,15 @@ export interface MaterialCuttingLogsParams {
   endDate?: string
 }
 
+export interface MaterialCuttingCsvStatus {
+  exists: boolean
+  path: string
+  mtime_ms: number | null
+  size: number | null
+  /** mtime_ms:size — 更新検知用 */
+  signature: string | null
+}
+
 export interface ImportMaterialCuttingCsvParams {
   /** true: TRUNCATE 後に全行取込（最速・CSVに無い行も消える） */
   full_replace?: boolean
@@ -486,6 +501,16 @@ export interface ImportMaterialCuttingCsvResult {
   csv_date_min?: string | null
   csv_date_max?: string | null
   skipped_before_retention?: number
+}
+
+export function getMaterialCuttingCsvStatus(): Promise<{
+  success?: boolean
+  data?: MaterialCuttingCsvStatus
+}> {
+  return request.get(`${PREFIX}/cutting/csv-status`) as Promise<{
+    success?: boolean
+    data?: MaterialCuttingCsvStatus
+  }>
 }
 
 export function importMaterialCuttingCsv(

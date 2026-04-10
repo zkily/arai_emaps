@@ -565,6 +565,259 @@ async def get_material_requirements_summary_from_instruction_plans(
     }
 
 
+@router.get("/plan/batch/component-requirements-summary")
+async def get_component_requirements_summary_from_instruction_plans(
+    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（DATE(start_date) で判定、start_date 未設定行は対象外）"),
+    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
+    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    instruction_plans と product_bom_lines から、部品（component_product_cd）所要量を集計する。
+    - start_date が NULL の instruction_plans は対象外
+    - 期間キー: DATE(instruction_plans.start_date)
+    - 指標: SUM(actual_production_quantity * qty_per / base_quantity * (1 + scrap_rate/100))
+    """
+    d_start = _parse_date_ymd(date_start) if date_start else None
+    d_end = _parse_date_ymd(date_end) if date_end else None
+
+    if production_month and production_month.strip():
+        try:
+            parts = production_month.strip().split("-")
+            if len(parts) == 2:
+                y, m = int(parts[0]), int(parts[1])
+                if 1 <= m <= 12:
+                    if d_start is None:
+                        d_start = date(y, m, 1)
+                    if d_end is None:
+                        if m == 12:
+                            d_end = date(y, 12, 31)
+                        else:
+                            d_end = date(y, m + 1, 1) - timedelta(days=1)
+        except (ValueError, IndexError):
+            pass
+
+    if d_start is None or d_end is None:
+        today = datetime.utcnow().date()
+        d_start = d_start or today.replace(day=1)
+        d_end = d_end or today
+
+    if d_start > d_end:
+        raise HTTPException(status_code=400, detail="date_start は date_end 以下で指定してください。")
+
+    conditions = [
+        "start_date IS NOT NULL",
+        "DATE(start_date) >= :d_start",
+        "DATE(start_date) <= :d_end",
+    ]
+    params = {"d_start": d_start, "d_end": d_end}
+
+    sql = text(f"""
+        SELECT
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+            COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+            COUNT(DISTINCT ip.id) AS source_lot_count,
+            SUM(
+                COALESCE(ip.actual_production_quantity, 0)
+                * COALESCE(l.qty_per, 0)
+                / NULLIF(COALESCE(h.base_quantity, 1), 0)
+                * (1 + COALESCE(l.scrap_rate, 0) / 100)
+            ) AS required_qty
+        FROM instruction_plans ip
+        JOIN product_bom_headers h
+          ON h.id = (
+              SELECT h2.id
+              FROM product_bom_headers h2
+              WHERE h2.parent_product_cd = ip.product_cd
+                AND h2.status = 'active'
+                AND (h2.effective_from IS NULL OR h2.effective_from <= DATE(ip.start_date))
+                AND (h2.effective_to IS NULL OR h2.effective_to >= DATE(ip.start_date))
+              ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
+              LIMIT 1
+          )
+        JOIN product_bom_lines l
+          ON l.header_id = h.id
+         AND l.component_product_cd IS NOT NULL
+         AND TRIM(l.component_product_cd) <> ''
+         AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
+        LEFT JOIN parts p
+          ON p.part_cd = l.component_product_cd
+        WHERE {" AND ".join(conditions)}
+        GROUP BY
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+            COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+        ORDER BY component_cd ASC
+    """)
+
+    try:
+        result = await db.execute(sql, params)
+        rows = result.mappings().fetchall()
+    except Exception as e:
+        msg = str(e).lower()
+        if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="instruction_plans テーブルが存在しません。",
+            ) from e
+        if "product_bom_headers" in msg or "product_bom_lines" in msg:
+            raise HTTPException(
+                status_code=503,
+                detail="product_bom_headers / product_bom_lines テーブルが存在しないため集計できません。",
+            ) from e
+        logger.exception("component-requirements-summary 集計失敗")
+        raise HTTPException(status_code=500, detail="部品需要量の集計に失敗しました。") from e
+
+    def _fnum(v) -> float:
+        if v is None:
+            return 0.0
+        if isinstance(v, Decimal):
+            return float(v)
+        return float(v)
+
+    def _inum(v) -> int:
+        if v is None:
+            return 0
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    items = []
+    total_required_qty = 0.0
+    for r in rows:
+        rd = dict(r)
+        rq = _fnum(rd.get("required_qty"))
+        total_required_qty += rq
+        items.append(
+            {
+                "component_cd": rd.get("component_cd"),
+                "component_name": rd.get("component_name"),
+                "component_uom": rd.get("component_uom"),
+                "source_lot_count": _inum(rd.get("source_lot_count")),
+                "required_qty": round(rq, 6),
+            }
+        )
+
+    # 日別×部品の二次元表（期間が長すぎると列数過多のため上限）
+    _DAY_MATRIX_MAX_DAYS = 186
+    span_days = (d_end - d_start).days + 1
+    daily_matrix: Optional[dict] = None
+    daily_matrix_omitted = span_days > _DAY_MATRIX_MAX_DAYS
+
+    if not daily_matrix_omitted:
+        dsql = text(f"""
+            SELECT
+                DATE(ip.start_date) AS eff_date,
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+                COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+                SUM(
+                    COALESCE(ip.actual_production_quantity, 0)
+                    * COALESCE(l.qty_per, 0)
+                    / NULLIF(COALESCE(h.base_quantity, 1), 0)
+                    * (1 + COALESCE(l.scrap_rate, 0) / 100)
+                ) AS required_qty
+            FROM instruction_plans ip
+            JOIN product_bom_headers h
+              ON h.id = (
+                  SELECT h2.id
+                  FROM product_bom_headers h2
+                  WHERE h2.parent_product_cd = ip.product_cd
+                    AND h2.status = 'active'
+                    AND (h2.effective_from IS NULL OR h2.effective_from <= DATE(ip.start_date))
+                    AND (h2.effective_to IS NULL OR h2.effective_to >= DATE(ip.start_date))
+                  ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
+                  LIMIT 1
+              )
+            JOIN product_bom_lines l
+              ON l.header_id = h.id
+             AND l.component_product_cd IS NOT NULL
+             AND TRIM(l.component_product_cd) <> ''
+             AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
+            LEFT JOIN parts p
+              ON p.part_cd = l.component_product_cd
+            WHERE {" AND ".join(conditions)}
+            GROUP BY
+                DATE(ip.start_date),
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+                COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+            ORDER BY
+                DATE(ip.start_date) ASC,
+                component_cd ASC
+        """)
+        dresult = await db.execute(dsql, params)
+        drows = dresult.mappings().fetchall()
+
+        date_list = [(d_start + timedelta(days=i)).isoformat() for i in range(span_days)]
+        pivot: dict[tuple, dict[str, float]] = {}
+        for r in drows:
+            rd = dict(r)
+            ed = rd.get("eff_date")
+            if ed is None:
+                continue
+            if hasattr(ed, "isoformat"):
+                ds = ed.isoformat()[:10]
+            else:
+                ds = str(ed)[:10]
+            key = (
+                rd.get("component_cd"),
+                rd.get("component_name"),
+                rd.get("component_uom"),
+            )
+            if key not in pivot:
+                pivot[key] = {d: 0.0 for d in date_list}
+            qv = _fnum(rd.get("required_qty"))
+            if ds in pivot[key]:
+                pivot[key][ds] += qv
+
+        for it in items:
+            k = (it.get("component_cd"), it.get("component_name"), it.get("component_uom"))
+            if k not in pivot:
+                pivot[k] = {d: 0.0 for d in date_list}
+
+        matrix_rows = []
+        for key in sorted(pivot.keys(), key=lambda k: (k[0] or "", k[1] or "", k[2] or "")):
+            cc, cn, cu = key
+            by_date = pivot[key]
+            row_total = sum(by_date.values())
+            matrix_rows.append(
+                {
+                    "component_cd": cc,
+                    "component_name": cn,
+                    "component_uom": cu,
+                    "by_date": {d: round(by_date[d], 6) for d in date_list},
+                    "row_total": round(row_total, 6),
+                }
+            )
+
+        daily_matrix = {
+            "dates": date_list,
+            "rows": matrix_rows,
+        }
+
+    return {
+        "success": True,
+        "message": "OK",
+        "data": {
+            "items": items,
+            "daily_matrix": daily_matrix,
+            "summary": {
+                "date_start": d_start.isoformat(),
+                "date_end": d_end.isoformat(),
+                "production_month_filter": production_month.strip() if production_month and production_month.strip() else None,
+                "total_component_kinds": len(items),
+                "total_required_qty": round(total_required_qty, 6),
+                "effective_date_note": "start_date が設定されている instruction_plans を対象に、actual_production_quantity × BOM構成比（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。",
+                "daily_matrix_omitted": daily_matrix_omitted,
+                "daily_matrix_max_days": _DAY_MATRIX_MAX_DAYS,
+            },
+        },
+    }
+
+
 class UpdatePlanBody(BaseModel):
     """生産ロット（instruction_plans）1件の更新（テーブル全項目対応）"""
     production_month: Optional[str] = None  # YYYY-MM-DD

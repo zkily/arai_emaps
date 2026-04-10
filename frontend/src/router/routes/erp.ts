@@ -340,6 +340,12 @@ export const erpRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/erp/production-requirements/MaterialRequirements.vue'),
         meta: { title: '材料需要量', group: '生産管理 > 生産需要量', requiresAuth: true },
       },
+      {
+        path: 'erp/production-requirements/component',
+        name: 'ProductionComponentRequirements',
+        component: () => import('@/views/erp/production-requirements/ComponentRequirements.vue'),
+        meta: { title: '部品需要量', group: '生産管理 > 生産需要量', requiresAuth: true },
+      },
 
       // ╔══════════════════════════════════════════════════════════════╗
       // ║  5. 原価・財務連携 (Costing & Finance)                        ║

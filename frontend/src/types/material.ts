@@ -43,6 +43,8 @@ export interface MaterialLogItem {
   note?: string
   created_at?: string
   updated_at?: string
+  /** 切断ログに同一製造番号がある（includeCuttingUsage 時のみ） */
+  used_in_cutting?: boolean
 }
 
 /** 受入ログ（MaterialLog は MaterialLogItem の別名） */

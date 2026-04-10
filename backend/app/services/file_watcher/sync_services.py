@@ -23,13 +23,8 @@ STOCK_FILES = [
     "InspectionNG.csv",
 ]
 
-# 材料ログファイル → material_logs
-MATERIAL_FILES = [
-    "Material_Maruiti.csv",
-    "Material_Nagoya.csv",
-    "Material_JFE.csv",
-    "Material_Okajima.csv",
-]
+# 材料ログ → material_logs（実パスは .env: MATERIAL_RECEIVING_CSV_PATHS / MATERIAL_RECEIVING_WATCH_BASE_PATH 等）
+MATERIAL_FILES = list(settings.get_material_receiving_watch_filenames())
 
 # ピッキングログファイル → shipping_log（fileWatcherService.js と同等）
 PICKING_FILES = [
@@ -160,9 +155,10 @@ class MaterialService:
     """材料 CSV → material_logs（解析、补全、按业务键删除后插入）"""
 
     def sync(self, filepath, filename):
+        """CSV を material_logs に同期。戻り値は API 用（file_watcher ワーカーは無視してよい）。"""
         rows = read_csv_content(filepath, encoding_list=["shift_jis", "cp932"])
         if not rows or len(rows) < 2:
-            return
+            return {"success": True, "processedCount": 0, "error": None}
         data_rows = rows[1:]
         conn = get_db_connection()
         conn.autocommit = False
@@ -177,7 +173,7 @@ class MaterialService:
                     parsed_data.append(item)
             if not parsed_data:
                 logger.warning("⚠️ [Material] %s 解析後に有効データなし", filename)
-                return
+                return {"success": True, "processedCount": 0, "error": None}
             self._enrich_data(cursor, parsed_data, filename)
             deleted_count = 0
             if "Maruiti" in filename:
@@ -238,9 +234,11 @@ class MaterialService:
             conn.commit()
             skipped = len(data_rows) - inserted_count
             logger.info("%s 処理完了: %s件処理, %s件スキップ", filename, inserted_count, skipped)
+            return {"success": True, "processedCount": int(inserted_count), "error": None}
         except Exception as e:
             conn.rollback()
             logger.error("❌ [Material] エラー %s: %s", filename, e, exc_info=True)
+            return {"success": False, "processedCount": 0, "error": str(e)}
         finally:
             cursor.close()
             conn.close()
@@ -628,3 +626,87 @@ class PickingLogService:
         except Exception as e:
             # picking_tasks が存在しない等
             logger.debug("picking_tasks 更新スキップ（テーブル未作成の可能性）: %s", e)
+
+
+def sync_material_csv_files_from_watch_folder() -> dict:
+    """
+    .env で解決した材料受入 CSV（get_material_receiving_csv_entries）をすべて DB に取り込む。
+    手動「データ読取」API と同一ロジック。戻りはフロントの fileResults 形式に合わせる。
+    """
+    import os
+
+    from app.services.file_watcher.enabled_config import is_file_enabled
+
+    entries = list(settings.get_material_receiving_csv_entries())
+    if not entries:
+        return {
+            "success": False,
+            "message": (
+                "材料受入 CSV のパスが解決できません。.env に MATERIAL_RECEIVING_CSV_PATHS（フルパス・カンマ区切り）、"
+                "または MATERIAL_RECEIVING_WATCH_BASE_PATH / FILE_WATCH_BASE_PATH とファイル名を設定してください。"
+            ),
+            "data": {"fileResults": [], "totalProcessed": 0},
+        }
+
+    svc = MaterialService()
+    file_results: list = []
+    total_processed = 0
+
+    for fp, fn in entries:
+        if not is_file_enabled(fn):
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": True,
+                    "processedCount": 0,
+                    "error": None,
+                    "skipped": True,
+                }
+            )
+            continue
+        if not os.path.isfile(fp):
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": False,
+                    "processedCount": 0,
+                    "error": "ファイルが見つかりません",
+                }
+            )
+            continue
+        try:
+            r = svc.sync(fp, fn) or {}
+            ok = r.get("success", False)
+            n = int(r.get("processedCount") or 0)
+            err = r.get("error")
+            if ok:
+                total_processed += n
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": bool(ok),
+                    "processedCount": n,
+                    "error": err,
+                }
+            )
+        except Exception as e:
+            logger.exception("材料 CSV 同期エラー %s", fn)
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": False,
+                    "processedCount": 0,
+                    "error": str(e),
+                }
+            )
+
+    any_fail = any(not fr.get("success") for fr in file_results if not fr.get("skipped"))
+    return {
+        "success": not any_fail,
+        "message": "材料ログ CSV の取込が完了しました" if not any_fail else "一部ファイルの取込に失敗しました",
+        "data": {"fileResults": file_results, "totalProcessed": total_processed},
+    }

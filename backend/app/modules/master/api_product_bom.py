@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, and_
 from typing import Optional, List
 from pydantic import BaseModel
 from datetime import date
@@ -11,7 +11,7 @@ from datetime import date
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import ProductBomHeader, ProductBomLine
+from app.modules.master.models import Product, ProductBomHeader, ProductBomLine
 
 router = APIRouter()
 
@@ -47,10 +47,11 @@ class BomHeaderIn(BaseModel):
 
 # ---------- Helpers ----------
 
-def _header_dict(h: ProductBomHeader) -> dict:
+def _header_dict(h: ProductBomHeader, parent_product_name: Optional[str] = None) -> dict:
     return {
         "id": h.id,
         "parent_product_cd": h.parent_product_cd,
+        "parent_product_name": parent_product_name,
         "bom_type": h.bom_type,
         "revision": h.revision,
         "status": h.status,
@@ -123,23 +124,32 @@ async def list_bom_headers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """BOMヘッダ一覧"""
-    q = select(ProductBomHeader)
+    """BOMヘッダ一覧（親製品名は products と LEFT JOIN）"""
+    conds = []
     if parent_product_cd:
-        q = q.where(ProductBomHeader.parent_product_cd == parent_product_cd)
+        conds.append(ProductBomHeader.parent_product_cd == parent_product_cd)
     if status:
-        q = q.where(ProductBomHeader.status == status)
+        conds.append(ProductBomHeader.status == status)
     if keyword and keyword.strip():
-        q = q.where(ProductBomHeader.parent_product_cd.like(f"%{keyword.strip()}%"))
-    cnt = await db.execute(select(func.count()).select_from(q.subquery()))
+        conds.append(ProductBomHeader.parent_product_cd.like(f"%{keyword.strip()}%"))
+
+    count_base = select(ProductBomHeader)
+    if conds:
+        count_base = count_base.where(and_(*conds))
+    cnt = await db.execute(select(func.count()).select_from(count_base.subquery()))
     total = cnt.scalar() or 0
-    q = q.order_by(ProductBomHeader.parent_product_cd, ProductBomHeader.id.desc())
-    q = q.offset((page - 1) * limit).limit(limit)
-    rows = await db.execute(q)
-    return {
-        "success": True,
-        "data": {"list": [_header_dict(r) for r in rows.scalars().all()], "total": total},
-    }
+
+    list_q = select(ProductBomHeader, Product.product_name).outerjoin(
+        Product, Product.product_cd == ProductBomHeader.parent_product_cd
+    )
+    if conds:
+        list_q = list_q.where(and_(*conds))
+    list_q = list_q.order_by(ProductBomHeader.parent_product_cd, ProductBomHeader.id.desc()).offset(
+        (page - 1) * limit
+    ).limit(limit)
+    rows = await db.execute(list_q)
+    items = [_header_dict(h, pname) for h, pname in rows.all()]
+    return {"success": True, "data": {"list": items, "total": total}}
 
 
 @router.get("/{header_id}")

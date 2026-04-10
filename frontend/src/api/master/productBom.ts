@@ -39,6 +39,8 @@ export interface BomLine extends BomLinePayload {
 export interface BomHeader {
   id: number
   parent_product_cd: string
+  /** 一覧APIで products と結合した親製品名 */
+  parent_product_name?: string | null
   bom_type: string
   revision: string
   status: string

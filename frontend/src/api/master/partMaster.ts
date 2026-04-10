@@ -1,5 +1,6 @@
 /**
- * 部品マスタ API（標準単価・通貨・為替→standard_price_jpy＝総単価×汇率）
+ * 部品マスタ API（原通貨の単価・材料単価・為替）
+ * standard_price_jpy＝総単価（円）＝単価×為替(>0)＋部品材料単価（原通貨をそのまま加算）
  */
 import request from '@/shared/api/request'
 
@@ -18,9 +19,11 @@ export interface PartMasterRow {
   uom: string
   unit_price: number
   material_unit_price: number
+  /** 単価+材料（原通貨）、DB 計算列 */
   total_unit_price: number
   currency: string
   exchange_rate: number
+  /** 総単価（円）＝単価×為替(>0)＋部品材料単価 */
   standard_price_jpy: number
   supplier_cd?: string | null
   supplier_name?: string | null

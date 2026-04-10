@@ -27,6 +27,15 @@ from app.modules.material.schemas import (
 router = APIRouter()
 
 
+def _escape_like_pattern(text: str) -> str:
+    """LIKE 検索で % _ \\ をリテラルとして扱う（材料名に記号が含まれる場合の誤マッチ防止）"""
+    return (
+        text.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 def _to_dict(r: StockMaterial) -> dict:
     return {
         "id": r.id,
@@ -69,6 +78,10 @@ async def list_stock_materials(
     page: int = Query(1, ge=1),
     pageSize: int = Query(50, ge=1, le=2000),
     keyword: Optional[str] = Query(None),
+    materialNameExact: Optional[str] = Query(
+        None,
+        description="材料名完全一致（材料日別在庫から開くダイアログ用。keyword より優先）",
+    ),
     supplier: Optional[str] = Query(None),
     is_used: Optional[str] = Query(None),
     startDate: Optional[str] = Query(None),
@@ -80,13 +93,16 @@ async def list_stock_materials(
 ):
     """在庫材料一覧"""
     q = select(StockMaterial)
-    if keyword:
-        kw = f"%{keyword}%"
+    exact = (materialNameExact or "").strip()
+    if exact:
+        q = q.where(StockMaterial.material_name == exact)
+    elif keyword and keyword.strip():
+        kw = f"%{_escape_like_pattern(keyword.strip())}%"
         q = q.where(
             or_(
-                StockMaterial.material_name.ilike(kw),
-                StockMaterial.manufacture_no.ilike(kw),
-                StockMaterial.supplier.ilike(kw),
+                StockMaterial.material_name.ilike(kw, escape="\\"),
+                StockMaterial.manufacture_no.ilike(kw, escape="\\"),
+                StockMaterial.supplier.ilike(kw, escape="\\"),
             )
         )
     if supplier:

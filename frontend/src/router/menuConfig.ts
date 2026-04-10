@@ -75,6 +75,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_REQUIREMENTS', name: '生産需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION', sortOrder: 5.7 },
   { code: 'ERP_PRODUCTION_MAT_REQ', name: '材料需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 1 },
+  { code: 'ERP_PRODUCTION_COMPONENT_REQ', name: '部品需要量', path: '/erp/production-requirements/component', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_INSTRUCTION', name: '生産指示', path: '/erp/production/instruction', parentCode: 'ERP_PRODUCTION', sortOrder: 6 },
   { code: 'ERP_PRODUCTION_INSTR_CUTTING', name: '切断・面取指示', path: '/erp/production/instruction/cutting', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_INSTR_FORMING', name: '成型指示', path: '/erp/production/instruction/forming', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 3 },

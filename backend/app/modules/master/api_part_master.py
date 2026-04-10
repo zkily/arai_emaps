@@ -1,6 +1,8 @@
 """
 部品マスタ API（parts）
-単価は原通貨、exchange_rate は 1 原通貨あたりの JPY。標準原価(円) = total_unit_price * exchange_rate（total = unit_price + material_unit_price）
+単価・部品材料単価は原通貨。exchange_rate は 1 原通貨あたりの JPY。
+総単価（円）= 単価×為替レート（>0 のとき）+ 部品材料単価（原通貨、加算のみ）。
+API の standard_price_jpy は上記の総単価（円）。total_unit_price は DB 計算列（単価+材料、原通貨）。
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,10 +28,14 @@ def _total_unit(row: PartMaster) -> Decimal:
     return (row.unit_price or Decimal("0")) + (row.material_unit_price or Decimal("0"))
 
 
-def _jpy_standard(row: PartMaster) -> float:
-    total = _total_unit(row)
-    ex = row.exchange_rate or Decimal("1")
-    return float(total * ex)
+def _total_yen_jpy(row: PartMaster) -> float:
+    u = row.unit_price or Decimal("0")
+    m = row.material_unit_price or Decimal("0")
+    ex = row.exchange_rate
+    exd = ex if ex is not None else Decimal("0")
+    if exd > 0:
+        return float(u * exd + m)
+    return float(u + m)
 
 
 def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
@@ -46,7 +52,7 @@ def _row_dict(row: PartMaster, supplier_name: Optional[str] = None) -> dict:
         "total_unit_price": float(_total_unit(row)),
         "currency": row.currency or "JPY",
         "exchange_rate": float(row.exchange_rate) if row.exchange_rate is not None else 1.0,
-        "standard_price_jpy": _jpy_standard(row),
+        "standard_price_jpy": _total_yen_jpy(row),
         "supplier_cd": row.supplier_cd,
         "status": int(row.status) if row.status is not None else 1,
         "remarks": row.remarks,
@@ -108,7 +114,7 @@ async def list_parts(
         q = q.where(PartMaster.status == status)
     cnt = await db.execute(select(func.count()).select_from(q.subquery()))
     total = cnt.scalar() or 0
-    q = q.order_by(PartMaster.part_cd).offset((page - 1) * page_size).limit(page_size)
+    q = q.order_by(PartMaster.part_name, PartMaster.part_cd).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
     sup_cds = {r.supplier_cd for r in rows if r.supplier_cd}
     sup_map = {}

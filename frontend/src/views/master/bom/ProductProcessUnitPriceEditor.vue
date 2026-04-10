@@ -1,11 +1,11 @@
 <template>
   <div class="ppup-page">
     <header class="ppup-hero">
-      <div class="ppup-hero__accent" aria-hidden="true" />
+      <div class="ppup-hero__glow" aria-hidden="true" />
       <div class="ppup-hero__inner">
         <div class="ppup-hero__brand">
           <div class="ppup-hero__icon">
-            <el-icon :size="20"><Money /></el-icon>
+            <el-icon :size="18"><Money /></el-icon>
           </div>
           <div class="ppup-hero__text">
             <h1 class="ppup-hero__title">{{ t('bomHome.productUnitPriceTitle') }}</h1>
@@ -13,12 +13,13 @@
           </div>
         </div>
       </div>
+      <div class="ppup-hero__accent" aria-hidden="true" />
     </header>
 
     <el-card class="ppup-toolbar-card" shadow="never">
       <div class="ppup-toolbar">
         <el-form :inline="true" class="ppup-filter-form" @submit.prevent>
-          <el-form-item label="製品">
+          <el-form-item label="製品" class="ppup-form-item--product">
             <el-select
               v-model="selectedProductCd"
               filterable
@@ -37,59 +38,55 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="routeCd" label="ルート">
-            <el-tag type="info" size="small">{{ routeCd }}</el-tag>
+          <el-form-item v-if="routeCd" label="ルート" class="ppup-form-item--chip">
+            <el-tag class="ppup-chip ppup-chip--route" size="small" effect="dark">{{ routeCd }}</el-tag>
           </el-form-item>
-          <el-form-item v-if="bomRevisionLabel" label="BOM">
-            <el-tag size="small" effect="plain">{{ bomRevisionLabel }}</el-tag>
+          <el-form-item v-if="bomRevisionLabel" label="BOM" class="ppup-form-item--chip">
+            <el-tag class="ppup-chip ppup-chip--bom" size="small">{{ bomRevisionLabel }}</el-tag>
           </el-form-item>
-          <el-form-item v-if="selectedProductCd" label="取数">
+          <el-form-item v-if="selectedProductCd" label="取数" class="ppup-form-item--chip">
             <span class="ppup-take-badge">{{ selectedProductTakeCount }}</span>
-            <span v-if="!hasExplicitProductTakeCount" class="ppup-take-fallback">（製品マスタ未設定時は 1 で試算）</span>
+            <span v-if="!hasExplicitProductTakeCount" class="ppup-take-fallback">（未設定時 1）</span>
           </el-form-item>
         </el-form>
       </div>
     </el-card>
 
     <div v-if="!selectedProductCd" class="ppup-placeholder">
-      <el-empty description="製品を選択すると、工程・部品材料・累計単価が表示されます" :image-size="72" />
+      <el-empty class="ppup-empty" description="製品を選択すると、工程・部品材料・累計単価が表示されます" :image-size="56" />
     </div>
 
     <div v-else class="ppup-grid">
       <!-- 工程 + 標準加工費 -->
-      <el-card class="ppup-data-card" shadow="never">
+      <el-card class="ppup-data-card ppup-data-card--process" shadow="never">
         <template #header>
           <div class="ppup-data-cap">
             <span class="ppup-data-cap__dot" />
             <span class="ppup-data-cap__title">工程順・標準加工費</span>
-            <span class="ppup-data-cap__meta">{{ routeSteps.length }} 工程</span>
+            <span class="ppup-data-cap__meta ppup-data-cap__pill">{{ routeSteps.length }} 工程</span>
           </div>
         </template>
         <div v-loading="loadingProcessPanel" class="ppup-card-body">
           <el-empty
             v-if="!loadingProcessPanel && !routeSteps.length"
+            class="ppup-empty ppup-empty--sm"
             description="工程ルート未設定"
-            :image-size="56"
+            :image-size="48"
           />
           <el-table
             v-else
-            class="ppup-table"
+            class="ppup-table ppup-table--process"
             :data="routeSteps"
             stripe
             size="small"
-            max-height="calc(100vh - 340px)"
+            max-height="calc(100vh - 280px)"
           >
-            <el-table-column prop="step_no" label="順" width="48" align="center" />
+            <el-table-column prop="step_no" label="順" width="44" align="center" />
             <el-table-column prop="process_cd" label="工程CD" min-width="88" show-overflow-tooltip />
             <el-table-column label="工程名" min-width="100" show-overflow-tooltip>
               <template #default="{ row }">{{ row.process_name || '—' }}</template>
             </el-table-column>
-            <el-table-column label="マスタ参考" width="108" align="right">
-              <template #default="{ row }">
-                <span class="ppup-muted">{{ formatPriceYen(masterFeeHint(row.process_cd)) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="標準加工費" width="140" align="center">
+            <el-table-column label="標準加工費" width="160" align="center">
               <template #default="{ row }">
                 <el-input-number
                   v-model="stepFees[row.step_no]"
@@ -99,55 +96,45 @@
                   size="small"
                   controls-position="right"
                   class="ppup-fee-input"
-                  :disabled="!routeCd"
+                  :disabled="!routeCd || savingStep === row.step_no"
+                  @change="scheduleSaveProcessFee(row.step_no)"
                 />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="88" align="center" fixed="right">
-              <template #default="{ row }">
-                <el-button
-                  type="primary"
-                  size="small"
-                  link
-                  :loading="savingStep === row.step_no"
-                  :disabled="!routeCd"
-                  @click="saveProcessFee(row.step_no)"
-                >
-                  保存
-                </el-button>
-              </template>
-            </el-table-column>
           </el-table>
-          <p v-if="routeSteps.length && routeCd" class="ppup-hint">
-            マスタ参考は「工程加工費マスタ」の有効行の先頭単価です。保存すると製品×ルート×工程の標準原価行（加工費）が更新されます。
+          <p v-if="routeSteps.length && routeCd" class="ppup-hint ppup-hint--process">
+            標準加工費は入力・変更後に自動で保存され、製品×ルート×工程の標準原価行（加工費）が更新されます。
           </p>
         </div>
       </el-card>
 
       <!-- 部品・材料 -->
-      <el-card class="ppup-data-card" shadow="never">
+      <el-card class="ppup-data-card ppup-data-card--bom" shadow="never">
         <template #header>
           <div class="ppup-data-cap">
             <span class="ppup-data-cap__dot ppup-data-cap__dot--amber" />
             <span class="ppup-data-cap__title">部品・材料</span>
-            <span class="ppup-data-cap__meta">{{ bomComponentRows.length }} 行 · 小計 {{ formatPriceYen(materialPartSubtotal) }}</span>
+            <span class="ppup-data-cap__meta ppup-data-cap__pill ppup-data-cap__pill--amber">
+              {{ bomComponentRows.length }} 行 · 小計 {{ formatPriceYen(materialPartSubtotal) }}
+            </span>
           </div>
         </template>
         <div v-loading="loadingBom" class="ppup-card-body">
           <el-empty
             v-if="!loadingBom && !selectedBomHeaderId"
+            class="ppup-empty ppup-empty--sm"
             description="BOMが未登録です（製品BOM表で登録してください）"
-            :image-size="56"
+            :image-size="48"
           />
           <el-table
             v-else-if="selectedBomHeaderId"
-            class="ppup-table"
+            class="ppup-table ppup-table--bom"
             :data="bomComponentRows"
             stripe
             size="small"
-            max-height="calc(100vh - 340px)"
+            max-height="calc(100vh - 280px)"
           >
-            <el-table-column label="区分" width="72" align="center">
+            <el-table-column label="区分" width="68" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.kind === 'material' ? 'warning' : 'primary'" size="small">
                   {{ row.kind === 'material' ? '材料' : '部品' }}
@@ -193,7 +180,7 @@
               </template>
             </el-table-column>
           </el-table>
-          <p v-if="selectedBomHeaderId && bomComponentRows.length" class="ppup-hint">
+          <p v-if="selectedBomHeaderId && bomComponentRows.length" class="ppup-hint ppup-hint--bom">
             <strong>計算ルール：</strong>材料の行金額は<strong>(使用重量 kg ÷ 選択製品の取数) × 単重単価(¥/kg)</strong>（本・個は
             <code>所要量×長尺単重</code>で kg 化）。取数は製品マスタの「取り数」、未設定は 1。
             一本単価のみの行は <strong>(所要量×一本単価)÷取数</strong>。部品は<strong>所要量×標準単価（円）</strong>—
@@ -210,20 +197,35 @@
       </el-card>
 
       <!-- 累計（材料 + 工程完了時点） -->
-      <el-card class="ppup-data-card ppup-card--wide" shadow="never">
+      <el-card class="ppup-data-card ppup-data-card--cumulative ppup-card--wide" shadow="never">
         <template #header>
           <div class="ppup-data-cap">
             <span class="ppup-data-cap__dot ppup-data-cap__dot--cyan" />
             <span class="ppup-data-cap__title">単価累計（工程完了時点）</span>
-            <span class="ppup-data-cap__meta">材料・部品 + 加工費を順に積み上げ</span>
+            <span class="ppup-data-cap__meta ppup-data-cap__pill ppup-data-cap__pill--cyan">材料 + 加工を積み上げ</span>
           </div>
         </template>
         <div class="ppup-card-body">
           <el-table class="ppup-table ppup-table--cumulative" :data="cumulativeStageRows" stripe size="small">
             <el-table-column prop="stage" label="時点" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="processIncrement" label="当段増分" width="120" align="right">
+            <el-table-column prop="materialIncrement" label="材料単価" width="110" align="right">
               <template #default="{ row }">
-                {{ row.processIncrement != null ? formatPriceYen(row.processIncrement) : '—' }}
+                {{ formatPriceYen(row.materialIncrement) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="partIncrement" label="部品単価" width="110" align="right">
+              <template #default="{ row }">
+                {{ formatPriceYen(row.partIncrement) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="processIncrement" label="工程単価" width="110" align="right">
+              <template #default="{ row }">
+                {{ formatPriceYen(row.processIncrement) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="stageIncrement" label="当段増分" width="120" align="right">
+              <template #default="{ row }">
+                {{ formatPriceYen(row.stageIncrement) }}
               </template>
             </el-table-column>
             <el-table-column prop="cumulative" label="累計単価" width="140" align="right">
@@ -239,7 +241,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Money } from '@element-plus/icons-vue'
@@ -255,7 +257,6 @@ import {
 import { getBomHeaders, getBomTree, type BomLine } from '@/api/master/productBom'
 import { getProductList } from '@/api/master/productMaster'
 import { getMaterialList } from '@/api/master/materialMaster'
-import { getProcessProcessingFees } from '@/api/master/processProcessingFee'
 import { getPartList, type PartMasterRow } from '@/api/master/partMaster'
 import type { Product, Material } from '@/types/master'
 
@@ -277,6 +278,8 @@ interface BomDisplayRow {
   kind: 'material' | 'part'
   code: string
   name: string
+  consumeStepNo: number | null
+  consumeProcessCd: string
   qtyPer: number
   qtyEff: number
   scrapRate: number
@@ -294,7 +297,10 @@ interface BomDisplayRow {
 
 interface CumulativeStageRow {
   stage: string
-  processIncrement: number | null
+  materialIncrement: number
+  partIncrement: number
+  processIncrement: number
+  stageIncrement: number
   cumulative: number
 }
 
@@ -313,6 +319,25 @@ const loadingProcessPanel = computed(() => loadingRouteSteps.value || loadingPri
 /** 各工程の標準加工費（入力バインド） */
 const stepFees = reactive<Record<number, number>>({})
 const savingStep = ref<number | null>(null)
+const feeSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
+const FEE_SAVE_DEBOUNCE_MS = 400
+
+function clearFeeSaveTimers() {
+  for (const t of feeSaveTimers.values()) clearTimeout(t)
+  feeSaveTimers.clear()
+}
+
+function scheduleSaveProcessFee(stepNo: number) {
+  const existing = feeSaveTimers.get(stepNo)
+  if (existing) clearTimeout(existing)
+  feeSaveTimers.set(
+    stepNo,
+    setTimeout(() => {
+      feeSaveTimers.delete(stepNo)
+      void saveProcessFee(stepNo, { quiet: true })
+    }, FEE_SAVE_DEBOUNCE_MS)
+  )
+}
 
 const selectedBomHeaderId = ref<number | undefined>(undefined)
 const bomRevisionLabel = ref('')
@@ -327,7 +352,6 @@ const productNameByCd = ref<Record<string, string>>({})
 /** BOM 子品目CD と一致する部品マスタ（円換算標準単価）— 優先して原価試算に使用 */
 const partStandardJpyByCd = ref<Record<string, number>>({})
 const partNameByCd = ref<Record<string, string>>({})
-const processMasterFeeByCd = ref<Record<string, number>>({})
 
 /** 製品マスタの取り数（材料行の「÷取数」に使用）。未設定・0以下は試算上 1 */
 const rawProductTakeCount = computed(() => {
@@ -345,13 +369,8 @@ const selectedProductTakeCount = computed(() => (hasExplicitProductTakeCount.val
 function formatPriceYen(v: number | undefined | null) {
   if (v == null || Number.isNaN(Number(v))) return '—'
   const n = Number(v)
+  if (Math.abs(n) < 0.0000001) return '-'
   return `¥${n.toLocaleString('ja-JP', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function masterFeeHint(processCd: string | undefined): number | undefined {
-  if (!processCd) return undefined
-  const v = processMasterFeeByCd.value[processCd]
-  return v !== undefined ? v : undefined
 }
 
 function uomIsMassKg(uom: string): boolean {
@@ -491,6 +510,8 @@ const bomComponentRows = computed((): BomDisplayRow[] => {
         kind: 'material',
         code: matCd,
         name: materialNameByCd.value[matCd] ?? matCd,
+        consumeStepNo: Number(line.consume_step_no) > 0 ? Number(line.consume_step_no) : null,
+        consumeProcessCd: String(line.consume_process_cd || '').trim(),
         qtyPer,
         qtyEff,
         scrapRate: scrap,
@@ -518,6 +539,8 @@ const bomComponentRows = computed((): BomDisplayRow[] => {
         kind: 'part',
         code: pc,
         name: nm,
+        consumeStepNo: Number(line.consume_step_no) > 0 ? Number(line.consume_step_no) : null,
+        consumeProcessCd: String(line.consume_process_cd || '').trim(),
         qtyPer,
         qtyEff,
         scrapRate: scrap,
@@ -539,20 +562,65 @@ const materialPartSubtotal = computed(() =>
 
 const cumulativeStageRows = computed((): CumulativeStageRow[] => {
   const rows: CumulativeStageRow[] = []
-  let cum = materialPartSubtotal.value
-  rows.push({
-    stage: '材料・部品計（BOM構成）',
-    processIncrement: null,
-    cumulative: cum,
-  })
+  let cum = 0
   const steps = [...routeSteps.value].sort((a, b) => a.step_no - b.step_no)
+  const stepNoByProcessCd = new Map<string, number>()
   for (const s of steps) {
-    const inc = Number(stepFees[s.step_no]) || 0
-    cum += inc
+    const cd = String(s.process_cd || '').trim()
+    if (cd) stepNoByProcessCd.set(cd, s.step_no)
+  }
+
+  const materialCostByStepNo = new Map<number, number>()
+  const partCostByStepNo = new Map<number, number>()
+  let unassignedMaterialCost = 0
+  let unassignedPartCost = 0
+  for (const r of bomComponentRows.value) {
+    let targetStepNo: number | undefined
+    if (r.consumeStepNo != null) {
+      targetStepNo = r.consumeStepNo
+    } else if (r.consumeProcessCd) {
+      targetStepNo = stepNoByProcessCd.get(r.consumeProcessCd)
+    }
+    if (targetStepNo == null || !Number.isFinite(targetStepNo)) {
+      if (r.kind === 'material') unassignedMaterialCost += Number(r.lineAmount) || 0
+      else unassignedPartCost += Number(r.lineAmount) || 0
+      continue
+    }
+    if (r.kind === 'material') {
+      materialCostByStepNo.set(
+        targetStepNo,
+        (materialCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0)
+      )
+    } else {
+      partCostByStepNo.set(targetStepNo, (partCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0))
+    }
+  }
+
+  for (const s of steps) {
+    const materialInc = materialCostByStepNo.get(s.step_no) || 0
+    const partInc = partCostByStepNo.get(s.step_no) || 0
+    const processInc = Number(stepFees[s.step_no]) || 0
+    const stageInc = materialInc + partInc + processInc
+    cum += stageInc
     const name = (s.process_name || s.process_cd || '').trim() || `ステップ${s.step_no}`
     rows.push({
       stage: `〜 ${name} 工程完了時点`,
-      processIncrement: inc,
+      materialIncrement: materialInc,
+      partIncrement: partInc,
+      processIncrement: processInc,
+      stageIncrement: stageInc,
+      cumulative: cum,
+    })
+  }
+  const unassignedStageInc = unassignedMaterialCost + unassignedPartCost
+  if (unassignedStageInc > 0) {
+    cum += unassignedStageInc
+    rows.push({
+      stage: '〜 工程未割当の部品・材料投入',
+      materialIncrement: unassignedMaterialCost,
+      partIncrement: unassignedPartCost,
+      processIncrement: 0,
+      stageIncrement: unassignedStageInc,
       cumulative: cum,
     })
   }
@@ -566,7 +634,14 @@ async function loadProductOptions() {
     const list = res?.data?.list ?? res?.list ?? []
     productOptions.value = (list as Product[])
       .filter((p) => p.product_cd)
-      .sort((a, b) => String(a.product_cd).localeCompare(String(b.product_cd), 'ja'))
+      .sort((a, b) => {
+        const nameCmp = String(a.product_name || a.product_cd).localeCompare(
+          String(b.product_name || b.product_cd),
+          'ja'
+        )
+        if (nameCmp !== 0) return nameCmp
+        return String(a.product_cd).localeCompare(String(b.product_cd), 'ja')
+      })
     const up: Record<string, number> = {}
     const nm: Record<string, string> = {}
     for (const p of list as Product[]) {
@@ -645,23 +720,6 @@ async function loadMaterialPrices() {
   }
 }
 
-async function loadProcessFeeMasterHints() {
-  try {
-    const res = await getProcessProcessingFees({ page: 1, limit: 2000, status: 'active' })
-    const d = (res as { data?: { list: { process_cd?: string; unit_price?: number }[] } })?.data ?? res
-    const list = (d as { list?: { process_cd?: string; unit_price?: number }[] })?.list ?? []
-    const map: Record<string, number> = {}
-    for (const r of list) {
-      const cd = r.process_cd
-      if (!cd || map[cd] !== undefined) continue
-      map[cd] = Number(r.unit_price) || 0
-    }
-    processMasterFeeByCd.value = map
-  } catch {
-    processMasterFeeByCd.value = {}
-  }
-}
-
 async function loadRouteForProduct(productCd: string) {
   routeSteps.value = []
   routeCd.value = ''
@@ -731,6 +789,7 @@ async function loadBomForProduct(productCd: string) {
 }
 
 async function onProductChange() {
+  clearFeeSaveTimers()
   const cd = selectedProductCd.value
   for (const key of Object.keys(stepFees)) delete stepFees[Number(key)]
   priceRows.value = []
@@ -748,15 +807,23 @@ async function onProductChange() {
   if (rc) syncStepFeesFromPrices()
 }
 
-async function saveProcessFee(stepNo: number) {
+function persistedProcessFeeSum(stepNo: number): number {
+  const rows = processRowsForStep(stepNo)
+  return rows.reduce((acc, r) => acc + (Number(r.increment_unit_price) || 0), 0)
+}
+
+async function saveProcessFee(stepNo: number, options?: { quiet?: boolean }) {
   const cd = selectedProductCd.value
   const rc = routeCd.value
   if (!cd || !rc) {
-    ElMessage.warning('製品・ルートが未設定です')
+    if (!options?.quiet) ElMessage.warning('製品・ルートが未設定です')
     return
   }
   const step = routeSteps.value.find((s) => s.step_no === stepNo)
   const fee = Number(stepFees[stepNo]) || 0
+  const persisted = persistedProcessFeeSum(stepNo)
+  if (Math.abs(fee - persisted) < 0.000001) return
+
   savingStep.value = stepNo
   try {
     const rows = processRowsForStep(stepNo)
@@ -781,10 +848,10 @@ async function saveProcessFee(stepNo: number) {
       for (let i = 1; i < rows.length; i++) {
         await deleteUnitPrice(rows[i].id)
       }
-      ElMessage.success('保存しました')
+      if (!options?.quiet) ElMessage.success('保存しました')
     } else {
       await createUnitPrice(payload)
-      ElMessage.success('登録しました')
+      if (!options?.quiet) ElMessage.success('登録しました')
     }
     await loadPricesForProduct(cd, rc)
     syncStepFeesFromPrices()
@@ -797,96 +864,138 @@ async function saveProcessFee(stepNo: number) {
 }
 
 onMounted(async () => {
-  await Promise.all([
-    loadProductOptions(),
-    loadMaterialPrices(),
-    loadPartMasters(),
-    loadProcessFeeMasterHints(),
-  ])
+  await Promise.all([loadProductOptions(), loadMaterialPrices(), loadPartMasters()])
+})
+
+onBeforeUnmount(() => {
+  clearFeeSaveTimers()
 })
 </script>
 
 <style scoped>
 .ppup-page {
+  --ppup-violet: #6366f1;
+  --ppup-violet-d: #4f46e5;
+  --ppup-amber: #f59e0b;
+  --ppup-amber-d: #d97706;
+  --ppup-cyan: #06b6d4;
+  --ppup-cyan-d: #0891b2;
+  --ppup-slate-50: #f8fafc;
+  --ppup-slate-100: #f1f5f9;
+  --ppup-slate-500: #64748b;
+  --ppup-slate-600: #475569;
+  --ppup-slate-700: #334155;
+  --ppup-slate-900: #0f172a;
+
+  font-family:
+    'Segoe UI Variable',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'Hiragino Sans',
+    'Yu Gothic UI',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
   min-height: 100vh;
-  padding: 10px 12px 12px;
+  padding: 6px 8px 8px;
   background:
-    radial-gradient(ellipse 90% 60% at 0% -10%, rgba(99, 102, 241, 0.1), transparent 45%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    radial-gradient(ellipse 100% 80% at 100% 0%, rgba(99, 102, 241, 0.12), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 0% 100%, rgba(6, 182, 212, 0.08), transparent 45%),
+    linear-gradient(165deg, #f1f5f9 0%, #e8eef5 48%, #f0f4f8 100%);
 }
 
 .ppup-hero {
   position: relative;
-  border-radius: 12px;
-  margin-bottom: 10px;
+  border-radius: 10px;
+  margin-bottom: 6px;
   overflow: hidden;
-  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.2);
+  box-shadow:
+    0 4px 6px -1px rgba(15, 23, 42, 0.08),
+    0 12px 28px -8px rgba(79, 70, 229, 0.35);
 }
 
-.ppup-hero__accent {
-  height: 3px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6, #0ea5e9);
+.ppup-hero__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 120% 100% at 20% -40%, rgba(167, 139, 250, 0.45), transparent 55%);
+  pointer-events: none;
 }
 
 .ppup-hero__inner {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 55%, #4f46e5 100%);
+  padding: 8px 12px;
+  background: linear-gradient(125deg, #312e81 0%, #4338ca 42%, #5b21b6 88%);
+}
+
+.ppup-hero__accent {
+  height: 2px;
+  background: linear-gradient(90deg, #a78bfa, #6366f1 35%, #22d3ee 70%, #fbbf24);
 }
 
 .ppup-hero__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .ppup-hero__icon {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #eef2ff;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .ppup-hero__title {
-  margin: 0 0 2px;
+  margin: 0 0 1px;
   font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #fff;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .ppup-hero__sub {
   margin: 0;
-  font-size: 11px;
-  line-height: 1.35;
-  color: rgba(226, 232, 240, 0.88);
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(237, 242, 255, 0.92);
 }
 
 .ppup-toolbar-card {
-  margin-bottom: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+  margin-bottom: 6px;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.98));
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
 .ppup-toolbar-card :deep(.el-card__body) {
-  padding: 8px 12px;
+  padding: 6px 10px;
 }
 
 .ppup-filter-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 2px 10px;
 }
 
 .ppup-filter-form :deep(.el-form-item) {
@@ -895,24 +1004,62 @@ onMounted(async () => {
 }
 
 .ppup-filter-form :deep(.el-form-item__label) {
-  padding-right: 6px;
+  padding-right: 4px;
   font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
+  font-weight: 700;
+  color: var(--ppup-slate-700);
+}
+
+.ppup-form-item--product :deep(.el-form-item__label) {
+  color: var(--ppup-violet-d);
 }
 
 .ppup-filt-product {
-  width: min(360px, 92vw);
+  width: min(340px, 90vw);
+}
+
+.ppup-toolbar-card :deep(.el-input__inner),
+.ppup-toolbar-card :deep(.el-select__wrapper),
+.ppup-toolbar-card :deep(.el-select .el-input__inner) {
+  font-size: 12px;
+}
+
+.ppup-chip {
+  border: none;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.ppup-chip--route {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7) !important;
+  color: #fff !important;
+}
+
+.ppup-chip--bom {
+  background: linear-gradient(180deg, #fff7ed, #ffedd5) !important;
+  color: #9a3412 !important;
+  border: 1px solid rgba(251, 146, 60, 0.45) !important;
 }
 
 .ppup-placeholder {
-  padding: 48px 16px;
+  padding: 20px 10px;
+}
+
+.ppup-empty :deep(.el-empty__description p) {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ppup-slate-700);
+}
+
+.ppup-empty--sm :deep(.el-empty__image) {
+  margin-bottom: 8px;
 }
 
 .ppup-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 6px;
   align-items: start;
 }
 
@@ -921,50 +1068,111 @@ onMounted(async () => {
 }
 
 .ppup-data-card {
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
   overflow: hidden;
+  background: #fff;
+}
+
+.ppup-data-card--process {
+  border-color: rgba(99, 102, 241, 0.22);
+  box-shadow:
+    0 2px 10px rgba(15, 23, 42, 0.04),
+    inset 3px 0 0 0 var(--ppup-violet);
+}
+
+.ppup-data-card--bom {
+  border-color: rgba(245, 158, 11, 0.28);
+  box-shadow:
+    0 2px 10px rgba(15, 23, 42, 0.04),
+    inset 3px 0 0 0 var(--ppup-amber);
+}
+
+.ppup-data-card--cumulative {
+  border-color: rgba(6, 182, 212, 0.25);
+  box-shadow:
+    0 2px 10px rgba(15, 23, 42, 0.04),
+    inset 3px 0 0 0 var(--ppup-cyan);
+}
+
+.ppup-data-card--process :deep(.el-card__header) {
+  background: linear-gradient(90deg, rgba(238, 242, 255, 0.95), rgba(248, 250, 252, 0.5));
+}
+
+.ppup-data-card--bom :deep(.el-card__header) {
+  background: linear-gradient(90deg, rgba(255, 251, 235, 0.95), rgba(248, 250, 252, 0.45));
+}
+
+.ppup-data-card--cumulative :deep(.el-card__header) {
+  background: linear-gradient(90deg, rgba(236, 254, 255, 0.9), rgba(248, 250, 252, 0.45));
 }
 
 .ppup-data-card :deep(.el-card__header) {
-  padding: 8px 12px;
-  border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc, #f8fafc);
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.85);
 }
 
 .ppup-data-cap {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  min-height: 22px;
 }
 
 .ppup-data-cap__dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #0ea5e9);
+  background: linear-gradient(135deg, var(--ppup-violet), #818cf8);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .ppup-data-cap__dot--amber {
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  background: linear-gradient(135deg, #fbbf24, var(--ppup-amber-d));
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.22);
 }
 
 .ppup-data-cap__dot--cyan {
-  background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+  background: linear-gradient(135deg, #22d3ee, var(--ppup-cyan-d));
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.22);
 }
 
 .ppup-data-cap__title {
   font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
+  font-weight: 800;
+  color: var(--ppup-slate-900);
+  letter-spacing: -0.015em;
 }
 
 .ppup-data-cap__meta {
   font-size: 11px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--ppup-slate-700);
+}
+
+.ppup-data-cap__pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ppup-violet-d);
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+}
+
+.ppup-data-cap__pill--amber {
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.ppup-data-cap__pill--cyan {
+  color: var(--ppup-cyan-d);
+  background: rgba(6, 182, 212, 0.1);
+  border-color: rgba(6, 182, 212, 0.22);
 }
 
 .ppup-card-body {
@@ -973,34 +1181,83 @@ onMounted(async () => {
 
 .ppup-table {
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ppup-table :deep(.el-table th.el-table__cell) {
   font-size: 11px;
-  font-weight: 700;
-  color: #334155;
-  padding: 6px 0;
-  background: linear-gradient(180deg, #f8fafc, #f1f5f9) !important;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  color: var(--ppup-slate-700);
+  padding: 5px 6px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9) !important;
 }
 
 .ppup-table :deep(.el-table td.el-table__cell) {
-  padding: 5px 0;
+  padding: 4px 6px;
 }
 
-.ppup-table :deep(.el-table__row:hover > td.el-table__cell) {
-  background-color: rgba(99, 102, 241, 0.04) !important;
+.ppup-table :deep(.el-table .cell) {
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.ppup-table--process :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #eef2ff, #e0e7ff) !important;
+  color: #3730a3;
+}
+
+.ppup-table--bom :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #fffbeb, #fef3c7) !important;
+  color: #92400e;
+}
+
+.ppup-table--cumulative :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #ecfeff, #cffafe) !important;
+  color: #0e7490;
+}
+
+.ppup-table :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: rgba(248, 250, 252, 0.65) !important;
+}
+
+.ppup-table--process :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: rgba(99, 102, 241, 0.07) !important;
+}
+
+.ppup-table--bom :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+.ppup-table--cumulative :deep(.el-table__row:hover > td.el-table__cell) {
+  background-color: rgba(6, 182, 212, 0.07) !important;
 }
 
 .ppup-fee-input {
-  width: 120px !important;
+  width: 118px !important;
 }
 
 .ppup-fee-input :deep(.el-input-number) {
   width: 100%;
 }
 
+.ppup-fee-input :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2) inset;
+}
+
+.ppup-fee-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.45) inset;
+}
+
+.ppup-fee-input :deep(.el-input__inner) {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .ppup-muted {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 11px;
 }
 
@@ -1011,69 +1268,88 @@ onMounted(async () => {
 .ppup-qty-sub {
   display: block;
   font-size: 10px;
-  color: #94a3b8;
-  font-weight: 400;
+  color: var(--ppup-slate-500);
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .ppup-unit-suffix {
   margin-left: 2px;
   font-size: 10px;
-  font-weight: 600;
-  color: #64748b;
+  font-weight: 700;
+  color: var(--ppup-slate-600);
 }
 
 .ppup-line-amt {
   cursor: help;
+  color: var(--ppup-amber-d);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ppup-link {
-  color: #4f46e5;
-  font-weight: 600;
+  color: var(--ppup-violet-d);
+  font-weight: 700;
   text-decoration: none;
 }
 
 .ppup-link:hover {
+  color: #4338ca;
   text-decoration: underline;
 }
 
 .ppup-take-badge {
   display: inline-block;
-  min-width: 28px;
-  padding: 2px 8px;
+  min-width: 24px;
+  padding: 1px 7px;
   font-size: 12px;
   font-weight: 800;
-  color: #4f46e5;
-  background: #eef2ff;
+  color: var(--ppup-violet-d);
+  background: linear-gradient(180deg, #eef2ff, #e0e7ff);
   border-radius: 6px;
   text-align: center;
+  border: 1px solid rgba(99, 102, 241, 0.22);
 }
 
 .ppup-take-fallback {
-  margin-left: 6px;
+  margin-left: 4px;
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ppup-slate-700);
 }
 
 .ppup-hint {
   margin: 0;
-  padding: 8px 12px 10px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #64748b;
-  background: #fafbfc;
-  border-top: 1px solid #f1f5f9;
+  padding: 6px 10px 7px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ppup-slate-900);
+  border-top: 1px solid rgba(226, 232, 240, 0.85);
+}
+
+.ppup-hint--process {
+  background: linear-gradient(90deg, rgba(238, 242, 255, 0.55), rgba(248, 250, 252, 0.9));
+  border-left: 3px solid var(--ppup-violet);
+}
+
+.ppup-hint--bom {
+  background: linear-gradient(90deg, rgba(255, 251, 235, 0.55), rgba(248, 250, 252, 0.92));
+  border-left: 3px solid var(--ppup-amber);
 }
 
 .ppup-hint code {
-  font-size: 10px;
-  padding: 1px 4px;
-  background: #f1f5f9;
-  border-radius: 4px;
+  font-size: 11px;
+  font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', 'Consolas', monospace;
+  padding: 1px 5px;
+  background: rgba(241, 245, 249, 0.9);
+  border-radius: 3px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .ppup-cum-strong {
-  color: #4f46e5;
+  color: var(--ppup-cyan-d);
   font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 1100px) {

@@ -7,7 +7,7 @@
       <div class="ppb-hero__inner">
         <div class="ppb-hero__brand">
           <div class="ppb-hero__icon-wrap">
-            <el-icon :size="22"><Tools /></el-icon>
+            <el-icon :size="20"><Tools /></el-icon>
           </div>
           <div class="ppb-hero__titles">
             <h1 class="ppb-hero__title">製品工程BOM管理</h1>
@@ -40,37 +40,38 @@
       </div>
     </header>
 
-    <!-- 検索（1行コンパクト） -->
-    <section class="ppb-toolbar">
-      <div class="ppb-toolbar__compact">
-        <div class="ppb-toolbar__search-row">
-          <span class="ppb-pill">検索</span>
-          <el-input
-            v-model="filters.keyword"
-            placeholder="製品コード・製品名"
-            clearable
-            class="ppb-search-input"
-            @clear="handleFilter"
-            @keyup.enter="handleFilter"
-          >
-            <template #prefix>
-              <el-icon class="ppb-input-prefix"><Search /></el-icon>
-            </template>
-          </el-input>
+    <div class="ppb-workspace">
+      <!-- 検索（1行コンパクト） -->
+      <section class="ppb-toolbar">
+        <div class="ppb-toolbar__compact">
+          <div class="ppb-toolbar__search-row">
+            <span class="ppb-pill">検索</span>
+            <el-input
+              v-model="filters.keyword"
+              placeholder="製品コード・製品名"
+              clearable
+              class="ppb-search-input"
+              @clear="handleFilter"
+              @keyup.enter="handleFilter"
+            >
+              <template #prefix>
+                <el-icon class="ppb-input-prefix"><Search /></el-icon>
+              </template>
+            </el-input>
+          </div>
+          <div class="ppb-toolbar__actions">
+            <el-button size="small" @click="clearFilters" :icon="Refresh">クリア</el-button>
+            <el-button type="primary" size="small" @click="handleFilter" :icon="Search">検索</el-button>
+            <el-button type="success" size="small" plain @click="handleSync" :icon="Refresh" :loading="syncing">
+              同期
+            </el-button>
+          </div>
         </div>
-        <div class="ppb-toolbar__actions">
-          <el-button size="small" @click="clearFilters" :icon="Refresh">クリア</el-button>
-          <el-button type="primary" size="small" @click="handleFilter" :icon="Search">検索</el-button>
-          <el-button type="success" size="small" plain @click="handleSync" :icon="Refresh" :loading="syncing">
-            同期
-          </el-button>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- データ一覧 -->
-    <section class="ppb-table-section">
-      <el-card class="ppb-table-card" shadow="never">
+      <!-- データ一覧 -->
+      <section class="ppb-table-section">
+        <el-card class="ppb-table-card" shadow="never">
         <template #header>
           <div class="ppb-table-cap">
             <div class="ppb-table-cap__left">
@@ -87,8 +88,10 @@
           stripe
           style="width: 100%"
           :empty-text="'データがありません'"
-          height="calc(100vh - 300px)"
-          :row-style="{ height: '36px' }"
+          height="calc(100vh - 228px)"
+          :row-style="{ height: '34px' }"
+          :header-cell-class-name="ppbHeaderCellClass"
+          :cell-class-name="ppbBodyCellClass"
           @sort-change="handleSortChange"
           :default-sort="{ prop: 'product_name', order: 'ascending' }"
         >
@@ -450,21 +453,22 @@
             </template>
           </el-table-column>
         </el-table>
-      </el-card>
-    </section>
+        </el-card>
+      </section>
 
-    <!-- ページネーション -->
-    <div class="ppb-pagination-wrap">
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.limit"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="pagination.total"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSizeChange"
-        @current-change="handlePageChange"
-        class="ppb-pagination"
-      />
+      <!-- ページネーション -->
+      <div class="ppb-pagination-wrap">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.limit"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+          class="ppb-pagination"
+        />
+      </div>
     </div>
 
     <!-- 編集ダイアログ -->
@@ -736,6 +740,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { TableColumnCtx } from 'element-plus'
 import {
   Tools,
   Refresh,
@@ -792,6 +797,51 @@ const sortConfig = ref({
 const filters = ref({
   keyword: '',
 })
+
+/** 一覧テーブル：列ラベル → 色グループ（ヘッダー・セル共通） */
+const PPB_COL_GROUP: Record<string, string> = {
+  終息: 'ppb-col-meta',
+  製品CD: 'ppb-col-meta',
+  製品名: 'ppb-col-meta',
+  最低在庫日数: 'ppb-col-stock',
+  安全在庫日数: 'ppb-col-stock',
+  材料工程: 'ppb-col-g0',
+  材料工程LT: 'ppb-col-g0',
+  切断工程: 'ppb-col-g1',
+  切断工程LT: 'ppb-col-g1',
+  面取工程: 'ppb-col-g2',
+  面取工程LT: 'ppb-col-g2',
+  SW工程: 'ppb-col-g3',
+  SW工程LT: 'ppb-col-g3',
+  成型工程: 'ppb-col-g0',
+  成型工程LT: 'ppb-col-g0',
+  メッキ工程: 'ppb-col-g1',
+  メッキ工程LT: 'ppb-col-g1',
+  外注メッキ工程: 'ppb-col-g2',
+  外注メッキ工程LT: 'ppb-col-g2',
+  溶接工程: 'ppb-col-g3',
+  溶接工程LT: 'ppb-col-g3',
+  外注溶接工程: 'ppb-col-g0',
+  外注溶接工程LT: 'ppb-col-g0',
+  検査工程: 'ppb-col-g1',
+  検査工程LT: 'ppb-col-g1',
+  外注倉庫工程: 'ppb-col-g2',
+  外注倉庫工程LT: 'ppb-col-g2',
+  メッキ前溶接: 'ppb-col-g3',
+  検査後溶接: 'ppb-col-g0',
+  検査後溶接工程LT: 'ppb-col-g0',
+  操作: 'ppb-col-act',
+}
+
+function ppbHeaderCellClass({ column }: { column: TableColumnCtx<ProductProcessBOM> }) {
+  const label = column.label
+  return label && typeof label === 'string' ? PPB_COL_GROUP[label] ?? '' : ''
+}
+
+function ppbBodyCellClass({ column }: { column: TableColumnCtx<ProductProcessBOM> }) {
+  const label = column.label
+  return label && typeof label === 'string' ? PPB_COL_GROUP[label] ?? '' : ''
+}
 
 // 布尔值转换辅助函数（优化性能，避免重复代码）
 const convertBooleanFields = (item: any): ProductProcessBOM => {
@@ -1122,22 +1172,35 @@ onMounted(async () => {
 <style scoped>
 .product-process-bom-container {
   min-height: 100vh;
-  padding: 10px 12px 12px;
+  padding: 8px 10px 10px;
+  box-sizing: border-box;
   background:
-    radial-gradient(ellipse 100% 70% at 0% -15%, rgba(99, 102, 241, 0.1), transparent 48%),
-    radial-gradient(ellipse 80% 50% at 100% 0%, rgba(14, 165, 233, 0.08), transparent 42%),
-    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+    radial-gradient(ellipse 90% 55% at 0% -8%, rgba(99, 102, 241, 0.12), transparent 45%),
+    radial-gradient(ellipse 70% 45% at 100% 5%, rgba(14, 165, 233, 0.1), transparent 40%),
+    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(139, 92, 246, 0.06), transparent 50%),
+    linear-gradient(165deg, #f8fafc 0%, #f1f5f9 45%, #eef2f7 100%);
+}
+
+/* メイン作業面：ツールバー＋表＋ページを一枚に */
+.ppb-workspace {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: #fff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px -16px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
 }
 
 /* —— ヒーロー（コンパクト） —— */
 .ppb-hero {
   position: relative;
-  border-radius: 14px;
-  margin-bottom: 10px;
+  border-radius: 12px;
+  margin-bottom: 8px;
   overflow: hidden;
   box-shadow:
-    0 12px 28px -12px rgba(15, 23, 42, 0.4),
-    0 0 0 1px rgba(255, 255, 255, 0.1) inset;
+    0 10px 24px -14px rgba(15, 23, 42, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.12) inset;
 }
 
 .ppb-hero__accent {
@@ -1164,9 +1227,11 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px 16px;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 38%, #4338ca 72%, #4f46e5 100%);
+  gap: 10px 14px;
+  padding: 10px 14px;
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.06) 0%, transparent 42%),
+    linear-gradient(135deg, #1e1b4b 0%, #312e81 32%, #4338ca 68%, #5b21b6 100%);
 }
 
 .ppb-hero__brand {
@@ -1179,9 +1244,9 @@ onMounted(async () => {
 
 .ppb-hero__icon-wrap {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1193,8 +1258,8 @@ onMounted(async () => {
 }
 
 .ppb-hero__title {
-  margin: 0 0 2px;
-  font-size: 1.125rem;
+  margin: 0 0 1px;
+  font-size: 1.05rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   color: #fff;
@@ -1203,38 +1268,52 @@ onMounted(async () => {
 
 .ppb-hero__subtitle {
   margin: 0;
-  max-width: 480px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: rgba(226, 232, 240, 0.88);
+  max-width: 520px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(226, 232, 240, 0.82);
 }
 
 .ppb-hero__stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ppb-stat {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 5px 10px 5px 8px;
   min-width: 0;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left-width: 3px;
+  border-left-color: rgba(255, 255, 255, 0.35);
   backdrop-filter: blur(8px);
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .ppb-stat:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ppb-stat--total {
+  border-left-color: #7dd3fc;
+}
+
+.ppb-stat--active {
+  border-left-color: #4ade80;
+}
+
+.ppb-stat--halt {
+  border-left-color: #fb923c;
 }
 
 .ppb-stat__ico {
-  font-size: 18px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.88);
 }
 
 .ppb-stat--active .ppb-stat__ico {
@@ -1252,7 +1331,7 @@ onMounted(async () => {
 }
 
 .ppb-stat__num {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 800;
   color: #fff;
   line-height: 1;
@@ -1260,20 +1339,21 @@ onMounted(async () => {
 }
 
 .ppb-stat__lbl {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  color: rgba(226, 232, 240, 0.72);
+  letter-spacing: 0.04em;
+  color: rgba(226, 232, 240, 0.7);
 }
 
 /* —— ツールバー 1行 —— */
 .ppb-toolbar {
-  background: #fff;
-  border-radius: 12px;
-  padding: 8px 12px;
-  margin-bottom: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+  background: linear-gradient(180deg, #fafbff 0%, #ffffff 100%);
+  border-radius: 0;
+  padding: 6px 10px;
+  margin-bottom: 0;
+  border: none;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: none;
 }
 
 .ppb-toolbar__compact {
@@ -1281,7 +1361,7 @@ onMounted(async () => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
+  gap: 6px 10px;
 }
 
 .ppb-toolbar__search-row {
@@ -1339,9 +1419,9 @@ onMounted(async () => {
 }
 
 .ppb-search-input :deep(.el-input__wrapper) {
-  border-radius: 10px;
-  padding-left: 10px;
-  min-height: 32px;
+  border-radius: 8px;
+  padding-left: 8px;
+  min-height: 30px;
   box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3) inset;
   transition: box-shadow 0.2s ease;
 }
@@ -1356,7 +1436,7 @@ onMounted(async () => {
 
 /* —— テーブル —— */
 .ppb-table-section {
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .ppb-table-cap {
@@ -1373,35 +1453,40 @@ onMounted(async () => {
 }
 
 .ppb-table-cap__dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6366f1, #0ea5e9);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .ppb-table-cap__title {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .ppb-table-cap__hint {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.12);
 }
 
 .ppb-table-card {
-  border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
   overflow: hidden;
 }
 
 .ppb-table-card :deep(.el-card__header) {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc 0%, #f8fafc 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .ppb-table-card :deep(.el-card__body) {
@@ -1409,27 +1494,154 @@ onMounted(async () => {
 }
 
 .ppb-table-card :deep(.el-table) {
-  font-size: 12px;
+  font-size: 11px;
   --el-table-border-color: transparent;
   --el-table-header-bg-color: #f1f5f9;
 }
 
 .ppb-table-card :deep(.el-table th.el-table__cell) {
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
   color: #334155;
   font-weight: 700;
-  font-size: 11px;
-  padding: 6px 0;
+  font-size: 10px;
+  padding: 5px 2px;
   border-bottom: 1px solid #e2e8f0 !important;
 }
 
 .ppb-table-card :deep(.el-table td.el-table__cell) {
-  padding: 4px 0;
+  padding: 2px 1px;
   border-bottom: 1px solid #f1f5f9 !important;
 }
 
 .ppb-table-card :deep(.el-table__row:hover > td.el-table__cell) {
-  background-color: rgba(99, 102, 241, 0.04) !important;
+  background-color: rgba(99, 102, 241, 0.06) !important;
+}
+
+/* 列グループ色（工程ブロックを識別しやすく） */
+.ppb-table-card :deep(th.el-table__cell.ppb-col-meta) {
+  background: linear-gradient(180deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  color: #312e81 !important;
+  border-bottom-color: #a5b4fc !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-meta) {
+  background-color: rgba(99, 102, 241, 0.06) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-stock) {
+  background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%) !important;
+  color: #78350f !important;
+  border-bottom-color: #fcd34d !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-stock) {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-g0) {
+  background: linear-gradient(180deg, #ccfbf1 0%, #99f6e4 100%) !important;
+  color: #115e59 !important;
+  border-bottom-color: #5eead4 !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-g0) {
+  background-color: rgba(45, 212, 191, 0.07) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-g1) {
+  background: linear-gradient(180deg, #ede9fe 0%, #ddd6fe 100%) !important;
+  color: #5b21b6 !important;
+  border-bottom-color: #c4b5fd !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-g1) {
+  background-color: rgba(139, 92, 246, 0.07) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-g2) {
+  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%) !important;
+  color: #0c4a6e !important;
+  border-bottom-color: #7dd3fc !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-g2) {
+  background-color: rgba(14, 165, 233, 0.07) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-g3) {
+  background: linear-gradient(180deg, #ffedd5 0%, #fed7aa 100%) !important;
+  color: #7c2d12 !important;
+  border-bottom-color: #fdba74 !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-g3) {
+  background-color: rgba(249, 115, 22, 0.07) !important;
+}
+
+.ppb-table-card :deep(th.el-table__cell.ppb-col-act) {
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%) !important;
+  color: #1e293b !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+
+.ppb-table-card :deep(td.el-table__cell.ppb-col-act) {
+  background-color: rgba(148, 163, 184, 0.08) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-meta) {
+  background-color: rgba(99, 102, 241, 0.09) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-stock) {
+  background-color: rgba(245, 158, 11, 0.11) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g0) {
+  background-color: rgba(45, 212, 191, 0.1) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g1) {
+  background-color: rgba(139, 92, 246, 0.1) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g2) {
+  background-color: rgba(14, 165, 233, 0.1) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-g3) {
+  background-color: rgba(249, 115, 22, 0.1) !important;
+}
+
+.ppb-table-card :deep(.el-table__row--striped td.el-table__cell.ppb-col-act) {
+  background-color: rgba(148, 163, 184, 0.12) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-meta) {
+  background-color: rgba(99, 102, 241, 0.14) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-stock) {
+  background-color: rgba(245, 158, 11, 0.16) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g0) {
+  background-color: rgba(45, 212, 191, 0.14) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g1) {
+  background-color: rgba(139, 92, 246, 0.14) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g2) {
+  background-color: rgba(14, 165, 233, 0.14) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-g3) {
+  background-color: rgba(249, 115, 22, 0.14) !important;
+}
+
+.ppb-table-card :deep(.el-table__body tr:hover > td.el-table__cell.ppb-col-act) {
+  background-color: rgba(148, 163, 184, 0.18) !important;
 }
 
 .ppb-table-card :deep(.el-table__body-wrapper) {
@@ -1479,11 +1691,12 @@ onMounted(async () => {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 6px 10px;
-  background: #fff;
-  border-radius: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  padding: 4px 10px 6px;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  box-shadow: none;
 }
 
 .ppb-pagination-wrap :deep(.el-pagination) {

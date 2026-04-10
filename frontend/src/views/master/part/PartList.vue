@@ -48,12 +48,13 @@
         stripe
         class="part-table"
         max-height="calc(100vh - 280px)"
+        :default-sort="{ prop: 'part_name', order: 'ascending' }"
       >
-        <el-table-column prop="part_cd" :label="t('master.part.partCd')" width="120" show-overflow-tooltip />
-        <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="part_cd" :label="t('master.part.partCd')" width="80" show-overflow-tooltip />
+        <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="150" show-overflow-tooltip />
         <el-table-column prop="category" :label="t('master.part.category')" width="100" show-overflow-tooltip />
         <el-table-column prop="kind" :label="t('master.part.kind')" width="56" align="center" />
-        <el-table-column :label="t('master.part.settlementType')" min-width="108" show-overflow-tooltip>
+        <el-table-column :label="t('master.part.settlementType')" width="90" show-overflow-tooltip>
           <template #default="{ row }">{{ settlementOptionLabel(row.settlement_type) }}</template>
         </el-table-column>
         <el-table-column prop="uom" :label="t('master.part.uom')" width="64" align="center" />
@@ -62,20 +63,15 @@
             {{ formatNum(row.unit_price) }} {{ row.currency }}
           </template>
         </el-table-column>
-        <el-table-column :label="t('master.part.materialUnitPrice')" width="112" align="right">
+        <el-table-column :label="t('master.part.materialUnitPrice')" width="160" align="right">
           <template #default="{ row }">
             {{ formatNum(row.material_unit_price) }} {{ row.currency }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('master.part.totalUnitPrice')" width="112" align="right">
-          <template #default="{ row }">
-            <strong>{{ formatNum(row.total_unit_price) }} {{ row.currency }}</strong>
           </template>
         </el-table-column>
         <el-table-column prop="exchange_rate" :label="t('master.part.exchangeRate')" width="108" align="right">
           <template #default="{ row }">{{ formatNum(row.exchange_rate, 2) }}</template>
         </el-table-column>
-        <el-table-column :label="t('master.part.standardJpy')" width="128" align="right">
+        <el-table-column :label="t('master.part.totalUnitPrice')" width="128" align="right">
           <template #default="{ row }">
             <strong class="part-jpy">¥{{ formatNum(row.standard_price_jpy) }}</strong>
           </template>
@@ -237,11 +233,7 @@
           <p class="part-dlg__fx-hint">{{ t('master.part.exchangeHint') }}</p>
           <div class="part-preview-jpy">
             <span class="part-preview-jpy__lbl">{{ t('master.part.totalUnitPrice') }}</span>
-            <span class="part-preview-jpy__val">{{ formatNum(previewTotalOrig) }} {{ form.currency }}</span>
-          </div>
-          <div class="part-preview-jpy part-preview-jpy--sub">
-            <span class="part-preview-jpy__lbl">{{ t('master.part.standardJpy') }}</span>
-            <span class="part-preview-jpy__val">¥{{ formatNum(previewJpy) }}</span>
+            <span class="part-preview-jpy__val">¥{{ formatNum(previewTotalJpy) }}</span>
           </div>
         </div>
 
@@ -342,10 +334,13 @@ const supplierSelectOptions = computed(() => {
   return [extra, ...supplierRows.value.filter((s) => s.supplier_cd !== extra.supplier_cd)]
 })
 
-const previewTotalOrig = computed(
-  () => (Number(form.unit_price) || 0) + (Number(form.material_unit_price) || 0)
-)
-const previewJpy = computed(() => previewTotalOrig.value * (Number(form.exchange_rate) || 0))
+const previewTotalJpy = computed(() => {
+  const u = Number(form.unit_price) || 0
+  const m = Number(form.material_unit_price) || 0
+  const ex = Number(form.exchange_rate) || 0
+  if (ex > 0) return u * ex + m
+  return u + m
+})
 
 function settlementOptionLabel(v: string | undefined | null) {
   if (!v) return '—'
@@ -668,19 +663,6 @@ onMounted(fetchList)
   border-radius: 8px;
   border: 1px solid rgba(99, 102, 241, 0.22);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
-}
-
-.part-preview-jpy--sub {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-color: rgba(100, 116, 139, 0.25);
-}
-
-.part-preview-jpy--sub .part-preview-jpy__lbl {
-  color: #475569;
-}
-
-.part-preview-jpy--sub .part-preview-jpy__val {
-  color: #0f172a;
 }
 
 .part-preview-jpy__lbl {

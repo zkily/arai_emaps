@@ -110,19 +110,35 @@
                 <span class="pbe-panel-cap__meta">{{ materialRows.length }} 件</span>
               </div>
             </template>
-            <el-table :data="materialRows" v-loading="loadingTree" class="pbe-table" size="small" stripe style="width: 100%">
-              <el-table-column prop="line_no" label="行番" width="70" />
-              <el-table-column prop="component_material_cd" label="材料CD" width="120" />
-              <el-table-column label="材料名" min-width="140" show-overflow-tooltip>
+            <el-table
+              :data="materialRows"
+              v-loading="loadingTree"
+              class="pbe-table pbe-table--center-cells"
+              size="small"
+              stripe
+              style="width: 100%"
+            >
+              <el-table-column prop="line_no" label="行番" width="70" align="center" header-align="center" />
+              <el-table-column
+                prop="component_material_cd"
+                label="材料CD"
+                width="120"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column label="材料名" min-width="140" align="center" header-align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ masterMaterialName(row.component_material_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="qty_per" label="所要量" width="90" align="right" />
-              <el-table-column prop="uom" label="単位" width="70" />
-              <el-table-column prop="scrap_rate" label="ロス率(%)" width="95" align="right" />
-              <el-table-column prop="consume_process_cd" label="投入工程" width="100" />
-              <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
+              <el-table-column prop="qty_per" label="所要量" width="90" align="center" header-align="center" />
+              <el-table-column prop="uom" label="単位" width="70" align="center" header-align="center" />
+              <el-table-column label="工程名" min-width="120" align="center" header-align="center" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ mainRouteProcessName(row.consume_process_cd) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="remarks" label="備考" min-width="100" align="center" header-align="center" show-overflow-tooltip />
             </el-table>
           </el-card>
           <el-card class="panel-card pbe-panel" shadow="never">
@@ -133,26 +149,42 @@
                 <span class="pbe-panel-cap__meta">{{ partRows.length }} 件</span>
               </div>
             </template>
-            <el-table :data="partRows" v-loading="loadingTree" class="pbe-table" size="small" stripe style="width: 100%">
-              <el-table-column prop="line_no" label="行番" width="70" />
-              <el-table-column label="子品目種別" width="100">
+            <el-table
+              :data="partRows"
+              v-loading="loadingTree"
+              class="pbe-table pbe-table--center-cells"
+              size="small"
+              stripe
+              style="width: 100%"
+            >
+              <el-table-column prop="line_no" label="行番" width="70" align="center" header-align="center" />
+              <el-table-column label="子品目種別" width="100" align="center" header-align="center">
                 <template #default="{ row }">
                   <el-tag :type="componentTypeTagMap[row.component_type] || 'info'" size="small">
                     {{ componentTypeLabel[row.component_type] || row.component_type }}
                   </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="component_product_cd" label="部品CD" width="120" />
-              <el-table-column label="製品名" min-width="140" show-overflow-tooltip>
+              <el-table-column
+                prop="component_product_cd"
+                label="部品CD"
+                width="120"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column label="製品名" min-width="140" align="center" header-align="center" show-overflow-tooltip>
                 <template #default="{ row }">
                   {{ masterProductName(row.component_product_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="qty_per" label="所要量" width="90" align="right" />
-              <el-table-column prop="uom" label="単位" width="70" />
-              <el-table-column prop="scrap_rate" label="ロス率(%)" width="95" align="right" />
-              <el-table-column prop="consume_process_cd" label="投入工程" width="100" />
-              <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
+              <el-table-column prop="qty_per" label="所要量" width="90" align="center" header-align="center" />
+              <el-table-column prop="uom" label="単位" width="70" align="center" header-align="center" />
+              <el-table-column label="工程名" min-width="120" align="center" header-align="center" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ mainRouteProcessName(row.consume_process_cd) }}
+                </template>
+              </el-table-column>
+              <el-table-column prop="remarks" label="備考" min-width="100" align="center" header-align="center" show-overflow-tooltip />
             </el-table>
           </el-card>
         </div>
@@ -347,12 +379,12 @@
       </div>
     </el-card>
 
-    <!-- 全BOMヘッダ一覧（保守） -->
+    <!-- 全BOMヘッダ一覧 -->
     <el-card class="search-card pbe-search-card" shadow="never">
       <template #header>
         <div class="pbe-panel-cap">
           <span class="pbe-panel-cap__dot pbe-panel-cap__dot--slate" />
-          <span>全BOMヘッダ（保守）</span>
+          <span>全BOMヘッダ</span>
         </div>
       </template>
       <el-form :inline="true" class="search-form pbe-search-form">
@@ -381,6 +413,7 @@
         style="width: 100%"
       >
         <el-table-column prop="parent_product_cd" label="親製品CD" width="140" />
+        <el-table-column prop="parent_product_name" label="製品名" min-width="160" show-overflow-tooltip />
         <el-table-column prop="bom_type" label="種別" width="100">
           <template #default="{ row }">
             <el-tag :type="row.bom_type === 'production' ? 'success' : 'info'" size="small">
@@ -918,6 +951,15 @@ function masterProductName(cd: string | null | undefined) {
   return partNameByCd.value[cd] || productNameByCd.value[cd] || cd
 }
 
+/** 左カラム工程順（選択製品）に基づき投入工程CD→工程名 */
+function mainRouteProcessName(processCd: string | null | undefined) {
+  const c = String(processCd || '').trim()
+  if (!c) return '—'
+  const step = mainRouteSteps.value.find((s) => String(s.process_cd || '').trim() === c)
+  const name = step?.process_name?.trim()
+  return name || c
+}
+
 /** ダイアログ内：有効部品＋現在行にあってマスタに無い CD（旧製品参照の編集用） */
 const dialogPartSelectOptions = computed(() => {
   const list = partSelectList.value
@@ -1234,7 +1276,7 @@ async function reloadTreeAndFilter() {
   }
 }
 
-// ——— 全BOMヘッダ一覧（保守） ———
+// ——— 全BOMヘッダ一覧 ———
 const searchProductCd = ref('')
 const searchStatus = ref('')
 const currentPage = ref(1)
@@ -1283,6 +1325,10 @@ function sanitizedPayloadLine(ln: DialogLineRow, kind: 'material' | 'part'): Bom
   }
   return out
 }
+
+/** 新規BOM作成ダイアログの既定有効期間（YYYY-MM-DD） */
+const DEFAULT_NEW_BOM_EFFECTIVE_FROM = '2026-04-01'
+const DEFAULT_NEW_BOM_EFFECTIVE_TO = '2032-03-31'
 
 const formData = reactive({
   parent_product_cd: '',
@@ -1578,8 +1624,8 @@ function openCreateDialog() {
     bom_type: 'production',
     revision: '1',
     status: 'active',
-    effective_from: null,
-    effective_to: null,
+    effective_from: DEFAULT_NEW_BOM_EFFECTIVE_FROM,
+    effective_to: DEFAULT_NEW_BOM_EFFECTIVE_TO,
     base_quantity: 1,
     uom: '個',
     remarks: null,
@@ -1940,6 +1986,10 @@ onMounted(() => {
 
 .pbe-table :deep(.el-table__row:hover > td.el-table__cell) {
   background-color: rgba(99, 102, 241, 0.04) !important;
+}
+
+.pbe-table--center-cells :deep(.el-table .cell) {
+  text-align: center;
 }
 
 .pbe-panel :deep(.el-card__body) {

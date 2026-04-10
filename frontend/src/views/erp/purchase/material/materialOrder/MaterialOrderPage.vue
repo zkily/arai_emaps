@@ -144,8 +144,8 @@
       <div class="search-container">
         <div class="search-row">
 
-          <!-- 期間 (日別在庫・注文・初期在庫のみ) -->
-          <div class="filter-item date-group" v-if="activeTab !== 'sub'">
+          <!-- 期間（全材料未使用受入タブでは使わないため非表示） -->
+          <div class="filter-item date-group" v-if="activeTab !== 'sub' && activeTab !== 'unusedReceiving'">
             <span class="filter-label">
               <el-icon><Calendar /></el-icon>期間
             </span>
@@ -179,7 +179,13 @@
             </span>
             <el-input
               v-model="searchForm.keyword"
-              :placeholder="activeTab === 'orderHistory' ? '材料名 / 材料CD / 仕入先' : '材料名 / 材料CD'"
+              :placeholder="
+                activeTab === 'unusedReceiving'
+                  ? '材料名 / 材料CD / 製造番号 / 仕入先'
+                  : activeTab === 'orderHistory'
+                    ? '材料名 / 材料CD / 仕入先'
+                    : '材料名 / 材料CD'
+              "
               clearable
               @input="handleKeywordSearch"
               class="filter-input"
@@ -289,6 +295,14 @@
               <el-icon><List /></el-icon>
               <span>材料注文履歴</span>
             </div>
+            <div
+              class="tab-item tab-item--unused"
+              :class="{ active: activeTab === 'unusedReceiving' }"
+              @click="handleTabChange('unusedReceiving')"
+            >
+              <el-icon><DocumentCopy /></el-icon>
+              <span>材料未使用</span>
+            </div>
           </div>
           <div class="table-actions" v-if="activeTab === 'order'">
             <el-button type="success" @click="handleAddManualOrder" class="add-btn">
@@ -304,6 +318,27 @@
             <el-button type="primary" @click="handleSetMonthStart" class="month-start-btn">
               <el-icon><Calendar /></el-icon>
               当月月初に設定
+            </el-button>
+          </div>
+          <div class="table-actions unused-receiving-actions" v-if="activeTab === 'unusedReceiving'">
+            <el-button
+              class="unused-receiving-btn-refresh"
+              round
+              @click="fetchUnusedReceivingAll"
+              :loading="unusedReceivingFetchLoading"
+            >
+              <el-icon><Refresh /></el-icon>
+              再読込
+            </el-button>
+            <el-button
+              class="unused-receiving-btn-print"
+              type="primary"
+              round
+              :disabled="unusedReceivingFetchLoading || unusedReceivingUnusedRows.length === 0"
+              @click="printAllUnusedReceivingSummary"
+            >
+              <el-icon><Printer /></el-icon>
+              未使用一覧を印刷
             </el-button>
           </div>
         </div>
@@ -666,6 +701,77 @@
           </el-table>
         </div>
 
+        <!-- 材料未使用：受入ログ集計 -->
+        <div class="table-content unused-receiving-tab" v-if="activeTab === 'unusedReceiving'">
+          <div class="unused-receiving-shell">
+            <div v-if="unusedReceivingFetchTruncated" class="unused-receiving-banner unused-receiving-banner--warn">
+              <el-icon class="unused-receiving-banner__ico"><WarningFilled /></el-icon>
+              <div class="unused-receiving-banner__msg">
+                取得が上限に達している可能性があります（表示 {{ unusedReceivingAllList.length }} / 該当総数
+                {{ unusedReceivingApiTotal }}）。条件を絞って<strong>再読込</strong>してください。
+              </div>
+            </div>
+
+            <div
+              class="unused-receiving-stats-row"
+              v-if="!unusedReceivingFetchLoading || unusedReceivingAllList.length"
+            >
+              <div class="unused-receiving-stat-pill unused-receiving-stat-pill--emerald">
+                <span class="unused-receiving-stat-pill__label">未使用件数</span>
+                <span class="unused-receiving-stat-pill__value">{{ unusedReceivingUnusedRows.length }}</span>
+                <span class="unused-receiving-stat-pill__unit">件</span>
+              </div>
+              <div class="unused-receiving-stat-pill unused-receiving-stat-pill--slate">
+                <span class="unused-receiving-stat-pill__label">材料種類</span>
+                <span class="unused-receiving-stat-pill__value">{{ unusedReceivingDistinctMaterialCount }}</span>
+                <span class="unused-receiving-stat-pill__unit">種</span>
+              </div>
+            </div>
+
+            <div class="unused-receiving-table-card">
+              <el-table
+                v-loading="unusedReceivingFetchLoading"
+                :data="unusedReceivingUnusedRows"
+                stripe
+                class="modern-table unused-receiving-table"
+                :default-sort="{ prop: 'log_date', order: 'descending' }"
+                height="calc(100vh - 300px)"
+                :max-height="780"
+                size="small"
+              >
+            <el-table-column prop="material_cd" label="材料CD" width="118" align="center" />
+            <el-table-column
+              prop="material_name"
+              label="材料名"
+              width="160"
+              show-overflow-tooltip
+              sortable
+            />
+            <el-table-column prop="log_date" label="受入日" width="112" align="center" sortable>
+              <template #default="{ row }">
+                {{
+                  row.log_date
+                    ? new Date(row.log_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
+                    : '—'
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="supplier" label="仕入先" width="130" show-overflow-tooltip />
+            <el-table-column prop="manufacture_no" label="製造番号" width="130" show-overflow-tooltip />
+            <el-table-column prop="manufacture_date" label="製造日" width="112" align="center" sortable>
+              <template #default="{ row }">
+                {{
+                  row.manufacture_date
+                    ? new Date(row.manufacture_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
+                    : '—'
+                }}
+              </template>
+            </el-table-column>
+              </el-table>
+            </div>
+          </div>
+        </div>
+
         <!-- 半端材料リストテーブル -->
         <div class="table-content" v-if="activeTab === 'sub'">
           <el-table
@@ -842,7 +948,7 @@
         </div>
 
         <!-- ページネーション -->
-        <div class="pagination-wrapper">
+        <div class="pagination-wrapper" v-if="activeTab !== 'unusedReceiving'">
           <el-pagination
             v-model:current-page="pagination.page"
             v-model:page-size="pagination.page_size"
@@ -1293,131 +1399,111 @@
     <!-- 材料詳細ダイアログ -->
     <el-dialog
       v-model="materialDetailDialogVisible"
-      :title="`材料詳細情報 - ${selectedMaterialDetail?.material_name || ''}`"
-      width="900px"
+      width="760px"
       :close-on-click-modal="false"
       class="material-detail-dialog"
+      align-center
     >
+      <template #header>
+        <div class="material-detail-dialog__header">
+          <div class="material-detail-dialog__header-main">
+            <div class="material-detail-dialog__icon" aria-hidden="true">
+              <el-icon><Box /></el-icon>
+            </div>
+            <div class="material-detail-dialog__titles">
+              <div class="material-detail-dialog__title-row">
+                <span class="material-detail-dialog__title">材料詳細情報</span>
+                <span v-if="selectedMaterialDetail?.material_cd" class="material-detail-dialog__cd">{{
+                  selectedMaterialDetail.material_cd
+                }}</span>
+              </div>
+              <p class="material-detail-dialog__name">
+                {{ selectedMaterialDetail?.material_name || '—' }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <div class="material-detail-content">
-        <div class="dialog-header-compact">
-          <div class="header-icon-compact">
-            <el-icon><Box /></el-icon>
-          </div>
-          <div class="header-text-compact">
-            <h3>在庫材料一覧</h3>
-            <p>{{ selectedMaterialDetail?.material_name }}の在庫材料データ</p>
-          </div>
+        <p class="material-detail-hint">
+          受入日 {{ MATERIAL_DETAIL_RECEIVING_START_DATE }} 以降の受入ログ。切断ログに製造番号があれば使用済。材料CDは<strong>材料名</strong>で<strong>materials</strong>（材料マスタ）と突合した値を表示します（マスタに無い場合はログのCD）。材料CDまたは仕入先が空の行は表示しません。
+        </p>
+
+        <div class="material-detail-tabs-wrap">
+          <el-radio-group v-model="materialDetailLogFilter" size="small" class="material-detail-segmented">
+            <el-radio-button label="all">
+              全部
+              <span class="material-detail-tab-badge">{{ materialLogsDetailSanitizedList.length }}</span>
+            </el-radio-button>
+            <el-radio-button label="used">
+              使用済
+              <span class="material-detail-tab-badge tab-badge--used">{{ materialLogsCuttingUsedCount }}</span>
+            </el-radio-button>
+            <el-radio-button label="unused">
+              未使用
+              <span class="material-detail-tab-badge tab-badge--unused">{{ materialLogsCuttingUnusedCount }}</span>
+            </el-radio-button>
+          </el-radio-group>
         </div>
 
-        <!-- フィルターボタン -->
-        <div class="filter-buttons">
-          <el-button-group size="small">
-            <el-button
-              :type="stockMaterialsFilter === 'all' ? 'primary' : ''"
-              @click="handleFilterChange('all')"
-              class="filter-btn"
-            >
-              全部 ({{ stockMaterialsList.length }})
-            </el-button>
-            <el-button
-              :type="stockMaterialsFilter === 'unused' ? 'primary' : ''"
-              @click="handleFilterChange('unused')"
-              class="filter-btn"
-            >
-              未使用 ({{ unusedCount }})
-            </el-button>
-            <el-button
-              :type="stockMaterialsFilter === 'used' ? 'primary' : ''"
-              @click="handleFilterChange('used')"
-              class="filter-btn"
-            >
-              使用済 ({{ usedCount }})
-            </el-button>
-          </el-button-group>
-        </div>
-
-        <div class="stock-materials-table">
+        <div class="stock-materials-table material-detail-table-wrap">
           <el-table
-            v-loading="stockMaterialsLoading"
-            :data="filteredStockMaterialsList"
+            v-loading="materialLogsDetailLoading"
+            :data="materialLogsDetailFilteredList"
             stripe
-            border
-            class="modern-table compact-table"
-            height="315"
-            :max-height="315"
+            class="modern-table compact-table material-detail-table"
+            height="300"
+            :max-height="300"
             size="small"
           >
-            <el-table-column prop="log_date" label="入荷日" width="100" align="center" sortable>
+            <el-table-column prop="log_date" label="受入日" width="102" align="center" sortable>
               <template #default="{ row }">
                 {{ row.log_date ? new Date(row.log_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '-' }}
               </template>
             </el-table-column>
-            <el-table-column prop="supplier" label="仕入先" width="100" show-overflow-tooltip />
-            <el-table-column
-              prop="material_name"
-              label="材料名"
-              min-width="160"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              prop="manufacture_no"
-              label="製造番号"
-              width="120"
-              show-overflow-tooltip
-            />
-            <el-table-column
-              prop="material_quality"
-              label="材質"
-              width="80"
-              show-overflow-tooltip
-            />
-            <el-table-column prop="quantity" label="数量" width="80" align="center" />
-            <el-table-column label="使用状態" width="110" align="center">
+            <el-table-column prop="supplier" label="仕入先" min-width="108" show-overflow-tooltip />
+            <el-table-column prop="manufacture_no" label="製造番号" width="112" show-overflow-tooltip />
+            <el-table-column prop="manufacture_date" label="製造日" width="102" align="center">
               <template #default="{ row }">
-                <el-switch
-                  v-model="row.is_used"
-                  :active-value="1"
-                  :inactive-value="0"
-                  active-text="済"
-                  inactive-text="未"
-                  size="small"
-                  @change="handleIsUsedChange(row)"
-                  :loading="row.updating"
-                />
+                {{
+                  row.manufacture_date
+                    ? new Date(row.manufacture_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
+                    : '-'
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column label="切断使用" width="92" align="center">
+              <template #default="{ row }">
+                <el-tag :type="row.used_in_cutting ? 'warning' : 'success'" size="small" effect="plain" class="material-detail-status-tag">
+                  {{ row.used_in_cutting ? '使用済' : '未使用' }}
+                </el-tag>
               </template>
             </el-table-column>
           </el-table>
         </div>
 
-        <div class="material-summary-compact" v-if="stockMaterialsList.length > 0">
-          <div class="summary-card-compact">
-            <div class="summary-item-compact">
-              <span class="summary-label-compact">総数量:</span>
-              <span class="summary-value-compact">{{ totalStockQuantity }}</span>
-            </div>
-            <div class="summary-item-compact">
-              <span class="summary-label-compact">未使用:</span>
-              <span class="summary-value-compact">{{ unusedCount }}件</span>
-            </div>
-            <div class="summary-item-compact">
-              <span class="summary-label-compact">使用済:</span>
-              <span class="summary-value-compact">{{ usedCount }}件</span>
-            </div>
-            <div class="summary-item-compact">
-              <span class="summary-label-compact">登録:</span>
-              <span class="summary-value-compact">{{ stockMaterialsList.length }}件</span>
-            </div>
-          </div>
+        <div class="material-detail-footer-stats" v-if="materialLogsDetailSanitizedList.length > 0">
+          <span
+            >表示 <strong>{{ materialLogsDetailFilteredList.length }}</strong> 件</span
+          >
+          <span class="material-detail-footer-dot">·</span>
+          <span>合計 {{ materialLogsDetailSanitizedList.length }} 件</span>
         </div>
       </div>
 
       <template #footer>
-        <div class="dialog-footer-compact">
+        <div class="dialog-footer-compact material-detail-footer-actions">
           <el-button
-            @click="materialDetailDialogVisible = false"
-            class="cancel-btn-compact"
             size="small"
+            class="material-detail-print-btn"
+            :disabled="materialLogsDetailLoading || materialLogsCuttingUnusedCount === 0"
+            @click="printMaterialDetailUnusedList"
           >
+            <el-icon><Printer /></el-icon>
+            未使用一覧を印刷
+          </el-button>
+          <el-button type="primary" plain @click="materialDetailDialogVisible = false" size="small" class="material-detail-close-btn">
             <el-icon><Close /></el-icon>
             閉じる
           </el-button>
@@ -1477,10 +1563,12 @@ import {
   Close,
   Calendar,
   InfoFilled,
+  WarningFilled,
   Plus,
   Check,
   Delete,
   List,
+  DocumentCopy,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
@@ -1493,8 +1581,7 @@ import {
   createMaterialStockSub,
   deleteMaterialStockSub,
   transferMaterialStockToSub,
-  getStockMaterialsList,
-  toggleStockMaterialUsage,
+  getMaterialLogs,
   saveMaruichiOrderPdf,
 } from '@/api/material'
 import html2canvas from 'html2canvas'
@@ -1595,10 +1682,20 @@ const transferDialogVisible = ref(false)
 const transferRow = ref<MaterialOrderItem | null>(null)
 const transferQuantity = ref(1)
 const transferLoading = ref(false)
-const stockMaterialsLoading = ref(false)
-const stockMaterialsList = ref<any[]>([])
+const materialLogsDetailLoading = ref(false)
+const materialLogsDetailList = ref<any[]>([])
 const selectedMaterialDetail = ref<any>(null)
-const stockMaterialsFilter = ref('all') // フィルター: all, used, unused
+/** 材料詳細ダイアログ：受入ログ表示タブ */
+const materialDetailLogFilter = ref<'all' | 'used' | 'unused'>('all')
+
+/** 受入ログの未使用集計・材料詳細と同じ下限日 */
+const MATERIAL_DETAIL_RECEIVING_START_DATE = '2026-04-01'
+
+/** 全材料未使用受入タブ：API 取得結果（切断使用フラグ付き） */
+const unusedReceivingFetchLoading = ref(false)
+const unusedReceivingAllList = ref<any[]>([])
+const unusedReceivingApiTotal = ref(0)
+const unusedReceivingFetchTruncated = ref(false)
 
 // 统计数据
 const stats = ref({
@@ -1779,32 +1876,65 @@ const calculatedAmount = computed(() => {
   return calculatedWeight.value * (selectedMaterial.value.unit_price || 0)
 })
 
-// 材料详情相关计算属性
-const totalStockQuantity = computed(() => {
-  return stockMaterialsList.value.reduce((total, item) => total + (item.quantity || 0), 0)
+/** 受入ログ行の材料CD（API が materials と材料名で突合済み） */
+const resolveReceivingRowMaterialCd = (r: any): string => String(r?.material_cd ?? '').trim()
+
+/** 材料CD・仕入先が空の行は一覧・集計・印刷から除外 */
+const receivingLogHasMaterialCdAndSupplier = (r: any): boolean => {
+  const cd = resolveReceivingRowMaterialCd(r)
+  const sup = String(r?.supplier ?? '').trim()
+  return !!cd && !!sup
+}
+
+// 材料詳細：表示対象（CD・仕入先あり）
+const materialLogsDetailSanitizedList = computed(() =>
+  materialLogsDetailList.value.filter(receivingLogHasMaterialCdAndSupplier),
+)
+
+// 材料詳細：切断ログに製造番号があるか（API used_in_cutting）
+const materialLogsCuttingUsedCount = computed(
+  () => materialLogsDetailSanitizedList.value.filter((r) => r.used_in_cutting === true).length,
+)
+const materialLogsCuttingUnusedCount = computed(
+  () => materialLogsDetailSanitizedList.value.filter((r) => r.used_in_cutting !== true).length,
+)
+
+const materialLogsDetailFilteredList = computed(() => {
+  const list = materialLogsDetailSanitizedList.value
+  if (materialDetailLogFilter.value === 'used') {
+    return list.filter((r) => r.used_in_cutting === true)
+  }
+  if (materialDetailLogFilter.value === 'unused') {
+    return list.filter((r) => r.used_in_cutting !== true)
+  }
+  return list
+})
+
+/** 全材料タブ：未使用行のみ（材料CD→受入日降順） */
+const unusedReceivingUnusedRows = computed(() => {
+  const rows = unusedReceivingAllList.value.filter(
+    (r) => r.used_in_cutting !== true && receivingLogHasMaterialCdAndSupplier(r),
+  )
+  return [...rows].sort((a, b) => {
+    const c = String(a.material_cd || '').localeCompare(String(b.material_cd || ''), 'ja')
+    if (c !== 0) return c
+    const db = String(b.log_date || '')
+    const da = String(a.log_date || '')
+    return db.localeCompare(da)
+  })
+})
+
+const unusedReceivingDistinctMaterialCount = computed(() => {
+  const keys = new Set<string>()
+  for (const r of unusedReceivingUnusedRows.value) {
+    keys.add(String(r.material_cd || r.material_name || ''))
+  }
+  return keys.size
 })
 
 const _totalStockValue = computed(() => {
   // stock_materials表没有单价字段，这里暂时返回0或者可以去掉这个统计
   return 0
-})
-
-const unusedCount = computed(() => {
-  return stockMaterialsList.value.filter((item) => item.is_used === 0).length
-})
-
-const usedCount = computed(() => {
-  return stockMaterialsList.value.filter((item) => item.is_used === 1).length
-})
-
-// 筛选后的数据
-const filteredStockMaterialsList = computed(() => {
-  if (stockMaterialsFilter.value === 'used') {
-    return stockMaterialsList.value.filter((item) => item.is_used === 1)
-  } else if (stockMaterialsFilter.value === 'unused') {
-    return stockMaterialsList.value.filter((item) => item.is_used === 0)
-  }
-  return stockMaterialsList.value // 'all'
 })
 
 const mapMaterialStockRow = (item: any): MaterialOrderItem => {
@@ -2112,6 +2242,8 @@ const refreshListForActiveTab = () => {
     fetchInitialStockData()
   } else if (activeTab.value === 'orderHistory') {
     fetchOrderHistory()
+  } else if (activeTab.value === 'unusedReceiving') {
+    fetchUnusedReceivingAll()
   } else {
     fetchData()
   }
@@ -3523,72 +3655,311 @@ onMounted(() => {
   fetchSupplierOptions()
 })
 
-// 材料详情相关方法
-const handleMaterialNameDoubleClick = async (row: MaterialOrderItem) => {
-  console.log('双击材料名:', row.material_name)
-  selectedMaterialDetail.value = row
-  materialDetailDialogVisible.value = true
-  // 重置筛选状态为全部
-  stockMaterialsFilter.value = 'all'
-  await fetchStockMaterials(row.material_name)
+/** 受入ログ API 戻りから list を取り出す */
+const parseMaterialLogsListResponse = (result: unknown): any[] => {
+  const r = result as { data?: { list?: unknown[] }; list?: unknown[] } | null | undefined
+  const list = r?.data?.list ?? r?.list
+  return Array.isArray(list) ? list : []
 }
 
-const fetchStockMaterials = async (materialName: string) => {
+/** 全材料の受入ログを一括取得し、画面上は切断「未使用」のみ表示（期間は固定下限のみ、終了日なし） */
+const fetchUnusedReceivingAll = async () => {
   try {
-    stockMaterialsLoading.value = true
-    console.log('获取stock_materials数据，材料名:', materialName)
+    unusedReceivingFetchLoading.value = true
+    const startDate = MATERIAL_DETAIL_RECEIVING_START_DATE
+    const kw = searchForm.keyword.trim()
+    const suppliers = searchForm.supplier.filter((s): s is string => typeof s === 'string' && !!s.trim())
+    const supplierParam =
+      suppliers.length === 0 ? undefined : suppliers.length === 1 ? suppliers[0] : suppliers.join(',')
 
-    const result = await getStockMaterialsList({
-      keyword: materialName,
+    const result = await getMaterialLogs({
       page: 1,
-      pageSize: 1000,
+      pageSize: 20000,
+      includeCuttingUsage: true,
+      startDate,
+      ...(kw ? { keyword: kw } : {}),
+      ...(supplierParam ? { supplier: supplierParam } : {}),
     })
-    const list = (result as any)?.data?.list ?? []
 
-    console.log('stock_materials API响应:', result)
-
-    if ((result as any)?.success !== false && list) {
-      stockMaterialsList.value = list.map((item: any) => ({
-        ...item,
-        updating: false, // 添加更新状态标志
-      }))
-      console.log('成功获取stock_materials数据:', stockMaterialsList.value.length, '条')
-    } else {
-      console.error('stock_materialsデータの取得に失敗')
-      ElMessage.error('在庫材料データの取得に失敗しました')
-      stockMaterialsList.value = []
+    if ((result as { success?: boolean })?.success === false) {
+      ElMessage.error('受入ログの取得に失敗しました')
+      unusedReceivingAllList.value = []
+      unusedReceivingApiTotal.value = 0
+      unusedReceivingFetchTruncated.value = false
+      return
     }
-  } catch (error: any) {
-    console.error('获取stock_materials数据时发生错误:', error)
-    ElMessage.error(`在庫材料データの取得に失敗しました: ${error?.message || '不明なエラー'}`)
-    stockMaterialsList.value = []
+
+    const list = parseMaterialLogsListResponse(result)
+    const totalRaw = (result as { data?: { total?: number } })?.data?.total
+    const total = typeof totalRaw === 'number' ? totalRaw : list.length
+    unusedReceivingApiTotal.value = total
+    unusedReceivingAllList.value = list
+    unusedReceivingFetchTruncated.value = list.length >= 20000 || total > list.length
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    console.error('全材料未使用受入 取得エラー:', error)
+    ElMessage.error(`受入ログの取得に失敗しました: ${err?.message || '不明なエラー'}`)
+    unusedReceivingAllList.value = []
+    unusedReceivingApiTotal.value = 0
+    unusedReceivingFetchTruncated.value = false
   } finally {
-    stockMaterialsLoading.value = false
+    unusedReceivingFetchLoading.value = false
   }
 }
 
-const handleIsUsedChange = async (row: any) => {
+// 材料詳細：material_logs を材料名で取得
+const handleMaterialNameDoubleClick = async (row: MaterialOrderItem) => {
+  selectedMaterialDetail.value = row
+  materialDetailLogFilter.value = 'all'
+  materialDetailDialogVisible.value = true
+  await fetchMaterialLogsForDetail(row)
+}
+
+const fetchMaterialLogsForDetail = async (row: MaterialOrderItem) => {
+  const materialName = (row.material_name ?? '').trim()
+  const materialCd = (row.material_cd ?? '').trim()
+  const baseParams = {
+    page: 1,
+    pageSize: 2000,
+    includeCuttingUsage: true as const,
+    startDate: MATERIAL_DETAIL_RECEIVING_START_DATE,
+  }
+
   try {
-    console.log('更新is_used状态:', row.id, row.is_used)
+    materialLogsDetailLoading.value = true
 
-    row.updating = true
+    let result = await getMaterialLogs({
+      ...baseParams,
+      ...(materialName ? { materialNameExact: materialName } : {}),
+    })
+    let list = parseMaterialLogsListResponse(result)
 
-    await toggleStockMaterialUsage(row.id)
-    ElMessage.success('使用状態を更新しました')
-    row.is_used = row.is_used === 1 ? 0 : 1
-  } catch (error: any) {
-    console.error('更新is_used时发生错误:', error)
-    ElMessage.error(`使用状態の更新に失敗しました: ${error.message || '网络错误'}`)
-    // 恢复原来的状态
-    row.is_used = row.is_used === 1 ? 0 : 1
+    if (!list.length && materialName) {
+      result = await getMaterialLogs({
+        ...baseParams,
+        keyword: materialName,
+      })
+      list = parseMaterialLogsListResponse(result)
+    }
+
+    if (!list.length && materialCd) {
+      result = await getMaterialLogs({
+        ...baseParams,
+        material_cd: materialCd,
+      })
+      list = parseMaterialLogsListResponse(result)
+    }
+
+    if ((result as { success?: boolean })?.success === false) {
+      ElMessage.error('受入ログの取得に失敗しました')
+      materialLogsDetailList.value = []
+      return
+    }
+
+    materialLogsDetailList.value = list
+  } catch (error: unknown) {
+    const err = error as { message?: string }
+    console.error('material_logs 取得エラー:', error)
+    ElMessage.error(`受入ログの取得に失敗しました: ${err?.message || '不明なエラー'}`)
+    materialLogsDetailList.value = []
   } finally {
-    row.updating = false
+    materialLogsDetailLoading.value = false
   }
 }
 
-// 筛选状态处理函数
-const handleFilterChange = (filterType: string) => {
-  stockMaterialsFilter.value = filterType
+const escapeHtmlForPrint = (value: unknown): string => {
+  const s = value == null ? '' : String(value)
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const formatMaterialLogDateJp = (d: string | null | undefined): string =>
+  d ? new Date(d).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) : '—'
+
+/** 印刷用ウィンドウ：document.write 直後の print はプレビューが空になるブラウザがあるため Blob URL + load 後に印刷 */
+const openPrintWindowWithHtml = (html: string) => {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const win = window.open(url, '_blank')
+  if (!win) {
+    URL.revokeObjectURL(url)
+    ElMessage.error('ポップアップがブロックされています。ブラウザでポップアップを許可してください。')
+    return
+  }
+  let printed = false
+  const cleanup = () => {
+    try {
+      URL.revokeObjectURL(url)
+    } catch {
+      /* noop */
+    }
+  }
+  const runPrint = () => {
+    if (printed) return
+    printed = true
+    try {
+      win.focus()
+      win.print()
+    } finally {
+      setTimeout(cleanup, 2500)
+    }
+  }
+  win.addEventListener('load', () => setTimeout(runPrint, 50))
+  setTimeout(runPrint, 600)
+}
+
+/** 材料詳細：現在表示中の材料について、未使用（切断未使用）の受入ログのみを印刷 */
+const printMaterialDetailUnusedList = () => {
+  const rows = materialLogsDetailSanitizedList.value.filter((r) => r.used_in_cutting !== true)
+  if (rows.length === 0) {
+    ElMessage.warning('未使用の受入ログがありません')
+    return
+  }
+  const mat = selectedMaterialDetail.value as MaterialOrderItem | null
+  const materialName = escapeHtmlForPrint(mat?.material_name ?? '—')
+  const materialCd = escapeHtmlForPrint((mat?.material_cd ?? '').trim() || '—')
+  const printedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+  const tableBody = rows
+    .map((row) => {
+      const d1 = escapeHtmlForPrint(formatMaterialLogDateJp(row.log_date))
+      const d2 = escapeHtmlForPrint(formatMaterialLogDateJp(row.manufacture_date))
+      return `<tr><td class="c">${d1}</td><td>${escapeHtmlForPrint(row.supplier)}</td><td>${escapeHtmlForPrint(row.manufacture_no)}</td><td class="c">${d2}</td></tr>`
+    })
+    .join('')
+
+  const doc = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>未使用一覧</title>
+<style>
+  body{font-family:Meiryo,"MS Gothic",sans-serif;margin:14mm 12mm;color:#111;font-size:11px;}
+  h1{font-size:15px;margin:0 0 10px;font-weight:700;}
+  .meta{margin:0 0 14px;line-height:1.55;font-size:10px;color:#333;}
+  table{width:100%;border-collapse:collapse;}
+  th,td{border:1px solid #222;padding:5px 7px;vertical-align:top;}
+  th{background:#e8e8e8;font-weight:700;text-align:center;}
+  td.c{text-align:center;}
+  .foot{margin-top:12px;font-size:9px;color:#555;}
+  @media print{body{margin:10mm;}}
+</style></head><body>
+<h1>未使用材料 — 受入ログ一覧</h1>
+<div class="meta">
+  材料名：${materialName}<br/>
+  材料コード：${materialCd}<br/>
+  条件：受入日 ${MATERIAL_DETAIL_RECEIVING_START_DATE} 以降 · 切断ログに製造番号なし（未使用）<br/>
+  件数：<strong>${rows.length}</strong> 件 · 印刷日時：${escapeHtmlForPrint(printedAt)}
+</div>
+<table>
+<thead><tr><th>受入日</th><th>仕入先</th><th>製造番号</th><th>製造日</th></tr></thead>
+<tbody>${tableBody}</tbody>
+</table>
+<p class="foot">Smart-EMAPs / 材料詳細情報</p>
+</body></html>`
+
+  openPrintWindowWithHtml(doc)
+}
+
+/** 全材料未使用タブ：印刷（材料名でグループ、CD 列なし・受入日・製造日は昇順） */
+const printAllUnusedReceivingSummary = () => {
+  const raw = unusedReceivingUnusedRows.value
+  if (raw.length === 0) {
+    ElMessage.warning('未使用の受入ログがありません')
+    return
+  }
+
+  const dateKeyAsc = (d: string | null | undefined): string => {
+    if (!d) return ''
+    const s = String(d).trim()
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+    return m ? m[1] : s.slice(0, 10)
+  }
+
+  const sorted = [...raw].sort((a, b) => {
+    const na = String(a.material_name ?? '').trim()
+    const nb = String(b.material_name ?? '').trim()
+    const byName = na.localeCompare(nb, 'ja')
+    if (byName !== 0) return byName
+    const byLog = dateKeyAsc(a.log_date).localeCompare(dateKeyAsc(b.log_date))
+    if (byLog !== 0) return byLog
+    return dateKeyAsc(a.manufacture_date).localeCompare(dateKeyAsc(b.manufacture_date))
+  })
+
+  const groups = new Map<string, typeof raw>()
+  for (const row of sorted) {
+    const key = String(row.material_name ?? '').trim() || '—'
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(row)
+  }
+
+  const tableColgroup = `<colgroup>
+<col class="col-date" />
+<col class="col-supplier" />
+<col class="col-mfgno" />
+<col class="col-mfgdate" />
+</colgroup>`
+
+  const groupBlocks = [...groups.entries()]
+    .map(([materialName, grp]) => {
+      const cnt = grp.length
+      const body = grp
+        .map((row) => {
+          const d1 = escapeHtmlForPrint(formatMaterialLogDateJp(row.log_date))
+          const d2 = escapeHtmlForPrint(formatMaterialLogDateJp(row.manufacture_date))
+          return `<tr><td class="c">${d1}</td><td class="td-supplier">${escapeHtmlForPrint(row.supplier)}</td><td class="td-mfgno">${escapeHtmlForPrint(row.manufacture_no)}</td><td class="c">${d2}</td></tr>`
+        })
+        .join('')
+      return `<section class="print-grp">
+<div class="print-grp-title">
+<span class="print-grp-title-name">材料名：${escapeHtmlForPrint(materialName)}</span>
+<span class="print-grp-title-count">${cnt} 束</span>
+</div>
+<table class="print-grp-table">
+${tableColgroup}
+<thead><tr><th>受入日</th><th>仕入先</th><th>製造番号</th><th>製造日</th></tr></thead>
+<tbody>${body}</tbody>
+</table>
+</section>`
+    })
+    .join('')
+
+  const printedAt = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+  const distinctMaterialCount = unusedReceivingDistinctMaterialCount.value
+  const rowCount = sorted.length
+
+  const doc = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>全材料未使用一覧</title>
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:Meiryo,"MS Gothic",sans-serif;margin:10mm 12mm;color:#1e293b;font-size:10px;line-height:1.45;background:#fff;}
+  h1{font-size:16px;margin:0 0 10px;font-weight:800;color:#0f172a;letter-spacing:0.02em;border-bottom:2px solid #0d9488;padding-bottom:6px;}
+  .meta-bar{margin:0 0 16px;padding:8px 12px;background:linear-gradient(90deg,#f0fdfa 0%,#f8fafc 100%);border:1px solid #99f6e4;border-radius:8px;font-size:10px;color:#334155;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;}
+  .meta-bar strong{color:#0f766e;font-weight:800;font-variant-numeric:tabular-nums;}
+  .meta-sep{color:#94a3b8;font-weight:400;}
+  .print-grp{margin:0 0 16px;page-break-inside:avoid;}
+  .print-grp-title{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;font-weight:700;background:linear-gradient(90deg,#ccfbf1 0%,#d1fae5 100%);padding:6px 10px;border:1px solid #5eead4;border-bottom:none;color:#134e4a;}
+  .print-grp-title-name{flex:1;min-width:0;word-break:break-word;}
+  .print-grp-title-count{flex-shrink:0;font-variant-numeric:tabular-nums;white-space:nowrap;padding:2px 10px;background:#fff;border:1px solid #5eead4;border-radius:999px;font-size:10px;color:#0f766e;}
+  .print-grp-table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #334155;}
+  .print-grp-table col.col-date{width:13%;}
+  .print-grp-table col.col-supplier{width:40%;}
+  .print-grp-table col.col-mfgno{width:27%;}
+  .print-grp-table col.col-mfgdate{width:20%;}
+  .print-grp-table th,.print-grp-table td{border:1px solid #475569;padding:5px 8px;vertical-align:middle;font-size:9.5px;}
+  .print-grp-table th{background:#e2e8f0;color:#0f172a;font-weight:700;text-align:center;}
+  .print-grp-table td.c{text-align:center;}
+  .print-grp-table .td-supplier{word-break:break-word;}
+  .print-grp-table .td-mfgno{word-break:break-all;font-variant-numeric:tabular-nums;}
+  .foot{margin-top:14px;font-size:8px;color:#64748b;text-align:center;}
+  @media print{body{margin:8mm 10mm;}}
+</style></head><body>
+<h1>全材料 — 未使用一覧</h1>
+<div class="meta-bar">
+<span>未使用 <strong>${rowCount}</strong> 束</span><span class="meta-sep">·</span><span>材料 <strong>${distinctMaterialCount}</strong></span><span class="meta-sep">·</span><span>印刷：<strong>${escapeHtmlForPrint(printedAt)}</strong></span>
+</div>
+${groupBlocks}
+<p class="foot">Smart-EMAPs / 材料在庫管理 — 全材料未使用受入</p>
+</body></html>`
+
+  openPrintWindowWithHtml(doc)
 }
 </script>
 
@@ -4069,9 +4440,187 @@ const handleFilterChange = (filterType: string) => {
   box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
 }
 
+.tab-item.tab-item--unused:not(.active):hover {
+  background: rgba(13, 148, 136, 0.1);
+  color: #0f766e;
+}
+
+.tab-item.tab-item--unused.active {
+  background: linear-gradient(135deg, #0d9488 0%, #059669 55%, #10b981 100%);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.38);
+}
+
 .table-actions {
   display: flex;
   gap: 6px;
+}
+
+.unused-receiving-actions {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.unused-receiving-btn-refresh {
+  font-weight: 600;
+  padding: 8px 18px;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.unused-receiving-btn-refresh:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.unused-receiving-btn-print {
+  font-weight: 600;
+  padding: 8px 20px;
+  border: none;
+  background: linear-gradient(135deg, #0d9488 0%, #059669 100%) !important;
+  box-shadow: 0 2px 10px rgba(5, 150, 105, 0.35);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.unused-receiving-btn-print:hover:not(.is-disabled) {
+  box-shadow: 0 4px 16px rgba(5, 150, 105, 0.45);
+  filter: brightness(1.03);
+}
+
+.unused-receiving-btn-print.is-disabled {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.unused-receiving-tab {
+  padding: 0;
+  background: linear-gradient(180deg, #f0fdfa 0%, #f8fafc 28%, #fff 100%);
+}
+
+.unused-receiving-shell {
+  padding: 12px 14px 14px;
+  max-width: 100%;
+}
+
+.unused-receiving-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.unused-receiving-banner--warn {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+
+.unused-receiving-banner__ico {
+  flex-shrink: 0;
+  font-size: 18px;
+  margin-top: 1px;
+  color: #d97706;
+}
+
+.unused-receiving-banner__msg {
+  min-width: 0;
+}
+
+.unused-receiving-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.unused-receiving-stat-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.unused-receiving-stat-pill__label {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.unused-receiving-stat-pill__value {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.unused-receiving-stat-pill__unit {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.unused-receiving-stat-pill--emerald {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.unused-receiving-stat-pill--slate {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.unused-receiving-table-card {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+}
+
+.unused-receiving-table {
+  margin-top: 0;
+}
+
+.unused-receiving-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+
+.unused-receiving-table :deep(.el-table__header-wrapper th) {
+  background: linear-gradient(180deg, #f0fdfa 0%, #ecfdf5 100%) !important;
+  color: #134e4a;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.unused-receiving-table :deep(.el-table td),
+.unused-receiving-table :deep(.el-table th) {
+  border-color: #f1f5f9;
+}
+
+.unused-receiving-table :deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background-color: #fafafa;
+}
+
+.unused-receiving-table :deep(.el-table__body tr:hover > td) {
+  background-color: #f0fdfa !important;
 }
 
 .print-btn {
@@ -5038,6 +5587,24 @@ const handleFilterChange = (filterType: string) => {
     width: 100% !important;
   }
 
+  .unused-receiving-shell {
+    padding: 8px;
+  }
+
+  .unused-receiving-stat-pill__value {
+    font-size: 18px;
+  }
+
+  .unused-receiving-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .unused-receiving-actions .el-button {
+    flex: 1;
+    min-width: 0;
+  }
+
   .summary-card-compact {
     flex-direction: column;
     gap: 6px;
@@ -5638,31 +6205,111 @@ const handleFilterChange = (filterType: string) => {
 
 /* 材料詳細ダイアログ */
 .material-detail-dialog {
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
 }
 
 .material-detail-dialog :deep(.el-dialog) {
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  box-shadow:
+    0 24px 48px rgba(15, 23, 42, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  background: linear-gradient(165deg, #fafbfc 0%, #f1f5f9 100%);
 }
 
 .material-detail-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 16px 20px;
-  border-radius: 16px 16px 0 0;
+  padding: 0;
+  margin: 0;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+  border-radius: 14px 14px 0 0;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-.material-detail-dialog :deep(.el-dialog__title) {
-  color: white;
-  font-weight: 600;
-  font-size: 16px;
+.material-detail-dialog :deep(.el-dialog__headerbtn) {
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
 }
 
 .material-detail-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+  color: #64748b !important;
   font-size: 18px;
+}
+
+.material-detail-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #0f172a !important;
+}
+
+.material-detail-dialog__header {
+  padding: 10px 44px 12px 12px;
+}
+
+.material-detail-dialog__header-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 40px;
+}
+
+.material-detail-dialog__icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  font-size: 20px;
+  border: 1px solid #c7d2fe;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.08);
+}
+
+.material-detail-dialog__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.material-detail-dialog__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.material-detail-dialog__title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.material-detail-dialog__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.material-detail-dialog__cd {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #3730a3;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
 }
 
 .material-detail-dialog :deep(.el-dialog__body) {
@@ -5670,49 +6317,175 @@ const handleFilterChange = (filterType: string) => {
 }
 
 .material-detail-dialog :deep(.el-dialog__footer) {
-  padding: 12px 16px;
-  background-color: #f8f9fa;
-  border-radius: 0 0 16px 16px;
+  padding: 8px 12px 10px;
+  background: rgba(248, 250, 252, 0.95);
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0 0 14px 14px;
 }
 
 .material-detail-content {
-  padding: 16px;
+  padding: 10px 12px 8px;
 }
 
-.dialog-header-compact {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border-left: 3px solid #667eea;
+.material-detail-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #64748b;
 }
 
-.header-icon-compact {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
+.material-detail-tabs-wrap {
+  margin-bottom: 8px;
+}
+
+.material-detail-segmented {
   display: flex;
+  width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #e2e8f0;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.material-detail-segmented :deep(.el-radio-button) {
+  flex: 1;
+  margin: 0 !important;
+}
+
+.material-detail-segmented :deep(.el-radio-button__inner) {
+  width: 100%;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: transparent;
+  box-shadow: none !important;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
-  color: white;
-  font-size: 16px;
+  gap: 6px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
 }
 
-.header-text-compact h3 {
-  margin: 0 0 2px 0;
-  color: #2c3e50;
-  font-size: 14px;
-  font-weight: 600;
+.material-detail-segmented :deep(.el-radio-button:first-child .el-radio-button__inner) {
+  border-radius: 8px !important;
 }
 
-.header-text-compact p {
+.material-detail-segmented :deep(.el-radio-button:last-child .el-radio-button__inner) {
+  border-radius: 8px !important;
+}
+
+.material-detail-segmented :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background: #fff !important;
+  color: #312e81 !important;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08) !important;
+}
+
+.material-detail-tab-badge {
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 1.25rem;
+  padding: 0 5px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: 999px;
+  background: rgba(71, 85, 105, 0.12);
+  color: #334155;
+}
+
+.material-detail-segmented :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) .material-detail-tab-badge {
+  background: rgba(79, 70, 229, 0.12);
+  color: #4338ca;
+}
+
+.material-detail-tab-badge.tab-badge--used {
+  background: rgba(245, 158, 11, 0.18);
+  color: #b45309;
+}
+
+.material-detail-tab-badge.tab-badge--unused {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+.material-detail-table-wrap {
   margin: 0;
-  color: #6c757d;
-  font-size: 12px;
+}
+
+.material-detail-table {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.material-detail-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+
+.material-detail-status-tag {
+  font-weight: 600;
+  border-radius: 6px;
+}
+
+.material-detail-footer-stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.material-detail-footer-stats strong {
+  color: #334155;
+  font-weight: 700;
+}
+
+.material-detail-footer-dot {
+  opacity: 0.45;
+}
+
+.material-detail-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.material-detail-print-btn {
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.material-detail-print-btn:hover {
+  border-color: #94a3b8;
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.material-detail-print-btn :deep(.el-icon) {
+  margin-right: 4px;
+}
+
+.material-detail-close-btn {
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 6px 14px;
+}
+
+.material-detail-close-btn :deep(.el-icon) {
+  margin-right: 4px;
 }
 
 .stock-materials-table {
@@ -5806,60 +6579,10 @@ const handleFilterChange = (filterType: string) => {
   background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
 }
 
-.material-summary-compact {
-  margin-top: 12px;
-  padding: 12px;
-  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-  border-radius: 8px;
-  border-left: 3px solid #667eea;
-}
-
-.summary-card-compact {
-  display: flex;
-  justify-content: space-around;
-  gap: 16px;
-}
-
-.summary-item-compact {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.summary-label-compact {
-  font-size: 11px;
-  color: #6c757d;
-  font-weight: 500;
-}
-
-.summary-value-compact {
-  font-size: 14px;
-  color: #2d3748;
-  font-weight: 700;
-}
-
 .dialog-footer-compact {
   display: flex;
   justify-content: center;
   gap: 8px;
-}
-
-.cancel-btn-compact {
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  font-size: 12px;
-}
-
-.cancel-btn-compact:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
-}
-
-.cancel-btn-compact :deep(.el-icon) {
-  margin-right: 4px;
 }
 
 /* 使用状態开关紧凑样式 */
@@ -5879,14 +6602,14 @@ const handleFilterChange = (filterType: string) => {
     width: 95% !important;
   }
 
-  .summary-card-compact {
-    flex-direction: column;
-    gap: 8px;
+  .material-detail-dialog__name {
+    white-space: normal;
   }
 
-  .summary-item-compact {
-    flex-direction: row;
-    justify-content: space-between;
+  .material-detail-segmented :deep(.el-radio-button__inner) {
+    flex-wrap: wrap;
+    font-size: 11px;
+    padding: 5px 4px;
   }
 }
 

@@ -137,6 +137,34 @@ def _inspection_excel_polling_loop(file_path, task_queue, poll_interval, stop_ev
             logger.debug("検査管理指標ポーリング異常: %s", e)
 
 
+def _material_csv_polling_loop(task_queue, poll_interval, stop_event):
+    """材料受入 CSV の実パス（.env 解決済み）を mtime ポーリングし、変更時にキュー投入"""
+    last_mtime = {}
+    while not stop_event.is_set():
+        stop_event.wait(timeout=poll_interval)
+        if stop_event.is_set():
+            break
+        entries = settings.get_material_receiving_csv_entries()
+        for path, name in entries:
+            if not is_file_enabled(name):
+                continue
+            if not os.path.isfile(path):
+                continue
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                continue
+            key = os.path.normpath(path)
+            prev = last_mtime.get(key)
+            last_mtime[key] = mtime
+            if prev is not None and mtime > prev:
+                logger.info("材料 CSV mtime 変更を検知、キュー投入: %s (%s)", name, path)
+                try:
+                    task_queue.put((path, name))
+                except Exception as e:
+                    logger.warning("材料 CSV キュー投入失敗 %s: %s", name, e)
+
+
 def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
     """ワーカー：キューから (filepath, filename) を取得し、ファイル安定後に種別で処理；同一 Excel は 1 ワーカーのみ"""
     stock_svc = StockService()
@@ -208,7 +236,19 @@ def run_watcher():
     """ファイル監視サービスを起動：CSV 受信ディレクトリと生産計画 Excel ディレクトリを同時監視（別々に指定可）"""
     csv_path, excel_path = _get_watch_paths()
     if not csv_path:
-        logger.error("❌ FILE_WATCH_BASE_PATH 未配置，请在 .env 中设置（CSV 受信目录）")
+        entries_fb = settings.get_material_receiving_csv_entries()
+        if entries_fb:
+            parent = os.path.normpath(os.path.dirname(entries_fb[0][0]))
+            if parent and os.path.isdir(parent):
+                csv_path = parent
+                logger.info(
+                    "FILE_WATCH_BASE_PATH 未設定のため、材料受入 CSV の親フォルダを監視ルートに使用: %s",
+                    csv_path,
+                )
+    if not csv_path:
+        logger.error(
+            "❌ FILE_WATCH_BASE_PATH 未配置です。.env に設定するか、MATERIAL_RECEIVING_CSV_PATHS で材料 CSV のフルパスを指定してください。"
+        )
         return
     if not os.path.exists(csv_path):
         logger.error("❌ CSV 監視パスが存在しません: %s", csv_path)
@@ -267,9 +307,40 @@ def run_watcher():
                 observer.schedule(handler, inspection_dir, recursive=False)
             except Exception as e:
                 logger.warning("検査管理指標ディレクトリの watchdog 登録失敗（ポーリングで補完）: %s", e)
+    watched_roots = {os.path.normpath(csv_path)}
+    if excel_path:
+        watched_roots.add(os.path.normpath(excel_path))
+    if inspection_excel_path:
+        idir = os.path.dirname(inspection_excel_path)
+        if idir:
+            watched_roots.add(os.path.normpath(idir))
+    for fullpath, _bn in settings.get_material_receiving_csv_entries():
+        parent = os.path.normpath(os.path.dirname(fullpath))
+        if not parent or parent in watched_roots:
+            continue
+        if not os.path.isdir(parent):
+            continue
+        try:
+            observer.schedule(handler, parent, recursive=False)
+            watched_roots.add(parent)
+            logger.info("材料受入 CSV 用にディレクトリを追加監視: %s", parent)
+        except Exception as e:
+            logger.warning("材料追加監視の登録に失敗 %s: %s", parent, e)
     observer.start()
 
     stop_polling = threading.Event()
+    material_poll_thread = threading.Thread(
+        target=_material_csv_polling_loop,
+        args=(task_queue, POLL_INTERVAL, stop_polling),
+        daemon=True,
+        name="MaterialCsvMtimePoll",
+    )
+    material_poll_thread.start()
+    logger.info(
+        "✅ 材料受入 CSV mtime ポーリング開始（対象 %s 種・間隔 %.1fs）",
+        len(MATERIAL_FILES),
+        POLL_INTERVAL,
+    )
     if excel_watcher_enabled and excel_path:
         excel_poll_thread = threading.Thread(
             target=_excel_polling_loop,
@@ -299,3 +370,42 @@ def run_watcher():
         observer.stop()
         logger.info("🛑 服务停止")
     observer.join()
+
+
+_watcher_bg_lock = threading.Lock()
+_file_watcher_bg_started = False
+
+
+def start_file_watcher_background() -> None:
+    """
+    FastAPI 起動時用：ファイル監視をデーモンスレッドで開始する。
+    settings.FILE_WATCH_START_WITH_API=True かつ FILE_WATCH_BASE_PATH が有効なときのみ main から呼ぶ。
+    """
+    global _file_watcher_bg_started
+    with _watcher_bg_lock:
+        if _file_watcher_bg_started:
+            logger.info("ファイル監視バックグラウンドは既に起動済みのためスキップします")
+            return
+        csv_path, _ = _get_watch_paths()
+        if not csv_path:
+            entries_fb = settings.get_material_receiving_csv_entries()
+            if entries_fb:
+                parent = os.path.normpath(os.path.dirname(entries_fb[0][0]))
+                if parent and os.path.isdir(parent):
+                    csv_path = parent
+        if not csv_path:
+            logger.warning(
+                "FILE_WATCH_START_WITH_API=true ですが FILE_WATCH_BASE_PATH（または MATERIAL_RECEIVING_CSV_PATHS）が未設定のため監視を開始しません"
+            )
+            return
+        if not os.path.exists(csv_path):
+            logger.warning("CSV 監視ルートが存在しません: %s", csv_path)
+            return
+        _file_watcher_bg_started = True
+        t = threading.Thread(
+            target=run_watcher,
+            name="SmartEMAP-FileWatcher",
+            daemon=True,
+        )
+        t.start()
+        logger.info("ファイル監視を API プロセス内のバックグラウンドスレッドで開始しました")
