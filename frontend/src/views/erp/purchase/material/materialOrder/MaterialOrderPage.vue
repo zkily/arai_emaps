@@ -301,7 +301,7 @@
               @click="handleTabChange('unusedReceiving')"
             >
               <el-icon><DocumentCopy /></el-icon>
-              <span>材料未使用</span>
+              <span>材料未使用番号</span>
             </div>
           </div>
           <div class="table-actions" v-if="activeTab === 'order'">
@@ -4062,10 +4062,7 @@ const printAllUnusedReceivingSummary = () => {
         })
         .join('')
       return `<section class="print-grp">
-<div class="print-grp-title">
-<span class="print-grp-title-name">材料名：${escapeHtmlForPrint(materialName)}</span>
-<span class="print-grp-title-count">${cnt} 束</span>
-</div>
+<div class="print-grp-title"><span class="print-grp-title-name">${escapeHtmlForPrint(materialName)}</span><span class="print-grp-title-count">${cnt}</span></div>
 <table class="print-grp-table">
 ${tableColgroup}
 <thead><tr><th>受入日</th><th>仕入先</th><th>製造番号</th><th>製造日</th></tr></thead>
@@ -4082,34 +4079,41 @@ ${tableColgroup}
   const doc = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"/><title>全材料未使用一覧</title>
 <style>
   *{box-sizing:border-box;}
-  body{font-family:Meiryo,"MS Gothic",sans-serif;margin:10mm 12mm;color:#1e293b;font-size:10px;line-height:1.45;background:#fff;}
-  h1{font-size:16px;margin:0 0 10px;font-weight:800;color:#0f172a;letter-spacing:0.02em;border-bottom:2px solid #0d9488;padding-bottom:6px;}
-  .meta-bar{margin:0 0 16px;padding:8px 12px;background:linear-gradient(90deg,#f0fdfa 0%,#f8fafc 100%);border:1px solid #99f6e4;border-radius:8px;font-size:10px;color:#334155;display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;}
-  .meta-bar strong{color:#0f766e;font-weight:800;font-variant-numeric:tabular-nums;}
-  .meta-sep{color:#94a3b8;font-weight:400;}
-  .print-grp{margin:0 0 16px;page-break-inside:avoid;}
-  .print-grp-title{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:11px;font-weight:700;background:linear-gradient(90deg,#ccfbf1 0%,#d1fae5 100%);padding:6px 10px;border:1px solid #5eead4;border-bottom:none;color:#134e4a;}
+  body{font-family:Meiryo,"MS Gothic",sans-serif;margin:5mm 7mm;color:#000;font-size:8.5px;line-height:1.22;background:#fff;}
+  h1{font-size:12px;margin:0 0 3px;font-weight:800;color:#000;letter-spacing:0.03em;border-bottom:1px solid #000;padding-bottom:2px;}
+  .meta-bar{margin:0 0 5px;padding:3px 7px;background:#f0f0f0;border:1px solid #000;border-radius:2px;font-size:8px;color:#000;display:flex;flex-wrap:wrap;align-items:center;gap:3px 8px;line-height:1.2;}
+  .meta-bar strong{color:#000;font-weight:800;font-variant-numeric:tabular-nums;}
+  .meta-sep{color:#000;padding:0 1px;opacity:0.55;}
+  .print-grp{margin:0 0 5px;page-break-inside:avoid;}
+  .print-grp:last-of-type{margin-bottom:3px;}
+  .print-grp-title{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:8.5px;font-weight:700;background:#e5e5e5;padding:2px 6px;border:1px solid #000;border-bottom:0;color:#000;line-height:1.15;}
   .print-grp-title-name{flex:1;min-width:0;word-break:break-word;}
-  .print-grp-title-count{flex-shrink:0;font-variant-numeric:tabular-nums;white-space:nowrap;padding:2px 10px;background:#fff;border:1px solid #5eead4;border-radius:999px;font-size:10px;color:#0f766e;}
-  .print-grp-table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #334155;}
-  .print-grp-table col.col-date{width:13%;}
-  .print-grp-table col.col-supplier{width:40%;}
-  .print-grp-table col.col-mfgno{width:27%;}
-  .print-grp-table col.col-mfgdate{width:20%;}
-  .print-grp-table th,.print-grp-table td{border:1px solid #475569;padding:5px 8px;vertical-align:middle;font-size:9.5px;}
-  .print-grp-table th{background:#e2e8f0;color:#0f172a;font-weight:700;text-align:center;}
+  .print-grp-title-name::before{content:"材料名：";font-weight:600;color:#000;}
+  .print-grp-title-count{flex-shrink:0;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:8px;color:#000;}
+  .print-grp-title-count::after{content:" 束";}
+  .print-grp-table{width:100%;border-collapse:collapse;table-layout:fixed;border:1px solid #000;border-top:0;}
+  .print-grp-table col.col-date{width:11%;}
+  .print-grp-table col.col-supplier{width:42%;}
+  .print-grp-table col.col-mfgno{width:28%;}
+  .print-grp-table col.col-mfgdate{width:19%;}
+  .print-grp-table th,.print-grp-table td{border:1px solid #333;padding:2px 4px;vertical-align:middle;font-size:8px;line-height:1.2;color:#000;}
+  .print-grp-table th{background:#ddd;font-weight:700;text-align:center;padding:2px 4px;}
   .print-grp-table td.c{text-align:center;}
   .print-grp-table .td-supplier{word-break:break-word;}
   .print-grp-table .td-mfgno{word-break:break-all;font-variant-numeric:tabular-nums;}
-  .foot{margin-top:14px;font-size:8px;color:#64748b;text-align:center;}
-  @media print{body{margin:8mm 10mm;}}
+  .foot{margin-top:4px;padding-top:3px;border-top:1px solid #666;font-size:7px;color:#333;text-align:center;line-height:1.15;}
+  @media print{
+    body{margin:4mm 6mm;}
+    .print-grp{page-break-inside:avoid;}
+    *{-webkit-print-color-adjust:economy;print-color-adjust:economy;}
+  }
 </style></head><body>
 <h1>全材料 — 未使用一覧</h1>
 <div class="meta-bar">
-<span>未使用 <strong>${rowCount}</strong> 束</span><span class="meta-sep">·</span><span>材料 <strong>${distinctMaterialCount}</strong></span><span class="meta-sep">·</span><span>印刷：<strong>${escapeHtmlForPrint(printedAt)}</strong></span>
+<span>未使用<strong>${rowCount}</strong>束</span><span class="meta-sep">|</span><span>材料<strong>${distinctMaterialCount}</strong>種</span><span class="meta-sep">|</span><span>${escapeHtmlForPrint(printedAt)}</span>
 </div>
 ${groupBlocks}
-<p class="foot">Smart-EMAPs / 材料在庫管理 — 全材料未使用受入</p>
+<p class="foot">Smart-EMAPs / 材料在庫管理 — 全材料未使用</p>
 </body></html>`
 
   openPrintWindowWithHtml(doc)
