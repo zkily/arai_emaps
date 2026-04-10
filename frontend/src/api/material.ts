@@ -130,10 +130,11 @@ export function createMaterialLog(data: Partial<MaterialLogItem>): Promise<{ suc
 export function updateMaterialLog(
   id: number,
   data: Partial<MaterialLogItem>
-): Promise<{ success?: boolean; data?: MaterialLogItem }> {
+): Promise<{ success?: boolean; data?: MaterialLogItem; material_cutting_log_id?: number }> {
   return request.put(`${PREFIX}/receiving/${id}`, data) as Promise<{
     success?: boolean
     data?: MaterialLogItem
+    material_cutting_log_id?: number
   }>
 }
 

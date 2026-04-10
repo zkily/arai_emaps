@@ -13,9 +13,9 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, distinct
+from sqlalchemy import select, func, or_, distinct, delete
 from typing import Optional, List, Set
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
@@ -105,6 +105,12 @@ def _log_to_dict(r: MaterialLog) -> dict:
         "material_quality": r.material_quality,
         "remarks": r.remarks,
         "note": r.note,
+        "cutting_used_manual": bool(getattr(r, "cutting_used_manual", False)),
+        "cutting_used_manual_at": (
+            r.cutting_used_manual_at.isoformat() if getattr(r, "cutting_used_manual_at", None) else None
+        ),
+        "cutting_used_manual_by": getattr(r, "cutting_used_manual_by", None),
+        "cutting_used_manual_note": getattr(r, "cutting_used_manual_note", None),
         "created_at": r.created_at.isoformat() if r.created_at else None,
         "updated_at": r.updated_at.isoformat() if r.updated_at else None,
     }
@@ -228,7 +234,10 @@ async def list_receiving_logs(
         d["material_cd"] = _resolve_material_cd_from_master(r, name_to_cd)
         if includeCuttingUsage:
             mn = r.manufacture_no
-            d["used_in_cutting"] = bool(mn and mn in used_manufacture_nos)
+            from_log = bool(mn and mn in used_manufacture_nos)
+            manual = bool(getattr(r, "cutting_used_manual", False))
+            d["used_in_cutting_from_log"] = from_log
+            d["used_in_cutting"] = from_log or manual
         return d
 
     return {
@@ -275,6 +284,97 @@ async def create_receiving_log(
     return {"success": True, "data": d}
 
 
+_MANUAL_CUTTING_PREFIX = "manual:material_log"
+
+
+def _pop_manual_cutting_fields(data: dict) -> tuple[Optional[bool], Optional[str], Optional[str]]:
+    """PUT ボディから手動切断フラグ・備考・管理コードを取り出し（残りは通常更新用）"""
+    manual = data.pop("cutting_used_manual", None)
+    note = data.pop("cutting_used_manual_note", None)
+    mc = data.pop("manual_cutting_management_code", None)
+    return manual, note, mc
+
+
+_JST = timezone(timedelta(hours=9))
+
+
+async def _delete_manual_cutting_logs_for_material_log(db: AsyncSession, material_log_id: int) -> int:
+    """手動連携で追加した切断ログのみ削除（source_file プレフィックス判定）"""
+    pat = f"{_MANUAL_CUTTING_PREFIX}:{material_log_id}:%"
+    r = await db.execute(delete(MaterialCuttingLog).where(MaterialCuttingLog.source_file.like(pat)))
+    return int(r.rowcount or 0)
+
+
+async def _insert_manual_cutting_log_for_receiving(
+    db: AsyncSession,
+    material_log: MaterialLog,
+    management_code: str,
+    material_log_id: int,
+) -> MaterialCuttingLog:
+    """
+    手動「使用済」で material_cutting_logs に1件追加。
+    material_cd が空だと DB トリガーで manufacture_no が落ちるため、
+    受入の材料CDが無いときは製造番号を material_cd に入れる（ビジネス上の「材料未連携」行として扱う）。
+    """
+    mfg = (material_log.manufacture_no or "").strip()
+    if not mfg:
+        raise HTTPException(
+            status_code=400,
+            detail="製造番号が空のため切断ログ（material_cutting_logs）へ連携できません",
+        )
+    mc = (management_code or "").strip()[:255]
+    if not mc:
+        raise HTTPException(status_code=400, detail="管理コードが空です")
+
+    now = datetime.now(_JST)
+    log_date = now.date()
+    log_time = now.time().replace(microsecond=0)
+    recv_cd = (material_log.material_cd or "").strip()
+    # トリガー tg_material_cutting_logs_manufacture_no_bi 対策
+    material_cd_val = (recv_cd or mfg)[:255]
+
+    raw = f"切断材料使用,{log_date},{log_time},手動入力,9999,{material_cd_val},{mfg},{mc}"
+    source_file = f"{_MANUAL_CUTTING_PREFIX}:{material_log_id}:{int(now.timestamp() * 1000)}"
+
+    rec = MaterialCuttingLog(
+        item="切断材料使用",
+        log_date=log_date,
+        log_time=log_time,
+        hd_no="手動入力",
+        operator_name="9999",
+        material_cd=material_cd_val,
+        management_code=mc,
+        raw_line=raw[:65535] if len(raw) > 65535 else raw,
+        source_file=source_file[:500],
+    )
+    db.add(rec)
+    await db.flush()
+    await db.refresh(rec)
+    return rec
+
+
+def _apply_cutting_used_manual_fields(
+    row: MaterialLog,
+    manual: Optional[bool],
+    note: Optional[str],
+    current_user: User,
+) -> None:
+    """cutting_used_manual の更新（True=確定、False=取消、None=触らない）。備考のみ更新も可。"""
+    if manual is True:
+        row.cutting_used_manual = True
+        row.cutting_used_manual_at = datetime.now()
+        row.cutting_used_manual_by = (current_user.username or "")[:100] or None
+        if note is not None:
+            row.cutting_used_manual_note = (note.strip()[:500] if note and note.strip() else None)
+    elif manual is False:
+        row.cutting_used_manual = False
+        row.cutting_used_manual_at = None
+        row.cutting_used_manual_by = None
+        row.cutting_used_manual_note = None
+    elif note is not None and getattr(row, "cutting_used_manual", False):
+        row.cutting_used_manual_note = note.strip()[:500] if note.strip() else None
+
+
 @router.put("/{item_id}")
 async def update_receiving_log(
     item_id: int,
@@ -287,8 +387,23 @@ async def update_receiving_log(
     row = result.scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="レコードが見つかりません")
-    for field, value in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    manual, manual_note, manual_mc = _pop_manual_cutting_fields(data)
+    _apply_cutting_used_manual_fields(row, manual, manual_note, current_user)
+    for field, value in data.items():
         setattr(row, field, value)
+
+    await db.flush()
+
+    material_cutting_log_id: Optional[int] = None
+    if manual is False:
+        await _delete_manual_cutting_logs_for_material_log(db, item_id)
+    elif manual is True and manual_mc is not None and str(manual_mc).strip():
+        cutting_row = await _insert_manual_cutting_log_for_receiving(
+            db, row, str(manual_mc).strip(), item_id
+        )
+        material_cutting_log_id = cutting_row.id
+
     await db.commit()
     await db.refresh(row)
     name_to_cd = await _material_name_to_cd_map(
@@ -296,7 +411,10 @@ async def update_receiving_log(
     )
     d = _log_to_dict(row)
     d["material_cd"] = _resolve_material_cd_from_master(row, name_to_cd)
-    return {"success": True, "data": d}
+    out: dict = {"success": True, "data": d}
+    if material_cutting_log_id is not None:
+        out["material_cutting_log_id"] = material_cutting_log_id
+    return out
 
 
 @router.delete("/{item_id}")

@@ -86,12 +86,20 @@ class MaterialLogUpdate(BaseModel):
     material_quality: Optional[str] = None
     remarks: Optional[str] = None
     note: Optional[str] = None
+    cutting_used_manual: Optional[bool] = None
+    cutting_used_manual_note: Optional[str] = None
+    #: cutting_used_manual=True 時のみ有効。値があると material_cutting_logs に手動行を1件追加
+    manual_cutting_management_code: Optional[str] = None
 
 
 class MaterialLogResponse(MaterialLogBase):
     id: int
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    cutting_used_manual: bool = False
+    cutting_used_manual_at: Optional[datetime] = None
+    cutting_used_manual_by: Optional[str] = None
+    cutting_used_manual_note: Optional[str] = None
 
     class Config:
         from_attributes = True

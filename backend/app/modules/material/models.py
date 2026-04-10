@@ -50,6 +50,12 @@ class MaterialLog(Base):
     material_quality = Column(String(100), comment="材質")
     remarks = Column(Text, comment="備考")
     note = Column(String(255), comment="メモ")
+    cutting_used_manual = Column(
+        Boolean, nullable=False, default=False, index=True, comment="手動で切断使用済と確定"
+    )
+    cutting_used_manual_at = Column(DateTime, nullable=True, comment="手動確定日時")
+    cutting_used_manual_by = Column(String(100), nullable=True, comment="手動確定ユーザー")
+    cutting_used_manual_note = Column(String(500), nullable=True, comment="手動確定理由・備考")
     created_at = Column(DateTime, default=func.now(), comment="作成日時")
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
 

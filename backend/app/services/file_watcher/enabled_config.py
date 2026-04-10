@@ -4,13 +4,20 @@ import json
 import os
 from pathlib import Path
 
-from app.services.file_watcher.sync_services import STOCK_FILES, MATERIAL_FILES, PICKING_FILES
+from app.services.file_watcher.sync_services import (
+    STOCK_FILES,
+    MATERIAL_FILES,
+    PICKING_FILES,
+    MATERIAL_CUTTING_CSV_BASENAME,
+)
 
 # backend/data/file_watcher_enabled.json（API と watcher で共用）
 _BACKEND_ROOT = Path(__file__).resolve().parents[3]
 _ENABLED_JSON = _BACKEND_ROOT / "data" / "file_watcher_enabled.json"
 
-_ALL_FILE_NAMES = list(STOCK_FILES) + list(MATERIAL_FILES) + list(PICKING_FILES)
+_ALL_FILE_NAMES = (
+    list(STOCK_FILES) + list(MATERIAL_FILES) + list(PICKING_FILES) + [MATERIAL_CUTTING_CSV_BASENAME]
+)
 
 
 def get_enabled_path() -> Path:
@@ -40,7 +47,7 @@ def get_enabled() -> dict:
 
 def set_enabled(enabled: dict, excel_watcher_enabled: bool = True) -> None:
     """有効設定を書き込む（STOCK + MATERIAL + PICKING のキーと excel_watcher_enabled）"""
-    all_names = set(STOCK_FILES) | set(MATERIAL_FILES) | set(PICKING_FILES)
+    all_names = set(STOCK_FILES) | set(MATERIAL_FILES) | set(PICKING_FILES) | {MATERIAL_CUTTING_CSV_BASENAME}
     to_save = {k: bool(v) for k, v in enabled.items() if k in all_names}
     to_save["excel_watcher_enabled"] = bool(excel_watcher_enabled)
     _ENABLED_JSON.parent.mkdir(parents=True, exist_ok=True)

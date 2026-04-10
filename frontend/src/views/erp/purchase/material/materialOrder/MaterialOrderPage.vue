@@ -734,7 +734,7 @@
                 :data="unusedReceivingUnusedRows"
                 stripe
                 class="modern-table unused-receiving-table"
-                :default-sort="{ prop: 'log_date', order: 'descending' }"
+                :default-sort="{ prop: 'material_name', order: 'ascending' }"
                 height="calc(100vh - 300px)"
                 :max-height="780"
                 size="small"
@@ -765,6 +765,19 @@
                     ? new Date(row.manufacture_date).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })
                     : '—'
                 }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  type="primary"
+                  link
+                  size="small"
+                  :loading="cuttingManualActionId === row.id"
+                  @click="markReceivingLogCuttingUsedManually(row)"
+                >
+                  手動で使用済
+                </el-button>
               </template>
             </el-table-column>
               </el-table>
@@ -1427,7 +1440,7 @@
 
       <div class="material-detail-content">
         <p class="material-detail-hint">
-          受入日 {{ MATERIAL_DETAIL_RECEIVING_START_DATE }} 以降の受入ログ。切断ログに製造番号があれば使用済。材料CDは<strong>材料名</strong>で<strong>materials</strong>（材料マスタ）と突合した値を表示します（マスタに無い場合はログのCD）。材料CDまたは仕入先が空の行は表示しません。
+          受入日 {{ MATERIAL_DETAIL_RECEIVING_START_DATE }} 以降の受入ログ。切断ログに製造番号があれば使用済。現場未ログインなどでログに無いが実際は使用済の場合は、<strong>手動で使用済</strong>から事後登録できます（取消可）。材料CDは<strong>材料名</strong>で<strong>materials</strong>（材料マスタ）と突合した値を表示します（マスタに無い場合はログのCD）。材料CDまたは仕入先が空の行は表示しません。
         </p>
 
         <div class="material-detail-tabs-wrap">
@@ -1473,11 +1486,47 @@
                 }}
               </template>
             </el-table-column>
-            <el-table-column label="切断使用" width="92" align="center">
+            <el-table-column label="切断使用" width="108" align="center">
               <template #default="{ row }">
-                <el-tag :type="row.used_in_cutting ? 'warning' : 'success'" size="small" effect="plain" class="material-detail-status-tag">
-                  {{ row.used_in_cutting ? '使用済' : '未使用' }}
+                <el-tag
+                  :type="row.used_in_cutting ? (row.cutting_used_manual ? 'info' : 'warning') : 'success'"
+                  size="small"
+                  effect="plain"
+                  class="material-detail-status-tag"
+                >
+                  {{
+                    !row.used_in_cutting
+                      ? '未使用'
+                      : row.cutting_used_manual
+                        ? '手動済'
+                        : '使用済'
+                  }}
                 </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="120" align="center" fixed="right">
+              <template #default="{ row }">
+                <el-button
+                  v-if="!row.used_in_cutting"
+                  type="primary"
+                  link
+                  size="small"
+                  :loading="cuttingManualActionId === row.id"
+                  @click="markReceivingLogCuttingUsedManually(row)"
+                >
+                  手動で使用済
+                </el-button>
+                <el-button
+                  v-else-if="row.cutting_used_manual"
+                  type="danger"
+                  link
+                  size="small"
+                  :loading="cuttingManualActionId === row.id"
+                  @click="unmarkReceivingLogCuttingUsedManual(row)"
+                >
+                  手動取消
+                </el-button>
+                <span v-else class="material-detail-op-muted">—</span>
               </template>
             </el-table-column>
           </el-table>
@@ -1582,6 +1631,7 @@ import {
   deleteMaterialStockSub,
   transferMaterialStockToSub,
   getMaterialLogs,
+  updateMaterialLog,
   saveMaruichiOrderPdf,
 } from '@/api/material'
 import html2canvas from 'html2canvas'
@@ -1696,6 +1746,8 @@ const unusedReceivingFetchLoading = ref(false)
 const unusedReceivingAllList = ref<any[]>([])
 const unusedReceivingApiTotal = ref(0)
 const unusedReceivingFetchTruncated = ref(false)
+/** 受入ログ：手動切断使用済 登録/取消中の行 id */
+const cuttingManualActionId = ref<number | null>(null)
 
 // 统计数据
 const stats = ref({
@@ -1910,17 +1962,19 @@ const materialLogsDetailFilteredList = computed(() => {
   return list
 })
 
-/** 全材料タブ：未使用行のみ（材料CD→受入日降順） */
+/** 全材料タブ：未使用行のみ（材料名昇順→受入日降順） */
 const unusedReceivingUnusedRows = computed(() => {
   const rows = unusedReceivingAllList.value.filter(
     (r) => r.used_in_cutting !== true && receivingLogHasMaterialCdAndSupplier(r),
   )
   return [...rows].sort((a, b) => {
-    const c = String(a.material_cd || '').localeCompare(String(b.material_cd || ''), 'ja')
-    if (c !== 0) return c
+    const byName = String(a.material_name || '').localeCompare(String(b.material_name || ''), 'ja')
+    if (byName !== 0) return byName
     const db = String(b.log_date || '')
     const da = String(a.log_date || '')
-    return db.localeCompare(da)
+    const byDate = db.localeCompare(da)
+    if (byDate !== 0) return byDate
+    return String(a.material_cd || '').localeCompare(String(b.material_cd || ''), 'ja')
   })
 })
 
@@ -3707,6 +3761,105 @@ const fetchUnusedReceivingAll = async () => {
   }
 }
 
+const refreshReceivingViewsAfterManual = async () => {
+  await fetchUnusedReceivingAll()
+  if (materialDetailDialogVisible.value && selectedMaterialDetail.value) {
+    await fetchMaterialLogsForDetail(selectedMaterialDetail.value as MaterialOrderItem)
+  }
+}
+
+/** 切断ログに無いが実際は使用済の受入束を手動登録 */
+const markReceivingLogCuttingUsedManually = async (row: { id?: number; manufacture_no?: string }) => {
+  const id = row.id
+  if (id == null || Number.isNaN(Number(id))) {
+    ElMessage.warning('受入ログIDがありません')
+    return
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '理由・備考（任意・監査用）',
+      'この受入を「切断使用済（手動）」に登録します',
+      {
+        confirmButtonText: '次へ',
+        cancelButtonText: 'キャンセル',
+        inputPlaceholder: '例：現場メモ未連携のため事後確認',
+        inputType: 'textarea',
+      },
+    )
+    const note = typeof value === 'string' ? value.trim() : ''
+
+    let managementCode = ''
+    try {
+      const mcRes = await ElMessageBox.prompt(
+        '管理コード（任意）。入力すると material_cutting_logs に1件追加されます（item=切断材料使用、製造番号は受入ログから連携）。スキップは「キャンセル」。',
+        '切断ログ連携（任意）',
+        {
+          confirmButtonText: '登録する',
+          cancelButtonText: 'スキップ',
+          inputPlaceholder: '管理コード',
+        },
+      )
+      managementCode =
+        typeof mcRes.value === 'string' ? mcRes.value.trim().slice(0, 255) : ''
+    } catch {
+      managementCode = ''
+    }
+
+    if (managementCode && !String(row.manufacture_no ?? '').trim()) {
+      ElMessage.warning('製造番号が空のため、切断ログへは連携できません（手動使用済のみ登録する場合は管理コードを空にしてください）')
+      return
+    }
+
+    cuttingManualActionId.value = id
+    const res = (await updateMaterialLog(id, {
+      cutting_used_manual: true,
+      ...(note ? { cutting_used_manual_note: note } : {}),
+      ...(managementCode ? { manual_cutting_management_code: managementCode } : {}),
+    })) as { material_cutting_log_id?: number }
+    if (res?.material_cutting_log_id != null) {
+      ElMessage.success(
+        `手動で使用済としました。切断ログを追加しました（ID: ${res.material_cutting_log_id}）`,
+      )
+    } else {
+      ElMessage.success('手動で使用済として登録しました')
+    }
+    await refreshReceivingViewsAfterManual()
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      const detail =
+        e && typeof e === 'object' && 'response' in e
+          ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : ''
+      ElMessage.error(typeof detail === 'string' && detail ? detail : '登録に失敗しました')
+    }
+  } finally {
+    cuttingManualActionId.value = null
+  }
+}
+
+/** 手動確定のみ取り消し（切断ログ突合がある行は引き続き使用済） */
+const unmarkReceivingLogCuttingUsedManual = async (row: { id?: number }) => {
+  const id = row.id
+  if (id == null || Number.isNaN(Number(id))) return
+  try {
+    await ElMessageBox.confirm(
+      '手動確定を取り消します。この操作で追加した切断ログ（手動連携分）も削除します。CSV等で既にある切断ログは削除されません。製造番号が切断ログに無い行は再び「未使用」一覧に出ます。',
+      '手動取消',
+      { type: 'warning', confirmButtonText: '取消する', cancelButtonText: 'キャンセル' },
+    )
+    cuttingManualActionId.value = id
+    await updateMaterialLog(id, { cutting_used_manual: false })
+    ElMessage.success('手動確定を取り消しました')
+    await refreshReceivingViewsAfterManual()
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error('取消に失敗しました')
+    }
+  } finally {
+    cuttingManualActionId.value = null
+  }
+}
+
 // 材料詳細：material_logs を材料名で取得
 const handleMaterialNameDoubleClick = async (row: MaterialOrderItem) => {
   selectedMaterialDetail.value = row
@@ -3846,7 +3999,7 @@ const printMaterialDetailUnusedList = () => {
 <div class="meta">
   材料名：${materialName}<br/>
   材料コード：${materialCd}<br/>
-  条件：受入日 ${MATERIAL_DETAIL_RECEIVING_START_DATE} 以降 · 切断ログに製造番号なし（未使用）<br/>
+  条件：受入日 ${MATERIAL_DETAIL_RECEIVING_START_DATE} 以降 · 切断ログ突合・手動確定ともに無い行（未使用）<br/>
   件数：<strong>${rows.length}</strong> 件 · 印刷日時：${escapeHtmlForPrint(printedAt)}
 </div>
 <table>
@@ -6430,6 +6583,11 @@ ${groupBlocks}
 .material-detail-status-tag {
   font-weight: 600;
   border-radius: 6px;
+}
+
+.material-detail-op-muted {
+  color: #94a3b8;
+  font-size: 12px;
 }
 
 .material-detail-footer-stats {

@@ -45,6 +45,15 @@ export interface MaterialLogItem {
   updated_at?: string
   /** 切断ログに同一製造番号がある（includeCuttingUsage 時のみ） */
   used_in_cutting?: boolean
+  /** 上記と別に、切断ログ突合の有無（includeCuttingUsage 時のみ） */
+  used_in_cutting_from_log?: boolean
+  /** 事後手動で「切断使用済」と確定したか */
+  cutting_used_manual?: boolean
+  cutting_used_manual_at?: string
+  cutting_used_manual_by?: string
+  cutting_used_manual_note?: string
+  /** PUT のみ。手動使用済と同時に切断ログへ management_code を書くとき */
+  manual_cutting_management_code?: string
 }
 
 /** 受入ログ（MaterialLog は MaterialLogItem の別名） */

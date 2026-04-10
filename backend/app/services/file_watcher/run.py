@@ -11,10 +11,12 @@ from app.services.file_watcher.handler import UnifiedHandler
 from app.services.file_watcher.sync_services import (
     StockService,
     MaterialService,
+    MaterialCuttingCsvService,
     PickingLogService,
     STOCK_FILES,
     MATERIAL_FILES,
     PICKING_FILES,
+    MATERIAL_CUTTING_CSV_BASENAME,
 )
 from app.services.file_watcher.excel_processor import (
     ExcelProcessor,
@@ -165,10 +167,37 @@ def _material_csv_polling_loop(task_queue, poll_interval, stop_event):
                     logger.warning("材料 CSV キュー投入失敗 %s: %s", name, e)
 
 
+def _material_cutting_csv_polling_loop(task_queue, poll_interval, stop_event):
+    """MATERIAL_CUTTING_CSV_PATH の mtime をポーリングし、変更時にキュー投入（ネットワーク共有向け）"""
+    path = settings.get_material_cutting_csv_path()
+    last_mtime = None
+    filename = os.path.basename(path) or MATERIAL_CUTTING_CSV_BASENAME
+    while not stop_event.is_set():
+        stop_event.wait(timeout=poll_interval)
+        if stop_event.is_set():
+            break
+        if not is_file_enabled(MATERIAL_CUTTING_CSV_BASENAME):
+            continue
+        if not os.path.isfile(path):
+            continue
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            continue
+        if last_mtime is not None and mtime > last_mtime:
+            logger.info("材料切断CSV mtime 変更を検知、キュー投入: %s (%s)", filename, path)
+            try:
+                task_queue.put((path, filename))
+            except Exception as e:
+                logger.warning("材料切断CSV キュー投入失敗: %s", e)
+        last_mtime = mtime
+
+
 def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
     """ワーカー：キューから (filepath, filename) を取得し、ファイル安定後に種別で処理；同一 Excel は 1 ワーカーのみ"""
     stock_svc = StockService()
     material_svc = MaterialService()
+    cutting_csv_svc = MaterialCuttingCsvService()
     picking_svc = PickingLogService()
     excel_processor = ExcelProcessor()
     inspection_processor = InspectionExcelProcessor()
@@ -216,6 +245,13 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
                     stock_svc.sync(filepath, filename)
                 else:
                     logger.debug("在庫ファイル監視は無効のためスキップ: %s", filename)
+            elif os.path.normpath(filepath) == os.path.normpath(
+                settings.get_material_cutting_csv_path()
+            ):
+                if is_file_enabled(MATERIAL_CUTTING_CSV_BASENAME):
+                    cutting_csv_svc.sync(filepath, filename)
+                else:
+                    logger.debug("材料切断CSV 監視は無効のためスキップ: %s", filename)
             elif filename in MATERIAL_FILES:
                 if is_file_enabled(filename):
                     material_svc.sync(filepath, filename)
@@ -270,9 +306,16 @@ def run_watcher():
     if inspection_excel_path:
         logger.info("📂 検査管理指標 Excel パス: %s", inspection_excel_path)
     logger.info("📊 ポーリング間隔: %.1f 秒、ワーカー: %s 個", POLL_INTERVAL, WORKER_COUNT)
-    logger.info("📑 監視対象: 在庫 %s 件、材料 %s 件、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s",
-                len(STOCK_FILES), len(MATERIAL_FILES), len(PICKING_FILES), len(EXCEL_FILES),
-                "有効" if inspection_excel_path else "未設定")
+    cutting_csv_display = os.path.basename(settings.get_material_cutting_csv_path()) or MATERIAL_CUTTING_CSV_BASENAME
+    logger.info(
+        "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s",
+        len(STOCK_FILES),
+        len(MATERIAL_FILES),
+        cutting_csv_display,
+        len(PICKING_FILES),
+        len(EXCEL_FILES),
+        "有効" if inspection_excel_path else "未設定",
+    )
     excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     if not excel_watcher_enabled:
         logger.info("📌 Excel 監視は無効です（環境変数またはシステム設定）")
@@ -326,6 +369,19 @@ def run_watcher():
             logger.info("材料受入 CSV 用にディレクトリを追加監視: %s", parent)
         except Exception as e:
             logger.warning("材料追加監視の登録に失敗 %s: %s", parent, e)
+    cutting_full = os.path.normpath(settings.get_material_cutting_csv_path())
+    cutting_parent = os.path.normpath(os.path.dirname(cutting_full))
+    if (
+        cutting_parent
+        and cutting_parent not in watched_roots
+        and os.path.isdir(cutting_parent)
+    ):
+        try:
+            observer.schedule(handler, cutting_parent, recursive=False)
+            watched_roots.add(cutting_parent)
+            logger.info("材料切断CSV 用にディレクトリを追加監視: %s", cutting_parent)
+        except Exception as e:
+            logger.warning("材料切断CSV ディレクトリの watchdog 登録失敗（mtime ポーリングで補完）: %s", e)
     observer.start()
 
     stop_polling = threading.Event()
@@ -339,6 +395,18 @@ def run_watcher():
     logger.info(
         "✅ 材料受入 CSV mtime ポーリング開始（対象 %s 種・間隔 %.1fs）",
         len(MATERIAL_FILES),
+        POLL_INTERVAL,
+    )
+    cutting_poll_thread = threading.Thread(
+        target=_material_cutting_csv_polling_loop,
+        args=(task_queue, POLL_INTERVAL, stop_polling),
+        daemon=True,
+        name="MaterialCuttingCsvMtimePoll",
+    )
+    cutting_poll_thread.start()
+    logger.info(
+        "✅ 材料切断CSV mtime ポーリング開始: %s（間隔 %.1fs）",
+        cutting_csv_display,
         POLL_INTERVAL,
     )
     if excel_watcher_enabled and excel_path:

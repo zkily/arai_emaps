@@ -31,6 +31,9 @@ PICKING_FILES = [
     "PickingLog.csv",
 ]
 
+# 材料切断ログ（MATERIAL_CUTTING_CSV_PATH / materialCutting.csv）→ material_cutting_logs
+MATERIAL_CUTTING_CSV_BASENAME = "materialCutting.csv"
+
 
 def get_db_connection():
     """プロジェクト設定の同期用 MySQL 接続（ファイル監視用）"""
@@ -44,6 +47,29 @@ def get_db_connection():
 
 
 # ---------- StockService: 全量镜像同步 ----------
+
+
+class MaterialCuttingCsvService:
+    """materialCutting.csv → material_cutting_logs（file_watcher / API と同じ取込ルール）"""
+
+    def sync(self, filepath, filename):
+        from app.modules.material.cutting_import_sync import sync_material_cutting_csv
+
+        try:
+            result = sync_material_cutting_csv(filepath)
+            logger.info(
+                "材料切断CSV 取込完了 %s: imported=%s prune_del=%s window_del=%s err=%s",
+                filename,
+                result.get("imported"),
+                result.get("deleted_prune"),
+                result.get("deleted_window"),
+                result.get("errors_count"),
+            )
+            errs = result.get("errors") or []
+            if errs:
+                logger.warning("材料切断CSV 取込エラー例: %s", errs[:3])
+        except Exception as e:
+            logger.exception("材料切断CSV 取込失敗 %s: %s", filename, e)
 
 
 class StockService:
@@ -151,6 +177,149 @@ class StockService:
 # ---------- MaterialService: 材料日志 → material_logs ----------
 
 
+def _log_time_key_for_material_sync(t) -> str:
+    """DB / CSV の時刻を material_logs 突合用キーに正規化（HH:MM:SS）"""
+    if t is None:
+        return "00:00:00"
+    if isinstance(t, str):
+        return normalize_time_str(t)
+    if hasattr(t, "hour") and hasattr(t, "minute"):
+        sec = getattr(t, "second", 0) or 0
+        return f"{int(t.hour):02d}:{int(t.minute):02d}:{int(sec):02d}"
+    if hasattr(t, "total_seconds"):
+        secs = int(t.total_seconds()) % 86400
+        h, r = divmod(secs, 3600)
+        m, s = divmod(r, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+    return normalize_time_str(str(t))
+
+
+def _material_log_manual_key(log_date, log_time, manufacture_no) -> tuple:
+    if log_date is not None and hasattr(log_date, "isoformat"):
+        dstr = log_date.isoformat()[:10]
+    else:
+        dstr = str(log_date or "")[:10]
+    return (dstr, _log_time_key_for_material_sync(log_time), (manufacture_no or "").strip())
+
+
+def _fetch_material_manual_snapshot(cursor, keys: list[tuple]) -> dict:
+    """
+    CSV 同期で削除される可能性がある行のうち、手動「切断使用済」を付けた行だけスナップショット。
+    keys: (log_date, log_time, manufacture_no)（CSV 解析結果と同じ）
+    """
+    if not keys:
+        return {}
+    seen: list[tuple] = []
+    dedup = set()
+    for k in keys:
+        if k in dedup:
+            continue
+        dedup.add(k)
+        seen.append(k)
+    out: dict = {}
+    batch_size = 300
+    for i in range(0, len(seen), batch_size):
+        batch = seen[i : i + batch_size]
+        placeholders = ",".join(["(%s,%s,%s)"] * len(batch))
+        flat = [x for t in batch for x in t]
+        try:
+            cursor.execute(
+                f"""
+                SELECT log_date, log_time, manufacture_no, cutting_used_manual_at,
+                       cutting_used_manual_by, cutting_used_manual_note
+                FROM material_logs
+                WHERE cutting_used_manual = 1
+                  AND (log_date, log_time, manufacture_no) IN ({placeholders})
+                """,
+                flat,
+            )
+        except mysql.connector.Error as e:
+            err = str(e)
+            if "Unknown column" in err or "doesn't exist" in err.lower():
+                logger.debug("material_logs に手動切断列なし、スキップ: %s", err)
+                return {}
+            raise
+        for row in cursor.fetchall():
+            mk = _material_log_manual_key(
+                row["log_date"], row["log_time"], row["manufacture_no"]
+            )
+            out[mk] = {
+                "at": row["cutting_used_manual_at"],
+                "by": row["cutting_used_manual_by"],
+                "note": row["cutting_used_manual_note"],
+            }
+    return out
+
+
+def _fetch_material_manual_snapshot_by_item(cursor, item: str) -> dict:
+    try:
+        cursor.execute(
+            """
+            SELECT log_date, log_time, manufacture_no, cutting_used_manual_at,
+                   cutting_used_manual_by, cutting_used_manual_note
+            FROM material_logs
+            WHERE item = %s AND cutting_used_manual = 1
+            """,
+            (item,),
+        )
+    except mysql.connector.Error as e:
+        err = str(e)
+        if "Unknown column" in err or "doesn't exist" in err.lower():
+            return {}
+        raise
+    out: dict = {}
+    for row in cursor.fetchall():
+        mk = _material_log_manual_key(
+            row["log_date"], row["log_time"], row["manufacture_no"]
+        )
+        out[mk] = {
+            "at": row["cutting_used_manual_at"],
+            "by": row["cutting_used_manual_by"],
+            "note": row["cutting_used_manual_note"],
+        }
+    return out
+
+
+def _restore_material_manual_flags(cursor, final_list: list, manual_map: dict) -> int:
+    """INSERT 後、同一业务键に手動フラグを戻す"""
+    if not manual_map or not final_list:
+        return 0
+    restored = 0
+    for d in final_list:
+        mk = _material_log_manual_key(
+            d.get("log_date"), d.get("log_time"), d.get("manufacture_no")
+        )
+        if mk not in manual_map:
+            continue
+        m = manual_map[mk]
+        try:
+            cursor.execute(
+                """
+                UPDATE material_logs SET
+                    cutting_used_manual = 1,
+                    cutting_used_manual_at = %s,
+                    cutting_used_manual_by = %s,
+                    cutting_used_manual_note = %s
+                WHERE item = %s AND log_date = %s AND log_time = %s AND manufacture_no <=> %s
+                """,
+                (
+                    m["at"],
+                    m["by"],
+                    m["note"],
+                    d.get("item"),
+                    d.get("log_date"),
+                    d.get("log_time"),
+                    d.get("manufacture_no"),
+                ),
+            )
+            restored += int(cursor.rowcount or 0)
+        except mysql.connector.Error as e:
+            if "Unknown column" in str(e):
+                return restored
+            raise
+    return restored
+
+
 class MaterialService:
     """材料 CSV → material_logs（解析、补全、按业务键删除后插入）"""
 
@@ -176,11 +345,13 @@ class MaterialService:
                 return {"success": True, "processedCount": 0, "error": None}
             self._enrich_data(cursor, parsed_data, filename)
             deleted_count = 0
+            manual_snapshot: dict = {}
             if "Maruiti" in filename:
                 keys = [
                     (d["log_date"], d["log_time"], d["manufacture_no"])
                     for d in parsed_data
                 ]
+                manual_snapshot = _fetch_material_manual_snapshot(cursor, keys)
                 batch_size = 500
                 for i in range(0, len(keys), batch_size):
                     batch = keys[i : i + batch_size]
@@ -197,6 +368,7 @@ class MaterialService:
                     deleted_count += cursor.rowcount
             else:
                 target_item = parsed_data[0]["item"]
+                manual_snapshot = _fetch_material_manual_snapshot_by_item(cursor, target_item)
                 cursor.execute("DELETE FROM material_logs WHERE item = %s", (target_item,))
                 deleted_count = cursor.rowcount
             unique_map = {}
@@ -229,6 +401,16 @@ class MaterialService:
             if final_list:
                 cursor.executemany(insert_sql, final_list)
                 inserted_count = cursor.rowcount
+                if manual_snapshot:
+                    n_rest = _restore_material_manual_flags(
+                        cursor, final_list, manual_snapshot
+                    )
+                    if n_rest > 0:
+                        logger.info(
+                            "📌 [Material] %s 手動切断使用済を %s 行復元（CSV 同期後）",
+                            filename,
+                            n_rest,
+                        )
             else:
                 inserted_count = 0
             conn.commit()
