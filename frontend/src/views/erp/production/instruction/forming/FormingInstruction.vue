@@ -790,6 +790,15 @@
 <script setup lang="ts">
 defineOptions({ name: 'FormingInstruction' })
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+/** MES ルートでは production_schedules + schedule_details 由来の API を使う */
+const planDataApiPath = computed(() =>
+  (route.meta as { useApsSchedulePlanData?: boolean }).useApsSchedulePlanData === true
+    ? '/api/mes/forming-plan-data'
+    : '/api/excel-monitor/plan-data',
+)
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   Plus,
@@ -1054,6 +1063,19 @@ const loadMachineOptions = async () => {
 }
 
 // 計画データを読み込み
+// 默认排序：生産日升序 -> 生産順位升序（数值优先）
+const sortByPlanDateAndOperatorAsc = (a: any, b: any) => {
+  const dateA = String(a?.plan_date || '')
+  const dateB = String(b?.plan_date || '')
+  if (dateA !== dateB) return dateA.localeCompare(dateB)
+
+  const opA = a?.operator != null && a.operator !== '' ? Number(a.operator) : NaN
+  const opB = b?.operator != null && b.operator !== '' ? Number(b.operator) : NaN
+  if (!Number.isNaN(opA) && !Number.isNaN(opB)) return opA - opB
+
+  return String(a?.operator || '').localeCompare(String(b?.operator || ''))
+}
+
 const loadPlanData = async () => {
   planLoading.value = true
   try {
@@ -1077,14 +1099,14 @@ const loadPlanData = async () => {
     params.limit = 10000 // 设置一个足够大的值以获取所有数据
 
     console.log('计划数据查询参数:', params)
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
     console.log('计划数据API响应:', result)
 
     if (result.success) {
       // 过滤掉製品名为空值的数据，以及計画生産数小于等于0的数据
-      const filteredData = result.data.records.filter(
-        (item: any) => item.product_name && item.product_name.trim() !== '' && item.quantity > 0,
-      )
+      const filteredData = result.data.records
+        .filter((item: any) => item.product_name && item.product_name.trim() !== '' && item.quantity > 0)
+        .sort(sortByPlanDateAndOperatorAsc)
       console.log('过滤前数据数量:', result.data.records.length)
       console.log('过滤后数据数量:', filteredData.length)
       console.log('关键词筛选参数:', planSearchForm.keyword)
@@ -1260,7 +1282,7 @@ const calculatePlanStats = async () => {
     params.limit = 10000
 
     console.log('统计查询参数:', params)
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
 
     if (result.success) {
       // 过滤掉製品名为空值的数据
@@ -1354,6 +1376,11 @@ const saveRemarks = async (row: any, showSuccessMessage = true) => {
       updateData.machine_name = row.machine_name
       updateData.product_cd = row.product_cd
       updateData.process_name = row.process_name || '成型'
+    }
+
+    // スケジュール由来データに備考列が無いため API 更新なし（画面入力のみ）
+    if (planDataApiPath.value === '/api/mes/forming-plan-data') {
+      return
     }
 
     // 调用后端API更新remarks
@@ -1930,7 +1957,7 @@ const calculateSmartDateRange = async () => {
       } else {
         // 周末需要检查是否有生产计划数据
         try {
-          const result = (await request.get('/api/excel-monitor/plan-data', {
+          const result = (await request.get(planDataApiPath.value, {
             params: {
               startDate: dateStr,
               endDate: dateStr,
@@ -2058,7 +2085,7 @@ const getFullPlanDataForPrint = async () => {
     params.processName = '成型'
 
     // 获取完整数据，不分页
-    const result = (await request.get('/api/excel-monitor/plan-data', {
+    const result = (await request.get(planDataApiPath.value, {
       params: {
         ...params,
         page: 1,
@@ -2658,17 +2685,7 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
                     // 注意：这里不需要再次过滤日期，因为getFullPlanDataForPrint已经使用了智能日期范围
                     return true
                   })
-                  .sort((a, b) => {
-                    // 生産日升序
-                    const dateA = a.plan_date || ''
-                    const dateB = b.plan_date || ''
-                    if (dateA !== dateB) return dateA.localeCompare(dateB)
-                    // 生産順位升序（数值优先，否则按字符串）
-                    const opA = a.operator != null && a.operator !== '' ? Number(a.operator) : NaN
-                    const opB = b.operator != null && b.operator !== '' ? Number(b.operator) : NaN
-                    if (!Number.isNaN(opA) && !Number.isNaN(opB)) return opA - opB
-                    return String(a.operator || '').localeCompare(String(b.operator || ''))
-                  })
+                  .sort(sortByPlanDateAndOperatorAsc)
                   .slice(0, 4) // 只显示前4行数据
 
                 // 如果没有数据，在表格里显示「生産計画停止」
@@ -5945,7 +5962,7 @@ const loadMatrixData = async () => {
       page: 1,
       limit: 10000,
     }
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
     if (result.success) {
       const records = (result.data as { records?: unknown[] })?.records ?? []
       const filtered = records.filter(

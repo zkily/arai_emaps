@@ -1,5 +1,5 @@
 /**
- * 生産スケジュール・instruction_plans 関連 API
+ * 生産スケジュール・計画関連 API（部品需要量は production_summarys.molding_actual_plan ベース）
  */
 import request from '@/shared/api/request'
 
@@ -73,6 +73,8 @@ export interface ComponentRequirementsSummaryMeta {
   effective_date_note: string
   daily_matrix_omitted?: boolean
   daily_matrix_max_days?: number
+  /** 需求量の駆動列（API） */
+  plan_column?: string
 }
 
 export interface ComponentRequirementsDailyMatrixRow {
@@ -102,7 +104,39 @@ export function fetchComponentRequirementsSummary(params: {
   date_start: string
   date_end: string
   production_month?: string
+  /** molding_actual_plan | molding_plan */
+  plan_column?: string
 }): Promise<ComponentRequirementsSummaryResponse> {
   return request.get('/api/plan/batch/component-requirements-summary', { params })
 }
 
+export interface ComponentRequirementsBundleData {
+  date_start: string
+  date_end: string
+  production_month_filter: string | null
+  demand: {
+    items: ComponentRequirementsSummaryItem[]
+    summary: ComponentRequirementsSummaryMeta
+    daily_matrix: ComponentRequirementsDailyMatrix | null
+  }
+  use: {
+    items: ComponentRequirementsSummaryItem[]
+    summary: ComponentRequirementsSummaryMeta
+    daily_matrix: ComponentRequirementsDailyMatrix | null
+  }
+}
+
+export interface ComponentRequirementsBundleResponse {
+  success?: boolean
+  message?: string
+  data?: ComponentRequirementsBundleData
+}
+
+export function fetchComponentRequirementsBundle(params: {
+  date_start: string
+  date_end: string
+  production_month?: string
+  plan_column?: string
+}): Promise<ComponentRequirementsBundleResponse> {
+  return request.get('/api/plan/batch/component-requirements-bundle', { params })
+}

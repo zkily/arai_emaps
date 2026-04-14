@@ -15,14 +15,247 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, Any
 
+from sqlalchemy import select
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
-
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+_COMPONENT_REQUIREMENTS_PLAN_COLUMNS = frozenset({"molding_actual_plan", "molding_plan"})
+_WELDING_USE_DRIVER_SQL = "(COALESCE(ps.welding_actual, 0) + COALESCE(ps.welding_defect, 0))"
+
+
+def _plan_column_sql_expr(plan_column: str) -> tuple[str, str]:
+    col = (plan_column or "molding_actual_plan").strip()
+    if col not in _COMPONENT_REQUIREMENTS_PLAN_COLUMNS:
+        allowed = ", ".join(sorted(_COMPONENT_REQUIREMENTS_PLAN_COLUMNS))
+        raise HTTPException(status_code=400, detail=f"plan_column は次のいずれかです: {allowed}")
+    expr = f"COALESCE(ps.{col}, 0)"
+    labels = {
+        "molding_actual_plan": "molding_actual_plan（成型実績計画）",
+        "molding_plan": "molding_plan（成型計画）",
+    }
+    return expr, labels[col]
+
+
+async def _aggregate_component_requirements_from_production_summarys(
+    db: AsyncSession,
+    d_start: date,
+    d_end: date,
+    driver_sql_expr: str,
+    effective_date_note: str,
+    production_month_filter: Optional[str],
+) -> dict[str, Any]:
+    """
+    production_summarys × 明細 BOM で部品所要を集計。driver_sql_expr はサーバ側定数のみ（ユーザー入力不可）。
+    """
+    conditions = [
+        "ps.date >= :d_start",
+        "ps.date <= :d_end",
+    ]
+    params: dict = {"d_start": d_start, "d_end": d_end}
+
+    sql = text(f"""
+        SELECT
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+            COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+            COUNT(DISTINCT ps.id) AS source_lot_count,
+            SUM(
+                ({driver_sql_expr})
+                * COALESCE(l.qty_per, 0)
+                / NULLIF(COALESCE(h.base_quantity, 1), 0)
+                * (1 + COALESCE(l.scrap_rate, 0) / 100)
+            ) AS required_qty
+        FROM production_summarys ps
+        JOIN product_bom_headers h
+          ON h.id = (
+              SELECT h2.id
+              FROM product_bom_headers h2
+              WHERE h2.parent_product_cd = ps.product_cd
+                AND h2.status = 'active'
+                AND (h2.effective_from IS NULL OR h2.effective_from <= ps.date)
+                AND (h2.effective_to IS NULL OR h2.effective_to >= ps.date)
+              ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
+              LIMIT 1
+          )
+        JOIN product_bom_lines l
+          ON l.header_id = h.id
+         AND l.component_product_cd IS NOT NULL
+         AND TRIM(l.component_product_cd) <> ''
+         AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
+        LEFT JOIN parts p
+          ON p.part_cd = l.component_product_cd
+        WHERE {" AND ".join(conditions)}
+        GROUP BY
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+            COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+        ORDER BY component_cd ASC
+    """)
+
+    try:
+        result = await db.execute(sql, params)
+        rows = result.mappings().fetchall()
+    except Exception as e:
+        msg = str(e).lower()
+        if "production_summarys" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="production_summarys テーブルが存在しません。",
+            ) from e
+        if "product_bom_headers" in msg or "product_bom_lines" in msg:
+            raise HTTPException(
+                status_code=503,
+                detail="product_bom_headers / product_bom_lines テーブルが存在しないため集計できません。",
+            ) from e
+        logger.exception("component-requirements aggregate failed")
+        raise HTTPException(status_code=500, detail="部品需要量の集計に失敗しました。") from e
+
+    def _fnum(v) -> float:
+        if v is None:
+            return 0.0
+        if isinstance(v, Decimal):
+            return float(v)
+        return float(v)
+
+    def _inum(v) -> int:
+        if v is None:
+            return 0
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    items = []
+    total_required_qty = 0.0
+    for r in rows:
+        rd = dict(r)
+        rq = _fnum(rd.get("required_qty"))
+        total_required_qty += rq
+        items.append(
+            {
+                "component_cd": rd.get("component_cd"),
+                "component_name": rd.get("component_name"),
+                "component_uom": rd.get("component_uom"),
+                "source_lot_count": _inum(rd.get("source_lot_count")),
+                "required_qty": round(rq, 6),
+            }
+        )
+
+    _DAY_MATRIX_MAX_DAYS = 186
+    span_days = (d_end - d_start).days + 1
+    daily_matrix: Optional[dict] = None
+    daily_matrix_omitted = span_days > _DAY_MATRIX_MAX_DAYS
+
+    if not daily_matrix_omitted:
+        dsql = text(f"""
+            SELECT
+                ps.date AS eff_date,
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+                COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+                SUM(
+                    ({driver_sql_expr})
+                    * COALESCE(l.qty_per, 0)
+                    / NULLIF(COALESCE(h.base_quantity, 1), 0)
+                    * (1 + COALESCE(l.scrap_rate, 0) / 100)
+                ) AS required_qty
+            FROM production_summarys ps
+            JOIN product_bom_headers h
+              ON h.id = (
+                  SELECT h2.id
+                  FROM product_bom_headers h2
+                  WHERE h2.parent_product_cd = ps.product_cd
+                    AND h2.status = 'active'
+                    AND (h2.effective_from IS NULL OR h2.effective_from <= ps.date)
+                    AND (h2.effective_to IS NULL OR h2.effective_to >= ps.date)
+                  ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
+                  LIMIT 1
+              )
+            JOIN product_bom_lines l
+              ON l.header_id = h.id
+             AND l.component_product_cd IS NOT NULL
+             AND TRIM(l.component_product_cd) <> ''
+             AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
+            LEFT JOIN parts p
+              ON p.part_cd = l.component_product_cd
+            WHERE {" AND ".join(conditions)}
+            GROUP BY
+                ps.date,
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+                COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+            ORDER BY
+                ps.date ASC,
+                component_cd ASC
+        """)
+        dresult = await db.execute(dsql, params)
+        drows = dresult.mappings().fetchall()
+
+        date_list = [(d_start + timedelta(days=i)).isoformat() for i in range(span_days)]
+        pivot: dict[tuple, dict[str, float]] = {}
+        for r in drows:
+            rd = dict(r)
+            ed = rd.get("eff_date")
+            if ed is None:
+                continue
+            if hasattr(ed, "isoformat"):
+                ds = ed.isoformat()[:10]
+            else:
+                ds = str(ed)[:10]
+            key = (
+                rd.get("component_cd"),
+                rd.get("component_name"),
+                rd.get("component_uom"),
+            )
+            if key not in pivot:
+                pivot[key] = {d: 0.0 for d in date_list}
+            qv = _fnum(rd.get("required_qty"))
+            if ds in pivot[key]:
+                pivot[key][ds] += qv
+
+        for it in items:
+            k = (it.get("component_cd"), it.get("component_name"), it.get("component_uom"))
+            if k not in pivot:
+                pivot[k] = {d: 0.0 for d in date_list}
+
+        matrix_rows = []
+        for key in sorted(pivot.keys(), key=lambda k: (k[0] or "", k[1] or "", k[2] or "")):
+            cc, cn, cu = key
+            by_date = pivot[key]
+            row_total = sum(by_date.values())
+            matrix_rows.append(
+                {
+                    "component_cd": cc,
+                    "component_name": cn,
+                    "component_uom": cu,
+                    "by_date": {d: round(by_date[d], 6) for d in date_list},
+                    "row_total": round(row_total, 6),
+                }
+            )
+
+        daily_matrix = {
+            "dates": date_list,
+            "rows": matrix_rows,
+        }
+
+    return {
+        "items": items,
+        "daily_matrix": daily_matrix,
+        "summary": {
+            "date_start": d_start.isoformat(),
+            "date_end": d_end.isoformat(),
+            "production_month_filter": production_month_filter.strip() if production_month_filter and production_month_filter.strip() else None,
+            "total_component_kinds": len(items),
+            "total_required_qty": round(total_required_qty, 6),
+            "effective_date_note": effective_date_note,
+            "daily_matrix_omitted": daily_matrix_omitted,
+            "daily_matrix_max_days": _DAY_MATRIX_MAX_DAYS,
+        },
+    }
 
 
 async def _table_has_column(db: AsyncSession, table_name: str, column_name: str) -> bool:
@@ -179,6 +412,160 @@ async def get_schedule(
     """
     # スタブ: 空リストで 404 を避ける
     return {"success": True, "data": {"list": []}, "message": "OK"}
+
+
+def _mes_schedule_plan_row_to_record(row: Any) -> dict:
+    """schedule_details × production_schedules × machines → excel-monitor plan-data 互換1件"""
+    def _val(key: str, default=None):
+        v = row.get(key) if hasattr(row, "get") else getattr(row, key, None)
+        if v is None:
+            return default
+        if isinstance(v, Decimal):
+            return float(v) if v is not None else default
+        return v
+
+    plan_date = _val("plan_date")
+    if hasattr(plan_date, "isoformat"):
+        plan_date = plan_date.isoformat()[:10] if plan_date else None
+    op = _val("operator")
+    if op is not None and not isinstance(op, str):
+        op = str(op)
+    eff = _val("efficiency_rate")
+    st = _val("setup_time")
+    if st is not None:
+        try:
+            st = int(st)
+        except (TypeError, ValueError):
+            st = None
+    qty = _val("quantity", 0)
+    try:
+        qty = int(qty) if qty is not None else 0
+    except (TypeError, ValueError):
+        qty = 0
+    return {
+        "id": _val("id"),
+        "file_name": _val("file_name"),
+        "plan_date": plan_date,
+        "quantity": qty,
+        "machine_name": _val("machine_name"),
+        "machine_cd": _val("machine_cd"),
+        "process_name": _val("process_name") or "成型",
+        "operator": op,
+        "product_name": _val("product_name") or "",
+        "product_cd": _val("product_cd"),
+        "efficiency_rate": eff,
+        "setup_time": st,
+        "remarks": _val("remarks") or "",
+    }
+
+
+@router.get("/mes/forming-plan-data")
+async def get_mes_forming_plan_data_from_schedule(
+    startDate: Optional[str] = Query(None),
+    endDate: Optional[str] = Query(None),
+    processName: Optional[str] = Query(None),
+    machineName: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    productNameExact: Optional[str] = Query(
+        None,
+        description="品名または product_cd と完全一致",
+    ),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10000, ge=1, le=10000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    MES 成型指示用: production_schedules と schedule_details を結合し、
+    /api/excel-monitor/plan-data と同形の records を返す（設備は machine_type=成型）。
+    能率(efficiency_rate)は equipment_efficiency（machine_cd + product_cd）を優先。
+    """
+    if not startDate or not endDate:
+        return {
+            "success": True,
+            "data": {"records": [], "total": 0},
+            "message": "OK",
+        }
+    pn = (processName or "").strip()
+    if pn and pn != "成型":
+        return {
+            "success": True,
+            "data": {"records": [], "total": 0},
+            "message": "OK",
+        }
+    kw = keyword.strip() if keyword else ""
+    pne = (productNameExact or "").strip() or None
+    offset = (page - 1) * limit
+    params = {
+        "start_date": startDate,
+        "end_date": endDate,
+        "machine_name": (machineName or "").strip() or None,
+        "pne": pne,
+        "keyword": kw or None,
+        "kw_like": f"%{kw}%" if kw else "%",
+        "limit": limit,
+        "offset": offset,
+    }
+    base_where = """
+        sd.schedule_date BETWEEN :start_date AND :end_date
+        AND m.machine_type = '成型'
+        AND (:machine_name IS NULL OR m.machine_name = :machine_name)
+        AND (
+            :pne IS NULL
+            OR ps.item_name = :pne
+            OR ps.product_cd = :pne
+        )
+        AND (
+            :keyword IS NULL OR :keyword = ''
+            OR ps.item_name LIKE :kw_like
+            OR ps.product_cd LIKE :kw_like
+            OR m.machine_name LIKE :kw_like
+        )
+    """
+    count_sql = text(f"SELECT COUNT(*) AS cnt FROM schedule_details sd INNER JOIN production_schedules ps ON ps.id = sd.schedule_id INNER JOIN machines m ON m.id = ps.line_id WHERE {base_where}")
+    count_keys = (
+        "start_date",
+        "end_date",
+        "machine_name",
+        "pne",
+        "keyword",
+        "kw_like",
+    )
+    count_result = await db.execute(count_sql, {k: v for k, v in params.items() if k in count_keys})
+    total = count_result.scalar() or 0
+    if hasattr(total, "__int__"):
+        total = int(total)
+    sql = text(f"""
+        SELECT
+            sd.id AS id,
+            'APS' AS file_name,
+            sd.schedule_date AS plan_date,
+            sd.planned_qty AS quantity,
+            m.machine_name AS machine_name,
+            m.machine_cd AS machine_cd,
+            '成型' AS process_name,
+            ps.order_no AS operator,
+            ps.item_name AS product_name,
+            ps.product_cd AS product_cd,
+            ee.efficiency_rate AS efficiency_rate,
+            ps.setup_time AS setup_time
+        FROM schedule_details sd
+        INNER JOIN production_schedules ps ON ps.id = sd.schedule_id
+        INNER JOIN machines m ON m.id = ps.line_id
+        LEFT JOIN equipment_efficiency ee
+          ON m.machine_cd = ee.machine_cd AND ps.product_cd = ee.product_cd
+        WHERE {base_where}
+        ORDER BY sd.schedule_date, m.machine_name, ps.order_no, ps.item_name
+        LIMIT :limit OFFSET :offset
+    """)
+    result = await db.execute(sql, params)
+    rows = result.mappings().fetchall()
+    records = [_mes_schedule_plan_row_to_record(dict(r)) for r in rows]
+    return {
+        "success": True,
+        "data": {"records": records, "total": total},
+        "message": "OK",
+    }
 
 
 def _parse_month(month: str) -> tuple[date, str]:
@@ -565,28 +952,19 @@ async def get_material_requirements_summary_from_instruction_plans(
     }
 
 
-@router.get("/plan/batch/component-requirements-summary")
-async def get_component_requirements_summary_from_instruction_plans(
-    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（DATE(start_date) で判定、start_date 未設定行は対象外）"),
-    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
-    """
-    instruction_plans と product_bom_lines から、部品（component_product_cd）所要量を集計する。
-    - start_date が NULL の instruction_plans は対象外
-    - 期間キー: DATE(instruction_plans.start_date)
-    - 指標: SUM(actual_production_quantity * qty_per / base_quantity * (1 + scrap_rate/100))
-    """
+def _component_requirements_date_range(
+    date_start: Optional[str],
+    date_end: Optional[str],
+    production_month: Optional[str],
+) -> tuple[date, date]:
     d_start = _parse_date_ymd(date_start) if date_start else None
     d_end = _parse_date_ymd(date_end) if date_end else None
 
     if production_month and production_month.strip():
         try:
-            parts = production_month.strip().split("-")
-            if len(parts) == 2:
-                y, m = int(parts[0]), int(parts[1])
+            pm_parts = production_month.strip().split("-")
+            if len(pm_parts) == 2:
+                y, m = int(pm_parts[0]), int(pm_parts[1])
                 if 1 <= m <= 12:
                     if d_start is None:
                         d_start = date(y, m, 1)
@@ -605,215 +983,99 @@ async def get_component_requirements_summary_from_instruction_plans(
 
     if d_start > d_end:
         raise HTTPException(status_code=400, detail="date_start は date_end 以下で指定してください。")
+    return d_start, d_end
 
-    conditions = [
-        "start_date IS NOT NULL",
-        "DATE(start_date) >= :d_start",
-        "DATE(start_date) <= :d_end",
-    ]
-    params = {"d_start": d_start, "d_end": d_end}
 
-    sql = text(f"""
-        SELECT
-            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
-            COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
-            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
-            COUNT(DISTINCT ip.id) AS source_lot_count,
-            SUM(
-                COALESCE(ip.actual_production_quantity, 0)
-                * COALESCE(l.qty_per, 0)
-                / NULLIF(COALESCE(h.base_quantity, 1), 0)
-                * (1 + COALESCE(l.scrap_rate, 0) / 100)
-            ) AS required_qty
-        FROM instruction_plans ip
-        JOIN product_bom_headers h
-          ON h.id = (
-              SELECT h2.id
-              FROM product_bom_headers h2
-              WHERE h2.parent_product_cd = ip.product_cd
-                AND h2.status = 'active'
-                AND (h2.effective_from IS NULL OR h2.effective_from <= DATE(ip.start_date))
-                AND (h2.effective_to IS NULL OR h2.effective_to >= DATE(ip.start_date))
-              ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
-              LIMIT 1
-          )
-        JOIN product_bom_lines l
-          ON l.header_id = h.id
-         AND l.component_product_cd IS NOT NULL
-         AND TRIM(l.component_product_cd) <> ''
-         AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
-        LEFT JOIN parts p
-          ON p.part_cd = l.component_product_cd
-        WHERE {" AND ".join(conditions)}
-        GROUP BY
-            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
-            COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
-            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
-        ORDER BY component_cd ASC
-    """)
+@router.get("/plan/batch/component-requirements-summary")
+async def get_component_requirements_summary_from_production_summarys(
+    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（production_summarys.date で判定）"),
+    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
+    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
+    plan_column: str = Query(
+        "molding_actual_plan",
+        description="需求量の駆動列: molding_actual_plan | molding_plan",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    production_summarys の指定列 × 明細 BOM から部品所要を集計。
+    既定は molding_actual_plan（成型実績計画）。molding_plan で成型計画に切替可能。
+    """
+    d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
+    driver_expr, label = _plan_column_sql_expr(plan_column)
+    note = (
+        f"production_summarys を日付・製品で対象に、{label} × BOM構成比（qty_per/base_quantity）"
+        "× 歩留補正（1+scrap_rate）で集計しています。source_lot_count は当該部品に寄与したサマリー行（id）の件数です。"
+    )
+    pmf = production_month.strip() if production_month and production_month.strip() else None
+    inner = await _aggregate_component_requirements_from_production_summarys(
+        db, d_start, d_end, driver_expr, note, pmf
+    )
+    inner["summary"]["plan_column"] = plan_column.strip()
+    return {"success": True, "message": "OK", "data": inner}
 
-    try:
-        result = await db.execute(sql, params)
-        rows = result.mappings().fetchall()
-    except Exception as e:
-        msg = str(e).lower()
-        if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(
-                status_code=503,
-                detail="instruction_plans テーブルが存在しません。",
-            ) from e
-        if "product_bom_headers" in msg or "product_bom_lines" in msg:
-            raise HTTPException(
-                status_code=503,
-                detail="product_bom_headers / product_bom_lines テーブルが存在しないため集計できません。",
-            ) from e
-        logger.exception("component-requirements-summary 集計失敗")
-        raise HTTPException(status_code=500, detail="部品需要量の集計に失敗しました。") from e
 
-    def _fnum(v) -> float:
-        if v is None:
-            return 0.0
-        if isinstance(v, Decimal):
-            return float(v)
-        return float(v)
+@router.get("/plan/batch/component-requirements-use-summary")
+async def get_component_requirements_use_summary_from_production_summarys(
+    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（production_summarys.date）"),
+    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
+    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    (welding_actual + welding_defect) × 明細 BOM で部品の日別使用量を集計。
+    """
+    d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
+    note = (
+        "production_summarys を日付・製品で対象に、(welding_actual + welding_defect) × BOM構成比"
+        "（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。"
+    )
+    pmf = production_month.strip() if production_month and production_month.strip() else None
+    inner = await _aggregate_component_requirements_from_production_summarys(
+        db, d_start, d_end, _WELDING_USE_DRIVER_SQL, note, pmf
+    )
+    return {"success": True, "message": "OK", "data": inner}
 
-    def _inum(v) -> int:
-        if v is None:
-            return 0
-        if isinstance(v, Decimal):
-            return int(v)
-        return int(v)
 
-    items = []
-    total_required_qty = 0.0
-    for r in rows:
-        rd = dict(r)
-        rq = _fnum(rd.get("required_qty"))
-        total_required_qty += rq
-        items.append(
-            {
-                "component_cd": rd.get("component_cd"),
-                "component_name": rd.get("component_name"),
-                "component_uom": rd.get("component_uom"),
-                "source_lot_count": _inum(rd.get("source_lot_count")),
-                "required_qty": round(rq, 6),
-            }
-        )
-
-    # 日別×部品の二次元表（期間が長すぎると列数過多のため上限）
-    _DAY_MATRIX_MAX_DAYS = 186
-    span_days = (d_end - d_start).days + 1
-    daily_matrix: Optional[dict] = None
-    daily_matrix_omitted = span_days > _DAY_MATRIX_MAX_DAYS
-
-    if not daily_matrix_omitted:
-        dsql = text(f"""
-            SELECT
-                DATE(ip.start_date) AS eff_date,
-                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
-                COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
-                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
-                SUM(
-                    COALESCE(ip.actual_production_quantity, 0)
-                    * COALESCE(l.qty_per, 0)
-                    / NULLIF(COALESCE(h.base_quantity, 1), 0)
-                    * (1 + COALESCE(l.scrap_rate, 0) / 100)
-                ) AS required_qty
-            FROM instruction_plans ip
-            JOIN product_bom_headers h
-              ON h.id = (
-                  SELECT h2.id
-                  FROM product_bom_headers h2
-                  WHERE h2.parent_product_cd = ip.product_cd
-                    AND h2.status = 'active'
-                    AND (h2.effective_from IS NULL OR h2.effective_from <= DATE(ip.start_date))
-                    AND (h2.effective_to IS NULL OR h2.effective_to >= DATE(ip.start_date))
-                  ORDER BY COALESCE(h2.effective_from, DATE('1900-01-01')) DESC, h2.id DESC
-                  LIMIT 1
-              )
-            JOIN product_bom_lines l
-              ON l.header_id = h.id
-             AND l.component_product_cd IS NOT NULL
-             AND TRIM(l.component_product_cd) <> ''
-             AND COALESCE(NULLIF(TRIM(l.component_type), ''), 'material') <> 'material'
-            LEFT JOIN parts p
-              ON p.part_cd = l.component_product_cd
-            WHERE {" AND ".join(conditions)}
-            GROUP BY
-                DATE(ip.start_date),
-                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
-                COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
-                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
-            ORDER BY
-                DATE(ip.start_date) ASC,
-                component_cd ASC
-        """)
-        dresult = await db.execute(dsql, params)
-        drows = dresult.mappings().fetchall()
-
-        date_list = [(d_start + timedelta(days=i)).isoformat() for i in range(span_days)]
-        pivot: dict[tuple, dict[str, float]] = {}
-        for r in drows:
-            rd = dict(r)
-            ed = rd.get("eff_date")
-            if ed is None:
-                continue
-            if hasattr(ed, "isoformat"):
-                ds = ed.isoformat()[:10]
-            else:
-                ds = str(ed)[:10]
-            key = (
-                rd.get("component_cd"),
-                rd.get("component_name"),
-                rd.get("component_uom"),
-            )
-            if key not in pivot:
-                pivot[key] = {d: 0.0 for d in date_list}
-            qv = _fnum(rd.get("required_qty"))
-            if ds in pivot[key]:
-                pivot[key][ds] += qv
-
-        for it in items:
-            k = (it.get("component_cd"), it.get("component_name"), it.get("component_uom"))
-            if k not in pivot:
-                pivot[k] = {d: 0.0 for d in date_list}
-
-        matrix_rows = []
-        for key in sorted(pivot.keys(), key=lambda k: (k[0] or "", k[1] or "", k[2] or "")):
-            cc, cn, cu = key
-            by_date = pivot[key]
-            row_total = sum(by_date.values())
-            matrix_rows.append(
-                {
-                    "component_cd": cc,
-                    "component_name": cn,
-                    "component_uom": cu,
-                    "by_date": {d: round(by_date[d], 6) for d in date_list},
-                    "row_total": round(row_total, 6),
-                }
-            )
-
-        daily_matrix = {
-            "dates": date_list,
-            "rows": matrix_rows,
-        }
-
+@router.get("/plan/batch/component-requirements-bundle")
+async def get_component_requirements_bundle(
+    date_start: Optional[str] = Query(None),
+    date_end: Optional[str] = Query(None),
+    production_month: Optional[str] = Query(None),
+    plan_column: str = Query("molding_actual_plan", description="需求量の駆動列"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """需求量サマリーと溶接ベース使用量サマリーを1回で返す。"""
+    d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
+    pmf = production_month.strip() if production_month and production_month.strip() else None
+    driver_expr, label = _plan_column_sql_expr(plan_column)
+    note_d = (
+        f"production_summarys を日付・製品で対象に、{label} × BOM構成比（qty_per/base_quantity）"
+        "× 歩留補正（1+scrap_rate）で集計しています。source_lot_count は当該部品に寄与したサマリー行（id）の件数です。"
+    )
+    note_u = (
+        "production_summarys を日付・製品で対象に、(welding_actual + welding_defect) × BOM構成比"
+        "（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。"
+    )
+    demand = await _aggregate_component_requirements_from_production_summarys(
+        db, d_start, d_end, driver_expr, note_d, pmf
+    )
+    demand["summary"]["plan_column"] = plan_column.strip()
+    use = await _aggregate_component_requirements_from_production_summarys(
+        db, d_start, d_end, _WELDING_USE_DRIVER_SQL, note_u, pmf
+    )
     return {
         "success": True,
         "message": "OK",
         "data": {
-            "items": items,
-            "daily_matrix": daily_matrix,
-            "summary": {
-                "date_start": d_start.isoformat(),
-                "date_end": d_end.isoformat(),
-                "production_month_filter": production_month.strip() if production_month and production_month.strip() else None,
-                "total_component_kinds": len(items),
-                "total_required_qty": round(total_required_qty, 6),
-                "effective_date_note": "start_date が設定されている instruction_plans を対象に、actual_production_quantity × BOM構成比（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。",
-                "daily_matrix_omitted": daily_matrix_omitted,
-                "daily_matrix_max_days": _DAY_MATRIX_MAX_DAYS,
-            },
+            "date_start": d_start.isoformat(),
+            "date_end": d_end.isoformat(),
+            "production_month_filter": pmf,
+            "demand": demand,
+            "use": use,
         },
     }
 

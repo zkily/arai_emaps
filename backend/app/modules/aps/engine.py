@@ -315,28 +315,38 @@ async def run_engine(
     override_start_date: Optional[date] = None,
     override_start_time: Optional[time] = None,
     actual_done_qty: int = 0,
+    use_setup_time: bool = True,
+    *,
+    ps_obj: Optional["ProductionSchedule"] = None,
+    machine_obj: Optional["Machine"] = None,
+    cal_map_preloaded: Optional[dict[date, float]] = None,
+    slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
 ) -> ProductionSchedule:
     """
     指定された工単に対して排産推算を実行する。
 
     1. schedule_details を全削除（冪等）
     2. 日別稼働 h：時間帯があれば合算、無ければ line_capacities → 設備 default
-    3. 日次出来高 ⌊ 稼働 h × (daily_capacity/15.3) × 能率% ⌋ で schedule_details を INSERT（初日は段取を h から控除）
+    3. 日次出来高 ⌊ 稼働 h × (daily_capacity/15.3) × 能率% ⌋ で schedule_details を INSERT（初日は段取を h から控除。use_setup_time=False の場合は段取を消費しない）
     4. 同一数量を稼働帯に「区間ごとの時間上限×個/h×能率」で先から詰め、最大 60 分区間ごとに schedule_slice_allocations を INSERT
     5. production_schedules の start_date / end_date / planned_output_qty / completion_rate を更新
+
+    性能最適化パラメータ（省略時は従来通り DB 取得）:
+      ps_obj            事前取得済みの ProductionSchedule
+      machine_obj        事前取得済みの Machine
+      cal_map_preloaded  事前取得済みの {date: available_hours}
+      slots_by_date_preloaded  事前取得済みの {date: [LineCapacityTimeSlot]}
     """
-    ps = await db.get(ProductionSchedule, schedule_id)
+    ps = ps_obj or await db.get(ProductionSchedule, schedule_id)
     if ps is None:
         raise ValueError(f"ProductionSchedule id={schedule_id} not found")
 
-    line = await db.get(Machine, ps.line_id)
+    line = machine_obj or await db.get(Machine, ps.line_id)
     if line is None:
         raise ValueError(f"Machine id={ps.line_id} not found")
 
-    # 基準開始日（再計算の対象開始）
     start = override_start_date or ps.start_date or now_jst().date()
 
-    # 既存実績を保持（再計算で schedule_details を削除しても actual_qty を失わない）
     old_detail_res = await db.execute(
         select(ScheduleDetail).where(ScheduleDetail.schedule_id == schedule_id)
     )
@@ -346,14 +356,17 @@ async def run_engine(
     for od in old_details:
         old_actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
         if od.schedule_date < start:
-            old_rows_before_start.append((
-                od.schedule_date,
-                int(od.planned_qty or 0),
-                int(od.actual_qty or 0),
-                int(getattr(od, "remaining_qty", 0) or 0),
-            ))
+            # 重排起点より前は「実績あり」の履歴のみ保持する。
+            # 実績0の旧 planned/remaining 行を残すと、日別ガントに
+            # 「計0/実0/残N」の浮動残数が再出現するため破棄する。
+            if int(od.actual_qty or 0) > 0:
+                old_rows_before_start.append((
+                    od.schedule_date,
+                    int(od.planned_qty or 0),
+                    int(od.actual_qty or 0),
+                    int(getattr(od, "remaining_qty", 0) or 0),
+                ))
 
-    # 既存明細・時間帯配分の削除（冪等性）
     await db.execute(
         delete(ScheduleSliceAllocation).where(
             ScheduleSliceAllocation.schedule_id == schedule_id
@@ -364,7 +377,6 @@ async def run_engine(
     )
     await db.flush()
 
-    # 再計算対象より前の日次は復元（履歴保持）
     for d0, p0, a0, r0 in old_rows_before_start:
         db.add(
             ScheduleDetail(
@@ -376,7 +388,6 @@ async def run_engine(
             )
         )
 
-    # 基本パラメータ
     remaining = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0) - max(0, int(actual_done_qty or 0))
     if remaining <= 0:
         ps.start_date = start
@@ -395,33 +406,36 @@ async def run_engine(
         default_hours = 8.0
 
     efficiency_pct = float(ps.efficiency or 100)
-    setup_minutes = int(ps.setup_time or 0)
+    setup_minutes = int(ps.setup_time or 0) if use_setup_time else 0
 
     base_day_hours = float(line.default_work_hours or 0)
     if base_day_hours <= 0:
         base_day_hours = SCHEDULE_STANDARD_DAY_HOURS
     if base_day_hours <= 0:
         raise ValueError("base_day_hours must be > 0")
-    # daily_capacity 换算为小时产能：
-    # - 线体有设定运行时间 -> 用线体运行时间
-    # - 未设定 -> 回退到默认 15.3h
     hourly_piece_rate = float(daily_capacity) / base_day_hours
 
-    # 稼働カレンダー・時間帯を先読み（最大 365 日分）
-    cal_end = start + timedelta(days=365)
-    cal_result = await db.execute(
-        select(LineCapacity)
-        .where(
-            LineCapacity.line_id == ps.line_id,
-            LineCapacity.work_date >= start,
-            LineCapacity.work_date <= cal_end,
+    if cal_map_preloaded is not None:
+        cal_map = cal_map_preloaded
+    else:
+        cal_end = start + timedelta(days=365)
+        cal_result = await db.execute(
+            select(LineCapacity)
+            .where(
+                LineCapacity.line_id == ps.line_id,
+                LineCapacity.work_date >= start,
+                LineCapacity.work_date <= cal_end,
+            )
+            .order_by(LineCapacity.work_date)
         )
-        .order_by(LineCapacity.work_date)
-    )
-    cal_map: dict[date, float] = {
-        row.work_date: float(row.available_hours) for row in cal_result.scalars().all()
-    }
-    slots_by_date = await _fetch_slots_by_date(db, ps.line_id, start, cal_end)
+        cal_map = {
+            row.work_date: float(row.available_hours) for row in cal_result.scalars().all()
+        }
+    if slots_by_date_preloaded is not None:
+        slots_by_date = slots_by_date_preloaded
+    else:
+        cal_end = start + timedelta(days=365)
+        slots_by_date = await _fetch_slots_by_date(db, ps.line_id, start, cal_end)
 
     total_produced = 0
     current_date = start
@@ -558,13 +572,19 @@ async def replan_line_sequential(
     db: AsyncSession,
     line_id: int,
     anchor_start_date: Optional[date] = None,
+    *,
+    machine_obj: Optional["Machine"] = None,
+    cal_map_preloaded: Optional[dict[date, float]] = None,
+    slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
 ) -> List[ProductionSchedule]:
     """
-    指定産線の全 PLANNING/IN_PROGRESS 工単を order_no 順に串接重算する。
+    指定産線の全工単（PLANNING / IN_PROGRESS / COMPLETED）を order_no 順に串接重算する。
+    COMPLETED 工単は run_engine を実行せず、時間占位のみ行い cursor を前進させる。
     最初の工単は anchor_start_date から、以降は前の工単 end_date の翌稼働日から。
     各工単の開始日は run_engine 内で「初日段取」をその製品の setup_time で控除する（製品切替＝次工単の初日に段取）。
+    順位（order_no）が 1 の工単はライン先頭想定のため、段取分を稼働から控除しない（全量 order_no 基準）。
     """
-    line = await db.get(Machine, line_id)
+    line = machine_obj or await db.get(Machine, line_id)
     if line is None:
         raise ValueError(f"Machine id={line_id} not found")
 
@@ -576,9 +596,13 @@ async def replan_line_sequential(
         select(ProductionSchedule)
         .where(
             ProductionSchedule.line_id == line_id,
-            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS"]),
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
         )
-        .order_by(ProductionSchedule.order_no, ProductionSchedule.id)
+        .order_by(
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no.asc(),
+            ProductionSchedule.id,
+        )
     )
     schedules = result.scalars().all()
     if not schedules:
@@ -586,19 +610,53 @@ async def replan_line_sequential(
 
     cursor_date = anchor_start_date or schedules[0].start_date or now_jst().date()
     cursor_time = time(0, 0, 0)
+
+    if cal_map_preloaded is not None:
+        shared_cal_map = cal_map_preloaded
+    else:
+        cal_start = cursor_date
+        cal_end = cal_start + timedelta(days=365)
+        cal_result = await db.execute(
+            select(LineCapacity)
+            .where(
+                LineCapacity.line_id == line_id,
+                LineCapacity.work_date >= cal_start,
+                LineCapacity.work_date <= cal_end,
+            )
+            .order_by(LineCapacity.work_date)
+        )
+        shared_cal_map = {
+            row.work_date: float(row.available_hours) for row in cal_result.scalars().all()
+        }
+
+    if slots_by_date_preloaded is not None:
+        shared_slots = slots_by_date_preloaded
+    else:
+        cal_start = cursor_date
+        cal_end = cal_start + timedelta(days=365)
+        shared_slots = await _fetch_slots_by_date(db, line_id, cal_start, cal_end)
+
     updated: List[ProductionSchedule] = []
 
-    for ps in schedules:
-        ps = await run_engine(
-            db,
-            ps.id,
-            override_start_date=cursor_date,
-            override_start_time=cursor_time,
-        )
-        updated.append(ps)
+    for idx, ps in enumerate(schedules):
+        replannable = (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS")
+        if replannable:
+            # 段取免除は「全線で先頭の1件」のみ。order_no 重複に依存しない。
+            use_setup = idx != 0
+            ps = await run_engine(
+                db,
+                ps.id,
+                override_start_date=cursor_date,
+                override_start_time=cursor_time,
+                use_setup_time=use_setup,
+                ps_obj=ps,
+                machine_obj=line,
+                cal_map_preloaded=shared_cal_map,
+                slots_by_date_preloaded=shared_slots,
+            )
+            updated.append(ps)
+            await db.flush()
 
-        # 次工単の開始時刻は、前工単の最後の slice end 時刻（同日で切替するため）
-        await db.flush()
         last_q = await db.execute(
             select(ScheduleSliceAllocation)
             .where(ScheduleSliceAllocation.schedule_id == ps.id)
@@ -610,16 +668,22 @@ async def replan_line_sequential(
             .limit(1)
         )
         last = last_q.scalars().first()
+        cand_date = None
+        cand_time = time(0, 0, 0)
         if last is not None:
-            cursor_date = last.work_date
-            cursor_time = last.period_end
-            # 00:00 は「24:00 保存（m % 1440）」の可能性があるため翌日に補正
-            if cursor_time == time(0, 0, 0) and last.period_start != time(0, 0, 0):
-                cursor_date = cursor_date + timedelta(days=1)
-                cursor_time = time(0, 0, 0)
+            cand_date = last.work_date
+            cand_time = last.period_end
+            if cand_time == time(0, 0, 0) and last.period_start != time(0, 0, 0):
+                cand_date = cand_date + timedelta(days=1)
+                cand_time = time(0, 0, 0)
         else:
-            cursor_date = ps.end_date or (cursor_date + timedelta(days=1))
-            cursor_time = time(0, 0, 0)
+            cand_date = ps.end_date
+            cand_time = time(0, 0, 0)
+
+        # 已完成工单也要参与“时间占位”，但不能把 cursor 往回拨
+        if cand_date is not None and (cand_date, cand_time) > (cursor_date, cursor_time):
+            cursor_date = cand_date
+            cursor_time = cand_time
 
     await db.flush()
     return updated

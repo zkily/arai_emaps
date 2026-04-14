@@ -98,6 +98,18 @@ const routes: RouteRecordRaw[] = [
         ],
       },
 
+      {
+        path: 'erp/purchase/part',
+        name: 'PartPurchaseManagement',
+        component: () => import('@/views/erp/purchase/part/PartLayoutWrapper.vue'),
+        meta: { title: '部品管理', group: '購買管理 > 部品管理', requiresAuth: true },
+        children: [
+          { path: '', name: 'PartPurchaseHome', component: () => import('@/views/erp/purchase/part/PartHome.vue'), meta: { title: '部品管理ホーム', group: '部品管理', requiresAuth: true } },
+          { path: 'master', redirect: '/master/part' },
+          { path: 'order', name: 'PartOrder', component: () => import('@/views/erp/purchase/part/partOrder/PartOrderPage.vue'), meta: { title: '部品在庫管理', group: '発注管理', requiresAuth: true } },
+        ],
+      },
+
       // ========== ERP - 在庫管理 (Inventory / WMS) ==========
       { path: 'erp/inventory', name: 'Inventory', component: () => import('@/views/erp/Inventory.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '在庫照会', group: '在庫管理', requiresAuth: true } },
@@ -200,8 +212,12 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/batch-plans', name: 'ApsBatchPlans', component: () => import('@/views/aps/BatchPlans.vue'), meta: { title: 'APSロット計画', requiresAuth: true } },
 
       // ========== MES モジュール ==========
-      { path: 'mes/execution', name: 'Execution', component: () => import('@/views/mes/Execution.vue'), meta: { title: '製造実行', requiresAuth: true } },
-      { path: 'mes/quality', name: 'Quality', component: () => import('@/views/mes/Quality.vue'), meta: { title: '品質管理', requiresAuth: true } },
+      {
+        path: 'mes/instruction/forming',
+        name: 'MesFormingInstruction',
+        component: () => import('@/views/mes/instruction/forming/MesFormingInstruction.vue'),
+        meta: { title: '成型指示', group: 'MES > 生産指示', requiresAuth: true, useApsSchedulePlanData: true },
+      },
 
       // ========== マスタ管理 ==========
       { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },

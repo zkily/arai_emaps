@@ -1,7 +1,7 @@
 """
 製品マスタ データベースモデル（products テーブル）
 """
-from sqlalchemy import Column, Integer, String, DateTime, Date, Time, Boolean, Text, Numeric, Float, SmallInteger, Computed  # Date used by DestinationHoliday; Time by Carrier
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Date, Time, Boolean, Text, Numeric, Float, SmallInteger, Computed  # Date used by DestinationHoliday; Time by Carrier
 from sqlalchemy.sql import func
 from app.core.database import Base
 

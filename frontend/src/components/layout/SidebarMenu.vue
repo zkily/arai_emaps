@@ -83,6 +83,21 @@
               </el-menu-item>
             </el-sub-menu>
 
+            <el-sub-menu index="erp-purchase-part">
+              <template #title>
+                <el-icon><Box /></el-icon>
+                <span>部品管理</span>
+              </template>
+              <el-menu-item index="/erp/purchase/part" class="menu-item-home">
+                <el-icon><HomeFilled /></el-icon>
+                <template #title><span>部品管理ホーム</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/purchase/part/order">
+                <el-icon><ShoppingCart /></el-icon>
+                <template #title><span>部品在庫管理</span></template>
+              </el-menu-item>
+            </el-sub-menu>
+
           <el-sub-menu index="erp-purchase-outsourcing">
               <template #title>
                 <el-icon><OfficeBuilding /></el-icon>
@@ -410,14 +425,16 @@
             <el-icon><Monitor /></el-icon>
             <span :title="t('menu.MES')">{{ t('menu.MES') }}</span>
           </template>
-          <el-menu-item index="/mes/execution">
-            <el-icon><VideoPlay /></el-icon>
-            <template #title><span :title="t('menu.MES_EXECUTION')">{{ t('menu.MES_EXECUTION') }}</span></template>
-          </el-menu-item>
-          <el-menu-item index="/mes/quality">
-            <el-icon><CircleCheck /></el-icon>
-            <template #title><span :title="t('menu.MES_QUALITY')">{{ t('menu.MES_QUALITY') }}</span></template>
-          </el-menu-item>
+          <el-sub-menu index="mes-instruction">
+            <template #title>
+              <el-icon><Document /></el-icon>
+              <span :title="t('menu.MES_PRODUCTION_INSTRUCTION')">{{ t('menu.MES_PRODUCTION_INSTRUCTION') }}</span>
+            </template>
+            <el-menu-item index="/mes/instruction/forming">
+              <el-icon><Document /></el-icon>
+              <template #title><span :title="t('menu.MES_FORMING_INSTRUCTION')">{{ t('menu.MES_FORMING_INSTRUCTION') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
         </el-sub-menu>
         
         <el-sub-menu index="master">
@@ -514,7 +531,7 @@ import { useUserStore } from '@/modules/auth/stores/user'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document, Money,
   User, DataAnalysis, Monitor, Setting, Tools, Grid,
-  Collection, List, Connection, Calendar, Timer, VideoPlay, CircleCheck, Van,
+  Collection, List, Connection, Calendar, Timer, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
   Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload
 } from '@element-plus/icons-vue'

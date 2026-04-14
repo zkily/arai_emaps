@@ -416,6 +416,25 @@ export function replanLineSequence(lineId: number, anchorStartDate?: string): Pr
   return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
 }
 
+/** 設備別に DB 保存する順次再計算アンカー日（未設定は null） */
+export interface LineReplanAnchorRow {
+  line_id: number
+  line_code: string
+  line_name: string
+  anchor_date: string | null
+}
+
+export function fetchLineReplanAnchors(processCd?: string | null): Promise<LineReplanAnchorRow[]> {
+  const params: Record<string, string> = {}
+  const pc = processCd != null ? String(processCd).trim() : ''
+  if (pc) params.processCd = pc
+  return request.get(`${BASE}/line-replan-anchors`, { params })
+}
+
+export function saveLineReplanAnchors(items: { line_id: number; anchor_date: string | null }[]): Promise<any> {
+  return request.put(`${BASE}/line-replan-anchors`, { items })
+}
+
 // ──────────── Time Slots ────────────
 
 export function fetchLineCapacitySlots(

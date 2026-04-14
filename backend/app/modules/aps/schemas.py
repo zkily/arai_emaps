@@ -19,6 +19,23 @@ class ProductionLineOut(BaseModel):
         from_attributes = True
 
 
+class LineReplanAnchorOut(BaseModel):
+    """設備別に保存した再計算アンカー日（未設定時 anchor_date は null）"""
+    line_id: int
+    line_code: str
+    line_name: str = ""
+    anchor_date: Optional[str] = None
+
+
+class LineReplanAnchorItemBody(BaseModel):
+    line_id: int
+    anchor_date: Optional[str] = None
+
+
+class LineReplanAnchorsBatchBody(BaseModel):
+    items: List[LineReplanAnchorItemBody]
+
+
 class EquipmentEfficiencyProductOut(BaseModel):
     """equipment_efficiency 1 行（APS 品名プルダウン用）"""
     id: int

@@ -161,6 +161,18 @@ export const erpRoutes: RouteRecordRaw[] = [
         ],
       },
 
+      {
+        path: 'erp/purchase/part',
+        name: 'PartPurchaseManagement',
+        component: () => import('@/views/erp/purchase/part/PartLayoutWrapper.vue'),
+        meta: { title: '部品管理', group: '購買管理 > 部品管理', requiresAuth: true },
+        children: [
+          { path: '', name: 'PartPurchaseHome', component: () => import('@/views/erp/purchase/part/PartHome.vue'), meta: { title: '部品管理ホーム', group: '部品管理', requiresAuth: true } },
+          { path: 'master', redirect: '/master/part' },
+          { path: 'order', name: 'PartOrder', component: () => import('@/views/erp/purchase/part/partOrder/PartOrderPage.vue'), meta: { title: '部品在庫管理', group: '発注管理', requiresAuth: true } },
+        ],
+      },
+
       // ╔══════════════════════════════════════════════════════════════╗
       // ║  3. 在庫管理 (Inventory / WMS)                               ║
       // ╚══════════════════════════════════════════════════════════════╝

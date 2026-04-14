@@ -19,6 +19,11 @@
               style="width: 120px"
             />
           </el-form-item>
+          <el-form-item label-width="0">
+            <el-button type="default" @click="openLineReplanAnchorDialog">
+              再計算アンカー日設定
+            </el-button>
+          </el-form-item>
           <el-form-item label="工程" required>
             <el-select
               v-model="selectedProcessCd"
@@ -248,10 +253,20 @@
       <div class="plan-sec-hd plan-sec-hd--schedule">
         <div class="plan-sec-hd-left">
           計画一覧
-          <span class="plan-sec-badge">{{ schedules.length }}</span>
-          <span class="plan-sec-sub">行をドラッグして順序を変更</span>
+          <span class="plan-sec-badge">{{ scheduleCountBadge }}</span>
+          <span class="plan-sec-sub">
+            {{ showCompletedSchedules ? '完了を含む表示では並べ替えできません' : '行をドラッグして順序を変更' }}
+          </span>
         </div>
         <div class="schedule-actions">
+          <el-switch
+            v-model="showCompletedSchedules"
+            size="small"
+            inline-prompt
+            :active-text="'含む完了'"
+            :inactive-text="'未完のみ'"
+            class="schedule-completed-switch"
+          />
           <el-button
             type="warning"
             size="small"
@@ -265,7 +280,7 @@
       </div>
       <el-table
         ref="scheduleTableRef"
-        :data="sortedSchedules"
+        :data="visibleSchedules"
         border
         stripe
         size="small"
@@ -281,7 +296,9 @@
             <span class="schedule-order-head" title="行をドラッグして順序を変更">順位</span>
           </template>
           <template #default="{ row }">
-            <span class="order-num schedule-drag-hint">{{ row.order_no ?? '—' }}</span>
+            <span class="order-num schedule-drag-hint" :title="`ID: ${row.id}`">
+              {{ row.order_no ?? '—' }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column prop="item_name" label="製品名" width="130" />
@@ -431,7 +448,7 @@
                     :title="ganttCellTitle(row, d)"
                   >
                     <div
-                      v-if="(row.daily[d] || 0) > 0 || (row.actual_daily?.[d] || 0) > 0 || (row.remaining_daily?.[d] || 0) > 0"
+                      v-if="(row.daily[d] || 0) !== 0 || (row.actual_daily?.[d] || 0) !== 0 || (row.remaining_daily?.[d] || 0) !== 0"
                       class="gantt-layered"
                     >
                       <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
@@ -504,7 +521,7 @@
 
         <!-- ─── 生産進捗（ロット別ステータス甘特） ─── -->
         <el-tab-pane label="生産進捗" name="progress">
-          <div v-if="progressLots.length === 0 && !loadingProgress" class="gantt-hourly-placeholder">
+          <div v-if="sortedProgressLots.length === 0 && !loadingProgress" class="gantt-hourly-placeholder">
             <el-empty description="進捗データがありません（ライン順で再計算後に表示されます）" />
           </div>
           <div v-else class="gantt-scroll">
@@ -532,7 +549,7 @@
               </thead>
               <tbody>
                 <tr
-                  v-for="(lot, idx) in progressLots"
+                  v-for="(lot, idx) in sortedProgressLots"
                   :key="`${lot.aps_schedule_id}_${lot.lot_number}`"
                   :class="['gantt-row', `gantt-rc-${idx % 10}`]"
                 >
@@ -578,24 +595,101 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-
-      <el-dialog
-        v-model="lineCapacityDialogVisible"
-        :title="`設備稼働設定 — ${selectedLineDisplayName}`"
-        width="min(960px, 96vw)"
-        top="4vh"
-        destroy-on-close
-        append-to-body
-        class="plan-line-capacity-dialog"
-      >
-        <LineCapacity
-          v-if="lineCapacityDialogVisible && selectedLineId != null && lineCapacityDateRange"
-          embed
-          :preset-line-id="selectedLineId"
-          :preset-date-range="lineCapacityDateRange"
-        />
-      </el-dialog>
     </div>
+
+    <!-- ガント未表示時も DOM に存在させる（v-if 内だとガント未取得の間はダイアログが無く反応しない） -->
+    <el-dialog
+      v-model="lineReplanAnchorDialogVisible"
+      width="min(820px, 96vw)"
+      top="5vh"
+      append-to-body
+      destroy-on-close
+      :close-on-click-modal="false"
+      @open="onLineReplanAnchorDialogOpen"
+      class="plan-line-anchor-dialog"
+    >
+      <template #header>
+        <div class="line-anchor-dlg-header">
+          <div class="line-anchor-dlg-header-icon" aria-hidden="true">
+            <el-icon :size="26"><Calendar /></el-icon>
+          </div>
+          <div class="line-anchor-dlg-header-text">
+            <div class="line-anchor-dlg-title">再計算アンカー日</div>
+            <div class="line-anchor-dlg-meta">
+              <el-tag size="small" type="primary" effect="light" class="line-anchor-dlg-tag">
+                {{ anchorDialogProcessTag }}
+              </el-tag>
+              <span class="line-anchor-dlg-meta-note">上記工程に該当する APS 設備のみ（設備マスタの種別＝工程名／工程CD）</span>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="line-anchor-dlg-inner">
+        <div class="line-anchor-dlg-hint-card">
+          順次再計算の開始日を設備ごとに保存します。保存済みは<strong>最優先</strong>で使われます（今日への繰り上げなし）。クリアすると「基準月1日」と「今日」の従来ロジックに戻ります。
+        </div>
+
+        <el-empty
+          v-if="!loadingLineReplanAnchors && lineReplanAnchorRows.length === 0"
+          description="この工程に該当する設備がありません"
+          :image-size="72"
+        />
+        <el-table
+          v-else
+          v-loading="loadingLineReplanAnchors"
+          :data="lineReplanAnchorRows"
+          class="line-anchor-dlg-table"
+          border
+          stripe
+          size="small"
+          max-height="420"
+          style="width: 100%"
+        >
+          <el-table-column type="index" label="#" width="48" align="center" />
+          <el-table-column prop="line_code" label="設備コード" width="118" />
+          <el-table-column prop="line_name" label="設備名" min-width="160" show-overflow-tooltip />
+          <el-table-column label="アンカー日" width="220" align="center">
+            <template #default="{ row }">
+              <el-date-picker
+                v-model="row.anchor_date"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="未設定"
+                clearable
+                class="line-anchor-dlg-picker"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <template #footer>
+        <div class="line-anchor-dlg-footer">
+          <el-button @click="lineReplanAnchorDialogVisible = false">閉じる</el-button>
+          <el-button type="primary" :loading="savingLineReplanAnchors" @click="saveLineReplanAnchorsFromDialog">
+            保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="lineCapacityDialogVisible"
+      :title="`設備稼働設定 — ${selectedLineDisplayName}`"
+      width="min(960px, 96vw)"
+      top="4vh"
+      destroy-on-close
+      append-to-body
+      class="plan-line-capacity-dialog"
+    >
+      <LineCapacity
+        v-if="lineCapacityDialogVisible && selectedLineId != null && lineCapacityDateRange"
+        embed
+        :preset-line-id="selectedLineId"
+        :preset-date-range="lineCapacityDateRange"
+      />
+    </el-dialog>
   </div>
 </template>
 
@@ -603,7 +697,7 @@
 defineOptions({ name: 'FormingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Calendar, Delete } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 import {
@@ -617,8 +711,11 @@ import {
   fetchSchedulingHourlyGrid,
   fetchEquipmentEfficiencyProducts,
   fetchProductionProgress,
+  fetchLineReplanAnchors,
+  saveLineReplanAnchors,
   productionLineOptionLabel,
   type ProductionLine,
+  type LineReplanAnchorRow,
   type ScheduleOut,
   type ScheduleGridRow,
   type HourlyGridColumn,
@@ -629,6 +726,24 @@ import {
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import LineCapacity from '../LineCapacity.vue'
+
+/** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
+function formatYmdInJapan(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+/** ISO 日付文字列 YYYY-MM-DD のグレゴリオ暦上の曜日（0=日）。列ヘッダ日付と一致させる */
+function weekdayIndexForIsoDate(isoYmd: string): number {
+  const p = isoYmd.trim().split('-').map((v) => Number(v))
+  if (p.length !== 3 || p.some((n) => !Number.isFinite(n))) return 0
+  const [y, m, d] = p
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0)).getUTCDay()
+}
 
 function firstDayOfMonthIso(month: string): string {
   return `${month}-01`
@@ -643,19 +758,17 @@ function lastDayOfMonthOffsetIso(month: string, offset: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`
 }
 
-/** 表示期間と同じ全日列（日次ガントの dates と一致） */
+/** 表示期間と同じ全日列（日次ガントの dates と一致）。暦日は日本時区で積み上げ */
 function expandDateRangeIso(startIso: string, endIso: string): string[] {
-  const sd = new Date(`${startIso}T12:00:00`)
-  const ed = new Date(`${endIso}T12:00:00`)
+  const sd = new Date(`${startIso.trim()}T12:00:00+09:00`)
+  const ed = new Date(`${endIso.trim()}T12:00:00+09:00`)
   if (Number.isNaN(sd.getTime()) || Number.isNaN(ed.getTime()) || ed < sd) return []
   const out: string[] = []
-  const cur = new Date(sd)
-  while (cur <= ed) {
-    const y = cur.getFullYear()
-    const m = String(cur.getMonth() + 1).padStart(2, '0')
-    const d = String(cur.getDate()).padStart(2, '0')
-    out.push(`${y}-${m}-${d}`)
-    cur.setDate(cur.getDate() + 1)
+  let t = sd.getTime()
+  const endT = ed.getTime()
+  while (t <= endT) {
+    out.push(formatYmdInJapan(new Date(t)))
+    t += 24 * 60 * 60 * 1000
   }
   return out
 }
@@ -669,6 +782,10 @@ const loadingLines = ref(false)
 const DEFAULT_ANCHOR_MONTH = '2026-04'
 const anchorMonth = ref<string>(DEFAULT_ANCHOR_MONTH)
 const anchorDate = ref<string>(firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH))
+const lineReplanAnchorDialogVisible = ref(false)
+const lineReplanAnchorRows = ref<LineReplanAnchorRow[]>([])
+const loadingLineReplanAnchors = ref(false)
+const savingLineReplanAnchors = ref(false)
 const ganttRange = ref<[string, string]>([
   firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH),
   lastDayOfMonthOffsetIso(DEFAULT_ANCHOR_MONTH, 1),
@@ -679,6 +796,7 @@ const replanning = ref(false)
 const savingScheduleId = ref<number | null>(null)
 const reordering = ref(false)
 const schedules = ref<ScheduleOut[]>([])
+const showCompletedSchedules = ref(false)
 /** 合計(本) インライン編集用の下書き */
 const plannedQtyDrafts = ref<Record<number, string>>({})
 /** 合計(本) を編集中のスケジュール id（ダブルクリックで編集） */
@@ -772,6 +890,22 @@ const scheduleProgressMap = computed(() => {
   return map
 })
 
+/** 生産進捗の行を順位順に安定ソート（同順位内は計画ID→ロット番号） */
+const sortedProgressLots = computed(() => {
+  return [...progressLots.value].sort((a, b) => {
+    const oa = a.order_no ?? 1_000_000 + a.aps_schedule_id
+    const ob = b.order_no ?? 1_000_000 + b.aps_schedule_id
+    if (oa !== ob) return oa - ob
+    if (a.aps_schedule_id !== b.aps_schedule_id) return a.aps_schedule_id - b.aps_schedule_id
+    const la = Number(a.lot_number)
+    const lb = Number(b.lot_number)
+    const na = Number.isFinite(la)
+    const nb = Number.isFinite(lb)
+    if (na && nb && la !== lb) return la - lb
+    return String(a.lot_number).localeCompare(String(b.lot_number))
+  })
+})
+
 watch(anchorMonth, (v) => {
   if (!v) return
   anchorDate.value = firstDayOfMonthIso(v)
@@ -788,12 +922,24 @@ const sortedSchedules = computed(() => {
   })
 })
 
+/** 未完了行のみ（現場で操作する実行キュー） */
+const activeSchedules = computed(() => sortedSchedules.value.filter((s) => s.status !== 'COMPLETED'))
+
+/** 一覧表示対象（既定は未完了のみ、必要時に完了含む） */
+const visibleSchedules = computed(() => (showCompletedSchedules.value ? sortedSchedules.value : activeSchedules.value))
+
+const scheduleCountBadge = computed(() => `${visibleSchedules.value.length}/${schedules.value.length}`)
+
+watch([showCompletedSchedules, () => visibleSchedules.value.length], () => {
+  initScheduleSortable()
+})
+
 /** 計画一覧のうち、追加フォームで選んだ製品と同一の行（product_cd 優先、無ければ品名一致） */
 const mergeableSchedules = computed((): ScheduleOut[] => {
   const ep = (newEntry.value.product_cd || '').trim()
   const en = (newEntry.value.item_name || '').trim()
   if (!ep && !en) return []
-  return sortedSchedules.value.filter((s) => {
+  return activeSchedules.value.filter((s) => {
     const sp = (s.product_cd || '').trim()
     if (ep && sp) return sp === ep
     if (ep || sp) return false
@@ -906,7 +1052,8 @@ function destroyScheduleSortable() {
 
 function initScheduleSortable() {
   destroyScheduleSortable()
-  if (sortedSchedules.value.length < 2) return
+  if (showCompletedSchedules.value) return
+  if (visibleSchedules.value.length < 2) return
   nextTick(() => {
     const root = scheduleTableRef.value?.$el
     const tbody = root?.querySelector?.('.el-table__body-wrapper tbody') as HTMLElement | undefined | null
@@ -931,14 +1078,38 @@ function initScheduleSortable() {
 
 async function persistScheduleOrderAfterDrag(oldIndex: number, newIndex: number) {
   if (!selectedLineId.value || reordering.value) return
+  if (showCompletedSchedules.value) return
   scheduleSortable?.option('disabled', true)
-  const list = sortedSchedules.value.map((s) => s)
-  const [moved] = list.splice(oldIndex, 1)
-  list.splice(newIndex, 0, moved)
+
+  const allSorted = sortedSchedules.value
+  // 未完了行が占有する「全量一覧内の槽位编号（1..N）」。
+  // これを回填することで、完了行アンカーを保ったまま重複順位を解消できる。
+  const nonCompletedSlots = allSorted
+    .map((s, idx) => ({ s, slotOrder: idx + 1 }))
+    .filter((x) => x.s.status !== 'COMPLETED')
+    .map((x) => x.slotOrder)
+
+  const dragged = visibleSchedules.value.map((s) => s)
+  const [moved] = dragged.splice(oldIndex, 1)
+  dragged.splice(newIndex, 0, moved)
+
+  const updates: { id: number; order_no: number }[] = []
+  dragged.forEach((s, i) => {
+    const newOrder = nonCompletedSlots[i] ?? (Math.max(...allSorted.map((x) => x.order_no ?? 0)) + i + 1)
+    if (s.order_no !== newOrder) {
+      updates.push({ id: s.id, order_no: newOrder })
+    }
+  })
+
+  if (updates.length === 0) {
+    scheduleSortable?.option('disabled', false)
+    return
+  }
+
   reordering.value = true
   try {
     await Promise.all(
-      list.map((s, i) => updateSchedule(s.id, { order_no: i + 1, run_immediately: false })),
+      updates.map((u) => updateSchedule(u.id, { order_no: u.order_no, run_immediately: false })),
     )
     await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
@@ -1185,7 +1356,7 @@ async function addSchedule() {
     }
 
     const nextOrder = schedules.value.length > 0
-      ? Math.max(...schedules.value.map(s => s.order_no ?? 0)) + 1
+      ? Math.max(...schedules.value.map((s) => s.order_no ?? 0)) + 1
       : 1
 
     const payload: Parameters<typeof createSchedule>[0] = {
@@ -1351,18 +1522,69 @@ async function replanAll() {
   }
 }
 
-const todayIso = computed(() => new Date().toISOString().slice(0, 10))
+const todayIso = computed(() => formatYmdInJapan(new Date()))
 
 /**
- * 计划变更后的重排锚点：
- * - 仅重排“今天及以后”，避免回改历史数据
- * - 若基准开始日晚于今天，则继续使用基准开始日
+ * 再計算 API（replan-sequence）のクエリ錨点（フォールバック）。
+ * 当該設備に DB（aps_line_replan_anchors）があればサーバ側でそちらが最優先される。
+ * ここでは基準月1日と日本の今日の大きい方のみ（過去の月初に固定しない）。
  */
 function effectiveReplanAnchorDate(): string {
   const anchor = (anchorDate.value || '').trim()
   const today = todayIso.value
   if (!anchor) return today
   return anchor >= today ? anchor : today
+}
+
+function openLineReplanAnchorDialog() {
+  if (!(selectedProcessCd.value || '').trim()) {
+    ElMessage.warning('先に工程を選択してください')
+    return
+  }
+  lineReplanAnchorDialogVisible.value = true
+}
+
+const anchorDialogProcessTag = computed(() => {
+  const cd = (selectedProcessCd.value || '').trim()
+  if (!cd) return '工程未選択'
+  const p = processOptions.value.find((x) => (x.process_cd || '').trim() === cd)
+  return p ? `${p.process_cd} — ${p.process_name}` : cd
+})
+
+async function onLineReplanAnchorDialogOpen() {
+  const pc = (selectedProcessCd.value || '').trim()
+  if (!pc) {
+    lineReplanAnchorRows.value = []
+    return
+  }
+  loadingLineReplanAnchors.value = true
+  try {
+    const rows = await fetchLineReplanAnchors(pc)
+    lineReplanAnchorRows.value = Array.isArray(rows) ? rows.map((r) => ({ ...r })) : []
+  } catch {
+    lineReplanAnchorRows.value = []
+    ElMessage.error('アンカー一覧の取得に失敗しました')
+  } finally {
+    loadingLineReplanAnchors.value = false
+  }
+}
+
+async function saveLineReplanAnchorsFromDialog() {
+  savingLineReplanAnchors.value = true
+  try {
+    await saveLineReplanAnchors(
+      lineReplanAnchorRows.value.map((r) => {
+        const raw = r.anchor_date != null && r.anchor_date !== '' ? String(r.anchor_date).trim() : ''
+        return { line_id: r.line_id, anchor_date: raw || null }
+      }),
+    )
+    ElMessage.success('再計算アンカー日を保存しました')
+    lineReplanAnchorDialogVisible.value = false
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '保存に失敗しました')
+  } finally {
+    savingLineReplanAnchors.value = false
+  }
 }
 
 /** equipment_efficiency.efficiency_rate（本/H） */
@@ -1504,7 +1726,17 @@ function progressCellClass(lot: ProgressLotItem, d: string): Record<string, bool
 }
 function formatPrediction(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return iso.replace('T', ' ').slice(0, 16)
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.replace('T', ' ').slice(0, 16)
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d)
 }
 
 /** cutting_management の実績/計画（成型の日別セル・在庫ログ実績とは別） */
@@ -1535,24 +1767,24 @@ function statusLabelJa(s: string): string {
 }
 
 function isWeekend(d: string): boolean {
-  const day = new Date(d).getDay()
+  const day = weekdayIndexForIsoDate(d)
   return day === 0 || day === 6
 }
 
 function isToday(d: string): boolean {
-  return d === new Date().toISOString().slice(0, 10)
+  return d === formatYmdInJapan(new Date())
 }
 
 function getWeekday(d: string): string {
   const wd = ['日', '月', '火', '水', '木', '金', '土']
-  return wd[new Date(d).getDay()]
+  return wd[weekdayIndexForIsoDate(d)]
 }
 
 function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean> {
   const qty = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  const active = qty > 0 || actual > 0 || remain > 0
+  const active = qty !== 0 || actual !== 0 || remain !== 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
   return {
     'gantt-active': active,
@@ -1756,6 +1988,9 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+.schedule-completed-switch {
+  margin-right: 4px;
 }
 .schedule-section .schedule-replan-btn {
   height: var(--ctrl-h);
@@ -2196,6 +2431,95 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .gantt-table tbody .gantt-line-dbl:hover,
 .gantt-table thead .gantt-line-dbl:hover {
   background-color: rgba(64, 158, 255, 0.1) !important;
+}
+.plan-line-anchor-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.plan-line-anchor-dialog :deep(.el-dialog__body) {
+  padding: 0 20px 16px;
+}
+.plan-line-anchor-dialog :deep(.el-dialog__footer) {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+.line-anchor-dlg-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+}
+.line-anchor-dlg-header-icon {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, rgba(64, 158, 255, 0.18), rgba(64, 158, 255, 0.06));
+  color: var(--el-color-primary);
+}
+.line-anchor-dlg-header-text {
+  min-width: 0;
+  flex: 1;
+}
+.line-anchor-dlg-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+.line-anchor-dlg-meta {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.line-anchor-dlg-tag {
+  font-weight: 500;
+}
+.line-anchor-dlg-meta-note {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.line-anchor-dlg-inner {
+  padding-top: 16px;
+}
+.line-anchor-dlg-hint-card {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--el-text-color-regular);
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+}
+.line-anchor-dlg-hint-card strong {
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+.line-anchor-dlg-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.line-anchor-dlg-table :deep(.el-table__header th) {
+  font-weight: 600;
+  background: var(--el-fill-color-light) !important;
+}
+.line-anchor-dlg-picker {
+  width: 100%;
+  max-width: 200px;
+}
+.line-anchor-dlg-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
 }
 .plan-line-capacity-dialog :deep(.el-dialog__body) {
   padding: 8px 12px 14px;

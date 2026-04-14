@@ -26,9 +26,9 @@
 
 ```sql
 status = CASE
-    WHEN received_qty + good_qty_diff >= quantity THEN 'completed'
-    WHEN received_qty + good_qty_diff > 0 THEN 'partial'
-    ELSE 'ordered'   -- 原 ELSE status
+  WHEN received_qty + good_qty_diff >= quantity THEN 'completed'
+  WHEN received_qty + good_qty_diff > 0 THEN 'partial'
+  ELSE 'ordered'   -- 原 ELSE status
 END
 ```
 
@@ -69,7 +69,7 @@ END
 
 ## 修正后的触发器（建议版）
 
-见同目录下 `046_welding_receiving_good_qty_trigger.sql`（如存在），或以下逻辑要点：
+见 `backend/database/migrations/046_welding_receiving_good_qty_trigger.sql`，或以下逻辑要点：
 
 - 使用 `CASE` 在「新入庫数 <= 0」时设 `status = 'ordered'`（按需保留或改回 `ELSE status`）。
 - 在庫更新：增加时用「先 UPDATE，未命中再 INSERT」避免 NULL welding_type 下重复行；减少时 UPDATE 加 `ORDER BY id LIMIT 1`。

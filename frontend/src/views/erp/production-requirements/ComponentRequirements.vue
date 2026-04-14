@@ -65,6 +65,17 @@
           <el-button type="primary" size="small" :loading="loading" class="btn-run" @click="runSummary">
             {{ t('productionRequirements.searchBtn') }}
           </el-button>
+          <span class="ctl-label ctl-label--plan">{{ t('productionRequirements.planColumnLabel') }}</span>
+          <el-select
+            v-model="planColumn"
+            size="small"
+            class="plan-col-select"
+            :disabled="loading"
+            :teleported="false"
+          >
+            <el-option :label="t('productionRequirements.planColumnMoldingActualPlan')" value="molding_actual_plan" />
+            <el-option :label="t('productionRequirements.planColumnMoldingPlan')" value="molding_plan" />
+          </el-select>
         </div>
       </div>
 
@@ -77,6 +88,12 @@
         <span class="chip chip--qty">
           {{ t('productionRequirements.totalRequiredQty') }}
           <em>{{ formatQty(summary.total_required_qty) }}</em>
+        </span>
+      </div>
+      <div v-if="summaryUse" class="stat-chips stat-chips--use">
+        <span class="chip chip--qty chip--accent">
+          {{ t('productionRequirements.totalUseQty') }}
+          <em>{{ formatQty(summaryUse.total_required_qty) }}</em>
         </span>
       </div>
 
@@ -135,6 +152,7 @@
         </div>
         <div class="table-frame table-frame--matrix">
           <el-table
+            :key="matrixTableKey"
             v-loading="loading"
             :data="matrixRows"
             border
@@ -143,6 +161,7 @@
             class="tbl tbl-matrix"
             :max-height="MATRIX_TABLE_MAX_H"
             :empty-text="t('productionRequirements.noData')"
+            :default-sort="{ prop: 'component_name', order: 'ascending' }"
           >
             <el-table-column prop="component_cd" :label="t('productionRequirements.colComponentCd')" fixed width="80" />
             <el-table-column prop="component_name" :label="t('productionRequirements.colComponentName')" fixed width="160" sortable/>
@@ -170,6 +189,53 @@
           </el-table>
         </div>
       </section>
+
+      <section v-if="hasSearched && dailyDates.length > 0" class="panel panel--matrix panel--matrix-use">
+        <div class="panel-head panel-head--with-action">
+          <div class="panel-head-left">
+            <span class="panel-mark panel-mark--accent" />
+            <span class="panel-title">{{ t('productionRequirements.componentUseDailyMatrixTitle') }}</span>
+          </div>
+        </div>
+        <div class="table-frame table-frame--matrix">
+          <el-table
+            :key="matrixTableKeyUse"
+            v-loading="loading"
+            :data="matrixRowsUse"
+            border
+            stripe
+            size="small"
+            class="tbl tbl-matrix"
+            :max-height="MATRIX_TABLE_MAX_H"
+            :empty-text="t('productionRequirements.noData')"
+            :default-sort="{ prop: 'component_name', order: 'ascending' }"
+          >
+            <el-table-column prop="component_cd" :label="t('productionRequirements.colComponentCd')" fixed width="80" />
+            <el-table-column prop="component_name" :label="t('productionRequirements.colComponentName')" fixed width="160" sortable />
+            <el-table-column prop="component_uom" :label="t('productionRequirements.colUom')" fixed width="55" align="center" />
+            <el-table-column :label="t('productionRequirements.rowTotalUse')" fixed width="90" align="right">
+              <template #default="{ row }">
+                {{ formatQty(row.row_total ?? 0) }}
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="d in dailyDates"
+              :key="'u-' + d"
+              min-width="80"
+              align="right"
+              label-class-name="matrix-day-col"
+              class-name="matrix-day-col"
+            >
+              <template #header>
+                <span :title="d">{{ shortDateLabel(d) }}</span>
+              </template>
+              <template #default="{ row }">
+                <span>{{ formatQtyCell(row, d) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </section>
     </el-card>
   </div>
 </template>
@@ -181,21 +247,37 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import {
-  fetchComponentRequirementsSummary,
+  fetchComponentRequirementsBundle,
   type ComponentRequirementsSummaryItem,
   type ComponentRequirementsDailyMatrixRow,
   type ComponentRequirementsSummaryMeta,
 } from '@/api/productionSchedule'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function htmlLangForPrint(): string {
+  const l = (locale.value || 'ja').toLowerCase()
+  if (l.startsWith('zh')) return 'zh-Hans'
+  if (l.startsWith('ja')) return 'ja'
+  if (l.startsWith('vi')) return 'vi'
+  return 'en'
+}
+
+const planColumn = ref<'molding_actual_plan' | 'molding_plan'>('molding_actual_plan')
 
 const dateRange = ref<[string, string] | null>(null)
 const loading = ref(false)
 const hasSearched = ref(false)
 const items = ref<ComponentRequirementsSummaryItem[]>([])
 const summary = ref<ComponentRequirementsSummaryMeta | null>(null)
+const summaryUse = ref<ComponentRequirementsSummaryMeta | null>(null)
 const dailyDates = ref<string[]>([])
 const matrixRows = ref<ComponentRequirementsDailyMatrixRow[]>([])
+const matrixRowsUse = ref<ComponentRequirementsDailyMatrixRow[]>([])
+/** 再查询时重置 el-table，使 default-sort（部品名升序）重新生效 */
+const matrixTableKey = ref(0)
+const matrixTableKeyUse = ref(0)
+
 const SUMMARY_TABLE_MAX_H = 320
 const MATRIX_TABLE_MAX_H = 380
 
@@ -217,6 +299,73 @@ function formatQty(n: number) {
 function shortDateLabel(iso: string) {
   if (!iso || iso.length < 10) return iso
   return iso.slice(5, 10)
+}
+
+/** 日別矩阵：默认部品名升序，同名再按部品 CD */
+function compareMatrixRowsByComponentName(
+  a: ComponentRequirementsDailyMatrixRow,
+  b: ComponentRequirementsDailyMatrixRow,
+): number {
+  const n0 = (a.component_name ?? '').localeCompare(b.component_name ?? '', undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+  if (n0 !== 0) return n0
+  return (a.component_cd ?? '').localeCompare(b.component_cd ?? '', undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+}
+
+function sortMatrixRowsByComponentName(rows: ComponentRequirementsDailyMatrixRow[]) {
+  return [...rows].sort(compareMatrixRowsByComponentName)
+}
+
+/** 使用量マトリクスを需要マトリクスと同じ部品行順に揃える（需要に無い部品は末尾に追加） */
+function alignUseRowsToDemand(
+  demandSorted: ComponentRequirementsDailyMatrixRow[],
+  useMatrix: { dates: string[]; rows: ComponentRequirementsDailyMatrixRow[] } | null,
+  dates: string[],
+): ComponentRequirementsDailyMatrixRow[] {
+  if (!dates.length) return []
+  if (!useMatrix?.rows?.length) {
+    return demandSorted.map((dr) => {
+      const empty: Record<string, number> = {}
+      for (const d of dates) empty[d] = 0
+      return {
+        component_cd: dr.component_cd,
+        component_name: dr.component_name,
+        component_uom: dr.component_uom,
+        by_date: empty,
+        row_total: 0,
+      }
+    })
+  }
+  const byCd = new Map(useMatrix.rows.map((r) => [r.component_cd, r]))
+  const out: ComponentRequirementsDailyMatrixRow[] = []
+  for (const dr of demandSorted) {
+    const u = byCd.get(dr.component_cd)
+    if (u) {
+      out.push(u)
+      continue
+    }
+    const empty: Record<string, number> = {}
+    for (const d of dates) empty[d] = 0
+    out.push({
+      component_cd: dr.component_cd,
+      component_name: dr.component_name,
+      component_uom: dr.component_uom,
+      by_date: empty,
+      row_total: 0,
+    })
+  }
+  const demandCds = new Set(demandSorted.map((d) => d.component_cd))
+  for (const ur of useMatrix.rows) {
+    if (!demandCds.has(ur.component_cd)) {
+      out.push(ur)
+    }
+  }
+  return sortMatrixRowsByComponentName(out)
 }
 
 function qtyFor(row: ComponentRequirementsDailyMatrixRow, d: string): number {
@@ -258,16 +407,7 @@ function printDailyMatrix() {
   const period =
     summary.value != null ? `${summary.value.date_start} — ${summary.value.date_end}` : ''
 
-  const rows = [...matrixRows.value].sort((a, b) => {
-    const ca = a.component_cd ?? ''
-    const cb = b.component_cd ?? ''
-    const c0 = ca.localeCompare(cb, undefined, { sensitivity: 'base', numeric: true })
-    if (c0 !== 0) return c0
-    return (a.component_name ?? '').localeCompare(b.component_name ?? '', undefined, {
-      sensitivity: 'base',
-      numeric: true,
-    })
-  })
+  const rows = sortMatrixRowsByComponentName(matrixRows.value)
 
   const dateThs = dates
     .map((d) => `<th class="col-day">${escapeHtml(shortDateLabel(d))}</th>`)
@@ -383,7 +523,7 @@ function printDailyMatrix() {
         </div>
       </section>`
 
-  const html = `<!DOCTYPE html><html lang="ja"><head>
+  const html = `<!DOCTYPE html><html lang="${escapeHtml(htmlLangForPrint())}"><head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <title>${escapeHtml(title)}</title>
@@ -414,25 +554,44 @@ async function runSummary() {
   loading.value = true
   hasSearched.value = true
   try {
-    const res = await fetchComponentRequirementsSummary({ date_start: range[0], date_end: range[1] })
+    const res = await fetchComponentRequirementsBundle({
+      date_start: range[0],
+      date_end: range[1],
+      plan_column: planColumn.value,
+    })
     if (res?.success && res.data) {
-      items.value = res.data.items ?? []
-      summary.value = res.data.summary ?? null
-      const dm = res.data.daily_matrix
-      dailyDates.value = dm?.dates ?? []
-      matrixRows.value = dm?.rows ?? []
+      const dem = res.data.demand
+      const use = res.data.use
+      items.value = dem.items ?? []
+      summary.value = dem.summary ?? null
+      const dm = dem.daily_matrix
+      const um = use.daily_matrix
+      dailyDates.value = dm?.dates?.length ? dm.dates : um?.dates ?? []
+      matrixRows.value = sortMatrixRowsByComponentName(dm?.rows ?? [])
+      matrixTableKey.value += 1
+      summaryUse.value = use.summary ?? null
+      matrixRowsUse.value = alignUseRowsToDemand(matrixRows.value, um, dailyDates.value)
+      matrixTableKeyUse.value += 1
     } else {
       items.value = []
       summary.value = null
+      summaryUse.value = null
       dailyDates.value = []
       matrixRows.value = []
+      matrixRowsUse.value = []
+      matrixTableKey.value += 1
+      matrixTableKeyUse.value += 1
       ElMessage.warning(res?.message || t('productionRequirements.loadFailed'))
     }
   } catch (e: unknown) {
     items.value = []
     summary.value = null
+    summaryUse.value = null
     dailyDates.value = []
     matrixRows.value = []
+    matrixRowsUse.value = []
+    matrixTableKey.value += 1
+    matrixTableKeyUse.value += 1
     const ax = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(ax?.response?.data?.detail || t('productionRequirements.loadFailed'))
   } finally {
@@ -717,5 +876,21 @@ onMounted(() => {
 :deep(.tbl-matrix td.matrix-day-col) {
   min-width: 5ch;
   font-variant-numeric: tabular-nums;
+}
+.ctl-label--plan {
+  margin-left: 8px;
+}
+.plan-col-select {
+  width: 200px;
+}
+.stat-chips--use {
+  margin-top: 4px;
+}
+.chip--accent {
+  border-color: #99f6e4;
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+}
+.panel--matrix-use {
+  margin-top: 12px;
 }
 </style>

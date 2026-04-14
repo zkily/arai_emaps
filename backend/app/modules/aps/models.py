@@ -126,6 +126,17 @@ class ScheduleDetail(Base):
     schedule = relationship("ProductionSchedule", back_populates="details")
 
 
+class ApsLineReplanAnchor(Base):
+    """設備別・順次再計算の開始アンカー日（replan-sequence で API 引数より優先）"""
+    __tablename__ = "aps_line_replan_anchors"
+
+    line_id = Column(Integer, ForeignKey("machines.id", ondelete="CASCADE"), primary_key=True)
+    anchor_date = Column(Date, nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    machine = relationship("Machine", foreign_keys=[line_id])
+
+
 class ApsBatchPlan(Base):
     """APS ロット（lot_number）計画表（instruction_plans へ同期可能）"""
     __tablename__ = "aps_batch_plans"

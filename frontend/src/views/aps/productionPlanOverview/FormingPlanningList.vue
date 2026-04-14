@@ -40,6 +40,17 @@
             検索
           </el-button>
         </el-form-item>
+        <el-form-item label-width="0">
+          <el-button
+            type="warning"
+            plain
+            :loading="replanningAllLines"
+            :disabled="!canSearch || loading"
+            @click="replanAllLinesByMonth"
+          >
+            全ライン順で再計算
+          </el-button>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -50,6 +61,16 @@
             <span class="legend-item"><span class="legend-dot legend-dot--plan" />計画</span>
             <span class="legend-item"><span class="legend-dot legend-dot--actual" />実績</span>
             <span class="legend-item"><span class="legend-dot legend-dot--remain" />残</span>
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              class="gantt-print-btn"
+              :disabled="loading || ganttRows.length === 0"
+              @click="handleGanttPrint"
+            >
+              印刷
+            </el-button>
             <span class="gantt-range-note">表示期間：{{ displayRangeText }}</span>
           </div>
 
@@ -85,7 +106,6 @@
                   :key="row.id"
                   :class="[
                     'gantt-row',
-                    productPaletteClass(row),
                     gIdx % 2 === 1 ? 'gantt-row--alt' : 'gantt-row--base',
                     { 'gantt-row--group-start': isGanttGroupStart(gIdx) },
                   ]"
@@ -103,13 +123,19 @@
                     :class="ganttCellClass(row, d)"
                     :title="ganttCellTitle(row, d)"
                   >
-                    <div
-                      v-if="(row.daily[d] || 0) > 0 || (row.actual_daily?.[d] || 0) > 0 || (row.remaining_daily?.[d] || 0) > 0"
-                      class="gantt-layered"
-                    >
-                      <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
-                      <span class="gantt-layer gantt-layer--actual"><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
-                      <span class="gantt-layer gantt-layer--remain"><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
+                    <div v-if="ganttCellHasVisibleContent(row, d)" class="gantt-layered">
+                      <span
+                        v-show="(row.daily[d] || 0) > 0"
+                        class="gantt-layer gantt-layer--plan"
+                      ><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
+                      <span
+                        v-show="(row.actual_daily?.[d] || 0) > 0"
+                        class="gantt-layer gantt-layer--actual"
+                      ><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
+                      <span
+                        v-show="shouldShowGanttRemain(row, d)"
+                        class="gantt-layer gantt-layer--remain"
+                      ><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
                     </div>
                   </td>
                 </tr>
@@ -147,7 +173,7 @@
                 :row-class-name="scheduleTableRowClassName"
               >
                 <el-table-column prop="order_no" label="順位" width="72" align="center" />
-                <el-table-column :label="'品名'" min-width="180" show-overflow-tooltip>
+                <el-table-column :label="'製品名'" width="160" show-overflow-tooltip>
                   <template #default="{ row }">
                     <span class="product-name-cell">{{ row.item_name || '—' }}</span>
                   </template>
@@ -232,7 +258,7 @@
           />
           <div v-else class="schedule-table-wrap util-table-wrap">
             <el-table :data="utilizationRows" border size="small" class="schedule-list-table nest-table--polish util-table">
-              <el-table-column prop="lineLabel" label="設備" width="130" show-overflow-tooltip />
+              <el-table-column prop="lineLabel" label="設備" width="85" show-overflow-tooltip />
               <el-table-column prop="scheduleCount" label="指示数" width="75" align="right" />
               <el-table-column label="稼働可能時間(H)" width="135" align="right">
                 <template #default="{ row }"><span class="util-num">{{ formatHours(row.availableHours) }}</span></template>
@@ -273,8 +299,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
+  fetchLines,
+  fetchLineReplanAnchors,
+  replanLineSequence,
   fetchSchedules,
   fetchSchedulingGrid,
+  type LineReplanAnchorRow,
+  type ProductionLine,
   type ScheduleOut,
   type ScheduleGridRow,
 } from '@/api/aps'
@@ -292,6 +323,7 @@ const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
 const rows = ref<ScheduleOut[]>([])
 const loading = ref(false)
+const replanningAllLines = ref(false)
 const searched = ref(false)
 const activeResultTab = ref<'gantt' | 'table' | 'utilization'>('gantt')
 const ganttDates = ref<string[]>([])
@@ -470,8 +502,8 @@ async function loadProcessOptions() {
 function formatLine(row: ScheduleOut): string {
   const code = (row.line_code || '').trim()
   const name = (row.line_name || '').trim()
-  if (code && name) return `${code} — ${name}`
-  return code || name || `ID ${row.line_id}`
+  if (name) return name
+  return code || `ID ${row.line_id}`
 }
 
 /** 設備表示名 → 順位 → id の昇順（一覧・ガント共通） */
@@ -609,6 +641,136 @@ function buildUtilizationPrintHtml(): string {
   </table>
 </body>
 </html>`
+}
+
+function buildGanttPrintHtml(): string {
+  const title = '成型計画一覧（ガント日別）'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const dateCols = ganttDates.value
+    .map((d) => `<th class="date-col">${escHtml(d.slice(5))}</th>`)
+    .join('')
+  const colCount = 3 + ganttDates.value.length
+  const lines = new Map<string, GanttListRow[]>()
+  for (const row of ganttRows.value) {
+    const key = (row.lineLabel || '—').trim() || '—'
+    const list = lines.get(key) ?? []
+    list.push(row)
+    lines.set(key, list)
+  }
+  const rowsHtml = Array.from(lines.entries())
+    .map(([lineLabel, lineRows]) => {
+      const sumPlanned = lineRows.reduce((sum, row) => sum + Number(row.planned_process_qty ?? 0), 0)
+      const workingDays = new Set<string>()
+      for (const row of lineRows) {
+        for (const d of ganttDates.value) {
+          const p = Number(row.daily?.[d] ?? 0)
+          const a = Number(row.actual_daily?.[d] ?? 0)
+          const hasRemain = shouldShowGanttRemain(row, d)
+          if (p > 0 || a > 0 || hasRemain) workingDays.add(d)
+        }
+      }
+      const workDayCount = workingDays.size
+      const avgDailyProduction = workDayCount > 0 ? Math.round(sumPlanned / workDayCount) : 0
+      const groupHeader = `<tr class="group-row"><td colspan="${colCount}">設備：${escHtml(lineLabel)}（${lineRows.length}件）　計画数合計：${escHtml(formatNum(sumPlanned))}　稼働日数：${escHtml(String(workDayCount))}日　日平均生産数：${escHtml(formatNum(avgDailyProduction))}</td></tr>`
+      const body = lineRows
+        .map((row) => {
+          const cells = ganttDates.value
+            .map((d) => {
+              const p = Number(row.daily?.[d] ?? 0)
+              const a = Number(row.actual_daily?.[d] ?? 0)
+              const showRemain = shouldShowGanttRemain(row, d)
+              const r = showRemain ? Number(row.remaining_daily?.[d] ?? 0) : 0
+              if (p <= 0 && a <= 0 && r <= 0) return '<td></td>'
+              const chunks: string[] = []
+              if (p > 0) chunks.push(`${p}`)
+              if (a > 0) chunks.push(`${a}`)
+              if (r > 0) chunks.push(`${r}`)
+              return `<td class="num cell-data">${escHtml(chunks.join(' / '))}</td>`
+            })
+            .join('')
+          return `<tr>
+            <td class="num indent-col order-col">${escHtml(String(row.order_no ?? '—'))}</td>
+            <td class="left name-col indent-col">${escHtml(row.item_name || '—')}</td>
+            <td class="num indent-col planned-col">${escHtml(formatNum(row.planned_process_qty))}</td>
+            ${cells}
+          </tr>`
+        })
+        .join('')
+      return `<tbody class="group-block">${groupHeader}${body}</tbody>`
+    })
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escHtml(title)}</title>
+  <style>
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 8px; color: #0f172a; font: 10px/1.35 "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif; background: #f8fafc; }
+    .hd { margin-bottom: 8px; padding: 8px 10px; border: 1px solid #dbe5f1; border-radius: 8px; background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%); }
+    .tt { font-size: 16px; font-weight: 800; color: #1e3a8a; }
+    .meta { margin-top: 3px; color: #475569; font-size: 10px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #cbd5e1; padding: 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    th { background: linear-gradient(180deg, #eaf3ff 0%, #dceafe 100%); font-weight: 800; color: #334155; }
+    .left { text-align: left; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; }
+    .date-col { font-size: 9px; }
+    .group-block { break-inside: avoid; page-break-inside: avoid; }
+    .name-col { color: #0f172a; font-weight: 700; width: 100px; max-width: 100px; }
+    .order-col { width: calc(2ch + 10px); max-width: calc(2ch + 10px); }
+    .planned-col { width: calc(5ch + 20px); max-width: calc(5ch + 20px); }
+    .indent-col { padding-left: 10px; }
+    .cell-data { font-size: 9px; }
+    .group-row td { background: #e2e8f0; color: #1e293b; font-weight: 800; text-align: left; border-top: 2px solid #94a3b8; }
+    tbody tr:nth-child(odd) { background: #fcfdff; }
+    tbody tr:nth-child(even) { background: #f7fbff; }
+    @media print { @page { size: A3 landscape; margin: 8mm; } }
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="tt">${escHtml(title)}</div>
+    <div class="meta">対象月：${escHtml(productionMonth.value || '—')}　工程：${escHtml(selectedProcessLabel())}　表示期間：${escHtml(displayRangeText.value)}　印刷日時：${escHtml(printedAt)}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="num order-col">順位</th>
+        <th class="left name-col">品名</th>
+        <th class="num planned-col">計画数</th>
+        ${dateCols}
+      </tr>
+    </thead>
+    ${rowsHtml}
+  </table>
+</body>
+</html>`
+}
+
+function handleGanttPrint() {
+  if (ganttRows.value.length === 0 || ganttDates.value.length === 0) {
+    ElMessage.warning('印刷対象のガントデータがありません')
+    return
+  }
+  const w = window.open('', '_blank')
+  if (!w) {
+    ElMessage.error('ポップアップがブロックされました')
+    return
+  }
+  w.document.write(buildGanttPrintHtml())
+  w.document.close()
+  w.onload = () => {
+    w.print()
+    setTimeout(() => w.close(), 400)
+  }
 }
 
 function handleUtilizationPrint() {
@@ -753,6 +915,47 @@ async function loadSchedules() {
   }
 }
 
+async function replanAllLinesByMonth() {
+  if (!canSearch.value) {
+    ElMessage.warning('対象月と工程を選択してください')
+    return
+  }
+  const pc = (selectedProcessCd.value || '').trim()
+  if (!pc) {
+    ElMessage.warning('工程を選択してください')
+    return
+  }
+  replanningAllLines.value = true
+  try {
+    const lines = await fetchLines(pc)
+    const targetLines = (Array.isArray(lines) ? lines : []) as ProductionLine[]
+    if (targetLines.length === 0) {
+      ElMessage.warning('再計算対象の設備がありません')
+      return
+    }
+    const monthAnchor = firstDayOfMonthIso(productionMonth.value)
+    const anchorRows = await fetchLineReplanAnchors(pc)
+    const anchorByLineId = new Map<number, string | null>()
+    for (const r of (Array.isArray(anchorRows) ? anchorRows : []) as LineReplanAnchorRow[]) {
+      const id = Number(r.line_id)
+      if (!Number.isFinite(id)) continue
+      const raw = r.anchor_date
+      anchorByLineId.set(id, raw != null && String(raw).trim() !== '' ? String(raw).trim().slice(0, 10) : null)
+    }
+    for (const line of targetLines) {
+      const saved = anchorByLineId.get(line.id)
+      const anchorStartDate = saved ?? monthAnchor
+      await replanLineSequence(line.id, anchorStartDate)
+    }
+    await loadSchedules()
+    ElMessage.success(`全${targetLines.length}ラインの順次再計算が完了しました`)
+  } catch (e: unknown) {
+    ElMessage.error(String((e as { message?: string })?.message || e))
+  } finally {
+    replanningAllLines.value = false
+  }
+}
+
 function formatEfficiencyRatePiecesPerH(v: number | null | undefined): string {
   if (v == null || Number.isNaN(Number(v))) return '—'
   const n = Number(v)
@@ -776,39 +979,52 @@ function getWeekday(d: string): string {
   return wd[new Date(d).getDay()]
 }
 
+/** 列日付が本日より前（当日は含めない） */
+function isPastGanttDate(d: string): boolean {
+  return d < todayIso.value
+}
+
+/**
+ * 残の表示ルール：
+ * - 当日実績あり → 残も表示対象（残>0 かつトグルON のとき）
+ * - 当日実績なし → 本日以降の日付では残を出さない／過去日のみ残を出す（計画未着手・遅れの把握用）
+ */
+function shouldShowGanttRemain(row: ScheduleGridRow, d: string): boolean {
+  const r = row.remaining_daily?.[d] || 0
+  if (r <= 0) return false
+  const a = row.actual_daily?.[d] || 0
+  if (a > 0) return true
+  return isPastGanttDate(d)
+}
+
 function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean> {
-  const qty = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
-  const remain = row.remaining_daily?.[d] || 0
-  const active = qty > 0 || actual > 0 || remain > 0
-  const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
+  const hasActual = actual > 0
+  const past = isPastGanttDate(d)
   return {
-    'gantt-active': active,
-    'gantt-has-actual': actual > 0,
-    'gantt-range': !!inRange && !active,
-    'is-weekend': isWeekend(d),
-    'is-today': isToday(d),
+    'gantt-has-actual': hasActual,
+    /** 実>0 のときは実績色を優先し、過去日トーンは付けない */
+    'gantt-past-date': past && !hasActual,
   }
 }
 
-function productPaletteClass(row: ScheduleGridRow): string {
-  const base = (row.item_name || '').trim()
-  if (!base) return 'gpc-0'
-  let h = 0
-  for (let i = 0; i < base.length; i += 1) {
-    h = ((h << 5) - h + base.charCodeAt(i)) | 0
-  }
-  return `gpc-${Math.abs(h) % 10}`
+function ganttCellHasVisibleContent(row: ScheduleGridRow, d: string): boolean {
+  const p = row.daily[d] || 0
+  const a = row.actual_daily?.[d] || 0
+  return p > 0 || a > 0 || shouldShowGanttRemain(row, d)
 }
 
 function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   const planned = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  if (planned > 0 || actual > 0 || remain > 0) {
-    return `${row.item_name}: 計画 ${planned} / 実績 ${actual} / 残 ${remain}`
-  }
-  return ''
+  if (!ganttCellHasVisibleContent(row, d)) return ''
+  const parts: string[] = []
+  if (planned > 0) parts.push(`計画 ${planned}`)
+  if (actual > 0) parts.push(`実績 ${actual}`)
+  if (shouldShowGanttRemain(row, d)) parts.push(`残 ${remain}`)
+  if (parts.length === 0) return ''
+  return `${row.item_name}: ${parts.join(' / ')}`
 }
 
 function periodActualForRow(row: ScheduleGridRow): number {
@@ -837,8 +1053,7 @@ function periodActualForRow(row: ScheduleGridRow): number {
   --c-accent-2: #7c3aed;
   --c-success: #10b981;
   --c-warn: #f59e0b;
-  /* 左 sticky 列幅（設備列を広めに） */
-  --gl-line: 168px;
+  /* 左 sticky 列幅（設備列は .list-gantt-table 内で指定） */
   --gl-order: 44px;
   --gl-name: 132px;
   --gl-eff: 70px;
@@ -975,6 +1190,9 @@ function periodActualForRow(row: ScheduleGridRow): number {
   font-size: var(--fs-xs);
   font-family: var(--font-mono);
   color: var(--c-text-s);
+}
+.gantt-print-btn {
+  margin-left: 10px;
 }
 
 .plan-sec-hd {
@@ -1208,13 +1426,24 @@ function periodActualForRow(row: ScheduleGridRow): number {
 
 /* ── Gantt（日別）：浅色分区 + 清晰字体 + 现代表格 ── */
 .list-gantt-scroll {
+  /* 表头高 + データ行 17 行分（.gantt-cell 38px に合わせる） */
+  --list-gantt-thead-h: 54px;
+  --list-gantt-body-row-h: 38px;
+  --list-gantt-visible-body-rows: 17;
+  max-height: calc(
+    var(--list-gantt-thead-h) + var(--list-gantt-visible-body-rows) * var(--list-gantt-body-row-h)
+  );
   overflow-x: auto;
+  overflow-y: auto;
+  /* 縦スクロールバーでヘッダと列がズレにくくする */
+  scrollbar-gutter: stable;
   border-radius: 12px;
   border: 1px solid var(--c-border-l);
   background: linear-gradient(180deg, #f5f9ff 0%, #fafcfe 45%, #f8fafc 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 .list-gantt-scroll::-webkit-scrollbar {
+  width: 8px;
   height: 8px;
 }
 .list-gantt-scroll::-webkit-scrollbar-track {
@@ -1227,6 +1456,11 @@ function periodActualForRow(row: ScheduleGridRow): number {
   border: 2px solid #e8eef6;
 }
 .list-gantt-table {
+  /* 設備列：約7全角字（12px 基準の 7em）+ 左右 padding 6px×2 */
+  --gl-line: calc(7em + 12px);
+  /* 列幅を先頭行で固定し、縦横スクロール時も th/td の列が揃うようにする */
+  table-layout: fixed;
+  width: max-content;
   border-collapse: collapse;
   font-size: 12px;
   line-height: 1.35;
@@ -1241,10 +1475,15 @@ function periodActualForRow(row: ScheduleGridRow): number {
   border: 1px solid #e2e8f0;
   padding: 0 6px;
   text-align: center;
-  height: 30px;
+  box-sizing: border-box;
   vertical-align: middle;
 }
 .list-gantt-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 104;
+  height: auto;
+  min-height: 54px;
   background: linear-gradient(180deg, #eef4fc 0%, #e3ecf8 100%);
   font-weight: 800;
   color: #334155;
@@ -1252,14 +1491,16 @@ function periodActualForRow(row: ScheduleGridRow): number {
   letter-spacing: 0.04em;
   border-bottom: 2px solid #c7d5ea;
 }
+.list-gantt-table tbody td {
+  height: 38px;
+}
 .list-gantt-table tbody tr {
   transition: background 0.15s ease;
 }
-.list-gantt-table tbody tr.gantt-row--base td.gantt-cell {
-  background-color: #fafcfe;
-}
+/* 日付列：デフォルトは全行同一トーン（品名別配色なし） */
+.list-gantt-table tbody tr.gantt-row--base td.gantt-cell,
 .list-gantt-table tbody tr.gantt-row--alt td.gantt-cell {
-  background-color: #f3f6fb;
+  background-color: #f1f5f9;
 }
 .list-gantt-table tbody tr.gantt-row--group-start td {
   border-top: 10px solid #e2ebf8;
@@ -1370,7 +1611,9 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 
 .gantt-date-col {
-  min-width: 46px;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
   padding: 5px 2px 4px !important;
 }
 .gantt-date-text {
@@ -1402,7 +1645,9 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 
 .gantt-cell {
-  min-width: 46px;
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
   height: 38px;
   transition:
     background 0.12s ease,
@@ -1428,20 +1673,28 @@ function periodActualForRow(row: ScheduleGridRow): number {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
+/* 淡色セル上の文字（実>0 のセルは下で白に上書き） */
 .gantt-layer--plan {
-  color: rgba(255, 255, 255, 0.98);
+  color: #1d4ed8;
   font-weight: 900;
   font-size: 11px;
 }
 .gantt-layer--actual {
-  color: rgba(255, 255, 255, 0.9);
+  color: #047857;
   font-size: 10px;
   font-weight: 700;
 }
 .gantt-layer--remain {
-  color: rgba(255, 255, 255, 0.93);
+  color: #b45309;
   font-size: 10px;
   font-weight: 700;
+}
+td.gantt-has-actual .gantt-layer--plan {
+  color: rgba(255, 255, 255, 0.98);
+}
+td.gantt-has-actual .gantt-layer--actual,
+td.gantt-has-actual .gantt-layer--remain {
+  color: rgba(255, 255, 255, 0.93);
 }
 .gl-lbl {
   font-weight: 600;
@@ -1450,77 +1703,28 @@ function periodActualForRow(row: ScheduleGridRow): number {
   font-size: 9.5px;
   font-family: var(--font-sans);
 }
-.gantt-cell.is-weekend:not(.gantt-active):not(.gantt-has-actual) {
-  background-color: #fdf2f8 !important;
-  opacity: 1;
+/* 本日より前の列・かつ当日実績0：過去日として区別 */
+.gantt-cell.gantt-past-date {
+  background-color: #e2e8f0 !important;
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.12);
 }
-.gantt-cell.is-today:not(.gantt-active):not(.gantt-has-actual) {
-  background: linear-gradient(180deg, #fffbeb 0%, #fef9c3 100%) !important;
-  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.2);
-}
-.gantt-cell.gantt-range {
-  background: #e8f0fe !important;
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.12);
-}
-.gantt-cell.gantt-active {
+/* 実>0：実績を強調（過去日トーンより優先） */
+td.gantt-has-actual {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 65%, #059669 100%) !important;
+  color: #fff !important;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     inset 0 -1px 0 rgba(0, 0, 0, 0.06);
 }
 
-.gantt-row.gpc-0 td.gantt-active {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 55%, #2563eb 100%);
-  color: #fff;
+.list-gantt-table tbody tr:hover td.gantt-cell:not(.gantt-has-actual):not(.gantt-past-date) {
+  background-color: #e2e8f0 !important;
 }
-.gantt-row.gpc-1 td.gantt-active {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 55%, #059669 100%);
-  color: #fff;
+.list-gantt-table tbody tr:hover td.gantt-cell.gantt-past-date:not(.gantt-has-actual) {
+  background-color: #cbd5e1 !important;
 }
-.gantt-row.gpc-2 td.gantt-active {
-  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 55%, #7c3aed 100%);
-  color: #fff;
-}
-.gantt-row.gpc-3 td.gantt-active {
-  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #d97706 100%);
-  color: #fff;
-}
-.gantt-row.gpc-4 td.gantt-active {
-  background: linear-gradient(135deg, #f472b6 0%, #ec4899 55%, #db2777 100%);
-  color: #fff;
-}
-.gantt-row.gpc-5 td.gantt-active {
-  background: linear-gradient(135deg, #22d3ee 0%, #06b6d4 55%, #0891b2 100%);
-  color: #fff;
-}
-.gantt-row.gpc-6 td.gantt-active {
-  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 55%, #e11d48 100%);
-  color: #fff;
-}
-.gantt-row.gpc-7 td.gantt-active {
-  background: linear-gradient(135deg, #a3e635 0%, #84cc16 55%, #65a30d 100%);
-  color: #fff;
-}
-.gantt-row.gpc-8 td.gantt-active {
-  background: linear-gradient(135deg, #818cf8 0%, #6366f1 55%, #4f46e5 100%);
-  color: #fff;
-}
-.gantt-row.gpc-9 td.gantt-active {
-  background: linear-gradient(135deg, #2dd4bf 0%, #14b8a6 55%, #0d9488 100%);
-  color: #fff;
-}
-td.gantt-has-actual {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 65%, #059669 100%) !important;
-  color: #fff !important;
-}
-
-.list-gantt-table tbody tr:hover td.gantt-cell:not(.gantt-active):not(.gantt-has-actual) {
-  background-color: #e8f0fe !important;
-}
-.list-gantt-table tbody tr:hover td.gantt-cell.is-weekend:not(.gantt-active):not(.gantt-has-actual) {
-  background-color: #fce7f3 !important;
-}
-.list-gantt-table tbody tr:hover td.gantt-cell.is-today:not(.gantt-active):not(.gantt-has-actual) {
-  background: linear-gradient(180deg, #fff7d6 0%, #fef08a 55%) !important;
+.list-gantt-table tbody tr:hover td.gantt-has-actual {
+  filter: brightness(1.04);
 }
 .list-gantt-table tbody tr.gantt-row--base:hover .gantt-sticky {
   background-color: #e8f0fe !important;
