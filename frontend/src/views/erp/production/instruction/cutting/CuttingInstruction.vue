@@ -37,31 +37,6 @@
                 <el-icon class="title-toolbar-sync-icon"><Refresh /></el-icon>
                 寸法マスタ同期
               </el-button>
-              <el-select
-                v-model="selectedScheduleMonth"
-                placeholder="生産月"
-                clearable
-                size="small"
-                class="title-toolbar-month-select"
-                @change="loadPlans"
-              >
-                <el-option
-                  v-for="m in scheduleMonths"
-                  :key="m.value"
-                  :label="m.label"
-                  :value="m.value"
-                />
-              </el-select>
-              <el-button
-                type="primary"
-                size="small"
-                class="title-toolbar-btn title-toolbar-btn--generate"
-                :loading="generateFromScheduleLoading"
-                :disabled="!selectedScheduleMonth"
-                @click="generateFromSchedule"
-              >
-                切断指示生成
-              </el-button>
             </div>
           </div>
         </template>
@@ -105,7 +80,7 @@
           <div v-show="planListForTable.length > 0" class="plan-batch-table-inner">
             <div class="plan-batch-thead">
               <div class="plan-batch-tr">
-                <div class="plan-batch-th">生産月</div>
+                <div class="plan-batch-th">開始日</div>
                 <div class="plan-batch-th">ライン</div>
                 <div class="plan-batch-th">順位</div>
                 <div class="plan-batch-th">製品名</div>
@@ -132,7 +107,7 @@
                 @dragstart="onPlanCardDragStart($event, row)"
                 @dragend="onPlanCardDragEnd"
               >
-                <div class="plan-batch-td">{{ formatDateOnly(String(row.production_month ?? '')) || '-' }}</div>
+                <div class="plan-batch-td">{{ formatDateOnly(String(row.start_date ?? '')) || '-' }}</div>
                 <div class="plan-batch-td">{{ row.production_line ?? '-' }}</div>
                 <div class="plan-batch-td">{{ row.priority_order ?? '-' }}</div>
                 <div class="plan-batch-td">{{ row.product_name || row.product_cd || '-' }}</div>
@@ -217,9 +192,9 @@
             <div v-else-if="!productDetailLoading" class="right-panel-placeholder">該当製品なし</div>
           </div>
         </div>
-        <!-- 下：設備能率（切断・面取のみ） -->
+        <!-- 下：設備能率（設備名に「切断」を含む行のみ） -->
         <div class="right-panel-bottom">
-          <div class="right-panel-title">設備能率（切断・面取）</div>
+          <div class="right-panel-title">設備能率（切断）</div>
           <div v-if="!selectedProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
           <div v-else v-loading="equipmentEfficiencyLoading" class="equipment-efficiency-body">
             <el-table v-if="equipmentEfficiencyListFiltered.length" :data="equipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
@@ -228,7 +203,7 @@
                 <template #default="{ row }">{{ row.efficiency_rate != null ? Number(row.efficiency_rate) : '-' }}</template>
               </el-table-column>
             </el-table>
-            <div v-else-if="!equipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（切断・面取のみ表示）</div>
+            <div v-else-if="!equipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（設備名に「切断」を含むもののみ表示）</div>
           </div>
         </div>
       </div>
@@ -766,7 +741,7 @@
             </div>
           </div>
           <div class="right-panel-bottom">
-            <div class="right-panel-title">設備能率（切断・面取）</div>
+            <div class="right-panel-title">設備能率（面取）</div>
             <div v-if="!selectedChamferingProductCd" class="right-panel-placeholder">一覧で製品をクリック</div>
             <div v-else v-loading="chamferingEquipmentEfficiencyLoading" class="equipment-efficiency-body">
               <el-table v-if="chamferingEquipmentEfficiencyListFiltered.length" :data="chamferingEquipmentEfficiencyListFiltered" size="small" max-height="220" class="efficiency-table">
@@ -775,7 +750,7 @@
                   <template #default="{ row }">{{ row.efficiency_rate != null ? Number(row.efficiency_rate) : '-' }}</template>
                 </el-table-column>
               </el-table>
-              <div v-else-if="!chamferingEquipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（切断・面取のみ表示）</div>
+              <div v-else-if="!chamferingEquipmentEfficiencyLoading" class="right-panel-placeholder">該当データなし（設備名に「面取」を含むもののみ表示）</div>
             </div>
           </div>
         </div>
@@ -4017,14 +3992,12 @@ interface EquipmentEfficiencyRow {
 const equipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
 const equipmentEfficiencyLoading = ref(false)
 
-/** 設備能率：切断機・面取機のみ表示（設備名が切断/面取オプションに含まれるもの） */
+/** 生産ロット一覧右：設備能率は設備名に「切断」を含む行のみ表示 */
 const equipmentEfficiencyListFiltered = computed(() => {
   const list = equipmentEfficiencyList.value
-  const cuttingNames = new Set(cuttingMachineOptionsFiltered.value.map((m) => m.machine_name))
-  const chamferingNames = new Set(chamferingMachineOptions.value.map((m) => m.machine_name))
   return list.filter((r) => {
     const name = (r.machines_name ?? '').toString().trim()
-    return name && (cuttingNames.has(name) || chamferingNames.has(name))
+    return name && name.includes('切断')
   })
 })
 
@@ -4035,14 +4008,12 @@ const chamferingProductDetailLoading = ref(false)
 const chamferingEquipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
 const chamferingEquipmentEfficiencyLoading = ref(false)
 
-/** 面取用設備能率：切断機・面取機のみ表示 */
+/** 面取ロット一覧右：設備能率は設備名に「面取」を含む行のみ表示 */
 const chamferingEquipmentEfficiencyListFiltered = computed(() => {
   const list = chamferingEquipmentEfficiencyList.value
-  const cuttingNames = new Set(cuttingMachineOptionsFiltered.value.map((m) => m.machine_name))
-  const chamferingNames = new Set(chamferingMachineOptions.value.map((m) => m.machine_name))
   return list.filter((r) => {
     const name = (r.machines_name ?? '').toString().trim()
-    return name && (cuttingNames.has(name) || chamferingNames.has(name))
+    return name && name.includes('面取')
   })
 })
 
@@ -4057,8 +4028,6 @@ const planListForTable = computed(() => {
 
 // 生産月：自动生成当月前后3个月（共7个月），value 格式 YYYY-MM
 const scheduleMonths = ref<{ value: string; label: string }[]>([])
-const selectedScheduleMonth = ref('')
-const generateFromScheduleLoading = ref(false)
 const syncLengthsFromProductsLoading = ref(false)
 
 /** 設備下拉：machines 表の machine_name で「成型」を含むもの */
@@ -4164,7 +4133,6 @@ const loadScheduleMonths = () => {
   const now = new Date()
   const baseYear = now.getFullYear()
   const baseMonth = now.getMonth()
-  const currentMonthValue = `${baseYear}-${String(baseMonth + 1).padStart(2, '0')}`
   scheduleMonths.value = Array.from({ length: 7 }, (_, i) => {
     const m = new Date(baseYear, baseMonth + (i - 3), 1)
     const year = m.getFullYear()
@@ -4174,60 +4142,17 @@ const loadScheduleMonths = () => {
       label: `${month}月`,
     }
   })
-  if (!selectedScheduleMonth.value) {
-    selectedScheduleMonth.value = currentMonthValue
-  }
 }
 
-watch(scheduleMonths, (months) => {
-  if (!selectedScheduleMonth.value) return
-  const exists = months.some((m) => m.value === selectedScheduleMonth.value)
-  if (!exists) {
-    selectedScheduleMonth.value = ''
-  }
-})
-
-const generateFromSchedule = async () => {
-  if (!selectedScheduleMonth.value) {
-    ElMessage.warning('生産月を選択してください')
-    return
-  }
-  try {
-    await ElMessageBox.confirm(
-      `「${scheduleMonths.value.find((m) => m.value === selectedScheduleMonth.value)?.label ?? selectedScheduleMonth.value}」の計画から生産ロットを生成しますか？同一月の既存ロット（計画由来）は上書きされます。`,
-      'ロット生成の確認',
-      { confirmButtonText: '生成', cancelButtonText: '取消', type: 'warning' }
-    )
-  } catch {
-    return
-  }
-  generateFromScheduleLoading.value = true
-  try {
-    const result = await request.post<{ success?: boolean; message?: string; detail?: string }>(
-      '/api/plan/batch/generate-from-schedule',
-      { month: selectedScheduleMonth.value }
-    )
-    if ((result as any)?.success) {
-      ElMessage.success((result as any).message ?? '生産ロットを生成しました')
-      loadPlans()
-    } else {
-      const errMsg =
-        (typeof (result as any)?.detail === 'string' ? (result as any).detail : (result as any)?.message) ??
-        'ロット生成に失敗しました'
-      ElMessage.error(errMsg)
-    }
-  } catch (e) {
-    console.error('ロット生成に失敗:', e)
-    ElMessage.error('ロット生成に失敗しました')
-  } finally {
-    generateFromScheduleLoading.value = false
-  }
+function getCurrentMonthYYYYMM(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 const syncLengthsFromProducts = async () => {
   try {
     await ElMessageBox.confirm(
-      '製品マスタの切断長・面取長・展開長を、生産ロット（instruction_plans）・切断/面取関連テーブル・カンバン発行へ一括反映します。よろしいですか？',
+      '製品マスタの切断長・面取長・展開長を、生産ロット（instruction_plans）・切断/面取関連テーブル・カンバン発行へ一括反映します。生産ロットについては製品工程ルートに基づき面取工程・SW工程フラグ（has_chamfering_process / has_sw_process）も更新します。よろしいですか？',
       '寸法マスタ同期',
       { confirmButtonText: '同期', cancelButtonText: '取消', type: 'warning' }
     )
@@ -4266,7 +4191,6 @@ const loadPlans = async () => {
   planLoading.value = true
   try {
     const params: Record<string, string> = {}
-    if (selectedScheduleMonth.value) params.production_month = selectedScheduleMonth.value
     if (planSearchForm.equipment) params.equipment = planSearchForm.equipment
     const result = await request.get<{ success?: boolean; data?: CuttingPlanRow[]; message?: string }>(
       '/api/plan/batch/list',
@@ -5867,7 +5791,6 @@ async function duplicateChamferingRow(row: ChamferingManagementRow) {
 async function loadChamferingManagement() {
   chamferingManagementLoading.value = true
   const baseParams: Record<string, string> = {}
-  if (selectedScheduleMonth.value) baseParams.production_month = selectedScheduleMonth.value
   const todayParam = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
   const tomorrowParam = selectedChamferingDateTomorrow.value ? String(selectedChamferingDateTomorrow.value).slice(0, 10) : ''
   const chamferingMachineParam = selectedChamferingMachineFilter.value ? String(selectedChamferingMachineFilter.value).trim() : undefined
@@ -5899,7 +5822,6 @@ async function loadChamferingBatchList() {
   chamferingBatchLoading.value = true
   try {
     const params: Record<string, string | number> = {}
-    if (selectedScheduleMonth.value) params.production_month = selectedScheduleMonth.value
     params.limit = 50000
     const result = await request.get<{ success?: boolean; data?: ChamferingBatchRow[] }>(
       '/api/plan/chamfering-plans/list',
@@ -5993,7 +5915,7 @@ function resetChamferingPlanNewForm() {
 
 function openChamferingPlanNewDialog() {
   resetChamferingPlanNewForm()
-  chamferingPlanNewForm.production_month = selectedScheduleMonth.value || ''
+  chamferingPlanNewForm.production_month = getCurrentMonthYYYYMM()
   chamferingPlanNewForm.production_day = getTodayString()
   loadChamferingMachineOptions()
   loadChamferingProductOptions()
@@ -6596,7 +6518,6 @@ async function saveKanbanEdit() {
 async function loadCuttingManagement() {
   cuttingManagementLoading.value = true
   const baseParams: Record<string, string> = {}
-  if (selectedScheduleMonth.value) baseParams.production_month = selectedScheduleMonth.value
   if (cuttingMachineFilter.value) baseParams.cutting_machine = cuttingMachineFilter.value
   const todayParam = normalizeDateStr(selectedDateToday.value)
   const tomorrowParam = normalizeDateStr(selectedDateTomorrow.value)
@@ -7200,12 +7121,6 @@ function escapeHtml(s: string): string {
   div.textContent = s
   return div.innerHTML
 }
-
-watch(selectedScheduleMonth, () => {
-  loadCuttingManagement()
-  loadChamferingManagement()
-  loadChamferingBatchList()
-})
 
 function onProductionDayEditorKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return
@@ -8655,24 +8570,6 @@ onUnmounted(() => {
 }
 .card-header .section-title .title-toolbar-btn--data {
   margin-left: auto;
-}
-.title-toolbar-month-select {
-  width: 108px;
-}
-.title-toolbar-month-select :deep(.el-input__wrapper) {
-  min-height: 28px;
-  padding: 0 8px;
-  border-radius: 7px;
-  font-size: 12px;
-  box-shadow: 0 0 0 1px #e2e8f0 inset;
-}
-.title-toolbar-month-select :deep(.el-input__inner) {
-  font-size: 12px;
-  font-weight: 600;
-  color: #1e3a5f;
-}
-.title-toolbar-month-select :deep(.el-input__wrapper.is-focus) {
-  box-shadow: 0 0 0 1px #818cf8 inset !important;
 }
 .title-toolbar-btn {
   margin: 0 !important;
@@ -10449,20 +10346,6 @@ onUnmounted(() => {
   box-shadow: 0 2px 6px rgba(16, 185, 129, 0.2) !important;
 }
 
-/* 切断指示生成（primary コンパクト） */
-.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--generate) {
-  height: 28px !important;
-  padding: 0 14px !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.03em !important;
-  border-radius: 7px !important;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35) !important;
-}
-.cutting-instruction-container .section-title :deep(.el-button.title-toolbar-btn--generate:not(:disabled):hover) {
-  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.45) !important;
-}
-
 /* 試作追加ボタン */
 .btn-trial-add {
   background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
@@ -10489,10 +10372,6 @@ onUnmounted(() => {
   flex: 1 1 auto !important;
   min-width: 0 !important;
 }
-.card-header .section-title .title-toolbar-month-select {
-  flex-shrink: 0;
-}
-
 /* ── right-panel hover ── */
 .right-panel { transition: box-shadow 0.22s ease !important; }
 .right-panel:hover { box-shadow: 0 6px 16px rgba(37,99,235,0.12) !important; }

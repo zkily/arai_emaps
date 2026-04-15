@@ -20,7 +20,7 @@
             />
           </el-form-item>
           <el-form-item label-width="0">
-            <el-button type="default" @click="openLineReplanAnchorDialog">
+            <el-button type="default" class="btn-soft btn-soft--indigo" @click="openLineReplanAnchorDialog">
               再計算アンカー日設定
             </el-button>
           </el-form-item>
@@ -60,7 +60,7 @@
             </el-select>
           </el-form-item>
           <el-form-item class="setup-fi-btn" label-width="0">
-            <el-button type="primary" :loading="loadingSchedules" @click="loadSchedules">
+            <el-button type="primary" class="btn-accent btn-accent--primary" :loading="loadingSchedules" @click="loadSchedules">
               計画を取得
             </el-button>
           </el-form-item>
@@ -191,6 +191,7 @@
                 <div class="add-btn-hint-row">
                   <el-button
                     type="success"
+                    class="btn-accent btn-accent--success"
                     size="small"
                     :loading="adding"
                     :disabled="!canAddQty"
@@ -222,6 +223,7 @@
               <div class="add-btn-hint-row">
                 <el-button
                   type="success"
+                  class="btn-accent btn-accent--success"
                   size="small"
                   :loading="adding"
                   :disabled="!canAddQty"
@@ -270,7 +272,7 @@
           <el-button
             type="warning"
             size="small"
-            class="schedule-replan-btn"
+            class="schedule-replan-btn btn-accent btn-accent--warning"
             :loading="replanning"
             @click="replanAll"
           >
@@ -666,8 +668,8 @@
 
       <template #footer>
         <div class="line-anchor-dlg-footer">
-          <el-button @click="lineReplanAnchorDialogVisible = false">閉じる</el-button>
-          <el-button type="primary" :loading="savingLineReplanAnchors" @click="saveLineReplanAnchorsFromDialog">
+          <el-button class="btn-soft btn-soft--gray" @click="lineReplanAnchorDialogVisible = false">閉じる</el-button>
+          <el-button type="primary" class="btn-accent btn-accent--primary" :loading="savingLineReplanAnchors" @click="saveLineReplanAnchorsFromDialog">
             保存
           </el-button>
         </div>
@@ -1831,10 +1833,10 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
     "Meiryo", "Hiragino Sans", Arial, sans-serif;
   --font-mono: Consolas, "Courier New", monospace;
   /* colors */
-  --c-bg:        #f4f6f9;
+  --c-bg:        #f1f5f9;
   --c-surface:   #ffffff;
-  --c-border:    #e2e6ed;
-  --c-border-l:  #edf0f5;
+  --c-border:    #dbe3ee;
+  --c-border-l:  #e9eef6;
   --c-text-h:    #0f172a;
   --c-text:      #334155;
   --c-text-m:    #475569;
@@ -1860,22 +1862,25 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   --gap:    12px;
   --gap-l:  16px;
   /* card */
-  --card-r:  8px;
-  --card-p: 12px 14px;
-  --card-sh: 0 1px 4px rgba(0,21,41,.06), 0 2px 10px rgba(0,21,41,.04);
+  --card-r:  12px;
+  --card-p: 10px 12px;
+  --card-sh: 0 2px 8px rgba(15,23,42,.05), 0 8px 20px rgba(15,23,42,.04);
 }
 
 /* ══════════════════════════════════════════════════
    Page Shell
    ══════════════════════════════════════════════════ */
 .planning-page {
-  padding: 14px 18px;
-  background: var(--c-bg);
+  padding: 10px 14px;
+  background:
+    radial-gradient(circle at 12% -20%, #e0ecff 0%, transparent 30%),
+    radial-gradient(circle at 85% -25%, #dff7ef 0%, transparent 26%),
+    var(--c-bg);
   min-height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: var(--gap-s);
+  gap: 6px;
   font-family: var(--font-sans);
   font-size: var(--fs-base);
   font-weight: 400;
@@ -1903,7 +1908,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   display: flex;
   align-items: center;
   gap: var(--gap);
-  padding: 2px 0 4px;
+  padding: 0 2px 2px;
 }
 .plan-hd-title {
   font-size: var(--fs-lg);
@@ -1918,7 +1923,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-size: var(--fs-s);
   color: var(--c-text-m);
   margin: 0;
-  line-height: 1.55;
+  line-height: 1.45;
 }
 
 /* ══════════════════════════════════════════════════
@@ -1930,6 +1935,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   padding: var(--card-p);
   box-shadow: var(--card-sh);
   border: 1px solid var(--c-border-l);
+  backdrop-filter: saturate(115%) blur(2px);
 }
 
 /* ══════════════════════════════════════════════════
@@ -1939,7 +1945,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-size: var(--fs-m);
   font-weight: 700;
   color: var(--c-text-h);
-  margin: 0 0 9px;
+  margin: 0 0 6px;
   padding-left: 8px;
   border-left: 3px solid var(--c-accent);
   display: flex;
@@ -1987,7 +1993,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .schedule-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .schedule-completed-switch {
   margin-right: 4px;
@@ -2053,7 +2059,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
    ══════════════════════════════════════════════════ */
 .plan-card.add-section,
 .plan-card.setup-section {
-  padding: 10px 14px;
+  padding: 8px 10px;
   /* 計画追加・検索条件で共通のコントロール寸法 */
   --add-h:  var(--ctrl-h);
   --add-fs: var(--fs-base);
@@ -2072,7 +2078,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--gap-s) var(--gap);
+  gap: 6px 10px;
 }
 
 /* ── form wrapper ── */
@@ -2088,7 +2094,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   display: inline-flex;
   align-items: center;
   margin-bottom: 0;
-  margin-right: var(--gap);
+  margin-right: 10px;
   vertical-align: middle;
 }
 .add-form :deep(.el-form-item):last-child { margin-right: 0; }
@@ -2205,7 +2211,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .add-btn-hint-row {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .add-qty-hint {
@@ -2265,6 +2271,51 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .ee-empty-hint   { margin: 4px 0 0; font-size: var(--fs-base); color: #e6a23c; }
 .add-empty-hint  { margin-top: 6px; margin-bottom: 0; }
 
+/* ── Modern button hierarchy ── */
+.planning-page :deep(.el-button) {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: transform .12s ease, box-shadow .18s ease, filter .18s ease;
+}
+.planning-page :deep(.el-button:not(.is-disabled):hover) {
+  transform: translateY(-1px);
+}
+
+.btn-accent:deep(.el-button),
+.btn-accent {
+  border: none !important;
+  color: #fff !important;
+  box-shadow: 0 6px 14px rgba(30, 64, 175, .16);
+}
+.btn-accent--primary:deep(.el-button),
+.btn-accent--primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+.btn-accent--success:deep(.el-button),
+.btn-accent--success {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+  box-shadow: 0 6px 14px rgba(21, 128, 61, .18);
+}
+.btn-accent--warning:deep(.el-button),
+.btn-accent--warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 6px 14px rgba(180, 83, 9, .18);
+}
+
+.btn-soft:deep(.el-button),
+.btn-soft {
+  border: 1px solid #d5deeb !important;
+  background: #f8fafc !important;
+}
+.btn-soft--indigo:deep(.el-button),
+.btn-soft--indigo {
+  color: #334155 !important;
+}
+.btn-soft--gray:deep(.el-button),
+.btn-soft--gray {
+  color: #475569 !important;
+}
+
 /* ══════════════════════════════════════════════════
    Schedule List
    ══════════════════════════════════════════════════ */
@@ -2272,7 +2323,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100px;
+  min-height: 84px;
 }
 .schedule-table { width: 100%; }
 .schedule-table :deep(.el-table__header th) {
@@ -2347,7 +2398,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 .gantt-tabs :deep(.el-tabs__active-bar) { height: 3px; border-radius: 2px; }
 .gantt-hourly-placeholder {
-  min-height: 160px;
+  min-height: 128px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2685,8 +2736,8 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   align-items: center;
   flex-wrap: wrap;
   gap: 5px 16px;
-  margin: 0 0 10px;
-  padding: 6px 10px;
+  margin: 0 0 8px;
+  padding: 5px 8px;
   font-size: var(--fs-s);
   color: var(--c-text-m);
   background: #f8fafc;

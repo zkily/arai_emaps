@@ -656,6 +656,7 @@ async def get_instruction_plans_list(
 ):
     """
     生産ロット一覧: instruction_plans を取得する。
+    既定ソート: start_date 昇順（未設定は末尾）、同一日内は production_line・順位・ロットNo。
     """
     conditions = ["1=1"]
     params = {"limit": limit}
@@ -687,7 +688,7 @@ async def get_instruction_plans_list(
                created_at, updated_at
         FROM instruction_plans
         WHERE {" AND ".join(conditions)}
-        ORDER BY production_month DESC, production_line, priority_order,
+        ORDER BY (start_date IS NULL) ASC, start_date ASC, production_line, priority_order,
                  CAST(COALESCE(lot_number, '0') AS UNSIGNED),
                  lot_number
         LIMIT :limit
@@ -3186,7 +3187,9 @@ async def get_chamfering_management_list(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取指示一覧: chamfering_management を取得する。"""
+    """面取指示一覧: chamfering_management を取得する。
+    生産時間は切断指示一覧と同様、product_cd + 面取機=equipment_efficiency.machines_name で能率を結合し 生産数/能率 で算出する。
+    """
     conditions = ["1=1"]
     params = {"limit": limit}
     if production_month and production_month.strip():
@@ -3216,13 +3219,23 @@ async def get_chamfering_management_list(
         params["chamfering_machine"] = chamfering_machine.strip()
 
     sql = text(f"""
-        SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
-               production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty, production_lot_size, lot_number,
-               cutting_length, chamfering_length, developed_length, production_time, material_name, management_code, has_sw_process,
-               production_completed_check, no_count, remarks, cd, created_at
-        FROM chamfering_management
+        SELECT `chamfering_management`.id, `chamfering_management`.cutting_management_id, `chamfering_management`.production_month,
+               `chamfering_management`.production_day, `chamfering_management`.production_line, `chamfering_management`.chamfering_machine,
+               `chamfering_management`.production_order, `chamfering_management`.production_sequence, `chamfering_management`.product_cd,
+               `chamfering_management`.product_name, `chamfering_management`.actual_production_quantity, `chamfering_management`.defect_qty,
+               `chamfering_management`.production_lot_size, `chamfering_management`.lot_number,
+               `chamfering_management`.cutting_length, `chamfering_management`.chamfering_length, `chamfering_management`.developed_length,
+               `chamfering_management`.material_name, `chamfering_management`.management_code, `chamfering_management`.has_sw_process,
+               `chamfering_management`.production_completed_check, `chamfering_management`.no_count, `chamfering_management`.remarks, `chamfering_management`.cd,
+               `chamfering_management`.created_at,
+               `equipment_efficiency`.efficiency_rate AS efficiency_rate
+        FROM `chamfering_management`
+        LEFT JOIN `equipment_efficiency`
+          ON `chamfering_management`.product_cd = `equipment_efficiency`.product_cd
+         AND `chamfering_management`.chamfering_machine = `equipment_efficiency`.machines_name
         WHERE {" AND ".join(conditions)}
-        ORDER BY production_day DESC, chamfering_machine ASC, production_sequence ASC
+        ORDER BY `chamfering_management`.production_day DESC, `chamfering_management`.chamfering_machine ASC,
+                 `chamfering_management`.production_sequence ASC
         LIMIT :limit
     """)
     try:
@@ -3251,6 +3264,18 @@ async def get_chamfering_management_list(
         row = dict(r)
         pm = _v(row, "production_month")
         pd = _v(row, "production_day")
+        # 生産時間 = 生産数 / efficiency_rate（切断指示一覧の cutting_management と同じ）
+        qty = row.get("actual_production_quantity")
+        rate = row.get("efficiency_rate")
+        if qty is not None and rate is not None:
+            try:
+                q = float(qty) if not isinstance(qty, (int, float)) else qty
+                rr = float(rate) if not isinstance(rate, (int, float)) else rate
+                production_time = round(q / rr, 1) if rr > 0 else None
+            except (TypeError, ValueError):
+                production_time = None
+        else:
+            production_time = None
         return {
             "id": row.get("id"),
             "cutting_management_id": row.get("cutting_management_id"),
@@ -3269,7 +3294,7 @@ async def get_chamfering_management_list(
             "cutting_length": _v(row, "cutting_length"),
             "chamfering_length": _v(row, "chamfering_length"),
             "developed_length": _v(row, "developed_length"),
-            "production_time": _v(row, "production_time"),
+            "production_time": production_time,
             "material_name": row.get("material_name"),
             "management_code": row.get("management_code"),
             "has_sw_process": 1 if row.get("has_sw_process") else 0,
@@ -4299,6 +4324,8 @@ async def sync_batch_lengths_from_products(
     products の cut_length / chamfer_length / developed_length を、同一 product_cd の
     instruction_plans・cutting_management・chamfering_plans・chamfering_management・
     kanban_issuance（product_cd がある行）へ反映する。
+    instruction_plans については製品の工程ルート（product_route_steps × processes）から
+    has_chamfering_process / has_sw_process も更新する（batch-detail / APS 同期と同じ判定）。
     chamfering_plans / chamfering_management に cutting_length・developed_length が無い環境
     （マイグレーション 208 未実行）では、chamfering_length のみ同期する。
     """
@@ -4315,9 +4342,30 @@ async def sync_batch_lengths_from_products(
             text(f"""
                 UPDATE instruction_plans ip
                 INNER JOIN products p ON {_pc.format(alias="ip")}
+                LEFT JOIN (
+                    SELECT
+                        prs.product_cd AS prs_product_cd,
+                        prs.route_cd AS prs_route_cd,
+                        MAX(CASE WHEN pr.process_name LIKE '%面取%' THEN 1 ELSE 0 END) AS has_ch,
+                        MAX(CASE
+                            WHEN pr.process_name LIKE '%SW%'
+                                 OR LOWER(pr.process_name) LIKE '%swaging%' THEN 1 ELSE 0
+                            END) AS has_sw
+                    FROM product_route_steps prs
+                    INNER JOIN processes pr
+                        ON pr.process_cd COLLATE utf8mb4_unicode_ci
+                         = prs.process_cd COLLATE utf8mb4_unicode_ci
+                    GROUP BY prs.product_cd, prs.route_cd
+                ) rf ON rf.prs_product_cd COLLATE utf8mb4_unicode_ci
+                        = p.product_cd COLLATE utf8mb4_unicode_ci
+                    AND p.route_cd IS NOT NULL
+                    AND TRIM(p.route_cd) <> ''
+                    AND TRIM(rf.prs_route_cd) = TRIM(p.route_cd)
                 SET ip.cutting_length = p.cut_length,
                     ip.chamfering_length = p.chamfer_length,
-                    ip.developed_length = p.developed_length
+                    ip.developed_length = p.developed_length,
+                    ip.has_chamfering_process = COALESCE(rf.has_ch, 0),
+                    ip.has_sw_process = COALESCE(rf.has_sw, 0)
             """),
         ),
         (
