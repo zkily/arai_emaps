@@ -1,8 +1,17 @@
 <template>
-  <div class="scheduling-page">
+  <div ref="printRootRef" class="scheduling-page">
     <div class="plan-hd">
-      <h2 class="plan-hd-title">APS 生産スケジューリングボード</h2>
-      <p class="plan-hd-sub">工程・ライン・期間を指定してスケジュールマトリクスを確認し、条件内の計画を一括で再計算できます。</p>
+      <h2 class="plan-hd-title">
+        <span class="plan-hd-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path
+              d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v3H2V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1ZM2 12h20v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5Zm6 3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Zm5 0a1 1 0 1 0 0 2h3a1 1 0 1 0 0-2h-3Z"
+            />
+          </svg>
+        </span>
+        APS 生産スケジューリングボード
+      </h2>
+      <p class="plan-hd-sub">工程・設備・期間を指定して対象期間の生産計画を可視化し、ライン別の進捗をすばやく把握できます。</p>
     </div>
 
     <div class="plan-card filter-card">
@@ -13,13 +22,13 @@
             clearable
             filterable
             placeholder="全工程"
-            style="width: 180px"
+            style="width: 90px"
             @change="handleProcessChange"
           >
             <el-option
               v-for="p in processOptions"
               :key="p.process_cd"
-              :label="`${p.process_cd} — ${p.process_name}`"
+              :label="String(p.process_name || '').trim() || p.process_cd"
               :value="p.process_cd"
             />
           </el-select>
@@ -30,13 +39,13 @@
             clearable
             filterable
             placeholder="全ライン"
-            style="width: 240px"
+            style="width: 100px"
           >
             <el-option
               v-for="line in lines"
               :key="line.id"
               :value="line.id"
-              :label="productionLineOptionLabel(line)"
+              :label="String(line.line_name || '').trim() || line.line_code"
             />
           </el-select>
         </el-form-item>
@@ -78,7 +87,10 @@
     <div class="plan-card result-card" v-loading="loading">
       <div class="result-head">
         <div class="result-title">スケジューリングマトリクス</div>
-        <div class="result-note">期間：{{ displayDateRangeText }}</div>
+        <div class="result-head-actions">
+          <div class="result-note">期間：{{ displayDateRangeText }}</div>
+          <el-button class="print-btn" size="small" @click="handlePrint">印刷</el-button>
+        </div>
       </div>
 
       <el-empty v-if="!loading && gridDates.length === 0" description="期間を指定して検索してください" />
@@ -90,7 +102,6 @@
               <th class="sc-sticky-col sc-line-col">ライン</th>
               <th class="sc-sticky-col sc-order-col">順位</th>
               <th class="sc-sticky-col sc-item-col">製品</th>
-              <th class="sc-sticky-col sc-setup-col numeric-cell">段取(分)</th>
               <th class="sc-sticky-col sc-eff-col numeric-cell">能率(本/H)</th>
               <th class="sc-sticky-col sc-total-col numeric-cell">生産計画</th>
               <th
@@ -106,9 +117,9 @@
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody v-for="section in matrixSections" :key="section.key" class="sc-line-section">
             <tr
-              v-for="row in matrixRows"
+              v-for="row in section.rows"
               :key="row.key"
               :class="[
                 row.type === 'group' ? 'sc-group-header-row' : 'sc-item-row',
@@ -118,7 +129,6 @@
               <td class="sc-sticky-col sc-line-col">
                 <div class="sc-line-cell">
                   <span class="sc-line-code">{{ row.type === 'group' ? row.line_name : '' }}</span>
-                  <span v-if="row.type === 'group'" class="sc-rate">{{ formatPercent(row.utilization_rate) }}</span>
                 </div>
               </td>
               <td class="sc-sticky-col sc-order-col numeric-cell">
@@ -129,9 +139,6 @@
                   <div class="sc-item-name">{{ row.type === 'item' ? row.item_name : '' }}</div>
                   <div v-if="row.type === 'item' && row.material_shortage" class="sc-flag">資材不足</div>
                 </div>
-              </td>
-              <td class="sc-sticky-col sc-setup-col numeric-cell">
-                {{ row.type === 'item' ? row.setup_time : row.sum_setup_time }}
               </td>
               <td class="sc-sticky-col sc-eff-col numeric-cell">
                 {{ formatEfficiency(row.type === 'item' ? row.efficiency_rate : row.avg_efficiency) }}
@@ -157,7 +164,6 @@
               <td class="sc-sticky-col sc-line-col">合計</td>
               <td class="sc-sticky-col sc-order-col" />
               <td class="sc-sticky-col sc-item-col" />
-              <td class="sc-sticky-col sc-setup-col" />
               <td class="sc-sticky-col sc-eff-col" />
               <td class="sc-sticky-col sc-total-col numeric-cell">{{ formatQty(overallPlannedOutputTotal) }}</td>
               <td v-for="date in gridDates" :key="`total-${date}`" class="numeric-cell">
@@ -179,7 +185,6 @@ import type { ProcessItem } from '@/types/master'
 import {
   fetchLines,
   fetchSchedulingGrid,
-  productionLineOptionLabel,
   type LineGridBlock,
   type ProductionLine,
   type ScheduleGridRow,
@@ -225,6 +230,7 @@ const processOptions = ref<ProcessItem[]>([])
 const lines = ref<ProductionLine[]>([])
 const grid = ref<SchedulingGridResponse | null>(null)
 const loading = ref(false)
+const printRootRef = ref<HTMLElement | null>(null)
 
 const searchForm = reactive<{
   processCd: string
@@ -232,25 +238,57 @@ const searchForm = reactive<{
   lineId: number | null
 }>({
   processCd: 'KT04',
-  dateRange: [dayjs().subtract(7, 'day').format('YYYY-MM-DD'), dayjs().add(13, 'day').format('YYYY-MM-DD')],
+  dateRange: [dayjs().subtract(1, 'day').format('YYYY-MM-DD'), dayjs().add(30, 'day').format('YYYY-MM-DD')],
   lineId: null,
 })
 
 const gridDates = computed(() => grid.value?.dates ?? [])
+const visibleBlocks = computed(() => (grid.value?.blocks ?? []).filter((b) => !isIgnoredLine(resolveLineName(b.line_id, b.line_code))))
 
 const matrixRows = computed<MatrixRow[]>(() => {
   if (!grid.value) return []
-  return buildMatrixRows(grid.value)
+  return buildMatrixRows(visibleBlocks.value)
+})
+const matrixSections = computed(() => {
+  const sections: Array<{ key: string; rows: MatrixRow[] }> = []
+  let currentRows: MatrixRow[] = []
+  let currentKey = ''
+
+  matrixRows.value.forEach((row) => {
+    if (row.type === 'group') {
+      if (currentRows.length) sections.push({ key: currentKey, rows: currentRows })
+      currentKey = row.key
+      currentRows = [row]
+      return
+    }
+    if (currentRows.length === 0) {
+      currentKey = row.key
+    }
+    currentRows.push(row)
+  })
+
+  if (currentRows.length) sections.push({ key: currentKey, rows: currentRows })
+  return sections
 })
 
-const lineCount = computed(() => (grid.value?.blocks ?? []).length)
+const lineCount = computed(() => visibleBlocks.value.length)
 
 const overallPlannedOutputTotal = computed(() =>
-  (grid.value?.blocks ?? []).reduce((acc, b) => acc + (b.sum_planned_output_qty ?? 0), 0),
+  visibleBlocks.value.reduce(
+    (acc, b) =>
+      acc +
+      (b.rows ?? []).reduce(
+        (rowAcc, r) =>
+          rowAcc +
+          gridDates.value.reduce((dateAcc, date) => dateAcc + Number((r.daily ?? {})[date] ?? 0), 0),
+        0,
+      ),
+    0,
+  ),
 )
 
 const avgEfficiencyRate = computed(() => {
-  const blocks = grid.value?.blocks ?? []
+  const blocks = visibleBlocks.value
   let weightedSum = 0
   let weightedDenom = 0
   for (const block of blocks) {
@@ -276,7 +314,7 @@ const requiredProductionHours = computed(() => {
 const overallDailyTotals = computed(() => {
   const totals: Record<string, number> = {}
   for (const date of gridDates.value) totals[date] = 0
-  for (const block of grid.value?.blocks ?? []) {
+  for (const block of visibleBlocks.value) {
     for (const [date, qty] of Object.entries(block.daily_totals ?? {})) {
       totals[date] = (totals[date] ?? 0) + (qty ?? 0)
     }
@@ -294,11 +332,6 @@ function formatQty(v: number) {
   const n = Number(v ?? 0)
   if (!Number.isFinite(n)) return '-'
   return n.toLocaleString()
-}
-
-function formatPercent(v?: number | null) {
-  if (v == null || !Number.isFinite(v)) return '-'
-  return `${v.toFixed(1)}%`
 }
 
 function formatEfficiency(v?: number | null) {
@@ -328,9 +361,14 @@ function isToday(iso: string) {
   return iso === dayjs().format('YYYY-MM-DD')
 }
 
-function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
+function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
   const rows: MatrixRow[] = []
-  res.blocks.forEach((block: LineGridBlock, blockIndex) => {
+  blocks.forEach((block: LineGridBlock, blockIndex) => {
+    const periodRows = (block.rows ?? []).filter((r) =>
+      gridDates.value.some((date) => Number((r.daily ?? {})[date] ?? 0) > 0),
+    )
+    if (!periodRows.length) return
+
     const lineName = resolveLineName(block.line_id, block.line_code)
     const groupRow: MatrixGroupRow = {
       key: `group-${block.line_id}-${blockIndex}`,
@@ -352,7 +390,7 @@ function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
     let adjustSum = 0
     let setupSum = 0
 
-    ;(block.rows ?? []).forEach((r: ScheduleGridRow) => {
+    periodRows.forEach((r: ScheduleGridRow) => {
       const adjustQty = r.prev_month_carryover ?? 0
       const setupTime = r.setup_time ?? 0
       const efficiencyRate = Number(r.efficiency_rate ?? r.efficiency ?? 0)
@@ -388,7 +426,7 @@ function buildMatrixRows(res: SchedulingGridResponse): MatrixRow[] {
     groupRow.avg_efficiency = effWeightedDenom > 0 ? effWeightedSum / effWeightedDenom : null
     const availableHours = Object.values(block.calendar ?? {}).reduce((acc, h) => acc + Number(h || 0), 0)
     let plannedHours = 0
-    for (const r of block.rows ?? []) {
+    for (const r of periodRows) {
       const qty = Number(r.planned_output_qty ?? 0)
       const rate = Number(r.efficiency_rate ?? r.efficiency ?? 0)
       if (!Number.isFinite(qty) || !Number.isFinite(rate) || rate <= 0) continue
@@ -404,6 +442,11 @@ function resolveLineName(lineId: number, fallbackCode: string) {
   const name = String(line?.line_name || '').trim()
   if (name) return name
   return fallbackCode
+}
+
+function isIgnoredLine(lineName: string) {
+  const normalized = lineName.trim()
+  return normalized === '成型他' || normalized === 'FM-026'
 }
 
 function getCellValue(row: MatrixRow, date: string): number {
@@ -422,16 +465,62 @@ function getCellClass(row: MatrixRow, date: string): string {
   const v = getCellValue(row, date) || 0
   const dueMatch = row.type === 'item' && row.due_date ? row.due_date === date : false
 
+  if (row.type === 'group') return ''
   if (!v) return dueMatch ? 'cell-due' : ''
   if (row.type === 'item' && row.material_shortage) return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
 
-  const rate = row.type === 'group' ? row.utilization_rate : row.completion_rate
+  const rate = row.completion_rate
   if (rate != null && Number.isFinite(rate)) {
     if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
     if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
     return dueMatch ? 'tone-low cell-due' : 'tone-low'
   }
   return dueMatch ? 'tone-active cell-due' : 'tone-active'
+}
+
+function handlePrint() {
+  const root = printRootRef.value
+  if (!root) return
+
+  const printTarget = root.querySelector('.result-card') as HTMLElement | null
+  if (!printTarget) return
+
+  const styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+    .map((el) => el.outerHTML)
+    .join('\n')
+
+  const win = window.open('', '_blank')
+  if (!win) return
+
+  win.document.open()
+  win.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Scheduling Print</title>
+        ${styleTags}
+        <style>
+          @page { size: A3 landscape; margin: 8mm; }
+          html, body { margin: 0; padding: 0; }
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .matrix-table-wrapper { height: auto !important; max-height: none !important; overflow: visible !important; }
+          .result-card { border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
+          .result-head-actions .el-button { display: none !important; }
+          tfoot { display: table-row-group !important; }
+          .sc-total-footer-row td { position: static !important; bottom: auto !important; }
+          .sc-line-section { break-inside: avoid; page-break-inside: avoid; }
+          .sc-line-section tr { break-inside: avoid; page-break-inside: avoid; }
+        </style>
+      </head>
+      <body>
+        ${printTarget.outerHTML}
+      </body>
+    </html>
+  `)
+  win.document.close()
+  win.focus()
+  win.print()
 }
 
 async function loadProcessOptions() {
@@ -450,6 +539,7 @@ async function loadProcessOptions() {
 
 async function loadLines() {
   lines.value = await fetchLines((searchForm.processCd || '').trim() || undefined)
+  lines.value = lines.value.filter((x) => !isIgnoredLine(String(x.line_name || '').trim() || x.line_code))
   if (searchForm.lineId && !lines.value.some((x) => x.id === searchForm.lineId)) {
     searchForm.lineId = null
   }
@@ -518,20 +608,46 @@ watch(
 
 .plan-hd {
   margin-bottom: 8px;
+  padding: 4px 2px 2px;
 }
 
 .plan-hd-title {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 18px;
   font-weight: 800;
-  color: #0b1220;
+  color: #0f172a;
   letter-spacing: 0.2px;
+  line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.plan-hd-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  box-shadow:
+    0 6px 14px rgba(37, 99, 235, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.plan-hd-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: #fff;
 }
 
 .plan-hd-sub {
-  margin: 4px 0 0;
-  color: #5b6b82;
+  margin: 5px 0 0 34px;
+  color: #5f6f86;
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .plan-card {
@@ -546,27 +662,60 @@ watch(
     0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
+.filter-card {
+  padding: 7px 10px;
+  border-color: rgba(191, 219, 254, 0.75);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.82) 0%, rgba(250, 245, 255, 0.76) 100%),
+    rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 10px 22px rgba(37, 99, 235, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
+}
+
 .filter-form :deep(.el-form-item__label) {
+  font-size: 12px;
   font-weight: 600;
-  color: #334155;
-  padding-right: 6px;
+  color: #1e3a8a;
+  padding-right: 5px;
+  line-height: 30px;
 }
 
 .compact-form {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  row-gap: 4px;
+  row-gap: 2px;
+  column-gap: 6px;
 }
 
 .compact-form :deep(.el-form-item) {
-  margin-bottom: 4px;
-  margin-right: 8px;
+  margin-bottom: 2px;
+  margin-right: 0;
 }
 
 .compact-form :deep(.el-input__wrapper),
 .compact-form :deep(.el-select__wrapper) {
-  border-radius: 8px;
+  border-radius: 10px;
+  min-height: 32px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.compact-form :deep(.el-input__wrapper:hover),
+.compact-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12);
+}
+
+.compact-form :deep(.el-input__wrapper.is-focus),
+.compact-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.compact-form :deep(.el-input__inner),
+.compact-form :deep(.el-select__selected-item),
+.compact-form :deep(.el-range-input) {
+  font-size: 12px;
 }
 
 .compact-form :deep(.el-button) {
@@ -578,8 +727,8 @@ watch(
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(140px, 1fr));
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .compact-grid {
@@ -587,26 +736,58 @@ watch(
 }
 
 .stat-card {
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 10px;
-  padding: 8px 10px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(191, 219, 254, 0.75);
+  border-radius: 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  gap: 3px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(99, 102, 241, 0.12), transparent 44%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(243, 248, 255, 0.95) 100%);
+  box-shadow:
+    0 10px 24px rgba(37, 99, 235, 0.09),
+    0 2px 6px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.stat-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
+  opacity: 0.95;
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(147, 197, 253, 0.95);
+  box-shadow:
+    0 14px 28px rgba(37, 99, 235, 0.13),
+    0 4px 10px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .stat-label {
   font-size: 11px;
-  color: #6b7a90;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #5b6b82;
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 800;
-  color: #0f172a;
-  line-height: 1.15;
+  color: #0b1220;
+  line-height: 1.1;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .stat-value--warn {
@@ -618,6 +799,56 @@ watch(
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.result-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.print-btn {
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  border-radius: 999px;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  box-shadow:
+    0 8px 18px rgba(37, 99, 235, 0.28),
+    0 2px 4px rgba(124, 58, 237, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+  transition:
+    transform 0.16s ease,
+    box-shadow 0.22s ease,
+    filter 0.22s ease;
+}
+
+.print-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow:
+    0 12px 22px rgba(37, 99, 235, 0.33),
+    0 4px 8px rgba(124, 58, 237, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.print-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    0 5px 12px rgba(37, 99, 235, 0.25),
+    0 1px 3px rgba(124, 58, 237, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.print-btn.is-disabled,
+.print-btn.is-disabled:hover,
+.print-btn.is-disabled:active {
+  transform: none;
+  filter: none;
+  opacity: 0.62;
+  box-shadow: none;
 }
 
 .result-title {
@@ -683,39 +914,33 @@ watch(
 }
 
 .sc-line-col {
-  width: 88px;
-  min-width: 88px;
+  width: 50px;
+  min-width: 50px;
   left: 0;
 }
 
 .sc-order-col {
-  width: 62px;
-  min-width: 62px;
-  left: 88px;
+  width: 50px;
+  min-width: 50px;
+  left: 50px;
 }
 
 .sc-item-col {
-  width: 180px;
-  min-width: 180px;
-  left: 150px;
-}
-
-.sc-setup-col {
-  width: 72px;
-  min-width: 72px;
-  left: 330px;
+  width: 120px;
+  min-width: 120px;
+  left: 100px;
 }
 
 .sc-eff-col {
   width: 66px;
   min-width: 66px;
-  left: 402px;
+  left: 220px;
 }
 
 .sc-total-col {
   width: 90px;
   min-width: 90px;
-  left: 468px;
+  left: 286px;
 }
 
 .numeric-cell {
@@ -744,7 +969,6 @@ watch(
 }
 
 .sc-group-header-row {
-  background: linear-gradient(180deg, #eaf4ff 0%, #e4f0ff 100%);
   font-weight: 700;
   border-top: 2px solid #bfdbfe;
 }

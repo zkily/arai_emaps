@@ -503,7 +503,7 @@
                     :class="{ 'is-today': col.work_date === todayIso }"
                   >
                     <div class="gantt-hour-date">{{ col.work_date.slice(5) }}</div>
-                    <div class="gantt-hour-range">{{ formatHm(col.period_start) }}–{{ formatHm(col.period_end) }}</div>
+                    <div class="gantt-hour-range">{{ formatHmShiftedForHourly(col.period_start) }}–{{ formatHmShiftedForHourly(col.period_end) }}</div>
                   </th>
                 </tr>
               </thead>
@@ -1619,16 +1619,32 @@ function formatEfficiencyRatePiecesPerH(v: number | null | undefined): string {
   return `${s}本/H`
 }
 
+const HOURLY_DISPLAY_SHIFT_MINUTES = 15 * 60
+
 function formatHm(t: string): string {
   if (!t) return ''
   const parts = t.split(':')
   return parts.length >= 2 ? `${parts[0]}:${parts[1]}` : t
 }
 
+/** 時間別ガント表示のみ、時刻を +15h 平行移動（00:00→15:00） */
+function formatHmShiftedForHourly(t: string): string {
+  if (!t) return ''
+  const parts = t.split(':')
+  if (parts.length < 2) return t
+  const hh = Number(parts[0])
+  const mm = Number(parts[1])
+  if (Number.isNaN(hh) || Number.isNaN(mm)) return formatHm(t)
+  const total = ((hh * 60 + mm + HOURLY_DISPLAY_SHIFT_MINUTES) % 1440 + 1440) % 1440
+  const outH = Math.floor(total / 60)
+  const outM = total % 60
+  return `${String(outH).padStart(2, '0')}:${String(outM).padStart(2, '0')}`
+}
+
 function hourlyCellTitle(row: HourlyGridRow, col: HourlyGridColumn): string {
   const q = row.slice_qty[col.key] || 0
   if (q <= 0) return ''
-  return `${row.item_name}: ${q}個（${col.work_date} ${formatHm(col.period_start)}–${formatHm(col.period_end)}）`
+  return `${row.item_name}: ${q}個（${col.work_date} ${formatHmShiftedForHourly(col.period_start)}–${formatHmShiftedForHourly(col.period_end)}）`
 }
 
 function hourlyCellClass(row: HourlyGridRow, col: HourlyGridColumn): Record<string, boolean> {

@@ -1,21 +1,34 @@
 <template>
   <div class="forming-plan-list-page">
     <div class="plan-hd">
-      <h2 class="plan-hd-title">成型計画一覧</h2>
+      <h2 class="plan-hd-title">
+        <span class="plan-hd-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path
+              d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v3H2V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1ZM2 12h20v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5Zm6 3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Zm5 0a1 1 0 1 0 0 2h3a1 1 0 1 0 0-2h-3Z"
+            />
+          </svg>
+        </span>
+        成型計画一覧
+      </h2>
       <p class="plan-hd-sub">
-        工程・対象月を指定し、当該月に期間が重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。編集は「成型計画作成」でラインを選んで行ってください。
+        工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。編集は「成型計画作成」でラインを選んで行ってください。
       </p>
     </div>
 
     <div class="plan-card filter-card">
       <el-form :inline="true" label-position="left" class="filter-form">
-        <el-form-item label="対象月" required>
+        <el-form-item label="期間" required>
           <el-date-picker
-            v-model="productionMonth"
-            type="month"
-            value-format="YYYY-MM"
-            placeholder="YYYY-MM"
-            style="width: 140px"
+            v-model="dateRange"
+            type="daterange"
+            unlink-panels
+            range-separator="~"
+            start-placeholder="開始日"
+            end-placeholder="終了日"
+            value-format="YYYY-MM-DD"
+            format="YYYY-MM-DD"
+            style="width: 280px"
           />
         </el-form-item>
         <el-form-item label="工程" required>
@@ -288,9 +301,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  fetchSchedules,
   fetchSchedulingGrid,
-  type ScheduleOut,
   type ScheduleGridRow,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
@@ -300,12 +311,21 @@ defineOptions({ name: 'FormingPlanningList' })
 
 type GanttListRow = ScheduleGridRow & { lineLabel: string; line_id: number }
 
-const DEFAULT_MONTH = '2026-04'
-const productionMonth = ref<string>(DEFAULT_MONTH)
+function offsetDateIso(offsetDays: number): string {
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() + offsetDays)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
+const dateRange = ref<[string, string]>([offsetDateIso(-1), offsetDateIso(30)])
 const selectedProcessCd = ref<string>('')
 const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
-const rows = ref<ScheduleOut[]>([])
+const rows = ref<GanttListRow[]>([])
 const loading = ref(false)
 const searched = ref(false)
 const activeResultTab = ref<'gantt' | 'table' | 'utilization'>('gantt')
@@ -315,19 +335,25 @@ const lineCalendarHoursMap = ref<Record<number, Record<string, number>>>({})
 const lineDefaultHoursMap = ref<Record<number, number>>({})
 
 const canSearch = computed(
-  () => !!(productionMonth.value && (selectedProcessCd.value || '').trim()),
+  () =>
+    !!(
+      Array.isArray(dateRange.value) &&
+      dateRange.value[0] &&
+      dateRange.value[1] &&
+      (selectedProcessCd.value || '').trim()
+    ),
 )
 
 const displayRangeText = computed(() => {
-  const m = (productionMonth.value || '').trim()
-  if (!m) return '—'
-  return `${firstDayOfMonthIso(m)} 〜 ${lastDayOfMonthIso(m)}`
+  const [startDate, endDate] = dateRange.value || []
+  if (!startDate || !endDate) return '—'
+  return `${startDate} 〜 ${endDate}`
 })
 
 const tableGroups = computed(() => {
-  const groups: Array<{ lineLabel: string; rows: ScheduleOut[] }> = []
+  const groups: Array<{ lineLabel: string; rows: GanttListRow[] }> = []
   for (const row of rows.value) {
-    const lineLabel = formatLine(row)
+    const lineLabel = row.lineLabel || `ID ${row.line_id}`
     const last = groups[groups.length - 1]
     if (!last || last.lineLabel !== lineLabel) {
       groups.push({ lineLabel, rows: [row] })
@@ -341,15 +367,12 @@ const tableGroups = computed(() => {
 const monthlyStatDates = computed(() => {
   const allDates = [...ganttDates.value].sort((a, b) => a.localeCompare(b))
   if (allDates.length === 0) return [] as string[]
-  const month = (productionMonth.value || '').trim()
-  if (!month) return allDates
-  const start = firstDayOfMonthIso(month)
-  const monthEnd = lastDayOfMonthIso(month)
+  const [startDate, endDate] = dateRange.value || []
+  if (!startDate || !endDate) return allDates
   const today = todayIso.value
-  let end = monthEnd
-  if (today >= start && today <= monthEnd) end = today
-  if (today < start) return [] as string[]
-  return allDates.filter((d) => d >= start && d <= end)
+  const effectiveEnd = today >= startDate && today <= endDate ? today : endDate
+  if (today < startDate) return [] as string[]
+  return allDates.filter((d) => d >= startDate && d <= effectiveEnd)
 })
 
 interface LineUtilizationRow {
@@ -449,19 +472,6 @@ onMounted(() => {
   void loadProcessOptions()
 })
 
-function firstDayOfMonthIso(month: string): string {
-  return `${month}-01`
-}
-
-function lastDayOfMonthIso(month: string): string {
-  const [y, m] = month.split('-').map((v) => Number(v))
-  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return `${month}-28`
-  const d = new Date(y, m, 0)
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${mm}-${dd}`
-}
-
 async function loadProcessOptions() {
   loadingProcesses.value = true
   try {
@@ -482,16 +492,9 @@ async function loadProcessOptions() {
   }
 }
 
-function formatLine(row: ScheduleOut): string {
-  const code = (row.line_code || '').trim()
-  const name = (row.line_name || '').trim()
-  if (name) return name
-  return code || `ID ${row.line_id}`
-}
-
 /** 設備表示名 → 順位 → id の昇順（一覧・ガント共通） */
-function compareByLineThenOrder(a: ScheduleOut, b: ScheduleOut): number {
-  const lineCmp = formatLine(a).localeCompare(formatLine(b), 'ja')
+function compareByLineThenOrder(a: GanttListRow, b: GanttListRow): number {
+  const lineCmp = (a.lineLabel || '').localeCompare(b.lineLabel || '', 'ja')
   if (lineCmp !== 0) return lineCmp
   const oa = a.order_no ?? 1_000_000 + a.id
   const ob = b.order_no ?? 1_000_000 + b.id
@@ -510,7 +513,7 @@ function isGanttGroupStart(index: number): boolean {
 function scheduleTableRowClassName({
   rowIndex,
 }: {
-  row: ScheduleOut
+  row: GanttListRow
   rowIndex: number
 }): string {
   const parts: string[] = []
@@ -602,7 +605,7 @@ function buildUtilizationPrintHtml(): string {
 <body>
   <div class="hd">
     <div class="tt">${escHtml(title)}</div>
-    <div class="meta">対象月：${escHtml(productionMonth.value || '—')}　工程：${escHtml(selectedProcessLabel())}　印刷日時：${escHtml(printedAt)}</div>
+    <div class="meta">期間：${escHtml(displayRangeText.value)}　工程：${escHtml(selectedProcessLabel())}　印刷日時：${escHtml(printedAt)}</div>
   </div>
   <table>
     <thead>
@@ -721,7 +724,7 @@ function buildGanttPrintHtml(): string {
 <body>
   <div class="hd">
     <div class="tt">${escHtml(title)}</div>
-    <div class="meta">対象月：${escHtml(productionMonth.value || '—')}　工程：${escHtml(selectedProcessLabel())}　表示期間：${escHtml(displayRangeText.value)}　印刷日時：${escHtml(printedAt)}</div>
+    <div class="meta">期間：${escHtml(displayRangeText.value)}　工程：${escHtml(selectedProcessLabel())}　表示期間：${escHtml(displayRangeText.value)}　印刷日時：${escHtml(printedAt)}</div>
   </div>
   <table>
     <thead>
@@ -774,19 +777,19 @@ function handleUtilizationPrint() {
   }
 }
 
-function tableActual(row: ScheduleOut): number {
+function tableActual(row: GanttListRow): number {
   const target = ganttRows.value.find((g) => g.id === row.id)
   if (!target) return 0
   return periodActualForRow(target)
 }
 
-function tableRemaining(row: ScheduleOut): number {
+function tableRemaining(row: GanttListRow): number {
   const planned = Number(row.planned_process_qty ?? 0)
   const remain = planned - tableActual(row)
   return remain > 0 ? remain : 0
 }
 
-function tableProgress(row: ScheduleOut): string {
+function tableProgress(row: GanttListRow): string {
   const planned = Number(row.planned_process_qty ?? 0)
   if (planned <= 0) return '0%'
   const pct = (tableActual(row) / planned) * 100
@@ -813,7 +816,7 @@ function todayLocalStart(): Date {
   return new Date(n.getFullYear(), n.getMonth(), n.getDate())
 }
 
-function tableStatusKind(row: ScheduleOut): 'done' | 'ongoing' | 'pending' {
+function tableStatusKind(row: GanttListRow): 'done' | 'ongoing' | 'pending' {
   const today = todayLocalStart()
   const start = parseLocalDay(row.start_date)
   const end = parseLocalDay(row.end_date)
@@ -822,7 +825,7 @@ function tableStatusKind(row: ScheduleOut): 'done' | 'ongoing' | 'pending' {
   return 'pending'
 }
 
-function tableStatusLabel(row: ScheduleOut): string {
+function tableStatusLabel(row: GanttListRow): string {
   const map: Record<'done' | 'ongoing' | 'pending', string> = {
     done: '生産済',
     ongoing: '生産中',
@@ -833,7 +836,16 @@ function tableStatusLabel(row: ScheduleOut): string {
 
 async function loadSchedules() {
   if (!canSearch.value) {
-    ElMessage.warning('対象月と工程を選択してください')
+    ElMessage.warning('期間と工程を選択してください')
+    return
+  }
+  const [sd, ed] = dateRange.value || []
+  if (!sd || !ed) {
+    ElMessage.warning('期間を入力してください')
+    return
+  }
+  if (sd > ed) {
+    ElMessage.warning('期間の開始日は終了日以前にしてください')
     return
   }
   loading.value = true
@@ -844,15 +856,7 @@ async function loadSchedules() {
   lineDefaultHoursMap.value = {}
   try {
     const pc = (selectedProcessCd.value || '').trim()
-    const month = productionMonth.value
-    const sd = firstDayOfMonthIso(month)
-    const ed = lastDayOfMonthIso(month)
-    const [scheduleList, grid] = await Promise.all([
-      fetchSchedules({ processCd: pc, productionMonth: month }),
-      fetchSchedulingGrid(sd, ed, undefined, pc),
-    ])
-    const listRaw = Array.isArray(scheduleList) ? scheduleList : []
-    rows.value = [...listRaw].sort(compareByLineThenOrder)
+    const grid = await fetchSchedulingGrid(sd, ed, undefined, pc)
     ganttDates.value = Array.isArray(grid.dates) ? grid.dates : []
     const calendarMap: Record<number, Record<string, number>> = {}
     const defaultMap: Record<number, number> = {}
@@ -863,28 +867,15 @@ async function loadSchedules() {
     lineCalendarHoursMap.value = calendarMap
     lineDefaultHoursMap.value = defaultMap
 
-    const allowed = new Set(rows.value.map((r) => r.id))
-    const lineLabelById = new Map<number, string>()
-    for (const s of rows.value) {
-      if (!lineLabelById.has(s.line_id)) lineLabelById.set(s.line_id, formatLine(s))
-    }
-
     const flat: GanttListRow[] = []
     for (const block of grid.blocks || []) {
-      const label = lineLabelById.get(block.line_id) ?? block.line_code ?? `ID ${block.line_id}`
+      const label = block.line_code ?? `ID ${block.line_id}`
       for (const r of block.rows || []) {
-        if (!allowed.has(r.id)) continue
         flat.push({ ...r, lineLabel: label, line_id: block.line_id })
       }
     }
-    flat.sort((a, b) => {
-      const lc = a.lineLabel.localeCompare(b.lineLabel, 'ja')
-      if (lc !== 0) return lc
-      const oa = a.order_no ?? 1_000_000 + a.id
-      const ob = b.order_no ?? 1_000_000 + b.id
-      if (oa !== ob) return oa - ob
-      return a.id - b.id
-    })
+    flat.sort(compareByLineThenOrder)
+    rows.value = [...flat]
     ganttRows.value = flat
   } catch (e: unknown) {
     rows.value = []
@@ -1002,8 +993,11 @@ function periodActualForRow(row: ScheduleGridRow): number {
   --gl-plan: 56px;
   --gl-act: 72px;
 
-  padding: 12px 14px;
-  background: var(--c-bg);
+  padding: 10px 12px 12px;
+  background:
+    radial-gradient(circle at 10% -20%, rgba(59, 130, 246, 0.1), transparent 35%),
+    radial-gradient(circle at 110% -30%, rgba(16, 185, 129, 0.08), transparent 30%),
+    #f3f6fb;
   min-height: 100%;
   box-sizing: border-box;
   display: flex;
@@ -1012,61 +1006,110 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 
 .plan-hd {
-  display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 2px 2px 0;
+  margin-bottom: 0;
+  padding: 4px 2px 2px;
 }
 .plan-hd-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--c-text-h);
   margin: 0;
-  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.2px;
+  line-height: 1.1;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.plan-hd-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  box-shadow:
+    0 6px 14px rgba(37, 99, 235, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.plan-hd-icon svg {
+  width: 15px;
+  height: 15px;
+  fill: #fff;
 }
 .plan-hd-sub {
+  margin: 5px 0 0 34px;
+  color: #5f6f86;
   font-size: 12px;
-  color: var(--c-text-s);
-  margin: 0;
-  line-height: 1.5;
+  line-height: 1.45;
   max-width: 980px;
 }
 .plan-hd-sub strong {
   font-weight: 600;
-  color: #64748b;
+  color: #4f5f79;
 }
 
 .plan-card {
-  background: var(--c-surface);
+  border: 1px solid rgba(226, 232, 240, 0.9);
   border-radius: 12px;
-  padding: 12px 12px;
-  border: 1px solid var(--c-border-l);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 10px 24px rgba(15, 23, 42, 0.05);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(3px);
+  padding: 10px 12px;
+  margin-bottom: 0;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 8px 20px rgba(15, 23, 42, 0.04);
 }
 
 .filter-card {
-  padding: 10px 10px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(248, 251, 255, 1) 100%);
+  padding: 7px 10px;
+  border-color: rgba(191, 219, 254, 0.75);
+  background:
+    linear-gradient(135deg, rgba(239, 246, 255, 0.82) 0%, rgba(250, 245, 255, 0.76) 100%),
+    rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 10px 22px rgba(37, 99, 235, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.74);
 }
 
 .filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
+  margin-bottom: 2px;
+  margin-right: 6px;
 }
 .filter-form :deep(.el-form-item__label) {
-  font-size: var(--fs-s);
-  color: var(--c-text-m);
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e3a8a;
+  padding-right: 5px;
+  line-height: 30px;
 }
 .filter-form :deep(.el-input__wrapper),
 .filter-form :deep(.el-select__wrapper) {
   border-radius: 10px;
+  min-height: 32px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.filter-form :deep(.el-input__wrapper:hover),
+.filter-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.12);
+}
+.filter-form :deep(.el-input__wrapper.is-focus),
+.filter-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
 }
 .filter-form :deep(.el-button) {
-  border-radius: 10px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  border-radius: 999px;
+  border: none;
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  box-shadow:
+    0 8px 18px rgba(37, 99, 235, 0.28),
+    0 2px 4px rgba(124, 58, 237, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
   padding-left: 14px;
   padding-right: 14px;
 }
@@ -1084,11 +1127,12 @@ function periodActualForRow(row: ScheduleGridRow): number {
 .result-tabs :deep(.el-tabs__item) {
   font-weight: 800;
   font-size: var(--fs-base);
+  color: #334155;
 }
 .result-tabs :deep(.el-tabs__active-bar) {
   height: 3px;
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--c-accent) 0%, var(--c-accent-2) 100%);
+  background: linear-gradient(90deg, #2563eb 0%, #7c3aed 100%);
 }
 
 .gantt-legend-bar {

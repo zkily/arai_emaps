@@ -1694,13 +1694,16 @@ async def replan_sequence(
                         "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
                     })
 
+                # 既に当該工単で実績/不良が出ている場合は、同一製品の継続生産として扱う。
+                # Step3 の再排産開始日（最終活動日の翌日）で段取を再控除すると
+                # 日量が不当に下がるため、use_setup_time=False に固定する。
                 ps = await run_engine(
                     db,
                     ps.id,
                     override_start_date=cursor_date_r,
                     override_start_time=cursor_time_r,
                     actual_done_qty=actual_done_for_engine,
-                    use_setup_time=(line_head_schedule_id is None or ps.id != int(line_head_schedule_id)),
+                    use_setup_time=False,
                     ps_obj=ps,
                     machine_obj=line_machine,
                     cal_map_preloaded=shared_cal_map,
