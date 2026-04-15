@@ -379,6 +379,7 @@
         <span class="legend-item"><i class="legend-dot legend-dot--in-progress" />生産中</span>
         <span class="legend-item"><i class="legend-dot legend-dot--completed" />完了</span>
         <span class="legend-item"><i class="legend-dot legend-dot--actual" />実績（成型）</span>
+        <span class="legend-item"><i class="legend-dot legend-dot--wait-upstream" />前工程不良</span>
         <span class="legend-item"><i class="legend-dot legend-dot--wait-upstream" />上流待ち</span>
         <div class="gantt-range-wrap">
           <span class="gantt-range-label">表示期間</span>
@@ -414,6 +415,7 @@
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
                   <th class="gantt-sticky gantt-sticky-actual">実績数</th>
                   <th class="gantt-sticky gantt-sticky-defect" title="表示期間内の不良合計（在庫ログ・不良）">不良数</th>
+                  <th class="gantt-sticky gantt-sticky-upstream" title="表示期間内の前工程不良合計（切断・面取）">前工程不良</th>
                   <th
                     v-for="d in ganttDates"
                     :key="d"
@@ -444,6 +446,7 @@
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty }}</td>
                   <td class="gantt-sticky gantt-sticky-actual">{{ periodActualForRow(row).toLocaleString() }}</td>
                   <td class="gantt-sticky gantt-sticky-defect">{{ periodDefectForRow(row).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-upstream">{{ periodUpstreamDefectForRow(row).toLocaleString() }}</td>
                   <td
                     v-for="d in ganttDates"
                     :key="d"
@@ -456,6 +459,7 @@
                         (row.daily[d] || 0) !== 0 ||
                         (row.actual_daily?.[d] || 0) !== 0 ||
                         (row.defect_daily?.[d] || 0) !== 0 ||
+                        (row.upstream_defect_daily?.[d] || 0) !== 0 ||
                         (row.remaining_daily?.[d] || 0) !== 0
                       "
                       class="gantt-layered"
@@ -463,6 +467,7 @@
                       <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--actual"><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--defect"><b class="gl-lbl">不</b>{{ row.defect_daily?.[d] || 0 }}</span>
+                      <span class="gantt-layer gantt-layer--upstream"><b class="gl-lbl">前</b>{{ row.upstream_defect_daily?.[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--remain"><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
                     </div>
                   </td>
@@ -1645,6 +1650,13 @@ function periodDefectForRow(row: ScheduleGridRow): number {
   return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
+/** ガント表示期間内の前工程不良合計（日別セル upstream_defect_daily と一致） */
+function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
+  const m = row.upstream_defect_daily || {}
+  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
 function periodActualByScheduleId(scheduleId: number): number {
   const row = ganttRows.value.find((r) => r.id === scheduleId)
   if (!row) return 0
@@ -1828,8 +1840,9 @@ function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean
   const qty = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const defect = row.defect_daily?.[d] || 0
+  const upstream = row.upstream_defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  const active = qty !== 0 || actual !== 0 || defect !== 0 || remain !== 0
+  const active = qty !== 0 || actual !== 0 || defect !== 0 || upstream !== 0 || remain !== 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
   return {
     'gantt-active': active,
@@ -1860,9 +1873,10 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   const planned = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const defect = row.defect_daily?.[d] || 0
+  const upstream = row.upstream_defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  if (planned !== 0 || actual !== 0 || defect !== 0 || remain !== 0) {
-    return `${row.item_name}: 計画 ${planned} / 実績(良) ${actual} / 不良 ${defect} / 残 ${remain}`
+  if (planned !== 0 || actual !== 0 || defect !== 0 || upstream !== 0 || remain !== 0) {
+    return `${row.item_name}: 計画 ${planned} / 実績(良) ${actual} / 不良 ${defect} / 前工程不良 ${upstream} / 残 ${remain}`
   }
   return ''
 }
@@ -2657,10 +2671,20 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-family: var(--font-mono); color: #b45309;
   box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06);
 }
+.gantt-sticky-upstream {
+  left: 518px; width: 86px; min-width: 86px; max-width: 86px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--fs-s);
+  font-family: var(--font-mono); color: #6d28d9;
+  box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06);
+}
 .gantt-table thead .gantt-sticky-actual {
   box-shadow: inset -1px 0 0 #c9d1de;
 }
 .gantt-table thead .gantt-sticky-defect {
+  box-shadow: inset -1px 0 0 #c9d1de, 3px 0 6px rgba(0,21,41,.06);
+}
+.gantt-table thead .gantt-sticky-upstream {
   box-shadow: inset -1px 0 0 #c9d1de, 3px 0 6px rgba(0,21,41,.06);
 }
 .gantt-name {
@@ -2728,6 +2752,11 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 .gantt-layer--defect {
   color: rgba(254, 243, 199, 0.98);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.gantt-layer--upstream {
+  color: rgba(233, 213, 255, 0.98);
   font-size: 9.5px;
   font-weight: 600;
 }

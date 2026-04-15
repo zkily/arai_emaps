@@ -1110,6 +1110,7 @@ async def get_scheduling_grid(
         detail_planned_rows: dict[int, dict[str, int]] = defaultdict(dict)
         detail_actual_rows: dict[int, dict[str, int]] = defaultdict(dict)
         detail_defect_rows: dict[int, dict[str, int]] = defaultdict(dict)
+        upstream_defect_total_rows: dict[int, int] = defaultdict(int)
         slice_rows: dict[int, dict[str, int]] = defaultdict(dict)
         slice_bounds: dict[int, tuple[Optional[date], Optional[date]]] = {}
 
@@ -1137,6 +1138,19 @@ async def get_scheduling_grid(
                 detail_planned_rows[int(sid)][dk] = int(p_sum or 0)
                 detail_actual_rows[int(sid)][dk] = int(a_sum or 0)
                 detail_defect_rows[int(sid)][dk] = int(df_sum or 0)
+
+            upstream_agg_result = await db.execute(
+                select(
+                    ApsBatchPlan.aps_schedule_id,
+                    func.coalesce(func.sum(ApsBatchPlan.upstream_defect_qty), 0),
+                )
+                .where(ApsBatchPlan.aps_schedule_id.in_(schedule_ids))
+                .group_by(ApsBatchPlan.aps_schedule_id)
+            )
+            for sid, u_sum in upstream_agg_result.all():
+                if sid is None:
+                    continue
+                upstream_defect_total_rows[int(sid)] = int(u_sum or 0)
 
             slice_agg_result = await db.execute(
                 select(
@@ -1235,6 +1249,35 @@ async def get_scheduling_grid(
                         continue
                     daily[dk] = planned_from_detail.get(dk, 0)
 
+            upstream_defect_daily: dict[str, int] = {}
+            upstream_total = int(upstream_defect_total_rows.get(sid, 0) or 0)
+            if upstream_total > 0 and daily:
+                keys = sorted(daily.keys())
+                weighted_keys = [(k, max(0, int(daily.get(k, 0) or 0))) for k in keys]
+                total_weight = sum(w for _k, w in weighted_keys)
+                capped_total = min(upstream_total, total_weight) if total_weight > 0 else 0
+                if capped_total > 0:
+                    acc = 0
+                    remainders: list[tuple[float, str]] = []
+                    for k, w in weighted_keys:
+                        raw = capped_total * (w / total_weight)
+                        q = int(raw)
+                        upstream_defect_daily[k] = q
+                        acc += q
+                        remainders.append((raw - q, k))
+                    rem = capped_total - acc
+                    for _frac, k in sorted(remainders, key=lambda x: (-x[0], x[1]))[:rem]:
+                        upstream_defect_daily[k] = int(upstream_defect_daily.get(k, 0) or 0) + 1
+                elif total_weight == 0:
+                    first_key = keys[0]
+                    upstream_defect_daily[first_key] = int(upstream_total)
+
+            # ガント日別「計画」は有効本数として表示（前工程不良を日別按分で控除）
+            for k, u in upstream_defect_daily.items():
+                if int(u or 0) <= 0:
+                    continue
+                daily[k] = max(0, int(daily.get(k, 0) or 0) - int(u or 0))
+
             for k, v in daily.items():
                 daily_totals[k] += int(v or 0)
 
@@ -1252,19 +1295,21 @@ async def get_scheduling_grid(
 
             defect_daily = dict(defect_daily_raw)
 
-            # 残＝当日セルに表示する計画 − 良品実績 − 不良（schedule_details 同期値の合算と一致）
+            # 残＝当日セルに表示する計画 − 良品実績 − 不良 − 前工程不良（日別按分）
             remaining_daily: dict[str, int] = {}
-            for k in set(daily.keys()) | set(actual_daily.keys()) | set(defect_daily.keys()):
+            for k in set(daily.keys()) | set(actual_daily.keys()) | set(defect_daily.keys()) | set(upstream_defect_daily.keys()):
                 if (
                     int(daily.get(k, 0) or 0) == 0
                     and int(actual_daily.get(k, 0) or 0) == 0
                     and int(defect_daily.get(k, 0) or 0) == 0
+                    and int(upstream_defect_daily.get(k, 0) or 0) == 0
                 ):
                     continue
                 remaining_daily[k] = (
                     int(daily.get(k, 0) or 0)
                     - int(actual_daily.get(k, 0) or 0)
                     - int(defect_daily.get(k, 0) or 0)
+                    - int(upstream_defect_daily.get(k, 0) or 0)
                 )
 
             rows.append(ScheduleGridRow(
@@ -1291,6 +1336,7 @@ async def get_scheduling_grid(
                 daily=daily,
                 actual_daily=actual_daily,
                 defect_daily=defect_daily,
+                upstream_defect_daily=upstream_defect_daily,
                 remaining_daily=remaining_daily,
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
@@ -2807,10 +2853,36 @@ def _instruction_management_code(
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
 
 
-async def _upstream_defect_qty_for_management_code(db: AsyncSession, management_code: str) -> int:
+async def _upstream_defect_qty_for_batch_plan_id_only(db: AsyncSession, batch_plan_id: int) -> int:
+    """cutting_management.aps_batch_plan_id が付いている行のみで切断不良＋紐づく面取不良を合算（顺位に依存しない）。"""
+    bid = int(batch_plan_id)
+    if bid <= 0:
+        return 0
+    cut_res = await db.execute(
+        text(
+            "SELECT COALESCE(SUM(COALESCE(defect_qty, 0)), 0) AS s FROM cutting_management "
+            "WHERE aps_batch_plan_id = :bid"
+        ),
+        {"bid": bid},
+    )
+    cut_def = int(cut_res.scalar() or 0)
+    ch_res = await db.execute(
+        text(
+            "SELECT COALESCE(SUM(COALESCE(cm.defect_qty, 0)), 0) AS s "
+            "FROM chamfering_management cm "
+            "INNER JOIN cutting_management c ON c.id = cm.cutting_management_id "
+            "WHERE c.aps_batch_plan_id = :bid"
+        ),
+        {"bid": bid},
+    )
+    cham_def = int(ch_res.scalar() or 0)
+    return cut_def + cham_def
+
+
+async def _upstream_defect_qty_for_management_code_fallback(db: AsyncSession, management_code: str) -> int:
     """
-    切断 management_code に紐づく切断不良 + 当該切断にぶら下がる面取不良の合算。
-    切断行が無い場合は面取のみ management_code 一致で合算（指示済・未切断移行など）。
+    management_code のみで照合（従来）。切断行が無い場合は面取のみ management_code 一致で合算。
+    顺位変更で code がズレた場合は cutting に aps_batch_plan_id が入っていれば _upstream_defect_qty_for_batch_plan_id_only を使う。
     """
     mc = (management_code or "").strip()
     if not mc:
@@ -2846,6 +2918,24 @@ async def _upstream_defect_qty_for_management_code(db: AsyncSession, management_
     return cut_def + cham_def
 
 
+async def _upstream_defect_qty_resolved(
+    db: AsyncSession,
+    *,
+    batch_plan_id: Optional[int],
+    management_code: str,
+) -> int:
+    """優先: cutting_management.aps_batch_plan_id。無ければ management_code フォールバック。"""
+    bid = int(batch_plan_id) if batch_plan_id is not None else 0
+    if bid > 0:
+        cnt_res = await db.execute(
+            text("SELECT COUNT(*) AS c FROM cutting_management WHERE aps_batch_plan_id = :bid"),
+            {"bid": bid},
+        )
+        if int(cnt_res.scalar() or 0) > 0:
+            return await _upstream_defect_qty_for_batch_plan_id_only(db, bid)
+    return await _upstream_defect_qty_for_management_code_fallback(db, management_code)
+
+
 async def _upstream_defect_qty_by_lots(
     db: AsyncSession,
     *,
@@ -2855,10 +2945,12 @@ async def _upstream_defect_qty_by_lots(
     priority_order: Optional[int],
     production_lot_size_engine: int,
     lot_numbers_ordered: Iterable[str],
+    existing_bp_by_lot: Optional[Dict[str, ApsBatchPlan]] = None,
 ) -> dict[str, int]:
-    """ロット番号ごとの前工程不良合計（management_code = APS ロットと同一ルール）。"""
+    """ロット番号ごとの前工程不良。既存 aps_batch_plans.id があれば cutting.aps_batch_plan_id 経路を優先。"""
     out: dict[str, int] = {}
     seen: set[str] = set()
+    bp_map = existing_bp_by_lot or {}
     for ln in lot_numbers_ordered:
         s = str(ln)
         if s in seen:
@@ -2872,8 +2964,32 @@ async def _upstream_defect_qty_by_lots(
             production_lot_size_engine,
             s,
         )
-        out[s] = await _upstream_defect_qty_for_management_code(db, mc)
+        ex = bp_map.get(s)
+        bid = int(ex.id) if ex is not None else None
+        out[s] = await _upstream_defect_qty_resolved(db, batch_plan_id=bid, management_code=mc)
     return out
+
+
+async def _backfill_cutting_management_aps_batch_plan_id(
+    db: AsyncSession,
+    schedule_id: int,
+) -> None:
+    """同一成型工単の aps_batch_plans と切断行を品番・ロット・生産月で突合し aps_batch_plan_id を補完する。"""
+    await db.execute(
+        text(
+            """
+            UPDATE cutting_management cm
+            INNER JOIN aps_batch_plans abp
+              ON abp.aps_schedule_id = :sid
+             AND TRIM(cm.product_cd) = TRIM(abp.product_cd)
+             AND TRIM(COALESCE(cm.lot_number, '')) = TRIM(COALESCE(abp.lot_number, ''))
+             AND cm.production_month = abp.production_month
+            SET cm.aps_batch_plan_id = abp.id
+            WHERE cm.aps_batch_plan_id IS NULL
+            """
+        ),
+        {"sid": int(schedule_id)},
+    )
 
 
 def _aps_build_batch_qty_rows(total_qty: int, lot_size_snapshot: int) -> tuple[int, List[tuple[int, int]]]:
@@ -3207,6 +3323,9 @@ async def _sync_instruction_plans_from_aps_schedule(
         str(bp.lot_number): bp for bp in existing_bp_res.scalars().all()
     }
 
+    # 既存 APS ロットに紐づく切断行へ aps_batch_plan_id を補完（不良集計を batch id 優先にするため）
+    await _backfill_cutting_management_aps_batch_plan_id(db, ps.id)
+
     lot_nums_ordered: list[str] = []
     seen_lot: set[str] = set()
     for b in batches_engine:
@@ -3227,6 +3346,7 @@ async def _sync_instruction_plans_from_aps_schedule(
         priority_order=ps.order_no,
         production_lot_size_engine=production_lot_size_engine,
         lot_numbers_ordered=lot_nums_ordered,
+        existing_bp_by_lot=existing_bp_by_lot,
     )
 
     # 成型ロット計画：スライス按分後の本数から当該ロットの前工程不良を差し引く（ロット単位・他ロットに波及しない）
@@ -3307,9 +3427,14 @@ async def _sync_instruction_plans_from_aps_schedule(
             pls_e,
             lot_str,
         )
-        bp.upstream_defect_qty = await _upstream_defect_qty_for_management_code(db, mc)
+        bp.upstream_defect_qty = await _upstream_defect_qty_resolved(
+            db,
+            batch_plan_id=int(bp.id),
+            management_code=mc,
+        )
 
     await db.flush()
+    await _backfill_cutting_management_aps_batch_plan_id(db, ps.id)
 
     if not sync_instruction_plans or not batches_instruction:
         return

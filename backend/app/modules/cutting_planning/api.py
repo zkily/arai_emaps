@@ -669,14 +669,14 @@ async def publish_cutting_plans(
                         production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                         product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                         is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                        management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
+                        management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                         developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                         production_completed_check, use_material_stock_sub, usage_count
                     ) VALUES (
                         :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                         :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                         :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-                        :management_code, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length,
+                        :management_code, NULL, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length,
                         :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
                         0, :use_material_stock_sub, :usage_count
                     )

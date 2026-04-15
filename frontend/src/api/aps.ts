@@ -212,6 +212,8 @@ export interface ScheduleGridRow {
   actual_daily?: Record<string, number>
   /** 日次不良（stock_transaction_logs「不良」同期） */
   defect_daily?: Record<string, number>
+  /** 日次前工程不良（cutting/chamfering 集計を lot 経由で按分） */
+  upstream_defect_daily?: Record<string, number>
   remaining_daily?: Record<string, number>
 }
 

@@ -1762,7 +1762,7 @@ async def move_batch_to_cutting_management(
             SELECT production_month, production_line, priority_order, product_cd, product_name,
                    planned_quantity, start_date, end_date, production_lot_size, lot_number,
                    is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                   management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+                   management_code, aps_batch_plan_id, actual_production_quantity, take_count, cutting_length, chamfering_length,
                    developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                    use_material_stock_sub, usage_count
             FROM instruction_plans WHERE id = :plan_id
@@ -1795,14 +1795,14 @@ async def move_batch_to_cutting_management(
             production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
             product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-            management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
+            management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
             material_name, material_manufacturer, standard_specification, production_completed_check,
             use_material_stock_sub, usage_count
         ) VALUES (
             :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
             :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-            :management_code, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
+            :management_code, :aps_batch_plan_id, :actual_production_quantity, 0, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
             :material_name, :material_manufacturer, :standard_specification, 0,
             :use_material_stock_sub, :usage_count
         )
@@ -1838,6 +1838,7 @@ async def move_batch_to_cutting_management(
         "has_sw_process": 1 if plan.get("has_sw_process") else 0,
         "is_sw_instructed": 1 if plan.get("is_sw_instructed") else 0,
         "management_code": (plan.get("management_code") or "").strip() or None,
+        "aps_batch_plan_id": plan.get("aps_batch_plan_id") if plan.get("aps_batch_plan_id") is not None else None,
         "actual_production_quantity": plan.get("actual_production_quantity") if plan.get("actual_production_quantity") is not None else 0,
         "take_count": plan.get("take_count"),
         "cutting_length": float(plan["cutting_length"]) if plan.get("cutting_length") is not None else None,
@@ -1989,7 +1990,7 @@ async def move_cutting_to_batch(
         SELECT production_month, production_line, priority_order, product_cd, product_name,
                planned_quantity, start_date, end_date, production_lot_size, lot_number,
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-               management_code, actual_production_quantity, take_count, cutting_length, chamfering_length,
+               management_code, aps_batch_plan_id, actual_production_quantity, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                use_material_stock_sub, usage_count,
                cutting_machine, production_day
@@ -2027,14 +2028,14 @@ async def move_cutting_to_batch(
             production_month, production_line, priority_order, product_cd, product_name,
             planned_quantity, start_date, end_date, production_lot_size, lot_number,
             is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-            management_code, actual_production_quantity, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
+            management_code, aps_batch_plan_id, actual_production_quantity, take_count, cutting_length, chamfering_length, developed_length, scrap_length,
             material_name, material_manufacturer, standard_specification,
             use_material_stock_sub, usage_count
         ) VALUES (
             :production_month, :production_line, :priority_order, :product_cd, :product_name,
             :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
             :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-            :management_code, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
+            :management_code, :aps_batch_plan_id, :actual_production_quantity, :take_count, :cutting_length, :chamfering_length, :developed_length, :scrap_length,
             :material_name, :material_manufacturer, :standard_specification,
             :use_material_stock_sub, :usage_count
         )
@@ -2058,6 +2059,7 @@ async def move_cutting_to_batch(
         "has_sw_process": 1 if cut.get("has_sw_process") else 0,
         "is_sw_instructed": 1 if cut.get("is_sw_instructed") else 0,
         "management_code": (cut.get("management_code") or "").strip() or None,
+        "aps_batch_plan_id": cut.get("aps_batch_plan_id") if cut.get("aps_batch_plan_id") is not None else None,
         "actual_production_quantity": cut.get("actual_production_quantity") if cut.get("actual_production_quantity") is not None else 0,
         "take_count": cut.get("take_count"),
         "cutting_length": _to_float(cut.get("cutting_length")),
@@ -2358,7 +2360,7 @@ async def split_cutting_to_next_day(
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-               management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
+               management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                production_completed_check, remarks, use_material_stock_sub, usage_count
         FROM cutting_management WHERE id = :cid
@@ -2441,7 +2443,7 @@ async def split_cutting_to_next_day(
             "production_line", "cutting_machine", "priority_order",
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
             "is_cutting_instructed", "has_chamfering_process", "is_chamfering_instructed", "has_sw_process", "is_sw_instructed",
-            "management_code", "take_count", "cutting_length", "chamfering_length",
+            "management_code", "aps_batch_plan_id", "take_count", "cutting_length", "chamfering_length",
             "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks",
             "use_material_stock_sub", "usage_count"
         )}
@@ -2459,14 +2461,14 @@ async def split_cutting_to_next_day(
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                 product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
+                management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                 production_completed_check, remarks, use_material_stock_sub, usage_count
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-                :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
+                :management_code, :aps_batch_plan_id, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
                 0, :remarks, :use_material_stock_sub, :usage_count
             )
@@ -2490,7 +2492,7 @@ async def duplicate_cutting_management(
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-               management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
+               management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                production_completed_check, remarks, use_material_stock_sub, usage_count
         FROM cutting_management WHERE id = :cid
@@ -2518,14 +2520,14 @@ async def duplicate_cutting_management(
                 production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                 product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
                 is_cutting_instructed, has_chamfering_process, is_chamfering_instructed, has_sw_process, is_sw_instructed,
-                management_code, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
+                management_code, aps_batch_plan_id, actual_production_quantity, defect_qty, take_count, cutting_length, chamfering_length,
                 developed_length, scrap_length, material_name, material_manufacturer, standard_specification,
                 production_completed_check, remarks, use_material_stock_sub, usage_count
             ) VALUES (
                 :production_month, :production_day, :production_line, :cutting_machine, :production_sequence, :priority_order,
                 :product_cd, :product_name, :planned_quantity, :start_date, :end_date, :production_lot_size, :lot_number,
                 :is_cutting_instructed, :has_chamfering_process, :is_chamfering_instructed, :has_sw_process, :is_sw_instructed,
-                :management_code, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
+                :management_code, :aps_batch_plan_id, :actual_production_quantity, :defect_qty, :take_count, :cutting_length, :chamfering_length,
                 :developed_length, :scrap_length, :material_name, :material_manufacturer, :standard_specification,
                 0, :remarks, :use_material_stock_sub, :usage_count
             )
@@ -2534,7 +2536,7 @@ async def duplicate_cutting_management(
             "production_month", "production_day", "production_line", "cutting_machine", "priority_order",
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
             "is_cutting_instructed", "has_chamfering_process", "is_chamfering_instructed", "has_sw_process", "is_sw_instructed",
-            "management_code", "actual_production_quantity", "defect_qty", "take_count", "cutting_length", "chamfering_length",
+            "management_code", "aps_batch_plan_id", "actual_production_quantity", "defect_qty", "take_count", "cutting_length", "chamfering_length",
             "developed_length", "scrap_length", "material_name", "material_manufacturer", "standard_specification", "remarks",
             "use_material_stock_sub", "usage_count"
         )}

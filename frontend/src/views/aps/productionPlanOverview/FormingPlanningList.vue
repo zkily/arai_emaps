@@ -40,17 +40,6 @@
             検索
           </el-button>
         </el-form-item>
-        <el-form-item label-width="0">
-          <el-button
-            type="warning"
-            plain
-            :loading="replanningAllLines"
-            :disabled="!canSearch || loading"
-            @click="replanAllLinesByMonth"
-          >
-            全ライン順で再計算
-          </el-button>
-        </el-form-item>
       </el-form>
     </div>
 
@@ -299,13 +288,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  fetchLines,
-  fetchLineReplanAnchors,
-  replanLineSequence,
   fetchSchedules,
   fetchSchedulingGrid,
-  type LineReplanAnchorRow,
-  type ProductionLine,
   type ScheduleOut,
   type ScheduleGridRow,
 } from '@/api/aps'
@@ -323,7 +307,6 @@ const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
 const rows = ref<ScheduleOut[]>([])
 const loading = ref(false)
-const replanningAllLines = ref(false)
 const searched = ref(false)
 const activeResultTab = ref<'gantt' | 'table' | 'utilization'>('gantt')
 const ganttDates = ref<string[]>([])
@@ -912,47 +895,6 @@ async function loadSchedules() {
     ElMessage.error(String((e as { message?: string })?.message || e))
   } finally {
     loading.value = false
-  }
-}
-
-async function replanAllLinesByMonth() {
-  if (!canSearch.value) {
-    ElMessage.warning('対象月と工程を選択してください')
-    return
-  }
-  const pc = (selectedProcessCd.value || '').trim()
-  if (!pc) {
-    ElMessage.warning('工程を選択してください')
-    return
-  }
-  replanningAllLines.value = true
-  try {
-    const lines = await fetchLines(pc)
-    const targetLines = (Array.isArray(lines) ? lines : []) as ProductionLine[]
-    if (targetLines.length === 0) {
-      ElMessage.warning('再計算対象の設備がありません')
-      return
-    }
-    const monthAnchor = firstDayOfMonthIso(productionMonth.value)
-    const anchorRows = await fetchLineReplanAnchors(pc)
-    const anchorByLineId = new Map<number, string | null>()
-    for (const r of (Array.isArray(anchorRows) ? anchorRows : []) as LineReplanAnchorRow[]) {
-      const id = Number(r.line_id)
-      if (!Number.isFinite(id)) continue
-      const raw = r.anchor_date
-      anchorByLineId.set(id, raw != null && String(raw).trim() !== '' ? String(raw).trim().slice(0, 10) : null)
-    }
-    for (const line of targetLines) {
-      const saved = anchorByLineId.get(line.id)
-      const anchorStartDate = saved ?? monthAnchor
-      await replanLineSequence(line.id, anchorStartDate)
-    }
-    await loadSchedules()
-    ElMessage.success(`全${targetLines.length}ラインの順次再計算が完了しました`)
-  } catch (e: unknown) {
-    ElMessage.error(String((e as { message?: string })?.message || e))
-  } finally {
-    replanningAllLines.value = false
   }
 }
 
