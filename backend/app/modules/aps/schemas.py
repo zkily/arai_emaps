@@ -237,6 +237,7 @@ class ScheduleGridRow(BaseModel):
     status: str
     daily: Dict[str, int] = Field(default_factory=dict)
     actual_daily: Dict[str, int] = Field(default_factory=dict)
+    defect_daily: Dict[str, int] = Field(default_factory=dict)
     remaining_daily: Dict[str, int] = Field(default_factory=dict)
 
 

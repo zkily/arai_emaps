@@ -121,6 +121,12 @@ class ScheduleDetail(Base):
     schedule_date = Column(Date, nullable=False)
     planned_qty = Column(Integer, nullable=False, default=0)
     actual_qty = Column(Integer, nullable=False, default=0)
+    defect_qty = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="日次不良数（在庫ログ transaction_type=不良 かつ process_cd=KT04 の quantity 合算）",
+    )
     remaining_qty = Column(Integer, nullable=False, default=0)
 
     schedule = relationship("ProductionSchedule", back_populates="details")

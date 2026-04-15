@@ -413,6 +413,7 @@
                   <th class="gantt-sticky gantt-sticky-eff">能率</th>
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
                   <th class="gantt-sticky gantt-sticky-actual">実績数</th>
+                  <th class="gantt-sticky gantt-sticky-defect" title="表示期間内の不良合計（在庫ログ・不良）">不良数</th>
                   <th
                     v-for="d in ganttDates"
                     :key="d"
@@ -442,6 +443,7 @@
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty }}</td>
                   <td class="gantt-sticky gantt-sticky-actual">{{ periodActualForRow(row).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-defect">{{ periodDefectForRow(row).toLocaleString() }}</td>
                   <td
                     v-for="d in ganttDates"
                     :key="d"
@@ -450,11 +452,17 @@
                     :title="ganttCellTitle(row, d)"
                   >
                     <div
-                      v-if="(row.daily[d] || 0) !== 0 || (row.actual_daily?.[d] || 0) !== 0 || (row.remaining_daily?.[d] || 0) !== 0"
+                      v-if="
+                        (row.daily[d] || 0) !== 0 ||
+                        (row.actual_daily?.[d] || 0) !== 0 ||
+                        (row.defect_daily?.[d] || 0) !== 0 ||
+                        (row.remaining_daily?.[d] || 0) !== 0
+                      "
                       class="gantt-layered"
                     >
                       <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--actual"><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
+                      <span class="gantt-layer gantt-layer--defect"><b class="gl-lbl">不</b>{{ row.defect_daily?.[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--remain"><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
                     </div>
                   </td>
@@ -1621,6 +1629,13 @@ function periodActualForRow(row: ScheduleGridRow): number {
   return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
+/** ガント表示期間内の不良合計（日別セル defect_daily と一致） */
+function periodDefectForRow(row: ScheduleGridRow): number {
+  const m = row.defect_daily || {}
+  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
 function periodActualByScheduleId(scheduleId: number): number {
   const row = ganttRows.value.find((r) => r.id === scheduleId)
   if (!row) return 0
@@ -1785,12 +1800,14 @@ function getWeekday(d: string): string {
 function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean> {
   const qty = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
+  const defect = row.defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  const active = qty !== 0 || actual !== 0 || remain !== 0
+  const active = qty !== 0 || actual !== 0 || defect !== 0 || remain !== 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
   return {
     'gantt-active': active,
     'gantt-has-actual': actual > 0,
+    'gantt-has-defect': defect !== 0,
     'gantt-range': !!inRange && !active,
     'is-weekend': isWeekend(d),
     'is-today': isToday(d),
@@ -1815,9 +1832,10 @@ function productPaletteClassByName(name: string): string {
 function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   const planned = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
+  const defect = row.defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  if (planned > 0 || actual > 0 || remain > 0) {
-    return `${row.item_name}: 計画 ${planned} / 実績 ${actual} / 残 ${remain}`
+  if (planned !== 0 || actual !== 0 || defect !== 0 || remain !== 0) {
+    return `${row.item_name}: 計画 ${planned} / 実績(良) ${actual} / 不良 ${defect} / 残 ${remain}`
   }
   return ''
 }
@@ -2603,9 +2621,19 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   text-align: right; font-variant-numeric: tabular-nums;
   font-weight: 700; font-size: var(--fs-s);
   font-family: var(--font-mono); color: #0f766e;
+  box-shadow: inset -1px 0 0 #d4dae5;
+}
+.gantt-sticky-defect {
+  left: 454px; width: 64px; min-width: 64px; max-width: 64px;
+  text-align: right; font-variant-numeric: tabular-nums;
+  font-weight: 700; font-size: var(--fs-s);
+  font-family: var(--font-mono); color: #b45309;
   box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06);
 }
 .gantt-table thead .gantt-sticky-actual {
+  box-shadow: inset -1px 0 0 #c9d1de;
+}
+.gantt-table thead .gantt-sticky-defect {
   box-shadow: inset -1px 0 0 #c9d1de, 3px 0 6px rgba(0,21,41,.06);
 }
 .gantt-name {
@@ -2671,6 +2699,11 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-size: 9.5px;
   font-weight: 600;
 }
+.gantt-layer--defect {
+  color: rgba(254, 243, 199, 0.98);
+  font-size: 9.5px;
+  font-weight: 600;
+}
 .gantt-layer--remain {
   color: rgba(255, 255, 255, 0.92);
   font-size: 9.5px;
@@ -2682,7 +2715,7 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-family: var(--font-sans);
 }
 .gantt-cell.is-weekend:not(.gantt-active) { background: transparent; }
-.gantt-cell.is-today:not(.gantt-active):not(.gantt-has-actual) {
+.gantt-cell.is-today:not(.gantt-active):not(.gantt-has-actual):not(.gantt-has-defect) {
   background: #fefce8; box-shadow: none;
 }
 .gantt-cell.gantt-range { background: #f0f5ff; }

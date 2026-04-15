@@ -352,19 +352,21 @@ async def run_engine(
     )
     old_details = old_detail_res.scalars().all()
     old_actual_by_date: Dict[date, int] = defaultdict(int)
+    old_defect_by_date: Dict[date, int] = defaultdict(int)
     old_rows_before_start: List[tuple[date, int, int, int]] = []
     for od in old_details:
         old_actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
+        old_defect_by_date[od.schedule_date] += int(getattr(od, "defect_qty", 0) or 0)
         if od.schedule_date < start:
-            # 重排起点より前は「実績あり」の履歴のみ保持する。
-            # 実績0の旧 planned/remaining 行を残すと、日別ガントに
+            # 重排起点より前は「実績または不良あり」の履歴のみ保持する。
+            # 実績0・不良0の旧 planned/remaining 行を残すと、日別ガントに
             # 「計0/実0/残N」の浮動残数が再出現するため破棄する。
-            if int(od.actual_qty or 0) > 0:
+            if int(od.actual_qty or 0) > 0 or int(getattr(od, "defect_qty", 0) or 0) > 0:
                 old_rows_before_start.append((
                     od.schedule_date,
                     int(od.planned_qty or 0),
                     int(od.actual_qty or 0),
-                    int(getattr(od, "remaining_qty", 0) or 0),
+                    int(getattr(od, "defect_qty", 0) or 0),
                 ))
 
     await db.execute(
@@ -377,14 +379,14 @@ async def run_engine(
     )
     await db.flush()
 
-    for d0, p0, a0, r0 in old_rows_before_start:
+    for d0, p0, a0, def0 in old_rows_before_start:
         db.add(
             ScheduleDetail(
                 schedule_id=schedule_id,
                 schedule_date=d0,
                 planned_qty=p0,
                 actual_qty=a0,
-                remaining_qty=max(0, int(r0 if r0 is not None else (p0 - a0))),
+                defect_qty=def0,
             )
         )
 
@@ -508,13 +510,15 @@ async def run_engine(
                 start_from_minute=start_from_minute,
             )
             if placed > 0:
+                oa = int(old_actual_by_date.get(current_date, 0))
+                odg = int(old_defect_by_date.get(current_date, 0))
                 db.add(
                     ScheduleDetail(
                         schedule_id=schedule_id,
                         schedule_date=current_date,
                         planned_qty=placed,
-                        actual_qty=int(old_actual_by_date.get(current_date, 0)),
-                        remaining_qty=max(0, int(placed - int(old_actual_by_date.get(current_date, 0)))),
+                        actual_qty=oa,
+                        defect_qty=odg,
                     )
                 )
                 remaining -= placed

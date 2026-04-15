@@ -79,6 +79,8 @@ def _dec(v) -> float:
 
 # 設備能率マスタ由来の日産初期値と整合（productionPlanCreation/FormingPlanning.vue EE_DAILY_HOURS_STANDARD）
 _APS_EE_STANDARD_DAY_HOURS = Decimal("15.3")
+# 成型工程 CD：在庫ログの不良同期は transaction_type=不良 かつ process_cd 一致のみ（instruction_plans 同期と同一）
+_APS_FORMING_PROCESS_CD = "KT04"
 
 
 async def _load_equipment_efficiency_rows_for_machine(
@@ -1107,7 +1109,7 @@ async def get_scheduling_grid(
         # 日別表示用データを線体単位で先読み（N+1 回避）
         detail_planned_rows: dict[int, dict[str, int]] = defaultdict(dict)
         detail_actual_rows: dict[int, dict[str, int]] = defaultdict(dict)
-        detail_remaining_rows: dict[int, dict[str, int]] = defaultdict(dict)
+        detail_defect_rows: dict[int, dict[str, int]] = defaultdict(dict)
         slice_rows: dict[int, dict[str, int]] = defaultdict(dict)
         slice_bounds: dict[int, tuple[Optional[date], Optional[date]]] = {}
 
@@ -1119,7 +1121,7 @@ async def get_scheduling_grid(
                     ScheduleDetail.schedule_date,
                     func.coalesce(func.sum(ScheduleDetail.planned_qty), 0),
                     func.coalesce(func.sum(ScheduleDetail.actual_qty), 0),
-                    func.coalesce(func.sum(ScheduleDetail.remaining_qty), 0),
+                    func.coalesce(func.sum(ScheduleDetail.defect_qty), 0),
                 )
                 .where(
                     ScheduleDetail.schedule_id.in_(schedule_ids),
@@ -1128,13 +1130,13 @@ async def get_scheduling_grid(
                 )
                 .group_by(ScheduleDetail.schedule_id, ScheduleDetail.schedule_date)
             )
-            for sid, d0, p_sum, a_sum, r_sum in detail_agg_result.all():
+            for sid, d0, p_sum, a_sum, df_sum in detail_agg_result.all():
                 if sid is None or d0 is None:
                     continue
                 dk = d0.isoformat()
                 detail_planned_rows[int(sid)][dk] = int(p_sum or 0)
                 detail_actual_rows[int(sid)][dk] = int(a_sum or 0)
-                detail_remaining_rows[int(sid)][dk] = int(r_sum or 0)
+                detail_defect_rows[int(sid)][dk] = int(df_sum or 0)
 
             slice_agg_result = await db.execute(
                 select(
@@ -1194,7 +1196,7 @@ async def get_scheduling_grid(
             sid = int(ps.id)
             planned_from_detail: dict[str, int] = dict(detail_planned_rows.get(sid, {}))
             actual_daily_raw: dict[str, int] = dict(detail_actual_rows.get(sid, {}))
-            remaining_from_detail: dict[str, int] = dict(detail_remaining_rows.get(sid, {}))
+            defect_daily_raw: dict[str, int] = dict(detail_defect_rows.get(sid, {}))
             planned_from_slice: dict[str, int] = dict(slice_rows.get(sid, {}))
             slice_dates: set[str] = set(planned_from_slice.keys())
 
@@ -1248,13 +1250,22 @@ async def get_scheduling_grid(
                 # なお、他工単への実績にじみは _sync_actual_from_stock_logs 側の前順位控除で抑制する。
                 actual_daily = dict(actual_daily_raw)
 
+            defect_daily = dict(defect_daily_raw)
+
+            # 残＝当日セルに表示する計画 − 良品実績 − 不良（schedule_details 同期値の合算と一致）
             remaining_daily: dict[str, int] = {}
-            for k in set(daily.keys()) | set(actual_daily.keys()):
-                # 「計0 / 実0 / 残N」の浮動セルを抑止：
-                # 当日に計画または実績がある場合のみ残数を表示する。
-                if int(daily.get(k, 0) or 0) == 0 and int(actual_daily.get(k, 0) or 0) == 0:
+            for k in set(daily.keys()) | set(actual_daily.keys()) | set(defect_daily.keys()):
+                if (
+                    int(daily.get(k, 0) or 0) == 0
+                    and int(actual_daily.get(k, 0) or 0) == 0
+                    and int(defect_daily.get(k, 0) or 0) == 0
+                ):
                     continue
-                remaining_daily[k] = int(remaining_from_detail.get(k, 0) or 0)
+                remaining_daily[k] = (
+                    int(daily.get(k, 0) or 0)
+                    - int(actual_daily.get(k, 0) or 0)
+                    - int(defect_daily.get(k, 0) or 0)
+                )
 
             rows.append(ScheduleGridRow(
                 id=ps.id,
@@ -1279,6 +1290,7 @@ async def get_scheduling_grid(
                 status=ps.status or "PLANNING",
                 daily=daily,
                 actual_daily=actual_daily,
+                defect_daily=defect_daily,
                 remaining_daily=remaining_daily,
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
@@ -1449,8 +1461,8 @@ async def replan_sequence(
     """
     ライン順で再計算（実績考慮を統合）。
     ステップ 1: anchor から通常の順次排産（ガント生成）
-    ステップ 2: stock_transaction_logs → schedule_details.actual_qty 同期
-    ステップ 3: 実績のある工単は「最後の actual>0 の翌日」から残数で再排産
+    ステップ 2: stock_transaction_logs → schedule_details.actual_qty / defect_qty 同期
+    ステップ 3: 良品実績または不良のある工単は「最終発生日の翌日」から残数（計画−良品−不良）で再排産
 
     アンカー日の優先順位: aps_line_replan_anchors に当該 line_id の行があればその日付（今日繰り上げなし） >
     クエリ anchorStartDate > 無指定時は replan_line_sequential 側の既定。
@@ -1524,13 +1536,14 @@ async def replan_sequence(
         await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
     await db.flush()
 
-    # ── Step 3: 実績がある工単は残数ベースで再排産 ──
-    # 一括集計：actual 合計 / planned 合計 / 最終実績日 / has_actual を schedule_id ごとに取得
+    # ── Step 3: 実績または不良がある工単は残数ベースで再排産 ──
+    # 一括集計：良品実績 / 不良 / planned / 最終活動日 を schedule_id ごとに取得
     sched_ids = [ps.id for ps in updated]
     actual_agg_res = await db.execute(
         select(
             ScheduleDetail.schedule_id,
             func.coalesce(func.sum(ScheduleDetail.actual_qty), 0).label("total_actual"),
+            func.coalesce(func.sum(ScheduleDetail.defect_qty), 0).label("total_defect"),
             func.coalesce(func.sum(ScheduleDetail.planned_qty), 0).label("total_planned"),
             func.max(
                 case(
@@ -1538,6 +1551,12 @@ async def replan_sequence(
                     else_=None,
                 )
             ).label("last_actual_date"),
+            func.max(
+                case(
+                    (ScheduleDetail.defect_qty > 0, ScheduleDetail.schedule_date),
+                    else_=None,
+                )
+            ).label("last_defect_date"),
         )
         .where(ScheduleDetail.schedule_id.in_(sched_ids))
         .group_by(ScheduleDetail.schedule_id)
@@ -1546,8 +1565,10 @@ async def replan_sequence(
     for row in actual_agg_res.all():
         agg_map[row.schedule_id] = {
             "total_actual": int(row.total_actual or 0),
+            "total_defect": int(row.total_defect or 0),
             "total_planned": int(row.total_planned or 0),
             "last_actual_date": row.last_actual_date,
+            "last_defect_date": row.last_defect_date,
         }
 
     line_head_result = await db.execute(
@@ -1562,34 +1583,53 @@ async def replan_sequence(
     )
     line_head_schedule_id = line_head_result.scalar_one_or_none()
 
-    has_any_actual = any(v["total_actual"] > 0 for v in agg_map.values())
+    has_any_activity = any(
+        v.get("total_actual", 0) > 0 or v.get("total_defect", 0) > 0 for v in agg_map.values()
+    )
     replan_debug_rows: list[dict[str, Any]] = []
 
-    if has_any_actual:
+    if has_any_activity:
         cursor_date_r = anchor or updated[0].start_date or now_jst().date()
         cursor_time_r = time(0, 0, 0)
 
         for ps in updated:
             sid = ps.id
-            info = agg_map.get(sid, {"total_actual": 0, "total_planned": 0, "last_actual_date": None})
-            if info["total_actual"] > 0:
-                last_actual_dt = info["last_actual_date"]
-                if last_actual_dt is not None:
-                    # 実績あり工単は「計画-実績」の残数を再排産。
-                    # 起排日は最終実績日の翌日（例: 4/14 に実績があれば 4/15 から再排産）。
-                    replan_start = last_actual_dt + timedelta(days=1)
+            info = agg_map.get(
+                sid,
+                {
+                    "total_actual": 0,
+                    "total_defect": 0,
+                    "total_planned": 0,
+                    "last_actual_date": None,
+                    "last_defect_date": None,
+                },
+            )
+            lg = info.get("last_actual_date")
+            lb = info.get("last_defect_date")
+            last_activity_dt: Optional[date] = None
+            if lg is not None and lb is not None:
+                last_activity_dt = max(lg, lb)
+            else:
+                last_activity_dt = lg or lb
+
+            if info["total_actual"] > 0 or info["total_defect"] > 0:
+                if last_activity_dt is not None:
+                    # 良品実績または不良があれば、最終発生日の翌日から再排産。
+                    replan_start = last_activity_dt + timedelta(days=1)
                     if replan_start > cursor_date_r:
                         cursor_date_r = replan_start
                         cursor_time_r = time(0, 0, 0)
 
                 period_planned = info["total_planned"]
                 period_actual = info["total_actual"]
-                remaining = max(0, period_planned - period_actual)
+                period_defect = info["total_defect"]
+                remaining = max(0, period_planned - period_actual - period_defect)
 
                 planned_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
-                # 実績反映は「実績総数」を直接採用する（計画明細の揺れに依存しない）。
-                # 上限は工単総必要量までにクリップ。
-                actual_done_for_engine = min(planned_total, max(0, int(period_actual or 0)))
+                # 工単消化量＝良品実績＋不良（残＝計画−良品−不良 と整合）
+                actual_done_for_engine = min(
+                    planned_total, max(0, int(period_actual or 0) + int(period_defect or 0))
+                )
                 if includeDebug:
                     replan_debug_rows.append({
                         "schedule_id": int(ps.id),
@@ -1597,10 +1637,13 @@ async def replan_sequence(
                         "status": ps.status or "PLANNING",
                         "total_planned": int(period_planned or 0),
                         "total_actual": int(period_actual or 0),
+                        "total_defect": int(period_defect or 0),
                         "remaining_for_replan": int(remaining or 0),
                         "planned_total": int(planned_total or 0),
                         "actual_done_for_engine": int(actual_done_for_engine or 0),
-                        "last_actual_date": last_actual_dt.isoformat() if last_actual_dt else None,
+                        "last_actual_date": lg.isoformat() if lg else None,
+                        "last_defect_date": lb.isoformat() if lb else None,
+                        "last_activity_date": last_activity_dt.isoformat() if last_activity_dt else None,
                         "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
                     })
 
@@ -1624,10 +1667,12 @@ async def replan_sequence(
                         "status": ps.status or "PLANNING",
                         "total_planned": int(info.get("total_planned", 0) or 0),
                         "total_actual": int(info.get("total_actual", 0) or 0),
+                        "total_defect": int(info.get("total_defect", 0) or 0),
                         "remaining_for_replan": int(info.get("total_planned", 0) or 0),
                         "planned_total": int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0),
                         "actual_done_for_engine": 0,
                         "last_actual_date": None,
+                        "last_defect_date": None,
                         "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
                     })
                 ps = await run_engine(
@@ -2542,9 +2587,13 @@ async def _sync_actual_from_stock_logs(
     db: AsyncSession, ps: ProductionSchedule, *, machine: Optional[Machine] = None
 ):
     """
-    成型実績：stock_transaction_logs（実績・当該設備 machine_cd・製品 target_cd）を
-    schedule_details.actual_qty に日付単位で同期。切断完工ではない。
-    run_engine 後に schedule_details が再作成されるため、DB トリガーが効かないケースを補完する。
+    成型：stock_transaction_logs を schedule_details に日別同期する。
+    - transaction_type='実績' → actual_qty（良品・machine_cd 一致）
+    - transaction_type='不良' かつ process_cd=成型(KT04) → defect_qty
+      マッチ：TRIM(ps.product_cd)=TRIM(target_cd)、DATE(transaction_time)=schedule_date、
+      SUM(quantity)。不良は在庫ログに machine_cd が無い場合があるため device 一致は課さない。
+    同一ライン・同一製品の前順位工単に配賦済みの良品/不良を控除し、二重計上を防ぐ。
+    remaining_qty は 計画 − 良品実績 − 不良 で上書きする。
     """
     from sqlalchemy import func as sa_func
 
@@ -2561,6 +2610,10 @@ async def _sync_actual_from_stock_logs(
         return
 
     from app.modules.erp.stock_transaction_log_models import StockTransactionLog
+
+    product_cd_norm = (ps.product_cd or "").strip()
+    if not product_cd_norm:
+        return
 
     all_dates = [det.schedule_date for det in details]
     max_d = max(all_dates)
@@ -2579,7 +2632,7 @@ async def _sync_actual_from_stock_logs(
             sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
             sa_func.date(StockTransactionLog.transaction_time) <= max_d,
             StockTransactionLog.machine_cd == machine.machine_cd,
-            StockTransactionLog.target_cd == ps.product_cd,
+            sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
         )
         .group_by(sa_func.date(StockTransactionLog.transaction_time))
     )
@@ -2589,6 +2642,29 @@ async def _sync_actual_from_stock_logs(
         if isinstance(d, str):
             d = date.fromisoformat(d)
         actual_by_date[d] = int(row.qty or 0)
+
+    agg_def = await db.execute(
+        select(
+            sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
+            sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
+        )
+        .where(
+            sa_func.trim(StockTransactionLog.transaction_type) == "不良",
+            sa_func.trim(sa_func.coalesce(StockTransactionLog.process_cd, ""))
+            == _APS_FORMING_PROCESS_CD,
+            StockTransactionLog.transaction_time.isnot(None),
+            sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
+            sa_func.date(StockTransactionLog.transaction_time) <= max_d,
+            sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
+        )
+        .group_by(sa_func.date(StockTransactionLog.transaction_time))
+    )
+    defect_by_date: dict[date, int] = {}
+    for row in agg_def.all():
+        d = row.tx_date
+        if isinstance(d, str):
+            d = date.fromisoformat(d)
+        defect_by_date[d] = int(row.qty or 0)
 
     # 同一ライン・同一製品で前順位工単に既に配賦済みの実績を控除し、
     # 同日実績の二重計上（複数工単への重複反映）を防ぐ。
@@ -2612,7 +2688,7 @@ async def _sync_actual_from_stock_logs(
         .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
         .where(
             ProductionSchedule.line_id == ps.line_id,
-            ProductionSchedule.product_cd == ps.product_cd,
+            sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
             ScheduleDetail.schedule_date >= lookback_d,
             ScheduleDetail.schedule_date <= max_d,
             ScheduleDetail.schedule_id != ps.id,
@@ -2626,12 +2702,38 @@ async def _sync_actual_from_stock_logs(
             continue
         prior_assigned_by_date[d0] = int(q0 or 0)
 
+    prior_def_res = await db.execute(
+        select(
+            ScheduleDetail.schedule_date,
+            sa_func.coalesce(sa_func.sum(ScheduleDetail.defect_qty), 0),
+        )
+        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+        .where(
+            ProductionSchedule.line_id == ps.line_id,
+            sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
+            ScheduleDetail.schedule_date >= lookback_d,
+            ScheduleDetail.schedule_date <= max_d,
+            ScheduleDetail.schedule_id != ps.id,
+            prior_cond,
+        )
+        .group_by(ScheduleDetail.schedule_date)
+    )
+    prior_defect_by_date: dict[date, int] = {}
+    for d0, q0 in prior_def_res.all():
+        if d0 is None:
+            continue
+        prior_defect_by_date[d0] = int(q0 or 0)
+
     for det in details:
         raw_actual = actual_by_date.get(det.schedule_date, 0)
+        raw_defect = defect_by_date.get(det.schedule_date, 0)
         already_assigned = prior_assigned_by_date.get(det.schedule_date, 0)
+        already_defect = prior_defect_by_date.get(det.schedule_date, 0)
         actual = max(0, raw_actual - already_assigned)
+        defect = max(0, raw_defect - already_defect)
         det.actual_qty = actual
-        det.remaining_qty = max(0, int(det.planned_qty or 0) - actual)
+        det.defect_qty = defect
+        det.remaining_qty = int(det.planned_qty or 0) - int(actual) - int(defect)
 
 
 async def _schedule_has_actual(db: AsyncSession, schedule_id: int) -> bool:
@@ -2800,7 +2902,7 @@ def _walk_slice_pairs_to_batches(
 
 
 # instruction_plans へ書き込むのは「成型」(KT04) の設備に限る（get_lines の processCd 判定と同一）。aps_batch_plans は全工程で更新する。
-_APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD = "KT04"
+_APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD = _APS_FORMING_PROCESS_CD
 # 生産進捗：True のとき schedule_details.actual_qty をロット順に割当て、残数を翌日以降に再按分し日別ガントと整列する。
 _PRODUCTION_PROGRESS_USE_FORMING_ACTUAL = True
 

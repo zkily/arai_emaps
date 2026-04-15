@@ -210,6 +210,8 @@ export interface ScheduleGridRow {
   status: string
   daily: Record<string, number>
   actual_daily?: Record<string, number>
+  /** 日次不良（stock_transaction_logs「不良」同期） */
+  defect_daily?: Record<string, number>
   remaining_daily?: Record<string, number>
 }
 

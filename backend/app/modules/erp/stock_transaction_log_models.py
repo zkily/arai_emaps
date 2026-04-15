@@ -26,7 +26,7 @@ class StockTransactionLog(Base):
     lot_no = Column(String(50), nullable=True, comment="ロット番号")
     process_cd = Column(String(50), nullable=True, comment="工程コード")
     machine_cd = Column(String(50), nullable=True, comment="設備コード")
-    quantity = Column(Numeric(18, 4), nullable=False, comment="操作数量")
+    quantity = Column(Numeric(18, 4), nullable=False, comment="操作数量（不良は transaction_type=不良 で本フィールドに件数）")
     unit = Column(String(10), nullable=True, comment="単位")
     order_no = Column(String(50), nullable=True, comment="関連伝票No")
     notes = Column(String(100), nullable=True, comment="注文番号等（トリガー互換・削除照合用）")

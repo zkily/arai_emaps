@@ -1,4 +1,5 @@
--- stock_transaction_logs に defect_qty（不良数）列を追加（外注溶接受入の良品/不良を記録）
+-- stock_transaction_logs に defect_qty 列を追加（任意・他画面用）。
+-- 成型APSの「不良」集計は transaction_type='不良' の quantity のみを使用する。
 SET NAMES utf8mb4;
 
 delimiter ;;
@@ -7,7 +8,7 @@ BEGIN
   IF (SELECT COUNT(*) FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'stock_transaction_logs' AND COLUMN_NAME = 'defect_qty') = 0 THEN
     ALTER TABLE stock_transaction_logs
-    ADD COLUMN `defect_qty` int NULL DEFAULT NULL COMMENT '不良数量（外注溶接受入等）' AFTER `quantity`;
+    ADD COLUMN `defect_qty` int NULL DEFAULT NULL COMMENT '任意。成型不良集計は transaction_type=不良 の quantity を使用' AFTER `quantity`;
   END IF;
 END;;
 delimiter ;
