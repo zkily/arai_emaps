@@ -267,6 +267,8 @@ export interface ApsBatchPlanOut {
   product_cd: string
   product_name: string
   planned_quantity: number
+  /** 切断+面取の不良合計（management_code 照合） */
+  upstream_defect_qty?: number
   /** 計画一覧確定時の本数（生産進捗の計画数と同趣旨） */
   original_planned_quantity?: number | null
   production_lot_size: number
@@ -296,6 +298,10 @@ export interface ProgressLotItem {
   cutting_planned_qty?: number | null
   cutting_actual_qty?: number | null
   cutting_completed?: boolean | null
+  /** 切断+面取の不良合計（当ロット management_code） */
+  upstream_defect_qty?: number
+  /** 成型有効計画 = planned_quantity（表示）− upstream_defect_qty、下限0 */
+  forming_effective_planned_qty?: number
 }
 
 /** 生産進捗日別セル：成型の実績・計画（schedule_details）。切断本数は ProgressLotItem.cutting_* */

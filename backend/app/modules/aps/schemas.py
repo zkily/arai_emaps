@@ -293,6 +293,7 @@ class ApsBatchPlanOut(BaseModel):
     product_cd: str
     product_name: str
     planned_quantity: int
+    upstream_defect_qty: int = 0
     original_planned_quantity: Optional[int] = None
     production_lot_size: int
     lot_number: str
@@ -329,6 +330,14 @@ class ProgressLotItem(BaseModel):
     )
     cutting_completed: Optional[bool] = Field(
         None, description="切断 production_completed_check（実績確定イメージ）"
+    )
+    upstream_defect_qty: int = Field(
+        0,
+        description="前工程不良合計（切断+面取、management_code／aps ロットと照合）",
+    )
+    forming_effective_planned_qty: int = Field(
+        0,
+        description="成型有効計画本数（計画表示−前工程不良、下限0）",
     )
 
 

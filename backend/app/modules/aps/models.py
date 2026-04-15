@@ -155,6 +155,12 @@ class ApsBatchPlan(Base):
     product_cd = Column(String(50), nullable=False)
     product_name = Column(String(255), nullable=False)
     planned_quantity = Column(Integer, nullable=False, default=0)
+    upstream_defect_qty = Column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="前工程不良合計（切断+面取、management_code 照合）",
+    )
     original_planned_quantity = Column(Integer, nullable=True)
     production_lot_size = Column(Integer, nullable=False, default=0)
     lot_number = Column(String(100), nullable=False)

@@ -6,7 +6,7 @@ import math
 from collections import defaultdict
 from datetime import date, timedelta, datetime, time
 from decimal import Decimal
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, and_, or_, delete, text, exists, func, case
@@ -1463,6 +1463,7 @@ async def replan_sequence(
     ステップ 1: anchor から通常の順次排産（ガント生成）
     ステップ 2: stock_transaction_logs → schedule_details.actual_qty / defect_qty 同期
     ステップ 3: 良品実績または不良のある工単は「最終発生日の翌日」から残数（計画−良品−不良）で再排産
+    同期後: aps_batch_plans はロットごとに cutting/chamfering の upstream_defect_qty を取り込み、成型 planned_quantity を有効本数へ更新
 
     アンカー日の優先順位: aps_line_replan_anchors に当該 line_id の行があればその日付（今日繰り上げなし） >
     クエリ anchorStartDate > 無指定時は replan_line_sequential 側の既定。
@@ -1864,6 +1865,13 @@ def _batch_display_planned_qty(batch: ApsBatchPlan) -> int:
     if oq is not None and int(oq) > 0:
         return int(oq)
     return int(batch.planned_quantity or 0)
+
+
+def _batch_forming_progress_cap(batch: ApsBatchPlan) -> int:
+    """ロット別生産進捗の上限用：計画表示本数から前工程不良（upstream_defect_qty）を差し引いた成型側有効本数（下限0）。"""
+    base = _batch_display_planned_qty(batch)
+    u = int(getattr(batch, "upstream_defect_qty", 0) or 0)
+    return max(0, base - u)
 
 
 def _split_actual_across_lots(actual_total: int, shares: dict[str, int]) -> dict[str, int]:
@@ -2377,13 +2385,16 @@ async def get_production_progress(
         start_iso = batch.start_date.isoformat() if batch.start_date else None
         end_iso = batch.end_date.isoformat() if batch.end_date else None
 
+        disp_qty = _batch_display_planned_qty(batch)
+        u_def = int(getattr(batch, "upstream_defect_qty", 0) or 0)
+        eff_qty = _batch_forming_progress_cap(batch)
         lots.append(ProgressLotItem(
             batch_plan_id=batch.id,
             aps_schedule_id=batch.aps_schedule_id,
             product_cd=batch.product_cd,
             product_name=batch.product_name,
             lot_number=batch.lot_number,
-            planned_quantity=_batch_display_planned_qty(batch),
+            planned_quantity=disp_qty,
             order_no=ps.order_no,
             start_date=start_iso,
             end_date=end_iso,
@@ -2394,6 +2405,8 @@ async def get_production_progress(
             cutting_planned_qty=cut_planned,
             cutting_actual_qty=cut_actual,
             cutting_completed=cut_done,
+            upstream_defect_qty=u_def,
+            forming_effective_planned_qty=eff_qty,
         ))
 
         lot_key = f"{batch.aps_schedule_id}_{batch.lot_number}"
@@ -2401,7 +2414,7 @@ async def get_production_progress(
         lot_progress_status[lot_key] = progress_status
         lot_planned_cap[lot_key] = max(
             lot_planned_cap.get(lot_key, 0),
-            _batch_display_planned_qty(batch),
+            eff_qty,
         )
         daily_map: dict[str, int] = {}
 
@@ -2794,6 +2807,75 @@ def _instruction_management_code(
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
 
 
+async def _upstream_defect_qty_for_management_code(db: AsyncSession, management_code: str) -> int:
+    """
+    切断 management_code に紐づく切断不良 + 当該切断にぶら下がる面取不良の合算。
+    切断行が無い場合は面取のみ management_code 一致で合算（指示済・未切断移行など）。
+    """
+    mc = (management_code or "").strip()
+    if not mc:
+        return 0
+    cut_res = await db.execute(
+        text(
+            "SELECT id, COALESCE(defect_qty, 0) AS dq FROM cutting_management "
+            "WHERE management_code = :mc LIMIT 1"
+        ),
+        {"mc": mc},
+    )
+    crow = cut_res.mappings().first()
+    cut_def = int(crow["dq"] or 0) if crow else 0
+    if crow and crow.get("id") is not None:
+        cid = int(crow["id"])
+        ch_res = await db.execute(
+            text(
+                "SELECT COALESCE(SUM(COALESCE(defect_qty, 0)), 0) AS s FROM chamfering_management "
+                "WHERE cutting_management_id = :cid"
+            ),
+            {"cid": cid},
+        )
+        cham_def = int(ch_res.scalar() or 0)
+    else:
+        ch_res = await db.execute(
+            text(
+                "SELECT COALESCE(SUM(COALESCE(defect_qty, 0)), 0) AS s FROM chamfering_management "
+                "WHERE management_code = :mc"
+            ),
+            {"mc": mc},
+        )
+        cham_def = int(ch_res.scalar() or 0)
+    return cut_def + cham_def
+
+
+async def _upstream_defect_qty_by_lots(
+    db: AsyncSession,
+    *,
+    production_month: date,
+    production_line: str,
+    product_cd: str,
+    priority_order: Optional[int],
+    production_lot_size_engine: int,
+    lot_numbers_ordered: Iterable[str],
+) -> dict[str, int]:
+    """ロット番号ごとの前工程不良合計（management_code = APS ロットと同一ルール）。"""
+    out: dict[str, int] = {}
+    seen: set[str] = set()
+    for ln in lot_numbers_ordered:
+        s = str(ln)
+        if s in seen:
+            continue
+        seen.add(s)
+        mc = _instruction_management_code(
+            production_month,
+            production_line,
+            product_cd,
+            priority_order,
+            production_lot_size_engine,
+            s,
+        )
+        out[s] = await _upstream_defect_qty_for_management_code(db, mc)
+    return out
+
+
 def _aps_build_batch_qty_rows(total_qty: int, lot_size_snapshot: int) -> tuple[int, List[tuple[int, int]]]:
     """ロット数と [(lot_index, qty), ...]（qty>0 のみ）。"""
     production_lot_size = max(1, int(math.ceil(total_qty / float(lot_size_snapshot))))
@@ -2984,6 +3066,9 @@ async def _sync_instruction_plans_from_aps_schedule(
     """
     APS の工単スケジュールをロット（lot_number）に展開し、instruction_plans へ同期する。
 
+    成型ロット（aps_batch_plans.planned_quantity）はスライス按分後に、当該ロットの management_code で
+    cutting_management / chamfering_management の不良合計（upstream_defect_qty）を差し引いた有効本数とする。
+
     性能最適化パラメータ（省略時は従来通り DB 取得）:
       machine            事前取得済みの Machine
       is_forming_line    事前判定済みの成型ライン判定
@@ -3110,6 +3195,48 @@ async def _sync_instruction_plans_from_aps_schedule(
     if not batches_engine:
         return
 
+    # 生産月はスライスの最初日基準（管理コード・前工程不良照合に先に必要）
+    min_work_date = min(s.work_date for s in slices)
+    production_month = date(min_work_date.year, min_work_date.month, 1)
+
+    # ① 既存 aps_batch_plans を先読み（本同期に出ないロットの upstream だけ更新するため）
+    existing_bp_res = await db.execute(
+        select(ApsBatchPlan).where(ApsBatchPlan.aps_schedule_id == ps.id)
+    )
+    existing_bp_by_lot: dict[str, ApsBatchPlan] = {
+        str(bp.lot_number): bp for bp in existing_bp_res.scalars().all()
+    }
+
+    lot_nums_ordered: list[str] = []
+    seen_lot: set[str] = set()
+    for b in batches_engine:
+        lk = str(b["lot_number"])
+        if lk not in seen_lot:
+            seen_lot.add(lk)
+            lot_nums_ordered.append(lk)
+    for lk in existing_bp_by_lot.keys():
+        if lk not in seen_lot:
+            seen_lot.add(lk)
+            lot_nums_ordered.append(lk)
+
+    upstream_map = await _upstream_defect_qty_by_lots(
+        db,
+        production_month=production_month,
+        production_line=str(production_line),
+        product_cd=production_product_cd,
+        priority_order=ps.order_no,
+        production_lot_size_engine=production_lot_size_engine,
+        lot_numbers_ordered=lot_nums_ordered,
+    )
+
+    # 成型ロット計画：スライス按分後の本数から当該ロットの前工程不良を差し引く（ロット単位・他ロットに波及しない）
+    for b in batches_engine:
+        raw_slice = int(b.get("planned_quantity") or 0)
+        b["_raw_forming_slice_qty"] = raw_slice
+        lk = str(b["lot_number"])
+        u = int(upstream_map.get(lk, 0) or 0)
+        b["planned_quantity"] = max(0, raw_slice - u)
+
     # instruction_plans：計画一覧合計（切断前。スライスを full_plan_total へ比例拡大してロット・時刻を算出）
     instruction_planned_qty = full_plan_total
     production_lot_size_ip, batch_qtys_ip = _aps_build_batch_qty_rows(full_plan_total, lot_size_snapshot)
@@ -3120,21 +3247,13 @@ async def _sync_instruction_plans_from_aps_schedule(
         else []
     )
 
-    # 生産月はスライスの最初日基準
-    min_work_date = min(s.work_date for s in slices)
-    production_month = date(min_work_date.year, min_work_date.month, 1)
-
-    # ① aps_batch_plans のみ（成型スライス実値）— 既存行を一括取得
-    existing_bp_res = await db.execute(
-        select(ApsBatchPlan).where(ApsBatchPlan.aps_schedule_id == ps.id)
-    )
-    existing_bp_by_lot: dict[str, ApsBatchPlan] = {
-        str(bp.lot_number): bp for bp in existing_bp_res.scalars().all()
-    }
-
+    processed_lots: set[str] = set()
     for b in batches_engine:
-        lot_number = b["lot_number"]
+        lot_number = str(b["lot_number"])
+        processed_lots.add(lot_number)
+        raw_slice = int(b.get("_raw_forming_slice_qty") or 0)
         batch_planned_qty = int(b["planned_quantity"])
+        u = int(upstream_map.get(lot_number, 0) or 0)
         start_dt = b["start_date"]
         end_dt = b["end_date"]
 
@@ -3148,7 +3267,8 @@ async def _sync_instruction_plans_from_aps_schedule(
                 product_cd=production_product_cd,
                 product_name=production_name,
                 planned_quantity=batch_planned_qty,
-                original_planned_quantity=batch_planned_qty,
+                upstream_defect_qty=u,
+                original_planned_quantity=raw_slice,
                 production_lot_size=production_lot_size_engine,
                 lot_number=lot_number,
                 start_date=start_dt,
@@ -3160,18 +3280,34 @@ async def _sync_instruction_plans_from_aps_schedule(
             new_pq = int(batch_planned_qty or 0)
             oq = getattr(existing, "original_planned_quantity", None)
             if oq is None:
-                existing.original_planned_quantity = max(old_pq, new_pq)
+                existing.original_planned_quantity = max(old_pq, raw_slice)
             else:
-                existing.original_planned_quantity = max(int(oq or 0), new_pq)
+                existing.original_planned_quantity = max(int(oq or 0), raw_slice)
             existing.production_month = production_month
             existing.production_line = str(production_line)
             existing.priority_order = ps.order_no
             existing.product_cd = production_product_cd
             existing.product_name = production_name
             existing.planned_quantity = new_pq
+            existing.upstream_defect_qty = u
             existing.production_lot_size = production_lot_size_engine
             existing.start_date = start_dt
             existing.end_date = end_dt
+
+    # 今回のスライスに含まれない既存ロット：前工程不良のみ最新化
+    for lot_str, bp in existing_bp_by_lot.items():
+        if lot_str in processed_lots:
+            continue
+        pls_e = int(getattr(bp, "production_lot_size", 0) or 0) or production_lot_size_engine
+        mc = _instruction_management_code(
+            production_month,
+            str(production_line),
+            production_product_cd,
+            ps.order_no,
+            pls_e,
+            lot_str,
+        )
+        bp.upstream_defect_qty = await _upstream_defect_qty_for_management_code(db, mc)
 
     await db.flush()
 

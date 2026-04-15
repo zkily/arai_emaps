@@ -567,7 +567,15 @@
                   <td class="gantt-sticky gantt-sticky-order">{{ lot.order_no ?? '—' }}</td>
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ lot.product_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff pgs-lot-num">#{{ lot.lot_number }}</td>
-                  <td class="gantt-sticky gantt-sticky-planned">{{ lot.planned_quantity?.toLocaleString() }}</td>
+                  <td
+                    class="gantt-sticky gantt-sticky-planned pgs-planned-cell"
+                    :title="progressPlannedCellTitle(lot)"
+                  >
+                    <span class="pgs-planned-main">{{ lot.planned_quantity?.toLocaleString() }}</span>
+                    <span v-if="(lot.upstream_defect_qty ?? 0) > 0" class="pgs-eff-sub">
+                      有効 {{ formingEffectiveDisplay(lot).toLocaleString() }}（上流不良 {{ (lot.upstream_defect_qty ?? 0).toLocaleString() }}）
+                    </span>
+                  </td>
                   <td class="pgs-cutting-cell">
                     <span class="pgs-cutting-qty">{{ cuttingProgressDisplay(lot) }}</span>
                     <el-tag
@@ -600,6 +608,7 @@
             </table>
             <p class="pgs-footnote">
               全ロットを本工程（成型）の計画・実績として表示。日別セルは schedule_details／在庫ログ同期の<strong>成型実績</strong>。
+              「計画数」は計画一覧のロット本数。上流不良がある場合は切断+面取の defect を management_code で合算し、<strong>有効</strong>は再計算後の成型ロット本数（aps_batch_plans）に合わせます。
               「ステータス」「切断(本)」は上流（instruction_plans／cutting_management）のみの情報で、行の表示とは独立します。
             </p>
           </div>
@@ -1767,6 +1776,24 @@ function cuttingProgressDisplay(lot: ProgressLotItem): string {
   return `${an.toLocaleString()}/${pn.toLocaleString()}`
 }
 
+/** 成型ロットの有効計画本数（API 未対応時は 計画−上流不良） */
+function formingEffectiveDisplay(lot: ProgressLotItem): number {
+  if (lot.forming_effective_planned_qty != null && lot.forming_effective_planned_qty !== undefined) {
+    return Math.max(0, Number(lot.forming_effective_planned_qty))
+  }
+  const pq = Number(lot.planned_quantity ?? 0)
+  const u = Number(lot.upstream_defect_qty ?? 0)
+  return Math.max(0, pq - u)
+}
+
+function progressPlannedCellTitle(lot: ProgressLotItem): string {
+  const u = Number(lot.upstream_defect_qty ?? 0)
+  const eff = formingEffectiveDisplay(lot)
+  const base = `計画一覧: ${(lot.planned_quantity ?? 0).toLocaleString()} 本`
+  if (u <= 0) return `${base}。上流不良なし。成型有効 ${eff.toLocaleString()} 本`
+  return `${base}。切断+面取の上流不良 ${u.toLocaleString()} 本。成型有効 ${eff.toLocaleString()} 本（management_code 一致で集計）`
+}
+
 function statusType(s: string): 'success' | 'warning' | 'info' {
   if (s === 'COMPLETED') return 'success'
   if (s === 'IN_PROGRESS') return 'warning'
@@ -2915,6 +2942,24 @@ td.gantt-has-actual {
 }
 .pgs-footnote strong { color: var(--c-text-m); font-weight: 600; }
 .pgs-lot-num { font-weight: 700; text-align: center; font-family: var(--font-mono); }
+
+.pgs-planned-cell {
+  vertical-align: middle;
+  line-height: 1.25;
+}
+.pgs-planned-main {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.pgs-eff-sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--c-text-s);
+  font-weight: 500;
+  white-space: nowrap;
+}
 
 /* 実績セル（成型 schedule_details.actual_qty／在庫ログ同期の成型実績） */
 .gantt-progress-table td.pgs-src-actual.gantt-active {
