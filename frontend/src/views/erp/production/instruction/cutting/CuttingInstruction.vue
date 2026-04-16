@@ -1552,6 +1552,31 @@
         </el-row>
         <el-row :gutter="12" class="cutting-edit-form-row">
           <el-col :span="12">
+            <el-form-item label="ロット数" class="cutting-edit-form-item">
+              <el-input-number
+                v-model="cuttingEditForm.production_lot_size"
+                :min="0"
+                :max="9999"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="ロットNo." class="cutting-edit-form-item">
+              <el-input
+                v-model="cuttingEditForm.lot_number"
+                placeholder="ロットNo."
+                size="small"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
             <el-form-item label="使用サブ在庫" class="cutting-edit-form-item">
               <el-switch
                 v-model="cuttingEditForm.use_material_stock_sub"
@@ -1670,6 +1695,31 @@
               <el-input
                 v-model="chamferingEditForm.defect_qty"
                 placeholder="不良数"
+                size="small"
+                clearable
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="12" class="cutting-edit-form-row">
+          <el-col :span="12">
+            <el-form-item label="ロット数" class="cutting-edit-form-item">
+              <el-input-number
+                v-model="chamferingEditForm.production_lot_size"
+                :min="0"
+                :max="9999"
+                controls-position="right"
+                size="small"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="ロットNo." class="cutting-edit-form-item">
+              <el-input
+                v-model="chamferingEditForm.lot_number"
+                placeholder="ロットNo."
                 size="small"
                 clearable
                 style="width: 100%"
@@ -3447,6 +3497,8 @@ const cuttingEditForm = reactive({
   cutting_machine: '',
   actual_production_quantity: '' as string,
   defect_qty: '' as string,
+  production_lot_size: null as number | null,
+  lot_number: '',
   production_sequence: 1,
   remarks: '',
   use_material_stock_sub: 0 as number,
@@ -3462,6 +3514,8 @@ const chamferingEditForm = reactive({
   chamfering_machine: '',
   actual_production_quantity: '' as string,
   defect_qty: '' as string,
+  production_lot_size: null as number | null,
+  lot_number: '',
   production_sequence: 1,
   remarks: '',
 })
@@ -5272,6 +5326,8 @@ function openCuttingEditDialog(row: CuttingManagementRow) {
   cuttingEditForm.cutting_machine = (row.cutting_machine ?? '') || ''
   cuttingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
   cuttingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
+  cuttingEditForm.production_lot_size = row.production_lot_size ?? null
+  cuttingEditForm.lot_number = row.lot_number != null ? String(row.lot_number) : ''
   cuttingEditForm.production_sequence = row.production_sequence ?? 1
   cuttingEditForm.remarks = (row.remarks ?? '') || ''
   cuttingEditForm.use_material_stock_sub = (row as { use_material_stock_sub?: number }).use_material_stock_sub === 1 ? 1 : 0
@@ -5299,6 +5355,8 @@ async function saveCuttingEdit() {
       cutting_machine: cuttingEditForm.cutting_machine?.trim() || null,
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
       defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
+      production_lot_size: cuttingEditForm.production_lot_size,
+      lot_number: cuttingEditForm.lot_number?.trim() || null,
       production_sequence: cuttingEditForm.production_sequence,
       remarks: cuttingEditForm.remarks?.trim() || null,
       use_material_stock_sub: cuttingEditForm.use_material_stock_sub,
@@ -5326,6 +5384,8 @@ function openChamferingEditDialog(row: ChamferingManagementRow) {
   chamferingEditForm.chamfering_machine = (row.chamfering_machine ?? '') || ''
   chamferingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
   chamferingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
+  chamferingEditForm.production_lot_size = row.production_lot_size ?? null
+  chamferingEditForm.lot_number = row.lot_number != null ? String(row.lot_number) : ''
   chamferingEditForm.production_sequence = row.production_sequence ?? 1
   chamferingEditForm.remarks = (row.remarks ?? '') || ''
   chamferingEditDialogVisible.value = true
@@ -5353,6 +5413,8 @@ async function saveChamferingEdit() {
       chamfering_machine: chamferingEditForm.chamfering_machine?.trim() || null,
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
       defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
+      production_lot_size: chamferingEditForm.production_lot_size,
+      lot_number: chamferingEditForm.lot_number?.trim() || null,
       production_sequence: chamferingEditForm.production_sequence,
       remarks: chamferingEditForm.remarks?.trim() || null,
     })
@@ -6871,6 +6933,7 @@ async function issueCuttingInstructionSheet() {
       .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 10px; }
       .instruction-sheet-table td { font-size: 14px; }
       .instruction-sheet-table td:nth-child(1), .instruction-sheet-table td:nth-child(12) { font-size: 10px; }
+      .instruction-sheet-table th:nth-child(12), .instruction-sheet-table td:nth-child(12) { color: #d00; }
       .instruction-sheet-table td:nth-child(2), .instruction-sheet-table td:nth-child(4), .instruction-sheet-table td:nth-child(12) { text-align: left; }
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
       @media print {

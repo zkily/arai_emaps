@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>成型生産計画段替予定表 項目利用ガイド（印刷版）</title>
+    <style>
+      :root {
+        --text: #1f2937;
+        --muted: #4b5563;
+        --line: #d1d5db;
+        --head: #f3f4f6;
+        --accent: #111827;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        background: #fff;
+      }
+
+      .page {
+        width: 210mm;
+        margin: 0 auto;
+        padding: 12mm 10mm 14mm;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        color: var(--accent);
+      }
+
+      h1 {
+        font-size: 21px;
+        margin-bottom: 6px;
+      }
+
+      h2 {
+        font-size: 16px;
+        margin: 16px 0 8px;
+        border-left: 4px solid #111827;
+        padding-left: 8px;
+      }
+
+      h3 {
+        font-size: 14px;
+        margin: 10px 0 6px;
+      }
+
+      p {
+        margin: 6px 0;
+      }
+
+      .meta {
+        margin-bottom: 8px;
+        color: var(--muted);
+      }
+
+      .box {
+        border: 1px solid var(--line);
+        padding: 8px 10px;
+        margin-top: 8px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--line);
+        padding: 6px 7px;
+        vertical-align: top;
+        word-break: break-word;
+      }
+
+      th {
+        background: var(--head);
+        text-align: left;
+        font-weight: 700;
+      }
+
+      .mono {
+        font-family: Consolas, "Courier New", monospace;
+      }
+
+      ul {
+        margin: 6px 0 6px 18px;
+        padding: 0;
+      }
+
+      li {
+        margin: 2px 0;
+      }
+
+      .footer-note {
+        margin-top: 14px;
+        padding-top: 8px;
+        border-top: 1px dashed var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
+
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+
+        .page {
+          width: auto;
+          margin: 0;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>成型生産計画段替予定表 項目利用ガイド</h1>
+      <p class="meta">用途：教育・引継ぎ・運用ルール統一向け。A4縦でそのまま印刷できます。</p>
+
+      <div class="box">
+        <h3>1. 適用範囲</h3>
+        <p>本資料は <span class="mono">FormingInstruction.vue</span> の「成型生産計画段替予定表」印刷内容に対応します。</p>
+        <p>現行実装では、ERP/MES ともに MES データ口径（<span class="mono">/api/mes/forming-plan-data</span>）を利用します。</p>
+      </div>
+
+      <h2>2. ヘッダ項目（印刷上部）</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 22%">項目名</th>
+            <th style="width: 18%">表示例</th>
+            <th style="width: 20%">データ元</th>
+            <th style="width: 40%">用途・ルール</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>成型生産計画段替予定表</td>
+            <td>固定タイトル</td>
+            <td>フロント固定文言</td>
+            <td>帳票名。現場掲示・保管時の識別に使用します。</td>
+          </tr>
+          <tr>
+            <td>生産日</td>
+            <td>2026/04/16</td>
+            <td>検索条件の日付（計画日）</td>
+            <td>本帳票の対象生産日。通常は検索開始日を表示します。</td>
+          </tr>
+          <tr>
+            <td>集計時間</td>
+            <td>前日15:00~当日15:00</td>
+            <td>フロント固定文言</td>
+            <td>本帳票の集計時間帯ルールを示します。</td>
+          </tr>
+          <tr>
+            <td>出力時刻</td>
+            <td>2026/04/16 11:42</td>
+            <td>システム現在時刻（JST）</td>
+            <td>紙帳票の出力タイミング確認用。旧版の誤使用防止に有効です。</td>
+          </tr>
+          <tr>
+            <td>生産計画合計数</td>
+            <td>12,800</td>
+            <td>当日計画数の合計</td>
+            <td>当日全ラインの負荷総量を管理者が即時把握するための指標です。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>3. 明細項目（主テーブル）</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 16%">項目名</th>
+            <th style="width: 14%">データキー</th>
+            <th style="width: 12%">型</th>
+            <th style="width: 18%">表示ルール</th>
+            <th style="width: 40%">業務上の意味・運用ポイント</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>生産残数(参考)</td>
+            <td class="mono">totalPlanQuantity</td>
+            <td>数値</td>
+            <td>3桁区切り、空値は空白</td>
+            <td>集計時点の残数（参考）。優先順位判断や応援投入判断に使用します。</td>
+          </tr>
+          <tr>
+            <td>ライン</td>
+            <td class="mono">line</td>
+            <td>文字列</td>
+            <td>そのまま表示</td>
+            <td>設備/ライン識別子。現場作業割当の主キーです。</td>
+          </tr>
+          <tr>
+            <td>予定稼働(H)</td>
+            <td class="mono">plannedWorkingHours</td>
+            <td>数値（時間）</td>
+            <td>小数1桁、値域で色分け</td>
+            <td>
+              想定稼働可能時間。色分け基準：<br />
+              &lt;8 赤、8~16 黄、16~22.5 緑、&ge;22.5 濃緑。0/無効値は空欄。
+            </td>
+          </tr>
+          <tr>
+            <td>操業度(進捗)</td>
+            <td class="mono">operationVariance</td>
+            <td>数値（差異時間）</td>
+            <td>整数表示、負値は赤字</td>
+            <td>計画と実績の差異工数。負値は遅れ、正値は先行を示します。</td>
+          </tr>
+          <tr>
+            <td>生産品種</td>
+            <td class="mono">productName</td>
+            <td>文字列</td>
+            <td>そのまま表示</td>
+            <td>現在または直近で生産する品種名です。</td>
+          </tr>
+          <tr>
+            <td>能率(本/h)</td>
+            <td class="mono">efficiency</td>
+            <td>数値</td>
+            <td>そのまま表示</td>
+            <td>1時間あたり生産本数。完了見込みと排程妥当性の判断に使います。</td>
+          </tr>
+          <tr>
+            <td>当日計画数</td>
+            <td class="mono">planQuantity</td>
+            <td>数値</td>
+            <td>3桁区切り、強調表示</td>
+            <td>当日達成管理の中心項目です。</td>
+          </tr>
+          <tr>
+            <td>残生産時間</td>
+            <td class="mono">setupAfterHours</td>
+            <td>数値/文字列</td>
+            <td>そのまま表示</td>
+            <td>現状から当該品種完了までの見込み時間。引継ぎ時に重要です。</td>
+          </tr>
+          <tr>
+            <td>（矢印列）</td>
+            <td class="mono">nextProductName</td>
+            <td>記号</td>
+            <td>次品種がある場合のみ <span class="mono">→</span></td>
+            <td>次工程（次品種）への遷移があることを視覚的に示します。</td>
+          </tr>
+          <tr>
+            <td>次生産品種</td>
+            <td class="mono">nextProductName</td>
+            <td>文字列</td>
+            <td>空なら空欄</td>
+            <td>段替え後の次品種。段取り準備の起点情報です。</td>
+          </tr>
+          <tr>
+            <td>次品種計画数</td>
+            <td class="mono">nextQuantity</td>
+            <td>数値</td>
+            <td>3桁区切り、無効値は空欄</td>
+            <td>次品種の予定数。資材・金型・要員の先行準備に利用します。</td>
+          </tr>
+          <tr>
+            <td>備考</td>
+            <td class="mono">remarks</td>
+            <td>文字列</td>
+            <td>そのまま表示</td>
+            <td>異常、優先度、品質注意、段替え制約などを記載します。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>4. 主な計算・判定ルール</h2>
+      <div class="box">
+        <ul>
+          <li><b>数量表示：</b>3桁区切り（例：<span class="mono">12800 -> 12,800</span>）。</li>
+          <li><b>予定稼働(H)：</b>有効数値かつ 0 以外のみ表示。小数1桁。</li>
+          <li><b>操業度(進捗)：</b>整数表示。負値は赤字で遅れリスクを明示。</li>
+          <li><b>矢印表示：</b><span class="mono">nextProductName</span> が非空の場合のみ表示。</li>
+          <li><b>MES口径：</b>本画面は MES 計画データ API 基準で ERP/MES を統一運用。</li>
+        </ul>
+      </div>
+
+      <h2>5. 運用上の推奨</h2>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 26%">運用シーン</th>
+            <th style="width: 74%">推奨対応</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>交替前の印刷</td>
+            <td>対象日が当日生産日であることを確認し、最新化後に印刷してください。</td>
+          </tr>
+          <tr>
+            <td>操業度が大幅マイナス</td>
+            <td>能率・当日計画数・実績同期の順で確認し、必要時は備考に原因と対策を記載します。</td>
+          </tr>
+          <tr>
+            <td>次生産品種が未設定</td>
+            <td>段替え待ちを防ぐため、計画担当が次品種を補完してください。</td>
+          </tr>
+          <tr>
+            <td>残生産時間が不自然</td>
+            <td>能率、可動時間設定、数量更新の反映状況を再確認してください。</td>
+          </tr>
+          <tr>
+            <td>紙帳票の保管</td>
+            <td>「生産日 + 班 + ライン」で保管すると、差異分析時の追跡性が向上します。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>6. 印刷推奨設定</h2>
+      <div class="box">
+        <ul>
+          <li>用紙：A4 縦。</li>
+          <li>余白：標準または狭い（本書は印刷用CSS調整済み）。</li>
+          <li>拡大縮小：100%。</li>
+          <li>背景グラフィックを有効化すると、表頭色や強調が保持されます。</li>
+        </ul>
+      </div>
+
+      <div class="footer-note">版管理目安：v1.0（項目追加・口径変更時は本資料を同時更新してください）。</div>
+    </div>
+  </body>
+</html>
