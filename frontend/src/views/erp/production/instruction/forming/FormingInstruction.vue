@@ -1,5 +1,5 @@
 <template>
-  <div class="molding-instruction-container">
+  <div class="molding-instruction-container" :class="{ 'is-compact': compact }">
     <!-- コンパクトヘッダー -->
     <div class="page-header">
       <div class="header-content">
@@ -159,7 +159,14 @@
                 直接印刷
               </el-button>
             </el-tooltip>
-            <el-button @click="openWorkTimeConfigDialog" size="small" type="info" class="print-btn">
+            <el-button
+              v-if="showWorkTimeConfig"
+              data-work-time-config-button
+              @click="openWorkTimeConfigDialog"
+              size="small"
+              type="info"
+              class="print-btn"
+            >
               設備運行時間設定
             </el-button>
           </div>
@@ -508,23 +515,20 @@
           class="setup-preview-table"
           stripe
         >
-          <el-table-column label="総計画数" width="80" align="center">
+          <el-table-column label="生産残数" width="92" align="center">
             <template #default="{ row }">
               <el-input v-model="row.totalPlanQuantity" size="small" type="number" placeholder="" class="setup-preview-input" />
             </template>
           </el-table-column>
-          <el-table-column label="実績" width="80" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.actualProduction" size="small" type="number" placeholder="" class="setup-preview-input" />
-            </template>
-          </el-table-column>
-          <el-table-column label="生産残数" width="80" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.remainingProduction" size="small" type="number" placeholder="" class="setup-preview-input" />
-            </template>
-          </el-table-column>
           <el-table-column prop="line" label="ライン" width="70" show-overflow-tooltip />
-          <el-table-column label="操業度" width="72" align="center">
+          <el-table-column label="予定稼働(H)" width="92" align="center">
+            <template #default="{ row }">
+              <div class="planned-hours-chip" :class="plannedHoursLevelClass(row.plannedWorkingHours)">
+                {{ formatPlannedWorkingHours(row.plannedWorkingHours) }}
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操業度(進捗)" width="72" align="center" class-name="op-progress-col">
             <template #default="{ row }">
               <el-input
                 v-model="row.operationVariance"
@@ -533,11 +537,6 @@
                 class="setup-preview-input"
                 @blur="formatOperationVarianceToOneDecimal(row)"
               />
-            </template>
-          </el-table-column>
-          <el-table-column label="順位" width="50" align="center">
-            <template #default="{ row }">
-              <el-input v-model="row.operator" size="small" placeholder="" class="setup-preview-input" />
             </template>
           </el-table-column>
           <el-table-column label="生産品種" width="108" align="center">
@@ -552,12 +551,17 @@
           </el-table-column>
           <el-table-column label="当日計画数" width="88" align="center">
             <template #default="{ row }">
-              <el-input v-model="row.planQuantity" size="small" type="number" placeholder="" class="setup-preview-input" />
+              <el-input v-model="row.planQuantity" size="small" type="number" placeholder="" class="setup-preview-input setup-preview-plan-quantity" />
             </template>
           </el-table-column>
           <el-table-column label="残生産時間" width="88" align="center">
             <template #default="{ row }">
               <el-input v-model="row.setupAfterHours" size="small" placeholder="" class="setup-preview-input" />
+            </template>
+          </el-table-column>
+          <el-table-column label="" width="42" align="center" class-name="preview-arrow-col" label-class-name="preview-arrow-col">
+            <template #default="{ row }">
+              <span v-if="hasNextProduct(row.nextProductName)" class="next-arrow-indicator">→</span>
             </template>
           </el-table-column>
           <el-table-column label="次生産品種" width="130" align="center">
@@ -647,6 +651,8 @@
 
     <!-- 設備運行時間設定弹窗 -->
     <el-dialog
+      v-if="showWorkTimeConfig"
+      data-work-time-config-dialog
       v-model="workTimeConfigDialogVisible"
       title="設備運行時間設定"
       width="760px"
@@ -730,6 +736,8 @@
 
     <!-- 添加/编辑設備運行時間設定弹窗 -->
     <el-dialog
+      v-if="showWorkTimeConfig"
+      data-work-time-config-form-dialog
       v-model="workTimeConfigFormDialogVisible"
       :title="workTimeConfigForm.id ? '設備運行時間設定編集' : '設備運行時間設定追加'"
       width="420px"
@@ -790,15 +798,8 @@
 <script setup lang="ts">
 defineOptions({ name: 'FormingInstruction' })
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-
-const route = useRoute()
-/** MES ルートでは production_schedules + schedule_details 由来の API を使う */
-const planDataApiPath = computed(() =>
-  (route.meta as { useApsSchedulePlanData?: boolean }).useApsSchedulePlanData === true
-    ? '/api/mes/forming-plan-data'
-    : '/api/excel-monitor/plan-data',
-)
+/** ERP/MES いずれの画面でも MES 由来 API を利用し、挙動を統一する */
+const planDataApiPath = computed(() => '/api/mes/forming-plan-data')
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   Plus,
@@ -813,6 +814,17 @@ import {
   Printer,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+
+const props = defineProps<{
+  /** MES ルートでは設備運行時間設定 UI を非表示にします */
+  showWorkTimeConfig?: boolean
+  /** MES ルートでレイアウトをさらにコンパクトにします */
+  compact?: boolean
+}>()
+
+// 表示制御用のフラグ（テンプレートで直接参照）
+const showWorkTimeConfig = props.showWorkTimeConfig !== false
+const compact = props.compact === true
 
 /** API 响应类型（request 拦截器返回 response.data） */
 interface ApiResponse<T = any> {
@@ -3059,6 +3071,26 @@ const formatOperationVarianceToOneDecimal = (row: { operationVariance?: string |
   if (!isNaN(n)) row.operationVariance = String(Math.round(n))
 }
 
+const formatPlannedWorkingHours = (v: unknown): string => {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n === 0) return ''
+  return n.toFixed(1)
+}
+
+const plannedHoursLevelClass = (v: unknown): string => {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n === 0) return 'planned-hours-empty'
+  if (n < 8) return 'planned-hours-low'
+  if (n < 16) return 'planned-hours-mid'
+  if (n < 22.5) return 'planned-hours-high'
+  return 'planned-hours-very-high'
+}
+
+const hasNextProduct = (name: unknown): boolean => {
+  const s = (name ?? '').toString().trim()
+  return s !== ''
+}
+
 /** プレビューダイアログから印刷（編集後のデータで印刷） */
 const printFromSetupSchedulePreview = () => {
   const meta = setupSchedulePreviewMeta.value
@@ -4365,7 +4397,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     await loadEfficiencyData()
   }
 
-  // 2. 预加载 production_plan_schedules 数据
+  // 2. 预加载用于「総計画数 / 実績 / 生産残数」的数据
   // 从生产日期提取月份（例如：2025/11/10 → 11，2026/01/05 → 1）
   // 文件名格式为：加工計画(1月).xlsm，所以需要转换为不带前导零的数字
   let monthFilter = ''
@@ -4377,9 +4409,16 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
   }
 
-  // 查询 production_plan_schedules 表，使用月份筛选 file_name 字段
+  // MES 路由：直接使用 production_schedules + schedule_details 由来数据
+  // ERP 路由：沿用 production_plan_schedules（月文件）数据
   let productionPlanSchedulesData: any[] = []
-  if (monthFilter) {
+  if (planDataApiPath.value === '/api/mes/forming-plan-data') {
+    productionPlanSchedulesData = Array.isArray(planData) ? planData : []
+    console.log(
+      'MES ルート: production_schedules 由来データを使用、记录数:',
+      productionPlanSchedulesData.length,
+    )
+  } else if (monthFilter) {
     try {
       console.log('production_plan_schedules データを読み込み中、月フィルター:', monthFilter)
       const result = (await request.get('/api/processing-status', {
@@ -4401,9 +4440,42 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
   }
 
-  // 查询 production_plan_rate 表（操業度），条件同上：file_name 包含生产日月份，ライン对应 machine_name
-  const productionPlanRateMap = new Map<string, string | number>() // machine_name -> operation_variance
-  if (monthFilter) {
+  // 操業度（MES）：按 FormingPlanningList「操業度差異(H)」口径计算
+  // 差異工時 = Σ((実績 - 計画) / 能率)、范围=当月1日~今天(JST)
+  const productionPlanRateMap = new Map<string, string | number>() // machine_name -> diff_hours
+  if (planDataApiPath.value === '/api/mes/forming-plan-data') {
+    try {
+      const today = JapanDateUtils.getTodayString() // YYYY-MM-DD (JST)
+      const monthStart = `${today.slice(0, 7)}-01`
+      const utilResult = (await request.get('/api/mes/forming-plan-data', {
+        params: {
+          startDate: monthStart,
+          endDate: today,
+          processName: '成型',
+          page: 1,
+          limit: 10000,
+        },
+      })) as ApiResponse
+      const records = (utilResult.data as { records?: any[] })?.records ?? []
+      if (utilResult.success && Array.isArray(records)) {
+        records.forEach((item: any) => {
+          const machineName = (item.machine_name || '').toString().trim()
+          if (!machineName) return
+          const rate = Number(item.efficiency_rate ?? 0)
+          if (!Number.isFinite(rate) || rate <= 0) return
+          const plannedQty = Number(item.quantity ?? item.planned_quantity ?? 0)
+          const actualQty = Number(item.actual_production ?? item.actual_qty ?? 0)
+          if (!Number.isFinite(plannedQty) || !Number.isFinite(actualQty)) return
+          const diffHours = (actualQty - plannedQty) / rate
+          const prev = Number(productionPlanRateMap.get(machineName) ?? 0)
+          productionPlanRateMap.set(machineName, prev + diffHours)
+        })
+      }
+    } catch (e) {
+      console.error('MES 操業度差異(H)数据加载失败:', e)
+    }
+  } else if (monthFilter) {
+    // ERP 路由维持既有逻辑
     try {
       const rateResult = (await request.get('/api/operation-rate', {
         params: { fileName: monthFilter, limit: 10000 },
@@ -4422,25 +4494,55 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
   }
 
-  // 创建一个映射表，以便快速查找：key 为 machine_name + product_name + production_order
+  // 创建映射表，key: machine_name + product_name + production_order(operator)
   const productionPlanSchedulesMap = new Map<string, any>()
+  const mesPlannedDedupByKey = new Map<string, Set<string>>()
   productionPlanSchedulesData.forEach((item) => {
-    // 将 production_order 转换为字符串（确保一致性）
-    const productionOrder = (item.production_order || '').toString().trim()
+    // MES データは operator、ERP データは production_order を主に使用
+    const productionOrder = (item.production_order ?? item.operator ?? '').toString().trim()
     const key = `${item.machine_name}|${item.product_name}|${productionOrder}`
+    const plannedQuantity = parseInt(item.planned_quantity ?? item.quantity ?? item.planned_qty) || 0
+    const plannedOutputQuantity = parseInt(item.planned_output_qty) || 0
+    const actualProduction = parseInt(item.actual_production ?? item.actual_qty) || 0
+    const defectQuantity = parseInt(item.defect_qty) || 0
+    const upstreamDefectQuantity = parseInt(item.upstream_defect_qty_total) || 0
     // 如果同一个 machine_name + product_name + production_order 有多条记录，累加数量
     if (productionPlanSchedulesMap.has(key)) {
       const existing = productionPlanSchedulesMap.get(key)
-      existing.planned_quantity =
-        (parseInt(existing.planned_quantity) || 0) + (parseInt(item.planned_quantity) || 0)
-      existing.actual_production =
-        (parseInt(existing.actual_production) || 0) + (parseInt(item.actual_production) || 0)
+      if (planDataApiPath.value === '/api/mes/forming-plan-data') {
+        const scheduleId = (item.schedule_id ?? '').toString().trim()
+        const dedupSet = mesPlannedDedupByKey.get(key) || new Set<string>()
+        if (scheduleId && !dedupSet.has(scheduleId)) {
+          existing.planned_quantity =
+            (parseInt(existing.planned_quantity) || 0) + (plannedOutputQuantity || plannedQuantity)
+          dedupSet.add(scheduleId)
+          mesPlannedDedupByKey.set(key, dedupSet)
+        }
+      } else {
+        existing.planned_quantity = (parseInt(existing.planned_quantity) || 0) + plannedQuantity
+      }
+      existing.actual_production = (parseInt(existing.actual_production) || 0) + actualProduction
+      existing.defect_qty = (parseInt(existing.defect_qty) || 0) + defectQuantity
+      existing.upstream_defect_qty_total =
+        (parseInt(existing.upstream_defect_qty_total) || 0) + upstreamDefectQuantity
     } else {
+      const initialPlannedQuantity =
+        planDataApiPath.value === '/api/mes/forming-plan-data'
+          ? (plannedOutputQuantity || plannedQuantity)
+          : plannedQuantity
       productionPlanSchedulesMap.set(key, {
-        planned_quantity: parseInt(item.planned_quantity) || 0,
-        actual_production: parseInt(item.actual_production) || 0,
+        planned_quantity: initialPlannedQuantity,
+        actual_production: actualProduction,
+        defect_qty: defectQuantity,
+        upstream_defect_qty_total: upstreamDefectQuantity,
         production_order: productionOrder,
       })
+      if (planDataApiPath.value === '/api/mes/forming-plan-data') {
+        const scheduleId = (item.schedule_id ?? '').toString().trim()
+        const dedupSet = new Set<string>()
+        if (scheduleId) dedupSet.add(scheduleId)
+        mesPlannedDedupByKey.set(key, dedupSet)
+      }
     }
   })
 
@@ -4449,6 +4551,55 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
   // 将生产日期转换为 YYYY-MM-DD 格式用于比较
   const filterDateForTotal = productionDate.replace(/\//g, '-')
+
+  // 读取予定稼働(H)：line_capacities.available_hours（work_date = 生産日）
+  const plannedWorkHoursMap = new Map<string, number>()
+  try {
+    const machinesResult = (await request.get('/api/master/machines', {
+      params: { machine_type: '成型' },
+    })) as ApiResponse
+    const machineList: any[] = Array.isArray(machinesResult)
+      ? machinesResult
+      : ((machinesResult?.list ?? (machinesResult?.data as any)?.list ?? []) as any[])
+    const machineIdByName = new Map<string, number>()
+    machineList.forEach((m: any) => {
+      const name = (m.machine_name || '').toString().trim()
+      const id = Number(m.id)
+      if (name && Number.isFinite(id) && id > 0) {
+        machineIdByName.set(name, id)
+      }
+    })
+
+    await Promise.all(
+      machines.map(async (machineName) => {
+        const lineId = machineIdByName.get(machineName)
+        if (!lineId) return
+        try {
+          const capRes = (await request.get('/api/aps/line-capacities', {
+            params: {
+              lineId,
+              startDate: filterDateForTotal,
+              endDate: filterDateForTotal,
+            },
+          })) as ApiResponse
+          const capList: any[] = Array.isArray(capRes)
+            ? capRes
+            : ((capRes?.list ?? (capRes?.data as any)?.list ?? capRes?.data ?? []) as any[])
+          const dayCap = capList.find(
+            (c: any) => JapanDateUtils.normalizeDate(c?.work_date) === filterDateForTotal,
+          )
+          const hours = Number(dayCap?.available_hours ?? 0)
+          if (Number.isFinite(hours)) {
+            plannedWorkHoursMap.set(machineName, hours)
+          }
+        } catch (e) {
+          console.error(`予定稼働(H) 读取失败: ${machineName}`, e)
+        }
+      }),
+    )
+  } catch (e) {
+    console.error('予定稼働(H) 设备基础数据读取失败:', e)
+  }
 
   // 计算生产计划合计数（只统计指定生产日所有产品的生产数合计）
   const totalQuantity = planData.reduce((sum, item) => {
@@ -4561,12 +4712,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           // 如果都没找到能率数据，使用简化计算作为后备方案（仅用于显示）
           if (currentQuantity > 0 && workTime > 0) {
             const hourlyRate = Math.round(currentQuantity / workTime)
-            efficiency = `${hourlyRate}本/h`
+            efficiency = `${hourlyRate}`
             // 注意：简化计算的能率不保存到 efficiencyRateNum，因为不准确
           } else if (currentQuantity > 0) {
             // 假设标准8小时工作制
             const standardHourlyRate = Math.round(currentQuantity / 8)
-            efficiency = `${standardHourlyRate}本/h`
+            efficiency = `${standardHourlyRate}`
             // 注意：简化计算的能率不保存到 efficiencyRateNum，因为不准确
           }
         }
@@ -5120,9 +5271,14 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       if (scheduleData) {
         totalPlanQuantity = scheduleData.planned_quantity || 0
         actualProduction = scheduleData.actual_production || 0
-        remainingProduction = Math.max(0, totalPlanQuantity - actualProduction)
+        const defectQty = scheduleData.defect_qty || 0
+        const upstreamDefectQty = scheduleData.upstream_defect_qty_total || 0
+        remainingProduction = Math.max(
+          0,
+          totalPlanQuantity - actualProduction - defectQty - upstreamDefectQty,
+        )
         console.log(
-          `[生産計画数] 设备: ${machineName}, 产品: ${currentProductName}, 順位: ${currentOperator} (转换为数字: ${operatorAsNumber}), 総計画数: ${totalPlanQuantity}, 実績: ${actualProduction}, 生産残数: ${remainingProduction}`,
+          `[生産計画数] 设备: ${machineName}, 产品: ${currentProductName}, 順位: ${currentOperator} (转换为数字: ${operatorAsNumber}), 計画数: ${totalPlanQuantity}, 実績数: ${actualProduction}, 不良数: ${defectQty}, 前工程不良: ${upstreamDefectQty}, 生産残数: ${remainingProduction}`,
         )
       } else {
         console.log(
@@ -5162,12 +5318,17 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       const n = Number(rawOp)
       operationVariance = isNaN(n) ? String(rawOp) : String(Math.round(n))
     }
+    const plannedWorkingHours = plannedWorkHoursMap.get(machineName)
 
     // 行データを返却
     return {
       workTime: workTime || '',
       machineCd: currentMachineCd,
       line: machineName,
+      plannedWorkingHours:
+        plannedWorkingHours !== undefined && plannedWorkingHours !== null
+          ? Number(plannedWorkingHours).toFixed(1)
+          : '',
       operationVariance,
       operator: operator,
       startTime,
@@ -5428,12 +5589,24 @@ const buildSetupSchedulePrintHtml = (data: {
           line-height: 1.5;
         }
 
+        .main-table th {
+          font-weight: 400 !important;
+        }
+
+        .main-table th.plan-quantity-header {
+          font-weight: 400 !important;
+        }
+
         /* 确保表格内所有文字都是纯黑色 */
         .main-table th,
         .main-table td,
         .main-table th *,
         .main-table td * {
           color: #000 !important;
+        }
+
+        .main-table .reference-date-red {
+          color: #e00 !important;
         }
 
         .numeric-cell {
@@ -5456,15 +5629,52 @@ const buildSetupSchedulePrintHtml = (data: {
           border-left: 2px solid #000 !important;
         }
 
-        /* 実績和生産残数表头上边框粗体 */
-        .main-table thead tr:last-child th.actual-col,
-        .main-table thead tr:last-child th.remaining-col {
+        /* 参考列表头上边框粗体 */
+        .main-table thead tr:last-child th.reference-col {
           border-top: 2px solid #000 !important;
         }
 
         /* 操業度：負数は赤表示 */
         .main-table .operation-negative {
           color: #e00 !important;
+        }
+
+        /* 操業度(進捗)：显示约3个字符宽 */
+        .main-table .op-progress-col {
+          width: 7ch;
+          min-width: 7ch;
+          max-width: 7ch;
+        }
+
+        .main-table .planned-hours {
+          text-align: center;
+          font-weight: 600;
+          border-radius: 3px;
+        }
+
+        /* 当日計画数を予定稼働(H)と同じく太字表示（印刷HTML用） */
+        .main-table td.plan-quantity-cell {
+          font-weight: 700;
+          text-align: center;
+        }
+        .main-table .planned-hours-low {
+          background: #fdeaea;
+        }
+        .main-table .planned-hours-mid {
+          background: #fff6db;
+        }
+        .main-table .planned-hours-high {
+          background: #e8f7ec;
+        }
+        .main-table .planned-hours-very-high {
+          background: #cfeecf;
+        }
+        .main-table .next-arrow-cell {
+          text-align: center;
+          font-size: 13px;
+          font-weight: 900;
+          border-top: none !important;
+          border-bottom: none !important;
         }
 
       </style>
@@ -5493,23 +5703,22 @@ const buildSetupSchedulePrintHtml = (data: {
         <table class="main-table">
           <thead>
             <tr>
-              <th colspan="3" class="bold-border-col" style="width: 17%; border-bottom: none;">${currentDateTime.split(' ')[0]}まで実績(参考)</th>
+              <th colspan="1" class="bold-border-col" style="width: 8%; border-bottom: none;"><span class="reference-date-red">${currentDateTime.split(' ')[0]}</span>までの実績(算出)</th>
               <th rowspan="2" class="blank-col" style="width: 3%;"> </th>
-              <th rowspan="2" class="line-col" style="width: 6%;">ライン</th>
-              <th rowspan="2" style="width: 5%;">操業度</th>
-              <th rowspan="2" style="width: 5%;">順位</th>
-              <th rowspan="2" style="width: 9%;">生産品種</th>
-              <th rowspan="2" style="width: 5%;">能率</th>
-              <th rowspan="2" style="width: 7%;">当日計画数</th>
+              <th rowspan="2" class="line-col" style="width: 7%;">ライン</th>
+              <th rowspan="2" style="width: 8%;">予定稼働(H)</th>
+              <th rowspan="2" style="width: 7%;">操業度(進捗)</th>
+              <th rowspan="2" style="width: 12%;">生産品種</th>
+              <th rowspan="2" style="width: 7%;">能率(本/h)</th>
+              <th rowspan="2" class="plan-quantity-header" style="width: 7%;">当日計画数</th>
               <th rowspan="2" style="width: 6%;">残生産時間</th>
-              <th rowspan="2" style="width: 10%;">次生産品種</th>
+              <th rowspan="2" class="blank-col" style="width: 6%;"> </th>
+              <th rowspan="2" style="width: 9%;">次生産品種</th>
               <th rowspan="2" style="width: 8%;">次品種計画数</th>
-              <th rowspan="2" style="width: 28%;">備考</th>
+              <th rowspan="2" style="width: 15%;">備考</th>
             </tr>
             <tr>
-              <th class="bold-border-col" style="width: 6%;">総計画数</th>
-              <th class="bold-border-col actual-col" style="width: 5%;">実績</th>
-              <th class="bold-border-col remaining-col" style="width: 6%;">生産残数</th>
+              <th class="bold-border-col reference-col" style="width: 8%;">生産残数(参考)</th>
             </tr>
           </thead>
           <tbody>
@@ -5518,16 +5727,15 @@ const buildSetupSchedulePrintHtml = (data: {
                 return `
               <tr>
                 <td class="numeric-cell bold-border-col">${row.totalPlanQuantity ? row.totalPlanQuantity.toLocaleString('ja-JP') : ''}</td>
-                <td class="numeric-cell bold-border-col">${row.actualProduction ? row.actualProduction.toLocaleString('ja-JP') : ''}</td>
-                <td class="numeric-cell bold-border-col">${row.remainingProduction ? row.remainingProduction.toLocaleString('ja-JP') : ''}</td>
                 <td class="blank-col"> </td>
                 <td class="line-col">${row.line}</td>
-                <td class="${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : String(Math.round(n)); })()}</td>
-                <td class="numeric-cell">${row.operator || ''}</td>
+                <td class="${(() => { const n = Number(row.plannedWorkingHours); if (!Number.isFinite(n)) return 'planned-hours planned-hours-empty'; if (n === 0) return 'planned-hours planned-hours-empty'; if (n < 8) return 'planned-hours planned-hours-low'; if (n < 16) return 'planned-hours planned-hours-mid'; if (n < 22.5) return 'planned-hours planned-hours-high'; return 'planned-hours planned-hours-very-high'; })()}">${(() => { const v = Number(row.plannedWorkingHours); return Number.isFinite(v) && v !== 0 ? v.toFixed(1) : ''; })()}</td>
+                <td class="op-progress-col ${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return 'numeric-cell'; const n = Number(v); return isNaN(n) ? 'numeric-cell' : (n < 0 ? 'numeric-cell operation-negative' : 'numeric-cell'); })()}">${(() => { const v = row.operationVariance; if (v === undefined || v === null || v === '') return ''; const n = Number(v); return isNaN(n) ? String(v) : String(Math.round(n)); })()}</td>
                 <td>${row.productName}</td>
                 <td class="numeric-cell">${row.efficiency || ''}</td>
-                <td class="numeric-cell">${row.planQuantity ? row.planQuantity.toLocaleString('ja-JP') : ''}</td>
+                <td class="numeric-cell plan-quantity-cell">${row.planQuantity ? row.planQuantity.toLocaleString('ja-JP') : ''}</td>
                 <td class="numeric-cell">${row.setupAfterHours || ''}</td>
+                <td class="next-arrow-cell">${row.nextProductName && String(row.nextProductName).trim() !== '' ? '&rarr;' : ''}</td>
                 <td>${row.nextProductName || ''}</td>
                 <td class="numeric-cell">${(() => { const v = row.nextQuantity; if (v == null || v === '') return ''; const n = Number(v); return isNaN(n) ? '' : n.toLocaleString('ja-JP'); })()}</td>
                 <td>${row.remarks || ''}</td>
@@ -6092,13 +6300,13 @@ const formatNumber = (val: number | string) => {
   return (n as number).toLocaleString('ja-JP')
 }
 
-// 能率格式化（显示为"XX本/h"格式）
+// 能率格式化（显示为"XX"）
 const formatEfficiencyRate = (val: number | string) => {
   const n = typeof val === 'string' ? Number(val) : val
   if (!isFinite(n as number)) return '-'
   // 保留1位小数，如果小数部分为0则不显示
   const formatted = (n as number).toFixed(1)
-  return formatted.endsWith('.0') ? `${Math.round(n as number)}本/h` : `${formatted}本/h`
+  return formatted.endsWith('.0') ? `${Math.round(n as number)}` : `${formatted}`
 }
 
 // 日期格式化（MM-DD）
@@ -6518,6 +6726,32 @@ onMounted(() => {
   min-height: 100vh;
   position: relative;
   animation: fadeIn 0.6s ease-out;
+}
+
+.molding-instruction-container.is-compact {
+  padding: 0;
+}
+
+.molding-instruction-container.is-compact .page-header {
+  padding: 8px 12px;
+  margin-bottom: 0;
+}
+
+.molding-instruction-container.is-compact .plan-section {
+  margin-bottom: 8px;
+}
+
+.molding-instruction-container.is-compact .search-bar {
+  padding: 6px 10px;
+}
+
+.molding-instruction-container.is-compact .stats-grid {
+  gap: 10px;
+  padding: 0;
+}
+
+.molding-instruction-container.is-compact .stat-item {
+  padding: 3px 12px;
 }
 
 @keyframes fadeIn {
@@ -7013,7 +7247,7 @@ onMounted(() => {
 .setup-schedule-preview-dialog .setup-preview-table .el-table th.el-table__cell {
   padding: 5px 6px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 400;
   background: var(--el-fill-color-light);
   color: #000;
 }
@@ -7032,12 +7266,66 @@ onMounted(() => {
   font-size: 12px;
   color: #000;
 }
+.setup-schedule-preview-dialog .setup-preview-table .el-table .setup-preview-plan-quantity :deep(.el-input__inner) {
+  font-weight: 700 !important;
+  text-align: center;
+  height: 24px;
+  line-height: 24px;
+}
+
+/* 兜底：确保 scoped 下也能命中 el-input 内部 input */
+.setup-schedule-preview-dialog :deep(.setup-preview-plan-quantity .el-input__inner) {
+  font-weight: 700 !important;
+  text-align: center;
+  height: 24px;
+  line-height: 24px;
+}
+
+.setup-schedule-preview-dialog .setup-preview-table .el-table th.op-progress-col,
+.setup-schedule-preview-dialog .setup-preview-table .el-table td.op-progress-col {
+  width: 3ch !important;
+  min-width: 3ch !important;
+  max-width: 3ch !important;
+}
 .setup-schedule-preview-dialog .setup-preview-table .el-table .el-textarea__inner {
   padding: 2px 6px;
   font-size: 12px;
   min-height: 24px;
   line-height: 1.35;
   color: #000;
+}
+.setup-schedule-preview-dialog .planned-hours-chip {
+  height: 24px;
+  line-height: 24px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: 600;
+}
+.setup-schedule-preview-dialog .planned-hours-chip.planned-hours-empty {
+  background: #f5f7fa;
+}
+.setup-schedule-preview-dialog .planned-hours-chip.planned-hours-low {
+  background: #fdeaea;
+}
+.setup-schedule-preview-dialog .planned-hours-chip.planned-hours-mid {
+  background: #fff6db;
+}
+.setup-schedule-preview-dialog .planned-hours-chip.planned-hours-high {
+  background: #e8f7ec;
+}
+.setup-schedule-preview-dialog .planned-hours-chip.planned-hours-very-high {
+  background: #cfeecf;
+}
+.setup-schedule-preview-dialog .next-arrow-indicator {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2563eb;
+}
+.setup-schedule-preview-dialog .setup-preview-table .el-table th.preview-arrow-col,
+.setup-schedule-preview-dialog .setup-preview-table .el-table td.preview-arrow-col {
+  border-top: none !important;
+  border-bottom: none !important;
 }
 .setup-schedule-preview-dialog .setup-preview-footer {
   display: flex;
@@ -7967,6 +8255,14 @@ onMounted(() => {
 /* 数字居中 */
 .numeric-cell {
   text-align: center;
+}
+
+.main-table td.plan-quantity-cell {
+  font-weight: 600 !important;
+}
+
+.plan-quantity-cell {
+  font-weight: 600 !important;
 }
 
 /* 周末日期表头与合计列显示为红色 */

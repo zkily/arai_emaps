@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     DB_PASSWORD: str = "136228508"
     DB_NAME: str = "eams_db"
     DATABASE_URL: Optional[str] = None  # 自動生成（未設定の場合）
+    # データベース全件バックアップ（mysqldump）の既定保存先（UNC 可）。UI 未設定時のデフォルト。
+    BACKUP_DEFAULT_STORAGE_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\バックアップ"
+    # mysqldump 実行ファイル。空または "mysqldump" のとき PATH と Windows 標準インストール先を自動探索
+    MYSQLDUMP_BIN: str = "mysqldump"
     
     # JWT設定
     JWT_SECRET: Optional[str] = None  # JWT_SECRET_KEYのエイリアス

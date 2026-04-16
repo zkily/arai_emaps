@@ -443,8 +443,9 @@ export interface FileWatcherSettings {
 }
 
 /** ファイル監視の有効/無効一覧取得 */
-export function getFileWatcherSettings() {
-  return request.get<FileWatcherSettings>(`${SETTINGS_BASE}/file-watcher`)
+export function getFileWatcherSettings(): Promise<FileWatcherSettings> {
+  // インターセプターが response.data を返すため、AxiosResponse ではなく本体型で扱う
+  return request.get<FileWatcherSettings>(`${SETTINGS_BASE}/file-watcher`) as unknown as Promise<FileWatcherSettings>
 }
 
 /** ファイル監視の有効/無効を保存 */
@@ -456,4 +457,117 @@ export function updateFileWatcherSettings(payload: {
     `${SETTINGS_BASE}/file-watcher`,
     payload
   )
+}
+
+// ========== DB バックアップ（mysqldump → 共有フォルダ等） ==========
+
+export interface BackupSettingDTO {
+  id: number
+  auto_backup_enabled: boolean
+  schedule: string
+  schedule_time?: string | null
+  storage_path: string
+  retention_count: number
+  include_files: boolean
+  compression_enabled: boolean
+  encryption_enabled: boolean
+  notify_on_complete: boolean
+  notify_on_error: boolean
+  updated_by?: number | null
+  updated_at: string
+}
+
+export interface BackupHistoryItem {
+  id: number
+  filename: string
+  file_path: string
+  file_size?: number | null
+  file_size_display?: string | null
+  backup_type: string
+  status: string
+  error_message?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_by?: number | null
+  created_at: string
+}
+
+export function getBackupSettings(): Promise<BackupSettingDTO> {
+  return request.get(`${SETTINGS_BASE}/backup/settings`) as unknown as Promise<BackupSettingDTO>
+}
+
+export function updateBackupSettings(payload: Partial<BackupSettingDTO>) {
+  return request.put(`${SETTINGS_BASE}/backup/settings`, payload) as unknown as Promise<BackupSettingDTO>
+}
+
+export function getBackupHistory(params?: { page?: number; page_size?: number }) {
+  return request.get(`${SETTINGS_BASE}/backup/history`, { params }) as unknown as Promise<BackupHistoryItem[]>
+}
+
+export function runManualBackup(body: { include_files?: boolean } = {}) {
+  return request.post(`${SETTINGS_BASE}/backup/manual`, body) as unknown as Promise<{
+    message: string
+    filename: string
+    file_path: string
+    file_size: number
+    id: number
+  }>
+}
+
+export function downloadBackup(backupId: number) {
+  return request.get<Blob>(`${SETTINGS_BASE}/backup/${backupId}/download`, {
+    responseType: 'blob',
+  }) as unknown as Promise<Blob>
+}
+
+export function restoreBackup(backupId: number) {
+  return request.post(`${SETTINGS_BASE}/backup/${backupId}/restore`) as unknown as Promise<{ message: string }>
+}
+
+// ========== データ管理（インポート / エクスポート） ==========
+
+export interface ImportExportHistoryRow {
+  id: number
+  type: string
+  master_type: string
+  filename: string
+  file_path?: string | null
+  format?: string | null
+  encoding?: string | null
+  total_records: number
+  success_records: number
+  error_records: number
+  status: string
+  error_details?: Record<string, unknown> | null
+  options?: Record<string, unknown> | null
+  user_id?: number | null
+  user_name?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at: string
+}
+
+export function getDataImportExportHistory(params?: { type?: string; page?: number; page_size?: number }) {
+  return request.get(`${SETTINGS_BASE}/data/history`, { params }) as unknown as Promise<ImportExportHistoryRow[]>
+}
+
+export function postDataImport(formData: FormData) {
+  return request.post(`${SETTINGS_BASE}/data/import`, formData) as unknown as Promise<{
+    message: string
+    history_id: number
+    success_records: number
+    error_records: number
+  }>
+}
+
+export function postDataExport(payload: { master_type: string; format: string; encoding?: string }) {
+  return request.post(`${SETTINGS_BASE}/data/export`, payload, {
+    responseType: 'blob',
+  }) as unknown as Promise<Blob>
+}
+
+export function getDataImportTemplate(masterType: string) {
+  return request.get<Blob>(`${SETTINGS_BASE}/data/template/${masterType}`, {
+    responseType: 'blob',
+  }) as unknown as Promise<Blob>
 }

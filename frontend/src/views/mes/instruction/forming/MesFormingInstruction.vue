@@ -8,5 +8,33 @@ import FormingInstruction from '../../../erp/production/instruction/forming/Form
 defineOptions({ name: 'MesFormingInstruction' })
 </script>
 <template>
-  <FormingInstruction />
+  <div class="mes-forming-instruction">
+    <FormingInstruction />
+  </div>
 </template>
+
+<style scoped>
+.mes-forming-instruction :deep(.molding-instruction-container) {
+  padding: 0;
+}
+
+.mes-forming-instruction :deep(.molding-instruction-container .page-header) {
+  padding: 8px 12px;
+  margin-bottom: 0;
+}
+
+.mes-forming-instruction :deep(.molding-instruction-container .plan-section) {
+  margin-bottom: 8px;
+}
+
+.mes-forming-instruction :deep(.molding-instruction-container .search-bar) {
+  padding: 6px 10px;
+}
+
+/* 移除：設備運行時間設定（入口按钮 + 弹窗） */
+.mes-forming-instruction :deep([data-work-time-config-button]),
+.mes-forming-instruction :deep([data-work-time-config-dialog]),
+.mes-forming-instruction :deep([data-work-time-config-form-dialog]) {
+  display: none !important;
+}
+</style>

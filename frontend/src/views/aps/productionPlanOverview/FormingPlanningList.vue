@@ -49,11 +49,33 @@
           </el-select>
         </el-form-item>
         <el-form-item label-width="0">
-          <el-button type="primary" :loading="loading" :disabled="!canSearch" @click="loadSchedules">
+          <el-button type="primary" :loading="loading" :disabled="!canSearch" @click="onSearchClick">
             検索
           </el-button>
         </el-form-item>
       </el-form>
+      <div v-if="canSearch" class="forming-replan-toolbar">
+        <el-button
+          type="warning"
+          size="small"
+          class="forming-replan-toolbar__primary"
+          :loading="bulkReplanning"
+          :disabled="loading || bulkReplanning"
+          @click="replanAllLinesForProcess"
+        >
+          全設備ライン順で再計算
+        </el-button>
+        <el-button
+          size="small"
+          :disabled="!preReplanGridSnapshot || loading || bulkReplanning"
+          @click="restorePreReplanGrid"
+        >
+          再計算前の表示に戻す
+        </el-button>
+        <span v-if="preReplanGridSnapshot" class="forming-replan-toolbar__note">
+          画面上の一覧のみ再計算直前の取得結果に戻します（DB は既に更新済み）。最新データは「検索」で再取得してください。
+        </span>
+      </div>
     </div>
 
     <div v-if="searched" v-loading="loading" class="plan-card result-card">
@@ -329,11 +351,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Printer } from '@element-plus/icons-vue'
 import {
   fetchLines,
   fetchSchedulingGrid,
+  replanLineSequence,
   type ScheduleGridRow,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
@@ -342,6 +365,42 @@ import type { ProcessItem } from '@/types/master'
 defineOptions({ name: 'FormingPlanningList' })
 
 type GanttListRow = ScheduleGridRow & { lineLabel: string; line_id: number }
+
+/** 一覧再計算前の画面状態（DB 巻き戻しは行わない） */
+interface PreReplanGridSnapshot {
+  rows: GanttListRow[]
+  ganttRows: GanttListRow[]
+  ganttDates: string[]
+  lineCalendarHoursMap: Record<number, Record<string, number>>
+  lineDefaultHoursMap: Record<number, number>
+}
+
+const preReplanGridSnapshot = ref<PreReplanGridSnapshot | null>(null)
+const bulkReplanning = ref(false)
+
+/** 再計算 API のクエリ用アンカー（DB の aps_line_replan_anchors があればサーバ側で優先） */
+function formatYmdInJapan(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+const replanFallbackAnchorDate = computed(() => formatYmdInJapan(new Date()))
+
+function clonePreReplanSnapshot(): PreReplanGridSnapshot {
+  return JSON.parse(
+    JSON.stringify({
+      rows: rows.value,
+      ganttRows: ganttRows.value,
+      ganttDates: ganttDates.value,
+      lineCalendarHoursMap: lineCalendarHoursMap.value,
+      lineDefaultHoursMap: lineDefaultHoursMap.value,
+    }),
+  ) as PreReplanGridSnapshot
+}
 
 function offsetDateIso(offsetDays: number): string {
   const d = new Date()
@@ -921,7 +980,26 @@ function tableStatusLabel(row: GanttListRow): string {
   return map[tableStatusKind(row)]
 }
 
-async function loadSchedules() {
+function formatApiError(e: unknown): string {
+  const err = e as {
+    response?: { data?: { detail?: string | { msg?: string }[]; message?: string } }
+    message?: string
+  }
+  const d = err?.response?.data?.detail
+  if (typeof d === 'string') return d
+  if (Array.isArray(d)) {
+    const parts = d.map((x) => (typeof x === 'object' && x?.msg ? x.msg : String(x))).filter(Boolean)
+    if (parts.length) return parts.join('；')
+  }
+  return err?.response?.data?.message || err?.message || 'エラーが発生しました'
+}
+
+function onSearchClick() {
+  void loadSchedules()
+}
+
+async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
+  const clearReplanSnapshot = options?.clearReplanSnapshot !== false
   if (!canSearch.value) {
     ElMessage.warning('期間と工程を選択してください')
     return
@@ -977,6 +1055,7 @@ async function loadSchedules() {
     flat.sort(compareByLineThenOrder)
     rows.value = [...flat]
     ganttRows.value = flat
+    if (clearReplanSnapshot) preReplanGridSnapshot.value = null
   } catch (e: unknown) {
     rows.value = []
     ganttDates.value = []
@@ -986,6 +1065,67 @@ async function loadSchedules() {
     ElMessage.error(String((e as { message?: string })?.message || e))
   } finally {
     loading.value = false
+  }
+}
+
+function restorePreReplanGrid() {
+  const snap = preReplanGridSnapshot.value
+  if (!snap) {
+    ElMessage.warning('戻せるスナップショットがありません')
+    return
+  }
+  rows.value = JSON.parse(JSON.stringify(snap.rows)) as GanttListRow[]
+  ganttRows.value = JSON.parse(JSON.stringify(snap.ganttRows)) as GanttListRow[]
+  ganttDates.value = [...snap.ganttDates]
+  lineCalendarHoursMap.value = JSON.parse(JSON.stringify(snap.lineCalendarHoursMap))
+  lineDefaultHoursMap.value = JSON.parse(JSON.stringify(snap.lineDefaultHoursMap))
+  ElMessage.success('再計算前に取得した一覧表示に戻しました（サーバの計画は変わりません）')
+}
+
+async function replanAllLinesForProcess() {
+  if (!canSearch.value) {
+    ElMessage.warning('期間と工程を選択してください')
+    return
+  }
+  const pc = (selectedProcessCd.value || '').trim()
+  if (!pc) return
+  try {
+    await ElMessageBox.confirm(
+      `工程「${pc}」の全設備をラインコード順に順次再計算します。実行しますか？`,
+      '全設備ライン順で再計算',
+      { type: 'warning', confirmButtonText: '実行', cancelButtonText: 'キャンセル' },
+    )
+  } catch {
+    return
+  }
+  bulkReplanning.value = true
+  try {
+    const rawLines = await fetchLines(pc)
+    const lines = (Array.isArray(rawLines) ? rawLines : []).filter((l) => l.is_active !== false)
+    lines.sort((a, b) => (a.line_code || '').localeCompare(b.line_code || '', 'ja'))
+    if (lines.length === 0) {
+      ElMessage.warning('対象工程に有効な設備がありません')
+      return
+    }
+    if (rows.value.length > 0 || ganttRows.value.length > 0) {
+      preReplanGridSnapshot.value = clonePreReplanSnapshot()
+    }
+    const anchor = replanFallbackAnchorDate.value
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      await replanLineSequence(line.id, anchor)
+    }
+    await loadSchedules({ clearReplanSnapshot: false })
+    ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '再計算に失敗しました')
+    try {
+      await loadSchedules({ clearReplanSnapshot: false })
+    } catch {
+      /* 一覧取得失敗は無視 */
+    }
+  } finally {
+    bulkReplanning.value = false
   }
 }
 
@@ -1231,6 +1371,26 @@ function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
   padding-left: 14px;
   padding-right: 14px;
+}
+
+.forming-replan-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(191, 219, 254, 0.55);
+}
+.forming-replan-toolbar__primary {
+  border-radius: 999px;
+  font-weight: 700;
+}
+.forming-replan-toolbar__note {
+  flex: 1 1 240px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #475569;
 }
 
 .result-card {

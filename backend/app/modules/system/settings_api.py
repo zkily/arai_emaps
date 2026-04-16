@@ -2,10 +2,13 @@
 システム設定 API エンドポイント
 システムログ、採番ルール、ワークフロー、通知、データ管理
 """
+import asyncio
 import logging
+import os
 from datetime import datetime, date, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
-from fastapi.responses import StreamingResponse
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, delete
 from sqlalchemy.orm import selectinload
@@ -13,7 +16,19 @@ from typing import List, Optional
 import io
 import csv
 
+from app.core.config import settings as app_config
 from app.core.database import get_db
+from app.services.data_management_io import (
+    build_master_export_csv,
+    build_master_export_xlsx,
+    import_master_csv,
+)
+from app.services.mysql_backup import (
+    run_mysqldump_to_file,
+    apply_retention,
+    normalize_backup_storage_path,
+    is_windows_posix_backup_placeholder,
+)
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.system.settings_models import (
@@ -1068,22 +1083,22 @@ async def get_import_export_history(
 
 @router.post("/data/import", summary="データインポート")
 async def import_data(
-    master_type: str,
-    update_existing: bool = False,
-    skip_errors: bool = True,
+    master_type: str = Form(...),
+    update_existing: bool = Form(False),
+    skip_errors: bool = Form(True),
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """マスターデータをインポート"""
+    """マスター CSV を取り込み（users は未対応）。"""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="管理者権限が必要です")
-    
-    # 履歴レコード作成
+
+    raw = await file.read()
     history = ImportExportHistory(
         type="import",
         master_type=master_type,
-        filename=file.filename or "unknown",
+        filename=file.filename or "unknown.csv",
         options={"update_existing": update_existing, "skip_errors": skip_errors},
         user_id=current_user.id,
         started_at=datetime.now(),
@@ -1091,18 +1106,42 @@ async def import_data(
     )
     db.add(history)
     await db.commit()
-    
-    # TODO: 実際のインポート処理を実装
-    # CSVパース、バリデーション、DB登録
-    
-    history.status = "success"
-    history.total_records = 0
-    history.success_records = 0
+    await db.refresh(history)
+
+    try:
+        success, err_cnt, err_msgs = await import_master_csv(
+            db, master_type, raw, update_existing, skip_errors
+        )
+    except ValueError as e:
+        history.status = "failed"
+        history.error_details = {"message": str(e)}
+        history.completed_at = datetime.now()
+        await db.commit()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("import failed")
+        history.status = "failed"
+        history.error_details = {"message": str(e)[:2000]}
+        history.completed_at = datetime.now()
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"インポートに失敗しました: {e!s}") from e
+
+    total = success + err_cnt
+    history.status = "success" if err_cnt == 0 else "partial_success"
+    history.total_records = total
+    history.success_records = success
+    history.error_records = err_cnt
+    history.error_details = {"messages": err_msgs} if err_msgs else None
     history.completed_at = datetime.now()
     await db.commit()
-    
-    logger.info(f"Data imported: {master_type} by {current_user.username}")
-    return {"message": "インポートが完了しました", "history_id": history.id}
+
+    logger.info("Data imported: %s by %s (%s rows)", master_type, current_user.username, success)
+    return {
+        "message": "インポートが完了しました" if err_cnt == 0 else "一部行でエラーがありました",
+        "history_id": history.id,
+        "success_records": success,
+        "error_records": err_cnt,
+    }
 
 
 @router.post("/data/export", summary="データエクスポート")
@@ -1111,31 +1150,62 @@ async def export_data(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """マスターデータをエクスポート"""
-    # 履歴レコード作成
-    filename = f"{data.master_type}_{date.today().strftime('%Y%m%d')}.{data.format}"
+    """マスターを CSV / Excel でダウンロード（DB 現データ）。"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+
+    fmt = (data.format or "csv").lower()
+    if fmt not in ("csv", "xlsx"):
+        raise HTTPException(status_code=400, detail="format は csv または xlsx を指定してください")
+
+    filename = f"{data.master_type}_{date.today().strftime('%Y%m%d')}.{fmt}"
     history = ImportExportHistory(
         type="export",
         master_type=data.master_type,
         filename=filename,
-        format=data.format,
-        encoding=data.encoding,
+        format=fmt,
+        encoding=data.encoding if fmt == "csv" else None,
         user_id=current_user.id,
         started_at=datetime.now(),
         status="processing",
     )
     db.add(history)
     await db.commit()
-    
-    # TODO: 実際のエクスポート処理を実装
-    # DBからデータ取得、CSV/Excel生成
-    
+    await db.refresh(history)
+
+    try:
+        if fmt == "xlsx":
+            body, n = await build_master_export_xlsx(db, data.master_type)
+            media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            body, n = await build_master_export_csv(db, data.master_type, data.encoding or "utf8")
+            media = "text/csv; charset=utf-8"
+    except ValueError as e:
+        history.status = "failed"
+        history.error_details = {"message": str(e)}
+        history.completed_at = datetime.now()
+        await db.commit()
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("export failed")
+        history.status = "failed"
+        history.error_details = {"message": str(e)[:2000]}
+        history.completed_at = datetime.now()
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"エクスポートに失敗しました: {e!s}") from e
+
     history.status = "success"
+    history.total_records = n
+    history.success_records = n
     history.completed_at = datetime.now()
     await db.commit()
-    
-    logger.info(f"Data exported: {data.master_type} by {current_user.username}")
-    return {"message": "エクスポートが完了しました", "filename": filename}
+
+    logger.info("Data exported: %s by %s (%s rows)", data.master_type, current_user.username, n)
+    return StreamingResponse(
+        io.BytesIO(body),
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/data/template/{master_type}", summary="インポートテンプレートダウンロード")
@@ -1168,6 +1238,17 @@ async def download_import_template(
 
 
 # バックアップ API
+def _final_backup_storage_dir(raw: Optional[str]) -> str:
+    """
+    バックアップ保存ディレクトリ。
+    Windows で DB に残った Linux 既定 '/backup/' はドライブ直下 \\backup になってしまうため、既定 UNC に置き換える。
+    """
+    rp = (raw or "").strip()
+    if is_windows_posix_backup_placeholder(rp):
+        rp = ""
+    return normalize_backup_storage_path(rp or app_config.BACKUP_DEFAULT_STORAGE_PATH)
+
+
 @router.get("/backup/settings", response_model=BackupSettingResponse, summary="バックアップ設定取得")
 async def get_backup_settings(
     db: AsyncSession = Depends(get_db),
@@ -1183,7 +1264,7 @@ async def get_backup_settings(
             id=1,
             auto_backup_enabled=False,
             schedule="daily",
-            storage_path="/backup/",
+            storage_path=app_config.BACKUP_DEFAULT_STORAGE_PATH,
             retention_count=7,
             include_files=False,
             compression_enabled=True,
@@ -1192,7 +1273,13 @@ async def get_backup_settings(
             notify_on_error=True,
             updated_at=datetime.now(),
         )
-    return setting
+    resp = BackupSettingResponse.model_validate(setting)
+    sp = (resp.storage_path or "").strip()
+    if is_windows_posix_backup_placeholder(sp):
+        resp.storage_path = app_config.BACKUP_DEFAULT_STORAGE_PATH
+    else:
+        resp.storage_path = normalize_backup_storage_path(sp or app_config.BACKUP_DEFAULT_STORAGE_PATH)
+    return resp
 
 
 @router.put("/backup/settings", response_model=BackupSettingResponse, summary="バックアップ設定更新")
@@ -1208,20 +1295,29 @@ async def update_backup_settings(
     result = await db.execute(select(BackupSetting).where(BackupSetting.id == 1))
     setting = result.scalar_one_or_none()
     
+    dumped = data.model_dump()
+    dumped["storage_path"] = _final_backup_storage_dir(dumped.get("storage_path"))
+
     if not setting:
-        setting = BackupSetting(id=1, **data.model_dump(), updated_by=current_user.id)
+        setting = BackupSetting(id=1, **dumped, updated_by=current_user.id)
         db.add(setting)
     else:
-        for key, value in data.model_dump().items():
+        for key, value in dumped.items():
             if value is not None:
                 setattr(setting, key, value)
         setting.updated_by = current_user.id
-    
+
     await db.commit()
     await db.refresh(setting)
-    
+
     logger.info(f"Backup settings updated by {current_user.username}")
-    return setting
+    resp = BackupSettingResponse.model_validate(setting)
+    sp = (resp.storage_path or "").strip()
+    if is_windows_posix_backup_placeholder(sp):
+        resp.storage_path = app_config.BACKUP_DEFAULT_STORAGE_PATH
+    else:
+        resp.storage_path = normalize_backup_storage_path(sp or app_config.BACKUP_DEFAULT_STORAGE_PATH)
+    return resp
 
 
 @router.get("/backup/history", response_model=List[BackupHistoryResponse], summary="バックアップ履歴")
@@ -1243,8 +1339,10 @@ async def get_backup_history(
     response = []
     for h in histories:
         resp = BackupHistoryResponse.model_validate(h)
-        if h.file_size:
+        if h.file_size is not None:
             resp.file_size_display = _format_file_size(h.file_size)
+        if h.file_path and os.name == "nt":
+            resp.file_path = str(Path(h.file_path))
         response.append(resp)
     
     return response
@@ -1256,31 +1354,78 @@ async def create_manual_backup(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """手動バックアップを実行"""
+    """mysqldump で DB 全件をバックアップし、設定の保存先（既定は社内共有フォルダ）へ書き込む。"""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="管理者権限が必要です")
-    
-    # バックアップ履歴レコード作成
+
+    _ = data  # include_files 等は将来拡張用
+
+    result = await db.execute(select(BackupSetting).where(BackupSetting.id == 1))
+    setting = result.scalar_one_or_none()
+    raw_path = (setting.storage_path or "").strip() if setting else ""
+    storage_path = _final_backup_storage_dir(raw_path)
+    compress = bool(setting.compression_enabled) if setting else True
+    retention = int(setting.retention_count) if setting else 7
+
     now = datetime.now()
-    filename = f"backup_{now.strftime('%Y%m%d_%H%M%S')}.sql.gz"
-    
+    ext = ".sql.gz" if compress else ".sql"
+    filename = f"backup_{now.strftime('%Y%m%d_%H%M%S')}{ext}"
+    full_path = os.path.join(storage_path, filename)
+
     history = BackupHistory(
         filename=filename,
-        file_path=f"/backup/{filename}",
+        file_path=full_path,
         backup_type="manual",
-        status="completed",
+        status="running",
         started_at=now,
-        completed_at=now,
         created_by=current_user.id,
     )
     db.add(history)
     await db.commit()
-    
-    # TODO: 実際のバックアップ処理を実装
-    # mysqldump実行、圧縮、保存
-    
-    logger.info(f"Manual backup created: {filename} by {current_user.username}")
-    return {"message": "バックアップを開始しました", "filename": filename}
+    await db.refresh(history)
+
+    def _run_dump() -> int:
+        os.makedirs(storage_path, exist_ok=True)
+        return run_mysqldump_to_file(
+            out_path=full_path,
+            host=app_config.DB_HOST,
+            port=app_config.DB_PORT,
+            user=app_config.DB_USER,
+            password=app_config.DB_PASSWORD,
+            database=app_config.DB_NAME,
+            compress=compress,
+            mysqldump_bin=(app_config.MYSQLDUMP_BIN or "mysqldump").strip() or "mysqldump",
+        )
+
+    try:
+        size = await asyncio.to_thread(_run_dump)
+    except Exception as e:
+        logger.exception("Manual backup failed")
+        history.status = "failed"
+        history.error_message = str(e)[:2000]
+        history.completed_at = datetime.now()
+        await db.commit()
+        raise HTTPException(status_code=500, detail=f"バックアップに失敗しました: {e!s}") from e
+
+    history.status = "completed"
+    history.file_path = full_path
+    history.file_size = size
+    history.completed_at = datetime.now()
+    await db.commit()
+
+    try:
+        await asyncio.to_thread(apply_retention, storage_path, retention)
+    except Exception:
+        logger.exception("apply_retention failed")
+
+    logger.info("Manual backup OK: %s (%s bytes) by %s", full_path, size, current_user.username)
+    return {
+        "message": "バックアップが完了しました",
+        "filename": filename,
+        "file_path": full_path,
+        "file_size": size,
+        "id": history.id,
+    }
 
 
 @router.post("/backup/{backup_id}/restore", summary="バックアップから復元")
@@ -1300,10 +1445,11 @@ async def restore_from_backup(
     if not backup:
         raise HTTPException(status_code=404, detail="バックアップが見つかりません")
     
-    # TODO: 実際の復元処理を実装
-    
-    logger.info(f"Restore started from {backup.filename} by {current_user.username}")
-    return {"message": "復元を開始しました"}
+    logger.info("Restore requested for %s by %s (未実装)", backup.filename, current_user.username)
+    raise HTTPException(
+        status_code=501,
+        detail="復元 API は未実装です。MySQL クライアント等でダンプファイルを手動インポートしてください。",
+    )
 
 
 @router.get("/backup/{backup_id}/download", summary="バックアップダウンロード")
@@ -1319,11 +1465,20 @@ async def download_backup(
     backup = result.scalar_one_or_none()
     if not backup:
         raise HTTPException(status_code=404, detail="バックアップが見つかりません")
-    
-    # TODO: 実際のファイルを返す
-    # return FileResponse(backup.file_path, filename=backup.filename)
-    
-    return {"message": "ダウンロード準備中", "filename": backup.filename}
+
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+
+    path = normalize_backup_storage_path(os.path.expandvars(backup.file_path or ""))
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="バックアップファイルが見つかりません")
+
+    media = (
+        "application/gzip"
+        if backup.filename.lower().endswith(".gz")
+        else "application/octet-stream"
+    )
+    return FileResponse(path, filename=backup.filename, media_type=media)
 
 
 @router.post("/data/reset", summary="データ初期化")
@@ -1348,11 +1503,16 @@ async def reset_data(
 
 def _format_file_size(size_bytes: int) -> str:
     """ファイルサイズを人間が読みやすい形式に変換"""
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f}{unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f}TB"
+    if size_bytes is None:
+        return "—"
+    n = float(size_bytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024.0 or unit == "TB":
+            if unit == "B":
+                return f"{int(n)}B"
+            return f"{n:.1f}{unit}"
+        n /= 1024.0
+    return f"{n:.1f}PB"
 
 
 # ========== ファイル監視設定（在庫・材料・ピッキング・Excel 計画の有効/無効） ==========

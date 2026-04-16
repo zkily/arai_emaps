@@ -444,17 +444,25 @@ def _mes_schedule_plan_row_to_record(row: Any) -> dict:
         qty = 0
     return {
         "id": _val("id"),
+        "schedule_id": _val("schedule_id"),
         "file_name": _val("file_name"),
         "plan_date": plan_date,
         "quantity": qty,
+        "planned_quantity": qty,
+        "planned_output_qty": _val("planned_output_qty", qty),
         "machine_name": _val("machine_name"),
         "machine_cd": _val("machine_cd"),
         "process_name": _val("process_name") or "成型",
         "operator": op,
+        "production_order": op,
         "product_name": _val("product_name") or "",
         "product_cd": _val("product_cd"),
         "efficiency_rate": eff,
         "setup_time": st,
+        "actual_production": _val("actual_production", 0),
+        "actual_qty": _val("actual_production", 0),
+        "defect_qty": _val("defect_qty", 0),
+        "upstream_defect_qty_total": _val("upstream_defect_qty_total", 0),
         "remarks": _val("remarks") or "",
     }
 
@@ -538,9 +546,11 @@ async def get_mes_forming_plan_data_from_schedule(
     sql = text(f"""
         SELECT
             sd.id AS id,
+            ps.id AS schedule_id,
             'APS' AS file_name,
             sd.schedule_date AS plan_date,
             sd.planned_qty AS quantity,
+            ps.planned_output_qty AS planned_output_qty,
             m.machine_name AS machine_name,
             m.machine_cd AS machine_cd,
             '成型' AS process_name,
@@ -548,12 +558,22 @@ async def get_mes_forming_plan_data_from_schedule(
             ps.item_name AS product_name,
             ps.product_cd AS product_cd,
             ee.efficiency_rate AS efficiency_rate,
-            ps.setup_time AS setup_time
+            ps.setup_time AS setup_time,
+            sd.actual_qty AS actual_production,
+            sd.defect_qty AS defect_qty,
+            COALESCE(ub.upstream_defect_qty_total, 0) AS upstream_defect_qty_total
         FROM schedule_details sd
         INNER JOIN production_schedules ps ON ps.id = sd.schedule_id
         INNER JOIN machines m ON m.id = ps.line_id
         LEFT JOIN equipment_efficiency ee
           ON m.machine_cd = ee.machine_cd AND ps.product_cd = ee.product_cd
+        LEFT JOIN (
+          SELECT
+            aps_schedule_id,
+            COALESCE(SUM(COALESCE(upstream_defect_qty, 0)), 0) AS upstream_defect_qty_total
+          FROM aps_batch_plans
+          GROUP BY aps_schedule_id
+        ) ub ON ub.aps_schedule_id = ps.id
         WHERE {base_where}
         ORDER BY sd.schedule_date, m.machine_name, ps.order_no, ps.item_name
         LIMIT :limit OFFSET :offset
