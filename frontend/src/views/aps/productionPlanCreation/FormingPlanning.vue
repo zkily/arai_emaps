@@ -335,8 +335,16 @@
         </el-table-column>
         <el-table-column prop="daily_capacity" label="標準日産能力" width="110" align="right" />
         <el-table-column prop="setup_time" label="段取（分）" width="98" align="right" />
-        <el-table-column prop="start_date" label="開始日" width="100" align="center"/>
-        <el-table-column prop="end_date" label="終了日" width="100" align="center"/>
+        <el-table-column label="開始日" width="100" align="center">
+          <template #default="{ row }">
+            {{ scheduleListDateSpanById[row.id]?.start ?? '—' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="終了日" width="100" align="center">
+          <template #default="{ row }">
+            {{ scheduleListDateSpanById[row.id]?.end ?? '—' }}
+          </template>
+        </el-table-column>
         <el-table-column label="状態" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ statusLabelJa(row.status) }}</el-tag>
@@ -892,6 +900,52 @@ const progressDisplayDates = computed(() => {
   const sd = (ganttRange.value?.[0] || anchorDate.value || firstDayOfMonthIso(month)).trim()
   const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 1)).trim()
   return expandDateRangeIso(sd, ed)
+})
+
+/** 日次ガント行から「セルに何かしら出る」暦日を列挙（計画一覧の期日をガント表示と揃える） */
+function isoDatesWithGridActivity(gr: ScheduleGridRow): string[] {
+  const keys = new Set<string>()
+  const maps: (Record<string, number> | undefined)[] = [
+    gr.daily,
+    gr.actual_daily,
+    gr.defect_daily,
+    gr.upstream_defect_daily,
+    gr.remaining_daily,
+  ]
+  for (const mp of maps) {
+    if (!mp) continue
+    for (const [d, v] of Object.entries(mp)) {
+      if (Number(v || 0) !== 0) keys.add(d)
+    }
+  }
+  return [...keys].sort()
+}
+
+/**
+ * 計画一覧の開始日・終了日。
+ * production_schedules の start_date/end_date はスライス再配置などで日次グリッドとずれることがあるため、
+ * ガントと同じ根拠（明細・スライス・実績・残などの非ゼロ日の min/max）を優先する。
+ */
+const scheduleListDateSpanById = computed((): Record<number, { start: string | null; end: string | null }> => {
+  const byId: Record<number, ScheduleGridRow> = {}
+  for (const r of ganttRows.value) {
+    byId[r.id] = r
+  }
+  const out: Record<number, { start: string | null; end: string | null }> = {}
+  for (const row of schedules.value) {
+    const gr = byId[row.id]
+    if (!gr) {
+      out[row.id] = { start: row.start_date ?? null, end: row.end_date ?? null }
+      continue
+    }
+    const dates = isoDatesWithGridActivity(gr)
+    if (dates.length === 0) {
+      out[row.id] = { start: row.start_date ?? null, end: row.end_date ?? null }
+    } else {
+      out[row.id] = { start: dates[0]!, end: dates[dates.length - 1]! }
+    }
+  }
+  return out
 })
 
 /** 計画一覧の各行に対応するロット進捗サマリ（{ status, count }[] per schedule id） */

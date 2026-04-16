@@ -190,17 +190,114 @@
 
         <el-tab-pane label="一覧（表）" name="table">
           <div class="plan-sec-hd plan-sec-hd--inner">
-            製造指示一覧
-            <span class="plan-sec-badge">{{ rows.length }}</span>
+            成型工程生産スケジュール一覧
+            <span class="plan-sec-badge">{{ filteredTableRows.length }}</span>
+            <span v-if="tableTabFiltersActive && tableRows.length > 0" class="plan-sec-sub table-filter-hint">
+              全 {{ tableRows.length }} 件中
+            </span>
+          </div>
+          <!-- <p class="table-range-note">
+            当工程の<strong>全設備・全製造指示</strong>を表示します。実績・不良・残の日次合計は検索期間ではなく、システム上の広い明細取得範囲で集計します（{{ tableGridRangeNote }}）。
+          </p> -->
+
+          <div v-if="tableRows.length > 0" class="table-filter-toolbar-card">
+            <div class="table-tab-filter-bar">
+              <div class="table-filter-field table-filter-field--line">
+                <span class="table-filter-field__lead" title="設備で絞込">
+                  <el-icon class="table-filter-field__icon"><OfficeBuilding /></el-icon>
+                  <span class="table-filter-field__label">設備</span>
+                </span>
+                <el-select
+                  v-model="tableFilterLineId"
+                  clearable
+                  filterable
+                  placeholder="すべて"
+                  class="table-tab-filter-select"
+                >
+                  <el-option
+                    v-for="opt in tableLineFilterOptions"
+                    :key="opt.id"
+                    :label="opt.label"
+                    :value="opt.id"
+                  />
+                </el-select>
+              </div>
+              <div class="table-filter-field table-filter-field--product">
+                <span class="table-filter-field__lead" title="製品で絞込">
+                  <el-icon class="table-filter-field__icon"><Goods /></el-icon>
+                  <span class="table-filter-field__label">製品</span>
+                </span>
+                <el-select
+                  v-model="tableFilterProductKey"
+                  clearable
+                  filterable
+                  placeholder="すべて"
+                  class="table-tab-filter-select table-tab-filter-select--product"
+                >
+                  <el-option
+                    v-for="opt in tableProductFilterOptions"
+                    :key="opt.value"
+                    :label="opt.label"
+                    :value="opt.value"
+                  />
+                </el-select>
+              </div>
+              <div class="table-filter-toolbar-divider" aria-hidden="true" />
+              <div class="table-filter-status-cluster">
+                <span class="table-filter-status-cluster__title" title="一覧に表示する状態">
+                  <el-icon class="table-filter-status-cluster__title-icon"><Switch /></el-icon>
+                  状態
+                </span>
+                <div class="table-filter-pill" :class="{ 'table-filter-pill--on': tableShowStatusDone }">
+                  <span class="table-filter-pill__text">生産済</span>
+                  <el-switch
+                    v-model="tableShowStatusDone"
+                    size="small"
+                    inline-prompt
+                    class="table-filter-switch"
+                    :active-text="'表示'"
+                    :inactive-text="'隠す'"
+                  />
+                </div>
+                <div class="table-filter-pill" :class="{ 'table-filter-pill--on': tableShowStatusPending }">
+                  <span class="table-filter-pill__text">準備中</span>
+                  <el-switch
+                    v-model="tableShowStatusPending"
+                    size="small"
+                    inline-prompt
+                    class="table-filter-switch"
+                    :active-text="'表示'"
+                    :inactive-text="'隠す'"
+                  />
+                </div>
+              </div>
+              <div class="table-filter-bar-spacer" aria-hidden="true" />
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                class="table-filter-print-btn"
+                :icon="Printer"
+                :disabled="loading || filteredTableRows.length === 0"
+                @click="handleTableListPrint"
+              >
+                印刷
+              </el-button>
+            </div>
           </div>
 
           <el-empty
-            v-if="!loading && rows.length === 0"
+            v-if="!loading && tableRows.length === 0"
             description="条件に一致する計画がありません"
             class="schedule-empty"
           />
+          <el-empty
+            v-else-if="!loading && filteredTableRows.length === 0"
+            description="絞込み条件に一致する計画がありません"
+            class="schedule-empty"
+          />
 
-          <div v-else class="schedule-table-group-list">
+          <div v-else-if="!loading" class="schedule-table-group-list">
             <section
               v-for="group in tableGroups"
               :key="group.lineLabel"
@@ -224,12 +321,12 @@
                 </el-table-column>
                 <el-table-column :label="'開始'" width="110" align="center">
                   <template #default="{ row }">
-                    <span class="date-cell">{{ row.start_date || '—' }}</span>
+                    <span class="date-cell">{{ effectiveScheduleDateSpan(row).start || '—' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column :label="'終了'" width="110" align="center">
                   <template #default="{ row }">
-                    <span class="date-cell">{{ row.end_date || '—' }}</span>
+                    <span class="date-cell">{{ effectiveScheduleDateSpan(row).end || '—' }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column :label="'計画'" width="92" align="right">
@@ -287,34 +384,70 @@
           <div class="plan-sec-hd plan-sec-hd--inner util-sec-hd">
             <span>設備操業度（月次）</span>
             <span class="plan-sec-badge">{{ utilizationRows.length }}</span>
+            <div
+              class="util-month-surface"
+              :class="{
+                'util-month-surface--disabled':
+                  !(selectedProcessCd || '').trim() || loadingUtilizationMonth,
+              }"
+            >
+              <el-icon class="util-month-surface__icon"><Calendar /></el-icon>
+              <div class="util-month-surface__main util-month-surface__main--row">
+                <span class="util-month-surface__kicker">集計月</span>
+                <el-date-picker
+                  v-model="utilizationMonth"
+                  type="month"
+                  value-format="YYYY-MM"
+                  format="YYYY年MM月"
+                  placeholder="月を選択"
+                  class="util-month-picker"
+                  :disabled="!(selectedProcessCd || '').trim() || loadingUtilizationMonth"
+                  :clearable="false"
+                  teleported
+                />
+              </div>
+            </div>
             <span class="util-hd-spacer" />
             <el-button
               size="small"
               type="warning"
               plain
               class="util-print-btn"
-              :disabled="loading || utilizationRows.length === 0"
+              :disabled="loadingUtilizationMonth || utilizationRows.length === 0"
               @click="handleUtilizationPrint"
             >
               印刷
             </el-button>
           </div>
           <div class="util-note">
-            <span class="util-note-chip">月初〜本日集計</span>
+            <span class="util-note-chip">検索期間とは独立（集計月のグリッドで算出）</span>
+            <span class="util-note-chip">対象：{{ utilizationMonthLabelJp }}</span>
+            <span class="util-note-chip">月初〜当月末内の本日まで集計</span>
             <span class="util-note-chip">本日実績0以下は前日まで</span>
             <span class="util-note-chip util-note-chip--formula">差異工時=Σ((実績-計画)/能率)</span>
           </div>
 
           <el-empty
-            v-if="!loading && utilizationRows.length === 0"
+            v-if="!loadingUtilizationMonth && !(selectedProcessCd || '').trim()"
+            description="先に工程を選択してください（上部の工程）"
+            class="schedule-empty"
+          />
+          <el-empty
+            v-else-if="!loadingUtilizationMonth && utilizationRows.length === 0"
             description="集計対象データがありません"
             class="schedule-empty"
           />
-          <div v-else class="schedule-table-wrap util-table-wrap">
-            <el-table :data="utilizationRows" border size="small" class="schedule-list-table nest-table--polish util-table">
-              <el-table-column prop="lineLabel" label="設備" width="85" show-overflow-tooltip />
-              <el-table-column prop="scheduleCount" label="指示数" width="75" align="right" />
-              <el-table-column label="稼働可能時間(H)" width="135" align="right">
+          <div v-else v-loading="loadingUtilizationMonth" class="schedule-table-wrap util-table-wrap">
+            <el-table
+              :data="utilizationRows"
+              border
+              stripe
+              size="small"
+              class="schedule-list-table nest-table--polish util-table util-table--modern"
+            >
+              <el-table-column prop="lineLabel" label="設備" width="65" show-overflow-tooltip />
+              <el-table-column prop="scheduleCount" label="指示数" width="75" align="center" />
+              <el-table-column label="稼働設定時間(H)" width="125" align="right">
                 <template #default="{ row }"><span class="util-num">{{ formatHours(row.availableHours) }}</span></template>
               </el-table-column>
               <el-table-column label="計画数" width="80" align="right">
@@ -350,25 +483,32 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Printer } from '@element-plus/icons-vue'
+import { Calendar, Goods, OfficeBuilding, Printer, Switch } from '@element-plus/icons-vue'
 import {
   fetchLines,
   fetchSchedulingGrid,
   replanLineSequence,
   type ScheduleGridRow,
+  type SchedulingGridResponse,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 
 defineOptions({ name: 'FormingPlanningList' })
 
-type GanttListRow = ScheduleGridRow & { lineLabel: string; line_id: number }
+type GanttListRow = ScheduleGridRow & {
+  lineLabel: string
+  line_id: number
+  /** グリッド拡張時用（現行 API に無い場合もある） */
+  product_cd?: string | null
+}
 
 /** 一覧再計算前の画面状態（DB 巻き戻しは行わない） */
 interface PreReplanGridSnapshot {
-  rows: GanttListRow[]
+  tableRows: GanttListRow[]
+  tableGanttDates: string[]
   ganttRows: GanttListRow[]
   ganttDates: string[]
   lineCalendarHoursMap: Record<number, Record<string, number>>
@@ -393,7 +533,8 @@ const replanFallbackAnchorDate = computed(() => formatYmdInJapan(new Date()))
 function clonePreReplanSnapshot(): PreReplanGridSnapshot {
   return JSON.parse(
     JSON.stringify({
-      rows: rows.value,
+      tableRows: tableRows.value,
+      tableGanttDates: tableGanttDates.value,
       ganttRows: ganttRows.value,
       ganttDates: ganttDates.value,
       lineCalendarHoursMap: lineCalendarHoursMap.value,
@@ -413,10 +554,38 @@ function offsetDateIso(offsetDays: number): string {
 }
 
 const dateRange = ref<[string, string]>([offsetDateIso(-1), offsetDateIso(30)])
+/** 設備操業度タブ専用：集計月（検索期間とは独立） */
+function formatYmInJapan(d = new Date()): string {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+  })
+    .format(d)
+    .slice(0, 7)
+}
+const utilizationMonth = ref<string>(formatYmInJapan())
+/** 集計月の日次グリッド（fetchSchedulingGrid の dates / rows） */
+const utilizationMonthDates = ref<string[]>([])
+const utilizationMonthRows = ref<GanttListRow[]>([])
+const utilizationLineCalendarMap = ref<Record<number, Record<string, number>>>({})
+const utilizationLineDefaultHoursMap = ref<Record<number, number>>({})
+const loadingUtilizationMonth = ref(false)
 const selectedProcessCd = ref<string>('')
 const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
-const rows = ref<GanttListRow[]>([])
+/** 一覧（表）用：工程内の全設備の全指示（日次集計は tableGanttDates の広い範囲） */
+const tableRows = ref<GanttListRow[]>([])
+/** 一覧（表）のみ：設備で絞込（null / undefined＝すべて） */
+const tableFilterLineId = ref<number | null>(null)
+/** 一覧（表）のみ：製品で絞込（空＝すべて。値は product_cd 優先、無ければ品名、無ければ id:） */
+const tableFilterProductKey = ref<string>('')
+/** 一覧（表）のみ：状態「生産済」行を表示（既定 OFF＝非表示） */
+const tableShowStatusDone = ref(false)
+/** 一覧（表）のみ：状態「準備中」行を表示（既定 ON） */
+const tableShowStatusPending = ref(true)
+/** 一覧（表）の実績・不良・残など日次マップの合計に使う日付列（検索期間より広い取得結果） */
+const tableGanttDates = ref<string[]>([])
 const loading = ref(false)
 const searched = ref(false)
 const activeResultTab = ref<'gantt' | 'table' | 'utilization'>('gantt')
@@ -424,6 +593,110 @@ const ganttDates = ref<string[]>([])
 const ganttRows = ref<GanttListRow[]>([])
 const lineCalendarHoursMap = ref<Record<number, Record<string, number>>>({})
 const lineDefaultHoursMap = ref<Record<number, number>>({})
+
+/** 一覧用 grid の明細取得範囲（サーバ負荷のため過大にしない） */
+const TABLE_GRID_PAST_YEARS = 10
+const TABLE_GRID_FUTURE_YEARS = 5
+
+const tableGridRangeNote = ref('—')
+
+function ymdFromLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** YYYY-MM から暦月の [月初, 月末] ISO 日付 */
+function monthRangeFromYm(ym: string): [string, string] | null {
+  const t = (ym || '').trim()
+  const m = t.match(/^(\d{4})-(\d{2})/)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null
+  const sd = `${y}-${String(mo).padStart(2, '0')}-01`
+  const last = new Date(y, mo, 0).getDate()
+  const ed = `${y}-${String(mo).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+  return [sd, ed]
+}
+
+/** 一覧（表）の日次明細を検索期間外まで含めて集計するための grid 用期間 */
+function buildTableGridRange(): [string, string] {
+  const n = new Date()
+  n.setHours(0, 0, 0, 0)
+  const start = new Date(n.getFullYear() - TABLE_GRID_PAST_YEARS, n.getMonth(), n.getDate())
+  const end = new Date(n.getFullYear() + TABLE_GRID_FUTURE_YEARS, n.getMonth(), n.getDate())
+  return [ymdFromLocalDate(start), ymdFromLocalDate(end)]
+}
+
+function flattenGridToRows(grid: SchedulingGridResponse, lineNameById: Map<number, string>): GanttListRow[] {
+  const flat: GanttListRow[] = []
+  for (const block of grid.blocks || []) {
+    const label =
+      lineNameById.get(block.line_id) ||
+      String((block as { line_name?: string }).line_name || '').trim() ||
+      block.line_code ||
+      `ID ${block.line_id}`
+    for (const r of block.rows || []) {
+      flat.push({ ...r, lineLabel: label, line_id: block.line_id })
+    }
+  }
+  return flat
+}
+
+/** 設備操業度：集計月の日次グリッドを取得（検索期間のガントとは独立） */
+async function loadUtilizationMonthGrid() {
+  const pc = (selectedProcessCd.value || '').trim()
+  if (!pc) {
+    utilizationMonthDates.value = []
+    utilizationMonthRows.value = []
+    utilizationLineCalendarMap.value = {}
+    utilizationLineDefaultHoursMap.value = {}
+    return
+  }
+  const range = monthRangeFromYm(utilizationMonth.value)
+  if (!range) {
+    utilizationMonthDates.value = []
+    utilizationMonthRows.value = []
+    utilizationLineCalendarMap.value = {}
+    utilizationLineDefaultHoursMap.value = {}
+    return
+  }
+  const [sd, ed] = range
+  loadingUtilizationMonth.value = true
+  try {
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(sd, ed, undefined, pc),
+      fetchLines(pc),
+    ])
+    utilizationMonthDates.value = Array.isArray(grid.dates) ? grid.dates : []
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
+    const flat = flattenGridToRows(grid, lineNameById)
+    flat.sort(compareByLineThenOrder)
+    utilizationMonthRows.value = flat
+    const calendarMap: Record<number, Record<string, number>> = {}
+    const defaultMap: Record<number, number> = {}
+    for (const block of grid.blocks || []) {
+      calendarMap[block.line_id] = block.calendar || {}
+      defaultMap[block.line_id] = Number(block.default_work_hours ?? 0)
+    }
+    utilizationLineCalendarMap.value = calendarMap
+    utilizationLineDefaultHoursMap.value = defaultMap
+  } catch {
+    utilizationMonthDates.value = []
+    utilizationMonthRows.value = []
+    utilizationLineCalendarMap.value = {}
+    utilizationLineDefaultHoursMap.value = {}
+  } finally {
+    loadingUtilizationMonth.value = false
+  }
+}
 
 const canSearch = computed(
   () =>
@@ -441,9 +714,66 @@ const displayRangeText = computed(() => {
   return `${startDate} 〜 ${endDate}`
 })
 
+function tableProductRowKey(row: GanttListRow): string {
+  const cd = (row.product_cd || '').trim()
+  const name = (row.item_name || '').trim()
+  return cd || name || `id:${row.id}`
+}
+
+const tableLineFilterOptions = computed(() => {
+  const byId = new Map<number, string>()
+  for (const r of tableRows.value) {
+    if (!byId.has(r.line_id)) {
+      byId.set(r.line_id, (r.lineLabel || '').trim() || `ID ${r.line_id}`)
+    }
+  }
+  return [...byId.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], 'ja'))
+    .map(([id, label]) => ({ id, label }))
+})
+
+const tableProductFilterOptions = computed(() => {
+  const labels = new Map<string, string>()
+  for (const r of tableRows.value) {
+    const key = tableProductRowKey(r)
+    if (!labels.has(key)) {
+      const cd = (r.product_cd || '').trim()
+      const name = (r.item_name || '').trim()
+      const label = cd && name ? `${name}（${cd}）` : name || cd || key
+      labels.set(key, label)
+    }
+  }
+  return [...labels.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], 'ja'))
+    .map(([value, label]) => ({ value, label }))
+})
+
+const filteredTableRows = computed(() => {
+  const lineId = tableFilterLineId.value
+  const prodKey = (tableFilterProductKey.value || '').trim()
+  const showDone = tableShowStatusDone.value
+  const showPending = tableShowStatusPending.value
+  return tableRows.value.filter((row) => {
+    if (lineId != null && row.line_id !== lineId) return false
+    if (prodKey && tableProductRowKey(row) !== prodKey) return false
+    const kind = tableStatusKind(row)
+    if (kind === 'done' && !showDone) return false
+    if (kind === 'pending' && !showPending) return false
+    return true
+  })
+})
+
+const tableTabFiltersActive = computed(
+  () =>
+    tableFilterLineId.value != null ||
+    (tableFilterProductKey.value || '').trim() !== '' ||
+    tableShowStatusDone.value ||
+    !tableShowStatusPending.value,
+)
+
 const tableGroups = computed(() => {
   const groups: Array<{ lineLabel: string; rows: GanttListRow[] }> = []
-  for (const row of rows.value) {
+  for (const row of filteredTableRows.value) {
     const lineLabel = row.lineLabel || `ID ${row.line_id}`
     const last = groups[groups.length - 1]
     if (!last || last.lineLabel !== lineLabel) {
@@ -496,15 +826,23 @@ const ganttGroups = computed(() => {
   return groups
 })
 
-const monthlyStatDates = computed(() => {
-  const allDates = [...ganttDates.value].sort((a, b) => a.localeCompare(b))
+/** 設備操業度：集計月グリッドの日付列を、本日まで（未来月は空）に絞る */
+const utilizationStatDates = computed(() => {
+  const allDates = [...utilizationMonthDates.value].sort((a, b) => a.localeCompare(b))
   if (allDates.length === 0) return [] as string[]
-  const [startDate, endDate] = dateRange.value || []
-  if (!startDate || !endDate) return allDates
+  const monthStart = allDates[0]
+  const monthEnd = allDates[allDates.length - 1]
   const today = todayIso.value
-  const effectiveEnd = today >= startDate && today <= endDate ? today : endDate
-  if (today < startDate) return [] as string[]
-  return allDates.filter((d) => d >= startDate && d <= effectiveEnd)
+  if (today < monthStart) return [] as string[]
+  const effectiveEnd = today <= monthEnd ? today : monthEnd
+  return allDates.filter((d) => d >= monthStart && d <= effectiveEnd)
+})
+
+const utilizationMonthLabelJp = computed(() => {
+  const ym = (utilizationMonth.value || '').trim()
+  const p = ym.match(/^(\d{4})-(\d{2})$/)
+  if (!p) return '—'
+  return `${Number(p[1])}年${Number(p[2])}月`
 })
 
 interface LineUtilizationRow {
@@ -524,18 +862,18 @@ interface LineUtilizationRow {
 }
 
 const utilizationRows = computed<LineUtilizationRow[]>(() => {
-  const baseDates = monthlyStatDates.value
+  const baseDates = utilizationStatDates.value
   if (baseDates.length === 0) return []
   const lastBaseDate = baseDates[baseDates.length - 1]
   const prevBaseDate = baseDates.length >= 2 ? baseDates[baseDates.length - 2] : lastBaseDate
   const actualOnLastByLine = new Map<number, number>()
-  for (const row of ganttRows.value) {
+  for (const row of utilizationMonthRows.value) {
     const lid = row.line_id
     const v = Number(row.actual_daily?.[lastBaseDate] ?? 0)
     actualOnLastByLine.set(lid, (actualOnLastByLine.get(lid) ?? 0) + v)
   }
   const lineDatesMap = new Map<number, string[]>()
-  for (const row of ganttRows.value) {
+  for (const row of utilizationMonthRows.value) {
     const lid = row.line_id
     if (lineDatesMap.has(lid)) continue
     const todayActual = Number(actualOnLastByLine.get(lid) ?? 0)
@@ -544,7 +882,7 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
   }
 
   const map = new Map<number, LineUtilizationRow>()
-  for (const row of ganttRows.value) {
+  for (const row of utilizationMonthRows.value) {
     const lineId = row.line_id
     const statDates = lineDatesMap.get(lineId) ?? baseDates
     const plannedQty = statDates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
@@ -585,8 +923,8 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
   const result = Array.from(map.values())
   for (const r of result) {
     const statDates = lineDatesMap.get(r.lineId) ?? baseDates
-    const calMap = lineCalendarHoursMap.value[r.lineId] || {}
-    const fallback = Number(lineDefaultHoursMap.value[r.lineId] ?? 0)
+    const calMap = utilizationLineCalendarMap.value[r.lineId] || {}
+    const fallback = Number(utilizationLineDefaultHoursMap.value[r.lineId] ?? 0)
     const avail = statDates.reduce((sum, d) => {
       const h = Number(calMap[d] ?? fallback)
       return sum + (Number.isFinite(h) ? h : 0)
@@ -602,6 +940,10 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
 
 onMounted(() => {
   void loadProcessOptions()
+})
+
+watch([utilizationMonth, selectedProcessCd], () => {
+  void loadUtilizationMonthGrid()
 })
 
 async function loadProcessOptions() {
@@ -735,7 +1077,7 @@ function buildUtilizationPrintHtml(): string {
 <body>
   <div class="hd">
     <div class="tt">${escHtml(title)}</div>
-    <div class="meta">期間：${escHtml(displayRangeText.value)}　工程：${escHtml(selectedProcessLabel())}　印刷日時：${escHtml(printedAt)}</div>
+    <div class="meta">集計月：<strong>${escHtml(utilizationMonthLabelJp.value)}</strong>（${escHtml(utilizationMonth.value || '—')}）　工程：${escHtml(selectedProcessLabel())}　印刷日時：${escHtml(printedAt)}</div>
   </div>
   <table>
     <thead>
@@ -889,6 +1231,167 @@ function handleGanttPrint() {
   }
 }
 
+/** 一覧（表）タブ：現在の絞込結果を A4 縦で印刷 */
+function buildTableListPrintHtml(): string {
+  const title = '成型計画一覧（表・絞込結果）'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const lineId = tableFilterLineId.value
+  const lineLabel =
+    lineId != null
+      ? tableLineFilterOptions.value.find((x) => x.id === lineId)?.label ?? `ID ${lineId}`
+      : 'すべて'
+  const pk = (tableFilterProductKey.value || '').trim()
+  const productLabel = pk
+    ? tableProductFilterOptions.value.find((x) => x.value === pk)?.label ?? pk
+    : 'すべて'
+  const statusLine = `生産済: ${tableShowStatusDone.value ? '表示' : '非表示'}　準備中: ${tableShowStatusPending.value ? '表示' : '非表示'}`
+
+  const sectionsHtml = tableGroups.value
+    .map((group) => {
+      const body = group.rows
+        .map((row) => {
+          const span = effectiveScheduleDateSpan(row)
+          return `<tr>
+            <td class="num">${escHtml(String(row.order_no ?? '—'))}</td>
+            <td class="left name">${escHtml(row.item_name || '—')}</td>
+            <td class="cen">${escHtml(span.start || '—')}</td>
+            <td class="cen">${escHtml(span.end || '—')}</td>
+            <td class="num">${escHtml(formatNum(row.planned_process_qty))}</td>
+            <td class="num">${escHtml(formatNum(tableActual(row)))}</td>
+            <td class="num">${escHtml(formatNum(tableDefect(row)))}</td>
+            <td class="num">${escHtml(formatNum(tableUpstreamDefect(row)))}</td>
+            <td class="num">${escHtml(formatNum(tableRemaining(row)))}</td>
+            <td class="num">${escHtml(tableProgress(row))}</td>
+            <td class="cen">${escHtml(tableStatusLabel(row))}</td>
+          </tr>`
+        })
+        .join('')
+      return `<section class="print-sec">
+        <div class="grp-title">${escHtml(group.lineLabel)}</div>
+        <table>
+          <thead>
+            <tr>
+              <th class="num">順位</th>
+              <th class="left name">製品名</th>
+              <th class="cen">開始</th>
+              <th class="cen">終了</th>
+              <th class="num">計画</th>
+              <th class="num">実績</th>
+              <th class="num">不良</th>
+              <th class="num">前工程不良</th>
+              <th class="num">残</th>
+              <th class="num">進捗</th>
+              <th class="cen">状態</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </section>`
+    })
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escHtml(title)}</title>
+  <style>
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      margin: 0;
+      padding: 10px 12px 14px;
+      color: #0f172a;
+      font: 9.5px/1.35 "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif;
+      background: #fff;
+    }
+    .hd {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid #dbe5f1;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    }
+    .tt { font-size: 14px; font-weight: 800; color: #1e3a8a; }
+    .meta { margin-top: 4px; color: #475569; font-size: 8.5px; line-height: 1.55; }
+    .meta strong { color: #334155; font-weight: 700; }
+    .print-sec { margin-bottom: 12px; break-inside: avoid; page-break-inside: avoid; }
+    .grp-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #1e293b;
+      margin: 0 0 4px 2px;
+      padding: 3px 0;
+      border-bottom: 2px solid #94a3b8;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 3px 4px;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: linear-gradient(180deg, #eaf3ff 0%, #dceafe 100%);
+      font-weight: 800;
+      color: #334155;
+      font-size: 8.5px;
+    }
+    tbody tr:nth-child(odd) { background: #fcfdff; }
+    tbody tr:nth-child(even) { background: #f7fbff; }
+    .left { text-align: left; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; }
+    .cen { text-align: center; }
+    th.num, td.num { width: 6.5%; }
+    th.cen, td.cen { width: 8%; }
+    th.name, td.name { width: 18%; }
+    @media print {
+      @page { size: A4 portrait; margin: 10mm; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="tt">${escHtml(title)}</div>
+    <div class="meta">
+      期間：<strong>${escHtml(displayRangeText.value)}</strong>
+      　工程：<strong>${escHtml(selectedProcessLabel())}</strong>
+     
+      絞込：<strong>設備 ${escHtml(lineLabel)}</strong> ／ <strong>製品 ${escHtml(productLabel)}</strong>
+      　${escHtml(statusLine)}<br />
+      件数：<strong>${tableGroups.value.reduce((n, g) => n + g.rows.length, 0)}</strong> 件
+      　印刷日時：${escHtml(printedAt)}
+    </div>
+  </div>
+  ${sectionsHtml}
+</body>
+</html>`
+}
+
+function handleTableListPrint() {
+  if (filteredTableRows.value.length === 0) {
+    ElMessage.warning('印刷対象の行がありません（絞込みを確認してください）')
+    return
+  }
+  const w = window.open('', '_blank')
+  if (!w) {
+    ElMessage.error('ポップアップがブロックされました')
+    return
+  }
+  w.document.write(buildTableListPrintHtml())
+  w.document.close()
+  w.onload = () => {
+    w.print()
+    setTimeout(() => w.close(), 400)
+  }
+}
+
 function handleUtilizationPrint() {
   if (utilizationRows.value.length === 0) {
     ElMessage.warning('印刷対象データがありません')
@@ -907,29 +1410,58 @@ function handleUtilizationPrint() {
   }
 }
 
+/** 日次グリッド行からセルに値がある暦日（スライスと明細の表示根拠と揃える） */
+function isoDatesWithGridActivity(gr: ScheduleGridRow): string[] {
+  const keys = new Set<string>()
+  const maps: (Record<string, number> | undefined)[] = [
+    gr.daily,
+    gr.actual_daily,
+    gr.defect_daily,
+    gr.upstream_defect_daily,
+    gr.remaining_daily,
+  ]
+  for (const mp of maps) {
+    if (!mp) continue
+    for (const [d, v] of Object.entries(mp)) {
+      if (Number(v || 0) !== 0) keys.add(d)
+    }
+  }
+  return [...keys].sort()
+}
+
+/**
+ * 一覧の開始・終了および状態判定用。
+ * production_schedules の期日が日次明細・スライスとずれる場合があるため、非ゼロ日の min/max を優先する。
+ */
+function effectiveScheduleDateSpan(row: GanttListRow): { start: string | null; end: string | null } {
+  const dates = isoDatesWithGridActivity(row)
+  if (dates.length === 0) {
+    return { start: row.start_date ?? null, end: row.end_date ?? null }
+  }
+  return { start: dates[0] ?? null, end: dates[dates.length - 1] ?? null }
+}
+
 function tableActual(row: GanttListRow): number {
-  const target = ganttRows.value.find((g) => g.id === row.id)
-  if (!target) return 0
-  return periodActualForRow(target)
+  return periodActualForRow(row, tableGanttDates.value)
 }
 
 /** 不良：schedule_details.defect_qty の期間合計（API の defect_qty_sum） */
 function tableDefect(row: GanttListRow): number {
   const v = row.defect_qty_sum
   if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  const target = ganttRows.value.find((g) => g.id === row.id)
-  return target ? periodDefectForRow(target) : 0
+  return periodDefectForRow(row, tableGanttDates.value)
 }
 
 /** 前工程不良：FormingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
 function tableUpstreamDefect(row: GanttListRow): number {
   const v = row.upstream_defect_qty_total
   if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  const target = ganttRows.value.find((g) => g.id === row.id)
-  return target ? periodUpstreamDefectForRow(target) : 0
+  return periodUpstreamDefectForRow(row, tableGanttDates.value)
 }
 
 function tableRemaining(row: GanttListRow): number {
+  const remainByDaily = periodRemainingForRow(row, tableGanttDates.value)
+  if (remainByDaily > 0) return remainByDaily
   const planned = Number(row.planned_process_qty ?? 0)
   const remain = planned - tableActual(row)
   return remain > 0 ? remain : 0
@@ -964,8 +1496,9 @@ function todayLocalStart(): Date {
 
 function tableStatusKind(row: GanttListRow): 'done' | 'ongoing' | 'pending' {
   const today = todayLocalStart()
-  const start = parseLocalDay(row.start_date)
-  const end = parseLocalDay(row.end_date)
+  const span = effectiveScheduleDateSpan(row)
+  const start = parseLocalDay(span.start)
+  const end = parseLocalDay(span.end)
   if (end && end < today) return 'done'
   if (start && end && start <= today && today <= end) return 'ongoing'
   return 'pending'
@@ -1015,8 +1548,14 @@ async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
   }
   loading.value = true
   searched.value = true
+  tableFilterLineId.value = null
+  tableFilterProductKey.value = ''
+  tableShowStatusDone.value = false
+  tableShowStatusPending.value = true
   ganttDates.value = []
   ganttRows.value = []
+  tableRows.value = []
+  tableGanttDates.value = []
   lineCalendarHoursMap.value = {}
   lineDefaultHoursMap.value = {}
   try {
@@ -1041,23 +1580,27 @@ async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
     lineCalendarHoursMap.value = calendarMap
     lineDefaultHoursMap.value = defaultMap
 
-    const flat: GanttListRow[] = []
-    for (const block of grid.blocks || []) {
-      const label =
-        lineNameById.get(block.line_id) ||
-        String((block as { line_name?: string }).line_name || '').trim() ||
-        block.line_code ||
-        `ID ${block.line_id}`
-      for (const r of block.rows || []) {
-        flat.push({ ...r, lineLabel: label, line_id: block.line_id })
-      }
-    }
+    const flat = flattenGridToRows(grid, lineNameById)
     flat.sort(compareByLineThenOrder)
-    rows.value = [...flat]
     ganttRows.value = flat
+
+    const [wideStart, wideEnd] = buildTableGridRange()
+    tableGridRangeNote.value = `${wideStart} 〜 ${wideEnd}`
+    try {
+      const wideGrid = await fetchSchedulingGrid(wideStart, wideEnd, undefined, pc)
+      tableGanttDates.value = Array.isArray(wideGrid.dates) ? wideGrid.dates : []
+      const wideFlat = flattenGridToRows(wideGrid, lineNameById)
+      wideFlat.sort(compareByLineThenOrder)
+      tableRows.value = wideFlat
+    } catch {
+      tableGanttDates.value = [...ganttDates.value]
+      tableRows.value = [...flat]
+    }
     if (clearReplanSnapshot) preReplanGridSnapshot.value = null
+    await loadUtilizationMonthGrid()
   } catch (e: unknown) {
-    rows.value = []
+    tableRows.value = []
+    tableGanttDates.value = []
     ganttDates.value = []
     ganttRows.value = []
     lineCalendarHoursMap.value = {}
@@ -1074,11 +1617,20 @@ function restorePreReplanGrid() {
     ElMessage.warning('戻せるスナップショットがありません')
     return
   }
-  rows.value = JSON.parse(JSON.stringify(snap.rows)) as GanttListRow[]
+  const legacy = snap as PreReplanGridSnapshot & { rows?: GanttListRow[] }
+  const restoredTableRows = snap.tableRows ?? legacy.rows ?? snap.ganttRows
+  const restoredTableDates = snap.tableGanttDates ?? snap.ganttDates
+  tableRows.value = JSON.parse(JSON.stringify(restoredTableRows)) as GanttListRow[]
+  tableGanttDates.value = [...restoredTableDates]
   ganttRows.value = JSON.parse(JSON.stringify(snap.ganttRows)) as GanttListRow[]
   ganttDates.value = [...snap.ganttDates]
   lineCalendarHoursMap.value = JSON.parse(JSON.stringify(snap.lineCalendarHoursMap))
   lineDefaultHoursMap.value = JSON.parse(JSON.stringify(snap.lineDefaultHoursMap))
+  tableFilterLineId.value = null
+  tableFilterProductKey.value = ''
+  tableShowStatusDone.value = false
+  tableShowStatusPending.value = true
+  void loadUtilizationMonthGrid()
   ElMessage.success('再計算前に取得した一覧表示に戻しました（サーバの計画は変わりません）')
 }
 
@@ -1107,7 +1659,7 @@ async function replanAllLinesForProcess() {
       ElMessage.warning('対象工程に有効な設備がありません')
       return
     }
-    if (rows.value.length > 0 || ganttRows.value.length > 0) {
+    if (tableRows.value.length > 0 || ganttRows.value.length > 0) {
       preReplanGridSnapshot.value = clonePreReplanSnapshot()
     }
     const anchor = replanFallbackAnchorDate.value
@@ -1202,23 +1754,50 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   return `${row.item_name}: ${parts.join(' / ')}`
 }
 
-function periodActualForRow(row: ScheduleGridRow): number {
+function periodActualForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
   const m = row.actual_daily || {}
-  const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
   return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
 /** ガント表示期間内の不良合計（defect_daily の期間合計） */
-function periodDefectForRow(row: ScheduleGridRow): number {
+function periodDefectForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
   const m = row.defect_daily || {}
-  const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
   return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
 /** ガント表示期間内の前工程不良合計（upstream_defect_daily の期間合計） */
-function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
+function periodUpstreamDefectForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
   const m = row.upstream_defect_daily || {}
-  const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
+/** ガント表示期間内の残合計（remaining_daily と一致） */
+function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
+  const m = row.remaining_daily || {}
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
   return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 </script>
@@ -1530,6 +2109,210 @@ function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
 .plan-sec-hd--inner {
   margin-top: 4px;
 }
+
+.table-range-note {
+  margin: -2px 0 12px;
+  padding-left: 9px;
+  font-size: var(--fs-xs);
+  color: var(--c-text-s);
+  line-height: 1.5;
+  max-width: 960px;
+}
+.table-range-note strong {
+  font-weight: 700;
+  color: #475569;
+}
+
+.table-filter-hint {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--c-text-s);
+}
+
+/* ── 一覧（表）絞込ツールバー（カード＋同行レイアウト） ── */
+.table-filter-toolbar-card {
+  margin: 0 0 14px;
+  padding: 0;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.98) 48%, rgba(241, 245, 249, 0.95) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 28px -8px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.table-tab-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 12px 14px 12px 12px;
+}
+
+.table-filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.table-filter-field__lead {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 4px 0 4px 4px;
+}
+
+.table-filter-field__icon {
+  font-size: 16px;
+  color: var(--c-accent);
+  opacity: 0.92;
+}
+
+.table-filter-field__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #475569;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table-tab-filter-select {
+  width: min(220px, 100%);
+}
+
+.table-tab-filter-select--product {
+  width: min(260px, 100%);
+}
+
+.table-filter-toolbar-divider {
+  width: 1px;
+  height: 32px;
+  flex-shrink: 0;
+  align-self: center;
+  border-radius: 1px;
+  background: linear-gradient(180deg, transparent, rgba(148, 163, 184, 0.45) 15%, rgba(148, 163, 184, 0.45) 85%, transparent);
+}
+
+.table-filter-status-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.table-filter-status-cluster__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #475569;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-right: 2px;
+}
+
+.table-filter-status-cluster__title-icon {
+  font-size: 15px;
+  color: var(--c-accent-2);
+  opacity: 0.9;
+}
+
+.table-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.table-filter-pill:hover {
+  border-color: rgba(148, 163, 184, 0.55);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.table-filter-pill--on {
+  background: linear-gradient(135deg, rgba(219, 234, 254, 0.65) 0%, rgba(237, 233, 254, 0.55) 100%);
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow:
+    0 1px 2px rgba(37, 99, 235, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.table-filter-pill__text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.table-filter-toolbar-card :deep(.el-select) {
+  --el-select-border-color-hover: rgba(59, 130, 246, 0.45);
+}
+
+.table-filter-toolbar-card :deep(.el-select .el-select__wrapper) {
+  min-height: 36px;
+  border-radius: 10px;
+  padding-left: 10px;
+  padding-right: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.table-filter-toolbar-card :deep(.el-select .el-select__wrapper.is-hovering),
+.table-filter-toolbar-card :deep(.el-select .el-select__wrapper.is-focused) {
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.table-filter-toolbar-card :deep(.el-select .el-select__placeholder) {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.table-filter-switch :deep(.el-switch__core) {
+  border: 1px solid rgba(203, 213, 225, 0.9);
+}
+
+.table-filter-switch.is-checked :deep(.el-switch__core) {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.table-filter-bar-spacer {
+  flex: 1 1 32px;
+  min-width: 4px;
+}
+
+.table-filter-print-btn {
+  flex-shrink: 0;
+  border-radius: 10px;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.12);
+}
+
+.table-filter-print-btn:not(:disabled):hover {
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.18);
+}
+
 .plan-sec-badge {
   font-size: var(--fs-xs);
   font-weight: 600;
@@ -1592,6 +2375,109 @@ function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
 }
 .util-sec-hd {
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+/* 集計月：カード風コントロール */
+.util-month-surface {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 6px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(248, 250, 252, 0.98) 45%,
+    rgba(241, 245, 249, 0.92) 100%
+  );
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.05),
+    0 10px 24px -12px rgba(30, 64, 175, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+.util-month-surface:not(.util-month-surface--disabled):hover {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.06),
+    0 14px 32px -10px rgba(37, 99, 235, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+.util-month-surface--disabled {
+  opacity: 0.52;
+  pointer-events: none;
+  filter: saturate(0.85);
+}
+.util-month-surface__icon {
+  flex-shrink: 0;
+  font-size: 22px;
+  padding: 4px;
+  border-radius: 10px;
+  color: #2563eb;
+  background: linear-gradient(145deg, rgba(219, 234, 254, 0.9) 0%, rgba(237, 233, 254, 0.75) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+.util-month-surface__main {
+  min-width: 0;
+}
+.util-month-surface__main--row {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.util-month-surface__kicker {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #475569;
+  line-height: 1;
+  white-space: nowrap;
+}
+.util-month-picker {
+  width: min(172px, 46vw);
+}
+.util-month-picker :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  min-height: 32px;
+  padding-left: 10px;
+  padding-right: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(203, 213, 225, 0.65);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.util-month-picker :deep(.el-input__wrapper:hover) {
+  border-color: rgba(59, 130, 246, 0.4);
+}
+.util-month-picker :deep(.el-input__wrapper.is-focus) {
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+.util-month-picker :deep(.el-input__inner) {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+}
+.util-month-picker :deep(.el-input__prefix),
+.util-month-picker :deep(.el-input__suffix) {
+  color: #64748b;
+}
+.util-month-picker :deep(.el-input__suffix .el-icon) {
+  font-size: 14px;
 }
 .util-hd-spacer {
   margin-left: auto;
@@ -1619,17 +2505,71 @@ function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
   border-color: #c7d8ff;
 }
 .util-table-wrap {
-  border-color: #dbe6f5;
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.99) 40%, rgba(241, 245, 249, 0.96) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 8px 20px -16px rgba(30, 64, 175, 0.28);
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 16px 40px -20px rgba(30, 64, 175, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  overflow: hidden;
 }
-.util-table :deep(.el-table__header-wrapper th.el-table__cell) {
-  background: linear-gradient(180deg, #eef4ff 0%, #e6effc 100%) !important;
-  color: #1f2937 !important;
+.util-table-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(80% 50% at 0% 0%, rgba(59, 130, 246, 0.06), transparent 55%);
+  z-index: 0;
 }
-.util-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: #eaf2ff !important;
+.util-table-wrap :deep(.el-table) {
+  position: relative;
+  z-index: 1;
+  --el-table-border-color: rgba(226, 232, 240, 0.95);
+  --el-table-header-bg-color: transparent;
+  background: transparent;
+}
+.util-table--modern :deep(.el-table__inner-wrapper) {
+  border-radius: 0 0 15px 15px;
+}
+.util-table--modern :deep(.el-table__header-wrapper th.el-table__cell) {
+  background: linear-gradient(180deg, #f0f6ff 0%, #e2ecfb 100%) !important;
+  color: #0f172a !important;
+  font-weight: 800 !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.45) !important;
+  padding: 10px 10px !important;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.65);
+}
+.util-table--modern :deep(.el-table__body td.el-table__cell) {
+  padding: 9px 11px !important;
+  font-size: 12px !important;
+  color: #334155 !important;
+  border-color: rgba(241, 245, 249, 0.98) !important;
+  background: rgba(255, 255, 255, 0.55) !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.util-table--modern :deep(.el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: rgba(248, 250, 252, 0.92) !important;
+}
+.util-table--modern :deep(.el-table__body tr:hover > td.el-table__cell) {
+  background: linear-gradient(90deg, rgba(219, 234, 254, 0.55) 0%, rgba(237, 233, 254, 0.35) 100%) !important;
+}
+.util-table--modern :deep(.el-table__body tr.el-table__row--striped:hover > td.el-table__cell) {
+  background: linear-gradient(90deg, rgba(191, 219, 254, 0.5) 0%, rgba(221, 214, 254, 0.35) 100%) !important;
+}
+.util-table--modern :deep(.el-table__body td.el-table__cell:first-child) {
+  font-weight: 800;
+  color: #1e293b !important;
+}
+.util-table--modern :deep(.el-table__body .el-table__row:last-child td.el-table__cell) {
+  border-bottom: none;
+}
+.util-table--modern :deep(.el-table__border-bottom-patch) {
+  display: none;
 }
 .util-num {
   font-family: var(--font-mono);
