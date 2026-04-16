@@ -240,6 +240,14 @@ class ScheduleGridRow(BaseModel):
     defect_daily: Dict[str, int] = Field(default_factory=dict)
     upstream_defect_daily: Dict[str, int] = Field(default_factory=dict)
     remaining_daily: Dict[str, int] = Field(default_factory=dict)
+    defect_qty_sum: int = Field(
+        0,
+        description="検索期間内 schedule_details.defect_qty の合計（defect_daily の総和と一致）",
+    )
+    upstream_defect_qty_total: int = Field(
+        0,
+        description="当製造指示の aps_batch_plans.upstream_defect_qty 合計（切断+面取・FormingPlanning と同趣旨）",
+    )
 
 
 class LineGridBlock(BaseModel):

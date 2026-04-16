@@ -62,6 +62,17 @@
             style="width: 280px"
           />
         </el-form-item>
+        <el-form-item label="製品">
+          <el-select
+            v-model="searchForm.itemName"
+            clearable
+            filterable
+            placeholder="全製品"
+            style="width: 220px"
+          >
+            <el-option v-for="name in schedulingProductOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -236,18 +247,66 @@ const searchForm = reactive<{
   processCd: string
   dateRange: [string, string]
   lineId: number | null
+  itemName: string | null
 }>({
   processCd: 'KT04',
   dateRange: [dayjs().subtract(1, 'day').format('YYYY-MM-DD'), dayjs().add(30, 'day').format('YYYY-MM-DD')],
   lineId: null,
+  itemName: null,
 })
 
 const gridDates = computed(() => grid.value?.dates ?? [])
 const visibleBlocks = computed(() => (grid.value?.blocks ?? []).filter((b) => !isIgnoredLine(resolveLineName(b.line_id, b.line_code))))
 
+/** 当前网格中的品名（忽略已隐藏ライン），供製品下拉使用 */
+const schedulingProductOptions = computed(() => {
+  const names = new Set<string>()
+  for (const b of visibleBlocks.value) {
+    for (const r of b.rows ?? []) {
+      const n = String(r.item_name || '').trim()
+      if (n) names.add(n)
+    }
+  }
+  return [...names].sort((a, b) => a.localeCompare(b, 'ja'))
+})
+
+/** 按製品筛选后的块；并重算日计与合計以便矩阵与统计一致 */
+const displayBlocks = computed<LineGridBlock[]>(() => {
+  const blocks = visibleBlocks.value
+  const dates = gridDates.value
+  const needle = (searchForm.itemName || '').trim()
+  if (!needle) return blocks
+
+  const out: LineGridBlock[] = []
+  for (const block of blocks) {
+    const rows = (block.rows ?? []).filter((r) => String(r.item_name || '').trim() === needle)
+    if (!rows.length) continue
+
+    const daily_totals: Record<string, number> = {}
+    for (const d of dates) daily_totals[d] = 0
+    let sum_planned_output_qty = 0
+    let sum_planned_process_qty = 0
+    for (const r of rows) {
+      sum_planned_output_qty += Number(r.planned_output_qty ?? 0)
+      sum_planned_process_qty += Number(r.planned_process_qty ?? 0)
+      for (const d of dates) {
+        daily_totals[d] = (daily_totals[d] ?? 0) + Number((r.daily ?? {})[d] ?? 0)
+      }
+    }
+    out.push({
+      ...block,
+      rows,
+      daily_totals,
+      sum_planned_output_qty,
+      sum_planned_process_qty,
+    })
+  }
+  return out
+})
+
 const matrixRows = computed<MatrixRow[]>(() => {
   if (!grid.value) return []
-  return buildMatrixRows(visibleBlocks.value)
+  return buildMatrixRows(displayBlocks.value)
 })
 const matrixSections = computed(() => {
   const sections: Array<{ key: string; rows: MatrixRow[] }> = []
@@ -271,10 +330,10 @@ const matrixSections = computed(() => {
   return sections
 })
 
-const lineCount = computed(() => visibleBlocks.value.length)
+const lineCount = computed(() => displayBlocks.value.length)
 
 const overallPlannedOutputTotal = computed(() =>
-  visibleBlocks.value.reduce(
+  displayBlocks.value.reduce(
     (acc, b) =>
       acc +
       (b.rows ?? []).reduce(
@@ -288,7 +347,7 @@ const overallPlannedOutputTotal = computed(() =>
 )
 
 const avgEfficiencyRate = computed(() => {
-  const blocks = visibleBlocks.value
+  const blocks = displayBlocks.value
   let weightedSum = 0
   let weightedDenom = 0
   for (const block of blocks) {
@@ -314,7 +373,7 @@ const requiredProductionHours = computed(() => {
 const overallDailyTotals = computed(() => {
   const totals: Record<string, number> = {}
   for (const date of gridDates.value) totals[date] = 0
-  for (const block of visibleBlocks.value) {
+  for (const block of displayBlocks.value) {
     for (const [date, qty] of Object.entries(block.daily_totals ?? {})) {
       totals[date] = (totals[date] ?? 0) + (qty ?? 0)
     }
@@ -593,6 +652,17 @@ watch(
     scheduleAutoLoad()
   },
   { deep: true },
+)
+
+watch(
+  () => grid.value,
+  () => {
+    const sel = (searchForm.itemName || '').trim()
+    if (!sel) return
+    if (!schedulingProductOptions.value.includes(sel)) {
+      searchForm.itemName = null
+    }
+  },
 )
 </script>
 

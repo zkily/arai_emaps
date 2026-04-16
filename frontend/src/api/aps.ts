@@ -215,6 +215,10 @@ export interface ScheduleGridRow {
   /** 日次前工程不良（cutting/chamfering 集計を lot 経由で按分） */
   upstream_defect_daily?: Record<string, number>
   remaining_daily?: Record<string, number>
+  /** 検索期間内 schedule_details.defect_qty の合計 */
+  defect_qty_sum?: number
+  /** 当製造指示の aps_batch_plans.upstream_defect_qty 合計（FormingPlanning 前工程不良と同趣旨） */
+  upstream_defect_qty_total?: number
 }
 
 export interface LineGridBlock {

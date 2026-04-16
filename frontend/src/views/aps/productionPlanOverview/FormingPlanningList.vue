@@ -12,7 +12,7 @@
         成型計画一覧
       </h2>
       <p class="plan-hd-sub">
-        工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。編集は「成型計画作成」でラインを選んで行ってください。
+        工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。
       </p>
     </div>
 
@@ -65,9 +65,8 @@
             <span class="legend-item"><span class="legend-dot legend-dot--remain" />残</span>
             <el-button
               size="small"
-              type="warning"
-              plain
               class="gantt-print-btn"
+              :icon="Printer"
               :disabled="loading || ganttRows.length === 0"
               @click="handleGanttPrint"
             >
@@ -102,17 +101,37 @@
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody v-for="group in ganttGroups" :key="group.lineLabel">
+                <tr class="gantt-group-row">
+                  <td
+                    class="gantt-sticky gantt-sticky-line gantt-group-cell gantt-group-line"
+                    :title="group.lineLabel"
+                  >
+                    {{ group.lineLabel }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-order gantt-group-cell" />
+                  <td class="gantt-sticky gantt-sticky-name gantt-group-cell" />
+                  <td class="gantt-sticky gantt-sticky-eff gantt-group-cell gantt-group-num">
+                    {{ formatGroupEfficiency(group.avgEfficiencyRate) }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-planned gantt-group-cell gantt-group-num">
+                    {{ formatNum(group.plannedTotal) }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-actual gantt-group-cell gantt-group-num">
+                    {{ formatNum(group.actualTotal) }}
+                  </td>
+                  <td
+                    v-for="d in ganttDates"
+                    :key="`grp-${group.lineLabel}-${d}`"
+                    class="gantt-cell gantt-group-date-cell"
+                  />
+                </tr>
                 <tr
-                  v-for="(row, gIdx) in ganttRows"
+                  v-for="(row, gIdx) in group.rows"
                   :key="row.id"
-                  :class="[
-                    'gantt-row',
-                    gIdx % 2 === 1 ? 'gantt-row--alt' : 'gantt-row--base',
-                    { 'gantt-row--group-start': isGanttGroupStart(gIdx) },
-                  ]"
+                  :class="['gantt-row', gIdx % 2 === 1 ? 'gantt-row--alt' : 'gantt-row--base']"
                 >
-                  <td class="gantt-sticky gantt-sticky-line" :title="row.lineLabel">{{ row.lineLabel }}</td>
+                  <td class="gantt-sticky gantt-sticky-line gantt-line-empty" />
                   <td class="gantt-sticky gantt-sticky-order">{{ row.order_no ?? '—' }}</td>
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
@@ -122,22 +141,23 @@
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-cell"
-                    :class="ganttCellClass(row, d)"
+                    :class="{ 'gantt-cell--tone': ganttCellHasSoftTone(row, d) }"
                     :title="ganttCellTitle(row, d)"
+                    :aria-label="ganttCellHasAnyMarker(row, d) ? ganttCellTitle(row, d) : undefined"
                   >
-                    <div v-if="ganttCellHasVisibleContent(row, d)" class="gantt-layered">
-                      <span
-                        v-show="(row.daily[d] || 0) > 0"
-                        class="gantt-layer gantt-layer--plan"
-                      ><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
-                      <span
-                        v-show="(row.actual_daily?.[d] || 0) > 0"
-                        class="gantt-layer gantt-layer--actual"
-                      ><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
-                      <span
-                        v-show="shouldShowGanttRemain(row, d)"
-                        class="gantt-layer gantt-layer--remain"
-                      ><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
+                    <div v-if="ganttCellHasAnyMarker(row, d)" class="gantt-cell-markers">
+                      <span v-if="ganttDayQty(row.daily?.[d]) !== 0" class="gantt-seg gantt-seg--plan">
+                        <span class="gantt-dot gantt-dot--plan" role="presentation" />
+                        <span class="gantt-seg-val">{{ ganttDayQty(row.daily?.[d]) }}</span>
+                      </span>
+                      <span v-if="ganttDayQty(row.actual_daily?.[d]) !== 0" class="gantt-seg gantt-seg--actual">
+                        <span class="gantt-dot gantt-dot--actual" role="presentation" />
+                        <span class="gantt-seg-val">{{ ganttDayQty(row.actual_daily?.[d]) }}</span>
+                      </span>
+                      <span v-if="shouldShowGanttRemain(row, d)" class="gantt-seg gantt-seg--remain">
+                        <span class="gantt-dot gantt-dot--remain" role="presentation" />
+                        <span class="gantt-seg-val">{{ ganttDayQty(row.remaining_daily?.[d]) }}</span>
+                      </span>
                     </div>
                   </td>
                 </tr>
@@ -198,6 +218,16 @@
                 <el-table-column :label="'実績'" width="92" align="right">
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--actual">{{ formatNum(tableActual(row)) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="'不良'" width="88" align="right">
+                  <template #default="{ row }">
+                    <span class="qty-cell qty-cell--defect">{{ formatNum(tableDefect(row)) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column :label="'前工程不良'" width="100" align="right">
+                  <template #default="{ row }">
+                    <span class="qty-cell qty-cell--upstream">{{ formatNum(tableUpstreamDefect(row)) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column :label="'残'" width="92" align="right">
@@ -300,7 +330,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Printer } from '@element-plus/icons-vue'
 import {
+  fetchLines,
   fetchSchedulingGrid,
   type ScheduleGridRow,
 } from '@/api/aps'
@@ -360,6 +392,47 @@ const tableGroups = computed(() => {
     } else {
       last.rows.push(row)
     }
+  }
+  return groups
+})
+
+const ganttGroups = computed(() => {
+  const groups: Array<{
+    lineLabel: string
+    rows: GanttListRow[]
+    plannedTotal: number
+    actualTotal: number
+    avgEfficiencyRate: number | null
+  }> = []
+  for (const row of ganttRows.value) {
+    const lineLabel = (row.lineLabel || '').trim() || `ID ${row.line_id}`
+    const last = groups[groups.length - 1]
+    if (!last || last.lineLabel !== lineLabel) {
+      groups.push({
+        lineLabel,
+        rows: [row],
+        plannedTotal: Number(row.planned_process_qty ?? 0),
+        actualTotal: Number(periodActualForRow(row) ?? 0),
+        avgEfficiencyRate: null,
+      })
+    } else {
+      last.rows.push(row)
+      last.plannedTotal += Number(row.planned_process_qty ?? 0)
+      last.actualTotal += Number(periodActualForRow(row) ?? 0)
+    }
+  }
+
+  for (const group of groups) {
+    let weightedSum = 0
+    let weightedDenom = 0
+    for (const row of group.rows) {
+      const rate = Number(row.efficiency_rate ?? 0)
+      const qty = Number(row.planned_process_qty ?? 0)
+      if (!Number.isFinite(rate) || !Number.isFinite(qty) || rate <= 0 || qty <= 0) continue
+      weightedSum += rate * qty
+      weightedDenom += qty
+    }
+    group.avgEfficiencyRate = weightedDenom > 0 ? weightedSum / weightedDenom : null
   }
   return groups
 })
@@ -502,14 +575,6 @@ function compareByLineThenOrder(a: GanttListRow, b: GanttListRow): number {
   return a.id - b.id
 }
 
-/** 設備グループ先頭行の上に余白（先頭行は除く） */
-function isGanttGroupStart(index: number): boolean {
-  if (index <= 0) return false
-  const cur = ganttRows.value[index]
-  const prev = ganttRows.value[index - 1]
-  return cur.lineLabel !== prev.lineLabel
-}
-
 function scheduleTableRowClassName({
   rowIndex,
 }: {
@@ -542,6 +607,12 @@ function escHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
+}
+
+/** 日別セル値を数値化（文字列・欠損でも表示判定がブレないようにする） */
+function ganttDayQty(v: unknown): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
 }
 
 function selectedProcessLabel(): string {
@@ -641,49 +712,43 @@ function buildGanttPrintHtml(): string {
   const dateCols = ganttDates.value
     .map((d) => `<th class="date-col">${escHtml(d.slice(5))}</th>`)
     .join('')
-  const colCount = 3 + ganttDates.value.length
-  const lines = new Map<string, GanttListRow[]>()
-  for (const row of ganttRows.value) {
-    const key = (row.lineLabel || '—').trim() || '—'
-    const list = lines.get(key) ?? []
-    list.push(row)
-    lines.set(key, list)
-  }
-  const rowsHtml = Array.from(lines.entries())
-    .map(([lineLabel, lineRows]) => {
-      const sumPlanned = lineRows.reduce((sum, row) => sum + Number(row.planned_process_qty ?? 0), 0)
-      const workingDays = new Set<string>()
-      for (const row of lineRows) {
-        for (const d of ganttDates.value) {
-          const p = Number(row.daily?.[d] ?? 0)
-          const a = Number(row.actual_daily?.[d] ?? 0)
-          const hasRemain = shouldShowGanttRemain(row, d)
-          if (p > 0 || a > 0 || hasRemain) workingDays.add(d)
-        }
-      }
-      const workDayCount = workingDays.size
-      const avgDailyProduction = workDayCount > 0 ? Math.round(sumPlanned / workDayCount) : 0
-      const groupHeader = `<tr class="group-row"><td colspan="${colCount}">設備：${escHtml(lineLabel)}（${lineRows.length}件）　計画数合計：${escHtml(formatNum(sumPlanned))}　稼働日数：${escHtml(String(workDayCount))}日　日平均生産数：${escHtml(formatNum(avgDailyProduction))}</td></tr>`
+  const emptyDateCells = ganttDates.value.map(() => '<td></td>').join('')
+  const rowsHtml = ganttGroups.value
+    .map((group) => {
+      const lineLabel = group.lineLabel
+      const lineRows = group.rows
+      const groupHeader = `<tr class="group-row">
+        <td class="left line-col">${escHtml(lineLabel)}</td>
+        <td></td>
+        <td></td>
+        <td class="num eff-col">${escHtml(formatGroupEfficiency(group.avgEfficiencyRate))}</td>
+        <td class="num planned-col">${escHtml(formatNum(group.plannedTotal))}</td>
+        <td class="num act-col">${escHtml(formatNum(group.actualTotal))}</td>
+        ${emptyDateCells}
+      </tr>`
       const body = lineRows
         .map((row) => {
           const cells = ganttDates.value
             .map((d) => {
-              const p = Number(row.daily?.[d] ?? 0)
-              const a = Number(row.actual_daily?.[d] ?? 0)
+              const p = ganttDayQty(row.daily?.[d])
+              const a = ganttDayQty(row.actual_daily?.[d])
               const showRemain = shouldShowGanttRemain(row, d)
-              const r = showRemain ? Number(row.remaining_daily?.[d] ?? 0) : 0
-              if (p <= 0 && a <= 0 && r <= 0) return '<td></td>'
+              const r = showRemain ? ganttDayQty(row.remaining_daily?.[d]) : 0
+              if (p === 0 && a === 0 && r === 0) return '<td></td>'
               const chunks: string[] = []
-              if (p > 0) chunks.push(`${p}`)
-              if (a > 0) chunks.push(`${a}`)
-              if (r > 0) chunks.push(`${r}`)
+              if (p !== 0) chunks.push(`${p}`)
+              if (a !== 0) chunks.push(`${a}`)
+              if (r !== 0) chunks.push(`${r}`)
               return `<td class="num cell-data">${escHtml(chunks.join(' / '))}</td>`
             })
             .join('')
           return `<tr>
+            <td class="line-col"></td>
             <td class="num indent-col order-col">${escHtml(String(row.order_no ?? '—'))}</td>
             <td class="left name-col indent-col">${escHtml(row.item_name || '—')}</td>
+            <td class="num eff-col">${escHtml(formatEfficiencyRatePiecesPerH(row.efficiency_rate))}</td>
             <td class="num indent-col planned-col">${escHtml(formatNum(row.planned_process_qty))}</td>
+            <td class="num act-col">${escHtml(formatNum(periodActualForRow(row)))}</td>
             ${cells}
           </tr>`
         })
@@ -710,9 +775,12 @@ function buildGanttPrintHtml(): string {
     .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; }
     .date-col { font-size: 9px; }
     .group-block { break-inside: avoid; page-break-inside: avoid; }
-    .name-col { color: #0f172a; font-weight: 700; width: 100px; max-width: 100px; }
+    .name-col { color: #0f172a; font-weight: 700; width: 110px; max-width: 110px; }
+    .line-col { font-weight: 800; width: 80px; max-width: 80px; white-space: normal; }
     .order-col { width: calc(2ch + 10px); max-width: calc(2ch + 10px); }
+    .eff-col { width: calc(6ch + 12px); max-width: calc(6ch + 12px); }
     .planned-col { width: calc(5ch + 20px); max-width: calc(5ch + 20px); }
+    .act-col { width: calc(5ch + 20px); max-width: calc(5ch + 20px); }
     .indent-col { padding-left: 10px; }
     .cell-data { font-size: 9px; }
     .group-row td { background: #e2e8f0; color: #1e293b; font-weight: 800; text-align: left; border-top: 2px solid #94a3b8; }
@@ -729,9 +797,12 @@ function buildGanttPrintHtml(): string {
   <table>
     <thead>
       <tr>
+        <th class="left line-col">設備</th>
         <th class="num order-col">順位</th>
         <th class="left name-col">品名</th>
+        <th class="num eff-col">能率</th>
         <th class="num planned-col">計画数</th>
+        <th class="num act-col">実績数</th>
         ${dateCols}
       </tr>
     </thead>
@@ -781,6 +852,22 @@ function tableActual(row: GanttListRow): number {
   const target = ganttRows.value.find((g) => g.id === row.id)
   if (!target) return 0
   return periodActualForRow(target)
+}
+
+/** 不良：schedule_details.defect_qty の期間合計（API の defect_qty_sum） */
+function tableDefect(row: GanttListRow): number {
+  const v = row.defect_qty_sum
+  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
+  const target = ganttRows.value.find((g) => g.id === row.id)
+  return target ? periodDefectForRow(target) : 0
+}
+
+/** 前工程不良：FormingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
+function tableUpstreamDefect(row: GanttListRow): number {
+  const v = row.upstream_defect_qty_total
+  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
+  const target = ganttRows.value.find((g) => g.id === row.id)
+  return target ? periodUpstreamDefectForRow(target) : 0
 }
 
 function tableRemaining(row: GanttListRow): number {
@@ -856,8 +943,17 @@ async function loadSchedules() {
   lineDefaultHoursMap.value = {}
   try {
     const pc = (selectedProcessCd.value || '').trim()
-    const grid = await fetchSchedulingGrid(sd, ed, undefined, pc)
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(sd, ed, undefined, pc),
+      fetchLines(pc || undefined),
+    ])
     ganttDates.value = Array.isArray(grid.dates) ? grid.dates : []
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
     const calendarMap: Record<number, Record<string, number>> = {}
     const defaultMap: Record<number, number> = {}
     for (const block of grid.blocks || []) {
@@ -869,7 +965,11 @@ async function loadSchedules() {
 
     const flat: GanttListRow[] = []
     for (const block of grid.blocks || []) {
-      const label = block.line_code ?? `ID ${block.line_id}`
+      const label =
+        lineNameById.get(block.line_id) ||
+        String((block as { line_name?: string }).line_name || '').trim() ||
+        block.line_code ||
+        `ID ${block.line_id}`
       for (const r of block.rows || []) {
         flat.push({ ...r, lineLabel: label, line_id: block.line_id })
       }
@@ -896,6 +996,11 @@ function formatEfficiencyRatePiecesPerH(v: number | null | undefined): string {
   return `${s}本/H`
 }
 
+function formatGroupEfficiency(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return '—'
+  return `${Number(v).toFixed(1)}本/H`
+}
+
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
 
 function isWeekend(d: string): boolean {
@@ -917,44 +1022,41 @@ function isPastGanttDate(d: string): boolean {
   return d < todayIso.value
 }
 
+/** 当日に実績がある列、または日付が本日より前の列：ガントセルに淡色背景 */
+function ganttCellHasSoftTone(row: ScheduleGridRow, d: string): boolean {
+  if (ganttDayQty(row.actual_daily?.[d]) !== 0) return true
+  if (isPastGanttDate(d)) return true
+  return false
+}
+
 /**
  * 残の表示ルール：
  * - 当日実績あり → 残も表示対象（残>0 かつトグルON のとき）
  * - 当日実績なし → 本日以降の日付では残を出さない／過去日のみ残を出す（計画未着手・遅れの把握用）
  */
 function shouldShowGanttRemain(row: ScheduleGridRow, d: string): boolean {
-  const r = row.remaining_daily?.[d] || 0
-  if (r <= 0) return false
-  const a = row.actual_daily?.[d] || 0
-  if (a > 0) return true
+  const r = ganttDayQty(row.remaining_daily?.[d])
+  if (r === 0) return false
+  const a = ganttDayQty(row.actual_daily?.[d])
+  if (a !== 0) return true
   return isPastGanttDate(d)
 }
 
-function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean> {
-  const actual = row.actual_daily?.[d] || 0
-  const hasActual = actual > 0
-  const past = isPastGanttDate(d)
-  return {
-    'gantt-has-actual': hasActual,
-    /** 実>0 のときは実績色を優先し、過去日トーンは付けない */
-    'gantt-past-date': past && !hasActual,
-  }
-}
-
-function ganttCellHasVisibleContent(row: ScheduleGridRow, d: string): boolean {
-  const p = row.daily[d] || 0
-  const a = row.actual_daily?.[d] || 0
-  return p > 0 || a > 0 || shouldShowGanttRemain(row, d)
+function ganttCellHasAnyMarker(row: ScheduleGridRow, d: string): boolean {
+  const p = ganttDayQty(row.daily?.[d])
+  const a = ganttDayQty(row.actual_daily?.[d])
+  if (p !== 0 || a !== 0) return true
+  return shouldShowGanttRemain(row, d)
 }
 
 function ganttCellTitle(row: ScheduleGridRow, d: string): string {
-  const planned = row.daily[d] || 0
-  const actual = row.actual_daily?.[d] || 0
-  const remain = row.remaining_daily?.[d] || 0
-  if (!ganttCellHasVisibleContent(row, d)) return ''
+  const planned = ganttDayQty(row.daily?.[d])
+  const actual = ganttDayQty(row.actual_daily?.[d])
+  const remain = ganttDayQty(row.remaining_daily?.[d])
+  if (!ganttCellHasAnyMarker(row, d)) return ''
   const parts: string[] = []
-  if (planned > 0) parts.push(`計画 ${planned}`)
-  if (actual > 0) parts.push(`実績 ${actual}`)
+  if (planned !== 0) parts.push(`計画 ${planned}`)
+  if (actual !== 0) parts.push(`実績 ${actual}`)
   if (shouldShowGanttRemain(row, d)) parts.push(`残 ${remain}`)
   if (parts.length === 0) return ''
   return `${row.item_name}: ${parts.join(' / ')}`
@@ -965,13 +1067,26 @@ function periodActualForRow(row: ScheduleGridRow): number {
   const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
   return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
+
+/** ガント表示期間内の不良合計（defect_daily の期間合計） */
+function periodDefectForRow(row: ScheduleGridRow): number {
+  const m = row.defect_daily || {}
+  const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
+/** ガント表示期間内の前工程不良合計（upstream_defect_daily の期間合計） */
+function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
+  const m = row.upstream_defect_daily || {}
+  const dates1 = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
 </script>
 
 <style scoped>
 .forming-plan-list-page {
-  --font-sans: YuGothic, system-ui, -apple-system, 'Segoe UI', 'Yu Gothic UI', 'Meiryo',
-    'Hiragino Sans', Arial, sans-serif;
-  --font-mono: Consolas, 'Courier New', monospace;
+  --font-sans: inherit;
+  --font-mono: inherit;
   --fs-xs: 10.5px;
   --fs-s: 11.5px;
   --fs-base: 13px;
@@ -988,10 +1103,10 @@ function periodActualForRow(row: ScheduleGridRow): number {
   --c-warn: #f59e0b;
   /* 左 sticky 列幅（設備列は .list-gantt-table 内で指定） */
   --gl-order: 44px;
-  --gl-name: 132px;
+  --gl-name: 110px;
   --gl-eff: 70px;
   --gl-plan: 56px;
-  --gl-act: 72px;
+  --gl-act: var(--gl-plan);
 
   padding: 10px 12px 12px;
   background:
@@ -1003,6 +1118,10 @@ function periodActualForRow(row: ScheduleGridRow): number {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  font-family: inherit;
+  font-size: var(--fs-base);
+  color: var(--c-text-m);
+  -webkit-font-smoothing: antialiased;
 }
 
 .plan-hd {
@@ -1040,8 +1159,8 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 .plan-hd-sub {
   margin: 5px 0 0 34px;
-  color: #5f6f86;
-  font-size: 12px;
+  color: var(--c-text-s);
+  font-size: var(--fs-s);
   line-height: 1.45;
   max-width: 980px;
 }
@@ -1178,13 +1297,68 @@ function periodActualForRow(row: ScheduleGridRow): number {
   color: var(--c-text-s);
 }
 .gantt-print-btn {
-  margin-left: 10px;
+  margin-left: 12px;
+  flex-shrink: 0;
+  border-radius: 999px !important;
+  padding: 0 16px 0 14px !important;
+  min-height: 30px !important;
+  font-weight: 700 !important;
+  font-size: 12.5px !important;
+  letter-spacing: 0.04em;
+  color: #334155 !important;
+  border: 1px solid rgba(148, 163, 184, 0.55) !important;
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 42%, #eef2f7 100%) !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 6px 16px -6px rgba(37, 99, 235, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.22s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background 0.2s ease;
+}
+
+.gantt-print-btn:hover:not(.is-disabled) {
+  color: #1e3a8a !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  background: linear-gradient(165deg, #ffffff 0%, #f0f7ff 45%, #e8effc 100%) !important;
+  box-shadow:
+    0 2px 4px rgba(15, 23, 42, 0.07),
+    0 10px 24px -8px rgba(37, 99, 235, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+  transform: translateY(-1px);
+}
+
+.gantt-print-btn:active:not(.is-disabled) {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.gantt-print-btn.is-disabled,
+.gantt-print-btn.is-disabled:hover {
+  opacity: 0.48 !important;
+  transform: none !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.gantt-print-btn :deep(.el-icon) {
+  font-size: 15px;
+  color: #64748b;
+  transition: color 0.2s ease;
+}
+
+.gantt-print-btn:hover:not(.is-disabled) :deep(.el-icon) {
+  color: #2563eb;
 }
 
 .plan-sec-hd {
-  font-size: 13px;
+  font-size: var(--fs-base);
   font-weight: 700;
-  color: #1f2329;
+  color: var(--c-text-h);
   margin: 0 0 12px;
   padding-left: 9px;
   border-left: 3px solid var(--c-accent);
@@ -1197,7 +1371,7 @@ function periodActualForRow(row: ScheduleGridRow): number {
   margin-top: 4px;
 }
 .plan-sec-badge {
-  font-size: 11px;
+  font-size: var(--fs-xs);
   font-weight: 600;
   background: linear-gradient(90deg, var(--c-accent) 0%, var(--c-accent-2) 100%);
   color: #fff;
@@ -1207,9 +1381,9 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 
 .line-cell {
-  font-size: 12px;
+  font-size: var(--fs-s);
   font-weight: 700;
-  color: #334155;
+  color: var(--c-text-h);
   letter-spacing: 0.01em;
 }
 
@@ -1222,19 +1396,27 @@ function periodActualForRow(row: ScheduleGridRow): number {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  font-size: 12px;
-  color: #0f172a;
+  font-size: var(--fs-s);
+  color: var(--c-text-h);
 }
 .qty-cell--actual {
   color: #059669;
 }
 
+.qty-cell--defect {
+  color: #c2410c;
+}
+
+.qty-cell--upstream {
+  color: #6d28d9;
+}
+
 .date-cell {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: var(--fs-s);
   font-weight: 700;
-  color: #475569;
+  color: var(--c-text-m);
 }
 
 .schedule-empty :deep(.el-empty__description) {
@@ -1319,17 +1501,17 @@ function periodActualForRow(row: ScheduleGridRow): number {
 }
 .schedule-group-title {
   padding: 9px 12px;
-  font-size: 12px;
+  font-size: var(--fs-s);
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: #334155;
+  color: var(--c-text-h);
   background: linear-gradient(180deg, #edf3fb 0%, #e6eef9 100%);
   border-bottom: 1px solid #d4deeb;
 }
 
 .schedule-list-table {
   width: 100%;
-  font-size: 12px;
+  font-size: var(--fs-s);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   --el-table-header-bg-color: transparent;
@@ -1353,7 +1535,7 @@ function periodActualForRow(row: ScheduleGridRow): number {
   background: linear-gradient(180deg, var(--el-fill-color-lighter) 0%, var(--el-fill-color-blank) 100%) !important;
   color: var(--el-text-color-primary) !important;
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-s);
   letter-spacing: 0.04em;
   border-bottom: 1px solid var(--el-border-color-lighter) !important;
   padding: 8px 10px;
@@ -1405,317 +1587,309 @@ function periodActualForRow(row: ScheduleGridRow): number {
   background: var(--el-color-warning);
 }
 .status-lamp-label {
-  font-size: 12px;
+  font-size: var(--fs-s);
   color: var(--el-text-color-regular);
   font-weight: 500;
 }
 
-/* ── Gantt（日別）：浅色分区 + 清晰字体 + 现代表格 ── */
+/* ── Gantt（日別）：对齐 Scheduling.vue 表格风格 ── */
 .list-gantt-scroll {
-  /* 表头高 + データ行 17 行分（.gantt-cell 38px に合わせる） */
-  --list-gantt-thead-h: 54px;
-  --list-gantt-body-row-h: 38px;
-  --list-gantt-visible-body-rows: 17;
-  max-height: calc(
-    var(--list-gantt-thead-h) + var(--list-gantt-visible-body-rows) * var(--list-gantt-body-row-h)
-  );
-  overflow-x: auto;
-  overflow-y: auto;
-  /* 縦スクロールバーでヘッダと列がズレにくくする */
-  scrollbar-gutter: stable;
-  border-radius: 12px;
-  border: 1px solid var(--c-border-l);
-  background: linear-gradient(180deg, #f5f9ff 0%, #fafcfe 45%, #f8fafc 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  max-height: 620px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
-.list-gantt-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-.list-gantt-scroll::-webkit-scrollbar-track {
-  background: #e8eef6;
-  border-radius: 6px;
-}
-.list-gantt-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #c7d2e0, #a8b6c9);
-  border-radius: 6px;
-  border: 2px solid #e8eef6;
-}
+
 .list-gantt-table {
-  /* 設備列：約7全角字（12px 基準の 7em）+ 左右 padding 6px×2 */
-  --gl-line: calc(7em + 12px);
-  /* 列幅を先頭行で固定し、縦横スクロール時も th/td の列が揃うようにする */
+  --gl-line: 80px;
+  --gl-name: 110px;
+  --gl-plan: 56px;
+  --gl-act: var(--gl-plan);
   table-layout: fixed;
   width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-s);
   line-height: 1.35;
-  font-family: var(--font-sans);
-  white-space: nowrap;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  color: var(--c-text-m);
 }
+
 .list-gantt-table th,
 .list-gantt-table td {
-  border: 1px solid #e2e8f0;
-  padding: 0 6px;
-  text-align: center;
+  border: 1px solid #e6edf5;
+  padding: 3px 5px;
+  white-space: nowrap;
   box-sizing: border-box;
-  vertical-align: middle;
 }
+
 .list-gantt-table thead th {
   position: sticky;
   top: 0;
-  z-index: 104;
-  height: auto;
-  min-height: 54px;
-  background: linear-gradient(180deg, #eef4fc 0%, #e3ecf8 100%);
-  font-weight: 800;
-  color: #334155;
-  font-size: 11.5px;
-  letter-spacing: 0.04em;
-  border-bottom: 2px solid #c7d5ea;
+  z-index: 3;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  font-weight: 700;
+  color: var(--c-text-m);
+  box-shadow: 0 1px 0 #dbe5f1;
 }
-.list-gantt-table tbody td {
-  height: 38px;
+
+.list-gantt-table thead th.gantt-sticky-eff,
+.list-gantt-table thead th.gantt-sticky-planned,
+.list-gantt-table thead th.gantt-sticky-actual {
+  text-align: right;
 }
-.list-gantt-table tbody tr {
-  transition: background 0.15s ease;
-}
-/* 日付列：デフォルトは全行同一トーン（品名別配色なし） */
+
 .list-gantt-table tbody tr.gantt-row--base td.gantt-cell,
 .list-gantt-table tbody tr.gantt-row--alt td.gantt-cell {
-  background-color: #f1f5f9;
+  background: #fff;
 }
+
+.list-gantt-table tbody td {
+  color: var(--c-text-h);
+  font-weight: 400;
+}
+
+.list-gantt-table tbody tr.gantt-row--alt td {
+  background: #fcfdff;
+}
+
+.list-gantt-table tbody tr:hover td {
+  background: #f1f7ff;
+}
+
+/* 実績あり or 過去日の日別セル：極めて薄いグレー（行の白指定より優先） */
+.list-gantt-table tbody tr.gantt-row--base td.gantt-cell.gantt-cell--tone,
+.list-gantt-table tbody tr.gantt-row--alt td.gantt-cell.gantt-cell--tone {
+  background-color: #f5f5f5;
+}
+
+.list-gantt-table tbody tr:hover td.gantt-cell.gantt-cell--tone {
+  background-color: #e8ecf2;
+}
+
 .list-gantt-table tbody tr.gantt-row--group-start td {
-  border-top: 10px solid #e2ebf8;
+  border-top: 2px solid #bfdbfe;
+}
+
+.gantt-group-row td {
+  background: #e2e8f0;
+  color: var(--c-text-h);
+  font-weight: 700;
+  border-top: 2px solid #94a3b8;
+}
+
+/* グループ行：列クラス（能率・計画・実績は右寄せ）を上書きしない */
+.gantt-group-row .gantt-sticky-line,
+.gantt-group-row .gantt-sticky-name {
+  text-align: left;
+}
+
+.gantt-group-row .gantt-sticky-order {
+  text-align: center;
+}
+
+.gantt-group-row .gantt-sticky-eff,
+.gantt-group-row .gantt-sticky-planned,
+.gantt-group-row .gantt-sticky-actual {
+  text-align: right;
+}
+
+.list-gantt-table tbody tr.gantt-group-row .gantt-sticky {
+  background: #e2e8f0 !important;
+}
+
+.list-gantt-table tbody tr.gantt-group-row:hover .gantt-sticky {
+  background: #d8dee8 !important;
+}
+
+.gantt-group-cell {
+  vertical-align: middle;
+}
+
+.gantt-group-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.gantt-group-num {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.gantt-group-date-cell {
+  background: #e2e8f0;
+  padding: 0;
 }
 
 .gantt-sticky {
   position: sticky;
-  background: #f5f9ff;
-  background-color: #f5f9ff !important;
-  z-index: 100;
-  text-align: left;
-  border-right: 0 !important;
-  box-sizing: border-box;
-  background-clip: padding-box;
-  overflow: hidden;
-  box-shadow: inset -1px 0 0 #d5deeb, 4px 0 10px rgba(15, 23, 42, 0.06);
+  left: 0;
+  background: #fff;
+  z-index: 2;
 }
-.list-gantt-table tbody tr.gantt-row--alt .gantt-sticky {
-  background: #edf2fb !important;
-  background-color: #edf2fb !important;
-  box-shadow: inset -1px 0 0 #d5deeb, 4px 0 10px rgba(15, 23, 42, 0.05);
-}
+
 .list-gantt-table thead .gantt-sticky {
-  background: linear-gradient(180deg, #e8f0fb 0%, #dce8f6 100%) !important;
-  background-color: #e8f0fb !important;
-  z-index: 110;
-  box-shadow: inset -1px 0 0 #c8d7ea, 4px 0 12px rgba(15, 23, 42, 0.07);
+  z-index: 4;
 }
+
 .gantt-sticky-line {
   left: 0;
   width: var(--gl-line);
   min-width: var(--gl-line);
   max-width: var(--gl-line);
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 700;
-  color: #334155;
-  font-size: 12px;
+  font-weight: 500;
+  color: var(--c-text-h);
 }
+
+.gantt-line-empty {
+  color: transparent;
+}
+
 .gantt-sticky-order {
   left: var(--gl-line);
   width: var(--gl-order);
   min-width: var(--gl-order);
   max-width: var(--gl-order);
   text-align: center;
-  color: #64748b;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
 }
+
 .gantt-sticky-name {
   left: calc(var(--gl-line) + var(--gl-order));
   width: var(--gl-name);
   min-width: var(--gl-name);
   max-width: var(--gl-name);
   text-align: left;
-  padding-left: 8px;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--c-text-h);
+  font-weight: 400;
 }
+
 .gantt-sticky-eff {
   left: calc(var(--gl-line) + var(--gl-order) + var(--gl-name));
   width: var(--gl-eff);
   min-width: var(--gl-eff);
   max-width: var(--gl-eff);
   text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 700;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: #475569;
+  color: var(--c-text-h);
+  font-weight: 400;
 }
+
 .gantt-sticky-planned {
   left: calc(var(--gl-line) + var(--gl-order) + var(--gl-name) + var(--gl-eff));
   width: var(--gl-plan);
   min-width: var(--gl-plan);
   max-width: var(--gl-plan);
   text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: #0f172a;
+  color: var(--c-text-h);
+  font-weight: 400;
 }
+
 .gantt-sticky-actual {
   left: calc(var(--gl-line) + var(--gl-order) + var(--gl-name) + var(--gl-eff) + var(--gl-plan));
   width: var(--gl-act);
   min-width: var(--gl-act);
   max-width: var(--gl-act);
   text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 800;
-  font-size: 12px;
-  font-family: var(--font-mono);
-  color: #047857;
-  box-shadow: inset -1px 0 0 #b8cadc, 6px 0 14px rgba(15, 23, 42, 0.08);
+  color: var(--c-text-h);
+  font-weight: 400;
 }
-.list-gantt-table thead .gantt-sticky-actual {
-  box-shadow: inset -1px 0 0 #b8cadc, 6px 0 14px rgba(15, 23, 42, 0.08);
-}
+
 .gantt-name {
-  font-weight: 800;
-  color: #0f172a;
-  letter-spacing: 0.01em;
-  font-size: 12px;
+  font-weight: 400;
+  color: var(--c-text-h);
 }
 
 .gantt-date-col {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
-  padding: 5px 2px 4px !important;
+  min-width: 54px;
+  width: 54px;
 }
+
 .gantt-date-text {
-  font-size: 11.5px;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: #334155;
+  font-size: var(--fs-xs);
+  font-weight: 650;
 }
+
 .gantt-wd-text {
-  font-size: 10px;
-  color: #64748b;
-  margin-top: 2px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-size: var(--fs-xs);
+  color: var(--c-text-s);
 }
-.list-gantt-table thead .gantt-date-col.is-weekend {
-  background: linear-gradient(180deg, #fdf2f8 0%, #fce7f3 100%) !important;
+
+.list-gantt-table thead .gantt-date-col.is-weekend .gantt-date-text,
+.list-gantt-table thead .gantt-date-col.is-weekend .gantt-wd-text {
+  color: #dc2626;
 }
-.gantt-date-col.is-weekend .gantt-date-text,
-.gantt-date-col.is-weekend .gantt-wd-text {
-  color: #be185d;
-  font-weight: 800;
-}
-.gantt-date-col.is-today {
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
-  border-bottom: 2px solid #f59e0b !important;
+
+.list-gantt-table thead .gantt-date-col.is-today {
+  background: linear-gradient(180deg, #fff3d4 0%, #ffeab0 100%);
 }
 
 .gantt-cell {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
-  height: 38px;
-  transition:
-    background 0.12s ease,
-    box-shadow 0.12s ease;
-}
-.list-gantt-table tbody td.gantt-cell {
+  width: 54px;
+  min-width: 54px;
+  max-width: 54px;
   text-align: left;
-  padding-left: 4px;
+  padding: 2px 4px;
+  vertical-align: middle;
 }
-.gantt-layered {
+
+.gantt-cell-markers {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 1px;
-  line-height: 1;
-  padding: 2px 0;
-}
-.gantt-layer {
-  font-size: 10.5px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-  letter-spacing: 0.02em;
-}
-/* 淡色セル上の文字（実>0 のセルは下で白に上書き） */
-.gantt-layer--plan {
-  color: #1d4ed8;
-  font-weight: 900;
-  font-size: 11px;
-}
-.gantt-layer--actual {
-  color: #047857;
-  font-size: 10px;
-  font-weight: 700;
-}
-.gantt-layer--remain {
-  color: #b45309;
-  font-size: 10px;
-  font-weight: 700;
-}
-td.gantt-has-actual .gantt-layer--plan {
-  color: rgba(255, 255, 255, 0.98);
-}
-td.gantt-has-actual .gantt-layer--actual,
-td.gantt-has-actual .gantt-layer--remain {
-  color: rgba(255, 255, 255, 0.93);
-}
-.gl-lbl {
-  font-weight: 600;
-  opacity: 0.88;
-  margin-right: 2px;
-  font-size: 9.5px;
-  font-family: var(--font-sans);
-}
-/* 本日より前の列・かつ当日実績0：過去日として区別 */
-.gantt-cell.gantt-past-date {
-  background-color: #e2e8f0 !important;
-  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.12);
-}
-/* 実>0：実績を強調（過去日トーンより優先） */
-td.gantt-has-actual {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 65%, #059669 100%) !important;
-  color: #fff !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+  gap: 2px;
+  min-height: 12px;
+  width: 100%;
 }
 
-.list-gantt-table tbody tr:hover td.gantt-cell:not(.gantt-has-actual):not(.gantt-past-date) {
-  background-color: #e2e8f0 !important;
+.gantt-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  line-height: 1.15;
+  max-width: 100%;
 }
-.list-gantt-table tbody tr:hover td.gantt-cell.gantt-past-date:not(.gantt-has-actual) {
-  background-color: #cbd5e1 !important;
+
+.gantt-seg-val {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--c-text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
-.list-gantt-table tbody tr:hover td.gantt-has-actual {
-  filter: brightness(1.04);
+
+.gantt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
 }
-.list-gantt-table tbody tr.gantt-row--base:hover .gantt-sticky {
-  background-color: #e8f0fe !important;
+
+.gantt-dot--plan {
+  background: linear-gradient(135deg, #60a5fa, #2563eb);
 }
-.list-gantt-table tbody tr.gantt-row--alt:hover .gantt-sticky {
-  background-color: #dbe7fd !important;
+
+.gantt-dot--actual {
+  background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.gantt-dot--remain {
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+}
+
+.list-gantt-table tbody tr:hover .gantt-sticky {
+  background: #f1f7ff !important;
 }
 </style>

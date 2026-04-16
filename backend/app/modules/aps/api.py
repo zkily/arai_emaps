@@ -1294,6 +1294,7 @@ async def get_scheduling_grid(
                 actual_daily = dict(actual_daily_raw)
 
             defect_daily = dict(defect_daily_raw)
+            defect_qty_sum = int(sum(int(v or 0) for v in defect_daily_raw.values()))
 
             # 残＝当日セルに表示する計画 − 良品実績 − 不良 − 前工程不良（日別按分）
             remaining_daily: dict[str, int] = {}
@@ -1338,6 +1339,8 @@ async def get_scheduling_grid(
                 defect_daily=defect_daily,
                 upstream_defect_daily=upstream_defect_daily,
                 remaining_daily=remaining_daily,
+                defect_qty_sum=defect_qty_sum,
+                upstream_defect_qty_total=int(upstream_defect_total_rows.get(sid, 0) or 0),
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
             sum_planned_output += int(ps.planned_output_qty or 0)
