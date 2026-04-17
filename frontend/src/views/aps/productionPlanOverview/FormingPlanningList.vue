@@ -420,11 +420,9 @@
             </el-button>
           </div>
           <div class="util-note">
-            <span class="util-note-chip">検索期間とは独立（集計月のグリッドで算出）</span>
             <span class="util-note-chip">対象：{{ utilizationMonthLabelJp }}</span>
-            <span class="util-note-chip">月初〜当月末内の本日まで集計</span>
-            <span class="util-note-chip">本日実績0以下は前日まで</span>
-            <span class="util-note-chip util-note-chip--formula">差異工時=Σ((実績-計画)/能率)</span>
+            <span class="util-note-chip util-note-chip--formula">操業度＝各時間÷理論稼働</span>
+            <span class="util-note-chip util-note-chip--formula">差異工時＝上記期間の Σ((実績−計画)/能率)</span>
           </div>
 
           <el-empty
@@ -447,7 +445,15 @@
             >
               <el-table-column prop="lineLabel" label="設備" width="65" show-overflow-tooltip />
               <el-table-column prop="scheduleCount" label="指示数" width="75" align="center" />
-              <el-table-column label="稼働設定時間(H)" width="125" align="right">
+              <el-table-column width="105" align="right">
+                <template #header>
+                  <span
+                    class="util-col-head"
+                    title="集計月の暦日すべてについて、line_capacities.available_hours を日別に合算した理論値。未登録日は設備の default_work_hours。計画/実績の集計日とは独立（整月の分母）。"
+                  >
+                    理論稼働(H)
+                  </span>
+                </template>
                 <template #default="{ row }"><span class="util-num">{{ formatHours(row.availableHours) }}</span></template>
               </el-table-column>
               <el-table-column label="計画数" width="80" align="right">
@@ -468,7 +474,15 @@
               <el-table-column label="実績操業度" width="100" align="right">
                 <template #default="{ row }"><span class="util-num util-num--actual">{{ formatPercent(row.actualUtilizationPct) }}</span></template>
               </el-table-column>
-              <el-table-column label="操業度差異(H)" width="120" align="right">
+              <el-table-column width="120" align="right">
+                <template #header>
+                  <span
+                    class="util-col-head"
+                    title="当該設備で集計月内に実績があった最終日までの日別 (実績−計画) を、各指示の能率で工時換算して合算。"
+                  >
+                    操業度差異(H)
+                  </span>
+                </template>
                 <template #default="{ row }"><span class="util-num" :class="{ 'util-num--negative': row.diffHours < 0 }">{{ formatHours(row.diffHours) }}</span></template>
               </el-table-column>
               <el-table-column label="差異操業度(%)" width="130" align="right">
@@ -826,17 +840,28 @@ const ganttGroups = computed(() => {
   return groups
 })
 
-/** 設備操業度：集計月グリッドの日付列を、本日まで（未来月は空）に絞る */
-const utilizationStatDates = computed(() => {
-  const allDates = [...utilizationMonthDates.value].sort((a, b) => a.localeCompare(b))
-  if (allDates.length === 0) return [] as string[]
-  const monthStart = allDates[0]
-  const monthEnd = allDates[allDates.length - 1]
-  const today = todayIso.value
-  if (today < monthStart) return [] as string[]
-  const effectiveEnd = today <= monthEnd ? today : monthEnd
-  return allDates.filter((d) => d >= monthStart && d <= effectiveEnd)
-})
+/** 集計月の暦日すべて（計画・実績の合算・理論稼働の分母用。グリッド＝当該月全日） */
+const utilizationMonthFullDates = computed(() =>
+  [...utilizationMonthDates.value].sort((a, b) => a.localeCompare(b)),
+)
+
+/** 設備別：集計月内で「その日の実績合計が正になる」最終日（ISO）。月内に実績なしは null */
+function lineLastActualDayInMonth(monthDates: string[], rows: GanttListRow[]): Map<number, string | null> {
+  const lastBy = new Map<number, string | null>()
+  const lineIds = new Set(rows.map((r) => r.line_id))
+  for (const lid of lineIds) lastBy.set(lid, null)
+  for (const d of monthDates) {
+    const daySum = new Map<number, number>()
+    for (const row of rows) {
+      const lid = row.line_id
+      daySum.set(lid, (daySum.get(lid) ?? 0) + Number(row.actual_daily?.[d] ?? 0))
+    }
+    for (const [lid, v] of daySum) {
+      if (v > 0) lastBy.set(lid, d)
+    }
+  }
+  return lastBy
+}
 
 const utilizationMonthLabelJp = computed(() => {
   const ym = (utilizationMonth.value || '').trim()
@@ -862,35 +887,24 @@ interface LineUtilizationRow {
 }
 
 const utilizationRows = computed<LineUtilizationRow[]>(() => {
-  const baseDates = utilizationStatDates.value
-  if (baseDates.length === 0) return []
-  const lastBaseDate = baseDates[baseDates.length - 1]
-  const prevBaseDate = baseDates.length >= 2 ? baseDates[baseDates.length - 2] : lastBaseDate
-  const actualOnLastByLine = new Map<number, number>()
-  for (const row of utilizationMonthRows.value) {
-    const lid = row.line_id
-    const v = Number(row.actual_daily?.[lastBaseDate] ?? 0)
-    actualOnLastByLine.set(lid, (actualOnLastByLine.get(lid) ?? 0) + v)
-  }
-  const lineDatesMap = new Map<number, string[]>()
-  for (const row of utilizationMonthRows.value) {
-    const lid = row.line_id
-    if (lineDatesMap.has(lid)) continue
-    const todayActual = Number(actualOnLastByLine.get(lid) ?? 0)
-    const endDate = todayActual > 0 ? lastBaseDate : prevBaseDate
-    lineDatesMap.set(lid, baseDates.filter((d) => d <= endDate))
-  }
+  const monthDates = utilizationMonthFullDates.value
+  if (monthDates.length === 0) return []
+
+  const rows = utilizationMonthRows.value
+  const lastActualByLine = lineLastActualDayInMonth(monthDates, rows)
 
   const map = new Map<number, LineUtilizationRow>()
-  for (const row of utilizationMonthRows.value) {
+  for (const row of rows) {
     const lineId = row.line_id
-    const statDates = lineDatesMap.get(lineId) ?? baseDates
-    const plannedQty = statDates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
-    const actualQty = statDates.reduce((sum, d) => sum + Number(row.actual_daily?.[d] ?? 0), 0)
+    const plannedQty = monthDates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
+    const actualQty = monthDates.reduce((sum, d) => sum + Number(row.actual_daily?.[d] ?? 0), 0)
     const rate = Number(row.efficiency_rate ?? 0)
     const plannedHours = rate > 0 ? plannedQty / rate : 0
     const actualHours = rate > 0 ? actualQty / rate : 0
-    const diffQtyRow = statDates.reduce((sum, d) => {
+    const endDay = lastActualByLine.get(lineId)
+    const diffDates =
+      endDay == null || endDay === '' ? ([] as string[]) : monthDates.filter((d) => d <= endDay)
+    const diffQtyRow = diffDates.reduce((sum, d) => {
       const p = Number(row.daily?.[d] ?? 0)
       const a = Number(row.actual_daily?.[d] ?? 0)
       return sum + (a - p)
@@ -922,10 +936,9 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
   }
   const result = Array.from(map.values())
   for (const r of result) {
-    const statDates = lineDatesMap.get(r.lineId) ?? baseDates
     const calMap = utilizationLineCalendarMap.value[r.lineId] || {}
     const fallback = Number(utilizationLineDefaultHoursMap.value[r.lineId] ?? 0)
-    const avail = statDates.reduce((sum, d) => {
+    const avail = monthDates.reduce((sum, d) => {
       const h = Number(calMap[d] ?? fallback)
       return sum + (Number.isFinite(h) ? h : 0)
     }, 0)
@@ -1084,7 +1097,7 @@ function buildUtilizationPrintHtml(): string {
       <tr>
         <th class="left">設備</th>
         <th class="num">製造指示数</th>
-        <th class="num">稼働可能時間(H)</th>
+        <th class="num">理論稼働(H)</th>
         <th class="num">計画数</th>
         <th class="num">実績数</th>
         <th class="num">計画時間(H)</th>
