@@ -251,6 +251,7 @@ export default {
     APS_PRODUCTION_PLAN_VIEW: '生产计划一览',
     APS_FORMING_PLAN_LIST: '成型计划一览',
     APS_CUTTING_PLANNING: '切断计划编制',
+    APS_WELDING_PLANNING: '焊接计划编制',
     APS_SCHEDULING: '排程',
     APS_CAPACITY: '设备稼动设定',
     APS_CAPACITY_MATRIX: '设备稼动时间表',

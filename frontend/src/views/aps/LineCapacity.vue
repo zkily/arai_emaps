@@ -201,6 +201,11 @@ const props = withDefaults(
   },
 )
 
+const emit = defineEmits<{
+  /** 時間帯を保存し DB に反映した後（親でガント等を再取得する用） */
+  (e: 'saved'): void
+}>()
+
 const embed = computed(() => props.embed)
 
 const lines = ref<ProductionLine[]>([])
@@ -436,6 +441,7 @@ async function saveAll() {
     await batchUpsertLineCapacitySlots({ line_id: selectedLineId.value, days })
     ElMessage.success('保存しました')
     await loadData()
+    emit('saved')
   } catch (e: any) {
     ElMessage.error(e?.message || '保存に失敗しました')
   } finally {

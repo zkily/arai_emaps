@@ -252,6 +252,7 @@ export default {
     APS_PRODUCTION_PLAN_VIEW: 'Production Plan Overview',
     APS_FORMING_PLAN_LIST: 'Forming Plan List',
     APS_CUTTING_PLANNING: 'Cutting Planning',
+    APS_WELDING_PLANNING: 'Welding Planning',
     APS_SCHEDULING: 'Scheduling',
     APS_CAPACITY: 'Equipment Capacity',
     APS_CAPACITY_MATRIX: 'Equipment Runtime Matrix',

@@ -387,6 +387,10 @@
               <el-icon><Operation /></el-icon>
               <template #title><span :title="t('menu.APS_CUTTING_PLANNING')">{{ t('menu.APS_CUTTING_PLANNING') }}</span></template>
             </el-menu-item>
+            <el-menu-item index="/aps/welding-planning">
+              <el-icon><Calendar /></el-icon>
+              <template #title><span :title="t('menu.APS_WELDING_PLANNING')">{{ t('menu.APS_WELDING_PLANNING') }}</span></template>
+            </el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="aps-production-plan-view">
             <template #title>

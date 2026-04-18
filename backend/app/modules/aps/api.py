@@ -1504,6 +1504,10 @@ async def replan_sequence(
     line_id: int,
     anchorStartDate: Optional[str] = Query(None),
     includeDebug: bool = Query(False, description="true の場合、工単ごとの再排産デバッグ情報を返す"),
+    syncInstructionPlans: bool = Query(
+        True,
+        description="false のとき instruction_plans を更新・INSERT せず、スケジュール・aps_batch_plans のみ（溶接計画作成等）",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -1768,9 +1772,13 @@ async def replan_sequence(
         await db.flush()
 
     # instruction_plans 同期（事前に共通データを一括取得）
-    is_forming_line = await _machine_matches_process_cd(
-        db, line_machine, _APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD
-    ) if line_machine else False
+    # syncInstructionPlans=false のときは成型設備でも instruction_plans に触れない（排産・aps_batch_plans のみ）
+    if syncInstructionPlans:
+        is_forming_line = await _machine_matches_process_cd(
+            db, line_machine, _APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD
+        ) if line_machine else False
+    else:
+        is_forming_line = False
 
     product_cds = list({(ps.product_cd or "").strip() for ps in updated if ps.product_cd})
     product_cache: dict[str, Optional[Product]] = {}
@@ -2415,6 +2423,17 @@ async def get_production_progress(
                 {"mc": mc},
             )
             cut_row = cut_res.mappings().first()
+            if cut_row is None:
+                cut_res_bid = await db.execute(
+                    text(
+                        "SELECT planned_quantity, actual_production_quantity, "
+                        "COALESCE(production_completed_check, 0) AS pcc "
+                        "FROM cutting_management WHERE aps_batch_plan_id = :bid "
+                        "ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"bid": batch.id},
+                )
+                cut_row = cut_res_bid.mappings().first()
             if cut_row is not None:
                 progress_status = "IN_PROGRESS"
                 cut_planned = int(cut_row.get("planned_quantity") or 0)

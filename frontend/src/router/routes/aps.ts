@@ -20,6 +20,12 @@ export const apsRoutes: RouteRecordRaw[] = [
         meta: { title: '切断計画作成' },
       },
       {
+        path: 'welding-planning',
+        name: 'WeldingPlanning',
+        component: () => import('@/views/aps/productionPlanCreation/WeldingPlanning.vue'),
+        meta: { title: '溶接計画作成' },
+      },
+      {
         path: 'planning-list',
         name: 'FormingPlanningList',
         component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'),

@@ -424,9 +424,17 @@ export function runAllSchedules(lineId?: number, sequential?: boolean): Promise<
   return request.post(`${BASE}/run-all`, null, { params })
 }
 
-export function replanLineSequence(lineId: number, anchorStartDate?: string): Promise<any> {
+/**
+ * @param syncInstructionPlans false のとき instruction_plans を更新しない（排産・aps_batch_plans のみ）。溶接計画作成ページ向け。
+ */
+export function replanLineSequence(
+  lineId: number,
+  anchorStartDate?: string,
+  syncInstructionPlans = true,
+): Promise<any> {
   const params: Record<string, any> = {}
   if (anchorStartDate) params.anchorStartDate = anchorStartDate
+  if (!syncInstructionPlans) params.syncInstructionPlans = false
   return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
 }
 

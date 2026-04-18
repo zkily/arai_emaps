@@ -251,6 +251,7 @@ export default {
     APS_PRODUCTION_PLAN_VIEW: 'Tổng quan kế hoạch sản xuất',
     APS_FORMING_PLAN_LIST: 'Danh sách kế hoạch định hình',
     APS_CUTTING_PLANNING: 'Lập kế hoạch cắt',
+    APS_WELDING_PLANNING: 'Lập kế hoạch hàn',
     APS_SCHEDULING: 'Lập lịch',
     APS_CAPACITY: 'Cài đặt thiết bị',
     APS_CAPACITY_MATRIX: 'Bảng thời gian vận hành thiết bị',
