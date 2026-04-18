@@ -1,91 +1,112 @@
 <template>
-  <div class="quotation-list">
-    <div class="page-header">
-      <h2>見積管理</h2>
-      <p class="subtitle">見積作成・過去見積参照・原価積算シミュレーション</p>
+  <div class="sales-page-shell">
+    <div class="sales-page-hero">
+      <div class="sales-page-hero__mesh" aria-hidden="true" />
+      <div class="sales-page-hero__content">
+        <div class="sales-page-hero__icon">
+          <el-icon :size="28"><Document /></el-icon>
+        </div>
+        <div class="sales-page-hero__titles">
+          <h1 class="sales-page-hero__title">{{ t('salesPages.quotation.title') }}</h1>
+          <p class="sales-page-hero__subtitle">{{ t('salesPages.quotation.subtitle') }}</p>
+        </div>
+      </div>
     </div>
 
-    <!-- 検索フィルター -->
-    <el-card class="filter-card" shadow="never">
+    <el-card class="sales-page-section filter-card" shadow="never">
       <el-form :inline="true" :model="filters" class="filter-form">
-        <el-form-item label="見積番号">
-          <el-input v-model="filters.quotation_no" placeholder="見積番号" clearable />
+        <el-form-item :label="t('salesPages.quotation.quotationNo')">
+          <el-input v-model="filters.quotation_no" clearable />
         </el-form-item>
-        <el-form-item label="顧客">
-          <el-select v-model="filters.customer_code" placeholder="顧客選択" clearable filterable>
+        <el-form-item :label="t('salesPages.common.customer')">
+          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
-        <el-form-item label="期間">
-          <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="〜"
-            start-placeholder="開始日" end-placeholder="終了日" value-format="YYYY-MM-DD" />
+        <el-form-item :label="t('salesPages.common.period')">
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            :range-separator="t('salesPages.common.rangeSep')"
+            :start-placeholder="t('salesPages.common.startDate')"
+            :end-placeholder="t('salesPages.common.endDate')"
+            value-format="YYYY-MM-DD"
+          />
         </el-form-item>
-        <el-form-item label="ステータス">
-          <el-select v-model="filters.status" placeholder="全て" clearable>
-            <el-option label="作成中" value="draft" />
-            <el-option label="提出済" value="submitted" />
-            <el-option label="受注済" value="ordered" />
-            <el-option label="失注" value="lost" />
+        <el-form-item :label="t('salesPages.common.status')">
+          <el-select v-model="filters.status" :placeholder="t('salesPages.common.all')" clearable>
+            <el-option :label="t('salesPages.quotation.statusDraft')" value="draft" />
+            <el-option :label="t('salesPages.quotation.statusSubmitted')" value="submitted" />
+            <el-option :label="t('salesPages.quotation.statusOrdered')" value="ordered" />
+            <el-option :label="t('salesPages.quotation.statusLost')" value="lost" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
-            <el-icon><Search /></el-icon> 検索
+            <el-icon><Search /></el-icon>
+            {{ t('salesPages.common.search') }}
           </el-button>
-          <el-button @click="handleReset">リセット</el-button>
+          <el-button @click="handleReset">{{ t('salesPages.common.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- ツールバー -->
-    <div class="toolbar">
+    <div class="sales-page-toolbar">
       <el-button type="primary" @click="handleCreate">
-        <el-icon><Plus /></el-icon> 新規見積作成
+        <el-icon><Plus /></el-icon>
+        {{ t('salesPages.quotation.newQuotation') }}
       </el-button>
       <el-button @click="handleCostSimulation">
-        <el-icon><DataAnalysis /></el-icon> 原価積算シミュレーション
+        <el-icon><DataAnalysis /></el-icon>
+        {{ t('salesPages.quotation.costSim') }}
       </el-button>
     </div>
 
-    <!-- 見積一覧テーブル -->
     <el-card shadow="never">
       <el-table :data="quotationList" v-loading="loading" stripe border>
-        <el-table-column prop="quotation_no" label="見積番号" width="140" fixed />
-        <el-table-column prop="quotation_date" label="見積日" width="110" />
-        <el-table-column prop="customer_name" label="顧客名" min-width="150" />
-        <el-table-column prop="subject" label="件名" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="total_amount" label="見積金額" width="130" align="right">
+        <el-table-column prop="quotation_no" :label="t('salesPages.quotation.quotationNo')" width="140" fixed />
+        <el-table-column prop="quotation_date" :label="t('salesPages.quotation.quotationDate')" width="110" />
+        <el-table-column prop="customer_name" :label="t('salesPages.common.customer')" min-width="150" />
+        <el-table-column prop="subject" :label="t('salesPages.quotation.subject')" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="total_amount" :label="t('salesPages.quotation.amount')" width="130" align="right">
           <template #default="{ row }">
-            ¥{{ row.total_amount?.toLocaleString() }}
+            ¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="gross_profit_rate" label="粗利率" width="90" align="right">
+        <el-table-column prop="gross_profit_rate" :label="t('salesPages.quotation.grossMargin')" width="90" align="right">
           <template #default="{ row }">
             <span :class="getProfitClass(row.gross_profit_rate)">
-              {{ row.gross_profit_rate?.toFixed(1) }}%
+              {{ formatDecimal(row.gross_profit_rate ?? 0, locale as LocaleType, 1) }}%
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="valid_until" label="有効期限" width="110" />
-        <el-table-column prop="status" label="ステータス" width="100" align="center">
+        <el-table-column prop="valid_until" :label="t('salesPages.quotation.validUntil')" width="110" />
+        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column :label="t('salesPages.common.actions')" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">詳細</el-button>
-            <el-button size="small" type="success" link @click="handleCopy(row)">複製</el-button>
-            <el-button size="small" type="warning" link @click="handleExportPdf(row)">PDF</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(row)" v-if="row.status === 'draft'">削除</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
+            <el-button size="small" type="success" link @click="handleCopy(row)">{{ t('salesPages.common.copy') }}</el-button>
+            <el-button size="small" type="warning" link @click="handleExportPdf(row)">{{ t('salesPages.common.pdf') }}</el-button>
+            <el-button size="small" type="danger" link @click="handleDelete(row)" v-if="row.status === 'draft'">{{ t('salesPages.common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper">
-        <el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize"
-          :total="pagination.total" :page-sizes="[20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper" background />
+      <div class="sales-page-pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="onPageSizeChange"
+          @current-change="loadData"
+        />
       </div>
     </el-card>
   </div>
@@ -93,11 +114,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, DataAnalysis } from '@element-plus/icons-vue'
+import { Search, Plus, DataAnalysis, Document } from '@element-plus/icons-vue'
+import type { LocaleType } from '@/i18n'
+import { formatDecimal } from '@/utils/formatInteger'
 
+const { t, locale } = useI18n()
 const loading = ref(false)
-const quotationList = ref<any[]>([])
+const quotationList = ref<Record<string, unknown>[]>([])
 const customers = ref<{ cd: string; name: string }[]>([])
 
 const filters = reactive({
@@ -120,14 +145,18 @@ onMounted(() => {
 const loadData = async () => {
   loading.value = true
   try {
-    // TODO: API呼び出し
     quotationList.value = []
     pagination.total = 0
-  } catch (e) {
-    ElMessage.error('データ取得に失敗しました')
+  } catch {
+    ElMessage.error(t('salesPages.common.loadFailed'))
   } finally {
     loading.value = false
   }
+}
+
+const onPageSizeChange = () => {
+  pagination.page = 1
+  loadData()
 }
 
 const handleSearch = () => {
@@ -141,28 +170,28 @@ const handleReset = () => {
 }
 
 const handleCreate = () => {
-  ElMessage.info('見積作成画面を開きます')
+  ElMessage.info(t('salesPages.quotation.createWip'))
 }
 
 const handleCostSimulation = () => {
-  ElMessage.info('原価積算シミュレーション画面を開きます')
+  ElMessage.info(t('salesPages.quotation.simWip'))
 }
 
-const handleView = (row: any) => {
-  ElMessage.info(`見積 ${row.quotation_no} の詳細を表示`)
+const handleView = (row: Record<string, unknown>) => {
+  ElMessage.info(t('salesPages.quotation.viewWip', { no: String(row.quotation_no ?? '') }))
 }
 
-const handleCopy = (row: any) => {
-  ElMessage.success(`見積 ${row.quotation_no} を複製しました`)
+const handleCopy = (row: Record<string, unknown>) => {
+  ElMessage.success(t('salesPages.quotation.copyOk', { no: String(row.quotation_no ?? '') }))
 }
 
-const handleExportPdf = (row: any) => {
-  ElMessage.info(`見積 ${row.quotation_no} のPDFを出力します`)
+const handleExportPdf = (row: Record<string, unknown>) => {
+  ElMessage.info(t('salesPages.quotation.pdfWip', { no: String(row.quotation_no ?? '') }))
 }
 
-const handleDelete = async (row: any) => {
-  await ElMessageBox.confirm('この見積を削除しますか？', '確認')
-  ElMessage.success('削除しました')
+const handleDelete = async (row: Record<string, unknown>) => {
+  await ElMessageBox.confirm(t('salesPages.quotation.deleteConfirm'), t('salesPages.common.confirm'))
+  ElMessage.success(t('salesPages.quotation.deleteOk'))
 }
 
 const getStatusType = (status: string) => {
@@ -171,26 +200,32 @@ const getStatusType = (status: string) => {
 }
 
 const getStatusLabel = (status: string) => {
-  const map: Record<string, string> = { draft: '作成中', submitted: '提出済', ordered: '受注済', lost: '失注' }
-  return map[status] || status
+  const keys: Record<string, string> = {
+    draft: 'salesPages.quotation.statusDraft',
+    submitted: 'salesPages.quotation.statusSubmitted',
+    ordered: 'salesPages.quotation.statusOrdered',
+    lost: 'salesPages.quotation.statusLost',
+  }
+  return keys[status] ? t(keys[status]) : status
 }
 
 const getProfitClass = (rate: number) => {
-  if (rate >= 30) return 'profit-high'
-  if (rate >= 15) return 'profit-mid'
-  return 'profit-low'
+  if (rate >= 30) return 'text-profit-high'
+  if (rate >= 15) return 'text-profit-mid'
+  return 'text-profit-low'
 }
 </script>
 
+<style scoped src="@/views/erp/sales/sales-page-shell.scss"></style>
+
 <style scoped>
-.quotation-list { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0 0 8px 0; color: #303133; }
-.subtitle { margin: 0; color: #909399; font-size: 14px; }
-.filter-card { margin-bottom: 16px; }
-.toolbar { margin-bottom: 16px; display: flex; gap: 12px; }
-.pagination-wrapper { margin-top: 16px; display: flex; justify-content: flex-end; }
-.profit-high { color: #67c23a; font-weight: bold; }
-.profit-mid { color: #e6a23c; }
-.profit-low { color: #f56c6c; }
+.filter-card :deep(.el-card__body) {
+  padding: 16px;
+}
+
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
 </style>

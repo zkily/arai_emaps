@@ -42,6 +42,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/layouts/pages/DashboardHome.vue'),
         meta: { title: 'ダッシュボード', requiresAuth: true },
       },
+      {
+        path: 'account/profile',
+        name: 'UserProfile',
+        component: () => import('@/views/account/UserProfile.vue'),
+        meta: { title: 'プロフィール', requiresAuth: true },
+      },
       // ========== ERP - 販売管理 (Sales / SD) ==========
       { path: 'erp/sales', name: 'Sales', component: () => import('@/views/erp/Sales.vue'), meta: { title: '販売管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/quotation', name: 'QuotationList', component: () => import('@/views/erp/sales/quotation/QuotationList.vue'), meta: { title: '見積管理', group: '販売管理', requiresAuth: true } },

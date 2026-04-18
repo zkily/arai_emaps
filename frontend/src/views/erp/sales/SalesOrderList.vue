@@ -1,123 +1,115 @@
 <template>
-  <div class="sales-order-list">
-    <!-- 动态背景 -->
-    <div class="dynamic-background">
-      <div class="gradient-orb orb-1"></div>
-      <div class="gradient-orb orb-2"></div>
-    </div>
-
-    <!-- 页面头部 -->
-    <div class="modern-header">
-      <div class="header-content">
-        <div class="header-left">
-          <div class="header-icon">
-            <el-icon size="32"><Document /></el-icon>
-          </div>
-          <div class="header-text">
-            <h1 class="header-title">受注一覧</h1>
-            <div class="header-subtitle">{{ pagination.total }} 件</div>
-          </div>
+  <div class="sales-page-shell sales-order-list">
+    <div class="sales-page-hero">
+      <div class="sales-page-hero__mesh" aria-hidden="true" />
+      <div class="sales-page-hero__content">
+        <div class="sales-page-hero__icon">
+          <el-icon :size="28"><Document /></el-icon>
         </div>
-        <div class="header-actions">
-          <el-button type="primary" @click="createOrder">
-            <el-icon><Plus /></el-icon>新規受注
-          </el-button>
-          <el-button @click="exportData">
-            <el-icon><Download /></el-icon>エクスポート
-          </el-button>
+        <div class="sales-page-hero__titles">
+          <h1 class="sales-page-hero__title">{{ t('salesPages.orderList.title') }}</h1>
+          <p class="sales-page-hero__subtitle">{{ t('salesPages.common.recordCount', { n: pagination.total }) }}</p>
         </div>
+      </div>
+      <div class="hero-actions">
+        <el-button type="primary" @click="createOrder">
+          <el-icon><Plus /></el-icon>
+          {{ t('salesPages.orderList.newOrder') }}
+        </el-button>
+        <el-button @click="exportData">
+          <el-icon><Download /></el-icon>
+          {{ t('salesPages.orderList.export') }}
+        </el-button>
       </div>
     </div>
 
-    <!-- 筛选区域 -->
-    <div class="filter-section modern-card">
+    <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters" class="filter-form">
-        <el-form-item label="受注番号">
-          <el-input v-model="filters.order_no" placeholder="受注番号" clearable @keyup.enter="handleSearch" />
+        <el-form-item :label="t('salesPages.orderList.filterOrderNo')">
+          <el-input
+            v-model="filters.order_no"
+            clearable
+            @keyup.enter="handleSearch"
+          />
         </el-form-item>
-        <el-form-item label="顧客">
-          <el-select v-model="filters.customer_code" placeholder="顧客を選択" clearable filterable>
-            <el-option
-              v-for="c in customerOptions"
-              :key="c.code"
-              :label="c.name"
-              :value="c.code"
-            />
+        <el-form-item :label="t('salesPages.common.customer')">
+          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+            <el-option v-for="c in customerOptions" :key="c.code" :label="c.name" :value="c.code" />
           </el-select>
         </el-form-item>
-        <el-form-item label="ステータス">
-          <el-select v-model="filters.status" placeholder="ステータス" clearable>
-            <el-option label="下書き" value="draft" />
-            <el-option label="承認待ち" value="pending" />
-            <el-option label="承認済" value="approved" />
-            <el-option label="一部出荷" value="partial_delivered" />
-            <el-option label="完了" value="completed" />
-            <el-option label="キャンセル" value="cancelled" />
+        <el-form-item :label="t('salesPages.orderList.filterStatus')">
+          <el-select v-model="filters.status" :placeholder="t('salesPages.common.all')" clearable>
+            <el-option :label="t('salesPages.orderList.statusDraft')" value="draft" />
+            <el-option :label="t('salesPages.orderList.statusPending')" value="pending" />
+            <el-option :label="t('salesPages.orderList.statusApproved')" value="approved" />
+            <el-option :label="t('salesPages.orderList.statusPartial')" value="partial_delivered" />
+            <el-option :label="t('salesPages.orderList.statusCompleted')" value="completed" />
+            <el-option :label="t('salesPages.orderList.statusCancelled')" value="cancelled" />
           </el-select>
         </el-form-item>
-        <el-form-item label="受注日">
+        <el-form-item :label="t('salesPages.orderList.filterOrderDate')">
           <el-date-picker
             v-model="filters.dateRange"
             type="daterange"
-            range-separator="～"
-            start-placeholder="開始日"
-            end-placeholder="終了日"
+            :range-separator="t('salesPages.common.rangeSep')"
+            :start-placeholder="t('salesPages.common.startDate')"
+            :end-placeholder="t('salesPages.common.endDate')"
             format="YYYY-MM-DD"
             value-format="YYYY-MM-DD"
           />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
-            <el-icon><Search /></el-icon>検索
+            <el-icon><Search /></el-icon>
+            {{ t('salesPages.common.search') }}
           </el-button>
           <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>リセット
+            <el-icon><Refresh /></el-icon>
+            {{ t('salesPages.common.reset') }}
           </el-button>
         </el-form-item>
       </el-form>
-    </div>
+    </el-card>
 
-    <!-- 数据表格 -->
-    <div class="table-section modern-card">
-      <el-table :data="orders" v-loading="loading" stripe border class="modern-table">
-        <el-table-column prop="order_no" label="受注番号" width="140">
+    <el-card class="table-card" shadow="never">
+      <el-table :data="orders" v-loading="loading" stripe border>
+        <el-table-column prop="order_no" :label="t('salesPages.common.orderNo')" width="140">
           <template #default="{ row }">
             <span class="link-text" @click="viewOrder(row)">{{ row.order_no }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="customer_name" label="顧客" min-width="150" />
-        <el-table-column prop="order_date" label="受注日" width="110" />
-        <el-table-column prop="expected_delivery_date" label="出荷予定" width="110" />
-        <el-table-column prop="status_name" label="ステータス" width="100">
+        <el-table-column prop="customer_name" :label="t('salesPages.common.customer')" min-width="150" />
+        <el-table-column prop="order_date" :label="t('salesPages.orderList.colOrderDate')" width="110" />
+        <el-table-column prop="expected_delivery_date" :label="t('salesPages.orderList.colShipDue')" width="110" />
+        <el-table-column prop="status_name" :label="t('salesPages.orderList.colStatus')" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)" size="small">{{ row.status_name }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total_amount" label="受注金額" width="120" align="right">
+        <el-table-column prop="total_amount" :label="t('salesPages.orderList.colOrderAmount')" width="120" align="right">
           <template #default="{ row }">
-            ¥{{ row.total_amount?.toLocaleString() }}
+            ¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="payment_status_name" label="入金状況" width="100">
+        <el-table-column prop="payment_status_name" :label="t('salesPages.orderList.colPayment')" width="100">
           <template #default="{ row }">
             <el-tag :type="getPaymentStatusType(row.payment_status)" size="small">
               {{ row.payment_status_name }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="sales_person" label="担当者" width="100" />
-        <el-table-column label="操作" width="220" fixed="right" align="center">
+        <el-table-column prop="sales_person" :label="t('salesPages.orderList.colSalesPerson')" width="100" />
+        <el-table-column :label="t('salesPages.common.actions')" width="220" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="viewOrder(row)">詳細</el-button>
-            <el-button size="small" type="warning" link @click="editOrder(row)" v-if="row.status === 'draft'">編集</el-button>
-            <el-button size="small" type="success" link @click="deliverOrder(row)" v-if="row.status === 'approved'">出荷</el-button>
-            <el-button size="small" type="danger" link @click="cancelOrder(row)" v-if="['draft', 'pending'].includes(row.status)">取消</el-button>
+            <el-button size="small" type="primary" link @click="viewOrder(row)">{{ t('salesPages.common.detail') }}</el-button>
+            <el-button size="small" type="warning" link @click="editOrder(row)" v-if="row.status === 'draft'">{{ t('salesPages.orderList.edit') }}</el-button>
+            <el-button size="small" type="success" link @click="deliverOrder(row)" v-if="row.status === 'approved'">{{ t('salesPages.salesHome.ship') }}</el-button>
+            <el-button size="small" type="danger" link @click="cancelOrder(row)" v-if="['draft', 'pending'].includes(row.status)">{{ t('salesPages.orderList.cancel') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <!-- 分页 -->
-      <div class="pagination-container">
+      <div class="pagination-wrap">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
@@ -128,19 +120,23 @@
           @current-change="handleCurrentChange"
         />
       </div>
-    </div>
+    </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Document, Plus, Download, Search, Refresh } from '@element-plus/icons-vue'
 import { getSalesOrderList, cancelSalesOrder } from '@/api/erp/sales'
 import type { SalesOrder } from '@/types/erp/sales'
+import type { LocaleType } from '@/i18n'
+import { formatDecimal } from '@/utils/formatInteger'
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const loading = ref(false)
 const orders = ref<SalesOrder[]>([])
 const customerOptions = ref<Array<{ code: string; name: string }>>([])
@@ -149,16 +145,15 @@ const filters = reactive({
   order_no: '',
   customer_code: '',
   status: '',
-  dateRange: [] as string[]
+  dateRange: [] as string[],
 })
 
 const pagination = reactive({
   page: 1,
   pageSize: 50,
-  total: 0
+  total: 0,
 })
 
-// 获取状态标签类型
 const getStatusType = (status: string) => {
   const typeMap: Record<string, string> = {
     draft: 'info',
@@ -166,72 +161,67 @@ const getStatusType = (status: string) => {
     approved: 'success',
     partial_delivered: 'primary',
     completed: '',
-    cancelled: 'danger'
+    cancelled: 'danger',
   }
   return typeMap[status] || 'info'
 }
 
-// 获取支付状态标签类型
 const getPaymentStatusType = (status: string) => {
   const typeMap: Record<string, string> = {
     unpaid: 'danger',
     partial_paid: 'warning',
-    paid: 'success'
+    paid: 'success',
   }
   return typeMap[status] || 'info'
 }
 
-// 创建订单
 const createOrder = () => {
   router.push('/erp/sales/orders/new')
 }
 
-// 查看订单
 const viewOrder = (row: SalesOrder) => {
   router.push(`/erp/sales/orders/${row.id}`)
 }
 
-// 编辑订单
 const editOrder = (row: SalesOrder) => {
   router.push(`/erp/sales/orders/${row.id}/edit`)
 }
 
-// 发货
 const deliverOrder = (row: SalesOrder) => {
   router.push(`/erp/sales/deliveries/new?order_id=${row.id}`)
 }
 
-// 取消订单
 const cancelOrder = async (row: SalesOrder) => {
   try {
-    const { value: reason } = await ElMessageBox.prompt('取消理由を入力してください', '受注取消', {
-      confirmButtonText: '確認',
-      cancelButtonText: 'キャンセル',
-      inputPattern: /\S+/,
-      inputErrorMessage: '理由を入力してください'
-    })
+    const { value: reason } = await ElMessageBox.prompt(
+      t('salesPages.salesHome.cancelPromptLabel'),
+      t('salesPages.salesHome.cancelPromptTitle'),
+      {
+        confirmButtonText: t('salesPages.common.confirm'),
+        cancelButtonText: t('salesPages.common.cancel'),
+        inputPattern: /\S+/,
+        inputErrorMessage: t('salesPages.salesHome.cancelReasonRequired'),
+      },
+    )
     await cancelSalesOrder(row.id, reason)
-    ElMessage.success('取消しました')
+    ElMessage.success(t('salesPages.salesHome.cancelOk'))
     fetchData()
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('取消に失敗しました')
+      ElMessage.error(t('salesPages.salesHome.cancelFail'))
     }
   }
 }
 
-// 导出
 const exportData = () => {
-  ElMessage.info('エクスポート機能は開発中です')
+  ElMessage.info(t('salesPages.salesHome.exportWip'))
 }
 
-// 搜索
 const handleSearch = () => {
   pagination.page = 1
   fetchData()
 }
 
-// 重置
 const resetFilters = () => {
   filters.order_no = ''
   filters.customer_code = ''
@@ -241,7 +231,6 @@ const resetFilters = () => {
   fetchData()
 }
 
-// 分页
 const handleSizeChange = () => {
   pagination.page = 1
   fetchData()
@@ -251,7 +240,6 @@ const handleCurrentChange = () => {
   fetchData()
 }
 
-// 获取数据
 const fetchData = async () => {
   loading.value = true
   try {
@@ -262,13 +250,14 @@ const fetchData = async () => {
       start_date: filters.dateRange?.[0] || undefined,
       end_date: filters.dateRange?.[1] || undefined,
       page: pagination.page,
-      page_size: pagination.pageSize
+      page_size: pagination.pageSize,
     }
     const res = await getSalesOrderList(params)
-    orders.value = res.data?.items || res.items || []
-    pagination.total = res.data?.total || res.total || 0
+    const body = res as { items?: SalesOrder[]; total?: number }
+    orders.value = body.items ?? []
+    pagination.total = body.total ?? 0
   } catch (error) {
-    console.error('データ取得に失敗しました', error)
+    console.error(t('salesPages.common.loadFailed'), error)
   } finally {
     loading.value = false
   }
@@ -279,112 +268,37 @@ onMounted(() => {
 })
 </script>
 
+<style scoped src="@/views/erp/sales/sales-page-shell.scss"></style>
+
 <style scoped>
-.sales-order-list {
-  padding: 20px;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.sales-order-list .sales-page-hero {
+  flex-wrap: wrap;
+}
+
+.hero-actions {
   position: relative;
-}
-
-.dynamic-background {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-}
-
-.gradient-orb {
-  position: absolute;
-  border-radius: 50%;
-  background: linear-gradient(45deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-  animation: float 20s ease-in-out infinite;
-}
-
-.orb-1 { width: 300px; height: 300px; top: -150px; right: -150px; }
-.orb-2 { width: 200px; height: 200px; bottom: -100px; left: -100px; animation-delay: -10s; }
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-30px); }
-}
-
-.modern-header {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  padding: 20px 24px;
-  margin-bottom: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.header-content {
+  z-index: 1;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.filter-card {
+  margin-bottom: 12px;
 }
 
-.header-icon {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #67c23a, #85ce61);
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: #2c3e50;
-  margin: 0;
-}
-
-.header-subtitle {
-  font-size: 14px;
-  color: #8492a6;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.modern-card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 16px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-}
-
-.filter-section {
-  padding: 20px;
-  margin-bottom: 20px;
+.filter-card :deep(.el-card__body) {
+  padding: 16px;
 }
 
 .filter-form {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px 12px;
 }
 
-.table-section {
-  padding: 20px;
-}
-
-.modern-table {
-  border-radius: 8px;
-  overflow: hidden;
+.table-card :deep(.el-card__body) {
+  padding: 16px;
 }
 
 .link-text {
@@ -396,8 +310,8 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-.pagination-container {
-  margin-top: 20px;
+.pagination-wrap {
+  margin-top: 16px;
   display: flex;
   justify-content: center;
 }

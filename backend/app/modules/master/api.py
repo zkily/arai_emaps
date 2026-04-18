@@ -4,7 +4,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func, or_, and_, not_
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional
 from decimal import Decimal, InvalidOperation
 import io
@@ -61,6 +62,49 @@ def _row_to_dict(row: Product) -> dict:
         "unit_price": float(row.unit_price) if row.unit_price is not None else None,
         "product_alias": row.product_alias,
     }
+
+
+def _is_missing_table(exc: BaseException, table_name: str) -> bool:
+    orig = getattr(exc, "orig", None)
+    if orig is not None:
+        args = getattr(orig, "args", None)
+        if isinstance(args, tuple) and len(args) >= 1:
+            try:
+                if int(args[0]) == 1146:
+                    return True
+            except (TypeError, ValueError):
+                pass
+    msg = str(exc).lower()
+    t = table_name.lower()
+    return t in msg and (
+        "doesn't exist" in msg
+        or "does not exist" in msg
+        or "unknown table" in msg
+        or "不存在" in str(exc)
+    )
+
+
+@router.get("/stats/active-count")
+async def get_active_products_count(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """ダッシュボード用：有効製品数（active・量産品・品名に「加工」「アーチ」を含まない）。"""
+    try:
+        q = select(func.count()).select_from(Product).where(
+            and_(
+                Product.status == "active",
+                Product.product_type == "量産品",
+                or_(Product.product_name.is_(None), not_(Product.product_name.like("%加工%"))),
+                or_(Product.product_name.is_(None), not_(Product.product_name.like("%アーチ%"))),
+            )
+        )
+        r = await db.execute(q)
+        return {"active_count": int(r.scalar() or 0)}
+    except SQLAlchemyError as e:
+        if _is_missing_table(e, "products"):
+            return {"active_count": 0}
+        raise
 
 
 @router.get("")

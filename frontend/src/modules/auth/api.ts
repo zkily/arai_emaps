@@ -1,4 +1,5 @@
 import request from '@/shared/api/request'
+import type { User } from '@/modules/auth/stores/user'
 
 export interface LoginParams {
   username: string
@@ -16,6 +17,8 @@ export interface LoginResponse {
     role: string
     permissions: string[]
     is_active?: boolean
+    department_id?: number | null
+    department_name?: string | null
   }
 }
 
@@ -29,8 +32,8 @@ export const logout = () => {
   return request.post('/api/auth/logout')
 }
 
-// ユーザー情報取得
-export const getUserInfo = () => {
-  return request.get('/api/auth/me')
+// ユーザー情報取得（インターセプターで response.data を返す）
+export const getUserInfo = (): Promise<User> => {
+  return request.get('/api/auth/me') as Promise<User>
 }
 

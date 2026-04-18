@@ -12,6 +12,7 @@ export interface User {
   permissions: string[]
   is_active?: boolean
   department_id?: number | null
+  department_name?: string | null
 }
 
 // ストレージキー

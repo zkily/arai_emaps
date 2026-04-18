@@ -1,0 +1,137 @@
+/* 与 DashboardHome 等模块页一致的浅色工作区 */
+.sales-page-shell {
+  padding: 16px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.sales-page-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-radius: 18px;
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(125deg, #4f46e5 0%, #6366f1 28%, #7c3aed 58%, #5b21b6 100%);
+  box-shadow:
+    0 4px 6px -1px rgba(79, 70, 229, 0.12),
+    0 20px 40px -12px rgba(79, 70, 229, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.sales-page-hero__mesh {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background:
+    radial-gradient(ellipse 90% 70% at 10% 20%, rgba(255, 255, 255, 0.32) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 88% 75%, rgba(167, 139, 250, 0.4) 0%, transparent 50%);
+}
+
+.sales-page-hero__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sales-page-hero__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #eef2ff;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
+}
+
+.sales-page-hero__titles {
+  min-width: 0;
+}
+
+.sales-page-hero__title {
+  margin: 0;
+  font-size: clamp(1.1rem, 2.2vw, 1.35rem);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.sales-page-hero__subtitle {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.sales-page-section {
+  margin-bottom: 16px;
+}
+
+.sales-page-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+  padding-left: 2px;
+}
+
+.sales-page-section-header .el-icon {
+  color: #6366f1;
+}
+
+.sales-page-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.sales-page-pagination {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sales-page-card :deep(.el-card__body) {
+  padding: 16px;
+}
+
+.text-profit-high {
+  color: #67c23a;
+  font-weight: 600;
+}
+.text-profit-mid {
+  color: #e6a23c;
+}
+.text-profit-low {
+  color: #f56c6c;
+}
+.text-diff-pos {
+  color: #67c23a;
+  font-weight: 600;
+}
+.text-diff-neg {
+  color: #f56c6c;
+  font-weight: 600;
+}
+.text-amount-danger {
+  color: #f56c6c;
+  font-weight: 600;
+}

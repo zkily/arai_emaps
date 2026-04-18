@@ -1,97 +1,121 @@
 <template>
-  <div class="sales-recording">
-    <div class="page-header">
-      <h2>売上計上</h2>
-      <p class="subtitle">出荷基準/検収基準の売上計上・売上伝票作成・赤黒訂正</p>
+  <div class="sales-page-shell">
+    <div class="sales-page-hero">
+      <div class="sales-page-hero__mesh" aria-hidden="true" />
+      <div class="sales-page-hero__content">
+        <div class="sales-page-hero__icon">
+          <el-icon :size="28"><DataAnalysis /></el-icon>
+        </div>
+        <div class="sales-page-hero__titles">
+          <h1 class="sales-page-hero__title">{{ t('salesPages.salesRecording.title') }}</h1>
+          <p class="sales-page-hero__subtitle">{{ t('salesPages.salesRecording.subtitle') }}</p>
+        </div>
+      </div>
     </div>
 
-    <!-- 計上基準切替 -->
     <el-card class="basis-card" shadow="never">
       <div class="basis-toggle">
-        <span class="basis-label">計上基準:</span>
+        <span class="basis-label">{{ t('salesPages.salesRecording.basis') }}</span>
         <el-radio-group v-model="recordingBasis">
-          <el-radio-button value="shipment">出荷基準</el-radio-button>
-          <el-radio-button value="acceptance">検収基準</el-radio-button>
+          <el-radio-button value="shipment">{{ t('salesPages.salesRecording.basisShip') }}</el-radio-button>
+          <el-radio-button value="acceptance">{{ t('salesPages.salesRecording.basisAccept') }}</el-radio-button>
         </el-radio-group>
       </div>
     </el-card>
 
-    <!-- 検索フィルター -->
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters">
-        <el-form-item label="期間">
-          <el-date-picker v-model="filters.dateRange" type="daterange" range-separator="〜"
-            start-placeholder="開始日" end-placeholder="終了日" value-format="YYYY-MM-DD" />
+        <el-form-item :label="t('salesPages.common.period')">
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            :range-separator="t('salesPages.common.rangeSep')"
+            :start-placeholder="t('salesPages.common.startDate')"
+            :end-placeholder="t('salesPages.common.endDate')"
+            value-format="YYYY-MM-DD"
+          />
         </el-form-item>
-        <el-form-item label="顧客">
-          <el-select v-model="filters.customer_code" placeholder="全て" clearable filterable>
+        <el-form-item :label="t('salesPages.common.customer')">
+          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.all')" clearable filterable>
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
-        <el-form-item label="ステータス">
-          <el-select v-model="filters.status" placeholder="全て" clearable>
-            <el-option label="未計上" value="pending" />
-            <el-option label="計上済" value="recorded" />
-            <el-option label="訂正済" value="corrected" />
+        <el-form-item :label="t('salesPages.common.status')">
+          <el-select v-model="filters.status" :placeholder="t('salesPages.common.all')" clearable>
+            <el-option :label="t('salesPages.salesRecording.statusPending')" value="pending" />
+            <el-option :label="t('salesPages.salesRecording.statusRecorded')" value="recorded" />
+            <el-option :label="t('salesPages.salesRecording.statusCorrected')" value="corrected" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch"><el-icon><Search /></el-icon> 検索</el-button>
+          <el-button type="primary" @click="handleSearch">
+            <el-icon><Search /></el-icon>
+            {{ t('salesPages.common.search') }}
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- ツールバー -->
-    <div class="toolbar">
+    <div class="sales-page-toolbar">
       <el-button type="primary" @click="handleBatchRecord" :disabled="!hasSelection">
-        <el-icon><Check /></el-icon> 一括売上計上
+        <el-icon><Check /></el-icon>
+        {{ t('salesPages.salesRecording.batchRecord') }}
       </el-button>
       <el-button type="warning" @click="handleCorrection" :disabled="!hasSingleSelection">
-        <el-icon><EditPen /></el-icon> 赤黒訂正
+        <el-icon><EditPen /></el-icon>
+        {{ t('salesPages.salesRecording.redBlack') }}
       </el-button>
       <el-button @click="handleExportSlip" :disabled="!hasSelection">
-        <el-icon><Document /></el-icon> 売上伝票出力
+        <el-icon><Document /></el-icon>
+        {{ t('salesPages.salesRecording.exportSlip') }}
       </el-button>
     </div>
 
-    <!-- 売上一覧 -->
     <el-card shadow="never">
       <el-table :data="salesList" v-loading="loading" stripe border @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="slip_no" label="伝票番号" width="130" fixed />
-        <el-table-column prop="order_no" label="受注番号" width="130" />
-        <el-table-column prop="shipment_date" label="出荷日" width="110" />
-        <el-table-column prop="acceptance_date" label="検収日" width="110" />
-        <el-table-column prop="customer_name" label="顧客名" min-width="150" />
-        <el-table-column prop="product_code" label="品番" width="120" />
-        <el-table-column prop="quantity" label="数量" width="80" align="right" />
-        <el-table-column prop="unit_price" label="単価" width="100" align="right">
-          <template #default="{ row }">¥{{ row.unit_price?.toLocaleString() }}</template>
+        <el-table-column prop="slip_no" :label="t('salesPages.salesRecording.colSlipNo')" width="130" fixed />
+        <el-table-column prop="order_no" :label="t('salesPages.common.orderNo')" width="130" />
+        <el-table-column prop="shipment_date" :label="t('salesPages.salesRecording.colShipDate')" width="110" />
+        <el-table-column prop="acceptance_date" :label="t('salesPages.salesRecording.colAcceptDate')" width="110" />
+        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
+        <el-table-column prop="product_code" :label="t('salesPages.common.productCode')" width="120" />
+        <el-table-column prop="quantity" :label="t('salesPages.salesRecording.colQty')" width="80" align="right" />
+        <el-table-column prop="unit_price" :label="t('salesPages.salesRecording.colUnitPrice')" width="100" align="right">
+          <template #default="{ row }">¥{{ formatDecimal(row.unit_price ?? 0, locale as LocaleType, 0) }}</template>
         </el-table-column>
-        <el-table-column prop="total_amount" label="売上金額" width="120" align="right">
-          <template #default="{ row }">¥{{ row.total_amount?.toLocaleString() }}</template>
+        <el-table-column prop="total_amount" :label="t('salesPages.salesRecording.colTotal')" width="120" align="right">
+          <template #default="{ row }">¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}</template>
         </el-table-column>
-        <el-table-column prop="status" label="ステータス" width="100" align="center">
+        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="correction_type" label="訂正" width="80" align="center">
+        <el-table-column prop="correction_type" :label="t('salesPages.salesRecording.correction')" width="80" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.correction_type === 'red'" type="danger" size="small">赤</el-tag>
-            <el-tag v-else-if="row.correction_type === 'black'" type="info" size="small">黒</el-tag>
+            <el-tag v-if="row.correction_type === 'red'" type="danger" size="small">{{ t('salesPages.salesRecording.tagRed') }}</el-tag>
+            <el-tag v-else-if="row.correction_type === 'black'" type="info" size="small">{{ t('salesPages.salesRecording.tagBlack') }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column :label="t('salesPages.common.actions')" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">詳細</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper">
-        <el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize"
-          :total="pagination.total" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" background />
+      <div class="sales-page-pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next"
+          background
+          @size-change="onPageSize"
+          @current-change="loadData"
+        />
       </div>
     </el-card>
   </div>
@@ -99,12 +123,16 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Check, EditPen, Document } from '@element-plus/icons-vue'
+import { Search, Check, EditPen, Document, DataAnalysis } from '@element-plus/icons-vue'
+import type { LocaleType } from '@/i18n'
+import { formatDecimal } from '@/utils/formatInteger'
 
+const { t, locale } = useI18n()
 const loading = ref(false)
-const salesList = ref<any[]>([])
-const selectedRows = ref<any[]>([])
+const salesList = ref<Record<string, unknown>[]>([])
+const selectedRows = ref<Record<string, unknown>[]>([])
 const customers = ref<{ cd: string; name: string }[]>([])
 const recordingBasis = ref('shipment')
 
@@ -114,42 +142,86 @@ const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 const hasSelection = computed(() => selectedRows.value.length > 0)
 const hasSingleSelection = computed(() => selectedRows.value.length === 1)
 
-onMounted(() => { loadData() })
+const statusLabelKeys: Record<string, string> = {
+  pending: 'salesPages.salesRecording.statusPending',
+  recorded: 'salesPages.salesRecording.statusRecorded',
+  corrected: 'salesPages.salesRecording.statusCorrected',
+}
+
+onMounted(() => {
+  loadData()
+})
 
 const loadData = async () => {
   loading.value = true
-  try { salesList.value = [] } finally { loading.value = false }
+  try {
+    salesList.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleSearch = () => { pagination.page = 1; loadData() }
-const handleSelectionChange = (rows: any[]) => { selectedRows.value = rows }
+const onPageSize = () => {
+  pagination.page = 1
+  loadData()
+}
+
+const handleSearch = () => {
+  pagination.page = 1
+  loadData()
+}
+
+const handleSelectionChange = (rows: Record<string, unknown>[]) => {
+  selectedRows.value = rows
+}
 
 const handleBatchRecord = async () => {
-  await ElMessageBox.confirm(`${selectedRows.value.length}件を売上計上しますか？`, '確認')
-  ElMessage.success('売上計上を実行しました')
+  await ElMessageBox.confirm(
+    t('salesPages.salesRecording.batchConfirm', { n: selectedRows.value.length }),
+    t('salesPages.common.confirmTitle'),
+  )
+  ElMessage.success(t('salesPages.salesRecording.batchOk'))
 }
 
 const handleCorrection = async () => {
-  await ElMessageBox.confirm('赤黒訂正を実行しますか？', '赤黒訂正')
-  ElMessage.success('赤黒訂正を実行しました')
+  await ElMessageBox.confirm(t('salesPages.salesRecording.redBlackConfirm'), t('salesPages.salesRecording.redBlack'))
+  ElMessage.success(t('salesPages.salesRecording.redBlackOk'))
 }
 
-const handleExportSlip = () => { ElMessage.info('売上伝票を出力しました') }
-const handleView = (row: any) => { ElMessage.info(`伝票 ${row.slip_no} の詳細`) }
+const handleExportSlip = () => {
+  ElMessage.info(t('salesPages.salesRecording.slipWip'))
+}
+
+const handleView = (row: Record<string, unknown>) => {
+  ElMessage.info(t('salesPages.salesRecording.detailWip', { no: String(row.slip_no ?? '') }))
+}
 
 const getStatusType = (s: string) => ({ pending: 'warning', recorded: 'success', corrected: 'info' }[s] || 'info')
-const getStatusLabel = (s: string) => ({ pending: '未計上', recorded: '計上済', corrected: '訂正済' }[s] || s)
+const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>
 
+<style scoped src="@/views/erp/sales/sales-page-shell.scss"></style>
+
 <style scoped>
-.sales-recording { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0 0 8px 0; color: #303133; }
-.subtitle { margin: 0; color: #909399; font-size: 14px; }
-.basis-card { margin-bottom: 16px; }
-.basis-toggle { display: flex; align-items: center; gap: 16px; }
-.basis-label { font-weight: 500; color: #606266; }
-.filter-card { margin-bottom: 16px; }
-.toolbar { margin-bottom: 16px; display: flex; gap: 12px; }
-.pagination-wrapper { margin-top: 16px; display: flex; justify-content: flex-end; }
+.basis-card {
+  margin-bottom: 12px;
+}
+.basis-card :deep(.el-card__body) {
+  padding: 16px;
+}
+.basis-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.basis-label {
+  font-weight: 500;
+  color: #606266;
+}
+.filter-card {
+  margin-bottom: 12px;
+}
+.filter-card :deep(.el-card__body) {
+  padding: 16px;
+}
 </style>

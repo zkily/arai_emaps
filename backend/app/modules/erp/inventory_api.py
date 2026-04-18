@@ -4,6 +4,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
+from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import date, datetime
 import uuid
@@ -12,12 +13,39 @@ from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
+from app.modules.database.models import ProductionSummary
 from app.modules.erp.inventory_models import (
     Inventory, InventoryTransaction, InventoryAdjustment, StockAlert, Warehouse
 )
 from app.modules.master.models import Product, ProductRouteStep
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])
+
+def _mysql_errno_from_sqlalchemy(exc: BaseException) -> Optional[int]:
+    orig = getattr(exc, "orig", None)
+    if orig is None:
+        return None
+    args = getattr(orig, "args", None)
+    if isinstance(args, tuple) and len(args) >= 1:
+        try:
+            return int(args[0])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _is_missing_table(exc: BaseException, table_name: str) -> bool:
+    if _mysql_errno_from_sqlalchemy(exc) == 1146:
+        return True
+    msg = str(exc).lower()
+    table = table_name.lower()
+    return table in msg and (
+        "doesn't exist" in msg
+        or "does not exist" in msg
+        or "doesnt exist" in msg
+        or "unknown table" in msg
+        or "不存在" in str(exc)
+    )
 
 
 # ========== 在庫一覧 ==========
@@ -66,41 +94,87 @@ async def get_inventory_list(
     }
 
 
+async def _summary_stock_qty_today(db: AsyncSession) -> int:
+    """production_summarys：当日 date=JST今日 の Σ(warehouse_inventory + inspection_inventory)。"""
+    today = now_jst().date()
+    line = func.coalesce(ProductionSummary.warehouse_inventory, 0) + func.coalesce(
+        ProductionSummary.inspection_inventory, 0
+    )
+    q = (
+        select(func.coalesce(func.sum(line), 0))
+        .select_from(ProductionSummary)
+        .where(ProductionSummary.date == today)
+    )
+    r = await db.execute(q)
+    v = r.scalar()
+    try:
+        return int(float(v)) if v is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 @router.get("/stats")
 async def get_inventory_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user)
 ):
     """在庫統計取得"""
-    # 総在庫数
-    total_query = select(
-        func.count(Inventory.id).label("total_items"),
-        func.sum(Inventory.total_cost).label("total_value")
-    ).where(Inventory.is_active == True)
-    total_result = await db.execute(total_query)
-    total_row = total_result.first()
-    
-    # 在庫不足
-    low_stock_query = select(func.count()).where(
-        and_(Inventory.is_active == True, Inventory.quantity < Inventory.min_stock_level)
-    )
-    low_stock_result = await db.execute(low_stock_query)
-    low_stock_count = low_stock_result.scalar()
-    
-    # 過剰在庫
-    overstock_query = select(func.count()).where(
-        and_(Inventory.is_active == True, Inventory.quantity > Inventory.max_stock_level, Inventory.max_stock_level > 0)
-    )
-    overstock_result = await db.execute(overstock_query)
-    overstock_count = overstock_result.scalar()
-    
-    return {
-        "total_items": total_row.total_items or 0,
-        "total_value": float(total_row.total_value or 0),
-        "low_stock_count": low_stock_count or 0,
-        "overstock_count": overstock_count or 0,
-        "expiring_soon_count": 0
+    summary_stock_qty_today = 0
+    try:
+        summary_stock_qty_today = await _summary_stock_qty_today(db)
+    except SQLAlchemyError as e:
+        if _is_missing_table(e, "production_summarys"):
+            summary_stock_qty_today = 0
+        else:
+            raise
+
+    payload_base = {
+        "summary_stock_qty_today": summary_stock_qty_today,
     }
+
+    try:
+        # 総在庫数（品目数：inventory マスタ行数）
+        total_query = select(
+            func.count(Inventory.id).label("total_items"),
+            func.sum(Inventory.total_cost).label("total_value")
+        ).where(Inventory.is_active == True)
+        total_result = await db.execute(total_query)
+        total_row = total_result.first()
+        
+        # 在庫不足
+        low_stock_query = select(func.count()).where(
+            and_(Inventory.is_active == True, Inventory.quantity < Inventory.min_stock_level)
+        )
+        low_stock_result = await db.execute(low_stock_query)
+        low_stock_count = low_stock_result.scalar()
+        
+        # 過剰在庫
+        overstock_query = select(func.count()).where(
+            and_(Inventory.is_active == True, Inventory.quantity > Inventory.max_stock_level, Inventory.max_stock_level > 0)
+        )
+        overstock_result = await db.execute(overstock_query)
+        overstock_count = overstock_result.scalar()
+        
+        return {
+            **payload_base,
+            "total_items": total_row.total_items or 0,
+            "total_value": float(total_row.total_value or 0),
+            "low_stock_count": low_stock_count or 0,
+            "overstock_count": overstock_count or 0,
+            "expiring_soon_count": 0
+        }
+    except SQLAlchemyError as e:
+        # 新环境/未执行迁移时，inventory 表不存在：前端降级显示 0，避免首页 500
+        if _is_missing_table(e, "inventory"):
+            return {
+                **payload_base,
+                "total_items": 0,
+                "total_value": 0.0,
+                "low_stock_count": 0,
+                "overstock_count": 0,
+                "expiring_soon_count": 0
+            }
+        raise
 
 
 @router.get("/products-by-process")
@@ -137,6 +211,54 @@ async def get_products_by_process(
         }
         for r in rows
     ]
+
+
+# ========== 在庫アラート（/{inventory_id} より前に定義すること：否则 "alerts" が id として 422 になる）==========
+
+@router.get("/alerts")
+async def get_stock_alerts(
+    alert_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user)
+):
+    """在庫アラート一覧取得"""
+    try:
+        query = select(StockAlert)
+        
+        if alert_type:
+            query = query.where(StockAlert.alert_type == alert_type)
+        if status:
+            query = query.where(StockAlert.status == status)
+        
+        # 総件数
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await db.execute(count_query)
+        total = total_result.scalar()
+        
+        # ページネーション
+        query = query.order_by(StockAlert.created_at.desc())
+        query = query.offset((page - 1) * page_size).limit(page_size)
+        result = await db.execute(query)
+        items = result.scalars().all()
+        
+        return {
+            "items": [_alert_to_dict(item) for item in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size
+        }
+    except SQLAlchemyError as e:
+        if _is_missing_table(e, "stock_alert"):
+            return {
+                "items": [],
+                "total": 0,
+                "page": page,
+                "page_size": page_size
+            }
+        raise
 
 
 @router.get("/{inventory_id}")
@@ -275,44 +397,6 @@ async def create_outbound_transaction(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# ========== 在庫アラート ==========
-
-@router.get("/alerts")
-async def get_stock_alerts(
-    alert_type: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=500),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
-):
-    """在庫アラート一覧取得"""
-    query = select(StockAlert)
-    
-    if alert_type:
-        query = query.where(StockAlert.alert_type == alert_type)
-    if status:
-        query = query.where(StockAlert.status == status)
-    
-    # 総件数
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
-    
-    # ページネーション
-    query = query.order_by(StockAlert.created_at.desc())
-    query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
-    
-    return {
-        "items": [_alert_to_dict(item) for item in items],
-        "total": total,
-        "page": page,
-        "page_size": page_size
-    }
 
 
 # ========== ヘルパー関数 ==========

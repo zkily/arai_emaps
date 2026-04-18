@@ -5,6 +5,7 @@ import { apsRoutes } from './aps'
 import { mesRoutes } from './mes'
 import { masterRoutes } from './master'
 import { systemRoutes } from './system'
+import { accountRoutes } from './account'
 import { dashboardRoute } from './layouts'
 
 /** レイアウト内に表示するルート（認証必須） */
@@ -15,6 +16,7 @@ const layoutRoutes: RouteRecordRaw = {
   children: [
     // ダッシュボード（layouts/pages で管理）
     dashboardRoute,
+    ...accountRoutes,
     // ERP モジュール（子ルートを展開）
     ...erpRoutes[0].children || [],
     // APS モジュール（子ルートを展開）

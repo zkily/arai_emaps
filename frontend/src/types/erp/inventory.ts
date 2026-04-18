@@ -109,6 +109,8 @@ export interface InventoryQueryParams {
 
 /** 库存统计 */
 export interface InventoryStats {
+  /** production_summarys：JST 当日 Σ(warehouse_inventory + inspection_inventory)（ダッシュボード在庫数量） */
+  summary_stock_qty_today?: number
   total_items: number
   total_value: number
   low_stock_count: number

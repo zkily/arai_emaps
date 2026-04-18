@@ -58,7 +58,8 @@ class UserResponse(UserBase):
     is_active: bool = True
     permissions: list[str] = []
     department_id: Optional[int] = None
-    
+    department_name: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -170,6 +171,17 @@ async def get_db_and_current_user(
     return (db, user)
 
 
+async def _resolve_department_name(db: AsyncSession, department_id: Optional[int]) -> Optional[str]:
+    """organizations から所属部門の表示名を取得"""
+    if department_id is None:
+        return None
+    from app.modules.system.models import Organization
+
+    result = await db.execute(select(Organization).where(Organization.id == department_id))
+    org = result.scalar_one_or_none()
+    return org.name if org else None
+
+
 def get_user_permissions(role: str) -> list[str]:
     """ロールに基づいて権限を取得（admin: 全権限 / manager, worker, user: 読み書き / guest, viewer: 閲覧のみ）"""
     if role == "admin":
@@ -265,7 +277,9 @@ async def login(
     
     # ユーザー権限を取得
     permissions = get_user_permissions(user.role)
-    
+    dept_id = getattr(user, "department_id", None)
+    dept_name = await _resolve_department_name(db, dept_id)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -277,7 +291,8 @@ async def login(
             "role": user.role,
             "is_active": user.is_active,
             "permissions": permissions,
-            "department_id": getattr(user, "department_id", None),
+            "department_id": dept_id,
+            "department_name": dept_name,
         }
     }
 
@@ -316,13 +331,16 @@ async def logout(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
-    current_user: User = Depends(verify_token_and_get_user)
+    db_and_user: tuple[AsyncSession, User] = Depends(get_db_and_current_user),
 ):
     """現在のユーザー情報取得"""
     try:
+        db, current_user = db_and_user
         # UserResponse は username/email/role を必須とするため、None の場合は空文字/デフォルトで返す
         role = current_user.role if current_user.role is not None else "user"
         permissions = get_user_permissions(role)
+        dept_id = getattr(current_user, "department_id", None)
+        dept_name = await _resolve_department_name(db, dept_id)
         return {
             "id": current_user.id,
             "username": current_user.username or "",
@@ -331,7 +349,8 @@ async def get_current_user(
             "role": role,
             "is_active": bool(current_user.is_active) if current_user.is_active is not None else True,
             "permissions": permissions,
-            "department_id": getattr(current_user, "department_id", None),
+            "department_id": dept_id,
+            "department_name": dept_name,
         }
     except Exception as e:
         logger.exception("GET /me でエラー: %s", e)

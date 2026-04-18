@@ -3,20 +3,53 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, cast
+from sqlalchemy.exc import SQLAlchemyError
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+import calendar
 import uuid
+
+from sqlalchemy.types import Numeric
 
 from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
+from app.modules.erp.models import OrderDaily
 from app.modules.erp.sales_models import (
     SalesOrder, SalesOrderItem, SalesDelivery, SalesDeliveryItem
 )
+from app.modules.master.models import Product
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
+
+
+def _mysql_errno_from_sqlalchemy(exc: BaseException) -> Optional[int]:
+    orig = getattr(exc, "orig", None)
+    if orig is None:
+        return None
+    args = getattr(orig, "args", None)
+    if isinstance(args, tuple) and len(args) >= 1:
+        try:
+            return int(args[0])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _is_missing_table(exc: BaseException, table_name: str) -> bool:
+    if _mysql_errno_from_sqlalchemy(exc) == 1146:
+        return True
+    msg = str(exc).lower()
+    t = table_name.lower()
+    return t in msg and (
+        "doesn't exist" in msg
+        or "does not exist" in msg
+        or "doesnt exist" in msg
+        or "unknown table" in msg
+        or "不存在" in str(exc)
+    )
 
 
 # ========== 受注一覧 ==========
@@ -66,6 +99,38 @@ async def get_sales_order_list(
     }
 
 
+async def _monthly_order_daily_aggregates(
+    db: AsyncSession, month_start: date, month_end: date
+) -> tuple[float, int]:
+    """当月 order_daily: 売上金額と確定本数を一括集計。
+
+    - 売上: Σ(confirmed_units × unit_price)
+    - 本数: Σ(confirmed_units)
+    """
+    line_amt = func.coalesce(OrderDaily.confirmed_units, 0) * func.coalesce(
+        cast(Product.unit_price, Numeric(18, 4)), 0
+    )
+    units_expr = func.coalesce(OrderDaily.confirmed_units, 0)
+    q = (
+        select(
+            func.coalesce(func.sum(line_amt), 0).label("amount"),
+            func.coalesce(func.sum(units_expr), 0).label("units"),
+        )
+        .select_from(OrderDaily)
+        .outerjoin(Product, Product.product_cd == OrderDaily.product_cd)
+        .where(and_(OrderDaily.date >= month_start, OrderDaily.date <= month_end))
+    )
+    r = await db.execute(q)
+    row = r.one()
+    amt = float(row.amount or 0)
+    u = row.units
+    try:
+        units = int(float(u)) if u is not None else 0
+    except (TypeError, ValueError):
+        units = 0
+    return amt, units
+
+
 @router.get("/orders/stats")
 async def get_sales_stats(
     db: AsyncSession = Depends(get_db),
@@ -73,43 +138,131 @@ async def get_sales_stats(
 ):
     """販売統計取得"""
     today = date.today()
-    
-    # 今月の受注
     month_start = today.replace(day=1)
-    monthly_query = select(
-        func.count(SalesOrder.id).label("count"),
-        func.sum(SalesOrder.total_amount).label("amount")
-    ).where(SalesOrder.order_date >= month_start)
-    monthly_result = await db.execute(monthly_query)
-    monthly = monthly_result.first()
-    
-    # 出荷待ち
-    pending_delivery_query = select(func.count()).where(
-        SalesOrder.status.in_(['approved', 'partial_delivered'])
-    )
-    pending_delivery_result = await db.execute(pending_delivery_query)
-    pending_delivery_count = pending_delivery_result.scalar()
-    
-    # 未回収
-    unpaid_query = select(func.sum(SalesOrder.total_amount - SalesOrder.received_amount)).where(
-        and_(SalesOrder.payment_status != 'paid', SalesOrder.status != 'cancelled')
-    )
-    unpaid_result = await db.execute(unpaid_query)
-    unpaid_amount = unpaid_result.scalar() or 0
-    
-    # 今月完了
-    completed_query = select(func.count()).where(
-        and_(SalesOrder.status == 'completed', SalesOrder.order_date >= month_start)
-    )
-    completed_result = await db.execute(completed_query)
-    completed_count = completed_result.scalar()
-    
+    last_d = calendar.monthrange(today.year, today.month)[1]
+    month_end = date(today.year, today.month, last_d)
+
+    empty_stats = {
+        "monthly_order_count": 0,
+        "monthly_order_amount": 0.0,
+        "monthly_confirmed_units": 0,
+        "pending_delivery_count": 0,
+        "completed_count": 0,
+        "unpaid_amount": 0.0,
+    }
+
+    monthly_order_amount = 0.0
+    monthly_confirmed_units = 0
+    try:
+        monthly_order_amount, monthly_confirmed_units = await _monthly_order_daily_aggregates(
+            db, month_start, month_end
+        )
+    except SQLAlchemyError as e:
+        if _is_missing_table(e, "order_daily") or _is_missing_table(e, "products"):
+            monthly_order_amount = 0.0
+            monthly_confirmed_units = 0
+        else:
+            raise
+
+    try:
+        # 今月の受注件数（sales_order）
+        monthly_query = select(func.count(SalesOrder.id).label("count")).where(
+            SalesOrder.order_date >= month_start
+        )
+        monthly_result = await db.execute(monthly_query)
+        monthly = monthly_result.first()
+
+        # 出荷待ち
+        pending_delivery_query = select(func.count()).where(
+            SalesOrder.status.in_(['approved', 'partial_delivered'])
+        )
+        pending_delivery_result = await db.execute(pending_delivery_query)
+        pending_delivery_count = pending_delivery_result.scalar()
+
+        # 未回収
+        unpaid_query = select(func.sum(SalesOrder.total_amount - SalesOrder.received_amount)).where(
+            and_(SalesOrder.payment_status != 'paid', SalesOrder.status != 'cancelled')
+        )
+        unpaid_result = await db.execute(unpaid_query)
+        unpaid_amount = unpaid_result.scalar() or 0
+
+        # 今月完了
+        completed_query = select(func.count()).where(
+            and_(SalesOrder.status == 'completed', SalesOrder.order_date >= month_start)
+        )
+        completed_result = await db.execute(completed_query)
+        completed_count = completed_result.scalar()
+
+        return {
+            "monthly_order_count": monthly.count or 0,
+            "monthly_order_amount": monthly_order_amount,
+            "monthly_confirmed_units": monthly_confirmed_units,
+            "pending_delivery_count": pending_delivery_count or 0,
+            "completed_count": completed_count or 0,
+            "unpaid_amount": float(unpaid_amount),
+        }
+    except SQLAlchemyError as e:
+        # 未执行 ERP 迁移时 sales_order 等表可能不存在（今月売上は order_daily ベースの値を返す）
+        if _is_missing_table(e, "sales_order"):
+            return {
+                **empty_stats,
+                "monthly_order_amount": monthly_order_amount,
+                "monthly_confirmed_units": monthly_confirmed_units,
+            }
+        raise
+
+
+@router.get("/orders/daily-confirmed-series")
+async def get_daily_confirmed_series(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+    start_date: Optional[date] = Query(None, description="開始日（省略時 JST 今日の 14 日前）"),
+    end_date: Optional[date] = Query(None, description="終了日（省略時 JST 今日の 7 日後）"),
+):
+    """日別受注確定本数（order_daily.confirmed_units の日付合計）。既定レンジ：過去2週＋今日＋将来1週。"""
+    today = now_jst().date()
+    if start_date is None:
+        start_date = today - timedelta(days=14)
+    if end_date is None:
+        end_date = today + timedelta(days=7)
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date must be <= end_date")
+
+    rows_map: dict[date, int] = {}
+    try:
+        units_expr = func.coalesce(OrderDaily.confirmed_units, 0)
+        q = (
+            select(OrderDaily.date, func.coalesce(func.sum(units_expr), 0).label("units"))
+            .select_from(OrderDaily)
+            .where(and_(OrderDaily.date >= start_date, OrderDaily.date <= end_date))
+            .group_by(OrderDaily.date)
+            .order_by(OrderDaily.date)
+        )
+        r = await db.execute(q)
+        for row in r.all():
+            u = row.units
+            try:
+                v = int(float(u)) if u is not None else 0
+            except (TypeError, ValueError):
+                v = 0
+            rows_map[row.date] = v
+    except SQLAlchemyError as e:
+        if _is_missing_table(e, "order_daily"):
+            rows_map = {}
+        else:
+            raise
+
+    items = []
+    d = start_date
+    while d <= end_date:
+        items.append({"date": d.isoformat(), "confirmed_units": rows_map.get(d, 0)})
+        d += timedelta(days=1)
+
     return {
-        "monthly_order_count": monthly.count or 0,
-        "monthly_order_amount": float(monthly.amount or 0),
-        "pending_delivery_count": pending_delivery_count or 0,
-        "completed_count": completed_count or 0,
-        "unpaid_amount": float(unpaid_amount)
+        "as_of_date": today.isoformat(),
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "items": items,
     }
 
 

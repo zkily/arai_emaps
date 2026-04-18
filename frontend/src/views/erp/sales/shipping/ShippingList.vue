@@ -1,82 +1,103 @@
 <template>
-  <div class="shipping-list">
-    <div class="page-header">
-      <h2>出荷指示</h2>
-      <p class="subtitle">出荷指図書発行・ピッキングリスト・送り状データ出力</p>
+  <div class="sales-page-shell">
+    <div class="sales-page-hero">
+      <div class="sales-page-hero__mesh" aria-hidden="true" />
+      <div class="sales-page-hero__content">
+        <div class="sales-page-hero__icon">
+          <el-icon :size="28"><Van /></el-icon>
+        </div>
+        <div class="sales-page-hero__titles">
+          <h1 class="sales-page-hero__title">{{ t('salesPages.shippingList.title') }}</h1>
+          <p class="sales-page-hero__subtitle">{{ t('salesPages.shippingList.subtitle') }}</p>
+        </div>
+      </div>
     </div>
 
-    <!-- 検索フィルター -->
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters" class="filter-form">
-        <el-form-item label="出荷予定日">
-          <el-date-picker v-model="filters.shipping_date" type="date" placeholder="日付選択" value-format="YYYY-MM-DD" />
+        <el-form-item :label="t('salesPages.shippingList.shipDate')">
+          <el-date-picker v-model="filters.shipping_date" type="date" value-format="YYYY-MM-DD" />
         </el-form-item>
-        <el-form-item label="顧客">
-          <el-select v-model="filters.customer_code" placeholder="顧客選択" clearable filterable>
+        <el-form-item :label="t('salesPages.common.customer')">
+          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
-        <el-form-item label="ステータス">
-          <el-select v-model="filters.status" placeholder="全て" clearable>
-            <el-option label="未出荷" value="pending" />
-            <el-option label="ピッキング中" value="picking" />
-            <el-option label="出荷完了" value="shipped" />
+        <el-form-item :label="t('salesPages.common.status')">
+          <el-select v-model="filters.status" :placeholder="t('salesPages.common.all')" clearable>
+            <el-option :label="t('salesPages.shippingList.statusPending')" value="pending" />
+            <el-option :label="t('salesPages.shippingList.statusPicking')" value="picking" />
+            <el-option :label="t('salesPages.shippingList.statusShipped')" value="shipped" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch"><el-icon><Search /></el-icon> 検索</el-button>
-          <el-button @click="handleReset">リセット</el-button>
+          <el-button type="primary" @click="handleSearch">
+            <el-icon><Search /></el-icon>
+            {{ t('salesPages.common.search') }}
+          </el-button>
+          <el-button @click="handleReset">{{ t('salesPages.common.reset') }}</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- ツールバー -->
-    <div class="toolbar">
+    <div class="sales-page-toolbar">
       <el-button type="primary" @click="handlePrintPickingList" :disabled="!hasSelection">
-        <el-icon><Document /></el-icon> ピッキングリスト発行
+        <el-icon><Document /></el-icon>
+        {{ t('salesPages.shippingList.pickingList') }}
       </el-button>
       <el-button type="success" @click="handlePrintShippingOrder" :disabled="!hasSelection">
-        <el-icon><Tickets /></el-icon> 出荷指図書発行
+        <el-icon><Tickets /></el-icon>
+        {{ t('salesPages.shippingList.shipOrder') }}
       </el-button>
       <el-button @click="handleExportInvoiceData" :disabled="!hasSelection">
-        <el-icon><Download /></el-icon> 送り状データ出力
+        <el-icon><Download /></el-icon>
+        {{ t('salesPages.shippingList.waybillExport') }}
       </el-button>
       <el-divider direction="vertical" />
       <el-button type="warning" @click="handleBatchShip" :disabled="!hasSelection">
-        <el-icon><Van /></el-icon> 一括出荷処理
+        <el-icon><Van /></el-icon>
+        {{ t('salesPages.shippingList.batchShip') }}
       </el-button>
     </div>
 
-    <!-- 出荷一覧テーブル -->
     <el-card shadow="never">
       <el-table :data="shippingList" v-loading="loading" stripe border @selection-change="handleSelectionChange">
         <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="order_no" label="受注番号" width="130" fixed />
-        <el-table-column prop="shipping_date" label="出荷予定日" width="110" />
-        <el-table-column prop="customer_name" label="顧客名" min-width="150" />
-        <el-table-column prop="destination_name" label="納入先" min-width="150" />
-        <el-table-column prop="product_code" label="品番" width="120" />
-        <el-table-column prop="product_name" label="品名" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="quantity" label="出荷数" width="90" align="right" />
-        <el-table-column prop="location" label="ロケーション" width="120" />
-        <el-table-column prop="carrier" label="配送業者" width="100" />
-        <el-table-column prop="status" label="ステータス" width="110" align="center">
+        <el-table-column prop="order_no" :label="t('salesPages.common.orderNo')" width="130" fixed />
+        <el-table-column prop="shipping_date" :label="t('salesPages.shippingList.shipDate')" width="110" />
+        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
+        <el-table-column prop="destination_name" :label="t('salesPages.shippingList.colDest')" min-width="150" />
+        <el-table-column prop="product_code" :label="t('salesPages.common.productCode')" width="120" />
+        <el-table-column prop="product_name" :label="t('salesPages.contractPricing.productName')" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="quantity" :label="t('salesPages.shippingList.colQty')" width="90" align="right" />
+        <el-table-column prop="location" :label="t('salesPages.shippingList.colLoc')" width="120" />
+        <el-table-column prop="carrier" :label="t('salesPages.shippingList.colCarrier')" width="100" />
+        <el-table-column prop="status" :label="t('salesPages.common.status')" width="110" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
+            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column :label="t('salesPages.common.actions')" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">詳細</el-button>
-            <el-button size="small" type="success" link @click="handleShip(row)" v-if="row.status !== 'shipped'">出荷</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
+            <el-button size="small" type="success" link @click="handleShip(row)" v-if="row.status !== 'shipped'">
+              {{ t('salesPages.shippingList.ship') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="pagination-wrapper">
-        <el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize"
-          :total="pagination.total" :page-sizes="[20, 50, 100]"
-          layout="total, sizes, prev, pager, next, jumper" background />
+      <div class="sales-page-pagination">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.pageSize"
+          :total="pagination.total"
+          :page-sizes="[20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="onPageSize"
+          @current-change="loadData"
+        />
       </div>
     </el-card>
   </div>
@@ -84,12 +105,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Document, Tickets, Download, Van } from '@element-plus/icons-vue'
 
+const { t } = useI18n()
 const loading = ref(false)
-const shippingList = ref<any[]>([])
-const selectedRows = ref<any[]>([])
+const shippingList = ref<Record<string, unknown>[]>([])
+const selectedRows = ref<Record<string, unknown>[]>([])
 const customers = ref<{ cd: string; name: string }[]>([])
 
 const filters = reactive({
@@ -102,42 +125,89 @@ const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 const hasSelection = computed(() => selectedRows.value.length > 0)
 
-onMounted(() => { loadData() })
+const statusTypeMap: Record<string, string> = { pending: 'warning', picking: 'info', shipped: 'success' }
+const statusLabelKeys: Record<string, string> = {
+  pending: 'salesPages.shippingList.statusPending',
+  picking: 'salesPages.shippingList.statusPicking',
+  shipped: 'salesPages.shippingList.statusShipped',
+}
+
+onMounted(() => {
+  loadData()
+})
 
 const loadData = async () => {
   loading.value = true
   try {
-    // TODO: API呼び出し
     shippingList.value = []
   } finally {
     loading.value = false
   }
 }
 
-const handleSearch = () => { pagination.page = 1; loadData() }
-const handleReset = () => { Object.assign(filters, { shipping_date: '', customer_code: '', status: '' }); handleSearch() }
-const handleSelectionChange = (rows: any[]) => { selectedRows.value = rows }
-
-const handlePrintPickingList = () => { ElMessage.info(`${selectedRows.value.length}件のピッキングリストを発行`) }
-const handlePrintShippingOrder = () => { ElMessage.info(`${selectedRows.value.length}件の出荷指図書を発行`) }
-const handleExportInvoiceData = () => { ElMessage.info('送り状データを出力しました') }
-const handleBatchShip = async () => {
-  await ElMessageBox.confirm(`${selectedRows.value.length}件を出荷完了にしますか？`, '確認')
-  ElMessage.success('出荷処理を実行しました')
+const onPageSize = () => {
+  pagination.page = 1
+  loadData()
 }
-const handleView = (row: any) => { ElMessage.info(`受注 ${row.order_no} の詳細`) }
-const handleShip = (row: any) => { ElMessage.success(`受注 ${row.order_no} を出荷完了にしました`) }
 
-const getStatusType = (s: string) => ({ pending: 'warning', picking: 'info', shipped: 'success' }[s] || 'info')
-const getStatusLabel = (s: string) => ({ pending: '未出荷', picking: 'ピッキング中', shipped: '出荷完了' }[s] || s)
+const handleSearch = () => {
+  pagination.page = 1
+  loadData()
+}
+
+const handleReset = () => {
+  Object.assign(filters, { shipping_date: '', customer_code: '', status: '' })
+  handleSearch()
+}
+
+const handleSelectionChange = (rows: Record<string, unknown>[]) => {
+  selectedRows.value = rows
+}
+
+const handlePrintPickingList = () => {
+  ElMessage.info(t('salesPages.shippingList.pickingWip', { n: selectedRows.value.length }))
+}
+
+const handlePrintShippingOrder = () => {
+  ElMessage.info(t('salesPages.shippingList.orderWip', { n: selectedRows.value.length }))
+}
+
+const handleExportInvoiceData = () => {
+  ElMessage.success(t('salesPages.shippingList.waybillOk'))
+}
+
+const handleBatchShip = async () => {
+  await ElMessageBox.confirm(
+    t('salesPages.shippingList.batchShipConfirm', { n: selectedRows.value.length }),
+    t('salesPages.common.confirmTitle'),
+  )
+  ElMessage.success(t('salesPages.shippingList.batchShipOk'))
+}
+
+const handleView = (row: Record<string, unknown>) => {
+  ElMessage.info(t('salesPages.shippingList.detailWip', { no: String(row.order_no ?? '') }))
+}
+
+const handleShip = (row: Record<string, unknown>) => {
+  ElMessage.success(t('salesPages.shippingList.shipOk', { no: String(row.order_no ?? '') }))
+}
+
+const getStatusType = (s: string) => statusTypeMap[s] || 'info'
+const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>
 
+<style scoped src="@/views/erp/sales/sales-page-shell.scss"></style>
+
 <style scoped>
-.shipping-list { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0 0 8px 0; color: #303133; }
-.subtitle { margin: 0; color: #909399; font-size: 14px; }
-.filter-card { margin-bottom: 16px; }
-.toolbar { margin-bottom: 16px; display: flex; gap: 12px; align-items: center; }
-.pagination-wrapper { margin-top: 16px; display: flex; justify-content: flex-end; }
+.filter-card {
+  margin-bottom: 12px;
+}
+.filter-card :deep(.el-card__body) {
+  padding: 16px;
+}
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
 </style>

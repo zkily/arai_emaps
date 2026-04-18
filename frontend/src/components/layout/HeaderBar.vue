@@ -1,102 +1,113 @@
 <template>
   <div class="header-bar">
-    <div class="header-left">
-      <div
-        v-if="isMobile"
-        class="header-action menu-trigger"
-        :title="t('common.menu')"
-        @click="$emit('toggle-sidebar')"
-      >
-        <el-icon :size="20">
-          <component :is="sidebarOpen ? Close : Menu" />
-        </el-icon>
-      </div>
-      <div class="time-badge">
-        <el-icon class="time-icon"><Clock /></el-icon>
-        <span class="current-time">{{ currentTime }}</span>
-      </div>
-    </div>
-    
-    <div class="header-right">
-      <!-- 语言切换 -->
-      <el-dropdown trigger="click" @command="handleLocaleChange" class="lang-dropdown" popper-class="lang-dropdown-popper">
-        <div class="header-action lang-trigger" :title="t('common.language')">
-          <el-icon :size="15"><Promotion /></el-icon>
-          <span class="lang-label">{{ currentLangLabel }}</span>
-          <el-icon class="dropdown-arrow" :size="10"><ArrowDown /></el-icon>
+    <div class="header-bar__mesh" aria-hidden="true" />
+    <div class="header-bar__shine" aria-hidden="true" />
+    <div class="header-bar__inner">
+      <div class="header-left">
+        <div
+          v-if="isMobile"
+          class="header-action menu-trigger"
+          :title="t('common.menu')"
+          @click="$emit('toggle-sidebar')"
+        >
+          <el-icon :size="20">
+            <component :is="sidebarOpen ? Close : Menu" />
+          </el-icon>
         </div>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="en">
-              <span class="flag-emoji">🇺🇸</span> English
-            </el-dropdown-item>
-            <el-dropdown-item command="ja">
-              <span class="flag-emoji">🇯🇵</span> 日本語
-            </el-dropdown-item>
-            <el-dropdown-item command="zh">
-              <span class="flag-emoji">🇨🇳</span> 中文
-            </el-dropdown-item>
-            <el-dropdown-item command="vi">
-              <span class="flag-emoji">🇻🇳</span> Tiếng Việt
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+        <div class="time-badge">
+          <el-icon class="time-icon"><Clock /></el-icon>
+          <span class="current-time">{{ currentTime }}</span>
+        </div>
+      </div>
 
-      <div class="header-action" @click="toggleFullscreen" :title="isFullscreen ? t('common.exitFullscreen') : t('common.fullscreen')">
-        <el-icon :size="15">
-          <FullScreen v-if="!isFullscreen" />
-          <Aim v-else />
-        </el-icon>
-      </div>
-      
-      <div class="header-action notification-action">
-        <el-badge :value="notificationCount" :hidden="notificationCount === 0" :max="99">
-          <el-icon :size="15"><Bell /></el-icon>
-        </el-badge>
-      </div>
-      
-      <div class="header-divider"></div>
-      
-      <el-dropdown @command="handleCommand" trigger="click">
-        <div class="user-dropdown">
-          <div class="user-avatar">
-            <el-icon v-if="!userStore.user?.username" :size="14"><User /></el-icon>
-            <span v-else>{{ userStore.user?.username?.charAt(0).toUpperCase() }}</span>
+      <div class="header-right">
+        <!-- 语言切换 -->
+        <el-dropdown trigger="click" @command="handleLocaleChange" class="lang-dropdown" popper-class="lang-dropdown-popper">
+          <div class="header-action lang-trigger" :title="t('common.language')">
+            <el-icon :size="15"><Promotion /></el-icon>
+            <span class="lang-label">{{ currentLangLabel }}</span>
+            <el-icon class="dropdown-arrow" :size="10"><ArrowDown /></el-icon>
           </div>
-          <div class="user-details">
-            <span class="username">{{ userStore.user?.username || t('common.guest') }}</span>
-            <span class="user-role">
-              <el-icon :size="9"><Star /></el-icon>
-              {{ t('common.admin') }}
-            </span>
-          </div>
-          <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="en">
+                <span class="flag-emoji">🇺🇸</span> English
+              </el-dropdown-item>
+              <el-dropdown-item command="ja">
+                <span class="flag-emoji">🇯🇵</span> 日本語
+              </el-dropdown-item>
+              <el-dropdown-item command="zh">
+                <span class="flag-emoji">🇨🇳</span> 中文
+              </el-dropdown-item>
+              <el-dropdown-item command="vi">
+                <span class="flag-emoji">🇻🇳</span> Tiếng Việt
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
+        <div
+          class="header-action header-action--icon"
+          @click="toggleFullscreen"
+          :title="isFullscreen ? t('common.exitFullscreen') : t('common.fullscreen')"
+        >
+          <el-icon :size="16">
+            <FullScreen v-if="!isFullscreen" />
+            <Aim v-else />
+          </el-icon>
         </div>
-        <template #dropdown>
-          <el-dropdown-menu class="user-menu">
-            <el-dropdown-item command="profile">
-              <el-icon><User /></el-icon>
-              {{ t('common.profile') }}
-            </el-dropdown-item>
-            <el-dropdown-item command="settings">
-              <el-icon><Setting /></el-icon>
-              {{ t('common.settings') }}
-            </el-dropdown-item>
-            <el-dropdown-item command="logout" divided>
-              <el-icon><SwitchButton /></el-icon>
-              {{ t('common.logout') }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
+
+        <div class="header-divider" aria-hidden="true" />
+
+        <el-dropdown @command="handleCommand" trigger="click">
+          <div class="user-dropdown">
+            <div class="user-avatar">
+              <el-icon v-if="!userStore.user?.username" :size="14"><User /></el-icon>
+              <span v-else>{{ userStore.user?.username?.charAt(0).toUpperCase() }}</span>
+            </div>
+            <div class="user-details">
+              <span class="username">{{ userStore.user?.username || t('common.guest') }}</span>
+              <span class="user-role">
+                <el-icon :size="9"><Star /></el-icon>
+                {{ t('common.admin') }}
+              </span>
+            </div>
+            <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu class="user-menu">
+              <el-dropdown-item command="profile">
+                <el-icon><User /></el-icon>
+                {{ t('common.profile') }}
+              </el-dropdown-item>
+              <el-dropdown-item command="logout" divided>
+                <el-icon><SwitchButton /></el-icon>
+                {{ t('common.logout') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
     </div>
+
+    <el-dialog
+      v-model="profileDialogVisible"
+      :title="t('common.profile')"
+      width="400px"
+      append-to-body
+      destroy-on-close
+      align-center
+      class="header-profile-dialog"
+    >
+      <UserProfilePanel v-if="profileDialogVisible" presentation="dialog" />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
@@ -104,7 +115,7 @@ import 'dayjs/locale/ja'
 import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
-  FullScreen, Aim, Bell, User, Setting, SwitchButton, ArrowDown, Clock,
+  FullScreen, Aim, User, SwitchButton, ArrowDown, Clock,
   Menu, Close, Promotion, Star
 } from '@element-plus/icons-vue'
 
@@ -136,7 +147,7 @@ const userStore = useUserStore()
 
 const currentTime = ref(dayjs().tz('Asia/Tokyo').format('MM/DD (ddd) HH:mm'))
 const isFullscreen = ref(false)
-const notificationCount = ref(3)
+const profileDialogVisible = ref(false)
 
 let timer: number | null = null
 
@@ -189,8 +200,7 @@ const handleCommand = async (command: string) => {
       }
       break
     case 'profile':
-      break
-    case 'settings':
+      profileDialogVisible.value = true
       break
   }
 }
@@ -198,27 +208,86 @@ const handleCommand = async (command: string) => {
 
 <style scoped>
 .header-bar {
+  position: relative;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  height: 42px;
-  padding: 0 16px;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%);
+  align-items: stretch;
+  min-height: 46px;
+  padding: 0;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(
+    118deg,
+    #312e81 0%,
+    #4338ca 22%,
+    #6366f1 52%,
+    #6d28d9 88%,
+    #5b21b6 100%
+  );
   box-shadow:
-    0 2px 0 0 rgba(255, 255, 255, 0.08) inset,
-    0 2px 12px rgba(99, 102, 241, 0.35);
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 8px 32px -8px rgba(49, 46, 129, 0.55);
   -webkit-font-smoothing: antialiased;
+}
+
+.header-bar__mesh {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background:
+    radial-gradient(ellipse 100% 80% at 0% 0%, rgba(255, 255, 255, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse 70% 60% at 100% 100%, rgba(167, 139, 250, 0.35) 0%, transparent 50%);
+}
+
+.header-bar__shine {
+  pointer-events: none;
+  position: absolute;
+  top: -60%;
+  right: -20%;
+  width: 45%;
+  height: 200%;
+  background: linear-gradient(
+    125deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.04) 55%,
+    transparent 100%
+  );
+  transform: rotate(-18deg);
+}
+
+.header-bar__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+  padding: 0 18px;
+  gap: 12px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .menu-trigger {
   flex-shrink: 0;
-  color: white;
+  color: #fff;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.15);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .menu-trigger .el-icon {
@@ -228,50 +297,68 @@ const handleCommand = async (command: string) => {
 .time-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 20px;
-  color: #fff;
-  font-size: 11px;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-radius: 999px;
+  color: #f8fafc;
+  font-size: 11.5px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 2px 8px rgba(15, 23, 42, 0.12);
 }
 
 .time-icon {
-  font-size: 12px;
+  font-size: 13px;
   opacity: 0.95;
+  color: #c7d2fe;
 }
 
 .current-time {
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .header-action {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  min-width: 34px;
+  height: 34px;
+  border-radius: 10px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.92);
-  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  color: rgba(255, 255, 255, 0.94);
+  transition:
+    background 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s ease;
 }
 
-.header-action:hover {
-  background: rgba(255, 255, 255, 0.18);
+.header-action--icon {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.header-action--icon:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
   color: #fff;
   transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 4px 12px rgba(15, 23, 42, 0.15);
 }
 
 .header-action:active {
@@ -280,16 +367,20 @@ const handleCommand = async (command: string) => {
 
 /* 语言切换 */
 .lang-dropdown .lang-trigger {
-  min-width: 64px;
-  padding: 0 10px;
-  gap: 5px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  min-width: 72px;
+  height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .lang-dropdown .lang-trigger:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.26);
+  transform: translateY(-1px);
 }
 
 .lang-label {
@@ -308,21 +399,17 @@ const handleCommand = async (command: string) => {
   margin-right: 6px;
 }
 
-.notification-action :deep(.el-badge__content) {
-  height: 14px;
-  line-height: 14px;
-  padding: 0 4px;
-  font-size: 9px;
-  border: 2px solid #6366f1;
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  box-shadow: 0 1px 4px rgba(220, 38, 38, 0.4);
-}
-
 .header-divider {
   width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.25);
-  margin: 0 8px;
+  height: 22px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  margin: 0 4px 0 10px;
+  flex-shrink: 0;
 }
 
 /* 用户区域：加宽显示，行高保持不变 */
@@ -330,38 +417,45 @@ const handleCommand = async (command: string) => {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 160px;
-  padding: 4px 12px 4px 4px;
-  border-radius: 22px;
+  min-width: 168px;
+  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.14);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  background: rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition: all 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 10px rgba(15, 23, 42, 0.12);
 }
 
 .user-dropdown:hover {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.32);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 6px 20px rgba(15, 23, 42, 0.18);
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
   border-radius: 50%;
-  background: linear-gradient(145deg, #fff 0%, #eef2ff 100%);
-  color: #6366f1;
+  background: linear-gradient(145deg, #ffffff 0%, #e0e7ff 55%, #c7d2fe 100%);
+  color: #4338ca;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
-  font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  font-weight: 800;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.38),
+    0 2px 8px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
 .user-details {
@@ -426,9 +520,12 @@ const handleCommand = async (command: string) => {
 
 /* Responsive */
 @media (max-width: 768px) {
+  .header-bar__inner {
+    padding: 0 12px;
+  }
+
   .header-bar {
-    padding: 0 10px;
-    height: 40px;
+    min-height: 44px;
   }
   .user-dropdown {
     min-width: auto;
@@ -466,5 +563,55 @@ const handleCommand = async (command: string) => {
 .lang-dropdown-popper .el-dropdown-menu__item {
   display: flex;
   align-items: center;
+}
+
+.header-profile-dialog.el-dialog {
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 0;
+  background: #f1f5f9;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
+.header-profile-dialog .el-dialog__header {
+  margin: 0;
+  padding: 4px 8px 0;
+  border-bottom: none;
+  background: transparent;
+}
+
+.header-profile-dialog .el-dialog__headerbtn {
+  top: 4px;
+  right: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.header-profile-dialog .el-dialog__headerbtn:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.header-profile-dialog .el-dialog__title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.header-profile-dialog .el-dialog__body {
+  padding: 0;
+  max-height: min(78vh, 620px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: transparent;
 }
 </style>

@@ -38,6 +38,11 @@ export function getMaxProductCd(): Promise<number> {
   return request.get('/api/master/products/max-cd') as Promise<number>
 }
 
+/** 有効製品数（active・量産品・品名に「加工」「アーチ」を含まない、ダッシュボード用） */
+export function getActiveProductCount(): Promise<{ active_count: number }> {
+  return request.get('/api/master/products/stats/active-count') as Promise<{ active_count: number }>
+}
+
 export function createProduct(data: Product): Promise<Product> {
   return request.post('/api/master/products', data) as Promise<Product>
 }

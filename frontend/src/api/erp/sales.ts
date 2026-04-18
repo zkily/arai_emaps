@@ -131,12 +131,61 @@ export const confirmSalesReturnReceipt = (id: number, items: Array<{
 
 // ========== 销售统计 ==========
 
-/** 获取销售统计数据 */
-export const getSalesStats = (params?: {
+/** 后端 GET /sales/orders/stats 的原始字段（与 SalesStats 不同名） */
+export interface SalesStatsOrdersApi {
+  /** 当月 sales_order 条数（参考用） */
+  monthly_order_count: number
+  monthly_order_amount: number
+  /** 当月 order_daily.confirmed_units 合计（今月受注卡片用） */
+  monthly_confirmed_units?: number
+  pending_delivery_count: number
+  completed_count: number
+  unpaid_amount: number
+}
+
+function mapOrdersStatsToSalesStats(raw: SalesStatsOrdersApi): SalesStats {
+  const units = raw.monthly_confirmed_units ?? raw.monthly_order_count ?? 0
+  const amount = raw.monthly_order_amount ?? 0
+  return {
+    total_orders: units,
+    total_amount: amount,
+    pending_orders: raw.pending_delivery_count ?? 0,
+    pending_amount: raw.unpaid_amount ?? 0,
+    completed_orders: raw.completed_count ?? 0,
+    completed_amount: 0,
+    this_month_orders: units,
+    this_month_amount: amount,
+    last_month_orders: 0,
+    last_month_amount: 0,
+    month_over_month_rate: 0,
+    average_order_value: units > 0 ? amount / units : 0,
+  }
+}
+
+/** 获取销售统计数据（对接后端 /sales/orders/stats） */
+export const getSalesStats = async (params?: {
   start_date?: string
   end_date?: string
 }) => {
-  return request.get<SalesStats>(`${BASE_URL}/stats`, { params })
+  const raw = await request.get<SalesStatsOrdersApi>(`${BASE_URL}/orders/stats`, { params })
+  return mapOrdersStatsToSalesStats(raw as SalesStatsOrdersApi)
+}
+
+/** 日別受注確定本数（order_daily、既定：過去2週＋将来1週） */
+export interface DailyConfirmedSeriesItem {
+  date: string
+  confirmed_units: number
+}
+
+export interface DailyConfirmedSeries {
+  as_of_date: string
+  start_date: string
+  end_date: string
+  items: DailyConfirmedSeriesItem[]
+}
+
+export const getDailyConfirmedSeries = () => {
+  return request.get<DailyConfirmedSeries>(`${BASE_URL}/orders/daily-confirmed-series`)
 }
 
 /** 获取客户销售排名 */
