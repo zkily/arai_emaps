@@ -1,7 +1,6 @@
 <template>
   <div class="product-machine-config-container fade-in">
-    <!-- 页面头部 -->
-    <div class="page-header surface-card fade-card">
+    <div class="page-header">
       <div class="header-content">
         <div class="title-section">
           <h1 class="main-title">
@@ -21,15 +20,17 @@
       </div>
     </div>
 
-    <!-- 功能操作区域 -->
-    <div class="action-section surface-card fade-card">
-      <!-- 筛选标题 -->
+    <div class="action-section">
       <div class="filter-header">
         <div class="filter-title">
           <el-icon class="filter-icon">
             <Filter />
           </el-icon>
           <span>検索・絞り込み</span>
+          <div class="filter-inline-summary">
+            <el-icon class="summary-icon"><InfoFilled /></el-icon>
+            <span>表示 {{ filteredList.length }} / {{ configList?.length || 0 }} 件</span>
+          </div>
         </div>
         <div class="filter-actions">
           <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
@@ -50,13 +51,13 @@
         </div>
       </div>
 
-      <!-- 筛选内容 -->
       <div class="filters-content">
         <div class="keyword-search">
           <el-input
             v-model="filters.keyword"
-            placeholder="製品CDまたは製品名で検索"
+            placeholder="製品CD・製品名（リアルタイム絞り込み）"
             clearable
+            size="default"
             @input="handleFilter"
             class="keyword-input"
           >
@@ -70,18 +71,20 @@
       </div>
     </div>
 
-    <!-- 数据表格 -->
-    <div class="table-section surface-card fade-card">
-      <el-card class="table-card elevated-card" shadow="never">
+    <div class="table-section">
+      <el-card class="table-card" shadow="never">
         <el-table
           :data="filteredList"
           v-loading="loading"
           stripe
           border
+          size="small"
           style="width: 100%"
           :empty-text="'データがありません'"
           :default-sort="{ prop: 'product_cd', order: 'ascending' }"
-          height="calc(100vh - 320px)"
+          :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
+          :cell-style="{ padding: '4px 8px' }"
+          height="calc(100vh - 268px)"
         >
           <el-table-column
             prop="product_cd"
@@ -141,13 +144,6 @@
           </el-table-column>
         </el-table>
       </el-card>
-    </div>
-
-    <!-- 结果统计 -->
-    <div class="result-section surface-card fade-card">
-      <div class="result-info">
-        表示件数: {{ filteredList.length }} / {{ configList?.length || 0 }}
-      </div>
     </div>
 
     <!-- 编辑对话框 -->
@@ -388,6 +384,7 @@ import {
   Box,
   Tools,
   OfficeBuilding,
+  InfoFilled,
 } from '@element-plus/icons-vue'
 import {
   fetchProductMachineConfigList,
@@ -658,35 +655,19 @@ onMounted(async () => {
 
 <style scoped>
 .product-machine-config-container {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  padding: 12px 16px 16px;
-}
-
-.surface-card {
-  background: #ffffff;
-  border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(6px);
-  transition: all 0.2s ease;
-}
-
-.surface-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.06);
-}
-
-.fade-card {
-  animation: fadeUp 0.35s ease;
+  min-height: 100%;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+  padding: 6px 8px 10px;
+  box-sizing: border-box;
 }
 
 .page-header {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  padding: 16px 20px;
-  margin-bottom: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 10px 14px;
+  margin-bottom: 8px;
   color: #fff;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.28);
 }
 
 .header-content {
@@ -694,7 +675,7 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .title-section {
@@ -705,89 +686,111 @@ onMounted(async () => {
 .main-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 22px;
+  gap: 8px;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   letter-spacing: -0.02em;
 }
 
 .title-icon {
-  font-size: 24px;
+  font-size: 1.35rem;
   flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.88);
   margin: 0;
-  font-weight: 400;
+  line-height: 1.35;
 }
 
 .header-stats {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(10px);
   border-radius: 10px;
-  padding: 10px 14px;
+  padding: 6px 12px;
   text-align: center;
-  min-width: 70px;
-  transition: all 0.2s ease;
+  min-width: 64px;
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .stat-card:hover {
-  background: rgba(255, 255, 255, 0.35);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .stat-number {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
   color: white;
-  margin-bottom: 2px;
-  line-height: 1.2;
+  line-height: 1.1;
 }
 
 .stat-label {
-  font-size: 10px;
-  color: rgba(255, 255, 255, 0.95);
-  letter-spacing: 0.03em;
-  font-weight: 500;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.92);
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 .action-section {
-  padding: 14px 18px;
-  margin-bottom: 12px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  padding: 8px 12px 10px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .filter-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .filter-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 0.88rem;
   font-weight: 600;
   color: #334155;
+  min-width: 0;
 }
 
 .filter-icon {
-  font-size: 16px;
-  color: #6366f1;
+  font-size: 15px;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.filter-inline-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 10px;
+  margin-left: 4px;
+  border-left: 1px solid #e2e8f0;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.summary-icon {
+  color: #667eea;
+  font-size: 14px;
 }
 
 .filter-actions {
@@ -797,26 +800,20 @@ onMounted(async () => {
 }
 
 .filter-actions .el-button {
-  transition: all 0.2s ease;
-  border-radius: 6px;
-  font-size: 13px;
-  padding: 6px 12px;
-}
-
-.filter-actions .el-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 6px 11px;
 }
 
 .filters-content {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .keyword-search {
   flex: 1;
-  min-width: 240px;
+  min-width: 200px;
 }
 
 .keyword-input :deep(.el-input__wrapper) {
@@ -838,14 +835,15 @@ onMounted(async () => {
 
 .table-section {
   padding: 0;
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 .table-card {
-  border: none;
-  background: transparent;
-  border-radius: 12px;
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
   overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 
 .table-card :deep(.el-card__body) {
@@ -870,28 +868,6 @@ onMounted(async () => {
   transform: translateY(-1px);
 }
 
-.result-section {
-  padding: 10px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fafbfc;
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
-}
-
-.result-info {
-  font-size: 12px;
-  color: #64748b;
-  letter-spacing: 0.02em;
-  font-weight: 500;
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .config-dialog :deep(.el-dialog) {
   border-radius: 16px;
   overflow: hidden;
@@ -899,28 +875,28 @@ onMounted(async () => {
 }
 
 .config-dialog :deep(.el-dialog__header) {
-  padding: 18px 24px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.08));
   border-bottom: 1px solid rgba(226, 232, 240, 0.8);
   margin: 0;
 }
 
 .config-dialog :deep(.el-dialog__title) {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   letter-spacing: 0.02em;
 }
 
 .config-dialog :deep(.el-dialog__body) {
-  padding: 20px 24px;
+  padding: 12px 18px;
   background: #ffffff;
-  max-height: calc(90vh - 140px);
+  max-height: calc(90vh - 120px);
   overflow-y: auto;
 }
 
 .config-dialog :deep(.el-dialog__footer) {
-  padding: 16px 24px;
+  padding: 10px 18px 12px;
   background: #fafbfc;
   border-top: 1px solid rgba(226, 232, 240, 0.8);
   margin: 0;
@@ -929,32 +905,31 @@ onMounted(async () => {
 .config-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .form-section {
   background: #ffffff;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  border-radius: 12px;
-  padding: 16px 18px;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: border-color 0.2s ease;
 }
 
 .form-section:hover {
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.28);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: #475467;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
-  border-bottom: 2px solid rgba(99, 102, 241, 0.15);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(99, 102, 241, 0.18);
 }
 
 .section-title .el-icon {
@@ -965,7 +940,7 @@ onMounted(async () => {
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px 16px;
+  gap: 8px 12px;
 }
 
 .form-grid .span-2 {
@@ -1033,7 +1008,7 @@ onMounted(async () => {
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
 }
 
 .dialog-footer .el-button {
@@ -1062,7 +1037,7 @@ onMounted(async () => {
   --el-table-border-color: rgba(226, 232, 240, 0.6);
   --el-table-header-bg-color: #f8fafc;
   --el-table-row-hover-bg-color: rgba(99, 102, 241, 0.04);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .table-section :deep(.el-table__header) {
@@ -1070,19 +1045,19 @@ onMounted(async () => {
 }
 
 .table-section :deep(.el-table__header th) {
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
   color: #475467;
   font-weight: 600;
-  font-size: 12px;
-  padding: 10px 8px;
-  border-bottom: 2px solid rgba(226, 232, 240, 0.8);
+  font-size: 11px;
+  padding: 6px 6px !important;
+  border-bottom: 1px solid #e2e8f0;
   text-transform: none;
   letter-spacing: 0.01em;
 }
 
 .table-section :deep(.el-table__body td) {
-  padding: 10px 8px;
-  font-size: 13px;
+  padding: 5px 6px !important;
+  font-size: 12px;
   color: #334155;
   border-bottom: 1px solid rgba(226, 232, 240, 0.6);
 }
@@ -1108,12 +1083,12 @@ onMounted(async () => {
 }
 
 .table-section :deep(.el-table__empty-block) {
-  padding: 40px 0;
+  padding: 24px 0;
 }
 
 .table-section :deep(.el-table__empty-text) {
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .fade-in {

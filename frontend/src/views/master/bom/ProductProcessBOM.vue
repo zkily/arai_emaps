@@ -427,28 +427,30 @@
             </template>
           </el-table-column>
 
-          <!-- 操作列 -->
-          <el-table-column label="操作" width="160" align="center" fixed="right">
+          <!-- 操作列（アイコンのみ） -->
+          <el-table-column label="操作" width="96" align="center" fixed="right">
             <template #default="{ row }">
-              <div class="action-buttons">
-                <el-button
-                  size="small"
-                  type="primary"
-                  :icon="Edit"
-                  @click="handleEdit(row)"
-                  class="action-btn-edit"
-                >
-                  編集
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  :icon="Delete"
-                  @click="handleDelete(row)"
-                  class="action-btn-delete"
-                >
-                  削除
-                </el-button>
+              <div class="action-buttons ppb-op-cell">
+                <el-tooltip content="編集" placement="top">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    :icon="Edit"
+                    circle
+                    class="action-btn-edit"
+                    @click="handleEdit(row)"
+                  />
+                </el-tooltip>
+                <el-tooltip content="削除" placement="top">
+                  <el-button
+                    size="small"
+                    type="danger"
+                    :icon="Delete"
+                    circle
+                    class="action-btn-delete"
+                    @click="handleDelete(row)"
+                  />
+                </el-tooltip>
               </div>
             </template>
           </el-table-column>
@@ -1714,20 +1716,23 @@ onMounted(async () => {
   color: #64748b;
 }
 
-/* 行アクション */
+/* 行アクション（アイコンのみ） */
 .action-buttons {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   justify-content: center;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.ppb-op-cell {
+  line-height: 1;
 }
 
 .action-btn-edit {
-  padding: 4px 10px !important;
-  border-radius: 6px !important;
-  font-weight: 600;
-  font-size: 12px !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
   border: none !important;
   background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
   box-shadow: 0 1px 6px rgba(79, 70, 229, 0.3);
@@ -1738,10 +1743,9 @@ onMounted(async () => {
 }
 
 .action-btn-delete {
-  padding: 4px 10px !important;
-  border-radius: 6px !important;
-  font-weight: 600;
-  font-size: 12px !important;
+  width: 28px !important;
+  height: 28px !important;
+  padding: 0 !important;
   border: none !important;
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
   box-shadow: 0 1px 6px rgba(239, 68, 68, 0.28);
@@ -1749,6 +1753,11 @@ onMounted(async () => {
 
 .action-btn-delete:hover {
   filter: brightness(1.05);
+}
+
+.action-btn-edit :deep(.el-icon),
+.action-btn-delete :deep(.el-icon) {
+  font-size: 14px;
 }
 
 /* —— ダイアログ —— */

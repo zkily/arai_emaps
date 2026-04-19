@@ -168,6 +168,10 @@
             </template>
             <el-menu-item index="/erp/inventory" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_HOME')">{{ t('menu.ERP_INVENTORY_HOME') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/inventory/list"><el-icon><List /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_LIST')">{{ t('menu.ERP_INVENTORY_LIST') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory/material-list"><el-icon><Grid /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_MATERIAL_LIST')">{{ t('menu.ERP_INVENTORY_MATERIAL_LIST') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory/part-list"><el-icon><Files /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_PART_LIST')">{{ t('menu.ERP_INVENTORY_PART_LIST') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory/stock-entry"><el-icon><DocumentAdd /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_ENTRY')">{{ t('menu.ERP_INVENTORY_STOCK_ENTRY') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/inventory/stock-transaction-logs"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_TX_LOG')">{{ t('menu.ERP_INVENTORY_STOCK_TX_LOG') }}</span></template></el-menu-item>
             <el-sub-menu index="erp-inventory-stocktake">
               <template #title>
                 <el-icon><Memo /></el-icon>
@@ -210,8 +214,6 @@
                 </template>
               </el-menu-item>
             </el-sub-menu>
-            <el-menu-item index="/erp/inventory/stock-entry"><el-icon><DocumentAdd /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_ENTRY')">{{ t('menu.ERP_INVENTORY_STOCK_ENTRY') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/inventory/stock-transaction-logs"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_INVENTORY_STOCK_TX_LOG')">{{ t('menu.ERP_INVENTORY_STOCK_TX_LOG') }}</span></template></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-production">
@@ -538,7 +540,7 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document, Money,
-  User, DataAnalysis, Monitor, Setting, Tools, Grid,
+  User, DataAnalysis, Monitor, Setting, Tools, Grid, Files,
   Collection, List, Connection, Calendar, Timer, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
   Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload

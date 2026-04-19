@@ -3,7 +3,9 @@
     <div class="page-header compact">
       <div class="header-content">
         <div class="title-section">
-          <span class="title-icon">📋</span>
+          <span class="title-icon-wrap" aria-hidden="true">
+            <el-icon :size="18"><List /></el-icon>
+          </span>
           <h2 class="sub-title">製品一覧</h2>
         </div>
       </div>
@@ -11,15 +13,13 @@
     <div class="search-section compact">
       <el-input
         v-model="keyword"
-        placeholder="製品CD・名称検索"
+        placeholder="製品CD・名称（入力で自動検索）"
         clearable
         size="small"
         class="search-input"
-        @clear="resetSearch"
-        @keyup.enter="handleSearch"
       >
-        <template #append>
-          <el-button icon="Search" @click="handleSearch" />
+        <template #prefix>
+          <el-icon class="search-prefix-ico"><Search /></el-icon>
         </template>
       </el-input>
     </div>
@@ -62,8 +62,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch, onBeforeUnmount } from 'vue'
+import { List, Search } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+
+/** キーワード変更時の自動検索（連打時はまとめて 1 回） */
+const KEYWORD_DEBOUNCE_MS = 320
+let keywordDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const emit = defineEmits<{
   (e: 'select', productCd: string): void
@@ -95,18 +100,20 @@ const loadProducts = async () => {
 
 onMounted(() => loadProducts())
 
+watch(keyword, () => {
+  if (keywordDebounceTimer) clearTimeout(keywordDebounceTimer)
+  keywordDebounceTimer = setTimeout(() => {
+    keywordDebounceTimer = null
+    currentPage.value = 1
+    loadProducts()
+  }, KEYWORD_DEBOUNCE_MS)
+})
+
+onBeforeUnmount(() => {
+  if (keywordDebounceTimer) clearTimeout(keywordDebounceTimer)
+})
+
 const handlePageChange = () => {
-  loadProducts()
-}
-
-const handleSearch = () => {
-  currentPage.value = 1
-  loadProducts()
-}
-
-const resetSearch = () => {
-  keyword.value = ''
-  currentPage.value = 1
   loadProducts()
 }
 
@@ -133,15 +140,37 @@ const handleClick = (row: Product) => {
   margin-bottom: 8px;
 }
 
+.header-content {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.title-section {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.title-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.95);
+}
+
 .sub-title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
   color: #fff;
-}
-
-.title-icon {
-  margin-right: 6px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .search-section.compact {
@@ -150,6 +179,10 @@ const handleClick = (row: Product) => {
 
 .search-input {
   width: 100%;
+}
+
+.search-prefix-ico {
+  color: #94a3b8;
 }
 
 .table-wrapper {

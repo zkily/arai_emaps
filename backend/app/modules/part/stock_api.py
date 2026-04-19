@@ -55,6 +55,26 @@ from app.modules.part.part_planned_usage_from_production import (
 router = APIRouter()
 
 
+def _is_missing_part_stock_table_error(exc: BaseException) -> bool:
+    """
+    MySQL 1146: Table '...part_stock' doesn't exist
+    （マイグレーション `224_part_purchase_tables.sql` 未実行時）
+    """
+    depth = 0
+    cur: BaseException | None = exc
+    while cur is not None and depth < 10:
+        depth += 1
+        args = getattr(cur, "args", ())
+        if args and args[0] == 1146:
+            msg = str(args[1]) if len(args) > 1 else ""
+            return "part_stock" in msg
+        text = f"{cur!s} {args!r}".lower()
+        if "part_stock" in text and ("1146" in text or "doesn't exist" in text):
+            return True
+        cur = cur.__cause__ or cur.__context__
+    return False
+
+
 # ─────────────────────────────────────────────
 # part_stock  メイン在庫
 # ─────────────────────────────────────────────
@@ -169,6 +189,11 @@ async def list_part_stocks(
     except HTTPException:
         raise
     except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            logger.warning(
+                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+            )
+            return {"success": True, "data": {"list": [], "total": 0}}
         logger.exception("list_part_stocks failed: %s", e)
         raise HTTPException(status_code=500, detail=f"部品在庫一覧の取得に失敗しました: {str(e)}") from e
 
@@ -179,23 +204,31 @@ async def get_latest_part_stocks(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """各部品の最新在庫（part_cd ごとに最新日付。parts.status=0 は除外）"""
-    join_cond = PartStock.part_cd.collate("utf8mb4_unicode_ci") == PartMaster.part_cd.collate("utf8mb4_unicode_ci")
-    subq = (
-        select(PartStock.part_cd, func.max(PartStock.date).label("max_date"))
-        .group_by(PartStock.part_cd)
-        .subquery()
-    )
-    q = (
-        select(PartStock)
-        .join(PartMaster, join_cond)
-        .where(PartMaster.status != 0)
-        .join(
-            subq,
-            (PartStock.part_cd == subq.c.part_cd) & (PartStock.date == subq.c.max_date),
+    try:
+        join_cond = PartStock.part_cd.collate("utf8mb4_unicode_ci") == PartMaster.part_cd.collate("utf8mb4_unicode_ci")
+        subq = (
+            select(PartStock.part_cd, func.max(PartStock.date).label("max_date"))
+            .group_by(PartStock.part_cd)
+            .subquery()
         )
-    )
-    rows = (await db.execute(q)).scalars().all()
-    return {"success": True, "data": [_stock_to_dict(r) for r in rows]}
+        q = (
+            select(PartStock)
+            .join(PartMaster, join_cond)
+            .where(PartMaster.status != 0)
+            .join(
+                subq,
+                (PartStock.part_cd == subq.c.part_cd) & (PartStock.date == subq.c.max_date),
+            )
+        )
+        rows = (await db.execute(q)).scalars().all()
+        return {"success": True, "data": [_stock_to_dict(r) for r in rows]}
+    except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            logger.warning(
+                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+            )
+            return {"success": True, "data": []}
+        raise
 
 
 @router.post("/calculate")
@@ -215,7 +248,24 @@ async def calculate_part_stock(
       5) current_stock / stock_trend は global_start_date 以降を日付順に再計算。
     """
     q = select(PartStock).order_by(PartStock.part_cd, PartStock.date.asc())
-    rows = (await db.execute(q)).scalars().all()
+    try:
+        rows = (await db.execute(q)).scalars().all()
+    except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            logger.warning(
+                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+            )
+            return {
+                "success": True,
+                "data": {
+                    "calculated_count": 0,
+                    "updated_count": 0,
+                    "usage_synced": 0,
+                    "usage_plan_synced": 0,
+                    "usage_period": None,
+                },
+            }
+        raise
     if not rows:
         return {
             "success": True,
@@ -391,14 +441,24 @@ async def get_part_stock_summary(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """在庫サマリー（総部品数・在庫マイナス行数・合計在庫金額）"""
-    total_parts = (await db.execute(select(func.count(distinct(PartStock.part_cd))))).scalar() or 0
-    below_zero = (
-        await db.execute(select(func.count()).where(PartStock.current_stock < 0))
-    ).scalar() or 0
-    total_value_result = await db.execute(
-        select(func.sum(PartStock.current_stock * PartStock.unit_price))
-    )
-    total_value = float(total_value_result.scalar() or 0)
+    try:
+        total_parts = (await db.execute(select(func.count(distinct(PartStock.part_cd))))).scalar() or 0
+        below_zero = (
+            await db.execute(select(func.count()).where(PartStock.current_stock < 0))
+        ).scalar() or 0
+        total_value_result = await db.execute(
+            select(func.sum(PartStock.current_stock * PartStock.unit_price))
+        )
+        total_value = float(total_value_result.scalar() or 0)
+    except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            logger.warning(
+                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+            )
+            total_parts = below_zero = 0
+            total_value = 0.0
+        else:
+            raise
     return {
         "success": True,
         "data": {
@@ -423,7 +483,15 @@ async def list_distinct_part_stock_supplier_names(
         .where(PartStock.supplier_name != "")
         .order_by(PartStock.supplier_name)
     )
-    result = await db.execute(q)
+    try:
+        result = await db.execute(q)
+    except Exception as e:
+        if _is_missing_part_stock_table_error(e):
+            logger.warning(
+                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+            )
+            return {"success": True, "data": []}
+        raise
     raw = [row[0] for row in result.all() if row[0] is not None]
     names = sorted({str(n).strip() for n in raw if str(n).strip()})
     return {"success": True, "data": names}

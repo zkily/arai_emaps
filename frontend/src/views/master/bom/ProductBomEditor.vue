@@ -228,7 +228,9 @@
                 <span class="pbe-tree-view-toggle__inner"><el-icon><Histogram /></el-icon>展開集計</span>
               </el-radio-button>
             </el-radio-group>
-            <el-button type="primary" link size="small" @click="openEditDialog(selectedHeader)">編集</el-button>
+            <el-tooltip content="編集" placement="bottom">
+              <el-button type="primary" link size="small" :icon="Edit" @click="openEditDialog(selectedHeader)" />
+            </el-tooltip>
           </div>
         </div>
       </template>
@@ -431,14 +433,22 @@
         </el-table-column>
         <el-table-column prop="effective_from" label="有効開始" width="110" />
         <el-table-column prop="effective_to" label="有効終了" width="110" />
-        <el-table-column label="操作" width="130" fixed="right">
+        <el-table-column label="操作" width="96" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEditDialog(row)">編集</el-button>
-            <el-popconfirm title="削除しますか？" @confirm="handleDelete(row.id)">
-              <template #reference>
-                <el-button link type="danger" size="small">削除</el-button>
-              </template>
-            </el-popconfirm>
+            <div class="pbe-op-cell">
+              <el-tooltip content="編集" placement="top">
+                <el-button link type="primary" size="small" :icon="Edit" @click="openEditDialog(row)" />
+              </el-tooltip>
+              <el-tooltip content="削除" placement="top">
+                <span class="pbe-op-icon-wrap">
+                  <el-popconfirm title="削除しますか？" @confirm="handleDelete(row.id)">
+                    <template #reference>
+                      <el-button link type="danger" size="small" :icon="Delete" />
+                    </template>
+                  </el-popconfirm>
+                </span>
+              </el-tooltip>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -690,9 +700,11 @@
                       <el-input v-model="row.remarks" />
                     </template>
                   </el-table-column>
-                  <el-table-column label="操作" width="72" align="center" fixed="right">
+                  <el-table-column label="操作" width="56" align="center" fixed="right">
                     <template #default="{ $index }">
-                      <el-button link type="danger" @click="removeStepLine(step.step_no, $index)">削除</el-button>
+                      <el-tooltip content="行を削除" placement="top">
+                        <el-button link type="danger" size="small" :icon="Delete" @click="removeStepLine(step.step_no, $index)" />
+                      </el-tooltip>
                     </template>
                   </el-table-column>
                 </el-table>
@@ -797,9 +809,11 @@
                 <el-input v-model="row.remarks" />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="72" align="center" fixed="right">
+            <el-table-column label="操作" width="56" align="center" fixed="right">
               <template #default="{ $index }">
-                <el-button link type="danger" @click="removeOrphanLine($index)">削除</el-button>
+                <el-tooltip content="行を削除" placement="top">
+                  <el-button link type="danger" size="small" :icon="Delete" @click="removeOrphanLine($index)" />
+                </el-tooltip>
               </template>
             </el-table-column>
           </el-table>
@@ -820,7 +834,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import jaElLocale from 'element-plus/dist/locale/ja.js'
-import { Plus, Search, Document, List, Grid, Bottom, Histogram } from '@element-plus/icons-vue'
+import { Plus, Search, Document, List, Grid, Bottom, Histogram, Edit, Delete } from '@element-plus/icons-vue'
 import {
   getBomHeaders,
   getBomTree,
@@ -1740,6 +1754,21 @@ onMounted(() => {
   background:
     radial-gradient(ellipse 95% 65% at 0% -12%, rgba(99, 102, 241, 0.1), transparent 46%),
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+/* 操作列：アイコンのみ */
+.pbe-op-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  flex-wrap: nowrap;
+}
+
+.pbe-op-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
 }
 
 /* ページヒーロー */

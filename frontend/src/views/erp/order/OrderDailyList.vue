@@ -1,18 +1,35 @@
 <template>
   <div class="order-daily-list">
-    <div class="page-toolbar">
-      <div class="toolbar-left">
-        <h1 class="toolbar-title">日受注管理</h1>
+    <div class="page-hero">
+      <div class="page-hero-top">
+        <div class="hero-title-block">
+          <h1 class="toolbar-title">日受注管理</h1>
+          <p v-if="lastFetchedText" class="hero-meta">更新: {{ lastFetchedText }}</p>
+        </div>
+        <div class="hero-actions">
+          <el-button class="tb-btn tb-btn-refresh" :loading="loading" @click="refreshAll">
+            <el-icon><Refresh /></el-icon>
+            <span class="tb-label">更新</span>
+          </el-button>
+          <el-button class="tb-btn tb-btn-export" :disabled="!fullList.length" @click="exportCsv">
+            <el-icon><Download /></el-icon>
+            <span class="tb-label">CSV</span>
+          </el-button>
+          <el-button class="tb-btn tb-btn-create" @click="openDialog()">
+            <el-icon><Plus /></el-icon>
+            <span class="tb-label">新規登録</span>
+          </el-button>
+        </div>
       </div>
-      <div class="toolbar-right">
-        <el-button class="tb-btn tb-btn-green" @click="openDialog()">
-          <el-icon><Plus /></el-icon>
-          <span class="tb-label">新規登録</span>
-        </el-button>
+      <div class="date-quick-row">
+        <span class="dq-label">期間</span>
+        <el-button-group class="date-quick-btns">
+          <el-button size="small" @click="applyQuickRange('today')">今日</el-button>
+          <el-button size="small" @click="applyQuickRange('week')">今週</el-button>
+          <el-button size="small" @click="applyQuickRange('month')">今月</el-button>
+          <el-button size="small" @click="applyQuickRange('lastMonth')">先月</el-button>
+        </el-button-group>
       </div>
-    </div>
-
-    <div class="filter-bar">
       <div class="filter-inline">
         <div class="fi-group">
           <el-icon class="fi-icon"><Calendar /></el-icon>
@@ -52,8 +69,40 @@
       </div>
     </div>
 
+    <div class="kpi-strip">
+      <div class="kpi-card kpi-count">
+        <span class="kpi-label">件数</span>
+        <span class="kpi-value">{{ summaryStats.count }}</span>
+      </div>
+      <div class="kpi-card kpi-units">
+        <span class="kpi-label">確定本数</span>
+        <span class="kpi-value">{{ formatNum(summaryStats.confirmedUnits) }}</span>
+      </div>
+      <div class="kpi-card kpi-boxes">
+        <span class="kpi-label">確定箱数</span>
+        <span class="kpi-value">{{ formatNum(summaryStats.confirmedBoxes) }}</span>
+      </div>
+      <div class="kpi-card kpi-forecast">
+        <span class="kpi-label">内示本数</span>
+        <span class="kpi-value">{{ formatNum(summaryStats.forecastUnits) }}</span>
+      </div>
+    </div>
+
     <div class="table-section">
-      <el-table :data="list" v-loading="loading" stripe border size="small" class="data-table" :default-sort="{ prop: 'date', order: 'ascending' }">
+      <div class="table-section-head">
+        <span class="table-section-title">受注一覧</span>
+        <span class="table-section-hint">クリックで列ソート</span>
+      </div>
+      <el-table
+        :data="list"
+        v-loading="loading"
+        stripe
+        border
+        size="small"
+        class="data-table"
+        :max-height="tableMaxHeight"
+        :default-sort="{ prop: 'date', order: 'ascending' }"
+      >
         <el-table-column prop="date" label="日付" width="110" sortable />
         <el-table-column prop="weekday" label="曜日" width="70" align="center" />
         <el-table-column prop="monthly_order_id" label="月受注ID" width="160" show-overflow-tooltip />
@@ -65,26 +114,34 @@
         <el-table-column prop="forecast_units" label="内示本数" width="90" align="right" />
         <el-table-column prop="confirmed_boxes" label="確定箱数" width="90" align="right" />
         <el-table-column prop="confirmed_units" label="確定本数" width="90" align="right" />
-        <el-table-column prop="status" label="ステータス" width="90" />
-        <el-table-column prop="delivery_date" label="納入日" width="110" />
-        <el-table-column label="操作" width="120" fixed="right" align="center">
+        <el-table-column label="ステータス" width="108" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="openDialog(row)">編集</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(row)">削除</el-button>
+            <el-tag :type="statusTagType(row.status)" size="small" effect="light" class="status-tag">
+              {{ row.status || '—' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="delivery_date" label="納入日" width="110" />
+        <el-table-column label="操作" width="128" fixed="right" align="center">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" class="row-act-btn row-act-edit" link @click="openDialog(row)">編集</el-button>
+            <el-button type="danger" size="small" class="row-act-btn row-act-del" link @click="handleDelete(row)">削除</el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <div class="pagination-container">
+        <span class="page-range-text">{{ pageRangeText }}</span>
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :page-sizes="[20, 50, 100, 200]"
           :total="pagination.total"
-          layout="total, sizes, prev, pager, next"
+          layout="sizes, prev, pager, next"
           @size-change="handleSizeChange"
           @current-change="handlePageChange"
           background
+          class="pagination-el"
         />
       </div>
     </div>
@@ -281,10 +338,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Calendar, Plus, Document, Box, InfoFilled, Close, Check } from '@element-plus/icons-vue'
+import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Download } from '@element-plus/icons-vue'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
 import {
@@ -334,6 +391,160 @@ function getTodayRange(): [string, string] {
   return [`${y}-${m}-${day}`, `${y}-${m}-${day}`]
 }
 const dateRange = ref<[string, string] | null>(getTodayRange())
+
+/** フィルタ後の全件（KPI・CSV 用） */
+const fullList = ref<OrderDailyItem[]>([])
+const lastFetchedAt = ref<Date | null>(null)
+
+const lastFetchedText = computed(() => {
+  if (!lastFetchedAt.value) return ''
+  return lastFetchedAt.value.toLocaleString('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+})
+
+const summaryStats = computed(() => {
+  const rows = fullList.value
+  let confirmedUnits = 0
+  let confirmedBoxes = 0
+  let forecastUnits = 0
+  for (const r of rows) {
+    confirmedUnits += Number(r.confirmed_units) || 0
+    confirmedBoxes += Number(r.confirmed_boxes) || 0
+    forecastUnits += Number(r.forecast_units) || 0
+  }
+  return { count: rows.length, confirmedUnits, confirmedBoxes, forecastUnits }
+})
+
+function formatNum(n: number): string {
+  return n.toLocaleString('ja-JP')
+}
+
+const pageRangeText = computed(() => {
+  const total = pagination.total
+  if (total === 0) return '表示 0件'
+  const start = (pagination.page - 1) * pagination.pageSize + 1
+  const end = Math.min(pagination.page * pagination.pageSize, total)
+  return `表示 ${start}〜${end}件 / 全${total.toLocaleString('ja-JP')}件`
+})
+
+function formatYmdFromDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** 今日・今週・今月・先月（getJapanDate 基準） */
+function applyQuickRange(kind: 'today' | 'week' | 'month' | 'lastMonth') {
+  const d = getJapanDate()
+  if (kind === 'today') {
+    dateRange.value = getTodayRange()
+    return
+  }
+  if (kind === 'week') {
+    const w = d.getDay()
+    const mondayOffset = w === 0 ? -6 : 1 - w
+    const start = new Date(d.getFullYear(), d.getMonth(), d.getDate() + mondayOffset)
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6)
+    dateRange.value = [formatYmdFromDate(start), formatYmdFromDate(end)]
+    return
+  }
+  if (kind === 'month') {
+    const y = d.getFullYear()
+    const m = d.getMonth()
+    const start = new Date(y, m, 1)
+    const end = new Date(y, m + 1, 0)
+    dateRange.value = [formatYmdFromDate(start), formatYmdFromDate(end)]
+    return
+  }
+  const y = d.getFullYear()
+  const m = d.getMonth()
+  const start = new Date(y, m - 1, 1)
+  const end = new Date(y, m, 0)
+  dateRange.value = [formatYmdFromDate(start), formatYmdFromDate(end)]
+}
+
+function statusTagType(status: string | null | undefined): 'success' | 'warning' | 'info' | 'danger' {
+  const s = status || ''
+  if (/取消|キャンセル|中止/.test(s)) return 'danger'
+  if (/未出荷|保留|待ち/.test(s)) return 'warning'
+  if (/出荷済|完了/.test(s)) return 'success'
+  if (/出荷/.test(s)) return 'success'
+  return 'info'
+}
+
+function escapeCsvCell(v: unknown): string {
+  const s = v == null ? '' : String(v)
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+  return s
+}
+
+function exportCsv() {
+  const rows = fullList.value
+  if (!rows.length) {
+    ElMessage.warning('出力するデータがありません')
+    return
+  }
+  const headers = [
+    '日付',
+    '曜日',
+    '月受注ID',
+    '納入先CD',
+    '納入先名',
+    '製品CD',
+    '製品名',
+    '種別',
+    '内示本数',
+    '確定箱数',
+    '確定本数',
+    'ステータス',
+    '納入日',
+  ]
+  const lines: string[] = [headers.map(escapeCsvCell).join(',')]
+  for (const r of rows) {
+    lines.push(
+      [
+        r.date,
+        r.weekday ?? '',
+        r.monthly_order_id ?? '',
+        r.destination_cd,
+        r.destination_name ?? '',
+        r.product_cd,
+        r.product_name ?? '',
+        r.product_type ?? '',
+        r.forecast_units,
+        r.confirmed_boxes,
+        r.confirmed_units,
+        r.status ?? '',
+        r.delivery_date ?? '',
+      ]
+        .map(escapeCsvCell)
+        .join(',')
+    )
+  }
+  const stamp = formatYmdFromDate(getJapanDate()).replace(/-/g, '')
+  const blob = new Blob([`\ufeff${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `order_daily_${stamp}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('CSVをダウンロードしました')
+}
+
+const tableMaxHeight = ref(480)
+function updateTableMaxHeight() {
+  /* ヘッダー・KPI・余白を差し引き、一覧を縦に最大化 */
+  tableMaxHeight.value = Math.max(240, window.innerHeight - 296)
+}
 
 // ========== ページング ==========
 const pagination = reactive({
@@ -388,6 +599,16 @@ async function loadOptions() {
   }
 }
 
+function applyPagination() {
+  const allData = fullList.value
+  pagination.total = allData.length
+  const maxPage = Math.max(1, Math.ceil(allData.length / pagination.pageSize) || 1)
+  if (pagination.page > maxPage) pagination.page = maxPage
+  const start = (pagination.page - 1) * pagination.pageSize
+  const end = start + pagination.pageSize
+  list.value = allData.slice(start, end)
+}
+
 async function loadList() {
   loading.value = true
   try {
@@ -399,24 +620,33 @@ async function loadList() {
     if (filters.keyword) params.keyword = filters.keyword
     if (filters.destination_cd) params.destination_cd = filters.destination_cd
     const allData = await fetchOrderDailyList(params)
-    pagination.total = allData.length
-    const start = (pagination.page - 1) * pagination.pageSize
-    const end = start + pagination.pageSize
-    list.value = allData.slice(start, end)
+    fullList.value = allData
+    lastFetchedAt.value = new Date()
+    applyPagination()
+  } catch {
+    fullList.value = []
+    list.value = []
+    pagination.total = 0
+    ElMessage.error('一覧の取得に失敗しました')
   } finally {
     loading.value = false
   }
 }
 
+async function refreshAll() {
+  await loadOptions()
+  await loadList()
+}
+
 function handlePageChange(page: number) {
   pagination.page = page
-  loadList()
+  applyPagination()
 }
 
 function handleSizeChange(size: number) {
   pagination.pageSize = size
   pagination.page = 1
-  loadList()
+  applyPagination()
 }
 
 watch(
@@ -743,8 +973,14 @@ async function handleDelete(row: OrderDailyItem) {
 
 // ========== マウント ==========
 onMounted(() => {
+  updateTableMaxHeight()
+  window.addEventListener('resize', updateTableMaxHeight)
   loadOptions()
   loadList()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateTableMaxHeight)
 })
 </script>
 
@@ -755,105 +991,92 @@ onMounted(() => {
 
 /* --- Base --- */
 .order-daily-list {
-  padding: 12px;
-  min-height: 100vh;
-  background: linear-gradient(160deg, #f0f4ff 0%, #e8ecf8 40%, #f5f0ff 100%);
+  padding: 8px 10px 10px;
+  min-height: calc(100vh - 20px);
+  box-sizing: border-box;
+  background-color: #f1f4fb;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 0% -20%, rgba(99, 102, 241, 0.14), transparent 55%),
+    radial-gradient(ellipse 100% 60% at 100% 0%, rgba(14, 165, 233, 0.1), transparent 50%),
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(16, 185, 129, 0.06), transparent 55%);
 }
 
-/* --- Toolbar --- */
-.page-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: linear-gradient(135deg, rgba(99,102,241,0.88) 0%, rgba(139,92,246,0.92) 50%, rgba(168,85,247,0.88) 100%);
+/* --- Hero: タイトル + 操作 + フィルタ一体 --- */
+.page-hero {
+  background: linear-gradient(145deg, #4f46e5 0%, #6366f1 38%, #7c3aed 72%, #6d28d9 100%);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.25);
-  border-radius: 14px;
-  padding: 10px 18px;
-  margin-bottom: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  padding: 8px 12px 10px;
+  margin-bottom: 8px;
   box-shadow:
-    0 4px 24px rgba(99,102,241,0.25),
-    inset 0 1px 0 rgba(255,255,255,0.2);
+    0 8px 32px rgba(79, 70, 229, 0.28),
+    0 2px 8px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.page-hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hero-title-block {
+  min-width: 0;
 }
 
 .toolbar-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: #fff;
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  letter-spacing: -0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
-.toolbar-right {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-/* --- Toolbar Buttons --- */
-.tb-btn {
-  border-radius: 8px;
-  padding: 5px 11px;
-  font-size: 12px;
+.hero-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
   font-weight: 500;
-  display: inline-flex;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.12);
-  position: relative;
-  overflow: hidden;
 }
 
-.tb-btn::before {
-  content: '';
-  position: absolute;
-  inset: 0;
+.date-quick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.dq-label {
+  font-size: 12px;
+  color: rgba(255,255,255,0.85);
+  font-weight: 500;
+}
+
+.date-quick-btns :deep(.el-button) {
+  --el-button-bg-color: rgba(255, 255, 255, 0.14);
+  --el-button-border-color: rgba(255, 255, 255, 0.32);
+  --el-button-text-color: #fff;
+  --el-button-hover-bg-color: rgba(255, 255, 255, 0.26);
+  --el-button-hover-border-color: rgba(255, 255, 255, 0.48);
+  --el-button-hover-text-color: #fff;
   border-radius: 8px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 100%);
-  pointer-events: none;
-}
-
-.tb-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  color: #fff;
-}
-
-.tb-btn:active {
-  transform: translateY(0);
-}
-
-/* Green - 新規登録 */
-.tb-btn-green {
-  background: linear-gradient(135deg, rgba(16,185,129,0.9) 0%, rgba(5,150,105,0.95) 100%);
-  box-shadow: 0 2px 10px rgba(16,185,129,0.35);
   font-weight: 600;
-}
-
-.tb-btn-green:hover {
-  background: linear-gradient(135deg, rgba(16,185,129,1) 0%, rgba(5,150,105,1) 100%);
-  box-shadow: 0 4px 18px rgba(16,185,129,0.5);
-  color: #fff;
-}
-
-/* --- Filter Bar (Glass) --- */
-.filter-bar {
-  background: rgba(255,255,255,0.65);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-  border: 1px solid rgba(255,255,255,0.7);
-  padding: 8px 12px;
-  margin-bottom: 10px;
 }
 
 .filter-inline {
@@ -861,6 +1084,137 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+/* --- ツールバー：役割別配色 --- */
+.tb-btn {
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid transparent;
+  color: #fff;
+}
+
+.tb-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.tb-btn:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+/* 更新：シアン（同期・再取得） */
+.tb-btn-refresh {
+  background: linear-gradient(145deg, #0ea5e9 0%, #0284c7 100%);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 3px 12px rgba(14, 165, 233, 0.45);
+}
+
+.tb-btn-refresh:hover {
+  box-shadow: 0 5px 18px rgba(14, 165, 233, 0.55);
+}
+
+/* CSV：アンバー（書き出し） */
+.tb-btn-export {
+  background: linear-gradient(145deg, #f59e0b 0%, #d97706 100%);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.42);
+}
+
+.tb-btn-export:hover:not(:disabled) {
+  box-shadow: 0 5px 18px rgba(245, 158, 11, 0.52);
+}
+
+.tb-btn-export:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
+  filter: grayscale(0.15);
+}
+
+/* 新規登録：エメラルド（主アクション） */
+.tb-btn-create {
+  background: linear-gradient(145deg, #10b981 0%, #059669 100%);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 3px 14px rgba(16, 185, 129, 0.48);
+}
+
+.tb-btn-create:hover {
+  box-shadow: 0 6px 22px rgba(16, 185, 129, 0.58);
+}
+
+/* --- KPI --- */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.kpi-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 12px;
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  border-left: 3px solid #cbd5e1;
+}
+
+.kpi-count {
+  border-left-color: #64748b;
+}
+
+.kpi-units {
+  border-left-color: #6366f1;
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.06) 0%, rgba(255, 255, 255, 0.92) 100%);
+}
+
+.kpi-boxes {
+  border-left-color: #0d9488;
+}
+
+.kpi-forecast {
+  border-left-color: #8b5cf6;
+}
+
+.kpi-label {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kpi-value {
+  font-size: 17px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
 
 .fi-group {
@@ -920,75 +1274,153 @@ onMounted(() => {
   font-size: 12px;
 }
 
-/* --- Table Section (Glass) --- */
+/* --- Table --- */
 .table-section {
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(14px) saturate(160%);
-  -webkit-backdrop-filter: blur(14px) saturate(160%);
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.65);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
-  padding: 10px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 4px 24px rgba(15, 23, 42, 0.06),
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  padding: 0 8px 8px;
+}
+
+.table-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 4px 6px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 4px;
+}
+
+.table-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.table-section-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
 }
 
 .data-table {
   width: 100%;
+  --el-table-border-color: #e8ecf1;
+  --el-table-header-bg-color: #f8fafc;
 }
 
 .data-table :deep(.el-table__header-wrapper th) {
-  background: rgba(248,250,252,0.95) !important;
-  color: #000;
-  font-weight: 600;
-  font-size: 12px;
-  border-bottom: 1px solid rgba(0,0,0,0.08);
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  color: #334155 !important;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
 
 .data-table :deep(.el-table__body-wrapper td.el-table__cell) {
-  color: #000;
-  font-size: 13px;
+  color: #1e293b;
+  font-size: 12px;
 }
 
 .data-table :deep(.el-table__row) {
-  transition: background-color 0.2s;
+  transition: background-color 0.15s ease;
 }
 
 .data-table :deep(.el-table__row:hover > td) {
-  background: rgba(99,102,241,0.05) !important;
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.data-table :deep(.el-table__body tr.el-table__row--striped td) {
+  background: #fafbfc;
+}
+
+.data-table :deep(.el-table__body tr.el-table__row--striped:hover > td) {
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.row-act-btn {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.data-table :deep(.row-act-edit.el-button.is-link) {
+  color: #4f46e5;
+}
+
+.data-table :deep(.row-act-edit.el-button.is-link:hover) {
+  color: #4338ca;
+}
+
+.data-table :deep(.row-act-del.el-button.is-link) {
+  color: #e11d48;
+}
+
+.data-table :deep(.row-act-del.el-button.is-link:hover) {
+  color: #be123c;
 }
 
 .pagination-container {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 2px 0;
+}
+
+.page-range-text {
+  font-size: 11px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.pagination-el {
+  flex: 1;
   justify-content: flex-end;
-  margin-top: 8px;
-  padding: 4px 0;
-  font-size: 60%;
+  min-width: 0;
 }
 
-.pagination-container :deep(.el-pagination) {
-  font-size: inherit;
+.pagination-container :deep(.pagination-el.el-pagination) {
+  font-size: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  --el-pagination-button-bg-color: #fff;
+  --el-pagination-hover-color: #4f46e5;
 }
 
-.pagination-container :deep(.el-pagination__total),
-.pagination-container :deep(.el-pagination__sizes),
-.pagination-container :deep(.el-pager),
-.pagination-container :deep(.el-pagination__jump) {
-  font-size: inherit;
+.pagination-container :deep(.el-pagination.is-background .el-pager li.is-active) {
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+  color: #fff;
 }
 
 .pagination-container :deep(.el-pagination button),
 .pagination-container :deep(.el-pagination .el-pager li) {
-  font-size: inherit;
-  min-width: 1.6em;
-  height: 1.6em;
-  line-height: 1.6em;
+  min-width: 26px;
+  height: 26px;
+  line-height: 26px;
+  font-weight: 600;
 }
 
-.pagination-container :deep(.el-select .el-input__inner) {
-  font-size: inherit;
+.status-tag {
+  max-width: 100%;
 }
 
-.pagination-container :deep(.el-input__inner) {
-  font-size: inherit;
+.status-tag :deep(.el-tag__content) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 92px;
 }
 
 /* --- Modern Compact Dialog Styles --- */
@@ -1226,20 +1658,36 @@ onMounted(() => {
 }
 
 /* Responsive Design */
+@media (max-width: 900px) {
+  .kpi-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
   .order-daily-list {
     padding: 8px;
   }
 
-  .page-toolbar {
-    padding: 8px 12px;
+  .page-hero {
+    padding: 8px 10px 10px;
+  }
+
+  .page-hero-top {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
+    align-items: stretch;
+  }
+
+  .hero-actions {
+    justify-content: flex-end;
   }
 
   .toolbar-title {
     font-size: 15px;
+  }
+
+  .table-section-hint {
+    display: none;
   }
 
   .filter-inline {
@@ -1302,6 +1750,16 @@ onMounted(() => {
 }
 
 @media (max-width: 480px) {
+  .kpi-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .date-quick-btns {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+  }
+
   .daily-order-dialog :deep(.el-dialog__title) {
     font-size: 14px;
   }

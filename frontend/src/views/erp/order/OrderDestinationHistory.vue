@@ -1,122 +1,102 @@
 <template>
   <div class="order-destination-history">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="title-section">
-          <div class="title-icon">
-            <el-icon>
-              <OfficeBuilding />
-            </el-icon>
+    <div class="page-shell">
+      <!-- 页头 + 筛选：紧凑一体 -->
+      <header class="hero-panel">
+        <div class="hero-top">
+          <div class="title-block">
+            <div class="title-icon" aria-hidden="true">
+              <el-icon><OfficeBuilding /></el-icon>
+            </div>
+            <div class="title-text">
+              <h1 class="page-title">納入先別受注履歴</h1>
+              <p class="page-subtitle">納入先ごとの受注データ分析・履歴管理</p>
+            </div>
           </div>
-          <div class="title-text">
-            <h1 class="page-title">納入先別受注履歴</h1>
-            <p class="page-subtitle">納入先ごとの受注データ分析・履歴管理</p>
+          <div v-if="orderList.length > 0" class="hero-badge">
+            <span class="badge-label">結果</span>
+            <span class="badge-value">{{ filteredOrderList.length }}件</span>
           </div>
         </div>
-      </div>
-    </div>
 
-    <!-- 筛选区域 -->
-    <div class="filter-section">
-      <div class="filter-header">
-        <div class="filter-title">
-          <el-icon class="filter-icon">
-            <Search />
-          </el-icon>
-          <span>検索フィルター</span>
-        </div>
+        <div class="filter-strip">
+          <div class="filter-strip-label">
+            <el-icon class="filter-icon"><Search /></el-icon>
+            <span>条件</span>
+          </div>
+          <el-form :inline="true" class="modern-filter-form" @submit.prevent>
+            <div class="filter-row">
+              <el-form-item class="filter-item">
+                <template #label>
+                  <div class="custom-label">
+                    <el-icon><OfficeBuilding /></el-icon>
+                    <span>納入先</span>
+                  </div>
+                </template>
+                <el-select
+                  v-model="filters.destination_cd"
+                  placeholder="納入先を選択"
+                  clearable
+                  filterable
+                  class="select-input"
+                >
+                  <el-option
+                    v-for="item in destinationOptions"
+                    :key="item.cd"
+                    :label="`${item.cd} - ${item.name}`"
+                    :value="item.cd"
+                  />
+                </el-select>
+              </el-form-item>
 
-        <div class="filter-stats" v-if="orderList.length > 0">
-          <span class="stats-text">{{ filteredOrderList.length }}件の結果</span>
-        </div>
-      </div>
+              <el-form-item class="filter-item">
+                <template #label>
+                  <div class="custom-label">
+                    <el-icon><Calendar /></el-icon>
+                    <span>期間</span>
+                  </div>
+                </template>
+                <el-date-picker
+                  v-model="filters.date_range"
+                  type="daterange"
+                  range-separator="～"
+                  start-placeholder="開始日"
+                  end-placeholder="終了日"
+                  format="YYYY-MM-DD"
+                  value-format="YYYY-MM-DD"
+                  class="date-picker"
+                  clearable
+                />
+              </el-form-item>
 
-      <el-form :inline="true" class="modern-filter-form">
-        <div class="filter-row">
-          <el-form-item class="filter-item">
-            <template #label>
-              <div class="custom-label">
-                <el-icon>
-                  <OfficeBuilding />
-                </el-icon>
-                <span>納入先</span>
+              <div class="filter-actions">
+                <el-button type="primary" @click="fetchData" class="search-btn" :loading="isFetching">
+                  <el-icon><Search /></el-icon>
+                  検索
+                </el-button>
               </div>
-            </template>
-            <el-select
-              v-model="filters.destination_cd"
-              placeholder="納入先を選択"
-              clearable
-              filterable
-              class="select-input"
-            >
-              <el-option
-                v-for="item in destinationOptions"
-                :key="item.cd"
-                :label="`${item.cd} - ${item.name}`"
-                :value="item.cd"
-              />
-            </el-select>
-          </el-form-item>
-
-          <el-form-item class="filter-item">
-            <template #label>
-              <div class="custom-label">
-                <el-icon>
-                  <Calendar />
-                </el-icon>
-                <span>期間</span>
-              </div>
-            </template>
-            <el-date-picker
-              v-model="filters.date_range"
-              type="daterange"
-              range-separator="～"
-              start-placeholder="開始日"
-              end-placeholder="終了日"
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-              class="date-picker"
-              clearable
-            />
-          </el-form-item>
-
-          <div class="filter-actions">
-            <el-button
-              type="primary"
-              @click="fetchData"
-              class="search-btn"
-              :loading="isFetching"
-            >
-              <el-icon>
-                <Search />
-              </el-icon>
-              検索
-            </el-button>
-          </div>
+            </div>
+          </el-form>
         </div>
-      </el-form>
-    </div>
+      </header>
 
     <!-- 月別集計 -->
-    <div class="summary-section">
+    <section class="summary-section panel-card">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="section-icon">
-            <TrendCharts />
-          </el-icon>
+          <el-icon class="section-icon"><TrendCharts /></el-icon>
           <span>月別集計</span>
         </div>
         <div class="summary-stats" v-if="summaryList.length > 0">
-          <div class="stat-item">
-            <span class="stat-label">期間数</span>
+          <div class="stat-chip">
+            <span class="stat-label">期間</span>
             <span class="stat-value">{{ summaryList.length }}ヶ月</span>
           </div>
         </div>
       </div>
 
       <div class="modern-table-container">
-        <el-table :data="summaryList" class="modern-table summary-table">
+        <el-table :data="summaryList" class="modern-table summary-table" stripe>
           <el-table-column label="年月" prop="ym" width="140" align="center">
             <template #header>
               <div class="table-header">
@@ -151,37 +131,39 @@
           </el-table-column>
         </el-table>
       </div>
-    </div>
+    </section>
 
     <!-- 受注明細 -->
-    <div class="details-section">
+    <section class="details-section panel-card">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="section-icon">
-            <List />
-          </el-icon>
+          <el-icon class="section-icon"><List /></el-icon>
           <span>受注明細</span>
         </div>
 
         <div class="section-actions">
           <div class="details-stats" v-if="filteredOrderList.length > 0">
-            <div class="stat-item">
-              <span class="stat-label">明細数</span>
+            <div class="stat-chip">
+              <span class="stat-label">明細</span>
               <span class="stat-value">{{ filteredOrderList.length }}件</span>
             </div>
           </div>
 
           <el-button class="print-btn" @click="handlePrint">
-            <el-icon>
-              <Printer />
-            </el-icon>
+            <el-icon><Printer /></el-icon>
             印刷
           </el-button>
         </div>
       </div>
 
-      <div class="modern-table-container">
-        <el-table :data="filteredOrderList" class="modern-table details-table" :v-loading="isFetching">
+      <div class="modern-table-container modern-table-container--details">
+        <el-table
+          v-loading="isFetching"
+          :data="filteredOrderList"
+          class="modern-table details-table"
+          stripe
+          :height="DETAILS_TABLE_HEIGHT"
+        >
           <el-table-column label="出荷日" prop="date" width="120" align="center">
             <template #header>
               <div class="table-header">
@@ -294,6 +276,7 @@
           </el-table-column>
         </el-table>
       </div>
+    </section>
     </div>
   </div>
 </template>
@@ -331,6 +314,9 @@ const destinationOptions = ref<DestinationOption[]>([])
 const orderList = ref<DestinationOrderHistoryItem[]>([])
 
 const isFetching = ref(false)
+
+/** 受注明細テーブル固定高さ（表頭固定・表体は縦スクロール） */
+const DETAILS_TABLE_HEIGHT = 480
 
 const filteredOrderList = computed(() => {
   // 界面与打印逻辑保持一致：只显示“数量 > 0”的记录
@@ -408,11 +394,16 @@ async function fetchData() {
 function escapeHtml(s: string) {
   return (s ?? '')
     .toString()
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
+    .split('&')
+    .join('&amp;')
+    .split('<')
+    .join('&lt;')
+    .split('>')
+    .join('&gt;')
+    .split('"')
+    .join('&quot;')
+    .split("'")
+    .join('&#039;')
 }
 
 function formatPrintTime() {
@@ -684,120 +675,157 @@ onMounted(async () => {
 
 <style scoped>
 .order-destination-history {
-  min-height: 100vh;
-  background: #f5f7fa;
-  padding: 0;
+  --odh-accent: #4f46e5;
+  --odh-accent-2: #7c3aed;
+  --odh-surface: #ffffff;
+  --odh-border: rgba(15, 23, 42, 0.08);
+  --odh-text: #0f172a;
+  --odh-muted: #64748b;
+
+  min-height: auto;
+  background: linear-gradient(165deg, #eef2ff 0%, #f8fafc 42%, #f1f5f9 100%);
+  padding: 10px 12px 14px;
   position: relative;
 }
 
-.page-header {
-  position: relative;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 16px 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.header-content {
+.page-shell {
+  max-width: 1480px;
+  margin: 0 auto;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hero-panel {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--odh-border);
+  background: linear-gradient(135deg, #312e81 0%, var(--odh-accent) 48%, var(--odh-accent-2) 100%);
+  box-shadow:
+    0 10px 30px rgba(79, 70, 229, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 10px;
 }
 
-.title-section {
+.title-block {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .title-icon {
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
 .title-icon .el-icon {
   font-size: 20px;
-  color: white;
+  color: #fff;
 }
 
 .title-text {
-  color: white;
+  color: #fff;
+  min-width: 0;
 }
 
 .page-title {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   font-weight: 700;
   margin: 0;
-  color: white;
-  letter-spacing: -0.01em;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
 }
 
 .page-subtitle {
-  font-size: 0.875rem;
-  margin: 4px 0 0 0;
-  opacity: 0.9;
+  font-size: 0.8rem;
+  margin: 2px 0 0;
+  opacity: 0.88;
   font-weight: 400;
+  line-height: 1.35;
 }
 
-.filter-section {
-  background: white;
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin: 0 16px 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+.hero-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(8px);
 }
 
-.filter-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.filter-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1rem;
+.badge-label {
+  font-size: 0.7rem;
   font-weight: 600;
-  color: #1f2937;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
 }
 
-.filter-icon {
-  font-size: 16px;
-  color: #667eea;
+.badge-value {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
-.filter-stats {
+.filter-strip {
   display: flex;
+  align-items: flex-end;
   gap: 12px;
+  padding: 10px 12px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 
-.stats-text {
-  background: #667eea;
-  color: white;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 500;
+.filter-strip-label {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.filter-strip-label .filter-icon {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.95);
 }
 
 .modern-filter-form {
+  flex: 1;
+  min-width: 0;
   margin: 0;
 }
 
 .filter-row {
   display: flex;
-  align-items: end;
-  gap: 16px;
+  align-items: flex-end;
+  gap: 10px 14px;
   flex-wrap: wrap;
 }
 
@@ -808,192 +836,243 @@ onMounted(async () => {
 .custom-label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  color: #374151;
-  margin-bottom: 6px;
-  font-size: 0.875rem;
+  gap: 5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 4px;
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
 }
 
 .custom-label .el-icon {
-  font-size: 14px;
-  color: #667eea;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+::deep(.filter-strip .el-form-item__label) {
+  padding: 0;
+  margin-right: 0;
+}
+
+::deep(.filter-strip .el-form-item) {
+  margin-right: 0;
+  margin-bottom: 0;
+}
+
+::deep(.filter-strip .el-input__wrapper),
+::deep(.filter-strip .el-select .el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+}
+
+::deep(.filter-strip .el-range-editor.el-input__wrapper) {
+  border-radius: 10px;
 }
 
 .select-input {
-  width: 240px;
+  width: min(260px, 100%);
 }
 
 .date-picker {
-  width: 280px;
+  width: min(300px, 100%);
 }
 
 .filter-actions {
   display: flex;
   gap: 8px;
+  align-items: center;
+  margin-left: auto;
 }
 
 .search-btn {
-  background: #667eea;
   border: none;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  display: flex;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.82rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  background: rgba(15, 23, 42, 0.28);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
 }
 
 .search-btn:hover {
-  background: #5568d3;
+  background: rgba(15, 23, 42, 0.38);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.panel-card {
+  background: var(--odh-surface);
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--odh-border);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
 .summary-section,
 .details-section {
-  background: white;
-  border-radius: 8px;
-  padding: 16px 20px;
-  margin: 0 16px 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  margin: 0;
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 0 2px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1f2937;
+  gap: 6px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--odh-text);
+  letter-spacing: -0.01em;
 }
 
 .section-icon {
   font-size: 16px;
-  color: #667eea;
+  color: var(--odh-accent);
 }
 
 .section-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .summary-stats,
 .details-stats {
   display: flex;
-  gap: 12px;
+  gap: 8px;
 }
 
-.stat-item {
-  display: flex;
+.stat-chip {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  border: 1px solid rgba(79, 70, 229, 0.18);
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: 0.7rem;
+  color: var(--odh-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .stat-value {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #667eea;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--odh-accent);
+  font-variant-numeric: tabular-nums;
 }
 
 .modern-table-container {
-  border-radius: 6px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--odh-border);
+  background: #fafafa;
+}
+
+.modern-table-container--details {
+  overflow: hidden;
 }
 
 .modern-table {
   border: none;
+  --el-table-border-color: transparent;
 }
 
 ::deep(.modern-table .el-table__header) {
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 ::deep(.modern-table .el-table__header th) {
-  background: #f8fafc;
+  background: transparent;
   border: none;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 10px 8px;
-  color: #374151;
-  font-weight: 600;
-  font-size: 0.875rem;
+  border-bottom: 1px solid var(--odh-border);
+  padding: 8px 8px;
+  color: var(--odh-text);
+  font-weight: 700;
+  font-size: 0.8rem;
   text-align: center;
 }
 
 ::deep(.modern-table .el-table__body td) {
   border: none;
-  padding: 10px 8px;
-  border-bottom: 1px solid #f3f4f6;
-  font-size: 0.875rem;
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  font-size: 0.8125rem;
+}
+
+::deep(.modern-table .el-table__body tr:hover > td) {
+  background: rgba(79, 70, 229, 0.04) !important;
 }
 
 .table-header {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-weight: 600;
+  gap: 5px;
+  font-weight: 700;
 }
 
 .table-header .el-icon {
-  font-size: 14px;
+  font-size: 13px;
+  color: var(--odh-accent);
 }
 
 .date-cell {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-  font-weight: 500;
-  color: #667eea;
+  font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-weight: 600;
+  color: var(--odh-accent);
   text-align: center;
-  font-size: 0.8125rem;
+  font-size: 0.78rem;
 }
 
 .name-cell {
   font-weight: 500;
-  color: #374151;
-  font-size: 0.8125rem;
+  color: var(--odh-text);
+  font-size: 0.78rem;
   text-align: center;
 }
 
 .number-cell {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
   gap: 4px;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', monospace;
 }
 
 .number-cell .number {
-  font-weight: 600;
-  font-size: 0.8125rem;
+  font-weight: 700;
+  font-size: 0.78rem;
 }
 
 .number-cell .unit {
-  font-size: 0.75rem;
-  opacity: 0.7;
-  font-weight: 500;
+  font-size: 0.7rem;
+  opacity: 0.65;
+  font-weight: 600;
 }
 
 .number-cell.quantity {
-  color: #059669;
+  color: #047857;
 }
 
 .status-cell {
@@ -1003,83 +1082,102 @@ onMounted(async () => {
 
 .status-tag {
   border: none;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  transition: transform 0.15s ease;
+}
+
+.status-tag:hover {
+  transform: translateY(-1px);
 }
 
 .status-completed {
-  background: #10b981;
+  background: linear-gradient(180deg, #34d399, #10b981);
   color: white;
 }
 
 .status-cancelled {
-  background: #ef4444;
+  background: linear-gradient(180deg, #fb7185, #ef4444);
   color: white;
 }
 
 .status-processing {
-  background: #f59e0b;
+  background: linear-gradient(180deg, #fbbf24, #f59e0b);
   color: white;
 }
 
 .status-default {
-  background: #6b7280;
+  background: #64748b;
   color: white;
 }
 
 .print-btn {
-  background: #667eea;
-  border: none;
-  color: white;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  display: flex;
+  border: 1px solid rgba(79, 70, 229, 0.35);
+  color: var(--odh-accent);
+  background: #fff;
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
 .print-btn:hover {
-  background: #5568d3;
+  background: #eef2ff;
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.15);
 }
 
 @media (max-width: 1200px) {
-  .page-header {
-    padding: 14px 20px;
+  .order-destination-history {
+    padding: 8px 10px 12px;
   }
 
-  .filter-section,
-  .summary-section,
-  .details-section {
-    margin: 0 12px 10px;
-    padding: 14px 16px;
+  .page-shell {
+    gap: 8px;
+  }
+
+  .panel-card {
+    padding: 9px 10px;
   }
 }
 
 @media (max-width: 768px) {
-  .page-header {
-    padding: 12px 16px;
-    margin-bottom: 12px;
+  .hero-top {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
-  .filter-section,
-  .summary-section,
-  .details-section {
-    margin: 0 12px 10px;
-    padding: 12px 14px;
+  .filter-strip {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-strip-label {
+    width: fit-content;
   }
 
   .filter-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+  }
+
+  .filter-actions {
+    margin-left: 0;
+    justify-content: stretch;
+  }
+
+  .search-btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .select-input,
@@ -1087,14 +1185,14 @@ onMounted(async () => {
     width: 100%;
   }
 
-  .filter-actions {
-    justify-content: center;
-  }
-
   .section-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+  }
+
+  .section-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 </style>

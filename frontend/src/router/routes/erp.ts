@@ -187,7 +187,19 @@ export const erpRoutes: RouteRecordRaw[] = [
         path: 'erp/inventory/list',
         name: 'InventoryList',
         component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'),
-        meta: { title: '在庫照会', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
+        meta: { title: '製品在庫照会', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/inventory/material-list',
+        name: 'MaterialInventoryList',
+        component: () => import('@/views/erp/inventory/Inventory/MaterialInventoryList.vue'),
+        meta: { title: '材料在庫照会', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
+      },
+      {
+        path: 'erp/inventory/part-list',
+        name: 'PartInventoryList',
+        component: () => import('@/views/erp/inventory/Inventory/PartInventoryList.vue'),
+        meta: { title: '部品在庫照会', group: '在庫管理 > 在庫・ロケーション管理', requiresAuth: true },
       },
       {
         path: 'erp/inventory/stock-entry',

@@ -13,7 +13,7 @@
           <el-icon size="24"><List /></el-icon>
         </div>
         <div class="header-text">
-          <h1 class="header-title">在庫一覧</h1>
+          <h1 class="header-title">製品在庫照会</h1>
           <span class="header-meta">{{ totalCount }} 件</span>
         </div>
       </div>
@@ -54,9 +54,30 @@
           @change="onDateChange"
         />
         <div class="date-quick">
-          <el-button size="small" :type="isPrevDay ? 'primary' : ''" @click="setQuickDate('prev')">前日</el-button>
-          <el-button size="small" :type="isToday ? 'primary' : ''" @click="setQuickDate('today')">今日</el-button>
-          <el-button size="small" :type="isNextDay ? 'primary' : ''" @click="setQuickDate('next')">翌日</el-button>
+          <el-button
+            size="small"
+            class="date-quick-btn"
+            :class="{ 'date-quick-btn--active': isPrevDay }"
+            @click="setQuickDate('prev')"
+          >
+            前日
+          </el-button>
+          <el-button
+            size="small"
+            class="date-quick-btn"
+            :class="{ 'date-quick-btn--active': isToday }"
+            @click="setQuickDate('today')"
+          >
+            今日
+          </el-button>
+          <el-button
+            size="small"
+            class="date-quick-btn"
+            :class="{ 'date-quick-btn--active': isNextDay }"
+            @click="setQuickDate('next')"
+          >
+            翌日
+          </el-button>
         </div>
       </div>
       <div class="toolbar-group">
@@ -172,8 +193,8 @@
     >
       <p class="confirm-message">在庫を更新しますか？</p>
       <template #footer>
-        <el-button @click="showAllUpdateConfirmDialog = false">キャンセル</el-button>
-        <el-button type="primary" @click="confirmAllUpdate">更新</el-button>
+        <el-button class="dlg-btn dlg-btn--ghost" @click="showAllUpdateConfirmDialog = false">キャンセル</el-button>
+        <el-button class="dlg-btn dlg-btn--accent" type="primary" @click="confirmAllUpdate">更新</el-button>
       </template>
     </el-dialog>
 
@@ -703,19 +724,23 @@ onMounted(() => {
 .header-icon {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(99, 102, 241, 0.9));
+  border-radius: 14px;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 45%, #7c3aed 100%);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  box-shadow:
+    0 4px 16px rgba(79, 70, 229, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .header-icon:hover {
   transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5);
+  box-shadow:
+    0 8px 24px rgba(79, 70, 229, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 
 .header-title {
@@ -739,28 +764,59 @@ onMounted(() => {
 }
 
 .btn-glass {
-  background: rgba(255, 255, 255, 0.12) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  color: rgba(255, 255, 255, 0.95) !important;
-  transition: all 0.2s ease !important;
+  border-radius: 10px !important;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(6, 182, 212, 0.12) 100%
+  ) !important;
+  border: 1px solid rgba(103, 232, 249, 0.35) !important;
+  color: #ecfeff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 2px 12px rgba(6, 182, 212, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease !important;
 }
 
 .btn-glass:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.2) 0%,
+    rgba(34, 211, 238, 0.22) 100%
+  ) !important;
+  border-color: rgba(165, 243, 252, 0.55) !important;
   transform: translateY(-1px);
+  box-shadow:
+    0 6px 20px rgba(6, 182, 212, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
 }
 
 .btn-primary-glass {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(99, 102, 241, 0.9)) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35) !important;
-  transition: all 0.2s ease !important;
+  border-radius: 10px !important;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 48%, #7c3aed 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  color: #fff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 4px 18px rgba(79, 70, 229, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease !important;
 }
 
 .btn-primary-glass:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.5) !important;
+  filter: brightness(1.06);
+  box-shadow:
+    0 8px 26px rgba(79, 70, 229, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
+}
+
+.btn-primary-glass:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
 }
 
 /* Stat cards */
@@ -874,16 +930,38 @@ onMounted(() => {
 
 .date-quick {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
-.date-quick .el-button {
-  min-width: 56px;
-  transition: all 0.2s ease;
+.date-quick-btn {
+  min-width: 58px !important;
+  border-radius: 999px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
 }
 
-.date-quick .el-button:not(.is-plain):hover {
+.date-quick-btn:hover {
+  background: rgba(255, 255, 255, 0.11) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #fff !important;
   transform: translateY(-1px);
+}
+
+.date-quick-btn--active {
+  background: linear-gradient(145deg, rgba(99, 102, 241, 0.55), rgba(6, 182, 212, 0.45)) !important;
+  border-color: rgba(255, 255, 255, 0.32) !important;
+  color: #fff !important;
+  box-shadow:
+    0 4px 16px rgba(79, 70, 229, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+.date-quick-btn--active:hover {
+  background: linear-gradient(145deg, rgba(99, 102, 241, 0.68), rgba(6, 182, 212, 0.52)) !important;
 }
 
 .product-select {
@@ -977,6 +1055,37 @@ onMounted(() => {
 .num-positive { color: #1e293b; }
 .num-zero { color: #64748b; }
 .num-negative { color: #dc2626; font-weight: 600; }
+
+/* ダイアログフッター（確認） */
+.dlg-btn {
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  min-width: 96px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease !important;
+}
+
+.dlg-btn--ghost {
+  background: #f1f5f9 !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+}
+
+.dlg-btn--ghost:hover {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+.dlg-btn--accent.el-button--primary {
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 50%, #7c3aed 100%) !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4) !important;
+}
+
+.dlg-btn--accent.el-button--primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.48) !important;
+}
 
 /* 在庫更新確認・進度ダイアログ */
 .confirm-message { margin: 0; font-size: 14px; color: #334155; }

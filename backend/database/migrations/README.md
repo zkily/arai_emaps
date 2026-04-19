@@ -25,6 +25,7 @@
 - `074` - `086`: 材料管理与用量追踪（`087` 为 production_summarys 补丁，接在 086 之后）
 - `091` - `106`: APS 排产相关（甘特、时段、批次、实绩同步）
 - `215` 以降: 部品マスタ・購買・在庫など（`224_part_purchase_tables.sql` に部品在庫作成・廃止テーブル削除・列整合を統合）
+  - **部品在庫 API / 画面**で `Table '...part_stock' doesn't exist` (1146) が出る場合は、対象 DB に **`224_part_purchase_tables.sql` を未実行**のことが多い。MySQL で当該 DB を選択してから本ファイルを実行する（例: `mysql -u USER -p eams_db < backend/database/migrations/224_part_purchase_tables.sql`）。
 
 ## 本次整理产物
 

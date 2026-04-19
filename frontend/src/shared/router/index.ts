@@ -118,7 +118,9 @@ const routes: RouteRecordRaw[] = [
 
       // ========== ERP - 在庫管理 (Inventory / WMS) ==========
       { path: 'erp/inventory', name: 'Inventory', component: () => import('@/views/erp/Inventory.vue'), meta: { title: '在庫管理', group: '在庫管理', requiresAuth: true } },
-      { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '在庫照会', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/list', name: 'InventoryList', component: () => import('@/views/erp/inventory/Inventory/InventoryList.vue'), meta: { title: '製品在庫照会', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/material-list', name: 'MaterialInventoryList', component: () => import('@/views/erp/inventory/Inventory/MaterialInventoryList.vue'), meta: { title: '材料在庫照会', group: '在庫管理', requiresAuth: true } },
+      { path: 'erp/inventory/part-list', name: 'PartInventoryList', component: () => import('@/views/erp/inventory/Inventory/PartInventoryList.vue'), meta: { title: '部品在庫照会', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-entry', name: 'StockEntryManagement', component: () => import('@/views/erp/inventory/stockEntry/UnifiedStockEntry.vue'), meta: { title: '在庫登録管理', group: '在庫管理', requiresAuth: true } },
       { path: 'erp/inventory/stock-transaction-logs', name: 'StockTransactionLog', component: () => import('@/views/erp/inventory/stock/StockTransactionLog.vue'), meta: { title: '在庫取引記録', group: '在庫管理', requiresAuth: true } },
       {
@@ -237,7 +239,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/process', name: 'ProcessList', component: () => import('@/views/master/process/ProcessList.vue'), meta: { title: '工程マスタ', requiresAuth: true } },
       { path: 'master/process-route', name: 'ProcessRouteList', component: () => import('@/views/master/processRoute/ProcessRouteList.vue'), meta: { title: '工程ルートマスタ', requiresAuth: true } },
       { path: 'master/process-route/:route_cd/steps', name: 'RouteStepList', component: () => import('@/views/master/processRoute/ProcessRouteStepEditor.vue'), meta: { title: 'ルートステップ編集', requiresAuth: true } },
-      { path: 'master/product-process-route', name: 'ProductProcessRouteManager', component: () => import('@/views/master/productProcessRoute/ProductRouteStepManager.vue'), meta: { title: '製品別工程ルートマスタ', requiresAuth: true } },
+      { path: 'master/product-process-route', name: 'ProductProcessRouteManager', component: () => import('@/views/master/productProcessRoute/ProductRouteStepManager.vue'), meta: { title: '製品ルートマスタ', requiresAuth: true } },
       { path: 'master/customer', name: 'CustomerList', component: () => import('@/views/master/customer/CustomerList.vue'), meta: { title: '顧客マスタ', requiresAuth: true } },
       { path: 'master/carrier', name: 'CarrierList', component: () => import('@/views/master/carrier/CarrierList.vue'), meta: { title: '運送便マスタ', requiresAuth: true } },
       { path: 'master/machine', name: 'MachineList', component: () => import('@/views/master/machine/MachineList.vue'), meta: { title: '設備マスタ', requiresAuth: true } },

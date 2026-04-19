@@ -1,55 +1,125 @@
 <template>
-  <div class="part-master-page">
-    <header class="part-hero">
-      <div class="part-hero__accent" aria-hidden="true" />
-      <div class="part-hero__inner">
-        <div class="part-hero__brand">
-          <div class="part-hero__icon">
-            <el-icon :size="22"><Grid /></el-icon>
+  <div class="part-master-container">
+    <!-- 与 ProductList / MaterialInspection 同构的页面头部 -->
+    <div class="page-header">
+      <div class="header-content">
+        <div class="title-section">
+          <h1 class="main-title">
+            <el-icon class="title-icon">
+              <Grid />
+            </el-icon>
+            {{ t('master.part.title') }}
+          </h1>
+          <p class="subtitle">{{ t('master.part.subtitle') }}</p>
+        </div>
+        <div class="header-stats">
+          <div class="stat-card">
+            <div class="stat-number">{{ total }}</div>
+            <div class="stat-label">{{ t('master.part.listTotal') }}</div>
           </div>
-          <div>
-            <h1 class="part-hero__title">{{ t('master.part.title') }}</h1>
-            <p class="part-hero__sub">{{ t('master.part.subtitle') }}</p>
+          <div class="stat-card">
+            <div class="stat-number">{{ rows.length }}</div>
+            <div class="stat-label">{{ t('master.part.pageRows') }}</div>
           </div>
         </div>
-        <el-button type="primary" size="small" :icon="Plus" @click="openForm()">{{ t('master.part.add') }}</el-button>
       </div>
-    </header>
+    </div>
 
-    <el-card class="part-toolbar" shadow="never">
-      <el-form :inline="true" class="part-filter" @submit.prevent>
-        <el-form-item :label="t('master.part.keyword')">
-          <el-input
-            v-model="filters.keyword"
-            clearable
-            size="small"
-            class="part-filter__kw"
-            :placeholder="t('master.part.keywordPh')"
-            @keyup.enter="fetchList"
-          />
-        </el-form-item>
-        <el-form-item :label="t('master.common.status')">
-          <el-select v-model="filters.status" clearable size="small" class="part-filter__st" @change="fetchList">
-            <el-option :label="t('master.part.statusActive')" :value="1" />
-            <el-option :label="t('master.part.statusInactive')" :value="0" />
-          </el-select>
-        </el-form-item>
-        <el-form-item>
-          <el-button type="primary" size="small" :icon="Search" @click="fetchList">{{ t('master.common.search') }}</el-button>
-          <el-button size="small" @click="clearFilters">{{ t('master.common.clear') }}</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
+    <div class="action-section">
+      <div class="filter-header">
+        <div class="filter-title">
+          <el-icon class="filter-icon">
+            <Filter />
+          </el-icon>
+          <span>{{ t('master.product.searchFilter') }}</span>
+          <div class="filter-inline-summary" v-if="rows.length || hasActiveFilters">
+            <div class="summary-text">
+              <el-icon class="summary-icon">
+                <InfoFilled />
+              </el-icon>
+              <span>{{ t('master.common.displayCount', { shown: rows.length, total }) }}</span>
+            </div>
+            <div class="active-filters" v-if="hasActiveFilters">
+              <el-tag
+                v-if="filters.keyword"
+                closable
+                @close="handleClearFilter('keyword')"
+                type="primary"
+                size="small"
+              >
+                {{ t('master.part.keyword') }}: {{ filters.keyword }}
+              </el-tag>
+              <el-tag
+                v-if="filters.status === 0 || filters.status === 1"
+                closable
+                @close="handleClearFilter('status')"
+                type="warning"
+                size="small"
+              >
+                {{ t('master.common.status') }}:
+                {{ filters.status === 1 ? t('master.part.statusActive') : t('master.part.statusInactive') }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        <div class="filter-actions">
+          <el-button type="primary" :icon="Search" class="search-btn" @click="fetchList">
+            {{ t('master.common.search') }}
+          </el-button>
+          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
+            {{ t('master.product.reset') }}
+          </el-button>
+          <el-button type="primary" @click="openForm()" :icon="Plus" class="add-product-btn">
+            {{ t('master.part.add') }}
+          </el-button>
+        </div>
+      </div>
 
-    <el-card class="part-table-card" shadow="never">
-      <el-table
-        v-loading="loading"
-        :data="rows"
-        stripe
-        class="part-table"
-        max-height="calc(100vh - 280px)"
-        :default-sort="{ prop: 'part_name', order: 'ascending' }"
-      >
+      <div class="filters-grid">
+        <el-row :gutter="16">
+          <el-col :lg="10" :md="12" :sm="24">
+            <el-form-item :label="`🔍 ${t('master.part.keyword')}`">
+              <el-input
+                v-model="filters.keyword"
+                clearable
+                :placeholder="t('master.part.keywordPh')"
+                style="width: 100%"
+                @keyup.enter="fetchList"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :lg="8" :md="12" :sm="24">
+            <el-form-item :label="`🔖 ${t('master.common.status')}`">
+              <el-select
+                v-model="filters.status"
+                clearable
+                :placeholder="t('master.common.select')"
+                style="width: 100%"
+                @change="fetchList"
+              >
+                <el-option :label="t('master.part.statusActive')" :value="1" />
+                <el-option :label="t('master.part.statusInactive')" :value="0" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </div>
+    </div>
+
+    <el-table
+      v-loading="loading"
+      :data="rows"
+      stripe
+      border
+      highlight-current-row
+      :style="{ width: '100%' }"
+      height="600"
+      class="part-table"
+      :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
+      :cell-style="{ padding: '4px 8px' }"
+      :scrollbar-always-on="true"
+      :default-sort="{ prop: 'part_name', order: 'ascending' }"
+    >
         <el-table-column prop="part_cd" :label="t('master.part.partCd')" width="80" show-overflow-tooltip />
         <el-table-column prop="part_name" :label="t('master.part.partName')" min-width="150" show-overflow-tooltip />
         <el-table-column prop="category" :label="t('master.part.category')" width="100" show-overflow-tooltip />
@@ -97,17 +167,16 @@
           </template>
         </el-table-column>
       </el-table>
-      <div class="part-pager">
-        <el-pagination
-          v-model:current-page="page"
-          :page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          small
-          @current-change="fetchList"
-        />
-      </div>
-    </el-card>
+
+    <el-pagination
+      v-model:current-page="page"
+      :page-size="pageSize"
+      :total="total"
+      layout="total, prev, pager, next"
+      class="pagination"
+      small
+      @current-change="fetchList"
+    />
 
     <el-dialog
       v-model="dlgVisible"
@@ -268,7 +337,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Search, Grid } from '@element-plus/icons-vue'
+import { Plus, Search, Grid, Filter, Refresh, InfoFilled } from '@element-plus/icons-vue'
 import {
   getPartList,
   createPart,
@@ -291,6 +360,19 @@ const page = ref(1)
 const pageSize = 30
 
 const filters = ref<{ keyword: string; status?: number }>({ keyword: '' })
+
+const hasActiveFilters = computed(() => {
+  const kw = filters.value.keyword?.trim()
+  const st = filters.value.status
+  return Boolean(kw) || st === 0 || st === 1
+})
+
+function handleClearFilter(key: 'keyword' | 'status') {
+  if (key === 'keyword') filters.value.keyword = ''
+  else filters.value.status = undefined
+  page.value = 1
+  fetchList()
+}
 
 const dlgVisible = ref(false)
 const isEdit = ref(false)
@@ -401,7 +483,7 @@ function onCurrencyChange(c: string) {
 }
 
 function clearFilters() {
-  filters.value = { keyword: '' }
+  filters.value = { keyword: '', status: undefined }
   page.value = 1
   fetchList()
 }
@@ -543,94 +625,274 @@ onMounted(fetchList)
 </script>
 
 <style scoped>
-.part-master-page {
+/* 与 ProductList / MaterialInspectionMaster 对齐的列表页骨架 */
+.part-master-container {
+  padding: 6px;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
   min-height: 100vh;
-  padding: 10px 12px 16px;
-  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
-.part-hero {
+.page-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
-  margin-bottom: 10px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.15);
+  padding: 10px 16px;
+  margin-bottom: 6px;
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
 }
 
-.part-hero__accent {
-  height: 3px;
-  background: linear-gradient(90deg, #0ea5e9, #6366f1, #8b5cf6);
-}
-
-.part-hero__inner {
+.header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  gap: 16px;
 }
 
-.part-hero__brand {
+.title-section {
+  flex: 1;
+}
+
+.main-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 2px;
+  color: #fff;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  gap: 8px;
 }
 
-.part-hero__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+.title-icon {
+  font-size: 1.3rem;
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.part-hero__title {
-  margin: 0 0 4px;
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: #fff;
-}
-
-.part-hero__sub {
+.subtitle {
+  color: rgba(255, 255, 255, 0.8);
   margin: 0;
-  font-size: 11px;
-  color: rgba(226, 232, 240, 0.85);
-  line-height: 1.35;
+  font-size: 0.8rem;
 }
 
-.part-toolbar {
-  margin-bottom: 10px;
-  border-radius: 12px;
+.header-stats {
+  display: flex;
+  gap: 8px;
 }
 
-.part-toolbar :deep(.el-card__body) {
-  padding: 10px 12px;
+.stat-card {
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 10px;
+  text-align: center;
+  min-width: 70px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.2s ease;
 }
 
-.part-filter :deep(.el-form-item) {
-  margin-bottom: 0;
-  margin-right: 12px;
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
 }
 
-.part-filter__kw {
-  width: 200px;
+.stat-number {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.part-filter__st {
-  width: 130px;
+.stat-label {
+  font-size: 0.7rem;
+  opacity: 0.9;
+  margin-top: 2px;
+  white-space: nowrap;
 }
 
-.part-table-card {
-  border-radius: 12px;
-}
-
-.part-table-card :deep(.el-card__body) {
+.action-section {
+  background: white;
+  border-radius: 10px;
   padding: 0;
+  margin-bottom: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.filter-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.filter-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #334155;
+  flex-wrap: wrap;
+}
+
+.filter-icon {
+  font-size: 1rem;
+  color: #667eea;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.clear-btn {
+  color: #64748b;
+  transition: all 0.2s ease;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+}
+
+.clear-btn:hover {
+  color: #667eea;
+}
+
+.search-btn {
+  border: none !important;
+  border-radius: 8px;
+  padding: 7px 12px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.search-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+}
+
+.add-product-btn {
+  border: none !important;
+  border-radius: 8px;
+  padding: 7px 12px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.add-product-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+  background: linear-gradient(135deg, #7c8ff0 0%, #8558b5 100%) !important;
+}
+
+.filters-grid {
+  padding: 10px 14px;
+  background: white;
+}
+
+.filters-grid :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.filters-grid :deep(.el-form-item__label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  padding-bottom: 2px;
+}
+
+.filters-grid :deep(.el-input__wrapper),
+.filters-grid :deep(.el-select .el-input__wrapper) {
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px #e2e8f0;
+}
+
+.filters-grid :deep(.el-input__wrapper:hover),
+.filters-grid :deep(.el-select .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #667eea;
+}
+
+.summary-text {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.summary-icon {
+  color: #667eea;
+  font-size: 14px;
+}
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.active-filters :deep(.el-tag) {
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 0 6px;
+  height: 22px;
+}
+
+.filter-inline-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.filter-inline-summary .summary-text {
+  margin-bottom: 0;
+}
+
+:deep(.el-table) {
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+:deep(.el-table .el-table__header th) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  font-weight: 600;
+  color: #334155;
+  font-size: 12px;
+  padding: 6px 8px !important;
+}
+
+:deep(.el-table .el-table__cell) {
+  padding: 4px 6px !important;
+}
+
+:deep(.el-table .cell) {
+  line-height: 1.5;
+}
+
+:deep(.el-table .el-button--small) {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 5px;
 }
 
 .part-table {
@@ -641,11 +903,21 @@ onMounted(fetchList)
   color: #4f46e5;
 }
 
-.part-pager {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 12px;
-  border-top: 1px solid #f1f5f9;
+.pagination {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.pagination :deep(.el-pager li) {
+  border-radius: 6px;
+  font-size: 12px;
+  min-width: 28px;
+  height: 28px;
+  line-height: 28px;
+}
+
+.pagination :deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .part-input-full {
@@ -677,6 +949,71 @@ onMounted(fetchList)
   font-weight: 800;
   color: #312e81;
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1200px) {
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .header-stats {
+    align-self: stretch;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 768px) {
+  .part-master-container {
+    padding: 4px;
+  }
+
+  .page-header {
+    padding: 8px 12px;
+    border-radius: 10px;
+  }
+
+  .main-title {
+    font-size: 1.15rem;
+  }
+
+  .filter-header {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+    padding: 10px 12px;
+  }
+
+  .filter-actions {
+    justify-content: flex-start;
+  }
+
+  .stat-card {
+    min-width: 60px;
+    padding: 5px 8px;
+  }
+
+  .stat-number {
+    font-size: 1.1rem;
+  }
+}
+
+.page-header,
+.action-section {
+  animation: partListFadeIn 0.4s ease-out;
+}
+
+@keyframes partListFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
 
