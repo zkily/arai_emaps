@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Excel 取込の production_plan_updates は工程名が実質「成型」「溶接」のみ。切断・面取・メッキ等の日次計画は production_summarys の *_plan に載る（update-plan 等で更新）。
+# Excel 取込の production_plan_updates は別用途。生産サマリの日次 *_plan は update-plan が schedule_details を設備工程別に集計して反映する。
 SUMMARY_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
     "成型": "molding_plan",
     "溶接": "welding_plan",

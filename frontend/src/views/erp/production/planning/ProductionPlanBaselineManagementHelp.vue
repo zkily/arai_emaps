@@ -390,6 +390,84 @@ async function handlePdfSave() {
   margin: 18px 0;
 }
 
+/* 操業度：ヘッダー操作（対象月・工程・検索・印刷）同一行イメージ — 余白を抑えたコンパクトバー */
+:deep(.help-content .ppb-help-opbar) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin: 8px 0 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(255, 255, 255, 0.92));
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+:deep(.help-content .ppb-help-opbar__cluster) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+:deep(.help-content .ppb-help-opbar__k) {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+:deep(.help-content .ppb-help-opbar__pill) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:deep(.help-content .ppb-help-opbar__pill--wide) {
+  max-width: min(240px, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.help-content .ppb-help-opbar__btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 10px;
+  cursor: default;
+  user-select: none;
+  white-space: nowrap;
+}
+
+:deep(.help-content .ppb-help-opbar__btn--primary) {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(64, 158, 255, 0.98), rgba(37, 99, 235, 0.96));
+  border: 1px solid rgba(37, 99, 235, 0.45);
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.15);
+}
+
+:deep(.help-content .ppb-help-opbar__btn--muted) {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
 :deep(.help-content table) {
   width: 100%;
   border-collapse: collapse;
@@ -469,6 +547,12 @@ async function handlePdfSave() {
 
   :deep(.help-content img) {
     box-shadow: none !important;
+  }
+
+  :deep(.help-content .ppb-help-opbar) {
+    break-inside: avoid;
+    box-shadow: none !important;
+    background: #f8fafc !important;
   }
 }
 

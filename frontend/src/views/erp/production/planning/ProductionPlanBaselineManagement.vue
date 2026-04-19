@@ -177,54 +177,63 @@
       </div>
     </div>
 
-    <!-- 紧凑型表格卡片 -->
+    <!-- ベースライン比較一覧（工程別タブ＋表） -->
     <el-card shadow="hover" class="table-card baseline-comparison-card">
       <template #header>
-        <div class="card-header">
-          <div class="card-header-left">
-            <el-icon class="card-header-icon"><Setting /></el-icon>
-            <span class="card-title">ベースライン比較一覧</span>
+        <div class="comparison-list-head">
+          <div class="comparison-list-head__lead">
+            <el-icon class="comparison-list-head__icon"><Setting /></el-icon>
+            <div class="comparison-list-head__titles">
+              <span class="comparison-list-head__title">ベースライン比較一覧</span>
+              <span class="comparison-list-head__sub">工程別タブで日次の基準・現行・差異を表示</span>
+            </div>
             <el-tag
               v-if="comparisonResult?.baselineMonth"
               type="info"
+              effect="plain"
               size="small"
-              class="month-tag"
+              class="comparison-list-head__tag"
             >
               {{ dayjs(comparisonResult.baselineMonth).format('YYYY年MM月') }}
             </el-tag>
-          </div>
-          <div class="card-header-right">
-            <el-tag v-if="totalItemsCount > 0" type="primary" size="small" class="count-tag">
-              総件数: {{ totalItemsCount }}
+            <el-tag
+              v-if="totalItemsCount > 0"
+              type="primary"
+              effect="plain"
+              size="small"
+              class="comparison-list-head__tag"
+            >
+              全 {{ totalItemsCount }} 行
             </el-tag>
+          </div>
+          <div class="comparison-list-head__actions">
             <el-button
               type="primary"
               plain
-              class="btn-export-baseline-modern"
+              class="btn-export-baseline-modern comparison-list-btn"
               :icon="Download"
               @click="handleExportPdfToFolder"
               :loading="exportPdfLoading"
               :disabled="!canExportBaselinePdf"
-              size="default"
+              size="small"
             >
               工程別報告書発行
             </el-button>
-
             <el-button
               type="default"
               plain
-              class="btn-print-baseline-modern"
+              class="btn-print-baseline-modern comparison-list-btn"
               :icon="Printer"
               @click="handlePrintBaselineComparison"
               :disabled="totalItemsCount === 0"
-              size="default"
+              size="small"
             >
               印刷
             </el-button>
           </div>
         </div>
       </template>
-      <el-tabs v-model="activeTab" type="border-card" v-loading="tableLoading">
+      <el-tabs v-model="activeTab" class="comparison-tabs" type="card" v-loading="tableLoading">
         <el-tab-pane
           v-for="process in processTabs"
           :key="process.name"
@@ -233,16 +242,15 @@
         >
           <template #label>
             <span class="tab-label">
-              <el-icon class="tab-icon"><Setting /></el-icon>
               {{ process.label }}
-              <el-tag size="small" type="info" class="tab-count">{{ process.count }}</el-tag>
+              <span class="tab-count">{{ process.count }}</span>
             </span>
           </template>
           <el-table
             :data="process.items"
             border
             stripe
-            height="380"
+            height="340"
             style="width: 100%"
             empty-text="データがありません"
             class="comparison-table"
@@ -445,56 +453,55 @@
       </el-tabs>
     </el-card>
 
-    <!-- 操業度 production_plan_rate（Excel 取込）— スタイルはベースライン比較カードに合わせる -->
+    <!-- 操業度：成型計画一覧「設備操業度」と同一データ（fetchSchedulingGrid + 設備別集計） -->
     <el-card class="table-card operation-rate-card" shadow="hover">
       <template #header>
-        <div class="card-header">
-          <div class="card-header-left">
+        <div class="operation-rate-head">
+          <div class="operation-rate-head__lead">
             <el-icon class="card-header-icon"><DataLine /></el-icon>
             <span class="card-title">操業度</span>
-            <span class="operation-rate-title-meta">production_plan_rate</span>
-            <el-tag v-if="planRateFilter.baselineMonth" type="info" size="small" class="month-tag">
-              {{ dayjs(planRateFilter.baselineMonth).format('YYYY年MM月') }}
-            </el-tag>
-            <el-tag v-if="planRateRows.length > 0" type="primary" size="small" class="count-tag">
-              {{ planRateRows.length }} 件
+            <span class="operation-rate-title-meta">APS 設備操業度（月次）</span>
+            <el-tag v-if="planUtilizationRows.length > 0" type="primary" size="small" class="count-tag">
+              {{ planUtilizationRows.length }} 設備
             </el-tag>
           </div>
-          <div class="card-header-right operation-rate-header-actions">
+          <div class="operation-rate-head__controls">
+            <span class="operation-rate-ctl-label">集計月</span>
             <el-date-picker
               v-model="planRateFilter.baselineMonth"
               type="month"
-              value-format="YYYY-MM-DD"
-              placeholder="対象月"
-              size="default"
+              value-format="YYYY-MM"
+              format="YYYY年MM月"
+              placeholder="月"
+              size="small"
               class="operation-rate-picker"
+              :clearable="false"
+              teleported
             />
+            <span class="operation-rate-ctl-label">工程</span>
             <el-select
-              v-model="planRateFilter.processName"
-              placeholder="工程"
-              clearable
-              size="default"
+              v-model="planRateFilter.processCd"
+              placeholder="工程を選択"
+              filterable
+              size="small"
               class="operation-rate-select"
+              teleported
             >
               <el-option
-                v-for="opt in planRateProcessOptions"
-                :key="opt.value === '' ? '_all' : opt.value"
+                v-for="opt in planRateProcessSelectOptions"
+                :key="opt.value"
                 :label="opt.label"
                 :value="opt.value"
               />
             </el-select>
-            <el-button type="primary" :icon="Search" :loading="planRateLoading" @click="loadPlanOperationRate">
-              検索
-            </el-button>
-
             <el-button
               type="default"
               plain
-              class="btn-print-operation-modern"
+              class="btn-print-operation-modern operation-rate-print-btn"
               :icon="Printer"
               @click="handlePrintOperationRate"
-              :disabled="planRateRows.length === 0"
-              size="default"
+              :disabled="planUtilizationRows.length === 0"
+              size="small"
             >
               印刷
             </el-button>
@@ -502,41 +509,78 @@
         </div>
       </template>
       <div class="operation-rate-body">
+        <div class="util-note util-note--baseline">
+          <span class="util-note-chip">対象：{{ utilizationMonthLabelJp }}</span>
+          <span class="util-note-chip util-note-chip--formula">操業度＝各時間÷理論稼働</span>
+          <span class="util-note-chip util-note-chip--formula">差異工時＝上記期間の Σ((実績−計画)/能率)</span>
+        </div>
         <el-table
           v-loading="planRateLoading"
-          :data="planRateRows"
+          :data="planUtilizationRows"
           border
           stripe
           size="small"
           class="comparison-table operation-rate-table"
           max-height="360"
-          empty-text="該当データがありません。月・工程を選んで検索してください。"
+          empty-text="該当データがありません。集計月・工程を変更すると自動で再読込されます。"
         >
-          <el-table-column prop="display_month" label="月" width="72" align="center" />
-          <el-table-column prop="display_process" label="工程" width="88" align="center">
+          <el-table-column prop="lineLabel" label="設備" width="80" show-overflow-tooltip />
+          <el-table-column prop="scheduleCount" label="指示数" width="72" align="center" />
+          <el-table-column width="100" align="right">
+            <template #header>
+              <span class="util-col-head">理論稼働(H)</span>
+            </template>
             <template #default="{ row }">
-              <el-tag v-if="row.display_process" size="small" type="info" effect="plain">
-                {{ row.display_process }}
-              </el-tag>
-              <span v-else>—</span>
+              <span class="util-num">{{ formatUtilHours(row.availableHours) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="machine_cd" label="ラインCD" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="machine_name" label="ライン" min-width="140" show-overflow-tooltip />
-          <el-table-column prop="operation_variance" label="操業度差異" width="120" align="center">
+          <el-table-column label="計画数" width="78" align="right">
             <template #default="{ row }">
-              <span
-                v-for="(ov, oi) in [operationVarianceRowView(row.operation_variance)]"
-                :key="oi"
-                class="operation-variance-cell"
-                :class="ov.cls"
-              >
-                {{ ov.text }}
-              </span>
+              <span class="util-num">{{ formatUtilNum(row.plannedQty) }}</span>
             </template>
           </el-table-column>
-          <el-table-column prop="file_name" label="ファイル名" min-width="200" show-overflow-tooltip />
-          <el-table-column prop="processed_at" label="取込日時" width="160" align="center" />
+          <el-table-column label="実績数" width="78" align="right">
+            <template #default="{ row }">
+              <span class="util-num util-num--actual">{{ formatUtilNum(row.actualQty) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="計画時間(H)" width="102" align="right">
+            <template #default="{ row }">
+              <span class="util-num">{{ formatUtilHours(row.plannedHours) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="実績時間(H)" width="102" align="right">
+            <template #default="{ row }">
+              <span class="util-num util-num--actual">{{ formatUtilHours(row.actualHours) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="計画操業度" width="96" align="right">
+            <template #default="{ row }">
+              <span class="util-num">{{ formatUtilPercent(row.planUtilizationPct) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="実績操業度" width="96" align="right">
+            <template #default="{ row }">
+              <span class="util-num util-num--actual">{{ formatUtilPercent(row.actualUtilizationPct) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column width="112" align="right">
+            <template #header>
+              <span class="util-col-head">操業度差異(H)</span>
+            </template>
+            <template #default="{ row }">
+              <span class="util-num" :class="{ 'util-num--negative': row.diffHours < 0 }">{{
+                formatUtilHours(row.diffHours)
+              }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="差異操業度(%)" width="118" align="right">
+            <template #default="{ row }">
+              <span class="util-num" :class="{ 'util-num--negative': row.diffUtilizationPct < 0 }">{{
+                formatUtilPercent(row.diffUtilizationPct)
+              }}</span>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
     </el-card>
@@ -787,14 +831,20 @@ import {
   deletePlanBaseline,
   deletePlanBaselineRecord,
   fetchPlanBaselineRecords,
-  fetchPlanOperationRate,
   updatePlanBaselinePlanQuantity,
   exportPlanBaselinePdfToFolder,
   type PlanBaselineComparisonItem,
   type PlanBaselineComparisonResult,
   type PlanBaselineRecord,
-  type PlanOperationRateRow,
 } from '@/api/planBaseline'
+import {
+  fetchLines,
+  fetchSchedulingGrid,
+  type ScheduleGridRow,
+  type SchedulingGridResponse,
+} from '@/api/aps'
+import { fetchProcesses } from '@/api/master/processMaster'
+import type { ProcessItem } from '@/types/master'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import * as echarts from 'echarts'
@@ -829,17 +879,149 @@ const processOptions = [
   { label: '外注溶接', value: '外注溶接' },
 ]
 
+/** 操業度カード：成型計画一覧「設備操業度」と同じ集計月（東京暦 YYYY-MM） */
+function formatYmInJapan(d = new Date()): string {
+  return new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+  })
+    .format(d)
+    .slice(0, 7)
+}
+
 const planRateFilter = reactive({
-  baselineMonth: today,
-  processName: '' as string,
+  baselineMonth: formatYmInJapan(),
+  processCd: '' as string,
 })
-const planRateProcessOptions = [
-  { label: '全て', value: '' },
-  { label: '成型', value: '成型' },
-  { label: '溶接', value: '溶接' },
-]
-const planRateRows = ref<PlanOperationRateRow[]>([])
+const planRateProcessList = ref<ProcessItem[]>([])
+const planRateProcessSelectOptions = computed(() =>
+  planRateProcessList.value.map((p) => ({
+    label: `${(p.process_cd || '').trim()} — ${(p.process_name || '').trim()}`,
+    value: (p.process_cd || '').trim(),
+  })),
+)
 const planRateLoading = ref(false)
+
+type GanttListRow = ScheduleGridRow & {
+  lineLabel: string
+  line_id: number
+  product_cd?: string | null
+}
+
+interface LineUtilizationRow {
+  lineId: number
+  lineLabel: string
+  scheduleCount: number
+  availableHours: number
+  plannedQty: number
+  actualQty: number
+  plannedHours: number
+  actualHours: number
+  diffQty: number
+  diffHours: number
+  diffUtilizationPct: number
+  planUtilizationPct: number
+  actualUtilizationPct: number
+}
+
+const planUtilMonthDates = ref<string[]>([])
+const planUtilMonthRows = ref<GanttListRow[]>([])
+const planUtilLineCalendarMap = ref<Record<number, Record<string, number>>>({})
+const planUtilLineDefaultHoursMap = ref<Record<number, number>>({})
+
+const utilizationMonthLabelJp = computed(() => {
+  const ym = (planRateFilter.baselineMonth || '').trim()
+  const p = ym.match(/^(\d{4})-(\d{2})$/)
+  if (!p) return '—'
+  return `${Number(p[1])}年${Number(p[2])}月`
+})
+
+const planUtilizationMonthFullDates = computed(() =>
+  [...planUtilMonthDates.value].sort((a, b) => a.localeCompare(b)),
+)
+
+function lineLastActualDayInMonth(monthDates: string[], rows: GanttListRow[]): Map<number, string | null> {
+  const lastBy = new Map<number, string | null>()
+  const lineIds = new Set(rows.map((r) => r.line_id))
+  for (const lid of lineIds) lastBy.set(lid, null)
+  for (const d of monthDates) {
+    const daySum = new Map<number, number>()
+    for (const row of rows) {
+      const lid = row.line_id
+      daySum.set(lid, (daySum.get(lid) ?? 0) + Number(row.actual_daily?.[d] ?? 0))
+    }
+    for (const [lid, v] of daySum) {
+      if (v > 0) lastBy.set(lid, d)
+    }
+  }
+  return lastBy
+}
+
+const planUtilizationRows = computed<LineUtilizationRow[]>(() => {
+  const monthDates = planUtilizationMonthFullDates.value
+  if (monthDates.length === 0) return []
+
+  const rows = planUtilMonthRows.value
+  const lastActualByLine = lineLastActualDayInMonth(monthDates, rows)
+
+  const map = new Map<number, LineUtilizationRow>()
+  for (const row of rows) {
+    const lineId = row.line_id
+    const plannedQty = monthDates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
+    const actualQty = monthDates.reduce((sum, d) => sum + Number(row.actual_daily?.[d] ?? 0), 0)
+    const rate = Number(row.efficiency_rate ?? 0)
+    const plannedHours = rate > 0 ? plannedQty / rate : 0
+    const actualHours = rate > 0 ? actualQty / rate : 0
+    const endDay = lastActualByLine.get(lineId)
+    const diffDates =
+      endDay == null || endDay === '' ? ([] as string[]) : monthDates.filter((d) => d <= endDay)
+    const diffQtyRow = diffDates.reduce((sum, d) => {
+      const p = Number(row.daily?.[d] ?? 0)
+      const a = Number(row.actual_daily?.[d] ?? 0)
+      return sum + (a - p)
+    }, 0)
+    const diffHoursRow = rate > 0 ? diffQtyRow / rate : 0
+    const item = map.get(lineId) ?? {
+      lineId,
+      lineLabel: row.lineLabel || `ID ${lineId}`,
+      scheduleCount: 0,
+      availableHours: 0,
+      plannedQty: 0,
+      actualQty: 0,
+      plannedHours: 0,
+      actualHours: 0,
+      diffQty: 0,
+      diffHours: 0,
+      diffUtilizationPct: 0,
+      planUtilizationPct: 0,
+      actualUtilizationPct: 0,
+    }
+    item.scheduleCount += 1
+    item.plannedQty += plannedQty
+    item.actualQty += actualQty
+    item.plannedHours += plannedHours
+    item.actualHours += actualHours
+    item.diffQty += diffQtyRow
+    item.diffHours += diffHoursRow
+    map.set(lineId, item)
+  }
+  const result = Array.from(map.values())
+  for (const r of result) {
+    const calMap = planUtilLineCalendarMap.value[r.lineId] || {}
+    const fallback = Number(planUtilLineDefaultHoursMap.value[r.lineId] ?? 0)
+    const avail = monthDates.reduce((sum, d) => {
+      const h = Number(calMap[d] ?? fallback)
+      return sum + (Number.isFinite(h) ? h : 0)
+    }, 0)
+    r.availableHours = avail
+    r.planUtilizationPct = avail > 0 ? (r.plannedHours / avail) * 100 : 0
+    r.actualUtilizationPct = avail > 0 ? (r.actualHours / avail) * 100 : 0
+    r.diffUtilizationPct = avail > 0 ? (r.diffHours / avail) * 100 : 0
+  }
+  result.sort((a, b) => a.lineLabel.localeCompare(b.lineLabel, 'ja'))
+  return result
+})
 
 const generating = ref(false)
 const deleting = ref(false)
@@ -1111,41 +1293,236 @@ const formatNumber = (value: number | string | null | undefined) => {
   return num.toLocaleString('ja-JP')
 }
 
-/** 操業度差異の生文字列を数値化（カンマ・Unicode マイナス対応） */
-function parseOperationVarianceNumber(raw: string): number | null {
-  const s = raw
-    .replace(/,/g, '')
-    .replace(/\u2212/g, '-')
-    .replace(/\uFF0D/g, '-')
-    .trim()
-  if (s === '' || s === '-') return null
-  const n = Number(s)
-  return Number.isNaN(n) ? null : n
+function formatUtilNum(v: number | null | undefined): string {
+  return Number(v ?? 0).toLocaleString()
 }
 
-/** 操業度差異の表示用テキスト・負数フラグ（一覧・PDF 共通） */
-function getOperationVarianceDisplayMeta(v: string | null | undefined): {
-  text: string
-  negative: boolean
-  isEmpty: boolean
-} {
-  if (v == null || v === '') return { text: '', negative: false, isEmpty: true }
-  const raw = String(v).trim()
-  const n = parseOperationVarianceNumber(raw)
-  if (n !== null) {
-    return { text: formatNumber(n), negative: n < 0, isEmpty: false }
-  }
-  const normalized = raw.replace(/\u2212/g, '-').replace(/\uFF0D/g, '-').replace(/,/g, '').trim()
-  const negative = /^-\d/.test(normalized) || /^-\./.test(normalized)
-  return { text: raw, negative, isEmpty: false }
+function formatUtilHours(v: number | null | undefined): string {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n.toFixed(1) : '0.0'
 }
 
-function operationVarianceRowView(v: string | null | undefined) {
-  const m = getOperationVarianceDisplayMeta(v)
-  return {
-    text: m.isEmpty ? '—' : m.text,
-    cls: m.negative ? 'operation-variance-cell--negative' : '',
+function formatUtilPercent(v: number | null | undefined): string {
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '0.0%'
+  return `${n.toFixed(1)}%`
+}
+
+function monthRangeFromYm(ym: string): [string, string] | null {
+  const m = ym.trim().match(/^(\d{4})-(\d{2})$/)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null
+  const sd = `${y}-${String(mo).padStart(2, '0')}-01`
+  const last = new Date(y, mo, 0).getDate()
+  const ed = `${y}-${String(mo).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+  return [sd, ed]
+}
+
+function compareByLineThenOrder(a: GanttListRow, b: GanttListRow): number {
+  const lineCmp = (a.lineLabel || '').localeCompare(b.lineLabel || '', 'ja')
+  if (lineCmp !== 0) return lineCmp
+  const oa = a.order_no ?? 1_000_000 + a.id
+  const ob = b.order_no ?? 1_000_000 + b.id
+  if (oa !== ob) return oa - ob
+  return a.id - b.id
+}
+
+function flattenGridToRows(grid: SchedulingGridResponse, lineNameById: Map<number, string>): GanttListRow[] {
+  const flat: GanttListRow[] = []
+  for (const block of grid.blocks || []) {
+    const label =
+      lineNameById.get(block.line_id) ||
+      String((block as { line_name?: string }).line_name || '').trim() ||
+      block.line_code ||
+      `ID ${block.line_id}`
+    for (const r of block.rows || []) {
+      flat.push({ ...r, lineLabel: label, line_id: block.line_id })
+    }
   }
+  return flat
+}
+
+function selectedPlanRateProcessLabel(): string {
+  const cd = (planRateFilter.processCd || '').trim()
+  if (!cd) return '—'
+  const p = planRateProcessList.value.find((x) => (x.process_cd || '').trim() === cd)
+  const nm = (p?.process_name || '').trim()
+  return nm ? `${cd} — ${nm}` : cd
+}
+
+async function loadPlanProcessOptions() {
+  try {
+    const res = await fetchProcesses({ page: 1, pageSize: 5000 })
+    const list = res.list ?? res.data?.list ?? []
+    const raw = Array.isArray(list) ? list : []
+    let filtered = raw.filter((p) => {
+      const name = (p.process_name || '').trim()
+      const cd = (p.process_cd || '').trim()
+      if (name === '成型' || name === '溶接') return true
+      if (cd === 'KT04' || cd === 'KT07') return true
+      return false
+    })
+    if (filtered.length === 0) {
+      filtered = raw.filter((p) => {
+        const cd = (p.process_cd || '').trim()
+        return cd === 'KT04' || cd === 'KT07'
+      })
+    }
+    planRateProcessList.value = filtered
+    const hasKt04 = planRateProcessList.value.some((p) => (p.process_cd || '').trim() === 'KT04')
+    if (hasKt04) {
+      planRateFilter.processCd = 'KT04'
+    } else if (planRateProcessList.value.length === 1) {
+      planRateFilter.processCd = (planRateProcessList.value[0].process_cd || '').trim()
+    }
+  } catch {
+    planRateProcessList.value = []
+    ElMessage.error('工程一覧の取得に失敗しました')
+  }
+}
+
+async function loadPlanUtilizationGrid() {
+  const pc = (planRateFilter.processCd || '').trim()
+  if (!pc) {
+    planUtilMonthDates.value = []
+    planUtilMonthRows.value = []
+    planUtilLineCalendarMap.value = {}
+    planUtilLineDefaultHoursMap.value = {}
+    return
+  }
+  const ym = (planRateFilter.baselineMonth || '').trim()
+  const range = monthRangeFromYm(ym)
+  if (!range) {
+    planUtilMonthDates.value = []
+    planUtilMonthRows.value = []
+    planUtilLineCalendarMap.value = {}
+    planUtilLineDefaultHoursMap.value = {}
+    return
+  }
+  const [sd, ed] = range
+  planRateLoading.value = true
+  try {
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(sd, ed, undefined, pc),
+      fetchLines(pc),
+    ])
+    planUtilMonthDates.value = Array.isArray(grid.dates) ? grid.dates : []
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
+    const flat = flattenGridToRows(grid, lineNameById)
+    flat.sort(compareByLineThenOrder)
+    planUtilMonthRows.value = flat
+    const calendarMap: Record<number, Record<string, number>> = {}
+    const defaultMap: Record<number, number> = {}
+    for (const block of grid.blocks || []) {
+      calendarMap[block.line_id] = block.calendar || {}
+      defaultMap[block.line_id] = Number(block.default_work_hours ?? 0)
+    }
+    planUtilLineCalendarMap.value = calendarMap
+    planUtilLineDefaultHoursMap.value = defaultMap
+  } catch {
+    planUtilMonthDates.value = []
+    planUtilMonthRows.value = []
+    planUtilLineCalendarMap.value = {}
+    planUtilLineDefaultHoursMap.value = {}
+    ElMessage.error('操業度データの取得に失敗しました')
+  } finally {
+    planRateLoading.value = false
+  }
+}
+
+/** 工程別PDFの「操業度」章用：成型・溶接それぞれの設備操業度を HTML 化するための行取得 */
+async function fetchUtilizationRowsForYmProcess(
+  ym: string,
+  processCd: string,
+): Promise<LineUtilizationRow[]> {
+  const pc = (processCd || '').trim()
+  if (!pc) return []
+  const range = monthRangeFromYm(ym.trim())
+  if (!range) return []
+  const [sd, ed] = range
+  const [grid, lines] = await Promise.all([
+    fetchSchedulingGrid(sd, ed, undefined, pc),
+    fetchLines(pc),
+  ])
+  const dates = Array.isArray(grid.dates) ? [...grid.dates].sort((a, b) => a.localeCompare(b)) : []
+  if (dates.length === 0) return []
+  const lineNameById = new Map<number, string>()
+  for (const line of lines || []) {
+    const name = String(line.line_name || '').trim()
+    const code = String(line.line_code || '').trim()
+    lineNameById.set(line.id, name || code || `ID ${line.id}`)
+  }
+  const flat = flattenGridToRows(grid, lineNameById)
+  const calendarMap: Record<number, Record<string, number>> = {}
+  const defaultMap: Record<number, number> = {}
+  for (const block of grid.blocks || []) {
+    calendarMap[block.line_id] = block.calendar || {}
+    defaultMap[block.line_id] = Number(block.default_work_hours ?? 0)
+  }
+  const lastActualByLine = lineLastActualDayInMonth(dates, flat)
+  const map = new Map<number, LineUtilizationRow>()
+  for (const row of flat) {
+    const lineId = row.line_id
+    const plannedQty = dates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
+    const actualQty = dates.reduce((sum, d) => sum + Number(row.actual_daily?.[d] ?? 0), 0)
+    const rate = Number(row.efficiency_rate ?? 0)
+    const plannedHours = rate > 0 ? plannedQty / rate : 0
+    const actualHours = rate > 0 ? actualQty / rate : 0
+    const endDay = lastActualByLine.get(lineId)
+    const diffDates =
+      endDay == null || endDay === '' ? ([] as string[]) : dates.filter((d) => d <= endDay)
+    const diffQtyRow = diffDates.reduce((sum, d) => {
+      const p = Number(row.daily?.[d] ?? 0)
+      const a = Number(row.actual_daily?.[d] ?? 0)
+      return sum + (a - p)
+    }, 0)
+    const diffHoursRow = rate > 0 ? diffQtyRow / rate : 0
+    const item = map.get(lineId) ?? {
+      lineId,
+      lineLabel: row.lineLabel || `ID ${lineId}`,
+      scheduleCount: 0,
+      availableHours: 0,
+      plannedQty: 0,
+      actualQty: 0,
+      plannedHours: 0,
+      actualHours: 0,
+      diffQty: 0,
+      diffHours: 0,
+      diffUtilizationPct: 0,
+      planUtilizationPct: 0,
+      actualUtilizationPct: 0,
+    }
+    item.scheduleCount += 1
+    item.plannedQty += plannedQty
+    item.actualQty += actualQty
+    item.plannedHours += plannedHours
+    item.actualHours += actualHours
+    item.diffQty += diffQtyRow
+    item.diffHours += diffHoursRow
+    map.set(lineId, item)
+  }
+  const result = Array.from(map.values())
+  for (const r of result) {
+    const calMap = calendarMap[r.lineId] || {}
+    const fallback = Number(defaultMap[r.lineId] ?? 0)
+    const avail = dates.reduce((sum, d) => {
+      const h = Number(calMap[d] ?? fallback)
+      return sum + (Number.isFinite(h) ? h : 0)
+    }, 0)
+    r.availableHours = avail
+    r.planUtilizationPct = avail > 0 ? (r.plannedHours / avail) * 100 : 0
+    r.actualUtilizationPct = avail > 0 ? (r.actualHours / avail) * 100 : 0
+    r.diffUtilizationPct = avail > 0 ? (r.diffHours / avail) * 100 : 0
+  }
+  result.sort((a, b) => a.lineLabel.localeCompare(b.lineLabel, 'ja'))
+  return result
 }
 
 const openAdjustmentDialog = () => {
@@ -1357,26 +1734,6 @@ const loadComparison = async () => {
     ElMessage.error(error?.message || '比較データの取得に失敗しました')
   } finally {
     tableLoading.value = false
-  }
-}
-
-const loadPlanOperationRate = async () => {
-  if (!planRateFilter.baselineMonth) {
-    ElMessage.warning('対象月を選択してください')
-    return
-  }
-  planRateLoading.value = true
-  try {
-    const monthNum = dayjs(planRateFilter.baselineMonth).month() + 1
-    planRateRows.value = await fetchPlanOperationRate({
-      monthNum,
-      processName: planRateFilter.processName || undefined,
-    })
-  } catch (error: any) {
-    ElMessage.error(error?.message || '操業度データの取得に失敗しました')
-    planRateRows.value = []
-  } finally {
-    planRateLoading.value = false
   }
 }
 
@@ -1787,11 +2144,10 @@ async function buildProcessPdf(
   return doc.output('blob')
 }
 
-/** 操業度を工程ごとに PDF ページ分け（各工程は新規ページから。表が長い工程は縦に続けて複数ページ）。データなしは null */
+/** 操業度を工程ごとに PDF ページ分け（成型計画一覧の設備操業度と同一集計。データなしは null） */
 async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blob | null> {
-  const monthNum = dayjs(baselineMonth).month() + 1
-  const rows = await fetchPlanOperationRate({ monthNum })
-  if (!rows.length) return null
+  const ym = dayjs(baselineMonth).format('YYYY-MM')
+  const monthLabel = dayjs(`${ym}-01`).format('YYYY年MM月')
 
   const esc = (s: string) =>
     String(s ?? '')
@@ -1800,23 +2156,36 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
 
-  const processOrder = ['成型', '溶接']
-  const groupMap = new Map<string, PlanOperationRateRow[]>()
-  for (const r of rows) {
-    const key = (r.display_process || '').trim() || 'その他'
-    if (!groupMap.has(key)) groupMap.set(key, [])
-    groupMap.get(key)!.push(r)
-  }
-  const groupKeys = [...groupMap.keys()].sort((a, b) => {
-    const ia = processOrder.indexOf(a)
-    const ib = processOrder.indexOf(b)
-    if (ia !== -1 && ib !== -1) return ia - ib
-    if (ia !== -1) return -1
-    if (ib !== -1) return 1
-    return a.localeCompare(b, 'ja')
+  const master = planRateProcessList.value
+  const forPdf =
+    master.filter((p) => {
+      const name = (p.process_name || '').trim()
+      const cd = (p.process_cd || '').trim()
+      return name === '成型' || name === '溶接' || cd === 'KT04' || cd === 'KT07'
+    }).length > 0
+      ? master.filter((p) => {
+          const name = (p.process_name || '').trim()
+          const cd = (p.process_cd || '').trim()
+          return name === '成型' || name === '溶接' || cd === 'KT04' || cd === 'KT07'
+        })
+      : []
+  const rawPairs =
+    forPdf.length > 0
+      ? forPdf.map((p) => ({
+          cd: (p.process_cd || '').trim(),
+          name: (p.process_name || '').trim() || (p.process_cd || '').trim(),
+        }))
+      : [
+          { cd: 'KT04', name: '成型' },
+          { cd: 'KT07', name: '溶接' },
+        ]
+  const seenCd = new Set<string>()
+  const processPairs = rawPairs.filter((p) => {
+    if (!p.cd || seenCd.has(p.cd)) return false
+    seenCd.add(p.cd)
+    return true
   })
 
-  const monthLabel = dayjs(baselineMonth).format('YYYY年MM月')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const pageW = 210
   const pageH = 297
@@ -1858,35 +2227,46 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
 
   let isFirstSection = true
   let renderedAny = false
-  for (const proc of groupKeys) {
-    const group = groupMap.get(proc)!
-    if (!group.length) continue
+  for (const { cd, name } of processPairs) {
+    const utilRows = await fetchUtilizationRowsForYmProcess(ym, cd)
+    if (!utilRows.length) continue
 
-    const rowParts = group.map((r, idx) => {
+    const rowParts = utilRows.map((r, idx) => {
       const bg = idx % 2 === 0 ? '#fafafa' : '#fff'
-      const meta = getOperationVarianceDisplayMeta(r.operation_variance)
-      const inner = meta.isEmpty ? '-' : esc(meta.text)
-      const varStyle = meta.negative ? ' color:#c62828;' : ''
-      return `<tr style="background:${bg};">
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(r.display_month || '')}</td>
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(r.display_process || '')}</td>
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_cd ?? ''))}</td>
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;">${esc(String(r.machine_name ?? ''))}</td>
-        <td style="border:1px solid #bdbdbd;padding:5px 8px;text-align:center;${varStyle}">${inner}</td>
+      const dh = r.diffHours < 0 ? 'color:#c62828;font-weight:600;' : ''
+      const dp = r.diffUtilizationPct < 0 ? 'color:#c62828;font-weight:600;' : ''
+      return `<tr style="background:${bg};font-size:11px;">
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;">${esc(r.lineLabel)}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:center;">${esc(String(r.scheduleCount))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilHours(r.availableHours))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilNum(r.plannedQty))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilNum(r.actualQty))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilHours(r.plannedHours))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilHours(r.actualHours))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilPercent(r.planUtilizationPct))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilPercent(r.actualUtilizationPct))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;${dh}">${esc(formatUtilHours(r.diffHours))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;${dp}">${esc(formatUtilPercent(r.diffUtilizationPct))}</td>
       </tr>`
     })
 
     const tableBlock = `
       <div style="margin-bottom:18px;">
-        <div style="font-size:14px;font-weight:700;color:#37474f;margin:12px 0 8px;padding:6px 10px;background:#eceff1;border-left:4px solid #1565c0;">工程：${esc(proc)}</div>
-        <table style="width:100%;border-collapse:collapse;font-size:12px;border:1px solid #90a4ae;">
+        <div style="font-size:14px;font-weight:700;color:#37474f;margin:12px 0 8px;padding:6px 10px;background:#eceff1;border-left:4px solid #1565c0;">工程：${esc(name)}（${esc(cd)}）</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;border:1px solid #90a4ae;">
           <thead>
             <tr style="background:linear-gradient(180deg,#37474f 0%,#455a64 100%);color:#fff;">
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">月</th>
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">工程</th>
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ラインCD</th>
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:left;">ライン</th>
-              <th style="border:1px solid #546e7a;padding:6px 8px;text-align:center;">操業度差異</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">設備</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">指示数</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">理論稼働(H)</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">計画数</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">実績数</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">計画時間(H)</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">実績時間(H)</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">計画操業度</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">実績操業度</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">操業度差異(H)</th>
+              <th style="border:1px solid #546e7a;padding:5px 6px;text-align:center;">差異操業度(%)</th>
             </tr>
           </thead>
           <tbody>${rowParts.join('')}</tbody>
@@ -1894,8 +2274,8 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
       </div>`
 
     const html = `
-    <div class="operation-rate-pdf-root" style="font-family:'Meiryo','Hiragino Sans','Yu Gothic',sans-serif;padding:20px;background:#fff;width:720px;box-sizing:border-box;">
-      <div style="font-size:17px;font-weight:bold;color:#1565c0;margin-bottom:6px;padding-bottom:8px;border-bottom:2px solid #e3f2fd;">操業度（工程別）</div>
+    <div class="operation-rate-pdf-root" style="font-family:'Meiryo','Hiragino Sans','Yu Gothic',sans-serif;padding:16px;background:#fff;width:1000px;box-sizing:border-box;">
+      <div style="font-size:17px;font-weight:bold;color:#1565c0;margin-bottom:6px;padding-bottom:8px;border-bottom:2px solid #e3f2fd;">操業度（設備操業度・工程別）</div>
       <div style="font-size:12px;color:#546e7a;margin-bottom:14px;">${esc(monthLabel)}</div>
       ${tableBlock}
     </div>`
@@ -2014,7 +2394,11 @@ watch(
 
 onMounted(() => {
   loadComparison()
-  loadPlanOperationRate()
+  void loadPlanProcessOptions()
+})
+
+watch([() => planRateFilter.baselineMonth, () => planRateFilter.processCd], () => {
+  void loadPlanUtilizationGrid()
 })
 
 /** 印刷用 HTML を隠し iframe で開き、ブラウザの印刷ダイアログのみ出す */
@@ -2145,69 +2529,93 @@ ${wrapDiff(row.actual_diff ?? null)}
   printWithIframeDoc(html, 'ベースライン比較印刷')
 }
 
-/** 操業度：ページではなく、現在一覧に表示されている検索結果（planRateRows）だけを印刷 */
+/** 操業度：現在一覧（設備操業度と同一集計）を印刷 */
 function handlePrintOperationRate() {
-  const rows = planRateRows.value
+  const rows = planUtilizationRows.value
   if (rows.length === 0) return
 
-  const esc = (v: unknown) => {
-    const s = v == null || v === '' ? '—' : String(v)
-    return s
+  const escHtml = (s: string) =>
+    String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;')
-  }
 
-  const monthLabel = planRateFilter.baselineMonth
-    ? dayjs(planRateFilter.baselineMonth).format('YYYY年MM月')
-    : '—'
-  const processLabel = planRateFilter.processName?.trim() || '全て'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 
-  const headCells = ['月', '工程', 'ラインCD', 'ライン', '操業度差異', '取込日時']
-  const headerRow = headCells.map((h) => `<th>${esc(h)}</th>`).join('')
-
-  const bodyRows = rows
-    .map((row) => {
-      const ov = operationVarianceRowView(row.operation_variance)
-      const ovHtml = ov.cls
-        ? `<span class="ov-neg">${esc(ov.text)}</span>`
-        : esc(ov.text)
+  const rowsHtml = rows
+    .map((r) => {
+      const negHours = r.diffHours < 0 ? 'neg' : ''
+      const negPct = r.diffUtilizationPct < 0 ? 'neg' : ''
       return `<tr>
-<td>${esc(row.display_month)}</td>
-<td>${esc(row.display_process)}</td>
-<td>${esc(row.machine_cd)}</td>
-<td>${esc(row.machine_name)}</td>
-<td>${ovHtml}</td>
-<td>${esc(row.processed_at)}</td>
-</tr>`
+        <td class="left">${escHtml(r.lineLabel)}</td>
+        <td class="num">${escHtml(String(r.scheduleCount))}</td>
+        <td class="num">${escHtml(formatUtilHours(r.availableHours))}</td>
+        <td class="num">${escHtml(formatUtilNum(r.plannedQty))}</td>
+        <td class="num">${escHtml(formatUtilNum(r.actualQty))}</td>
+        <td class="num">${escHtml(formatUtilHours(r.plannedHours))}</td>
+        <td class="num">${escHtml(formatUtilHours(r.actualHours))}</td>
+        <td class="num">${escHtml(formatUtilPercent(r.planUtilizationPct))}</td>
+        <td class="num">${escHtml(formatUtilPercent(r.actualUtilizationPct))}</td>
+        <td class="num ${negHours}">${escHtml(formatUtilHours(r.diffHours))}</td>
+        <td class="num ${negPct}">${escHtml(formatUtilPercent(r.diffUtilizationPct))}</td>
+      </tr>`
     })
     .join('')
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <title>操業度</title>
+  <meta charset="UTF-8" />
+  <title>設備操業度（月次）</title>
   <style>
-    @page { margin: 12mm; }
-    body { font-family: 'Segoe UI', 'Meiryo', 'Hiragino Sans', sans-serif; font-size: 11px; color: #111; }
-    h1 { font-size: 15px; margin: 0 0 6px; font-weight: 700; }
-    .meta { font-size: 10px; color: #333; margin: 0 0 10px; line-height: 1.5; }
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 16px; color: #0f172a; font: 12px/1.4 "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif; }
+    .hd { margin-bottom: 10px; }
+    .tt { font-size: 18px; font-weight: 700; }
+    .meta { margin-top: 4px; color: #475569; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td { border: 1px solid #333; padding: 4px 5px; vertical-align: top; word-wrap: break-word; }
-    th { background: #eee; text-align: center; font-weight: 600; }
-    td:nth-child(1), td:nth-child(2), td:nth-child(5), td:nth-child(6) { text-align: center; }
-    .ov-neg { color: #c62828; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    th, td { border: 1px solid #cbd5e1; padding: 6px 8px; }
+    th { background: #eff6ff; font-weight: 700; }
+    .left { text-align: left; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .neg { color: #dc2626; font-weight: 700; }
+    tbody tr:nth-child(odd) { background: #f8fafc; }
+    @media print { @page { size: A4 landscape; margin: 10mm; } }
   </style>
 </head>
 <body>
-  <h1>操業度（production_plan_rate）</h1>
-  <p class="meta">対象月：${esc(monthLabel)}　工程：${esc(processLabel)}　件数：${rows.length}</p>
+  <div class="hd">
+    <div class="tt">設備操業度（月次）</div>
+    <div class="meta">集計月：<strong>${escHtml(utilizationMonthLabelJp.value)}</strong>（${escHtml(
+      planRateFilter.baselineMonth || '—',
+    )}）　工程：${escHtml(
+      selectedPlanRateProcessLabel(),
+    )}　印刷日時：${escHtml(printedAt)}</div>
+  </div>
   <table>
-    <thead><tr>${headerRow}</tr></thead>
-    <tbody>${bodyRows}</tbody>
+    <thead>
+      <tr>
+        <th class="left">設備</th>
+        <th class="num">指示数</th>
+        <th class="num">理論稼働(H)</th>
+        <th class="num">計画数</th>
+        <th class="num">実績数</th>
+        <th class="num">計画時間(H)</th>
+        <th class="num">実績時間(H)</th>
+        <th class="num">計画操業度</th>
+        <th class="num">実績操業度</th>
+        <th class="num">操業度差異(H)</th>
+        <th class="num">差異操業度(%)</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHtml}</tbody>
   </table>
 </body>
 </html>`
@@ -2541,9 +2949,9 @@ function handlePrintOperationRate() {
 /* 紧凑型摘要卡片 */
 .summary-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 6px;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 5px;
+  margin-bottom: 6px;
 }
 
 .summary-card {
@@ -2580,7 +2988,7 @@ function handlePrintOperationRate() {
 }
 
 .summary-card-inner {
-  padding: 8px 10px;
+  padding: 7px 9px;
 }
 
 .summary-label {
@@ -2638,19 +3046,152 @@ function handlePrintOperationRate() {
   padding: 8px 12px 10px;
 }
 
-/* 操業度（production_plan_rate）— ベースライン比較 table-card と同系統のヘッダー・本文・表 */
+/* ベースライン比較一覧カード：ヘッダー・本文を詰めて現代的に */
+.baseline-comparison-card {
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(99, 102, 241, 0.06);
+}
+
+.baseline-comparison-card :deep(.el-card__header) {
+  padding: 8px 12px 9px !important;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  background: linear-gradient(180deg, #fafbff 0%, #ffffff 100%);
+}
+
+.baseline-comparison-card :deep(.el-card__body) {
+  padding: 6px 8px 10px !important;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 40%);
+}
+
+.comparison-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.comparison-list-head__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.comparison-list-head__icon {
+  font-size: 20px;
+  color: #6366f1;
+  flex-shrink: 0;
+}
+
+.comparison-list-head__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.comparison-list-head__title {
+  font-size: 15px;
+  font-weight: 750;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.comparison-list-head__sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.25;
+}
+
+.comparison-list-head__tag {
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+}
+
+.comparison-list-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  margin-left: auto;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8eef5 100%);
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 11px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.comparison-list-btn {
+  border-radius: 10px !important;
+  font-weight: 650 !important;
+  padding: 5px 12px !important;
+}
+
+@media (max-width: 900px) {
+  .comparison-list-head__actions {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* 操業度（APS 設備操業度）— ベースライン比較 table-card と同系統のヘッダー・本文・表 */
 .operation-rate-card {
   animation: fadeInUp 0.65s ease-out 0.06s backwards;
 }
 
 .operation-rate-card :deep(.el-card__header) {
-  padding: 8px 12px 10px;
+  padding: 10px 14px 11px;
   border-bottom: 1px solid #e2e8f0;
   background: linear-gradient(180deg, #fafbfc 0%, #ffffff 100%);
 }
 
 .operation-rate-card :deep(.el-card__body) {
   padding: 8px 12px 10px;
+}
+
+.operation-rate-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
+
+.operation-rate-head__lead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.operation-rate-head__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 6px 10px 6px 12px;
+  margin-left: auto;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.operation-rate-ctl-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .operation-rate-title-meta {
@@ -2660,17 +3201,40 @@ function handlePrintOperationRate() {
   letter-spacing: 0.02em;
 }
 
-.operation-rate-header-actions {
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 .operation-rate-picker {
-  width: 150px;
+  width: 132px;
+  flex: 0 0 auto;
 }
 
 .operation-rate-select {
-  width: 132px;
+  width: 200px;
+  min-width: 160px;
+  max-width: 260px;
+  flex: 0 1 auto;
+}
+
+.operation-rate-print-btn {
+  flex: 0 0 auto;
+  border-radius: 10px !important;
+  padding: 5px 12px !important;
+  margin-left: 2px;
+}
+
+.operation-rate-head__controls :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.35) inset;
+}
+
+.operation-rate-head__controls :deep(.el-select .el-input__wrapper) {
+  border-radius: 8px;
+}
+
+@media (max-width: 960px) {
+  .operation-rate-head__controls {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .operation-rate-body {
@@ -2683,9 +3247,40 @@ function handlePrintOperationRate() {
   overflow: hidden;
 }
 
-/* el-table セル既定の色より優先して負数を赤表示 */
-.operation-rate-table :deep(.operation-variance-cell--negative) {
-  color: #c62828 !important;
+.util-note--baseline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+.util-note-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+}
+.util-note-chip--formula {
+  background: #eef2ff;
+  color: #4338ca;
+}
+.util-col-head {
+  font-size: 11px;
+  line-height: 1.25;
+}
+.operation-rate-table :deep(.util-num) {
+  font-variant-numeric: tabular-nums;
+}
+.operation-rate-table :deep(.util-num--actual) {
+  color: #0d9488;
+}
+.operation-rate-table :deep(.util-num--negative) {
+  color: #c62828;
+  font-weight: 600;
 }
 
 .card-header {
@@ -2874,96 +3469,140 @@ function handlePrintOperationRate() {
   font-weight: 600;
 }
 
-/* 标签页样式 */
-:deep(.el-tabs__header) {
-  margin: 0 0 6px 0;
-  border-bottom: 2px solid #e2e8f0;
+/* ベースライン比較：工程タブ（card 型・コンパクト） */
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card) {
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
-:deep(.el-tabs__item) {
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.3s ease;
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card > .el-tabs__header) {
+  margin: 0 0 6px;
+  border: none;
+  background: transparent;
 }
 
-:deep(.el-tabs__item.is-active) {
-  color: #6366f1;
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__nav-wrap) {
+  margin-bottom: 0;
+}
+
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__nav) {
+  border: none;
+  gap: 5px;
+}
+
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card > .el-tabs__header .el-tabs__nav-wrap) {
+  border-bottom: none;
+}
+
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__item) {
+  border: 1px solid rgba(203, 213, 225, 0.95) !important;
+  border-radius: 9px !important;
+  height: 32px;
+  line-height: 30px;
+  padding: 0 12px !important;
+  font-size: 12px;
   font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
-:deep(.el-tabs__active-bar) {
-  background-color: #6366f1;
-  height: 2px;
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__item.is-active) {
+  color: #4338ca !important;
+  font-weight: 750;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
+  border-color: #a5b4fc !important;
+  box-shadow: 0 1px 4px rgba(79, 70, 229, 0.12);
+}
+
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__item:hover) {
+  color: #4f46e5;
+  border-color: #c7d2fe !important;
+}
+
+.baseline-comparison-card :deep(.comparison-tabs.el-tabs--card .el-tabs__nav-scroll) {
+  padding: 2px 0;
 }
 
 .tab-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.tab-icon {
-  font-size: 14px;
-  color: #6366f1;
-}
-
 .tab-count {
-  margin-left: 4px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #4338ca;
+  background: rgba(99, 102, 241, 0.12);
+  border-radius: 999px;
 }
 
-/* 合計区域美化 */
+/* 合計区域（工程タブ下・コンパクト） */
 .tab-total-wrapper {
-  margin-top: 8px;
-  padding: 10px 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.3s ease;
-  animation: fadeInUp 0.5s ease-out;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .tab-total-wrapper:hover {
   border-color: #c7d2fe;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.1);
 }
 
 .tab-total-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  padding-bottom: 6px;
-  border-bottom: 2px solid #e2e8f0;
+  gap: 5px;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .total-icon {
-  font-size: 18px;
+  font-size: 16px;
   color: #6366f1;
 }
 
 .tab-total-label {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 15px;
-  letter-spacing: 0.5px;
+  font-weight: 750;
+  color: #0f172a;
+  font-size: 13px;
+  letter-spacing: 0.03em;
 }
 
 .tab-total-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+  gap: 6px;
 }
 
 .total-item {
-  padding: 8px 10px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 9px;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
 }
@@ -2983,8 +3622,7 @@ function handlePrintOperationRate() {
 
 .total-item:hover {
   border-color: #c7d2fe;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
-  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .total-item:hover::before {
@@ -2994,8 +3632,8 @@ function handlePrintOperationRate() {
 .total-item-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 5px;
+  margin-bottom: 4px;
 }
 
 .total-item-icon {
@@ -3004,22 +3642,22 @@ function handlePrintOperationRate() {
 }
 
 .total-item-label {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
-  font-weight: 600;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.45px;
 }
 
 .total-item-value {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 750;
   color: #1e293b;
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  line-height: 1.2;
+  gap: 5px;
+  line-height: 1.15;
 }
 
 /* 不同指标的颜色区分 */
@@ -3133,13 +3771,13 @@ function handlePrintOperationRate() {
   font-weight: 600;
 }
 
-/* 表格样式优化 */
+/* 表格（比較一覧・操業度共通クラス） */
 :deep(.comparison-table) {
   font-size: 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
 }
 
 :deep(.comparison-table .el-table__inner-wrapper::before) {
@@ -3151,49 +3789,48 @@ function handlePrintOperationRate() {
 }
 
 :deep(.comparison-table .el-table__header-wrapper) {
-  border-radius: 8px 8px 0 0;
+  border-radius: 10px 10px 0 0;
 }
 
 :deep(.comparison-table .el-table__header th) {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #6366f1 100%);
   color: white;
-  font-weight: 600;
+  font-weight: 650;
   font-size: 11px;
-  padding: 5px 8px;
+  padding: 5px 7px;
   border: none;
   text-align: center;
 }
 
 :deep(.comparison-table .el-table__header th:first-child) {
-  border-radius: 8px 0 0 0;
+  border-radius: 10px 0 0 0;
 }
 
 :deep(.comparison-table .el-table__header th .cell) {
   color: white;
-  font-weight: 600;
+  font-weight: 650;
 }
 
 :deep(.comparison-table .el-table__body td) {
-  padding: 4px 8px;
-  border-color: #e2e8f0;
-  transition: all 0.2s ease;
+  padding: 3px 7px;
+  border-color: #e8ecf1;
+  transition: background-color 0.15s ease;
 }
 
 :deep(.comparison-table .el-table__row) {
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease;
 }
 
 :deep(.comparison-table .el-table__row:hover > td) {
-  background-color: #f0f4ff !important;
-  transform: scale(1.01);
+  background-color: #eef2ff !important;
 }
 
 :deep(.comparison-table .el-table__row--striped td) {
-  background-color: #fafbfc;
+  background-color: #f8fafc;
 }
 
 :deep(.comparison-table .el-table__row--striped:hover > td) {
-  background-color: #eef2ff !important;
+  background-color: #e8edff !important;
 }
 
 :deep(.comparison-table .el-table__fixed-left-patch) {
@@ -3201,7 +3838,7 @@ function handlePrintOperationRate() {
 }
 
 :deep(.comparison-table .el-table__fixed) {
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 2px 0 10px rgba(15, 23, 42, 0.06);
 }
 
 :deep(.comparison-table .el-table__fixed-left) {
@@ -3209,7 +3846,7 @@ function handlePrintOperationRate() {
 }
 
 :deep(.comparison-table .el-table__fixed-left .el-table__header th) {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #6366f1 100%);
   color: white;
 }
 
@@ -3218,15 +3855,15 @@ function handlePrintOperationRate() {
 }
 
 :deep(.comparison-table .el-table__fixed-left .el-table__row:hover > td) {
-  background-color: #f0f4ff !important;
+  background-color: #eef2ff !important;
 }
 
 :deep(.comparison-table .el-table__fixed-left .el-table__row--striped td) {
-  background-color: #fafbfc;
+  background-color: #f8fafc;
 }
 
 :deep(.comparison-table .el-table__fixed-left .el-table__row--striped:hover > td) {
-  background-color: #eef2ff !important;
+  background-color: #e8edff !important;
 }
 
 /* 数值单元格样式 */
@@ -3234,11 +3871,11 @@ function handlePrintOperationRate() {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
-  padding: 3px 6px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  min-height: 20px;
+  gap: 3px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+  min-height: 18px;
 }
 
 .number-cell:hover {
@@ -3295,36 +3932,10 @@ function handlePrintOperationRate() {
 
 .trend-icon.trend-up {
   color: #10b981;
-  animation: pulseUp 2s ease-in-out infinite;
 }
 
 .trend-icon.trend-down {
   color: #ef4444;
-  animation: pulseDown 2s ease-in-out infinite;
-}
-
-@keyframes pulseUp {
-  0%,
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  50% {
-    opacity: 0.7;
-    transform: translateY(-2px);
-  }
-}
-
-@keyframes pulseDown {
-  0%,
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  50% {
-    opacity: 0.7;
-    transform: translateY(2px);
-  }
 }
 
 /* 表格列头样式 */

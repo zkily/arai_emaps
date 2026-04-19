@@ -182,7 +182,7 @@ export function clearProductionSummarysMoldingPlan(startDate: string) {
   )
 }
 
-/** 計画データ更新：production_plan_updates を集計して production_summarys の plan / actual_plan を更新。startDate 指定時はその日～+3ヶ月のみ対象 */
+/** 計画データ更新：schedule_details（× production_schedules × machines × processes）を集計して plan / actual_plan を更新。startDate 指定時はその日～+3ヶ月のみ対象 */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }

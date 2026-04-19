@@ -122,24 +122,33 @@
 
 ---
 
-### 3.7 操業度（production_plan_rate）の確認
+### 3.7 操業度（APS 設備操業度・月次）の確認
 
-「操業度」カードでは、指定した `対象月` と `工程` に対して、操業度差異の一覧を表示します。
+「操業度」カードでは、成型計画一覧の「設備操業度」と同じ集計（スケジュールグリッド由来）で、設備別の計画／実績・操業度を表示します。カード見出しでは **対象月・工程・検索・印刷** を **同一行** にまとめ、余白を抑えたレイアウトです（狭い画面では折り返します）。
 
-1. 操業度カードで `対象月` を選択します。
-2. `工程` を選択します（必要に応じて「全て」）。
-3. `検索` をクリックします。
-4. テーブルが更新されます。
+<div class="ppb-help-opbar" role="presentation" aria-hidden="true">
+  <div class="ppb-help-opbar__cluster">
+    <span class="ppb-help-opbar__k">対象月</span>
+    <span class="ppb-help-opbar__pill">2026年04月</span>
+  </div>
+  <div class="ppb-help-opbar__cluster">
+    <span class="ppb-help-opbar__k">工程</span>
+    <span class="ppb-help-opbar__pill ppb-help-opbar__pill--wide">KT04 — 成型</span>
+  </div>
+  <span class="ppb-help-opbar__btn ppb-help-opbar__btn--primary">検索</span>
+  <span class="ppb-help-opbar__btn ppb-help-opbar__btn--muted">印刷</span>
+</div>
 
-表列（操業度テーブル）：
+1. `対象月` を選択します（`YYYY-MM`）。
+2. `工程` を選択します（工程マスタのコード付き表示）。
+3. 条件変更時は自動で再集計されます。必要に応じて `検索` をクリックしても同じです。
+4. `印刷` で、現在表示中の設備操業度表を印刷します。
 
-1. `月`
-2. `工程`
-3. `ラインCD`
-4. `ライン`
-5. `操業度差異`（表示上はマイナス/プラスで色分けされた差異テキスト）
-6. `ファイル名`
-7. `取込日時`
+主な表列（操業度テーブル）：
+
+1. `設備`／`指示数`／`理論稼働(H)`／`計画数`／`実績数`
+2. `計画時間(H)`／`実績時間(H)`／`計画操業度`／`実績操業度`
+3. `操業度差異(H)`／`差異操業度(%)`
 
 - ![操業度カード](./images/ProductionPlanBaselineManagement/operation_rate_card.png)
 

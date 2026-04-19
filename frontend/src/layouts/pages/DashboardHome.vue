@@ -141,6 +141,7 @@ const quickAccessItems = ref([
   { path: '/erp/production/data-management', titleKey: 'productionData', descKey: 'productionDataDesc', icon: markRaw(DataAnalysis), bg: 'linear-gradient(135deg, #10b981, #059669)' },
   { path: '/erp/production/plan-schedules', titleKey: 'scheduling', descKey: 'schedulingDesc', icon: markRaw(Operation), bg: 'linear-gradient(135deg, #8b5cf6, #7c3aed)' },
   { path: '/aps/planning-list', titleKey: 'formingPlanList', descKey: 'formingPlanListDesc', icon: markRaw(Tickets), bg: 'linear-gradient(135deg, #a855f7, #9333ea)' },
+  { path: '/aps/welding-planning-list', titleKey: 'weldingPlanList', descKey: 'weldingPlanListDesc', icon: markRaw(Tickets), bg: 'linear-gradient(135deg, #7c3aed, #6d28d9)' },
   { path: '/erp/production/instruction/cutting', titleKey: 'cuttingInstruction', descKey: 'cuttingInstructionDesc', icon: markRaw(Tools), bg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
   { path: '/erp/production/instruction/forming', titleKey: 'formingInstruction', descKey: 'formingInstructionDesc', icon: markRaw(Box), bg: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
   { path: '/erp/production/instruction/welding', titleKey: 'weldingInstruction', descKey: 'weldingInstructionDesc', icon: markRaw(Grid), bg: 'linear-gradient(135deg, #6366f1, #4f46e5)' },

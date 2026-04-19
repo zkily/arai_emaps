@@ -158,7 +158,7 @@ INVENTORY_COLUMNS = [
 # 推移・実計推移の対象 6 工程（cutting, chamfering, molding, plating, welding, inspection）
 TREND_PREFIXES = ["cutting", "chamfering", "molding", "plating", "welding", "inspection"]
 
-# 計画データ更新：production_plan_updates.process_name → production_summarys の _plan 列（6工程）
+# 計画データ更新：schedule_details × 設備 machine_type → processes.process_name → production_summarys の _plan 列（6工程）
 PLAN_PROCESS_MAPPING = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
@@ -1737,8 +1737,10 @@ async def update_production_summarys_plan(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    production_plan_updates を product_cd・date・process_name で集計し、
-    production_summarys の各工程 plan 列に反映。続けて actual/plan から actual_plan を更新する。
+    schedule_details.planned_qty を、production_schedules（product_cd）× 設備 machines.machine_type
+    が processes と一致する工程名（成型/溶接/メッキ/切断/面取/検査）に振り分け、
+    production_summarys と同日・同製品で INNER JOIN した行のみ日別集計する。
+    続けて各工程 plan 列へ反映し、actual/plan から actual_plan を更新する。
     startDate を指定した場合はその日～+3ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
     """
     start_time = time.perf_counter()
@@ -1750,21 +1752,24 @@ async def update_production_summarys_plan(
             end_d = _parse_end_date(start_d, 3)
         except ValueError:
             pass
-    # 1) 集計: ppu × ps INNER JOIN, GROUP BY product_cd, date, process_name
-    agg_sql = text("""
-        SELECT ppu.product_cd AS product_cd, DATE(ppu.plan_date) AS dt, ppu.process_name AS process_name,
-               SUM(ppu.quantity) AS quantity
-        FROM production_plan_updates ppu
-        INNER JOIN production_summarys ps ON ppu.product_cd = ps.product_cd AND DATE(ppu.plan_date) = ps.date
-        WHERE ppu.process_name IN ('成型','溶接','メッキ','切断','面取','検査')
-          AND ppu.product_cd IS NOT NULL AND TRIM(ppu.product_cd) <> ''
-          AND ppu.plan_date IS NOT NULL
-          AND (:start_date IS NULL OR (DATE(ppu.plan_date) >= :start_date AND DATE(ppu.plan_date) <= :end_date))
-        GROUP BY ppu.product_cd, DATE(ppu.plan_date), ppu.process_name
+    # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング
+    agg_sql_sd = text("""
+        SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt, pr.process_name AS process_name,
+               SUM(sd.planned_qty) AS quantity
+        FROM schedule_details sd
+        INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
+        INNER JOIN machines m ON m.id = sch.line_id
+        INNER JOIN processes pr ON m.machine_type IS NOT NULL
+          AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
+        INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
+        WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
+          AND pr.process_name IN ('成型','溶接','メッキ','切断','面取','検査')
+          AND (:start_date IS NULL OR (sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date))
+        GROUP BY sch.product_cd, sd.schedule_date, pr.process_name
     """)
     params = {"start_date": start_d, "end_date": end_d}
-    result = await db.execute(agg_sql, params)
-    plan_rows = result.fetchall()
+    result_sd = await db.execute(agg_sql_sd, params)
+    plan_rows = result_sd.fetchall()
     if not plan_rows:
         return {
             "code": 200,

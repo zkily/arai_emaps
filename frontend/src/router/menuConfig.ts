@@ -127,6 +127,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_WELDING_PLANNING', name: '溶接計画作成', path: '/aps/welding-planning', icon: 'Calendar', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 3 },
   { code: 'APS_PRODUCTION_PLAN_VIEW', name: '生産計画一覧', icon: 'List', parentCode: 'APS', sortOrder: 1.5 },
   { code: 'APS_FORMING_PLAN_LIST', name: '成型計画一覧', path: '/aps/planning-list', icon: 'List', parentCode: 'APS_PRODUCTION_PLAN_VIEW', sortOrder: 1 },
+  { code: 'APS_WELDING_PLAN_LIST', name: '溶接計画一覧', path: '/aps/welding-planning-list', icon: 'List', parentCode: 'APS_PRODUCTION_PLAN_VIEW', sortOrder: 2 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 2 },
   { code: 'APS_CAPACITY', name: '設備稼働設定', path: '/aps/capacity', parentCode: 'APS', sortOrder: 3 },
   { code: 'APS_CAPACITY_MATRIX', name: '設備稼働時間表', path: '/aps/capacity-matrix', parentCode: 'APS', sortOrder: 4 },

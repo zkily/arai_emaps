@@ -401,6 +401,10 @@
               <el-icon><List /></el-icon>
               <template #title><span :title="t('menu.APS_FORMING_PLAN_LIST')">{{ t('menu.APS_FORMING_PLAN_LIST') }}</span></template>
             </el-menu-item>
+            <el-menu-item index="/aps/welding-planning-list">
+              <el-icon><List /></el-icon>
+              <template #title><span :title="t('menu.APS_WELDING_PLAN_LIST')">{{ t('menu.APS_WELDING_PLAN_LIST') }}</span></template>
+            </el-menu-item>
           </el-sub-menu>
           <el-menu-item index="/aps/scheduling">
             <el-icon><Timer /></el-icon>

@@ -8,7 +8,7 @@
         <div class="header-stats">
           <span class="psv-stat psv-stat--total">
             <span class="psv-stat__k">{{ t('productionPlanSchedule.totalFetched') }}</span>
-            <span class="psv-stat__v">{{ rawRows.length }}</span>
+            <span class="psv-stat__v">{{ enrichedRows.length }}</span>
           </span>
           <span class="psv-stat psv-stat--shown">
             <span class="psv-stat__k">{{ t('productionPlanSchedule.shown') }}</span>
@@ -46,7 +46,13 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('productionPlanSchedule.engineering')">
-          <el-select v-model="filterEngineering" clearable :placeholder="t('productionPlanSchedule.all')" style="width: 130px">
+          <el-select
+            v-model="filterEngineering"
+            clearable
+            :placeholder="t('productionPlanSchedule.all')"
+            style="width: 130px"
+            @change="fetchData"
+          >
             <el-option :label="t('productionPlanSchedule.forming')" value="成型" />
             <el-option :label="t('productionPlanSchedule.welding')" value="溶接" />
           </el-select>
@@ -129,7 +135,7 @@
             </div>
             <el-table :data="mc.rows" size="small" border stripe class="nest-table nest-table--polish">
               <el-table-column
-                prop="production_order"
+                prop="order_no"
                 :label="t('productionPlanSchedule.productionOrder')"
                 width="70"
                 align="center"
@@ -141,29 +147,29 @@
               >
                 <template #default="{ row }">
                   <span class="product-name-cell" @dblclick.stop="openPlanUpdatesDialog(row)">
-                    {{ row.product_name }}
+                    {{ row.item_name }}
                   </span>
                 </template>
               </el-table-column>
               <el-table-column :label="t('productionPlanSchedule.startDate')" width="100">
-                <template #default="{ row }">{{ displayDate(row.production_start_date) }}</template>
+                <template #default="{ row }">{{ displayDate(scheduleStartIso(row)) }}</template>
               </el-table-column>
               <el-table-column :label="t('productionPlanSchedule.endDate')" width="100">
-                <template #default="{ row }">{{ displayDate(row.production_end_date) }}</template>
+                <template #default="{ row }">{{ displayDate(scheduleEndIso(row)) }}</template>
               </el-table-column>
               <el-table-column
                 :label="t('productionPlanSchedule.plannedQty')"
                 width="90"
                 align="right"
               >
-                <template #default="{ row }">{{ formatNum(row.planned_quantity) }}</template>
+                <template #default="{ row }">{{ formatNum(row.planned_process_qty) }}</template>
               </el-table-column>
               <el-table-column
                 :label="t('productionPlanSchedule.actual')"
                 width="90"
                 align="right"
               >
-                <template #default="{ row }">{{ formatNum(row.actual_production) }}</template>
+                <template #default="{ row }">{{ formatNum(rowActualQty(row)) }}</template>
               </el-table-column>
               <el-table-column
                 :label="t('productionPlanSchedule.remaining')"
@@ -295,6 +301,19 @@ import { ElMessage } from 'element-plus'
 import { Printer, Refresh } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchPlanOperationRate } from '@/api/planBaseline'
+import {
+  fetchLines,
+  fetchSchedulingGrid,
+  type ScheduleGridRow,
+  type SchedulingGridResponse,
+} from '@/api/aps'
+
+/** 一覧（FormingPlanningList）と同じ APS 工程コード */
+const PROCESS_CD_FORMING = 'KT04'
+const PROCESS_CD_WELDING = 'KT07'
+/** 一覧の日次集計用グリッド期間（FormingPlanningList の buildTableGridRange と同趣旨） */
+const TABLE_GRID_PAST_YEARS = 10
+const TABLE_GRID_FUTURE_YEARS = 5
 
 const { t, locale } = useI18n()
 
@@ -486,27 +505,15 @@ interface ApiResponse<T = unknown> {
   message?: string
 }
 
-interface ScheduleRow {
-  id?: number
-  file_name?: string
-  machine_name?: string
-  product_name?: string
-  production_order?: string | number
-  planned_quantity?: number
-  production_start_date?: string
-  production_end_date?: string
-  actual_production?: number
-  variance?: number
-  achievement_rate?: number
-  total_production_time?: number
-  operation_variance?: string
-  material_lot_count?: number
-  material_name?: string
+type ApsGridListRow = ScheduleGridRow & {
+  lineLabel: string
+  line_id: number
+  engineering: string
+  product_cd?: string | null
 }
 
-interface EnrichedRow extends ScheduleRow {
+interface EnrichedRow extends ApsGridListRow {
   parsedMonth: number | null
-  engineering: string
   monthLabel: string
 }
 
@@ -536,16 +543,134 @@ interface PlanUpdateRecord {
   setup_time?: number
 }
 
-/** 从 file_name 解析月份（数字+月）与工程：溶接 → 溶接；加工 → 成型 */
-function parseScheduleFileName(fileName: string): { month: number | null; engineering: string; monthLabel: string } {
-  const fn = String(fileName ?? '')
-  const m = fn.match(/(\d{1,2})\s*月/)
-  const month = m ? parseInt(m[1], 10) : null
-  let engineering = ''
-  if (fn.includes('溶接')) engineering = '溶接'
-  else if (fn.includes('加工')) engineering = '成型'
-  const monthLabel = month != null ? `${month}${t('productionPlanSchedule.monthSuffix')}` : '—'
-  return { month, engineering, monthLabel }
+function ymdFromLocalDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function buildTableGridRange(): [string, string] {
+  const n = new Date()
+  n.setHours(0, 0, 0, 0)
+  const start = new Date(n.getFullYear() - TABLE_GRID_PAST_YEARS, n.getMonth(), n.getDate())
+  const end = new Date(n.getFullYear() + TABLE_GRID_FUTURE_YEARS, n.getMonth(), n.getDate())
+  return [ymdFromLocalDate(start), ymdFromLocalDate(end)]
+}
+
+function flattenGridToRows(
+  grid: SchedulingGridResponse,
+  lineNameById: Map<number, string>,
+  engineering: string,
+): ApsGridListRow[] {
+  const flat: ApsGridListRow[] = []
+  for (const block of grid.blocks || []) {
+    const label =
+      lineNameById.get(block.line_id) ||
+      String((block as { line_name?: string }).line_name || '').trim() ||
+      block.line_code ||
+      `ID ${block.line_id}`
+    for (const r of block.rows || []) {
+      flat.push({ ...r, lineLabel: label, line_id: block.line_id, engineering })
+    }
+  }
+  return flat
+}
+
+function compareByLineThenOrder(a: ApsGridListRow, b: ApsGridListRow): number {
+  const lineCmp = (a.lineLabel || '').localeCompare(b.lineLabel || '', 'ja')
+  if (lineCmp !== 0) return lineCmp
+  const oa = a.order_no ?? 1_000_000 + a.id
+  const ob = b.order_no ?? 1_000_000 + b.id
+  if (oa !== ob) return Number(oa) - Number(ob)
+  return a.id - b.id
+}
+
+function compareRowsMerged(a: ApsGridListRow, b: ApsGridListRow): number {
+  const ek = engineeringSortKey(a.engineering) - engineeringSortKey(b.engineering)
+  if (ek !== 0) return ek
+  return compareByLineThenOrder(a, b)
+}
+
+/** 日次グリッド行からセルに値がある暦日（FormingPlanningList と同じ） */
+function isoDatesWithGridActivity(gr: ScheduleGridRow): string[] {
+  const keys = new Set<string>()
+  const maps: (Record<string, number> | undefined)[] = [
+    gr.daily,
+    gr.actual_daily,
+    gr.defect_daily,
+    gr.upstream_defect_daily,
+    gr.remaining_daily,
+  ]
+  for (const mp of maps) {
+    if (!mp) continue
+    for (const [d, v] of Object.entries(mp)) {
+      if (Number(v || 0) !== 0) keys.add(d)
+    }
+  }
+  return [...keys].sort()
+}
+
+/** 一覧の開始・終了（FormingPlanningList effectiveScheduleDateSpan と同じ） */
+function effectiveScheduleDateSpan(row: ScheduleGridRow): { start: string | null; end: string | null } {
+  const dates = isoDatesWithGridActivity(row)
+  if (dates.length === 0) {
+    return { start: row.start_date ?? null, end: row.end_date ?? null }
+  }
+  return { start: dates[0] ?? null, end: dates[dates.length - 1] ?? null }
+}
+
+function periodActualForRow(row: ScheduleGridRow, datesOverride: string[]): number {
+  const m = row.actual_daily || {}
+  const dates1 = datesOverride.length > 0 ? datesOverride : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
+function periodRemainingForRow(row: ScheduleGridRow, datesOverride: string[]): number {
+  const m = row.remaining_daily || {}
+  const dates1 = datesOverride.length > 0 ? datesOverride : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
+}
+
+function scheduleStartIso(row: EnrichedRow): string | undefined {
+  const s = effectiveScheduleDateSpan(row).start || row.start_date
+  return s ?? undefined
+}
+
+function scheduleEndIso(row: EnrichedRow): string | undefined {
+  const s = effectiveScheduleDateSpan(row).end || row.end_date
+  return s ?? undefined
+}
+
+function rowActualQty(row: EnrichedRow): number {
+  return periodActualForRow(row, tableGanttDates.value)
+}
+
+function tableRemainingLikeForming(row: EnrichedRow): number {
+  const remainByDaily = periodRemainingForRow(row, tableGanttDates.value)
+  if (remainByDaily > 0) return remainByDaily
+  const planned = Number(row.planned_process_qty ?? 0)
+  const act = rowActualQty(row)
+  const remain = planned - act
+  return remain > 0 ? remain : 0
+}
+
+function rowOverlapsSelectedCalendarMonth(row: ApsGridListRow): boolean {
+  const y = new Date().getFullYear()
+  const m = filterMonth.value
+  if (m < 1 || m > 12) return false
+  const mm = String(m).padStart(2, '0')
+  const lastDay = new Date(y, m, 0).getDate()
+  const ms = `${y}-${mm}-01`
+  const me = `${y}-${mm}-${String(lastDay).padStart(2, '0')}`
+  const span = effectiveScheduleDateSpan(row)
+  let rs = span.start || row.start_date || null
+  let re = span.end || row.end_date || null
+  if (!rs && !re) return true
+  if (!rs) rs = re
+  if (!re) re = rs
+  if (!rs || !re) return true
+  return !(re < ms || rs > me)
 }
 
 function engineeringSortKey(eng: string): number {
@@ -568,21 +693,17 @@ function formatNum(x: unknown): string {
 }
 
 function formatRemainder(row: EnrichedRow): string {
-  const p = toFiniteNumber(row.planned_quantity)
-  const a = toFiniteNumber(row.actual_production)
-  if (p === null && a === null) return '—'
-  const d = (p ?? 0) - (a ?? 0)
-  if (Math.abs(d - Math.round(d)) < 1e-9) return String(Math.round(d))
-  return String(d)
+  const v = tableRemainingLikeForming(row)
+  if (Math.abs(v - Math.round(v)) < 1e-9) return String(Math.round(v))
+  return String(v)
 }
 
-/** 進捗度 = 実績/計画を百分率、小数1位 + %（計画が0または未設定は —） */
+/** 進捗度：一覧（FormingPlanningList tableProgress）と同じく 実績/計画 */
 function formatProgress(row: EnrichedRow): string {
-  const p = toFiniteNumber(row.planned_quantity)
-  const a = toFiniteNumber(row.actual_production)
-  if (p === null || p === 0) return '—'
-  const pct = ((a ?? 0) / p) * 100
-  return `${pct.toFixed(1)}%`
+  const planned = Number(row.planned_process_qty ?? 0)
+  if (planned <= 0) return '0%'
+  const pct = (rowActualQty(row) / planned) * 100
+  return `${Math.round(Math.max(0, Math.min(999, pct)))}%`
 }
 
 function parseLocalDay(v: string | undefined): Date | null {
@@ -605,11 +726,12 @@ function todayLocalStart(): Date {
   return new Date(n.getFullYear(), n.getMonth(), n.getDate())
 }
 
-/** 終了日＜当日→done；開始日≤当日≤終了日→ongoing；それ以外→pending */
+/** 終了日＜当日→done；開始日≤当日≤終了日→ongoing（FormingPlanningList tableStatusKind と同じ根拠） */
 function productionStatusKind(row: EnrichedRow): 'done' | 'ongoing' | 'pending' {
   const today = todayLocalStart()
-  const start = parseLocalDay(row.production_start_date)
-  const end = parseLocalDay(row.production_end_date)
+  const span = effectiveScheduleDateSpan(row)
+  const start = parseLocalDay(span.start || row.start_date || undefined)
+  const end = parseLocalDay(span.end || row.end_date || undefined)
   if (end && end < today) return 'done'
   if (start && end && start <= today && today <= end) return 'ongoing'
   return 'pending'
@@ -708,12 +830,12 @@ function buildPrintHtml(): string {
       const rowHtml = mc.rows
         .map(
           (row) => `<tr>
-          <td>${escHtml(String(row.production_order ?? ''))}</td>
-          <td class="text-left">${escHtml(String(row.product_name ?? ''))}</td>
-          <td>${escHtml(displayDate(row.production_start_date))}</td>
-          <td>${escHtml(displayDate(row.production_end_date))}</td>
-          <td class="num">${escHtml(formatNum(row.planned_quantity))}</td>
-          <td class="num">${escHtml(formatNum(row.actual_production))}</td>
+          <td>${escHtml(String(row.order_no ?? ''))}</td>
+          <td class="text-left">${escHtml(String(row.item_name ?? ''))}</td>
+          <td>${escHtml(displayDate(scheduleStartIso(row)))}</td>
+          <td>${escHtml(displayDate(scheduleEndIso(row)))}</td>
+          <td class="num">${escHtml(formatNum(row.planned_process_qty))}</td>
+          <td class="num">${escHtml(formatNum(rowActualQty(row)))}</td>
           <td class="num">${escHtml(formatRemainder(row))}</td>
           <td class="num">${escHtml(formatProgress(row))}</td>
           <td class="status-print-cell">${printStatusCell(row)}</td>
@@ -782,27 +904,28 @@ function handlePrint() {
 const monthChoices = Array.from({ length: 12 }, (_, i) => i + 1)
 
 const loading = ref(false)
-const rawRows = ref<ScheduleRow[]>([])
+/** APS scheduling/grid 一覧と同じ取得結果（工程・設備・順位付き） */
+const rawGridRows = ref<ApsGridListRow[]>([])
+/** FormingPlanningList の tableGanttDates：日次実績・残の集計に使用 */
+const tableGanttDates = ref<string[]>([])
 const filterMonth = ref(new Date().getMonth() + 1)
 const filterEngineering = ref('')
 const filterMachineName = ref('')
 
 const enrichedRows = computed<EnrichedRow[]>(() => {
-  return rawRows.value.map((row) => {
-    const { month, engineering, monthLabel } = parseScheduleFileName(row.file_name ?? '')
-    return {
-      ...row,
-      parsedMonth: month,
-      engineering,
-      monthLabel,
-    }
-  })
+  const suffix = t('productionPlanSchedule.monthSuffix')
+  const m = filterMonth.value
+  return rawGridRows.value
+    .filter((r) => rowOverlapsSelectedCalendarMonth(r))
+    .map((r) => ({
+      ...r,
+      monthLabel: `${m}${suffix}`,
+      parsedMonth: m,
+    }))
 })
 
 const afterMonthAndEngineering = computed(() => {
-  const m = filterMonth.value
   return enrichedRows.value.filter((r) => {
-    if (r.parsedMonth !== m) return false
     if (filterEngineering.value && r.engineering !== filterEngineering.value) return false
     return true
   })
@@ -811,7 +934,7 @@ const afterMonthAndEngineering = computed(() => {
 const machineOptions = computed(() => {
   const set = new Set<string>()
   afterMonthAndEngineering.value.forEach((r) => {
-    const n = (r.machine_name ?? '').toString().trim()
+    const n = (r.lineLabel ?? '').toString().trim()
     if (n) set.add(n)
   })
   return [...set].sort((a, b) => a.localeCompare(b, 'ja'))
@@ -827,16 +950,17 @@ watch([afterMonthAndEngineering, filterMachineName], () => {
 const displayRows = computed(() => {
   let list = afterMonthAndEngineering.value
   if (filterMachineName.value) {
-    list = list.filter((r) => (r.machine_name ?? '').toString().trim() === filterMachineName.value)
+    list = list.filter((r) => (r.lineLabel ?? '').toString().trim() === filterMachineName.value)
   }
   return [...list].sort((a, b) => {
-    const ma = String(a.machine_name ?? '')
-    const mb = String(b.machine_name ?? '')
+    const ma = String(a.lineLabel ?? '')
+    const mb = String(b.lineLabel ?? '')
     const c = ma.localeCompare(mb, 'ja')
     if (c !== 0) return c
-    const oa = String(a.production_order ?? '')
-    const ob = String(b.production_order ?? '')
-    return oa.localeCompare(ob, 'ja', { numeric: true })
+    const oa = a.order_no ?? 1_000_000 + a.id
+    const ob = b.order_no ?? 1_000_000 + b.id
+    if (oa !== ob) return Number(oa) - Number(ob)
+    return a.id - b.id
   })
 })
 
@@ -858,7 +982,7 @@ const groupedSections = computed<GroupedSection[]>(() => {
       sections.set(key, { monthLabel, engineering, machineMap: new Map() })
     }
     const sec = sections.get(key)!
-    const mn = (row.machine_name ?? '').toString().trim() || '—'
+    const mn = (row.lineLabel ?? '').toString().trim() || '—'
     if (!sec.machineMap.has(mn)) sec.machineMap.set(mn, [])
     sec.machineMap.get(mn)!.push(row)
   }
@@ -880,9 +1004,12 @@ const groupedSections = computed<GroupedSection[]>(() => {
       .sort((a, b) => a[0].localeCompare(b[0], 'ja'))
       .map(([machineName, rlist]) => ({
         machineName,
-        rows: [...rlist].sort((a, b) =>
-          String(a.production_order ?? '').localeCompare(String(b.production_order ?? ''), 'ja', { numeric: true }),
-        ),
+        rows: [...rlist].sort((a, b) => {
+          const oa = a.order_no ?? 1_000_000 + a.id
+          const ob = b.order_no ?? 1_000_000 + b.id
+          if (oa !== ob) return Number(oa) - Number(ob)
+          return a.id - b.id
+        }),
       }))
     out.push({ monthLabel, engineering, machines })
   }
@@ -1180,7 +1307,7 @@ function formatRequiredTime(qty: unknown, efficiencyRate: unknown): string {
 }
 
 async function openPlanUpdatesDialog(row: EnrichedRow) {
-  const name = (row.product_name ?? '').trim()
+  const name = (row.item_name ?? '').trim()
   if (!name) {
     ElMessage.warning(t('productionPlanSchedule.planUpdatesNoProduct'))
     return
@@ -1229,29 +1356,48 @@ async function openPlanUpdatesDialog(row: EnrichedRow) {
 async function fetchData() {
   loading.value = true
   try {
-    const fileName = `${filterMonth.value}月`
-    const [result] = await Promise.all([
-      request.get('/api/processing-status', {
-        params: { fileName, limit: 100000 },
-      }) as Promise<ApiResponse<ScheduleRow[]>>,
-      loadPlanOperationVarianceMap(),
-    ])
-    if (result.success && Array.isArray(result.data)) {
-      rawRows.value = result.data
-    } else {
-      rawRows.value = []
+    await loadPlanOperationVarianceMap()
+    const [wideStart, wideEnd] = buildTableGridRange()
+    const jobs: { cd: string; engineering: string }[] = []
+    const fe = filterEngineering.value
+    if (!fe || fe === '成型') jobs.push({ cd: PROCESS_CD_FORMING, engineering: '成型' })
+    if (!fe || fe === '溶接') jobs.push({ cd: PROCESS_CD_WELDING, engineering: '溶接' })
+    if (jobs.length === 0) {
+      rawGridRows.value = []
+      tableGanttDates.value = []
+      return
     }
+    const merged: ApsGridListRow[] = []
+    const datesAcc = new Set<string>()
+    for (const { cd, engineering } of jobs) {
+      const [grid, lines] = await Promise.all([
+        fetchSchedulingGrid(wideStart, wideEnd, undefined, cd),
+        fetchLines(cd),
+      ])
+      for (const d of grid.dates || []) datesAcc.add(d)
+      const lineNameById = new Map<number, string>()
+      for (const line of lines || []) {
+        const name = String(line.line_name || '').trim()
+        const code = String(line.line_code || '').trim()
+        lineNameById.set(line.id, name || code || `ID ${line.id}`)
+      }
+      merged.push(...flattenGridToRows(grid, lineNameById, engineering))
+    }
+    merged.sort(compareRowsMerged)
+    tableGanttDates.value = [...datesAcc].sort((a, b) => a.localeCompare(b))
+    rawGridRows.value = merged
   } catch (e) {
     console.error(e)
     ElMessage.error(t('productionPlanSchedule.loadFailed'))
-    rawRows.value = []
+    rawGridRows.value = []
+    tableGanttDates.value = []
   } finally {
     loading.value = false
   }
 }
 
 function onMonthChange() {
-  fetchData()
+  void loadPlanOperationVarianceMap()
 }
 
 onMounted(fetchData)

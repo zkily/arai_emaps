@@ -1,5 +1,5 @@
 <template>
-  <div class="forming-plan-list-page">
+  <div class="welding-plan-list-page">
     <div class="plan-hd">
       <h2 class="plan-hd-title">
         <span class="plan-hd-icon" aria-hidden="true">
@@ -9,7 +9,7 @@
             />
           </svg>
         </span>
-        成型計画一覧
+        溶接計画一覧
       </h2>
       <p class="plan-hd-sub">
         工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。
@@ -54,16 +54,16 @@
           </el-button>
         </el-form-item>
       </el-form>
-      <div v-if="canSearch" class="forming-replan-toolbar">
+      <div v-if="canSearch" class="welding-replan-toolbar">
         <el-button
           type="warning"
           size="small"
-          class="forming-replan-toolbar__primary"
+          class="welding-replan-toolbar__primary"
           :loading="bulkReplanning"
           :disabled="loading || bulkReplanning"
           @click="replanAllLinesForProcess"
         >
-          成型ライン順で再計算
+          溶接ライン順で再計算
         </el-button>
         <el-button
           size="small"
@@ -72,7 +72,7 @@
         >
           再計算前の表示に戻す
         </el-button>
-        <span v-if="preReplanGridSnapshot" class="forming-replan-toolbar__note">
+        <span v-if="preReplanGridSnapshot" class="welding-replan-toolbar__note">
           画面上の一覧のみ再計算直前の取得結果に戻します（DB は既に更新済み）。最新データは「検索」で再取得してください。
         </span>
       </div>
@@ -190,7 +190,7 @@
 
         <el-tab-pane label="一覧（表）" name="table">
           <div class="plan-sec-hd plan-sec-hd--inner">
-            成型工程生産スケジュール一覧
+            溶接工程生産スケジュール一覧
             <span class="plan-sec-badge">{{ filteredTableRows.length }}</span>
             <span v-if="tableTabFiltersActive && tableRows.length > 0" class="plan-sec-sub table-filter-hint">
               全 {{ tableRows.length }} 件中
@@ -510,7 +510,7 @@ import {
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 
-defineOptions({ name: 'FormingPlanningList' })
+defineOptions({ name: 'WeldingPlanningList' })
 
 type GanttListRow = ScheduleGridRow & {
   lineLabel: string
@@ -965,9 +965,9 @@ async function loadProcessOptions() {
     const res = await fetchProcesses({ page: 1, pageSize: 5000 })
     const list = res.list ?? res.data?.list ?? []
     processOptions.value = Array.isArray(list) ? list : []
-    const hasDefault = processOptions.value.some((p) => (p.process_cd || '').trim() === 'KT04')
+    const hasDefault = processOptions.value.some((p) => (p.process_cd || '').trim() === 'KT07')
     if (hasDefault) {
-      selectedProcessCd.value = 'KT04'
+      selectedProcessCd.value = 'KT07'
     } else if (processOptions.value.length === 1) {
       selectedProcessCd.value = (processOptions.value[0].process_cd || '').trim()
     }
@@ -1115,7 +1115,7 @@ function buildUtilizationPrintHtml(): string {
 }
 
 function buildGanttPrintHtml(): string {
-  const title = '成型計画一覧（ガント日別）'
+  const title = '溶接計画一覧（ガント日別）'
   const printedAt = new Date().toLocaleString('ja-JP', {
     year: 'numeric',
     month: '2-digit',
@@ -1246,7 +1246,7 @@ function handleGanttPrint() {
 
 /** 一覧（表）タブ：現在の絞込結果を A4 縦で印刷 */
 function buildTableListPrintHtml(): string {
-  const title = '成型計画一覧（表・絞込結果）'
+  const title = '溶接計画一覧（表・絞込結果）'
   const printedAt = new Date().toLocaleString('ja-JP', {
     year: 'numeric',
     month: '2-digit',
@@ -1465,7 +1465,7 @@ function tableDefect(row: GanttListRow): number {
   return periodDefectForRow(row, tableGanttDates.value)
 }
 
-/** 前工程不良：FormingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
+/** 前工程不良：WeldingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
 function tableUpstreamDefect(row: GanttListRow): number {
   const v = row.upstream_defect_qty_total
   if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
@@ -1816,7 +1816,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 </script>
 
 <style scoped>
-.forming-plan-list-page {
+.welding-plan-list-page {
   --font-sans: inherit;
   --font-mono: inherit;
   --fs-xs: 10.5px;
@@ -1965,7 +1965,7 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   padding-right: 14px;
 }
 
-.forming-replan-toolbar {
+.welding-replan-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1974,11 +1974,11 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   padding-top: 8px;
   border-top: 1px solid rgba(191, 219, 254, 0.55);
 }
-.forming-replan-toolbar__primary {
+.welding-replan-toolbar__primary {
   border-radius: 999px;
   font-weight: 700;
 }
-.forming-replan-toolbar__note {
+.welding-replan-toolbar__note {
   flex: 1 1 240px;
   font-size: 12px;
   line-height: 1.45;

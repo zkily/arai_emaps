@@ -32,6 +32,12 @@ export const apsRoutes: RouteRecordRaw[] = [
         meta: { title: '成型計画一覧' },
       },
       {
+        path: 'welding-planning-list',
+        name: 'WeldingPlanningList',
+        component: () => import('@/views/aps/productionPlanOverview/WeldingPlanningList.vue'),
+        meta: { title: '溶接計画一覧' },
+      },
+      {
         path: 'scheduling',
         name: 'Scheduling',
         component: () => import('@/views/aps/Scheduling.vue'),

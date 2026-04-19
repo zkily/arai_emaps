@@ -212,6 +212,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/cutting-planning', name: 'CuttingPlanning', component: () => import('@/views/aps/productionPlanCreation/CuttingPlanning.vue'), meta: { title: '切断計画作成', requiresAuth: true } },
       { path: 'aps/welding-planning', name: 'WeldingPlanning', component: () => import('@/views/aps/productionPlanCreation/WeldingPlanning.vue'), meta: { title: '溶接計画作成', requiresAuth: true } },
       { path: 'aps/planning-list', name: 'FormingPlanningList', component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'), meta: { title: '成型計画一覧', requiresAuth: true } },
+      { path: 'aps/welding-planning-list', name: 'WeldingPlanningList', component: () => import('@/views/aps/productionPlanOverview/WeldingPlanningList.vue'), meta: { title: '溶接計画一覧', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
       { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
       { path: 'aps/capacity-matrix', name: 'CapacityMatrix', component: () => import('@/views/aps/CapacityMatrix.vue'), meta: { title: '設備稼働時間表', requiresAuth: true } },
