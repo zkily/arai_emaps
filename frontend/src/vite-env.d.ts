@@ -11,6 +11,13 @@ declare module 'element-plus/dist/locale/ja.js'
 declare module 'element-plus/dist/locale/zh-cn.js'
 declare module 'element-plus/dist/locale/vi.js'
 
+declare module 'file-saver' {
+  export function saveAs(data: Blob | File, filename?: string, options?: FileSaverOptions): void
+  interface FileSaverOptions {
+    autoBom?: boolean
+  }
+}
+
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string
   readonly VITE_API_HTTPS?: string

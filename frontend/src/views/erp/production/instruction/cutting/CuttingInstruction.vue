@@ -50,13 +50,51 @@
                 clearable
                 popper-class="equipment-select-dropdown"
                 style="width: 120px"
-                @change="loadPlans"
+                @change="onPlanEquipmentChange"
               >
                 <el-option
                   v-for="machine in machineOptions"
                   :key="machine.machine_name"
                   :label="machine.machine_name"
                   :value="machine.machine_name"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="製品" class="compact-form-item">
+              <el-select
+                v-model="planSearchForm.product_name"
+                placeholder="全部"
+                clearable
+                filterable
+                popper-class="equipment-select-dropdown"
+                style="width: 140px"
+                @change="onPlanProductOrMaterialFilterChange"
+              >
+                <el-option label="（全部）" value="" />
+                <el-option
+                  v-for="name in planProductNameOptions"
+                  :key="name"
+                  :label="name"
+                  :value="name"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="材料" class="compact-form-item">
+              <el-select
+                v-model="planSearchForm.material_name"
+                placeholder="全部"
+                clearable
+                filterable
+                popper-class="equipment-select-dropdown"
+                style="width: 140px"
+                @change="onPlanProductOrMaterialFilterChange"
+              >
+                <el-option label="（全部）" value="" />
+                <el-option
+                  v-for="name in planMaterialNameOptions"
+                  :key="name"
+                  :label="name"
+                  :value="name"
                 />
               </el-select>
             </el-form-item>
@@ -161,7 +199,7 @@
             v-model:current-page="planPagination.currentPage"
             v-model:page-size="planPagination.pageSize"
             :page-sizes="[10, 20, 50]"
-            :total="planPagination.total"
+            :total="planListFiltered.length"
             size="small"
             layout="total, sizes, prev, pager, next"
             @size-change="handlePlanSizeChange"
@@ -2906,12 +2944,13 @@ function getPlanBatchPriorityClass(order: number | null | undefined): string {
 
 const planSearchForm = reactive({
   equipment: '',
+  product_name: '',
+  material_name: '',
 })
 
 const planPagination = reactive({
   currentPage: 1,
   pageSize: 50,
-  total: 0,
 })
 
 const plans = ref<CuttingPlanRow[]>([])
@@ -4074,11 +4113,59 @@ const chamferingEquipmentEfficiencyListFiltered = computed(() => {
 /** 拖拽中不触发点击 */
 const isDragging = ref(false)
 
+/** 生産ロット一覧：設備で取得した一覧を製品名・材料名でクライアント側フィルタ（データ管理と同様に完全一致） */
+const planProductNameOptions = computed(() => {
+  const set = new Set<string>()
+  plans.value.forEach((r) => {
+    const v = (r.product_name ?? '').trim()
+    if (v) set.add(v)
+  })
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
+})
+const planMaterialNameOptions = computed(() => {
+  const set = new Set<string>()
+  plans.value.forEach((r) => {
+    const v = (r.material_name ?? '').trim()
+    if (v) set.add(v)
+  })
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
+})
+const planListFiltered = computed(() => {
+  const raw = plans.value
+  const pn = (planSearchForm.product_name ?? '').trim()
+  const mn = (planSearchForm.material_name ?? '').trim()
+  if (!pn && !mn) return raw
+  return raw.filter(
+    (r) =>
+      (!pn || (r.product_name ?? '').trim() === pn) &&
+      (!mn || (r.material_name ?? '').trim() === mn)
+  )
+})
 /** 生産ロット一覧のクライアント側ページネーション用 */
 const planListForTable = computed(() => {
+  const list = planListFiltered.value
   const start = (planPagination.currentPage - 1) * planPagination.pageSize
-  return plans.value.slice(start, start + planPagination.pageSize)
+  return list.slice(start, start + planPagination.pageSize)
 })
+
+watch(
+  () => planListFiltered.value.length,
+  (len) => {
+    const ps = planPagination.pageSize
+    const maxPage = Math.max(1, Math.ceil(len / ps) || 1)
+    if (planPagination.currentPage > maxPage) planPagination.currentPage = maxPage
+  }
+)
+
+function onPlanEquipmentChange() {
+  planSearchForm.product_name = ''
+  planSearchForm.material_name = ''
+  loadPlans()
+}
+
+function onPlanProductOrMaterialFilterChange() {
+  planPagination.currentPage = 1
+}
 
 // 生産月：自动生成当月前后3个月（共7个月），value 格式 YYYY-MM
 const scheduleMonths = ref<{ value: string; label: string }[]>([])
@@ -4175,12 +4262,11 @@ const loadChamferingMaterialOptions = async () => {
 
 const handlePlanSizeChange = (size: number) => {
   planPagination.pageSize = size
-  loadPlans()
+  planPagination.currentPage = 1
 }
 
 const handlePlanCurrentChange = (page: number) => {
   planPagination.currentPage = page
-  loadPlans()
 }
 
 const loadScheduleMonths = () => {
@@ -4252,7 +4338,6 @@ const loadPlans = async () => {
     )
     if ((result as any)?.success) {
       plans.value = ((result as any).data ?? []) as CuttingPlanRow[]
-      planPagination.total = plans.value.length
     } else {
       throw new Error((result as any)?.message ?? 'データの取得に失敗しました')
     }
@@ -4260,7 +4345,6 @@ const loadPlans = async () => {
     console.error('計画リストの読み込みに失敗:', error)
     ElMessage.error('計画データの読み込みに失敗しました')
     plans.value = []
-    planPagination.total = 0
   } finally {
     planLoading.value = false
   }

@@ -9,6 +9,7 @@ export interface Product {
   location_cd?: string
   start_use_date?: string | Date | null
   category?: string
+  kind?: string
   department_id?: number | null
   destination_cd?: string
   process_count?: number

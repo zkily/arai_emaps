@@ -203,6 +203,29 @@
             <span class="ppup-data-cap__dot ppup-data-cap__dot--cyan" />
             <span class="ppup-data-cap__title">単価累計（工程完了時点）</span>
             <span class="ppup-data-cap__meta ppup-data-cap__pill ppup-data-cap__pill--cyan">材料 + 加工を積み上げ</span>
+            <div class="ppup-data-cap__actions">
+              <el-tag v-if="latestSnapshotInfo" size="small" type="info" class="ppup-snap-info">
+                最新保存: {{ formatDateTime(latestSnapshotInfo.created_at) }}
+              </el-tag>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                :loading="savingSnapshot"
+                :disabled="!selectedProductCd || !routeCd"
+                @click="onSaveCurrentSnapshot"
+              >
+                現在を保存
+              </el-button>
+              <el-button
+                size="small"
+                type="warning"
+                plain
+                @click="openRecalcDialog"
+              >
+                全部一緒に更新
+              </el-button>
+            </div>
           </div>
         </template>
         <div class="ppup-card-body">
@@ -237,6 +260,103 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 一括再計算ダイアログ -->
+    <el-dialog
+      v-model="recalcDialogVisible"
+      title="累計単価 一括再計算"
+      width="640px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!recalcJob || recalcJob.status === 'completed' || recalcJob.status === 'failed' || recalcJob.status === 'partial'"
+    >
+      <div v-if="!recalcJob" class="ppup-recalc-form">
+        <p class="ppup-recalc-hint">
+          材料・部品・工程単価の変更後、対象製品の累計単価を現在のマスタで再計算し、
+          スナップショットとして保存します。
+        </p>
+        <el-form label-position="top" class="ppup-recalc-form-grid">
+          <el-form-item label="対象範囲">
+            <el-radio-group v-model="recalcScope">
+              <el-radio value="current">現在の製品のみ（{{ selectedProductCd || '未選択' }}）</el-radio>
+              <el-radio value="selected">製品を選択して実行</el-radio>
+              <el-radio value="all">全製品（有効）</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="recalcScope === 'selected'" label="製品選択">
+            <el-select
+              v-model="recalcSelectedProducts"
+              multiple
+              filterable
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="複数選択可"
+              class="ppup-recalc-product-select"
+            >
+              <el-option
+                v-for="p in productOptions"
+                :key="p.product_cd"
+                :label="`${p.product_cd} — ${p.product_name || ''}`"
+                :value="p.product_cd"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="保存モード">
+            <el-radio-group v-model="recalcMode">
+              <el-radio value="append_snapshot">追記（履歴を残す）</el-radio>
+              <el-radio value="replace_current">上書き（過去を削除）</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div v-else class="ppup-recalc-progress">
+        <p class="ppup-recalc-status">
+          ステータス:
+          <el-tag :type="recalcStatusTagType">{{ recalcStatusLabel }}</el-tag>
+          <span v-if="recalcJob.message" class="ppup-recalc-msg">{{ recalcJob.message }}</span>
+        </p>
+        <el-progress :percentage="recalcJob.progress_percent" :status="recalcProgressStatus" />
+        <p class="ppup-recalc-counts">
+          処理: {{ recalcJob.done_items }} / {{ recalcJob.total_items }} ·
+          成功 {{ recalcJob.success_items }} · 失敗 {{ recalcJob.failed_items }}
+        </p>
+        <div v-if="recalcJob.errors && recalcJob.errors.length" class="ppup-recalc-errors">
+          <p class="ppup-recalc-errors__title">失敗明細（{{ recalcJob.errors.length }}件）</p>
+          <el-scrollbar max-height="180">
+            <el-table :data="recalcJob.errors" size="small" border>
+              <el-table-column prop="product_cd" label="製品CD" width="140" />
+              <el-table-column prop="route_cd" label="ルートCD" width="120" />
+              <el-table-column prop="error" label="エラー" show-overflow-tooltip />
+            </el-table>
+          </el-scrollbar>
+        </div>
+      </div>
+      <template #footer>
+        <div class="ppup-recalc-footer">
+          <el-button v-if="!recalcJob" @click="recalcDialogVisible = false">キャンセル</el-button>
+          <el-button
+            v-if="!recalcJob"
+            type="primary"
+            :loading="recalcSubmitting"
+            @click="onStartRecalc"
+          >
+            再計算を開始
+          </el-button>
+          <el-button
+            v-if="recalcJob && (recalcJob.status === 'running' || recalcJob.status === 'queued')"
+            :disabled="true"
+          >
+            処理中…
+          </el-button>
+          <el-button
+            v-if="recalcJob && (recalcJob.status === 'completed' || recalcJob.status === 'failed' || recalcJob.status === 'partial')"
+            type="primary"
+            @click="onCloseRecalcDialog"
+          >
+            閉じる
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -258,6 +378,15 @@ import { getBomHeaders, getBomTree, type BomLine } from '@/api/master/productBom
 import { getProductList } from '@/api/master/productMaster'
 import { getMaterialList } from '@/api/master/materialMaster'
 import { getPartList, type PartMasterRow } from '@/api/master/partMaster'
+import {
+  saveCumulativeSnapshot,
+  startRecalcJob,
+  getRecalcJob,
+  getLatestCumulativeSnapshot,
+  type SnapshotMode,
+  type RecalcJobStatus,
+  type CumulativeSnapshotDetail,
+} from '@/api/master/productCostSnapshot'
 import type { Product, Material } from '@/types/master'
 
 const { t } = useI18n()
@@ -596,12 +725,28 @@ const cumulativeStageRows = computed((): CumulativeStageRow[] => {
     }
   }
 
-  for (const s of steps) {
-    const materialInc = materialCostByStepNo.get(s.step_no) || 0
-    const partInc = partCostByStepNo.get(s.step_no) || 0
-    const processInc = Number(stepFees[s.step_no]) || 0
+  const routeStepSet = new Set(steps.map((s) => s.step_no))
+  const feeStepKeys = Object.keys(stepFees)
+    .map((k) => Number(k))
+    .filter((n) => Number.isFinite(n))
+  const allStepKeys = Array.from(
+    new Set<number>([
+      ...routeStepSet,
+      ...materialCostByStepNo.keys(),
+      ...partCostByStepNo.keys(),
+      ...feeStepKeys,
+    ])
+  ).sort((a, b) => a - b)
+
+  for (const st of allStepKeys) {
+    const materialInc = materialCostByStepNo.get(st) || 0
+    const partInc = partCostByStepNo.get(st) || 0
+    const processInc = Number(stepFees[st]) || 0
     const stageInc = materialInc + partInc + processInc
     cum += stageInc
+    if (!routeStepSet.has(st)) continue
+    const s = steps.find((x) => x.step_no === st)
+    if (!s) continue
     const name = (s.process_name || s.process_cd || '').trim() || `ステップ${s.step_no}`
     rows.push({
       stage: `〜 ${name} 工程完了時点`,
@@ -805,6 +950,7 @@ async function onProductChange() {
   const rc = routeCd.value
   await Promise.all([loadPricesForProduct(cd, rc), loadBomForProduct(cd)])
   if (rc) syncStepFeesFromPrices()
+  void loadLatestSnapshotInfo()
 }
 
 function persistedProcessFeeSum(stepNo: number): number {
@@ -863,12 +1009,228 @@ async function saveProcessFee(stepNo: number, options?: { quiet?: boolean }) {
   }
 }
 
+// -----------------------------------------------------------------------------
+// 累計単価スナップショット保存 / 一括再計算
+// -----------------------------------------------------------------------------
+
+const savingSnapshot = ref(false)
+const latestSnapshotInfo = ref<CumulativeSnapshotDetail | null>(null)
+
+const recalcDialogVisible = ref(false)
+const recalcSubmitting = ref(false)
+const recalcScope = ref<'current' | 'selected' | 'all'>('current')
+const recalcMode = ref<SnapshotMode>('append_snapshot')
+const recalcSelectedProducts = ref<string[]>([])
+const recalcJob = ref<RecalcJobStatus | null>(null)
+const recalcPollTimer = ref<ReturnType<typeof setInterval> | null>(null)
+
+const recalcStatusLabel = computed(() => {
+  if (!recalcJob.value) return ''
+  switch (recalcJob.value.status) {
+    case 'queued':
+      return 'キュー待ち'
+    case 'running':
+      return '実行中'
+    case 'completed':
+      return '完了'
+    case 'failed':
+      return '失敗'
+    case 'partial':
+      return '一部成功'
+    default:
+      return recalcJob.value.status
+  }
+})
+
+const recalcStatusTagType = computed<'success' | 'warning' | 'danger' | 'info' | 'primary'>(() => {
+  if (!recalcJob.value) return 'info'
+  switch (recalcJob.value.status) {
+    case 'completed':
+      return 'success'
+    case 'partial':
+      return 'warning'
+    case 'failed':
+      return 'danger'
+    case 'running':
+    case 'queued':
+      return 'primary'
+    default:
+      return 'info'
+  }
+})
+
+const recalcProgressStatus = computed<'success' | 'exception' | 'warning' | undefined>(() => {
+  if (!recalcJob.value) return undefined
+  if (recalcJob.value.status === 'completed') return 'success'
+  if (recalcJob.value.status === 'failed') return 'exception'
+  if (recalcJob.value.status === 'partial') return 'warning'
+  return undefined
+})
+
+function formatDateTime(v: string | null | undefined): string {
+  if (!v) return '—'
+  try {
+    const d = new Date(v)
+    if (Number.isNaN(d.getTime())) return v
+    return d.toLocaleString('ja-JP')
+  } catch {
+    return v
+  }
+}
+
+async function loadLatestSnapshotInfo() {
+  const cd = selectedProductCd.value
+  const rc = routeCd.value
+  if (!cd || !rc) {
+    latestSnapshotInfo.value = null
+    return
+  }
+  try {
+    const res = await getLatestCumulativeSnapshot({ product_cd: cd, route_cd: rc })
+    latestSnapshotInfo.value = res?.data || null
+  } catch {
+    latestSnapshotInfo.value = null
+  }
+}
+
+async function onSaveCurrentSnapshot() {
+  const cd = selectedProductCd.value
+  const rc = routeCd.value
+  if (!cd || !rc) {
+    ElMessage.warning('製品・ルートが未設定です')
+    return
+  }
+  savingSnapshot.value = true
+  try {
+    const res = await saveCumulativeSnapshot({
+      product_cd: cd,
+      route_cd: rc,
+      bom_header_id: selectedBomHeaderId.value,
+      mode: 'append_snapshot',
+    })
+    const errs = res?.data?.errors || []
+    if (errs.length) {
+      ElMessage.warning(`保存しましたが警告あり: ${errs.join(' / ')}`)
+    } else {
+      ElMessage.success('スナップショットを保存しました')
+    }
+    await loadLatestSnapshotInfo()
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err?.response?.data?.detail || 'スナップショット保存に失敗しました')
+  } finally {
+    savingSnapshot.value = false
+  }
+}
+
+function openRecalcDialog() {
+  recalcJob.value = null
+  recalcScope.value = selectedProductCd.value ? 'current' : 'selected'
+  recalcMode.value = 'append_snapshot'
+  recalcSelectedProducts.value = []
+  recalcDialogVisible.value = true
+}
+
+function onCloseRecalcDialog() {
+  stopRecalcPolling()
+  recalcDialogVisible.value = false
+  recalcJob.value = null
+  void loadLatestSnapshotInfo()
+}
+
+function stopRecalcPolling() {
+  if (recalcPollTimer.value) {
+    clearInterval(recalcPollTimer.value)
+    recalcPollTimer.value = null
+  }
+}
+
+async function pollRecalcJob(jobId: number) {
+  try {
+    const res = await getRecalcJob(jobId)
+    recalcJob.value = res?.data || null
+    const s = recalcJob.value?.status
+    if (s === 'completed' || s === 'failed' || s === 'partial') {
+      stopRecalcPolling()
+      if (s === 'completed') ElMessage.success('一括再計算が完了しました')
+      else if (s === 'partial') ElMessage.warning('一括再計算は一部失敗しました')
+      else ElMessage.error('一括再計算が失敗しました')
+    }
+  } catch {
+    // 一時的な失敗はポーリング継続
+  }
+}
+
+async function onStartRecalc() {
+  if (recalcScope.value === 'current' && !selectedProductCd.value) {
+    ElMessage.warning('先に製品を選択してください')
+    return
+  }
+  if (recalcScope.value === 'selected' && recalcSelectedProducts.value.length === 0) {
+    ElMessage.warning('製品を 1 つ以上選択してください')
+    return
+  }
+  recalcSubmitting.value = true
+  try {
+    let body: Parameters<typeof startRecalcJob>[0]
+    if (recalcScope.value === 'all') {
+      body = { scope: 'all', mode: recalcMode.value }
+    } else if (recalcScope.value === 'current') {
+      body = {
+        scope: 'selected',
+        mode: recalcMode.value,
+        items: [
+          {
+            product_cd: selectedProductCd.value,
+            route_cd: routeCd.value || undefined,
+            bom_header_id: selectedBomHeaderId.value,
+          },
+        ],
+      }
+    } else {
+      body = {
+        scope: 'selected',
+        mode: recalcMode.value,
+        items: recalcSelectedProducts.value.map((cd) => ({ product_cd: cd })),
+      }
+    }
+    const res = await startRecalcJob(body)
+    const jobId = res?.data?.job_id
+    if (!jobId) throw new Error('job_id が取得できません')
+    recalcJob.value = {
+      id: jobId,
+      status: 'queued',
+      mode: recalcMode.value,
+      scope: body.scope,
+      total_items: res.data.total_items,
+      done_items: 0,
+      success_items: 0,
+      failed_items: 0,
+      progress_percent: 0,
+      message: 'queued',
+      errors: [],
+      result_snapshot_ids: [],
+      created_at: null,
+      started_at: null,
+      finished_at: null,
+    }
+    stopRecalcPolling()
+    recalcPollTimer.value = setInterval(() => pollRecalcJob(jobId), 1500)
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err?.response?.data?.detail || '一括再計算の起動に失敗しました')
+  } finally {
+    recalcSubmitting.value = false
+  }
+}
+
 onMounted(async () => {
   await Promise.all([loadProductOptions(), loadMaterialPrices(), loadPartMasters()])
 })
 
 onBeforeUnmount(() => {
   clearFeeSaveTimers()
+  stopRecalcPolling()
 })
 </script>
 
@@ -1173,6 +1535,84 @@ onBeforeUnmount(() => {
   color: var(--ppup-cyan-d);
   background: rgba(6, 182, 212, 0.1);
   border-color: rgba(6, 182, 212, 0.22);
+}
+
+.ppup-data-cap__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ppup-data-cap__actions .ppup-data-cap__pill,
+.ppup-data-cap__actions + * {
+  margin-left: 0;
+}
+
+.ppup-snap-info {
+  font-weight: 600;
+}
+
+.ppup-recalc-form {
+  padding: 4px 2px;
+}
+
+.ppup-recalc-hint {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  color: var(--ppup-slate-600);
+  line-height: 1.6;
+}
+
+.ppup-recalc-form-grid :deep(.el-form-item__label) {
+  font-weight: 700;
+  color: var(--ppup-slate-900);
+}
+
+.ppup-recalc-product-select {
+  width: 100%;
+}
+
+.ppup-recalc-progress {
+  padding: 8px 2px 4px;
+}
+
+.ppup-recalc-status {
+  margin: 0 0 10px 0;
+  font-size: 13px;
+  color: var(--ppup-slate-700);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ppup-recalc-msg {
+  color: var(--ppup-slate-500);
+  font-size: 12px;
+}
+
+.ppup-recalc-counts {
+  margin: 10px 0 0 0;
+  font-size: 12px;
+  color: var(--ppup-slate-600);
+}
+
+.ppup-recalc-errors {
+  margin-top: 14px;
+}
+
+.ppup-recalc-errors__title {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #b91c1c;
+}
+
+.ppup-recalc-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .ppup-card-body {

@@ -55,6 +55,51 @@ export const inventoryValueApi = {
   },
 
   /** 明細一覧（バックエンド: page, limit, item_type, process_cd, run_id） */
+  /** 実在庫テーブル由来の一覧（材料 material_stock / 部品 part_stock / 製品 production_summarys） */
+  async getStockPanel(params: {
+    tab: 'material' | 'part' | 'product'
+    as_of: string
+    process_cd?: string
+    page?: number
+    limit?: number
+    sort_by?: string
+    sort_order?: string
+  }) {
+    try {
+      const page = params.page ?? 1
+      const limit = params.limit ?? 50
+      const res = (await request.get('/api/erp/inventory-value/stock-panel', {
+        params: {
+          tab: params.tab,
+          as_of: params.as_of,
+          process_cd:
+            params.process_cd && params.process_cd !== 'all' ? params.process_cd : undefined,
+          page,
+          limit,
+          sort_by: params.sort_by,
+          sort_order: params.sort_order,
+        },
+      })) as {
+        success?: boolean
+        data?: { list?: unknown[]; total?: number; as_of?: string; sum_total_value?: number }
+      }
+      const payload = res?.data ?? { list: [], total: 0 }
+      return {
+        data: {
+          list: payload.list ?? [],
+          total: payload.total ?? 0,
+          as_of: payload.as_of,
+          sum_total_value:
+            payload.sum_total_value !== undefined && payload.sum_total_value !== null
+              ? Number(payload.sum_total_value)
+              : undefined,
+        },
+      }
+    } catch {
+      return { data: { list: [], total: 0 } }
+    }
+  },
+
   async getValueList(params: {
     run_id?: number
     item_type?: string
@@ -82,10 +127,20 @@ export const inventoryValueApi = {
         const row = raw as Record<string, unknown>
         const amount = row.amount ?? row.total_value
         const qty = row.quantity
-        const unitPrice = row.unit_price ?? row.unit_price_snapshot
+        const quantity = typeof qty === 'number' ? qty : Number(qty) || 0
+        // バックエンドが返す unit_price を最優先（部品は parts、他は累計スナップショット等）
+        const explicit =
+          row.unit_price !== undefined && row.unit_price !== null && row.unit_price !== ''
+            ? row.unit_price
+            : undefined
+        const unitPriceSnapshot =
+          explicit !== undefined ? explicit : (row.unit_price_snapshot ?? row.unit_price)
+        const unitPriceByAmount = amount != null && quantity > 0 ? Number(amount) / quantity : null
+        // 既存データ互換のため unit_price が無い場合のみ amount/qty を使用
+        const unitPrice = unitPriceSnapshot ?? unitPriceByAmount ?? null
         return {
           ...row,
-          quantity: typeof qty === 'number' ? qty : Number(qty) || 0,
+          quantity,
           unit_price: unitPrice != null ? Number(unitPrice) : null,
           total_value:
             amount != null
@@ -135,6 +190,39 @@ export const inventoryValueApi = {
       return { data: res?.data ?? { list: [], total: 0 } }
     } catch {
       return { data: { list: [], total: 0 } }
+    }
+  },
+
+  async getShipmentUnits(params: {
+    date?: string
+    dates?: string[]
+    destination_cd?: string
+    destination_cds?: string[]
+  }) {
+    try {
+      const res = (await request.get('/api/erp/inventory-value/shipment-units', {
+        params: {
+          date: params.date,
+          dates: params.dates?.length ? params.dates.join(',') : undefined,
+          destination_cd: params.destination_cd,
+          destination_cds: params.destination_cds?.length ? params.destination_cds.join(',') : undefined,
+        },
+      })) as { success?: boolean; data?: { list?: { product_cd: string; confirmed_units_sum: number }[] } }
+      return { data: { list: res?.data?.list ?? [] } }
+    } catch {
+      return { data: { list: [] } }
+    }
+  },
+
+  async getDestinations() {
+    try {
+      const res = (await request.get('/api/erp/inventory-value/destinations')) as {
+        success?: boolean
+        data?: { list?: { destination_cd: string; destination_name: string }[] }
+      }
+      return { data: { list: res?.data?.list ?? [] } }
+    } catch {
+      return { data: { list: [] } }
     }
   },
 

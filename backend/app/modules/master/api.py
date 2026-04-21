@@ -33,6 +33,7 @@ def _row_to_dict(row: Product) -> dict:
         "location_cd": row.location_cd,
         "start_use_date": row.start_use_date.isoformat() if row.start_use_date else None,
         "category": row.category,
+        "kind": row.kind,
         "department_id": row.department_id,
         "destination_cd": row.destination_cd,
         "process_count": row.process_count,
@@ -111,6 +112,7 @@ async def get_active_products_count(
 async def get_product_list(
     keyword: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    kind: Optional[str] = Query(None),
     product_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     product_cd: Optional[str] = Query(None),
@@ -124,6 +126,11 @@ async def get_product_list(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """製品一覧取得（検索・ページネーション）"""
+    if kind:
+        kind = kind.strip().upper()
+        if kind not in {"T", "N", "F"}:
+            raise HTTPException(status_code=400, detail="kind must be one of T, N, F")
+
     query = select(Product)
     if keyword:
         query = query.where(
@@ -136,6 +143,8 @@ async def get_product_list(
         )
     if category:
         query = query.where(Product.category == category)
+    if kind:
+        query = query.where(Product.kind == kind)
     if product_type:
         query = query.where(Product.product_type == product_type)
     if status:

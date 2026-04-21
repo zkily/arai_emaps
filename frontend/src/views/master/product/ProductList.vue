@@ -61,13 +61,13 @@
                 {{ t('master.product.categoryLabel') }}: {{ filters.category }}
               </el-tag>
               <el-tag
-                v-if="filters.location_cd"
+                v-if="filters.kind"
                 closable
-                @close="handleClearFilter('location_cd')"
-                type="info"
+                @close="handleClearFilter('kind')"
+                type="success"
                 size="small"
               >
-                {{ t('master.product.locationLabel') }}: {{ filters.location_cd }}
+                分類: {{ filters.kind }}
               </el-tag>
             </div>
           </div>
@@ -131,7 +131,7 @@
       <!-- 筛选内容 -->
       <div class="filters-grid">
         <el-row :gutter="16">
-          <el-col :lg="6" :md="12">
+          <el-col :lg="6" :md="12" :sm="12" :xs="24">
             <!-- 搜索关键词 -->
             <el-form-item label="🔍 キーワード">
               <el-input
@@ -143,7 +143,7 @@
             </el-form-item>
           </el-col>
           <!-- 类别 -->
-          <el-col :lg="6" :md="12">
+          <el-col :lg="6" :md="12" :sm="12" :xs="24">
             <el-form-item label="📁 カテゴリ">
               <el-select
                 v-model="filters.category"
@@ -159,59 +159,22 @@
               </el-select>
             </el-form-item>
           </el-col>
-          <!-- 状态 -->
-          <el-col :lg="6" :md="12">
-            <el-form-item label="🔖 状態">
+          <el-col :lg="6" :md="12" :sm="12" :xs="24">
+            <el-form-item label="🏷️ 分類(kind)">
               <el-select
-                v-model="filters.status"
-                clearable
-                placeholder="選択"
-                style="min-width: 100px; width: 100%"
-              >
-                <el-option label="現行" value="active" />
-                <el-option label="終息" value="inactive" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <!-- 产品种别 -->
-          <el-col :lg="6" :md="12">
-            <el-form-item label="🏷️ 製品種別">
-              <el-select
-                v-model="filters.product_type"
-                clearable
-                placeholder="選択"
-                style="min-width: 100px; width: 100%"
-              >
-                <el-option label="量産品" value="量産品" />
-                <el-option label="試作品" value="試作品" />
-                <el-option label="補給品" value="補給品" />
-                <el-option label="その他" value="その他" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <!-- 产品CD -->
-        <el-row :gutter="16">
-          <el-col :lg="6" :md="12">
-            <el-form-item label="🆔 製品CD">
-              <el-select
-                v-model="filters.product_cd"
-                filterable
+                v-model="filters.kind"
                 clearable
                 placeholder="選択"
                 style="width: 100%"
               >
-                <el-option
-                  v-for="item in productCdOptions"
-                  :key="item.cd"
-                  :label="`${item.cd}｜${item.name}`"
-                  :value="item.cd"
-                />
+                <el-option label="T" value="T" />
+                <el-option label="N" value="N" />
+                <el-option label="F" value="F" />
               </el-select>
             </el-form-item>
           </el-col>
           <!-- 材料CD -->
-          <el-col :lg="6" :md="12">
+          <el-col :lg="6" :md="12" :sm="12" :xs="24">
             <el-form-item label="🧱 材料CD">
               <el-select
                 v-model="filters.material_cd"
@@ -222,44 +185,6 @@
               >
                 <el-option
                   v-for="item in materialOptions"
-                  :key="item.cd"
-                  :label="`${item.cd}｜${item.name}`"
-                  :value="item.cd"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <!-- 工程ルートCD -->
-          <el-col :lg="6" :md="12">
-            <el-form-item label="🛠️ 工程ルートCD">
-              <el-select
-                v-model="filters.route_cd"
-                filterable
-                clearable
-                placeholder="選択"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="item in routeOptions"
-                  :key="item.cd"
-                  :label="`${item.cd}｜${item.name}`"
-                  :value="item.cd"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <!-- 保管場所CD -->
-          <el-col :lg="6" :md="12">
-            <el-form-item label="🏢 保管場所CD">
-              <el-select
-                v-model="filters.location_cd"
-                filterable
-                clearable
-                placeholder="選択"
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="item in locationOptions"
                   :key="item.cd"
                   :label="`${item.cd}｜${item.name}`"
                   :value="item.cd"
@@ -318,6 +243,17 @@
         align="center"
         v-show="visibleColumns.category"
       />
+      <el-table-column
+        prop="kind"
+        label="分類"
+        min-width="100"
+        align="center"
+        v-show="visibleColumns.kind"
+      >
+        <template #default="{ row }">
+          {{ row.kind || '—' }}
+        </template>
+      </el-table-column>
       <el-table-column
         prop="box_type"
         label="箱種"
@@ -711,6 +647,7 @@ const { t } = useI18n()
 const filters = reactive({
   keyword: '',
   category: '',
+  kind: '',
   product_cd: '',
   product_type: '',
   material_cd: '',
@@ -755,6 +692,7 @@ const visibleColumns = ref({
   part_number: true,
   product_type: true,
   category: true,
+  kind: true,
   box_type: true,
   unit_per_box: true,
   process_count: true,
@@ -786,6 +724,7 @@ const columnOptions = {
   part_number: { label: '品番' },
   product_type: { label: '製品種別' },
   category: { label: 'カテゴリ' },
+  kind: { label: '分類' },
   box_type: { label: '箱種' },
   unit_per_box: { label: '入数' },
   process_count: { label: '工程数' },
@@ -837,6 +776,7 @@ const hasActiveFilters = computed(() => {
   return (
     filters.keyword ||
     filters.category ||
+    filters.kind ||
     filters.product_cd ||
     filters.product_type ||
     filters.material_cd ||
@@ -958,6 +898,7 @@ const handleReset = () => {
   Object.assign(filters, {
     keyword: '',
     category: '',
+    kind: '',
     product_cd: '',
     product_type: '',
     material_cd: '',
@@ -1384,6 +1325,9 @@ const handleExport = () => {
     }
     if (visibleColumns.value.category) {
       data.カテゴリ = item.category
+    }
+    if (visibleColumns.value.kind) {
+      data.分類 = item.kind || ''
     }
     if (visibleColumns.value.box_type) {
       data.箱種 = item.box_type

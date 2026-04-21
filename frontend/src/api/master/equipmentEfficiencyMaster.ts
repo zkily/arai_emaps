@@ -18,17 +18,49 @@ export interface EquipmentEfficiency {
   updated_at?: string
 }
 
+export interface EquipmentEfficiencyTabCounts {
+  all: number
+  cutting: number
+  chamfering: number
+  forming: number
+  welding: number
+  plating: number
+  inspection: number
+  other: number
+}
+
 export interface EquipmentEfficiencyListParams {
   keyword?: string
+  /** 互換: 指定時は従来どおり先頭から最大 limit 件（ページングなし） */
   limit?: number
+  page?: number
+  pageSize?: number
+  /** all / cutting / chamfering / …（バックエンドの工程 CASE と一致） */
+  processType?: string
+}
+
+export interface EquipmentEfficiencyListResponse {
+  success?: boolean
+  data?: {
+    list: EquipmentEfficiency[]
+    total: number
+    tab_counts?: EquipmentEfficiencyTabCounts
+    machine_distinct_count?: number
+    product_distinct_count?: number
+  }
+  list?: EquipmentEfficiency[]
+  total?: number
+  tab_counts?: EquipmentEfficiencyTabCounts
+  machine_distinct_count?: number
+  product_distinct_count?: number
 }
 
 const BASE = '/api/master/equipment-efficiency'
 
 export function fetchEquipmentEfficiencyList(
   params?: EquipmentEfficiencyListParams
-): Promise<{ success?: boolean; data?: { list: EquipmentEfficiency[]; total: number }; list?: EquipmentEfficiency[]; total?: number }> {
-  return request.get(BASE, { params }) as Promise<any>
+): Promise<EquipmentEfficiencyListResponse> {
+  return request.get(BASE, { params }) as Promise<EquipmentEfficiencyListResponse>
 }
 
 export function getEquipmentEfficiencyById(id: number): Promise<EquipmentEfficiency> {

@@ -1,7 +1,7 @@
 """
 製品マスタ Pydantic スキーマ（products テーブル対応）
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import date, datetime
 
@@ -13,6 +13,7 @@ class ProductBase(BaseModel):
     location_cd: Optional[str] = None
     start_use_date: Optional[date] = None
     category: Optional[str] = None
+    kind: Optional[str] = None
     department_id: Optional[int] = None
     destination_cd: Optional[str] = None
     process_count: int = 1
@@ -39,6 +40,18 @@ class ProductBase(BaseModel):
     safety_days: Optional[int] = None
     unit_price: Optional[float] = None
     product_alias: Optional[str] = None
+
+    @field_validator("kind")
+    @classmethod
+    def validate_kind(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip().upper()
+        if value == "":
+            return None
+        if value not in {"T", "N", "F"}:
+            raise ValueError("kind must be one of T, N, F")
+        return value
 
 
 class ProductCreate(ProductBase):

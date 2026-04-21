@@ -1196,6 +1196,12 @@
                 <span class="molding-plan-batch">{{ formatMoldingPlanInt(row.batch_qty) }}</span>
               </template>
             </el-table-column>
+            <el-table-column prop="efficiency_rate" label="能率" width="112" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanEfficiencyPerH(row.efficiency_rate) }}</template>
+            </el-table-column>
+            <el-table-column prop="process_hours" label="工時" width="100" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanProcessHours(row.process_hours) }}</template>
+            </el-table-column>
             <el-table-column label="日当り" width="96" align="right" sortable>
               <template #default="{ row }">{{ formatMoldingPlanInt(row.daily_qty) }}</template>
             </el-table-column>
@@ -1701,6 +1707,7 @@ import {
   type ProductMachineConfig,
 } from '@/api/master/productMachineConfigMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
+import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 
 const STOCK_LOGS_BASE = '/api/erp/stock-transaction-logs'
@@ -4597,6 +4604,10 @@ interface MoldingPlanRow {
   lot_count: number
   batch_qty: number
   daily_qty: number
+  /** equipment_efficiency（本/H）。未登録時は null */
+  efficiency_rate: number | null
+  /** 計画数÷能率（時間）。能率なしは 0 */
+  process_hours: number
 }
 const moldingPlanResult = ref<MoldingPlanRow[]>([])
 
@@ -4924,6 +4935,20 @@ function formatMoldingPlanInt(n: number): string {
   return Number(n).toLocaleString('ja-JP')
 }
 
+function formatMoldingPlanEfficiencyPerH(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(Number(v))) return '—'
+  const n = Number(v)
+  const s = n % 1 === 0 ? String(Math.round(n)) : n.toFixed(1)
+  return `${s}本/H`
+}
+
+function formatMoldingPlanProcessHours(h: number | null | undefined): string {
+  if (h == null || Number.isNaN(Number(h)) || Number(h) <= 0) return '—'
+  const n = Number(h)
+  const s = n % 1 === 0 ? String(Math.round(n)) : n.toFixed(2)
+  return `${s}h`
+}
+
 /** 計算結果テーブルを印刷（画面のデフォルト並び：成型機昇順に合わせる） */
 function printMoldingPlanResult() {
   const rows = moldingPlanResult.value
@@ -4934,8 +4959,22 @@ function printMoldingPlanResult() {
   const sorted = [...rows].sort((a, b) => {
     const ma = (a.molding_machine || '\uffff').localeCompare(b.molding_machine || '\uffff', 'ja')
     if (ma !== 0) return ma
+    const da = String(a.lookup_date || '').localeCompare(String(b.lookup_date || ''))
+    if (da !== 0) return da
     return String(a.product_cd || '').localeCompare(String(b.product_cd || ''), 'ja')
   })
+  const workDayNum = Number(moldingPlanWorkingDays.value)
+  const workDaysSafe = Number.isFinite(workDayNum) && workDayNum > 0 ? workDayNum : 0
+  const totalsByMachine = new Map<string, { plan: number; hours: number }>()
+  for (const r of sorted) {
+    const m = String(r.molding_machine || '').trim() || '（未設定）'
+    const t = totalsByMachine.get(m) ?? { plan: 0, hours: 0 }
+    const bq = Number(r.batch_qty)
+    t.plan += Number.isNaN(bq) ? 0 : bq
+    const ph = Number(r.process_hours)
+    t.hours += Number.isNaN(ph) ? 0 : ph
+    totalsByMachine.set(m, t)
+  }
   const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
   const metaLine = [
     `生産計画月：${moldingPlanMonth.value || '—'}`,
@@ -4953,10 +4992,16 @@ function printMoldingPlanResult() {
     const machineName = String(r.molding_machine || '').trim() || '（未設定）'
     if (machineName !== prevMachine) {
       if (prevMachine) body += '</tbody></table></section>'
+      const agg = totalsByMachine.get(machineName) ?? { plan: 0, hours: 0 }
+      const avgDailyStr =
+        workDaysSafe > 0 && agg.hours > 0
+          ? `${(agg.hours / workDaysSafe).toFixed(2)}h/日`
+          : '—'
+      const sumHoursStr = agg.hours > 0 ? `${agg.hours.toFixed(2)}h` : '—'
       body += `<section class="machine-group">
-<h2 class="machine-title">成型機：${escapeHtmlRecommended(machineName)}</h2>
+<h2 class="machine-title">成型機：${escapeHtmlRecommended(machineName)}　／　合計計画数：${escapeHtmlRecommended(formatMoldingPlanInt(agg.plan))}　／　合計工時：${escapeHtmlRecommended(sumHoursStr)}　／　平均日稼働：${escapeHtmlRecommended(avgDailyStr)}</h2>
 <table>
-<thead><tr><th>対応日</th><th>製品名</th><th>必要数</th><th>ロットサイズ</th><th>ロット数</th><th>計画数</th></tr></thead>
+<thead><tr><th>対応日</th><th>製品名</th><th>必要数</th><th>ロットサイズ</th><th>ロット数</th><th>計画数</th><th>能率</th><th>工時</th></tr></thead>
 <tbody>`
       prevMachine = machineName
     }
@@ -4967,6 +5012,8 @@ function printMoldingPlanResult() {
       <td class="num">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.lot_size)))}</td>
       <td class="num">${escapeHtmlRecommended(String(r.lot_count ?? ''))}</td>
       <td class="num batch">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.batch_qty)))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanEfficiencyPerH(r.efficiency_rate))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanProcessHours(r.process_hours))}</td>
     </tr>`
   }
   if (prevMachine) body += '</tbody></table></section>'
@@ -5061,6 +5108,53 @@ async function executeMoldingPlanInventoryTrend() {
   }
 }
 
+/** 設備能率（equipment_efficiency）から製品×成型設備の能率（本/H）を解決 */
+function buildMoldingPlanEfficiencyResolver(
+  effRows: Array<{
+    product_cd?: string
+    machine_cd?: string
+    machines_name?: string
+    efficiency_rate?: number
+    status?: number
+  }>,
+  machines: Array<{ machine_cd?: string; machine_name?: string }>,
+): (productCd: string, moldingMachine: string) => number | null {
+  const nameToCd = new Map<string, string>()
+  for (const m of machines) {
+    const n = String(m.machine_name ?? '').trim()
+    const c = String(m.machine_cd ?? '').trim()
+    if (n && c) nameToCd.set(n, c)
+  }
+  const byProdName = new Map<string, number>()
+  const byProdCd = new Map<string, number>()
+  for (const e of effRows) {
+    if (e.status === 0) continue
+    const p = String(e.product_cd ?? '').trim()
+    if (!p) continue
+    const rate = Number(e.efficiency_rate)
+    if (!Number.isFinite(rate) || rate <= 0) continue
+    const mn = String(e.machines_name ?? '').trim()
+    const cd = String(e.machine_cd ?? '').trim()
+    if (mn) byProdName.set(`${p}|${mn}`, rate)
+    if (cd) byProdCd.set(`${p}|${cd}`, rate)
+  }
+  return (productCd: string, moldingMachine: string) => {
+    const p = String(productCd ?? '').trim()
+    const mm = String(moldingMachine ?? '').trim()
+    if (!p || !mm) return null
+    let r = byProdName.get(`${p}|${mm}`)
+    if (r != null && r > 0) return r
+    const mc = nameToCd.get(mm)
+    if (mc) {
+      r = byProdCd.get(`${p}|${mc}`)
+      if (r != null && r > 0) return r
+    }
+    r = byProdCd.get(`${p}|${mm}`)
+    if (r != null && r > 0) return r
+    return null
+  }
+}
+
 async function executeMoldingPlanCreate() {
   if (!moldingPlanBaseDate.value) {
     ElMessage.warning('基準日を選択してください')
@@ -5141,6 +5235,11 @@ async function executeMoldingPlanCreate() {
       page += 1
     } while (true)
 
+    const [effRes, machinesRes] = await Promise.all([fetchEquipmentEfficiencyList({ limit: 99999 }), fetchMachines()])
+    const effList = (effRes as any)?.data?.list ?? (effRes as any)?.list ?? []
+    const machineList = (machinesRes as any)?.data?.list ?? (machinesRes as any)?.list ?? []
+    const resolveEff = buildMoldingPlanEfficiencyResolver(effList, machineList)
+
     const result: MoldingPlanRow[] = []
     for (const L of lookups) {
       const row = summaryByDateProduct.get(`${L.lookup_date}|${L.product_cd}`)
@@ -5153,6 +5252,9 @@ async function executeMoldingPlanCreate() {
       const lotCount = lotSize > 0 ? Math.ceil(requiredQty / lotSize) : requiredQty
       const batchQty = lotCount * lotSize
       const dailyQty = workDays > 0 ? Math.ceil(batchQty / workDays) : batchQty
+      const moldName = String(row.molding_machine ?? '')
+      const effRate = resolveEff(L.product_cd, moldName)
+      const processHours = effRate != null && effRate > 0 ? batchQty / effRate : 0
 
       result.push({
         lookup_date: L.lookup_date,
@@ -5165,6 +5267,8 @@ async function executeMoldingPlanCreate() {
         lot_count: lotCount,
         batch_qty: batchQty,
         daily_qty: dailyQty,
+        efficiency_rate: effRate,
+        process_hours: processHours,
       })
     }
 

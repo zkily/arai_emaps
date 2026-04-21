@@ -3,8 +3,8 @@
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
-from typing import Optional
+from sqlalchemy import select, or_, and_, func, case, literal
+from typing import Optional, Any, Dict
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
@@ -13,6 +13,73 @@ from app.core.database import get_db
 from app.modules.master.models import EquipmentEfficiency
 
 router = APIRouter()
+
+
+def _keyword_clause(keyword: Optional[str]):
+    if not keyword or not str(keyword).strip():
+        return None
+    k = f"%{keyword.strip()}%"
+    return or_(
+        EquipmentEfficiency.machines_name.like(k),
+        EquipmentEfficiency.product_name.like(k),
+        EquipmentEfficiency.machine_cd.like(k),
+        EquipmentEfficiency.product_cd.like(k),
+    )
+
+
+def _process_type_expr():
+    """Vue EquipmentEfficiencyManagement.getProcessType と同優先度（CASE WHEN 順）"""
+    mn = func.lower(func.coalesce(EquipmentEfficiency.machines_name, ""))
+    mc = func.lower(func.coalesce(EquipmentEfficiency.machine_cd, ""))
+    return case(
+        (or_(mn.like("%面取%"), mn.like("%chamfer%"), mc.like("%chamfer%")), literal("chamfering")),
+        (or_(mn.like("%成型%"), mn.like("%forming%"), mc.like("%forming%")), literal("forming")),
+        (or_(mn.like("%溶接%"), mn.like("%welding%"), mc.like("%welding%")), literal("welding")),
+        (or_(mn.like("%メッキ%"), mn.like("%plating%"), mc.like("%plating%")), literal("plating")),
+        (or_(mn.like("%検査%"), mn.like("%inspection%"), mc.like("%inspection%")), literal("inspection")),
+        (or_(mn.like("%切断%"), mn.like("%cutting%"), mc.like("%cutting%")), literal("cutting")),
+        else_=literal("other"),
+    )
+
+
+def _list_where_clauses(keyword: Optional[str], process_type: Optional[str]) -> list:
+    clauses = []
+    kw = _keyword_clause(keyword)
+    if kw is not None:
+        clauses.append(kw)
+    pt = (process_type or "").strip().lower()
+    if pt and pt != "all":
+        clauses.append(_process_type_expr() == pt)
+    return clauses
+
+
+async def _tab_counts(db: AsyncSession, keyword: Optional[str]) -> Dict[str, int]:
+    kw = _keyword_clause(keyword)
+    pt = _process_type_expr()
+    stmt = select(pt.label("p"), func.count(EquipmentEfficiency.id)).select_from(EquipmentEfficiency)
+    if kw is not None:
+        stmt = stmt.where(kw)
+    stmt = stmt.group_by(pt)
+    result = await db.execute(stmt)
+    rows = result.all()
+    counts: Dict[str, int] = {
+        "all": 0,
+        "cutting": 0,
+        "chamfering": 0,
+        "forming": 0,
+        "welding": 0,
+        "plating": 0,
+        "inspection": 0,
+        "other": 0,
+    }
+    for p, n in rows:
+        key = str(p) if p is not None else "other"
+        if key in counts:
+            counts[key] = int(n)
+        else:
+            counts["other"] += int(n)
+    counts["all"] = sum(counts[k] for k in counts if k != "all")
+    return counts
 
 
 def _row_to_dict(row: EquipmentEfficiency) -> dict:
@@ -38,31 +105,70 @@ def _row_to_dict(row: EquipmentEfficiency) -> dict:
 @router.get("")
 async def get_equipment_efficiency_list(
     keyword: Optional[str] = Query(None),
-    limit: int = Query(99999, ge=1, le=99999),
+    process_type: Optional[str] = Query(None, alias="processType"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=99999, alias="pageSize"),
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        le=99999,
+        description="互換用: 指定時は page/pageSize を使わず先頭から最大 limit 件を返す",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """設備能率一覧"""
-    query = select(EquipmentEfficiency)
-    if keyword and keyword.strip():
-        k = f"%{keyword.strip()}%"
-        query = query.where(
-            or_(
-                EquipmentEfficiency.machines_name.like(k),
-                EquipmentEfficiency.product_name.like(k),
-                EquipmentEfficiency.machine_cd.like(k),
-                EquipmentEfficiency.product_cd.like(k),
-            )
-        )
-    query = query.order_by(EquipmentEfficiency.machines_name, EquipmentEfficiency.product_name)
-    result = await db.execute(query.limit(limit))
+    """設備能率一覧（ページング。limit 指定時は従来どおり一括取得互換）"""
+    clauses = _list_where_clauses(keyword, process_type)
+    where_expr = and_(*clauses) if clauses else None
+
+    count_stmt = select(func.count()).select_from(EquipmentEfficiency)
+    if where_expr is not None:
+        count_stmt = count_stmt.where(where_expr)
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    list_stmt = select(EquipmentEfficiency).order_by(
+        EquipmentEfficiency.machines_name, EquipmentEfficiency.product_name
+    )
+    if where_expr is not None:
+        list_stmt = list_stmt.where(where_expr)
+
+    legacy = limit is not None
+    if legacy:
+        list_stmt = list_stmt.limit(limit)
+    else:
+        list_stmt = list_stmt.offset((page - 1) * page_size).limit(page_size)
+
+    result = await db.execute(list_stmt)
     rows = result.scalars().all()
-    return {
+    data_list = [_row_to_dict(r) for r in rows]
+
+    payload: Dict[str, Any] = {
         "success": True,
-        "data": {"list": [_row_to_dict(r) for r in rows], "total": len(rows)},
-        "list": [_row_to_dict(r) for r in rows],
-        "total": len(rows),
+        "data": {
+            "list": data_list,
+            "total": total,
+        },
+        "list": data_list,
+        "total": total,
     }
+
+    if not legacy:
+        tab_counts = await _tab_counts(db, keyword)
+        m_stmt = select(func.count(func.distinct(EquipmentEfficiency.machine_cd))).select_from(EquipmentEfficiency)
+        p_stmt = select(func.count(func.distinct(EquipmentEfficiency.product_cd))).select_from(EquipmentEfficiency)
+        if where_expr is not None:
+            m_stmt = m_stmt.where(where_expr)
+            p_stmt = p_stmt.where(where_expr)
+        machine_distinct = (await db.execute(m_stmt)).scalar() or 0
+        product_distinct = (await db.execute(p_stmt)).scalar() or 0
+        payload["data"]["tab_counts"] = tab_counts
+        payload["data"]["machine_distinct_count"] = int(machine_distinct)
+        payload["data"]["product_distinct_count"] = int(product_distinct)
+        payload["tab_counts"] = tab_counts
+        payload["machine_distinct_count"] = int(machine_distinct)
+        payload["product_distinct_count"] = int(product_distinct)
+
+    return payload
 
 
 @router.get("/{item_id:int}")

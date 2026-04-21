@@ -11,9 +11,9 @@
       </div>
       <div class="ee-stats">
         <div class="ee-stat" v-for="s in [
-          { n: efficiencyList?.length || 0, l: '設定数' },
-          { n: uniqueEquipmentCount, l: '設備数' },
-          { n: uniqueProductCount, l: '製品数' }
+          { n: tabCountsAll, l: '設定数' },
+          { n: machineDistinctCount, l: '設備数' },
+          { n: productDistinctCount, l: '製品数' }
         ]" :key="s.l">
           <span class="ee-stat-num">{{ s.n }}</span>
           <span class="ee-stat-lbl">{{ s.l }}</span>
@@ -27,7 +27,7 @@
         v-model="filters.keyword"
         placeholder="製品名・設備名で検索…"
         clearable
-        @input="handleFilter"
+        @input="scheduleKeywordSearch"
         class="ee-search"
       >
         <template #prefix>
@@ -52,7 +52,7 @@
           :name="process.value"
         >
           <el-table
-            :data="getFilteredListByProcess(process.value)"
+            :data="process.value === activeProcessTab ? efficiencyList : []"
             v-loading="loading"
             stripe
             border
@@ -65,7 +65,7 @@
             :cell-style="{ padding: '2px 8px', fontSize: '12px', lineHeight: '1.4' }"
             height="calc(100vh - 260px)"
           >
-            <el-table-column type="index" label="#" width="48" align="center" />
+            <el-table-column type="index" label="#" width="48" align="center" :index="tableIndexMethod" />
             <el-table-column prop="machine_cd" label="設備CD" width="90" align="center" sortable />
             <el-table-column prop="machines_name" label="設備名" min-width="120" sortable show-overflow-tooltip />
             <el-table-column prop="product_cd" label="製品CD" width="90" align="center" sortable />
@@ -112,12 +112,24 @@
           </el-table>
         </el-tab-pane>
       </el-tabs>
-      <!-- 結果バー -->
+      <!-- 結果バー + ページング -->
       <div class="ee-result-bar">
-        <span>表示: <b>{{ getFilteredListByProcess(activeProcessTab).length }}</b> / {{ efficiencyList?.length || 0 }}</span>
+        <span>表示: <b>{{ efficiencyList.length }}</b> / <b>{{ total }}</b> 件</span>
         <span v-if="activeProcessTab !== 'all'" class="ee-proc-tag">
           {{ processTypes.find((p) => p.value === activeProcessTab)?.label }}工程
         </span>
+        <div class="ee-pagination-wrap">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[20, 50, 100]"
+            layout="total, sizes, prev, pager, next, jumper"
+            size="small"
+            background
+            @size-change="handlePageSizeChange"
+          />
+        </div>
       </div>
     </div>
 
@@ -226,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Tools, Refresh, Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
 import {
@@ -235,6 +247,7 @@ import {
   updateEquipmentEfficiency,
   deleteEquipmentEfficiency,
   type EquipmentEfficiency,
+  type EquipmentEfficiencyTabCounts,
 } from '@/api/master/equipmentEfficiencyMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { getProductList } from '@/api/master/productMaster'
@@ -243,6 +256,12 @@ import type { FormInstance, FormRules } from 'element-plus'
 defineOptions({ name: 'EquipmentEfficiencyManagement' })
 
 const efficiencyList = ref<EquipmentEfficiency[]>([])
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
+const tabCounts = ref<Partial<EquipmentEfficiencyTabCounts>>({})
+const machineDistinctCount = ref(0)
+const productDistinctCount = ref(0)
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -299,59 +318,40 @@ const formRules: FormRules = {
 
 const filters = ref({ keyword: '' })
 
-const uniqueEquipmentCount = computed(() => {
-  const codes = new Set(efficiencyList.value.map((item) => item.machine_cd))
-  return codes.size
-})
-
-const uniqueProductCount = computed(() => {
-  const codes = new Set(efficiencyList.value.map((item) => item.product_cd))
-  return codes.size
-})
-
-const getProcessType = (item: EquipmentEfficiency): string => {
-  const machineName = (item.machines_name || '').toLowerCase()
-  const machineCd = (item.machine_cd || '').toLowerCase()
-  if (machineName.includes('面取') || machineName.includes('chamfer') || machineCd.includes('chamfer')) return 'chamfering'
-  if (machineName.includes('成型') || machineName.includes('forming') || machineCd.includes('forming')) return 'forming'
-  if (machineName.includes('溶接') || machineName.includes('welding') || machineCd.includes('welding')) return 'welding'
-  if (machineName.includes('メッキ') || machineName.includes('plating') || machineCd.includes('plating')) return 'plating'
-  if (machineName.includes('検査') || machineName.includes('inspection') || machineCd.includes('inspection')) return 'inspection'
-  if (machineName.includes('切断') || machineName.includes('cutting') || machineCd.includes('cutting')) return 'cutting'
-  return 'other'
-}
-
-const filteredEfficiencyList = computed(() => {
-  let result = efficiencyList.value || []
-  if (filters.value.keyword) {
-    const keyword = filters.value.keyword.toLowerCase().trim()
-    result = result.filter((item) => {
-      const productName = (item.product_name || '').toLowerCase()
-      const machineName = (item.machines_name || '').toLowerCase()
-      return productName.includes(keyword) || machineName.includes(keyword)
-    })
-  }
-  return [...result].sort((a, b) => {
-    const machineCompare = (a.machines_name || '').localeCompare(b.machines_name || '', 'ja')
-    if (machineCompare !== 0) return machineCompare
-    return (a.product_name || '').localeCompare(b.product_name || '', 'ja')
-  })
-})
-
-const getFilteredListByProcess = (processType: string) => {
-  let result = filteredEfficiencyList.value
-  if (processType !== 'all') {
-    result = result.filter((item) => getProcessType(item) === processType)
-  }
-  return result
-}
+/** 検索キーワードに一致する総件数（タブラベル用・全タブ合計） */
+const tabCountsAll = computed(() => tabCounts.value.all ?? 0)
 
 const getProcessCount = (processType: string): number => {
-  if (processType === 'all') return filteredEfficiencyList.value.length
-  return filteredEfficiencyList.value.filter((item) => getProcessType(item) === processType).length
+  const key = processType as keyof EquipmentEfficiencyTabCounts
+  const v = tabCounts.value[key]
+  return typeof v === 'number' ? v : 0
 }
 
-const handleTabChange = () => {}
+const handleTabChange = () => {
+  if (currentPage.value === 1) {
+    loadData()
+  } else {
+    currentPage.value = 1
+  }
+}
+
+const tableIndexMethod = (index: number) => (currentPage.value - 1) * pageSize.value + index + 1
+
+let keywordSearchTimer: ReturnType<typeof setTimeout> | null = null
+const scheduleKeywordSearch = () => {
+  if (keywordSearchTimer) clearTimeout(keywordSearchTimer)
+  keywordSearchTimer = setTimeout(() => {
+    if (currentPage.value === 1) {
+      loadData()
+    } else {
+      currentPage.value = 1
+    }
+  }, 350)
+}
+
+const handlePageSizeChange = () => {
+  currentPage.value = 1
+}
 
 const getRowClassName = () => 'ee-row'
 
@@ -376,14 +376,27 @@ const handleStatusChange = async (row: EquipmentEfficiency, value: number | stri
 const loadData = async () => {
   loading.value = true
   try {
-    const result = (await fetchEquipmentEfficiencyList({ limit: 99999 })) as any
-    if (result.success && result.data) {
-      efficiencyList.value = result.data.list || []
-    } else if (result.list) {
-      efficiencyList.value = result.list || []
-    } else {
-      efficiencyList.value = []
+    const kw = filters.value.keyword?.trim()
+    const result = await fetchEquipmentEfficiencyList({
+      page: currentPage.value,
+      pageSize: pageSize.value,
+      processType: activeProcessTab.value,
+      ...(kw ? { keyword: kw } : {}),
+    })
+    const raw = result as Record<string, unknown>
+    const data = (raw.success && raw.data ? raw.data : raw) as {
+      list?: EquipmentEfficiency[]
+      total?: number
+      tab_counts?: EquipmentEfficiencyTabCounts
+      machine_distinct_count?: number
+      product_distinct_count?: number
     }
+    efficiencyList.value = data.list || (raw.list as EquipmentEfficiency[]) || []
+    total.value = typeof data.total === 'number' ? data.total : Number(raw.total) || 0
+    if (data.tab_counts) tabCounts.value = data.tab_counts
+    else if (raw.tab_counts) tabCounts.value = raw.tab_counts as EquipmentEfficiencyTabCounts
+    machineDistinctCount.value = Number(data.machine_distinct_count ?? raw.machine_distinct_count ?? 0)
+    productDistinctCount.value = Number(data.product_distinct_count ?? raw.product_distinct_count ?? 0)
   } catch (error) {
     console.error('能率データの読み込みに失敗:', error)
     ElMessage.error('能率データの読み込みに失敗しました')
@@ -491,6 +504,10 @@ const handleDelete = async (id?: number) => {
     await deleteEquipmentEfficiency(id)
     ElMessage.success('能率設定を削除しました')
     await loadData()
+    if (efficiencyList.value.length === 0 && currentPage.value > 1) {
+      currentPage.value -= 1
+      await loadData()
+    }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('削除に失敗:', error)
@@ -499,14 +516,25 @@ const handleDelete = async (id?: number) => {
   }
 }
 
-const handleFilter = () => {}
-
 const clearFilters = () => {
   filters.value = { keyword: '' }
+  if (currentPage.value === 1) {
+    loadData()
+  } else {
+    currentPage.value = 1
+  }
 }
 
+let listWatchReady = false
+watch([currentPage, pageSize], () => {
+  if (!listWatchReady) return
+  loadData()
+})
+
 onMounted(async () => {
-  await Promise.all([loadData(), loadEquipmentOptions(), loadProductOptions()])
+  await Promise.all([loadEquipmentOptions(), loadProductOptions()])
+  listWatchReady = true
+  await loadData()
 })
 </script>
 
@@ -844,7 +872,22 @@ onMounted(async () => {
   border-top: 1px solid #eef0f4;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+}
+
+.ee-pagination-wrap {
+  margin-left: auto;
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.ee-pagination-wrap :deep(.el-pagination) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  row-gap: 4px;
 }
 
 .ee-proc-tag {

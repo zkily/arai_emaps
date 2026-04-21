@@ -64,6 +64,15 @@
               </el-form-item>
             </el-col>
             <el-col :md="12">
+              <el-form-item label="分類(kind)">
+                <el-select v-model="form.kind" clearable placeholder="選択">
+                  <el-option label="T" value="T" />
+                  <el-option label="N" value="N" />
+                  <el-option label="F" value="F" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :md="12">
               <el-form-item label="優先度">
                 <el-select v-model="form.priority">
                   <el-option label="高" :value="1" />
@@ -316,6 +325,7 @@ const defaultForm: Product = {
   product_type: '',
   part_number: '',
   category: '',
+  kind: '',
   priority: 2,
   status: 'active',
   process_count: 1,

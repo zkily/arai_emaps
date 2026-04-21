@@ -17,6 +17,7 @@ class Product(Base):
     location_cd = Column(String(50), default="製品倉庫")
     start_use_date = Column(Date)
     category = Column(String(50))
+    kind = Column(String(50))
     department_id = Column(Integer)
     destination_cd = Column(String(50))
     process_count = Column(Integer, default=1)
@@ -501,6 +502,67 @@ class ProductProcessUnitPrice(Base):
     updated_by = Column(String(100))
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+# ---------------------------------------------------------------------------
+# 製品×ルート 累計単価スナップショット / 一括再計算ジョブ
+# ---------------------------------------------------------------------------
+
+
+class ProductCostCumulativeSnapshot(Base):
+    """累計単価スナップショット（product_cost_cumulative_snapshots）
+
+    画面「単価累計（工程完了時点）」の各行（工程ステップ行 + 未割当行）を
+    `snapshot_id` で束ねて保存する。
+    """
+
+    __tablename__ = "product_cost_cumulative_snapshots"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    snapshot_id = Column(String(36), nullable=False, index=True)
+    product_cd = Column(String(50), nullable=False, index=True)
+    route_cd = Column(String(50), nullable=False, index=True)
+    bom_header_id = Column(Integer)
+    row_kind = Column(String(20), nullable=False, default="route_step")
+    row_order = Column(Integer, nullable=False, default=0)
+    step_no = Column(Integer)
+    process_cd = Column(String(50))
+    stage_label = Column(String(200))
+    material_increment = Column(Numeric(18, 2), nullable=False, default=0)
+    part_increment = Column(Numeric(18, 2), nullable=False, default=0)
+    process_increment = Column(Numeric(18, 2), nullable=False, default=0)
+    stage_increment = Column(Numeric(18, 2), nullable=False, default=0)
+    cumulative_unit_price = Column(Numeric(18, 2), nullable=False, default=0)
+    currency = Column(String(10), nullable=False, default="JPY")
+    is_latest = Column(SmallInteger, nullable=False, default=0)
+    source_job_id = Column(BigInteger)
+    remarks = Column(Text)
+    created_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+
+
+class ProductCostRecalcJob(Base):
+    """累計単価 一括再計算ジョブ（product_cost_recalc_jobs）"""
+
+    __tablename__ = "product_cost_recalc_jobs"
+
+    id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
+    status = Column(String(20), nullable=False, default="queued")
+    mode = Column(String(30), nullable=False, default="append_snapshot")
+    scope = Column(String(30), nullable=False, default="selected")
+    total_items = Column(Integer, nullable=False, default=0)
+    done_items = Column(Integer, nullable=False, default=0)
+    success_items = Column(Integer, nullable=False, default=0)
+    failed_items = Column(Integer, nullable=False, default=0)
+    payload_json = Column(Text)
+    error_log = Column(Text)
+    result_snapshot_ids_json = Column(Text)
+    message = Column(String(500))
+    created_by = Column(String(100))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    started_at = Column(DateTime)
+    finished_at = Column(DateTime)
 
 
 # ---------------------------------------------------------------------------

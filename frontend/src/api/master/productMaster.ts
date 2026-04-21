@@ -7,6 +7,7 @@ import type { Product } from '@/types/master'
 export interface ProductListParams {
   keyword?: string
   category?: string
+  kind?: string
   product_type?: string
   status?: string
   product_cd?: string

@@ -3,6 +3,7 @@
  */
 import { getProducts as getErpProducts } from '@/api/erp/optionsData'
 import { getMaterialList } from '@/api/master/materialMaster'
+import { getPartList } from '@/api/master/partMaster'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { getUsers as fetchSystemUsers } from '@/api/system'
 import type { ProcessItem } from '@/types/master'
@@ -63,9 +64,18 @@ export async function getMaterials(): Promise<MaterialRow[]> {
   }))
 }
 
-/** 部品マスタ API 未整備のため空配列（必要になれば差し替え） */
+/** 棚卸フォーム用：parts を component_cd / component_name 形で返す（在庫ログの product_cd と一致） */
 export async function getComponents(): Promise<Component[]> {
-  return []
+  try {
+    const res = await getPartList({ page: 1, pageSize: 10000 })
+    const list = res?.data?.list ?? []
+    return list.map((p) => ({
+      component_cd: p.part_cd,
+      component_name: p.part_name,
+    }))
+  } catch {
+    return []
+  }
 }
 
 export async function getProcesses(): Promise<ProcessItem[]> {
