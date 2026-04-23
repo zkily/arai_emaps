@@ -6,9 +6,40 @@
         <div class="header-info">
           <div class="title-wrapper">
             <el-icon class="title-icon"><Document /></el-icon>
-            <h1 class="page-title">成型指示管理</h1>
+            <h1 class="page-title">成型指示書発行管理</h1>
           </div>
-          <span class="page-subtitle">生産計画データ管理・指示作成システム</span>
+          <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+        </div>
+        <div class="page-header-actions">
+          <div class="header-stats">
+            <div class="header-stat-item">
+              <div class="stat-icon total-icon">
+                <el-icon><TrendCharts /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-value">{{ formatNumber(planStats.totalQuantity) }}</div>
+                <div class="stat-label">計画生産数</div>
+              </div>
+            </div>
+            <div class="header-stat-item">
+              <div class="stat-icon machine-icon">
+                <el-icon><Monitor /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-value">{{ planStats.machineCount }}</div>
+                <div class="stat-label">稼働設備</div>
+              </div>
+            </div>
+          </div>
+          <el-button
+            @click="refreshPlanData"
+            :icon="Refresh"
+            size="small"
+            type="info"
+            class="action-btn refresh-btn"
+          >
+            データ更新
+          </el-button>
         </div>
       </div>
     </div>
@@ -16,67 +47,15 @@
     <!-- 上部：成型計画データテーブルエリア -->
     <div class="plan-section">
       <el-card class="section-card">
-        <template #header>
-          <div class="card-header">
-            <div class="section-title">
-              <el-icon size="26"><Calendar /></el-icon>
-              <span>成型計画データ一覧</span>
-            </div>
-            <div class="header-actions">
-              <el-button
-                @click="showUpdateEfficiencyDialog"
-                :icon="Refresh"
-                size="small"
-                type="warning"
-                class="action-btn update-btn"
-              >
-                能率・段取時間更新
-              </el-button>
-              <el-button
-                @click="refreshPlanData"
-                :icon="Refresh"
-                size="small"
-                type="info"
-                class="action-btn refresh-btn"
-              >
-                データ更新
-              </el-button>
-            </div>
-          </div>
-        </template>
-
-        <!-- コンパクト統計カード -->
-        <div class="stats-grid">
-          <div class="stat-item">
-            <div class="stat-icon total-icon">
-              <el-icon><TrendCharts /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ formatNumber(planStats.totalQuantity) }}</div>
-              <div class="stat-label">計画生産数</div>
-            </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-icon machine-icon">
-              <el-icon><Monitor /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ planStats.machineCount }}</div>
-              <div class="stat-label">稼働設備</div>
-            </div>
-          </div>
-        </div>
-
         <!-- コンパクト検索バー -->
         <div class="search-bar">
           <div class="search-controls">
             <div class="date-control">
+              <span class="filter-label">生産日</span>
               <el-date-picker
-                v-model="planSearchForm.dateRange"
-                type="daterange"
-                range-separator="〜"
-                start-placeholder="開始日"
-                end-placeholder="終了日"
+                v-model="planSelectedDate"
+                type="date"
+                placeholder="生産日"
                 format="MM/DD"
                 value-format="YYYY-MM-DD"
                 @change="searchPlans"
@@ -144,7 +123,7 @@
                 class="print-btn"
                 :loading="printingSetupSchedule"
               >
-                プレビュー
+                段取表プレビュー
               </el-button>
             </el-tooltip>
             <el-tooltip content="編集せずにそのまま印刷" placement="top">
@@ -156,7 +135,7 @@
                 class="print-btn"
                 :loading="printingSetupSchedule"
               >
-                直接印刷
+              段取表印刷
               </el-button>
             </el-tooltip>
             <el-button
@@ -176,7 +155,7 @@
           :data="planData"
           v-loading="planLoading"
           :style="{ width: '100%' }"
-          max-height="500"
+          max-height="245"
           :default-sort="{ prop: 'plan_date', order: 'ascending' }"
           size="small"
           class="compact-table"
@@ -271,18 +250,6 @@
           </el-table-column>
         </el-table>
 
-        <div class="pagination-container">
-          <el-pagination
-            v-model:current-page="planPagination.currentPage"
-            v-model:page-size="planPagination.pageSize"
-            :page-sizes="[20, 30, 50, 100]"
-            :total="planPagination.total"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handlePlanSizeChange"
-            @current-change="handlePlanCurrentChange"
-            size="small"
-          />
-        </div>
       </el-card>
     </div>
 
@@ -589,66 +556,6 @@
       </template>
     </el-dialog>
 
-    <!-- 能率・段取時間更新ダイアログ -->
-    <el-dialog
-      v-model="updateEfficiencyDialogVisible"
-      title="能率・段取時間更新"
-      width="500px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="updateEfficiencyForm" label-width="120px">
-        <el-form-item label="開始日" required>
-          <el-date-picker
-            v-model="updateEfficiencyForm.startDate"
-            type="date"
-            placeholder="開始日を選択"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-alert title="更新内容" type="info" :closable="false" show-icon>
-            <template #default>
-              <div style="font-size: 12px; line-height: 1.6">
-                <p>
-                  <strong>更新步骤：</strong>
-                </p>
-                <p>
-                  1.
-                  <strong>machine_cd更新：</strong
-                  >machines表のmachine_nameとproduction_plan_updates表のmachine_nameを結合し、machine_cdを更新します（只更新空值或NULL的记录）
-                </p>
-                <p>
-                  2.
-                  <strong>能率・段取時間更新：</strong
-                  >equipment_efficiency表のmachine_cd、product_cdと結合し、能率（efficiency_rate）と段取時間（setup_time）を更新します（只更新有变化的记录）
-                </p>
-                <p style="color: #67c23a; margin-top: 8px">
-                  <strong>✓ 优化：使用批量更新，只更新需要更新的记录，提高更新速度</strong>
-                </p>
-                <p style="color: #e6a23c; margin-top: 8px">
-                  <strong>⚠ 注意：選択した開始日以降のすべてのデータが更新されます</strong>
-                </p>
-              </div>
-            </template>
-          </el-alert>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="updateEfficiencyDialogVisible = false">取消</el-button>
-          <el-button
-            type="primary"
-            @click="updateEfficiencyAndSetupTime"
-            :loading="updatingEfficiency"
-          >
-            更新実行
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
-
     <!-- 設備運行時間設定弹窗 -->
     <el-dialog
       v-if="showWorkTimeConfig"
@@ -807,7 +714,6 @@ import {
   Refresh,
   Download,
   Document,
-  Calendar,
   TrendCharts,
   Monitor,
   ArrowDown,
@@ -847,6 +753,18 @@ const planSearchForm = reactive({
   dateRange: [] as string[],
   machineName: '',
   keyword: '',
+})
+
+// 单日选择（内部仍保持 [startDate, endDate] 结构以兼容既有逻辑）
+const planSelectedDate = computed<string>({
+  get: () => (planSearchForm.dateRange.length > 0 ? planSearchForm.dateRange[0] : ''),
+  set: (value) => {
+    if (!value) {
+      planSearchForm.dateRange = []
+      return
+    }
+    planSearchForm.dateRange = [value, value]
+  },
 })
 
 // 指示検索フォーム
@@ -922,13 +840,11 @@ const dailyInstructionDates = ref<string[]>([])
 const dialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const printPreviewVisible = ref(false)
-const updateEfficiencyDialogVisible = ref(false)
 const isEdit = ref(false)
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const selectedInstruction = ref<any>(null)
 const printPreviewContent = ref('')
-const updatingEfficiency = ref(false)
 const printingSetupSchedule = ref(false)
 // 段取予定プレビュー（編集してから印刷）
 const setupSchedulePreviewVisible = ref(false)
@@ -957,11 +873,6 @@ const isApiSuccess = (res: any): boolean => {
   }
   return true
 }
-
-// 能率・段取時間更新フォーム
-const updateEfficiencyForm = reactive({
-  startDate: '',
-})
 
 // フォームデータ
 const form = reactive({
@@ -1614,19 +1525,6 @@ const updatePlanDataPagination = () => {
   const start = (planPagination.currentPage - 1) * planPagination.pageSize
   const end = start + planPagination.pageSize
   planData.value = allFilteredPlanData.value.slice(start, end)
-}
-
-// 計画ページサイズ変更
-const handlePlanSizeChange = (size: number) => {
-  planPagination.pageSize = size
-  planPagination.currentPage = 1 // 重置到第一页
-  updatePlanDataPagination()
-}
-
-// 計画現在ページ変更
-const handlePlanCurrentChange = (page: number) => {
-  planPagination.currentPage = page
-  updatePlanDataPagination()
 }
 
 // 指示ページサイズ変更
@@ -5874,60 +5772,6 @@ const refreshPlanData = () => {
   calculatePlanStats() // 同时更新统计
 }
 
-// 能率・段取時間更新ダイアログを表示
-const showUpdateEfficiencyDialog = () => {
-  // 默认设置为今天（使用日本时区）
-  const todayStr = JapanDateUtils.getTodayString()
-  updateEfficiencyForm.startDate = todayStr
-  updateEfficiencyDialogVisible.value = true
-}
-
-// 能率・段取時間を更新
-const updateEfficiencyAndSetupTime = async () => {
-  if (!updateEfficiencyForm.startDate) {
-    ElMessage.warning('開始日を選択してください')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(
-      `開始日 ${updateEfficiencyForm.startDate} 以降のデータを更新しますか？\nこの操作は取り消せません。`,
-      '確認',
-      {
-        confirmButtonText: '更新実行',
-        cancelButtonText: '取消',
-        type: 'warning',
-      },
-    )
-
-    updatingEfficiency.value = true
-
-    const result = (await request.post('/api/excel-monitor/update-efficiency-and-setup-time', {
-      startDate: updateEfficiencyForm.startDate,
-    })) as ApiResponse
-
-    if (result.success) {
-      const d = result.data as { machineCdUpdated?: number; efficiencyUpdated?: number; duration?: string }
-      ElMessage.success({
-        message: `更新成功：machine_cd更新 ${d.machineCdUpdated ?? 0} 件、能率・段取時間更新 ${d.efficiencyUpdated ?? 0} 件${d.duration ? `（耗时: ${d.duration}）` : ''}`,
-        duration: 5000,
-      })
-      updateEfficiencyDialogVisible.value = false
-      // 更新后刷新数据
-      refreshPlanData()
-    } else {
-      throw new Error((result.message as string) || '更新に失敗しました')
-    }
-  } catch (error: unknown) {
-    if (error !== 'cancel') {
-      console.error('能率・段取時間更新失敗:', error)
-      ElMessage.error(error instanceof Error ? error.message : '更新に失敗しました')
-    }
-  } finally {
-    updatingEfficiency.value = false
-  }
-}
-
 // 加载設備下拉框选项
 const loadMachineOptionsForWorkTime = async () => {
   try {
@@ -6341,6 +6185,25 @@ const setMatrixMonth = (monthOffset: number) => {
   console.log(`设置月份范围: ${startDate} 到 ${endDate}`)
 
   matrixDateRange.value = [startDate, endDate]
+  loadMatrixData()
+}
+
+// マトリックス默认期间：当日往前2天 ～ 往后30天（JST）
+const setDefaultMatrixRange = () => {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  const start = new Date(now)
+  start.setDate(start.getDate() - 2)
+  const end = new Date(now)
+  end.setDate(end.getDate() + 30)
+
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  matrixDateRange.value = [formatDate(start), formatDate(end)]
   loadMatrixData()
 }
 
@@ -6824,16 +6687,16 @@ onMounted(() => {
   calculatePlanStats() // 加载统计
   loadInstructions()
   loadStats()
-  // 初始化二维表日期为当月，并加载
-  setMatrixMonth(0) // 设置为当月
+  // 初始化二维表日期：当日往前2天 ～ 往后30天
+  setDefaultMatrixRange()
 })
 </script>
 
 <style scoped>
 .molding-instruction-container {
-  padding: 5px;
+  padding: 4px 6px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  min-height: 100vh;
+  min-height: calc(100vh - 8px);
   position: relative;
   animation: fadeIn 0.6s ease-out;
 }
@@ -6890,11 +6753,11 @@ onMounted(() => {
 
 /* コンパクトヘッダー */
 .page-header {
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%);
   backdrop-filter: blur(10px);
-  padding: 10px 20px;
-  border-radius: 12px;
+  padding: 8px 14px;
+  border-radius: 10px;
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.06),
     0 1px 3px rgba(0, 0, 0, 0.04);
@@ -6928,6 +6791,8 @@ onMounted(() => {
 .header-content {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   position: relative;
   z-index: 1;
 }
@@ -6935,6 +6800,46 @@ onMounted(() => {
 .header-info {
   flex: 1;
   min-width: 0;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: 8px;
+  min-width: 124px;
+}
+
+.header-stat-item .stat-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.header-stat-item .stat-value {
+  font-size: 13px;
+  margin-bottom: 1px;
+}
+
+.header-stat-item .stat-label {
+  font-size: 9px;
 }
 
 .title-wrapper {
@@ -6963,7 +6868,7 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 25px;
+  font-size: 20px;
   font-weight: 700;
   background: linear-gradient(135deg, #1e293b 0%, #3b82f6 100%);
   -webkit-background-clip: text;
@@ -6975,7 +6880,7 @@ onMounted(() => {
 }
 
 .page-subtitle {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
   font-weight: 500;
   margin-top: 2px;
@@ -6984,7 +6889,7 @@ onMounted(() => {
 
 /* 计划区域样式 */
 .plan-section {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   animation: sectionFadeIn 0.8s ease-out 0.1s both;
 }
 
@@ -7000,10 +6905,10 @@ onMounted(() => {
 }
 
 .section-card {
-  border-radius: 16px;
+  border-radius: 12px;
   box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.1),
-    0 2px 8px rgba(0, 0, 0, 0.06);
+    0 2px 10px rgba(15, 23, 42, 0.08),
+    0 1px 4px rgba(15, 23, 42, 0.06);
   border: 1px solid rgba(226, 232, 240, 0.4);
   background: rgba(255, 255, 255, 0.98);
   backdrop-filter: blur(10px);
@@ -7013,10 +6918,10 @@ onMounted(() => {
 }
 
 .section-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.15),
-    0 4px 16px rgba(0, 0, 0, 0.1);
+    0 6px 18px rgba(15, 23, 42, 0.12),
+    0 2px 8px rgba(15, 23, 42, 0.08);
 }
 
 @keyframes slideInUp {
@@ -7034,8 +6939,8 @@ onMounted(() => {
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  padding: 6px;
+  gap: 10px;
+  padding: 2px 0;
   margin: 0;
   animation: fadeInScale 1s ease-out 0.2s both;
 }
@@ -7055,9 +6960,9 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 5px 16px;
+  padding: 6px 12px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.95) 100%);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(226, 232, 240, 0.3);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
@@ -7077,8 +6982,8 @@ onMounted(() => {
 }
 
 .stat-item:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
   border-color: rgba(148, 163, 184, 0.6);
   background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(248, 250, 252, 1) 100%);
 }
@@ -7113,7 +7018,7 @@ onMounted(() => {
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   color: #1e293b;
   line-height: 1.1;
@@ -7128,7 +7033,7 @@ onMounted(() => {
 
 /* コンパクト検索バー */
 .search-bar {
-  padding: 10px 16px;
+  padding: 8px 12px;
   background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.95) 100%);
   border-top: 1px solid rgba(226, 232, 240, 0.3);
   backdrop-filter: blur(10px);
@@ -7149,8 +7054,84 @@ onMounted(() => {
 .search-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+}
+
+/* 成型計画データテーブルエリア：按钮统一现代化 */
+.plan-section .search-controls .date-btn,
+.plan-section .search-controls .print-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 6px 14px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.2px;
+}
+
+.plan-section .search-controls :deep(.el-input__wrapper),
+.plan-section .search-controls :deep(.el-select__wrapper),
+.plan-section .search-controls :deep(.el-date-editor.el-input__wrapper),
+.plan-section .search-controls :deep(.el-date-editor .el-input__wrapper) {
+  min-height: 34px;
+  height: 34px;
+}
+
+.plan-section .search-controls .date-btn,
+.plan-section .search-controls .print-btn {
+  min-height: 34px;
+}
+
+.plan-section .search-controls .date-btn {
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.plan-section .search-controls .print-btn {
+  border-radius: 9px;
+  font-weight: 700;
+}
+
+.plan-section .search-controls .date-btn.prev {
+  background: linear-gradient(145deg, #f97373 0%, #dc2626 100%);
+}
+
+.plan-section .search-controls .date-btn.today {
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+}
+
+.plan-section .search-controls .date-btn.next {
+  background: linear-gradient(145deg, #34d399 0%, #059669 100%);
+}
+
+.plan-section .search-controls .print-btn.instruction-btn {
+  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
+}
+
+.plan-section .search-controls .print-btn[type='primary'] {
+  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
+}
+
+.plan-section .search-controls .print-btn[type='info'] {
+  background: linear-gradient(145deg, #64748b 0%, #334155 100%);
+}
+
+.plan-section .search-controls .date-btn:hover,
+.plan-section .search-controls .print-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 20px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.plan-section .search-controls .date-btn:active,
+.plan-section .search-controls .print-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 3px 8px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .date-control {
@@ -7159,10 +7140,37 @@ onMounted(() => {
   gap: 6px;
 }
 
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 34px;
+  white-space: nowrap;
+}
+
+.plan-section .date-control :deep(.el-date-editor.el-input),
+.plan-section .date-control :deep(.el-date-editor.el-input__wrapper) {
+  height: 34px;
+}
+
 .compact-date-picker {
   width: 120px;
   border-radius: 10px;
   transition: all 0.3s ease;
+}
+
+.plan-section .date-control .compact-date-picker {
+  width: 72px;
+}
+
+.plan-section .date-control :deep(.compact-date-picker.el-date-editor.el-input) {
+  width: 90px !important;
+  min-width: 90px !important;
+  flex: none !important;
 }
 
 .compact-date-picker:focus-within {
@@ -7172,12 +7180,12 @@ onMounted(() => {
 
 .date-buttons {
   display: flex;
-  gap: 3px;
+  gap: 2px;
 }
 
 .date-btn {
-  padding: 6px 12px;
-  font-size: 11px;
+  padding: 4px 10px;
+  font-size: 10px;
   border-radius: 8px;
   border: none;
   font-weight: 600;
@@ -7199,7 +7207,7 @@ onMounted(() => {
 }
 
 .date-btn:hover {
-  transform: translateY(-2px) scale(1.05);
+  transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
@@ -7228,7 +7236,7 @@ onMounted(() => {
 }
 
 .machine-select {
-  width: 140px;
+  width: 128px;
   border-radius: 10px;
   transition: all 0.3s ease;
 }
@@ -7239,7 +7247,7 @@ onMounted(() => {
 }
 
 .keyword-input {
-  width: 180px;
+  width: 168px;
   border-radius: 10px;
   transition: all 0.3s ease;
 }
@@ -7252,10 +7260,10 @@ onMounted(() => {
 /* 按钮颜色区分 */
 .print-btn {
   border: none;
-  border-radius: 10px;
-  padding: 8px 16px;
+  border-radius: 8px;
+  padding: 6px 12px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
@@ -7274,7 +7282,7 @@ onMounted(() => {
 }
 
 .print-btn:hover {
-  transform: translateY(-2px) scale(1.02);
+  transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -7513,13 +7521,75 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+/* 生産計画マトリックスエリア：按钮现代化 */
+.matrix-section .month-btn,
+.matrix-section .matrix-controls .export-btn,
+.matrix-section .matrix-controls .print-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 7px 16px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  letter-spacing: 0.2px;
+}
+
+.matrix-section .month-btn {
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.matrix-section .matrix-controls .export-btn,
+.matrix-section .matrix-controls .print-btn {
+  border-radius: 9px;
+  font-weight: 700;
+}
+
+.matrix-section .month-btn.prev {
+  background: linear-gradient(145deg, #fb7185 0%, #dc2626 100%);
+}
+
+.matrix-section .month-btn.current {
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+}
+
+.matrix-section .month-btn.next {
+  background: linear-gradient(145deg, #34d399 0%, #059669 100%);
+}
+
+.matrix-section .matrix-controls .export-btn {
+  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
+  color: #fff;
+}
+
+.matrix-section .matrix-controls .print-btn {
+  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+}
+
+.matrix-section .month-btn:hover,
+.matrix-section .matrix-controls .export-btn:hover,
+.matrix-section .matrix-controls .print-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 22px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.matrix-section .month-btn:active,
+.matrix-section .matrix-controls .export-btn:active,
+.matrix-section .matrix-controls .print-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 3px 9px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
 /* 操作按钮通用样式 */
 .action-btn {
   border: none;
-  border-radius: 10px;
-  padding: 8px 16px;
+  border-radius: 8px;
+  padding: 6px 12px;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
@@ -7538,7 +7608,7 @@ onMounted(() => {
 }
 
 .action-btn:hover {
-  transform: translateY(-2px) scale(1.02);
+  transform: translateY(-1px);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
@@ -7881,16 +7951,16 @@ onMounted(() => {
 /* コンパクトテーブル */
 .compact-table {
   font-size: 12px;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
   border: 1px solid rgba(226, 232, 240, 0.3);
   transition: all 0.3s ease;
   animation: tableSlideIn 0.8s ease-out;
 }
 
 .compact-table:hover {
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
 }
 
 @keyframes tableSlideIn {
@@ -7912,7 +7982,7 @@ onMounted(() => {
 }
 
 .compact-table :deep(.el-table__header th) {
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.5);
 }
 
@@ -7921,18 +7991,17 @@ onMounted(() => {
 }
 
 .compact-table :deep(.el-table__row) {
-  height: 40px;
+  height: 34px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .compact-table :deep(.el-table__row:hover) {
   background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.95) 100%);
-  transform: scale(1.005);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
 }
 
 .compact-table :deep(.el-table td) {
-  padding: 8px 12px;
+  padding: 5px 8px;
   border-bottom: 1px solid rgba(226, 232, 240, 0.3);
   font-weight: 400;
   transition: all 0.2s ease;
@@ -7944,7 +8013,7 @@ onMounted(() => {
 }
 
 .compact-table :deep(.el-table th) {
-  padding: 8px 8px;
+  padding: 6px 6px;
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid rgba(226, 232, 240, 0.6);
   color: #475569;
@@ -8176,7 +8245,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 10px 14px;
   background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
   border-bottom: 1px solid rgba(226, 232, 240, 0.2);
   position: relative;
@@ -8208,7 +8277,7 @@ onMounted(() => {
 }
 
 .pagination-container {
-  padding: 10px 12px;
+  padding: 8px 10px;
   display: flex;
   justify-content: flex-end;
   background: rgba(248, 250, 252, 0.5);
@@ -8425,6 +8494,38 @@ onMounted(() => {
   text-align: center;
 }
 
+.section-card :deep(.el-card__body) {
+  padding: 8px 10px 10px;
+}
+
+.section-card :deep(.el-card__header) {
+  padding: 0;
+  border-bottom: none;
+}
+
+.search-controls :deep(.el-input__wrapper),
+.search-controls :deep(.el-select__wrapper),
+.search-controls :deep(.el-date-editor.el-input__wrapper),
+.search-controls :deep(.el-date-editor .el-input__wrapper) {
+  min-height: 30px;
+  border-radius: 8px;
+}
+
+.search-controls :deep(.el-input__inner),
+.search-controls :deep(.el-select__selected-item),
+.search-controls :deep(.el-range-input) {
+  font-size: 12px;
+}
+
+.compact-table :deep(.el-input__wrapper) {
+  min-height: 28px;
+  padding: 0 8px;
+}
+
+.compact-table :deep(.el-input__inner) {
+  font-size: 12px;
+}
+
 /* レスポンシブデザイン */
 @media (max-width: 1200px) {
   .molding-instruction-container {
@@ -8437,8 +8538,8 @@ onMounted(() => {
   }
 
   .search-controls {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
     gap: 8px;
   }
 
@@ -8449,6 +8550,12 @@ onMounted(() => {
   .compact-date-picker {
     width: auto;
     flex: 1;
+  }
+
+  .plan-section .date-control :deep(.compact-date-picker.el-date-editor.el-input) {
+    width: 72px !important;
+    min-width: 72px !important;
+    flex: none !important;
   }
 }
 
@@ -8468,6 +8575,21 @@ onMounted(() => {
 
   .page-subtitle {
     font-size: 11px;
+  }
+
+  .page-header-actions {
+    gap: 5px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .header-stats {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .header-stat-item {
+    min-width: 112px;
   }
 
   .stats-grid {
@@ -8498,7 +8620,7 @@ onMounted(() => {
   }
 
   .search-controls {
-    gap: 6px;
+    gap: 5px;
   }
 
   .date-control {
@@ -8531,11 +8653,11 @@ onMounted(() => {
   }
 
   .compact-table :deep(.el-table__row) {
-    height: 28px;
+    height: 30px;
   }
 
   .compact-table :deep(.el-table td) {
-    padding: 2px 4px;
+    padding: 3px 5px;
   }
 
   .compact-table :deep(.el-table th) {
@@ -8562,7 +8684,24 @@ onMounted(() => {
   }
 
   .header-content {
+    flex-direction: column;
+    align-items: stretch;
     gap: 8px;
+  }
+
+  .page-header-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .header-stats {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .header-stat-item {
+    flex: 1;
+    min-width: 0;
   }
 
   .page-title {

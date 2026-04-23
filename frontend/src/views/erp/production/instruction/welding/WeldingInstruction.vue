@@ -6,9 +6,40 @@
         <div class="header-info">
           <div class="title-wrapper">
             <el-icon class="title-icon"><Document /></el-icon>
-            <h1 class="page-title">溶接指示管理</h1>
+            <h1 class="page-title">溶接指示書発行管理</h1>
           </div>
-          <span class="page-subtitle">生産計画データ管理・指示作成システム</span>
+          <span class="page-subtitle">生産計画データ管理・指示発行システム</span>
+        </div>
+        <div class="page-header-actions">
+          <div class="header-stats">
+            <div class="header-stat-item">
+              <div class="stat-icon total-icon">
+                <el-icon><TrendCharts /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-value">{{ formatNumber(planStats.totalQuantity) }}</div>
+                <div class="stat-label">計画生産数</div>
+              </div>
+            </div>
+            <div class="header-stat-item">
+              <div class="stat-icon machine-icon">
+                <el-icon><Monitor /></el-icon>
+              </div>
+              <div class="stat-content">
+                <div class="stat-value">{{ planStats.machineCount }}</div>
+                <div class="stat-label">稼働設備</div>
+              </div>
+            </div>
+          </div>
+          <el-button
+            @click="refreshPlanData"
+            :icon="Refresh"
+            size="small"
+            type="info"
+            class="action-btn refresh-btn"
+          >
+            データ更新
+          </el-button>
         </div>
       </div>
     </div>
@@ -16,67 +47,15 @@
     <!-- 上部：溶接計画データテーブルエリア -->
     <div class="plan-section">
       <el-card class="section-card">
-        <template #header>
-          <div class="card-header">
-            <div class="section-title">
-              <el-icon size="20"><Calendar /></el-icon>
-              <span>溶接計画データ一覧</span>
-            </div>
-            <div class="header-actions">
-              <el-button
-                @click="showUpdateEfficiencyDialog"
-                :icon="Refresh"
-                size="small"
-                type="warning"
-                class="action-btn update-btn"
-              >
-                能率・段取時間更新
-              </el-button>
-              <el-button
-                @click="refreshPlanData"
-                :icon="Refresh"
-                size="small"
-                type="info"
-                class="action-btn refresh-btn"
-              >
-                データ更新
-              </el-button>
-            </div>
-          </div>
-        </template>
-
-        <!-- コンパクト統計カード -->
-        <div class="stats-grid">
-          <div class="stat-item">
-            <div class="stat-icon total-icon">
-              <el-icon><TrendCharts /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ formatNumber(planStats.totalQuantity) }}</div>
-              <div class="stat-label">計画生産数</div>
-            </div>
-          </div>
-          <div class="stat-item">
-            <div class="stat-icon machine-icon">
-              <el-icon><Monitor /></el-icon>
-            </div>
-            <div class="stat-content">
-              <div class="stat-value">{{ planStats.machineCount }}</div>
-              <div class="stat-label">稼働設備</div>
-            </div>
-          </div>
-        </div>
-
         <!-- コンパクト検索バー -->
         <div class="search-bar">
           <div class="search-controls">
             <div class="date-control">
+              <span class="filter-label">生産日</span>
               <el-date-picker
-                v-model="planSearchForm.dateRange"
-                type="daterange"
-                range-separator="〜"
-                start-placeholder="開始日"
-                end-placeholder="終了日"
+                v-model="planSelectedDate"
+                type="date"
+                placeholder="生産日"
                 format="MM/DD"
                 value-format="YYYY-MM-DD"
                 @change="searchPlans"
@@ -174,7 +153,7 @@
           :data="planData"
           v-loading="planLoading"
           :style="{ width: '100%' }"
-          max-height="500"
+          max-height="245"
           :default-sort="{ prop: 'plan_date', order: 'ascending' }"
           size="small"
           class="compact-table"
@@ -260,18 +239,6 @@
           </el-table-column>
         </el-table>
 
-        <div class="pagination-container">
-          <el-pagination
-            v-model:current-page="planPagination.currentPage"
-            v-model:page-size="planPagination.pageSize"
-            :page-sizes="[20, 50, 100]"
-            :total="planPagination.total"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handlePlanSizeChange"
-            @current-change="handlePlanCurrentChange"
-            size="small"
-          />
-        </div>
       </el-card>
     </div>
 
@@ -549,7 +516,6 @@ import {
   Refresh,
   Download,
   Document,
-  Calendar,
   TrendCharts,
   Monitor,
   ArrowDown,
@@ -572,6 +538,18 @@ const planSearchForm = reactive({
   dateRange: [] as string[],
   machineName: '',
   keyword: '',
+})
+
+// 单日选择（内部继续使用 [startDate, endDate] 结构）
+const planSelectedDate = computed<string>({
+  get: () => (planSearchForm.dateRange.length > 0 ? planSearchForm.dateRange[0] : ''),
+  set: (value) => {
+    if (!value) {
+      planSearchForm.dateRange = []
+      return
+    }
+    planSearchForm.dateRange = [value, value]
+  },
 })
 
 // 指示検索フォーム
@@ -1408,19 +1386,6 @@ const deleteInstruction = async (instruction: any) => {
 // 指示選択変更
 const handleSelectionChange = (selection: any[]) => {
   selectedRows.value = selection
-}
-
-// 計画ページサイズ変更
-const handlePlanSizeChange = (size: number) => {
-  // 显示所有筛选数据，所以保持 pageSize 等于总数
-  planPagination.pageSize = planPagination.total || size
-  // 不需要重新加载数据，因为已经加载了所有数据
-}
-
-// 計画現在ページ変更
-const handlePlanCurrentChange = (page: number) => {
-  planPagination.currentPage = page
-  // 不需要重新加载数据，因为已经加载了所有数据
 }
 
 // 指示ページサイズ変更
@@ -2558,12 +2523,6 @@ const formatEfficiencyRate = (rate: number | string): string => {
   return `${formatNumber(num)}本/h`
 }
 
-// 显示能率・段取時間更新对话框
-const showUpdateEfficiencyDialog = () => {
-  updateEfficiencyForm.startDate = ''
-  updateEfficiencyDialogVisible.value = true
-}
-
 // 更新能率・段取時間
 const updateEfficiencyAndSetupTime = async () => {
   if (!updateEfficiencyForm.startDate) {
@@ -2890,6 +2849,25 @@ const setMatrixMonth = (monthOffset: number) => {
   console.log(`设置月份范围: ${startDate} 到 ${endDate}`)
 
   matrixDateRange.value = [startDate, endDate]
+  loadMatrixData()
+}
+
+// マトリックス默认期间：当日往前2天 ～ 往后30天（JST）
+const setDefaultMatrixRange = () => {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+  const start = new Date(now)
+  start.setDate(start.getDate() - 2)
+  const end = new Date(now)
+  end.setDate(end.getDate() + 30)
+
+  const formatDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  matrixDateRange.value = [formatDate(start), formatDate(end)]
   loadMatrixData()
 }
 
@@ -4631,8 +4609,8 @@ onMounted(() => {
   loadWeldingPlanComparisonSummary({ silent: true, workingDays: specifiedWorkingDays.value })
   loadInstructions()
   loadStats()
-  // 初始化二维表日期为当月，并加载
-  setMatrixMonth(0) // 设置为当月
+  // 初始化二维表日期：当日往前2天 ～ 往后30天
+  setDefaultMatrixRange()
 })
 </script>
 
@@ -6347,5 +6325,172 @@ onMounted(() => {
   padding: 8px;
   font-family:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+}
+
+/* ===== Forming 同款风格覆盖（Welding）===== */
+.header-content {
+  justify-content: space-between;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(226, 232, 240, 0.7);
+  border-radius: 8px;
+  min-width: 124px;
+}
+
+.header-stat-item .stat-icon {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.header-stat-item .stat-value {
+  font-size: 13px;
+  margin-bottom: 1px;
+}
+
+.header-stat-item .stat-label {
+  font-size: 9px;
+}
+
+.section-card :deep(.el-card__header) {
+  padding: 0;
+  border-bottom: none;
+}
+
+.section-card :deep(.el-card__body) {
+  padding: 8px 10px 10px;
+}
+
+.filter-label {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  line-height: 34px;
+  white-space: nowrap;
+}
+
+.plan-section .search-controls :deep(.el-input__wrapper),
+.plan-section .search-controls :deep(.el-select__wrapper),
+.plan-section .search-controls :deep(.el-date-editor.el-input__wrapper),
+.plan-section .search-controls :deep(.el-date-editor .el-input__wrapper),
+.plan-section .search-controls :deep(.el-input-number .el-input__wrapper) {
+  min-height: 34px;
+  height: 34px;
+}
+
+.plan-section .date-control :deep(.compact-date-picker.el-date-editor.el-input) {
+  display: inline-flex;
+  align-items: center;
+  width: 90px;
+  min-width: 90px;
+  flex: none;
+  height: 34px;
+  min-height: 34px;
+  margin: 0;
+}
+
+.plan-section .date-control :deep(.compact-date-picker .el-input__inner) {
+  line-height: 34px;
+}
+
+.plan-section .search-controls .date-btn,
+.plan-section .search-controls .print-btn {
+  min-height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 6px 14px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  letter-spacing: 0.2px;
+}
+
+.plan-section .search-controls .date-btn {
+  border-radius: 9px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.plan-section .search-controls .print-btn {
+  border-radius: 9px;
+  font-weight: 700;
+}
+
+.plan-section .search-controls .date-btn.prev {
+  background: linear-gradient(145deg, #f97373 0%, #dc2626 100%);
+  color: #fff;
+}
+
+.plan-section .search-controls .date-btn.today {
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+  color: #fff;
+}
+
+.plan-section .search-controls .date-btn.next {
+  background: linear-gradient(145deg, #34d399 0%, #059669 100%);
+  color: #fff;
+}
+
+.plan-section .search-controls .print-btn.instruction-btn {
+  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
+}
+
+.plan-section .search-controls .print-btn[type='primary'] {
+  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
+}
+
+.plan-section .search-controls .print-btn[type='info'] {
+  background: linear-gradient(145deg, #64748b 0%, #334155 100%);
+}
+
+.plan-section .search-controls .date-btn:hover,
+.plan-section .search-controls .print-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 20px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.matrix-section .month-btn,
+.matrix-section .matrix-controls .export-btn,
+.matrix-section .matrix-controls .print-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 7px 16px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+.matrix-section .matrix-controls .export-btn {
+  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
+  color: #fff;
+}
+
+.matrix-section .matrix-controls .print-btn {
+  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
 }
 </style>

@@ -16,12 +16,35 @@ from app.modules.master.models import Process, Product, Machine
 router = APIRouter(prefix="/production-actual-logs", tags=["ProductionActual"])
 
 
-def _apply_filters(query, keyword, date_from, date_to, process_cd, transaction_type):
+def _apply_filters(
+    query,
+    keyword,
+    target_name,
+    machine_name,
+    date_from,
+    date_to,
+    process_cd,
+    transaction_type,
+):
     if keyword and keyword.strip():
         q = f"%{keyword.strip()}%"
         query = query.where(
             (StockTransactionLog.target_cd.like(q)) | (StockTransactionLog.remarks.like(q))
         )
+    if target_name and target_name.strip():
+        product_subq = (
+            select(Product.product_cd)
+            .where(Product.product_name.like(f"%{target_name.strip()}%"))
+            .scalar_subquery()
+        )
+        query = query.where(StockTransactionLog.target_cd.in_(product_subq))
+    if machine_name and machine_name.strip():
+        machine_subq = (
+            select(Machine.machine_cd)
+            .where(Machine.machine_name.like(f"%{machine_name.strip()}%"))
+            .scalar_subquery()
+        )
+        query = query.where(StockTransactionLog.machine_cd.in_(machine_subq))
     if date_from:
         query = query.where(StockTransactionLog.transaction_time >= date_from)
     if date_to:
@@ -36,6 +59,8 @@ def _apply_filters(query, keyword, date_from, date_to, process_cd, transaction_t
 @router.get("")
 async def get_production_actual_logs(
     keyword: Optional[str] = Query(None),
+    target_name: Optional[str] = Query(None),
+    machine_name: Optional[str] = Query(None),
     date_from: Optional[str] = Query(None),
     date_to: Optional[str] = Query(None),
     process_cd: Optional[str] = Query(None),
@@ -49,7 +74,16 @@ async def get_production_actual_logs(
 ):
     """生産実績一覧（工程名・製品名・設備名付き）、stats、typeSummary、pagination を返す"""
     base = select(StockTransactionLog).where(True)
-    base = _apply_filters(base, keyword, date_from, date_to, process_cd, transaction_type)
+    base = _apply_filters(
+        base,
+        keyword,
+        target_name,
+        machine_name,
+        date_from,
+        date_to,
+        process_cd,
+        transaction_type,
+    )
 
     # total count
     count_q = select(func.count()).select_from(base.subquery())
@@ -69,7 +103,16 @@ async def get_production_actual_logs(
         .outerjoin(Product, StockTransactionLog.target_cd == Product.product_cd)
         .outerjoin(Machine, StockTransactionLog.machine_cd == Machine.machine_cd)
     )
-    list_q = _apply_filters(list_q, keyword, date_from, date_to, process_cd, transaction_type)
+    list_q = _apply_filters(
+        list_q,
+        keyword,
+        target_name,
+        machine_name,
+        date_from,
+        date_to,
+        process_cd,
+        transaction_type,
+    )
 
     order_col = getattr(StockTransactionLog, sort_by, None) if sort_by else StockTransactionLog.transaction_time
     if order_col is not None:
@@ -119,7 +162,16 @@ async def get_production_actual_logs(
         func.count(distinct(StockTransactionLog.target_cd)).label("product_count"),
         func.count(distinct(func.date(StockTransactionLog.transaction_time))).label("active_days"),
     ).select_from(StockTransactionLog)
-    stats_q = _apply_filters(stats_q, keyword, date_from, date_to, process_cd, transaction_type)
+    stats_q = _apply_filters(
+        stats_q,
+        keyword,
+        target_name,
+        machine_name,
+        date_from,
+        date_to,
+        process_cd,
+        transaction_type,
+    )
     stats_result = await db.execute(stats_q)
     stats_row = stats_result.one()
     total_records = int(stats_row.total_records or 0)
@@ -146,7 +198,16 @@ async def get_production_actual_logs(
         .select_from(StockTransactionLog)
         .group_by(StockTransactionLog.transaction_type)
     )
-    type_q = _apply_filters(type_q, keyword, date_from, date_to, process_cd, transaction_type)
+    type_q = _apply_filters(
+        type_q,
+        keyword,
+        target_name,
+        machine_name,
+        date_from,
+        date_to,
+        process_cd,
+        transaction_type,
+    )
     type_result = await db.execute(type_q)
     type_rows = type_result.all()
     type_summary = [

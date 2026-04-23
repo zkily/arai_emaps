@@ -16,32 +16,46 @@
     </div>
 
     <el-card class="search-card" shadow="hover">
-      <template #header>
-        <div class="search-header">
-          <el-icon><Search /></el-icon>
-          <span>検索条件</span>
-        </div>
-      </template>
       <el-form
         :model="searchForm"
         label-width="80px"
         class="search-form"
-        @keyup.enter.prevent="handleSearch"
       >
-        <el-row :gutter="16" class="search-row">
+        <el-row :gutter="12" class="search-row">
           <el-col :span="6">
-            <el-form-item label="キーワード">
-              <el-input
-                v-model="searchForm.keyword"
-                placeholder="製品名・品番で検索"
+            <el-form-item label="製品名">
+              <el-select
+                v-model="searchForm.target_name"
+                placeholder="製品名を選択"
                 clearable
-                size="default"
-                class="keyword-input"
+                filterable
+                class="filter-select"
               >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
+                <el-option
+                  v-for="item in productOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="設備">
+              <el-select
+                v-model="searchForm.machine_name"
+                placeholder="設備名を選択"
+                clearable
+                filterable
+                class="filter-select"
+              >
+                <el-option
+                  v-for="item in machineOptions"
+                  :key="item.value"
+                  :label="item.label"
+                  :value="item.value"
+                />
+              </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -71,14 +85,6 @@
                 </div>
               </div>
             </el-form-item>
-          </el-col>
-          <el-col :span="6">
-            <div class="search-actions">
-              <el-button type="primary" :icon="Search" @click="handleSearch" class="search-btn"
-                >検索</el-button
-              >
-              <el-button :icon="Refresh" @click="handleReset" class="reset-btn">リセット</el-button>
-            </div>
           </el-col>
         </el-row>
       </el-form>
@@ -165,7 +171,7 @@
           :data="tableData"
           stripe
           border
-          height="520"
+          max-height="520"
           class="data-table"
           @sort-change="handleSortChange"
         >
@@ -181,7 +187,7 @@
               {{ formatDateTime(row.transaction_time) }}
             </template>
           </el-table-column>
-          <el-table-column prop="process_cd" label="工程" width="90" align="center">
+          <el-table-column prop="process_cd" label="工程" width="120" align="center">
             <template #default="{ row }">
               <div class="process-info">
                 <div class="process-name">{{ row.process_name || '-' }}</div>
@@ -211,10 +217,14 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="数量" width="110" align="center">
+          <el-table-column label="数量" width="110" align="right">
             <template #default="{ row }">
-              <span class="quantity">{{ Number(row.quantity || 0).toLocaleString() }}</span>
-              <small v-if="row.unit" class="unit">{{ row.unit }}</small>
+              <span
+                class="quantity"
+                :class="{ 'is-negative': Number(row.quantity || 0) < 0 }"
+              >
+                {{ Number(row.quantity || 0).toLocaleString() }}
+              </span>
             </template>
           </el-table-column>
           <el-table-column prop="location_cd" label="保管場所" width="120" align="center" />
@@ -289,25 +299,25 @@
           <div class="chart-item-header">
             <span class="chart-item-title">日別生産量推移</span>
           </div>
-          <div ref="dailyTrendChartRef" class="chart-container" style="height: 250px"></div>
+          <div ref="dailyTrendChartRef" class="chart-container" style="height: 220px"></div>
         </div>
         <div class="chart-item">
           <div class="chart-item-header">
             <span class="chart-item-title">工程別生産量</span>
           </div>
-          <div ref="processChartRef" class="chart-container" style="height: 250px"></div>
+          <div ref="processChartRef" class="chart-container" style="height: 220px"></div>
         </div>
         <div class="chart-item">
           <div class="chart-item-header">
             <span class="chart-item-title">取引タイプ分布</span>
           </div>
-          <div ref="typeChartRef" class="chart-container" style="height: 250px"></div>
+          <div ref="typeChartRef" class="chart-container" style="height: 220px"></div>
         </div>
         <div class="chart-item">
           <div class="chart-item-header">
             <span class="chart-item-title">製品生産量TOP10</span>
           </div>
-          <div ref="productChartRef" class="chart-container" style="height: 250px"></div>
+          <div ref="productChartRef" class="chart-container" style="height: 220px"></div>
         </div>
       </div>
     </el-card>
@@ -375,11 +385,10 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'ProductionActualManagement' })
-import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
-  Search,
   Refresh,
   TrendCharts,
   Histogram,
@@ -463,12 +472,15 @@ let typeChart: echarts.ECharts | null = null
 let productChart: echarts.ECharts | null = null
 
 const searchForm = reactive({
-  keyword: '',
+  target_name: '',
+  machine_name: '',
   date_from: '',
   date_to: '',
   process_cd: '',
   transaction_type: '実績',
 })
+
+let autoSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 const dateShortcuts = [
   {
@@ -680,6 +692,28 @@ const initCharts = () => {
 // チャート用データ取得
 const chartData = ref<StockActualLogRecord[]>([])
 
+const productOptions = computed(() => {
+  const names = new Set<string>()
+  ;[...chartData.value, ...tableData.value].forEach((item) => {
+    const name = String(item.target_name || '').trim()
+    if (name) names.add(name)
+  })
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, 'ja'))
+    .map((name) => ({ label: name, value: name }))
+})
+
+const machineOptions = computed(() => {
+  const names = new Set<string>()
+  ;[...chartData.value, ...tableData.value].forEach((item) => {
+    const name = String(item.machine_name || '').trim()
+    if (name) names.add(name)
+  })
+  return Array.from(names)
+    .sort((a, b) => a.localeCompare(b, 'ja'))
+    .map((name) => ({ label: name, value: name }))
+})
+
 const loadChartData = async () => {
   try {
     const params = {
@@ -687,7 +721,8 @@ const loadChartData = async () => {
       limit: 500, // チャート用（API 上限 500 で確実に通す。バックエンドを le=10000 にした場合は 5000 等に変更可）
       process_cd: searchForm.process_cd || undefined,
       transaction_type: searchForm.transaction_type || undefined,
-      keyword: searchForm.keyword || undefined,
+      target_name: searchForm.target_name || undefined,
+      machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
       date_to: searchForm.date_to || undefined,
     }
@@ -1531,7 +1566,8 @@ const loadData = async () => {
       limit: pagination.limit,
       process_cd: searchForm.process_cd || undefined,
       transaction_type: searchForm.transaction_type || undefined,
-      keyword: searchForm.keyword || undefined,
+      target_name: searchForm.target_name || undefined,
+      machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
       date_to: searchForm.date_to || undefined,
     }
@@ -1589,22 +1625,6 @@ const handleDateRangeChange = (value: string[] | null) => {
 }
 
 const handleSearch = () => {
-  pagination.page = 1
-  loadData()
-}
-
-const handleReset = () => {
-  Object.assign(searchForm, {
-    keyword: '',
-    date_from: '',
-    date_to: '',
-    process_cd: activeProcessTab.value === 'ALL' ? '' : activeProcessTab.value,
-    transaction_type: '実績',
-  })
-  // ソート状態をリセット
-  sortState.prop = ''
-  sortState.order = ''
-  setDefaultDateRange()
   pagination.page = 1
   loadData()
 }
@@ -1799,8 +1819,11 @@ const handlePrintCharts = async () => {
     }
 
     // キーワードフィルタ
-    if (searchForm.keyword && searchForm.keyword.trim()) {
-      filterInfo.push('キーワード: ' + searchForm.keyword.trim())
+    if (searchForm.target_name) {
+      filterInfo.push('製品名: ' + searchForm.target_name)
+    }
+    if (searchForm.machine_name) {
+      filterInfo.push('設備: ' + searchForm.machine_name)
     }
 
     const filterText = filterInfo.length > 0 ? filterInfo.join(' | ') : ''
@@ -1906,7 +1929,8 @@ const handlePrintTable = async () => {
       limit: 10000, // 大きな値を設定して全データを取得
       process_cd: searchForm.process_cd || undefined,
       transaction_type: searchForm.transaction_type || undefined,
-      keyword: searchForm.keyword || undefined,
+      target_name: searchForm.target_name || undefined,
+      machine_name: searchForm.machine_name || undefined,
       date_from: searchForm.date_from || undefined,
       date_to: searchForm.date_to || undefined,
       sort_by: 'transaction_time', // 取引日時でソート
@@ -1962,8 +1986,11 @@ const handlePrintTable = async () => {
       filterInfo.push('取引タイプ: ' + searchForm.transaction_type)
     }
 
-    if (searchForm.keyword && searchForm.keyword.trim()) {
-      filterInfo.push('キーワード: ' + searchForm.keyword.trim())
+    if (searchForm.target_name) {
+      filterInfo.push('製品名: ' + searchForm.target_name)
+    }
+    if (searchForm.machine_name) {
+      filterInfo.push('設備: ' + searchForm.machine_name)
     }
 
     const filterText = filterInfo.length > 0 ? filterInfo.join(' | ') : ''
@@ -2147,7 +2174,28 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
 })
 
+watch(
+  () => [
+    searchForm.target_name,
+    searchForm.machine_name,
+    searchForm.date_from,
+    searchForm.date_to,
+  ],
+  () => {
+    if (autoSearchTimer) {
+      clearTimeout(autoSearchTimer)
+    }
+    autoSearchTimer = setTimeout(() => {
+      handleSearch()
+    }, 350)
+  },
+)
+
 onUnmounted(() => {
+  if (autoSearchTimer) {
+    clearTimeout(autoSearchTimer)
+    autoSearchTimer = null
+  }
   window.removeEventListener('resize', handleResize)
   dailyTrendChart?.dispose()
   processChart?.dispose()
@@ -2157,125 +2205,220 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+$font-stack:
+  'Inter',
+  'Noto Sans JP',
+  '游ゴシック',
+  'Yu Gothic',
+  'YuGothic',
+  'Hiragino Sans',
+  'Meiryo',
+  'メイリオ',
+  'Microsoft YaHei',
+  'PingFang SC',
+  sans-serif;
+$font-num:
+  'Inter',
+  'SF Pro Display',
+  -apple-system,
+  BlinkMacSystemFont,
+  'Segoe UI',
+  'Noto Sans JP',
+  '游ゴシック',
+  'Yu Gothic',
+  sans-serif;
+
+$primary: #3b82f6;
+$primary-strong: #2563eb;
+$primary-darker: #1d4ed8;
+$accent: #6366f1;
+
+$text-strong: #0f172a;
+$text-base: #1e293b;
+$text-soft: #475569;
+$text-muted: #64748b;
+$text-subtle: #94a3b8;
+
+$border: #e2e8f0;
+$border-soft: #eef2f7;
+
+$surface: #ffffff;
+$surface-1: #f8fafc;
+$surface-2: #f1f5f9;
+
+$radius-card: 12px;
+$radius-input: 8px;
+$radius-chip: 999px;
+
+$gradient-primary: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+$gradient-primary-strong: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+$gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+
+$shadow-card:
+  0 1px 2px rgba(15, 23, 42, 0.04),
+  0 10px 24px rgba(15, 23, 42, 0.06);
+$shadow-card-hover:
+  0 2px 4px rgba(15, 23, 42, 0.06),
+  0 18px 32px rgba(15, 23, 42, 0.1);
+$shadow-inset-top: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
 .production-actual-management {
-  padding: 10px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  padding: 10px 12px 14px;
   min-height: 100vh;
+  position: relative;
+  font-family: $font-stack;
+  font-feature-settings: 'palt' 1;
+  color: $text-base;
+  background:
+    radial-gradient(circle at 4% 0%, rgba(59, 130, 246, 0.14), transparent 34%),
+    radial-gradient(circle at 98% 8%, rgba(99, 102, 241, 0.12), transparent 32%),
+    linear-gradient(145deg, #f5f8fd 0%, #eef2f9 48%, #e6ecf5 100%);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, transparent 160px);
+    z-index: 0;
+  }
+
+  > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  :deep(button),
+  :deep(input),
+  :deep(.el-input__inner),
+  :deep(.el-tag),
+  :deep(.el-table) {
+    font-family: inherit;
+  }
 
   .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 10px;
-    padding: 12px 24px;
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-    border-radius: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    padding: 12px 18px;
+    border-radius: $radius-card;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    background:
+      linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(248, 250, 252, 0.95) 100%
+      );
+    backdrop-filter: blur(8px);
+    box-shadow: $shadow-card, $shadow-inset-top;
+    position: relative;
+    overflow: hidden;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.25s ease;
+
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      background: linear-gradient(90deg, $primary 0%, $accent 50%, $primary 100%);
+      opacity: 0.75;
+    }
 
     &:hover {
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+      box-shadow: $shadow-card-hover, $shadow-inset-top;
     }
 
     .page-title {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 12px;
 
       .title-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 14px;
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        width: 40px;
+        height: 40px;
+        border-radius: 11px;
+        background: $gradient-primary;
         display: flex;
         align-items: center;
         justify-content: center;
         color: #fff;
-        font-size: 24px;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-        transition: transform 0.2s ease;
+        font-size: 20px;
+        box-shadow:
+          0 10px 18px rgba(59, 130, 246, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        transition: transform 0.25s ease;
 
         &:hover {
-          transform: scale(1.05);
+          transform: translateY(-1px) scale(1.04);
         }
       }
 
       h1 {
         margin: 0;
-        font-size: 22px;
+        font-size: 18px;
         font-weight: 700;
-        color: #1e293b;
-        letter-spacing: -0.02em;
+        color: $text-strong;
+        letter-spacing: -0.01em;
+        line-height: 1.2;
       }
 
       p {
-        margin: 4px 0 0 0;
-        color: #64748b;
-        font-size: 14px;
+        margin: 2px 0 0;
+        color: $text-muted;
+        font-size: 12px;
         font-weight: 400;
+        letter-spacing: 0.2px;
       }
     }
 
     .action-btn {
       border-radius: 8px;
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 12px;
+      height: 30px;
+      padding: 0 14px;
+      background: #fff;
+      border: 1px solid $border;
+      color: $text-soft;
       transition: all 0.2s ease;
 
       &:hover {
         transform: translateY(-1px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        color: $primary-strong;
+        border-color: rgba(59, 130, 246, 0.5);
+        box-shadow: 0 6px 14px rgba(59, 130, 246, 0.15);
       }
     }
   }
 
   .search-card {
     margin-bottom: 10px;
-    border-radius: 10px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    border-radius: $radius-card;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: $gradient-surface;
+    box-shadow: $shadow-card, $shadow-inset-top;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.25s ease;
 
     &:hover {
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.08);
-    }
-
-    :deep(.el-card__header) {
-      padding: 10px 16px;
-      border-bottom: 1px solid #f1f5f9;
+      transform: translateY(-1px);
+      box-shadow: $shadow-card-hover, $shadow-inset-top;
     }
 
     :deep(.el-card__body) {
-      padding: 12px 16px 10px;
-    }
-
-    .search-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 700;
-      color: #1e293b;
-      font-size: 14px;
-
-      .el-icon {
-        color: #3b82f6;
-        font-size: 16px;
-      }
+      padding: 10px 14px;
     }
 
     .search-form {
-      padding: 4px 0 0;
-
       .search-row {
         align-items: center;
+        flex-wrap: nowrap;
       }
 
       :deep(.el-form-item) {
@@ -2284,8 +2427,8 @@ onUnmounted(() => {
 
       :deep(.el-form-item__label) {
         font-weight: 600;
-        color: #475569;
-        font-size: 13px;
+        color: $text-soft;
+        font-size: 12px;
         padding-bottom: 0;
         line-height: 32px;
       }
@@ -2294,70 +2437,30 @@ onUnmounted(() => {
         line-height: 32px;
       }
 
-      .keyword-input {
-        :deep(.el-input__wrapper) {
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-          transition: all 0.2s ease;
-
-          &:hover {
-            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
-          }
-
-          &.is-focus {
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-          }
-        }
-      }
-    }
-
-    .search-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      padding-top: 0;
-      align-items: center;
-
-      .search-btn {
-        min-width: 90px;
-        border-radius: 8px;
-        font-weight: 600;
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        border: none;
-        box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+      :deep(.el-input__wrapper) {
+        border-radius: $radius-input;
+        box-shadow: 0 0 0 1px rgba(203, 213, 225, 0.6) inset;
+        background: #fff;
         transition: all 0.2s ease;
 
         &:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+          box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.45) inset;
         }
 
-        &:active {
-          transform: translateY(0);
+        &.is-focus {
+          box-shadow:
+            0 0 0 1px $primary inset,
+            0 0 0 3px rgba(59, 130, 246, 0.15);
         }
       }
 
-      .reset-btn {
-        min-width: 90px;
-        border-radius: 8px;
-        font-weight: 500;
-        color: #64748b;
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        transition: all 0.2s ease;
+      :deep(.el-input__inner) {
+        font-size: 13px;
+        color: $text-strong;
+      }
 
-        &:hover {
-          background: #f1f5f9;
-          border-color: #cbd5e1;
-          color: #475569;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        }
-
-        &:active {
-          transform: translateY(0);
-        }
+      .filter-select {
+        width: 100%;
       }
     }
 
@@ -2369,69 +2472,53 @@ onUnmounted(() => {
       .date-picker {
         flex: 1;
         min-width: 0;
-
-        :deep(.el-input__wrapper) {
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-          transition: all 0.2s ease;
-
-          &:hover {
-            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.15);
-          }
-
-          &.is-focus {
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-          }
-        }
       }
 
       .quick-buttons {
-        display: flex;
-        flex-direction: row;
-        gap: 4px;
+        display: inline-flex;
         flex-shrink: 0;
+        padding: 2px;
+        border-radius: $radius-input;
+        background: $surface-2;
+        border: 1px solid $border-soft;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
+        gap: 0;
 
         .date-btn {
           font-size: 12px;
-          padding: 6px 12px;
-          min-width: 50px;
+          font-weight: 600;
+          padding: 4px 10px;
+          min-width: 46px;
+          height: 26px;
           border-radius: 6px;
-          font-weight: 500;
-          transition: all 0.2s ease;
           border: 1px solid transparent;
+          background: transparent;
+          color: $text-muted;
+          transition: all 0.2s ease;
+          margin: 0 1px;
 
-          &.yesterday {
-            color: #64748b;
-            background: #f8fafc;
-
-            &:hover {
-              background: #e2e8f0;
-              color: #475569;
-              border-color: #cbd5e1;
-            }
+          &:hover {
+            color: $text-base;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow:
+              0 1px 2px rgba(15, 23, 42, 0.04),
+              0 2px 6px rgba(15, 23, 42, 0.06);
           }
 
           &.today {
             color: #fff;
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-            border-color: #2563eb;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+            background: $gradient-primary;
+            border-color: transparent;
+            box-shadow:
+              0 4px 10px rgba(59, 130, 246, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.35);
 
             &:hover {
-              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-              box-shadow: 0 3px 8px rgba(59, 130, 246, 0.4);
+              background: $gradient-primary-strong;
+              box-shadow:
+                0 6px 14px rgba(59, 130, 246, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.35);
               transform: translateY(-1px);
-            }
-          }
-
-          &.tomorrow {
-            color: #64748b;
-            background: #f8fafc;
-
-            &:hover {
-              background: #e2e8f0;
-              color: #475569;
-              border-color: #cbd5e1;
             }
           }
 
@@ -2445,17 +2532,31 @@ onUnmounted(() => {
 
   .process-card {
     margin-bottom: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    border-radius: $radius-card;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: $gradient-surface;
+    box-shadow: $shadow-card, $shadow-inset-top;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.25s ease;
 
     &:hover {
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+      box-shadow: $shadow-card-hover, $shadow-inset-top;
+    }
+
+    :deep(.el-card__header) {
+      padding: 10px 14px;
+      border-bottom: 1px solid $border-soft;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(248, 250, 252, 0.6) 100%
+      );
+    }
+
+    :deep(.el-card__body) {
+      padding: 10px 14px 12px;
     }
 
     .process-card-header {
@@ -2463,19 +2564,20 @@ onUnmounted(() => {
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
 
       .title {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         font-weight: 700;
-        color: #1e293b;
-        font-size: 15px;
+        color: $text-strong;
+        font-size: 13px;
+        letter-spacing: 0.2px;
 
         .el-icon {
-          color: #3b82f6;
-          font-size: 18px;
+          color: $primary;
+          font-size: 16px;
         }
       }
 
@@ -2483,116 +2585,186 @@ onUnmounted(() => {
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 8px;
         flex: 1;
 
         .inline-label {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
-          color: #475569;
+          color: $text-soft;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
         }
 
         .type-chip {
-          display: flex;
+          display: inline-flex;
           align-items: center;
           gap: 6px;
-          padding: 6px 12px;
-          border-radius: 20px;
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          border: 1px solid rgba(226, 232, 240, 0.8);
+          padding: 3px 10px 3px 4px;
+          border-radius: $radius-chip;
+          background: #fff;
+          border: 1px solid $border-soft;
           font-size: 12px;
-          color: #334155;
+          color: $text-soft;
           transition: all 0.2s ease;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          box-shadow:
+            0 1px 2px rgba(15, 23, 42, 0.04),
+            inset 0 1px 0 rgba(255, 255, 255, 0.7);
 
           &:hover {
             transform: translateY(-1px);
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-            border-color: #cbd5e1;
+            border-color: rgba(59, 130, 246, 0.35);
+            box-shadow:
+              0 4px 10px rgba(59, 130, 246, 0.12),
+              inset 0 1px 0 rgba(255, 255, 255, 0.7);
           }
 
           .type-name {
             font-weight: 700;
-            color: #1e293b;
+            color: $text-strong;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: $radius-chip;
+            background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+            color: $primary-darker;
+            letter-spacing: 0.3px;
           }
 
           .type-values {
             display: flex;
             align-items: center;
             gap: 4px;
-            color: #64748b;
-            font-weight: 500;
+            color: $text-muted;
+            font-weight: 600;
+            font-family: $font-num;
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
 
             .divider {
-              color: #cbd5e1;
-              margin: 0 2px;
+              color: $text-subtle;
+              margin: 0 1px;
             }
           }
         }
       }
 
       .record-hint {
-        font-size: 13px;
-        color: #64748b;
+        font-size: 12px;
+        color: $text-soft;
         font-weight: 600;
-        padding: 4px 12px;
-        background: #f1f5f9;
-        border-radius: 12px;
+        padding: 4px 10px;
+        background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        border-radius: $radius-chip;
+        font-variant-numeric: tabular-nums;
       }
     }
 
     .process-tabs {
-      margin-bottom: 16px;
+      margin-bottom: 10px;
+
+      :deep(.el-tabs__header) {
+        margin: 0 0 10px;
+      }
+
+      :deep(.el-tabs__nav) {
+        border: none !important;
+        padding: 3px;
+        background: $surface-2;
+        border-radius: 10px;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+      }
+
+      :deep(.el-tabs__nav-wrap::after) {
+        display: none;
+      }
 
       :deep(.el-tabs__item) {
         font-weight: 600;
-        color: #64748b;
+        color: $text-muted;
+        font-size: 12px;
+        padding: 0 14px !important;
+        height: 28px;
+        line-height: 28px;
+        border: none !important;
+        border-radius: 8px;
+        margin: 0 2px;
         transition: all 0.2s ease;
 
-        &.is-active {
-          color: #3b82f6;
-          font-weight: 700;
+        &:hover {
+          color: $text-base;
+          background: rgba(255, 255, 255, 0.6);
         }
 
-        &:hover {
-          color: #3b82f6;
+        &.is-active {
+          color: #fff;
+          background: $gradient-primary;
+          box-shadow:
+            0 4px 10px rgba(59, 130, 246, 0.35),
+            inset 0 1px 0 rgba(255, 255, 255, 0.35);
         }
       }
     }
 
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-      margin-bottom: 0;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
 
       .stat-card {
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 12px;
-        border: 1px solid rgba(226, 232, 240, 0.8);
-        border-radius: 12px;
-        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-        transition: all 0.3s ease;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(226, 232, 240, 0.7);
+        border-radius: 10px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.95) 0%,
+          rgba(248, 250, 252, 0.9) 100%
+        );
+        position: relative;
+        overflow: hidden;
+        transition:
+          transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+          box-shadow 0.25s ease,
+          border-color 0.25s ease;
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.04),
+          0 6px 14px rgba(15, 23, 42, 0.05),
+          $shadow-inset-top;
+
+        &::before {
+          content: '';
+          position: absolute;
+          inset: 0 0 auto 0;
+          height: 3px;
+          opacity: 0.9;
+        }
 
         &:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+          transform: translateY(-3px);
+          box-shadow:
+            0 2px 4px rgba(15, 23, 42, 0.06),
+            0 16px 28px rgba(15, 23, 42, 0.1),
+            $shadow-inset-top;
           border-color: rgba(59, 130, 246, 0.3);
         }
 
         .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: #fff;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          font-size: 18px;
+          flex-shrink: 0;
+          transition: transform 0.3s ease;
+          box-shadow:
+            0 6px 12px rgba(15, 23, 42, 0.15),
+            inset 0 1px 0 rgba(255, 255, 255, 0.4);
 
           &.primary {
             background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -2604,37 +2776,60 @@ onUnmounted(() => {
             background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
           }
           &.info {
-            background: linear-gradient(135deg, #06b6d4 0%, #0ea5e9 100%);
+            background: linear-gradient(135deg, #06b6d4 0%, #0284c7 100%);
           }
           &.neutral {
             background: linear-gradient(135deg, #64748b 0%, #475569 100%);
           }
 
           &:hover {
-            transform: scale(1.1) rotate(5deg);
+            transform: scale(1.06) rotate(-3deg);
           }
         }
 
+        &:has(.stat-icon.primary)::before {
+          background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        }
+        &:has(.stat-icon.success)::before {
+          background: linear-gradient(90deg, #10b981, #34d399);
+        }
+        &:has(.stat-icon.warning)::before {
+          background: linear-gradient(90deg, #f59e0b, #fbbf24);
+        }
+        &:has(.stat-icon.info)::before {
+          background: linear-gradient(90deg, #06b6d4, #38bdf8);
+        }
+        &:has(.stat-icon.neutral)::before {
+          background: linear-gradient(90deg, #64748b, #94a3b8);
+        }
+
         .stat-label {
-          font-size: 13px;
-          color: #64748b;
+          font-size: 11px;
+          color: $text-muted;
           font-weight: 600;
-          margin-bottom: 4px;
+          margin-bottom: 2px;
+          letter-spacing: 0.3px;
+          text-transform: uppercase;
         }
 
         .stat-value {
-          font-size: 24px;
+          font-size: 20px;
           font-weight: 700;
-          color: #1e293b;
+          color: $text-strong;
           display: flex;
           align-items: baseline;
-          gap: 4px;
+          gap: 3px;
           letter-spacing: -0.02em;
+          line-height: 1.1;
+          font-family: $font-num;
+          font-variant-numeric: tabular-nums;
 
           small {
-            font-size: 14px;
-            font-weight: 500;
-            color: #64748b;
+            font-size: 11px;
+            font-weight: 600;
+            color: $text-muted;
+            font-family: $font-stack;
+            letter-spacing: 0.3px;
           }
         }
       }
@@ -2643,27 +2838,31 @@ onUnmounted(() => {
 
   .chart-card {
     margin-bottom: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    border-radius: $radius-card;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: $gradient-surface;
+    box-shadow: $shadow-card, $shadow-inset-top;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.25s ease;
 
     &:hover {
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+      box-shadow: $shadow-card-hover, $shadow-inset-top;
     }
 
     :deep(.el-card__header) {
-      padding: 12px 20px;
-      border-bottom: 1px solid #f1f5f9;
-      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      padding: 10px 14px;
+      border-bottom: 1px solid $border-soft;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(248, 250, 252, 0.6) 100%
+      );
     }
 
     :deep(.el-card__body) {
-      padding: 16px;
+      padding: 10px 12px 12px;
     }
 
     .chart-header {
@@ -2676,31 +2875,39 @@ onUnmounted(() => {
         align-items: center;
         gap: 8px;
         font-weight: 700;
-        color: #1e293b;
-        font-size: 15px;
-        font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
+        color: $text-strong;
+        font-size: 13px;
+        letter-spacing: 0.2px;
 
         .el-icon {
-          color: #3b82f6;
-          font-size: 18px;
+          color: $primary;
+          font-size: 16px;
         }
       }
 
       .print-btn {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        background: $gradient-primary;
         border: none;
-        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-        transition: all 0.3s ease;
+        color: #fff;
+        font-weight: 600;
+        height: 26px;
+        padding: 0 12px;
+        border-radius: 7px;
+        box-shadow:
+          0 4px 10px rgba(59, 130, 246, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: all 0.2s ease;
 
         &:hover {
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+          background: $gradient-primary-strong;
+          box-shadow:
+            0 6px 14px rgba(59, 130, 246, 0.42),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
           transform: translateY(-1px);
         }
 
         &:active {
           transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
         }
       }
     }
@@ -2708,51 +2915,73 @@ onUnmounted(() => {
     .charts-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
+      gap: 10px;
 
       .chart-item {
-        background: #ffffff;
-        border: 1px solid rgba(226, 232, 240, 0.6);
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+        border: 1px solid rgba(226, 232, 240, 0.7);
         border-radius: 10px;
-        padding: 12px;
-        transition: all 0.3s ease;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        padding: 10px 12px;
+        position: relative;
+        overflow: hidden;
+        transition:
+          transform 0.25s ease,
+          box-shadow 0.25s ease,
+          border-color 0.25s ease;
+        box-shadow:
+          0 1px 2px rgba(15, 23, 42, 0.03),
+          0 4px 12px rgba(15, 23, 42, 0.04),
+          $shadow-inset-top;
 
         &:hover {
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
           transform: translateY(-2px);
+          box-shadow:
+            0 2px 4px rgba(15, 23, 42, 0.05),
+            0 10px 22px rgba(15, 23, 42, 0.08),
+            $shadow-inset-top;
           border-color: rgba(59, 130, 246, 0.3);
         }
 
         .chart-item-header {
-          margin-bottom: 12px;
-          padding-bottom: 10px;
-          border-bottom: 2px solid #f1f5f9;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+          padding-bottom: 7px;
+          border-bottom: 1px solid $border-soft;
           position: relative;
+
+          &::before {
+            content: '';
+            width: 3px;
+            height: 14px;
+            border-radius: 2px;
+            background: $gradient-primary;
+            box-shadow: 0 2px 6px rgba(59, 130, 246, 0.35);
+          }
 
           &::after {
             content: '';
             position: absolute;
-            bottom: -2px;
+            bottom: -1px;
             left: 0;
-            width: 40px;
+            width: 48px;
             height: 2px;
-            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            background: linear-gradient(90deg, $primary, transparent);
             border-radius: 2px;
           }
 
           .chart-item-title {
             font-weight: 700;
-            color: #1e293b;
-            font-size: 13px;
+            color: $text-strong;
+            font-size: 12px;
             letter-spacing: 0.3px;
-            font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
           }
         }
 
         .chart-container {
           width: 100%;
-          min-height: 250px;
+          min-height: 220px;
         }
       }
     }
@@ -2760,21 +2989,31 @@ onUnmounted(() => {
 
   .table-card {
     margin-bottom: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow:
-      0 2px 8px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.06);
-    transition: all 0.3s ease;
+    border-radius: $radius-card;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: $gradient-surface;
+    box-shadow: $shadow-card, $shadow-inset-top;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.25s ease;
 
     &:hover {
-      box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.08),
-        0 2px 4px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+      box-shadow: $shadow-card-hover, $shadow-inset-top;
+    }
+
+    :deep(.el-card__header) {
+      padding: 10px 14px;
+      border-bottom: 1px solid $border-soft;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.9) 0%,
+        rgba(248, 250, 252, 0.6) 100%
+      );
     }
 
     :deep(.el-card__body) {
-      padding: 10px 20px 6px;
+      padding: 8px 12px 8px;
     }
 
     .table-header {
@@ -2785,78 +3024,102 @@ onUnmounted(() => {
       .table-title {
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         font-weight: 700;
-        color: #1e293b;
-        font-size: 15px;
+        color: $text-strong;
+        font-size: 13px;
+        letter-spacing: 0.2px;
 
         .el-icon {
-          color: #3b82f6;
-          font-size: 18px;
+          color: $primary;
+          font-size: 16px;
         }
       }
 
       .table-header-right {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
       }
 
       .el-tag {
-        border-radius: 12px;
-        font-weight: 600;
-        padding: 4px 12px;
+        border-radius: $radius-chip;
+        font-weight: 700;
+        font-size: 11px;
+        padding: 2px 10px;
+        height: 22px;
+        line-height: 20px;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        background: linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%);
+        color: $primary-darker;
+        font-variant-numeric: tabular-nums;
       }
 
       .print-table-btn {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        background: $gradient-primary;
         border: none;
-        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
-        transition: all 0.3s ease;
+        color: #fff;
+        font-weight: 600;
+        height: 26px;
+        padding: 0 12px;
+        border-radius: 7px;
+        box-shadow:
+          0 4px 10px rgba(59, 130, 246, 0.3),
+          inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        transition: all 0.2s ease;
 
         &:hover {
-          background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-          box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+          background: $gradient-primary-strong;
+          box-shadow:
+            0 6px 14px rgba(59, 130, 246, 0.42),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
           transform: translateY(-1px);
         }
 
         &:active {
           transform: translateY(0);
-          box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
         }
       }
     }
 
     .data-table {
-      border-radius: 12px;
+      border-radius: 10px;
       overflow: hidden;
-      border: 1px solid rgba(226, 232, 240, 0.8);
+      border: 1px solid $border;
       box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.1),
-        0 2px 4px rgba(0, 0, 0, 0.04);
-      font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
+        0 2px 4px rgba(15, 23, 42, 0.04),
+        0 8px 18px rgba(15, 23, 42, 0.06),
+        $shadow-inset-top;
+      font-family: $font-stack;
 
       :deep(.el-table__header-wrapper) {
-        border-radius: 12px 12px 0 0;
+        border-radius: 10px 10px 0 0;
         overflow: hidden;
       }
 
       :deep(.el-table__header) {
         th {
-          background: linear-gradient(135deg, #ffffff 0%, #f8fafc 50%, #f1f5f9 100%);
-          padding: 4px 8px;
+          background: linear-gradient(
+            180deg,
+            #f8fafc 0%,
+            #eef2f7 100%
+          );
+          padding: 6px 8px;
           font-weight: 700;
-          color: #01173b;
-          border-bottom: 2px solid #e2e8f0;
-          border-right: 1px solid rgba(226, 232, 240, 0.6);
+          color: $text-strong;
+          border-bottom: 1px solid $border;
+          border-right: 1px solid rgba(226, 232, 240, 0.5);
           position: relative;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
           font-size: 11px;
           line-height: 1.4;
 
           &:last-child {
             border-right: none;
+          }
+
+          .cell {
+            font-family: $font-stack;
           }
 
           &::after {
@@ -2866,22 +3129,29 @@ onUnmounted(() => {
             left: 0;
             right: 0;
             height: 2px;
-            background: linear-gradient(90deg, transparent 0%, #3b82f6 50%, transparent 100%);
-            opacity: 0.3;
+            background: linear-gradient(
+              90deg,
+              transparent 0%,
+              rgba(59, 130, 246, 0.6) 50%,
+              transparent 100%
+            );
+            opacity: 0.5;
           }
         }
       }
 
       :deep(.el-table__body-wrapper) {
-        border-radius: 0 0 12px 12px;
+        border-radius: 0 0 10px 10px;
       }
 
       :deep(.el-table__row) {
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        border-bottom: 1px solid rgba(241, 245, 249, 0.6);
+        transition:
+          background-color 0.2s ease,
+          box-shadow 0.2s ease;
+        border-bottom: 1px solid rgba(241, 245, 249, 0.7);
 
         &:nth-child(even) {
-          background: rgba(248, 250, 252, 0.3);
+          background: rgba(248, 250, 252, 0.45);
         }
 
         &:last-child {
@@ -2889,25 +3159,31 @@ onUnmounted(() => {
         }
 
         &:hover {
-          background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 100%) !important;
-          transform: translateX(2px);
+          background: linear-gradient(
+            90deg,
+            rgba(239, 246, 255, 0.9) 0%,
+            rgba(224, 231, 255, 0.6) 100%
+          ) !important;
           box-shadow:
-            inset 4px 0 0 #3b82f6,
-            0 2px 12px rgba(59, 130, 246, 0.15);
-          z-index: 1;
-          position: relative;
+            inset 3px 0 0 $primary,
+            0 1px 0 rgba(59, 130, 246, 0.08);
         }
 
         td {
-          padding: 4px 8px;
+          padding: 5px 8px;
           font-size: 12px;
-          color: #050505;
+          color: $text-base;
           border-right: 1px solid rgba(241, 245, 249, 0.6);
           transition: all 0.2s ease;
-          line-height: 1.5;
+          line-height: 1.4;
+          font-family: $font-stack;
 
           &:last-child {
             border-right: none;
+          }
+
+          .cell {
+            font-family: inherit;
           }
         }
       }
@@ -2915,7 +3191,7 @@ onUnmounted(() => {
       :deep(.el-table--striped) {
         .el-table__body {
           tr.el-table__row--striped {
-            background: rgba(248, 250, 252, 0.5);
+            background: rgba(248, 250, 252, 0.55);
           }
         }
       }
@@ -2928,79 +3204,88 @@ onUnmounted(() => {
         justify-content: center;
 
         .process-name {
-          font-weight: 600;
-          color: #051bda;
+          font-weight: 700;
+          color: $primary-darker;
           font-size: 12px;
           letter-spacing: 0.2px;
           line-height: 1.3;
+          padding: 1px 8px;
+          border-radius: $radius-chip;
+          background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+          border: 1px solid rgba(59, 130, 246, 0.2);
         }
 
         small {
           font-size: 10px;
-          color: #64748b;
+          color: $text-muted;
         }
       }
 
       .target-cd {
-        // font-weight: 700;
-        color: #252b35;
+        color: $text-base;
         font-size: 12px;
         letter-spacing: 0.3px;
-        font-family: '游ゴシック体', monospace;
+        font-family: $font-num;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
         background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        padding: 1px 4px;
-        border-radius: 3px;
+        border: 1px solid $border-soft;
+        padding: 1px 6px;
+        border-radius: 4px;
         display: inline-block;
-        line-height: 1.3;
+        line-height: 1.4;
       }
 
       .target-name {
-        color: #080808;
+        color: $text-strong;
         font-size: 12px;
-        font-weight: 700;
+        font-weight: 600;
         line-height: 1.4;
       }
 
       .quantity {
-        font-weight: 700;
-        color: #1e293b;
-        font-size: 13px;
-        letter-spacing: 0.3px;
-        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-        padding: 2px 6px;
-        border-radius: 4px;
-        display: inline-block;
-        border: 1px solid rgba(59, 130, 246, 0.2);
-        line-height: 1.3;
-      }
-
-      .unit {
-        color: #64748b;
-        font-size: 10px;
-        margin-left: 3px;
         font-weight: 500;
+        color: $text-base;
+        font-size: 12px;
+        letter-spacing: 0;
+        font-family: $font-num;
+        font-variant-numeric: tabular-nums;
+        background: transparent;
+        padding: 0;
+        border-radius: 0;
+        display: inline;
+        border: none;
+        line-height: 1.4;
+
+        &.is-negative {
+          color: #dc2626;
+          font-weight: 700;
+        }
       }
 
       :deep(.el-tag) {
-        border-radius: 4px;
+        border-radius: $radius-chip;
         font-weight: 600;
         font-size: 11px;
-        padding: 2px 8px;
-        border: none;
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+        padding: 0 10px;
+        height: 20px;
+        line-height: 18px;
+        border: 1px solid $border-soft;
+        background: #fff;
+        color: $text-soft;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
         transition: all 0.2s ease;
-        line-height: 1.3;
 
         &:hover {
           transform: translateY(-1px);
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
+          box-shadow: 0 3px 6px rgba(15, 23, 42, 0.1);
         }
       }
 
       .machine-name {
-        color: #860292;
+        color: $text-soft;
         font-size: 12px;
-        font-weight: 400;
+        font-weight: 500;
         line-height: 1.4;
       }
 
@@ -3011,23 +3296,24 @@ onUnmounted(() => {
         justify-content: center;
 
         .el-button {
-          padding: 3px 8px;
+          padding: 0 10px;
           font-size: 11px;
-          border-radius: 4px;
-          font-weight: 400;
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-          line-height: 1.3;
+          height: 24px;
+          border-radius: 6px;
+          font-weight: 600;
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+          line-height: 1;
 
           &.el-button--primary {
-            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            background: $gradient-primary;
             border: none;
             color: #fff;
 
             &:hover {
-              background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+              background: $gradient-primary-strong;
+              transform: translateY(-1px);
+              box-shadow: 0 6px 12px rgba(59, 130, 246, 0.35);
             }
 
             &:active {
@@ -3042,8 +3328,8 @@ onUnmounted(() => {
 
             &:hover {
               background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+              transform: translateY(-1px);
+              box-shadow: 0 6px 12px rgba(239, 68, 68, 0.35);
             }
 
             &:active {
@@ -3055,65 +3341,126 @@ onUnmounted(() => {
     }
 
     .pagination-wrapper {
-      margin-top: 16px;
+      margin-top: 10px;
       display: flex;
       justify-content: center;
-      padding: 8px 0;
+      padding: 4px 0 2px;
 
       :deep(.el-pagination) {
-        .el-pager li,
+        font-family: $font-stack;
+
+        .el-pagination__total,
+        .el-pagination__jump {
+          font-size: 12px;
+          color: $text-soft;
+          font-weight: 500;
+        }
+
+        .el-pagination__sizes {
+          .el-input__wrapper {
+            border-radius: 6px;
+            box-shadow: 0 0 0 1px $border inset;
+          }
+        }
+
         .btn-prev,
         .btn-next {
-          border-radius: 8px;
+          border-radius: 6px;
+          background: #fff;
+          border: 1px solid $border;
+          color: $text-soft;
+          min-width: 26px;
+          height: 26px;
           transition: all 0.2s ease;
 
           &:hover {
-            background: #3b82f6;
             color: #fff;
+            background: $gradient-primary;
+            border-color: transparent;
+            box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+          }
+        }
+
+        .el-pager li {
+          border-radius: 6px;
+          margin: 0 2px;
+          min-width: 26px;
+          height: 26px;
+          line-height: 26px;
+          font-weight: 600;
+          font-size: 12px;
+          color: $text-soft;
+          background: #fff;
+          border: 1px solid $border;
+          transition: all 0.2s ease;
+
+          &:hover {
+            color: $primary;
+            border-color: rgba(59, 130, 246, 0.4);
           }
 
           &.is-active {
-            background: #3b82f6;
             color: #fff;
-            font-weight: 700;
+            background: $gradient-primary;
+            border-color: transparent;
+            box-shadow:
+              0 4px 10px rgba(59, 130, 246, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.35);
           }
         }
       }
     }
 
     .table-skeleton {
-      padding: 20px 0;
+      padding: 14px 0;
     }
 
     .table-empty {
-      padding: 48px 0;
+      padding: 36px 0;
     }
   }
 
-  // 編集ダイアログスタイル
   :deep(.edit-dialog) {
     .el-dialog {
-      border-radius: 10px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-      border: 1px solid rgba(226, 232, 240, 0.8);
+      border-radius: 14px;
+      box-shadow:
+        0 20px 50px rgba(15, 23, 42, 0.18),
+        0 8px 16px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(226, 232, 240, 0.7);
+      overflow: hidden;
+      font-family: $font-stack;
     }
 
     .el-dialog__header {
-      padding: 10px 16px;
-      border-bottom: 1px solid #f1f5f9;
-      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-      border-radius: 10px 10px 0 0;
+      padding: 12px 18px;
+      border-bottom: 1px solid $border-soft;
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.95) 0%,
+        rgba(248, 250, 252, 0.95) 100%
+      );
+      position: relative;
+      margin: 0;
+
+      &::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 3px;
+        background: linear-gradient(90deg, $primary 0%, $accent 100%);
+      }
 
       .el-dialog__title {
         font-weight: 700;
-        font-size: 15px;
-        color: #1e293b;
-        font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
+        font-size: 14px;
+        color: $text-strong;
+        letter-spacing: 0.2px;
+        font-family: $font-stack;
       }
     }
 
     .el-dialog__body {
-      padding: 12px 16px;
+      padding: 14px 18px;
       background: #ffffff;
     }
 
@@ -3130,13 +3477,14 @@ onUnmounted(() => {
 
       :deep(.el-form-item__label) {
         font-weight: 600;
-        color: #475569;
+        color: $text-soft;
         font-size: 12px;
         padding-bottom: 3px;
         padding-top: 0;
         line-height: 1.4;
         margin-bottom: 0;
-        font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
+        letter-spacing: 0.2px;
+        font-family: $font-stack;
       }
 
       :deep(.el-form-item__content) {
@@ -3145,28 +3493,28 @@ onUnmounted(() => {
 
       .readonly-field {
         :deep(.el-input__wrapper) {
-          background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+          background: $surface-1;
+          border: 1px solid $border-soft;
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
           cursor: not-allowed;
-          padding: 5px 10px;
+          padding: 4px 10px;
           min-height: 30px;
-          border-radius: 6px;
+          border-radius: 7px;
           transition: all 0.2s ease;
 
           .el-input__inner {
-            color: #475569;
+            color: $text-base;
             font-size: 12px;
             padding: 0;
             line-height: 1.4;
-            font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
-            font-weight: 500;
+            font-weight: 600;
+            font-family: $font-stack;
           }
         }
 
         :deep(.el-input.is-disabled) {
           .el-input__wrapper {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            background: $surface-1;
           }
         }
       }
@@ -3176,45 +3524,52 @@ onUnmounted(() => {
           width: 100%;
 
           .el-input__wrapper {
-            border-radius: 6px;
-            border: 2px solid #3b82f6;
-            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.15);
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            box-shadow:
+              0 0 0 3px rgba(59, 130, 246, 0.08),
+              0 2px 6px rgba(59, 130, 246, 0.08);
             transition: all 0.2s ease;
             background: #ffffff;
-            padding: 5px 10px;
-            min-height: 32px;
+            padding: 4px 10px;
+            min-height: 34px;
 
             &:hover {
-              border-color: #2563eb;
-              box-shadow: 0 3px 8px rgba(59, 130, 246, 0.25);
+              border-color: $primary-strong;
+              box-shadow:
+                0 0 0 3px rgba(59, 130, 246, 0.14),
+                0 4px 10px rgba(59, 130, 246, 0.15);
             }
 
             &.is-focus {
-              border-color: #2563eb;
-              box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+              border-color: $primary-strong;
+              box-shadow:
+                0 0 0 3px rgba(59, 130, 246, 0.2),
+                0 4px 12px rgba(59, 130, 246, 0.2);
             }
 
             .el-input__inner {
               font-size: 14px;
               font-weight: 700;
-              color: #1e293b;
+              color: $text-strong;
               text-align: left;
               padding: 0;
               line-height: 1.4;
-              font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
+              font-family: $font-num;
+              font-variant-numeric: tabular-nums;
             }
           }
 
           .el-input-number__increase,
           .el-input-number__decrease {
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border-left: 1px solid #e2e8f0;
-            color: #64748b;
+            background: $surface-1;
+            border-left: 1px solid $border-soft;
+            color: $text-muted;
             transition: all 0.2s ease;
             width: 24px;
 
             &:hover {
-              background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+              background: $gradient-primary;
               color: #fff;
             }
           }
@@ -3226,29 +3581,33 @@ onUnmounted(() => {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
-      padding: 10px 16px;
-      border-top: 1px solid #f1f5f9;
-      background: #fafbfc;
-      border-radius: 0 0 10px 10px;
+      padding: 10px 18px 12px;
+      border-top: 1px solid $border-soft;
+      background: $surface-1;
 
       .el-button {
-        min-width: 80px;
-        border-radius: 6px;
+        min-width: 84px;
+        height: 30px;
+        border-radius: 7px;
         font-weight: 600;
-        transition: all 0.2s ease;
-        font-family: '游ゴシック', 'Yu Gothic', 'YuGothic', 'Meiryo', 'メイリオ', sans-serif;
         font-size: 12px;
+        transition: all 0.2s ease;
+        font-family: $font-stack;
 
         &.save-btn {
-          background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+          background: $gradient-primary;
           border: none;
-          box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
           color: #fff;
+          box-shadow:
+            0 4px 10px rgba(59, 130, 246, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3);
 
           &:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            background: $gradient-primary-strong;
+            box-shadow:
+              0 6px 14px rgba(59, 130, 246, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.3);
           }
 
           &:active {
@@ -3257,16 +3616,16 @@ onUnmounted(() => {
         }
 
         &:not(.save-btn) {
-          background: #ffffff;
-          border: 1px solid #e2e8f0;
-          color: #64748b;
+          background: #fff;
+          border: 1px solid $border;
+          color: $text-soft;
 
           &:hover {
-            background: #f8fafc;
+            background: $surface-1;
             border-color: #cbd5e1;
-            color: #475569;
+            color: $text-base;
             transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 3px 6px rgba(15, 23, 42, 0.06);
           }
         }
       }
