@@ -8,9 +8,8 @@
           v-for="opt in processFilterOptions"
           :key="opt.value"
           size="small"
-          :type="localProcessCd === opt.value ? 'primary' : 'default'"
-          plain
           class="process-filter__btn"
+          :class="{ 'process-filter__btn--active': localProcessCd === opt.value }"
           @click="setProductProcess(opt.value)"
         >
           {{ opt.label }}
@@ -663,16 +662,19 @@ interface EditForm {
 interface Props {
   dateRange?: string[]
   itemType?: string
+  /** 親画面の製品マスタ絞込（stock-panel の product_cd クエリ） */
+  productCdFilter?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   dateRange: () => [],
   itemType: 'all',
+  productCdFilter: '',
 })
 
 // Emits
 interface Emits {
-  /** sumTotalValue: 材料タブのみ material_stock 金額列の合計（API sum_total_value） */
+  /** sumTotalValue: 材料／部品タブ stock-panel の金額合計（API sum_total_value） */
   'data-updated': [data: { total: number; data: any[]; sumTotalValue?: number }]
   'selection-change': [selection: any]
 }
@@ -1050,6 +1052,7 @@ async function openPartPrintDialog() {
       const resp = await inventoryValueApi.getStockPanel({
         tab: 'part',
         as_of: asOf,
+        product_cd: props.productCdFilter?.trim() || undefined,
         page,
         limit,
         sort_by: 'product_name',
@@ -1334,6 +1337,7 @@ async function openMaterialPrintDialog() {
       const resp = await inventoryValueApi.getStockPanel({
         tab: 'material',
         as_of: asOf,
+        product_cd: props.productCdFilter?.trim() || undefined,
         page,
         limit,
         sort_by: 'product_name',
@@ -1618,7 +1622,7 @@ const loadTableData = async () => {
         emit('data-updated', {
           total: 0,
           data: [],
-          sumTotalValue: props.itemType === '材料' ? 0 : undefined,
+          sumTotalValue: props.itemType === '材料' || props.itemType === '部品' ? 0 : undefined,
         })
         return
       }
@@ -1634,7 +1638,7 @@ const loadTableData = async () => {
         emit('data-updated', {
           total: 0,
           data: [],
-          sumTotalValue: props.itemType === '材料' ? 0 : undefined,
+          sumTotalValue: props.itemType === '材料' || props.itemType === '部品' ? 0 : undefined,
         })
         return
       }
@@ -1642,6 +1646,7 @@ const loadTableData = async () => {
         tab,
         as_of: String(endDate).slice(0, 10),
         process_cd: isProductTab.value ? localProcessCd.value : undefined,
+        product_cd: props.productCdFilter?.trim() || undefined,
         page: currentPage.value,
         limit: pageSize.value,
         sort_by: sortField.value,
@@ -1652,7 +1657,7 @@ const loadTableData = async () => {
       totalCount.value = Number(inner.total ?? 0)
       tableData.value = list
       const sumTotalValue =
-        props.itemType === '材料'
+        props.itemType === '材料' || props.itemType === '部品'
           ? Number(inner.sum_total_value ?? 0)
           : undefined
       emit('data-updated', { total: totalCount.value, data: tableData.value, sumTotalValue })
@@ -1848,7 +1853,7 @@ const calculateTableHeight = () => {
 
 // 监听props变化
 watch(
-  () => [props.dateRange, props.itemType, localProcessCd.value],
+  () => [props.dateRange, props.itemType, localProcessCd.value, props.productCdFilter],
   () => {
     currentPage.value = 1
     loadTableData()
@@ -1884,12 +1889,13 @@ defineExpose({
 
 <style scoped>
 .inventory-value-table {
+  --iv-table-space: 12px;
   width: 100%;
   height: 100%;
   display: flex;
   flex-direction: column;
   padding: 0;
-  gap: 6px;
+  gap: var(--iv-table-space);
 }
 
 .material-print-dialog :deep(.el-overlay-dialog) {
@@ -2135,47 +2141,166 @@ defineExpose({
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
+  gap: 6px;
   padding: 6px 8px;
-  background: linear-gradient(180deg, rgba(255, 251, 235, 0.65), rgba(254, 243, 199, 0.35));
-  border: 1px solid rgba(245, 158, 11, 0.22);
-  border-radius: 9px;
+  background: linear-gradient(
+    135deg,
+    rgba(248, 250, 252, 0.96) 0%,
+    rgba(255, 251, 235, 0.55) 45%,
+    rgba(254, 243, 199, 0.4) 100%
+  );
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 3px 10px rgba(15, 23, 42, 0.05);
+  animation: iv-process-strip-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease;
+}
+
+.process-filter:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 6px 20px rgba(245, 158, 11, 0.1);
 }
 
 .process-filter__label {
+  display: inline-flex;
+  align-items: center;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   color: #92400e;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   flex-shrink: 0;
+  padding: 4px 8px;
+  line-height: 1.25;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(245, 158, 11, 0.18);
 }
 
 .process-filter__btns {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   align-items: center;
   flex: 1;
   min-width: 0;
 }
 
+/* 与棚卸金額管理标题行 .header-action-btn 同高：padding 8×16、12px 字、行高 1.3、圆角 11 */
 .process-filter__btn {
-  border-radius: 7px !important;
-  font-weight: 600;
-  font-size: 11px;
-  min-height: 26px;
-  padding: 0 10px;
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0.03em;
+  border-radius: 11px !important;
+  padding: 8px 16px !important;
+  border-width: 1px !important;
+  margin: 0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.22s ease,
+    background 0.22s ease,
+    color 0.22s ease !important;
+}
+
+.process-filter__btn:not(.process-filter__btn--active) {
+  color: #92400e !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 235, 0.72)) !important;
+  border-color: rgba(245, 158, 11, 0.38) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 2px 8px rgba(245, 158, 11, 0.1);
+}
+
+.process-filter__btn:not(.process-filter__btn--active):hover {
+  color: #7c2d12 !important;
+  border-color: rgba(217, 119, 6, 0.48) !important;
+  background: linear-gradient(165deg, #fff, rgba(254, 243, 199, 0.88)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 8px 20px rgba(245, 158, 11, 0.18);
+  transform: translateY(-2px);
+}
+
+.process-filter__btn--active {
+  color: #fff !important;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 42%, #d97706 100%) !important;
+  border-color: rgba(217, 119, 6, 0.55) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 6px 18px rgba(245, 158, 11, 0.38);
+}
+
+.process-filter__btn--active:hover {
+  color: #fff !important;
+  border-color: rgba(180, 83, 9, 0.65) !important;
+  background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 40%, #b45309 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 10px 26px rgba(245, 158, 11, 0.42);
+  transform: translateY(-2px);
+}
+
+.process-filter__btn:active {
+  transform: translateY(0);
+}
+
+.process-filter__btn:focus-visible {
+  outline: 2px solid rgba(245, 158, 11, 0.45);
+  outline-offset: 2px;
 }
 
 /* 表格样式 */
 .table-container {
   flex: 1;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 250, 252, 0.96) 100%);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 8px 24px rgba(15, 23, 42, 0.08);
   overflow: hidden;
+  animation: iv-table-surface-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition:
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+}
+
+.table-container:hover {
+  border-color: rgba(14, 165, 233, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 12px 32px rgba(15, 23, 42, 0.1);
+}
+
+@keyframes iv-process-strip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes iv-table-surface-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .value-table {
@@ -2215,11 +2340,16 @@ defineExpose({
 
 .value-table :deep(.el-table__body tr) {
   background: transparent;
+  transition: background-color 0.22s ease, transform 0.22s ease;
 }
 
 .value-table :deep(.el-table__body tr:hover) {
-  background: rgba(14, 165, 233, 0.08);
+  background: rgba(14, 165, 233, 0.09);
   cursor: pointer;
+}
+
+.value-table :deep(.el-table__body tr:hover > td) {
+  transition: color 0.2s ease;
 }
 
 .value-table :deep(.el-table__body tr.el-table__row--striped) {
@@ -2318,18 +2448,40 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 7px 10px;
+  gap: var(--iv-table-space);
+  padding: var(--iv-table-space);
   margin-top: 0;
-  background: rgba(248, 250, 252, 0.9);
-  border-radius: 9px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.88) 100%);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
+  animation: iv-pagination-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+  transition: box-shadow 0.35s ease, border-color 0.3s ease;
+}
+
+.pagination-container:hover {
+  border-color: rgba(14, 165, 233, 0.2);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 4px 14px rgba(14, 165, 233, 0.08);
 }
 
 .pagination-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--iv-table-space);
+}
+
+@keyframes iv-pagination-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .info-text {
@@ -2350,20 +2502,27 @@ defineExpose({
 }
 
 .table-pagination :deep(.el-pagination .el-pager li) {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
   color: #374151;
-  border: 1px solid rgba(203, 213, 225, 0.8);
-  border-radius: 5px;
-  margin: 0 1px;
-  min-width: 24px;
-  height: 24px;
-  line-height: 22px;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  border-radius: 8px;
+  margin: 0 3px;
+  min-width: 28px;
+  height: 28px;
+  line-height: 26px;
+  font-weight: 600;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s ease;
 }
 
 .table-pagination :deep(.el-pagination .el-pager li:hover) {
-  background: rgba(102, 126, 234, 0.1);
-  border-color: #667eea;
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px rgba(14, 165, 233, 0.15);
 }
 
 .table-pagination :deep(.el-pagination .el-pager li.is-active) {
@@ -2548,18 +2707,36 @@ defineExpose({
 @media (max-width: 768px) {
   .pagination-container {
     flex-direction: column;
-    gap: 8px;
-    padding: 8px;
+    gap: var(--iv-table-space);
+    padding: var(--iv-table-space);
   }
 
   .pagination-info {
     flex-direction: column;
-    gap: 6px;
+    gap: var(--iv-table-space);
     text-align: center;
   }
 }
 
 @media (max-width: 480px) {
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-filter,
+  .table-container,
+  .pagination-container,
+  .process-filter__btn,
+  .value-table :deep(.el-table__body tr),
+  .table-pagination :deep(.el-pagination .el-pager li) {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .process-filter__btn:hover,
+  .process-filter__btn:active,
+  .table-pagination :deep(.el-pagination .el-pager li:hover) {
+    transform: none;
+  }
 }
 
 </style>

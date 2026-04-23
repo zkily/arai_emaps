@@ -169,7 +169,7 @@ export function clearProductionSummarysCalculatedFields(startDate: string) {
   return request.post<{ message?: string }>(`${BASE}/clear-calculated-fields`, { startDate })
 }
 
-/** 計画列（_plan / _actual_plan）を date >= startDate ～ +3ヶ月 で 0 にクリア（計画データ更新前初期化用） */
+/** 計画列（_plan / _actual_plan）を date >= startDate ～ +5ヶ月 で 0 にクリア（計画データ更新前初期化用） */
 export function clearProductionSummarysPlanFields(startDate: string) {
   return request.post<{ message?: string; data?: { cleared?: number } }>(`${BASE}/clear-plan-fields`, { startDate })
 }
@@ -182,7 +182,7 @@ export function clearProductionSummarysMoldingPlan(startDate: string) {
   )
 }
 
-/** 計画データ更新：schedule_details（× production_schedules × machines × processes）を集計して plan / actual_plan を更新。startDate 指定時はその日～+3ヶ月のみ対象 */
+/** 計画データ更新：schedule_details（× production_schedules × machines × processes）を集計して plan / actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象 */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }

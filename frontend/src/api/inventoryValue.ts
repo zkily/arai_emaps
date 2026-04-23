@@ -60,6 +60,8 @@ export const inventoryValueApi = {
     tab: 'material' | 'part' | 'product'
     as_of: string
     process_cd?: string
+    /** 材料CD / 部品CD / 製品CD（完全一致） */
+    product_cd?: string
     page?: number
     limit?: number
     sort_by?: string
@@ -74,6 +76,7 @@ export const inventoryValueApi = {
           as_of: params.as_of,
           process_cd:
             params.process_cd && params.process_cd !== 'all' ? params.process_cd : undefined,
+          product_cd: params.product_cd?.trim() ? params.product_cd.trim() : undefined,
           page,
           limit,
           sort_by: params.sort_by,
@@ -277,4 +280,55 @@ export const inventoryValueApi = {
   async getValueAnalysis(_params: unknown) {
     return { data: [] as unknown[] }
   },
+
+  async getMonthlyInventoryReport(params: { as_of: string }) {
+    try {
+      const res = (await request.get('/api/erp/inventory-value/report/monthly', {
+        params: { as_of: params.as_of },
+      })) as { success?: boolean; data?: MonthlyInventoryReportData }
+      return { success: res?.success ?? false, data: res?.data ?? null }
+    } catch {
+      return { success: false, data: null }
+    }
+  },
+}
+
+export interface MonthlyReportOverviewRow {
+  label: string
+  wip_qty: number
+  wip_amount: number
+  product_qty: number
+  product_amount: number
+  total_qty: number
+  total_amount: number
+}
+export interface MonthlyReportOverview {
+  rows: MonthlyReportOverviewRow[]
+  totals: {
+    wip_qty: number
+    wip_amount: number
+    product_qty: number
+    product_amount: number
+    total_qty: number
+    total_amount: number
+  }
+}
+export interface MonthlyReportPartMekaRow {
+  kind: string
+  part_cd: string
+  part_name: string
+  qty: number
+  amount: number
+}
+export interface MonthlyReportPartNonMekaRow {
+  kind: string
+  qty: number
+  amount: number
+}
+export interface MonthlyInventoryReportData {
+  overview_by_kind: MonthlyReportOverview
+  overview_by_category: MonthlyReportOverview
+  parts_meka: { rows: MonthlyReportPartMekaRow[]; totals: { qty: number; amount: number } }
+  parts_non_meka: { rows: MonthlyReportPartNonMekaRow[]; totals: { qty: number; amount: number } }
+  meta: { as_of: string; month_label: string; printed_at: string; exchange_rate: number | null }
 }

@@ -66,8 +66,7 @@ router.beforeEach(async (to, _from, next) => {
     }
   } else {
     if ((to.path === '/login' || to.path === '/') && userStore.isAuthenticated) {
-      const redirect = to.query.redirect as string
-      next(redirect || '/dashboard')
+      next('/dashboard')
     } else {
       next()
     }

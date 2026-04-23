@@ -184,6 +184,25 @@ export const useTabsStore = defineStore('tabs', () => {
       }, 100)
     }
   }
+
+  // 拖拽排序标签页
+  const moveTab = (fromIndex: number, toIndex: number) => {
+    const list = tabs.value
+    if (
+      fromIndex === toIndex ||
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= list.length ||
+      toIndex >= list.length
+    ) {
+      return
+    }
+
+    const [moved] = list.splice(fromIndex, 1)
+    if (!moved) return
+    list.splice(toIndex, 0, moved)
+    persist()
+  }
   
   return {
     tabs,
@@ -198,6 +217,7 @@ export const useTabsStore = defineStore('tabs', () => {
     closeLeftTabs,
     closeRightTabs,
     setActiveTab,
-    refreshTab
+    refreshTab,
+    moveTab
   }
 })

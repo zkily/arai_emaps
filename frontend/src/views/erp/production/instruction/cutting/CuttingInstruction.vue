@@ -8,6 +8,10 @@
           <p class="header-desc">ロット一覧・切断指示・面取指示・カンバン発行を一括管理</p>
         </div>
       </div>
+      <div class="header-right">
+        <el-button type="primary" size="small" class="done-list-btn done-list-btn--cutting" @click="openCuttingDoneDialog">切断済リスト</el-button>
+        <el-button type="success" size="small" class="done-list-btn done-list-btn--chamfering" @click="openChamferingDoneDialog">面取済リスト</el-button>
+      </div>
     </div>
 
     <!-- 上部：生産ロット 50% + 右侧 50% -->
@@ -2499,6 +2503,192 @@
       </div>
     </el-dialog>
 
+    <el-dialog
+      v-model="cuttingDoneDialogVisible"
+      title="切断済リスト"
+      width="min(98vw, 1200px)"
+      destroy-on-close
+      class="cutting-done-dialog"
+      @open="loadCuttingDoneList"
+    >
+      <div class="cutting-done-toolbar">
+        <el-form :model="cuttingDoneFilter" inline size="small" class="filter-form">
+          <el-form-item label="期間">
+            <el-date-picker
+              v-model="cuttingDoneFilter.period"
+              type="daterange"
+              range-separator="~"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              value-format="YYYY-MM-DD"
+              style="width: 260px"
+              @change="onCuttingDoneFilterChange"
+            />
+          </el-form-item>
+          <el-form-item label="製品名">
+            <el-select
+              v-model="cuttingDoneFilter.product_name"
+              placeholder="全部"
+              clearable
+              filterable
+              style="width: 180px"
+              popper-class="data-management-product-select-dropdown"
+              @change="onCuttingDoneFilterChange"
+            >
+              <el-option label="（全部）" value="" />
+              <el-option v-for="name in cuttingDoneProductNameOptions" :key="name" :label="name" :value="name" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="生産完了チェック">
+            <el-switch
+              v-model="cuttingDoneFilter.only_completed"
+              inline-prompt
+              active-text="完了のみ"
+              inactive-text="全部"
+              @change="onCuttingDoneFilterChange"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" @click="resetCuttingDoneFilter">リセット</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div class="cutting-done-table-wrap">
+        <el-table
+          v-loading="cuttingDoneLoading"
+          :data="cuttingDoneListPaged"
+          size="small"
+          stripe
+          border
+          max-height="65vh"
+          style="width: 100%"
+        >
+          <el-table-column prop="production_day" label="生産日" width="104" align="center">
+            <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="production_line" label="ライン" width="94" align="center" show-overflow-tooltip />
+          <el-table-column prop="cutting_machine" label="切断機" width="106" align="center" show-overflow-tooltip />
+          <el-table-column prop="product_cd" label="製品CD" width="112" align="center" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" min-width="166" show-overflow-tooltip />
+          <el-table-column prop="actual_production_quantity" label="生産数" width="84" align="right" />
+          <el-table-column prop="defect_qty" label="不良数" width="84" align="right" />
+          <el-table-column prop="production_completed_check" label="生産完了" width="92" align="center">
+            <template #default="{ row }">{{ row.production_completed_check ? '切断済' : '未切断' }}</template>
+          </el-table-column>
+          <el-table-column label="管理コード" width="122" align="center">
+            <template #default="{ row }">{{ getManagementCodeLast5(row) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="cutting-done-footer">
+        <span class="total-text">計 {{ cuttingDoneListFiltered.length }} 件</span>
+        <el-pagination
+          v-model:current-page="cuttingDonePagination.currentPage"
+          v-model:page-size="cuttingDonePagination.pageSize"
+          :page-sizes="[30, 50, 100]"
+          :total="cuttingDoneListFiltered.length"
+          size="small"
+          layout="total, sizes, prev, pager, next"
+          background
+          @size-change="cuttingDonePagination.currentPage = 1"
+          @current-change="() => {}"
+        />
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      v-model="chamferingDoneDialogVisible"
+      title="面取済リスト"
+      width="min(98vw, 1200px)"
+      destroy-on-close
+      class="chamfering-done-dialog"
+      @open="loadChamferingDoneList"
+    >
+      <div class="chamfering-done-toolbar">
+        <el-form :model="chamferingDoneFilter" inline size="small" class="filter-form">
+          <el-form-item label="期間">
+            <el-date-picker
+              v-model="chamferingDoneFilter.period"
+              type="daterange"
+              range-separator="~"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              value-format="YYYY-MM-DD"
+              style="width: 260px"
+              @change="onChamferingDoneFilterChange"
+            />
+          </el-form-item>
+          <el-form-item label="製品名">
+            <el-select
+              v-model="chamferingDoneFilter.product_name"
+              placeholder="全部"
+              clearable
+              filterable
+              style="width: 180px"
+              popper-class="data-management-product-select-dropdown"
+              @change="onChamferingDoneFilterChange"
+            >
+              <el-option label="（全部）" value="" />
+              <el-option v-for="name in chamferingDoneProductNameOptions" :key="name" :label="name" :value="name" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="生産完了チェック">
+            <el-switch
+              v-model="chamferingDoneFilter.only_completed"
+              inline-prompt
+              active-text="完了のみ"
+              inactive-text="全部"
+              @change="onChamferingDoneFilterChange"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button size="small" @click="resetChamferingDoneFilter">リセット</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div class="chamfering-done-table-wrap">
+        <el-table
+          v-loading="chamferingDoneLoading"
+          :data="chamferingDoneListPaged"
+          size="small"
+          stripe
+          border
+          max-height="65vh"
+          style="width: 100%"
+        >
+          <el-table-column prop="production_day" label="生産日" width="104" align="center">
+            <template #default="{ row }">{{ formatDateOnly(String(row.production_day ?? '')) || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="production_line" label="ライン" width="94" align="center" show-overflow-tooltip />
+          <el-table-column prop="chamfering_machine" label="面取機" width="106" align="center" show-overflow-tooltip />
+          <el-table-column prop="product_cd" label="製品CD" width="112" align="center" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" min-width="166" show-overflow-tooltip />
+          <el-table-column prop="actual_production_quantity" label="生産数" width="84" align="right" />
+          <el-table-column prop="defect_qty" label="不良数" width="84" align="right" />
+          <el-table-column prop="production_completed_check" label="生産完了" width="92" align="center">
+            <template #default="{ row }">{{ row.production_completed_check ? '面取済' : '未面取' }}</template>
+          </el-table-column>
+          <el-table-column label="管理コード" width="122" align="center">
+            <template #default="{ row }">{{ getManagementCodeLast5Chamfering(row) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div class="chamfering-done-footer">
+        <span class="total-text">計 {{ chamferingDoneListFiltered.length }} 件</span>
+        <el-pagination
+          v-model:current-page="chamferingDonePagination.currentPage"
+          v-model:page-size="chamferingDonePagination.pageSize"
+          :page-sizes="[30, 50, 100]"
+          :total="chamferingDoneListFiltered.length"
+          size="small"
+          layout="total, sizes, prev, pager, next"
+          background
+          @size-change="chamferingDonePagination.currentPage = 1"
+          @current-change="() => {}"
+        />
+      </div>
+    </el-dialog>
+
     <!-- 新規追加ダイアログ（新規＝量産品 / 試作＝試作品） -->
     <el-dialog
       v-model="newRecordDialogVisible"
@@ -3677,6 +3867,50 @@ const paginatedDataManagementList = computed(() => {
   return filteredDataManagementList.value.slice(start, start + dataManagementPagination.pageSize)
 })
 
+/** 切断済リスト（cutting_management） */
+const cuttingDoneDialogVisible = ref(false)
+const cuttingDoneLoading = ref(false)
+const cuttingDoneRawList = ref<CuttingManagementRow[]>([])
+const cuttingDoneFilter = reactive({
+  period: [] as string[],
+  product_name: '',
+  only_completed: false,
+})
+const cuttingDonePagination = reactive({ currentPage: 1, pageSize: 50 })
+const cuttingDoneProductNameOptions = computed(() => {
+  const set = new Set<string>()
+  cuttingDoneRawList.value.forEach((row) => {
+    const name = (row.product_name ?? '').trim()
+    if (name) set.add(name)
+  })
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
+})
+const cuttingDoneListFiltered = computed(() => {
+  const [startDay, endDay] = cuttingDoneFilter.period
+  const productName = cuttingDoneFilter.product_name
+  const onlyCompleted = cuttingDoneFilter.only_completed
+  return cuttingDoneRawList.value.filter((row) => {
+    const day = formatDateOnly(String(row.production_day ?? ''))
+    if (startDay && day && day < startDay) return false
+    if (endDay && day && day > endDay) return false
+    if (startDay && !day) return false
+    if (productName && (row.product_name ?? '') !== productName) return false
+    if (onlyCompleted && !row.production_completed_check) return false
+    return true
+  })
+})
+const cuttingDoneListPaged = computed(() => {
+  const start = (cuttingDonePagination.currentPage - 1) * cuttingDonePagination.pageSize
+  return cuttingDoneListFiltered.value.slice(start, start + cuttingDonePagination.pageSize)
+})
+watch(
+  () => [cuttingDoneFilter.period, cuttingDoneFilter.product_name, cuttingDoneFilter.only_completed],
+  () => {
+    cuttingDonePagination.currentPage = 1
+  },
+  { deep: true }
+)
+
 /** 新規追加ダイアログ（false＝量産品 / true＝試作品） */
 const newRecordIsTrialMode = ref(false)
 const newRecordDialogVisible = ref(false)
@@ -4381,6 +4615,145 @@ function resetDataManagementFilter() {
   dataManagementFilter.production_month = ''
   dataManagementFilter.equipment = ''
   dataManagementFilter.product_name = ''
+}
+
+function openCuttingDoneDialog() {
+  resetCuttingDoneFilter()
+  cuttingDoneDialogVisible.value = true
+}
+
+function onCuttingDoneFilterChange() {
+  cuttingDonePagination.currentPage = 1
+}
+
+function resetCuttingDoneFilter() {
+  cuttingDoneFilter.period = []
+  cuttingDoneFilter.product_name = ''
+  cuttingDoneFilter.only_completed = false
+  cuttingDonePagination.currentPage = 1
+}
+
+function getManagementCodeLast5(row: CuttingManagementRow): string {
+  const raw = row.management_code != null ? String(row.management_code).trim() : ''
+  if (!raw) return '-'
+  return raw.slice(-5)
+}
+
+async function loadCuttingDoneList() {
+  cuttingDoneLoading.value = true
+  cuttingDonePagination.currentPage = 1
+  try {
+    const result = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { limit: 10000 } }
+    )
+    const list = (result as any)?.success ? ((result as any).data ?? []) as CuttingManagementRow[] : []
+    cuttingDoneRawList.value = [...list].sort((a, b) => {
+      const dayA = formatDateOnly(String(a.production_day ?? ''))
+      const dayB = formatDateOnly(String(b.production_day ?? ''))
+      if (dayA !== dayB) return dayB.localeCompare(dayA)
+      const codeA = (a.management_code ?? '').toString().trim()
+      const codeB = (b.management_code ?? '').toString().trim()
+      return codeB.localeCompare(codeA, 'ja')
+    })
+  } catch (e) {
+    console.error('切断済リストの取得に失敗:', e)
+    ElMessage.error('切断済リストの取得に失敗しました')
+    cuttingDoneRawList.value = []
+  } finally {
+    cuttingDoneLoading.value = false
+  }
+}
+
+const chamferingDoneDialogVisible = ref(false)
+const chamferingDoneLoading = ref(false)
+const chamferingDoneRawList = ref<ChamferingManagementRow[]>([])
+const chamferingDoneFilter = reactive({
+  period: [] as string[],
+  product_name: '',
+  only_completed: false,
+})
+const chamferingDonePagination = reactive({ currentPage: 1, pageSize: 50 })
+const chamferingDoneProductNameOptions = computed(() => {
+  const set = new Set<string>()
+  chamferingDoneRawList.value.forEach((row) => {
+    const name = (row.product_name ?? '').trim()
+    if (name) set.add(name)
+  })
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
+})
+const chamferingDoneListFiltered = computed(() => {
+  const [startDay, endDay] = chamferingDoneFilter.period
+  const productName = chamferingDoneFilter.product_name
+  const onlyCompleted = chamferingDoneFilter.only_completed
+  return chamferingDoneRawList.value.filter((row) => {
+    const day = formatDateOnly(String(row.production_day ?? ''))
+    if (startDay && day && day < startDay) return false
+    if (endDay && day && day > endDay) return false
+    if (startDay && !day) return false
+    if (productName && (row.product_name ?? '') !== productName) return false
+    if (onlyCompleted && !row.production_completed_check) return false
+    return true
+  })
+})
+const chamferingDoneListPaged = computed(() => {
+  const start = (chamferingDonePagination.currentPage - 1) * chamferingDonePagination.pageSize
+  return chamferingDoneListFiltered.value.slice(start, start + chamferingDonePagination.pageSize)
+})
+watch(
+  () => [chamferingDoneFilter.period, chamferingDoneFilter.product_name, chamferingDoneFilter.only_completed],
+  () => {
+    chamferingDonePagination.currentPage = 1
+  },
+  { deep: true }
+)
+
+function openChamferingDoneDialog() {
+  resetChamferingDoneFilter()
+  chamferingDoneDialogVisible.value = true
+}
+
+function onChamferingDoneFilterChange() {
+  chamferingDonePagination.currentPage = 1
+}
+
+function resetChamferingDoneFilter() {
+  chamferingDoneFilter.period = []
+  chamferingDoneFilter.product_name = ''
+  chamferingDoneFilter.only_completed = false
+  chamferingDonePagination.currentPage = 1
+}
+
+function getManagementCodeLast5Chamfering(row: ChamferingManagementRow): string {
+  const raw = row.management_code != null ? String(row.management_code).trim() : ''
+  if (!raw) return '-'
+  return raw.slice(-5)
+}
+
+async function loadChamferingDoneList() {
+  chamferingDoneLoading.value = true
+  chamferingDonePagination.currentPage = 1
+  try {
+    const result = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+      '/api/plan/chamfering-management/list',
+      { params: { limit: 10000 } }
+    )
+    const list = (result as any)?.success ? ((result as any).data ?? []) as ChamferingManagementRow[] : []
+    chamferingDoneRawList.value = [...list].sort((a, b) => {
+      const dayA = formatDateOnly(String(a.production_day ?? ''))
+      const dayB = formatDateOnly(String(b.production_day ?? ''))
+      if (dayA !== dayB) return dayB.localeCompare(dayA)
+      const codeA = (a.management_code ?? '').toString().trim()
+      const codeB = (b.management_code ?? '').toString().trim()
+      return codeB.localeCompare(codeA, 'ja')
+    })
+  } catch (e) {
+    console.error('面取済リストの取得に失敗:', e)
+    ElMessage.error('面取済リストの取得に失敗しました')
+    chamferingDoneRawList.value = []
+  } finally {
+    chamferingDoneLoading.value = false
+  }
 }
 
 function isEditingDataCell(row: CuttingPlanRow, prop: string) {
@@ -7358,6 +7731,52 @@ onUnmounted(() => {
   font-weight: 400;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header-right .done-list-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border-width: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+.header-right .done-list-btn:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.06);
+}
+.header-right .done-list-btn:active {
+  transform: translateY(0);
+}
+.header-right .done-list-btn:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 1px;
+}
+
+.header-right .done-list-btn--cutting {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 55%, #1d4ed8 100%);
+  box-shadow: 0 8px 18px -8px rgba(37, 99, 235, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.header-right .done-list-btn--cutting:hover {
+  box-shadow: 0 12px 22px -10px rgba(37, 99, 235, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.header-right .done-list-btn--chamfering {
+  border-color: #059669;
+  background: linear-gradient(135deg, #10b981 0%, #059669 55%, #047857 100%);
+  box-shadow: 0 8px 18px -8px rgba(5, 150, 105, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.26);
+}
+.header-right .done-list-btn--chamfering:hover {
+  box-shadow: 0 12px 22px -10px rgba(5, 150, 105, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
 .plan-row {
   display: flex;
   gap: 12px;
@@ -8949,6 +9368,206 @@ onUnmounted(() => {
 .data-management-footer .total-text {
   font-weight: 500;
   white-space: nowrap;
+}
+
+.cutting-done-dialog :deep(.el-dialog__body) {
+  padding: 10px 12px 12px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+}
+.cutting-done-dialog :deep(.el-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  box-shadow: 0 16px 36px rgba(30, 64, 175, 0.14);
+}
+.cutting-done-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%);
+}
+.cutting-done-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e3a8a;
+  letter-spacing: 0.01em;
+}
+.cutting-done-dialog :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  right: 10px;
+}
+.cutting-done-toolbar {
+  margin-bottom: 8px;
+  padding: 8px 10px 4px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85);
+}
+.cutting-done-toolbar .filter-form :deep(.el-form-item) {
+  margin-bottom: 6px;
+  margin-right: 10px;
+}
+.cutting-done-toolbar .filter-form :deep(.el-form-item__label) {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  padding-right: 6px;
+}
+.cutting-done-toolbar .filter-form :deep(.el-input__wrapper),
+.cutting-done-toolbar .filter-form :deep(.el-select__wrapper),
+.cutting-done-toolbar .filter-form :deep(.el-range-editor) {
+  min-height: 28px;
+}
+.cutting-done-toolbar .filter-form :deep(.el-button) {
+  min-height: 28px;
+  padding: 0 10px;
+}
+.cutting-done-table-wrap {
+  min-height: 200px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.cutting-done-table-wrap :deep(.el-table) {
+  --el-table-header-bg-color: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+}
+.cutting-done-table-wrap :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1e3a8a;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 0;
+}
+.cutting-done-table-wrap :deep(.el-table td.el-table__cell) {
+  padding: 5px 0;
+  font-size: 11px;
+}
+.cutting-done-table-wrap :deep(.el-table--small .cell) {
+  line-height: 1.3;
+}
+.cutting-done-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 6px 2px 0;
+  border-top: 1px solid #e2e8f0;
+  font-size: 11px;
+  color: #475569;
+}
+.cutting-done-footer .total-text {
+  font-weight: 600;
+}
+.cutting-done-footer :deep(.el-pagination) {
+  --el-pagination-font-size: 11px;
+}
+.cutting-done-footer :deep(.el-pagination button),
+.cutting-done-footer :deep(.el-pagination .el-pager li) {
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
+}
+
+.chamfering-done-dialog :deep(.el-dialog__body) {
+  padding: 10px 12px 12px;
+  background: linear-gradient(180deg, #fbfffd 0%, #f8fafc 100%);
+}
+.chamfering-done-dialog :deep(.el-dialog) {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #d1fae5;
+  box-shadow: 0 16px 36px rgba(5, 150, 105, 0.14);
+}
+.chamfering-done-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid #d1fae5;
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+}
+.chamfering-done-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #065f46;
+  letter-spacing: 0.01em;
+}
+.chamfering-done-dialog :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  right: 10px;
+}
+.chamfering-done-toolbar {
+  margin-bottom: 8px;
+  padding: 8px 10px 4px;
+  border: 1px solid #d1fae5;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85);
+}
+.chamfering-done-toolbar .filter-form :deep(.el-form-item) {
+  margin-bottom: 6px;
+  margin-right: 10px;
+}
+.chamfering-done-toolbar .filter-form :deep(.el-form-item__label) {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  padding-right: 6px;
+}
+.chamfering-done-toolbar .filter-form :deep(.el-input__wrapper),
+.chamfering-done-toolbar .filter-form :deep(.el-select__wrapper),
+.chamfering-done-toolbar .filter-form :deep(.el-range-editor) {
+  min-height: 28px;
+}
+.chamfering-done-toolbar .filter-form :deep(.el-button) {
+  min-height: 28px;
+  padding: 0 10px;
+}
+.chamfering-done-table-wrap {
+  min-height: 200px;
+  border: 1px solid #d1fae5;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.chamfering-done-table-wrap :deep(.el-table) {
+  --el-table-header-bg-color: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+}
+.chamfering-done-table-wrap :deep(.el-table th.el-table__cell) {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #065f46;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 0;
+}
+.chamfering-done-table-wrap :deep(.el-table td.el-table__cell) {
+  padding: 5px 0;
+  font-size: 11px;
+}
+.chamfering-done-table-wrap :deep(.el-table--small .cell) {
+  line-height: 1.3;
+}
+.chamfering-done-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 6px 2px 0;
+  border-top: 1px solid #d1fae5;
+  font-size: 11px;
+  color: #475569;
+}
+.chamfering-done-footer .total-text {
+  font-weight: 600;
+}
+.chamfering-done-footer :deep(.el-pagination) {
+  --el-pagination-font-size: 11px;
+}
+.chamfering-done-footer :deep(.el-pagination button),
+.chamfering-done-footer :deep(.el-pagination .el-pager li) {
+  min-width: 24px;
+  height: 24px;
+  line-height: 24px;
 }
 
 .data-management-table-wrap .editable-cell {

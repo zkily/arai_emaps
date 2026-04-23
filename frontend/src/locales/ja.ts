@@ -1236,7 +1236,7 @@ export default {
     startDate: '開始日',
     select: '選択',
     updateProductInfoCheck: '製品情報を最新データに更新',
-    updateProductInfoNote: '月受注・日受注の製品名・別名・タイプ・入数を最新に一括更新します。',
+    updateProductInfoNote: '月受注・日受注の製品名・別名・タイプ・入数・納入先名を最新に一括更新します。',
     updateExecute: '更新実行',
     filterYear: '年',
     filterMonth: '月',

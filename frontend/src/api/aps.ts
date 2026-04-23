@@ -91,6 +91,11 @@ export interface ScheduleUpdateBody {
   run_immediately?: boolean
 }
 
+export interface ScheduleDailyPlannedUpdateBody {
+  schedule_date: string
+  planned_qty: number
+}
+
 export interface ScheduleOut {
   id: number
   line_id: number
@@ -372,6 +377,13 @@ export function updateSchedule(
   body: ScheduleUpdateBody,
 ): Promise<ScheduleOut> {
   return request.put(`${BASE}/schedules/${scheduleId}`, body)
+}
+
+export function updateScheduleDailyPlannedQty(
+  scheduleId: number,
+  body: ScheduleDailyPlannedUpdateBody,
+): Promise<any> {
+  return request.put(`${BASE}/schedules/${scheduleId}/daily-planned`, body)
 }
 
 export function deleteSchedule(scheduleId: number): Promise<any> {

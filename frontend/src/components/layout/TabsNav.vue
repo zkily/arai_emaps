@@ -12,11 +12,24 @@
     </button>
 
     <div ref="scrollContainerRef" class="tabs-scroll" @scroll="updateScrollState">
-      <div class="tabs-wrapper">
+      <transition-group name="tab-list" tag="div" class="tabs-wrapper">
         <div
           v-for="tab in tabsStore.tabs"
           :key="tab.path"
-          :class="['tab-item', { 'is-active': tab.path === tabsStore.activeTab }]"
+          :ref="(el) => setTabRef(tab.path, el)"
+          :class="[
+            'tab-item',
+            {
+              'is-active': tab.path === tabsStore.activeTab,
+              'is-dragging': draggingPath === tab.path,
+              'is-drop-target': dropTargetPath === tab.path
+            }
+          ]"
+          draggable="true"
+          @dragstart="handleDragStart($event, tab)"
+          @dragend="handleDragEnd"
+          @dragover.prevent="handleDragOver(tab)"
+          @drop.prevent="handleDrop(tab)"
           @click="handleTabClick(tab)"
           @contextmenu.prevent="handleContextMenu($event, tab)"
         >
@@ -34,7 +47,7 @@
             <Close />
           </el-icon>
         </div>
-      </div>
+      </transition-group>
     </div>
 
     <!-- 右箭头：内容超出时显示 -->
@@ -114,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
+import { reactive, ref, onMounted, onUnmounted, computed, watch, nextTick, type ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTabsStore, type TabItem } from '@/stores/tabs'
@@ -144,6 +157,10 @@ const contextMenu = reactive({
   y: 0,
   tab: null as TabItem | null
 })
+
+const draggingPath = ref<string | null>(null)
+const dropTargetPath = ref<string | null>(null)
+const tabRefs = ref<Record<string, HTMLElement>>({})
 
 const handleTabClick = (tab: TabItem) => {
   if (tab.path !== tabsStore.activeTab) {
@@ -228,11 +245,81 @@ const closeContextMenu = () => {
   contextMenu.visible = false
 }
 
+const handleDragStart = (event: DragEvent, tab: TabItem) => {
+  draggingPath.value = tab.path
+  dropTargetPath.value = null
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+const handleDragOver = (tab: TabItem) => {
+  if (!draggingPath.value || draggingPath.value === tab.path) {
+    dropTargetPath.value = null
+    return
+  }
+  dropTargetPath.value = tab.path
+}
+
+const handleDrop = (targetTab: TabItem) => {
+  const fromPath = draggingPath.value
+  if (!fromPath || fromPath === targetTab.path) {
+    handleDragEnd()
+    return
+  }
+  const fromIndex = tabsStore.tabs.findIndex((tab) => tab.path === fromPath)
+  const toIndex = tabsStore.tabs.findIndex((tab) => tab.path === targetTab.path)
+  if (fromIndex !== -1 && toIndex !== -1) {
+    tabsStore.moveTab(fromIndex, toIndex)
+    nextTick(() => ensureActiveTabVisible())
+  }
+  handleDragEnd()
+}
+
+const handleDragEnd = () => {
+  draggingPath.value = null
+  dropTargetPath.value = null
+}
+
 // 左右箭头滚动
 const scrollContainerRef = ref<HTMLElement | null>(null)
 const canScrollLeft = ref(false)
 const canScrollRight = ref(false)
 const scrollStep = 180
+
+const setTabRef = (path: string, el: Element | ComponentPublicInstance | null) => {
+  const dom = el instanceof HTMLElement ? el : null
+  if (dom) {
+    tabRefs.value[path] = dom
+    return
+  }
+  delete tabRefs.value[path]
+}
+
+function ensureActiveTabVisible(behavior: ScrollBehavior = 'smooth') {
+  const container = scrollContainerRef.value
+  const activeEl = tabRefs.value[tabsStore.activeTab]
+  if (!container || !activeEl) return
+
+  const containerRect = container.getBoundingClientRect()
+  const activeRect = activeEl.getBoundingClientRect()
+  const safeGap = 18
+
+  if (activeRect.left < containerRect.left + safeGap) {
+    container.scrollBy({
+      left: activeRect.left - containerRect.left - safeGap,
+      behavior,
+    })
+  } else if (activeRect.right > containerRect.right - safeGap) {
+    container.scrollBy({
+      left: activeRect.right - containerRect.right + safeGap,
+      behavior,
+    })
+  }
+
+  nextTick(updateScrollState)
+}
 
 function updateScrollState() {
   const el = scrollContainerRef.value
@@ -250,7 +337,14 @@ function scrollBy(delta: number) {
 }
 
 watch(() => tabsStore.tabs.length, () => {
-  nextTick(updateScrollState)
+  nextTick(() => {
+    updateScrollState()
+    ensureActiveTabVisible('auto')
+  })
+})
+
+watch(() => tabsStore.activeTab, () => {
+  nextTick(() => ensureActiveTabVisible())
 })
 
 let resizeObserver: ResizeObserver | null = null
@@ -261,6 +355,7 @@ onMounted(() => {
     const el = scrollContainerRef.value
     if (el) {
       updateScrollState()
+      ensureActiveTabVisible('auto')
       resizeObserver = new ResizeObserver(() => updateScrollState())
       resizeObserver.observe(el)
     }
@@ -372,6 +467,21 @@ onUnmounted(() => {
   min-width: 100%;
 }
 
+.tab-list-move {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tab-list-enter-active,
+.tab-list-leave-active {
+  transition: all 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tab-list-enter-from,
+.tab-list-leave-to {
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+}
+
 .tab-item {
   display: flex;
   align-items: center;
@@ -395,6 +505,10 @@ onUnmounted(() => {
     0 1px 2px rgba(0, 0, 0, 0.04),
     inset 0 1px 0 rgba(255, 255, 255, 0.9);
   flex-shrink: 0;
+}
+
+.tab-item {
+  user-select: none;
 }
 
 .tab-item::before {
@@ -431,6 +545,10 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.tab-item:active {
+  cursor: grabbing;
+}
+
 .tab-item:hover::after {
   opacity: 1;
 }
@@ -454,6 +572,21 @@ onUnmounted(() => {
 
 .tab-item.is-active::after {
   display: none;
+}
+
+.tab-item.is-dragging {
+  opacity: 0.55;
+  transform: scale(0.98);
+  box-shadow:
+    0 10px 22px rgba(99, 102, 241, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.tab-item.is-drop-target {
+  border-color: rgba(99, 102, 241, 0.65);
+  box-shadow:
+    0 0 0 2px rgba(99, 102, 241, 0.16),
+    0 4px 14px rgba(99, 102, 241, 0.18);
 }
 
 .tab-icon {
@@ -480,6 +613,11 @@ onUnmounted(() => {
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.3;
+  transition: transform 0.22s var(--tabs-ease-out);
+}
+
+.tab-item:hover .tab-title {
+  transform: translateX(1px);
 }
 
 .tab-close {
@@ -519,6 +657,15 @@ onUnmounted(() => {
   margin-left: 4px;
   border-left: 1px solid rgba(226, 232, 240, 0.7);
   flex-shrink: 0;
+}
+
+.tabs-nav::after {
+  content: '';
+  position: absolute;
+  inset: auto 10px 0 10px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(99, 102, 241, 0.2) 50%, transparent 100%);
+  pointer-events: none;
 }
 
 .action-btn {

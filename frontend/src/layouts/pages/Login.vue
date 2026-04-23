@@ -207,8 +207,7 @@ const handleLogin = async () => {
           duration: 2000,
         })
 
-        const redirect = router.currentRoute.value.query.redirect as string
-        router.push(redirect || '/dashboard')
+        router.push('/dashboard')
       } catch (error: any) {
         console.error('ログインエラー:', error)
         
@@ -244,8 +243,7 @@ onMounted(() => {
   }
 
   if (userStore.isAuthenticated) {
-    const redirect = router.currentRoute.value.query.redirect as string
-    router.push(redirect || '/dashboard')
+    router.push('/dashboard')
   }
 })
 </script>

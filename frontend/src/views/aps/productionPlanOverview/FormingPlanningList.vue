@@ -163,9 +163,13 @@
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-cell"
-                    :class="{ 'gantt-cell--tone': ganttCellHasSoftTone(row, d) }"
-                    :title="ganttCellTitle(row, d)"
+                    :class="{
+                      'gantt-cell--tone': ganttCellHasSoftTone(row, d),
+                      'gantt-cell--editable': canEditGanttPlanDate(d),
+                    }"
+                    :title="ganttEditableCellTitle(row, d)"
                     :aria-label="ganttCellHasAnyMarker(row, d) ? ganttCellTitle(row, d) : undefined"
+                    @dblclick.stop="openGanttDailyPlanEdit(row, d)"
                   >
                     <div v-if="ganttCellHasAnyMarker(row, d)" class="gantt-cell-markers">
                       <span v-if="ganttDayQty(row.daily?.[d]) !== 0" class="gantt-seg gantt-seg--plan">
@@ -493,6 +497,47 @@
         </el-tab-pane>
       </el-tabs>
     </div>
+
+    <el-dialog
+      v-model="dailyPlanEditVisible"
+      title="計画数（日別）編集"
+      width="460px"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <div class="daily-plan-edit-body">
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">設備</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.lineLabel || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">品名</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.itemName || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">日付</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.date || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">計画数</span>
+          <el-input-number
+            v-model="dailyPlanEditQty"
+            :min="0"
+            :precision="0"
+            :step="1"
+            step-strictly
+            controls-position="right"
+            style="width: 180px"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button :disabled="savingDailyPlanEdit" @click="dailyPlanEditVisible = false">キャンセル</el-button>
+          <el-button type="primary" :loading="savingDailyPlanEdit" @click="submitGanttDailyPlanEdit">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -504,6 +549,7 @@ import {
   fetchLines,
   fetchSchedulingGrid,
   replanLineSequence,
+  updateScheduleDailyPlannedQty,
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
@@ -613,6 +659,15 @@ const TABLE_GRID_PAST_YEARS = 10
 const TABLE_GRID_FUTURE_YEARS = 5
 
 const tableGridRangeNote = ref('—')
+const dailyPlanEditVisible = ref(false)
+const savingDailyPlanEdit = ref(false)
+const dailyPlanEditQty = ref<number>(0)
+const dailyPlanEditTarget = ref<{
+  scheduleId: number
+  date: string
+  itemName: string
+  lineLabel: string
+} | null>(null)
 
 function ymdFromLocalDate(d: Date): string {
   const y = d.getFullYear()
@@ -1706,7 +1761,7 @@ function formatGroupEfficiency(v: number | null | undefined): string {
   return `${Number(v).toFixed(1)}本/H`
 }
 
-const todayIso = computed(() => new Date().toISOString().slice(0, 10))
+const todayIso = computed(() => formatYmdInJapan(new Date()))
 
 function isWeekend(d: string): boolean {
   const day = new Date(d).getDay()
@@ -1715,6 +1770,10 @@ function isWeekend(d: string): boolean {
 
 function isToday(d: string): boolean {
   return d === todayIso.value
+}
+
+function canEditGanttPlanDate(d: string): boolean {
+  return d <= todayIso.value
 }
 
 function getWeekday(d: string): string {
@@ -1765,6 +1824,100 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   if (shouldShowGanttRemain(row, d)) parts.push(`残 ${remain}`)
   if (parts.length === 0) return ''
   return `${row.item_name}: ${parts.join(' / ')}`
+}
+
+function ganttEditableCellTitle(row: ScheduleGridRow, d: string): string {
+  const base = ganttCellTitle(row, d)
+  if (canEditGanttPlanDate(d)) {
+    return base ? `${base}\nダブルクリックで計画数を編集` : 'ダブルクリックで計画数を編集'
+  }
+  return base
+}
+
+function openGanttDailyPlanEdit(row: GanttListRow, d: string) {
+  if (!canEditGanttPlanDate(d)) {
+    ElMessage.warning('日別計画数は当日以前のみ編集できます')
+    return
+  }
+  dailyPlanEditTarget.value = {
+    scheduleId: row.id,
+    date: d,
+    itemName: row.item_name || '',
+    lineLabel: row.lineLabel || `ID ${row.line_id}`,
+  }
+  dailyPlanEditQty.value = Math.max(0, Math.trunc(ganttDayQty(row.daily?.[d])))
+  dailyPlanEditVisible.value = true
+}
+
+async function submitGanttDailyPlanEdit() {
+  const target = dailyPlanEditTarget.value
+  if (!target) return
+  const qty = Number(dailyPlanEditQty.value)
+  if (!Number.isFinite(qty) || qty < 0 || !Number.isInteger(qty)) {
+    ElMessage.warning('計画数は 0 以上の整数を入力してください')
+    return
+  }
+  savingDailyPlanEdit.value = true
+  try {
+    const res = await updateScheduleDailyPlannedQty(target.scheduleId, {
+      schedule_date: target.date,
+      planned_qty: qty,
+    })
+    applyLocalDailyPlannedEdit(
+      target.scheduleId,
+      target.date,
+      qty,
+      extractPlannedProcessQtyFromDailyPlanResponse(res),
+    )
+    dailyPlanEditVisible.value = false
+    ElMessage.success('日別計画数を更新しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e))
+  } finally {
+    savingDailyPlanEdit.value = false
+  }
+}
+
+function extractPlannedProcessQtyFromDailyPlanResponse(res: unknown): number | null {
+  const src = res as
+    | { planned_process_qty?: unknown; data?: { planned_process_qty?: unknown } }
+    | undefined
+  const raw = src?.planned_process_qty ?? src?.data?.planned_process_qty
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.trunc(n) : null
+}
+
+function applyLocalDailyPlannedEdit(
+  scheduleId: number,
+  scheduleDate: string,
+  plannedQty: number,
+  plannedProcessQty: number | null,
+) {
+  const patchRows = (rows: GanttListRow[]) =>
+    rows.map((row) => {
+      if (row.id !== scheduleId) return row
+      const daily = { ...(row.daily || {}) }
+      const actual = { ...(row.actual_daily || {}) }
+      const defect = { ...(row.defect_daily || {}) }
+      const remaining = { ...(row.remaining_daily || {}) }
+      daily[scheduleDate] = plannedQty
+      const a = ganttDayQty(actual[scheduleDate])
+      const df = ganttDayQty(defect[scheduleDate])
+      remaining[scheduleDate] = plannedQty - a - df
+      const next: GanttListRow = {
+        ...row,
+        daily,
+        remaining_daily: remaining,
+      }
+      if (plannedProcessQty != null) {
+        next.planned_process_qty = plannedProcessQty
+      }
+      return next
+    })
+
+  ganttRows.value = patchRows(ganttRows.value)
+  tableRows.value = patchRows(tableRows.value)
+  utilizationMonthRows.value = patchRows(utilizationMonthRows.value)
 }
 
 function periodActualForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
@@ -2951,6 +3104,35 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   text-align: left;
   padding: 2px 4px;
   vertical-align: middle;
+}
+
+.gantt-cell--editable {
+  cursor: pointer;
+}
+
+.daily-plan-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.daily-plan-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.daily-plan-edit-label {
+  width: 62px;
+  color: var(--c-text-s);
+  font-size: var(--fs-s);
+  flex: 0 0 auto;
+}
+
+.daily-plan-edit-value {
+  color: var(--c-text-h);
+  font-size: var(--fs-base);
+  font-weight: 600;
 }
 
 .gantt-cell-markers {

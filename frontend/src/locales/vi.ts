@@ -1235,7 +1235,7 @@ export default {
     startDate: 'Ngày bắt đầu',
     select: 'Chọn',
     updateProductInfoCheck: 'Cập nhật thông tin SP lên dữ liệu mới nhất',
-    updateProductInfoNote: 'Cập nhật hàng loạt tên SP, bí danh, loại, số lượng cho đơn tháng/ngày.',
+    updateProductInfoNote: 'Cập nhật hàng loạt tên SP, bí danh, loại, số lượng và tên nơi giao hàng cho đơn tháng/ngày.',
     updateExecute: 'Cập nhật',
     filterYear: 'Năm',
     filterMonth: 'Tháng',

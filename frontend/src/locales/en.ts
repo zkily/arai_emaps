@@ -1236,7 +1236,7 @@ export default {
     startDate: 'Start Date',
     select: 'Select',
     updateProductInfoCheck: 'Update product info to latest data',
-    updateProductInfoNote: 'Bulk update product name, alias, type, quantity for monthly/daily orders.',
+    updateProductInfoNote: 'Bulk update product name, alias, type, quantity, and delivery destination name for monthly/daily orders.',
     updateExecute: 'Update',
     filterYear: 'Year',
     filterMonth: 'Month',

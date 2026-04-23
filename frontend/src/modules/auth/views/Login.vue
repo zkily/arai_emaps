@@ -192,9 +192,7 @@ const handleLogin = async () => {
           duration: 2000,
         })
 
-        // リダイレクト先を確認（ログイン前にアクセスしようとしたページ）
-        const redirect = router.currentRoute.value.query.redirect as string
-        router.push(redirect || '/dashboard')
+        router.push('/dashboard')
       } catch (error: any) {
         console.error('ログインエラー:', error)
         
@@ -231,8 +229,7 @@ onMounted(() => {
 
   // 既にログインしている場合はダッシュボードにリダイレクト
   if (userStore.isAuthenticated) {
-    const redirect = router.currentRoute.value.query.redirect as string
-    router.push(redirect || '/dashboard')
+    router.push('/dashboard')
   }
 })
 </script>

@@ -77,6 +77,49 @@ def _inventory_col_for_process(process_cd: Optional[str]) -> str:
     return "warehouse_inventory"
 
 
+def _deduped_process_inventory_specs() -> List[Tuple[str, str]]:
+    """各在庫数量列を 1 回ずつ（代表 process_cd, ORM 列名）。KT10/KT15 等の重複列は先勝ち。"""
+    seen_cols: set = set()
+    out: List[Tuple[str, str]] = []
+    for proc_cd_key, inv_col in _PROCESS_CD_TO_INVENTORY_COL.items():
+        if inv_col in seen_cols:
+            continue
+        seen_cols.add(inv_col)
+        out.append((str(proc_cd_key).strip(), inv_col))
+    return out
+
+
+def _sort_product_panel_expanded_rows(rows: List[dict], sort_by: str, desc_order: bool) -> None:
+    """製品タブ「全部」展開行の並べ替え。"""
+    sb = (sort_by or "").strip()
+
+    def pk(row: dict) -> tuple:
+        pn = str(row.get("product_name") or "").casefold()
+        pc = str(row.get("product_cd") or "").casefold()
+        pr = str(row.get("route_cd") or "").casefold()
+        proc = str(row.get("process_cd") or "").casefold()
+        pnm = str(row.get("process_name") or "").casefold()
+        if sb == "product_cd":
+            return (pc, pr, proc, pn)
+        if sb == "quantity":
+            return (float(row.get("quantity") or 0), pc, pr, proc)
+        if sb == "total_value":
+            tv = row.get("total_value")
+            fv = float(tv) if tv is not None else float("-inf")
+            return (fv, pc, pr, proc)
+        if sb == "unit_price":
+            up = row.get("unit_price")
+            fv = float(up) if up is not None else float("-inf")
+            return (fv, pc, pr, proc)
+        if sb in ("process_name", "process_cd"):
+            return (pnm, proc, pc, pr, pn)
+        if sb == "kind":
+            return (str(row.get("kind") or "").casefold(), pn, pc, pr, proc)
+        return (pn, pc, pr, proc)
+
+    rows.sort(key=pk, reverse=desc_order)
+
+
 def _fnum(v) -> float:
     if v is None:
         return 0.0
@@ -730,7 +773,14 @@ async def calculate_inventory_value(
 async def get_stock_panel(
     tab: str = Query(..., description="material | part | product"),
     as_of: str = Query(..., description="対象日（通常は対象月の月末） YYYY-MM-DD"),
-    process_cd: Optional[str] = Query(None, description="製品タブのみ：工程CD（省略または all で倉庫在庫列）"),
+    process_cd: Optional[str] = Query(
+        None,
+        description="製品タブのみ：工程CD。省略または all のときは全製品×全工程在庫列を展開して返す",
+    ),
+    product_cd: Optional[str] = Query(
+        None,
+        description="品目コードで絞込（材料=material_cd、部品=part_cd、製品=product_cd、完全一致）",
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=500),
     sort_by: str = Query("product_name"),
@@ -747,6 +797,7 @@ async def get_stock_panel(
     tab_norm = (tab or "").strip().lower()
     if tab_norm not in ("material", "part", "product"):
         raise HTTPException(status_code=422, detail="tab は material / part / product のいずれかを指定してください")
+    code_filter = (product_cd or "").strip() or None
     as_of_d = _parse_as_of_date(as_of)
     desc_order = str(sort_order).strip().lower() == "desc"
     order_fn = desc if desc_order else asc
@@ -770,14 +821,15 @@ async def get_stock_panel(
         return m.get(sort_by, MaterialStock.material_name)
 
     def _part_order_col():
+        part_unit_price_expr = func.coalesce(PartStock.unit_price, 0) * func.coalesce(PartMaster.exchange_rate, 1)
         m = {
             "product_name": PartStock.part_name,
             "product_cd": PartStock.part_cd,
             "quantity": PartStock.current_stock,
             "inventory_date": PartStock.date,
-            "unit_price": PartStock.unit_price,
+            "unit_price": part_unit_price_expr,
             "updated_at": PartStock.last_updated,
-            "total_value": cast(PartStock.current_stock, Numeric) * PartStock.unit_price,
+            "total_value": cast(PartStock.current_stock, Numeric) * part_unit_price_expr,
             "kind": func.coalesce(PartMaster.kind, ""),
         }
         return m.get(sort_by, PartStock.part_name)
@@ -786,7 +838,6 @@ async def get_stock_panel(
         if tab_norm == "material":
             base = select(MaterialStock).where(MaterialStock.date == as_of_d)
             cnt_q = select(func.count()).select_from(MaterialStock).where(MaterialStock.date == as_of_d)
-            total = int((await db.execute(cnt_q)).scalar() or 0)
             sum_stmt = select(
                 func.coalesce(
                     func.sum(
@@ -797,6 +848,11 @@ async def get_stock_panel(
                     0,
                 )
             ).where(MaterialStock.date == as_of_d)
+            if code_filter:
+                base = base.where(MaterialStock.material_cd == code_filter)
+                cnt_q = cnt_q.where(MaterialStock.material_cd == code_filter)
+                sum_stmt = sum_stmt.where(MaterialStock.material_cd == code_filter)
+            total = int((await db.execute(cnt_q)).scalar() or 0)
             sum_scalar = (await db.execute(sum_stmt)).scalar()
             sum_total_value = round(float(sum_scalar or 0), 2)
             order_col = _material_order_col()
@@ -837,13 +893,26 @@ async def get_stock_panel(
             }
 
         if tab_norm == "part":
+            part_unit_price_expr = func.coalesce(PartStock.unit_price, 0) * func.coalesce(PartMaster.exchange_rate, 1)
             base = (
-                select(PartStock, PartMaster.kind)
+                select(PartStock, PartMaster.kind, PartMaster.exchange_rate)
                 .outerjoin(PartMaster, PartStock.part_cd == PartMaster.part_cd)
                 .where(PartStock.date == as_of_d)
             )
             cnt_q = select(func.count()).select_from(PartStock).where(PartStock.date == as_of_d)
+            sum_stmt = select(
+                func.coalesce(
+                    func.sum(cast(PartStock.current_stock, Numeric) * part_unit_price_expr),
+                    0,
+                )
+            ).outerjoin(PartMaster, PartStock.part_cd == PartMaster.part_cd).where(PartStock.date == as_of_d)
+            if code_filter:
+                base = base.where(PartStock.part_cd == code_filter)
+                cnt_q = cnt_q.where(PartStock.part_cd == code_filter)
+                sum_stmt = sum_stmt.where(PartStock.part_cd == code_filter)
             total = int((await db.execute(cnt_q)).scalar() or 0)
+            sum_scalar = (await db.execute(sum_stmt)).scalar()
+            sum_total_value = round(float(sum_scalar or 0), 2)
             order_col = _part_order_col()
             q = base.order_by(order_fn(order_col)).offset((page - 1) * limit).limit(limit)
             rows = list((await db.execute(q)).all())
@@ -851,7 +920,9 @@ async def get_stock_panel(
             for row in rows:
                 r = row[0]
                 part_kind = row[1]
-                up = _fnum(r.unit_price)
+                exchange_rate = _fnum(row[2]) if row[2] is not None else 1.0
+                up_raw = _fnum(r.unit_price)
+                up = round(up_raw * exchange_rate, 6)
                 qty = int(r.current_stock or 0)
                 kind_str = (str(part_kind).strip() if part_kind is not None else "") or None
                 out.append(
@@ -865,30 +936,39 @@ async def get_stock_panel(
                         "kind": kind_str,
                         "quantity": float(qty),
                         "unit": (r.unit or "") or "pcs",
+                        "unit_price_raw": up_raw,
+                        "currency": exchange_rate,
                         "unit_price": up,
                         "total_value": round(qty * up, 2),
                         "inventory_date": str(r.date) if r.date else None,
                         "updated_at": str(r.last_updated) if r.last_updated else None,
                     }
                 )
-            return {"success": True, "data": {"list": out, "total": total, "as_of": str(as_of_d)}}
+            return {
+                "success": True,
+                "data": {
+                    "list": out,
+                    "total": total,
+                    "as_of": str(as_of_d),
+                    "sum_total_value": sum_total_value,
+                },
+            }
 
         # product
-        inv_col_name = _inventory_col_for_process(process_cd)
-        inv_col = getattr(ProductionSummary, inv_col_name)
         active_cd = (process_cd or "").strip() if process_cd and str(process_cd).strip().lower() != "all" else None
-        if not active_cd:
-            proc_display = "倉庫"
-        else:
-            pn = (
-                await db.execute(select(Process.process_name).where(Process.process_cd == active_cd).limit(1))
-            ).scalar_one_or_none()
-            proc_display = pn or active_cd
 
         base = select(ProductionSummary).where(ProductionSummary.date == as_of_d)
         cnt_q = select(func.count()).select_from(ProductionSummary).where(ProductionSummary.date == as_of_d)
-        # 工程指定時：当該製品×ルートにその工程が含まれる行のみ（ルートに無い製品は表示しない）
+        if code_filter:
+            base = base.where(ProductionSummary.product_cd == code_filter)
+            cnt_q = cnt_q.where(ProductionSummary.product_cd == code_filter)
+
         if active_cd:
+            inv_col_name = _inventory_col_for_process(active_cd)
+            inv_col = getattr(ProductionSummary, inv_col_name)
+            proc_display = (
+                await db.execute(select(Process.process_name).where(Process.process_cd == active_cd).limit(1))
+            ).scalar_one_or_none() or active_cd
             in_route_for_process = exists(
                 select(1)
                 .select_from(ProductRouteStep)
@@ -900,29 +980,136 @@ async def get_stock_panel(
             )
             base = base.where(in_route_for_process)
             cnt_q = cnt_q.where(in_route_for_process)
+            total = int((await db.execute(cnt_q)).scalar() or 0)
 
-        total = int((await db.execute(cnt_q)).scalar() or 0)
+            order_map = {
+                "product_name": ProductionSummary.product_name,
+                "product_cd": ProductionSummary.product_cd,
+                "quantity": inv_col,
+                "inventory_date": ProductionSummary.date,
+                "unit_price": ProductionSummary.product_cd,
+                "total_value": inv_col,
+                "updated_at": ProductionSummary.id,
+            }
+            order_col = order_map.get(sort_by, ProductionSummary.product_name)
+            q = base.order_by(order_fn(order_col)).offset((page - 1) * limit).limit(limit)
+            rows = list((await db.execute(q)).scalars().all())
 
-        qty_order = inv_col
-        order_map = {
-            "product_name": ProductionSummary.product_name,
-            "product_cd": ProductionSummary.product_cd,
-            "quantity": inv_col,
-            "inventory_date": ProductionSummary.date,
-            "unit_price": ProductionSummary.product_cd,
-            "total_value": inv_col,
-            "updated_at": ProductionSummary.id,
-        }
-        order_col = order_map.get(sort_by, ProductionSummary.product_name)
-        q = base.order_by(order_fn(order_col)).offset((page - 1) * limit).limit(limit)
-        rows = list((await db.execute(q)).scalars().all())
+            product_codes = sorted(
+                {str(r.product_cd).strip() for r in rows if r.product_cd and str(r.product_cd).strip()}
+            )
+            product_kind_by_cd: Dict[str, Optional[str]] = {}
+            if product_codes:
+                pq = select(Product.product_cd, Product.kind).where(Product.product_cd.in_(product_codes))
+                p_rows = list((await db.execute(pq)).all())
+                for pcd, pk in p_rows:
+                    k = str(pcd or "").strip()
+                    if not k:
+                        continue
+                    product_kind_by_cd[k] = (str(pk).strip() if pk is not None else "") or None
 
-        product_codes = sorted(
-            {str(r.product_cd).strip() for r in rows if r.product_cd and str(r.product_cd).strip()}
+            pair_keys: List[Tuple[str, str]] = []
+            seen_k: set[Tuple[str, str]] = set()
+            for r in rows:
+                if not r.product_cd or not r.route_cd:
+                    continue
+                kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
+                if kk not in seen_k:
+                    seen_k.add(kk)
+                    pair_keys.append(kk)
+            snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys)
+
+            out: List[dict] = []
+            for r in rows:
+                qty = int(getattr(r, inv_col_name) or 0)
+                key = (str(r.product_cd or "").strip(), str(r.route_cd or "").strip())
+                snap_rows = snap_by_pair.get(key, [])
+                unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, active_cd, 0)
+                up = _fnum(unit_dec) if unit_dec is not None else None
+                total_v: Optional[float]
+                if up is not None:
+                    total_v = round(float(qty) * up, 2)
+                else:
+                    total_v = None
+                out.append(
+                    {
+                        "id": r.id,
+                        "stock_panel_row": True,
+                        "item_type": "製品棚卸",
+                        "product_cd": r.product_cd,
+                        "product_name": r.product_name or r.product_cd,
+                        "kind": product_kind_by_cd.get(str(r.product_cd or "").strip()),
+                        "process_name": proc_display,
+                        "process_cd": active_cd,
+                        "quantity": float(qty),
+                        "unit": "pcs",
+                        "unit_price": up,
+                        "total_value": total_v,
+                        "inventory_date": str(r.date) if r.date else None,
+                        "updated_at": None,
+                        "inventory_column": inv_col_name,
+                        "route_cd": r.route_cd,
+                    }
+                )
+            return {
+                "success": True,
+                "data": {
+                    "list": out,
+                    "total": total,
+                    "as_of": str(as_of_d),
+                    "inventory_column": inv_col_name,
+                },
+            }
+
+        # 全部：各製品×ルート × 各工程在庫列を 1 行ずつ展開
+        total_summaries = int((await db.execute(cnt_q)).scalar() or 0)
+        if total_summaries == 0:
+            return {
+                "success": True,
+                "data": {
+                    "list": [],
+                    "total": 0,
+                    "as_of": str(as_of_d),
+                    "inventory_column": "all_processes",
+                },
+            }
+
+        q_all = base.order_by(
+            asc(ProductionSummary.product_name),
+            asc(ProductionSummary.product_cd),
+            asc(ProductionSummary.route_cd),
+        )
+        all_summary_rows = list((await db.execute(q_all)).scalars().all())
+
+        pair_keys_all: List[Tuple[str, str]] = []
+        seen_all: set[Tuple[str, str]] = set()
+        for r in all_summary_rows:
+            if not r.product_cd or not r.route_cd:
+                continue
+            kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
+            if kk not in seen_all:
+                seen_all.add(kk)
+                pair_keys_all.append(kk)
+        snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys_all)
+
+        proc_inv_specs = _deduped_process_inventory_specs()
+        spec_pcds = [p[0] for p in proc_inv_specs]
+        proc_name_by_cd: Dict[str, str] = {}
+        if spec_pcds:
+            pn_rows = list(
+                (await db.execute(select(Process.process_cd, Process.process_name).where(Process.process_cd.in_(spec_pcds)))).all()
+            )
+            for a, b in pn_rows:
+                k = str(a or "").strip()
+                if k:
+                    proc_name_by_cd[k] = (str(b or "").strip() or k)
+
+        product_codes_all = sorted(
+            {str(r.product_cd).strip() for r in all_summary_rows if r.product_cd and str(r.product_cd).strip()}
         )
         product_kind_by_cd: Dict[str, Optional[str]] = {}
-        if product_codes:
-            pq = select(Product.product_cd, Product.kind).where(Product.product_cd.in_(product_codes))
+        if product_codes_all:
+            pq = select(Product.product_cd, Product.kind).where(Product.product_cd.in_(product_codes_all))
             p_rows = list((await db.execute(pq)).all())
             for pcd, pk in p_rows:
                 k = str(pcd or "").strip()
@@ -930,59 +1117,56 @@ async def get_stock_panel(
                     continue
                 product_kind_by_cd[k] = (str(pk).strip() if pk is not None else "") or None
 
-        pair_keys: List[Tuple[str, str]] = []
-        seen_k: set[Tuple[str, str]] = set()
-        for r in rows:
-            if not r.product_cd or not r.route_cd:
+        expanded: List[dict] = []
+        spec_n = len(proc_inv_specs)
+        stride = max(spec_n + 1, 32)
+        for r in all_summary_rows:
+            if not r.product_cd:
                 continue
-            kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
-            if kk not in seen_k:
-                seen_k.add(kk)
-                pair_keys.append(kk)
-        snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys)
-
-        out = []
-        for r in rows:
-            qty = int(getattr(r, inv_col_name) or 0)
-            key = (str(r.product_cd or "").strip(), str(r.route_cd or "").strip())
+            key = (str(r.product_cd).strip(), str(r.route_cd or "").strip())
             snap_rows = snap_by_pair.get(key, [])
-            if active_cd:
-                unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, active_cd, 0)
-            else:
-                unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, None, 9999)
-            up = _fnum(unit_dec) if unit_dec is not None else None
-            total_v: Optional[float]
-            if up is not None:
-                total_v = round(float(qty) * up, 2)
-            else:
-                total_v = None
-            out.append(
-                {
-                    "id": r.id,
-                    "stock_panel_row": True,
-                    "item_type": "製品棚卸",
-                    "product_cd": r.product_cd,
-                    "product_name": r.product_name or r.product_cd,
-                    "kind": product_kind_by_cd.get(str(r.product_cd or "").strip()),
-                    "process_name": proc_display,
-                    "process_cd": active_cd or "all",
-                    "quantity": float(qty),
-                    "unit": "pcs",
-                    "unit_price": up,
-                    "total_value": total_v,
-                    "inventory_date": str(r.date) if r.date else None,
-                    "updated_at": None,
-                    "inventory_column": inv_col_name,
-                    "route_cd": r.route_cd,
-                }
-            )
+            rid = int(r.id or 0)
+            for spec_idx, (proc_cd_key, inv_col_attr) in enumerate(proc_inv_specs):
+                qty = int(getattr(r, inv_col_attr, None) or 0)
+                unit_dec = _pick_cumulative_from_snapshot_rows(snap_rows, proc_cd_key, 0)
+                up = _fnum(unit_dec) if unit_dec is not None else None
+                total_v: Optional[float]
+                if up is not None:
+                    total_v = round(float(qty) * up, 2)
+                else:
+                    total_v = None
+                expanded.append(
+                    {
+                        "id": rid * stride + spec_idx,
+                        "stock_panel_row": True,
+                        "item_type": "製品棚卸",
+                        "product_cd": r.product_cd,
+                        "product_name": r.product_name or r.product_cd,
+                        "kind": product_kind_by_cd.get(str(r.product_cd or "").strip()),
+                        "process_name": proc_name_by_cd.get(proc_cd_key, proc_cd_key),
+                        "process_cd": proc_cd_key,
+                        "quantity": float(qty),
+                        "unit": "pcs",
+                        "unit_price": up,
+                        "total_value": total_v,
+                        "inventory_date": str(r.date) if r.date else None,
+                        "updated_at": None,
+                        "inventory_column": inv_col_attr,
+                        "route_cd": r.route_cd,
+                    }
+                )
+
+        _sort_product_panel_expanded_rows(expanded, sort_by, desc_order)
+        total_expanded = len(expanded)
+        start = (page - 1) * limit
+        out_page = expanded[start : start + limit]
         return {
             "success": True,
             "data": {
-                "list": out,
-                "total": total,
+                "list": out_page,
+                "total": total_expanded,
                 "as_of": str(as_of_d),
-                "inventory_column": inv_col_name,
+                "inventory_column": "all_processes",
             },
         }
     except ProgrammingError as e:
@@ -1368,3 +1552,258 @@ async def get_destinations(
             ],
         },
     }
+
+
+# ---------- 棚卸金額報告書（月次印刷用聚合） ----------
+
+# 仕掛品に含める工程列（倉庫・外注倉庫・検査は製品側）
+_WIP_INVENTORY_COLS = [
+    "cutting_inventory",
+    "chamfering_inventory",
+    "molding_inventory",
+    "plating_inventory",
+    "outsourced_plating_inventory",
+    "welding_inventory",
+    "outsourced_welding_inventory",
+    "pre_welding_inspection_inventory",
+    "pre_inspection_inventory",
+    "pre_outsourcing_inventory",
+]
+_PRODUCT_INVENTORY_COLS = [
+    "inspection_inventory",
+    "warehouse_inventory",
+    "outsourced_warehouse_inventory",
+]
+
+# kind の並び順
+_KIND_ORDER = {"T": 0, "N": 1, "F": 2}
+
+# category → 表示名
+_CATEGORY_MAP = {
+    "一般": "一般",
+    "溶接": "溶接",
+    "メカ溶接": "メカ溶接",
+}
+
+
+@router.get("/report/monthly")
+async def get_monthly_inventory_report(
+    as_of: str = Query(..., description="対象月末日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    棚卸金額報告書（月次）: 全データを一括聚合して返す。
+    - overview_by_kind: T/N/F ごとの仕掛品本数/金額・製品本数/金額
+    - overview_by_category: 一般/溶接/メカ溶接/その他
+    - parts_meka: メカ部品明細（kind='T' かつ category に 'メカ'）
+    - parts_non_meka: メカ以外を kind で集計
+    - meta: 対象月・集計日時
+    """
+    as_of_d = _parse_as_of_date(as_of)
+    now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
+    month_label = f"{as_of_d.month}月"
+
+    try:
+        # ====== 1. 製品データ（production_summarys + snapshot 単価） ======
+        prod_base = select(ProductionSummary).where(ProductionSummary.date == as_of_d)
+        prod_rows = list((await db.execute(prod_base)).scalars().all())
+
+        prod_codes = sorted({str(r.product_cd).strip() for r in prod_rows if r.product_cd})
+        prod_kind_by_cd: Dict[str, str] = {}
+        prod_category_by_cd: Dict[str, str] = {}
+        if prod_codes:
+            pq = select(Product.product_cd, Product.kind, Product.category).where(
+                Product.product_cd.in_(prod_codes)
+            )
+            for pcd, pk, pcat in (await db.execute(pq)).all():
+                cd = str(pcd or "").strip()
+                if cd:
+                    prod_kind_by_cd[cd] = (str(pk or "").strip() or "—")
+                    prod_category_by_cd[cd] = (str(pcat or "").strip() or "その他")
+
+        pair_keys: List[Tuple[str, str]] = []
+        seen_pairs: set = set()
+        for r in prod_rows:
+            if not r.product_cd or not r.route_cd:
+                continue
+            kk = (str(r.product_cd).strip(), str(r.route_cd).strip())
+            if kk not in seen_pairs:
+                seen_pairs.add(kk)
+                pair_keys.append(kk)
+        snap_by_pair = await _batch_latest_snapshots_for_route_pairs(db, pair_keys)
+
+        # kind 汇总
+        kind_wip: Dict[str, dict] = {}
+        kind_product: Dict[str, dict] = {}
+        # category 汇总
+        cat_wip: Dict[str, dict] = {}
+        cat_product: Dict[str, dict] = {}
+
+        for r in prod_rows:
+            pcd = str(r.product_cd or "").strip()
+            kind = prod_kind_by_cd.get(pcd, "—")
+            category = prod_category_by_cd.get(pcd, "その他")
+            if category not in _CATEGORY_MAP:
+                category = "その他"
+
+            key = (pcd, str(r.route_cd or "").strip())
+            snaps = snap_by_pair.get(key, [])
+            unit_dec = _pick_cumulative_from_snapshot_rows(snaps, None, 9999)
+            up = _fnum(unit_dec) if unit_dec is not None else 0.0
+
+            wip_qty = 0
+            for col in _WIP_INVENTORY_COLS:
+                wip_qty += int(getattr(r, col, None) or 0)
+            prod_qty = 0
+            for col in _PRODUCT_INVENTORY_COLS:
+                prod_qty += int(getattr(r, col, None) or 0)
+
+            wip_amt = round(wip_qty * up, 2)
+            prod_amt = round(prod_qty * up, 2)
+
+            for grp_dict_w, grp_dict_p, grp_key in [
+                (kind_wip, kind_product, kind),
+                (cat_wip, cat_product, category),
+            ]:
+                if grp_key not in grp_dict_w:
+                    grp_dict_w[grp_key] = {"qty": 0, "amount": 0.0}
+                grp_dict_w[grp_key]["qty"] += wip_qty
+                grp_dict_w[grp_key]["amount"] += wip_amt
+                if grp_key not in grp_dict_p:
+                    grp_dict_p[grp_key] = {"qty": 0, "amount": 0.0}
+                grp_dict_p[grp_key]["qty"] += prod_qty
+                grp_dict_p[grp_key]["amount"] += prod_amt
+
+        def _build_overview(wip_dict: dict, prod_dict: dict, order_keys: Optional[List[str]] = None):
+            all_keys = sorted(
+                set(list(wip_dict.keys()) + list(prod_dict.keys())),
+                key=lambda k: _KIND_ORDER.get(k, 99),
+            )
+            if order_keys:
+                all_keys = [k for k in order_keys if k in set(list(wip_dict.keys()) + list(prod_dict.keys()))]
+                extras = [k for k in set(list(wip_dict.keys()) + list(prod_dict.keys())) if k not in order_keys]
+                all_keys.extend(sorted(extras))
+            rows_out = []
+            tot_wip_qty = tot_wip_amt = tot_prod_qty = tot_prod_amt = 0
+            for k in all_keys:
+                w = wip_dict.get(k, {"qty": 0, "amount": 0.0})
+                p = prod_dict.get(k, {"qty": 0, "amount": 0.0})
+                total_qty = w["qty"] + p["qty"]
+                total_amt = round(w["amount"] + p["amount"], 2)
+                rows_out.append({
+                    "label": k,
+                    "wip_qty": w["qty"],
+                    "wip_amount": round(w["amount"], 2),
+                    "product_qty": p["qty"],
+                    "product_amount": round(p["amount"], 2),
+                    "total_qty": total_qty,
+                    "total_amount": total_amt,
+                })
+                tot_wip_qty += w["qty"]
+                tot_wip_amt += w["amount"]
+                tot_prod_qty += p["qty"]
+                tot_prod_amt += p["amount"]
+            return {
+                "rows": rows_out,
+                "totals": {
+                    "wip_qty": tot_wip_qty,
+                    "wip_amount": round(tot_wip_amt, 2),
+                    "product_qty": tot_prod_qty,
+                    "product_amount": round(tot_prod_amt, 2),
+                    "total_qty": tot_wip_qty + tot_prod_qty,
+                    "total_amount": round(tot_wip_amt + tot_prod_amt, 2),
+                },
+            }
+
+        overview_by_kind = _build_overview(kind_wip, kind_product, ["T", "N", "F"])
+        overview_by_category = _build_overview(
+            cat_wip, cat_product, ["一般", "溶接", "メカ溶接", "その他"]
+        )
+
+        # ====== 2. 部品データ ======
+        part_base = (
+            select(PartStock, PartMaster.kind, PartMaster.category, PartMaster.part_name)
+            .outerjoin(PartMaster, PartStock.part_cd == PartMaster.part_cd)
+            .where(PartStock.date == as_of_d)
+        )
+        part_rows = list((await db.execute(part_base)).all())
+
+        parts_meka_list: List[dict] = []
+        parts_non_meka_by_kind: Dict[str, dict] = {}
+
+        for row in part_rows:
+            ps = row[0]
+            p_kind = str(row[1] or "").strip() or "—"
+            p_cat = str(row[2] or "").strip()
+            p_name = str(row[3] or ps.part_name or ps.part_cd or "").strip()
+            qty = int(ps.current_stock or 0)
+            up = _fnum(ps.unit_price)
+            amt = round(qty * up, 2)
+
+            is_meka = "メカ" in p_cat if p_cat else False
+
+            if is_meka:
+                parts_meka_list.append({
+                    "kind": p_kind,
+                    "part_cd": ps.part_cd,
+                    "part_name": p_name,
+                    "qty": qty,
+                    "amount": amt,
+                })
+            else:
+                if p_kind not in parts_non_meka_by_kind:
+                    parts_non_meka_by_kind[p_kind] = {"qty": 0, "amount": 0.0}
+                parts_non_meka_by_kind[p_kind]["qty"] += qty
+                parts_non_meka_by_kind[p_kind]["amount"] += amt
+
+        parts_meka_list.sort(key=lambda x: (x.get("kind", ""), x.get("part_name", "")))
+        meka_total_qty = sum(r["qty"] for r in parts_meka_list)
+        meka_total_amt = round(sum(r["amount"] for r in parts_meka_list), 2)
+
+        non_meka_rows = []
+        nm_total_qty = 0
+        nm_total_amt = 0.0
+        for k in sorted(parts_non_meka_by_kind.keys(), key=lambda x: _KIND_ORDER.get(x, 99)):
+            d = parts_non_meka_by_kind[k]
+            non_meka_rows.append({
+                "kind": k,
+                "qty": d["qty"],
+                "amount": round(d["amount"], 2),
+            })
+            nm_total_qty += d["qty"]
+            nm_total_amt += d["amount"]
+
+        # ====== 3. 为替レート（PartMaster の exchange_rate を使う） ======
+        ex_rate_q = (
+            select(PartMaster.exchange_rate)
+            .where(PartMaster.currency != "JPY", PartMaster.exchange_rate > 0)
+            .order_by(PartMaster.id.desc())
+            .limit(1)
+        )
+        ex_row = (await db.execute(ex_rate_q)).scalar_one_or_none()
+        exchange_rate = float(ex_row) if ex_row else None
+
+        return {
+            "success": True,
+            "data": {
+                "overview_by_kind": overview_by_kind,
+                "overview_by_category": overview_by_category,
+                "parts_meka": {
+                    "rows": parts_meka_list,
+                    "totals": {"qty": meka_total_qty, "amount": meka_total_amt},
+                },
+                "parts_non_meka": {
+                    "rows": non_meka_rows,
+                    "totals": {"qty": nm_total_qty, "amount": round(nm_total_amt, 2)},
+                },
+                "meta": {
+                    "as_of": str(as_of_d),
+                    "month_label": month_label,
+                    "printed_at": now_str,
+                    "exchange_rate": exchange_rate,
+                },
+            },
+        }
+    except ProgrammingError as e:
+        raise HTTPException(status_code=503, detail="報告書データの取得に失敗しました") from e

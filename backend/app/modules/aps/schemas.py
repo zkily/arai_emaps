@@ -177,6 +177,11 @@ class ScheduleUpdateBody(BaseModel):
     run_immediately: bool = False
 
 
+class ScheduleDailyPlanUpdateBody(BaseModel):
+    schedule_date: date
+    planned_qty: int = Field(ge=0, description="日別計画数（0 以上の整数）")
+
+
 class ScheduleOut(BaseModel):
     id: int
     line_id: int

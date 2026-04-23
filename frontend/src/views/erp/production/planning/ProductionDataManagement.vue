@@ -690,7 +690,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初～+3ヶ月の plan 列をいったんクリアしたうえで、schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初～+5ヶ月の plan 列をいったんクリアしたうえで、schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>
@@ -728,7 +728,9 @@
           </div>
           <div class="transaction-info-item">
             <div class="transaction-info-label">工程</div>
-            <div class="transaction-info-value">{{ transactionInputInfo.processName }} ({{ transactionInputInfo.processCd }})</div>
+            <div class="transaction-info-value">
+              {{ transactionInputInfo.processCd }} (<span class="transaction-process-name">{{ transactionInputInfo.processName }}</span>)
+            </div>
           </div>
         </div>
       </div>
@@ -836,7 +838,7 @@
           <h3 class="confirm-title">在庫・推移を更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">計算開始日は在庫取引ログで種別「初期」かつ数量&gt;0のうち最新の取引日時の日付です（該当が無い場合は当月月初・サーバー日本時間）。その日以降の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</span>
+              <span class="detail-value">計算開始日は在庫取引ログで種別「初期」かつ数量&gt;0のうち最新の取引日時の日付です（該当が無い場合は当月月初・サーバー日本時間）。その日以降の在庫・推移・安全在庫フィールドをクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。各工程の plan 列および実計列の再集計は「計画データ更新」で当月月初～+5ヶ月の範囲が対象です。</span>
             </div>
           </div>
         </div>
@@ -3553,25 +3555,29 @@ function handleCellDoubleClick(
   const productCd = (row.product_cd ?? '').toString().trim()
   if (!productCd) return
   if (processCd !== 'KT13') {
-    getProductRouteSteps(productCd).then((steps) => {
-      const hasProcess = steps.some((s) => (s.process_cd || '').trim() === processCd)
-      if (steps.length > 0 && !hasProcess) {
-        ElMessage.warning('製品は工程に属していません')
-        return
-      }
-      openTransactionDialog(row, processCd)
-    }).catch(() => openTransactionDialog(row, processCd))
+    getProductRouteSteps(productCd)
+      .then(async (steps) => {
+        const hasProcess = steps.some((s) => (s.process_cd || '').trim() === processCd)
+        if (steps.length > 0 && !hasProcess) {
+          ElMessage.warning('製品は工程に属していません')
+          return
+        }
+        await openTransactionDialog(row, processCd)
+      })
+      .catch(async () => {
+        await openTransactionDialog(row, processCd)
+      })
   } else {
-    openTransactionDialog(row, processCd)
+    void openTransactionDialog(row, processCd)
   }
 }
 
-function openTransactionDialog(row: Record<string, any>, processCd: string) {
+async function openTransactionDialog(row: Record<string, any>, processCd: string) {
   const dateVal = row.date
   const dateStr = dateVal
     ? (typeof dateVal === 'string' ? dateVal.slice(0, 10) : String(dateVal).slice(0, 10))
     : ''
-  ensureProcessOptions()
+  await ensureProcessOptions()
   transactionInputInfo.value = {
     date: dateStr,
     productCd: (row.product_cd ?? '').toString().trim(),
@@ -5084,7 +5090,7 @@ async function executeMoldingPlanInventoryTrend() {
   const startDate = await resolveInventoryTrendCalcStartDate()
   try {
     await ElMessageBox.confirm(
-      `<p>在庫取引「初期」かつ数量&gt;0の最新取引日（無ければ当月月初・JST）以降の在庫・推移・安全在庫をクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。</p><p style="margin-top:10px">計算開始日：<strong>${startDate}</strong></p>`,
+      `<p>在庫取引「初期」かつ数量&gt;0の最新取引日（無ければ当月月初・JST）以降の在庫・推移・安全在庫をクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。各工程の plan 列および実計列の再集計は「計画データ更新」で当月月初～+5ヶ月の範囲が対象です。</p><p style="margin-top:10px">計算開始日：<strong>${startDate}</strong></p>`,
       '在庫・推移更新の確認',
       {
         confirmButtonText: '更新',
@@ -6107,6 +6113,10 @@ onUnmounted(() => {
   font-size: 14px;
   color: #1e293b;
   font-weight: 600;
+}
+.transaction-process-name {
+  color: #dc2626;
+  font-weight: 700;
 }
 .transaction-panels {
   display: grid;

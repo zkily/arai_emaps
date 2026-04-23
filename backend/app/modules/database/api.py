@@ -198,6 +198,9 @@ ACTUAL_PLAN_COLUMNS = [
 ACTUAL_PLAN_FIELDS_TO_CLEAR = [target_col for _, _, target_col in ACTUAL_PLAN_COLUMNS]
 PLAN_AND_ACTUAL_PLAN_FIELDS_TO_CLEAR = PLAN_FIELDS_TO_CLEAR + ACTUAL_PLAN_FIELDS_TO_CLEAR
 
+# 計画列（_plan / _actual_plan）のクリアおよび schedule からの plan 反映の終了：開始日からこの月数後の月末まで
+PLAN_PERIOD_MONTHS = 5
+
 # 生産計画日更新：production_summarys の *_production_date と product_process_bom の *_process_lt 対応
 # (production_date 列名, BOM の lt 列名) — 注: BOM は cuting の typo
 PRODUCTION_DATE_LT_MAPPING = [
@@ -878,7 +881,7 @@ async def clear_production_summarys_plan_fields(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    startDate 必須。date >= startDate かつ date <= startDate+3ヶ月 の行について、
+    startDate 必須。date >= startDate かつ date <= startDate+5ヶ月 の行について、
     各工程の _plan / _actual_plan 列を 0 にクリアする（計画データ更新前の初期化用）。
     """
     if not (body.startDate and body.startDate.strip()):
@@ -887,7 +890,7 @@ async def clear_production_summarys_plan_fields(
         start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
-    end_d = _parse_end_date(start_d, 3)
+    end_d = _parse_end_date(start_d, PLAN_PERIOD_MONTHS)
     set_parts = ", ".join([f"`{col}` = 0" for col in PLAN_AND_ACTUAL_PLAN_FIELDS_TO_CLEAR])
     sql = text(
         f"UPDATE production_summarys SET {set_parts} WHERE date >= :start_date AND date <= :end_date"
@@ -1741,7 +1744,7 @@ async def update_production_summarys_plan(
     が processes と一致する工程名（成型/溶接/メッキ/切断/面取/検査）に振り分け、
     production_summarys と同日・同製品で INNER JOIN した行のみ日別集計する。
     続けて各工程 plan 列へ反映し、actual/plan から actual_plan を更新する。
-    startDate を指定した場合はその日～+3ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
+    startDate を指定した場合はその日～+5ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
     """
     start_time = time.perf_counter()
     start_d = None
@@ -1749,7 +1752,7 @@ async def update_production_summarys_plan(
     if body and body.startDate and body.startDate.strip():
         try:
             start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
-            end_d = _parse_end_date(start_d, 3)
+            end_d = _parse_end_date(start_d, PLAN_PERIOD_MONTHS)
         except ValueError:
             pass
     # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング

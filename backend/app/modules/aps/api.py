@@ -50,6 +50,7 @@ from app.modules.aps.schemas import (
     LineProductStandardOut,
     ScheduleCreateBody,
     ScheduleUpdateBody,
+    ScheduleDailyPlanUpdateBody,
     ScheduleOut,
     ScheduleWithLineOut,
     ScheduleGridRow,
@@ -982,6 +983,59 @@ async def update_schedule(
         await db.flush()
 
     return _schedule_to_out(ps)
+
+
+@router.put("/schedules/{schedule_id}/daily-planned")
+async def update_schedule_daily_planned_qty(
+    schedule_id: int,
+    body: ScheduleDailyPlanUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    ps = await db.get(ProductionSchedule, schedule_id)
+    if ps is None:
+        raise HTTPException(404, "工単が見つかりません")
+
+    today_jst = now_jst().date()
+    if body.schedule_date > today_jst:
+        raise HTTPException(400, "日別計画数を編集できるのは本日以前のみです")
+
+    detail_q = await db.execute(
+        select(ScheduleDetail).where(
+            ScheduleDetail.schedule_id == schedule_id,
+            ScheduleDetail.schedule_date == body.schedule_date,
+        )
+    )
+    detail = detail_q.scalar_one_or_none()
+    if detail is None:
+        detail = ScheduleDetail(
+            schedule_id=schedule_id,
+            schedule_date=body.schedule_date,
+            planned_qty=int(body.planned_qty),
+            actual_qty=0,
+            defect_qty=0,
+            remaining_qty=int(body.planned_qty),
+        )
+        db.add(detail)
+    else:
+        detail.planned_qty = int(body.planned_qty)
+        detail.remaining_qty = int(detail.planned_qty or 0) - int(detail.actual_qty or 0) - int(detail.defect_qty or 0)
+
+    await db.flush()
+
+    total_planned_q = await db.execute(
+        select(func.coalesce(func.sum(ScheduleDetail.planned_qty), 0)).where(ScheduleDetail.schedule_id == schedule_id)
+    )
+    ps.planned_process_qty = int(total_planned_q.scalar_one() or 0)
+    await db.flush()
+
+    return {
+        "success": True,
+        "schedule_id": schedule_id,
+        "schedule_date": body.schedule_date.isoformat(),
+        "planned_qty": int(body.planned_qty),
+        "planned_process_qty": int(ps.planned_process_qty or 0),
+    }
 
 
 @router.delete("/schedules/{schedule_id}")

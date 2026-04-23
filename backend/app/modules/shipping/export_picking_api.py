@@ -1,6 +1,7 @@
 """
 ピッキングCSVエクスポート API
-POST /export/export-picking-csv: shipping_items（出荷日≥当日）を picking_list に同期し、CSV 用データを返す。
+POST /export/export-picking-csv: shipping_items（出荷日≥当日）を picking_list に UPSERT 同期し、
+CSV は shipping_items 由来の最新値で生成する。
 CSV は既定で社内共有フォルダに PickingMaster.csv として出力する。
 """
 from fastapi import APIRouter, Depends, HTTPException
@@ -39,8 +40,8 @@ async def export_picking_csv(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    出荷日が当日以降の shipping_items を picking_list に同期し、
-    picking_list ベースで CSV 用データを取得。オプションでファイル出力。
+    出荷日が当日以降の shipping_items を picking_list に UPSERT 同期し、
+    CSV 用データは JOIN 後 shipping_items 側の列で取得（編集反映）。
     リクエスト body は不要。データ範囲は DB の CURDATE() で決まる。
     """
     try:
@@ -74,25 +75,34 @@ async def export_picking_csv(
         result = await db.execute(sel)
         rows = result.mappings().all()
 
+        # INSERT IGNORE だと既存行が更新されず、CSV も pl 列のみ参照していたため
+        # shipping_items を編集しても picking_list / 出力に反映されない問題があった。
+        # UPSERT で picking_list を常に shipping_items と一致させる。
         copied_count = 0
         ins = text("""
-            INSERT IGNORE INTO picking_list (shipping_no_p, shipping_no, product_cd, product_name, confirmed_boxes)
+            INSERT INTO picking_list (shipping_no_p, shipping_no, product_cd, product_name, confirmed_boxes)
             VALUES (:shipping_no_p, :shipping_no, :product_cd, :product_name, :confirmed_boxes)
+            ON DUPLICATE KEY UPDATE
+              shipping_no = VALUES(shipping_no),
+              product_name = VALUES(product_name),
+              confirmed_boxes = VALUES(confirmed_boxes)
         """)
         for row in rows:
             r = await db.execute(ins, dict(row))
-            if r.rowcount and r.rowcount > 0:
+            # MySQL: 新規挿入=1、既存更新=2、値不変の更新=0
+            if r.rowcount == 1:
                 copied_count += 1
         await db.commit()
 
         # 3) picking_list JOIN shipping_items で当日以降のデータを取得（CSV 用）
+        # 表示列は shipping_items 側（編集反映の最終ソース）。picking_list は同期用。
         join_sel = text("""
-            SELECT pl.shipping_no_p, pl.shipping_no, pl.product_cd, pl.product_name, pl.confirmed_boxes
+            SELECT si.shipping_no_p, si.shipping_no, si.product_cd, si.product_name, si.confirmed_boxes
             FROM picking_list pl
             INNER JOIN shipping_items si
               ON pl.shipping_no_p = si.shipping_no_p AND pl.product_cd = si.product_cd
             WHERE DATE(si.shipping_date) >= CURDATE()
-            ORDER BY pl.shipping_no, pl.product_cd
+            ORDER BY si.shipping_no, si.product_cd
         """)
         join_result = await db.execute(join_sel)
         csv_rows = join_result.mappings().all()

@@ -814,6 +814,12 @@ import {
   Printer,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+import {
+  fetchLines,
+  fetchSchedulingGrid,
+  type ScheduleGridRow,
+  type SchedulingGridResponse,
+} from '@/api/aps'
 
 const props = defineProps<{
   /** MES ルートでは設備運行時間設定 UI を非表示にします */
@@ -2045,9 +2051,18 @@ const calculateSmartDateRange = async () => {
   }
 }
 
+/** 成型生産指示書の印刷対象外（仮設備・他用途など） */
+const isExcludedFormingInstructionPrintMachine = (name: string) => {
+  const n = (name || '').trim()
+  return n === '成型他'
+}
+
 // 获取要生成成型生産指示書的设备列表：指定设备时只返回该设备，未指定时返回所有成型设备
 const getFormingMachineNamesForPrint = async (): Promise<string[]> => {
   if (planSearchForm.machineName) {
+    if (isExcludedFormingInstructionPrintMachine(planSearchForm.machineName)) {
+      return []
+    }
     return [planSearchForm.machineName]
   }
   try {
@@ -2060,6 +2075,7 @@ const getFormingMachineNamesForPrint = async (): Promise<string[]> => {
     return list
       .map((m: any) => m.machine_name)
       .filter(Boolean)
+      .filter((name: string) => !isExcludedFormingInstructionPrintMachine(name))
       .sort((a: string, b: string) => a.localeCompare(b))
   } catch (error) {
     console.error('获取成型设备列表失败:', error)
@@ -3063,12 +3079,12 @@ const openSetupSchedulePreview = async () => {
   }
 }
 
-/** 操業度を整数でフォーマット（段取予定プレビュー用） */
+/** 操業度(進捗)：プレビュー編集後の表示を整数に揃える */
 const formatOperationVarianceToOneDecimal = (row: { operationVariance?: string | number }) => {
   const v = row.operationVariance
   if (v === undefined || v === null || v === '') return
   const n = Number(v)
-  if (!isNaN(n)) row.operationVariance = String(Math.round(n))
+  if (!isNaN(n) && Number.isFinite(n)) row.operationVariance = String(Math.round(n))
 }
 
 const formatPlannedWorkingHours = (v: unknown): string => {
@@ -4369,6 +4385,127 @@ const addHoursWithWorkTimes = async (
   return resultTime
 }
 
+/** FormingPlanningList 設備操業度タブと同一の APS process_cd（成型） */
+const FORMING_APS_PROCESS_CD = 'KT04'
+
+function monthRangeFromYmUtil(ym: string): [string, string] | null {
+  const t = (ym || '').trim()
+  const m = t.match(/^(\d{4})-(\d{2})/)
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2])
+  if (!Number.isFinite(y) || mo < 1 || mo > 12) return null
+  const sd = `${y}-${String(mo).padStart(2, '0')}-01`
+  const last = new Date(y, mo, 0).getDate()
+  const ed = `${y}-${String(mo).padStart(2, '0')}-${String(last).padStart(2, '0')}`
+  return [sd, ed]
+}
+
+type ScheduleGridRowWithLine = ScheduleGridRow & { line_id: number; lineLabel: string }
+
+function flattenSchedulingGridToRows(
+  grid: SchedulingGridResponse,
+  lineNameById: Map<number, string>,
+): ScheduleGridRowWithLine[] {
+  const flat: ScheduleGridRowWithLine[] = []
+  for (const block of grid.blocks || []) {
+    const label =
+      lineNameById.get(block.line_id) ||
+      String((block as { line_name?: string }).line_name || '').trim() ||
+      block.line_code ||
+      `ID ${block.line_id}`
+    for (const r of block.rows || []) {
+      flat.push({ ...r, line_id: block.line_id, lineLabel: label })
+    }
+  }
+  return flat
+}
+
+function lineLastActualDayInMonthForUtil(
+  monthDates: string[],
+  rows: ScheduleGridRowWithLine[],
+): Map<number, string | null> {
+  const lastBy = new Map<number, string | null>()
+  const lineIds = new Set(rows.map((r) => r.line_id))
+  for (const lid of lineIds) lastBy.set(lid, null)
+  for (const d of monthDates) {
+    const daySum = new Map<number, number>()
+    for (const row of rows) {
+      const lid = row.line_id
+      daySum.set(lid, (daySum.get(lid) ?? 0) + Number(row.actual_daily?.[d] ?? 0))
+    }
+    for (const [lid, v] of daySum) {
+      if (v > 0) lastBy.set(lid, d)
+    }
+  }
+  return lastBy
+}
+
+/**
+ * 生産日が属する暦月について、設備名 → 操業度差異(H)。
+ * FormingPlanningList の utilizationRows.diffHours（行別日次差を能率換算し設備合算）と同一。
+ */
+async function loadUtilizationDiffHoursByLineNameForMonth(
+  productionDateSlash: string,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const parts = productionDateSlash.split('/').filter(Boolean)
+  if (parts.length < 2) return out
+  const y = parts[0].trim()
+  const mo = parts[1].trim().padStart(2, '0')
+  const ym = `${y}-${mo}`
+  const range = monthRangeFromYmUtil(ym)
+  if (!range) return out
+  const [sd, ed] = range
+  try {
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(sd, ed, undefined, FORMING_APS_PROCESS_CD),
+      fetchLines(FORMING_APS_PROCESS_CD),
+    ])
+    const monthDates = [...(Array.isArray(grid.dates) ? grid.dates : [])].sort((a, b) =>
+      a.localeCompare(b),
+    )
+    if (monthDates.length === 0) return out
+
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
+    const rows = flattenSchedulingGridToRows(grid, lineNameById)
+    const lastActualByLine = lineLastActualDayInMonthForUtil(monthDates, rows)
+
+    const byLineId = new Map<number, number>()
+    for (const row of rows) {
+      const lineId = row.line_id
+      const rate = Number(row.efficiency_rate ?? 0)
+      const endDay = lastActualByLine.get(lineId)
+      const diffDates =
+        endDay == null || endDay === '' ? ([] as string[]) : monthDates.filter((d) => d <= endDay)
+      const diffQtyRow = diffDates.reduce((sum, d) => {
+        const p = Number(row.daily?.[d] ?? 0)
+        const a = Number(row.actual_daily?.[d] ?? 0)
+        return sum + (a - p)
+      }, 0)
+      const diffHoursRow = rate > 0 ? diffQtyRow / rate : 0
+      byLineId.set(lineId, (byLineId.get(lineId) ?? 0) + diffHoursRow)
+    }
+
+    const labelByLineId = new Map<number, string>()
+    for (const r of rows) {
+      if (!labelByLineId.has(r.line_id)) labelByLineId.set(r.line_id, r.lineLabel)
+    }
+    for (const [lineId, hours] of byLineId) {
+      const label = labelByLineId.get(lineId) || ''
+      if (label) out.set(label, hours)
+    }
+  } catch (e) {
+    console.error('APS grid 操業度差異(H)の取得に失敗:', e)
+  }
+  return out
+}
+
 // ==================== 主函数 ====================
 
 // 生成段取予定表打印内容
@@ -4440,39 +4577,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
   }
 
-  // 操業度（MES）：按 FormingPlanningList「操業度差異(H)」口径计算
-  // 差異工時 = Σ((実績 - 計画) / 能率)、范围=当月1日~今天(JST)
-  const productionPlanRateMap = new Map<string, string | number>() // machine_name -> diff_hours
+  // 操業度（MES）：FormingPlanningList「操業度差異(H)」と同一（APS scheduling/grid、日次差×能率・最終実績日まで）
+  const productionPlanRateMap = new Map<string, string | number>()
   if (planDataApiPath.value === '/api/mes/forming-plan-data') {
-    try {
-      const today = JapanDateUtils.getTodayString() // YYYY-MM-DD (JST)
-      const monthStart = `${today.slice(0, 7)}-01`
-      const utilResult = (await request.get('/api/mes/forming-plan-data', {
-        params: {
-          startDate: monthStart,
-          endDate: today,
-          processName: '成型',
-          page: 1,
-          limit: 10000,
-        },
-      })) as ApiResponse
-      const records = (utilResult.data as { records?: any[] })?.records ?? []
-      if (utilResult.success && Array.isArray(records)) {
-        records.forEach((item: any) => {
-          const machineName = (item.machine_name || '').toString().trim()
-          if (!machineName) return
-          const rate = Number(item.efficiency_rate ?? 0)
-          if (!Number.isFinite(rate) || rate <= 0) return
-          const plannedQty = Number(item.quantity ?? item.planned_quantity ?? 0)
-          const actualQty = Number(item.actual_production ?? item.actual_qty ?? 0)
-          if (!Number.isFinite(plannedQty) || !Number.isFinite(actualQty)) return
-          const diffHours = (actualQty - plannedQty) / rate
-          const prev = Number(productionPlanRateMap.get(machineName) ?? 0)
-          productionPlanRateMap.set(machineName, prev + diffHours)
-        })
-      }
-    } catch (e) {
-      console.error('MES 操業度差異(H)数据加载失败:', e)
+    const diffMap = await loadUtilizationDiffHoursByLineNameForMonth(productionDate)
+    for (const [name, hours] of diffMap) {
+      productionPlanRateMap.set(name, hours)
     }
   } else if (monthFilter) {
     // ERP 路由维持既有逻辑
@@ -5311,7 +5421,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       ? ''
       : ((currentProduct as any)?.operator || '').toString().trim()
 
-    // 操業度：production_plan_rate より machine_name（ライン）で取得（整数）
+    // 操業度：設備操業度の操業度差異(H)と同値（表示は整数）
     const rawOp = productionPlanRateMap.get(machineName)
     let operationVariance: string = ''
     if (rawOp !== undefined && rawOp !== null && rawOp !== '') {

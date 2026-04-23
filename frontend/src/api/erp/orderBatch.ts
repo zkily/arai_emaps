@@ -94,7 +94,7 @@ export interface UpdateOrderFieldsResponse {
   message: string
 }
 
-/** 製品情報一括更新（開始日以降の月受注・日受注の製品名・別名・種別・入数を主データで更新） */
+/** 製品情報一括更新（開始日以降の月受注・日受注の製品名・別名・種別・入数・納入先名を主データで更新） */
 export function updateOrderFields(body: UpdateOrderFieldsBody): Promise<UpdateOrderFieldsResponse> {
   return request.post('/api/order/monthly/update-fields', body) as Promise<UpdateOrderFieldsResponse>
 }

@@ -18,7 +18,7 @@ from calendar import monthrange
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.master.models import Product, ProductRouteStep
+from app.modules.master.models import Product, ProductRouteStep, Destination
 from app.modules.erp import models as erp_models
 from app.modules.order.generate_daily_service import run_generate_daily
 
@@ -424,8 +424,9 @@ async def update_order_fields(
     """
     開始日以降の月受注・日受注の製品情報を主データに合わせて一括更新。
     startDate の年月以降が対象。(year > startYear) OR (year = startYear AND month >= startMonth)
-    updateProductInfo が True のとき、order_monthly の product_name/product_alias/product_type と
-    order_daily の product_name/product_alias/product_type/unit_per_box を products 主データで更新。
+    updateProductInfo が True のとき、order_monthly の product_name/product_alias/product_type・destination_name と
+    order_daily の product_name/product_alias/product_type/unit_per_box・destination_name を
+    products / destinations 主データで更新。
     """
     from datetime import datetime
 
@@ -442,7 +443,7 @@ async def update_order_fields(
         od = erp_models.OrderDaily
         # 対象月订单: (year > startYear) OR (year = startYear AND month >= startMonth)
         q = (
-            select(om.id, om.order_id, om.product_cd)
+            select(om.id, om.order_id, om.product_cd, om.destination_cd)
             .where(
                 or_(
                     om.year > start_year,
@@ -459,6 +460,16 @@ async def update_order_fields(
             product_map = {p.product_cd: p for p in presult.scalars().all()}
         else:
             product_map = {}
+        destination_cds = list({r.destination_cd for r in monthly_rows if r.destination_cd})
+        if destination_cds:
+            dq = select(Destination).where(
+                Destination.destination_cd.in_(destination_cds),
+                Destination.status == 1,
+            )
+            dresult = await db.execute(dq)
+            destination_map = {d.destination_cd: d for d in dresult.scalars().all()}
+        else:
+            destination_map = {}
 
         for row in monthly_rows:
             product = product_map.get(row.product_cd)
@@ -469,21 +480,26 @@ async def update_order_fields(
             product_type = (product.product_type or "量産品") if product.product_type else "量産品"
             unit_per_box = product.unit_per_box if product.unit_per_box is not None else 0
 
-            await db.execute(
-                update(om).where(om.id == row.id).values(
-                    product_name=product_name,
-                    product_alias=product_alias,
-                    product_type=product_type,
-                )
+            dest = destination_map.get(row.destination_cd) if row.destination_cd else None
+            destination_name = (dest.destination_name.strip() if dest and dest.destination_name else None) or None
+
+            om_values = dict(
+                product_name=product_name,
+                product_alias=product_alias,
+                product_type=product_type,
             )
-            await db.execute(
-                update(od).where(od.monthly_order_id == row.order_id).values(
-                    product_name=product_name,
-                    product_alias=product_alias,
-                    product_type=product_type,
-                    unit_per_box=unit_per_box,
-                )
+            od_values = dict(
+                product_name=product_name,
+                product_alias=product_alias,
+                product_type=product_type,
+                unit_per_box=unit_per_box,
             )
+            if destination_name:
+                om_values["destination_name"] = destination_name
+                od_values["destination_name"] = destination_name
+
+            await db.execute(update(om).where(om.id == row.id).values(**om_values))
+            await db.execute(update(od).where(od.monthly_order_id == row.order_id).values(**od_values))
             updated_count += 1
 
         await db.commit()

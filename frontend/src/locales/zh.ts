@@ -1235,7 +1235,7 @@ export default {
     startDate: '开始日',
     select: '选择',
     updateProductInfoCheck: '将製品信息更新为最新数据',
-    updateProductInfoNote: '将月受注・日受注的製品名・别名・类型・数量一括更新为最新。',
+    updateProductInfoNote: '将月受注・日受注的製品名・别名・类型・数量・納入先名一括更新为最新。',
     updateExecute: '执行更新',
     filterYear: '年',
     filterMonth: '月',

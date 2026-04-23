@@ -15,10 +15,8 @@
         <div class="header-actions">
           <el-button
             v-if="activeTab === 'material'"
-            type="primary"
-            plain
             size="small"
-            class="header-material-stock-btn"
+            class="header-action-btn header-action-btn--material"
             @click="openMaterialStockInput"
           >
             <el-icon class="btn-icon"><Printer /></el-icon>
@@ -26,10 +24,8 @@
           </el-button>
           <el-button
             v-if="activeTab === 'component'"
-            type="primary"
-            plain
             size="small"
-            class="header-material-stock-btn"
+            class="header-action-btn header-action-btn--component"
             @click="openPartStockPrint"
           >
             <el-icon class="btn-icon"><Printer /></el-icon>
@@ -37,10 +33,8 @@
           </el-button>
           <el-button
             v-if="activeTab === 'product'"
-            type="primary"
-            plain
             size="small"
-            class="header-material-stock-btn"
+            class="header-action-btn header-action-btn--product-count"
             @click="openProductCountDialog"
           >
             <el-icon class="btn-icon"><Printer /></el-icon>
@@ -48,20 +42,37 @@
           </el-button>
           <el-button
             v-if="activeTab === 'product'"
-            type="primary"
-            plain
             size="small"
-            class="header-material-stock-btn"
+            class="header-action-btn header-action-btn--product-amount"
             @click="openProductAmountDialog"
           >
             <el-icon class="btn-icon"><Printer /></el-icon>
             製品金額棚卸
           </el-button>
-          <el-button size="small" @click="goToBom">BOM管理</el-button>
-          <el-button size="small" @click="goToUnitPrice">原価管理</el-button>
+          <el-button
+            size="small"
+            class="header-action-btn header-action-btn--report"
+            @click="openMonthlyReport"
+          >
+            <el-icon class="btn-icon"><Document /></el-icon>
+            棚卸報告書
+          </el-button>
+          <el-button size="small" class="header-action-btn header-action-btn--bom" @click="goToBom">
+            <span class="header-action-btn__dot header-action-btn__dot--bom" aria-hidden="true" />
+            BOM管理
+          </el-button>
+          <el-button size="small" class="header-action-btn header-action-btn--cost" @click="goToUnitPrice">
+            <span class="header-action-btn__dot header-action-btn__dot--cost" aria-hidden="true" />
+            原価管理
+          </el-button>
           <el-badge :value="visibleErrors.length" :hidden="visibleErrors.length === 0" class="error-badge">
-            <el-button size="small" :loading="errorsLoading" class="error-entry-btn" @click="openErrorDialog">
-              <WarningFilled class="btn-icon" />
+            <el-button
+              size="small"
+              :loading="errorsLoading"
+              class="header-action-btn header-action-btn--alert"
+              @click="openErrorDialog"
+            >
+              <el-icon class="btn-icon"><WarningFilled /></el-icon>
               設定不備
             </el-button>
           </el-badge>
@@ -69,11 +80,11 @@
       </div>
     </div>
 
-    <!-- 期间筛选条件 -->
+    <!-- 期間・集計範囲・製品絞込 -->
     <div class="filter-container">
-      <div class="filter-row">
-        <div class="filter-item">
-          <label class="filter-label">期間選択</label>
+      <div class="filter-row filter-row--main">
+        <div class="filter-period-inline">
+          <span class="filter-inline-label">期間選択</span>
           <el-date-picker
             v-model="selectedMonth"
             type="month"
@@ -81,19 +92,38 @@
             placeholder="月を選択"
             format="YYYY-MM"
             value-format="YYYY-MM"
-            @change="handleMonthChange"
             class="date-picker"
+            @change="handleMonthChange"
+          />
+          <el-input
+            class="range-input"
+            size="small"
+            :readonly="true"
+            :model-value="dateRangeDisplay"
+            placeholder="対象月を選択"
           />
         </div>
+        <el-select
+          v-model="filterProductCd"
+          class="product-filter-select"
+          size="small"
+          filterable
+          clearable
+          placeholder="製品で絞込"
+        >
+          <el-option
+            v-for="opt in productFilterOptions"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
         <div class="filter-actions">
-          <div class="range-tip" v-if="dateRange.length === 2">
-            集計範囲: {{ dateRange[0] }} ～ {{ dateRange[1] }}
-          </div>
-          <el-button type="primary" size="small" @click="searchData" :loading="loading" class="search-btn">
+          <el-button type="primary" size="small" :loading="loading" class="search-btn" @click="searchData">
             <Search class="btn-icon" />
             検索
           </el-button>
-          <el-button size="small" @click="clearFilters" class="clear-btn">
+          <el-button size="small" class="clear-btn" @click="clearFilters">
             <RefreshLeft class="btn-icon" />
             クリア
           </el-button>
@@ -101,7 +131,7 @@
       </div>
     </div>
 
-    <!-- 金額 KPI（API total_amount / 材料・部品・製品内訳） -->
+    <!-- 金額 KPI（合計・製品は API；材料・部品は stock-panel 金額合計を優先） -->
     <div class="kpi-strip">
       <div class="kpi-grid">
         <div class="kpi-tile kpi-tile--total">
@@ -129,7 +159,7 @@
           <div class="kpi-tile__body">
             <span class="kpi-tile__tag">部品</span>
             <div class="kpi-tile__value">
-              ¥{{ formatNumber(statistics.total?.component_amount || 0) }}
+              ¥{{ formatNumber(displayComponentKpiAmount) }}
             </div>
             <p class="kpi-tile__desc">部品金額</p>
           </div>
@@ -147,31 +177,53 @@
       </div>
     </div>
 
-    <!-- 标签页切换 -->
+    <!-- 材料 / 部品 / 製品タブ -->
     <div class="content-tabs">
       <el-card class="tab-card" shadow="never">
         <el-tabs v-model="activeTab" type="card" class="custom-tabs">
-          <el-tab-pane label="材料" name="material">
+          <el-tab-pane name="material">
+            <template #label>
+              <span class="iv-tab-label">
+                <el-icon class="iv-tab-label__icon" aria-hidden="true"><Box /></el-icon>
+                <span class="iv-tab-label__text">材料</span>
+              </span>
+            </template>
             <InventoryValueTable
               ref="materialTableRef"
               :date-range="dateRange"
+              :product-cd-filter="filterProductCd"
               item-type="材料"
               @data-updated="onMaterialStockDataUpdated"
             />
           </el-tab-pane>
 
-          <el-tab-pane label="部品" name="component">
+          <el-tab-pane name="component">
+            <template #label>
+              <span class="iv-tab-label">
+                <el-icon class="iv-tab-label__icon" aria-hidden="true"><Files /></el-icon>
+                <span class="iv-tab-label__text">部品</span>
+              </span>
+            </template>
             <InventoryValueTable
               ref="componentTableRef"
               :date-range="dateRange"
+              :product-cd-filter="filterProductCd"
               item-type="部品"
+              @data-updated="onComponentStockDataUpdated"
             />
           </el-tab-pane>
 
-          <el-tab-pane label="製品" name="product">
+          <el-tab-pane name="product">
+            <template #label>
+              <span class="iv-tab-label">
+                <el-icon class="iv-tab-label__icon" aria-hidden="true"><Goods /></el-icon>
+                <span class="iv-tab-label__text">製品</span>
+              </span>
+            </template>
             <InventoryValueTable
               ref="productTableRef"
               :date-range="dateRange"
+              :product-cd-filter="filterProductCd"
               item-type="製品"
             />
           </el-tab-pane>
@@ -380,6 +432,50 @@
       </template>
     </el-dialog>
 
+    <!-- 棚卸金額報告書（月次） -->
+    <el-dialog
+      v-model="showMonthlyReportDialog"
+      width="min(96vw, 1180px)"
+      class="monthly-report-dialog"
+      align-center
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <template #header>
+        <div class="monthly-report-dialog__header">
+          <span class="monthly-report-dialog__title">棚卸金額報告書</span>
+          <span v-if="monthlyReportData?.meta" class="product-count-dialog__date-chip">
+            {{ monthlyReportData.meta.month_label }} ({{ monthlyReportData.meta.as_of }})
+          </span>
+        </div>
+      </template>
+      <div v-loading="monthlyReportLoading" class="monthly-report-dialog__body">
+        <MonthlyInventoryReportPrint
+          v-if="monthlyReportData"
+          ref="monthlyReportRef"
+          :data="monthlyReportData"
+        />
+        <el-empty
+          v-if="!monthlyReportData && !monthlyReportLoading"
+          description="報告書データがありません。"
+          :image-size="72"
+        />
+      </div>
+      <template #footer>
+        <div class="product-count-dialog__footer">
+          <el-button size="small" @click="showMonthlyReportDialog = false">閉じる</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            :disabled="monthlyReportLoading || !monthlyReportData"
+            @click="printMonthlyReport"
+          >
+            印刷
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="showProductAmountDialog"
       width="min(96vw, 1180px)"
@@ -519,9 +615,21 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { useRouter } from 'vue-router'
-import { Operation, Search, RefreshLeft, WarningFilled, Printer } from '@element-plus/icons-vue'
-import { inventoryValueApi, type InventoryValueParams } from '@/api/inventoryValue'
+import {
+  Operation,
+  Search,
+  RefreshLeft,
+  WarningFilled,
+  Printer,
+  Box,
+  Files,
+  Goods,
+  Document,
+} from '@element-plus/icons-vue'
+import { inventoryValueApi, type InventoryValueParams, type MonthlyInventoryReportData } from '@/api/inventoryValue'
+import { getProductList } from '@/api/master/productMaster'
 import InventoryValueTable from './components/InventoryValueTable.vue'
+import MonthlyInventoryReportPrint from './components/MonthlyInventoryReportPrint.vue'
 
 const router = useRouter()
 
@@ -575,6 +683,16 @@ const productTableRef = ref()
 
 const dateRange = ref<string[]>([])
 const selectedMonth = ref('')
+/** 製品マスタに基づく CD 絞込（材料／部品／製品タブの stock-panel に渡す） */
+const filterProductCd = ref('')
+const productFilterOptions = ref<{ value: string; label: string }[]>([])
+
+const dateRangeDisplay = computed(() => {
+  if (dateRange.value?.length === 2) {
+    return `集計範囲: ${dateRange.value[0]} ～ ${dateRange.value[1]}`
+  }
+  return ''
+})
 const errors = ref<CalcError[]>([])
 const showErrorDialog = ref(false)
 const errorsLoading = ref(false)
@@ -701,6 +819,8 @@ const statistics = ref<StatisticsData>({
 
 /** 材料タブ：material_stock の金額列合計（stock-panel の sum_total_value）。未取得時は null */
 const materialStockPanelSum = ref<number | null>(null)
+/** 部品タブ：part_stock の金額合計（stock-panel の sum_total_value）。未取得時は null */
+const componentStockPanelSum = ref<number | null>(null)
 
 const displayMaterialKpiAmount = computed(() => {
   if (materialStockPanelSum.value !== null && !Number.isNaN(materialStockPanelSum.value)) {
@@ -709,11 +829,26 @@ const displayMaterialKpiAmount = computed(() => {
   return statistics.value.total.material_amount ?? 0
 })
 
+const displayComponentKpiAmount = computed(() => {
+  if (componentStockPanelSum.value !== null && !Number.isNaN(componentStockPanelSum.value)) {
+    return componentStockPanelSum.value
+  }
+  return statistics.value.total.component_amount ?? 0
+})
+
 function onMaterialStockDataUpdated(payload: { total?: number; data?: unknown[]; sumTotalValue?: number }) {
   if (typeof payload.sumTotalValue === 'number' && !Number.isNaN(payload.sumTotalValue)) {
     materialStockPanelSum.value = payload.sumTotalValue
   } else {
     materialStockPanelSum.value = null
+  }
+}
+
+function onComponentStockDataUpdated(payload: { total?: number; data?: unknown[]; sumTotalValue?: number }) {
+  if (typeof payload.sumTotalValue === 'number' && !Number.isNaN(payload.sumTotalValue)) {
+    componentStockPanelSum.value = payload.sumTotalValue
+  } else {
+    componentStockPanelSum.value = null
   }
 }
 
@@ -751,10 +886,15 @@ const errorLabel = (code: string) => {
   return map[code] || code
 }
 
-/** 工程コードが KT18（前後空白除く、大文字小文字無視）の行は一覧・件数から除外 */
-const visibleErrors = computed(() =>
-  errors.value.filter((row) => String(row.process_cd ?? '').trim().toUpperCase() !== 'KT18'),
-)
+/** 一覧に出さない行：KT18／製品名に「加工」「アーチ」を含むもの */
+function shouldShowInventoryErrorRow(row: CalcError): boolean {
+  if (String(row.process_cd ?? '').trim().toUpperCase() === 'KT18') return false
+  const name = String(row.product_name ?? '')
+  if (name.includes('加工') || name.includes('アーチ')) return false
+  return true
+}
+
+const visibleErrors = computed(() => errors.value.filter(shouldShowInventoryErrorRow))
 
 const errorTableMaxHeight = computed(() => {
   if (typeof window === 'undefined') return 400
@@ -955,15 +1095,36 @@ const clearFilters = () => {
   const now = new Date()
   selectedMonth.value = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`
   dateRange.value = getMonthRange(selectedMonth.value)
+  filterProductCd.value = ''
   searchData()
 }
 
+async function loadProductFilterOptions() {
+  try {
+    const res = await getProductList({ page: 1, pageSize: 5000 })
+    const raw = res.data?.list ?? res.list ?? []
+    const opts: { value: string; label: string }[] = []
+    for (const row of raw as { product_cd?: string; product_name?: string }[]) {
+      const cd = String(row.product_cd ?? '').trim()
+      if (!cd) continue
+      const name = String(row.product_name ?? '').trim()
+      opts.push({
+        value: cd,
+        label: name ? `${cd} ${name}` : cd,
+      })
+    }
+    opts.sort((a, b) => a.value.localeCompare(b.value, 'ja', { sensitivity: 'base' }))
+    productFilterOptions.value = opts
+  } catch {
+    productFilterOptions.value = []
+  }
+}
+
 const refreshCurrentTable = () => {
-  /** 材料 KPI は材料タブの金額合計のため、常に材料テーブルを再取得 */
+  /** 材料・部品 KPI は各タブの stock-panel 金額合計のため、常に再取得 */
   materialTableRef.value?.refreshTable()
-  if (activeTab.value === 'component') {
-    componentTableRef.value?.refreshTable()
-  } else if (activeTab.value === 'product') {
+  componentTableRef.value?.refreshTable()
+  if (activeTab.value === 'product') {
     productTableRef.value?.refreshTable()
   }
 }
@@ -1517,6 +1678,118 @@ function exportProductAmountData() {
   }
 }
 
+// ---------- 棚卸金額報告書（月次） ----------
+const showMonthlyReportDialog = ref(false)
+const monthlyReportLoading = ref(false)
+const monthlyReportData = ref<MonthlyInventoryReportData | null>(null)
+const monthlyReportRef = ref<InstanceType<typeof MonthlyInventoryReportPrint> | null>(null)
+
+async function openMonthlyReport() {
+  const endDate = dateRange.value?.[1]
+  if (!endDate) {
+    ElMessage.warning('対象月（月末日）を選択してください')
+    return
+  }
+  showMonthlyReportDialog.value = true
+  monthlyReportLoading.value = true
+  monthlyReportData.value = null
+  try {
+    const res = await inventoryValueApi.getMonthlyInventoryReport({ as_of: String(endDate).slice(0, 10) })
+    if (res.success && res.data) {
+      monthlyReportData.value = res.data
+    } else {
+      ElMessage.error('報告書データの取得に失敗しました')
+    }
+  } catch {
+    ElMessage.error('報告書データの取得に失敗しました')
+  } finally {
+    monthlyReportLoading.value = false
+  }
+}
+
+function printMonthlyReport() {
+  const el = monthlyReportRef.value?.$el as HTMLElement | undefined
+  if (!el) return
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) {
+    ElMessage.warning('ポップアップがブロックされました。許可してください。')
+    return
+  }
+  const html = el.innerHTML
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>棚卸金額報告書</title>
+<style>
+@page { size: A4 portrait; margin: 10mm 8mm; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Meiryo', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif;
+  font-size: 10px;
+  color: #0f172a;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.mir-page {
+  width: 100%;
+  max-width: 188mm;
+  margin: 0 auto;
+  padding: 0;
+}
+.mir-header { text-align: center; margin-bottom: 5px; }
+.mir-title { font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #0b3a67; }
+.mir-subtitle { font-size: 10px; color: #5f6f85; margin-top: 2px; }
+.mir-meta {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 9px;
+  color: #3f4f68;
+  margin-bottom: 7px;
+  padding: 4px 6px;
+  background: #eef5ff;
+  border: 1px solid #d6e5f7;
+  border-radius: 6px;
+}
+.mir-section {
+  margin-bottom: 7px;
+  border: 1px solid #d7e2ef;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  page-break-inside: avoid;
+}
+.mir-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0c4a7d;
+  background: linear-gradient(90deg, #e8f3ff 0%, #f4f9ff 100%);
+  padding: 4px 8px;
+  border-left: 3px solid #2b79c2;
+  border-bottom: 1px solid #d7e2ef;
+}
+table { width: 100%; border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+th, td { border: 1px solid #d8e1ec; padding: 5px 7px; }
+th { background: #f3f8fd; font-weight: 600; text-align: center; white-space: nowrap; color: #334155; font-size: 10px; }
+td { text-align: right; background: #fff; }
+td.left { text-align: left; }
+td.center { text-align: center; }
+tr.total-row { background: #edf6ff; font-weight: 700; }
+tr.total-row td {
+  border-top: 2px solid #3d86cc;
+  background: #edf6ff;
+  color: #0f3f6e;
+}
+.mir-footer { text-align: right; font-size: 8px; color: #6b7f95; margin-top: 4px; }
+</style>
+</head>
+<body onload="window.print();window.close();">${html}</body>
+</html>`)
+  printWindow.document.close()
+}
+
 const goToBom = () => { router.push('/master/bom/product-bom') }
 const goToUnitPrice = () => { router.push('/master/bom/product-unit-price') }
 
@@ -1524,6 +1797,7 @@ watch(
   () => (dateRange.value?.length === 2 ? `${dateRange.value[0]}|${dateRange.value[1]}` : ''),
   () => {
     materialStockPanelSum.value = null
+    componentStockPanelSum.value = null
   },
 )
 
@@ -1531,6 +1805,7 @@ onMounted(() => {
   const now = new Date()
   selectedMonth.value = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`
   dateRange.value = getMonthRange(selectedMonth.value)
+  void loadProductFilterOptions()
   searchData()
 })
 </script>
@@ -1558,12 +1833,14 @@ onMounted(() => {
 
 .page-header {
   margin-bottom: 8px;
-  padding: 8px 12px;
-  background: var(--ivm-surface);
-  border-radius: 10px;
-  border: 1px solid var(--ivm-border);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
-  backdrop-filter: blur(10px);
+  padding: 10px 14px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 250, 252, 0.92) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 6px 22px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(12px);
 }
 
 .header-content {
@@ -1621,33 +1898,227 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 10px;
   align-items: center;
+  justify-content: flex-end;
 }
 
-.header-actions :deep(.el-button) {
-  border-radius: 8px;
+.header-action-btn {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.03em;
+  border-radius: 11px !important;
+  padding: 8px 16px !important;
+  line-height: 1.3 !important;
+  border-width: 1px !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s ease,
+    border-color 0.22s ease,
+    background 0.22s ease,
+    color 0.22s ease !important;
 }
 
-.header-material-stock-btn {
-  font-weight: 600;
+.header-action-btn :deep(.el-button__content) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.header-action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.header-action-btn:active {
+  transform: translateY(0);
+}
+
+.header-action-btn .btn-icon {
+  font-size: 15px;
+}
+
+.header-action-btn__dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.header-action-btn__dot--bom {
+  background: linear-gradient(135deg, #a5b4fc, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+}
+
+.header-action-btn__dot--cost {
+  background: linear-gradient(135deg, #5eead4, #0d9488);
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.2);
+}
+
+/* 材料タブ：印刷・入力 */
+.header-action-btn--material {
+  color: #075985 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(224, 242, 254, 0.65)) !important;
+  border-color: rgba(14, 165, 233, 0.42) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 14px rgba(14, 165, 233, 0.2);
+}
+
+.header-action-btn--material:hover {
+  color: #0c4a6e !important;
+  border-color: rgba(2, 132, 199, 0.55) !important;
+  background: linear-gradient(165deg, #fff, rgba(186, 230, 253, 0.85)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(14, 165, 233, 0.28);
+}
+
+/* 部品タブ：印刷 */
+.header-action-btn--component {
+  color: #065f46 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(209, 250, 229, 0.65)) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 14px rgba(16, 185, 129, 0.18);
+}
+
+.header-action-btn--component:hover {
+  color: #064e3b !important;
+  border-color: rgba(5, 150, 105, 0.55) !important;
+  background: linear-gradient(165deg, #fff, rgba(167, 243, 208, 0.88)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(16, 185, 129, 0.26);
+}
+
+/* 製品：本数棚卸（バイオレット系） */
+.header-action-btn--product-count {
+  color: #5b21b6 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(237, 233, 254, 0.75)) !important;
+  border-color: rgba(139, 92, 246, 0.42) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 4px 14px rgba(139, 92, 246, 0.2);
+}
+
+.header-action-btn--product-count:hover {
+  color: #4c1d95 !important;
+  border-color: rgba(124, 58, 237, 0.55) !important;
+  background: linear-gradient(165deg, #fff, rgba(221, 214, 254, 0.92)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(139, 92, 246, 0.28);
+}
+
+/* 製品：金額棚卸（アンバー系） */
+.header-action-btn--product-amount {
+  color: #9a3412 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(254, 243, 199, 0.72)) !important;
+  border-color: rgba(245, 158, 11, 0.48) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 14px rgba(245, 158, 11, 0.22);
+}
+
+.header-action-btn--product-amount:hover {
+  color: #7c2d12 !important;
+  border-color: rgba(217, 119, 6, 0.58) !important;
+  background: linear-gradient(165deg, #fff, rgba(253, 230, 138, 0.88)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(245, 158, 11, 0.3);
+}
+
+/* BOM */
+.header-action-btn--bom {
+  color: #3730a3 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(224, 231, 255, 0.55)) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 3px 12px rgba(99, 102, 241, 0.12);
+}
+
+.header-action-btn--bom:hover {
+  color: #312e81 !important;
+  border-color: rgba(79, 70, 229, 0.5) !important;
+  background: linear-gradient(165deg, #fff, rgba(199, 210, 254, 0.75)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 24px rgba(99, 102, 241, 0.22);
+}
+
+/* 原価 */
+.header-action-btn--cost {
+  color: #134e4a !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(204, 251, 241, 0.5)) !important;
+  border-color: rgba(20, 184, 166, 0.38) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 3px 12px rgba(13, 148, 136, 0.12);
+}
+
+.header-action-btn--cost:hover {
+  color: #0f766e !important;
+  border-color: rgba(15, 118, 110, 0.52) !important;
+  background: linear-gradient(165deg, #fff, rgba(153, 246, 228, 0.72)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 24px rgba(13, 148, 136, 0.2);
+}
+
+/* 設定不備 */
+.header-action-btn--report {
+  color: #7c3aed !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(237, 233, 254, 0.65)) !important;
+  border-color: rgba(139, 92, 246, 0.38) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 14px rgba(139, 92, 246, 0.15);
+}
+
+.header-action-btn--report:hover {
+  color: #6d28d9 !important;
+  border-color: rgba(124, 58, 237, 0.48) !important;
+  background: linear-gradient(165deg, #fff, rgba(221, 214, 254, 0.85)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(139, 92, 246, 0.22);
+}
+
+.header-action-btn--alert {
+  color: #9f1239 !important;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(254, 226, 226, 0.65)) !important;
+  border-color: rgba(244, 63, 94, 0.38) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 4px 14px rgba(244, 63, 94, 0.15);
+}
+
+.header-action-btn--alert:hover {
+  color: #881337 !important;
+  border-color: rgba(225, 29, 72, 0.48) !important;
+  background: linear-gradient(165deg, #fff, rgba(254, 205, 211, 0.85)) !important;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 10px 26px rgba(244, 63, 94, 0.22);
 }
 
 .error-badge :deep(.el-badge__content) {
-  border: none;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.28);
-}
-
-.error-entry-btn {
-  color: #b45309;
-  border-color: rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.08);
-}
-
-.error-entry-btn:hover {
-  color: #92400e;
-  border-color: rgba(245, 158, 11, 0.5);
-  background: rgba(245, 158, 11, 0.14);
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  font-weight: 800;
+  font-size: 10px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 14px;
+  padding: 0 4px;
+  box-shadow: 0 2px 10px rgba(244, 63, 94, 0.35);
+  background: linear-gradient(135deg, #fb7185, #e11d48);
 }
 
 .error-dialog :deep(.el-dialog) {
@@ -1929,6 +2400,24 @@ onMounted(() => {
   padding: 8px 0 4px;
 }
 
+.monthly-report-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.monthly-report-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.monthly-report-dialog__body {
+  max-height: 76vh;
+  overflow-y: auto;
+  padding: 0;
+}
+
 .filter-container {
   margin-bottom: 8px;
   padding: 8px 12px;
@@ -1945,28 +2434,60 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.filter-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
+.filter-row--main {
+  gap: 10px;
+  align-items: center;
 }
 
-.filter-label {
-  font-size: 11px;
+.filter-period-inline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.filter-inline-label {
+  font-size: 12px;
   font-weight: 600;
   color: var(--ivm-muted);
-  margin-bottom: 0;
-  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .date-picker {
-  width: 220px;
+  width: 140px;
+  flex-shrink: 0;
 }
 
 .date-picker :deep(.el-input__wrapper) {
   border-radius: 6px;
   min-height: 30px;
+}
+
+.range-input {
+  width: min(320px, 42vw);
+  min-width: 200px;
+  flex: 1 1 200px;
+}
+
+.range-input :deep(.el-input__wrapper) {
+  border-radius: 6px;
+  min-height: 30px;
+  background: rgba(148, 163, 184, 0.1);
+  box-shadow: none;
+}
+
+.range-input :deep(.el-input__inner) {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: default;
+}
+
+.product-filter-select {
+  width: 260px;
+  min-width: 180px;
+  flex-shrink: 0;
 }
 
 .filter-actions {
@@ -1975,16 +2496,6 @@ onMounted(() => {
   align-items: center;
   flex-wrap: wrap;
   margin-left: auto;
-}
-
-.range-tip {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 500;
-  padding: 4px 8px;
-  background: rgba(148, 163, 184, 0.12);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 8px;
 }
 
 .search-btn,
@@ -2150,23 +2661,32 @@ onMounted(() => {
 }
 
 .content-tabs {
+  --iv-tab-gap: 12px;
   margin-top: 0;
 }
 
 .tab-card {
-  background: var(--ivm-surface);
-  border: 1px solid var(--ivm-border);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: box-shadow 0.2s ease;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 250, 252, 0.94) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 12px 32px rgba(15, 23, 42, 0.06);
+  transition:
+    box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease,
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .tab-card:hover {
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  border-color: rgba(14, 165, 233, 0.2);
+  box-shadow:
+    0 4px 16px rgba(15, 23, 42, 0.07),
+    0 0 0 1px rgba(14, 165, 233, 0.06) inset;
 }
 
 .tab-card :deep(.el-card__body) {
-  padding: 8px;
+  padding: var(--iv-tab-gap);
 }
 
 .custom-tabs {
@@ -2175,38 +2695,105 @@ onMounted(() => {
 }
 
 .custom-tabs :deep(.el-tabs__header) {
-  margin: 0 0 6px;
-  padding: 2px;
-  background: rgba(241, 245, 249, 0.85);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 8px;
+  margin: 0 0 var(--iv-tab-gap);
+  padding: var(--iv-tab-gap);
+  background: linear-gradient(145deg, rgba(241, 245, 249, 0.95) 0%, rgba(226, 232, 240, 0.55) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
 }
 
 .custom-tabs :deep(.el-tabs__nav-wrap) {
   padding: 0;
 }
 
+.custom-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.custom-tabs :deep(.el-tabs__nav) {
+  display: flex;
+  width: 100%;
+  gap: var(--iv-tab-gap);
+}
+
 .custom-tabs :deep(.el-tabs__item) {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
-  color: var(--ivm-muted);
-  font-weight: 600;
-  padding: 5px 10px;
-  font-size: 12px;
-  border-radius: 6px;
-  margin: 0 1px;
+  color: #64748b;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  padding: 10px var(--iv-tab-gap);
+  margin: 0;
   line-height: 1.35;
-  transition: color 0.15s ease, background 0.15s ease;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition:
+    color 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    background 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.3s ease,
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.custom-tabs :deep(.el-tabs__item:hover) {
-  color: #0284c7;
-  background: rgba(14, 165, 233, 0.08);
+.custom-tabs :deep(.el-tabs__item:not(.is-active):hover) {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(14, 165, 233, 0.28);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.12);
+  transform: translateY(-1px);
 }
 
-.custom-tabs :deep(.el-tabs__item.is-active) {
+.custom-tabs :deep(#tab-material.is-active) {
   color: #fff;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.25);
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 55%, #0369a1 100%);
+  border-color: transparent;
+  box-shadow:
+    0 6px 20px rgba(14, 165, 233, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  animation: iv-tab-active-glow 2.8s ease-in-out infinite;
+}
+
+.custom-tabs :deep(#tab-component.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #047857 100%);
+  border-color: transparent;
+  box-shadow:
+    0 6px 20px rgba(16, 185, 129, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  animation: iv-tab-active-glow-emerald 2.8s ease-in-out infinite;
+}
+
+.custom-tabs :deep(#tab-product.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 45%, #d97706 100%);
+  border-color: transparent;
+  box-shadow:
+    0 6px 20px rgba(245, 158, 11, 0.38),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+  animation: iv-tab-active-glow-amber 2.8s ease-in-out infinite;
+}
+
+.custom-tabs :deep(#tab-material:not(.is-active):hover) {
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.custom-tabs :deep(#tab-component:not(.is-active):hover) {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.custom-tabs :deep(#tab-product:not(.is-active):hover) {
+  color: #b45309;
+  background: rgba(251, 191, 36, 0.14);
 }
 
 .custom-tabs :deep(.el-tabs__active-bar) {
@@ -2216,6 +2803,108 @@ onMounted(() => {
 .custom-tabs :deep(.el-tabs__content) {
   padding: 0;
   margin-top: 0;
+  animation: iv-tab-content-fade 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.iv-tab-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.iv-tab-label__icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.iv-tab-label__text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.custom-tabs :deep(.el-tabs__item:not(.is-active):hover) .iv-tab-label__icon {
+  transform: scale(1.1) rotate(-3deg);
+}
+
+.custom-tabs :deep(.el-tabs__item.is-active) .iv-tab-label__icon {
+  transform: scale(1.06);
+}
+
+@keyframes iv-tab-active-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 20px rgba(14, 165, 233, 0.38),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+  50% {
+    box-shadow:
+      0 8px 28px rgba(14, 165, 233, 0.48),
+      0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+  }
+}
+
+@keyframes iv-tab-active-glow-emerald {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 20px rgba(16, 185, 129, 0.35),
+      0 0 0 1px rgba(255, 255, 255, 0.2) inset;
+  }
+  50% {
+    box-shadow:
+      0 8px 28px rgba(16, 185, 129, 0.48),
+      0 0 0 1px rgba(255, 255, 255, 0.28) inset;
+  }
+}
+
+@keyframes iv-tab-active-glow-amber {
+  0%,
+  100% {
+    box-shadow:
+      0 6px 20px rgba(245, 158, 11, 0.38),
+      0 0 0 1px rgba(255, 255, 255, 0.22) inset;
+  }
+  50% {
+    box-shadow:
+      0 8px 28px rgba(245, 158, 11, 0.52),
+      0 0 0 1px rgba(255, 255, 255, 0.3) inset;
+  }
+}
+
+@keyframes iv-tab-content-fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-card,
+  .custom-tabs :deep(.el-tabs__item),
+  .custom-tabs :deep(.el-tabs__content),
+  .iv-tab-label__icon,
+  .header-action-btn {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .custom-tabs :deep(.el-tabs__item:not(.is-active):hover) {
+    transform: none;
+  }
+
+  .header-action-btn:hover,
+  .header-action-btn:active {
+    transform: none;
+  }
 }
 
 @media (max-width: 1200px) {
@@ -2233,11 +2922,25 @@ onMounted(() => {
     gap: 8px;
   }
 
-  .filter-row {
-    gap: 5px;
+  .filter-row--main {
+    gap: 8px;
+  }
+
+  .filter-period-inline {
+    width: 100%;
   }
 
   .date-picker {
+    width: 140px;
+  }
+
+  .range-input {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .product-filter-select {
     width: 100%;
   }
 
@@ -2245,10 +2948,6 @@ onMounted(() => {
     margin-left: 0;
     width: 100%;
     justify-content: flex-start;
-  }
-
-  .range-tip {
-    width: 100%;
   }
 
   .kpi-grid {
@@ -2287,9 +2986,20 @@ onMounted(() => {
     font-size: 1.05rem;
   }
 
+  .custom-tabs :deep(.el-tabs__nav) {
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .custom-tabs :deep(.el-tabs__item) {
-    padding: 5px 8px;
-    font-size: 11px;
+    flex: none;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .iv-tab-label__icon {
+    font-size: 15px;
   }
 }
 </style>
