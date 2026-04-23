@@ -4673,12 +4673,15 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 25px;
+  font-size: 20px;
   font-weight: 700;
-  color: #1a202c;
+  background: linear-gradient(135deg, #1e293b 0%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin: 0;
   line-height: 1.3;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.5px;
 }
 
 .page-subtitle {

@@ -1,16 +1,29 @@
 <template>
   <div class="welding-plan-list-page">
     <div class="plan-hd">
-      <h2 class="plan-hd-title">
-        <span class="plan-hd-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path
-              d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v3H2V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1ZM2 12h20v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5Zm6 3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Zm5 0a1 1 0 1 0 0 2h3a1 1 0 1 0 0-2h-3Z"
-            />
-          </svg>
-        </span>
-        溶接計画一覧
-      </h2>
+      <div class="plan-hd-row">
+        <h2 class="plan-hd-title">
+          <span class="plan-hd-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <path
+                d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v3H2V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1ZM2 12h20v5a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-5Zm6 3a1 1 0 0 0 0 2h2a1 1 0 0 0 0-2H8Zm5 0a1 1 0 1 0 0 2h3a1 1 0 1 0 0-2h-3Z"
+              />
+            </svg>
+          </span>
+          溶接計画一覧
+        </h2>
+        <el-button
+          v-if="canSearch"
+          type="warning"
+          size="small"
+          class="welding-replan-toolbar__primary"
+          :loading="bulkReplanning"
+          :disabled="loading || bulkReplanning"
+          @click="replanAllLinesForProcess"
+        >
+          溶接ライン順で再計算
+        </el-button>
+      </div>
       <p class="plan-hd-sub">
         工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。
       </p>
@@ -48,34 +61,28 @@
             />
           </el-select>
         </el-form-item>
+        <el-form-item label="製品">
+          <el-select
+            v-model="globalFilterProductKey"
+            clearable
+            filterable
+            placeholder="すべて"
+            style="width: 150px"
+          >
+            <el-option
+              v-for="opt in globalProductFilterOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label-width="0">
           <el-button type="primary" :loading="loading" :disabled="!canSearch" @click="onSearchClick">
             検索
           </el-button>
         </el-form-item>
       </el-form>
-      <div v-if="canSearch" class="welding-replan-toolbar">
-        <el-button
-          type="warning"
-          size="small"
-          class="welding-replan-toolbar__primary"
-          :loading="bulkReplanning"
-          :disabled="loading || bulkReplanning"
-          @click="replanAllLinesForProcess"
-        >
-          溶接ライン順で再計算
-        </el-button>
-        <el-button
-          size="small"
-          :disabled="!preReplanGridSnapshot || loading || bulkReplanning"
-          @click="restorePreReplanGrid"
-        >
-          再計算前の表示に戻す
-        </el-button>
-        <span v-if="preReplanGridSnapshot" class="welding-replan-toolbar__note">
-          画面上の一覧のみ再計算直前の取得結果に戻します（DB は既に更新済み）。最新データは「検索」で再取得してください。
-        </span>
-      </div>
     </div>
 
     <div v-if="searched" v-loading="loading" class="plan-card result-card">
@@ -519,17 +526,6 @@ type GanttListRow = ScheduleGridRow & {
   product_cd?: string | null
 }
 
-/** 一覧再計算前の画面状態（DB 巻き戻しは行わない） */
-interface PreReplanGridSnapshot {
-  tableRows: GanttListRow[]
-  tableGanttDates: string[]
-  ganttRows: GanttListRow[]
-  ganttDates: string[]
-  lineCalendarHoursMap: Record<number, Record<string, number>>
-  lineDefaultHoursMap: Record<number, number>
-}
-
-const preReplanGridSnapshot = ref<PreReplanGridSnapshot | null>(null)
 const bulkReplanning = ref(false)
 
 /** 再計算 API のクエリ用アンカー（DB の aps_line_replan_anchors があればサーバ側で優先） */
@@ -543,19 +539,6 @@ function formatYmdInJapan(d: Date): string {
 }
 
 const replanFallbackAnchorDate = computed(() => formatYmdInJapan(new Date()))
-
-function clonePreReplanSnapshot(): PreReplanGridSnapshot {
-  return JSON.parse(
-    JSON.stringify({
-      tableRows: tableRows.value,
-      tableGanttDates: tableGanttDates.value,
-      ganttRows: ganttRows.value,
-      ganttDates: ganttDates.value,
-      lineCalendarHoursMap: lineCalendarHoursMap.value,
-      lineDefaultHoursMap: lineDefaultHoursMap.value,
-    }),
-  ) as PreReplanGridSnapshot
-}
 
 function offsetDateIso(offsetDays: number): string {
   const d = new Date()
@@ -590,6 +573,8 @@ const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
 /** 一覧（表）用：工程内の全設備の全指示（日次集計は tableGanttDates の広い範囲） */
 const tableRows = ref<GanttListRow[]>([])
+/** ページ全体（ガント/一覧）共通：製品絞込 */
+const globalFilterProductKey = ref<string>('')
 /** 一覧（表）のみ：設備で絞込（null / undefined＝すべて） */
 const tableFilterLineId = ref<number | null>(null)
 /** 一覧（表）のみ：製品で絞込（空＝すべて。値は product_cd 優先、無ければ品名、無ければ id:） */
@@ -734,6 +719,23 @@ function tableProductRowKey(row: GanttListRow): string {
   return cd || name || `id:${row.id}`
 }
 
+function productFilterLabel(row: GanttListRow): string {
+  const cd = (row.product_cd || '').trim()
+  const name = (row.item_name || '').trim()
+  return cd && name ? `${name}（${cd}）` : name || cd || tableProductRowKey(row)
+}
+
+function buildProductFilterOptions(rows: GanttListRow[]): Array<{ value: string; label: string }> {
+  const labels = new Map<string, string>()
+  for (const r of rows) {
+    const key = tableProductRowKey(r)
+    if (!labels.has(key)) labels.set(key, productFilterLabel(r))
+  }
+  return [...labels.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1], 'ja'))
+    .map(([value, label]) => ({ value, label }))
+}
+
 const tableLineFilterOptions = computed(() => {
   const byId = new Map<number, string>()
   for (const r of tableRows.value) {
@@ -747,28 +749,29 @@ const tableLineFilterOptions = computed(() => {
 })
 
 const tableProductFilterOptions = computed(() => {
-  const labels = new Map<string, string>()
-  for (const r of tableRows.value) {
-    const key = tableProductRowKey(r)
-    if (!labels.has(key)) {
-      const cd = (r.product_cd || '').trim()
-      const name = (r.item_name || '').trim()
-      const label = cd && name ? `${name}（${cd}）` : name || cd || key
-      labels.set(key, label)
-    }
-  }
-  return [...labels.entries()]
-    .sort((a, b) => a[1].localeCompare(b[1], 'ja'))
-    .map(([value, label]) => ({ value, label }))
+  return buildProductFilterOptions(tableRows.value)
+})
+
+const globalProductFilterOptions = computed(() => {
+  const sourceRows = tableRows.value.length > 0 ? tableRows.value : ganttRows.value
+  return buildProductFilterOptions(sourceRows)
+})
+
+const filteredGanttRows = computed(() => {
+  const prodKey = (globalFilterProductKey.value || '').trim()
+  if (!prodKey) return ganttRows.value
+  return ganttRows.value.filter((row) => tableProductRowKey(row) === prodKey)
 })
 
 const filteredTableRows = computed(() => {
   const lineId = tableFilterLineId.value
+  const globalProdKey = (globalFilterProductKey.value || '').trim()
   const prodKey = (tableFilterProductKey.value || '').trim()
   const showDone = tableShowStatusDone.value
   const showPending = tableShowStatusPending.value
   return tableRows.value.filter((row) => {
     if (lineId != null && row.line_id !== lineId) return false
+    if (globalProdKey && tableProductRowKey(row) !== globalProdKey) return false
     if (prodKey && tableProductRowKey(row) !== prodKey) return false
     const kind = tableStatusKind(row)
     if (kind === 'done' && !showDone) return false
@@ -807,7 +810,7 @@ const ganttGroups = computed(() => {
     actualTotal: number
     avgEfficiencyRate: number | null
   }> = []
-  for (const row of ganttRows.value) {
+  for (const row of filteredGanttRows.value) {
     const lineLabel = (row.lineLabel || '').trim() || `ID ${row.line_id}`
     const last = groups[groups.length - 1]
     if (!last || last.lineLabel !== lineLabel) {
@@ -1544,8 +1547,7 @@ function onSearchClick() {
   void loadSchedules()
 }
 
-async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
-  const clearReplanSnapshot = options?.clearReplanSnapshot !== false
+async function loadSchedules() {
   if (!canSearch.value) {
     ElMessage.warning('期間と工程を選択してください')
     return
@@ -1609,7 +1611,12 @@ async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
       tableGanttDates.value = [...ganttDates.value]
       tableRows.value = [...flat]
     }
-    if (clearReplanSnapshot) preReplanGridSnapshot.value = null
+    if (
+      globalFilterProductKey.value &&
+      !globalProductFilterOptions.value.some((x) => x.value === globalFilterProductKey.value)
+    ) {
+      globalFilterProductKey.value = ''
+    }
     await loadUtilizationMonthGrid()
   } catch (e: unknown) {
     tableRows.value = []
@@ -1622,29 +1629,6 @@ async function loadSchedules(options?: { clearReplanSnapshot?: boolean }) {
   } finally {
     loading.value = false
   }
-}
-
-function restorePreReplanGrid() {
-  const snap = preReplanGridSnapshot.value
-  if (!snap) {
-    ElMessage.warning('戻せるスナップショットがありません')
-    return
-  }
-  const legacy = snap as PreReplanGridSnapshot & { rows?: GanttListRow[] }
-  const restoredTableRows = snap.tableRows ?? legacy.rows ?? snap.ganttRows
-  const restoredTableDates = snap.tableGanttDates ?? snap.ganttDates
-  tableRows.value = JSON.parse(JSON.stringify(restoredTableRows)) as GanttListRow[]
-  tableGanttDates.value = [...restoredTableDates]
-  ganttRows.value = JSON.parse(JSON.stringify(snap.ganttRows)) as GanttListRow[]
-  ganttDates.value = [...snap.ganttDates]
-  lineCalendarHoursMap.value = JSON.parse(JSON.stringify(snap.lineCalendarHoursMap))
-  lineDefaultHoursMap.value = JSON.parse(JSON.stringify(snap.lineDefaultHoursMap))
-  tableFilterLineId.value = null
-  tableFilterProductKey.value = ''
-  tableShowStatusDone.value = false
-  tableShowStatusPending.value = true
-  void loadUtilizationMonthGrid()
-  ElMessage.success('再計算前に取得した一覧表示に戻しました（サーバの計画は変わりません）')
 }
 
 async function replanAllLinesForProcess() {
@@ -1672,20 +1656,17 @@ async function replanAllLinesForProcess() {
       ElMessage.warning('対象工程に有効な設備がありません')
       return
     }
-    if (tableRows.value.length > 0 || ganttRows.value.length > 0) {
-      preReplanGridSnapshot.value = clonePreReplanSnapshot()
-    }
     const anchor = replanFallbackAnchorDate.value
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       await replanLineSequence(line.id, anchor)
     }
-    await loadSchedules({ clearReplanSnapshot: false })
+    await loadSchedules()
     ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e) || '再計算に失敗しました')
     try {
-      await loadSchedules({ clearReplanSnapshot: false })
+      await loadSchedules()
     } catch {
       /* 一覧取得失敗は無視 */
     }
@@ -1860,6 +1841,12 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   margin-bottom: 0;
   padding: 4px 2px 2px;
 }
+.plan-hd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 .plan-hd-title {
   margin: 0;
   display: inline-flex;
@@ -1965,24 +1952,9 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   padding-right: 14px;
 }
 
-.welding-replan-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(191, 219, 254, 0.55);
-}
 .welding-replan-toolbar__primary {
   border-radius: 999px;
   font-weight: 700;
-}
-.welding-replan-toolbar__note {
-  flex: 1 1 240px;
-  font-size: 12px;
-  line-height: 1.45;
-  color: #475569;
 }
 
 .result-card {
