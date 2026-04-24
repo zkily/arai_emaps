@@ -122,6 +122,7 @@ import type { ProcessItem } from '@/types/master'
 import {
   fetchLineCapacities,
   fetchLines,
+  fetchSchedulingGrid,
   productionLineOptionLabel,
   type ProductionLine,
 } from '@/api/aps'
@@ -182,7 +183,7 @@ function formatHours(v: number) {
   const n = Number(v || 0)
   if (!Number.isFinite(n)) return '-'
   if (n === 0) return ''
-  return n.toFixed(1)
+  return String(Math.round(n))
 }
 
 async function loadProcessOptions() {
@@ -196,7 +197,11 @@ async function loadProcessOptions() {
 }
 
 async function loadLinesByProcess() {
-  lines.value = await fetchLines((selectedProcessCd.value || '').trim() || undefined)
+  const fetchedLines = await fetchLines((selectedProcessCd.value || '').trim() || undefined)
+  lines.value = fetchedLines.filter((ln) => {
+    const lineName = String(ln.line_name || '').trim()
+    return !lineName.includes('成型他')
+  })
   selectedLineIds.value = selectedLineIds.value.filter((id) => lines.value.some((ln) => ln.id === id))
 }
 
@@ -255,14 +260,58 @@ function escHtml(v: unknown): string {
 async function handlePrint() {
   await loadMatrix()
   await nextTick()
+  const [startDate, endDate] = dateRange.value || []
+  const selectedLineIdSet = new Set(
+    (selectedLineIds.value.length > 0 ? selectedLineIds.value : lines.value.map((ln) => ln.id)),
+  )
+  const selectedLineCount = selectedLineIdSet.size
+  let totalPlannedProcessQty = 0
+  if (startDate && endDate) {
+    const schedulingGrid = await fetchSchedulingGrid(
+      startDate,
+      endDate,
+      undefined,
+      (selectedProcessCd.value || '').trim() || undefined,
+    )
+    totalPlannedProcessQty = (schedulingGrid?.blocks || [])
+      .filter((block) => selectedLineIdSet.has(Number(block.line_id)))
+      .reduce((sum, block) => {
+        const lineSum = Object.values(block.daily_totals || {})
+          .reduce((acc, qty) => acc + Number(qty || 0), 0)
+        return sum + lineSum
+      }, 0)
+  }
+  const summaryHtml = `
+    <section class="print-summary">
+      <h2>期間集計（生産計画数量）</h2>
+      <div class="summary-grid">
+        <div class="summary-item"><span class="k">対象期間</span><span class="v">${escHtml(startDate || '')} 〜 ${escHtml(endDate || '')}</span></div>
+        <div class="summary-item"><span class="k">対象設備数</span><span class="v">${escHtml(String(selectedLineCount))}</span></div>
+        <div class="summary-item summary-total"><span class="k">生産計画総数量</span><span class="v">${escHtml(Math.round(totalPlannedProcessQty).toLocaleString('ja-JP'))}</span></div>
+      </div>
+    </section>
+  `
   const headers = [
     '<th>設備</th>',
     '<th>期間合計(h)</th>',
-    ...dateColumns.value.map((d) => `<th>${escHtml(formatDate(d))}<br/><small>${escHtml(getWeekday(d))}</small></th>`),
+    ...dateColumns.value.map((d) => {
+      const weekendClass = isWeekend(d) ? ' class="is-weekend"' : ''
+      return `<th${weekendClass}>${escHtml(formatDate(d))}<br/><small>${escHtml(getWeekday(d))}</small></th>`
+    }),
   ].join('')
   const rowsHtml = matrixRows.value.map((row) => {
     const cells = dateColumns.value
-      .map((d) => `<td class="num">${escHtml(formatHours(row.dailyHours[d] || 0))}</td>`)
+      .map((d) => {
+        const rawHours = Number(row.dailyHours[d] || 0)
+        const classes = ['num']
+        if (isWeekend(d)) classes.push('is-weekend')
+        if (rawHours > 23) {
+          classes.push('is-high-hours')
+        } else if (rawHours >= 20 && rawHours <= 22) {
+          classes.push('is-mid-hours')
+        }
+        return `<td class="${classes.join(' ')}">${escHtml(formatHours(rawHours))}</td>`
+      })
       .join('')
     return `<tr><td>${escHtml(row.lineLabel)}</td><td class="num">${escHtml(formatHours(row.totalHours))}</td>${cells}</tr>`
   }).join('')
@@ -271,30 +320,43 @@ async function handlePrint() {
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>設備稼働時間表</title>
+    <title>成型ライン稼働予定時間表</title>
     <style>
       @page { size: A4 landscape; margin: 8mm; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif; color: #111827; }
       h1 { margin: 0 0 6px; font-size: 16px; }
       .meta { margin: 0 0 8px; font-size: 11px; color: #374151; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; }
-      th, td { border: 1px solid #cbd5e1; padding: 2px 4px; word-break: break-word; }
-      th { background: #f1f5f9; font-size: 8px; }
+      th, td { border: 1px solid #cbd5e1; padding: 4px 4px; word-break: break-word; line-height: 1.3; }
+      th { background-color: #f1f5f9; font-size: 8px; }
       th small { font-size: 8px; }
       th:nth-child(1), td:nth-child(1) { width: 35px; }
       th:nth-child(2), td:nth-child(2) { width: 28px; }
       .num { text-align: right; }
+      th.is-weekend { color: #dc2626; background-color: #ffecec; }
+      td.is-weekend { background-color: #fff5f5; }
+      td.is-mid-hours { background-color: #fff7d6; }
+      td.is-high-hours { background-color: #f4c98a; }
       thead { display: table-header-group; }
       tr { page-break-inside: avoid; }
+      .print-summary { margin-top: 10px; border-top: 1px solid #cbd5e1; padding-top: 8px; }
+      .print-summary h2 { margin: 0 0 6px; font-size: 12px; }
+      .summary-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+      .summary-item { min-width: 220px; border: 1px solid #dbe5f1; background-color: #f8fafc; padding: 5px 7px; }
+      .summary-item .k { display: inline-block; color: #475569; margin-right: 8px; }
+      .summary-item .v { font-weight: 700; color: #0f172a; }
+      .summary-total { background-color: #e6f4ea; border-color: #b7dfc2; }
     </style>
   </head>
   <body>
-    <h1>設備稼働時間表</h1>
+    <h1>成型ライン稼働予定時間表</h1>
     <p class="meta">${escHtml(printRangeText.value)} / 出力日時: ${escHtml(printNowText.value)}</p>
     <table>
       <thead><tr>${headers}</tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+    ${summaryHtml}
     <script>window.onload = () => window.print();<\/script>
   </body>
 </html>`
