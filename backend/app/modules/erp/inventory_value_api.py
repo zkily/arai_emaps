@@ -1589,6 +1589,9 @@ _CATEGORY_MAP = {
 @router.get("/report/monthly")
 async def get_monthly_inventory_report(
     as_of: str = Query(..., description="対象月末日 YYYY-MM-DD"),
+    shipment_merge: bool = Query(False, description="出荷確定本数を製品側数量・金額へ並入する"),
+    shipment_date: Optional[str] = Query(None, description="出荷日 YYYY-MM-DD"),
+    destination_cds: Optional[str] = Query(None, description="納入先コード（カンマ区切り）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -1599,6 +1602,7 @@ async def get_monthly_inventory_report(
     - parts_meka: メカ部品明細（kind='T' かつ category に 'メカ'）
     - parts_non_meka: メカ以外を kind で集計
     - meta: 対象月・集計日時
+    - shipment_merge=True のとき、指定出荷日・納入先の確定本数を製品側に加算（単価は当該製品の製品側合計金額÷合計本数で按分）
     """
     as_of_d = _parse_as_of_date(as_of)
     now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
@@ -1639,6 +1643,8 @@ async def get_monthly_inventory_report(
         # category 汇总
         cat_wip: Dict[str, dict] = {}
         cat_product: Dict[str, dict] = {}
+        # 製品CD ごとの製品側本数・金額（出荷並入の単価按分用）
+        by_pcd_product: Dict[str, dict] = {}
 
         for r in prod_rows:
             pcd = str(r.product_cd or "").strip()
@@ -1674,6 +1680,83 @@ async def get_monthly_inventory_report(
                     grp_dict_p[grp_key] = {"qty": 0, "amount": 0.0}
                 grp_dict_p[grp_key]["qty"] += prod_qty
                 grp_dict_p[grp_key]["amount"] += prod_amt
+
+            if pcd:
+                if pcd not in by_pcd_product:
+                    by_pcd_product[pcd] = {
+                        "kind": kind,
+                        "category": category,
+                        "prod_qty": 0,
+                        "prod_amt": 0.0,
+                    }
+                by_pcd_product[pcd]["prod_qty"] += prod_qty
+                by_pcd_product[pcd]["prod_amt"] += prod_amt
+
+        merge_applied = False
+        if shipment_merge and shipment_date and destination_cds:
+            dest_list = [d.strip() for d in str(destination_cds).split(",") if d.strip()]
+            ship_d: Optional[date] = None
+            if dest_list:
+                try:
+                    ship_d = datetime.strptime(str(shipment_date).strip()[:10], "%Y-%m-%d").date()
+                except ValueError:
+                    ship_d = None
+            if ship_d and dest_list:
+                ship_q = (
+                    select(
+                        OrderDaily.product_cd,
+                        func.sum(OrderDaily.confirmed_units).label("confirmed_units_sum"),
+                    )
+                    .where(OrderDaily.date == ship_d, OrderDaily.destination_cd.in_(dest_list))
+                    .group_by(OrderDaily.product_cd)
+                )
+                ship_rows = list((await db.execute(ship_q)).all())
+                ship_map: Dict[str, int] = {
+                    str(r.product_cd or "").strip(): int(r.confirmed_units_sum or 0)
+                    for r in ship_rows
+                    if str(r.product_cd or "").strip()
+                }
+                extra_pcds = set(ship_map.keys()) - set(by_pcd_product.keys())
+                if extra_pcds:
+                    pq2 = select(Product.product_cd, Product.kind, Product.category).where(
+                        Product.product_cd.in_(sorted(extra_pcds))
+                    )
+                    for pcd2, pk2, pcat2 in (await db.execute(pq2)).all():
+                        cd2 = str(pcd2 or "").strip()
+                        if not cd2 or cd2 in by_pcd_product:
+                            continue
+                        cat2 = str(pcat2 or "").strip() or "その他"
+                        if cat2 not in _CATEGORY_MAP:
+                            cat2 = "その他"
+                        by_pcd_product[cd2] = {
+                            "kind": (str(pk2 or "").strip() or "—"),
+                            "category": cat2,
+                            "prod_qty": 0,
+                            "prod_amt": 0.0,
+                        }
+
+                merge_applied = True
+
+                for pcd_ship, sq in ship_map.items():
+                    if sq <= 0:
+                        continue
+                    det = by_pcd_product.get(pcd_ship)
+                    if not det:
+                        continue
+                    pq_base = int(det["prod_qty"] or 0)
+                    pamt_base = float(det["prod_amt"] or 0.0)
+                    up_m = (pamt_base / pq_base) if pq_base > 0 else 0.0
+                    extra_amt = round(float(sq) * float(up_m), 2)
+                    kind_k = det["kind"]
+                    cat_k = det["category"]
+                    for grp_dict_p, grp_key in ((kind_product, kind_k), (cat_product, cat_k)):
+                        if grp_key not in grp_dict_p:
+                            grp_dict_p[grp_key] = {"qty": 0, "amount": 0.0}
+                        grp_dict_p[grp_key]["qty"] += sq
+                        grp_dict_p[grp_key]["amount"] += extra_amt
+                for gd in (kind_product, cat_product):
+                    for _k in gd:
+                        gd[_k]["amount"] = round(float(gd[_k]["amount"]), 2)
 
         def _build_overview(wip_dict: dict, prod_dict: dict, order_keys: Optional[List[str]] = None):
             all_keys = sorted(
@@ -1802,6 +1885,7 @@ async def get_monthly_inventory_report(
                     "month_label": month_label,
                     "printed_at": now_str,
                     "exchange_rate": exchange_rate,
+                    "shipment_merge_applied": merge_applied,
                 },
             },
         }

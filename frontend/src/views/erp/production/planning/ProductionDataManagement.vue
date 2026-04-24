@@ -370,6 +370,14 @@
         </el-dropdown>
         <el-button
           size="small"
+          :icon="WarningFilled"
+          @click="showInventoryStagnation = true"
+          class="modern-btn inventory-stagnation-btn"
+        >
+          <span>在庫停滞監視</span>
+        </el-button>
+        <el-button
+          size="small"
           :icon="Setting"
           @click="showColumnSettings = true"
           class="modern-btn settings-btn"
@@ -379,6 +387,11 @@
       </div>
       </div>
     </div>
+
+    <InventoryStagnationDrawer
+      v-model="showInventoryStagnation"
+      @filter-product="handleFilterProductFromStagnation"
+    />
     <el-card class="table-card" shadow="hover">
       <template #header>
         <div class="filter-section">
@@ -1711,6 +1724,7 @@ import {
 import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
 import jaLocale from 'element-plus/es/locale/lang/ja'
+import InventoryStagnationDrawer from './components/InventoryStagnationDrawer.vue'
 
 const STOCK_LOGS_BASE = '/api/erp/stock-transaction-logs'
 const INVENTORY_BASE = '/api/erp/inventory'
@@ -1783,6 +1797,7 @@ const sortOrder = ref<'ASC' | 'DESC'>('ASC')
 const productList = ref<Array<{ product_cd: string; product_name?: string }>>([])
 const showColumnSettings = ref(false)
 const activeTableTab = ref<string>('custom')
+const showInventoryStagnation = ref(false)
 
 // 初期在庫一括登録
 const showBatchInitialStockDialog = ref(false)
@@ -3776,6 +3791,14 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
 const handlePageChange = () => fetchData()
 const handleRefresh = () => fetchData()
 
+const handleFilterProductFromStagnation = (productCd: string) => {
+  if (!productCd) return
+  filterProductCd.value = productCd
+  activeTableTab.value = 'inventory'
+  showInventoryStagnation.value = false
+  handleFilterChange()
+}
+
 /** プレビュー用ウィンドウに HTML を描画した後、短い遅延で print() する（描画→印刷ダイアログの順） */
 const PRINT_PREVIEW_BEFORE_DIALOG_MS = 400
 
@@ -5618,20 +5641,32 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.46rem;
 }
 .header-actions :deep(.el-button) {
   font-size: 0.75rem;
-  height: 30px;
-  padding: 0 12px;
-  border-radius: 10px;
-  font-weight: 600;
+  height: 32px;
+  padding: 0 13px;
+  border-radius: 11px;
+  font-weight: 650;
   letter-spacing: 0.02em;
+  border-width: 1px;
+  border-style: solid;
+  position: relative;
+  overflow: hidden;
   transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.12s ease;
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    transform 0.18s ease,
+    filter 0.22s ease;
+  box-shadow:
+    0 8px 18px -12px rgba(15, 23, 42, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+.header-actions :deep(.el-button:not(.is-disabled):hover) {
+  transform: translateY(-1px);
+  filter: saturate(1.05);
 }
 .header-actions :deep(.el-button:not(.is-disabled):active) {
   transform: translateY(1px);
@@ -5639,77 +5674,104 @@ onUnmounted(() => {
 /* ツールバー：操作別カラー */
 .header-actions :deep(.others-btn.el-button) {
   color: #fff;
-  background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 58%, #4338ca 100%);
   border-color: #4338ca;
-  box-shadow: 0 2px 8px -2px rgba(67, 56, 202, 0.55);
+  box-shadow:
+    0 9px 18px -12px rgba(67, 56, 202, 0.75),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 .header-actions :deep(.others-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #818cf8 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 60%, #4f46e5 100%);
   border-color: #4f46e5;
 }
 .header-actions :deep(.refresh-btn.el-button) {
   color: #fff;
-  background: linear-gradient(180deg, #38bdf8 0%, #0ea5e9 100%);
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 62%, #0284c7 100%);
   border-color: #0284c7;
-  box-shadow: 0 2px 8px -2px rgba(14, 165, 233, 0.5);
+  box-shadow:
+    0 8px 18px -12px rgba(14, 165, 233, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
 }
 .header-actions :deep(.refresh-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #7dd3fc 0%, #38bdf8 100%);
+  background: linear-gradient(135deg, #7dd3fc 0%, #38bdf8 58%, #0ea5e9 100%);
   border-color: #0ea5e9;
 }
 .header-actions :deep(.print-btn.el-button) {
   color: #f8fafc;
-  background: linear-gradient(180deg, #64748b 0%, #475569 100%);
+  background: linear-gradient(135deg, #64748b 0%, #475569 62%, #334155 100%);
   border-color: #334155;
-  box-shadow: 0 2px 6px -2px rgba(51, 65, 85, 0.45);
+  box-shadow:
+    0 8px 16px -12px rgba(51, 65, 85, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.18) inset;
 }
 .header-actions :deep(.print-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
+  background: linear-gradient(135deg, #94a3b8 0%, #64748b 60%, #475569 100%);
 }
 .header-actions :deep(.process-print-btn-primary.el-button) {
   color: #fff;
-  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  background: linear-gradient(135deg, #34d399 0%, #10b981 54%, #059669 100%);
   border-color: #047857;
-  box-shadow: 0 2px 10px -2px rgba(5, 150, 105, 0.5);
+  box-shadow:
+    0 9px 18px -12px rgba(5, 150, 105, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
 }
 .header-actions :deep(.process-print-btn-primary.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #6ee7b7 0%, #10b981 100%);
+  background: linear-gradient(135deg, #6ee7b7 0%, #34d399 52%, #10b981 100%);
   border-color: #059669;
 }
 .header-actions :deep(.recommended-print-dropdown-btn.el-button) {
   color: #fff;
-  background: linear-gradient(180deg, #fbbf24 0%, #d97706 100%);
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 52%, #d97706 100%);
   border-color: #b45309;
-  box-shadow: 0 2px 10px -2px rgba(217, 119, 6, 0.45);
+  box-shadow:
+    0 8px 18px -12px rgba(217, 119, 6, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
 }
 .header-actions :deep(.recommended-print-dropdown-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #fcd34d 0%, #f59e0b 100%);
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 52%, #f59e0b 100%);
   border-color: #d97706;
 }
 .header-actions :deep(.production-plan-dropdown-btn.el-button) {
   color: #fff;
-  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 55%, #7c3aed 100%);
   border-color: #6d28d9;
-  box-shadow: 0 2px 10px -2px rgba(124, 58, 237, 0.45);
+  box-shadow:
+    0 9px 18px -12px rgba(124, 58, 237, 0.74),
+    0 1px 0 rgba(255, 255, 255, 0.2) inset;
 }
 .header-actions :deep(.production-plan-dropdown-btn.el-button:hover:not(.is-disabled)) {
-  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
+  background: linear-gradient(135deg, #c4b5fd 0%, #a78bfa 52%, #8b5cf6 100%);
   border-color: #7c3aed;
+}
+.header-actions :deep(.inventory-stagnation-btn.el-button) {
+  color: #fff;
+  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 52%, #e11d48 100%);
+  border-color: #be123c;
+  box-shadow:
+    0 9px 18px -12px rgba(225, 29, 72, 0.72),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
+}
+.header-actions :deep(.inventory-stagnation-btn.el-button:hover:not(.is-disabled)) {
+  background: linear-gradient(135deg, #fda4af 0%, #fb7185 50%, #f43f5e 100%);
+  border-color: #e11d48;
 }
 .header-actions :deep(.settings-btn.el-button) {
   color: #334155;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
   border-color: #cbd5e1;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  box-shadow:
+    0 8px 14px -12px rgba(15, 23, 42, 0.35),
+    0 1px 0 rgba(255, 255, 255, 0.92) inset;
 }
 .header-actions :deep(.settings-btn.el-button:hover:not(.is-disabled)) {
   color: #0f172a;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
   border-color: #94a3b8;
 }
 .header-actions :deep(.el-button.is-disabled) {
-  opacity: 0.52;
-  filter: grayscale(0.15);
+  opacity: 0.54;
+  filter: grayscale(0.1) saturate(0.86);
+  box-shadow: none !important;
 }
 /* 内容区域：统一字体 0.75rem，组件高度 28px */
 .table-card {

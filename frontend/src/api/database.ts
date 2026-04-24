@@ -53,6 +53,45 @@ export function getProductionSummarysProducts() {
   return request.get(`${BASE}/products`)
 }
 
+/** 在庫停滞（*_inventory 列）検知 */
+export interface InventoryStagnationParams {
+  /** 基準日 YYYY-MM-DD（省略時: サーバー JST 当日） */
+  as_of?: string
+  /** この値より大きい同一在庫値のみを対象（既定 50） */
+  min_quantity?: number
+  /** 連続同一値と判定する暦日数（既定 7） */
+  stable_calendar_days?: number
+  productCd?: string
+  keyword?: string
+}
+
+export interface InventoryStagnationRow {
+  product_cd: string
+  product_name: string
+  route_cd: string
+  inventory_column: string
+  stable_quantity: number
+  period_start: string
+  period_end: string
+  days: number
+}
+
+export interface InventoryStagnationResponse {
+  data: {
+    list: InventoryStagnationRow[]
+    total: number
+    as_of: string
+    period_start: string
+    period_end: string
+    min_quantity: number
+    stable_calendar_days: number
+  }
+}
+
+export function getInventoryStagnation(params?: InventoryStagnationParams) {
+  return request.get<InventoryStagnationResponse>(`${BASE}/inventory-stagnation`, { params })
+}
+
 export interface InventoryShortagePrintParams {
   startDate: string
   endDate: string

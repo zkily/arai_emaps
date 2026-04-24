@@ -281,10 +281,22 @@ export const inventoryValueApi = {
     return { data: [] as unknown[] }
   },
 
-  async getMonthlyInventoryReport(params: { as_of: string }) {
+  async getMonthlyInventoryReport(params: {
+    as_of: string
+    shipment_merge?: boolean
+    shipment_date?: string
+    destination_cds?: string[]
+  }) {
     try {
       const res = (await request.get('/api/erp/inventory-value/report/monthly', {
-        params: { as_of: params.as_of },
+        params: {
+          as_of: params.as_of,
+          ...(params.shipment_merge ? { shipment_merge: true } : {}),
+          ...(params.shipment_date ? { shipment_date: params.shipment_date } : {}),
+          ...(params.destination_cds?.length
+            ? { destination_cds: params.destination_cds.join(',') }
+            : {}),
+        },
       })) as { success?: boolean; data?: MonthlyInventoryReportData }
       return { success: res?.success ?? false, data: res?.data ?? null }
     } catch {
@@ -330,5 +342,11 @@ export interface MonthlyInventoryReportData {
   overview_by_category: MonthlyReportOverview
   parts_meka: { rows: MonthlyReportPartMekaRow[]; totals: { qty: number; amount: number } }
   parts_non_meka: { rows: MonthlyReportPartNonMekaRow[]; totals: { qty: number; amount: number } }
-  meta: { as_of: string; month_label: string; printed_at: string; exchange_rate: number | null }
+  meta: {
+    as_of: string
+    month_label: string
+    printed_at: string
+    exchange_rate: number | null
+    shipment_merge_applied?: boolean
+  }
 }

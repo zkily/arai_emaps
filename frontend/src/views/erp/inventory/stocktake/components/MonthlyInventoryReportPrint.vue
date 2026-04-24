@@ -2,7 +2,7 @@
   <div class="mir-page">
     <!-- Header -->
     <div class="mir-header">
-      <div class="mir-title">棚卸金額報告書</div>
+      <div class="mir-title">棚卸統合報告書</div>
       <div class="mir-subtitle">{{ data.meta.month_label }} 月末実在庫基準</div>
     </div>
     <div class="mir-meta">
@@ -174,7 +174,7 @@
       </table>
     </div>
 
-    <div class="mir-footer">※ 本報告書は stock-panel（実在庫）口径に基づきます</div>
+    <div class="mir-footer">※ 本報告書は （実在庫）口径に基づきます</div>
   </div>
 </template>
 

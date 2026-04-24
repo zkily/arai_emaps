@@ -443,10 +443,58 @@
     >
       <template #header>
         <div class="monthly-report-dialog__header">
-          <span class="monthly-report-dialog__title">棚卸金額報告書</span>
-          <span v-if="monthlyReportData?.meta" class="product-count-dialog__date-chip">
-            {{ monthlyReportData.meta.month_label }} ({{ monthlyReportData.meta.as_of }})
-          </span>
+          <div class="monthly-report-dialog__header-row">
+            <span class="monthly-report-dialog__title">棚卸統合報告書</span>
+            <span v-if="monthlyReportData?.meta" class="product-count-dialog__date-chip">
+              {{ monthlyReportData.meta.month_label }} ({{ monthlyReportData.meta.as_of }})
+            </span>
+          </div>
+          <p class="product-count-dialog__hint">
+            総括・分類別の製品本数・金額に、出荷確定本数を並入して再集計できます（部品集計は対象外）。
+          </p>
+          <div class="product-count-dialog__merge-controls">
+            <el-date-picker
+              v-model="monthlyReportShipmentDate"
+              type="date"
+              size="small"
+              value-format="YYYY-MM-DD"
+              placeholder="出荷日を選択"
+              class="product-count-dialog__date-select"
+              @change="onMonthlyReportShipmentControlChange"
+            />
+            <el-select
+              v-model="monthlyReportShipmentDestCds"
+              placeholder="納入先を選択（複数可）"
+              size="small"
+              filterable
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              clearable
+              class="product-count-dialog__dest-select"
+              @change="onMonthlyReportShipmentControlChange"
+            >
+              <el-option
+                v-for="d in destinationList"
+                :key="d.destination_cd"
+                :label="`${d.destination_cd} - ${d.destination_name}`"
+                :value="d.destination_cd"
+              />
+            </el-select>
+            <el-switch
+              v-model="monthlyReportShipmentMergeEnabled"
+              size="small"
+              active-text="出荷数並入"
+              :disabled="!monthlyReportShipmentDate || !monthlyReportShipmentDestCds.length"
+              @change="onMonthlyReportShipmentControlChange"
+            />
+            <span
+              v-if="monthlyReportShipmentMergeEnabled && monthlyReportShipmentDestCds.length"
+              class="product-count-dialog__merge-hint"
+            >
+              {{ monthlyReportShipmentDate }}・{{ monthlyReportShipmentDestCds.length }}納入先の出荷を製品側に加算中
+            </span>
+          </div>
         </div>
       </template>
       <div v-loading="monthlyReportLoading" class="monthly-report-dialog__body">
@@ -719,6 +767,12 @@ interface DestinationItem {
   destination_name: string
 }
 const destinationList = ref<DestinationItem[]>([])
+/** 出荷数並入の納入先初期選択（製品棚卸・統合報告書で共通） */
+const DEFAULT_SHIPMENT_DEST_CDS = [
+  'N12', 'N13', 'N17', 'N18', 'N20', 'N21',
+  'N24', 'N30', 'N36', 'N38', 'N39', 'N42',
+  'N43', 'N44', 'N48', 'N50',
+]
 const shipmentDate = ref('')
 const shipmentDestCds = ref<string[]>([])
 const shipmentMergeEnabled = ref(false)
@@ -1241,11 +1295,7 @@ async function openProductCountDialog() {
   shipmentDate.value = String(endDate).slice(0, 10)
   productCountAsOf.value = String(endDate).slice(0, 10)
   await loadDestinations()
-  shipmentDestCds.value = [
-    'N12', 'N13', 'N17', 'N18', 'N20', 'N21',
-    'N24', 'N30', 'N36', 'N38', 'N39', 'N42',
-    'N43', 'N44', 'N48', 'N50',
-  ]
+  shipmentDestCds.value = [...DEFAULT_SHIPMENT_DEST_CDS]
   try {
     productCountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
 
@@ -1268,10 +1318,14 @@ async function openProductCountDialog() {
               sort_order: 'asc',
             })
             const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
-            const list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
+            let list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
+            // 倉庫列は production_summarys.warehouse_inventory のみを対象とする
+            if (sourceCode === 'all') {
+              list = list.filter((r: any) => String(r.inventory_column ?? '') === 'warehouse_inventory')
+            }
             total = Number(inner.total ?? 0)
             merged.push(...list)
-            if (!list.length || list.length < limit || merged.length >= total) break
+            if (!(inner.list ?? []).length || (inner.list ?? []).length < limit || merged.length >= total) break
             page += 1
           }
         }
@@ -1340,11 +1394,7 @@ async function openProductAmountDialog() {
   shipmentAmountDate.value = String(endDate).slice(0, 10)
   productAmountAsOf.value = String(endDate).slice(0, 10)
   await loadDestinations()
-  shipmentAmountDestCds.value = [
-    'N12', 'N13', 'N17', 'N18', 'N20', 'N21',
-    'N24', 'N30', 'N36', 'N38', 'N39', 'N42',
-    'N43', 'N44', 'N48', 'N50',
-  ]
+  shipmentAmountDestCds.value = [...DEFAULT_SHIPMENT_DEST_CDS]
   try {
     productAmountProcesses.value = PRODUCT_COUNT_PROCESS_SPECS
     const results = await Promise.all(
@@ -1366,10 +1416,14 @@ async function openProductAmountDialog() {
               sort_order: 'asc',
             })
             const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
-            const list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
+            let list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
+            // 倉庫列は production_summarys.warehouse_inventory のみを対象とする
+            if (sourceCode === 'all') {
+              list = list.filter((r: any) => String(r.inventory_column ?? '') === 'warehouse_inventory')
+            }
             total = Number(inner.total ?? 0)
             merged.push(...list)
-            if (!list.length || list.length < limit || merged.length >= total) break
+            if (!(inner.list ?? []).length || (inner.list ?? []).length < limit || merged.length >= total) break
             page += 1
           }
         }
@@ -1683,18 +1737,28 @@ const showMonthlyReportDialog = ref(false)
 const monthlyReportLoading = ref(false)
 const monthlyReportData = ref<MonthlyInventoryReportData | null>(null)
 const monthlyReportRef = ref<InstanceType<typeof MonthlyInventoryReportPrint> | null>(null)
+const monthlyReportShipmentDate = ref('')
+const monthlyReportShipmentDestCds = ref<string[]>([])
+const monthlyReportShipmentMergeEnabled = ref(false)
 
-async function openMonthlyReport() {
+async function fetchMonthlyReportData() {
   const endDate = dateRange.value?.[1]
   if (!endDate) {
     ElMessage.warning('対象月（月末日）を選択してください')
     return
   }
-  showMonthlyReportDialog.value = true
   monthlyReportLoading.value = true
-  monthlyReportData.value = null
   try {
-    const res = await inventoryValueApi.getMonthlyInventoryReport({ as_of: String(endDate).slice(0, 10) })
+    const merge =
+      monthlyReportShipmentMergeEnabled.value
+      && Boolean(monthlyReportShipmentDate.value)
+      && monthlyReportShipmentDestCds.value.length > 0
+    const res = await inventoryValueApi.getMonthlyInventoryReport({
+      as_of: String(endDate).slice(0, 10),
+      shipment_merge: merge,
+      shipment_date: merge ? monthlyReportShipmentDate.value : undefined,
+      destination_cds: merge ? monthlyReportShipmentDestCds.value : undefined,
+    })
     if (res.success && res.data) {
       monthlyReportData.value = res.data
     } else {
@@ -1705,6 +1769,31 @@ async function openMonthlyReport() {
   } finally {
     monthlyReportLoading.value = false
   }
+}
+
+async function onMonthlyReportShipmentControlChange() {
+  if (!monthlyReportShipmentDate.value || !monthlyReportShipmentDestCds.value.length) {
+    if (monthlyReportShipmentMergeEnabled.value) {
+      monthlyReportShipmentMergeEnabled.value = false
+      ElMessage.warning('出荷日と納入先を選択してからスイッチをONにしてください')
+    }
+  }
+  await fetchMonthlyReportData()
+}
+
+async function openMonthlyReport() {
+  const endDate = dateRange.value?.[1]
+  if (!endDate) {
+    ElMessage.warning('対象月（月末日）を選択してください')
+    return
+  }
+  showMonthlyReportDialog.value = true
+  monthlyReportData.value = null
+  monthlyReportShipmentMergeEnabled.value = false
+  monthlyReportShipmentDate.value = String(endDate).slice(0, 10)
+  await loadDestinations()
+  monthlyReportShipmentDestCds.value = [...DEFAULT_SHIPMENT_DEST_CDS]
+  await fetchMonthlyReportData()
 }
 
 function printMonthlyReport() {
@@ -1720,7 +1809,7 @@ function printMonthlyReport() {
 <html lang="ja">
 <head>
 <meta charset="UTF-8" />
-<title>棚卸金額報告書</title>
+<title>棚卸統合報告書</title>
 <style>
 @page { size: A4 portrait; margin: 10mm 8mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2402,7 +2491,15 @@ onMounted(() => {
 
 .monthly-report-dialog__header {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.monthly-report-dialog__header-row {
+  display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 

@@ -286,6 +286,142 @@ async def get_production_summarys_list(
     }
 
 
+@router.get("/inventory-stagnation")
+async def get_inventory_stagnation(
+    as_of: Optional[str] = Query(None, description="基準日 YYYY-MM-DD（省略時: JST 当日）"),
+    min_quantity: int = Query(50, ge=0, description="この値より大きい同一在庫値のみを対象"),
+    stable_calendar_days: int = Query(7, ge=2, le=60, description="連続同一値と判定する暦日数"),
+    productCd: Optional[str] = Query(None, description="製品CD絞込"),
+    keyword: Optional[str] = Query(None, description="製品名・製品CDキーワード"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    在庫タブ基準の停滞製品検知。
+
+    - production_summarys の *_inventory 列（INVENTORY_COLUMNS と同一セット）を (product_cd, route_cd) 単位で
+      連続 stable_calendar_days 暦日分スキャンし、その窓内すべて同一値かつ min_quantity より大きい列を列挙する。
+    - 連続日数は暦日ベース。期間内に1日でも行が欠けた (product_cd, route_cd) は対象外（厳格）。
+    - NULL は 0 と同一視して比較。全日 NULL の列は対象外。
+    """
+    if as_of and as_of.strip():
+        try:
+            as_of_d = date.fromisoformat(as_of.strip()[:10])
+        except ValueError:
+            raise HTTPException(status_code=422, detail="as_of は YYYY-MM-DD 形式で指定してください")
+    else:
+        as_of_d = now_jst().date()
+
+    window_days = int(stable_calendar_days)
+    start_d = as_of_d - timedelta(days=window_days - 1)
+    required_dates = [start_d + timedelta(days=i) for i in range(window_days)]
+
+    inventory_attrs = [getattr(ProductionSummary, c) for c in INVENTORY_COLUMNS]
+    q = select(
+        ProductionSummary.product_cd,
+        ProductionSummary.product_name,
+        ProductionSummary.route_cd,
+        ProductionSummary.date,
+        *inventory_attrs,
+    ).where(
+        and_(
+            ProductionSummary.date >= start_d,
+            ProductionSummary.date <= as_of_d,
+            ProductionSummary.product_cd.isnot(None),
+            ProductionSummary.product_cd != "",
+        )
+    )
+    if productCd and productCd.strip():
+        q = q.where(ProductionSummary.product_cd == productCd.strip())
+    if keyword and keyword.strip():
+        k = f"%{keyword.strip()}%"
+        q = q.where(
+            or_(
+                ProductionSummary.product_name.ilike(k),
+                ProductionSummary.product_cd.ilike(k),
+            )
+        )
+    q = q.order_by(
+        ProductionSummary.product_cd,
+        ProductionSummary.route_cd,
+        ProductionSummary.date,
+    )
+    rows = (await db.execute(q)).all()
+
+    buckets: dict[tuple, dict] = {}
+    for r in rows:
+        pcd = (r.product_cd or "").strip()
+        rcd = (r.route_cd or "").strip()
+        if not pcd:
+            continue
+        key = (pcd, rcd)
+        entry = buckets.get(key)
+        if entry is None:
+            entry = {
+                "product_cd": pcd,
+                "product_name": r.product_name or "",
+                "route_cd": rcd,
+                "rows_by_date": {},
+            }
+            buckets[key] = entry
+        d = r.date
+        if isinstance(d, str):
+            try:
+                d = date.fromisoformat(d[:10])
+            except ValueError:
+                continue
+        entry["rows_by_date"][d] = r
+        if not entry["product_name"] and r.product_name:
+            entry["product_name"] = r.product_name
+
+    hits: list[dict] = []
+    for entry in buckets.values():
+        rows_by_date = entry["rows_by_date"]
+        if not all(d in rows_by_date for d in required_dates):
+            continue
+        ordered = [rows_by_date[d] for d in required_dates]
+        for col in INVENTORY_COLUMNS:
+            values = [getattr(row, col) for row in ordered]
+            if all(v is None for v in values):
+                continue
+            normalized = [0 if v is None else int(v) for v in values]
+            v0 = normalized[0]
+            if any(v != v0 for v in normalized):
+                continue
+            if v0 <= min_quantity:
+                continue
+            hits.append({
+                "product_cd": entry["product_cd"],
+                "product_name": entry["product_name"],
+                "route_cd": entry["route_cd"],
+                "inventory_column": col,
+                "stable_quantity": v0,
+                "period_start": required_dates[0].isoformat(),
+                "period_end": required_dates[-1].isoformat(),
+                "days": window_days,
+            })
+
+    hits.sort(key=lambda x: (
+        -x["stable_quantity"],
+        x["product_name"] or "",
+        x["product_cd"],
+        x["route_cd"],
+        x["inventory_column"],
+    ))
+
+    return {
+        "data": {
+            "list": hits,
+            "total": len(hits),
+            "as_of": as_of_d.isoformat(),
+            "period_start": start_d.isoformat(),
+            "period_end": as_of_d.isoformat(),
+            "min_quantity": int(min_quantity),
+            "stable_calendar_days": window_days,
+        }
+    }
+
+
 @router.get("/products")
 async def get_production_summarys_products(
     db: AsyncSession = Depends(get_db),
