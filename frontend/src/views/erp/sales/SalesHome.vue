@@ -221,8 +221,8 @@ const salesModules = computed(() => [
   },
   {
     path: '/erp/order/monthly',
-    title: t('salesPages.salesHome.modules.edi.title'),
-    description: t('salesPages.salesHome.modules.edi.desc'),
+    title: t('salesPages.salesHome.modules.monthlyOrder.title'),
+    description: t('salesPages.salesHome.modules.monthlyOrder.desc'),
     icon: markRaw(Tickets),
     gradient: 'linear-gradient(135deg, #4facfe, #00f2fe)',
   },

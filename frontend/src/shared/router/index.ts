@@ -52,7 +52,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/sales', name: 'Sales', component: () => import('@/views/erp/Sales.vue'), meta: { title: '販売管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/quotation', name: 'QuotationList', component: () => import('@/views/erp/sales/quotation/QuotationList.vue'), meta: { title: '見積管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/orders', name: 'SalesOrderList', component: () => import('@/views/erp/sales/SalesOrderList.vue'), meta: { title: '受注一覧', group: '販売管理', requiresAuth: true } },
-      { path: 'erp/sales/edi-import', redirect: '/erp/order/monthly' },
       { path: 'erp/sales/shipping', name: 'ShippingList', component: () => import('@/views/erp/sales/shipping/ShippingList.vue'), meta: { title: '出荷指示', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/recording', name: 'SalesRecording', component: () => import('@/views/erp/sales/shipping/SalesRecording.vue'), meta: { title: '売上計上', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/returns', name: 'ReturnsList', component: () => import('@/views/erp/sales/returns/ReturnsList.vue'), meta: { title: '返品管理(RMA)', group: '販売管理', requiresAuth: true } },

@@ -1,11 +1,19 @@
 <template>
   <div class="order-monthly-list">
     <div class="page-toolbar">
+      <div class="page-toolbar-glow" aria-hidden="true" />
       <div class="toolbar-left">
-        <el-icon class="toolbar-icon"><Calendar /></el-icon>
-        <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
+        <div class="toolbar-brand">
+          <div class="toolbar-icon-wrap">
+            <el-icon class="toolbar-icon"><Calendar /></el-icon>
+          </div>
+          <div class="toolbar-text">
+            <h1 class="toolbar-title">{{ t('orderMonthly.title') }}</h1>
+            <div class="toolbar-title-accent" aria-hidden="true" />
+          </div>
+        </div>
       </div>
-      <div class="toolbar-right">
+      <div class="toolbar-right toolbar-actions">
         <el-button class="tb-btn tb-btn-blue" :loading="generating" @click="openGenerateDailyConfirmDialog">
           <el-icon><DocumentAdd /></el-icon>
           <span class="tb-label">{{ t('orderMonthly.btnGenerateDaily') }}</span>
@@ -21,10 +29,6 @@
         <el-button class="tb-btn tb-btn-indigo" @click="openDailyOrderDialog">
           <el-icon><Calendar /></el-icon>
           <span class="tb-label">{{ t('orderMonthly.btnDailyOrder') }}</span>
-        </el-button>
-        <el-button class="tb-btn tb-btn-rose" @click="openEdiImportDialog">
-          <el-icon><Upload /></el-icon>
-          <span class="tb-label">{{ t('orderMonthly.btnEdiImport') }}</span>
         </el-button>
         <el-button class="tb-btn tb-btn-green" @click="openBatchDialog">
           <el-icon><Files /></el-icon>
@@ -672,16 +676,6 @@
       @saved="loadList"
     />
 
-    <!-- EDI取込弹窗 -->
-    <el-dialog
-      v-model="ediImportDialogVisible"
-      :title="t('orderMonthly.btnEdiImport')"
-      width="90%"
-      class="edi-import-dialog"
-      destroy-on-close
-    >
-      <EdiImport embedded />
-    </el-dialog>
   </div>
 </template>
 
@@ -690,7 +684,6 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import OrderDailyBatchEditDialog from './OrderDailyBatchEditDialog.vue'
 import OrderDailyManageDialog from './OrderDailyManageDialog.vue'
-import EdiImport from './EdiImport.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Calendar, Search, ArrowLeft, ArrowRight, Upload, Download, Close, Check, Edit, Loading as LoadingIcon, Refresh, Document, DocumentAdd, Files, Box, InfoFilled, TrendCharts, Operation, Tools, OfficeBuilding, View, Monitor } from '@element-plus/icons-vue'
@@ -1397,12 +1390,6 @@ function openDailyOrderDialog() {
   dailyManageDialogVisible.value = true
 }
 
-const ediImportDialogVisible = ref(false)
-
-function openEdiImportDialog() {
-  ediImportDialogVisible.value = true
-}
-
 // Batch registration state
 const batchDialogVisible = ref(false)
 const batchLoading = ref(false)
@@ -1687,147 +1674,251 @@ onMounted(() => {
   background: linear-gradient(160deg, #f0f4ff 0%, #e8ecf8 40%, #f5f0ff 100%);
 }
 
-/* --- Toolbar --- */
+/* --- Toolbar（标题行 · 层次阴影 · 微动效） --- */
 .page-toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(135deg, rgba(99,102,241,0.88) 0%, rgba(139,92,246,0.92) 50%, rgba(168,85,247,0.88) 100%);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
-  border: 1px solid rgba(255,255,255,0.25);
-  border-radius: 14px;
-  padding: 10px 18px;
-  margin-bottom: 10px;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: linear-gradient(
+    125deg,
+    rgba(79, 70, 229, 0.94) 0%,
+    rgba(109, 40, 217, 0.92) 38%,
+    rgba(147, 51, 234, 0.9) 72%,
+    rgba(168, 85, 247, 0.88) 100%
+  );
+  backdrop-filter: blur(20px) saturate(185%);
+  -webkit-backdrop-filter: blur(20px) saturate(185%);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 18px;
+  padding: 14px 20px 14px 18px;
+  margin-bottom: 14px;
+  overflow: hidden;
   box-shadow:
-    0 4px 24px rgba(99,102,241,0.25),
-    inset 0 1px 0 rgba(255,255,255,0.2);
+    0 1px 0 rgba(255, 255, 255, 0.45) inset,
+    0 8px 32px rgba(79, 70, 229, 0.28),
+    0 20px 48px -12px rgba(109, 40, 217, 0.35),
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+.page-toolbar-glow {
+  position: absolute;
+  inset: -40% -20% auto -10%;
+  height: 120%;
+  background: radial-gradient(ellipse 80% 55% at 18% 0%, rgba(255, 255, 255, 0.22), transparent 55%);
+  pointer-events: none;
 }
 .toolbar-left {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  min-width: 0;
+}
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.toolbar-icon-wrap {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 14px rgba(15, 23, 42, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 .toolbar-icon {
-  font-size: 20px;
+  font-size: 24px;
   color: #fff;
-  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.2));
+  filter: drop-shadow(0 2px 4px rgba(15, 23, 42, 0.25));
+}
+.toolbar-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 .toolbar-title {
   margin: 0;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
   color: #fff;
-  letter-spacing: 0.5px;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22),
+    0 2px 14px rgba(15, 23, 42, 0.35),
+    0 8px 24px rgba(49, 46, 129, 0.25);
+}
+.toolbar-title-accent {
+  height: 3px;
+  width: min(160px, 42vw);
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.95), rgba(196, 181, 253, 0.5), transparent);
+  box-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
 }
 .toolbar-right {
+  position: relative;
+  z-index: 1;
   display: flex;
-  gap: 5px;
+  align-items: center;
+  gap: 10px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.toolbar-actions {
+  row-gap: 8px;
 }
 
-/* --- Toolbar Buttons (Glass + Color Differentiation) --- */
+/* --- Toolbar Buttons（分色 · 立体阴影 · Element Plus 覆盖） --- */
 .tb-btn {
-  border-radius: 8px;
-  padding: 5px 11px;
-  font-size: 12px;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid rgba(255,255,255,0.2);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.12);
+  --tb-h: 40px;
   position: relative;
+  height: var(--tb-h);
+  min-height: var(--tb-h);
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  color: #fff !important;
+  cursor: pointer;
+  transition:
+    transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1),
+    box-shadow 0.22s ease,
+    filter 0.22s ease,
+    border-color 0.2s ease;
   overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 6px 16px rgba(15, 23, 42, 0.12);
 }
-.tb-btn::before {
+.tb-btn :deep(.el-button__wrapper) {
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.tb-btn :deep(.el-icon) {
+  font-size: 16px;
+}
+.tb-btn::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 100%);
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 48%);
   pointer-events: none;
 }
 .tb-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  color: #fff;
+  transform: translateY(-2px);
+  filter: brightness(1.04);
+  color: #fff !important;
 }
 .tb-btn:active {
   transform: translateY(0);
+  filter: brightness(0.98);
+}
+.tb-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+.tb-btn:disabled,
+.tb-btn.is-disabled {
+  opacity: 0.55;
+  transform: none !important;
+  filter: none;
+  cursor: not-allowed;
+}
+.tb-btn :deep(.el-icon.is-loading) {
+  color: #fff;
 }
 
 /* Blue - 日受注生成 */
 .tb-btn-blue {
-  background: linear-gradient(135deg, rgba(59,130,246,0.85) 0%, rgba(37,99,235,0.9) 100%);
-  box-shadow: 0 2px 10px rgba(59,130,246,0.3);
+  background: linear-gradient(145deg, #3b82f6 0%, #1d4ed8 52%, #1e40af 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.25) inset,
+    0 4px 14px rgba(37, 99, 235, 0.45),
+    0 12px 28px -8px rgba(30, 64, 175, 0.35);
 }
 .tb-btn-blue:hover {
-  background: linear-gradient(135deg, rgba(59,130,246,1) 0%, rgba(37,99,235,1) 100%);
-  box-shadow: 0 4px 18px rgba(59,130,246,0.45);
-  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.3) inset,
+    0 8px 22px rgba(37, 99, 235, 0.55),
+    0 18px 36px -10px rgba(30, 64, 175, 0.4);
 }
 
 /* Teal - 内示更新 */
 .tb-btn-teal {
-  background: linear-gradient(135deg, rgba(20,184,166,0.85) 0%, rgba(13,148,136,0.9) 100%);
-  box-shadow: 0 2px 10px rgba(20,184,166,0.3);
+  background: linear-gradient(145deg, #2dd4bf 0%, #0d9488 52%, #0f766e 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 4px 14px rgba(13, 148, 136, 0.42),
+    0 12px 28px -8px rgba(15, 118, 110, 0.32);
 }
 .tb-btn-teal:hover {
-  background: linear-gradient(135deg, rgba(20,184,166,1) 0%, rgba(13,148,136,1) 100%);
-  box-shadow: 0 4px 18px rgba(20,184,166,0.45);
-  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 8px 22px rgba(13, 148, 136, 0.52),
+    0 18px 36px -10px rgba(15, 118, 110, 0.38);
 }
 
 /* Amber - 製品更新 */
 .tb-btn-amber {
-  background: linear-gradient(135deg, rgba(245,158,11,0.85) 0%, rgba(217,119,6,0.9) 100%);
-  box-shadow: 0 2px 10px rgba(245,158,11,0.3);
+  background: linear-gradient(145deg, #fbbf24 0%, #d97706 50%, #b45309 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 4px 14px rgba(217, 119, 6, 0.42),
+    0 12px 28px -8px rgba(180, 83, 9, 0.3);
 }
 .tb-btn-amber:hover {
-  background: linear-gradient(135deg, rgba(245,158,11,1) 0%, rgba(217,119,6,1) 100%);
-  box-shadow: 0 4px 18px rgba(245,158,11,0.45);
-  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 8px 22px rgba(217, 119, 6, 0.52),
+    0 18px 36px -10px rgba(180, 83, 9, 0.36);
 }
 
 /* Indigo - 日受注 */
 .tb-btn-indigo {
-  background: linear-gradient(135deg, rgba(99,102,241,0.85) 0%, rgba(79,70,229,0.9) 100%);
-  box-shadow: 0 2px 10px rgba(99,102,241,0.3);
+  background: linear-gradient(145deg, #818cf8 0%, #6366f1 45%, #4f46e5 100%) !important;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 4px 14px rgba(79, 70, 229, 0.45),
+    0 12px 28px -8px rgba(67, 56, 202, 0.35);
 }
 .tb-btn-indigo:hover {
-  background: linear-gradient(135deg, rgba(99,102,241,1) 0%, rgba(79,70,229,1) 100%);
-  box-shadow: 0 4px 18px rgba(99,102,241,0.45);
-  color: #fff;
-}
-
-/* Rose - EDI取込 */
-.tb-btn-rose {
-  background: linear-gradient(135deg, rgba(244,63,94,0.85) 0%, rgba(225,29,72,0.9) 100%);
-  box-shadow: 0 2px 10px rgba(244,63,94,0.3);
-}
-.tb-btn-rose:hover {
-  background: linear-gradient(135deg, rgba(244,63,94,1) 0%, rgba(225,29,72,1) 100%);
-  box-shadow: 0 4px 18px rgba(244,63,94,0.45);
-  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 8px 22px rgba(79, 70, 229, 0.55),
+    0 18px 36px -10px rgba(67, 56, 202, 0.42);
 }
 
 /* Green - 一括登録 */
 .tb-btn-green {
-  background: linear-gradient(135deg, rgba(16,185,129,0.9) 0%, rgba(5,150,105,0.95) 100%);
-  box-shadow: 0 2px 10px rgba(16,185,129,0.35);
-  font-weight: 600;
+  background: linear-gradient(145deg, #34d399 0%, #059669 48%, #047857 100%) !important;
+  font-weight: 700;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.28) inset,
+    0 4px 14px rgba(5, 150, 105, 0.45),
+    0 12px 28px -8px rgba(4, 120, 87, 0.32);
 }
 .tb-btn-green:hover {
-  background: linear-gradient(135deg, rgba(16,185,129,1) 0%, rgba(5,150,105,1) 100%);
-  box-shadow: 0 4px 18px rgba(16,185,129,0.5);
-  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.32) inset,
+    0 8px 22px rgba(5, 150, 105, 0.55),
+    0 18px 36px -10px rgba(4, 120, 87, 0.38);
 }
 
 /* --- Progress --- */
@@ -2828,12 +2919,6 @@ onMounted(() => {
 }
 .register-btn:hover { opacity: 0.92; color: #fff; transform: translateY(-1px); }
 
-/* --- EDI Import Dialog --- */
-.edi-import-dialog :deep(.el-dialog) {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
 /* --- Global Element Plus Overrides (scoped) --- */
 .order-monthly-list :deep(.el-select .el-input__wrapper) {
   border-radius: 8px;
@@ -2879,13 +2964,25 @@ onMounted(() => {
   .order-monthly-list { padding: 8px; }
   .page-toolbar {
     flex-direction: column;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 12px;
+    align-items: stretch;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 16px;
   }
   .toolbar-right { justify-content: flex-start; }
+  .toolbar-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+  }
+  .toolbar-icon { font-size: 22px; }
   .tb-label { display: none; }
-  .tb-btn { padding: 6px 8px; border-radius: 8px; }
+  .tb-btn {
+    --tb-h: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12px;
+  }
   .filter-bar { padding: 6px 10px; }
   .filter-inline { gap: 5px; }
   .fi-dest, .fi-search { width: 140px; min-width: 110px; }
@@ -2902,9 +2999,15 @@ onMounted(() => {
 }
 @media (max-width: 480px) {
   .order-monthly-list { padding: 6px; }
-  .toolbar-title { font-size: 14px; }
-  .toolbar-right { gap: 3px; }
-  .tb-btn { padding: 5px 7px; font-size: 11px; }
+  .toolbar-title { font-size: 0.95rem; }
+  .toolbar-title-accent { width: min(100px, 55vw); height: 2px; }
+  .toolbar-right { gap: 6px; }
+  .tb-btn {
+    --tb-h: 36px;
+    padding: 0 10px;
+    font-size: 11px;
+    border-radius: 10px;
+  }
   .fi-year { width: 78px; }
   .fi-month { width: 68px; }
   .fi-nav-btn { width: 24px; height: 24px; }

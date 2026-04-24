@@ -129,6 +129,20 @@ service.interceptors.response.use(
         case 404:
           ElMessage.error(errorMessage || 'リソースが見つかりません。')
           break
+        case 422: {
+          // FastAPI の検証エラーは detail が配列のことがある
+          const d = data?.detail
+          const msg =
+            typeof d === 'string'
+              ? d
+              : Array.isArray(d)
+                ? d
+                    .map((x: { msg?: string }) => (typeof x === 'object' && x && 'msg' in x ? String((x as { msg?: string }).msg) : JSON.stringify(x)))
+                    .join('；')
+                : errorMessage
+          ElMessage.error(msg || 'リクエスト形式が正しくありません。')
+          break
+        }
         case 500:
           // 500 は呼び出し元の catch でメッセージ表示するため、ここでは表示しない（二重表示を防ぐ）
           break

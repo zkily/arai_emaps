@@ -138,6 +138,7 @@ class OrderDaily(Base):
     date = Column(Date, nullable=False, comment="年月日")
     weekday = Column(String(10), comment="曜日")
     product_cd = Column(String(50), nullable=False, index=True, comment="製品CD")
+    part_number = Column(String(50), index=True, comment="EDI かんばん品番（hinban）")
     product_name = Column(String(100), comment="製品名")
     product_alias = Column(String(100), comment="製品別名")
     forecast_units = Column(Integer, default=0, comment="内示本数")

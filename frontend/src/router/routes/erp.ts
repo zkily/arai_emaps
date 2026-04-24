@@ -31,10 +31,6 @@ export const erpRoutes: RouteRecordRaw[] = [
         meta: { title: '受注一覧', group: '販売管理 > 受注管理', requiresAuth: true },
       },
       {
-        path: 'erp/sales/edi-import',
-        redirect: '/erp/order/monthly',
-      },
-      {
         path: 'erp/sales/forecast',
         name: 'ForecastManagement',
         component: () => import('@/views/erp/sales/order/ForecastManagement.vue'),

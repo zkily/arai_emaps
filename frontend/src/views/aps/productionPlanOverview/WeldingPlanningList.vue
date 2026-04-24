@@ -27,6 +27,17 @@
       <p class="plan-hd-sub">
         工程・期間を指定し、対象期間に重なる APS 製造指示を<strong>日別ガント</strong>で表示します（計画／実績／残）。
       </p>
+      <div v-if="bulkReplanning && replanProgressTotal > 0" class="replan-progress-card">
+        <div class="replan-progress-head">
+          <span class="replan-progress-title">再計算進捗</span>
+          <span class="replan-progress-meta">{{ replanProgressText }}</span>
+        </div>
+        <div class="replan-progress-line">
+          <span class="replan-progress-label">現在設備：{{ replanCurrentLineLabel || '—' }}</span>
+          <span class="replan-progress-label">{{ replanProgressPercent }}%</span>
+        </div>
+        <el-progress :percentage="replanProgressPercent" :stroke-width="12" :show-text="false" />
+      </div>
     </div>
 
     <div class="plan-card filter-card">
@@ -504,7 +515,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Goods, OfficeBuilding, Printer, Switch } from '@element-plus/icons-vue'
 import {
@@ -527,6 +538,16 @@ type GanttListRow = ScheduleGridRow & {
 }
 
 const bulkReplanning = ref(false)
+const replanProgressTotal = ref(0)
+const replanProgressDone = ref(0)
+const replanCurrentLineLabel = ref('')
+const replanProgressPercent = computed(() => {
+  const total = replanProgressTotal.value
+  if (total <= 0) return 0
+  const pct = Math.round((replanProgressDone.value / total) * 100)
+  return Math.max(0, Math.min(100, pct))
+})
+const replanProgressText = computed(() => `${replanProgressDone.value} / ${replanProgressTotal.value}`)
 
 /** 再計算 API のクエリ用アンカー（DB の aps_line_replan_anchors があればサーバ側で優先） */
 function formatYmdInJapan(d: Date): string {
@@ -1038,6 +1059,28 @@ function selectedProcessLabel(): string {
   const p = processOptions.value.find((x) => (x.process_cd || '').trim() === cd)
   const nm = (p?.process_name || '').trim()
   return nm ? `${cd} — ${nm}` : cd
+}
+
+/** 再計算確認ダイアログ用：工程名（無ければコード） */
+function selectedProcessNameOnly(): string {
+  const cd = (selectedProcessCd.value || '').trim()
+  if (!cd) return '—'
+  const p = processOptions.value.find((x) => (x.process_cd || '').trim() === cd)
+  const nm = (p?.process_name || '').trim()
+  return nm || cd
+}
+
+function buildReplanConfirmMessage() {
+  const cd = (selectedProcessCd.value || '').trim()
+  const name = selectedProcessNameOnly()
+  const showCode = !!cd && name !== cd
+  const nameBlockChildren = [h('div', { class: 'forming-replan-confirm__name' }, name)]
+  if (showCode) nameBlockChildren.push(h('div', { class: 'forming-replan-confirm__code' }, cd))
+  return h('div', { class: 'forming-replan-confirm' }, [
+    h('p', { class: 'forming-replan-confirm__lead' }, '次の工程について、すべての有効設備をラインコード順に順次再計算します。'),
+    h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
+    h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
+  ])
 }
 
 function buildUtilizationPrintHtml(): string {
@@ -1639,15 +1682,24 @@ async function replanAllLinesForProcess() {
   const pc = (selectedProcessCd.value || '').trim()
   if (!pc) return
   try {
-    await ElMessageBox.confirm(
-      `工程「${pc}」の全設備をラインコード順に順次再計算します。実行しますか？`,
-      '全設備ライン順で再計算',
-      { type: 'warning', confirmButtonText: '実行', cancelButtonText: 'キャンセル' },
-    )
+    await ElMessageBox.confirm(buildReplanConfirmMessage(), {
+      title: '全設備ライン順で再計算',
+      type: 'warning',
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      customClass: 'forming-replan-messagebox',
+      center: false,
+      showClose: true,
+      closeOnClickModal: false,
+      distinguishCancelAndClose: true,
+    })
   } catch {
     return
   }
   bulkReplanning.value = true
+  replanProgressTotal.value = 0
+  replanProgressDone.value = 0
+  replanCurrentLineLabel.value = ''
   try {
     const rawLines = await fetchLines(pc)
     const lines = (Array.isArray(rawLines) ? rawLines : []).filter((l) => l.is_active !== false)
@@ -1656,10 +1708,13 @@ async function replanAllLinesForProcess() {
       ElMessage.warning('対象工程に有効な設備がありません')
       return
     }
+    replanProgressTotal.value = lines.length
     const anchor = replanFallbackAnchorDate.value
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
+      replanCurrentLineLabel.value = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
       await replanLineSequence(line.id, anchor)
+      replanProgressDone.value = i + 1
     }
     await loadSchedules()
     ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
@@ -1672,6 +1727,7 @@ async function replanAllLinesForProcess() {
     }
   } finally {
     bulkReplanning.value = false
+    replanCurrentLineLabel.value = ''
   }
 }
 
@@ -1886,6 +1942,38 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 .plan-hd-sub strong {
   font-weight: 600;
   color: #4f5f79;
+}
+.replan-progress-card {
+  margin: 8px 0 0 34px;
+  max-width: 620px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.92) 0%, rgba(255, 247, 237, 0.9) 100%);
+}
+.replan-progress-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.replan-progress-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a3412;
+}
+.replan-progress-meta,
+.replan-progress-label {
+  font-size: 12px;
+  color: #7c2d12;
+}
+.replan-progress-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
 .plan-card {
@@ -2976,5 +3064,121 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 
 .list-gantt-table tbody tr:hover .gantt-sticky {
   background: #f1f7ff !important;
+}
+</style>
+
+<!-- MessageBox は body へ teleport されるため、ダイアログ用はグローバル（成型計画一覧と同一スタイル） -->
+<style>
+.forming-replan-messagebox.el-message-box {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(10px);
+}
+.forming-replan-messagebox .el-message-box__header {
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 42%, #fde68a 100%);
+}
+.forming-replan-messagebox .el-message-box__headerbtn {
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: background 0.2s ease;
+}
+.forming-replan-messagebox .el-message-box__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+.forming-replan-messagebox .el-message-box__title {
+  width: 100%;
+  padding: 18px 48px 16px 20px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.forming-replan-messagebox .el-message-box__status {
+  display: none;
+}
+.forming-replan-messagebox .el-message-box__container {
+  padding: 0 20px 4px;
+}
+.forming-replan-messagebox .el-message-box__message {
+  padding: 0;
+}
+.forming-replan-messagebox .el-message-box__btns {
+  padding: 14px 20px 18px;
+  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.65) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+.forming-replan-messagebox .el-message-box__btns .el-button {
+  min-width: 108px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 10px 20px;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--default {
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  color: #475569;
+  background: #fff;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--primary {
+  border: none;
+  background: linear-gradient(135deg, #ea580c 0%, #dc2626 52%, #b91c1c 100%);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.35);
+}
+
+.forming-replan-confirm {
+  padding: 6px 0 10px;
+}
+.forming-replan-confirm__lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569;
+}
+.forming-replan-confirm__name-block {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 247, 237, 0.92) 100%);
+  border: 1px solid rgba(252, 165, 165, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.forming-replan-confirm__name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #dc2626;
+  letter-spacing: 0.02em;
+}
+.forming-replan-confirm__code {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.forming-replan-confirm__q {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 }
 </style>
