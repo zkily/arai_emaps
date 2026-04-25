@@ -283,6 +283,7 @@
       <el-table
         ref="scheduleTableRef"
         :data="visibleSchedules"
+        :max-height="scheduleTableMaxHeight"
         border
         stripe
         size="small"
@@ -333,8 +334,67 @@
             </span>
       </template>
         </el-table-column>
-        <el-table-column prop="daily_capacity" label="標準日産能力" width="110" align="right" />
-        <el-table-column prop="setup_time" label="段取（分）" width="98" align="right" />
+        <el-table-column label="段取（分）" width="98" align="right">
+          <template #default="{ row }">
+            <div
+              v-if="editingScheduleSetupId === row.id"
+              class="total-qty-edit-wrap"
+              :data-setup-edit-id="row.id"
+            >
+              <el-input
+                v-model="setupTimeDrafts[row.id]"
+                size="small"
+                class="total-qty-input"
+                maxlength="6"
+                :disabled="savingScheduleId === row.id"
+                @keydown.esc.stop.prevent="cancelEditSetupTime"
+                @keyup.enter.prevent="onSetupTimeEnter(row)"
+                @blur="onSetupTimeBlur(row)"
+              />
+            </div>
+            <span
+              v-else
+              class="total-qty-cell total-qty-editable"
+              title="ダブルクリックで段取時間を変更"
+              @dblclick="startEditSetupTime(row)"
+            >
+              {{ row.setup_time ?? '—' }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="開始日指定" width="118" align="center">
+          <template #default="{ row }">
+            <div
+              v-if="editingScheduleForcedStartId === row.id"
+              class="total-qty-edit-wrap"
+              :data-forced-start-edit-id="row.id"
+            >
+              <el-date-picker
+                v-model="forcedStartDateDrafts[row.id]"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                size="small"
+                class="total-qty-input"
+                popper-class="forced-start-date-popper"
+                clearable
+                placeholder="開始日指定"
+                :disabled="savingScheduleId === row.id"
+                @keydown.esc.stop.prevent="cancelEditForcedStartDate"
+                @blur="onForcedStartDateBlur(row)"
+                @change="onForcedStartDateChange(row)"
+              />
+            </div>
+            <span
+              v-else
+              class="total-qty-cell total-qty-editable"
+              title="ダブルクリックで開始日指定を変更（空で解除）"
+              @dblclick="startEditForcedStartDate(row)"
+            >
+              {{ row.forced_start_date || '—' }}
+            </span>
+          </template>
+        </el-table-column>
         <el-table-column label="開始日" width="100" align="center">
           <template #default="{ row }">
             {{ scheduleListDateSpanById[row.id]?.start ?? '—' }}
@@ -450,7 +510,7 @@
       </div>
       <el-tabs v-model="activeGanttTab" class="gantt-tabs">
         <el-tab-pane label="ガント（日別）" name="daily">
-          <div class="gantt-scroll">
+          <div class="gantt-scroll gantt-scroll--daily">
             <table class="gantt-table">
               <thead>
                 <tr>
@@ -538,7 +598,7 @@
               </template>
             </el-empty>
           </div>
-          <div v-else class="gantt-scroll">
+          <div v-else class="gantt-scroll gantt-scroll--hourly">
             <table class="gantt-table gantt-hourly-table">
               <thead>
                 <tr>
@@ -591,7 +651,7 @@
           <div v-if="sortedProgressLots.length === 0 && !loadingProgress" class="gantt-hourly-placeholder">
             <el-empty description="進捗データがありません（ライン順で再計算後に表示されます）" />
           </div>
-          <div v-else class="gantt-scroll">
+          <div v-else class="gantt-scroll gantt-scroll--progress">
             <table class="gantt-table gantt-progress-table">
               <thead>
                 <tr>
@@ -873,6 +933,14 @@ function expandDateRangeIso(startIso: string, endIso: string): string[] {
   return out
 }
 
+/** 日本時区基準の本日±N日（YYYY-MM-DD） */
+function offsetTodayIsoInJapan(offsetDays: number): string {
+  const todayIso = formatYmdInJapan(new Date())
+  const base = new Date(`${todayIso}T12:00:00+09:00`)
+  base.setDate(base.getDate() + offsetDays)
+  return formatYmdInJapan(base)
+}
+
 const lines = ref<ProductionLine[]>([])
 const selectedLineId = ref<number | null>(null)
 const selectedProcessCd = ref<string>('KT04')
@@ -887,8 +955,8 @@ const lineReplanAnchorRows = ref<LineReplanAnchorRow[]>([])
 const loadingLineReplanAnchors = ref(false)
 const savingLineReplanAnchors = ref(false)
 const ganttRange = ref<[string, string]>([
-  firstDayOfMonthIso(DEFAULT_ANCHOR_MONTH),
-  lastDayOfMonthOffsetIso(DEFAULT_ANCHOR_MONTH, 1),
+  offsetTodayIsoInJapan(-5),
+  offsetTodayIsoInJapan(30),
 ])
 const loadingSchedules = ref(false)
 const adding = ref(false)
@@ -901,10 +969,24 @@ const showCompletedSchedules = ref(false)
 const plannedQtyDrafts = ref<Record<number, string>>({})
 /** 合計(本) を編集中のスケジュール id（ダブルクリックで編集） */
 const editingScheduleTotalId = ref<number | null>(null)
+/** 段取（分）インライン編集用の下書き */
+const setupTimeDrafts = ref<Record<number, string>>({})
+/** 段取（分）を編集中のスケジュール id（ダブルクリックで編集） */
+const editingScheduleSetupId = ref<number | null>(null)
+/** 開始日指定インライン編集用の下書き（YYYY-MM-DD, 空で解除） */
+const forcedStartDateDrafts = ref<Record<number, string>>({})
+/** 開始日指定を編集中のスケジュール id */
+const editingScheduleForcedStartId = ref<number | null>(null)
 /** Enter 確定直後の blur で二重保存しない */
 const skipNextTotalQtyBlur = ref(false)
+/** 段取（分）用：Enter 確定直後の blur で二重保存しない */
+const skipNextSetupTimeBlur = ref(false)
+/** 開始日指定用：Enter 確定直後の blur で二重保存しない */
+const skipNextForcedStartBlur = ref(false)
 /** el-table インスタンス（行ドラッグ用） */
 const scheduleTableRef = ref<{ $el?: HTMLElement } | null>(null)
+/** 計画一覧は6行分を上限表示し、超過分は縦スクロール */
+const scheduleTableMaxHeight = 264
 let scheduleSortable: Sortable | null = null
 const eeProducts = ref<EquipmentEfficiencyProduct[]>([])
 const loadingEeProducts = ref(false)
@@ -1422,6 +1504,10 @@ async function loadSchedules() {
     schedules.value = Array.isArray(data) ? data : []
     editingScheduleTotalId.value = null
     plannedQtyDrafts.value = {}
+    editingScheduleSetupId.value = null
+    setupTimeDrafts.value = {}
+    editingScheduleForcedStartId.value = null
+    forcedStartDateDrafts.value = {}
     schedulesFetched.value = true
     await loadGantt()
   } catch (e: unknown) {
@@ -1624,6 +1710,153 @@ function onTotalQtyBlur(row: ScheduleOut) {
     }
     void saveTotalPlannedQty(row)
   })
+}
+
+function startEditSetupTime(row: ScheduleOut) {
+  if (savingScheduleId.value != null) return
+  editingScheduleSetupId.value = row.id
+  setupTimeDrafts.value[row.id] = String(row.setup_time ?? '')
+  nextTick(() => {
+    const wrap = document.querySelector(`[data-setup-edit-id="${row.id}"]`) as HTMLElement | null
+    const input = wrap?.querySelector('input') as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelEditSetupTime() {
+  skipNextSetupTimeBlur.value = true
+  editingScheduleSetupId.value = null
+  nextTick(() => {
+    skipNextSetupTimeBlur.value = false
+  })
+}
+
+function onSetupTimeEnter(row: ScheduleOut) {
+  skipNextSetupTimeBlur.value = true
+  void saveSetupTime(row).finally(() => {
+    nextTick(() => {
+      skipNextSetupTimeBlur.value = false
+    })
+  })
+}
+
+function onSetupTimeBlur(row: ScheduleOut) {
+  void nextTick(() => {
+    if (skipNextSetupTimeBlur.value) {
+      skipNextSetupTimeBlur.value = false
+      return
+    }
+    void saveSetupTime(row)
+  })
+}
+
+async function saveSetupTime(row: ScheduleOut) {
+  if (editingScheduleSetupId.value !== row.id) return
+  const draft = setupTimeDrafts.value[row.id] ?? ''
+  const raw = draft.trim().replace(/[,，]/g, '')
+  const val = parseInt(raw, 10)
+  if (!Number.isFinite(val) || val < 0) {
+    ElMessage.warning('段取（分）は 0 以上の整数を入力してください')
+    return
+  }
+  const cur = Number(row.setup_time ?? 0)
+  if (val === cur) {
+    editingScheduleSetupId.value = null
+    return
+  }
+  savingScheduleId.value = row.id
+  try {
+    await updateSchedule(row.id, {
+      setup_time: val,
+      run_immediately: false,
+    })
+    editingScheduleSetupId.value = null
+    await loadSchedules()
+    ElMessage.success('段取（分）を更新しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e))
+  } finally {
+    savingScheduleId.value = null
+  }
+}
+
+function startEditForcedStartDate(row: ScheduleOut) {
+  if (savingScheduleId.value != null) return
+  editingScheduleForcedStartId.value = row.id
+  forcedStartDateDrafts.value[row.id] = String(row.forced_start_date ?? '')
+  nextTick(() => {
+    const wrap = document.querySelector(`[data-forced-start-edit-id="${row.id}"]`) as HTMLElement | null
+    const input = wrap?.querySelector('input') as HTMLInputElement | null
+    input?.focus()
+    input?.select()
+  })
+}
+
+function cancelEditForcedStartDate() {
+  skipNextForcedStartBlur.value = true
+  editingScheduleForcedStartId.value = null
+  nextTick(() => {
+    skipNextForcedStartBlur.value = false
+  })
+}
+
+function onForcedStartDateEnter(row: ScheduleOut) {
+  skipNextForcedStartBlur.value = true
+  void saveForcedStartDate(row).finally(() => {
+    nextTick(() => {
+      skipNextForcedStartBlur.value = false
+    })
+  })
+}
+
+function onForcedStartDateChange(row: ScheduleOut) {
+  skipNextForcedStartBlur.value = true
+  void saveForcedStartDate(row).finally(() => {
+    nextTick(() => {
+      skipNextForcedStartBlur.value = false
+    })
+  })
+}
+
+function onForcedStartDateBlur(row: ScheduleOut) {
+  void nextTick(() => {
+    if (skipNextForcedStartBlur.value) {
+      skipNextForcedStartBlur.value = false
+      return
+    }
+    void saveForcedStartDate(row)
+  })
+}
+
+async function saveForcedStartDate(row: ScheduleOut) {
+  if (editingScheduleForcedStartId.value !== row.id) return
+  const draft = String(forcedStartDateDrafts.value[row.id] ?? '').trim()
+  const normalized = draft.replace(/[./]/g, '-')
+  const val = normalized === '' ? null : normalized
+  if (val !== null && !/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    ElMessage.warning('開始日指定は YYYY-MM-DD 形式で入力してください（空で解除）')
+    return
+  }
+  const cur = row.forced_start_date ?? null
+  if (val === cur) {
+    editingScheduleForcedStartId.value = null
+    return
+  }
+  savingScheduleId.value = row.id
+  try {
+    await updateSchedule(row.id, {
+      forced_start_date: val,
+      run_immediately: false,
+    })
+    editingScheduleForcedStartId.value = null
+    await loadSchedules()
+    ElMessage.success(val ? '開始日指定を更新しました' : '開始日指定を解除しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e))
+  } finally {
+    savingScheduleId.value = null
+  }
 }
 
 /** 合計(本) を planned_process_qty として保存（排産は本数が唯一の真理） */
@@ -2788,6 +3021,18 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   border-radius: 8px;
   border: 1px solid var(--c-border-l);
 }
+.gantt-scroll--daily {
+  max-height: 450px;
+  overflow-y: auto;
+}
+.gantt-scroll--progress {
+  max-height: 450px;
+  overflow-y: auto;
+}
+.gantt-scroll--hourly {
+  max-height: 450px;
+  overflow-y: auto;
+}
 .gantt-scroll::-webkit-scrollbar { height: 7px; }
 .gantt-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
 .gantt-scroll::-webkit-scrollbar-thumb { background: #c1c9d4; border-radius: 4px; }
@@ -3316,4 +3561,9 @@ td.gantt-has-actual {
 .gantt-progress-table td.pgs-released.gantt-active   { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
 .gantt-progress-table td.pgs-in_progress.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }
 .gantt-progress-table td.pgs-completed.gantt-active   { background: linear-gradient(135deg, #34d399, #059669) !important; color: #fff; }
+
+/* 開始日指定カレンダー：表格/ダイアログより前面に表示 */
+:global(.forced-start-date-popper) {
+  z-index: 4000 !important;
+}
 </style>

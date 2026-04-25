@@ -866,6 +866,7 @@ async def create_schedule(
         prev_month_carryover=prev_carry,
         due_date=body.due_date,
         material_date=body.material_date,
+        forced_start_date=body.forced_start_date,
         setup_time=setup_time,
         efficiency=Decimal(str(efficiency)),
         daily_capacity=daily_capacity,
@@ -942,6 +943,9 @@ async def update_schedule(
         val = getattr(body, field, None)
         if val is not None:
             setattr(ps, field, val)
+    # Optional[date] を null で明示クリアできるよう、存在判定で反映する。
+    if "forced_start_date" in body.model_fields_set:
+        ps.forced_start_date = body.forced_start_date
     if body.efficiency is not None:
         ps.efficiency = Decimal(str(body.efficiency))
 
@@ -1595,6 +1599,49 @@ async def replan_sequence(
         )
     )
     line_schedule_ids = [int(r[0]) for r in line_sched_res.all()]
+    # 冻结范围：仅限 date < today 且 actual_qty=0 的明细。
+    # 当天（today）若 actual_qty=0，则允许计划随重排变化，不冻结。
+    # 重排前快照冻结范围内的日计划与时段分配，重排完成后恢复；已有实绩的行不硬改。
+    frozen_planned_snapshot: dict[tuple[int, date], int] = {}
+    frozen_slice_snapshot: dict[tuple[int, date], list[dict[str, Any]]] = {}
+    if line_schedule_ids:
+        frozen_detail_res = await db.execute(
+            select(ScheduleDetail).where(
+                ScheduleDetail.schedule_id.in_(line_schedule_ids),
+                ScheduleDetail.schedule_date < today,
+                func.coalesce(ScheduleDetail.actual_qty, 0) == 0,
+            )
+        )
+        frozen_keys: list[tuple[int, date]] = []
+        for d in frozen_detail_res.scalars().all():
+            sid = int(d.schedule_id)
+            dte = d.schedule_date
+            key = (sid, dte)
+            frozen_keys.append(key)
+            frozen_planned_snapshot[key] = int(d.planned_qty or 0)
+
+        frozen_slice_res = await db.execute(
+            select(ScheduleSliceAllocation).where(
+                ScheduleSliceAllocation.schedule_id.in_(line_schedule_ids),
+                ScheduleSliceAllocation.work_date <= today,
+            )
+        )
+        frozen_key_set = set(frozen_keys)
+        for s in frozen_slice_res.scalars().all():
+            sid = int(s.schedule_id)
+            dte = s.work_date
+            key = (sid, dte)
+            if key not in frozen_key_set:
+                continue
+            frozen_slice_snapshot.setdefault(key, []).append(
+                {
+                    "period_start": s.period_start,
+                    "period_end": s.period_end,
+                    "planned_qty": int(s.planned_qty or 0),
+                    "sort_order": int(s.sort_order or 0),
+                }
+            )
+
     if line_schedule_ids:
         await db.execute(
             delete(ScheduleDetail).where(
@@ -1755,13 +1802,17 @@ async def replan_sequence(
                         "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
                     })
 
+                forced_start = getattr(ps, "forced_start_date", None)
+                effective_replan_start = cursor_date_r
+                if forced_start is not None and forced_start > effective_replan_start:
+                    effective_replan_start = forced_start
                 # 既に当該工単で実績/不良が出ている場合は、同一製品の継続生産として扱う。
                 # Step3 の再排産開始日（最終活動日の翌日）で段取を再控除すると
                 # 日量が不当に下がるため、use_setup_time=False に固定する。
                 ps = await run_engine(
                     db,
                     ps.id,
-                    override_start_date=cursor_date_r,
+                    override_start_date=effective_replan_start,
                     override_start_time=cursor_time_r,
                     actual_done_qty=actual_done_for_engine,
                     use_setup_time=False,
@@ -1786,10 +1837,14 @@ async def replan_sequence(
                         "last_defect_date": None,
                         "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
                     })
+                forced_start = getattr(ps, "forced_start_date", None)
+                effective_replan_start = cursor_date_r
+                if forced_start is not None and forced_start > effective_replan_start:
+                    effective_replan_start = forced_start
                 ps = await run_engine(
                     db,
                     ps.id,
-                    override_start_date=cursor_date_r,
+                    override_start_date=effective_replan_start,
                     override_start_time=cursor_time_r,
                     use_setup_time=(line_head_schedule_id is None or ps.id != int(line_head_schedule_id)),
                     ps_obj=ps,
@@ -1872,6 +1927,54 @@ async def replan_sequence(
             chamfer_sw_cache=chamfer_sw_cache,
         )
     await db.flush()
+
+    # 恢复冻结范围内计划（date < today 且 actual_qty=0）：仅恢复 planned_qty 与对应时段分配；
+    # actual/defect 维持重排后最新同步值，remaining 随之重算。
+    if line_schedule_ids:
+        for (sid, work_date), frozen_planned in frozen_planned_snapshot.items():
+            cur_res = await db.execute(
+                select(ScheduleDetail).where(
+                    ScheduleDetail.schedule_id == sid,
+                    ScheduleDetail.schedule_date == work_date,
+                )
+            )
+            cur = cur_res.scalar_one_or_none()
+            if cur is None:
+                db.add(
+                    ScheduleDetail(
+                        schedule_id=sid,
+                        schedule_date=work_date,
+                        planned_qty=int(frozen_planned),
+                        actual_qty=0,
+                        defect_qty=0,
+                    )
+                )
+            else:
+                cur.planned_qty = int(frozen_planned)
+                cur.remaining_qty = int(cur.planned_qty or 0) - int(cur.actual_qty or 0) - int(cur.defect_qty or 0)
+
+        # 冻结范围内的时段分配按快照恢复（未快照的工单/日期保持当前结果）
+        if frozen_slice_snapshot:
+            for sid, work_date in frozen_slice_snapshot.keys():
+                await db.execute(
+                    delete(ScheduleSliceAllocation).where(
+                        ScheduleSliceAllocation.schedule_id == int(sid),
+                        ScheduleSliceAllocation.work_date == work_date,
+                    )
+                )
+            for (sid, work_date), rows in frozen_slice_snapshot.items():
+                for r in rows:
+                    db.add(
+                        ScheduleSliceAllocation(
+                            schedule_id=int(sid),
+                            work_date=work_date,
+                            period_start=r["period_start"],
+                            period_end=r["period_end"],
+                            planned_qty=int(r["planned_qty"]),
+                            sort_order=int(r["sort_order"]),
+                        )
+                    )
+        await db.flush()
 
     data: dict[str, Any] = {"count": len(updated)}
     if includeDebug:
@@ -2754,10 +2857,31 @@ async def _sync_actual_from_stock_logs(
         return
 
     all_dates = [det.schedule_date for det in details]
+    min_d = min(all_dates)
     max_d = max(all_dates)
-    # 実績は工単明細の開始日より前に発生している場合があるため、
-    # 十分なルックバック窓（90日）を設けて stock_transaction_logs を全量参照する。
-    lookback_d = max_d - timedelta(days=90)
+    # 90 日固定窓だと長期工単や遅延補録を取りこぼすため、
+    # 当該工単の明細期間（min_d..max_d）を実績同期の検索窓とする。
+    lookback_d = min_d
+
+    machine_cd_norm = (machine.machine_cd or "").strip() if machine is not None else ""
+    machine_name_norm = (machine.machine_name or "").strip() if machine is not None else ""
+    machine_match_cond = None
+    if machine_cd_norm and machine_name_norm:
+        machine_match_cond = or_(
+            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_cd_norm,
+            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_name_norm,
+        )
+    elif machine_cd_norm:
+        machine_match_cond = (
+            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_cd_norm
+        )
+    elif machine_name_norm:
+        machine_match_cond = (
+            sa_func.trim(sa_func.coalesce(StockTransactionLog.machine_cd, "")) == machine_name_norm
+        )
+    else:
+        # 設備識別子が取れない場合は machine 絞り込みを行わない（target_cd で同期）
+        machine_match_cond = text("1=1")
 
     agg_res = await db.execute(
         select(
@@ -2769,7 +2893,7 @@ async def _sync_actual_from_stock_logs(
             StockTransactionLog.transaction_time.isnot(None),
             sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
             sa_func.date(StockTransactionLog.transaction_time) <= max_d,
-            StockTransactionLog.machine_cd == machine.machine_cd,
+            machine_match_cond,
             sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
         )
         .group_by(sa_func.date(StockTransactionLog.transaction_time))
@@ -3842,6 +3966,7 @@ def _schedule_to_out(ps: ProductionSchedule) -> ScheduleOut:
         prev_month_carryover=int(ps.prev_month_carryover or 0),
         due_date=ps.due_date,
         material_date=ps.material_date,
+        forced_start_date=getattr(ps, "forced_start_date", None),
         setup_time=int(ps.setup_time or 0),
         efficiency=_dec(ps.efficiency),
         daily_capacity=int(ps.daily_capacity or 0),

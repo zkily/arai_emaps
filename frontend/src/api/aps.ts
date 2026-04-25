@@ -63,6 +63,7 @@ export interface ScheduleCreateBody {
   prev_month_carryover?: number
   due_date?: string | null
   material_date?: string | null
+  forced_start_date?: string | null
   setup_time?: number
   efficiency?: number
   daily_capacity: number
@@ -84,6 +85,7 @@ export interface ScheduleUpdateBody {
   prev_month_carryover?: number | null
   due_date?: string | null
   material_date?: string | null
+  forced_start_date?: string | null
   setup_time?: number | null
   efficiency?: number | null
   daily_capacity?: number | null
@@ -111,6 +113,7 @@ export interface ScheduleOut {
   prev_month_carryover: number
   due_date?: string | null
   material_date?: string | null
+  forced_start_date?: string | null
   setup_time: number
   efficiency: number
   daily_capacity: number

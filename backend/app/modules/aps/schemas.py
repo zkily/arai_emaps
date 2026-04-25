@@ -148,6 +148,7 @@ class ScheduleCreateBody(BaseModel):
     prev_month_carryover: int = 0
     due_date: Optional[date] = None
     material_date: Optional[date] = None
+    forced_start_date: Optional[date] = None
     setup_time: int = 0
     efficiency: float = 100.0
     daily_capacity: int
@@ -169,6 +170,7 @@ class ScheduleUpdateBody(BaseModel):
     prev_month_carryover: Optional[int] = None
     due_date: Optional[date] = None
     material_date: Optional[date] = None
+    forced_start_date: Optional[date] = None
     setup_time: Optional[int] = None
     efficiency: Optional[float] = None
     daily_capacity: Optional[int] = None
@@ -197,6 +199,7 @@ class ScheduleOut(BaseModel):
     prev_month_carryover: int
     due_date: Optional[date] = None
     material_date: Optional[date] = None
+    forced_start_date: Optional[date] = None
     setup_time: int
     efficiency: float
     daily_capacity: int

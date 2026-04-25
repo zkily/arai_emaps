@@ -76,6 +76,7 @@ class ProductionSchedule(Base):
     prev_month_carryover = Column(Integer, nullable=False, default=0)
     due_date = Column(Date, nullable=True)
     material_date = Column(Date, nullable=True)
+    forced_start_date = Column(Date, nullable=True)
     setup_time = Column(Integer, nullable=False, default=0)
     efficiency = Column(Numeric(5, 2), nullable=False, default=100.00)
     daily_capacity = Column(Integer, nullable=False)

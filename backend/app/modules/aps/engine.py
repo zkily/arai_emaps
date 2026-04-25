@@ -463,8 +463,9 @@ async def run_engine(
 
         apply_setup_slices = is_first_day and setup_minutes > 0
         start_from_minute = initial_start_from_minute if is_first_day else None
-        # apply_setup_slices は「初回実稼働開始日だけ」消費（旧仕様互換）
-        if apply_setup_slices:
+        # 首日判定は setup_time の有無に関係なく 1 回だけ消費する。
+        # setup_time=0 の場合でも start_from_minute を後続日へ持ち越さない。
+        if is_first_day:
             is_first_day = False
 
         day_slot_list = slots_by_date.get(current_date) or []
@@ -647,10 +648,14 @@ async def replan_line_sequential(
         if replannable:
             # 段取免除は「全線で先頭の1件」のみ。order_no 重複に依存しない。
             use_setup = idx != 0
+            forced_start = getattr(ps, "forced_start_date", None)
+            effective_start = cursor_date
+            if forced_start is not None and forced_start > effective_start:
+                effective_start = forced_start
             ps = await run_engine(
                 db,
                 ps.id,
-                override_start_date=cursor_date,
+                override_start_date=effective_start,
                 override_start_time=cursor_time,
                 use_setup_time=use_setup,
                 ps_obj=ps,

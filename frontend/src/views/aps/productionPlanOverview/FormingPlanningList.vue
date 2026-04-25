@@ -1134,6 +1134,8 @@ function buildReplanConfirmMessage() {
   return h('div', { class: 'forming-replan-confirm' }, [
     h('p', { class: 'forming-replan-confirm__lead' }, '次の工程について、すべての有効設備をラインコード順に順次再計算します。'),
     h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
+    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）で実績0の日別計画のみ固定対象です。本日分は実績0でも固定せず、再計算結果で更新されます。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
     h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
   ])
 }
