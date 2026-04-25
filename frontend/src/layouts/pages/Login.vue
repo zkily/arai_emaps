@@ -143,6 +143,23 @@ const loginForm = reactive({
   password: '',
 })
 
+/** FastAPI の error.response.data.detail（文字列 or バリデーション配列）を表示用に整形 */
+function formatApiDetail(data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const detail = (data as { detail?: unknown }).detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((x) =>
+        typeof x === 'object' && x && 'msg' in (x as object)
+          ? String((x as { msg?: unknown }).msg)
+          : JSON.stringify(x),
+      )
+      .join('；')
+  }
+  return undefined
+}
+
 const rules: FormRules = {
   username: [
     { required: true, message: 'ユーザー名またはメールアドレスを入力してください', trigger: 'blur' },
@@ -208,17 +225,23 @@ const handleLogin = async () => {
         })
 
         router.push('/dashboard')
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('ログインエラー:', error)
-        
+
         let errorMessage = 'ログインに失敗しました。ユーザー名とパスワードを確認してください。'
-        
-        if (error?.response?.data?.detail) {
-          errorMessage = error.response.data.detail
-        } else if (error?.response?.data?.message) {
-          errorMessage = error.response.data.message
-        } else if (error?.message) {
-          errorMessage = error.message
+
+        const ax = error as { response?: { data?: unknown; status?: number }; message?: string }
+        const fromDetail = ax.response?.data ? formatApiDetail(ax.response.data) : undefined
+        if (fromDetail) {
+          errorMessage = fromDetail
+        } else if (ax.response?.data && typeof ax.response.data === 'object') {
+          const msg = (ax.response.data as { message?: unknown }).message
+          if (typeof msg === 'string') errorMessage = msg
+        } else if (ax.response?.status === 401) {
+          errorMessage =
+            '認証に失敗しました（401）。DB にユーザーが存在するか、パスワードが正しいか、API（例: http://localhost:8005）が起動しているか確認してください。'
+        } else if (ax.message) {
+          errorMessage = ax.message
         }
         
         ElMessage.error({

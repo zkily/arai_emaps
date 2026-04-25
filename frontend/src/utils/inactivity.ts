@@ -13,7 +13,8 @@ const CHECK_INTERVAL_MS = 60 * 1000
 /** 最后一次活动时间（任何操作或 API 请求会更新） */
 let lastActivityAt = 0
 
-let checkTimer: ReturnType<typeof setInterval> | null = null
+/** ブラウザでは number、Node 型定義では Timeout になるため明示 */
+let checkTimer: number | null = null
 let boundTouch: () => void
 
 const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']

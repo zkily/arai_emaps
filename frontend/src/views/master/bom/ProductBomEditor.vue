@@ -9,10 +9,14 @@
           </div>
           <div class="pbe-hero__text">
             <h1 class="pbe-hero__title">製品BOM表管理</h1>
-            <p class="pbe-hero__sub">製品を選ぶと左に工程順、右にBOMの材料・部品（版選択後）· 下に構成ツリー</p>
+            <p class="pbe-hero__sub">
+              製品を選ぶと左に工程順、右にBOMの材料・部品（版選択後）· 下に構成ツリー
+            </p>
           </div>
         </div>
-        <el-button type="primary" size="small" :icon="Plus" @click="openCreateDialog">新規BOM</el-button>
+        <el-button type="primary" size="small" :icon="Plus" @click="openCreateDialog">
+          新規BOM
+        </el-button>
       </div>
     </header>
 
@@ -58,7 +62,13 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="small" :icon="Search" :disabled="!selectedHeaderId" @click="reloadTreeAndFilter">
+          <el-button
+            type="primary"
+            size="small"
+            :icon="Search"
+            :disabled="!selectedHeaderId"
+            @click="reloadTreeAndFilter"
+          >
             再取得
           </el-button>
         </el-form-item>
@@ -90,7 +100,12 @@
             style="width: 100%"
           >
             <el-table-column prop="step_no" label="順" width="44" align="center" />
-            <el-table-column prop="process_cd" label="工程CD" min-width="92" show-overflow-tooltip />
+            <el-table-column
+              prop="process_cd"
+              label="工程CD"
+              min-width="92"
+              show-overflow-tooltip
+            />
             <el-table-column label="工程名" min-width="108" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ row.process_name || '—' }}
@@ -118,7 +133,13 @@
               stripe
               style="width: 100%"
             >
-              <el-table-column prop="line_no" label="行番" width="70" align="center" header-align="center" />
+              <el-table-column
+                prop="line_no"
+                label="行番"
+                width="70"
+                align="center"
+                header-align="center"
+              />
               <el-table-column
                 prop="component_material_cd"
                 label="材料CD"
@@ -126,19 +147,50 @@
                 align="center"
                 header-align="center"
               />
-              <el-table-column label="材料名" min-width="140" align="center" header-align="center" show-overflow-tooltip>
+              <el-table-column
+                label="材料名"
+                min-width="140"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ masterMaterialName(row.component_material_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="qty_per" label="所要量" width="90" align="center" header-align="center" />
-              <el-table-column prop="uom" label="単位" width="70" align="center" header-align="center" />
-              <el-table-column label="工程名" min-width="120" align="center" header-align="center" show-overflow-tooltip>
+              <el-table-column
+                prop="qty_per"
+                label="所要量"
+                width="90"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column
+                prop="uom"
+                label="単位"
+                width="70"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column
+                label="工程名"
+                min-width="120"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ mainRouteProcessName(row.consume_process_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="remarks" label="備考" min-width="100" align="center" header-align="center" show-overflow-tooltip />
+              <el-table-column
+                prop="remarks"
+                label="備考"
+                min-width="100"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              />
             </el-table>
           </el-card>
           <el-card class="panel-card pbe-panel" shadow="never">
@@ -157,7 +209,13 @@
               stripe
               style="width: 100%"
             >
-              <el-table-column prop="line_no" label="行番" width="70" align="center" header-align="center" />
+              <el-table-column
+                prop="line_no"
+                label="行番"
+                width="70"
+                align="center"
+                header-align="center"
+              />
               <el-table-column label="子品目種別" width="100" align="center" header-align="center">
                 <template #default="{ row }">
                   <el-tag :type="componentTypeTagMap[row.component_type] || 'info'" size="small">
@@ -172,19 +230,50 @@
                 align="center"
                 header-align="center"
               />
-              <el-table-column label="製品名" min-width="140" align="center" header-align="center" show-overflow-tooltip>
+              <el-table-column
+                label="製品名"
+                min-width="140"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ masterProductName(row.component_product_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="qty_per" label="所要量" width="90" align="center" header-align="center" />
-              <el-table-column prop="uom" label="単位" width="70" align="center" header-align="center" />
-              <el-table-column label="工程名" min-width="120" align="center" header-align="center" show-overflow-tooltip>
+              <el-table-column
+                prop="qty_per"
+                label="所要量"
+                width="90"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column
+                prop="uom"
+                label="単位"
+                width="70"
+                align="center"
+                header-align="center"
+              />
+              <el-table-column
+                label="工程名"
+                min-width="120"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              >
                 <template #default="{ row }">
                   {{ mainRouteProcessName(row.consume_process_cd) }}
                 </template>
               </el-table-column>
-              <el-table-column prop="remarks" label="備考" min-width="100" align="center" header-align="center" show-overflow-tooltip />
+              <el-table-column
+                prop="remarks"
+                label="備考"
+                min-width="100"
+                align="center"
+                header-align="center"
+                show-overflow-tooltip
+              />
             </el-table>
           </el-card>
         </div>
@@ -197,7 +286,11 @@
           </template>
           <div class="pbe-panel-placeholder-body">
             <el-empty
-              :description="productHeaders.length ? '上の BOM版を選択してください' : 'BOMヘッダがありません。新規BOMを作成してください'"
+              :description="
+                productHeaders.length
+                  ? '上の BOM版を選択してください'
+                  : 'BOMヘッダがありません。新規BOMを作成してください'
+              "
               :image-size="64"
             />
           </div>
@@ -211,25 +304,49 @@
         <div class="tree-card-header pbe-tree-cap">
           <div class="pbe-tree-cap__left">
             <span class="pbe-panel-cap__dot" />
-            <span>BOMツリー · {{ selectedHeader.parent_product_cd }} / Rev.{{ selectedHeader.revision }}</span>
+            <span>
+              BOMツリー · {{ selectedHeader.parent_product_cd }} / Rev.{{ selectedHeader.revision }}
+            </span>
           </div>
           <div class="pbe-tree-cap__actions">
-            <el-radio-group v-model="bomTreeViewMode" size="small" class="pbe-tree-view-toggle pbe-tree-view-toggle--wide">
+            <el-radio-group
+              v-model="bomTreeViewMode"
+              size="small"
+              class="pbe-tree-view-toggle pbe-tree-view-toggle--wide"
+            >
               <el-radio-button value="table">
-                <span class="pbe-tree-view-toggle__inner"><el-icon><List /></el-icon>表</span>
+                <span class="pbe-tree-view-toggle__inner">
+                  <el-icon><List /></el-icon>
+                  表
+                </span>
               </el-radio-button>
               <el-radio-button value="blocks">
-                <span class="pbe-tree-view-toggle__inner"><el-icon><Grid /></el-icon>多階層</span>
+                <span class="pbe-tree-view-toggle__inner">
+                  <el-icon><Grid /></el-icon>
+                  多階層
+                </span>
               </el-radio-button>
               <el-radio-button value="direct">
-                <span class="pbe-tree-view-toggle__inner"><el-icon><Bottom /></el-icon>直下</span>
+                <span class="pbe-tree-view-toggle__inner">
+                  <el-icon><Bottom /></el-icon>
+                  直下
+                </span>
               </el-radio-button>
               <el-radio-button value="flat">
-                <span class="pbe-tree-view-toggle__inner"><el-icon><Histogram /></el-icon>展開集計</span>
+                <span class="pbe-tree-view-toggle__inner">
+                  <el-icon><Histogram /></el-icon>
+                  展開集計
+                </span>
               </el-radio-button>
             </el-radio-group>
             <el-tooltip content="編集" placement="bottom">
-              <el-button type="primary" link size="small" :icon="Edit" @click="openEditDialog(selectedHeader)" />
+              <el-button
+                type="primary"
+                link
+                size="small"
+                :icon="Edit"
+                @click="openEditDialog(selectedHeader)"
+              />
             </el-tooltip>
           </div>
         </div>
@@ -259,44 +376,52 @@
             size="small"
             style="width: 100%"
           >
-        <el-table-column prop="line_no" label="行番" width="70" />
-        <el-table-column prop="component_type" label="子品目種別" width="110">
-          <template #default="{ row }">
-            <el-tag :type="componentTypeTagMap[row.component_type] || 'info'" size="small">
-              {{ componentTypeLabel[row.component_type] || row.component_type }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="子品目CD" width="160">
-          <template #default="{ row }">
-            {{ row.component_product_cd || row.component_material_cd || '—' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="マスタ名称" min-width="140" show-overflow-tooltip>
-          <template #default="{ row }">
-            {{
-              row.component_material_cd
-                ? masterMaterialName(row.component_material_cd)
-                : row.component_product_cd
-                  ? masterProductName(row.component_product_cd)
-                  : '—'
-            }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="qty_per" label="所要量" width="100" align="right" />
-        <el-table-column prop="uom" label="単位" width="70" />
-        <el-table-column prop="scrap_rate" label="ロス率(%)" width="100" align="right" />
-        <el-table-column prop="consume_process_cd" label="投入工程" width="120" />
-        <el-table-column prop="remarks" label="備考" min-width="120" />
+            <el-table-column prop="line_no" label="行番" width="70" />
+            <el-table-column prop="component_type" label="子品目種別" width="110">
+              <template #default="{ row }">
+                <el-tag :type="componentTypeTagMap[row.component_type] || 'info'" size="small">
+                  {{ componentTypeLabel[row.component_type] || row.component_type }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="子品目CD" width="160">
+              <template #default="{ row }">
+                {{ row.component_product_cd || row.component_material_cd || '—' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="マスタ名称" min-width="140" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{
+                  row.component_material_cd
+                    ? masterMaterialName(row.component_material_cd)
+                    : row.component_product_cd
+                      ? masterProductName(row.component_product_cd)
+                      : '—'
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="qty_per" label="所要量" width="100" align="right" />
+            <el-table-column prop="uom" label="単位" width="70" />
+            <el-table-column prop="scrap_rate" label="ロス率(%)" width="100" align="right" />
+            <el-table-column prop="consume_process_cd" label="投入工程" width="120" />
+            <el-table-column prop="remarks" label="備考" min-width="120" />
           </el-table>
 
           <!-- ブロック型：多階層（図の Multi-level に近い表現） -->
           <div v-show="bomTreeViewMode === 'blocks'" class="bom-viz-wrap">
             <div class="bom-viz-legend">
-              <span class="bom-viz-legend__item bom-viz-legend__item--assy">子を持つ行（構成の階層）</span>
-              <span class="bom-viz-legend__item bom-viz-legend__item--leaf">末端（材料・単体部品）</span>
+              <span class="bom-viz-legend__item bom-viz-legend__item--assy">
+                子を持つ行（構成の階層）
+              </span>
+              <span class="bom-viz-legend__item bom-viz-legend__item--leaf">
+                末端（材料・単体部品）
+              </span>
             </div>
-            <el-empty v-if="!bomBlockRows.length" description="構成行がありません" :image-size="64" />
+            <el-empty
+              v-if="!bomBlockRows.length"
+              description="構成行がありません"
+              :image-size="64"
+            />
             <div v-else class="bom-viz-block-list">
               <div
                 v-for="{ line, depth } in bomBlockRows"
@@ -309,9 +434,16 @@
                   :class="bomLineHasChildren(line) ? 'bom-viz-card--assy' : 'bom-viz-card--leaf'"
                 >
                   <div class="bom-viz-card__main">
-                    <span class="bom-viz-card__cd">{{ line.component_product_cd || line.component_material_cd || '—' }}</span>
+                    <span class="bom-viz-card__cd">
+                      {{ line.component_product_cd || line.component_material_cd || '—' }}
+                    </span>
                     <span class="bom-viz-card__name">{{ bomLineDisplayName(line) }}</span>
-                    <el-tag :type="componentTypeTagMap[line.component_type] || 'info'" size="small" effect="plain" class="bom-viz-type-tag">
+                    <el-tag
+                      :type="componentTypeTagMap[line.component_type] || 'info'"
+                      size="small"
+                      effect="plain"
+                      class="bom-viz-type-tag"
+                    >
                       {{ componentTypeLabel[line.component_type] || line.component_type }}
                     </el-tag>
                   </div>
@@ -327,17 +459,32 @@
 
           <!-- ブロック型：直下（親製品の直接子のみ） -->
           <div v-show="bomTreeViewMode === 'direct'" class="bom-viz-wrap">
-            <el-empty v-if="!bomDirectBlockRows.length" description="構成行がありません" :image-size="64" />
+            <el-empty
+              v-if="!bomDirectBlockRows.length"
+              description="構成行がありません"
+              :image-size="64"
+            />
             <div v-else class="bom-viz-block-list">
-              <div v-for="{ line } in bomDirectBlockRows" :key="line.id" class="bom-viz-row bom-viz-row--root">
+              <div
+                v-for="{ line } in bomDirectBlockRows"
+                :key="line.id"
+                class="bom-viz-row bom-viz-row--root"
+              >
                 <div
                   class="bom-viz-card"
                   :class="bomLineHasChildren(line) ? 'bom-viz-card--assy' : 'bom-viz-card--leaf'"
                 >
                   <div class="bom-viz-card__main">
-                    <span class="bom-viz-card__cd">{{ line.component_product_cd || line.component_material_cd || '—' }}</span>
+                    <span class="bom-viz-card__cd">
+                      {{ line.component_product_cd || line.component_material_cd || '—' }}
+                    </span>
                     <span class="bom-viz-card__name">{{ bomLineDisplayName(line) }}</span>
-                    <el-tag :type="componentTypeTagMap[line.component_type] || 'info'" size="small" effect="plain" class="bom-viz-type-tag">
+                    <el-tag
+                      :type="componentTypeTagMap[line.component_type] || 'info'"
+                      size="small"
+                      effect="plain"
+                      class="bom-viz-type-tag"
+                    >
                       {{ componentTypeLabel[line.component_type] || line.component_type }}
                     </el-tag>
                   </div>
@@ -353,8 +500,14 @@
 
           <!-- 展開集計：階層をたどり末端の所要量を積み上げ（図の Flattened に相当） -->
           <div v-show="bomTreeViewMode === 'flat'" class="bom-viz-wrap bom-viz-wrap--flat">
-            <p class="bom-flat-note">1 単位の親に対する末端部材・部品の合計所要量（階層の数量を乗算して集計）</p>
-            <el-empty v-if="!bomFlattenRollupList.length" description="末端行がありません" :image-size="64" />
+            <p class="bom-flat-note">
+              1 単位の親に対する末端部材・部品の合計所要量（階層の数量を乗算して集計）
+            </p>
+            <el-empty
+              v-if="!bomFlattenRollupList.length"
+              description="末端行がありません"
+              :image-size="64"
+            />
             <div v-else class="bom-flat-list">
               <div
                 v-for="row in bomFlattenRollupList"
@@ -365,7 +518,11 @@
                 <div class="bom-viz-card__main">
                   <span class="bom-viz-card__cd">{{ row.cd }}</span>
                   <span class="bom-viz-card__name">{{ row.name }}</span>
-                  <el-tag size="small" effect="plain" :type="row.kind === 'material' ? 'warning' : 'primary'">
+                  <el-tag
+                    size="small"
+                    effect="plain"
+                    :type="row.kind === 'material' ? 'warning' : 'primary'"
+                  >
                     {{ row.kind === 'material' ? '材料' : '部品' }}
                   </el-tag>
                 </div>
@@ -391,16 +548,31 @@
       </template>
       <el-form :inline="true" class="search-form pbe-search-form">
         <el-form-item label="親製品">
-          <el-input v-model="searchProductCd" placeholder="CDで検索" clearable class="pbe-search-cd" size="small" @keyup.enter="loadHeaders" />
+          <el-input
+            v-model="searchProductCd"
+            placeholder="CDで検索"
+            clearable
+            class="pbe-search-cd"
+            size="small"
+            @keyup.enter="loadHeaders"
+          />
         </el-form-item>
         <el-form-item label="状態">
-          <el-select v-model="searchStatus" clearable placeholder="全て" class="pbe-search-status" size="small">
+          <el-select
+            v-model="searchStatus"
+            clearable
+            placeholder="全て"
+            class="pbe-search-status"
+            size="small"
+          >
             <el-option label="有効" value="active" />
             <el-option label="履歴" value="historical" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="small" :icon="Search" @click="loadHeaders">検索</el-button>
+          <el-button type="primary" size="small" :icon="Search" @click="loadHeaders">
+            検索
+          </el-button>
           <el-button size="small" @click="resetSearch">クリア</el-button>
         </el-form-item>
       </el-form>
@@ -415,7 +587,12 @@
         style="width: 100%"
       >
         <el-table-column prop="parent_product_cd" label="親製品CD" width="140" />
-        <el-table-column prop="parent_product_name" label="製品名" min-width="160" show-overflow-tooltip />
+        <el-table-column
+          prop="parent_product_name"
+          label="製品名"
+          min-width="160"
+          show-overflow-tooltip
+        />
         <el-table-column prop="bom_type" label="種別" width="100">
           <template #default="{ row }">
             <el-tag :type="row.bom_type === 'production' ? 'success' : 'info'" size="small">
@@ -437,7 +614,13 @@
           <template #default="{ row }">
             <div class="pbe-op-cell">
               <el-tooltip content="編集" placement="top">
-                <el-button link type="primary" size="small" :icon="Edit" @click="openEditDialog(row)" />
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  :icon="Edit"
+                  @click="openEditDialog(row)"
+                />
               </el-tooltip>
               <el-tooltip content="削除" placement="top">
                 <span class="pbe-op-icon-wrap">
@@ -486,344 +669,450 @@
       </template>
       <!-- ダイアログ内は Element Plus を日本語ロケールに固定（アプリ言語が他言語でも日付・表の文言が日本語になる） -->
       <el-config-provider :locale="bomDialogElLocale">
-      <div v-loading="dialogRouteLoading" class="bom-dialog-inner">
-        <div class="bom-dialog-hero">
-          <div class="bom-dialog-hero-top">
-            <span class="bom-chip">BOMヘッダ</span>
-            <div class="hero-meta hero-meta--inline">
-              <el-tag v-if="dialogRouteCd" type="primary" effect="light" size="small" class="hero-tag-soft">ルート {{ dialogRouteCd }}</el-tag>
-              <el-tag v-else-if="formData.parent_product_cd" type="warning" effect="light" size="small" class="hero-tag-soft">ルート未設定</el-tag>
-              <span v-if="dialogRouteSteps.length" class="hero-step-pill">{{ dialogRouteSteps.length }} 工程</span>
-            </div>
-          </div>
-          <el-form :model="formData" label-width="76px" size="small" class="bom-hero-form">
-            <el-row :gutter="8" class="bom-hero-row">
-              <el-col :xs="24" :lg="10">
-                <el-form-item label="親製品CD" required>
-                  <el-select
-                    v-if="!isEditing"
-                    v-model="formData.parent_product_cd"
-                    filterable
-                    clearable
-                    placeholder="製品マスタから選択"
-                    style="width: 100%"
-                    :loading="loadingProducts"
-                    @change="onDialogParentProductChange"
-                  >
-                    <el-option
-                      v-for="p in productOptions"
-                      :key="p.product_cd"
-                      :label="`${p.product_cd} — ${p.product_name || ''}`"
-                      :value="p.product_cd"
-                    />
-                  </el-select>
-                  <el-input v-else v-model="formData.parent_product_cd" disabled />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="8" :sm="6" :lg="4">
-                <el-form-item label="種別">
-                  <el-select v-model="formData.bom_type" style="width: 100%" placeholder="選択してください">
-                    <el-option label="製造" value="production" />
-                    <el-option label="設計" value="engineering" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :xs="8" :sm="6" :lg="4">
-                <el-form-item label="版番">
-                  <el-input v-model="formData.revision" placeholder="例: 1" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="8" :sm="6" :lg="6">
-                <el-form-item label="基準数量">
-                  <el-input-number v-model="formData.base_quantity" :min="1" :step="1" :precision="0" style="width: 100%" controls-position="right" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="8" class="bom-hero-row">
-              <el-col :xs="12" :sm="6" :lg="4">
-                <el-form-item label="単位">
-                  <el-input v-model="formData.uom" placeholder="例: 個" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="12" :sm="9" :lg="10">
-                <el-form-item label="有効開始">
-                  <el-date-picker v-model="formData.effective_from" type="date" value-format="YYYY-MM-DD" style="width: 100%" placeholder="日付を選択" />
-                </el-form-item>
-              </el-col>
-              <el-col :xs="24" :sm="9" :lg="10">
-                <el-form-item label="有効終了">
-                  <el-date-picker v-model="formData.effective_to" type="date" value-format="YYYY-MM-DD" style="width: 100%" placeholder="日付を選択" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="備考" class="bom-fi-remarks">
-              <el-input
-                v-model="formData.remarks"
-                type="textarea"
-                :autosize="{ minRows: 1, maxRows: 3 }"
-                placeholder="ヘッダ備考"
-              />
-            </el-form-item>
-          </el-form>
-        </div>
-
-        <div class="bom-process-head">
-          <span class="section-label">工程順明細</span>
-          <span class="section-hint">各工程に材料行・部品行を追加</span>
-        </div>
-
-        <el-alert
-          v-if="formData.parent_product_cd && !dialogRouteLoading && !dialogRouteSteps.length"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="bom-route-alert"
-        >
-          <template #title>
-            <span class="bom-alert-title">工程ルート未設定。下の「その他・未分類」で入力するか、製品別ルートを登録してください。</span>
-          </template>
-        </el-alert>
-
-        <el-scrollbar v-if="dialogRouteSteps.length" max-height="min(52vh, 440px)" class="bom-steps-scroll">
-          <div class="bom-steps-rail">
-            <div v-for="step in dialogRouteSteps" :key="step.step_no" class="bom-step-block">
-              <div class="bom-step-index" :title="`ステップ ${step.step_no}`">{{ step.step_no }}</div>
-              <div class="bom-step-body">
-                <div class="process-step-card process-step-card--modern">
-                  <div class="step-card-head step-card-head--row">
-                    <span class="step-name">{{ step.process_name || step.process_cd }}</span>
-                    <el-tag size="small" effect="plain" type="info" class="step-cd-tag step-cd-tag--dense">{{ step.process_cd }}</el-tag>
-                  </div>
-
-                  <div class="step-lines-toolbar">
-                    <el-button type="primary" size="small" :icon="Plus" @click="addStepLine(step, 'material')">材料行</el-button>
-                    <el-button size="small" :icon="Plus" @click="addStepLine(step, 'part')">部品行</el-button>
-                  </div>
-                  <p
-                    v-if="isCuttingProcessStep(step) && dialogParentMaterialCd"
-                    class="bom-cut-material-hint"
-                  >
-                    製品マスタ材料 <code>{{ dialogParentMaterialCd }}</code> を「材料行」追加時に既定（一覧先頭）。
-                  </p>
-                  <p
-                    v-else-if="isCuttingProcessStep(step) && !dialogParentMaterialCd"
-                    class="bom-cut-material-hint bom-cut-material-hint--warn"
-                  >
-                    親製品に材料CDなし。製品マスタの <code>material_cd</code> で切断工程の材料を自動提案。
-                  </p>
-
-                  <el-table
-                  :data="processLinesByStep[step.step_no] || []"
-                  border
-                  stripe
+        <div v-loading="dialogRouteLoading" class="bom-dialog-inner">
+          <div class="bom-dialog-hero">
+            <div class="bom-dialog-hero-top">
+              <span class="bom-chip">BOMヘッダ</span>
+              <div class="hero-meta hero-meta--inline">
+                <el-tag
+                  v-if="dialogRouteCd"
+                  type="primary"
+                  effect="light"
                   size="small"
-                  class="step-lines-table bom-dlg-table"
-                  empty-text="行を追加"
+                  class="hero-tag-soft"
                 >
-                  <el-table-column label="種別" width="132" align="center">
-                    <template #default="{ row }">
-                      <el-select v-if="lineUiKind(row) === 'material'" v-model="row.component_type" style="width: 100%">
-                        <el-option label="原材料" value="material" />
-                        <el-option label="外購品" value="purchased" />
-                        <el-option label="ファントム" value="phantom" />
-                      </el-select>
-                      <el-select v-else v-model="row.component_type" style="width: 100%">
-                        <el-option label="子階品" value="subassy" />
-                        <el-option label="外購品" value="purchased" />
-                        <el-option label="ファントム" value="phantom" />
-                      </el-select>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="材料" min-width="240">
-                    <template #default="{ row }">
-                      <template v-if="lineUiKind(row) === 'material'">
-                        <el-select
-                          v-model="row.component_material_cd"
-                          filterable
-                          clearable
-                          placeholder="材料マスタから選択"
-                          style="width: 100%"
-                          @change="onLineMaterialPicked(row)"
-                        >
-                          <el-option
-                            v-for="m in sortedMaterialOptionsForStep(step)"
-                            :key="m.material_cd"
-                            :label="materialOptionLabel(m, step)"
-                            :value="m.material_cd"
-                          />
-                        </el-select>
-                      </template>
-                      <span v-else class="bom-line-cell-muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="部品" min-width="240">
-                    <template #default="{ row }">
-                      <template v-if="lineUiKind(row) === 'part'">
-                        <el-select
-                          v-model="row.component_product_cd"
-                          filterable
-                          clearable
-                          placeholder="部品マスタから選択"
-                          style="width: 100%"
-                          @change="onLineProductPicked(row)"
-                        >
-                          <el-option
-                            v-for="p in dialogPartSelectOptions"
-                            :key="p.part_cd"
-                            :label="`${p.part_cd} ${p.part_name}`"
-                            :value="p.part_cd"
-                          />
-                        </el-select>
-                      </template>
-                      <span v-else class="bom-line-cell-muted">—</span>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="所要量" width="100" align="right">
-                    <template #default="{ row }">
-                      <el-input-number
-                        v-model="row.qty_per"
-                        :min="0"
-                        :precision="0"
-                        :step="1"
-                        controls-position="right"
-                        style="width: 100%"
+                  ルート {{ dialogRouteCd }}
+                </el-tag>
+                <el-tag
+                  v-else-if="formData.parent_product_cd"
+                  type="warning"
+                  effect="light"
+                  size="small"
+                  class="hero-tag-soft"
+                >
+                  ルート未設定
+                </el-tag>
+                <span v-if="dialogRouteSteps.length" class="hero-step-pill">
+                  {{ dialogRouteSteps.length }} 工程
+                </span>
+              </div>
+            </div>
+            <el-form :model="formData" label-width="76px" size="small" class="bom-hero-form">
+              <el-row :gutter="8" class="bom-hero-row">
+                <el-col :xs="24" :lg="10">
+                  <el-form-item label="親製品CD" required>
+                    <el-select
+                      v-if="!isEditing"
+                      v-model="formData.parent_product_cd"
+                      filterable
+                      clearable
+                      placeholder="製品マスタから選択"
+                      style="width: 100%"
+                      :loading="loadingProducts"
+                      @change="onDialogParentProductChange"
+                    >
+                      <el-option
+                        v-for="p in productOptions"
+                        :key="p.product_cd"
+                        :label="`${p.product_cd} — ${p.product_name || ''}`"
+                        :value="p.product_cd"
                       />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="単位" width="88" align="center">
-                    <template #default="{ row }">
-                      <el-input v-model="row.uom" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="備考" min-width="160">
-                    <template #default="{ row }">
-                      <el-input v-model="row.remarks" />
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="56" align="center" fixed="right">
-                    <template #default="{ $index }">
-                      <el-tooltip content="行を削除" placement="top">
-                        <el-button link type="danger" size="small" :icon="Delete" @click="removeStepLine(step.step_no, $index)" />
-                      </el-tooltip>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                    </el-select>
+                    <el-input v-else v-model="formData.parent_product_cd" disabled />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="8" :sm="6" :lg="4">
+                  <el-form-item label="種別">
+                    <el-select
+                      v-model="formData.bom_type"
+                      style="width: 100%"
+                      placeholder="選択してください"
+                    >
+                      <el-option label="製造" value="production" />
+                      <el-option label="設計" value="engineering" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="8" :sm="6" :lg="4">
+                  <el-form-item label="版番">
+                    <el-input v-model="formData.revision" placeholder="例: 1" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="8" :sm="6" :lg="6">
+                  <el-form-item label="基準数量">
+                    <el-input-number
+                      v-model="formData.base_quantity"
+                      :min="1"
+                      :step="1"
+                      :precision="0"
+                      style="width: 100%"
+                      controls-position="right"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-row :gutter="8" class="bom-hero-row">
+                <el-col :xs="12" :sm="6" :lg="4">
+                  <el-form-item label="単位">
+                    <el-input v-model="formData.uom" placeholder="例: 個" />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="12" :sm="9" :lg="10">
+                  <el-form-item label="有効開始">
+                    <el-date-picker
+                      v-model="formData.effective_from"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                      placeholder="日付を選択"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :xs="24" :sm="9" :lg="10">
+                  <el-form-item label="有効終了">
+                    <el-date-picker
+                      v-model="formData.effective_to"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                      placeholder="日付を選択"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+              <el-form-item label="備考" class="bom-fi-remarks">
+                <el-input
+                  v-model="formData.remarks"
+                  type="textarea"
+                  :autosize="{ minRows: 1, maxRows: 3 }"
+                  placeholder="ヘッダ備考"
+                />
+              </el-form-item>
+            </el-form>
+          </div>
+
+          <div class="bom-process-head">
+            <span class="section-label">工程順明細</span>
+            <span class="section-hint">各工程に材料行・部品行を追加</span>
+          </div>
+
+          <el-alert
+            v-if="formData.parent_product_cd && !dialogRouteLoading && !dialogRouteSteps.length"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="bom-route-alert"
+          >
+            <template #title>
+              <span class="bom-alert-title">
+                工程ルート未設定。下の「その他・未分類」で入力するか、製品別ルートを登録してください。
+              </span>
+            </template>
+          </el-alert>
+
+          <el-scrollbar
+            v-if="dialogRouteSteps.length"
+            max-height="min(52vh, 440px)"
+            class="bom-steps-scroll"
+          >
+            <div class="bom-steps-rail">
+              <div v-for="step in dialogRouteSteps" :key="step.step_no" class="bom-step-block">
+                <div class="bom-step-index" :title="`ステップ ${step.step_no}`">
+                  {{ step.step_no }}
+                </div>
+                <div class="bom-step-body">
+                  <div class="process-step-card process-step-card--modern">
+                    <div class="step-card-head step-card-head--row">
+                      <span class="step-name">{{ step.process_name || step.process_cd }}</span>
+                      <el-tag
+                        size="small"
+                        effect="plain"
+                        type="info"
+                        class="step-cd-tag step-cd-tag--dense"
+                      >
+                        {{ step.process_cd }}
+                      </el-tag>
+                    </div>
+
+                    <div class="step-lines-toolbar">
+                      <el-button
+                        type="primary"
+                        size="small"
+                        :icon="Plus"
+                        @click="addStepLine(step, 'material')"
+                      >
+                        材料行
+                      </el-button>
+                      <el-button size="small" :icon="Plus" @click="addStepLine(step, 'part')">
+                        部品行
+                      </el-button>
+                    </div>
+                    <p
+                      v-if="isCuttingProcessStep(step) && dialogParentMaterialCd"
+                      class="bom-cut-material-hint"
+                    >
+                      製品マスタ材料
+                      <code>{{ dialogParentMaterialCd }}</code>
+                      を「材料行」追加時に既定（一覧先頭）。
+                    </p>
+                    <p
+                      v-else-if="isCuttingProcessStep(step) && !dialogParentMaterialCd"
+                      class="bom-cut-material-hint bom-cut-material-hint--warn"
+                    >
+                      親製品に材料CDなし。製品マスタの
+                      <code>material_cd</code>
+                      で切断工程の材料を自動提案。
+                    </p>
+
+                    <el-table
+                      :data="processLinesByStep[step.step_no] || []"
+                      border
+                      stripe
+                      size="small"
+                      class="step-lines-table bom-dlg-table"
+                      empty-text="行を追加"
+                    >
+                      <el-table-column label="種別" width="132" align="center">
+                        <template #default="{ row }">
+                          <el-select
+                            v-if="lineUiKind(row) === 'material'"
+                            v-model="row.component_type"
+                            style="width: 100%"
+                          >
+                            <el-option label="原材料" value="material" />
+                            <el-option label="外購品" value="purchased" />
+                            <el-option label="ファントム" value="phantom" />
+                          </el-select>
+                          <el-select v-else v-model="row.component_type" style="width: 100%">
+                            <el-option label="子階品" value="subassy" />
+                            <el-option label="外購品" value="purchased" />
+                            <el-option label="ファントム" value="phantom" />
+                          </el-select>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="材料" min-width="240">
+                        <template #default="{ row }">
+                          <template v-if="lineUiKind(row) === 'material'">
+                            <el-select
+                              v-model="row.component_material_cd"
+                              filterable
+                              clearable
+                              placeholder="材料マスタから選択"
+                              style="width: 100%"
+                              @change="onLineMaterialPicked(row)"
+                            >
+                              <el-option
+                                v-for="m in sortedMaterialOptionsForStep(step)"
+                                :key="m.material_cd"
+                                :label="materialOptionLabel(m, step)"
+                                :value="m.material_cd"
+                              />
+                            </el-select>
+                          </template>
+                          <span v-else class="bom-line-cell-muted">—</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="部品" min-width="240">
+                        <template #default="{ row }">
+                          <template v-if="lineUiKind(row) === 'part'">
+                            <el-select
+                              v-model="row.component_product_cd"
+                              filterable
+                              clearable
+                              placeholder="部品マスタから選択"
+                              style="width: 100%"
+                              @change="onLineProductPicked(row)"
+                            >
+                              <el-option
+                                v-for="p in dialogPartSelectOptions"
+                                :key="p.part_cd"
+                                :label="`${p.part_cd} ${p.part_name}`"
+                                :value="p.part_cd"
+                              />
+                            </el-select>
+                          </template>
+                          <span v-else class="bom-line-cell-muted">—</span>
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="所要量" width="100" align="right">
+                        <template #default="{ row }">
+                          <el-input-number
+                            v-model="row.qty_per"
+                            :min="0"
+                            :precision="0"
+                            :step="1"
+                            controls-position="right"
+                            style="width: 100%"
+                          />
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="単位" width="88" align="center">
+                        <template #default="{ row }">
+                          <el-input v-model="row.uom" />
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="備考" min-width="160">
+                        <template #default="{ row }">
+                          <el-input v-model="row.remarks" />
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="操作" width="56" align="center" fixed="right">
+                        <template #default="{ $index }">
+                          <el-tooltip content="行を削除" placement="top">
+                            <el-button
+                              link
+                              type="danger"
+                              size="small"
+                              :icon="Delete"
+                              @click="removeStepLine(step.step_no, $index)"
+                            />
+                          </el-tooltip>
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </el-scrollbar>
+          </el-scrollbar>
 
-        <div class="orphan-card orphan-card--modern">
-          <div class="orphan-card-head">
-            <span class="orphan-title">その他・未分類</span>
-            <span class="orphan-hint">ルート外・工程未紐づけ</span>
-          </div>
-          <div class="step-lines-toolbar">
-            <el-button type="primary" size="small" :icon="Plus" @click="addOrphanLine('material')">材料行</el-button>
-            <el-button size="small" :icon="Plus" @click="addOrphanLine('part')">部品行</el-button>
-          </div>
-          <el-table :data="orphanLines" border stripe size="small" empty-text="なし" class="bom-dlg-table" max-height="220">
-            <el-table-column label="種別" width="132" align="center">
-              <template #default="{ row }">
-                <el-select v-if="lineUiKind(row) === 'material'" v-model="row.component_type" style="width: 100%">
-                  <el-option label="原材料" value="material" />
-                  <el-option label="外購品" value="purchased" />
-                  <el-option label="ファントム" value="phantom" />
-                </el-select>
-                <el-select v-else v-model="row.component_type" style="width: 100%">
-                  <el-option label="子階品" value="subassy" />
-                  <el-option label="外購品" value="purchased" />
-                  <el-option label="ファントム" value="phantom" />
-                </el-select>
-              </template>
-            </el-table-column>
-            <el-table-column label="材料" min-width="220">
-              <template #default="{ row }">
-                <template v-if="lineUiKind(row) === 'material'">
+          <div class="orphan-card orphan-card--modern">
+            <div class="orphan-card-head">
+              <span class="orphan-title">その他・未分類</span>
+              <span class="orphan-hint">ルート外・工程未紐づけ</span>
+            </div>
+            <div class="step-lines-toolbar">
+              <el-button
+                type="primary"
+                size="small"
+                :icon="Plus"
+                @click="addOrphanLine('material')"
+              >
+                材料行
+              </el-button>
+              <el-button size="small" :icon="Plus" @click="addOrphanLine('part')">部品行</el-button>
+            </div>
+            <el-table
+              :data="orphanLines"
+              border
+              stripe
+              size="small"
+              empty-text="なし"
+              class="bom-dlg-table"
+              max-height="220"
+            >
+              <el-table-column label="種別" width="132" align="center">
+                <template #default="{ row }">
                   <el-select
-                    v-model="row.component_material_cd"
-                    filterable
-                    clearable
-                    placeholder="材料マスタから選択"
+                    v-if="lineUiKind(row) === 'material'"
+                    v-model="row.component_type"
                     style="width: 100%"
-                    @change="onLineMaterialPicked(row)"
                   >
-                    <el-option
-                      v-for="m in materialSelectList"
-                      :key="m.material_cd"
-                      :label="`${m.material_cd} ${m.material_name}`"
-                      :value="m.material_cd"
-                    />
+                    <el-option label="原材料" value="material" />
+                    <el-option label="外購品" value="purchased" />
+                    <el-option label="ファントム" value="phantom" />
+                  </el-select>
+                  <el-select v-else v-model="row.component_type" style="width: 100%">
+                    <el-option label="子階品" value="subassy" />
+                    <el-option label="外購品" value="purchased" />
+                    <el-option label="ファントム" value="phantom" />
                   </el-select>
                 </template>
-                <span v-else class="bom-line-cell-muted">—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="部品" min-width="220">
-              <template #default="{ row }">
-                <template v-if="lineUiKind(row) === 'part'">
-                  <el-select
-                    v-model="row.component_product_cd"
-                    filterable
-                    clearable
-                    placeholder="部品マスタから選択"
-                    style="width: 100%"
-                    @change="onLineProductPicked(row)"
-                  >
-                    <el-option
-                      v-for="p in dialogPartSelectOptions"
-                      :key="p.part_cd"
-                      :label="`${p.part_cd} ${p.part_name}`"
-                      :value="p.part_cd"
-                    />
-                  </el-select>
+              </el-table-column>
+              <el-table-column label="材料" min-width="220">
+                <template #default="{ row }">
+                  <template v-if="lineUiKind(row) === 'material'">
+                    <el-select
+                      v-model="row.component_material_cd"
+                      filterable
+                      clearable
+                      placeholder="材料マスタから選択"
+                      style="width: 100%"
+                      @change="onLineMaterialPicked(row)"
+                    >
+                      <el-option
+                        v-for="m in materialSelectList"
+                        :key="m.material_cd"
+                        :label="`${m.material_cd} ${m.material_name}`"
+                        :value="m.material_cd"
+                      />
+                    </el-select>
+                  </template>
+                  <span v-else class="bom-line-cell-muted">—</span>
                 </template>
-                <span v-else class="bom-line-cell-muted">—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="所要量" width="100" align="right">
-              <template #default="{ row }">
-                <el-input-number
-                  v-model="row.qty_per"
-                  :min="0"
-                  :precision="0"
-                  :step="1"
-                  controls-position="right"
-                  style="width: 100%"
-                />
-              </template>
-            </el-table-column>
-            <el-table-column label="単位" width="88" align="center">
-              <template #default="{ row }">
-                <el-input v-model="row.uom" />
-              </template>
-            </el-table-column>
-            <el-table-column label="投入工程CD" width="128">
-              <template #default="{ row }">
-                <el-input v-model="row.consume_process_cd" placeholder="工程CD" />
-              </template>
-            </el-table-column>
-            <el-table-column label="備考" min-width="140">
-              <template #default="{ row }">
-                <el-input v-model="row.remarks" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="56" align="center" fixed="right">
-              <template #default="{ $index }">
-                <el-tooltip content="行を削除" placement="top">
-                  <el-button link type="danger" size="small" :icon="Delete" @click="removeOrphanLine($index)" />
-                </el-tooltip>
-              </template>
-            </el-table-column>
-          </el-table>
+              </el-table-column>
+              <el-table-column label="部品" min-width="220">
+                <template #default="{ row }">
+                  <template v-if="lineUiKind(row) === 'part'">
+                    <el-select
+                      v-model="row.component_product_cd"
+                      filterable
+                      clearable
+                      placeholder="部品マスタから選択"
+                      style="width: 100%"
+                      @change="onLineProductPicked(row)"
+                    >
+                      <el-option
+                        v-for="p in dialogPartSelectOptions"
+                        :key="p.part_cd"
+                        :label="`${p.part_cd} ${p.part_name}`"
+                        :value="p.part_cd"
+                      />
+                    </el-select>
+                  </template>
+                  <span v-else class="bom-line-cell-muted">—</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="所要量" width="100" align="right">
+                <template #default="{ row }">
+                  <el-input-number
+                    v-model="row.qty_per"
+                    :min="0"
+                    :precision="0"
+                    :step="1"
+                    controls-position="right"
+                    style="width: 100%"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="単位" width="88" align="center">
+                <template #default="{ row }">
+                  <el-input v-model="row.uom" />
+                </template>
+              </el-table-column>
+              <el-table-column label="投入工程CD" width="128">
+                <template #default="{ row }">
+                  <el-input v-model="row.consume_process_cd" placeholder="工程CD" />
+                </template>
+              </el-table-column>
+              <el-table-column label="備考" min-width="140">
+                <template #default="{ row }">
+                  <el-input v-model="row.remarks" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="56" align="center" fixed="right">
+                <template #default="{ $index }">
+                  <el-tooltip content="行を削除" placement="top">
+                    <el-button
+                      link
+                      type="danger"
+                      size="small"
+                      :icon="Delete"
+                      @click="removeOrphanLine($index)"
+                    />
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </div>
-      </div>
       </el-config-provider>
       <template #footer>
         <div class="bom-dlg-footer">
           <el-button size="small" @click="dialogVisible = false">キャンセル</el-button>
-          <el-button type="primary" size="small" :loading="saving" @click="handleSave">保存</el-button>
+          <el-button type="primary" size="small" :loading="saving" @click="handleSave">
+            保存
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -834,7 +1123,17 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import jaElLocale from 'element-plus/dist/locale/ja.js'
-import { Plus, Search, Document, List, Grid, Bottom, Histogram, Edit, Delete } from '@element-plus/icons-vue'
+import {
+  Plus,
+  Search,
+  Document,
+  List,
+  Grid,
+  Bottom,
+  Histogram,
+  Edit,
+  Delete,
+} from '@element-plus/icons-vue'
 import {
   getBomHeaders,
   getBomTree,
@@ -894,7 +1193,9 @@ const selectedProductCd = ref<string>('')
 const productHeaders = ref<BomHeader[]>([])
 const loadingProductHeaders = ref(false)
 const selectedHeaderId = ref<number | undefined>(undefined)
-const selectedHeader = computed(() => productHeaders.value.find((h) => h.id === selectedHeaderId.value) ?? null)
+const selectedHeader = computed(
+  () => productHeaders.value.find((h) => h.id === selectedHeaderId.value) ?? null,
+)
 
 const materialNameByCd = ref<Record<string, string>>({})
 /** 材料マスタの単位（所要量の既定に使用） */
@@ -930,13 +1231,15 @@ async function loadMainProductRoute(productCd: string) {
   if (!productCd?.trim()) return
   loadingMainRoute.value = true
   try {
-    const productRes = await request.get(`/api/master/product/process/routes/${encodeURIComponent(productCd)}`)
+    const productRes = await request.get(
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}`,
+    )
     const product = (productRes as { data?: { route_cd?: string } })?.data ?? productRes
     const routeCd = (product as { route_cd?: string })?.route_cd || ''
     mainRouteCd.value = routeCd
     if (!routeCd) return
     const stepsRes = await request.get(
-      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(routeCd)}`
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(routeCd)}`,
     )
     const raw = (stepsRes as { data?: unknown })?.data ?? stepsRes
     const steps = Array.isArray(raw) ? (raw as ProductRouteStepLite[]) : []
@@ -950,10 +1253,14 @@ async function loadMainProductRoute(productCd: string) {
 }
 
 const materialRows = computed(() =>
-  flatLinesForProcess.value.filter((r) => r.component_material_cd && String(r.component_material_cd).trim() !== '')
+  flatLinesForProcess.value.filter(
+    (r) => r.component_material_cd && String(r.component_material_cd).trim() !== '',
+  ),
 )
 const partRows = computed(() =>
-  flatLinesForProcess.value.filter((r) => r.component_product_cd && String(r.component_product_cd).trim() !== '')
+  flatLinesForProcess.value.filter(
+    (r) => r.component_product_cd && String(r.component_product_cd).trim() !== '',
+  ),
 )
 
 function masterMaterialName(cd: string | null | undefined) {
@@ -1358,8 +1665,8 @@ const formData = reactive({
 })
 
 /** BOMダイアログで選択中の親製品（製品マスタの material_cd 参照用） */
-const dialogParentProduct = computed(() =>
-  productOptions.value.find((p) => p.product_cd === formData.parent_product_cd) ?? null
+const dialogParentProduct = computed(
+  () => productOptions.value.find((p) => p.product_cd === formData.parent_product_cd) ?? null,
 )
 const dialogParentMaterialCd = computed(() => dialogParentProduct.value?.material_cd?.trim() || '')
 
@@ -1373,7 +1680,9 @@ function isCuttingProcessStep(step: ProductRouteStepLite): boolean {
 }
 
 /** 切断工程では製品の material_cd を先頭に（材料マスタ未登録時は合成1件を先頭に） */
-function sortedMaterialOptionsForStep(step: ProductRouteStepLite): { material_cd: string; material_name: string }[] {
+function sortedMaterialOptionsForStep(
+  step: ProductRouteStepLite,
+): { material_cd: string; material_name: string }[] {
   const list = materialSelectList.value
   const pm = dialogParentMaterialCd.value
   if (!pm || !isCuttingProcessStep(step)) return list
@@ -1386,9 +1695,16 @@ function sortedMaterialOptionsForStep(step: ProductRouteStepLite): { material_cd
   return [{ material_cd: pm, material_name: masterMaterialName(pm) }, ...list]
 }
 
-function materialOptionLabel(m: { material_cd: string; material_name: string }, step: ProductRouteStepLite) {
+function materialOptionLabel(
+  m: { material_cd: string; material_name: string },
+  step: ProductRouteStepLite,
+) {
   const base = `${m.material_cd} ${m.material_name}`
-  if (dialogParentMaterialCd.value && m.material_cd === dialogParentMaterialCd.value && isCuttingProcessStep(step)) {
+  if (
+    dialogParentMaterialCd.value &&
+    m.material_cd === dialogParentMaterialCd.value &&
+    isCuttingProcessStep(step)
+  ) {
     return `${base}（製品マスタ）`
   }
   return base
@@ -1413,7 +1729,9 @@ async function loadDialogRouteAndPrices(productCd: string) {
   }
   dialogRouteLoading.value = true
   try {
-    const productRes = await request.get(`/api/master/product/process/routes/${encodeURIComponent(productCd)}`)
+    const productRes = await request.get(
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}`,
+    )
     const product = (productRes as { data?: { route_cd?: string } })?.data ?? productRes
     const routeCd = (product as { route_cd?: string })?.route_cd || ''
     dialogRouteCd.value = routeCd
@@ -1422,7 +1740,7 @@ async function loadDialogRouteAndPrices(productCd: string) {
       return
     }
     const stepsRes = await request.get(
-      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(routeCd)}`
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(routeCd)}`,
     )
     const raw = (stepsRes as { data?: unknown })?.data ?? stepsRes
     const steps = Array.isArray(raw) ? (raw as ProductRouteStepLite[]) : []
@@ -1545,7 +1863,11 @@ function onLineMaterialPicked(row: DialogLineRow) {
   if (lineUiKind(row) !== 'material') return
   if (row.component_material_cd) {
     row.component_product_cd = null
-    if (row.component_type !== 'material' && row.component_type !== 'phantom' && row.component_type !== 'purchased') {
+    if (
+      row.component_type !== 'material' &&
+      row.component_type !== 'phantom' &&
+      row.component_type !== 'purchased'
+    ) {
       row.component_type = 'material'
     }
   }
@@ -1651,7 +1973,9 @@ function openCreateDialog() {
     loadDialogRouteAndPrices(cd).then(() => {
       initEmptyStepBuckets()
       if (!dialogRouteSteps.value.length) {
-        ElMessage.warning('この製品に工程ルートが未設定です。「その他・未分類」で明細を入力できます。')
+        ElMessage.warning(
+          'この製品に工程ルートが未設定です。「その他・未分類」で明細を入力できます。',
+        )
       }
     })
   }
@@ -1681,7 +2005,7 @@ async function openEditDialog(row: BomHeader) {
       const res = await getBomTree(row.id)
       const d = (res as any)?.data ?? res
       const flat: BomLinePayload[] = []
-      function flatten(items: BomLine[]) {
+      const flatten = (items: BomLine[]) => {
         for (const it of items) {
           flat.push({ ...it })
           if (it.children?.length) flatten(it.children)

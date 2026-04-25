@@ -2,8 +2,11 @@
   <div class="shipping-overview-print">
     <!-- 主要内容 -->
     <div v-for="dateGroup in groupedData" :key="dateGroup.shipping_date">
-      <div v-for="(pageData, pageIndex) in getPaginatedData(dateGroup)" :key="`${dateGroup.shipping_date}-${pageIndex}`"
-        class="page-container">
+      <div
+        v-for="(pageData, pageIndex) in getPaginatedData(dateGroup)"
+        :key="`${dateGroup.shipping_date}-${pageIndex}`"
+        class="page-container"
+      >
         <!-- 页面头部 -->
         <div class="print-header">
           <div class="header-left">
@@ -22,10 +25,15 @@
         <!-- 页面内容：列数由单页最优分配结果决定，单个納入先可拆成多块跨列显示 -->
         <div class="print-body" :style="getPrintBodyStyle(pageData)">
           <div class="column" v-for="colIndex in getColumnCount(pageData)" :key="colIndex">
-            <div v-for="(block, blockIdx) in getColumnData(pageData, colIndex - 1)"
-              :key="`${block.destination_name}-${block.blockIndex}-${pageIndex}-${colIndex}`" class="destination-group">
+            <div
+              v-for="block in getColumnData(pageData, colIndex - 1)"
+              :key="`${block.destination_name}-${block.blockIndex}-${pageIndex}-${colIndex}`"
+              class="destination-group"
+            >
               <div class="destination-header">
-                <h2 class="destination-name">{{ block.destination_name }}{{ block.isContinuation ? '（続き）' : '' }}</h2>
+                <h2 class="destination-name">
+                  {{ block.destination_name }}{{ block.isContinuation ? '（続き）' : '' }}
+                </h2>
               </div>
               <table class="print-table">
                 <thead>
@@ -291,7 +299,9 @@ function getPrintBodyStyle(pageData) {
 /** 每个出荷日只出一页，所有納入先都在这一页内按最优列分配 */
 function getPaginatedData(dateGroup) {
   if (!dateGroup || !dateGroup.destinations || dateGroup.destinations.length === 0) {
-    return [{ shipping_date: dateGroup?.shipping_date || '', destinations: [], columnAllocations: null }]
+    return [
+      { shipping_date: dateGroup?.shipping_date || '', destinations: [], columnAllocations: null },
+    ]
   }
   const page = {
     shipping_date: dateGroup.shipping_date,
@@ -300,7 +310,6 @@ function getPaginatedData(dateGroup) {
   }
   return [page]
 }
-
 </script>
 
 <style scoped>

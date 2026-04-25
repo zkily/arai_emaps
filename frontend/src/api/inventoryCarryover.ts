@@ -44,7 +44,7 @@ export async function getCarryoverData(params: {
       page: params.page ?? 1,
       pageSize: params.pageSize ?? DEFAULT_PAGE_SIZE,
     },
-  })) as CarryoverPreviewResponse
+  })) as unknown as CarryoverPreviewResponse
   const d = res?.data
   if (d && Array.isArray(d.list)) {
     return {
@@ -82,7 +82,7 @@ export async function executeCarryover(params: {
   const res = (await request.post<CarryoverExecuteResponse>(
     `${BASE}/stocktake-carryover-execute`,
     params,
-  )) as CarryoverExecuteResponse
+  )) as unknown as CarryoverExecuteResponse
   return res?.data ?? { successCount: 0, skippedCount: 0 }
 }
 

@@ -1,0 +1,59 @@
+SET NAMES utf8mb4;
+
+CREATE TABLE `chamfering_plans`  (
+  `id` int NOT NULL AUTO_INCREMENT COMMENT 'システムID',
+  `cutting_management_id` int NULL DEFAULT NULL COMMENT '元切断指示ID（新規追加時はNULL）',
+  `production_month` date NOT NULL COMMENT '生産月',
+  `production_day` date NOT NULL COMMENT '生産日',
+  `production_line` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ライン',
+  `production_order` int NULL DEFAULT NULL COMMENT '順位',
+  `product_cd` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '製品CD',
+  `product_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '製品名',
+  `actual_production_quantity` int NULL DEFAULT 0 COMMENT '生産数',
+  `production_lot_size` int NULL DEFAULT NULL COMMENT 'ロット数',
+  `lot_number` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'ロットNo',
+  `cutting_length` decimal(10, 2) NULL DEFAULT NULL COMMENT '切断長',
+  `chamfering_length` decimal(10, 2) NULL DEFAULT NULL COMMENT '面取長',
+  `developed_length` decimal(10, 2) NULL DEFAULT NULL COMMENT '展開長',
+  `material_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '原材料',
+  `management_code` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '管理コード',
+  `cd` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT 'CD（管理コード後5位）',
+  `production_completed` tinyint NULL DEFAULT NULL COMMENT '生産完了',
+  `no_count` tinyint NULL DEFAULT NULL COMMENT 'カウント無',
+  `has_sw_process` tinyint NULL DEFAULT NULL COMMENT 'SW工程',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '作成日時',
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_cutting_management_id`(`cutting_management_id` ASC) USING BTREE,
+  INDEX `idx_production_month`(`production_month` ASC) USING BTREE,
+  INDEX `idx_production_day`(`production_day` ASC) USING BTREE,
+  INDEX `idx_production_line`(`production_line` ASC) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 617 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT = '面取バッチ一覧（chamfering_plans）' ROW_FORMAT = Dynamic;
+INSERT INTO `chamfering_plans` VALUES (555, 1389, '2026-05-01', '2026-04-27', '成型10', 5, '92781', '410D CTR', 1956, 7, '1', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-01', '07-01', NULL, NULL, 1, '2026-04-23 10:43:52');
+INSERT INTO `chamfering_plans` VALUES (556, 1390, '2026-05-01', '2026-04-27', '成型10', 5, '92781', '410D CTR', 1956, 7, '2', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-02', '07-02', NULL, NULL, 1, '2026-04-23 10:43:55');
+INSERT INTO `chamfering_plans` VALUES (557, 1391, '2026-05-01', '2026-04-27', '成型10', 5, '92781', '410D CTR', 1956, 7, '3', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-03', '07-03', NULL, NULL, 1, '2026-04-23 10:44:04');
+INSERT INTO `chamfering_plans` VALUES (572, 1412, '2026-04-01', '2026-04-28', '成型04', 1, '91441', '400B FR', 2282, 38, '14', 778.00, 777.50, 774.50, '14.0×1.35×5525', '2604914410401-38-14', '38-14', NULL, NULL, 0, '2026-04-23 11:18:51');
+INSERT INTO `chamfering_plans` VALUES (578, 1419, '2026-04-01', '2026-04-28', '成型05', 1, '92221', '900B FR', 2282, 37, '13', 778.00, 777.50, 774.50, '14.0×2.30×5526', '2604922210501-37-13', '37-13', NULL, NULL, 0, '2026-04-23 11:22:28');
+INSERT INTO `chamfering_plans` VALUES (579, 1420, '2026-04-01', '2026-04-28', '成型05', 1, '92221', '900B FR', 2282, 37, '14', 778.00, 777.50, 774.50, '14.0×2.30×5526', '2604922210501-37-14', '37-14', NULL, NULL, 0, '2026-04-23 11:22:34');
+INSERT INTO `chamfering_plans` VALUES (583, 1429, '2026-04-01', '2026-04-28', '成型17', 3, '91441', '400B FR', 2282, 16, '7', 778.00, 777.50, 774.50, '14.0×1.35×5524', '2604914411703-16-07', '16-07', NULL, NULL, 1, '2026-04-23 11:32:44');
+INSERT INTO `chamfering_plans` VALUES (584, 1430, '2026-04-01', '2026-04-28', '成型17', 3, '91441', '400B FR', 2282, 16, '8', 778.00, 777.50, 774.50, '14.0×1.35×5524', '2604914411703-16-08', '16-08', NULL, NULL, 1, '2026-04-23 11:32:46');
+INSERT INTO `chamfering_plans` VALUES (588, 1439, '2026-04-01', '2026-04-28', '成型09', 1, '92201', '970B 3RD', 564, 11, '11', 869.00, 868.50, 865.50, '14.0×1.35×5290', '2604922010901-11-11', '11-11', NULL, NULL, 1, '2026-04-24 09:36:59');
+INSERT INTO `chamfering_plans` VALUES (589, 1440, '2026-04-01', '2026-04-28', '成型09', 1, '92201', '970B 3RD', 1116, 11, '12', 869.00, 868.50, 865.50, '14.0×1.35×5290', '2604922010901-11-12', '11-12', NULL, NULL, 1, '2026-04-24 09:37:02');
+INSERT INTO `chamfering_plans` VALUES (590, 1441, '2026-04-01', '2026-04-28', '成型09', 1, '92201', '970B 3RD', 1800, 11, '10', 869.00, 868.50, 865.50, '14.0×1.35×5290', '2604922010901-11-10', '11-10', NULL, NULL, 1, '2026-04-24 09:37:29');
+INSERT INTO `chamfering_plans` VALUES (598, 1449, '2026-05-01', '2026-04-28', '成型15', 6, '92481', '155D RR', 2608, 7, '7', 573.00, 572.50, 572.50, '14.0×2.30×4929', '2605924811506-07-07', '07-07', NULL, NULL, 1, '2026-04-24 09:52:23');
+INSERT INTO `chamfering_plans` VALUES (599, 1454, '2026-05-01', '2026-04-28', '成型10', 5, '92781', '410D CTR', 1956, 7, '4', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-04', '07-04', NULL, NULL, 1, '2026-04-24 11:37:29');
+INSERT INTO `chamfering_plans` VALUES (600, 1455, '2026-05-01', '2026-04-28', '成型16', 4, '91491', 'TKR FR', 2500, 4, '1', 853.00, 852.50, 852.50, '12.7×2.00×4665', '2605914911604-04-01', '04-01', NULL, NULL, 1, '2026-04-24 11:37:45');
+INSERT INTO `chamfering_plans` VALUES (601, 1456, '2026-05-01', '2026-04-28', '成型16', 4, '91491', 'TKR FR', 2500, 4, '2', 853.00, 852.50, 852.50, '12.7×2.00×4665', '2605914911604-04-02', '04-02', NULL, NULL, 1, '2026-04-24 11:37:58');
+INSERT INTO `chamfering_plans` VALUES (602, 1457, '2026-04-01', '2026-04-28', '成型18', 3, '91681', 'D54L RR', 2400, 8, '7', 653.00, 652.50, NULL, '14.0×1.00×5345', '2604916811803-08-07', '08-07', NULL, NULL, 0, '2026-04-24 11:38:22');
+INSERT INTO `chamfering_plans` VALUES (603, 1458, '2026-04-01', '2026-04-28', '成型18', 3, '91681', 'D54L RR', 2400, 8, '8', 653.00, 652.50, NULL, '14.0×1.00×5345', '2604916811803-08-08', '08-08', NULL, NULL, 0, '2026-04-24 11:38:29');
+INSERT INTO `chamfering_plans` VALUES (605, 1461, '2026-05-01', '2026-04-28', '成型23', 4, '92431', '410D RR', 2934, 5, '3', 578.00, 0.00, 577.50, '14.0×1.35×5525', '2605924312304-05-03', '05-03', NULL, NULL, 0, '2026-04-24 11:39:36');
+INSERT INTO `chamfering_plans` VALUES (606, 1462, '2026-05-01', '2026-04-28', '成型23', 4, '92431', '410D RR', 2934, 5, '4', 578.00, 0.00, 577.50, '14.0×1.35×5525', '2605924312304-05-04', '05-04', NULL, NULL, 0, '2026-04-24 11:39:52');
+INSERT INTO `chamfering_plans` VALUES (607, 1471, '2026-05-01', '2026-04-28', '成型18', 4, '91671', 'D54L CTR', 2700, 5, '1', 545.00, 544.50, NULL, '14.0×1.00×5345', '2605916711804-05-01', '05-01', NULL, NULL, 0, '2026-04-24 11:44:09');
+INSERT INTO `chamfering_plans` VALUES (608, 1472, '2026-05-01', '2026-04-28', '成型18', 4, '91671', 'D54L CTR', 2700, 5, '2', 545.00, 544.50, NULL, '14.0×1.00×5345', '2605916711804-05-02', '05-02', NULL, NULL, 0, '2026-04-24 11:44:22');
+INSERT INTO `chamfering_plans` VALUES (609, 1473, '2026-05-01', '2026-04-28', '成型10', 5, '92781', '410D CTR', 1956, 7, '5', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-05', '07-05', NULL, NULL, 1, '2026-04-24 11:44:31');
+INSERT INTO `chamfering_plans` VALUES (610, 1474, '2026-05-01', '2026-04-28', '成型10', 5, '92781', '410D CTR', 1956, 7, '6', 704.50, 704.00, 704.00, '14.0×2.30×4929', '2605927811005-07-06', '07-06', NULL, NULL, 1, '2026-04-24 11:44:39');
+INSERT INTO `chamfering_plans` VALUES (611, 1477, '2026-05-01', '2026-04-28', '成型13', 5, '92011', '840B 2ND CTR', 2282, 3, '3', 790.20, 789.70, 789.70, '12.0×2.30×5620', '2605920111305-03-03', '03-03', NULL, NULL, 1, '2026-04-24 11:45:15');
+INSERT INTO `chamfering_plans` VALUES (612, 1478, '2026-04-01', '2026-04-28', '成型19', 1, '91111', 'TTA', 3000, 20, '7', 809.50, 809.00, 809.00, '12.7×2.00×4941', '2604911111901-20-07', '20-07', NULL, NULL, 1, '2026-04-24 11:45:27');
+INSERT INTO `chamfering_plans` VALUES (613, 1479, '2026-04-01', '2026-04-28', '成型19', 1, '91111', 'TTA', 3000, 20, '8', 809.50, 809.00, 809.00, '12.7×2.00×4941', '2604911111901-20-08', '20-08', NULL, NULL, 1, '2026-04-24 11:45:33');
+INSERT INTO `chamfering_plans` VALUES (614, 1480, '2026-05-01', '2026-04-28', '成型23', 4, '92431', '410D RR', 2934, 5, '5', 578.00, 0.00, 577.50, '14.0×1.35×5525', '2605924312304-05-05', '05-05', NULL, NULL, 0, '2026-04-24 11:46:12');
+INSERT INTO `chamfering_plans` VALUES (615, 1483, '2026-04-01', '2026-04-28', '成型24', 2, '92671', '655D 3RD SIDE', 1956, 16, '10', 790.50, 790.00, 790.00, '14.0×2.30×4929', '2604926712402-16-10', '16-10', NULL, NULL, 0, '2026-04-24 11:47:15');
+INSERT INTO `chamfering_plans` VALUES (616, 1492, '2026-05-01', '2026-04-28', '成型他', 1, '91591', 'モニートクッション', 600, 1, '1', 1070.50, 1069.00, 0.00, '12.0×1.50×5551', '260591591型他01-01-01', '01-01', NULL, NULL, 0, '2026-04-24 14:48:01');

@@ -17,8 +17,12 @@
       <div class="basis-toggle">
         <span class="basis-label">{{ t('salesPages.salesRecording.basis') }}</span>
         <el-radio-group v-model="recordingBasis">
-          <el-radio-button value="shipment">{{ t('salesPages.salesRecording.basisShip') }}</el-radio-button>
-          <el-radio-button value="acceptance">{{ t('salesPages.salesRecording.basisAccept') }}</el-radio-button>
+          <el-radio-button value="shipment">
+            {{ t('salesPages.salesRecording.basisShip') }}
+          </el-radio-button>
+          <el-radio-button value="acceptance">
+            {{ t('salesPages.salesRecording.basisAccept') }}
+          </el-radio-button>
         </el-radio-group>
       </div>
     </el-card>
@@ -36,7 +40,12 @@
           />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.all')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.all')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -72,35 +81,99 @@
     </div>
 
     <el-card shadow="never">
-      <el-table :data="salesList" v-loading="loading" stripe border @selection-change="handleSelectionChange">
+      <el-table
+        :data="salesList"
+        v-loading="loading"
+        stripe
+        border
+        @selection-change="handleSelectionChange"
+      >
         <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="slip_no" :label="t('salesPages.salesRecording.colSlipNo')" width="130" fixed />
+        <el-table-column
+          prop="slip_no"
+          :label="t('salesPages.salesRecording.colSlipNo')"
+          width="130"
+          fixed
+        />
         <el-table-column prop="order_no" :label="t('salesPages.common.orderNo')" width="130" />
-        <el-table-column prop="shipment_date" :label="t('salesPages.salesRecording.colShipDate')" width="110" />
-        <el-table-column prop="acceptance_date" :label="t('salesPages.salesRecording.colAcceptDate')" width="110" />
-        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
-        <el-table-column prop="product_code" :label="t('salesPages.common.productCode')" width="120" />
-        <el-table-column prop="quantity" :label="t('salesPages.salesRecording.colQty')" width="80" align="right" />
-        <el-table-column prop="unit_price" :label="t('salesPages.salesRecording.colUnitPrice')" width="100" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.unit_price ?? 0, locale as LocaleType, 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="total_amount" :label="t('salesPages.salesRecording.colTotal')" width="120" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
+        <el-table-column
+          prop="shipment_date"
+          :label="t('salesPages.salesRecording.colShipDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="acceptance_date"
+          :label="t('salesPages.salesRecording.colAcceptDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.credit.colCustomerName')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="product_code"
+          :label="t('salesPages.common.productCode')"
+          width="120"
+        />
+        <el-table-column
+          prop="quantity"
+          :label="t('salesPages.salesRecording.colQty')"
+          width="80"
+          align="right"
+        />
+        <el-table-column
+          prop="unit_price"
+          :label="t('salesPages.salesRecording.colUnitPrice')"
+          width="100"
+          align="right"
+        >
           <template #default="{ row }">
-            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
+            ¥{{ formatDecimal(row.unit_price ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="correction_type" :label="t('salesPages.salesRecording.correction')" width="80" align="center">
+        <el-table-column
+          prop="total_amount"
+          :label="t('salesPages.salesRecording.colTotal')"
+          width="120"
+          align="right"
+        >
           <template #default="{ row }">
-            <el-tag v-if="row.correction_type === 'red'" type="danger" size="small">{{ t('salesPages.salesRecording.tagRed') }}</el-tag>
-            <el-tag v-else-if="row.correction_type === 'black'" type="info" size="small">{{ t('salesPages.salesRecording.tagBlack') }}</el-tag>
+            ¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="100"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag :type="getStatusType(String(row.status))">
+              {{ getStatusLabel(String(row.status)) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="correction_type"
+          :label="t('salesPages.salesRecording.correction')"
+          width="80"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-tag v-if="row.correction_type === 'red'" type="danger" size="small">
+              {{ t('salesPages.salesRecording.tagRed') }}
+            </el-tag>
+            <el-tag v-else-if="row.correction_type === 'black'" type="info" size="small">
+              {{ t('salesPages.salesRecording.tagBlack') }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -127,6 +200,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Check, EditPen, Document, DataAnalysis } from '@element-plus/icons-vue'
 import type { LocaleType } from '@/i18n'
+import type { ElTagType } from '@/types/elementPlus'
 import { formatDecimal } from '@/utils/formatInteger'
 
 const { t, locale } = useI18n()
@@ -184,7 +258,10 @@ const handleBatchRecord = async () => {
 }
 
 const handleCorrection = async () => {
-  await ElMessageBox.confirm(t('salesPages.salesRecording.redBlackConfirm'), t('salesPages.salesRecording.redBlack'))
+  await ElMessageBox.confirm(
+    t('salesPages.salesRecording.redBlackConfirm'),
+    t('salesPages.salesRecording.redBlack'),
+  )
   ElMessage.success(t('salesPages.salesRecording.redBlackOk'))
 }
 
@@ -196,7 +273,9 @@ const handleView = (row: Record<string, unknown>) => {
   ElMessage.info(t('salesPages.salesRecording.detailWip', { no: String(row.slip_no ?? '') }))
 }
 
-const getStatusType = (s: string) => ({ pending: 'warning', recorded: 'success', corrected: 'info' }[s] || 'info')
+const getStatusType = (s: string): ElTagType =>
+  (({ pending: 'warning', recorded: 'success', corrected: 'info' }) as Record<string, ElTagType>)[s] ||
+  'info'
 const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>
 

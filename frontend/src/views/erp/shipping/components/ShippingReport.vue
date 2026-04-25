@@ -3,9 +3,9 @@
     <!-- 报告头部 - 单行布局 (第一页) -->
     <div class="report-header">
       <div class="header-content">
-        <span class="header-shipping-date"
-          >出荷日: {{ formatShippingDate(filters.dateRange) }}</span
-        >
+        <span class="header-shipping-date">
+          出荷日: {{ formatShippingDate(filters.dateRange) }}
+        </span>
         <h1 class="report-title">出荷品報告書</h1>
         <span class="header-print-time">印刷日時: {{ printDateTime }}</span>
       </div>
@@ -41,9 +41,9 @@
         <!-- 每页头部 (除第一页外) -->
         <div v-if="destGroup.needPageBreak" class="page-header">
           <div class="header-content">
-            <span class="header-shipping-date"
-              >出荷日: {{ formatShippingDate(filters.dateRange) }}</span
-            >
+            <span class="header-shipping-date">
+              出荷日: {{ formatShippingDate(filters.dateRange) }}
+            </span>
             <h1 class="report-title">出荷品報告書</h1>
             <span class="header-print-time">印刷日時: {{ printDateTime }}</span>
           </div>
@@ -272,9 +272,9 @@ function generateResultWithHeaders(pages, firstPageHeight, otherPageHeight) {
   return { result, pages }
 }
 
-// 按納入先分组数据，并应用智能分页
-const optimizedGroupedData = computed(() => {
-  if (!props.data || props.data.length === 0) return []
+// 按納入先分组数据，并应用智能分页（副作用なし：result と pages をまとめて算出）
+const allocationResult = computed(() => {
+  if (!props.data || props.data.length === 0) return { result: [], pages: [] }
 
   const destMap = new Map()
 
@@ -308,20 +308,14 @@ const optimizedGroupedData = computed(() => {
     a.destination_name.localeCompare(b.destination_name),
   )
 
-  const { result, pages } = allocateMinimumPages(sortedDestinations)
-
-  // 存储分页信息供其他computed使用
-  paginationResult.value = { result, pages }
-
-  return result
+  return allocateMinimumPages(sortedDestinations)
 })
 
-// 存储分页结果的响应式变量
-const paginationResult = ref({ result: [], pages: [] })
+const optimizedGroupedData = computed(() => allocationResult.value.result)
 
 // 计算总页数
 const totalPages = computed(() => {
-  return paginationResult.value.pages?.length || 0
+  return allocationResult.value.pages?.length || 0
 })
 
 // 计算总納入先数
@@ -333,18 +327,18 @@ const totalDestinations = computed(() => {
 
 // 计算优化率
 const optimizationRate = computed(() => {
-  if (!paginationResult.value.pages?.length) return 0
+  if (!allocationResult.value.pages?.length) return 0
 
   const avgUtilization =
-    paginationResult.value.pages.reduce((sum, page) => sum + page.utilizationRate, 0) /
-    paginationResult.value.pages.length
+    allocationResult.value.pages.reduce((sum, page) => sum + page.utilizationRate, 0) /
+    allocationResult.value.pages.length
 
   return Math.round(avgUtilization)
 })
 
 // 导出分页分析函数供外部调用
 const getPaginationAnalysis = () => {
-  const pages = paginationResult.value.pages
+  const pages = allocationResult.value.pages
   if (!pages?.length) return null
 
   return {

@@ -8,7 +8,9 @@
         </div>
         <div class="sales-page-hero__titles">
           <h1 class="sales-page-hero__title">{{ t('salesPages.orderList.title') }}</h1>
-          <p class="sales-page-hero__subtitle">{{ t('salesPages.common.recordCount', { n: pagination.total }) }}</p>
+          <p class="sales-page-hero__subtitle">
+            {{ t('salesPages.common.recordCount', { n: pagination.total }) }}
+          </p>
         </div>
       </div>
       <div class="hero-actions">
@@ -26,14 +28,15 @@
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters" class="filter-form">
         <el-form-item :label="t('salesPages.orderList.filterOrderNo')">
-          <el-input
-            v-model="filters.order_no"
-            clearable
-            @keyup.enter="handleSearch"
-          />
+          <el-input v-model="filters.order_no" clearable @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.selectCustomer')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customerOptions" :key="c.code" :label="c.name" :value="c.code" />
           </el-select>
         </el-form-item>
@@ -78,33 +81,93 @@
             <span class="link-text" @click="viewOrder(row)">{{ row.order_no }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="customer_name" :label="t('salesPages.common.customer')" min-width="150" />
-        <el-table-column prop="order_date" :label="t('salesPages.orderList.colOrderDate')" width="110" />
-        <el-table-column prop="expected_delivery_date" :label="t('salesPages.orderList.colShipDue')" width="110" />
-        <el-table-column prop="status_name" :label="t('salesPages.orderList.colStatus')" width="100">
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.common.customer')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="order_date"
+          :label="t('salesPages.orderList.colOrderDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="expected_delivery_date"
+          :label="t('salesPages.orderList.colShipDue')"
+          width="110"
+        />
+        <el-table-column
+          prop="status_name"
+          :label="t('salesPages.orderList.colStatus')"
+          width="100"
+        >
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)" size="small">{{ row.status_name }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="total_amount" :label="t('salesPages.orderList.colOrderAmount')" width="120" align="right">
+        <el-table-column
+          prop="total_amount"
+          :label="t('salesPages.orderList.colOrderAmount')"
+          width="120"
+          align="right"
+        >
           <template #default="{ row }">
             ¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="payment_status_name" :label="t('salesPages.orderList.colPayment')" width="100">
+        <el-table-column
+          prop="payment_status_name"
+          :label="t('salesPages.orderList.colPayment')"
+          width="100"
+        >
           <template #default="{ row }">
             <el-tag :type="getPaymentStatusType(row.payment_status)" size="small">
               {{ row.payment_status_name }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="sales_person" :label="t('salesPages.orderList.colSalesPerson')" width="100" />
-        <el-table-column :label="t('salesPages.common.actions')" width="220" fixed="right" align="center">
+        <el-table-column
+          prop="sales_person"
+          :label="t('salesPages.orderList.colSalesPerson')"
+          width="100"
+        />
+        <el-table-column
+          :label="t('salesPages.common.actions')"
+          width="220"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="viewOrder(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="warning" link @click="editOrder(row)" v-if="row.status === 'draft'">{{ t('salesPages.orderList.edit') }}</el-button>
-            <el-button size="small" type="success" link @click="deliverOrder(row)" v-if="row.status === 'approved'">{{ t('salesPages.salesHome.ship') }}</el-button>
-            <el-button size="small" type="danger" link @click="cancelOrder(row)" v-if="['draft', 'pending'].includes(row.status)">{{ t('salesPages.orderList.cancel') }}</el-button>
+            <el-button size="small" type="primary" link @click="viewOrder(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              link
+              @click="editOrder(row)"
+              v-if="row.status === 'draft'"
+            >
+              {{ t('salesPages.orderList.edit') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="success"
+              link
+              @click="deliverOrder(row)"
+              v-if="row.status === 'approved'"
+            >
+              {{ t('salesPages.salesHome.ship') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              link
+              @click="cancelOrder(row)"
+              v-if="['draft', 'pending'].includes(row.status)"
+            >
+              {{ t('salesPages.orderList.cancel') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -133,6 +196,7 @@ import { Document, Plus, Download, Search, Refresh } from '@element-plus/icons-v
 import { getSalesOrderList, cancelSalesOrder } from '@/api/erp/sales'
 import type { SalesOrder } from '@/types/erp/sales'
 import type { LocaleType } from '@/i18n'
+import type { ElTagType } from '@/types/elementPlus'
 import { formatDecimal } from '@/utils/formatInteger'
 
 const router = useRouter()
@@ -154,20 +218,20 @@ const pagination = reactive({
   total: 0,
 })
 
-const getStatusType = (status: string) => {
-  const typeMap: Record<string, string> = {
+const getStatusType = (status: string): ElTagType => {
+  const typeMap: Record<string, ElTagType> = {
     draft: 'info',
     pending: 'warning',
     approved: 'success',
     partial_delivered: 'primary',
-    completed: '',
+    completed: 'success',
     cancelled: 'danger',
   }
   return typeMap[status] || 'info'
 }
 
-const getPaymentStatusType = (status: string) => {
-  const typeMap: Record<string, string> = {
+const getPaymentStatusType = (status: string): ElTagType => {
+  const typeMap: Record<string, ElTagType> = {
     unpaid: 'danger',
     partial_paid: 'warning',
     paid: 'success',

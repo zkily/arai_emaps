@@ -1,0 +1,25 @@
+# Flake8 設定（Black と互換）
+[flake8]
+max-line-length = 100
+extend-ignore =
+    # Black と競合するルールを無効化
+    E203,
+    E501,
+    W503,
+    W504,
+    # Walrus 演算子の警告を無効化
+    E231
+exclude =
+    .git,
+    __pycache__,
+    venv,
+    .venv,
+    build,
+    dist,
+    alembic/versions,
+    *.egg-info,
+    node_modules
+per-file-ignores =
+    __init__.py: F401, F403
+    tests/*: S101, D100, D103
+max-complexity = 18

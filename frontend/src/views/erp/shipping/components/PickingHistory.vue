@@ -471,8 +471,8 @@
       <div class="chart-container">
         <ChartWrapper
           v-if="!loading.trend"
-          :data="(dailyCompletionRateChartData as any)"
-          :options="(dailyCompletionRateChartOptions as any)"
+          :data="dailyCompletionRateChartData as any"
+          :options="dailyCompletionRateChartOptions as any"
           height="320px"
           @error="handleChartError"
           @retry="retryChart"
@@ -570,7 +570,6 @@ import { getPickingHistoryData, getPerformanceByDestination } from '@/api/shippi
 import request from '@/utils/request'
 import DestinationGroupManager from './DestinationGroupManager.vue'
 import ChartWrapper from '@/components/ChartWrapper.vue'
-import { runChartTests } from '@/utils/chartTest'
 import { registerChartJS, type ChartData, type ChartOptions } from '@/utils/chartRegistration'
 
 // 确保Chart.js组件在生产环境中正确注册
@@ -1151,7 +1150,9 @@ function getTaskDateKey(task: PickingTask): string {
 
 function getGroupDestinationCds(group: GroupOption): string[] {
   const dests = group.destinations || []
-  return dests.map((d: any) => (typeof d === 'object' && d && 'value' in d ? String(d.value) : String(d))).filter(Boolean)
+  return dests
+    .map((d: any) => (typeof d === 'object' && d && 'value' in d ? String(d.value) : String(d)))
+    .filter(Boolean)
 }
 
 const dailyCompletionRateChartData = computed<ChartData<'line'>>(() => {
@@ -1297,7 +1298,8 @@ async function fetchHistoryStats() {
 
         // 任务列表仍按行展示：未ピッキング = pending + picking 行，完了 = completed 行
         pendingTasks.value = filteredTasks.filter(
-          (task) => task.status === 'pending' || task.status === 'picking' || task.status === 'assigned',
+          (task) =>
+            task.status === 'pending' || task.status === 'picking' || task.status === 'assigned',
         )
         completedTasks.value = filteredTasks.filter(
           (task) => task.status === 'completed' || task.status === 'picked',
@@ -1847,7 +1849,9 @@ function getDestinationStatus(dest: DestinationData): string {
   return 'pending'
 }
 
-function getDestinationStatusType(dest: DestinationData): 'success' | 'warning' | 'danger' | 'info' {
+function getDestinationStatusType(
+  dest: DestinationData,
+): 'success' | 'warning' | 'danger' | 'info' {
   const status = getDestinationStatus(dest)
   const typeMap: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
     completed: 'success',
@@ -1905,19 +1909,8 @@ safeOnMounted(async () => {
   // 初始化担当者日期范围为当前月份
   performerDateRange.value = getCurrentMonthRange()
 
-  // 测试Chart.js是否正确加载
-  const chartTestResult = runChartTests()
-  if (!chartTestResult) {
-    console.warn('⚠️ Chart.js测试失败，图表可能无法正常显示')
-    ElMessage.warning('チャートライブラリの読み込みに問題があります')
-  }
-
   // 并行加载数据（担当者选项来自 納入先グループ group_name）
-  await Promise.all([
-    fetchGroupOptions(),
-    refreshData(),
-    fetchPerformerAnalysisData(),
-  ])
+  await Promise.all([fetchGroupOptions(), refreshData(), fetchPerformerAnalysisData()])
 
   console.log('🚀 PickingHistory组件初始化完成')
 })
@@ -3489,7 +3482,9 @@ if (app) {
   padding: 8px 12px;
   background: rgba(248, 250, 252, 0.9);
   border-radius: 10px;
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
 .stat-item:hover {

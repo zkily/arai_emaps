@@ -8,7 +8,7 @@ import type {
   SalesDelivery,
   SalesReturn,
   SalesQueryParams,
-  SalesStats
+  SalesStats,
 } from '@/types/erp/sales'
 
 const BASE_URL = '/api/erp/sales'
@@ -67,7 +67,9 @@ export const getSalesDeliveryList = (params?: {
   page?: number
   page_size?: number
 }) => {
-  return request.get<{ items: SalesDelivery[]; total: number }>(`${BASE_URL}/deliveries`, { params })
+  return request.get<{ items: SalesDelivery[]; total: number }>(`${BASE_URL}/deliveries`, {
+    params,
+  })
 }
 
 /** 创建销售发货单 */
@@ -120,12 +122,15 @@ export const approveSalesReturn = (id: number, approved: boolean, remarks?: stri
 }
 
 /** 确认退货收货 */
-export const confirmSalesReturnReceipt = (id: number, items: Array<{
-  item_id: number
-  received_quantity: number
-  quality_status: string
-  remarks?: string
-}>) => {
+export const confirmSalesReturnReceipt = (
+  id: number,
+  items: Array<{
+    item_id: number
+    received_quantity: number
+    quality_status: string
+    remarks?: string
+  }>,
+) => {
   return request.post(`${BASE_URL}/returns/${id}/receive`, { items })
 }
 
@@ -163,12 +168,9 @@ function mapOrdersStatsToSalesStats(raw: SalesStatsOrdersApi): SalesStats {
 }
 
 /** 获取销售统计数据（对接后端 /sales/orders/stats） */
-export const getSalesStats = async (params?: {
-  start_date?: string
-  end_date?: string
-}) => {
+export const getSalesStats = async (params?: { start_date?: string; end_date?: string }) => {
   const raw = await request.get<SalesStatsOrdersApi>(`${BASE_URL}/orders/stats`, { params })
-  return mapOrdersStatsToSalesStats(raw as SalesStatsOrdersApi)
+  return mapOrdersStatsToSalesStats(raw as unknown as SalesStatsOrdersApi)
 }
 
 /** 日別受注確定本数（order_daily、既定：過去2週＋将来1週） */
@@ -194,12 +196,14 @@ export const getCustomerSalesRanking = (params?: {
   end_date?: string
   limit?: number
 }) => {
-  return request.get<Array<{
-    customer_code: string
-    customer_name: string
-    total_amount: number
-    order_count: number
-  }>>(`${BASE_URL}/stats/customer-ranking`, { params })
+  return request.get<
+    Array<{
+      customer_code: string
+      customer_name: string
+      total_amount: number
+      order_count: number
+    }>
+  >(`${BASE_URL}/stats/customer-ranking`, { params })
 }
 
 /** 获取产品销售排名 */
@@ -208,12 +212,14 @@ export const getProductSalesRanking = (params?: {
   end_date?: string
   limit?: number
 }) => {
-  return request.get<Array<{
-    product_code: string
-    product_name: string
-    total_quantity: number
-    total_amount: number
-  }>>(`${BASE_URL}/stats/product-ranking`, { params })
+  return request.get<
+    Array<{
+      product_code: string
+      product_name: string
+      total_quantity: number
+      total_amount: number
+    }>
+  >(`${BASE_URL}/stats/product-ranking`, { params })
 }
 
 /** 获取销售趋势 */
@@ -222,9 +228,11 @@ export const getSalesTrend = (params?: {
   end_date?: string
   group_by?: 'day' | 'week' | 'month'
 }) => {
-  return request.get<Array<{
-    date: string
-    total_amount: number
-    order_count: number
-  }>>(`${BASE_URL}/stats/trend`, { params })
+  return request.get<
+    Array<{
+      date: string
+      total_amount: number
+      order_count: number
+    }>
+  >(`${BASE_URL}/stats/trend`, { params })
 }

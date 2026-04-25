@@ -16,8 +16,8 @@ const props = withDefaults(
     height?: string
   }>(),
   {
-    data: () => null,
-    options: () => null,
+    data: undefined,
+    options: undefined,
     height: '300px',
   },
 )

@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Any
 
@@ -39,6 +40,63 @@ def _plan_column_sql_expr(plan_column: str) -> tuple[str, str]:
         "molding_plan": "molding_plan（成型計画）",
     }
     return expr, labels[col]
+
+
+def _mysql_lpad(value: Any, length: int, pad: str = "0") -> str:
+    """MySQL LPAD と同等（長い場合は左から切り詰める）。"""
+    s = "" if value is None else str(value)
+    if length <= 0:
+        return ""
+    if len(s) >= length:
+        return s[:length]
+    return (pad * (length - len(s))) + s
+
+
+def _build_management_code(
+    production_month: Optional[date],
+    product_cd: str,
+    production_line: str,
+    priority_order: Optional[int],
+    production_lot_size: Optional[int],
+    lot_number: Optional[str],
+) -> str:
+    """management_code のサーバ側兜底計算（DB trigger 未適用環境向け）。"""
+    pm = production_month or date.today()
+    yy = f"{pm.year % 100:02d}"
+    mm = f"{pm.month:02d}"
+    cd = (product_cd or "").strip()
+    line_suffix = (production_line or "")[-2:]
+    po2 = _mysql_lpad(int(priority_order or 0), 2, "0")
+    pls2 = _mysql_lpad(int(production_lot_size or 0), 2, "0")
+    ln2 = _mysql_lpad((lot_number or "").strip(), 2, "0")
+    return f"{yy}{mm}{cd}{line_suffix}{po2}-{pls2}-{ln2}"
+
+
+def _instruction_production_month_first_day(value: Any, body_month: str) -> date:
+    """instruction_plans.production_month は月初日。DB 値・YYYY-MM 文字列から正規化する。"""
+    if value is not None:
+        if isinstance(value, datetime):
+            d = value.date()
+            return date(d.year, d.month, 1)
+        if isinstance(value, date):
+            return date(value.year, value.month, 1)
+        s = str(value).strip()[:10]
+        if len(s) >= 10:
+            try:
+                d = date.fromisoformat(s)
+                return date(d.year, d.month, 1)
+            except ValueError:
+                pass
+    bm = (body_month or "").strip()
+    parts = bm.split("-")
+    if len(parts) >= 2:
+        try:
+            y, mo = int(parts[0]), int(parts[1])
+            if 1 <= mo <= 12:
+                return date(y, mo, 1)
+        except ValueError:
+            pass
+    return date.today()
 
 
 async def _aggregate_component_requirements_from_production_summarys(
@@ -1871,6 +1929,15 @@ async def move_batch_to_cutting_management(
         "use_material_stock_sub": 1 if plan.get("use_material_stock_sub") == 1 else 0,
         "usage_count": float(plan["usage_count"]) if plan.get("usage_count") is not None else 1.0,
     }
+    if not (cutting_params.get("management_code") or "").strip():
+        cutting_params["management_code"] = _build_management_code(
+            production_month=production_month_date,
+            product_cd=product_cd,
+            production_line=production_line,
+            priority_order=cutting_params.get("priority_order"),
+            production_lot_size=cutting_params.get("production_lot_size"),
+            lot_number=cutting_params.get("lot_number"),
+        )
 
     try:
         await db.execute(insert_cutting_sql, cutting_params)
@@ -2003,7 +2070,8 @@ async def move_cutting_to_batch(
 ):
     """
     切断指示1件を生産ロットへ戻す。
-    処理順: ①切断指示を読取 ②カンバン発行削除 ③面取指示削除 ④面取ロット一覧（chamfering_plans）削除 ⑤切断指示削除 ⑥instruction_plans に INSERT。
+    処理順: ①切断指示を読取 ②面取指示ID取得 ③カンバン削除 ④chamfering_plans 削除 ⑤chamfering_management 削除
+    ⑥cutting_management 削除 ⑦instruction_plans に INSERT。
     """
     # ① 切断指示1件を取得（削除前に全項目コピー用。cutting_machine/production_day は削除後の生産順リナンバ用）
     cut_sel = text("""
@@ -2021,6 +2089,15 @@ async def move_cutting_to_batch(
     if not cut_row:
         raise HTTPException(status_code=404, detail="切断指示が見つかりません")
     cut = dict(cut_row)
+
+    product_cd = (cut.get("product_cd") or body.product_cd or "").strip()
+    product_name = (cut.get("product_name") or body.product_name or "").strip()
+    production_line = (cut.get("production_line") or body.production_line or "").strip()
+    if not product_cd or not product_name or not production_line:
+        raise HTTPException(
+            status_code=400,
+            detail="切断指示に品番・品名・ラインが不足しています。画面データを更新してから再度お試しください。",
+        )
 
     def _to_dt(v):
         if v is None:
@@ -2059,15 +2136,50 @@ async def move_cutting_to_batch(
             :material_name, :material_manufacturer, :standard_specification,
             :use_material_stock_sub, :usage_count
         )
+        ON DUPLICATE KEY UPDATE
+            id = LAST_INSERT_ID(id),
+            production_month = VALUES(production_month),
+            production_line = VALUES(production_line),
+            priority_order = VALUES(priority_order),
+            product_cd = VALUES(product_cd),
+            product_name = VALUES(product_name),
+            planned_quantity = VALUES(planned_quantity),
+            start_date = VALUES(start_date),
+            end_date = VALUES(end_date),
+            production_lot_size = VALUES(production_lot_size),
+            lot_number = VALUES(lot_number),
+            is_cutting_instructed = VALUES(is_cutting_instructed),
+            has_chamfering_process = VALUES(has_chamfering_process),
+            is_chamfering_instructed = VALUES(is_chamfering_instructed),
+            has_sw_process = VALUES(has_sw_process),
+            is_sw_instructed = VALUES(is_sw_instructed),
+            management_code = VALUES(management_code),
+            aps_batch_plan_id = VALUES(aps_batch_plan_id),
+            actual_production_quantity = VALUES(actual_production_quantity),
+            take_count = VALUES(take_count),
+            cutting_length = VALUES(cutting_length),
+            chamfering_length = VALUES(chamfering_length),
+            developed_length = VALUES(developed_length),
+            scrap_length = VALUES(scrap_length),
+            material_name = VALUES(material_name),
+            material_manufacturer = VALUES(material_manufacturer),
+            standard_specification = VALUES(standard_specification),
+            use_material_stock_sub = VALUES(use_material_stock_sub),
+            usage_count = VALUES(usage_count)
     """)
-    pm = cut.get("production_month")
-    production_month_date = pm if isinstance(pm, date) else date.fromisoformat(str(pm)[:10]) if pm and len(str(pm)) >= 10 else date.today()
+    production_month_date = _instruction_production_month_first_day(
+        cut.get("production_month"), body.production_month
+    )
+    priority_order = cut.get("priority_order")
+    if priority_order is None:
+        priority_order = body.production_order
+
     insert_params = {
         "production_month": production_month_date,
-        "production_line": (cut.get("production_line") or "").strip() or "",
-        "priority_order": cut.get("priority_order"),
-        "product_cd": (cut.get("product_cd") or "").strip() or "",
-        "product_name": (cut.get("product_name") or "").strip() or "",
+        "production_line": production_line,
+        "priority_order": priority_order,
+        "product_cd": product_cd,
+        "product_name": product_name,
         "planned_quantity": cut.get("planned_quantity"),
         "start_date": _to_dt(cut.get("start_date")),
         "end_date": _to_dt(cut.get("end_date")),
@@ -2092,6 +2204,49 @@ async def move_cutting_to_batch(
         "use_material_stock_sub": 1 if cut.get("use_material_stock_sub") == 1 else 0,
         "usage_count": _to_float(cut.get("usage_count")) if cut.get("usage_count") is not None else 1.0,
     }
+    # INSERT 時 BEFORE INSERT トリガーが management_code を上書きするため、重複判定はトリガー結果と同じ式で行う
+    expected_management_code = _build_management_code(
+        production_month=production_month_date,
+        product_cd=product_cd,
+        production_line=production_line,
+        priority_order=insert_params.get("priority_order"),
+        production_lot_size=insert_params.get("production_lot_size"),
+        lot_number=insert_params.get("lot_number"),
+    )
+    if not (insert_params.get("management_code") or "").strip():
+        insert_params["management_code"] = expected_management_code
+
+    update_existing_ip_sql = text("""
+        UPDATE instruction_plans SET
+            production_month=:production_month,
+            production_line=:production_line,
+            priority_order=:priority_order,
+            product_cd=:product_cd,
+            product_name=:product_name,
+            planned_quantity=:planned_quantity,
+            start_date=:start_date,
+            end_date=:end_date,
+            production_lot_size=:production_lot_size,
+            lot_number=:lot_number,
+            is_cutting_instructed=:is_cutting_instructed,
+            has_chamfering_process=:has_chamfering_process,
+            is_chamfering_instructed=:is_chamfering_instructed,
+            has_sw_process=:has_sw_process,
+            is_sw_instructed=:is_sw_instructed,
+            aps_batch_plan_id=:aps_batch_plan_id,
+            actual_production_quantity=:actual_production_quantity,
+            take_count=:take_count,
+            cutting_length=:cutting_length,
+            chamfering_length=:chamfering_length,
+            developed_length=:developed_length,
+            scrap_length=:scrap_length,
+            material_name=:material_name,
+            material_manufacturer=:material_manufacturer,
+            standard_specification=:standard_specification,
+            use_material_stock_sub=:use_material_stock_sub,
+            usage_count=:usage_count
+        WHERE id = :ins_id
+    """)
 
     try:
         # ② この切断に紐づく面取指示IDを取得（カンバン削除用）
@@ -2112,22 +2267,22 @@ async def move_cutting_to_batch(
                 {"sid": chamfering_id},
             )
 
-        # ④ 面取指示を削除
-        await db.execute(
-            text("DELETE FROM chamfering_management WHERE cutting_management_id = :cid"),
-            {"cid": body.cutting_id},
-        )
-
-        # ④' 面取ロット一覧（chamfering_plans）の該当データを削除
+        # ④ 面取ロット一覧を先に削除（FK 構成差で面取指示より先に消す必要がある環境向け）
         await db.execute(
             text("DELETE FROM chamfering_plans WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
         )
 
-        # ⑤ 切断指示を削除
+        # ⑤ 面取指示を削除
+        await db.execute(
+            text("DELETE FROM chamfering_management WHERE cutting_management_id = :cid"),
+            {"cid": body.cutting_id},
+        )
+
+        # ⑥ 切断指示を削除
         await db.execute(text("DELETE FROM cutting_management WHERE id = :cid"), {"cid": body.cutting_id})
 
-        # ⑤' 同一切断機・同一生産日の残り行の生産順を 1,2,3... にリナンバ
+        # ⑥' 同一切断機・同一生産日の残り行の生産順を 1,2,3... にリナンバ
         cm = (cut.get("cutting_machine") or "").strip()
         pd = cut.get("production_day")
         if cm and pd is not None:
@@ -2148,15 +2303,63 @@ async def move_cutting_to_batch(
                         {"seq": seq, "id": rid},
                     )
 
-        # ⑥ 生産ロットへ挿入（cutting の全共通項目をコピー）
-        await db.execute(insert_sql, insert_params)
+        # ⑦ 生産ロットへ反映（新規 INSERT または既存行 UPDATE）
+        # 合算・APS 同期の重複で同一 management_code の行が残っていると UNIQUE で INSERT が 409 になるため、
+        # トリガーと同じ management_code で既存を検出したら UPDATE のみ行う。
+        bid0 = insert_params.get("aps_batch_plan_id")
+        if bid0 is not None:
+            chk_bp = await db.execute(
+                text("SELECT 1 FROM aps_batch_plans WHERE id = :id LIMIT 1"),
+                {"id": int(bid0)},
+            )
+            if chk_bp.scalar_one_or_none() is None:
+                insert_params["aps_batch_plan_id"] = None
 
-        # ⑥' 追加情報を補完
+        existing_ip_id: Optional[int] = None
+        # 最優先: aps_batch_plan_id（唯一キー）で既存行を特定する
+        # management_code 先行だと「別行に紐づく aps_batch_plan_id」を上書きして 409 を再発し得る。
+        if insert_params.get("aps_batch_plan_id") is not None:
+            ex_bid = await db.execute(
+                text(
+                    "SELECT id FROM instruction_plans WHERE aps_batch_plan_id = :bid ORDER BY id ASC LIMIT 1"
+                ),
+                {"bid": int(insert_params["aps_batch_plan_id"])},
+            )
+            row_b = ex_bid.mappings().fetchone()
+            if row_b and row_b.get("id") is not None:
+                existing_ip_id = int(row_b["id"])
+        if existing_ip_id is None:
+            ex_mc = await db.execute(
+                text(
+                    "SELECT id FROM instruction_plans "
+                    "WHERE TRIM(COALESCE(management_code, '')) = TRIM(:mc) ORDER BY id ASC LIMIT 1"
+                ),
+                {"mc": expected_management_code},
+            )
+            row_mc = ex_mc.mappings().fetchone()
+            if row_mc and row_mc.get("id") is not None:
+                existing_ip_id = int(row_mc["id"])
+
+        if existing_ip_id is not None:
+            up = {**insert_params, "ins_id": existing_ip_id}
+            await db.execute(update_existing_ip_sql, up)
+            await db.flush()
+            ins_id = existing_ip_id
+        else:
+            await db.execute(insert_sql, insert_params)
+            await db.flush()
+            ins_id_res = await db.execute(text("SELECT LAST_INSERT_ID() AS id"))
+            ins_id_row = ins_id_res.mappings().fetchone()
+            ins_id = int(ins_id_row["id"]) if ins_id_row and ins_id_row.get("id") is not None else None
+            if ins_id is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="instruction_plans の登録に失敗しました（INSERT 後の ID が取得できません）",
+                )
+
+        # ⑦' 追加情報を補完
         # - APS ロットとの紐付けを復元（aps_batch_plan_id）
         # - 「切断→ロット戻し」を撤回イベントとして記録（release_cancelled_*）
-        ins_id_res = await db.execute(text("SELECT LAST_INSERT_ID() AS id"))
-        ins_id_row = ins_id_res.mappings().fetchone()
-        ins_id = int(ins_id_row["id"]) if ins_id_row and ins_id_row.get("id") is not None else None
         if ins_id is not None:
             lot_no = (insert_params.get("lot_number") or "").strip() if insert_params.get("lot_number") else ""
             pcd = (insert_params.get("product_cd") or "").strip()
@@ -2208,6 +2411,17 @@ async def move_cutting_to_batch(
                 pass
 
         await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except IntegrityError as e:
+        await db.rollback()
+        orig = getattr(e, "orig", None)
+        detail = str(orig) if orig is not None else str(e)
+        raise HTTPException(
+            status_code=409,
+            detail=f"instruction_plans への登録で整合性エラーが発生しました: {detail}",
+        ) from e
     except Exception as e:
         await db.rollback()
         msg = str(e).lower()
@@ -2215,6 +2429,7 @@ async def move_cutting_to_batch(
             raise HTTPException(status_code=503, detail="instruction_plans テーブルが存在しません。") from e
         if "cutting_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(status_code=503, detail="cutting_management テーブルが存在しません。") from e
+        logger.exception("move_cutting_to_batch failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
     return {"success": True, "message": "生産ロットに戻しました（切断・面取・カンバンを削除済み）"}

@@ -1498,7 +1498,15 @@ async function addSchedule() {
       const targetId = mergeTargetScheduleId.value!
       const tg = schedules.value.find((s) => s.id === targetId)!
       const newTotal = Number(tg.planned_process_qty ?? 0) + deltaPieces
-      await updateSchedule(targetId, { planned_process_qty: newTotal, run_immediately: false })
+      const prevBatchCount = Number(tg.planned_batch_count ?? 0)
+      const updateBody: Parameters<typeof updateSchedule>[1] = {
+        planned_process_qty: newTotal,
+        run_immediately: false,
+      }
+      const lotSize = Number(tg.lot_size_snapshot ?? 0)
+      // 本数モードの合算では planned_batch_count を送らない。
+      // 送ると backend 側で「batch_count × lot_size」に丸められ、本数指定が崩れる。
+      await updateSchedule(targetId, updateBody)
       await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
 
       selectedEeId.value = null
@@ -1511,6 +1519,13 @@ async function addSchedule() {
       mergeTargetScheduleId.value = null
 
       await loadSchedules()
+      if (lotSize > 0) {
+        const nextBatchCount = Math.max(1, Math.ceil(newTotal / lotSize))
+        if (nextBatchCount !== prevBatchCount) {
+          ElMessage.success(`既存計画の合計(本)に加算しました（ロット数 ${prevBatchCount} → ${nextBatchCount}）`)
+          return
+        }
+      }
       ElMessage.success('既存計画の合計(本)に加算しました')
       return
     }
@@ -1622,6 +1637,7 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
     return
   }
   const cur = Number(row.planned_process_qty ?? 0)
+  const curBatchCount = Number(row.planned_batch_count ?? 0)
   if (val === cur) {
     editingScheduleTotalId.value = null
     return
@@ -1629,12 +1645,22 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
   if (!selectedLineId.value) return
   savingScheduleId.value = row.id
   try {
-    await updateSchedule(row.id, {
+    const updateBody: Parameters<typeof updateSchedule>[1] = {
       planned_process_qty: val,
       run_immediately: false,
-    })
+    }
+    const lotSize = Number(row.lot_size_snapshot ?? 0)
+    // 「合計(本)」編集は本数を真値として扱うため planned_batch_count は送らない。
+    await updateSchedule(row.id, updateBody)
     await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
+    if (lotSize > 0) {
+      const nextBatchCount = Math.max(1, Math.ceil(val / lotSize))
+      if (nextBatchCount !== curBatchCount) {
+        ElMessage.success(`合計(本)を更新しました（ロット数 ${curBatchCount} → ${nextBatchCount}）`)
+        return
+      }
+    }
     ElMessage.success('合計(本)を更新しました')
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e))

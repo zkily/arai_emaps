@@ -16,7 +16,12 @@
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters">
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.selectCustomer')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -56,34 +61,93 @@
     </div>
 
     <el-card shadow="never">
-      <el-table :data="invoiceList" v-loading="loading" stripe border @selection-change="handleSelectionChange">
+      <el-table
+        :data="invoiceList"
+        v-loading="loading"
+        stripe
+        border
+        @selection-change="handleSelectionChange"
+      >
         <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="invoice_no" :label="t('salesPages.invoice.invoiceNo')" width="140" fixed />
-        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
-        <el-table-column prop="closing_date" :label="t('salesPages.invoice.closingDate')" width="110" />
-        <el-table-column prop="invoice_date" :label="t('salesPages.invoice.invoiceDate')" width="110" />
+        <el-table-column
+          prop="invoice_no"
+          :label="t('salesPages.invoice.invoiceNo')"
+          width="140"
+          fixed
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.credit.colCustomerName')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="closing_date"
+          :label="t('salesPages.invoice.closingDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="invoice_date"
+          :label="t('salesPages.invoice.invoiceDate')"
+          width="110"
+        />
         <el-table-column prop="due_date" :label="t('salesPages.invoice.dueDate')" width="110" />
-        <el-table-column prop="subtotal" :label="t('salesPages.invoice.subtotal')" width="120" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.subtotal ?? 0, locale as LocaleType, 0) }}</template>
+        <el-table-column
+          prop="subtotal"
+          :label="t('salesPages.invoice.subtotal')"
+          width="120"
+          align="right"
+        >
+          <template #default="{ row }">
+            ¥{{ formatDecimal(row.subtotal ?? 0, locale as LocaleType, 0) }}
+          </template>
         </el-table-column>
-        <el-table-column prop="tax_amount" :label="t('salesPages.invoice.tax')" width="100" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.tax_amount ?? 0, locale as LocaleType, 0) }}</template>
+        <el-table-column
+          prop="tax_amount"
+          :label="t('salesPages.invoice.tax')"
+          width="100"
+          align="right"
+        >
+          <template #default="{ row }">
+            ¥{{ formatDecimal(row.tax_amount ?? 0, locale as LocaleType, 0) }}
+          </template>
         </el-table-column>
-        <el-table-column prop="total_amount" :label="t('salesPages.invoice.total')" width="130" align="right">
+        <el-table-column
+          prop="total_amount"
+          :label="t('salesPages.invoice.total')"
+          width="130"
+          align="right"
+        >
           <template #default="{ row }">
             <strong>¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}</strong>
           </template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
+            <el-tag :type="getStatusType(String(row.status))">
+              {{ getStatusLabel(String(row.status)) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="success" link @click="handleExportSingle(row)">{{ t('salesPages.common.pdf') }}</el-button>
-            <el-button size="small" type="warning" link @click="handleSend(row)" v-if="row.status === 'issued'">
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button size="small" type="success" link @click="handleExportSingle(row)">
+              {{ t('salesPages.common.pdf') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              link
+              @click="handleSend(row)"
+              v-if="row.status === 'issued'"
+            >
               {{ t('salesPages.invoice.send') }}
             </el-button>
           </template>
@@ -111,6 +175,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, Document, Promotion, Download } from '@element-plus/icons-vue'
 import type { LocaleType } from '@/i18n'
+import type { ElTagType } from '@/types/elementPlus'
 import { formatDecimal } from '@/utils/formatInteger'
 
 const { t, locale } = useI18n()
@@ -179,7 +244,11 @@ const handleSend = (row: Record<string, unknown>) => {
   ElMessage.success(t('salesPages.invoice.sendOk', { no: String(row.invoice_no ?? '') }))
 }
 
-const getStatusType = (s: string) => ({ pending: 'info', issued: 'primary', sent: 'warning', paid: 'success' }[s] || 'info')
+const getStatusType = (s: string): ElTagType =>
+  (({ pending: 'info', issued: 'primary', sent: 'warning', paid: 'success' }) as Record<
+    string,
+    ElTagType
+  >)[s] || 'info'
 const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>
 

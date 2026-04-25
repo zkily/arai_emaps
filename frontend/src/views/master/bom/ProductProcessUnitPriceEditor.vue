@@ -39,21 +39,29 @@
             </el-select>
           </el-form-item>
           <el-form-item v-if="routeCd" label="ルート" class="ppup-form-item--chip">
-            <el-tag class="ppup-chip ppup-chip--route" size="small" effect="dark">{{ routeCd }}</el-tag>
+            <el-tag class="ppup-chip ppup-chip--route" size="small" effect="dark">
+              {{ routeCd }}
+            </el-tag>
           </el-form-item>
           <el-form-item v-if="bomRevisionLabel" label="BOM" class="ppup-form-item--chip">
             <el-tag class="ppup-chip ppup-chip--bom" size="small">{{ bomRevisionLabel }}</el-tag>
           </el-form-item>
           <el-form-item v-if="selectedProductCd" label="取数" class="ppup-form-item--chip">
             <span class="ppup-take-badge">{{ selectedProductTakeCount }}</span>
-            <span v-if="!hasExplicitProductTakeCount" class="ppup-take-fallback">（未設定時 1）</span>
+            <span v-if="!hasExplicitProductTakeCount" class="ppup-take-fallback">
+              （未設定時 1）
+            </span>
           </el-form-item>
         </el-form>
       </div>
     </el-card>
 
     <div v-if="!selectedProductCd" class="ppup-placeholder">
-      <el-empty class="ppup-empty" description="製品を選択すると、工程・部品材料・累計単価が表示されます" :image-size="56" />
+      <el-empty
+        class="ppup-empty"
+        description="製品を選択すると、工程・部品材料・累計単価が表示されます"
+        :image-size="56"
+      />
     </div>
 
     <div v-else class="ppup-grid">
@@ -63,7 +71,9 @@
           <div class="ppup-data-cap">
             <span class="ppup-data-cap__dot" />
             <span class="ppup-data-cap__title">工程順・標準加工費</span>
-            <span class="ppup-data-cap__meta ppup-data-cap__pill">{{ routeSteps.length }} 工程</span>
+            <span class="ppup-data-cap__meta ppup-data-cap__pill">
+              {{ routeSteps.length }} 工程
+            </span>
           </div>
         </template>
         <div v-loading="loadingProcessPanel" class="ppup-card-body">
@@ -82,7 +92,12 @@
             max-height="calc(100vh - 280px)"
           >
             <el-table-column prop="step_no" label="順" width="44" align="center" />
-            <el-table-column prop="process_cd" label="工程CD" min-width="88" show-overflow-tooltip />
+            <el-table-column
+              prop="process_cd"
+              label="工程CD"
+              min-width="88"
+              show-overflow-tooltip
+            />
             <el-table-column label="工程名" min-width="100" show-overflow-tooltip>
               <template #default="{ row }">{{ row.process_name || '—' }}</template>
             </el-table-column>
@@ -148,7 +163,9 @@
                 <el-tooltip :content="row.calcLabel" placement="top" :show-after="400">
                   <span class="ppup-qty-cell">
                     {{ row.qtyEff.toLocaleString('ja-JP', { maximumFractionDigits: 6 }) }}
-                    <span v-if="row.scrapRate" class="ppup-qty-sub">（{{ row.qtyPer }}×{{ 100 + row.scrapRate }}%）</span>
+                    <span v-if="row.scrapRate" class="ppup-qty-sub">
+                      （{{ row.qtyPer }}×{{ 100 + row.scrapRate }}%）
+                    </span>
                   </span>
                 </el-tooltip>
               </template>
@@ -163,11 +180,15 @@
             <el-table-column label="単価" min-width="112" align="right">
               <template #default="{ row }">
                 <template v-if="row.kind === 'material'">
-                  <div>{{ formatPriceYen(row.pricePerKg) }}<span class="ppup-unit-suffix">/kg</span></div>
+                  <div>
+                    {{ formatPriceYen(row.pricePerKg) }}
+                    <span class="ppup-unit-suffix">/kg</span>
+                  </div>
                 </template>
                 <template v-else>
                   <div>
-                    {{ formatPriceYen(row.partUnitPrice) }}<span class="ppup-unit-suffix">/{{ row.uom || '個' }}</span>
+                    {{ formatPriceYen(row.partUnitPrice) }}
+                    <span class="ppup-unit-suffix">/{{ row.uom || '個' }}</span>
                   </div>
                 </template>
               </template>
@@ -181,11 +202,20 @@
             </el-table-column>
           </el-table>
           <p v-if="selectedBomHeaderId && bomComponentRows.length" class="ppup-hint ppup-hint--bom">
-            <strong>計算ルール：</strong>材料の行金額は<strong>(使用重量 kg ÷ 選択製品の取数) × 単重単価(¥/kg)</strong>（本・個は
-            <code>所要量×長尺単重</code>で kg 化）。取数は製品マスタの「取り数」、未設定は 1。
-            一本単価のみの行は <strong>(所要量×一本単価)÷取数</strong>。部品は<strong>所要量×標準単価（円）</strong>—
+            <strong>計算ルール：</strong>
+            材料の行金額は
+            <strong>(使用重量 kg ÷ 選択製品の取数) × 単重単価(¥/kg)</strong>
+            （本・個は
+            <code>所要量×長尺単重</code>
+            で kg 化）。取数は製品マスタの「取り数」、未設定は 1。 一本単価のみの行は
+            <strong>(所要量×一本単価)÷取数</strong>
+            。部品は
+            <strong>所要量×標準単価（円）</strong>
+            —
             <router-link class="ppup-link" to="/master/part">部品マスタ</router-link>
-            の登録があれば <strong>単価×為替の円換算</strong>を優先、なければ
+            の登録があれば
+            <strong>単価×為替の円換算</strong>
+            を優先、なければ
             <router-link class="ppup-link" to="/master/product">製品マスタ</router-link>
             の単価。材料単価・長尺単重は
             <router-link class="ppup-link" to="/master/material">材料マスタ</router-link>
@@ -202,7 +232,9 @@
           <div class="ppup-data-cap">
             <span class="ppup-data-cap__dot ppup-data-cap__dot--cyan" />
             <span class="ppup-data-cap__title">単価累計（工程完了時点）</span>
-            <span class="ppup-data-cap__meta ppup-data-cap__pill ppup-data-cap__pill--cyan">材料 + 加工を積み上げ</span>
+            <span class="ppup-data-cap__meta ppup-data-cap__pill ppup-data-cap__pill--cyan">
+              材料 + 加工を積み上げ
+            </span>
             <div class="ppup-data-cap__actions">
               <el-tag v-if="latestSnapshotInfo" size="small" type="info" class="ppup-snap-info">
                 最新保存: {{ formatDateTime(latestSnapshotInfo.created_at) }}
@@ -217,19 +249,19 @@
               >
                 現在を保存
               </el-button>
-              <el-button
-                size="small"
-                type="warning"
-                plain
-                @click="openRecalcDialog"
-              >
+              <el-button size="small" type="warning" plain @click="openRecalcDialog">
                 全部一緒に更新
               </el-button>
             </div>
           </div>
         </template>
         <div class="ppup-card-body">
-          <el-table class="ppup-table ppup-table--cumulative" :data="cumulativeStageRows" stripe size="small">
+          <el-table
+            class="ppup-table ppup-table--cumulative"
+            :data="cumulativeStageRows"
+            stripe
+            size="small"
+          >
             <el-table-column prop="stage" label="時点" min-width="220" show-overflow-tooltip />
             <el-table-column prop="materialIncrement" label="材料単価" width="110" align="right">
               <template #default="{ row }">
@@ -267,7 +299,12 @@
       title="累計単価 一括再計算"
       width="640px"
       :close-on-click-modal="false"
-      :close-on-press-escape="!recalcJob || recalcJob.status === 'completed' || recalcJob.status === 'failed' || recalcJob.status === 'partial'"
+      :close-on-press-escape="
+        !recalcJob ||
+        recalcJob.status === 'completed' ||
+        recalcJob.status === 'failed' ||
+        recalcJob.status === 'partial'
+      "
     >
       <div v-if="!recalcJob" class="ppup-recalc-form">
         <p class="ppup-recalc-hint">
@@ -277,7 +314,9 @@
         <el-form label-position="top" class="ppup-recalc-form-grid">
           <el-form-item label="対象範囲">
             <el-radio-group v-model="recalcScope">
-              <el-radio value="current">現在の製品のみ（{{ selectedProductCd || '未選択' }}）</el-radio>
+              <el-radio value="current">
+                現在の製品のみ（{{ selectedProductCd || '未選択' }}）
+              </el-radio>
               <el-radio value="selected">製品を選択して実行</el-radio>
               <el-radio value="all">全製品（有効）</el-radio>
             </el-radio-group>
@@ -316,8 +355,8 @@
         </p>
         <el-progress :percentage="recalcJob.progress_percent" :status="recalcProgressStatus" />
         <p class="ppup-recalc-counts">
-          処理: {{ recalcJob.done_items }} / {{ recalcJob.total_items }} ·
-          成功 {{ recalcJob.success_items }} · 失敗 {{ recalcJob.failed_items }}
+          処理: {{ recalcJob.done_items }} / {{ recalcJob.total_items }} · 成功
+          {{ recalcJob.success_items }} · 失敗 {{ recalcJob.failed_items }}
         </p>
         <div v-if="recalcJob.errors && recalcJob.errors.length" class="ppup-recalc-errors">
           <p class="ppup-recalc-errors__title">失敗明細（{{ recalcJob.errors.length }}件）</p>
@@ -348,7 +387,12 @@
             処理中…
           </el-button>
           <el-button
-            v-if="recalcJob && (recalcJob.status === 'completed' || recalcJob.status === 'failed' || recalcJob.status === 'partial')"
+            v-if="
+              recalcJob &&
+              (recalcJob.status === 'completed' ||
+                recalcJob.status === 'failed' ||
+                recalcJob.status === 'partial')
+            "
             type="primary"
             @click="onCloseRecalcDialog"
           >
@@ -464,7 +508,7 @@ function scheduleSaveProcessFee(stepNo: number) {
     setTimeout(() => {
       feeSaveTimers.delete(stepNo)
       void saveProcessFee(stepNo, { quiet: true })
-    }, FEE_SAVE_DEBOUNCE_MS)
+    }, FEE_SAVE_DEBOUNCE_MS),
   )
 }
 
@@ -493,7 +537,9 @@ const hasExplicitProductTakeCount = computed(() => {
   return t > 0 && Number.isFinite(t)
 })
 
-const selectedProductTakeCount = computed(() => (hasExplicitProductTakeCount.value ? rawProductTakeCount.value : 1))
+const selectedProductTakeCount = computed(() =>
+  hasExplicitProductTakeCount.value ? rawProductTakeCount.value : 1,
+)
 
 function formatPriceYen(v: number | undefined | null) {
   if (v == null || Number.isNaN(Number(v))) return '—'
@@ -503,12 +549,18 @@ function formatPriceYen(v: number | undefined | null) {
 }
 
 function uomIsMassKg(uom: string): boolean {
-  const u = (uom || '').trim().toLowerCase().replace(/\s|　/g, '')
+  const u = (uom || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s|\u3000/g, '')
   return u === 'kg' || u === 'キロ' || u === 'ｋｇ' || u === 'kgs' || u === 'kilogram'
 }
 
 function uomIsMassG(uom: string): boolean {
-  const u = (uom || '').trim().toLowerCase().replace(/\s|　/g, '')
+  const u = (uom || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s|\u3000/g, '')
   return u === 'g' || u === 'gr' || u === 'グラム' || u === 'ｇ'
 }
 
@@ -520,7 +572,7 @@ function uomIsMassG(uom: string): boolean {
 function materialCostFromLine(
   line: BomLine,
   mat: MaterialCalcFields | undefined,
-  takeCount: number
+  takeCount: number,
 ): {
   weightKg: number | null
   pricePerKg: number
@@ -573,8 +625,7 @@ function materialCostFromLine(
     }
   }
   const wFb = longW > 0 ? qtyEff * longW : null
-  const amt =
-    wFb != null && unitPrice > 0 ? (wFb / tc) * unitPrice : (qtyEff * unitPrice) / tc
+  const amt = wFb != null && unitPrice > 0 ? (wFb / tc) * unitPrice : (qtyEff * unitPrice) / tc
   return {
     weightKg: wFb,
     pricePerKg: unitPrice,
@@ -630,7 +681,7 @@ const bomComponentRows = computed((): BomDisplayRow[] => {
       const { weightKg, pricePerKg, lineAmount, calcLabel } = materialCostFromLine(
         line,
         mc,
-        selectedProductTakeCount.value
+        selectedProductTakeCount.value,
       )
       const qtyPer = Number(line.qty_per) || 0
       const scrap = Number(line.scrap_rate) || 0
@@ -662,8 +713,7 @@ const bomComponentRows = computed((): BomDisplayRow[] => {
       const fromProd = Number(productUnitPriceByCd.value[pc]) || 0
       const partUp = fromPart != null && fromPart > 0 ? fromPart : fromProd
       const nm = partNameByCd.value[pc] ?? productNameByCd.value[pc] ?? pc
-      const src =
-        fromPart != null && fromPart > 0 ? '部品マスタ（円換算）' : '製品マスタ標準単価'
+      const src = fromPart != null && fromPart > 0 ? '部品マスタ（円換算）' : '製品マスタ標準単価'
       rows.push({
         kind: 'part',
         code: pc,
@@ -686,7 +736,7 @@ const bomComponentRows = computed((): BomDisplayRow[] => {
 })
 
 const materialPartSubtotal = computed(() =>
-  bomComponentRows.value.reduce((acc, r) => acc + r.lineAmount, 0)
+  bomComponentRows.value.reduce((acc, r) => acc + r.lineAmount, 0),
 )
 
 const cumulativeStageRows = computed((): CumulativeStageRow[] => {
@@ -718,10 +768,13 @@ const cumulativeStageRows = computed((): CumulativeStageRow[] => {
     if (r.kind === 'material') {
       materialCostByStepNo.set(
         targetStepNo,
-        (materialCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0)
+        (materialCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0),
       )
     } else {
-      partCostByStepNo.set(targetStepNo, (partCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0))
+      partCostByStepNo.set(
+        targetStepNo,
+        (partCostByStepNo.get(targetStepNo) || 0) + (Number(r.lineAmount) || 0),
+      )
     }
   }
 
@@ -735,7 +788,7 @@ const cumulativeStageRows = computed((): CumulativeStageRow[] => {
       ...materialCostByStepNo.keys(),
       ...partCostByStepNo.keys(),
       ...feeStepKeys,
-    ])
+    ]),
   ).sort((a, b) => a - b)
 
   for (const st of allStepKeys) {
@@ -782,7 +835,7 @@ async function loadProductOptions() {
       .sort((a, b) => {
         const nameCmp = String(a.product_name || a.product_cd).localeCompare(
           String(b.product_name || b.product_cd),
-          'ja'
+          'ja',
         )
         if (nameCmp !== 0) return nameCmp
         return String(a.product_cd).localeCompare(String(b.product_cd), 'ja')
@@ -871,13 +924,15 @@ async function loadRouteForProduct(productCd: string) {
   if (!productCd?.trim()) return
   loadingRouteSteps.value = true
   try {
-    const productRes = await request.get(`/api/master/product/process/routes/${encodeURIComponent(productCd)}`)
+    const productRes = await request.get(
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}`,
+    )
     const product = (productRes as { data?: { route_cd?: string } })?.data ?? productRes
     const rc = (product as { route_cd?: string })?.route_cd || ''
     routeCd.value = rc
     if (!rc) return
     const stepsRes = await request.get(
-      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(rc)}`
+      `/api/master/product/process/routes/${encodeURIComponent(productCd)}/${encodeURIComponent(rc)}`,
     )
     const raw = (stepsRes as { data?: unknown })?.data ?? stepsRes
     const steps = Array.isArray(raw) ? (raw as ProductRouteStepLite[]) : []
@@ -915,7 +970,9 @@ async function loadBomForProduct(productCd: string) {
   loadingBom.value = true
   try {
     const res = await getBomHeaders({ parent_product_cd: productCd, page: 1, limit: 200 })
-    const d = (res as { data?: { list: { id: number; revision?: string; status?: string }[] } })?.data ?? res
+    const d =
+      (res as { data?: { list: { id: number; revision?: string; status?: string }[] } })?.data ??
+      res
     const list = (d as { list?: { id: number; revision?: string; status?: string }[] })?.list ?? []
     const active = list.find((h) => h.status === 'active')
     const header = active ?? list[0]
@@ -1286,7 +1343,11 @@ onBeforeUnmount(() => {
 .ppup-hero__glow {
   position: absolute;
   inset: 0;
-  background: radial-gradient(ellipse 120% 100% at 20% -40%, rgba(167, 139, 250, 0.45), transparent 55%);
+  background: radial-gradient(
+    ellipse 120% 100% at 20% -40%,
+    rgba(167, 139, 250, 0.45),
+    transparent 55%
+  );
   pointer-events: none;
 }
 

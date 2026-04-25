@@ -29,7 +29,9 @@
           <span>{{ t('master.supplier.searchFilter') }}</span>
         </div>
         <div class="filter-actions">
-          <el-button text @click="clearFilter" :icon="Refresh" class="clear-btn">{{ t('master.supplier.clear') }}</el-button>
+          <el-button text @click="clearFilter" :icon="Refresh" class="clear-btn">
+            {{ t('master.supplier.clear') }}
+          </el-button>
           <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-supplier-btn">
             {{ t('master.supplier.addSupplier') }}
           </el-button>
@@ -54,14 +56,21 @@
           </el-input>
         </div>
         <div class="filter-item">
-          <el-button type="primary" @click="fetchList" :icon="Search" class="search-btn">{{ t('master.common.search') }}</el-button>
+          <el-button type="primary" @click="fetchList" :icon="Search" class="search-btn">
+            {{ t('master.common.search') }}
+          </el-button>
         </div>
       </div>
     </div>
 
     <el-card class="table-card">
       <el-table :data="dataList" stripe highlight-current-row class="modern-table">
-        <el-table-column :label="t('master.supplier.supplierCD')" prop="supplier_cd" width="120" align="center">
+        <el-table-column
+          :label="t('master.supplier.supplierCD')"
+          prop="supplier_cd"
+          width="120"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="supplier-code-cell">
               <el-icon class="code-icon"><OfficeBuilding /></el-icon>
@@ -69,15 +78,44 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="t('master.supplier.supplierName')" prop="supplier_name" min-width="180" show-overflow-tooltip />
-        <el-table-column :label="t('master.supplier.contactPerson')" prop="contact_person" width="120" show-overflow-tooltip />
-        <el-table-column :label="t('master.supplier.phone')" prop="phone" width="150" show-overflow-tooltip />
-        <el-table-column :label="t('master.supplier.email')" prop="email" min-width="200" show-overflow-tooltip />
-        <el-table-column :label="t('master.common.actions')" width="140" fixed="right" align="center">
+        <el-table-column
+          :label="t('master.supplier.supplierName')"
+          prop="supplier_name"
+          min-width="180"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          :label="t('master.supplier.contactPerson')"
+          prop="contact_person"
+          width="120"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          :label="t('master.supplier.phone')"
+          prop="phone"
+          width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          :label="t('master.supplier.email')"
+          prop="email"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          :label="t('master.common.actions')"
+          width="140"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="action-buttons-table">
-              <el-button size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">{{ t('master.supplier.edit') }}</el-button>
-              <el-button size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">{{ t('master.supplier.delete') }}</el-button>
+              <el-button size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">
+                {{ t('master.supplier.edit') }}
+              </el-button>
+              <el-button size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">
+                {{ t('master.supplier.delete') }}
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -109,7 +147,15 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { Plus, OfficeBuilding, Filter, Refresh, Search, Edit, Delete } from '@element-plus/icons-vue'
+import {
+  Plus,
+  OfficeBuilding,
+  Filter,
+  Refresh,
+  Search,
+  Edit,
+  Delete,
+} from '@element-plus/icons-vue'
 import { getSupplierList, deleteSupplier } from '@/api/master/supplierMaster'
 import type { Supplier } from '@/types/master'
 import SupplierEditDialog from './SupplierEditDialog.vue'
@@ -154,11 +200,15 @@ const handleEdit = (row: Supplier) => {
 
 const handleDelete = async (row: Supplier) => {
   try {
-    await ElMessageBox.confirm(t('master.supplier.confirmDelete'), t('common.confirm'), { type: 'warning' })
+    await ElMessageBox.confirm(t('master.supplier.confirmDelete'), t('common.confirm'), {
+      type: 'warning',
+    })
     await deleteSupplier(row.id!)
     ElMessage.success(t('master.common.deleteSuccess'))
     fetchList()
-  } catch {}
+  } catch {
+    void 0
+  }
 }
 
 onMounted(() => {

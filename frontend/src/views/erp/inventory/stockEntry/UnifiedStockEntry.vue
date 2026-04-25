@@ -289,14 +289,7 @@
               <el-table-column prop="stock_type" label="種別" width="70" align="center">
                 <template #default="scope">
                   <el-tag
-                    :type="
-                      getStockTypeTagType(scope.row.stock_type) as
-                        | 'success'
-                        | 'warning'
-                        | 'primary'
-                        | 'info'
-                        | 'danger'
-                    "
+                    :type="getStockTypeTagType(scope.row.stock_type) as any"
                     effect="light"
                     size="small"
                     round
@@ -317,14 +310,7 @@
               <el-table-column prop="transaction_type" label="操作" width="70">
                 <template #default="scope">
                   <el-tag
-                    :type="
-                      getTransactionTypeTagType(scope.row.transaction_type) as
-                        | 'success'
-                        | 'warning'
-                        | 'primary'
-                        | 'info'
-                        | 'danger'
-                    "
+                    :type="getTransactionTypeTagType(scope.row.transaction_type) as any"
                     effect="dark"
                     size="small"
                     round

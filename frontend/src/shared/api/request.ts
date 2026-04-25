@@ -56,7 +56,11 @@ service.interceptors.request.use(
     }
     const userStore = useUserStore()
     const token = userStore.token
-    if (token) {
+    // ログインはボディ認証のみ。古い Bearer が付くと一部ゲートウェイで 401 になるため付与しない
+    const path = (config.url || '').split('?')[0]
+    const isAuthLogin = path.endsWith('/api/auth/login') || path === 'api/auth/login'
+
+    if (token && !isAuthLogin) {
       if (isTokenExpired(token)) {
         ElMessage.error('トークンの有効期限が切れました。再度ログインしてください。')
         userStore.clearLocalSession()

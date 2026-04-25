@@ -39,15 +39,36 @@
       </template>
       <el-form :inline="true" :model="filters" class="filter-form">
         <el-form-item label="外注先">
-          <el-select v-model="filters.supplier" placeholder="選択" clearable filterable style="width: 180px">
-            <el-option v-for="s in supplierOptions" :key="s.value" :label="s.label" :value="s.value" />
+          <el-select
+            v-model="filters.supplier"
+            placeholder="選択"
+            clearable
+            filterable
+            style="width: 180px"
+          >
+            <el-option
+              v-for="s in supplierOptions"
+              :key="s.value"
+              :label="s.label"
+              :value="s.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="材料">
-          <el-input v-model="filters.materialCode" placeholder="材料コード" clearable style="width: 130px" />
+          <el-input
+            v-model="filters.materialCode"
+            placeholder="材料コード"
+            clearable
+            style="width: 130px"
+          />
         </el-form-item>
         <el-form-item label="在庫状況">
-          <el-select v-model="filters.stockStatus" placeholder="選択" clearable style="width: 120px">
+          <el-select
+            v-model="filters.stockStatus"
+            placeholder="選択"
+            clearable
+            style="width: 120px"
+          >
             <el-option label="正常" value="normal" />
             <el-option label="僅少" value="low" />
             <el-option label="なし" value="empty" />
@@ -55,10 +76,12 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch" :loading="loading">
-            <el-icon><Search /></el-icon>検索
+            <el-icon><Search /></el-icon>
+            検索
           </el-button>
           <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>リセット
+            <el-icon><Refresh /></el-icon>
+            リセット
           </el-button>
         </el-form-item>
       </el-form>
@@ -68,10 +91,12 @@
     <div class="action-bar">
       <div class="left-actions">
         <el-button type="warning" @click="exportData">
-          <el-icon><Download /></el-icon>Excel出力
+          <el-icon><Download /></el-icon>
+          Excel出力
         </el-button>
         <el-button type="info" @click="refreshStock">
-          <el-icon><Refresh /></el-icon>在庫更新
+          <el-icon><Refresh /></el-icon>
+          在庫更新
         </el-button>
       </div>
       <div class="right-actions">
@@ -84,9 +109,9 @@
 
     <!-- 外注先別在庫カード -->
     <div class="supplier-cards">
-      <el-card 
-        v-for="supplier in filteredSuppliers" 
-        :key="supplier.id" 
+      <el-card
+        v-for="supplier in filteredSuppliers"
+        :key="supplier.id"
         class="supplier-card"
         :class="{ 'has-warning': supplier.lowStockItems > 0 }"
       >
@@ -99,19 +124,20 @@
             <div class="supplier-badges">
               <el-tag type="primary" size="small">{{ supplier.totalItems }}種</el-tag>
               <el-tag v-if="supplier.lowStockItems > 0" type="warning" size="small">
-                <el-icon><Warning /></el-icon>{{ supplier.lowStockItems }}
+                <el-icon><Warning /></el-icon>
+                {{ supplier.lowStockItems }}
               </el-tag>
             </div>
           </div>
         </template>
-        <el-table 
-          :data="supplier.materials" 
-          size="small" 
-          border
-          :row-class-name="getRowClassName"
-        >
+        <el-table :data="supplier.materials" size="small" border :row-class-name="getRowClassName">
           <el-table-column prop="materialCode" label="材料コード" width="110" />
-          <el-table-column prop="materialName" label="材料名" min-width="120" show-overflow-tooltip />
+          <el-table-column
+            prop="materialName"
+            label="材料名"
+            min-width="120"
+            show-overflow-tooltip
+          />
           <el-table-column prop="spec" label="規格" width="100" />
           <el-table-column prop="issuedQty" label="支給累計" width="90" align="right">
             <template #default="{ row }">
@@ -139,7 +165,8 @@
           <el-table-column label="操作" width="80" align="center">
             <template #default="{ row }">
               <el-button type="primary" size="small" link @click="viewHistory(supplier, row)">
-                <el-icon><View /></el-icon>履歴
+                <el-icon><View /></el-icon>
+                履歴
               </el-button>
             </template>
           </el-table-column>
@@ -192,7 +219,14 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Search, Refresh, Download, Box, OfficeBuilding, Warning, Upload, View
+  Search,
+  Refresh,
+  Download,
+  Box,
+  OfficeBuilding,
+  Warning,
+  Upload,
+  View,
 } from '@element-plus/icons-vue'
 
 interface MaterialStock {
@@ -234,7 +268,7 @@ const historyData = ref<HistoryItem[]>([])
 const filters = reactive({
   supplier: '',
   materialCode: '',
-  stockStatus: ''
+  stockStatus: '',
 })
 
 const supplierOptions = ref([
@@ -253,10 +287,37 @@ const supplierStocks = ref<SupplierStock[]>([
     totalIssuedWeight: 1250,
     currentStockWeight: 320,
     materials: [
-      { materialCode: 'M-001', materialName: 'SUS304丸棒', spec: 'φ10x1000', issuedQty: 500, usedQty: 420, stockQty: 80, unit: '本', minStock: 100 },
-      { materialCode: 'M-002', materialName: 'SUS304板材', spec: 't2.0x1000x2000', issuedQty: 100, usedQty: 65, stockQty: 35, unit: '枚', minStock: 20 },
-      { materialCode: 'M-003', materialName: 'SUS316角パイプ', spec: '30x30x2.0', issuedQty: 200, usedQty: 180, stockQty: 20, unit: '本', minStock: 50 },
-    ]
+      {
+        materialCode: 'M-001',
+        materialName: 'SUS304丸棒',
+        spec: 'φ10x1000',
+        issuedQty: 500,
+        usedQty: 420,
+        stockQty: 80,
+        unit: '本',
+        minStock: 100,
+      },
+      {
+        materialCode: 'M-002',
+        materialName: 'SUS304板材',
+        spec: 't2.0x1000x2000',
+        issuedQty: 100,
+        usedQty: 65,
+        stockQty: 35,
+        unit: '枚',
+        minStock: 20,
+      },
+      {
+        materialCode: 'M-003',
+        materialName: 'SUS316角パイプ',
+        spec: '30x30x2.0',
+        issuedQty: 200,
+        usedQty: 180,
+        stockQty: 20,
+        unit: '本',
+        minStock: 50,
+      },
+    ],
   },
   {
     id: 2,
@@ -266,9 +327,27 @@ const supplierStocks = ref<SupplierStock[]>([
     totalIssuedWeight: 5800,
     currentStockWeight: 1520,
     materials: [
-      { materialCode: 'M-004', materialName: 'SS400板材', spec: 't3.2x1219x2438', issuedQty: 150, usedQty: 100, stockQty: 50, unit: '枚', minStock: 30 },
-      { materialCode: 'M-005', materialName: 'SPHC-P', spec: 't1.6x1219x2438', issuedQty: 80, usedQty: 40, stockQty: 40, unit: '枚', minStock: 20 },
-    ]
+      {
+        materialCode: 'M-004',
+        materialName: 'SS400板材',
+        spec: 't3.2x1219x2438',
+        issuedQty: 150,
+        usedQty: 100,
+        stockQty: 50,
+        unit: '枚',
+        minStock: 30,
+      },
+      {
+        materialCode: 'M-005',
+        materialName: 'SPHC-P',
+        spec: 't1.6x1219x2438',
+        issuedQty: 80,
+        usedQty: 40,
+        stockQty: 40,
+        unit: '枚',
+        minStock: 20,
+      },
+    ],
   },
   {
     id: 3,
@@ -278,31 +357,53 @@ const supplierStocks = ref<SupplierStock[]>([
     totalIssuedWeight: 890,
     currentStockWeight: 180,
     materials: [
-      { materialCode: 'M-006', materialName: 'A5052アルミ板', spec: 't3.0x1000x2000', issuedQty: 60, usedQty: 55, stockQty: 5, unit: '枚', minStock: 15 },
-      { materialCode: 'M-007', materialName: 'C1100銅板', spec: 't1.0x365x1200', issuedQty: 30, usedQty: 10, stockQty: 20, unit: '枚', minStock: 10 },
-    ]
+      {
+        materialCode: 'M-006',
+        materialName: 'A5052アルミ板',
+        spec: 't3.0x1000x2000',
+        issuedQty: 60,
+        usedQty: 55,
+        stockQty: 5,
+        unit: '枚',
+        minStock: 15,
+      },
+      {
+        materialCode: 'M-007',
+        materialName: 'C1100銅板',
+        spec: 't1.0x365x1200',
+        issuedQty: 30,
+        usedQty: 10,
+        stockQty: 20,
+        unit: '枚',
+        minStock: 10,
+      },
+    ],
   },
 ])
 
 const supplierCount = computed(() => supplierStocks.value.length)
 const materialCount = computed(() => supplierStocks.value.reduce((sum, s) => sum + s.totalItems, 0))
-const lowStockCount = computed(() => supplierStocks.value.reduce((sum, s) => sum + s.lowStockItems, 0))
+const lowStockCount = computed(() =>
+  supplierStocks.value.reduce((sum, s) => sum + s.lowStockItems, 0),
+)
 
 const filteredSuppliers = computed(() => {
   let result = supplierStocks.value
-  if (filters.supplier) {
-    result = result.filter(s => s.id === filters.supplier)
+  if (filters.supplier !== '' && filters.supplier != null) {
+    result = result.filter((s) => String(s.id) === String(filters.supplier))
   }
   if (filters.stockStatus) {
-    result = result.map(s => ({
-      ...s,
-      materials: s.materials.filter(m => {
-        if (filters.stockStatus === 'low') return m.stockQty > 0 && m.stockQty < m.minStock
-        if (filters.stockStatus === 'empty') return m.stockQty === 0
-        if (filters.stockStatus === 'normal') return m.stockQty >= m.minStock
-        return true
-      })
-    })).filter(s => s.materials.length > 0)
+    result = result
+      .map((s) => ({
+        ...s,
+        materials: s.materials.filter((m) => {
+          if (filters.stockStatus === 'low') return m.stockQty > 0 && m.stockQty < m.minStock
+          if (filters.stockStatus === 'empty') return m.stockQty === 0
+          if (filters.stockStatus === 'normal') return m.stockQty >= m.minStock
+          return true
+        }),
+      }))
+      .filter((s) => s.materials.length > 0)
   }
   return result
 })
@@ -334,7 +435,7 @@ const getStockStatusLabel = (row: MaterialStock) => {
 const handleSearch = async () => {
   loading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
   } finally {
     loading.value = false
   }
@@ -348,10 +449,42 @@ const resetFilters = () => {
 const viewHistory = (supplier: SupplierStock, material: MaterialStock) => {
   historyTitle.value = `${supplier.name} - ${material.materialCode} 履歴`
   historyData.value = [
-    { date: '2025-12-03', type: 'issue', orderNo: 'MI-2025-001', quantity: 100, stockAfter: 80, operator: '田中', remarks: '' },
-    { date: '2025-12-02', type: 'usage', orderNo: 'PO-2025-001', quantity: 50, stockAfter: -20, operator: '-', remarks: '納品完了' },
-    { date: '2025-12-01', type: 'issue', orderNo: 'MI-2025-000', quantity: 200, stockAfter: 30, operator: '鈴木', remarks: '' },
-    { date: '2025-11-28', type: 'usage', orderNo: 'PO-2025-000', quantity: 170, stockAfter: -170, operator: '-', remarks: '' },
+    {
+      date: '2025-12-03',
+      type: 'issue',
+      orderNo: 'MI-2025-001',
+      quantity: 100,
+      stockAfter: 80,
+      operator: '田中',
+      remarks: '',
+    },
+    {
+      date: '2025-12-02',
+      type: 'usage',
+      orderNo: 'PO-2025-001',
+      quantity: 50,
+      stockAfter: -20,
+      operator: '-',
+      remarks: '納品完了',
+    },
+    {
+      date: '2025-12-01',
+      type: 'issue',
+      orderNo: 'MI-2025-000',
+      quantity: 200,
+      stockAfter: 30,
+      operator: '鈴木',
+      remarks: '',
+    },
+    {
+      date: '2025-11-28',
+      type: 'usage',
+      orderNo: 'PO-2025-000',
+      quantity: 170,
+      stockAfter: -170,
+      operator: '-',
+      remarks: '',
+    },
   ]
   historyVisible.value = true
 }
@@ -634,4 +767,3 @@ onMounted(() => {
   }
 }
 </style>
-

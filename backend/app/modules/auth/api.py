@@ -150,9 +150,10 @@ async def verify_token_and_get_user(
     # last_login_tokenがNULLの場合は、まだログインしていない（初回ログイン）とみなす
     # ただし、既にログインしている場合は、トークンが一致する必要がある
     if stored_token is not None and stored_token != request_token:
-        mismatch_msg = f"[SINGLE_DEVICE_MISMATCH] ❌ TOKEN MISMATCH! User {user.username} logged in on another device. Stored: {stored_token[:40]}..., Request: {request_token[:40]}..."
-        logger.error(mismatch_msg)
-        
+        logger.warning(
+            "[SINGLE_DEVICE_MISMATCH] user=%s logged in on another device", user.username
+        )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="このアカウントは他のデバイスでログインされています。再度ログインしてください。",
@@ -239,24 +240,16 @@ async def login(
     await db.commit()
     await db.refresh(user)
     
-    # デバッグ: トークンが正しく保存されたか確認
-    # 使用 logger 和 print 双重输出确保能看到
-    log_msg = f"[SINGLE_DEVICE_LOGIN] User {user.username} logged in. Token: {access_token[:50]}... Updated last_login_token"
-    logger.info(log_msg)
-    logger.warning(log_msg)  # 使用 WARNING 级别确保输出
-    print(log_msg, flush=True)
-    import sys
-    sys.stderr.write(log_msg + "\n")
-    sys.stderr.flush()
-    
+    logger.info("[SINGLE_DEVICE_LOGIN] user=%s logged in", user.username)
+
     # WebSocket経由で他のデバイスに通知（既にログインしていた場合）
     if old_token and old_token != access_token:
         try:
             from app.modules.websocket.api import notify_user_logged_in_elsewhere
             await notify_user_logged_in_elsewhere(user.username, access_token)
-            logger.info(f"[WebSocket] Notified other devices for user {user.username}")
+            logger.info("[WebSocket] Notified other devices for user %s", user.username)
         except Exception as e:
-            logger.error(f"[WebSocket] Failed to notify other devices: {e}")
+            logger.error("[WebSocket] Failed to notify other devices: %s", e)
     
     # 操作ログに記録（遅延 import で循環参照を回避、テーブル未作成時は無視）
     try:
@@ -325,7 +318,7 @@ async def logout(
         logger.warning("操作ログ記録に失敗しました（ログアウトは成功）: %s", e)
         await db.rollback()
 
-    logger.info(f"[SINGLE_DEVICE] User {current_user.username} logged out")
+    logger.info("[SINGLE_DEVICE] user=%s logged out", current_user.username)
     return {"message": "ログアウトしました"}
 
 

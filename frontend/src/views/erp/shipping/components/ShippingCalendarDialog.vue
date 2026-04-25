@@ -9,16 +9,22 @@
       <!-- 月份导航 -->
       <div class="month-navigation">
         <el-button-group>
-          <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn">前月</el-button>
+          <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn">
+            前月
+          </el-button>
           <el-button @click="goToCurrentMonth" class="current-month-btn">今月</el-button>
           <el-button @click="nextMonth" :icon="ArrowRight" class="next-month-btn">来月</el-button>
         </el-button-group>
         <div class="current-month">{{ formatMonthFromNumbers(calendarYear, calendarMonth) }}</div>
-        <el-button type="primary" :icon="Setting" @click="showGroupManager = true">グループ管理</el-button>
+        <el-button type="primary" :icon="Setting" @click="showGroupManager = true">
+          グループ管理
+        </el-button>
       </div>
       <div v-if="!hasAnyShippingData" class="no-data-banner">
         <el-icon><Calendar /></el-icon>
-        <span>{{ formatMonthFromNumbers(calendarYear, calendarMonth) }} は出荷データがありません</span>
+        <span>
+          {{ formatMonthFromNumbers(calendarYear, calendarMonth) }} は出荷データがありません
+        </span>
       </div>
       <div class="calendar-grid">
         <div class="weekday-header">
@@ -30,7 +36,11 @@
             v-for="date in daysInMonth"
             :key="date"
             class="date-cell"
-            :class="{ today: isToday(date), weekend: isWeekend(date), 'has-data': hasShippingData(date) }"
+            :class="{
+              today: isToday(date),
+              weekend: isWeekend(date),
+              'has-data': hasShippingData(date),
+            }"
           >
             <div class="date-number">{{ date }}</div>
             <div class="print-buttons" v-if="hasShippingData(date)">
@@ -39,14 +49,20 @@
                 :key="group.id || groupIndex"
                 v-show="!isList || isAllowedGroupForList(group)"
                 class="group-button-wrapper"
-                :class="{ 'has-data': hasGroupData(date, groupIndex), 'is-printed': isPrinted(date, groupIndex) }"
+                :class="{
+                  'has-data': hasGroupData(date, groupIndex),
+                  'is-printed': isPrinted(date, groupIndex),
+                }"
               >
                 <el-button
                   :type="getButtonType(date, groupIndex)"
                   size="small"
                   @click="handleGroupPrint(date, groupIndex)"
                   class="group-button"
-                  :class="{ 'is-printed': isPrinted(date, groupIndex), [`group-${groupIndex}`]: true }"
+                  :class="{
+                    'is-printed': isPrinted(date, groupIndex),
+                    [`group-${groupIndex}`]: true,
+                  }"
                 >
                   <div class="button-content">
                     <span class="button-text">{{ stripReportPrefix(group.groupName) }}</span>
@@ -83,9 +99,9 @@
       <!-- 月份导航 -->
       <div class="month-navigation">
         <el-button-group>
-          <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn"
-            >前月</el-button
-          >
+          <el-button @click="previousMonth" :icon="ArrowLeft" class="prev-month-btn">
+            前月
+          </el-button>
           <el-button @click="goToCurrentMonth" class="current-month-btn">今月</el-button>
           <el-button @click="nextMonth" :icon="ArrowRight" class="next-month-btn">来月</el-button>
         </el-button-group>
@@ -100,7 +116,9 @@
       <!-- 无数据时的提示条（不隐藏日历，保证每月都能选择/查看） -->
       <div v-if="!hasAnyShippingData" class="no-data-banner">
         <el-icon><Calendar /></el-icon>
-        <span>{{ formatMonthFromNumbers(calendarYear, calendarMonth) }} は出荷データがありません</span>
+        <span>
+          {{ formatMonthFromNumbers(calendarYear, calendarMonth) }} は出荷データがありません
+        </span>
       </div>
 
       <!-- 日历网格：始终显示，方便选择任意月份（含 2 月等无数据月份） -->
@@ -196,14 +214,14 @@
       </div>
     </template>
     <div ref="printContent" class="print-content">
-        <component
-          :is="printComponent"
-          v-if="printData && printData.length > 0"
-          :data="printData"
-          :filters="printFilters"
-        />
-        <div v-else class="no-data-message">該当するデータがありません</div>
-      </div>
+      <component
+        :is="printComponent"
+        v-if="printData && printData.length > 0"
+        :data="printData"
+        :filters="printFilters"
+      />
+      <div v-else class="no-data-message">該当するデータがありません</div>
+    </div>
   </el-dialog>
 
   <!-- 隐藏的打印容器，用于直接打印 -->
@@ -296,7 +314,8 @@ const getJstYearMonth = (date) => {
   })
   const parts = formatter.formatToParts(date)
   const year = parseInt(parts.find((p) => p.type === 'year')?.value ?? date.getFullYear(), 10)
-  const month = (parseInt(parts.find((p) => p.type === 'month')?.value ?? date.getMonth() + 1, 10) - 1)
+  const month =
+    parseInt(parts.find((p) => p.type === 'month')?.value ?? date.getMonth() + 1, 10) - 1
   return { year, month }
 }
 
@@ -446,7 +465,7 @@ onMounted(async () => {
         console.log('🔧 测试日期格式修复...')
         const testDates = ['2025-1-8', '2025-01-08', '2025-1-15', '2025-01-15']
         testDates.forEach((dateStr) => {
-          const dateParts = dateStr.split(/[-\/]/)
+          const dateParts = dateStr.split(/[-/]/)
           if (dateParts.length === 3) {
             const year = dateParts[0]
             const month = dateParts[1].padStart(2, '0')
@@ -538,25 +557,23 @@ watch(
   { immediate: false },
 )
 
-watch(
-  [calendarYear, calendarMonth],
-  async () => {
-    console.log('月が変更されました:', formatMonthFromNumbers(calendarYear.value, calendarMonth.value))
-    await fetchMonthData()
-    // 确保分组配置存在后再加载打印历史
-    if (destinationGroups.value && destinationGroups.value.length > 0) {
-      await loadPrintHistory()
-    }
-  },
-)
+watch([calendarYear, calendarMonth], async () => {
+  console.log(
+    '月が変更されました:',
+    formatMonthFromNumbers(calendarYear.value, calendarMonth.value),
+  )
+  await fetchMonthData()
+  // 确保分组配置存在后再加载打印历史
+  if (destinationGroups.value && destinationGroups.value.length > 0) {
+    await loadPrintHistory()
+  }
+})
 
 // 加载分组配置
 async function loadDestinationGroups() {
   try {
     console.log('🔄 分組配置を読み込み中...')
-    const response = await request.get(
-      `/api/shipping/destination-groups/${groupsPageKey.value}`,
-    )
+    const response = await request.get(`/api/shipping/destination-groups/${groupsPageKey.value}`)
     console.log('📋 分組配置API応答:', response)
 
     if (Array.isArray(response)) {
@@ -609,13 +626,9 @@ async function fetchMonthData() {
       data = response
       console.log('✅ 直接配列形式でデータを取得:', data.length, '件')
     } else if (response && Array.isArray(response.data)) {
-      // 格式2: { data: [...] }
+      // 格式2/3: { data: [...] } または { success: true, data: [...] }
       data = response.data
-      console.log('✅ dataプロパティでデータを取得:', data.length, '件')
-    } else if (response && response.success === true && Array.isArray(response.data)) {
-      // 格式3: { success: true, data: [...] }
-      data = response.data
-      console.log('✅ success形式でデータを取得:', data.length, '件')
+      console.log('✅ data / success 形式でデータを取得:', data.length, '件')
     } else {
       // 未知的响应格式
       console.warn('⚠️ 未知の応答形式:', response)
@@ -705,9 +718,9 @@ async function loadPrintHistory() {
         if (record.report_title && record.status === '成功') {
           // 解析 report_title：新格式 "2025-01-08 鈴鹿便"，旧格式 "出荷報告書カレンダー - 2025-1-8 鈴鹿便"
           const titleMatch =
-            record.report_title.match(/^(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\s+(.+)$/) ||
+            record.report_title.match(/^(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s+(.+)$/) ||
             record.report_title.match(
-              /出荷報告書カレンダー\s*-\s*(\d{4}[-\/]\d{1,2}[-\/]\d{1,2})\s+(.+)/,
+              /出荷報告書カレンダー\s*-\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s+(.+)/,
             )
 
           if (titleMatch) {
@@ -717,7 +730,7 @@ async function loadPrintHistory() {
             console.log(`📅 解析した日付: "${dateStr}", グループ名: "${groupName}"`)
 
             // 将日期格式标准化为 YYYY-MM-DD
-            const dateParts = dateStr.split(/[-\/]/)
+            const dateParts = dateStr.split(/[-/]/)
             if (dateParts.length === 3) {
               const year = dateParts[0]
               const month = dateParts[1].padStart(2, '0')
@@ -875,10 +888,16 @@ function goToCurrentMonth() {
 function isToday(date) {
   const todayJst = getJstYearMonth(getJapanDate())
   const todayDay = parseInt(
-    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', day: '2-digit' }).format(getJapanDate()),
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', day: '2-digit' }).format(
+      getJapanDate(),
+    ),
     10,
   )
-  return todayJst.year === calendarYear.value && todayJst.month === calendarMonth.value && todayDay === date
+  return (
+    todayJst.year === calendarYear.value &&
+    todayJst.month === calendarMonth.value &&
+    todayDay === date
+  )
 }
 
 function isWeekend(date) {
@@ -1463,7 +1482,12 @@ function handleClose() {
   padding: 10px 12px;
   background: #f1f5f9;
   min-height: 380px;
-  font-family: 'Helvetica Neue', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'Helvetica Neue',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
 }
 
 .month-navigation {

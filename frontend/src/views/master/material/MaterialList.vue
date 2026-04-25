@@ -39,13 +39,15 @@
           <span>{{ t('master.material.searchFilter') }}</span>
         </div>
         <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">{{ t('master.material.clear') }}</el-button>
-          <el-button text @click="showColumnSettings" :icon="Setting" class="column-settings-btn"
-            >{{ t('master.material.columnSettings') }}</el-button
-          >
-          <el-button text @click="showPrintSettings" :icon="Printer" class="print-btn"
-            >{{ t('master.material.print') }}</el-button
-          >
+          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
+            {{ t('master.material.clear') }}
+          </el-button>
+          <el-button text @click="showColumnSettings" :icon="Setting" class="column-settings-btn">
+            {{ t('master.material.columnSettings') }}
+          </el-button>
+          <el-button text @click="showPrintSettings" :icon="Printer" class="print-btn">
+            {{ t('master.material.print') }}
+          </el-button>
           <el-button
             type="warning"
             @click="generateAndPrintQRCodes"
@@ -73,9 +75,9 @@
           >
             単価計算
           </el-button>
-          <el-button type="primary" @click="openForm()" :icon="Plus" class="add-material-btn"
-            >{{ t('master.material.addMaterial') }}</el-button
-          >
+          <el-button type="primary" @click="openForm()" :icon="Plus" class="add-material-btn">
+            {{ t('master.material.addMaterial') }}
+          </el-button>
         </div>
       </div>
 
@@ -103,9 +105,10 @@
         </div>
         <!-- 状态 -->
         <div class="filter-item">
-          <label class="filter-label"
-            ><el-icon> <CircleCheck /> </el-icon>状態</label
-          >
+          <label class="filter-label">
+            <el-icon><CircleCheck /></el-icon>
+            状態
+          </label>
           <el-select
             v-model="filters.status"
             placeholder="全て"
@@ -125,9 +128,10 @@
         </div>
         <!-- 材料种类 -->
         <div class="filter-item">
-          <label class="filter-label"
-            ><el-icon> <Management /> </el-icon>材料種類</label
-          >
+          <label class="filter-label">
+            <el-icon><Management /></el-icon>
+            材料種類
+          </label>
           <el-select
             v-model="filters.material_type"
             placeholder="全て"
@@ -135,7 +139,7 @@
             @change="handleFilter"
             class="filter-input"
           >
-            　<el-option label="鋼管" value="鋼管" />
+            <el-option label="鋼管" value="鋼管" />
             <el-option label="鋼材" value="鋼材" />
             <el-option label="樹脂" value="樹脂" />
             <el-option label="アルミ" value="アルミ" />
@@ -144,9 +148,10 @@
         </div>
         <!-- 支给区分 -->
         <div class="filter-item">
-          <label class="filter-label"
-            ><el-icon> <Tickets /> </el-icon>支給区分</label
-          >
+          <label class="filter-label">
+            <el-icon><Tickets /></el-icon>
+            支給区分
+          </label>
           <el-select
             v-model="filters.supply_classification"
             placeholder="全て"
@@ -161,9 +166,10 @@
         </div>
         <!-- 用途 -->
         <div class="filter-item">
-          <label class="filter-label"
-            ><el-icon> <Tools /> </el-icon>用途</label
-          >
+          <label class="filter-label">
+            <el-icon><Tools /></el-icon>
+            用途
+          </label>
           <el-select
             v-model="filters.usegae"
             placeholder="全て"
@@ -179,9 +185,10 @@
         </div>
         <!-- 保管場所 -->
         <div class="filter-item">
-          <label class="filter-label"
-            ><el-icon> <Location /> </el-icon>保管場所</label
-          >
+          <label class="filter-label">
+            <el-icon><Location /></el-icon>
+            保管場所
+          </label>
           <el-input
             v-model="filters.storage_location"
             placeholder="保管場所"
@@ -207,48 +214,54 @@
             @close="clearKeywordFilter"
             type="primary"
             size="small"
-            >検索: {{ filters.keyword }}</el-tag
           >
+            検索: {{ filters.keyword }}
+          </el-tag>
           <el-tag
             v-if="filters.status !== ''"
             closable
             @close="clearStatusFilter"
             type="info"
             size="small"
-            >状態: {{ filters.status == 1 ? '有効' : '無効' }}</el-tag
           >
+            状態: {{ filters.status == 1 ? '有効' : '無効' }}
+          </el-tag>
           <el-tag
             v-if="filters.material_type"
             closable
             @close="clearMaterialTypeFilter"
             type="success"
             size="small"
-            >種類: {{ filters.material_type }}</el-tag
           >
+            種類: {{ filters.material_type }}
+          </el-tag>
           <el-tag
             v-if="filters.supply_classification"
             closable
             @close="clearSupplyClassificationFilter"
             type="warning"
             size="small"
-            >支給: {{ filters.supply_classification }}</el-tag
           >
+            支給: {{ filters.supply_classification }}
+          </el-tag>
           <el-tag
             v-if="filters.usegae"
             closable
             @close="clearUsageFilter"
             type="danger"
             size="small"
-            >用途: {{ filters.usegae }}</el-tag
           >
+            用途: {{ filters.usegae }}
+          </el-tag>
           <el-tag
             v-if="filters.storage_location"
             closable
             @close="clearStorageLocationFilter"
             type="info"
             size="small"
-            >保管: {{ filters.storage_location }}</el-tag
           >
+            保管: {{ filters.storage_location }}
+          </el-tag>
         </div>
       </div>
     </div>
@@ -290,9 +303,9 @@
           align="center"
         >
           <template #default="{ row }">
-            <el-tag :type="getMaterialTypeColor(row.material_type)" size="small">{{
-              row.material_type
-            }}</el-tag>
+            <el-tag :type="getMaterialTypeColor(row.material_type)" size="small">
+              {{ row.material_type }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column
@@ -330,8 +343,9 @@
             <el-tag
               :type="row.supply_classification === '無償支給' ? 'success' : 'warning'"
               size="small"
-              >{{ row.supply_classification }}</el-tag
             >
+              {{ row.supply_classification }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column v-if="showUsage" prop="usegae" label="用途" width="90" align="center">
@@ -551,9 +565,9 @@
           <template #default="{ row }">
             <div class="action-buttons-table">
               <el-button size="small" type="primary" link @click="openForm(row)">編集</el-button>
-              <el-button size="small" type="danger" link @click="deleteMaterial(row.id)"
-                >削除</el-button
-              >
+              <el-button size="small" type="danger" link @click="deleteMaterial(row.id)">
+                削除
+              </el-button>
             </div>
           </template>
         </el-table-column>
@@ -1355,7 +1369,9 @@ async function deleteMaterial(id: number) {
     await deleteMaterialById(id)
     ElMessage.success('削除しました')
     fetchList()
-  } catch {}
+  } catch {
+    void 0
+  }
 }
 
 async function toggleStatus(row: Material) {
@@ -1738,8 +1754,7 @@ const exportToCSV = async () => {
       pageSize: 10000,
     })
 
-    const allMaterialsData: Material[] =
-      allDataResponse?.data?.list ?? allDataResponse?.list ?? []
+    const allMaterialsData: Material[] = allDataResponse?.data?.list ?? allDataResponse?.list ?? []
 
     // 应用其他筛选条件
     let filteredData = allMaterialsData
@@ -2046,8 +2061,13 @@ onMounted(fetchList)
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 .type-desc,

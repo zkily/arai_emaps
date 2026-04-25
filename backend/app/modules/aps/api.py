@@ -3569,6 +3569,101 @@ async def _sync_instruction_plans_from_aps_schedule(
         for r in ins_mc_res.mappings().all():
             ins_by_mc[str(r["management_code"])] = {"id": r["id"], "aps_batch_plan_id": r["aps_batch_plan_id"]}
 
+    # 旧データ互換:
+    # 以前の同期で aps_batch_plan_id が未設定の instruction_plans が残っていると、
+    # 合算でロット本数（production_lot_size）が変わった際に management_code が変化し、
+    # 同一ロットなのに新規 INSERT されて重複化しやすい。
+    # 同一キー（月/ライン/優先順/品番/lot_number）で孤児行を先に拾い、UPDATE で再利用する。
+    ins_orphan_by_lot: dict[str, dict] = {}
+    target_lot_numbers = [str(b["lot_number"]) for b in batches_instruction]
+    all_lot_numbers_for_lock = list(dict.fromkeys([*target_lot_numbers, *list(existing_bp_by_lot.keys())]))
+    def _norm_lot(v: Any) -> str:
+        s = str(v or "").strip()
+        s2 = s.lstrip("0")
+        return s2 if s2 else "0"
+
+    lot_numbers_for_lookup = tuple(target_lot_numbers)
+    if lot_numbers_for_lookup:
+        orphan_res = await db.execute(
+            text(
+                """
+                SELECT id, lot_number, aps_batch_plan_id
+                FROM instruction_plans
+                WHERE production_month = :production_month
+                  AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
+                  AND priority_order = :priority_order
+                  AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
+                  AND lot_number IN :lot_numbers
+                ORDER BY id DESC
+                """
+            ),
+            {
+                "production_month": production_month,
+                "production_line": str(production_line),
+                "priority_order": ps.order_no,
+                "product_cd": production_product_cd,
+                "lot_numbers": lot_numbers_for_lookup,
+            },
+        )
+        for r in orphan_res.mappings().all():
+            lot_key = str(r["lot_number"])
+            # aps_batch_plan_id が空の行だけを回収対象にする（既に紐づく行は ins_by_bid 側で更新）
+            if r.get("aps_batch_plan_id") is None and lot_key not in ins_orphan_by_lot:
+                ins_orphan_by_lot[lot_key] = {
+                    "id": r["id"],
+                    "aps_batch_plan_id": r["aps_batch_plan_id"],
+                }
+
+    # cutting_management に既に存在するロットは「上流着手済み」とみなし、
+    # management_code 変更（04-xx -> 06-xx 等）が起きても instruction_plans を新規作成/更新しない。
+    # これにより、既存切断指示との整合を維持する。
+    cutting_locked_lots: set[str] = set()
+    lot_norms_for_lock = {_norm_lot(x) for x in all_lot_numbers_for_lock}
+    lot_by_bid: dict[int, str] = {
+        int(bid): str(ln) for ln, bid in plan_id_by_lot.items() if bid is not None
+    }
+    # 1) aps_batch_plan_id 優先で lock 判定（最も安定）
+    if lot_by_bid:
+        bid_rows = tuple(sorted(lot_by_bid.keys()))
+        bid_lock_res = await db.execute(
+            text("SELECT DISTINCT aps_batch_plan_id FROM cutting_management WHERE aps_batch_plan_id IN :bids"),
+            {"bids": bid_rows},
+        )
+        for r in bid_lock_res.all():
+            bid = r[0]
+            if bid is None:
+                continue
+            lot = lot_by_bid.get(int(bid))
+            if lot is not None:
+                cutting_locked_lots.add(str(lot))
+
+    # 2) 旧データ互換: aps_batch_plan_id 未設定行は lot で lock 判定（ゼロ埋め差異を吸収）
+    if lot_norms_for_lock:
+        locked_res = await db.execute(
+            text(
+                """
+                SELECT DISTINCT lot_number
+                FROM cutting_management
+                WHERE production_month = :production_month
+                  AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
+                  AND priority_order = :priority_order
+                  AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
+                """
+            ),
+            {
+                "production_month": production_month,
+                "production_line": str(production_line),
+                "priority_order": ps.order_no,
+                "product_cd": production_product_cd,
+            },
+        )
+        for r in locked_res.all():
+            lot_raw = r[0]
+            if lot_raw is None:
+                continue
+            if _norm_lot(lot_raw) in lot_norms_for_lock:
+                cutting_locked_lots.add(str(lot_raw))
+
     _ip_update_sql = text(
         "UPDATE instruction_plans SET "
         "production_month=:production_month, production_line=:production_line, "
@@ -3586,6 +3681,8 @@ async def _sync_instruction_plans_from_aps_schedule(
 
     for idx, b in enumerate(batches_instruction):
         lot_number = b["lot_number"]
+        if str(lot_number) in cutting_locked_lots:
+            continue
         batch_planned_qty = int(b["planned_quantity"])
         start_dt = b["start_date"]
         end_dt = b["end_date"]
@@ -3634,6 +3731,13 @@ async def _sync_instruction_plans_from_aps_schedule(
             if conf_row and not conf_row.get("aps_batch_plan_id"):
                 continue
 
+            # 最後の兜底: 管理コードが変わっても同一ロット（lot_number）なら既存孤児行を再利用する
+            orphan_row = ins_orphan_by_lot.get(str(lot_number))
+            if orphan_row:
+                update_params["ins_id"] = orphan_row["id"]
+                await db.execute(_ip_update_sql, update_params)
+                continue
+
             await db.execute(
                 text(
                     """
@@ -3660,6 +3764,66 @@ async def _sync_instruction_plans_from_aps_schedule(
                 ),
                 update_params,
             )
+
+    # 減算同期:
+    # 本同期で対象外になった旧ロットは、未着手（cutting 未存在）のみ instruction_plans から削除する。
+    # 既に cutting に存在するロットは locking を維持し、履歴を保持する。
+    target_lot_norms = {_norm_lot(x) for x in target_lot_numbers}
+    locked_lot_norms = {_norm_lot(x) for x in cutting_locked_lots}
+    stale_lots_unlocked = [
+        lot for lot in plan_id_by_lot.keys()
+        if _norm_lot(lot) not in target_lot_norms and _norm_lot(lot) not in locked_lot_norms
+    ]
+    stale_bid_ids = [
+        int(plan_id_by_lot[lot]) for lot in stale_lots_unlocked
+        if plan_id_by_lot.get(lot) is not None
+    ]
+    if stale_bid_ids:
+        await db.execute(
+            text("DELETE FROM instruction_plans WHERE aps_batch_plan_id IN :bids"),
+            {"bids": tuple(stale_bid_ids)},
+        )
+
+    # aps_batch_plan_id を持たない旧孤児行も、同一 management_code のみ削除する（誤削除防止）。
+    if stale_lots_unlocked:
+        stale_orphan_mcs: list[str] = []
+        for lot in stale_lots_unlocked:
+            bp = existing_bp_by_lot.get(str(lot))
+            pls = int(getattr(bp, "production_lot_size", 0) or 0) if bp is not None else 0
+            if pls <= 0:
+                pls = int(production_lot_size_ip or 0)
+            stale_orphan_mcs.append(
+                _instruction_management_code(
+                    production_month=production_month,
+                    production_line=str(production_line),
+                    product_cd=production_product_cd,
+                    priority_order=ps.order_no,
+                    production_lot_size=pls,
+                    lot_number=str(lot),
+                )
+            )
+        stale_orphan_mcs = list(dict.fromkeys(stale_orphan_mcs))
+    if stale_lots_unlocked and stale_orphan_mcs:
+        await db.execute(
+            text(
+                """
+                DELETE FROM instruction_plans
+                WHERE production_month = :production_month
+                  AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
+                  AND priority_order = :priority_order
+                  AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
+                  AND aps_batch_plan_id IS NULL
+                  AND management_code IN :mcs
+                """
+            ),
+            {
+                "production_month": production_month,
+                "production_line": str(production_line),
+                "priority_order": ps.order_no,
+                "product_cd": production_product_cd,
+                "mcs": tuple(stale_orphan_mcs),
+            },
+        )
 
 
 def _schedule_to_out(ps: ProductionSchedule) -> ScheduleOut:

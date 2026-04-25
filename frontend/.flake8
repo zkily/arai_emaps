@@ -1,0 +1,9 @@
+# 誤って frontend 直下で flake8 を実行した場合に node_modules を掃除しないための最小設定
+[flake8]
+max-line-length = 100
+exclude =
+    .git,
+    __pycache__,
+    node_modules,
+    dist,
+    public

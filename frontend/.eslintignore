@@ -1,0 +1,8 @@
+node_modules
+dist
+.vite
+public
+src/auto-imports.d.ts
+src/components.d.ts
+*.min.js
+*.min.css

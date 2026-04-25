@@ -34,23 +34,34 @@
       <div class="filter-grid">
         <div class="filter-item">
           <label>{{ t('systemUser.user.keyword') }}</label>
-          <el-input 
-            v-model="searchForm.keyword" 
-            :placeholder="t('systemUser.user.keywordPlaceholder')" 
-            clearable 
+          <el-input
+            v-model="searchForm.keyword"
+            :placeholder="t('systemUser.user.keywordPlaceholder')"
+            clearable
             :prefix-icon="Search"
             size="default"
           />
         </div>
         <div class="filter-item">
           <label>{{ t('systemUser.user.department') }}</label>
-          <el-select v-model="searchForm.department_id" :placeholder="t('systemUser.user.all')" clearable size="default" style="width: 100%">
+          <el-select
+            v-model="searchForm.department_id"
+            :placeholder="t('systemUser.user.all')"
+            clearable
+            size="default"
+            style="width: 100%"
+          >
             <el-option v-for="d in departmentOptions" :key="d.id" :label="d.name" :value="d.id" />
           </el-select>
         </div>
         <div class="filter-item">
           <label>{{ t('systemUser.user.status') }}</label>
-          <el-select v-model="searchForm.status" :placeholder="t('systemUser.user.all')" clearable size="default">
+          <el-select
+            v-model="searchForm.status"
+            :placeholder="t('systemUser.user.all')"
+            clearable
+            size="default"
+          >
             <el-option :label="t('systemUser.user.statusActive')" value="active" />
             <el-option :label="t('systemUser.user.statusLocked')" value="locked" />
           </el-select>
@@ -60,16 +71,23 @@
         <el-button type="primary" :icon="Plus" @click="handleAdd" class="btn-add">
           <span>{{ t('systemUser.user.addUser') }}</span>
         </el-button>
-        <el-button :icon="Printer" @click="handlePrint" class="btn-print">{{ t('systemUser.user.print') }}</el-button>
+        <el-button :icon="Printer" @click="handlePrint" class="btn-print">
+          {{ t('systemUser.user.print') }}
+        </el-button>
       </div>
     </div>
 
     <!-- Enhanced Table Card -->
     <div class="table-card">
-      <el-table 
-        :data="userList" 
-        v-loading="loading" 
-        :header-cell-style="{ background: '#f8fafc', color: '#334155', fontWeight: '600', fontSize: '13px' }"
+      <el-table
+        :data="userList"
+        v-loading="loading"
+        :header-cell-style="{
+          background: '#f8fafc',
+          color: '#334155',
+          fontWeight: '600',
+          fontSize: '13px',
+        }"
         :row-class-name="tableRowClassName"
         border
         size="default"
@@ -79,7 +97,12 @@
             <span class="id-badge">{{ row.id }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="username" :label="t('systemUser.user.username')" width="130" align="center">
+        <el-table-column
+          prop="username"
+          :label="t('systemUser.user.username')"
+          width="130"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="user-cell">
               <div class="avatar-mini">{{ row.username.charAt(0).toUpperCase() }}</div>
@@ -87,13 +110,23 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="full_name" :label="t('systemUser.user.fullName')" width="100" align="center"/>
+        <el-table-column
+          prop="full_name"
+          :label="t('systemUser.user.fullName')"
+          width="100"
+          align="center"
+        />
         <el-table-column prop="email" :label="t('systemUser.user.email')" width="220">
           <template #default="{ row }">
             <span class="email-text">{{ row.email }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="department" :label="t('systemUser.user.department')" width="250" align="center">
+        <el-table-column
+          prop="department"
+          :label="t('systemUser.user.department')"
+          width="250"
+          align="center"
+        >
           <template #default="{ row }">
             <span class="dept-badge" v-if="row.department">{{ row.department }}</span>
             <span class="text-muted" v-else>—</span>
@@ -106,7 +139,12 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('systemUser.user.statusCol')" width="110" align="center">
+        <el-table-column
+          prop="status"
+          :label="t('systemUser.user.statusCol')"
+          width="110"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="status-indicator" :class="row.status">
               <span class="status-dot"></span>
@@ -114,9 +152,19 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="two_factor" :label="t('systemUser.user.twoFA')" width="70" align="center">
+        <el-table-column
+          prop="two_factor"
+          :label="t('systemUser.user.twoFA')"
+          width="70"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tooltip :content="row.two_factor ? t('systemUser.user.twoFAOn') : t('systemUser.user.twoFAOff')" placement="top">
+            <el-tooltip
+              :content="
+                row.two_factor ? t('systemUser.user.twoFAOn') : t('systemUser.user.twoFAOff')
+              "
+              placement="top"
+            >
               <div class="tfa-indicator" :class="{ enabled: row.two_factor }">
                 <el-icon :size="16">
                   <component :is="row.two_factor ? CircleCheck : CircleClose" />
@@ -125,30 +173,57 @@
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column prop="last_login" :label="t('systemUser.user.lastLogin')" min-width="180" align="center">
+        <el-table-column
+          prop="last_login"
+          :label="t('systemUser.user.lastLogin')"
+          min-width="180"
+          align="center"
+        >
           <template #default="{ row }">
             <span class="login-time">{{ row.last_login || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('systemUser.user.actions')" width="170" fixed="right" align="center">
+        <el-table-column
+          :label="t('systemUser.user.actions')"
+          width="170"
+          fixed="right"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="action-cell">
               <el-tooltip :content="t('systemUser.user.edit')" placement="top">
-                <el-button size="small" type="primary" circle :icon="Edit" @click="handleEdit(row)" />
+                <el-button
+                  size="small"
+                  type="primary"
+                  circle
+                  :icon="Edit"
+                  @click="handleEdit(row)"
+                />
               </el-tooltip>
-              <el-tooltip :content="row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')" placement="top">
-                <el-button 
+              <el-tooltip
+                :content="
+                  row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')
+                "
+                placement="top"
+              >
+                <el-button
                   v-if="row.status === 'locked' || row.id !== userStore.user?.id"
-                  size="small" 
-                  :type="row.status === 'locked' ? 'success' : 'warning'" 
-                  circle 
+                  size="small"
+                  :type="row.status === 'locked' ? 'success' : 'warning'"
+                  circle
                   :icon="row.status === 'locked' ? Unlock : Lock"
                   @click="handleToggleLock(row)"
                 />
                 <el-button v-else size="small" circle :icon="Lock" disabled class="btn-disabled" />
               </el-tooltip>
               <el-tooltip :content="t('systemUser.user.resetPwd')" placement="top">
-                <el-button size="small" type="info" circle :icon="Key" @click="handleResetPassword(row)" />
+                <el-button
+                  size="small"
+                  type="info"
+                  circle
+                  :icon="Key"
+                  @click="handleResetPassword(row)"
+                />
               </el-tooltip>
             </div>
           </template>
@@ -157,7 +232,9 @@
 
       <div class="table-footer">
         <div class="footer-info">
-          {{ t('systemUser.user.displayCount', { shown: userList.length, total: pagination.total }) }}
+          {{
+            t('systemUser.user.displayCount', { shown: userList.length, total: pagination.total })
+          }}
         </div>
         <el-pagination
           v-model:current-page="pagination.page"
@@ -174,39 +251,79 @@
     </div>
 
     <!-- Modern Dialog -->
-    <el-dialog 
-      v-model="dialogVisible" 
-      :title="dialogTitle" 
-      width="520px" 
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="520px"
       destroy-on-close
       class="modern-dialog"
       :close-on-click-modal="false"
     >
-      <el-form :model="userForm" :rules="formRules" ref="formRef" label-width="100px" label-position="left">
+      <el-form
+        :model="userForm"
+        :rules="formRules"
+        ref="formRef"
+        label-width="100px"
+        label-position="left"
+      >
         <el-form-item :label="t('systemUser.user.formUsername')" prop="username">
-          <el-input v-model="userForm.username" :placeholder="t('systemUser.user.formUsernamePlaceholder')" :disabled="isEdit" />
+          <el-input
+            v-model="userForm.username"
+            :placeholder="t('systemUser.user.formUsernamePlaceholder')"
+            :disabled="isEdit"
+          />
         </el-form-item>
         <el-form-item :label="t('systemUser.user.formFullName')" prop="full_name">
-          <el-input v-model="userForm.full_name" :placeholder="t('systemUser.user.formFullNamePlaceholder')" />
+          <el-input
+            v-model="userForm.full_name"
+            :placeholder="t('systemUser.user.formFullNamePlaceholder')"
+          />
         </el-form-item>
         <el-form-item :label="t('systemUser.user.formEmail')" prop="email">
-          <el-input v-model="userForm.email" type="email" :placeholder="t('systemUser.user.formEmailPlaceholder')" />
+          <el-input
+            v-model="userForm.email"
+            type="email"
+            :placeholder="t('systemUser.user.formEmailPlaceholder')"
+          />
         </el-form-item>
         <el-form-item :label="t('systemUser.user.formDept')" prop="department_id">
-          <el-select v-model="userForm.department_id" :placeholder="t('systemUser.user.formDeptPlaceholder')" clearable style="width: 100%">
-            <el-option v-for="org in departmentOptions" :key="org.id" :label="org.name" :value="org.id" />
+          <el-select
+            v-model="userForm.department_id"
+            :placeholder="t('systemUser.user.formDeptPlaceholder')"
+            clearable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="org in departmentOptions"
+              :key="org.id"
+              :label="org.name"
+              :value="org.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('systemUser.user.formRole')" prop="role_id">
-          <el-select v-model="userForm.role_id" :placeholder="t('systemUser.user.formRolePlaceholder')" style="width: 100%">
+          <el-select
+            v-model="userForm.role_id"
+            :placeholder="t('systemUser.user.formRolePlaceholder')"
+            style="width: 100%"
+          >
             <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('systemUser.user.form2FA')">
-          <el-switch v-model="userForm.two_factor_enabled" :active-text="t('systemUser.user.form2FAOn')" :inactive-text="t('systemUser.user.form2FAOff')" />
+          <el-switch
+            v-model="userForm.two_factor_enabled"
+            :active-text="t('systemUser.user.form2FAOn')"
+            :inactive-text="t('systemUser.user.form2FAOff')"
+          />
         </el-form-item>
         <el-form-item :label="t('systemUser.user.formPassword')" prop="password" v-if="!isEdit">
-          <el-input v-model="userForm.password" type="password" show-password :placeholder="t('systemUser.user.formPasswordPlaceholder')" />
+          <el-input
+            v-model="userForm.password"
+            type="password"
+            show-password
+            :placeholder="t('systemUser.user.formPasswordPlaceholder')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -258,7 +375,11 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="resetPwdVisible = false">{{ t('systemUser.user.cancel') }}</el-button>
-          <el-button type="primary" @click="handleResetPasswordSubmit" :loading="resetPwdSubmitting">
+          <el-button
+            type="primary"
+            @click="handleResetPasswordSubmit"
+            :loading="resetPwdSubmitting"
+          >
             {{ t('systemUser.user.update') }}
           </el-button>
         </div>
@@ -271,7 +392,19 @@
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, Plus, Printer, CircleCheck, CircleClose, User, Edit, Lock, Unlock, Key, Check } from '@element-plus/icons-vue'
+import {
+  Search,
+  Plus,
+  Printer,
+  CircleCheck,
+  CircleClose,
+  User,
+  Edit,
+  Lock,
+  Unlock,
+  Key,
+  Check,
+} from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
 import type { UserListItem, PaginatedUserResponse } from '@/api/system'
@@ -281,8 +414,8 @@ const { t } = useI18n()
 const userStore = useUserStore()
 
 // Computed stats for header
-const activeUserCount = computed(() => userList.value.filter(u => u.status === 'active').length)
-const lockedUserCount = computed(() => userList.value.filter(u => u.status === 'locked').length)
+const activeUserCount = computed(() => userList.value.filter((u) => u.status === 'active').length)
+const lockedUserCount = computed(() => userList.value.filter((u) => u.status === 'locked').length)
 
 // Table row class for hover effects
 const tableRowClassName = ({ row }: { row: UserListItem }) => {
@@ -359,17 +492,27 @@ const departmentOptions = ref<{ id: number; name: string }[]>([])
 
 const formRules = computed<FormRules>(() => ({
   username: [{ required: true, message: t('systemUser.user.validationUsername'), trigger: 'blur' }],
-  full_name: [{ required: true, message: t('systemUser.user.validationFullName'), trigger: 'blur' }],
+  full_name: [
+    { required: true, message: t('systemUser.user.validationFullName'), trigger: 'blur' },
+  ],
   email: [
     { required: true, message: t('systemUser.user.validationEmail'), trigger: 'blur' },
     { type: 'email', message: t('systemUser.user.validationEmailInvalid'), trigger: 'blur' },
   ],
   role_id: [{ required: true, message: t('systemUser.user.validationRole'), trigger: 'change' }],
-  ...(isEdit.value ? {} : { password: [{ required: true, message: t('systemUser.user.validationPassword'), trigger: 'blur' }] }),
+  ...(isEdit.value
+    ? {}
+    : {
+        password: [
+          { required: true, message: t('systemUser.user.validationPassword'), trigger: 'blur' },
+        ],
+      }),
 }))
 
 const userList = ref<UserListItem[]>([])
-const dialogTitle = computed(() => (isEdit.value ? t('systemUser.user.formEditTitle') : t('systemUser.user.formAddTitle')))
+const dialogTitle = computed(() =>
+  isEdit.value ? t('systemUser.user.formEditTitle') : t('systemUser.user.formAddTitle'),
+)
 
 type TagType = 'primary' | 'success' | 'warning' | 'danger' | 'info'
 const getRoleType = (role: string): TagType => {
@@ -384,7 +527,11 @@ const getRoleType = (role: string): TagType => {
   return types[role] || 'info'
 }
 const getStatusLabel = (status: string) => {
-  const keyMap: Record<string, string> = { active: 'statusActive', locked: 'statusLocked', inactive: 'statusInactive' }
+  const keyMap: Record<string, string> = {
+    active: 'statusActive',
+    locked: 'statusLocked',
+    inactive: 'statusInactive',
+  }
   const key = keyMap[status]
   return key ? t(`systemUser.user.${key}`) : status
 }
@@ -415,11 +562,14 @@ async function loadOptions() {
       systemApi.getOrganizations(),
     ])
     // request インターセプターが response.data を返すため、getRoles/getOrganizations は配列をそのまま返す
-    const roles = Array.isArray(rolesRes) ? rolesRes : (rolesRes as any)?.data ?? []
-    const orgs = Array.isArray(orgsRes) ? orgsRes : (orgsRes as any)?.data ?? []
+    const roles = Array.isArray(rolesRes) ? rolesRes : ((rolesRes as any)?.data ?? [])
+    const orgs = Array.isArray(orgsRes) ? orgsRes : ((orgsRes as any)?.data ?? [])
     roleOptions.value = roles.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name }))
     departmentOptions.value = orgs
-      .filter((o: { type: string }) => o.type === 'department' || o.type === 'site' || o.type === 'company')
+      .filter(
+        (o: { type: string }) =>
+          o.type === 'department' || o.type === 'site' || o.type === 'company',
+      )
       .map((o: { id: number; name: string }) => ({ id: o.id, name: o.name }))
   } catch (_) {
     roleOptions.value = []
@@ -460,7 +610,8 @@ const roleCodeToName = computed(() => ({
 const handleEdit = async (row: UserListItem) => {
   isEdit.value = true
   await loadOptions()
-  const roleName = roleCodeToName.value[row.role] || row.role
+  const roleMap = roleCodeToName.value as Record<string, string>
+  const roleName = roleMap[row.role] || row.role
   const matchedRole = roleOptions.value.find((r) => r.name === roleName)
   Object.assign(userForm, {
     id: row.id,
@@ -485,9 +636,10 @@ const handleToggleLock = async (row: UserListItem) => {
   const actionKey = row.status === 'locked' ? 'unlock' : 'lock'
   const action = row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')
   try {
-    const msg = row.status === 'locked'
-      ? t('systemUser.user.msgUnlockConfirm', { name: row.full_name || row.username })
-      : t('systemUser.user.msgLockConfirm', { name: row.full_name || row.username })
+    const msg =
+      row.status === 'locked'
+        ? t('systemUser.user.msgUnlockConfirm', { name: row.full_name || row.username })
+        : t('systemUser.user.msgLockConfirm', { name: row.full_name || row.username })
     await ElMessageBox.confirm(msg, t('common.confirm'), { type: 'warning' })
     if (row.status === 'locked') {
       await systemApi.unlockUser(row.id)
@@ -497,7 +649,8 @@ const handleToggleLock = async (row: UserListItem) => {
     ElMessage.success(t('systemUser.user.msgLockSuccess', { action }))
     fetchUsers()
   } catch (e: unknown) {
-    if (e !== 'cancel') ElMessage.error((e as any)?.response?.data?.detail || t('systemUser.user.msgResetError'))
+    if (e !== 'cancel')
+      ElMessage.error((e as any)?.response?.data?.detail || t('systemUser.user.msgResetError'))
   }
 }
 
@@ -514,7 +667,9 @@ const handleResetPasswordSubmit = async () => {
   await resetPwdFormRef.value.validate()
   resetPwdSubmitting.value = true
   try {
-    await systemApi.resetUserPassword(resetPwdUserId.value, { new_password: resetPwdForm.new_password })
+    await systemApi.resetUserPassword(resetPwdUserId.value, {
+      new_password: resetPwdForm.new_password,
+    })
     ElMessage.success(t('systemUser.user.msgResetSuccess'))
     resetPwdVisible.value = false
   } catch (e: any) {
@@ -561,7 +716,9 @@ const handlePrint = () => {
     r.two_factor ? t('systemUser.user.form2FAOn') : '—',
     r.last_login || '—',
   ])
-  const tableRows = body.map((cells) => `<tr>${cells.map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`).join('')
+  const tableRows = body
+    .map((cells) => `<tr>${cells.map((c) => `<td>${escapeHtml(String(c))}</td>`).join('')}</tr>`)
+    .join('')
   const headerRow = `<tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr>`
   const html = `
 <!DOCTYPE html>
@@ -628,8 +785,7 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (isEdit.value) {
-      const roleId =
-        userForm.role_id != null ? Number(userForm.role_id) : undefined
+      const roleId = userForm.role_id != null ? Number(userForm.role_id) : undefined
       await systemApi.updateUser(userForm.id, {
         email: userForm.email,
         full_name: userForm.full_name,
@@ -673,7 +829,7 @@ watch(
       fetchUsers()
     }, 300)
   },
-  { deep: true }
+  { deep: true },
 )
 
 onMounted(() => {
@@ -757,8 +913,12 @@ onMounted(() => {
   color: white;
 }
 
-.stat-value.active { color: #a5f3fc; }
-.stat-value.locked { color: #fcd34d; }
+.stat-value.active {
+  color: #a5f3fc;
+}
+.stat-value.locked {
+  color: #fcd34d;
+}
 
 .stat-label {
   font-size: 11px;
@@ -968,9 +1128,15 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.status-indicator.active { color: #16a34a; }
-.status-indicator.locked { color: #d97706; }
-.status-indicator.inactive { color: #64748b; }
+.status-indicator.active {
+  color: #16a34a;
+}
+.status-indicator.locked {
+  color: #d97706;
+}
+.status-indicator.inactive {
+  color: #64748b;
+}
 
 .status-dot {
   width: 8px;
@@ -996,8 +1162,13 @@ onMounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* 2FA Indicator */
@@ -1115,7 +1286,7 @@ onMounted(() => {
   .filter-grid {
     grid-template-columns: repeat(2, 1fr) auto;
   }
-  
+
   .header-stats {
     display: none;
   }
@@ -1125,30 +1296,30 @@ onMounted(() => {
   .user-list {
     padding: 12px;
   }
-  
+
   .page-header {
     flex-direction: column;
     gap: 12px;
     text-align: center;
   }
-  
+
   .header-content {
     flex-direction: column;
   }
-  
+
   .filter-card {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .toolbar-actions {
     justify-content: center;
   }
-  
+
   .table-footer {
     flex-direction: column;
     gap: 12px;

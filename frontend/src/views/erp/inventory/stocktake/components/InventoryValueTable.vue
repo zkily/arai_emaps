@@ -52,7 +52,6 @@
           prop="item_type"
           label="項目タイプ"
           width="100"
-
           v-if="columnSettings.item_type"
         >
           <template #default="{ row }">
@@ -199,7 +198,7 @@
         >
           <template #default="{ row }">
             <span v-if="row.unit_price == null" class="price-text">—</span>
-            <span v-else class="price-text"> ¥{{ formatNumber(row.unit_price, 2) }} </span>
+            <span v-else class="price-text">¥{{ formatNumber(row.unit_price, 2) }}</span>
           </template>
         </el-table-column>
 
@@ -256,7 +255,6 @@
             </span>
           </template>
         </el-table-column>
-
       </el-table>
     </div>
 
@@ -317,16 +315,10 @@
             <span v-if="detailData.total_value == null">—</span>
             <span v-else class="detail-value">¥{{ formatNumber(detailData.total_value) }}</span>
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="detailData.bundle_quantity != null"
-            label="束本数"
-          >
+          <el-descriptions-item v-if="detailData.bundle_quantity != null" label="束本数">
             {{ formatNumber(detailData.bundle_quantity, 0) }}
           </el-descriptions-item>
-          <el-descriptions-item
-            v-if="detailData.bundle_weight != null"
-            label="束重量(kg)"
-          >
+          <el-descriptions-item v-if="detailData.bundle_weight != null" label="束重量(kg)">
             {{ formatNumber(detailData.bundle_weight, 2) }}
           </el-descriptions-item>
           <el-descriptions-item label="棚卸日">
@@ -408,7 +400,7 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="showEditDialog = false">キャンセル</el-button>
-          <el-button type="primary" @click="savePrice" :loading="saving"> 保存 </el-button>
+          <el-button type="primary" @click="savePrice" :loading="saving">保存</el-button>
         </div>
       </template>
     </el-dialog>
@@ -432,7 +424,9 @@
               対象日 {{ materialPrintAsOfLabel }}
             </span>
           </div>
-          <span class="material-print-dialog__sub">数量・束本数(手入力)を編集すると金額が再計算されます</span>
+          <span class="material-print-dialog__sub">
+            数量・束本数(手入力)を編集すると金額が再計算されます
+          </span>
         </div>
       </template>
       <div v-loading="materialPrintLoading" class="material-print-root">
@@ -447,7 +441,12 @@
           >
             <el-table-column type="index" label="No." width="50" align="center" />
             <el-table-column prop="product_cd" label="材料CD" width="78" show-overflow-tooltip />
-            <el-table-column prop="product_name" label="材料名" min-width="120" show-overflow-tooltip />
+            <el-table-column
+              prop="product_name"
+              label="材料名"
+              min-width="120"
+              show-overflow-tooltip
+            />
             <el-table-column label="束本数" width="96" align="right">
               <template #default="{ row }">
                 {{ formatNumber(row.bundle_quantity, 0) }}
@@ -459,9 +458,7 @@
               </template>
             </el-table-column>
             <el-table-column label="単価(kg/円)" width="95" align="right">
-              <template #default="{ row }">
-                ¥{{ formatNumber(row.unit_price, 2) }}
-              </template>
+              <template #default="{ row }">¥{{ formatNumber(row.unit_price, 2) }}</template>
             </el-table-column>
             <el-table-column label="数量" width="108" align="center">
               <template #default="{ row }">
@@ -492,13 +489,17 @@
             </el-table-column>
             <el-table-column label="金額" width="112" align="right">
               <template #default="{ row }">
-                <span class="material-print-amount">¥{{ formatNumber(calcMaterialPrintAmount(row), 2) }}</span>
+                <span class="material-print-amount">
+                  ¥{{ formatNumber(calcMaterialPrintAmount(row), 2) }}
+                </span>
               </template>
             </el-table-column>
           </el-table>
           <div class="material-print-summary">
             <span class="material-print-summary__label">合計金額</span>
-            <strong class="material-print-summary__amt">¥{{ formatNumber(materialPrintTotalAmount, 2) }}</strong>
+            <strong class="material-print-summary__amt">
+              ¥{{ formatNumber(materialPrintTotalAmount, 2) }}
+            </strong>
           </div>
         </div>
       </div>
@@ -550,7 +551,9 @@
               対象日 {{ partPrintAsOfLabel }}
             </span>
           </div>
-          <span class="material-print-dialog__sub">数量・金額は実在庫データに基づきます（変更不可）</span>
+          <span class="material-print-dialog__sub">
+            数量・金額は実在庫データに基づきます（変更不可）
+          </span>
         </div>
       </template>
       <div v-loading="partPrintLoading" class="material-print-root">
@@ -561,28 +564,32 @@
           >
             <div v-for="grp in partPrintGrouped" :key="grp.kindKey" class="part-print-kind-block">
               <div class="part-print-kind-block__title">種別：{{ grp.kindDisplay }}</div>
-              <el-table
-                :data="grp.rows"
-                border
-                stripe
-                size="small"
-                class="material-print-table"
-              >
-                <el-table-column prop="product_cd" label="部品CD" width="100" show-overflow-tooltip />
-                <el-table-column prop="product_name" label="部品名" min-width="200" show-overflow-tooltip />
+              <el-table :data="grp.rows" border stripe size="small" class="material-print-table">
+                <el-table-column
+                  prop="product_cd"
+                  label="部品CD"
+                  width="100"
+                  show-overflow-tooltip
+                />
+                <el-table-column
+                  prop="product_name"
+                  label="部品名"
+                  min-width="200"
+                  show-overflow-tooltip
+                />
                 <el-table-column label="数量" width="96" align="right">
                   <template #default="{ row }">
                     <span class="quantity-text">{{ formatNumber(row.quantity, 0) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="単価" width="108" align="right">
-                  <template #default="{ row }">
-                    ¥{{ formatNumber(row.unit_price, 2) }}
-                  </template>
+                  <template #default="{ row }">¥{{ formatNumber(row.unit_price, 2) }}</template>
                 </el-table-column>
                 <el-table-column label="金額" width="112" align="right">
                   <template #default="{ row }">
-                    <span class="material-print-amount">¥{{ formatNumber(calcPartPrintAmountYen(row), 0) }}</span>
+                    <span class="material-print-amount">
+                      ¥{{ formatNumber(calcPartPrintAmountYen(row), 0) }}
+                    </span>
                   </template>
                 </el-table-column>
               </el-table>
@@ -593,14 +600,18 @@
                 </span>
                 <span class="part-print-kind-block__subtotal-item">
                   金額合計
-                  <strong class="material-print-amount">¥{{ formatNumber(sumPartPrintGroupAmountYen(grp.rows), 0) }}</strong>
+                  <strong class="material-print-amount">
+                    ¥{{ formatNumber(sumPartPrintGroupAmountYen(grp.rows), 0) }}
+                  </strong>
                 </span>
               </div>
             </div>
           </div>
           <div class="material-print-summary">
             <span class="material-print-summary__label">合計金額</span>
-            <strong class="material-print-summary__amt">¥{{ formatNumber(partPrintTotalAmount, 0) }}</strong>
+            <strong class="material-print-summary__amt">
+              ¥{{ formatNumber(partPrintTotalAmount, 0) }}
+            </strong>
           </div>
         </div>
       </div>
@@ -643,7 +654,7 @@ import * as XLSX from 'xlsx'
 import { inventoryValueApi } from '@/api/inventoryValue'
 import { getProcessList } from '@/api/master/processMaster'
 import { getProductList } from '@/api/master/productMaster'
-import { useUserStore } from '@/stores/user'
+import { useUserStore } from '@/modules/auth/stores/user'
 
 // NOTE: inventoryValueApi は暫定プレースホルダ実装のため、厳密型を避ける。
 type TableRow = any
@@ -737,8 +748,15 @@ async function ensureProcessFilterList() {
   if (!isProductTab.value || processFilterList.value.length > 0) return
   try {
     const res = await getProcessList({ page: 1, pageSize: 5000 })
-    const list = (res as { data?: { list?: { process_cd: string; process_name: string }[] }; list?: { process_cd: string; process_name: string }[] })
-      .data?.list ?? (res as { list?: { process_cd: string; process_name: string }[] }).list ?? []
+    const list =
+      (
+        res as {
+          data?: { list?: { process_cd: string; process_name: string }[] }
+          list?: { process_cd: string; process_name: string }[]
+        }
+      ).data?.list ??
+      (res as { list?: { process_cd: string; process_name: string }[] }).list ??
+      []
     const raw = Array.isArray(list) ? list : []
     processFilterList.value = raw.filter((p) => !isProductTabExcludedProcess(p))
     if (
@@ -915,13 +933,15 @@ function getPartPrintKindGroups(rows: PartPrintRow[]): PartPrintKindGroup[] {
     return a.localeCompare(b, 'ja', { sensitivity: 'base' })
   })
   for (const k of keys) {
-    byKind.get(k)!.sort((a, b) =>
-      String(a.product_name ?? a.product_cd ?? '').localeCompare(
-        String(b.product_name ?? b.product_cd ?? ''),
-        'ja',
-        { sensitivity: 'base' },
-      ),
-    )
+    byKind
+      .get(k)!
+      .sort((a, b) =>
+        String(a.product_name ?? a.product_cd ?? '').localeCompare(
+          String(b.product_name ?? b.product_cd ?? ''),
+          'ja',
+          { sensitivity: 'base' },
+        ),
+      )
   }
   return keys.map((kindKey) => ({
     kindKey,
@@ -1428,7 +1448,7 @@ function handleExportMaterialData() {
       No: idx + 1,
       CD: row.product_cd ?? '',
       名称: String(row.product_name ?? ''),
-      '束本数': Number(row.bundle_quantity) || 0,
+      束本数: Number(row.bundle_quantity) || 0,
       '束重量(kg)': Number(row.bundle_weight) || 0,
       '単価(kg/円)': Number(row.unit_price) || 0,
       数量: Number(row.editQuantity) || 0,
@@ -1439,7 +1459,7 @@ function handleExportMaterialData() {
       No: '',
       CD: '',
       名称: '【合計】',
-      '束本数': '',
+      束本数: '',
       '束重量(kg)': '',
       '単価(kg/円)': '',
       数量: '',
@@ -1514,8 +1534,15 @@ async function ensureProcessNameMap() {
   if (Object.keys(processNameByCd).length > 0) return
   try {
     const res = await getProcessList({ page: 1, pageSize: 5000 })
-    const list = (res as { data?: { list?: { process_cd: string; process_name: string }[] }; list?: { process_cd: string; process_name: string }[] })
-      .data?.list ?? (res as { list?: { process_cd: string; process_name: string }[] }).list ?? []
+    const list =
+      (
+        res as {
+          data?: { list?: { process_cd: string; process_name: string }[] }
+          list?: { process_cd: string; process_name: string }[]
+        }
+      ).data?.list ??
+      (res as { list?: { process_cd: string; process_name: string }[] }).list ??
+      []
     processNameByCd = Object.fromEntries(list.map((p) => [p.process_cd, p.process_name]))
   } catch {
     processNameByCd = {}
@@ -1526,8 +1553,15 @@ async function ensureProductNameMap() {
   if (Object.keys(productNameByCd).length > 0) return
   try {
     const res = await getProductList({ page: 1, pageSize: 5000 })
-    const list = (res as { data?: { list?: { product_cd: string; product_name: string }[] }; list?: { product_cd: string; product_name: string }[] })
-      .data?.list ?? (res as { list?: { product_cd: string; product_name: string }[] }).list ?? []
+    const list =
+      (
+        res as {
+          data?: { list?: { product_cd: string; product_name: string }[] }
+          list?: { product_cd: string; product_name: string }[]
+        }
+      ).data?.list ??
+      (res as { list?: { product_cd: string; product_name: string }[] }).list ??
+      []
     productNameByCd = Object.fromEntries(
       list.map((p) => [String(p.product_cd ?? ''), String(p.product_name ?? '')]),
     )
@@ -1652,7 +1686,8 @@ const loadTableData = async () => {
         sort_by: sortField.value,
         sort_order: sortOrder.value,
       })
-      const inner = (resp as { data?: { list?: any[]; total?: number; sum_total_value?: number } })?.data ?? {}
+      const inner =
+        (resp as { data?: { list?: any[]; total?: number; sum_total_value?: number } })?.data ?? {}
       const list = inner.list ?? []
       totalCount.value = Number(inner.total ?? 0)
       tableData.value = list
@@ -1685,10 +1720,7 @@ const loadTableData = async () => {
         ...row,
         // 部品：API の product_name（parts.part_name）を優先
         product_name:
-          row.product_name ??
-          productNameByCd[String(row.product_cd ?? '')] ??
-          row.product_cd ??
-          '',
+          row.product_name ?? productNameByCd[String(row.product_cd ?? '')] ?? row.product_cd ?? '',
         process_name: row.process_name ?? processNameByCd[row.process_cd] ?? row.process_cd ?? '',
       }))
       totalFromApi = Number(response.data.total ?? 0)
@@ -1986,13 +2018,8 @@ defineExpose({
   background: transparent;
   color: #0f172a;
   font-family:
-    'Hiragino Sans',
-    'Hiragino Kaku Gothic ProN',
-    'Yu Gothic UI',
-    'Yu Gothic',
-    'Meiryo',
-    'MS PGothic',
-    sans-serif;
+    'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Yu Gothic', 'Meiryo',
+    'MS PGothic', sans-serif;
 }
 
 .material-print-root {
@@ -2212,7 +2239,11 @@ defineExpose({
 
 .process-filter__btn:not(.process-filter__btn--active) {
   color: #92400e !important;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 235, 0.72)) !important;
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.98),
+    rgba(255, 251, 235, 0.72)
+  ) !important;
   border-color: rgba(245, 158, 11, 0.38) !important;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.88) inset,
@@ -2340,7 +2371,9 @@ defineExpose({
 
 .value-table :deep(.el-table__body tr) {
   background: transparent;
-  transition: background-color 0.22s ease, transform 0.22s ease;
+  transition:
+    background-color 0.22s ease,
+    transform 0.22s ease;
 }
 
 .value-table :deep(.el-table__body tr:hover) {
@@ -2457,7 +2490,9 @@ defineExpose({
   border: 1px solid rgba(148, 163, 184, 0.22);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.75) inset;
   animation: iv-pagination-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
-  transition: box-shadow 0.35s ease, border-color 0.3s ease;
+  transition:
+    box-shadow 0.35s ease,
+    border-color 0.3s ease;
 }
 
 .pagination-container:hover {
@@ -2738,5 +2773,4 @@ defineExpose({
     transform: none;
   }
 }
-
 </style>

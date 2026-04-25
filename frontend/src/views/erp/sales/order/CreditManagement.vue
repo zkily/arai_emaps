@@ -16,7 +16,12 @@
     <el-card class="filter-card" shadow="never">
       <el-form :inline="true" :model="filters">
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.selectCustomer')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -50,31 +55,79 @@
 
     <el-card shadow="never">
       <el-table :data="creditList" v-loading="loading" stripe border>
-        <el-table-column prop="customer_code" :label="t('salesPages.credit.colCustomerCd')" width="100" fixed />
-        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
-        <el-table-column prop="credit_limit" :label="t('salesPages.credit.colLimit')" width="130" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.credit_limit ?? 0, locale as LocaleType, 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="current_balance" :label="t('salesPages.credit.colBalance')" width="130" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.current_balance ?? 0, locale as LocaleType, 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="pending_orders" :label="t('salesPages.credit.colPendingOrders')" width="120" align="right">
-          <template #default="{ row }">¥{{ formatDecimal(row.pending_orders ?? 0, locale as LocaleType, 0) }}</template>
-        </el-table-column>
-        <el-table-column prop="usage_rate" :label="t('salesPages.credit.colUsage')" width="120" align="right">
+        <el-table-column
+          prop="customer_code"
+          :label="t('salesPages.credit.colCustomerCd')"
+          width="100"
+          fixed
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.credit.colCustomerName')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="credit_limit"
+          :label="t('salesPages.credit.colLimit')"
+          width="130"
+          align="right"
+        >
           <template #default="{ row }">
-            <el-progress :percentage="row.usage_rate" :color="getUsageColor(row.usage_rate)" :stroke-width="8" />
+            ¥{{ formatDecimal(row.credit_limit ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
+        <el-table-column
+          prop="current_balance"
+          :label="t('salesPages.credit.colBalance')"
+          width="130"
+          align="right"
+        >
+          <template #default="{ row }">
+            ¥{{ formatDecimal(row.current_balance ?? 0, locale as LocaleType, 0) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="pending_orders"
+          :label="t('salesPages.credit.colPendingOrders')"
+          width="120"
+          align="right"
+        >
+          <template #default="{ row }">
+            ¥{{ formatDecimal(row.pending_orders ?? 0, locale as LocaleType, 0) }}
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="usage_rate"
+          :label="t('salesPages.credit.colUsage')"
+          width="120"
+          align="right"
+        >
+          <template #default="{ row }">
+            <el-progress
+              :percentage="row.usage_rate"
+              :color="getUsageColor(row.usage_rate)"
+              :stroke-width="8"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="warning" link @click="handleEdit(row)">{{ t('salesPages.common.edit') }}</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button size="small" type="warning" link @click="handleEdit(row)">
+              {{ t('salesPages.common.edit') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -100,6 +153,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, Setting, Warning, User } from '@element-plus/icons-vue'
 import type { LocaleType } from '@/i18n'
+import type { ElTagType } from '@/types/elementPlus'
 import { formatDecimal } from '@/utils/formatInteger'
 
 const { t, locale } = useI18n()
@@ -148,7 +202,8 @@ const handleEdit = (row: Record<string, unknown>) => {
   ElMessage.info(t('salesPages.credit.editWip', { name: String(row.customer_name ?? '') }))
 }
 
-const getUsageColor = (rate: number) => (rate >= 90 ? '#f56c6c' : rate >= 70 ? '#e6a23c' : '#67c23a')
+const getUsageColor = (rate: number) =>
+  rate >= 90 ? '#f56c6c' : rate >= 70 ? '#e6a23c' : '#67c23a'
 
 const statusLabelKeys: Record<string, string> = {
   normal: 'salesPages.credit.statusNormal',
@@ -157,8 +212,11 @@ const statusLabelKeys: Record<string, string> = {
   suspended: 'salesPages.credit.statusSuspended',
 }
 
-const getStatusType = (s: string) =>
-  ({ normal: 'success', warning: 'warning', exceeded: 'danger', suspended: 'info' }[s] || 'info')
+const getStatusType = (s: string): ElTagType =>
+  (({ normal: 'success', warning: 'warning', exceeded: 'danger', suspended: 'info' }) as Record<
+    string,
+    ElTagType
+  >)[s] || 'info'
 
 const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>

@@ -61,8 +61,17 @@
           </div>
           <div class="ppb-toolbar__actions">
             <el-button size="small" @click="clearFilters" :icon="Refresh">クリア</el-button>
-            <el-button type="primary" size="small" @click="handleFilter" :icon="Search">検索</el-button>
-            <el-button type="success" size="small" plain @click="handleSync" :icon="Refresh" :loading="syncing">
+            <el-button type="primary" size="small" @click="handleFilter" :icon="Search">
+              検索
+            </el-button>
+            <el-button
+              type="success"
+              size="small"
+              plain
+              @click="handleSync"
+              :icon="Refresh"
+              :loading="syncing"
+            >
               同期
             </el-button>
           </div>
@@ -72,389 +81,392 @@
       <!-- データ一覧 -->
       <section class="ppb-table-section">
         <el-card class="ppb-table-card" shadow="never">
-        <template #header>
-          <div class="ppb-table-cap">
-            <div class="ppb-table-cap__left">
-              <span class="ppb-table-cap__dot" />
-              <span class="ppb-table-cap__title">登録一覧</span>
-              <span class="ppb-table-cap__hint">自動保存 · デバウンス</span>
-            </div>
-          </div>
-        </template>
-        <el-table
-          class="ppb-el-table"
-          :data="bomList"
-          v-loading="loading"
-          stripe
-          style="width: 100%"
-          :empty-text="'データがありません'"
-          height="calc(100vh - 228px)"
-          :row-style="{ height: '34px' }"
-          :header-cell-class-name="ppbHeaderCellClass"
-          :cell-class-name="ppbBodyCellClass"
-          @sort-change="handleSortChange"
-          :default-sort="{ prop: 'product_name', order: 'ascending' }"
-        >
-          <!-- 終息 -->
-          <el-table-column label="終息" width="60" align="center" fixed="left">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.is_discontinued" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column
-            prop="product_cd"
-            label="製品CD"
-            width="70"
-            align="center"
-            fixed="left"
-            show-overflow-tooltip
-          />
-          <el-table-column
-            prop="product_name"
-            label="製品名"
-            min-width="130"
-            fixed="left"
-            show-overflow-tooltip
-            sortable
-            :default-sort="{ prop: 'product_name', order: 'ascending' }"
-          />
-          <el-table-column label="最低在庫日数" width="110" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.min_stock_days"
-                :min="0"
-                :max="999"
-                :precision="0"
-                :controls="false"
-                size="small"
-                style="width: 100%"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="安全在庫日数" width="110" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.safety_stock_days"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 材料工程 -->
-          <el-table-column label="材料工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.material_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="材料工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.material_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.material_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 切断工程 -->
-          <el-table-column label="切断工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.cuting_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="切断工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.cuting_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.cuting_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 面取工程 -->
-          <el-table-column label="面取工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.chamfering_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="面取工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.chamfering_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.chamfering_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- SW工程 -->
-          <el-table-column label="SW工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.swaging_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="SW工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.swaging_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.swaging_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 成型工程 -->
-          <el-table-column label="成型工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.forming_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="成型工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.forming_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.forming_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- メッキ工程 -->
-          <el-table-column label="メッキ工程" width="90" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.plating_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="メッキ工程LT" width="110" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.plating_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.plating_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 外注メッキ工程 -->
-          <el-table-column label="外注メッキ工程" width="120" align="center">
-            <template #default="{ row }">
-              <el-checkbox
-                v-model="row.outsourced_plating_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="外注メッキ工程LT" width="130" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.outsourced_plating_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.outsourced_plating_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 溶接工程 -->
-          <el-table-column label="溶接工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.welding_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="溶接工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.welding_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.welding_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 外注溶接工程 -->
-          <el-table-column label="外注溶接工程" width="120" align="center">
-            <template #default="{ row }">
-              <el-checkbox
-                v-model="row.outsourced_welding_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="外注溶接工程LT" width="130" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.outsourced_welding_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.outsourced_welding_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 検査工程 -->
-          <el-table-column label="検査工程" width="80" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.inspection_process" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="検査工程LT" width="100" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.inspection_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.inspection_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 外注倉庫工程 -->
-          <el-table-column label="外注倉庫工程" width="120" align="center">
-            <template #default="{ row }">
-              <el-checkbox
-                v-model="row.outsourced_warehouse_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="外注倉庫工程LT" width="130" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.outsourced_warehouse_process_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.outsourced_warehouse_process"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- メッキ前溶接 -->
-          <el-table-column label="メッキ前溶接" width="110" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.pre_plating_welding" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-
-          <!-- 検査後溶接 -->
-          <el-table-column label="検査後溶接" width="100" align="center">
-            <template #default="{ row }">
-              <el-checkbox v-model="row.post_inspection_welding" @change="handleCellChange(row)" />
-            </template>
-          </el-table-column>
-          <el-table-column label="検査後溶接工程LT" width="130" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-model="row.post_inspection_welding_lt"
-                :min="0"
-                :max="999"
-                :precision="0"
-                size="small"
-                :controls="false"
-                style="width: 100%"
-                :disabled="!row.post_inspection_welding"
-                @change="handleCellChange(row)"
-              />
-            </template>
-          </el-table-column>
-
-          <!-- 操作列（アイコンのみ） -->
-          <el-table-column label="操作" width="96" align="center" fixed="right">
-            <template #default="{ row }">
-              <div class="action-buttons ppb-op-cell">
-                <el-tooltip content="編集" placement="top">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :icon="Edit"
-                    circle
-                    class="action-btn-edit"
-                    @click="handleEdit(row)"
-                  />
-                </el-tooltip>
-                <el-tooltip content="削除" placement="top">
-                  <el-button
-                    size="small"
-                    type="danger"
-                    :icon="Delete"
-                    circle
-                    class="action-btn-delete"
-                    @click="handleDelete(row)"
-                  />
-                </el-tooltip>
+          <template #header>
+            <div class="ppb-table-cap">
+              <div class="ppb-table-cap__left">
+                <span class="ppb-table-cap__dot" />
+                <span class="ppb-table-cap__title">登録一覧</span>
+                <span class="ppb-table-cap__hint">自動保存 · デバウンス</span>
               </div>
-            </template>
-          </el-table-column>
-        </el-table>
+            </div>
+          </template>
+          <el-table
+            class="ppb-el-table"
+            :data="bomList"
+            v-loading="loading"
+            stripe
+            style="width: 100%"
+            :empty-text="'データがありません'"
+            height="calc(100vh - 228px)"
+            :row-style="{ height: '34px' }"
+            :header-cell-class-name="ppbHeaderCellClass"
+            :cell-class-name="ppbBodyCellClass"
+            @sort-change="handleSortChange"
+            :default-sort="{ prop: 'product_name', order: 'ascending' }"
+          >
+            <!-- 終息 -->
+            <el-table-column label="終息" width="60" align="center" fixed="left">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.is_discontinued" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="product_cd"
+              label="製品CD"
+              width="70"
+              align="center"
+              fixed="left"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              prop="product_name"
+              label="製品名"
+              min-width="130"
+              fixed="left"
+              show-overflow-tooltip
+              sortable
+              :default-sort="{ prop: 'product_name', order: 'ascending' }"
+            />
+            <el-table-column label="最低在庫日数" width="110" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.min_stock_days"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  :controls="false"
+                  size="small"
+                  style="width: 100%"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="安全在庫日数" width="110" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.safety_stock_days"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 材料工程 -->
+            <el-table-column label="材料工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.material_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="材料工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.material_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.material_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 切断工程 -->
+            <el-table-column label="切断工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.cuting_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="切断工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.cuting_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.cuting_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 面取工程 -->
+            <el-table-column label="面取工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.chamfering_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="面取工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.chamfering_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.chamfering_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- SW工程 -->
+            <el-table-column label="SW工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.swaging_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="SW工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.swaging_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.swaging_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 成型工程 -->
+            <el-table-column label="成型工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.forming_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="成型工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.forming_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.forming_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- メッキ工程 -->
+            <el-table-column label="メッキ工程" width="90" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.plating_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="メッキ工程LT" width="110" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.plating_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.plating_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 外注メッキ工程 -->
+            <el-table-column label="外注メッキ工程" width="120" align="center">
+              <template #default="{ row }">
+                <el-checkbox
+                  v-model="row.outsourced_plating_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="外注メッキ工程LT" width="130" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.outsourced_plating_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.outsourced_plating_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 溶接工程 -->
+            <el-table-column label="溶接工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.welding_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="溶接工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.welding_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.welding_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 外注溶接工程 -->
+            <el-table-column label="外注溶接工程" width="120" align="center">
+              <template #default="{ row }">
+                <el-checkbox
+                  v-model="row.outsourced_welding_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="外注溶接工程LT" width="130" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.outsourced_welding_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.outsourced_welding_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 検査工程 -->
+            <el-table-column label="検査工程" width="80" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.inspection_process" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+            <el-table-column label="検査工程LT" width="100" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.inspection_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.inspection_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 外注倉庫工程 -->
+            <el-table-column label="外注倉庫工程" width="120" align="center">
+              <template #default="{ row }">
+                <el-checkbox
+                  v-model="row.outsourced_warehouse_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="外注倉庫工程LT" width="130" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.outsourced_warehouse_process_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.outsourced_warehouse_process"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- メッキ前溶接 -->
+            <el-table-column label="メッキ前溶接" width="110" align="center">
+              <template #default="{ row }">
+                <el-checkbox v-model="row.pre_plating_welding" @change="handleCellChange(row)" />
+              </template>
+            </el-table-column>
+
+            <!-- 検査後溶接 -->
+            <el-table-column label="検査後溶接" width="100" align="center">
+              <template #default="{ row }">
+                <el-checkbox
+                  v-model="row.post_inspection_welding"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="検査後溶接工程LT" width="130" align="center">
+              <template #default="{ row }">
+                <el-input-number
+                  v-model="row.post_inspection_welding_lt"
+                  :min="0"
+                  :max="999"
+                  :precision="0"
+                  size="small"
+                  :controls="false"
+                  style="width: 100%"
+                  :disabled="!row.post_inspection_welding"
+                  @change="handleCellChange(row)"
+                />
+              </template>
+            </el-table-column>
+
+            <!-- 操作列（アイコンのみ） -->
+            <el-table-column label="操作" width="96" align="center" fixed="right">
+              <template #default="{ row }">
+                <div class="action-buttons ppb-op-cell">
+                  <el-tooltip content="編集" placement="top">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :icon="Edit"
+                      circle
+                      class="action-btn-edit"
+                      @click="handleEdit(row)"
+                    />
+                  </el-tooltip>
+                  <el-tooltip content="削除" placement="top">
+                    <el-button
+                      size="small"
+                      type="danger"
+                      :icon="Delete"
+                      circle
+                      class="action-btn-delete"
+                      @click="handleDelete(row)"
+                    />
+                  </el-tooltip>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-card>
       </section>
 
@@ -773,7 +785,7 @@ const isEdit = ref(false)
 const activeTab = ref('basic')
 const formData = ref<Partial<ProductProcessBOM>>({})
 // 保存防抖定时器
-const saveTimers = new Map<number, NodeJS.Timeout>()
+const saveTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
 // 分页状态
 const pagination = ref({
@@ -837,12 +849,12 @@ const PPB_COL_GROUP: Record<string, string> = {
 
 function ppbHeaderCellClass({ column }: { column: TableColumnCtx<ProductProcessBOM> }) {
   const label = column.label
-  return label && typeof label === 'string' ? PPB_COL_GROUP[label] ?? '' : ''
+  return label && typeof label === 'string' ? (PPB_COL_GROUP[label] ?? '') : ''
 }
 
 function ppbBodyCellClass({ column }: { column: TableColumnCtx<ProductProcessBOM> }) {
   const label = column.label
-  return label && typeof label === 'string' ? PPB_COL_GROUP[label] ?? '' : ''
+  return label && typeof label === 'string' ? (PPB_COL_GROUP[label] ?? '') : ''
 }
 
 // 布尔值转换辅助函数（优化性能，避免重复代码）
@@ -1294,7 +1306,9 @@ onMounted(async () => {
   border-left-width: 3px;
   border-left-color: rgba(255, 255, 255, 0.35);
   backdrop-filter: blur(8px);
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .ppb-stat:hover {

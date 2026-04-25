@@ -19,7 +19,12 @@
           <el-input v-model="filters.rma_no" clearable />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.all')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.all')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -50,32 +55,88 @@
     <el-card shadow="never">
       <el-table :data="returnsList" v-loading="loading" stripe border>
         <el-table-column prop="rma_no" :label="t('salesPages.returns.rmaNo')" width="130" fixed />
-        <el-table-column prop="request_date" :label="t('salesPages.returns.colRequestDate')" width="110" />
-        <el-table-column prop="order_no" :label="t('salesPages.returns.colOrigOrder')" width="130" />
-        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
-        <el-table-column prop="product_code" :label="t('salesPages.common.productCode')" width="120" />
-        <el-table-column prop="product_name" :label="t('salesPages.contractPricing.productName')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="quantity" :label="t('salesPages.returns.qty')" width="80" align="right" />
+        <el-table-column
+          prop="request_date"
+          :label="t('salesPages.returns.colRequestDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="order_no"
+          :label="t('salesPages.returns.colOrigOrder')"
+          width="130"
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.credit.colCustomerName')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="product_code"
+          :label="t('salesPages.common.productCode')"
+          width="120"
+        />
+        <el-table-column
+          prop="product_name"
+          :label="t('salesPages.contractPricing.productName')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="quantity"
+          :label="t('salesPages.returns.qty')"
+          width="80"
+          align="right"
+        />
         <el-table-column prop="reason" :label="t('salesPages.returns.colReason')" width="120" />
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="110" align="center">
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="110"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
+            <el-tag :type="getStatusType(String(row.status))">
+              {{ getStatusLabel(String(row.status)) }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="resolution" :label="t('salesPages.returns.colResolution')" width="100" align="center">
+        <el-table-column
+          prop="resolution"
+          :label="t('salesPages.returns.colResolution')"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
-            <span v-if="row.resolution === 'replacement'">{{ t('salesPages.returns.resolutionReplacement') }}</span>
-            <span v-else-if="row.resolution === 'refund'">{{ t('salesPages.returns.resolutionRefund') }}</span>
+            <span v-if="row.resolution === 'replacement'">
+              {{ t('salesPages.returns.resolutionReplacement') }}
+            </span>
+            <span v-else-if="row.resolution === 'refund'">
+              {{ t('salesPages.returns.resolutionRefund') }}
+            </span>
             <span v-else>{{ t('salesPages.returns.resolutionNone') }}</span>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="warning" link @click="handleInspection(row)" v-if="row.status === 'pending'">
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="warning"
+              link
+              @click="handleInspection(row)"
+              v-if="row.status === 'pending'"
+            >
               {{ t('salesPages.returns.inspection') }}
             </el-button>
-            <el-button size="small" type="success" link @click="handleProcess(row)" v-if="row.status === 'processing'">
+            <el-button
+              size="small"
+              type="success"
+              link
+              @click="handleProcess(row)"
+              v-if="row.status === 'processing'"
+            >
               {{ t('salesPages.returns.process') }}
             </el-button>
           </template>
@@ -96,7 +157,11 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="createDialogVisible" :title="t('salesPages.returns.dialogTitle')" width="600px">
+    <el-dialog
+      v-model="createDialogVisible"
+      :title="t('salesPages.returns.dialogTitle')"
+      width="600px"
+    >
       <el-form :model="createForm" label-width="120px">
         <el-form-item :label="t('salesPages.returns.origOrder')" required>
           <el-input v-model="createForm.order_no" />
@@ -105,15 +170,27 @@
           <el-input v-model="createForm.customer_name" disabled />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.productCode')">
-          <el-select v-model="createForm.product_code" :placeholder="t('salesPages.returns.productSelect')" filterable>
-            <el-option v-for="p in products" :key="p.cd" :label="`${p.cd} - ${p.name}`" :value="p.cd" />
+          <el-select
+            v-model="createForm.product_code"
+            :placeholder="t('salesPages.returns.productSelect')"
+            filterable
+          >
+            <el-option
+              v-for="p in products"
+              :key="p.cd"
+              :label="`${p.cd} - ${p.name}`"
+              :value="p.cd"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('salesPages.returns.qty')" required>
           <el-input-number v-model="createForm.quantity" :min="1" />
         </el-form-item>
         <el-form-item :label="t('salesPages.returns.reason')" required>
-          <el-select v-model="createForm.reason" :placeholder="t('salesPages.returns.reasonPlaceholder')">
+          <el-select
+            v-model="createForm.reason"
+            :placeholder="t('salesPages.returns.reasonPlaceholder')"
+          >
             <el-option :label="t('salesPages.returns.reasonDefect')" value="defective" />
             <el-option :label="t('salesPages.returns.reasonWrong')" value="wrong_delivery" />
             <el-option :label="t('salesPages.returns.reasonQty')" value="quantity_mismatch" />
@@ -125,8 +202,12 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="createDialogVisible = false">{{ t('salesPages.common.cancel') }}</el-button>
-        <el-button type="primary" @click="submitCreate">{{ t('salesPages.returns.register') }}</el-button>
+        <el-button @click="createDialogVisible = false">
+          {{ t('salesPages.common.cancel') }}
+        </el-button>
+        <el-button type="primary" @click="submitCreate">
+          {{ t('salesPages.returns.register') }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -137,6 +218,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, RefreshLeft } from '@element-plus/icons-vue'
+import type { ElTagType } from '@/types/elementPlus'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -216,8 +298,13 @@ const handleProcess = (row: Record<string, unknown>) => {
   ElMessage.info(t('salesPages.returns.processWip', { no: String(row.rma_no ?? '') }))
 }
 
-const getStatusType = (s: string) =>
-  ({ pending: 'warning', inspecting: 'info', processing: 'primary', completed: 'success' }[s] || 'info')
+const getStatusType = (s: string): ElTagType =>
+  (({
+    pending: 'warning',
+    inspecting: 'info',
+    processing: 'primary',
+    completed: 'success',
+  }) as Record<string, ElTagType>)[s] || 'info'
 
 const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>

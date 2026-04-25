@@ -19,7 +19,12 @@
           <el-date-picker v-model="filters.shipping_date" type="date" value-format="YYYY-MM-DD" />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.selectCustomer')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -61,26 +66,82 @@
     </div>
 
     <el-card shadow="never">
-      <el-table :data="shippingList" v-loading="loading" stripe border @selection-change="handleSelectionChange">
+      <el-table
+        :data="shippingList"
+        v-loading="loading"
+        stripe
+        border
+        @selection-change="handleSelectionChange"
+      >
         <el-table-column type="selection" width="50" fixed />
-        <el-table-column prop="order_no" :label="t('salesPages.common.orderNo')" width="130" fixed />
-        <el-table-column prop="shipping_date" :label="t('salesPages.shippingList.shipDate')" width="110" />
-        <el-table-column prop="customer_name" :label="t('salesPages.credit.colCustomerName')" min-width="150" />
-        <el-table-column prop="destination_name" :label="t('salesPages.shippingList.colDest')" min-width="150" />
-        <el-table-column prop="product_code" :label="t('salesPages.common.productCode')" width="120" />
-        <el-table-column prop="product_name" :label="t('salesPages.contractPricing.productName')" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="quantity" :label="t('salesPages.shippingList.colQty')" width="90" align="right" />
+        <el-table-column
+          prop="order_no"
+          :label="t('salesPages.common.orderNo')"
+          width="130"
+          fixed
+        />
+        <el-table-column
+          prop="shipping_date"
+          :label="t('salesPages.shippingList.shipDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.credit.colCustomerName')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="destination_name"
+          :label="t('salesPages.shippingList.colDest')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="product_code"
+          :label="t('salesPages.common.productCode')"
+          width="120"
+        />
+        <el-table-column
+          prop="product_name"
+          :label="t('salesPages.contractPricing.productName')"
+          min-width="150"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="quantity"
+          :label="t('salesPages.shippingList.colQty')"
+          width="90"
+          align="right"
+        />
         <el-table-column prop="location" :label="t('salesPages.shippingList.colLoc')" width="120" />
-        <el-table-column prop="carrier" :label="t('salesPages.shippingList.colCarrier')" width="100" />
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="110" align="center">
+        <el-table-column
+          prop="carrier"
+          :label="t('salesPages.shippingList.colCarrier')"
+          width="100"
+        />
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="110"
+          align="center"
+        >
           <template #default="{ row }">
-            <el-tag :type="getStatusType(String(row.status))">{{ getStatusLabel(String(row.status)) }}</el-tag>
+            <el-tag :type="getStatusType(String(row.status))">
+              {{ getStatusLabel(String(row.status)) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="success" link @click="handleShip(row)" v-if="row.status !== 'shipped'">
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="success"
+              link
+              @click="handleShip(row)"
+              v-if="row.status !== 'shipped'"
+            >
               {{ t('salesPages.shippingList.ship') }}
             </el-button>
           </template>
@@ -108,6 +169,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Document, Tickets, Download, Van } from '@element-plus/icons-vue'
+import type { ElTagType } from '@/types/elementPlus'
 
 const { t } = useI18n()
 const loading = ref(false)
@@ -125,7 +187,11 @@ const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
 
 const hasSelection = computed(() => selectedRows.value.length > 0)
 
-const statusTypeMap: Record<string, string> = { pending: 'warning', picking: 'info', shipped: 'success' }
+const statusTypeMap: Record<string, ElTagType> = {
+  pending: 'warning',
+  picking: 'info',
+  shipped: 'success',
+}
 const statusLabelKeys: Record<string, string> = {
   pending: 'salesPages.shippingList.statusPending',
   picking: 'salesPages.shippingList.statusPicking',
@@ -192,7 +258,7 @@ const handleShip = (row: Record<string, unknown>) => {
   ElMessage.success(t('salesPages.shippingList.shipOk', { no: String(row.order_no ?? '') }))
 }
 
-const getStatusType = (s: string) => statusTypeMap[s] || 'info'
+const getStatusType = (s: string): ElTagType => statusTypeMap[s] || 'info'
 const getStatusLabel = (s: string) => (statusLabelKeys[s] ? t(statusLabelKeys[s]) : s)
 </script>
 

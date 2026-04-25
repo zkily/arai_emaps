@@ -33,7 +33,7 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 | **Webフレームワーク** | FastAPI 0.109+                     |
 | **ASGIサーバー**      | Uvicorn 0.27+                      |
 | **ORM**               | SQLAlchemy 2.0+                    |
-| **マイグレーション**  | Alembic 1.13+                      |
+| **マイグレーション**  | 番号付き SQL スクリプト（`backend/database/migrations/*.sql`） |
 | **データベース**      | MySQL 8.0+ (aiomysql, PyMySQL)     |
 | **認証**              | JWT (python-jose), Passlib, Bcrypt |
 | **バリデーション**    | Pydantic 2.5+, Pydantic Settings   |
@@ -61,22 +61,17 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 Smart-EMAPs/
 ├── backend/                    # バックエンド（FastAPI + Python）
 │   ├── app/
-│   │   ├── core/              # コア機能（設定、DB、セキュリティ、日時処理）
-│   │   ├── modules/           # 機能モジュール
-│   │   │   ├── auth/          # 認証・認可
-│   │   │   ├── erp/           # ERP（販売、購買、在庫、原価、受注）
-│   │   │   ├── aps/           # APS（生産計画、スケジューリング）
-│   │   │   ├── mes/           # MES（製造実行、品質管理）
-│   │   │   ├── master/        # マスタデータ管理
-│   │   │   ├── system/        # システム管理
-│   │   │   └── websocket/     # WebSocket通信
-│   │   ├── models/            # データモデル
-│   │   ├── schemas/           # Pydanticスキーマ
+│   │   ├── core/              # コア機能（設定、DB、セキュリティ、日時処理、Loguru、例外ハンドラ、ミドルウェア）
+│   │   ├── modules/           # 機能モジュール（auth/erp/aps/mes/master/system/order/material/part/shipping/outsourcing/production_schedule/plan_baseline/cutting_planning/excel_monitor/machine_work_time_config/database/material_data_generation/part_data_generation/part_order/websocket）
+│   │   ├── services/          # 横断サービス（mysql_backup, data_management_io, file_watcher）
 │   │   └── main.py            # アプリケーションエントリーポイント
-│   ├── database/              # データベース初期化スクリプト
-│   ├── alembic/               # マイグレーション
-│   ├── requirements.txt       # Python依存関係
-│   └── .env                   # 環境変数設定
+│   ├── database/              # データベース初期化スクリプト + 番号付きマイグレーション SQL
+│   ├── data/                  # ファイル監視の永続フラグ等
+│   ├── pyproject.toml         # Black / isort / mypy / pytest 統一設定
+│   ├── .flake8                # Flake8 設定（Black 互換）
+│   ├── requirements.txt       # Python 依存関係
+│   ├── env.example            # 環境変数テンプレート（本番では .env を別途用意）
+│   └── run_file_watcher.py    # ファイル監視スタンドアロン起動
 │
 ├── frontend/                   # フロントエンド（Vue.js 3 + TypeScript）
 │   └── src/
@@ -517,9 +512,14 @@ npm run build:check
 ### コードフォーマット・Lint
 
 - **フロントエンド**
-  - ESLint + Prettier による統一フォーマット（`.eslintrc` / `.prettierrc` に準拠）
+  - ESLint + Prettier による統一フォーマット
+  - 設定ファイル: `frontend/.eslintrc.cjs` / `frontend/.prettierrc.cjs`（無視: `.eslintignore` / `.prettierignore`）
+  - 主要コマンド: `npm run lint` / `npm run lint:check` / `npm run format` / `npm run format:check` / `npm run type-check`
 - **バックエンド**
-  - `black` / `isort` / `flake8`（または同等ツール）による Python コード整形・静的解析（導入済み/導入予定の環境に応じて利用）
+  - `black` / `isort` / `flake8` / `mypy` を `backend/pyproject.toml`（Black/isort/Mypy/Pytest）と `backend/.flake8` に集約
+  - 例: `cd backend && black . && isort . && flake8 . && mypy app`
+  - エラーレスポンスは `app/core/exception_handlers.py` で統一形式 `{"success": false, "error": {"code", "message", "details?"}}`
+  - ロギングは Loguru（`app/core/logging.py`）。標準 `logging` も自動転送。`LOG_LEVEL` / `LOG_FILE` で制御
 
 ## 🎨 モダンUI/UXデザイン
 

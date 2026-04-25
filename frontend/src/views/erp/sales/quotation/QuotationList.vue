@@ -19,7 +19,12 @@
           <el-input v-model="filters.quotation_no" clearable />
         </el-form-item>
         <el-form-item :label="t('salesPages.common.customer')">
-          <el-select v-model="filters.customer_code" :placeholder="t('salesPages.common.selectCustomer')" clearable filterable>
+          <el-select
+            v-model="filters.customer_code"
+            :placeholder="t('salesPages.common.selectCustomer')"
+            clearable
+            filterable
+          >
             <el-option v-for="c in customers" :key="c.cd" :label="c.name" :value="c.cd" />
           </el-select>
         </el-form-item>
@@ -64,34 +69,85 @@
 
     <el-card shadow="never">
       <el-table :data="quotationList" v-loading="loading" stripe border>
-        <el-table-column prop="quotation_no" :label="t('salesPages.quotation.quotationNo')" width="140" fixed />
-        <el-table-column prop="quotation_date" :label="t('salesPages.quotation.quotationDate')" width="110" />
-        <el-table-column prop="customer_name" :label="t('salesPages.common.customer')" min-width="150" />
-        <el-table-column prop="subject" :label="t('salesPages.quotation.subject')" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="total_amount" :label="t('salesPages.quotation.amount')" width="130" align="right">
+        <el-table-column
+          prop="quotation_no"
+          :label="t('salesPages.quotation.quotationNo')"
+          width="140"
+          fixed
+        />
+        <el-table-column
+          prop="quotation_date"
+          :label="t('salesPages.quotation.quotationDate')"
+          width="110"
+        />
+        <el-table-column
+          prop="customer_name"
+          :label="t('salesPages.common.customer')"
+          min-width="150"
+        />
+        <el-table-column
+          prop="subject"
+          :label="t('salesPages.quotation.subject')"
+          min-width="200"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="total_amount"
+          :label="t('salesPages.quotation.amount')"
+          width="130"
+          align="right"
+        >
           <template #default="{ row }">
             ¥{{ formatDecimal(row.total_amount ?? 0, locale as LocaleType, 0) }}
           </template>
         </el-table-column>
-        <el-table-column prop="gross_profit_rate" :label="t('salesPages.quotation.grossMargin')" width="90" align="right">
+        <el-table-column
+          prop="gross_profit_rate"
+          :label="t('salesPages.quotation.grossMargin')"
+          width="90"
+          align="right"
+        >
           <template #default="{ row }">
             <span :class="getProfitClass(row.gross_profit_rate)">
               {{ formatDecimal(row.gross_profit_rate ?? 0, locale as LocaleType, 1) }}%
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="valid_until" :label="t('salesPages.quotation.validUntil')" width="110" />
-        <el-table-column prop="status" :label="t('salesPages.common.status')" width="100" align="center">
+        <el-table-column
+          prop="valid_until"
+          :label="t('salesPages.quotation.validUntil')"
+          width="110"
+        />
+        <el-table-column
+          prop="status"
+          :label="t('salesPages.common.status')"
+          width="100"
+          align="center"
+        >
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">{{ getStatusLabel(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column :label="t('salesPages.common.actions')" width="200" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">{{ t('salesPages.common.detail') }}</el-button>
-            <el-button size="small" type="success" link @click="handleCopy(row)">{{ t('salesPages.common.copy') }}</el-button>
-            <el-button size="small" type="warning" link @click="handleExportPdf(row)">{{ t('salesPages.common.pdf') }}</el-button>
-            <el-button size="small" type="danger" link @click="handleDelete(row)" v-if="row.status === 'draft'">{{ t('salesPages.common.delete') }}</el-button>
+            <el-button size="small" type="primary" link @click="handleView(row)">
+              {{ t('salesPages.common.detail') }}
+            </el-button>
+            <el-button size="small" type="success" link @click="handleCopy(row)">
+              {{ t('salesPages.common.copy') }}
+            </el-button>
+            <el-button size="small" type="warning" link @click="handleExportPdf(row)">
+              {{ t('salesPages.common.pdf') }}
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              link
+              @click="handleDelete(row)"
+              v-if="row.status === 'draft'"
+            >
+              {{ t('salesPages.common.delete') }}
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -118,6 +174,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, DataAnalysis, Document } from '@element-plus/icons-vue'
 import type { LocaleType } from '@/i18n'
+import type { ElTagType } from '@/types/elementPlus'
 import { formatDecimal } from '@/utils/formatInteger'
 
 const { t, locale } = useI18n()
@@ -190,12 +247,20 @@ const handleExportPdf = (row: Record<string, unknown>) => {
 }
 
 const handleDelete = async (row: Record<string, unknown>) => {
-  await ElMessageBox.confirm(t('salesPages.quotation.deleteConfirm'), t('salesPages.common.confirm'))
+  await ElMessageBox.confirm(
+    t('salesPages.quotation.deleteConfirm'),
+    t('salesPages.common.confirm'),
+  )
   ElMessage.success(t('salesPages.quotation.deleteOk'))
 }
 
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = { draft: 'info', submitted: 'primary', ordered: 'success', lost: 'danger' }
+const getStatusType = (status: string): ElTagType => {
+  const map: Record<string, ElTagType> = {
+    draft: 'info',
+    submitted: 'primary',
+    ordered: 'success',
+    lost: 'danger',
+  }
   return map[status] || 'info'
 }
 

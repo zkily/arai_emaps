@@ -102,7 +102,13 @@
           </h3>
         </div>
         <div class="card-body">
-          <el-table :data="upcomingDeliveries" stripe size="small" max-height="300" empty-text="データがありません">
+          <el-table
+            :data="upcomingDeliveries"
+            stripe
+            size="small"
+            max-height="300"
+            empty-text="データがありません"
+          >
             <el-table-column prop="type" label="種別" width="80" align="center">
               <template #default="{ row }">
                 <el-tag :type="row.type === 'plating' ? 'warning' : 'danger'" size="small">
@@ -112,7 +118,12 @@
             </el-table-column>
             <el-table-column prop="order_no" label="注文番号" width="130" />
             <el-table-column prop="product_cd" label="品番" width="120" />
-            <el-table-column prop="supplier_name" label="外注先" min-width="140" show-overflow-tooltip />
+            <el-table-column
+              prop="supplier_name"
+              label="外注先"
+              min-width="140"
+              show-overflow-tooltip
+            />
             <el-table-column prop="quantity" label="数量" width="80" align="right" />
             <el-table-column label="残数" width="80" align="right">
               <template #default="{ row }">
@@ -123,7 +134,13 @@
             <el-table-column prop="days_remaining" label="残日数" width="80" align="center">
               <template #default="{ row }">
                 <el-tag
-                  :type="row.days_remaining <= 1 ? 'danger' : row.days_remaining <= 3 ? 'warning' : 'success'"
+                  :type="
+                    row.days_remaining <= 1
+                      ? 'danger'
+                      : row.days_remaining <= 3
+                        ? 'warning'
+                        : 'success'
+                  "
                   size="small"
                 >
                   {{ row.days_remaining }}日
@@ -143,12 +160,33 @@
           </h3>
         </div>
         <div class="card-body">
-          <el-table :data="supplierSummary" stripe size="small" max-height="300" empty-text="データがありません">
+          <el-table
+            :data="supplierSummary"
+            stripe
+            size="small"
+            max-height="300"
+            empty-text="データがありません"
+          >
             <el-table-column prop="supplier_cd" label="コード" width="100" />
-            <el-table-column prop="supplier_name" label="外注先名" min-width="150" show-overflow-tooltip />
+            <el-table-column
+              prop="supplier_name"
+              label="外注先名"
+              min-width="150"
+              show-overflow-tooltip
+            />
             <el-table-column prop="supplier_type" label="種別" width="80" align="center">
               <template #default="{ row }">
-                <el-tag :type="getTypeTagColor(row.supplier_type) as 'success' | 'primary' | 'warning' | 'info' | 'danger'" size="small">
+                <el-tag
+                  :type="
+                    getTypeTagColor(row.supplier_type) as
+                      | 'success'
+                      | 'primary'
+                      | 'warning'
+                      | 'info'
+                      | 'danger'
+                  "
+                  size="small"
+                >
                   {{ getTypeLabel(row.supplier_type) }}
                 </el-tag>
               </template>
@@ -209,7 +247,10 @@
           <OfficeBuilding class="quick-icon" />
           <span>外注先マスタ</span>
         </router-link>
-        <router-link to="/erp/purchase/outsourcing/process-products" class="quick-btn process-products">
+        <router-link
+          to="/erp/purchase/outsourcing/process-products"
+          class="quick-btn process-products"
+        >
           <DataBoard class="quick-icon" />
           <span>外注工程製品</span>
         </router-link>
@@ -250,28 +291,33 @@ const supplierSummary = ref<any[]>([])
 
 // 计算属性
 const stats = computed(() => ({
-  todayOrders: (dashboardData.value?.todayOrders?.plating_orders || 0) +
-               (dashboardData.value?.todayOrders?.welding_orders || 0),
-  pendingOrders: (dashboardData.value?.pendingOrders?.plating_pending || 0) +
-                 (dashboardData.value?.pendingOrders?.welding_pending || 0),
-  todayReceivings: (dashboardData.value?.todayReceivings?.plating_receivings || 0) +
-                   (dashboardData.value?.todayReceivings?.welding_receivings || 0),
-  stockAlerts: (dashboardData.value?.stockAlerts?.plating_alerts || 0) +
-               (dashboardData.value?.stockAlerts?.welding_alerts || 0) +
-               (dashboardData.value?.stockAlerts?.material_alerts || 0),
-  overdueOrders: (dashboardData.value?.overdueOrders?.plating_overdue || 0) +
-                 (dashboardData.value?.overdueOrders?.welding_overdue || 0),
+  todayOrders:
+    (dashboardData.value?.todayOrders?.plating_orders || 0) +
+    (dashboardData.value?.todayOrders?.welding_orders || 0),
+  pendingOrders:
+    (dashboardData.value?.pendingOrders?.plating_pending || 0) +
+    (dashboardData.value?.pendingOrders?.welding_pending || 0),
+  todayReceivings:
+    (dashboardData.value?.todayReceivings?.plating_receivings || 0) +
+    (dashboardData.value?.todayReceivings?.welding_receivings || 0),
+  stockAlerts:
+    (dashboardData.value?.stockAlerts?.plating_alerts || 0) +
+    (dashboardData.value?.stockAlerts?.welding_alerts || 0) +
+    (dashboardData.value?.stockAlerts?.material_alerts || 0),
+  overdueOrders:
+    (dashboardData.value?.overdueOrders?.plating_overdue || 0) +
+    (dashboardData.value?.overdueOrders?.welding_overdue || 0),
 }))
 
 // 方法（request 拦截器已返回 response.data，故 res 即为 body: { success, data }）
 const fetchAllData = async () => {
   loading.value = true
   try {
-    const [dashboardRes, deliveriesRes, summaryRes] = await Promise.all([
+    const [dashboardRes, deliveriesRes, summaryRes] = (await Promise.all([
       getOutsourcingDashboard(),
       getUpcomingDeliveries(7),
       getSupplierSummary(),
-    ]) as Array<{ success?: boolean; data?: unknown }>
+    ])) as Array<{ success?: boolean; data?: unknown }>
 
     if (dashboardRes?.success && dashboardRes.data) {
       dashboardData.value = dashboardRes.data as Record<string, unknown>
@@ -426,11 +472,21 @@ onMounted(() => {
     }
   }
 
-  &.today-orders .stat-icon { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-  &.pending-orders .stat-icon { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-  &.today-receivings .stat-icon { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-  &.stock-alerts .stat-icon { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
-  &.overdue-orders .stat-icon { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
+  &.today-orders .stat-icon {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+  &.pending-orders .stat-icon {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  }
+  &.today-receivings .stat-icon {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  }
+  &.stock-alerts .stat-icon {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  }
+  &.overdue-orders .stat-icon {
+    background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+  }
 
   &.has-alert {
     border-color: rgba(255, 99, 71, 0.5);
@@ -439,8 +495,13 @@ onMounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 99, 71, 0.4); }
-  50% { box-shadow: 0 0 20px 10px rgba(255, 99, 71, 0.2); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 99, 71, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 10px rgba(255, 99, 71, 0.2);
+  }
 }
 
 .main-content {
@@ -524,13 +585,27 @@ onMounted(() => {
       height: 20px;
     }
 
-    &.plating { background: linear-gradient(135deg, #f5af19 0%, #f12711 100%); }
-    &.welding { background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%); }
-    &.receiving { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    &.issue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    &.stock { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    &.suppliers { background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%); }
-    &.process-products { background: linear-gradient(135deg, #26a69a 0%, #00897b 100%); }
+    &.plating {
+      background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+    }
+    &.welding {
+      background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%);
+    }
+    &.receiving {
+      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+    &.issue {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    &.stock {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+    &.suppliers {
+      background: linear-gradient(135deg, #5c6bc0 0%, #3949ab 100%);
+    }
+    &.process-products {
+      background: linear-gradient(135deg, #26a69a 0%, #00897b 100%);
+    }
   }
 }
 

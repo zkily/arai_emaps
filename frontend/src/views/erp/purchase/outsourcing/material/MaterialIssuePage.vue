@@ -49,15 +49,36 @@
           />
         </el-form-item>
         <el-form-item label="外注先">
-          <el-select v-model="filters.supplier" placeholder="選択" clearable filterable style="width: 160px">
-            <el-option v-for="s in supplierOptions" :key="s.value" :label="s.label" :value="s.value" />
+          <el-select
+            v-model="filters.supplier"
+            placeholder="選択"
+            clearable
+            filterable
+            style="width: 160px"
+          >
+            <el-option
+              v-for="s in supplierOptions"
+              :key="s.value"
+              :label="s.label"
+              :value="s.value"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="注文番号">
-          <el-input v-model="filters.orderNo" placeholder="注文番号" clearable style="width: 130px" />
+          <el-input
+            v-model="filters.orderNo"
+            placeholder="注文番号"
+            clearable
+            style="width: 130px"
+          />
         </el-form-item>
         <el-form-item label="材料">
-          <el-input v-model="filters.materialCode" placeholder="材料コード" clearable style="width: 130px" />
+          <el-input
+            v-model="filters.materialCode"
+            placeholder="材料コード"
+            clearable
+            style="width: 130px"
+          />
         </el-form-item>
         <el-form-item label="状態">
           <el-select v-model="filters.status" placeholder="選択" clearable style="width: 110px">
@@ -68,10 +89,12 @@
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch" :loading="loading">
-            <el-icon><Search /></el-icon>検索
+            <el-icon><Search /></el-icon>
+            検索
           </el-button>
           <el-button @click="resetFilters">
-            <el-icon><Refresh /></el-icon>リセット
+            <el-icon><Refresh /></el-icon>
+            リセット
           </el-button>
         </el-form-item>
       </el-form>
@@ -81,17 +104,21 @@
     <div class="action-bar">
       <div class="left-actions">
         <el-button type="primary" @click="openIssueDialog">
-          <el-icon><Plus /></el-icon>新規支給
+          <el-icon><Plus /></el-icon>
+          新規支給
         </el-button>
         <el-button type="success" @click="batchIssue" :disabled="selectedRows.length === 0">
-          <el-icon><Upload /></el-icon>一括出庫
+          <el-icon><Upload /></el-icon>
+          一括出庫
           <span v-if="selectedRows.length > 0" class="btn-badge">{{ selectedRows.length }}</span>
         </el-button>
         <el-button type="warning" @click="exportData">
-          <el-icon><Download /></el-icon>Excel出力
+          <el-icon><Download /></el-icon>
+          Excel出力
         </el-button>
         <el-button type="info" @click="printDeliveryNote" :disabled="selectedRows.length === 0">
-          <el-icon><Printer /></el-icon>支給伝票印刷
+          <el-icon><Printer /></el-icon>
+          支給伝票印刷
         </el-button>
       </div>
       <div class="right-actions">
@@ -154,13 +181,14 @@
         <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button-group>
-              <el-button 
-                type="success" 
-                size="small" 
-                @click="issueItem(row)" 
+              <el-button
+                type="success"
+                size="small"
+                @click="issueItem(row)"
                 :disabled="row.status !== 'preparing'"
               >
-                <el-icon><Upload /></el-icon>出庫
+                <el-icon><Upload /></el-icon>
+                出庫
               </el-button>
               <el-button type="primary" size="small" @click="editIssue(row)" :icon="Edit" />
               <el-button type="danger" size="small" @click="deleteIssue(row)" :icon="Delete" />
@@ -180,10 +208,10 @@
     </el-card>
 
     <!-- 新建/编辑对话框 -->
-    <el-dialog 
-      v-model="dialogVisible" 
-      :title="dialogTitle" 
-      width="850px" 
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="850px"
       destroy-on-close
       class="issue-dialog"
     >
@@ -191,17 +219,40 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="外注先" prop="supplierId">
-              <el-select v-model="formData.supplierId" placeholder="選択" filterable style="width: 100%">
-                <el-option v-for="s in supplierOptions" :key="s.value" :label="s.label" :value="s.value" />
+              <el-select
+                v-model="formData.supplierId"
+                placeholder="選択"
+                filterable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="s in supplierOptions"
+                  :key="s.value"
+                  :label="s.label"
+                  :value="s.value"
+                />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="関連注文">
-              <el-select v-model="formData.orderNo" placeholder="選択（任意）" clearable filterable style="width: 100%">
-                <el-option v-for="o in orderOptions" :key="o.orderNo" :label="o.orderNo" :value="o.orderNo">
+              <el-select
+                v-model="formData.orderNo"
+                placeholder="選択（任意）"
+                clearable
+                filterable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="o in orderOptions"
+                  :key="o.orderNo"
+                  :label="o.orderNo"
+                  :value="o.orderNo"
+                >
                   <span>{{ o.orderNo }}</span>
-                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">{{ o.productCode }}</span>
+                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">
+                    {{ o.productCode }}
+                  </span>
                 </el-option>
               </el-select>
             </el-form-item>
@@ -210,7 +261,12 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="出庫日" prop="issueDate">
-              <el-date-picker v-model="formData.issueDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+              <el-date-picker
+                v-model="formData.issueDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -223,21 +279,23 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="材料" prop="materialCode">
-              <el-select 
-                v-model="formData.materialCode" 
-                placeholder="材料を選択" 
-                filterable 
+              <el-select
+                v-model="formData.materialCode"
+                placeholder="材料を選択"
+                filterable
                 style="width: 100%"
                 @change="handleMaterialChange"
               >
-                <el-option 
-                  v-for="m in materialOptions" 
-                  :key="m.code" 
-                  :label="m.code" 
+                <el-option
+                  v-for="m in materialOptions"
+                  :key="m.code"
+                  :label="m.code"
                   :value="m.code"
                 >
                   <span>{{ m.code }}</span>
-                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">{{ m.name }}</span>
+                  <span style="color: #8492a6; font-size: 12px; margin-left: 8px">
+                    {{ m.name }}
+                  </span>
                 </el-option>
               </el-select>
             </el-form-item>
@@ -270,11 +328,11 @@
         <el-row :gutter="16">
           <el-col :span="8">
             <el-form-item label="支給数量" prop="quantity">
-              <el-input-number 
-                v-model="formData.quantity" 
-                :min="1" 
+              <el-input-number
+                v-model="formData.quantity"
+                :min="1"
                 :max="formData.stockQty || 99999"
-                style="width: 100%" 
+                style="width: 100%"
               />
             </el-form-item>
           </el-col>
@@ -285,9 +343,9 @@
           </el-col>
           <el-col :span="8">
             <el-form-item label="総重量(kg)">
-              <el-input 
-                :model-value="((formData.quantity || 0) * (formData.unitWeight || 0)).toFixed(2)" 
-                disabled 
+              <el-input
+                :model-value="((formData.quantity || 0) * (formData.unitWeight || 0)).toFixed(2)"
+                disabled
                 class="weight-input"
               />
             </el-form-item>
@@ -311,29 +369,52 @@
         <el-descriptions-item label="支給番号">{{ detailData.issueNo }}</el-descriptions-item>
         <el-descriptions-item label="出庫日">{{ detailData.issueDate }}</el-descriptions-item>
         <el-descriptions-item label="外注先">{{ detailData.supplier }}</el-descriptions-item>
-        <el-descriptions-item label="関連注文">{{ detailData.orderNo || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="材料コード">{{ detailData.materialCode }}</el-descriptions-item>
+        <el-descriptions-item label="関連注文">
+          {{ detailData.orderNo || '-' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="材料コード">
+          {{ detailData.materialCode }}
+        </el-descriptions-item>
         <el-descriptions-item label="材料名">{{ detailData.materialName }}</el-descriptions-item>
         <el-descriptions-item label="規格">{{ detailData.spec }}</el-descriptions-item>
         <el-descriptions-item label="単位">{{ detailData.unit }}</el-descriptions-item>
-        <el-descriptions-item label="支給数量">{{ detailData.quantity?.toLocaleString() }}</el-descriptions-item>
-        <el-descriptions-item label="単重(kg)">{{ detailData.unitWeight?.toFixed(3) }}</el-descriptions-item>
-        <el-descriptions-item label="総重量(kg)">{{ detailData.totalWeight?.toLocaleString() }}</el-descriptions-item>
+        <el-descriptions-item label="支給数量">
+          {{ detailData.quantity?.toLocaleString() }}
+        </el-descriptions-item>
+        <el-descriptions-item label="単重(kg)">
+          {{ detailData.unitWeight?.toFixed(3) }}
+        </el-descriptions-item>
+        <el-descriptions-item label="総重量(kg)">
+          {{ detailData.totalWeight?.toLocaleString() }}
+        </el-descriptions-item>
         <el-descriptions-item label="状態">
-          <el-tag :type="getStatusType(detailData.status)">{{ getStatusLabel(detailData.status) }}</el-tag>
+          <el-tag :type="getStatusType(detailData.status)">
+            {{ getStatusLabel(detailData.status) }}
+          </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="担当者">{{ detailData.operator }}</el-descriptions-item>
-        <el-descriptions-item label="備考" :span="2">{{ detailData.remarks || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="備考" :span="2">
+          {{ detailData.remarks || '-' }}
+        </el-descriptions-item>
       </el-descriptions>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import type { ElTagType } from '@/types/elementPlus'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  Search, Refresh, Plus, Download, Edit, Delete, Upload, Box, Printer
+  Search,
+  Refresh,
+  Plus,
+  Download,
+  Edit,
+  Delete,
+  Upload,
+  Box,
+  Printer,
 } from '@element-plus/icons-vue'
 
 interface IssueItem {
@@ -368,13 +449,13 @@ const filters = reactive({
   supplier: '',
   orderNo: '',
   materialCode: '',
-  status: ''
+  status: '',
 })
 
 const pagination = reactive({
   page: 1,
   pageSize: 20,
-  total: 0
+  total: 0,
 })
 
 const formRef = ref()
@@ -390,7 +471,7 @@ const formData = reactive({
   quantity: 0,
   unit: '',
   unitWeight: 0,
-  remarks: ''
+  remarks: '',
 })
 
 const formRules = {
@@ -398,15 +479,66 @@ const formRules = {
   issueDate: [{ required: true, message: '出庫日を選択してください', trigger: 'change' }],
   materialCode: [{ required: true, message: '材料を選択してください', trigger: 'change' }],
   quantity: [{ required: true, message: '数量を入力してください', trigger: 'blur' }],
-  operator: [{ required: true, message: '担当者を入力してください', trigger: 'blur' }]
+  operator: [{ required: true, message: '担当者を入力してください', trigger: 'blur' }],
 }
 
 const detailData = ref<Partial<IssueItem>>({})
 
 const issueList = ref<IssueItem[]>([
-  { id: 1, issueNo: 'MI-2025-001', issueDate: '2025-12-03', orderNo: 'PO-2025-001', supplier: '山田メッキ工業', supplierId: 1, materialCode: 'M-001', materialName: 'SUS304丸棒', spec: 'φ10x1000', quantity: 100, unit: '本', unitWeight: 0.62, totalWeight: 62, status: 'issued', operator: '田中', remarks: '' },
-  { id: 2, issueNo: 'MI-2025-002', issueDate: '2025-12-03', orderNo: 'WO-2025-001', supplier: '高橋溶接工業', supplierId: 2, materialCode: 'M-002', materialName: 'SS400板材', spec: 't3.2x1219x2438', quantity: 50, unit: '枚', unitWeight: 75.2, totalWeight: 3760, status: 'issued', operator: '鈴木', remarks: '' },
-  { id: 3, issueNo: 'MI-2025-003', issueDate: '2025-12-03', orderNo: '', supplier: '佐藤表面処理', supplierId: 3, materialCode: 'M-003', materialName: 'SPHC-P', spec: 't1.6x1219x2438', quantity: 30, unit: '枚', unitWeight: 37.6, totalWeight: 1128, status: 'preparing', operator: '山田', remarks: '午後出庫予定' },
+  {
+    id: 1,
+    issueNo: 'MI-2025-001',
+    issueDate: '2025-12-03',
+    orderNo: 'PO-2025-001',
+    supplier: '山田メッキ工業',
+    supplierId: 1,
+    materialCode: 'M-001',
+    materialName: 'SUS304丸棒',
+    spec: 'φ10x1000',
+    quantity: 100,
+    unit: '本',
+    unitWeight: 0.62,
+    totalWeight: 62,
+    status: 'issued',
+    operator: '田中',
+    remarks: '',
+  },
+  {
+    id: 2,
+    issueNo: 'MI-2025-002',
+    issueDate: '2025-12-03',
+    orderNo: 'WO-2025-001',
+    supplier: '高橋溶接工業',
+    supplierId: 2,
+    materialCode: 'M-002',
+    materialName: 'SS400板材',
+    spec: 't3.2x1219x2438',
+    quantity: 50,
+    unit: '枚',
+    unitWeight: 75.2,
+    totalWeight: 3760,
+    status: 'issued',
+    operator: '鈴木',
+    remarks: '',
+  },
+  {
+    id: 3,
+    issueNo: 'MI-2025-003',
+    issueDate: '2025-12-03',
+    orderNo: '',
+    supplier: '佐藤表面処理',
+    supplierId: 3,
+    materialCode: 'M-003',
+    materialName: 'SPHC-P',
+    spec: 't1.6x1219x2438',
+    quantity: 30,
+    unit: '枚',
+    unitWeight: 37.6,
+    totalWeight: 1128,
+    status: 'preparing',
+    operator: '山田',
+    remarks: '午後出庫予定',
+  },
 ])
 
 const supplierOptions = ref([
@@ -423,30 +555,68 @@ const orderOptions = ref([
 ])
 
 const materialOptions = ref([
-  { code: 'M-001', name: 'SUS304丸棒', spec: 'φ10x1000', unit: '本', unitWeight: 0.62, stockQty: 500 },
-  { code: 'M-002', name: 'SS400板材', spec: 't3.2x1219x2438', unit: '枚', unitWeight: 75.2, stockQty: 200 },
-  { code: 'M-003', name: 'SPHC-P', spec: 't1.6x1219x2438', unit: '枚', unitWeight: 37.6, stockQty: 150 },
+  {
+    code: 'M-001',
+    name: 'SUS304丸棒',
+    spec: 'φ10x1000',
+    unit: '本',
+    unitWeight: 0.62,
+    stockQty: 500,
+  },
+  {
+    code: 'M-002',
+    name: 'SS400板材',
+    spec: 't3.2x1219x2438',
+    unit: '枚',
+    unitWeight: 75.2,
+    stockQty: 200,
+  },
+  {
+    code: 'M-003',
+    name: 'SPHC-P',
+    spec: 't1.6x1219x2438',
+    unit: '枚',
+    unitWeight: 37.6,
+    stockQty: 150,
+  },
 ])
 
-const todayIssueCount = computed(() => issueList.value.filter(i => i.issueDate === new Date().toISOString().split('T')[0] && i.status === 'issued').length)
-const pendingCount = computed(() => issueList.value.filter(i => i.status === 'preparing').length)
-const todayQuantity = computed(() => issueList.value.filter(i => i.issueDate === new Date().toISOString().split('T')[0]).reduce((sum, i) => sum + i.totalWeight, 0))
-const dialogTitle = computed(() => isEdit.value ? '支給編集' : '新規支給')
+const todayIssueCount = computed(
+  () =>
+    issueList.value.filter(
+      (i) => i.issueDate === new Date().toISOString().split('T')[0] && i.status === 'issued',
+    ).length,
+)
+const pendingCount = computed(() => issueList.value.filter((i) => i.status === 'preparing').length)
+const todayQuantity = computed(() =>
+  issueList.value
+    .filter((i) => i.issueDate === new Date().toISOString().split('T')[0])
+    .reduce((sum, i) => sum + i.totalWeight, 0),
+)
+const dialogTitle = computed(() => (isEdit.value ? '支給編集' : '新規支給'))
 
-const getStatusType = (status: string) => {
-  const types: Record<string, string> = { preparing: 'warning', issued: 'success', returned: 'info' }
-  return types[status] || 'info'
+const getStatusType = (status: string | undefined): ElTagType => {
+  const types: Record<string, ElTagType> = {
+    preparing: 'warning',
+    issued: 'success',
+    returned: 'info',
+  }
+  return types[status ?? ''] || 'info'
 }
 
-const getStatusLabel = (status: string) => {
-  const labels: Record<string, string> = { preparing: '準備中', issued: '出庫済', returned: '返却済' }
-  return labels[status] || status
+const getStatusLabel = (status: string | undefined) => {
+  const labels: Record<string, string> = {
+    preparing: '準備中',
+    issued: '出庫済',
+    returned: '返却済',
+  }
+  return labels[status ?? ''] || status || ''
 }
 
 const handleSearch = async () => {
   loading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     pagination.total = issueList.value.length
   } finally {
     loading.value = false
@@ -465,14 +635,24 @@ const handleSelectionChange = (rows: IssueItem[]) => {
 const openIssueDialog = () => {
   isEdit.value = false
   Object.assign(formData, {
-    supplierId: null, orderNo: '', issueDate: new Date().toISOString().split('T')[0], operator: '',
-    materialCode: '', materialName: '', spec: '', stockQty: 0, quantity: 0, unit: '', unitWeight: 0, remarks: ''
+    supplierId: null,
+    orderNo: '',
+    issueDate: new Date().toISOString().split('T')[0],
+    operator: '',
+    materialCode: '',
+    materialName: '',
+    spec: '',
+    stockQty: 0,
+    quantity: 0,
+    unit: '',
+    unitWeight: 0,
+    remarks: '',
   })
   dialogVisible.value = true
 }
 
 const handleMaterialChange = (code: string) => {
-  const material = materialOptions.value.find(m => m.code === code)
+  const material = materialOptions.value.find((m) => m.code === code)
   if (material) {
     Object.assign(formData, {
       materialName: material.name,
@@ -480,7 +660,7 @@ const handleMaterialChange = (code: string) => {
       unit: material.unit,
       unitWeight: material.unitWeight,
       stockQty: material.stockQty,
-      quantity: Math.min(100, material.stockQty)
+      quantity: Math.min(100, material.stockQty),
     })
   }
 }
@@ -501,7 +681,7 @@ const submitForm = async () => {
   if (!valid) return
   submitLoading.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await new Promise((resolve) => setTimeout(resolve, 500))
     ElMessage.success(isEdit.value ? '更新しました' : '登録しました')
     dialogVisible.value = false
     handleSearch()
@@ -757,4 +937,3 @@ onMounted(() => {
   }
 }
 </style>
-

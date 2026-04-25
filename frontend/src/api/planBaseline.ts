@@ -71,9 +71,12 @@ export async function fetchPlanOperationRate(params: {
   }
   const p = params.processName?.trim()
   if (p) qp.processName = p
-  const res = (await request.get<PlanOperationRateResponse>('/api/plan-baseline/plan-operation-rate', {
-    params: qp,
-  })) as PlanOperationRateResponse
+  const res = (await request.get<PlanOperationRateResponse>(
+    '/api/plan-baseline/plan-operation-rate',
+    {
+      params: qp,
+    },
+  )) as PlanOperationRateResponse
   if (res?.success === false) {
     throw new Error(res.message || '操業度データの取得に失敗しました')
   }
@@ -152,13 +155,16 @@ export async function deletePlanBaselineRecord(params: {
   planDate: string
   processName?: string
 }): Promise<void> {
-  const res = await request.delete<{ success?: boolean; message?: string }>('/api/plan-baseline/record', {
-    params: {
-      baselineMonth: params.baselineMonth,
-      planDate: params.planDate,
-      processName: params.processName ?? '',
+  const res = (await request.delete<{ success?: boolean; message?: string }>(
+    '/api/plan-baseline/record',
+    {
+      params: {
+        baselineMonth: params.baselineMonth,
+        planDate: params.planDate,
+        processName: params.processName ?? '',
+      },
     },
-  })
+  )) as unknown as { success?: boolean; message?: string }
   if (res && typeof res === 'object' && res.success === false) {
     throw new Error(res.message || '削除に失敗しました')
   }
@@ -189,9 +195,16 @@ export async function exportPlanBaselinePdfToFolder(
   files.forEach(({ processName, blob }) => {
     form.append('files', blob, `${processName}.pdf`)
   })
-  const res = await request.post<{ success: boolean; message?: string; saved?: string[]; errors?: string[] }>(
-    '/api/plan-baseline/export-pdf-to-folder',
-    form,
-  )
+  const res = (await request.post<{
+    success: boolean
+    message?: string
+    saved?: string[]
+    errors?: string[]
+  }>('/api/plan-baseline/export-pdf-to-folder', form)) as unknown as {
+    success: boolean
+    message?: string
+    saved?: string[]
+    errors?: string[]
+  }
   return res ?? { success: false, message: 'レスポンスがありません' }
 }

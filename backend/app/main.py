@@ -2,13 +2,17 @@
 Smart-EMAP (ERP+APS+MES) 統合管理システム
 メインアプリケーションエントリーポイント
 """
-from fastapi import FastAPI, WebSocket
-from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+
 from app.core.config import settings
 from app.core.datetime_utils import JST
+from app.core.exception_handlers import register_exception_handlers
+from app.core.logging import setup_logging
 from app.modules import (
     auth,
     erp,
@@ -34,20 +38,31 @@ from app.modules import (
 )
 
 
+# Loguru による統一ログ初期化（標準 logging もブリッジ）
+setup_logging(
+    level=getattr(settings, "LOG_LEVEL", "INFO"),
+    log_file=getattr(settings, "LOG_FILE", "logs/app.log"),
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションライフサイクル管理"""
-    # 起動時の処理
-    print(f"🚀 Smart-EMAP システム起動中...")
-    print(f"⏰ 現在時刻 (JST): {datetime.now(JST).strftime('%Y年%m月%d日 %H:%M:%S')}")
+    logger.info("🚀 Smart-EMAP システム起動中...")
+    logger.info(
+        "⏰ 現在時刻 (JST): {}",
+        datetime.now(JST).strftime("%Y年%m月%d日 %H:%M:%S"),
+    )
     if getattr(settings, "FILE_WATCH_START_WITH_API", False):
         from app.services.file_watcher.run import start_file_watcher_background
 
         start_file_watcher_background()
-        print("📂 ファイル監視: API プロセス内バックグラウンドを有効にしました（FILE_WATCH_START_WITH_API）")
+        logger.info(
+            "📂 ファイル監視: API プロセス内バックグラウンドを有効化"
+            "（FILE_WATCH_START_WITH_API）"
+        )
     yield
-    # シャットダウン時の処理
-    print(f"🛑 Smart-EMAP システム停止中...")
+    logger.info("🛑 Smart-EMAP システム停止中...")
 
 
 # FastAPIアプリケーションの初期化
@@ -81,8 +96,12 @@ else:
     )
 
 # API連携ログ記録（/api/* のみ、api_logs テーブルに記録）
-from app.core.middleware.api_log_middleware import ApiLogMiddleware
+from app.core.middleware.api_log_middleware import ApiLogMiddleware  # noqa: E402
+
 app.add_middleware(ApiLogMiddleware)
+
+# グローバル例外ハンドラ（統一エラーレスポンス形式）
+register_exception_handlers(app)
 
 
 # ルーターの登録
@@ -154,11 +173,11 @@ async def websocket_route(websocket: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8005,
         reload=True,
     )
 
