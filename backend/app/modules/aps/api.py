@@ -3,6 +3,7 @@ APS（先進的計画・スケジューリング）APIエンドポイント
 産線管理、稼働カレンダー、工単 CRUD、排産エンジン、スケジューリンググリッド
 """
 import math
+import logging
 from collections import defaultdict
 from datetime import date, timedelta, datetime, time
 from decimal import Decimal
@@ -68,6 +69,7 @@ from app.modules.aps.schemas import (
 from app.modules.aps.engine import run_engine, replan_line_sequential, productive_hours_from_slot_rows, _fetch_slots_by_date
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _dec(v) -> float:
@@ -1589,9 +1591,13 @@ async def replan_sequence(
         except ValueError:
             raise HTTPException(400, "anchorStartDate は YYYY-MM-DD 形式")
 
-    # 计划变更时，先清理该线体“今天之后”的旧排产数据，避免旧数据残留混入新排产
+    # 计划变更时，先清理该线体“今天之后”的旧排产数据，避免旧数据残留混入新排产。
+    # 为避免 anchor 位于未来时产生 [today+1, anchor-1] 的空窗，执行重排起点会钳制到 today+1。
     today = now_jst().date()
-    clear_from = max(anchor, today + timedelta(days=1)) if anchor else (today + timedelta(days=1))
+    clear_from = today + timedelta(days=1)
+    replan_start_anchor = anchor
+    if replan_start_anchor is not None and replan_start_anchor > clear_from:
+        replan_start_anchor = clear_from
     line_sched_res = await db.execute(
         select(ProductionSchedule.id).where(
             ProductionSchedule.line_id == line_id,
@@ -1661,7 +1667,7 @@ async def replan_sequence(
     line_machine = await db.get(Machine, line_id)
 
     # 共有日历/时间帯を一括先読み
-    cal_start = anchor or today
+    cal_start = replan_start_anchor or today
     cal_end_d = cal_start + timedelta(days=365)
     cal_result = await db.execute(
         select(LineCapacity)
@@ -1679,7 +1685,7 @@ async def replan_sequence(
 
     # ── Step 1: 通常の順次排産 ──
     updated = await replan_line_sequential(
-        db, line_id, anchor,
+        db, line_id, replan_start_anchor,
         machine_obj=line_machine,
         cal_map_preloaded=shared_cal_map,
         slots_by_date_preloaded=shared_slots,
@@ -1744,7 +1750,7 @@ async def replan_sequence(
     replan_debug_rows: list[dict[str, Any]] = []
 
     if has_any_activity:
-        cursor_date_r = anchor or updated[0].start_date or now_jst().date()
+        cursor_date_r = replan_start_anchor or updated[0].start_date or now_jst().date()
         cursor_time_r = time(0, 0, 0)
 
         for ps in updated:
@@ -1804,8 +1810,10 @@ async def replan_sequence(
 
                 forced_start = getattr(ps, "forced_start_date", None)
                 effective_replan_start = cursor_date_r
+                effective_replan_time = cursor_time_r
                 if forced_start is not None and forced_start > effective_replan_start:
                     effective_replan_start = forced_start
+                    effective_replan_time = time(0, 0, 0)
                 # 既に当該工単で実績/不良が出ている場合は、同一製品の継続生産として扱う。
                 # Step3 の再排産開始日（最終活動日の翌日）で段取を再控除すると
                 # 日量が不当に下がるため、use_setup_time=False に固定する。
@@ -1813,7 +1821,7 @@ async def replan_sequence(
                     db,
                     ps.id,
                     override_start_date=effective_replan_start,
-                    override_start_time=cursor_time_r,
+                    override_start_time=effective_replan_time,
                     actual_done_qty=actual_done_for_engine,
                     use_setup_time=False,
                     ps_obj=ps,
@@ -1839,13 +1847,15 @@ async def replan_sequence(
                     })
                 forced_start = getattr(ps, "forced_start_date", None)
                 effective_replan_start = cursor_date_r
+                effective_replan_time = cursor_time_r
                 if forced_start is not None and forced_start > effective_replan_start:
                     effective_replan_start = forced_start
+                    effective_replan_time = time(0, 0, 0)
                 ps = await run_engine(
                     db,
                     ps.id,
                     override_start_date=effective_replan_start,
-                    override_start_time=cursor_time_r,
+                    override_start_time=effective_replan_time,
                     use_setup_time=(line_head_schedule_id is None or ps.id != int(line_head_schedule_id)),
                     ps_obj=ps,
                     machine_obj=line_machine,
@@ -1976,8 +1986,35 @@ async def replan_sequence(
                     )
         await db.flush()
 
+    anchor_debug_payload = {
+        "line_id": int(line_id),
+        "requested_anchor": anchorStartDate or None,
+        "db_anchor": ar_row.anchor_date.isoformat() if (ar_row and ar_row.anchor_date) else None,
+        "effective_anchor": replan_start_anchor.isoformat() if replan_start_anchor else None,
+        "clear_from": clear_from.isoformat(),
+        "anchor_clamped_to_clear_from": bool(
+            anchor is not None and replan_start_anchor is not None and replan_start_anchor != anchor
+        ),
+    }
+    logger.info(
+        "[重排锚点] 线体=%s，请求锚点=%s，DB锚点=%s，实际执行锚点=%s，清理起点=%s，是否发生锚点钳制=%s",
+        anchor_debug_payload["line_id"],
+        anchor_debug_payload["requested_anchor"],
+        anchor_debug_payload["db_anchor"],
+        anchor_debug_payload["effective_anchor"],
+        anchor_debug_payload["clear_from"],
+        "是" if anchor_debug_payload["anchor_clamped_to_clear_from"] else "否",
+    )
+
     data: dict[str, Any] = {"count": len(updated)}
     if includeDebug:
+        data["replan_anchor_debug"] = {
+            "requested_anchor": anchor_debug_payload["requested_anchor"],
+            "db_anchor": anchor_debug_payload["db_anchor"],
+            "effective_anchor": anchor_debug_payload["effective_anchor"],
+            "clear_from": anchor_debug_payload["clear_from"],
+            "anchor_clamped_to_clear_from": anchor_debug_payload["anchor_clamped_to_clear_from"],
+        }
         data["replan_debug"] = replan_debug_rows
 
     return {

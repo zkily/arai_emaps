@@ -70,10 +70,18 @@ async def get_user_from_token(websocket: WebSocket, db: AsyncSession) -> User:
 
 async def register_connection(username: str, websocket: WebSocket):
     """WebSocket接続を登録"""
+    was_online = username in active_connections and len(active_connections[username]) > 0
     if username not in active_connections:
         active_connections[username] = set()
     active_connections[username].add(websocket)
-    logger.info(f"[WebSocket] User {username} connected. Total connections: {len(active_connections[username])}")
+    if was_online:
+        logger.info(
+            f"[WebSocket] 用户 {username} 已重新连接（当前连接数: {len(active_connections[username])}）"
+        )
+    else:
+        logger.info(
+            f"[WebSocket] 用户 {username} 已进入实时页面（当前连接数: {len(active_connections[username])}）"
+        )
 
 
 async def unregister_connection(username: str, websocket: WebSocket):
@@ -82,7 +90,9 @@ async def unregister_connection(username: str, websocket: WebSocket):
         active_connections[username].discard(websocket)
         if not active_connections[username]:
             del active_connections[username]
-        logger.info(f"[WebSocket] User {username} disconnected. Remaining connections: {len(active_connections.get(username, []))}")
+        logger.info(
+            f"[WebSocket] 用户 {username} 暂时离线，等待重连（剩余连接数: {len(active_connections.get(username, []))}）"
+        )
 
 
 async def notify_user_logged_in_elsewhere(username: str, new_token: str):

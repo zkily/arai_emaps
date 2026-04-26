@@ -304,9 +304,13 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="item_name" label="製品名" width="130" />
+        <el-table-column label="製品名" width="120">
+          <template #default="{ row }">
+            <span class="schedule-item-name-strong">{{ row.item_name }}</span>
+          </template>
+        </el-table-column>
         <!-- <el-table-column prop="product_cd" label="製品CD" width="110" /> -->
-        <el-table-column label="合計(本)" width="128" align="right">
+        <el-table-column label="合計(本)" width="90" align="right">
           <template #default="{ row }">
             <div
               v-if="editingScheduleTotalId === row.id"
@@ -334,7 +338,7 @@
             </span>
       </template>
         </el-table-column>
-        <el-table-column label="段取（分）" width="98" align="right">
+        <el-table-column label="段取(分)" width="80" align="right">
           <template #default="{ row }">
             <div
               v-if="editingScheduleSetupId === row.id"
@@ -362,7 +366,7 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="開始日指定" width="118" align="center">
+        <el-table-column label="開始日指定" width="110" align="center">
           <template #default="{ row }">
             <div
               v-if="editingScheduleForcedStartId === row.id"
@@ -405,31 +409,42 @@
             {{ scheduleListDateSpanById[row.id]?.end ?? '—' }}
           </template>
         </el-table-column>
-        <el-table-column label="状態" width="100" align="center">
+        <el-table-column label="状態" width="85" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ statusLabelJa(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="進捗" width="120" align="center">
+        <el-table-column label="進捗" width="70" align="center">
           <template #default="{ row }">
             <div class="schedule-progress-cell">
               <template v-if="scheduleProgressMap[row.id]">
-                <el-tag
+                <el-popover
                   v-for="st in scheduleProgressMap[row.id]"
                   :key="st.status"
-                  :type="progressStatusType(st.status)"
-                  size="small"
-                  effect="dark"
-                  class="schedule-progress-tag"
+                  placement="top"
+                  trigger="click"
+                  width="250"
                 >
-                  {{ progressStatusLabel(st.status) }}{{ st.count > 1 ? `×${st.count}` : '' }}
-                </el-tag>
+                  <template #reference>
+                    <span
+                      class="schedule-progress-num schedule-progress-num--clickable"
+                      :class="progressStatusNumberClass(st.status)"
+                    >
+                      {{ st.count }}
+                    </span>
+                  </template>
+                  <div class="schedule-progress-pop">
+                    <div class="schedule-progress-pop__row"><b>ステータス：</b>{{ progressStatusLabel(st.status) }}</div>
+                    <div class="schedule-progress-pop__row"><b>件数：</b>{{ st.count }}</div>
+                    <div class="schedule-progress-pop__row"><b>進捗：</b>{{ progressStatusSourceTable(st.status) }}</div>
+                  </div>
+                </el-popover>
               </template>
               <span v-else class="schedule-progress-none">—</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" align="center">
+        <el-table-column label="操作" width="70" align="center">
           <template #default="{ row }">
             <el-button type="danger" size="small" text @click="removeSchedule(row.id)">
               <el-icon><Delete /></el-icon>
@@ -2198,6 +2213,20 @@ function progressStatusType(s: string): 'info' | 'warning' | 'primary' | 'succes
   if (s === 'RELEASED') return 'warning'
   return 'info'
 }
+function progressStatusNumberClass(s: string): string {
+  if (s === 'IN_PROGRESS') return 'is-in-progress'
+  if (s === 'RELEASED') return 'is-released'
+  if (s === 'PLANNED') return 'is-planned'
+  if (s === 'COMPLETED') return 'is-completed'
+  return 'is-default'
+}
+function progressStatusSourceTable(s: string): string {
+  if (s === 'IN_PROGRESS') return '（切断進行中）'
+  if (s === 'COMPLETED') return '（切断完了）'
+  if (s === 'RELEASED') return '（上流指示済み）'
+  if (s === 'PLANNED') return '（上流未同期）'
+  return '—'
+}
 function progressCellClass(lot: ProgressLotItem, d: string): Record<string, boolean> {
   const key = `${lot.aps_schedule_id}_${lot.lot_number}`
   const qty = (progressLotDaily.value[key] || {})[d] || 0
@@ -2509,6 +2538,10 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 .schedule-completed-switch {
   margin-right: 4px;
+}
+.schedule-item-name-strong {
+  font-weight: 700;
+  color: #000;
 }
 .schedule-section .schedule-replan-btn {
   height: var(--ctrl-h);
@@ -2955,7 +2988,29 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 
 /* ── 進捗列（計画一覧） ── */
 .schedule-progress-cell { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; align-items: center; }
-.schedule-progress-tag  { font-size: 10px !important; padding: 0 5px !important; height: 18px !important; line-height: 18px !important; }
+.schedule-progress-num {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 10px;
+}
+.schedule-progress-num--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.schedule-progress-num.is-in-progress { color: #2563eb; } /* 生産中 */
+.schedule-progress-num.is-released { color: #d97706; }    /* 指示済 */
+.schedule-progress-num.is-planned { color: #475569; }     /* 計画中 */
+.schedule-progress-num.is-completed { color: #059669; }   /* 完了 */
+.schedule-progress-num.is-default { color: #64748b; }
+.schedule-progress-pop {
+  font-size: 12px;
+  color: #0f172a;
+  line-height: 1.5;
+}
+.schedule-progress-pop__row + .schedule-progress-pop__row {
+  margin-top: 4px;
+}
 .schedule-progress-none { color: var(--c-text-s); font-size: var(--fs-s); }
 
 /* ── 合計(本) inline-edit ── */

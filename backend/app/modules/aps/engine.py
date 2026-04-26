@@ -650,13 +650,16 @@ async def replan_line_sequential(
             use_setup = idx != 0
             forced_start = getattr(ps, "forced_start_date", None)
             effective_start = cursor_date
+            effective_start_time = cursor_time
             if forced_start is not None and forced_start > effective_start:
                 effective_start = forced_start
+                # 開始日指定で日付を後ろへ送る場合は、前工単の時刻を持ち越さず 00:00 から計算。
+                effective_start_time = time(0, 0, 0)
             ps = await run_engine(
                 db,
                 ps.id,
                 override_start_date=effective_start,
-                override_start_time=cursor_time,
+                override_start_time=effective_start_time,
                 use_setup_time=use_setup,
                 ps_obj=ps,
                 machine_obj=line,

@@ -1136,6 +1136,7 @@ function buildReplanConfirmMessage() {
     h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
     h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）で実績0の日別計画のみ固定対象です。本日分は実績0でも固定せず、再計算結果で更新されます。'),
     h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, 'アンカー日が未来の場合でも、再計算は明日以降を連続で再作成します（空白期間は作りません）。'),
     h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
   ])
 }
@@ -1767,14 +1768,35 @@ async function replanAllLinesForProcess() {
     }
     replanProgressTotal.value = lines.length
     const anchor = replanFallbackAnchorDate.value
+    const failed: string[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      replanCurrentLineLabel.value = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
-      await replanLineSequence(line.id, anchor)
+      const lineLabel = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
+      replanCurrentLineLabel.value = lineLabel
+      try {
+        await replanLineSequence(line.id, anchor)
+      } catch (e: unknown) {
+        failed.push(`${lineLabel}: ${formatApiError(e) || '再計算に失敗しました'}`)
+      }
       replanProgressDone.value = i + 1
     }
     await loadSchedules()
-    ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+    if (failed.length === 0) {
+      ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+    } else {
+      const ok = lines.length - failed.length
+      ElMessage.warning(`再計算完了（成功 ${ok} / 失敗 ${failed.length}）`)
+      const preview = failed.slice(0, 5).join('\n')
+      await ElMessageBox.alert(
+        `${preview}${failed.length > 5 ? `\n...ほか ${failed.length - 5} 件` : ''}`,
+        '再計算失敗の設備',
+        {
+          type: 'warning',
+          confirmButtonText: 'OK',
+          customClass: 'forming-replan-messagebox',
+        },
+      )
+    }
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e) || '再計算に失敗しました')
     try {
