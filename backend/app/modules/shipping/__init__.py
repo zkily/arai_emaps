@@ -16,6 +16,7 @@ from app.modules.shipping.print_history_api import router as print_history_route
 from app.modules.shipping.welding_api import router as welding_router
 from app.modules.shipping.picking_api import router as picking_router
 from app.modules.shipping.quick_update_api import router as quick_update_router
+from app.modules.shipping.warehouse_daily_stock_api import router as warehouse_daily_stock_router
 
 router = APIRouter()
 router.include_router(quick_update_router, tags=["出荷クイック編集"])
@@ -27,3 +28,4 @@ router.include_router(print_record_router, prefix="/print-record", tags=["印刷
 router.include_router(export_picking_router, prefix="/export", tags=["ピッキングエクスポート"])
 router.include_router(overview_router, prefix="/overview", tags=["出荷報告一覧"])
 router.include_router(print_history_router, prefix="/print", tags=["印刷履歴"])
+router.include_router(warehouse_daily_stock_router, prefix="/warehouse-daily", tags=["倉庫日次在庫"])

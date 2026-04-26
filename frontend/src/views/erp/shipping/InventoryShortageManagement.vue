@@ -24,13 +24,13 @@
               value-format="YYYY-MM-DD"
               size="small"
               :editable="false"
-              @change="handleDateChange"
               class="date-picker"
+              @change="handleDateChange"
             />
             <div class="date-nav-buttons">
-              <el-button size="small" @click="adjustDate(-1)" class="nav-btn nav-prev">{{ t('shipping.prevDay') }}</el-button>
-              <el-button size="small" @click="goToToday" class="nav-btn today-btn">{{ t('shipping.today') }}</el-button>
-              <el-button size="small" @click="adjustDate(1)" class="nav-btn nav-next">{{ t('shipping.nextDay') }}</el-button>
+              <el-button size="small" class="nav-btn nav-prev" @click="adjustDate(-1)">{{ t('shipping.prevDay') }}</el-button>
+              <el-button size="small" class="nav-btn today-btn" @click="goToToday">{{ t('shipping.today') }}</el-button>
+              <el-button size="small" class="nav-btn nav-next" @click="adjustDate(1)">{{ t('shipping.nextDay') }}</el-button>
             </div>
           </div>
 
@@ -62,29 +62,29 @@
           <div class="filter-actions">
             <el-button
               :icon="TrendCharts"
-              @click="openChartDialog"
               :disabled="chartButtonDisabled"
               class="action-btn action-btn-chart"
               size="small"
+              @click="openChartDialog"
             >
               {{ t('shipping.chartTrend') }}
             </el-button>
             <el-button
               :icon="Printer"
-              @click="handlePrint"
               :disabled="loading || !filters.dateRange || filters.dateRange.length !== 2"
               class="action-btn action-btn-print"
               size="small"
+              @click="handlePrint"
             >
               不足数発行
             </el-button>
             <el-button
               :icon="Operation"
-              @click="handleAllUpdate"
               :disabled="updatingAll"
               :loading="updatingAll"
               class="action-btn action-btn-update"
               size="small"
+              @click="handleAllUpdate"
             >
               {{ t('shipping.batchUpdate') }}
             </el-button>
@@ -126,7 +126,7 @@
       </div>
 
       <!-- データテーブル -->
-      <div class="table-section glass-table-wrap" v-loading="loading">
+      <div v-loading="loading" class="table-section glass-table-wrap">
         <el-empty
           v-if="!loading && displayedData.length === 0"
           :description="t('shipping.noData')"
@@ -247,7 +247,7 @@
                       <td class="print-td">{{ row.product_name || '—' }}</td>
                       <td class="print-td">{{ row.product_type || '—' }}</td>
                       <td class="print-td">{{ row.box_type || '—' }}</td>
-                      <td class="print-td print-td-num">{{ row.inspection_inventory != null ? formatNumber(row.inspection_inventory) : '—' }}</td>
+                      <td class="print-td print-td-num">{{ formatPrintInspectionInventory(row.inspection_inventory) }}</td>
                       <td class="print-td print-td-num">{{ row.box_quantity != null ? formatNumber(row.box_quantity) : '—' }}</td>
                       <td class="print-td print-td-num">{{ formatNumber(row.units) }}</td>
                     </tr>
@@ -289,8 +289,8 @@
         </div>
         <template #footer>
           <div class="dialog-footer">
-            <el-button @click="showAllUpdateConfirmDialog = false" class="cancel-btn">キャンセル</el-button>
-            <el-button type="primary" @click="confirmAllUpdate" class="confirm-btn">一括更新開始</el-button>
+            <el-button class="cancel-btn" @click="showAllUpdateConfirmDialog = false">キャンセル</el-button>
+            <el-button type="primary" class="confirm-btn" @click="confirmAllUpdate">一括更新開始</el-button>
           </div>
         </template>
       </el-dialog>
@@ -311,7 +311,7 @@
         </div>
         <template #footer>
           <div class="chart-dialog-footer">
-            <el-button :icon="Printer" @click="handlePrintChart" type="primary" size="default">印刷</el-button>
+            <el-button :icon="Printer" type="primary" size="default" @click="handlePrintChart">印刷</el-button>
             <el-button @click="showChartDialog = false">閉じる</el-button>
           </div>
         </template>
@@ -638,6 +638,13 @@ function handleProductChange() {
 function formatNumber(val: number | null | undefined): string {
   if (val == null || (typeof val === 'number' && Number.isNaN(val))) return '-'
   return Number(val).toLocaleString()
+}
+
+/** 印刷「検査済在庫」：0・未設定は '—' */
+function formatPrintInspectionInventory(val: number | null | undefined): string {
+  if (val == null || (typeof val === 'number' && Number.isNaN(val))) return '—'
+  if (Number(val) === 0) return '—'
+  return formatNumber(val)
 }
 
 function getSummaries(param: { columns: Array<{ property?: string }>; data: SummaryRow[] }): string[] {

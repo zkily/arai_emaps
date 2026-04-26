@@ -727,7 +727,8 @@ async def get_inventory_shortage_print(
     在庫不足一覧印刷用。production_summarys の倉庫在庫マイナス行を、
     products（product_type, box_type, unit_per_box, destination_cd）と
     destinations（destination_name）でジョインして返す。
-    箱数 = 本数 / unit_per_box（本数＝warehouse_inventory）
+    箱数 = 本数 / unit_per_box（本数＝warehouse_inventory）。
+    products.product_type が「量産品」の行のみ。
     """
     if not startDate or not endDate:
         return {"data": []}
@@ -766,6 +767,7 @@ async def get_inventory_shortage_print(
             .where(ProductionSummary.date >= start_d)
             .where(ProductionSummary.date <= end_d)
             .where(ProductionSummary.warehouse_inventory < 0)
+            .where(Product.product_type == "量産品")
             .order_by(ProductionSummary.product_name, ProductionSummary.product_cd)
         )
         if productCd:

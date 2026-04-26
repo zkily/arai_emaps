@@ -310,6 +310,7 @@
             <el-menu-item index="/erp/shipping/inventory-shortage"><el-icon><Warning /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE')">{{ t('menu.ERP_SHIPPING_INVENTORY_SHORTAGE') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/abc-analysis"><el-icon><DataAnalysis /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_ABC')">{{ t('menu.ERP_SHIPPING_ABC') }}</span></template></el-menu-item>
             <el-menu-item index="/erp/shipping/inventory-kpi"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_INVENTORY_KPI')">{{ t('menu.ERP_SHIPPING_INVENTORY_KPI') }}</span></template></el-menu-item>
+            <el-menu-item index="/erp/shipping/warehouse-daily"><el-icon><OfficeBuilding /></el-icon><template #title><span :title="t('menu.ERP_SHIPPING_WAREHOUSE_DAILY')">{{ t('menu.ERP_SHIPPING_WAREHOUSE_DAILY') }}</span></template></el-menu-item>
           </el-sub-menu>
           
           <el-sub-menu index="erp-quality">

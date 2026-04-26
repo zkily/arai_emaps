@@ -114,6 +114,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_SHIPPING_INVENTORY_SHORTAGE', name: '倉庫在庫管理', path: '/erp/shipping/inventory-shortage', parentCode: 'ERP_SHIPPING', sortOrder: 7 },
   { code: 'ERP_SHIPPING_ABC', name: 'ABC分析', path: '/erp/shipping/abc-analysis', parentCode: 'ERP_SHIPPING', sortOrder: 8 },
   { code: 'ERP_SHIPPING_INVENTORY_KPI', name: '在庫KPI・アラート', path: '/erp/shipping/inventory-kpi', parentCode: 'ERP_SHIPPING', sortOrder: 9 },
+  { code: 'ERP_SHIPPING_WAREHOUSE_DAILY', name: '倉庫日次在庫', path: '/erp/shipping/warehouse-daily', parentCode: 'ERP_SHIPPING', sortOrder: 10 },
   { code: 'ERP_QUALITY', name: '品質管理', path: '/erp/quality', icon: 'CircleCheck', parentCode: 'ERP', sortOrder: 9 },
   { code: 'ERP_QUALITY_MATERIAL', name: '材料受入履歴', path: '/erp/quality/material-association/receiving-history', parentCode: 'ERP_QUALITY', sortOrder: 1 },
   { code: 'ERP_QUALITY_MATERIAL_TOLERANCE', name: '材料公差管理', path: '/erp/quality/material-association/tolerance-management', parentCode: 'ERP_QUALITY', sortOrder: 1.1 },

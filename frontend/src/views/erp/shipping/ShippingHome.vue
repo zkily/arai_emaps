@@ -325,6 +325,13 @@ const modules = [
     gradient: 'linear-gradient(135deg, #2563eb, #3b82f6)',
   },
   {
+    path: '/erp/shipping/warehouse-daily',
+    title: '倉庫日次在庫',
+    description: '製品別の日次受注・在庫推移の管理',
+    icon: markRaw(OfficeBuilding),
+    gradient: 'linear-gradient(135deg, #7c3aed, #a855f7)',
+  },
+  {
     path: '/erp/shipping/abc-analysis',
     title: 'ABC分析',
     description: '出荷データによる品目・納入先の重要度分析',
