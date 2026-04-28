@@ -70,15 +70,11 @@ export function performDeduplicate() {
 }
 
 export function syncToPickingTasks() {
-  return request.post('/api/shipping/picking/sync-data')
+  return request.post('/api/shipping/items/refresh-picking-log-matched')
 }
 
 export function getSyncStatus() {
   return request.get('/api/shipping/picking/sync-status')
-}
-
-export function createPickingTable() {
-  return request.post('/api/shipping/picking/db/init')
 }
 
 export function getSyncDebugInfo() {

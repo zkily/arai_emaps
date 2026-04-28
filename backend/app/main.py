@@ -2,8 +2,9 @@
 Smart-EMAP (ERP+APS+MES) 統合管理システム
 メインアプリケーションエントリーポイント
 """
+import asyncio
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,7 @@ from loguru import logger
 
 from app.core.config import settings
 from app.core.datetime_utils import JST
+from app.core.database import AsyncSessionLocal
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import setup_logging
 from app.modules import (
@@ -44,6 +46,43 @@ setup_logging(
     log_file=getattr(settings, "LOG_FILE", "logs/app.log"),
 )
 
+# APIログ自動削除（JST 毎日 02:00、2か月より古いデータ）
+async def _delete_old_api_logs_once() -> int:
+    from sqlalchemy import text
+
+    async with AsyncSessionLocal() as db:
+        # 「2か月」を SQL の INTERVAL 2 MONTH で統一
+        q = text("DELETE FROM api_logs WHERE timestamp < DATE_SUB(NOW(), INTERVAL 2 MONTH)")
+        result = await db.execute(q)
+        await db.commit()
+        return int(result.rowcount or 0)
+
+
+def _seconds_until_next_jst_2am(now: datetime) -> float:
+    target = now.replace(hour=2, minute=0, second=0, microsecond=0)
+    if now >= target:
+        target = target + timedelta(days=1)
+    return max((target - now).total_seconds(), 1.0)
+
+
+async def _api_logs_cleanup_loop():
+    logger.info("🧹 APIログ自動削除タスク開始（毎日 02:00 JST、保持期間 2か月）")
+    while True:
+        try:
+            now = datetime.now(JST)
+            wait_seconds = _seconds_until_next_jst_2am(now)
+            await asyncio.sleep(wait_seconds)
+            run_at = datetime.now(JST).strftime("%Y-%m-%d %H:%M:%S JST")
+            deleted = await _delete_old_api_logs_once()
+            logger.info("🧹 api_logs 自動削除完了: 実行時刻={} / 削除件数={} 件（2か月より古いデータ）", run_at, deleted)
+        except asyncio.CancelledError:
+            logger.info("🛑 APIログ自動削除タスク停止")
+            raise
+        except Exception as e:
+            logger.warning("APIログ自動削除でエラー: {}", e)
+            # 異常時は 5 分後に再試行
+            await asyncio.sleep(300)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,7 +100,13 @@ async def lifespan(app: FastAPI):
             "📂 ファイル監視: API プロセス内バックグラウンドを有効化"
             "（FILE_WATCH_START_WITH_API）"
         )
+    cleanup_task = asyncio.create_task(_api_logs_cleanup_loop())
     yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
     logger.info("🛑 Smart-EMAP システム停止中...")
 
 

@@ -65,7 +65,22 @@
       </router-link>
     </div>
 
-    <!-- 3. 生産指示（instruction 配下の各工程） -->
+    <!-- 3. 生産指標 -->
+    <div class="section-title">生産指標</div>
+    <div class="module-grid">
+      <router-link v-for="m in metricsModules" :key="m.path" :to="m.path" class="module-card modern-card">
+        <div class="module-icon" :style="{ background: m.gradient }">
+          <el-icon :size="32"><component :is="m.icon" /></el-icon>
+        </div>
+        <div class="module-info">
+          <h3 class="module-title">{{ m.title }}</h3>
+          <p class="module-desc">{{ m.description }}</p>
+        </div>
+        <el-icon class="module-arrow"><ArrowRight /></el-icon>
+      </router-link>
+    </div>
+
+    <!-- 4. 生産指示（instruction 配下の各工程） -->
     <div class="section-title">生産指示</div>
     <div class="module-grid">
       <router-link v-for="m in instructionModules" :key="m.path" :to="m.path" class="module-card modern-card">
@@ -80,7 +95,7 @@
       </router-link>
     </div>
 
-    <!-- 4. 生産実績 -->
+    <!-- 5. 生産実績 -->
     <div class="section-title">生産実績</div>
     <div class="module-grid">
       <router-link v-for="m in resultModules" :key="m.path" :to="m.path" class="module-card modern-card">
@@ -102,7 +117,7 @@ import { ref, markRaw } from 'vue'
 import type { Component } from 'vue'
 import {
   Setting, ArrowRight, Document, DataAnalysis, Tickets,
-  Cpu, TrendCharts, DataLine, Calendar, Operation, Connection, Box
+  Cpu, TrendCharts, DataLine, Calendar, Operation, Connection, Box, Delete, Monitor, Warning
 } from '@element-plus/icons-vue'
 
 interface ModuleItem {
@@ -127,6 +142,12 @@ const planningModules = ref<ModuleItem[]>([
 
 const requirementsModules = ref<ModuleItem[]>([
   { path: '/erp/production-requirements/material', title: '材料需要量', description: 'instruction_plans の start_date 基準で材料別件数・日別二次元表', icon: markRaw(Box), gradient: 'linear-gradient(135deg, #13c2c2, #2f54eb)' },
+])
+
+const metricsModules = ref<ModuleItem[]>([
+  { path: '/erp/production/metrics/scrap-rate', title: '廃棄率', description: '工程・製品別の廃棄数量とロス傾向を分析', icon: markRaw(Delete), gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)' },
+  { path: '/erp/production/metrics/utilization-rate', title: '稼働率', description: '設備・工程別の計画時間に対する稼働状況を確認', icon: markRaw(Monitor), gradient: 'linear-gradient(135deg, #409eff, #36cfc9)' },
+  { path: '/erp/production/metrics/defect-rate', title: '不良率', description: '工程・製品別の不良発生傾向を可視化', icon: markRaw(Warning), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
 ])
 
 const instructionModules = ref<ModuleItem[]>([

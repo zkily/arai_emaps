@@ -258,6 +258,21 @@
       </el-table>
     </div>
 
+    <div v-if="isProductTab" class="product-summary">
+      <span class="product-summary__item">
+        件数
+        <strong>{{ formatNumber(totalCount, 0) }}</strong>
+      </span>
+      <span class="product-summary__item">
+        数量合計
+        <strong>{{ formatNumber(productQuantityTotal, 0) }}</strong>
+      </span>
+      <span class="product-summary__item">
+        金額合計
+        <strong class="product-summary__amount">¥{{ formatNumber(productTotalValueSummary, 0) }}</strong>
+      </span>
+    </div>
+
     <!-- 分页 -->
     <div class="pagination-container">
       <div class="pagination-info">
@@ -274,7 +289,7 @@
         v-model:page-size="pageSize"
         :page-sizes="[20, 50, 100, 200]"
         :total="totalCount"
-        layout="sizes, prev, pager, next, jumper"
+        layout="sizes, prev, pager, next"
         @size-change="handleSizeChange"
         @current-change="handleCurrentChange"
         class="table-pagination"
@@ -813,11 +828,25 @@ const selectedRows = ref<any[]>([])
 const currentPage = ref(1)
 const pageSize = ref(50)
 const totalCount = ref(0)
+const productTotalValueFromApi = ref<number | null>(null)
 const tableHeight = ref(600)
 
 // 排序
 const sortField = ref('product_name')
 const sortOrder = ref('asc')
+
+const productQuantityTotal = computed(() =>
+  tableData.value.reduce((sum, row) => sum + (Number(row?.quantity) || 0), 0),
+)
+
+const productTotalValueByPage = computed(() =>
+  tableData.value.reduce((sum, row) => sum + (Number(row?.total_value) || 0), 0),
+)
+
+const productTotalValueSummary = computed(() => {
+  if (!isProductTab.value) return 0
+  return productTotalValueFromApi.value ?? productTotalValueByPage.value
+})
 
 // 列设置
 const columnLabels = {
@@ -1691,6 +1720,11 @@ const loadTableData = async () => {
       const list = inner.list ?? []
       totalCount.value = Number(inner.total ?? 0)
       tableData.value = list
+      productTotalValueFromApi.value = isProductTab.value
+        ? inner.sum_total_value != null
+          ? Number(inner.sum_total_value)
+          : null
+        : null
       const sumTotalValue =
         props.itemType === '材料' || props.itemType === '部品'
           ? Number(inner.sum_total_value ?? 0)
@@ -2495,6 +2529,37 @@ defineExpose({
     border-color 0.3s ease;
 }
 
+.product-summary {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 12px;
+  margin-top: 0;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(255, 251, 235, 0.8), rgba(254, 243, 199, 0.55));
+  color: #7c2d12;
+}
+
+.product-summary__item {
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.product-summary__item strong {
+  color: #1f2937;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.product-summary__amount {
+  color: #b45309 !important;
+}
+
 .pagination-container:hover {
   border-color: rgba(14, 165, 233, 0.2);
   box-shadow:
@@ -2521,19 +2586,26 @@ defineExpose({
 
 .info-text {
   color: #475569;
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .selected-info {
   color: #3b82f6;
   font-weight: 600;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .table-pagination :deep(.el-pagination) {
   color: #374151;
   background: transparent;
-  --el-pagination-font-size: 11px;
+  --el-pagination-font-size: 10px;
+}
+
+.table-pagination :deep(.el-pagination .el-select .el-input__inner),
+.table-pagination :deep(.el-pagination .el-input__inner),
+.table-pagination :deep(.el-pagination .el-select__placeholder),
+.table-pagination :deep(.el-pagination__sizes .el-select .el-select__wrapper) {
+  font-size: 10px !important;
 }
 
 .table-pagination :deep(.el-pagination .el-pager li) {
@@ -2542,9 +2614,9 @@ defineExpose({
   border: 1px solid rgba(203, 213, 225, 0.85);
   border-radius: 8px;
   margin: 0 3px;
-  min-width: 28px;
-  height: 28px;
-  line-height: 26px;
+  min-width: 24px;
+  height: 24px;
+  line-height: 22px;
   font-weight: 600;
   transition:
     background 0.25s ease,
@@ -2568,8 +2640,8 @@ defineExpose({
 
 .table-pagination :deep(.btn-prev),
 .table-pagination :deep(.btn-next) {
-  min-width: 24px;
-  height: 24px;
+  min-width: 22px;
+  height: 22px;
 }
 
 /* 弹窗样式 */

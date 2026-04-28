@@ -1,11 +1,8 @@
 """
 ピッキング管理 API
-- GET  /new-progress: 本日のピッキング進捗
-- POST /db/init: picking_tasks テーブル作成
-- GET  /tasks/for-display: ピッキングタスク一覧
-- POST /sync-data: shipping_items → picking_tasks 同期
-- GET  /history: ピッキング履歴
-- GET  /performance-by-destination: 担当者別・納入先別パフォーマンス（担当者＝納入先グループ）
+- GET  /new-progress: 本日のピッキング進捗（shipping_items + picking_log_matched）
+- GET  /history: ピッキング履歴（shipping_items）
+- GET  /performance-by-destination: 担当者別パフォーマンス（shipping_items）
 """
 import json
 import logging
@@ -18,10 +15,24 @@ from datetime import date, timedelta
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
+from app.modules.shipping.shipping_items_api import _shipping_item_to_picking_display_dict
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# shipping_log 突合せ後に picking_api / items API から再利用
+REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL = text("""
+UPDATE shipping_items si
+LEFT JOIN (
+    SELECT picking_no
+    FROM shipping_log
+    WHERE picking_no IS NOT NULL AND picking_no != ''
+    GROUP BY picking_no
+) sl ON sl.picking_no = si.shipping_no_p
+SET si.picking_log_matched = IF(sl.picking_no IS NULL, 0, 1)
+WHERE si.shipping_no_p IS NOT NULL AND si.shipping_no_p != ''
+""")
 
 
 def _parse_group_destinations(raw: Any) -> List[str]:
@@ -54,39 +65,6 @@ def _safe_date(val) -> str:
     return str(val)
 
 
-def _safe_datetime(val) -> str:
-    """日時を文字列に変換"""
-    if val is None:
-        return ""
-    return str(val)
-
-
-def _task_row_to_dict(r) -> dict:
-    """picking_tasks の行を辞書に変換。作業者表示用に users.full_name を picker_full_name で返す"""
-    return {
-        "id": r.get("id"),
-        "shipping_no_p": r.get("shipping_no_p") or "",
-        "shipping_no": r.get("shipping_no") or "",
-        "shipping_date": _safe_date(r.get("shipping_date")),
-        "product_cd": r.get("product_cd") or "",
-        "product_name": r.get("product_name") or "",
-        "confirmed_boxes": int(r.get("confirmed_boxes") or 0),
-        "destination_cd": r.get("destination_cd") or "",
-        "destination_name": r.get("destination_name") or "",
-        "picked_quantity": int(r.get("picked_quantity") or 0),
-        "picked_no": r.get("picked_no") or "",
-        "location_cd": r.get("location_cd") or "",
-        "picker_id": r.get("picker_id") or "",
-        "picker_name": r.get("picker_name") or "",
-        "picker_full_name": r.get("picker_full_name") or "",  # users.full_name（picker_id=username で JOIN）
-        "status": r.get("status") or "pending",
-        "start_time": _safe_datetime(r.get("start_time")),
-        "complete_time": _safe_datetime(r.get("complete_time")),
-        "created_at": _safe_datetime(r.get("created_at")),
-        "updated_at": _safe_datetime(r.get("updated_at")),
-    }
-
-
 # ================================================================
 # 1. GET /new-progress  ─ ピッキング進捗（本日 or 指定期間）
 # ================================================================
@@ -97,57 +75,37 @@ async def get_new_progress(
     start_date: Optional[str] = Query(None, description="期間開始日 YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="期間終了日 YYYY-MM-DD"),
 ) -> dict:
-    """ピッキングタスクから進捗情報を返す。start_date/end_date を指定するとその期間の palletList を返す。"""
+    """shipping_items の picking_log_matched を完了判定として進捗を返す。"""
 
     use_range = start_date and end_date and start_date <= end_date
+    base_where = "si.status != 'キャンセル' AND si.shipping_no_p IS NOT NULL AND si.shipping_no_p != ''"
 
     if use_range:
-        # --- 指定期間の pallet list（picking_tasks + users.full_name）---
         pallet_result = await db.execute(
-            text("""
-            SELECT pt.*, u.full_name AS picker_full_name
-            FROM picking_tasks pt
-            LEFT JOIN users u ON u.username = pt.picker_id
-            WHERE pt.shipping_date BETWEEN :start_date AND :end_date
-            ORDER BY pt.shipping_date ASC, pt.status ASC, pt.shipping_no_p ASC
+            text(f"""
+            SELECT si.*
+            FROM shipping_items si
+            WHERE si.shipping_date BETWEEN :start_date AND :end_date
+              AND {base_where}
+            ORDER BY si.shipping_date ASC, si.picking_log_matched ASC, si.shipping_no_p ASC
         """),
             {"start_date": start_date, "end_date": end_date},
         )
         pallet_rows = pallet_result.mappings().all()
-        # 期間内の集計（todayOverview / progressStats はこの期間のサマリ）
         total_tasks = len(pallet_rows)
-        pending_today = sum(
-            1 for r in pallet_rows if (r.get("status") or "") in ("pending", "picking")
-        )
-        completed_today = sum(1 for r in pallet_rows if (r.get("status") or "") == "completed")
+        pending_today = sum(int(r.get("picking_log_matched") or 0) == 0 for r in pallet_rows)
+        completed_today = sum(int(r.get("picking_log_matched") or 0) == 1 for r in pallet_rows)
         today_completion_rate = round(
             (completed_today / total_tasks * 100) if total_tasks > 0 else 0, 1
         )
-        total_today = total_tasks
-        completed_today_si = completed_today
     else:
-        # --- 本日のみ（従来どおり）---
-        si_result = await db.execute(text("""
-            SELECT
-                COUNT(DISTINCT shipping_no_p)                       AS total_today,
-                SUM(CASE WHEN status = '完了' THEN 1 ELSE 0 END)  AS completed_today
-            FROM shipping_items
-            WHERE shipping_date = CURDATE()
-              AND status != 'キャンセル'
-              AND shipping_no_p IS NOT NULL
-              AND shipping_no_p != ''
-        """))
-        si_row = si_result.mappings().first()
-        total_today = int(si_row["total_today"] or 0) if si_row else 0
-        completed_today_si = int(si_row["completed_today"] or 0) if si_row else 0
-
-        pt_result = await db.execute(text("""
+        pt_result = await db.execute(text(f"""
             SELECT
                 COUNT(*) AS total_tasks,
-                SUM(CASE WHEN status IN ('pending', 'picking') THEN 1 ELSE 0 END) AS pending_count,
-                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count
-            FROM picking_tasks
-            WHERE shipping_date = CURDATE()
+                SUM(CASE WHEN si.picking_log_matched = 0 THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN si.picking_log_matched = 1 THEN 1 ELSE 0 END) AS completed_count
+            FROM shipping_items si
+            WHERE si.shipping_date = CURDATE() AND {base_where}
         """))
         pt_row = pt_result.mappings().first()
         total_tasks = int(pt_row["total_tasks"] or 0) if pt_row else 0
@@ -157,34 +115,34 @@ async def get_new_progress(
             (completed_today / total_tasks * 100) if total_tasks > 0 else 0, 1
         )
 
-        pallet_result = await db.execute(text("""
-            SELECT pt.*, u.full_name AS picker_full_name
-            FROM picking_tasks pt
-            LEFT JOIN users u ON u.username = pt.picker_id
-            WHERE pt.shipping_date = CURDATE()
-            ORDER BY pt.status ASC, pt.shipping_no_p ASC
+        pallet_result = await db.execute(text(f"""
+            SELECT si.*
+            FROM shipping_items si
+            WHERE si.shipping_date = CURDATE() AND {base_where}
+            ORDER BY si.picking_log_matched ASC, si.shipping_no_p ASC
         """))
         pallet_rows = pallet_result.mappings().all()
 
     # --- 進捗推移トレンド用: 過去7日～未来3日、按出荷日分组、排除加工・アーチ・料金 ---
     trend_result = await db.execute(
-        text("""
+        text(f"""
         SELECT
-            pt.shipping_date AS shipping_date,
+            si.shipping_date AS shipping_date,
             COUNT(*) AS total_count,
-            SUM(CASE WHEN pt.status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
-            SUM(CASE WHEN pt.status = 'completed' THEN 1 ELSE 0 END) AS completed_count,
+            SUM(CASE WHEN si.picking_log_matched = 0 THEN 1 ELSE 0 END) AS pending_count,
+            SUM(CASE WHEN si.picking_log_matched = 1 THEN 1 ELSE 0 END) AS completed_count,
             ROUND(
-                SUM(CASE WHEN pt.status = 'completed' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
+                SUM(CASE WHEN si.picking_log_matched = 1 THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0),
                 2
             ) AS completion_rate
-        FROM picking_tasks pt
-        WHERE pt.shipping_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
-          AND COALESCE(pt.product_name, '') NOT LIKE '%加工%'
-          AND COALESCE(pt.product_name, '') NOT LIKE '%アーチ%'
-          AND COALESCE(pt.product_name, '') NOT LIKE '%料金%'
-        GROUP BY pt.shipping_date
-        ORDER BY pt.shipping_date
+        FROM shipping_items si
+        WHERE si.shipping_date BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+          AND {base_where}
+          AND COALESCE(si.product_name, '') NOT LIKE '%加工%'
+          AND COALESCE(si.product_name, '') NOT LIKE '%アーチ%'
+          AND COALESCE(si.product_name, '') NOT LIKE '%料金%'
+        GROUP BY si.shipping_date
+        ORDER BY si.shipping_date
     """)
     )
     trend_rows = trend_result.mappings().all()
@@ -201,190 +159,18 @@ async def get_new_progress(
 
     return {
         "todayOverview": {
-            "total_today": total_tasks if use_range else total_today,
+            "total_today": total_tasks,
             "pending_today": pending_today,
             "completed_today": completed_today,
             "today_completion_rate": today_completion_rate,
         },
-        "palletList": [_task_row_to_dict(r) for r in pallet_rows],
+        "palletList": [_shipping_item_to_picking_display_dict(dict(r)) for r in pallet_rows],
         "progressStats": progress_stats_list,
     }
 
 
 # ================================================================
-# 2. POST /db/init  ─ picking_tasks テーブル作成
-# ================================================================
-@router.post("/db/init")
-async def init_picking_tasks_table(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-) -> dict:
-    """picking_tasks テーブルが存在しなければ作成する"""
-    create_sql = text("""
-        CREATE TABLE IF NOT EXISTS picking_tasks (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            shipping_no_p VARCHAR(50) NOT NULL,
-            shipping_no VARCHAR(50) DEFAULT '',
-            shipping_date DATE NULL,
-            product_cd VARCHAR(50) DEFAULT '',
-            product_name VARCHAR(200) DEFAULT '',
-            confirmed_boxes INT DEFAULT 0,
-            destination_cd VARCHAR(50) DEFAULT '',
-            destination_name VARCHAR(200) DEFAULT '',
-            picked_quantity INT DEFAULT 0,
-            picked_no VARCHAR(100) DEFAULT '',
-            location_cd VARCHAR(50) DEFAULT '',
-            picker_id VARCHAR(50) DEFAULT '',
-            picker_name VARCHAR(100) DEFAULT '',
-            status VARCHAR(20) DEFAULT 'pending',
-            start_time DATETIME NULL,
-            complete_time DATETIME NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uk_shipping_no_p (shipping_no_p),
-            KEY idx_shipping_date (shipping_date),
-            KEY idx_status (status)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    """)
-    await db.execute(create_sql)
-    await db.commit()
-    logger.info("picking_tasks テーブルを初期化しました")
-    return {"success": True, "message": "picking_tasks テーブルを作成（または既存を確認）しました"}
-
-
-# ================================================================
-# 3. GET /tasks/for-display  ─ ピッキングタスク一覧
-# ================================================================
-@router.get("/tasks/for-display")
-async def get_tasks_for_display(
-    date: Optional[str] = Query(None, description="対象日（YYYY-MM-DD）。省略時は本日"),
-    start_date: Optional[str] = Query(None, description="開始日（範囲指定時）"),
-    end_date: Optional[str] = Query(None, description="終了日（範囲指定時）"),
-    status: Optional[str] = Query(None, description="ステータスでフィルタ"),
-    product_cd: Optional[str] = Query(None, description="品番でフィルタ"),
-    destination_cd: Optional[str] = Query(None, description="納入先コードでフィルタ"),
-    page: int = Query(1, ge=1, description="ページ番号"),
-    page_size: int = Query(50, ge=1, le=500, description="1ページあたりの件数"),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-) -> dict:
-    """ピッキングタスクを一覧で返す（shipping_items と結合して納入先情報を補完）"""
-    conditions = []
-    params: dict = {}
-
-    # 日付: start_date/end_date があれば範囲、date があれば単日、なければ本日
-    if start_date and end_date:
-        conditions.append("pt.shipping_date BETWEEN :start_date AND :end_date")
-        params["start_date"] = start_date
-        params["end_date"] = end_date
-    elif date:
-        conditions.append("pt.shipping_date = :target_date")
-        params["target_date"] = date
-    else:
-        conditions.append("pt.shipping_date = CURDATE()")
-
-    if status:
-        conditions.append("pt.status = :status")
-        params["status"] = status
-    if product_cd:
-        conditions.append("pt.product_cd LIKE :product_cd")
-        params["product_cd"] = f"%{product_cd}%"
-    if destination_cd:
-        conditions.append("pt.destination_cd = :destination_cd")
-        params["destination_cd"] = destination_cd
-
-    where_sql = " AND ".join(conditions) if conditions else "1=1"
-    offset = (page - 1) * page_size
-    params["limit"] = page_size
-    params["offset"] = offset
-
-    # カウント
-    count_q = text(f"""
-        SELECT COUNT(*) AS cnt
-        FROM picking_tasks pt
-        WHERE {where_sql}
-    """)
-    count_result = await db.execute(count_q, params)
-    total = int(count_result.scalar() or 0)
-
-    # データ取得（shipping_items で destination 補完、users で作業者 full_name 取得）
-    data_q = text(f"""
-        SELECT
-            pt.*,
-            COALESCE(si.destination_name, pt.destination_name) AS destination_name,
-            COALESCE(si.destination_cd, pt.destination_cd)     AS destination_cd,
-            u.full_name AS picker_full_name
-        FROM picking_tasks pt
-        LEFT JOIN shipping_items si
-            ON si.shipping_no_p = pt.shipping_no_p
-        LEFT JOIN users u
-            ON u.username = pt.picker_id
-        WHERE {where_sql}
-        ORDER BY pt.status ASC, pt.shipping_no_p ASC
-        LIMIT :limit OFFSET :offset
-    """)
-    result = await db.execute(data_q, params)
-    rows = result.mappings().all()
-
-    return {
-        "items": [_task_row_to_dict(r) for r in rows],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size if page_size else 1,
-    }
-
-
-# ================================================================
-# 4. POST /sync-data  ─ shipping_items → picking_tasks 同期
-# ================================================================
-@router.post("/sync-data")
-async def sync_data(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-) -> dict:
-    """shipping_items（出荷日が本日以降）を picking_tasks へ同期する"""
-    sync_sql = text("""
-        INSERT INTO picking_tasks
-            (shipping_no_p, shipping_no, shipping_date, product_cd, product_name,
-             confirmed_boxes, destination_cd, destination_name)
-        SELECT
-            si.shipping_no_p,
-            si.shipping_no,
-            si.shipping_date,
-            si.product_cd,
-            si.product_name,
-            si.confirmed_boxes,
-            si.destination_cd,
-            si.destination_name
-        FROM shipping_items si
-        WHERE si.shipping_date >= CURDATE()
-          AND si.status != 'キャンセル'
-          AND si.shipping_no_p IS NOT NULL
-          AND si.shipping_no_p != ''
-        ON DUPLICATE KEY UPDATE
-            shipping_no      = VALUES(shipping_no),
-            shipping_date    = VALUES(shipping_date),
-            product_cd       = VALUES(product_cd),
-            product_name     = VALUES(product_name),
-            confirmed_boxes  = VALUES(confirmed_boxes),
-            destination_cd   = VALUES(destination_cd),
-            destination_name = VALUES(destination_name)
-    """)
-    result = await db.execute(sync_sql)
-    await db.commit()
-    synced_count = result.rowcount
-
-    logger.info("picking_tasks に %d 件同期しました", synced_count)
-    return {
-        "success": True,
-        "message": f"picking_tasks に {synced_count} 件同期しました",
-        "synced_count": synced_count,
-    }
-
-
-# ================================================================
-# 5. GET /history  ─ ピッキング履歴
+# 2. GET /history  ─ ピッキング履歴
 # ================================================================
 @router.get("/history")
 async def get_picking_history(
@@ -393,32 +179,33 @@ async def get_picking_history(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """ピッキング履歴を期間指定で返す。デフォルトは過去30日"""
+    """ピッキング履歴を期間指定で返す（shipping_items + picking_log_matched）。デフォルトは過去30日"""
     params: dict = {}
     if start_date and end_date:
         params["start_date"] = start_date
         params["end_date"] = end_date
-        date_condition = "shipping_date BETWEEN :start_date AND :end_date"
+        date_condition = "si.shipping_date BETWEEN :start_date AND :end_date"
     elif start_date:
         params["start_date"] = start_date
-        date_condition = "shipping_date >= :start_date"
+        date_condition = "si.shipping_date >= :start_date"
     elif end_date:
         params["end_date"] = end_date
-        date_condition = "shipping_date <= :end_date"
+        date_condition = "si.shipping_date <= :end_date"
     else:
         # デフォルト: 過去30日
-        date_condition = "shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        date_condition = "si.shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
 
     # 統計
     stats_q = text(f"""
         SELECT
             COUNT(*)                                              AS total,
-            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-            SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) AS pending,
-            SUM(confirmed_boxes)                                   AS total_boxes,
-            SUM(picked_quantity)                                    AS total_picked
-        FROM picking_tasks
-        WHERE {date_condition}
+            SUM(CASE WHEN si.picking_log_matched = 1 THEN 1 ELSE 0 END) AS completed,
+            SUM(CASE WHEN si.picking_log_matched = 0 THEN 1 ELSE 0 END) AS pending,
+            SUM(si.confirmed_boxes)                               AS total_boxes,
+            SUM(CASE WHEN si.picking_log_matched = 1
+                THEN COALESCE(si.confirmed_units, si.confirmed_boxes) ELSE 0 END) AS total_picked
+        FROM shipping_items si
+        WHERE {date_condition} AND si.status != 'キャンセル'
     """)
     stats_result = await db.execute(stats_q, params)
     stats_row = stats_result.mappings().first()
@@ -431,10 +218,10 @@ async def get_picking_history(
 
     # 一覧
     data_q = text(f"""
-        SELECT *
-        FROM picking_tasks
-        WHERE {date_condition}
-        ORDER BY shipping_date DESC, shipping_no_p ASC
+        SELECT si.*
+        FROM shipping_items si
+        WHERE {date_condition} AND si.status != 'キャンセル'
+        ORDER BY si.shipping_date DESC, si.shipping_no_p ASC
     """)
     data_result = await db.execute(data_q, params)
     rows = data_result.mappings().all()
@@ -448,13 +235,13 @@ async def get_picking_history(
             "total_boxes": total_boxes,
             "total_picked": total_picked,
         },
-        "items": [_task_row_to_dict(r) for r in rows],
+        "items": [_shipping_item_to_picking_display_dict(dict(r)) for r in rows],
     }
 
 
 # ================================================================
-# 6. GET /performance-by-destination  ─ 担当者別・納入先別パフォーマンス
-# 担当者＝納入先グループ（destination_groups の group_name）。該当グループの destinations + 日期で picking_tasks を集計
+# 3. GET /performance-by-destination  ─ 担当者別・納入先別パフォーマンス
+# 担当者＝納入先グループ（destination_groups の group_name）。該当グループの destinations + 日期で shipping_items を集計
 # ================================================================
 @router.get("/performance-by-destination")
 async def get_performance_by_destination(
@@ -472,22 +259,22 @@ async def get_performance_by_destination(
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
     """担当者＝納入先グループ（destination_groups の1行＝1つの group_name）。
-    各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で picking_tasks を集計。
-    件数は出荷单维度 COUNT(DISTINCT shipping_no_p)、完了は status が completed/picked/完了 のみ。品名 加工・アーチ・料金 除外。
+    各担当者＝1グループ＝1組の納入先(destinations)。該当組の納入先＋日期範囲で shipping_items を集計。
+    件数は出荷単位 COUNT(DISTINCT shipping_no_p)、完了は picking_log_matched = 1。品名 加工・アーチ・料金 除外。
     """
     params: dict = {}
     if start_date and end_date:
         params["start_date"] = start_date
         params["end_date"] = end_date
-        date_condition = "pt.shipping_date BETWEEN :start_date AND :end_date"
+        date_condition = "si.shipping_date BETWEEN :start_date AND :end_date"
     elif start_date:
         params["start_date"] = start_date
-        date_condition = "pt.shipping_date >= :start_date"
+        date_condition = "si.shipping_date >= :start_date"
     elif end_date:
         params["end_date"] = end_date
-        date_condition = "pt.shipping_date <= :end_date"
+        date_condition = "si.shipping_date <= :end_date"
     else:
-        date_condition = "pt.shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
+        date_condition = "si.shipping_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
 
     # destination_groups から対象グループ取得（group_names 指定時はそのまま、未指定時は全件）
     group_q = text(
@@ -509,11 +296,9 @@ async def get_performance_by_destination(
         groups_list.append({"group_name": gname, "destination_cds": dest_cds})
 
     product_exclude = (
-        " AND (pt.product_name NOT LIKE '%加工%' AND pt.product_name NOT LIKE '%アーチ%' AND pt.product_name NOT LIKE '%料金%')"
+        " AND (si.product_name NOT LIKE '%加工%' AND si.product_name NOT LIKE '%アーチ%' AND si.product_name NOT LIKE '%料金%')"
     )
-    completed_condition = (
-        "LOWER(TRIM(COALESCE(pt.status,''))) IN ('completed','picked') OR TRIM(COALESCE(pt.status,'')) = '完了'"
-    )
+    completed_condition = "si.picking_log_matched = 1"
     out: List[dict] = []
     for grp in groups_list:
         gname = grp["group_name"]
@@ -531,15 +316,16 @@ async def get_performance_by_destination(
             continue
         q = text(f"""
             SELECT
-                pt.destination_cd,
-                pt.destination_name,
-                COUNT(DISTINCT pt.shipping_no_p) AS total_tasks,
-                COUNT(DISTINCT CASE WHEN ({completed_condition}) THEN pt.shipping_no_p END) AS completed_tasks
-            FROM picking_tasks pt
+                si.destination_cd,
+                si.destination_name,
+                COUNT(DISTINCT si.shipping_no_p) AS total_tasks,
+                COUNT(DISTINCT CASE WHEN ({completed_condition}) THEN si.shipping_no_p END) AS completed_tasks
+            FROM shipping_items si
             WHERE {date_condition}
+              AND si.status != 'キャンセル'
             {product_exclude}
-            AND pt.destination_cd IN :dest_cds
-            GROUP BY pt.destination_cd, pt.destination_name
+            AND si.destination_cd IN :dest_cds
+            GROUP BY si.destination_cd, si.destination_name
             ORDER BY total_tasks DESC
         """).bindparams(bindparam("dest_cds", expanding=True))
         exec_params = {**params, "dest_cds": dest_cds}
@@ -628,12 +414,13 @@ async def cleanup_shipping_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """90日以前の shipping_log を削除"""
+    """90日以前の shipping_log を削除し、shipping_items.picking_log_matched を再計算"""
     result = await db.execute(text(
         "DELETE FROM shipping_log WHERE date < DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
     ))
-    await db.commit()
     deleted = result.rowcount
+    await db.execute(REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL)
+    await db.commit()
     return {"success": True, "message": f"{deleted} 件の古いログを削除しました", "deleted": deleted}
 
 
@@ -686,8 +473,9 @@ async def perform_deduplicate(
                 AND sl.date = dup.date
                 AND sl.id < dup.max_id
     """))
-    await db.commit()
     deleted = result.rowcount
+    await db.execute(REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL)
+    await db.commit()
     return {"success": True, "message": f"{deleted} 件の重複を削除しました", "deleted": deleted}
 
 
@@ -699,31 +487,49 @@ async def get_sync_status(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """picking_tasks の同期状態を返す"""
-    try:
-        pt_result = await db.execute(text(
-            "SELECT COUNT(*) AS cnt, MAX(updated_at) AS last_sync FROM picking_tasks"
-        ))
-        pt_row = pt_result.mappings().first()
-        total_pt = int(pt_row["cnt"] or 0) if pt_row else 0
-        last_sync = str(pt_row["last_sync"]) if pt_row and pt_row["last_sync"] else None
-        table_exists = True
-    except Exception:
-        total_pt = 0
-        last_sync = None
-        table_exists = False
+    """shipping_items と shipping_log の突合せ状態（picking_log_matched）を返す。"""
 
-    sl_result = await db.execute(text("SELECT COUNT(*) AS cnt FROM shipping_log"))
-    total_sl = int(sl_result.scalar() or 0)
+    try:
+        si_result = await db.execute(text("""
+            SELECT
+                COUNT(*) AS cnt,
+                SUM(CASE WHEN picking_log_matched = 1 THEN 1 ELSE 0 END) AS matched,
+                MAX(updated_at) AS last_upd
+            FROM shipping_items
+            WHERE shipping_date >= CURDATE()
+              AND status != 'キャンセル'
+              AND shipping_no_p IS NOT NULL
+              AND shipping_no_p != ''
+        """))
+        si_row = si_result.mappings().first()
+        total_active_items = int(si_row["cnt"] or 0) if si_row else 0
+        matched_items = int(si_row["matched"] or 0) if si_row else 0
+        last_sync = str(si_row["last_upd"]) if si_row and si_row["last_upd"] else None
+    except Exception:
+        total_active_items = 0
+        matched_items = 0
+        last_sync = None
+
+    try:
+        sl_result = await db.execute(text("SELECT COUNT(*) AS cnt FROM shipping_log"))
+        total_sl = int(sl_result.scalar() or 0)
+    except Exception:
+        total_sl = 0
+
+    sync_rate = round((matched_items / total_active_items * 100) if total_active_items > 0 else 0, 1)
+    completion_rate = sync_rate
 
     return {
-        "totalPickingTasks": total_pt,
+        "totalPickingTasks": total_active_items,
+        "completedPickingTasks": matched_items,
+        "completionRate": completion_rate,
         "totalShippingLogs": total_sl,
+        "totalActiveShippingItems": total_active_items,
         "lastSyncTime": last_sync,
-        "tableExists": table_exists,
-        "availableForSync": total_sl,
-        "alreadySynced": total_pt,
-        "syncRate": round((total_pt / total_sl * 100) if total_sl > 0 else 0, 1),
+        "tableExists": True,
+        "availableForSync": total_active_items,
+        "alreadySynced": matched_items,
+        "syncRate": sync_rate,
     }
 
 
@@ -737,7 +543,7 @@ async def get_sync_debug_info(
 ) -> dict:
     """デバッグ用に各テーブルの件数と最新レコードを返す"""
     info: dict = {}
-    for table in ["shipping_items", "shipping_log", "picking_tasks", "picking_list"]:
+    for table in ["shipping_items", "shipping_log", "picking_list"]:
         try:
             r = await db.execute(text(f"SELECT COUNT(*) AS cnt FROM {table}"))
             cnt = int(r.scalar() or 0)

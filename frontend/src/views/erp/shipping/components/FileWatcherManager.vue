@@ -370,9 +370,9 @@
         <div class="sync-content">
           <div class="sync-info">
             <el-alert
-              title="データ同期機能"
+              title="出荷計画 → ピッキングタスク同期"
               type="info"
-              description="shipping_logテーブルのデータをpicking_tasksテーブルに同期します。picking_no、担当者、日時情報が更新され、ステータスが「済」に変更されます。"
+              description="shipping_log と shipping_items を突合せ、picking_log_matched を再計算します。ピッキング実績（PickingLog.csv）の取込はファイル監視が自動で行います。"
               show-icon
               :closable="false"
               class="sync-alert"
@@ -389,7 +389,7 @@
                 </div>
                 <div class="stat-content">
                   <div class="stat-value">{{ formatNumber(syncStatus.availableForSync) }}</div>
-                  <div class="stat-label">同期可能件数</div>
+                  <div class="stat-label">有効出荷明細数（当日以降）</div>
                 </div>
               </div>
 
@@ -401,7 +401,7 @@
                 </div>
                 <div class="stat-content">
                   <div class="stat-value">{{ formatNumber(syncStatus.alreadySynced) }}</div>
-                  <div class="stat-label">同期済み件数</div>
+                  <div class="stat-label">タスク件数（合計）</div>
                 </div>
               </div>
 
@@ -448,32 +448,11 @@
           </div>
 
           <div class="sync-actions">
-            <div v-if="!syncStatus.tableExists" class="table-not-exists">
-              <el-alert
-                title="picking_tasksテーブルが存在しません"
-                type="warning"
-                description="データ同期を実行するには、まずpicking_tasksテーブルを作成する必要があります。"
-                show-icon
-                :closable="false"
-                class="table-warning"
-              />
-              <el-button
-                type="warning"
-                :icon="Document"
-                @click="createPickingTable"
-                size="large"
-                class="create-table-btn"
-              >
-                picking_tasksテーブル作成
-              </el-button>
-            </div>
-
-            <div v-else class="sync-actions">
+            <div class="sync-actions">
               <el-button
                 type="primary"
                 :icon="Connection"
                 :loading="syncLoading"
-                :disabled="syncStatus.availableForSync === 0"
                 @click="syncToPickingTasks"
                 size="large"
                 class="sync-btn"
@@ -645,7 +624,6 @@ import {
   performDeduplicate as performDeduplicateAPI,
   syncToPickingTasks as syncToPickingTasksAPI,
   getSyncStatus as getSyncStatusAPI,
-  createPickingTable as createPickingTableAPI,
   getSyncDebugInfo as getSyncDebugInfoAPI,
   type FileWatcherStatus,
   type ShippingLogRecord,
@@ -728,7 +706,6 @@ const syncStatus = ref({
   totalShippingLogs: 0,
   lastSyncTime: null as string | null,
   syncRate: 0,
-  tableExists: true,
 })
 
 // 加载状态
@@ -986,7 +963,6 @@ async function loadSyncStatus() {
       totalShippingLogs: Number(data.totalShippingLogs) ?? 0,
       lastSyncTime: (data.lastSyncTime as string) ?? null,
       syncRate: Number(data.syncRate) ?? 0,
-      tableExists: (data.tableExists as boolean) ?? true,
     }
   } catch (error: unknown) {
     const errorMessage = getErrorMessage(error, '同期状態の取得に失敗しました')
@@ -998,8 +974,8 @@ async function loadSyncStatus() {
 async function syncToPickingTasks() {
   try {
     await ElMessageBox.confirm(
-      'shipping_logのデータをpicking_tasksテーブルに同期しますか？',
-      '確認',
+      'shipping_log と shipping_items を突合せ、picking_log_matched を再計算しますか？',
+      '同期確認',
       {
         confirmButtonText: '同期実行',
         cancelButtonText: 'キャンセル',
@@ -1028,26 +1004,6 @@ function getSyncProgressColor(percentage: number) {
   return '#67c23a'
 }
 
-// 创建picking_tasks表
-async function createPickingTable() {
-  try {
-    await ElMessageBox.confirm('picking_tasksテーブルを作成しますか？', '確認', {
-      confirmButtonText: 'テーブル作成',
-      cancelButtonText: 'キャンセル',
-      type: 'info',
-    })
-
-    const result = (await createPickingTableAPI()) as ApiResponseBody
-    ElMessage.success(result?.message || 'picking_tasksテーブルが正常に作成されました')
-    await loadSyncStatus()
-  } catch (error: unknown) {
-    if (error !== 'cancel') {
-      const errorMessage = getErrorMessage(error, 'テーブル作成に失敗しました')
-      ElMessage.error(errorMessage)
-    }
-  }
-}
-
 // 显示同步调试信息
 async function showSyncDebugInfo() {
   try {
@@ -1055,7 +1011,6 @@ async function showSyncDebugInfo() {
     const data = (response.data ?? response) as Record<string, { count?: number; latest?: unknown[]; error?: string }>
 
     const shippingLogCount = data.shipping_log?.count ?? 0
-    const pickingTasksCount = data.picking_tasks?.count ?? 0
     const shippingItemsCount = data.shipping_items?.count ?? 0
     const pickingListCount = data.picking_list?.count ?? 0
 
@@ -1065,7 +1020,6 @@ async function showSyncDebugInfo() {
         <h4>データ同期デバッグ情報</h4>
         <p><strong>shipping_items レコード数:</strong> ${shippingItemsCount}</p>
         <p><strong>shipping_log レコード数:</strong> ${shippingLogCount}</p>
-        <p><strong>picking_tasks レコード数:</strong> ${pickingTasksCount}</p>
         <p><strong>picking_list レコード数:</strong> ${pickingListCount}</p>
         <br>
         <p style="font-size: 12px; color: #666;">

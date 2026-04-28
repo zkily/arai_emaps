@@ -1,35 +1,6 @@
 <template>
   <div class="picking-list-generator">
-    <!-- 上部区域：标题和按钮 -->
-    <div class="header-section">
-      <!-- 左侧标题区域 -->
-      <div class="title-section">
-        <h2 class="page-title">
-          <el-icon><Box /></el-icon>
-          ピッキングリスト
-        </h2>
-      </div>
-
-      <!-- 右侧按钮区域 -->
-      <div class="action-buttons-section">
-        <el-button type="warning" @click="syncShippingData" :loading="loading.sync" size="default">
-          <el-icon><Download /></el-icon>
-          データ読み込み
-        </el-button>
-
-        <el-button
-          type="primary"
-          @click="fetchShippingData"
-          :loading="loading.fetch"
-          size="default"
-        >
-          <el-icon><Search /></el-icon>
-          データ更新
-        </el-button>
-      </div>
-    </div>
-
-     <!-- 统计卡片：精美UI -->
+    <!-- 统计卡片：精美UI -->
     <div class="statistics-section">
       <div class="statistics-cards">
         <div class="stat-card total-card">
@@ -125,6 +96,13 @@
           </el-form-item>
 
           <el-form-item>
+            <el-button type="primary" @click="fetchShippingData" :loading="loading.fetch">
+              <el-icon><Search /></el-icon>
+              データ更新
+            </el-button>
+          </el-form-item>
+
+          <el-form-item>
             <el-button type="success" @click="handlePrint" :disabled="filteredPalletGroups.length === 0">
               <el-icon><Printer /></el-icon>
               印刷
@@ -164,12 +142,14 @@
           <el-empty description="条件に合う出荷データがありません">
             <template #default>
               <div class="empty-actions">
-                <el-button type="warning" @click="syncShippingData" :loading="loading.sync">
-                  <el-icon><Download /></el-icon>
-                  データ読み込み
+                <el-button type="primary" @click="fetchShippingData" :loading="loading.fetch">
+                  <el-icon><Search /></el-icon>
+                  データ更新
                 </el-button>
               </div>
-              <p class="empty-hint">shipping_itemsテーブルからデータを読み込んでください</p>
+              <p class="empty-hint">
+                出荷明細（shipping_items）にデータがありません。出荷登録後、ページ上部の「データ読込」でログ突合せを実行するか、条件を変えて再取得してください。
+              </p>
             </template>
           </el-empty>
         </div>
@@ -266,7 +246,6 @@ import { ElMessage } from 'element-plus'
 import {
   Search,
   Loading,
-  Download,
   Box,
   Filter,
   List,
@@ -285,7 +264,7 @@ interface ApiResponseBody {
   data?: unknown
 }
 
-/** tasks/for-display API 返回结构 */
+/** items/for-picking-display API 返回结构（旧 tasks/for-display と同形） */
 interface TasksForDisplayResponse {
   items?: unknown[]
   total?: number
@@ -331,7 +310,6 @@ const emit = defineEmits(['refresh'])
 const loading = ref({
   fetch: false,
   generate: false,
-  sync: false,
 })
 
 const filters = ref({
@@ -403,7 +381,7 @@ async function fetchShippingData() {
     // 全ページを取得（API は最大 500 件/ページのため、複数回リクエスト）
     do {
       const params = { ...baseParams, page }
-      const response = (await request.get('/api/shipping/picking/tasks/for-display', {
+      const response = (await request.get('/api/shipping/items/for-picking-display', {
         params,
       })) as ApiResponseBody | TasksForDisplayResponse | unknown[]
 
@@ -875,41 +853,6 @@ function setDateRange(dayOffset: number) {
   }
 }
 
-async function syncShippingData() {
-  loading.value.sync = true
-  try {
-    console.log('開始shipping_itemsからpicking_tasksへデータ同期...')
-
-    // 使用已有的同步API
-    const response = (await request.post('/api/shipping/picking/sync-data')) as ApiResponseBody
-
-    console.log('データ同期レスポンス:', response)
-
-    if (response.success) {
-      ElMessage.success(response.message || 'データ同期が完了しました')
-      // 立即刷新数据
-      await fetchShippingData()
-      console.log(`syncShippingData完成后，palletGroups数量: ${palletGroups.value.length}`)
-    } else {
-      ElMessage.error(response.message || 'データ同期に失敗しました')
-    }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    console.error('データ同期エラー:', error)
-
-    let errorMessage = 'データ同期に失敗しました'
-    if (error.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error.message) {
-      errorMessage = error.message
-    }
-
-    ElMessage.error(errorMessage)
-  } finally {
-    loading.value.sync = false
-  }
-}
-
 function formatDate(dateStr: string) {
   if (!dateStr) return '-'
   // 使用日本标准时间格式化日期
@@ -977,43 +920,6 @@ onMounted(() => {
 <style scoped>
 .picking-list-generator {
   padding: 0 2px 6px;
-}
-
-/* 上部：标题与按钮 - 紧凑 */
-.header-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  padding: 8px 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.title-section { flex: 1; }
-
-.page-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 2px 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: #334155;
-}
-
-.page-subtitle {
-  margin: 0;
-  color: #64748b;
-  font-size: 11px;
-}
-
-.action-buttons-section {
-  display: flex;
-  gap: 8px;
-  align-items: center;
 }
 
 /* 筛选区域 - 紧凑・统一高度（与今日按钮一致） */
@@ -1313,15 +1219,6 @@ onMounted(() => {
     padding: 0 4px 6px;
   }
 
-  .header-section {
-    padding: 8px 10px;
-    margin-bottom: 6px;
-  }
-
-  .page-title {
-    font-size: 14px;
-  }
-
   .filter-section :deep(.el-card__body) {
     padding: 8px 10px;
   }
@@ -1353,28 +1250,6 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .header-section {
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
-    padding: 6px 10px;
-  }
-
-  .page-title {
-    font-size: 13px;
-  }
-
-  .action-buttons-section {
-    justify-content: stretch;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .action-buttons-section .el-button {
-    flex: 1;
-    min-width: 120px;
-  }
-
   .statistics-section {
     margin-bottom: 8px;
   }
@@ -1521,25 +1396,6 @@ onMounted(() => {
 @media (max-width: 480px) {
   .picking-list-generator {
     padding: 0 2px 4px;
-  }
-
-  .header-section {
-    padding: 6px 8px;
-    margin-bottom: 6px;
-    gap: 8px;
-  }
-
-  .page-title {
-    font-size: 12px;
-  }
-
-  .action-buttons-section {
-    flex-direction: column;
-  }
-
-  .action-buttons-section .el-button {
-    width: 100%;
-    min-width: 0;
   }
 
   .statistics-cards {
@@ -1745,5 +1601,79 @@ onMounted(() => {
   .statistics-cards {
     grid-template-columns: 1fr;
   }
+}
+
+/* ========== Modern compact tab polish ========== */
+.picking-list-generator {
+  padding: 0;
+}
+
+.statistics-section,
+.filter-section {
+  margin-bottom: 6px;
+}
+
+.statistics-cards {
+  gap: 8px;
+}
+
+.stat-card {
+  border-radius: 14px;
+  border-left: 0;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+}
+
+.stat-card-inner {
+  min-height: 48px;
+  padding: 9px 12px;
+  gap: 10px;
+}
+
+.stat-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+.stat-card .stat-value {
+  font-size: 17px;
+}
+
+.filter-section :deep(.el-card),
+.list-section :deep(.el-card) {
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.filter-section :deep(.el-card__header),
+.list-section :deep(.el-card__header) {
+  padding: 7px 10px;
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+}
+
+.filter-section :deep(.el-card__body),
+.list-section :deep(.el-card__body) {
+  padding: 8px 10px;
+}
+
+.filter-form {
+  gap: 8px 10px;
+}
+
+.product-list {
+  max-height: 82px;
+}
+
+.product-item {
+  padding: 3px 0;
+}
+
+.pallet-pagination {
+  margin-top: 6px;
+}
+
+.list-section :deep(.el-table th),
+.list-section :deep(.el-table td) {
+  padding: 5px 7px;
 }
 </style>

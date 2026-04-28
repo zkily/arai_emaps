@@ -2296,4 +2296,170 @@ onUnmounted(() => {
     justify-content: center;
   }
 }
+
+/* ========== Modern compact tab polish ========== */
+.picking-progress-container {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.page-header {
+  margin-bottom: 8px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+
+.page-title {
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.title-icon {
+  font-size: 18px;
+}
+
+.page-subtitle {
+  font-size: 11px;
+}
+
+.refresh-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.overview-section,
+.analytics-section,
+.data-section {
+  margin-bottom: 8px;
+}
+
+.section-title {
+  margin-bottom: 6px;
+}
+
+.section-title h2 {
+  font-size: 13px;
+}
+
+.overview-cards {
+  gap: 8px;
+}
+
+.card-content {
+  padding: 9px 12px;
+  gap: 10px;
+}
+
+.stat-icon {
+  font-size: 22px;
+}
+
+.stat-value {
+  font-size: 20px;
+}
+
+.stat-label,
+.stat-trend {
+  font-size: 11px;
+}
+
+.analytics-grid {
+  grid-template-columns: minmax(260px, 300px) 1fr;
+  gap: 8px;
+}
+
+.chart-card,
+.data-panel {
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+
+.card-header {
+  padding: 8px 10px;
+}
+
+.header-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 16px;
+}
+
+.card-title {
+  font-size: 13px;
+}
+
+.card-body,
+.progress-card .card-body,
+.trend-card .card-body {
+  padding: 10px 12px;
+}
+
+.progress-display {
+  gap: 10px;
+}
+
+.trend-chart-wrapper {
+  height: 300px;
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.chart-container,
+.chart-container > div {
+  min-height: 270px !important;
+}
+
+.data-panel {
+  padding: 10px 12px;
+}
+
+.data-panel .panel-header {
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+.detail-filters {
+  padding: 8px 10px;
+}
+
+.detail-table-wrap {
+  border-radius: 12px;
+}
+
+.detail-table-wrap :deep(.el-table__header-wrapper) th,
+.detail-table-wrap :deep(.el-table__body-wrapper) td {
+  padding: 7px 9px;
+}
+
+.pagination-wrapper {
+  margin-top: 8px;
+  padding: 10px;
+}
+
+@media (max-width: 1200px) {
+  .analytics-grid {
+    gap: 8px;
+  }
+
+  .progress-card .card-body {
+    padding: 10px 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .picking-progress-container,
+  .page-header {
+    padding: 8px;
+  }
+
+  .page-title {
+    font-size: 15px;
+  }
+}
 </style>

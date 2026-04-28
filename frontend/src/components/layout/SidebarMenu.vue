@@ -257,6 +257,24 @@
                 <template #title><span :title="t('menu.ERP_PRODUCTION_COMPONENT_REQ')">{{ t('menu.ERP_PRODUCTION_COMPONENT_REQ') }}</span></template>
               </el-menu-item>
             </el-sub-menu>
+            <el-sub-menu index="erp-production-metrics">
+              <template #title>
+                <el-icon><DataAnalysis /></el-icon>
+                <span :title="t('menu.ERP_PRODUCTION_METRICS')">{{ t('menu.ERP_PRODUCTION_METRICS') }}</span>
+              </template>
+              <el-menu-item index="/erp/production/metrics/scrap-rate">
+                <el-icon><Delete /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_SCRAP_RATE')">{{ t('menu.ERP_PRODUCTION_SCRAP_RATE') }}</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/production/metrics/utilization-rate">
+                <el-icon><Monitor /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_UTILIZATION_RATE')">{{ t('menu.ERP_PRODUCTION_UTILIZATION_RATE') }}</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/production/metrics/defect-rate">
+                <el-icon><Warning /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_DEFECT_RATE')">{{ t('menu.ERP_PRODUCTION_DEFECT_RATE') }}</span></template>
+              </el-menu-item>
+            </el-sub-menu>
             <el-sub-menu index="erp-production-instruction">
               <template #title>
                 <el-icon><Memo /></el-icon>
@@ -544,7 +562,7 @@ import {
   User, DataAnalysis, Monitor, Setting, Tools, Grid, Files,
   Collection, List, Connection, Calendar, Timer, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
-  Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload
+  Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload, Delete
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()

@@ -1,6 +1,6 @@
 """
 ピッキングCSVエクスポート API
-POST /export/export-picking-csv: shipping_items（出荷日≥当日）を picking_list に UPSERT 同期し、
+POST /export/export-picking-csv: shipping_items（出荷日が当日以上かつ当日+15日未満）を picking_list に UPSERT 同期し、
 CSV は shipping_items 由来の最新値で生成する。
 CSV は既定で社内共有フォルダに PickingMaster.csv として出力する。
 """
@@ -24,6 +24,9 @@ _DEFAULT_PICKING_CSV_DIR = "//192.168.1.200/社内共有/02_生産管理部/Data
 PICKING_CSV_OUTPUT_DIR = os.environ.get("PICKING_CSV_OUTPUT_DIR", _DEFAULT_PICKING_CSV_DIR)
 PICKING_CSV_FILENAME = "PickingMaster.csv"
 
+# 出荷日の上限: CURDATE() + この日数（当日を含めず、その日の 0 時を上限とする）
+PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS = 15
+
 
 def _escape_csv_cell(value) -> str:
     if value is None:
@@ -40,9 +43,9 @@ async def export_picking_csv(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    出荷日が当日以降の shipping_items を picking_list に UPSERT 同期し、
+    出荷日が当日以上かつ当日+15日未満の shipping_items を picking_list に UPSERT 同期し、
     CSV 用データは JOIN 後 shipping_items 側の列で取得（編集反映）。
-    リクエスト body は不要。データ範囲は DB の CURDATE() で決まる。
+    リクエスト body は不要。データ範囲は DB の CURDATE() と PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS で決まる。
     """
     try:
         # 1) picking_list が無ければ作成
@@ -64,12 +67,14 @@ async def export_picking_csv(
         """))
         await db.commit()
 
-        # 2) 出荷日≥当日・キー項目非 null の shipping_items を取得
-        sel = text("""
+        # 2) 出荷日 ∈ [当日, 当日+15日)・キー項目非 null・キャンセル除外の shipping_items を取得
+        sel = text(f"""
             SELECT shipping_no_p, shipping_no, product_cd, product_name, confirmed_boxes
             FROM shipping_items
             WHERE shipping_no_p IS NOT NULL AND shipping_no IS NOT NULL AND product_cd IS NOT NULL
               AND DATE(shipping_date) >= CURDATE()
+              AND DATE(shipping_date) < DATE_ADD(CURDATE(), INTERVAL {PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS} DAY)
+              AND status != 'キャンセル'
             ORDER BY shipping_no, product_cd
         """)
         result = await db.execute(sel)
@@ -94,14 +99,15 @@ async def export_picking_csv(
                 copied_count += 1
         await db.commit()
 
-        # 3) picking_list JOIN shipping_items で当日以降のデータを取得（CSV 用）
+        # 3) picking_list JOIN shipping_items で [当日, 当日+15日) のデータを取得（CSV 用）
         # 表示列は shipping_items 側（編集反映の最終ソース）。picking_list は同期用。
-        join_sel = text("""
+        join_sel = text(f"""
             SELECT si.shipping_no_p, si.shipping_no, si.product_cd, si.product_name, si.confirmed_boxes
             FROM picking_list pl
             INNER JOIN shipping_items si
               ON pl.shipping_no_p = si.shipping_no_p AND pl.product_cd = si.product_cd
             WHERE DATE(si.shipping_date) >= CURDATE()
+              AND DATE(si.shipping_date) < DATE_ADD(CURDATE(), INTERVAL {PICKING_EXPORT_SHIPPING_DATE_WINDOW_DAYS} DAY)
             ORDER BY si.shipping_no, si.product_cd
         """)
         join_result = await db.execute(join_sel)

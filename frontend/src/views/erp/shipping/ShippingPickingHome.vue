@@ -30,11 +30,6 @@
           </div>
         </div>
         <div class="header-right">
-          <el-button type="warning" :icon="Tools" :loading="initLoading" @click="handleInitDatabase" size="default"
-            class="header-btn init-btn">
-            <span>{{ t('shipping.initDatabase') }}</span>
-          </el-button>
-
           <el-button type="primary" :icon="Refresh" :loading="syncLoading" @click="handleSyncData" size="default"
             class="header-btn sync-btn">
             <span>{{ t('shipping.syncData') }}</span>
@@ -42,6 +37,17 @@
         </div>
       </div>
     </div>
+
+    <transition name="sync-progress-fade">
+      <div v-if="syncProgress > 0" class="sync-progress-banner">
+        <p class="sync-progress-hint">{{ t('shipping.syncProgressHint') }}</p>
+        <el-progress
+          :percentage="Math.min(syncProgress, 100)"
+          :stroke-width="10"
+          class="sync-progress-el"
+        />
+      </div>
+    </transition>
 
     <!-- 顶部状态统计 -->
     <div class="status-cards">
@@ -210,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
@@ -221,7 +227,6 @@ import {
   Check,
   Refresh,
   TrendCharts,
-  Tools,
   LocationInformation,
   ArrowUp,
   Operation,
@@ -229,7 +234,7 @@ import {
   PieChart,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import { syncShippingDataToPickingTasks } from '@/api/shipping/picking'
+import { refreshPickingLogMatchedFromLog } from '@/api/shipping/picking'
 import PickingListGenerator from './components/PickingListGenerator.vue'
 import PickingProgress from './components/PickingProgress.vue'
 import PickingHistory from './components/PickingHistory.vue'
@@ -262,7 +267,23 @@ const getJSTToday = getJSTTodayUtil
 
 const activeTab = ref('generate')
 const syncLoading = ref(false)
-const initLoading = ref(false)
+/** 同期処理の表示用（0 で非表示） */
+const syncProgress = ref(0)
+let syncProgressTimer: ReturnType<typeof setInterval> | null = null
+
+function clearSyncProgressTimer() {
+  if (syncProgressTimer !== null) {
+    clearInterval(syncProgressTimer)
+    syncProgressTimer = null
+  }
+}
+
+function tickSyncProgress() {
+  const v = syncProgress.value
+  if (v >= 90) return
+  const step = v < 35 ? 8 : v < 65 ? 5 : 3
+  syncProgress.value = Math.min(90, v + step)
+}
 const loading = ref({
   data: false,
 })
@@ -444,44 +465,42 @@ function refreshStats() {
   fetchProgressData()
 }
 
-async function handleInitDatabase() {
-  initLoading.value = true
-  try {
-    const response = (await request.post('/api/shipping/picking/db/init')) as ApiResponseBody
-    if (response.success) {
-      ElMessage.success(response.message || 'データベース初期化が完了しました')
-      refreshStats()
-    } else {
-      ElMessage.error(response.message || 'データベース初期化に失敗しました')
-    }
-  } catch (error: any) {
-    console.error('データベース初期化エラー:', error)
-    // レスポンスなし（ネットワークエラー等）のときのみトースト（4xx/5xx は interceptor で表示済み）
-    if (!error?.response) {
-      ElMessage.error(error?.message || 'データベース初期化に失敗しました')
-    }
-  } finally {
-    initLoading.value = false
-  }
+function syncErrorMessage(error: any): string {
+  const d = error?.response?.data?.detail
+  if (typeof d === 'string') return d
+  if (Array.isArray(d) && d[0]?.msg) return d.map((x: any) => x.msg).join(' ')
+  return error?.message || 'ピッキングログ突合せに失敗しました'
 }
 
 async function handleSyncData() {
   syncLoading.value = true
+  syncProgress.value = 8
+  clearSyncProgressTimer()
+  syncProgressTimer = setInterval(tickSyncProgress, 140)
+
   try {
-    const response = (await syncShippingDataToPickingTasks()) as ApiResponseBody
-    if (response.success) {
-      ElMessage.success(response.message || 'データ同期が完了しました')
+    const response = (await refreshPickingLogMatchedFromLog()) as ApiResponseBody
+    clearSyncProgressTimer()
+    syncProgress.value = 100
+    await new Promise((r) => setTimeout(r, 380))
+
+    if (response.success !== false) {
+      ElMessage.success(response.message || 'ピッキングログ突合せが完了しました')
       refreshStats()
     } else {
-      ElMessage.error(response.message || 'データ同期に失敗しました')
+      ElMessage.error(response.message || 'ピッキングログ突合せに失敗しました')
     }
   } catch (error: any) {
-    console.error('データ同期エラー:', error)
-    if (!error?.response) {
-      ElMessage.error(error?.message || 'データ同期に失敗しました')
-    }
+    clearSyncProgressTimer()
+    syncProgress.value = 100
+    await new Promise((r) => setTimeout(r, 220))
+    console.error('ピッキングログ突合せエラー:', error)
+    ElMessage.error(syncErrorMessage(error))
   } finally {
+    clearSyncProgressTimer()
     syncLoading.value = false
+    await new Promise((r) => setTimeout(r, 280))
+    syncProgress.value = 0
   }
 }
 
@@ -491,6 +510,10 @@ function handleTabChange(tabName: string | number) {
 
 onMounted(() => {
   fetchProgressData()
+})
+
+onBeforeUnmount(() => {
+  clearSyncProgressTimer()
 })
 </script>
 
@@ -1066,6 +1089,312 @@ onMounted(() => {
   :deep(.el-tabs__item) {
     font-size: 10px;
     padding: 5px 6px;
+  }
+}
+
+/* ========== Modern compact refresh ========== */
+.picking-management {
+  padding: 12px;
+  background:
+    radial-gradient(circle at 8% 8%, rgba(129, 140, 248, 0.28), transparent 30%),
+    radial-gradient(circle at 92% 0%, rgba(14, 165, 233, 0.24), transparent 28%),
+    linear-gradient(145deg, #0f172a 0%, #1e1b4b 48%, #111827 100%);
+}
+
+.page-header {
+  margin-bottom: 8px;
+}
+
+.header-content {
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+  backdrop-filter: blur(18px);
+}
+
+.title-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 10px 24px rgba(15, 23, 42, 0.2);
+}
+
+.main-title {
+  font-size: 22px;
+  letter-spacing: 0.01em;
+}
+
+.subtitle {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.header-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+.sync-btn {
+  background: linear-gradient(135deg, #06b6d4, #6366f1);
+  border: 0;
+}
+
+.sync-progress-banner {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 8px;
+  padding: 10px 14px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.22);
+}
+
+.sync-progress-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  letter-spacing: 0.02em;
+}
+
+.sync-progress-el :deep(.el-progress-bar__outer) {
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14) !important;
+}
+
+.sync-progress-el :deep(.el-progress-bar__inner) {
+  border-radius: 999px;
+  background: linear-gradient(90deg, #22d3ee, #6366f1, #c084fc, #22d3ee);
+  background-size: 220% 100%;
+  animation: sync-progress-shimmer 2.2s linear infinite;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.45);
+}
+
+.sync-progress-el :deep(.el-progress__text) {
+  font-size: 12px !important;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95) !important;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+}
+
+@keyframes sync-progress-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 220% 50%;
+  }
+}
+
+.sync-progress-fade-enter-active,
+.sync-progress-fade-leave-active {
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+.sync-progress-fade-enter-from,
+.sync-progress-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.status-cards {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stat-card {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.13);
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+}
+
+.stat-item {
+  min-height: 62px;
+  padding: 10px 12px;
+  align-items: center;
+}
+
+.stat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  font-size: 16px;
+}
+
+.stat-pulse {
+  display: none;
+}
+
+.stat-content {
+  gap: 3px;
+}
+
+.stat-number {
+  font-size: 24px;
+  letter-spacing: -0.03em;
+}
+
+.stat-label {
+  font-size: 11px;
+}
+
+.circular-progress {
+  top: 7px;
+  right: 8px;
+  opacity: 0.9;
+  transform: scale(0.82);
+  transform-origin: top right;
+}
+
+.main-content {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  box-shadow: 0 20px 54px rgba(15, 23, 42, 0.18);
+}
+
+.content-header {
+  padding: 8px 12px;
+  background:
+    linear-gradient(135deg, rgba(248, 250, 252, 0.98), rgba(238, 242, 255, 0.95));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.content-title {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+}
+
+.custom-tabs {
+  padding: 0 10px 10px;
+}
+
+:deep(.el-tabs__header) {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 -2px 8px;
+  padding-top: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.88));
+  border-bottom: 0;
+  backdrop-filter: blur(10px);
+}
+
+:deep(.el-tabs__nav) {
+  gap: 6px;
+}
+
+:deep(.el-tabs__item) {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+:deep(.el-tabs__item:hover) {
+  background: #eef2ff;
+  border-color: rgba(99, 102, 241, 0.18);
+}
+
+:deep(.el-tabs__item.is-active) {
+  color: #fff;
+  background: linear-gradient(135deg, #4f46e5, #06b6d4);
+  border-bottom: 0;
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.24);
+}
+
+:deep(.el-tab-pane) {
+  padding-top: 0;
+}
+
+:deep(.picking-list-generator),
+:deep(.picking-progress-container),
+:deep(.picking-history-container) {
+  min-height: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+:deep(.picking-progress-container .page-header),
+:deep(.picking-history-container .page-header) {
+  margin-bottom: 8px !important;
+}
+
+:deep(.picking-progress-container .page-title),
+:deep(.picking-history-container .page-title) {
+  font-size: 15px !important;
+}
+
+:deep(.picking-progress-container .page-subtitle),
+:deep(.picking-history-container .page-subtitle) {
+  font-size: 11px !important;
+}
+
+:deep(.picking-progress-container .overview-section),
+:deep(.picking-progress-container .analytics-section),
+:deep(.picking-progress-container .data-section),
+:deep(.picking-history-container .filter-card),
+:deep(.picking-history-container .stats-grid),
+:deep(.picking-history-container .chart-card),
+:deep(.picking-history-container .performer-analysis-card),
+:deep(.picking-history-container .daily-rate-chart-card),
+:deep(.picking-history-container .table-card) {
+  margin-bottom: 8px !important;
+}
+
+:deep(.el-card__header) {
+  padding: 8px 12px;
+}
+
+:deep(.el-card__body) {
+  padding: 10px 12px;
+}
+
+:deep(.el-table) {
+  --el-table-header-bg-color: #f8fafc;
+  font-size: 12px;
+}
+
+:deep(.el-table th),
+:deep(.el-table td) {
+  padding: 6px 8px;
+}
+
+@media (max-width: 768px) {
+  .picking-management {
+    padding: 8px;
+  }
+
+  .header-content {
+    padding: 9px 10px;
+  }
+
+  .status-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat-item {
+    min-height: 56px;
+  }
+
+  .custom-tabs {
+    padding: 0 8px 8px;
   }
 }
 </style>

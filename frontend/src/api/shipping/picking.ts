@@ -1,8 +1,8 @@
 import request from '@/utils/request'
 
-// Sync shipping data to picking tasks
-export function syncShippingDataToPickingTasks() {
-  return request.post('/api/shipping/picking/sync-data')
+/** 監視フォルダの PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、picking_log_matched を全件再計算 */
+export function refreshPickingLogMatchedFromLog() {
+  return request.post('/api/shipping/items/refresh-picking-log-matched')
 }
 
 // Get picking history data
@@ -10,7 +10,7 @@ export function getPickingHistoryData(params: { start_date: string; end_date: st
   return request.get('/api/shipping/picking/history', { params })
 }
 
-// Get performance by destination（担当者＝納入先グループ group_name，按该组 destinations + 日期在 picking_tasks 上汇总）
+// Get performance by destination（担当者＝納入先グループ、shipping_items + picking_log_matched で集計）
 export function getPerformanceByDestination(params: {
   start_date: string
   end_date: string

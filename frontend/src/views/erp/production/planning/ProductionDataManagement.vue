@@ -456,7 +456,7 @@
         </div>
       </template>
 
-      <el-tabs v-model="activeTableTab" type="card" class="summary-table-tabs" :stretch="true">
+      <el-tabs v-model="activeTableTab" type="card" class="summary-table-tabs" :stretch="true" @tab-change="handleTableTabChange">
               <el-tab-pane v-for="tab in tableTabs" :key="tab.key" :name="tab.key">
                 <template #label>
                   <span class="tab-text">{{ tab.label }}</span>
@@ -1784,6 +1784,7 @@ const datePickerShortcuts: Array<{ text: string; value: () => Date[] }> = [
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
+const summaryAllData = ref<any[]>([])
 const currentPage = ref(1)
 const pageSize = ref(150)
 const total = ref(0)
@@ -2280,6 +2281,9 @@ function sumSafetyStockByLatestDatePerProduct(data: any[]): number {
 
 const getSummaries = (param: { columns: any[]; data: any[] }) => {
   const { columns, data } = param
+  const summaryData = activeTableTab.value === 'plan' && summaryAllData.value.length > 0
+    ? summaryAllData.value
+    : data
   const sums: string[] = []
   columns.forEach((column, index) => {
     if (index === 0) {
@@ -2292,14 +2296,14 @@ const getSummaries = (param: { columns: any[]; data: any[] }) => {
       return
     }
     if (prop === 'safety_stock') {
-      sums[index] = sumSafetyStockByLatestDatePerProduct(data).toLocaleString()
+      sums[index] = sumSafetyStockByLatestDatePerProduct(summaryData).toLocaleString()
       return
     }
     if (!numericFields.has(prop)) {
       sums[index] = ''
       return
     }
-    const values = data.map((item) => Number(item[prop]) || 0)
+    const values = summaryData.map((item) => Number(item[prop]) || 0)
     sums[index] = values.reduce((a, b) => a + b, 0).toLocaleString()
   })
   return sums
@@ -3354,36 +3358,69 @@ const confirmGenerateData = async () => {
   }
 }
 
+const SUMMARY_FETCH_PAGE_SIZE = 1000
+const buildListParams = () => {
+  const params: any = {
+    page: currentPage.value,
+    limit: pageSize.value,
+    sortBy: sortBy.value,
+    sortOrder: sortOrder.value,
+  }
+  if (dateRange.value && dateRange.value.length === 2) {
+    params.startDate = dateRange.value[0]
+    params.endDate = dateRange.value[1]
+  }
+  if (filterProductCd.value) params.productCd = filterProductCd.value
+  if (filterKeyword.value.trim()) params.keyword = filterKeyword.value.trim()
+  return params
+}
+const fetchAllRowsForSummary = async (baseParams: any, totalCount: number) => {
+  if (totalCount <= 0) return []
+  const pages = Math.ceil(totalCount / SUMMARY_FETCH_PAGE_SIZE)
+  const allRows: any[] = []
+  for (let page = 1; page <= pages; page += 1) {
+    const response: any = await getProductionSummarysList({
+      ...baseParams,
+      page,
+      limit: SUMMARY_FETCH_PAGE_SIZE,
+    })
+    const list = response?.data?.list ?? []
+    if (!Array.isArray(list) || list.length === 0) break
+    allRows.push(...list)
+    if (allRows.length >= totalCount) break
+  }
+  return allRows
+}
 const fetchData = async () => {
   loading.value = true
   try {
-    const params: any = {
-      page: currentPage.value,
-      limit: pageSize.value,
-      sortBy: sortBy.value,
-      sortOrder: sortOrder.value,
-    }
-    if (dateRange.value && dateRange.value.length === 2) {
-      params.startDate = dateRange.value[0]
-      params.endDate = dateRange.value[1]
-    }
-    if (filterProductCd.value) params.productCd = filterProductCd.value
-    if (filterKeyword.value.trim()) params.keyword = filterKeyword.value.trim()
-
+    const params = buildListParams()
     const response: any = await getProductionSummarysList(params)
     lastRefreshTime.value = new Date().toLocaleString('ja-JP', { hour12: false })
 
     if (response?.data?.list) {
       tableData.value = response.data.list
       total.value = response.data.pagination?.total ?? 0
+      if (activeTableTab.value === 'plan') {
+        if (total.value <= tableData.value.length) {
+          summaryAllData.value = [...tableData.value]
+        } else {
+          const allRows = await fetchAllRowsForSummary(params, total.value)
+          summaryAllData.value = allRows.length > 0 ? allRows : [...tableData.value]
+        }
+      } else {
+        summaryAllData.value = []
+      }
     } else {
       tableData.value = []
       total.value = 0
+      summaryAllData.value = []
     }
   } catch {
     ElMessage.error('データの取得に失敗しました')
     tableData.value = []
     total.value = 0
+    summaryAllData.value = []
   } finally {
     loading.value = false
   }
@@ -3790,6 +3827,9 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
 }
 const handlePageChange = () => fetchData()
 const handleRefresh = () => fetchData()
+const handleTableTabChange = () => {
+  if (activeTableTab.value === 'plan') fetchData()
+}
 
 const handleFilterProductFromStagnation = (productCd: string) => {
   if (!productCd) return

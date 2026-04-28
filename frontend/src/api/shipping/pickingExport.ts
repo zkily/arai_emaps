@@ -1,6 +1,6 @@
 /**
  * ピッキングCSVエクスポートAPI
- * データ範囲: 出荷日 ≥ DB サーバー当日（CURDATE()）。画面の検索条件は使用しない。
+ * データ範囲: 出荷日 ≥ CURDATE() かつ 出荷日 < CURDATE()+15日。画面の検索条件は使用しない。
  * 無 body、60 分タイムアウト。
  */
 import request from '@/utils/request'

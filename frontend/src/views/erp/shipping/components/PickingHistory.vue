@@ -3686,4 +3686,191 @@ if (app) {
     margin-right: 0;
   }
 }
+
+/* ========== Modern compact tab polish ========== */
+.picking-history-container {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.picking-history-container::before {
+  display: none;
+}
+
+.page-header {
+  margin-bottom: 8px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(238, 242, 255, 0.9));
+  border: 1px solid rgba(203, 213, 225, 0.75);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+
+.title-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.page-title {
+  font-size: 15px;
+  color: #172554;
+  -webkit-text-fill-color: currentColor;
+}
+
+.page-subtitle {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.refresh-btn,
+.search-btn,
+.reset-btn,
+.quick-btn,
+.performer-quick-btn {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.filter-card,
+.chart-card,
+.performer-analysis-card,
+.daily-rate-chart-card,
+.table-card {
+  margin-bottom: 8px;
+  border-radius: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.filter-card :deep(.el-card__header),
+.chart-card :deep(.el-card__header),
+.performer-analysis-card :deep(.el-card__header),
+.daily-rate-chart-card :deep(.el-card__header),
+.table-card :deep(.el-card__header) {
+  padding: 8px 10px;
+  background: linear-gradient(135deg, #f8fafc, #eef2ff);
+}
+
+.filter-card :deep(.el-card__body),
+.chart-card :deep(.el-card__body),
+.performer-analysis-card :deep(.el-card__body),
+.daily-rate-chart-card :deep(.el-card__body),
+.table-card :deep(.el-card__body) {
+  padding: 10px 12px;
+}
+
+.date-selection-section,
+.performer-quick-date-section {
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.quick-date-buttons,
+.performer-quick-date-buttons,
+.button-group {
+  gap: 6px;
+}
+
+.stats-grid {
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.stats-grid .stat-card {
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.stats-grid .stat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+}
+
+.stats-grid .stat-number {
+  font-size: 20px;
+}
+
+.performer-analysis-content {
+  min-height: auto;
+  padding: 12px;
+}
+
+.performer-list,
+.performer-grid {
+  gap: 8px;
+}
+
+.performer-list-item {
+  margin-bottom: 8px;
+  border-radius: 14px;
+}
+
+.performer-list-header {
+  padding: 10px 12px;
+  gap: 10px;
+}
+
+.performer-avatar {
+  width: 38px;
+  height: 38px;
+}
+
+.performer-stats {
+  gap: 8px;
+}
+
+.stat-item {
+  padding: 6px 9px;
+}
+
+.performer-destinations {
+  padding: 10px 12px;
+}
+
+.destinations-header,
+.destination-header,
+.destination-stats {
+  margin-bottom: 8px;
+}
+
+.destinations-list {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.destination-list-item {
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.daily-rate-chart-card .chart-container {
+  min-height: 260px;
+}
+
+.pagination-container {
+  padding: 10px;
+}
+
+@media (max-width: 768px) {
+  .picking-history-container,
+  .page-header {
+    padding: 8px;
+  }
+
+  .page-title {
+    font-size: 15px;
+  }
+
+  .stats-grid {
+    gap: 8px;
+  }
+}
 </style>

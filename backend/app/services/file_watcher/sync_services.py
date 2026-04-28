@@ -2,6 +2,7 @@
 """在庫取引・材料ログ同期サービス（MySQL へ同期）"""
 import logging
 import random
+from datetime import date, timedelta
 import mysql.connector
 from app.core.config import settings
 from app.services.file_watcher.utils import read_csv_content, normalize_date_str, normalize_time_str
@@ -27,8 +28,10 @@ STOCK_FILES = [
 MATERIAL_FILES = list(settings.get_material_receiving_watch_filenames())
 
 # ピッキングログファイル → shipping_log（fileWatcherService.js と同等）
+# Partslog.csv も同一フォーマットで配置された場合に監視し、取込後は picking_log_matched を API と同様に全件再計算
 PICKING_FILES = [
     "PickingLog.csv",
+    "Partslog.csv",
 ]
 
 # 材料切断ログ（MATERIAL_CUTTING_CSV_PATH / materialCutting.csv）→ material_cutting_logs
@@ -671,9 +674,9 @@ def _picking_format_datetime(dt_str, date_str=None):
 
 
 class PickingLogService:
-    """PickingLog.csv → shipping_log（重複は (picking_no, product_code, date) で ON DUPLICATE KEY UPDATE）。続けて picking_tasks を更新。"""
+    """PickingLog.csv → shipping_log（重複は (picking_no, product_code, date) で ON DUPLICATE KEY UPDATE）。"""
 
-    def sync(self, filepath, filename):
+    def sync(self, filepath, filename, *, raise_on_error: bool = False):
         rows = read_csv_content(filepath)
         if not rows or len(rows) < 2:
             return
@@ -685,6 +688,8 @@ class PickingLogService:
                 start = 1
         data_rows = [r for r in rows[start:] if r and len(r) >= 8]
         records = []
+        cutoff_date = date.today() - timedelta(days=90)
+        skipped_old = 0
         for r in data_rows:
             # 列: project, date, datetime, model_no, person_in_charge, picking_no, product_name, product_code, product_name_2, quantity, shipping_quantity
             rec = {
@@ -700,10 +705,22 @@ class PickingLogService:
                 "quantity": _picking_int(r[9]) if len(r) > 9 else 0,
                 "shipping_quantity": _picking_int(r[10]) if len(r) > 10 else 0,
             }
+            # 保持期間外（90日より古い日付）のログは再取込しない
+            rec_date = rec["date"]
+            if rec_date:
+                try:
+                    y, m, d = str(rec_date).split("-")
+                    dval = date(int(y), int(m), int(d))
+                    if dval < cutoff_date:
+                        skipped_old += 1
+                        continue
+                except Exception:
+                    # 日付変換失敗時は従来どおり処理対象に残す
+                    pass
             if rec["picking_no"] or rec["product_code"]:
                 records.append(rec)
         if not records:
-            logger.warning("⚠️ [PickingLog] %s 有効レコードなし", filename)
+            logger.warning("⚠️ [PickingLog] %s 有効レコードなし（90日超過スキップ: %s）", filename, skipped_old)
             return
         # 同一ファイル内で (picking_no, product_code, date) 重複除去
         seen = set()
@@ -767,47 +784,93 @@ class PickingLogService:
                     logger.warning("shipping_log 挿入/更新失敗: %s", e)
             conn.commit()
             logger.info("%s 処理完了: shipping_log 新規 %s 件, 更新 %s 件", filename, inserted, updated)
-            if records_to_sync_pt:
-                self._sync_to_picking_tasks(cursor, records_to_sync_pt)
-                conn.commit()
+            if skipped_old > 0:
+                logger.info("%s 取込時に 90日超過レコード %s 件をスキップ", filename, skipped_old)
+            self._refresh_shipping_items_picking_log_matched_for_batch(cursor, unique_records)
+            conn.commit()
         except Exception as e:
             conn.rollback()
             logger.error("❌ [PickingLog] エラー %s: %s", filename, e, exc_info=True)
+            if raise_on_error:
+                raise
         finally:
             cursor.close()
             conn.close()
 
-    def _sync_to_picking_tasks(self, cursor, records):
-        """挿入/更新したレコードで picking_tasks を更新（shipping_no_p = picking_no）。テーブルが無い場合はスキップ。"""
-        if not records:
+    def _refresh_shipping_items_picking_log_matched_for_batch(self, cursor, source_records):
+        """PickingLog 取込後、当該 picking_no（= shipping_no_p）の shipping_items.picking_log_matched を shipping_log と突合せて更新。"""
+        if not source_records:
             return
-        # picking_no があるもののみ
-        valid = [r for r in records if r.get("picking_no")]
-        if not valid:
+        pns: list[str] = []
+        for r in source_records:
+            pn = (r.get("picking_no") or "").strip()
+            if pn and pn not in pns:
+                pns.append(pn)
+        if not pns:
             return
-        update_sql = """
-            UPDATE picking_tasks
-            SET start_time = %s, picker_id = %s, product_name = %s, product_cd = %s,
-                picked_quantity = %s, picked_no = %s, status = 'completed', updated_at = CURRENT_TIMESTAMP
-            WHERE shipping_no_p = %s
+        placeholders = ",".join(["%s"] * len(pns))
+        sql = f"""
+            UPDATE shipping_items s
+            SET s.picking_log_matched = CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM shipping_log l
+                    WHERE l.picking_no = s.shipping_no_p
+                      AND l.picking_no IS NOT NULL AND l.picking_no != ''
+                    LIMIT 1
+                ) THEN 1 ELSE 0 END
+            WHERE s.shipping_no_p IN ({placeholders})
         """
         try:
-            for rec in valid:
-                cursor.execute(
-                    update_sql,
-                    (
-                        rec.get("datetime"),
-                        rec.get("person_in_charge", ""),
-                        rec.get("product_name", ""),
-                        rec.get("product_code", ""),
-                        rec.get("quantity", 0),
-                        rec.get("picking_no", ""),
-                        rec.get("picking_no", ""),
-                    ),
-                )
+            cursor.execute(sql, tuple(pns))
         except Exception as e:
-            # picking_tasks が存在しない等
-            logger.debug("picking_tasks 更新スキップ（テーブル未作成の可能性）: %s", e)
+            logger.debug("picking_log_matched 一括更新スキップ（列未作成等）: %s", e)
+
+
+def execute_full_picking_log_matched_refresh_sync() -> int:
+    """shipping_items.picking_log_matched を全件再計算（POST refresh-picking-log-matched と同一 SQL）。"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    affected = 0
+    try:
+        cursor.execute(
+            """
+            UPDATE shipping_items
+            SET picking_log_matched = 0
+            WHERE shipping_no_p IS NOT NULL AND shipping_no_p != ''
+            """
+        )
+        affected = cursor.rowcount or 0
+        cursor.execute(
+            """
+            UPDATE shipping_items si
+            INNER JOIN (
+                SELECT DISTINCT picking_no
+                FROM shipping_log
+                WHERE picking_no IS NOT NULL AND picking_no != ''
+            ) sl ON sl.picking_no = si.shipping_no_p
+            SET si.picking_log_matched = 1
+            """
+        )
+        conn.commit()
+        logger.info("picking_log_matched 全件再計算完了（リセット対象行数: %s）", affected)
+    except Exception as e:
+        conn.rollback()
+        logger.error("picking_log_matched 全件再計算失敗: %s", e, exc_info=True)
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+    return affected
+
+
+def run_picking_sync_and_refresh_matched(filepath: str, filename: str) -> None:
+    """
+    PickingLog.csv / Partslog.csv 変更時：CSV を shipping_log に取り込み、その後 picking_log_matched を全件再計算する。
+    フロントの「データ読込・更新」と同じ結果になる（手動 API と同様の 2 段 UPDATE）。
+    """
+    svc = PickingLogService()
+    svc.sync(filepath, filename, raise_on_error=False)
+    execute_full_picking_log_matched_refresh_sync()
 
 
 def sync_material_csv_files_from_watch_folder() -> dict:

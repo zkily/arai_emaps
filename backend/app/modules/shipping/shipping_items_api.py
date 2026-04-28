@@ -1,22 +1,46 @@
 """
 出荷明細 API (shipping_items テーブル)
 - GET /items: 一覧取得（shipping_date / end_date / destination_cd / status 等でフィルタ）
+- GET /items/for-picking-display: ピッキング画面用（shipping_items のみ、ページング）
+- POST /items/refresh-picking-log-matched: FILE_WATCH_BASE_PATH の PickingLog.csv（無ければ Partslog.csv）を shipping_log に取込後、picking_log_matched を全件再計算
 - POST /items/bulk: 一括登録（パレット割当て案 → shipping_items）
 - POST /items/{shipping_no}/issue: 出荷番号を発行（該当 shipping_no の status を「発行済」に更新）
-- POST /items/{id}/cancel: shipping_no_p で order_daily/picking_tasks を整理後、shipping_items を物理削除
+- POST /items/{id}/cancel: shipping_no_p で order_daily を整理後、shipping_items を物理削除
 """
-from fastapi import APIRouter, Depends, Query, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from typing import Optional, List
-from pydantic import BaseModel
+import asyncio
+import os
 import re
+from typing import List, Optional, Tuple
 
+from fastapi import APIRouter, Depends, Query, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
-from app.core.database import get_db
+from app.services.file_watcher.sync_services import PickingLogService, execute_full_picking_log_matched_refresh_sync
 
 router = APIRouter()
+
+
+def _file_watch_csv_base() -> str:
+    raw = (os.environ.get("FILE_WATCH_BASE_PATH") or getattr(settings, "FILE_WATCH_BASE_PATH", "") or "").strip()
+    return os.path.normpath(os.path.expandvars(raw)) if raw else ""
+
+
+def _resolve_picking_csv_for_shipping_log() -> Tuple[Optional[str], Optional[str]]:
+    """監視フォルダ内のピッキングログ CSV を解決（PickingLog.csv を優先、無ければ Partslog.csv）。戻りは (フルパス, ファイル名)。"""
+    base = _file_watch_csv_base()
+    if not base or not os.path.isdir(base):
+        return None, None
+    for name in ("PickingLog.csv", "Partslog.csv"):
+        full = os.path.join(base, name)
+        if os.path.isfile(full):
+            return full, name
+    return None, None
 
 
 class ShippingItemBulkRow(BaseModel):
@@ -67,6 +91,39 @@ def _row_to_item(r: dict) -> dict:
         "updated_at": str(r.get("updated_at")) if r.get("updated_at") else "",
         "shipping_no_p": r.get("shipping_no_p") or "",
         "product_type": r.get("product_type") or "",
+        "picking_log_matched": int(r.get("picking_log_matched") or 0),
+    }
+
+
+def _shipping_item_to_picking_display_dict(r: dict) -> dict:
+    """shipping_items 行をピッキング画面用（旧 picking_tasks 互換）に変換"""
+    matched = int(r.get("picking_log_matched") or 0)
+    st = "completed" if matched else "pending"
+    uqty = int(r.get("confirmed_units") or 0) or int(r.get("confirmed_boxes") or 0)
+    snp = r.get("shipping_no_p") or ""
+    return {
+        "id": r.get("id"),
+        "shipping_no_p": snp,
+        "shipping_no": r.get("shipping_no") or "",
+        "shipping_date": r.get("shipping_date").isoformat()
+        if hasattr(r.get("shipping_date"), "isoformat")
+        else str(r.get("shipping_date") or ""),
+        "product_cd": r.get("product_cd") or "",
+        "product_name": r.get("product_name") or "",
+        "confirmed_boxes": int(r.get("confirmed_boxes") or 0),
+        "destination_cd": r.get("destination_cd") or "",
+        "destination_name": r.get("destination_name") or "",
+        "picked_quantity": uqty if matched else 0,
+        "picked_no": snp if matched else "",
+        "location_cd": "",
+        "picker_id": "",
+        "picker_name": "",
+        "picker_full_name": "",
+        "status": st,
+        "start_time": "",
+        "complete_time": "",
+        "created_at": str(r.get("created_at")) if r.get("created_at") else "",
+        "updated_at": str(r.get("updated_at")) if r.get("updated_at") else "",
     }
 
 
@@ -126,12 +183,122 @@ async def list_shipping_items(
     q = text(
         "SELECT id, shipping_no, shipping_date, delivery_date, destination_cd, destination_name, "
         "product_cd, product_name, product_alias, box_type, confirmed_boxes, confirmed_units, "
-        "unit, status, remarks, created_at, updated_at, shipping_no_p, product_type "
+        "unit, status, picking_log_matched, remarks, created_at, updated_at, shipping_no_p, product_type "
         "FROM shipping_items WHERE " + where_sql + " ORDER BY shipping_date DESC, shipping_no, id"
     )
     result = await db.execute(q, params)
     rows = result.mappings().all()
     return [_row_to_item(dict(r)) for r in rows]
+
+
+# ---------- GET /items/for-picking-display ----------
+@router.get("/for-picking-display")
+async def list_shipping_items_for_picking_display(
+    date: Optional[str] = Query(None, description="単日出荷日 YYYY-MM-DD"),
+    start_date: Optional[str] = Query(None, description="開始日（範囲指定時）"),
+    end_date: Optional[str] = Query(None, description="終了日（範囲指定時）"),
+    status: Optional[str] = Query(None, description="pending / completed / picking 等"),
+    product_cd: Optional[str] = Query(None),
+    destination_cd: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+) -> dict:
+    """ピッキング一覧用。shipping_items のみ参照（picking_log_matched で完了判定）。"""
+    conditions = ["si.status != 'キャンセル'", "si.shipping_no_p IS NOT NULL", "si.shipping_no_p != ''"]
+    params: dict = {}
+
+    if start_date and end_date:
+        conditions.append("si.shipping_date BETWEEN :start_date AND :end_date")
+        params["start_date"] = start_date
+        params["end_date"] = end_date
+    elif date:
+        conditions.append("si.shipping_date = :target_date")
+        params["target_date"] = date
+    else:
+        conditions.append("si.shipping_date = CURDATE()")
+
+    if status:
+        if status == "completed":
+            conditions.append("si.picking_log_matched = 1")
+        elif status in ("pending", "picking"):
+            conditions.append("si.picking_log_matched = 0")
+    if product_cd:
+        conditions.append("si.product_cd LIKE :product_cd")
+        params["product_cd"] = f"%{product_cd}%"
+    if destination_cd:
+        conditions.append("si.destination_cd = :destination_cd")
+        params["destination_cd"] = destination_cd
+
+    where_sql = " AND ".join(conditions)
+    offset = (page - 1) * page_size
+    params["limit"] = page_size
+    params["offset"] = offset
+
+    count_q = text(f"SELECT COUNT(*) AS cnt FROM shipping_items si WHERE {where_sql}")
+    count_result = await db.execute(count_q, params)
+    total = int(count_result.scalar() or 0)
+
+    data_q = text(
+        f"""
+        SELECT si.*
+        FROM shipping_items si
+        WHERE {where_sql}
+        ORDER BY si.picking_log_matched ASC, si.shipping_no_p ASC
+        LIMIT :limit OFFSET :offset
+    """
+    )
+    result = await db.execute(data_q, params)
+    rows = result.mappings().all()
+    return {
+        "items": [_shipping_item_to_picking_display_dict(dict(r)) for r in rows],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size else 1,
+    }
+
+
+# ---------- POST /items/refresh-picking-log-matched ----------
+@router.post("/refresh-picking-log-matched")
+async def refresh_picking_log_matched(
+    current_user: User = Depends(verify_token_and_get_user),
+) -> dict:
+    """監視フォルダのピッキングログ CSV を shipping_log に強制取込後、picking_log_matched を全件再計算する。"""
+    csv_path, csv_name = _resolve_picking_csv_for_shipping_log()
+    base = _file_watch_csv_base()
+    if not csv_path:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "ピッキングログ CSV が見つかりません。"
+                + (f" ({base})" if base else "")
+                + " に PickingLog.csv または Partslog.csv を配置するか、環境変数 FILE_WATCH_BASE_PATH を設定してください。"
+            ),
+        )
+    svc = PickingLogService()
+
+    def _run_sync() -> None:
+        svc.sync(csv_path, csv_name, raise_on_error=True)
+
+    try:
+        await asyncio.to_thread(_run_sync)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"shipping_log への CSV 取込に失敗しました: {e}") from e
+
+    try:
+        affected = await asyncio.to_thread(execute_full_picking_log_matched_refresh_sync)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"picking_log_matched の更新に失敗しました: {e}") from e
+    return {
+        "success": True,
+        "message": (
+            f"shipping_log を {csv_name} から取り込み、picking_log_matched を更新しました（対象行数: {affected}）"
+        ),
+        "updated_rows": affected,
+        "synced_csv": csv_name,
+    }
 
 
 # ---------- POST /items/bulk ----------
@@ -275,8 +442,9 @@ async def cancel_shipping_item(
     """
     削除前に shipping_items.shipping_no_p で関連を処理してから物理削除する。
     1) order_daily.shipping_no に同じ値があればクリア（なければスキップ）
-    2) picking_tasks.shipping_no_p に同じ値があれば該当行を削除（なければスキップ）
-    3) shipping_items の該当行を物理削除
+    2) picking_tasks.shipping_no_p に同じ値があれば該当行を削除（FK 残存環境向け）
+    3) picking_list.shipping_no_p に同じ値があれば該当行を削除（なければスキップ）
+    4) shipping_items の該当行を物理削除
     """
     try:
         sel = text("SELECT id, shipping_no_p FROM shipping_items WHERE id = :id")
@@ -291,13 +459,32 @@ async def cancel_shipping_item(
             clear_od = text(
                 "UPDATE order_daily SET shipping_no = NULL WHERE shipping_no = :shipping_no_p"
             )
-            await db.execute(clear_od, {"shipping_no_p": shipping_no_p})
+            try:
+                await db.execute(clear_od, {"shipping_no_p": shipping_no_p})
+            except Exception as e:
+                # 一部環境では order_daily が未作成の可能性があるため、テーブル未存在は無視
+                if "1146" not in str(e):
+                    raise
 
-            # 2) picking_tasks: shipping_no_p が一致する行を削除（該当なしでもエラーにしない）
+            # 2) picking_tasks: FK 残存環境では親削除前に子行削除が必要
             del_pt = text("DELETE FROM picking_tasks WHERE shipping_no_p = :shipping_no_p")
-            await db.execute(del_pt, {"shipping_no_p": shipping_no_p})
+            try:
+                await db.execute(del_pt, {"shipping_no_p": shipping_no_p})
+            except Exception as e:
+                # picking_tasks 未作成でもキャンセル本体は継続
+                if "1146" not in str(e):
+                    raise
 
-        # 3) shipping_items の該当行を物理削除
+            # 3) picking_list: shipping_no_p が一致する行を削除（CSV 同期スナップショットの孤児行を防ぐ）
+            del_pl = text("DELETE FROM picking_list WHERE shipping_no_p = :shipping_no_p")
+            try:
+                await db.execute(del_pl, {"shipping_no_p": shipping_no_p})
+            except Exception as e:
+                # picking_list 未作成でもキャンセル本体は継続
+                if "1146" not in str(e):
+                    raise
+
+        # 4) shipping_items の該当行を物理削除
         del_q = text("DELETE FROM shipping_items WHERE id = :id")
         await db.execute(del_q, {"id": item_id})
 

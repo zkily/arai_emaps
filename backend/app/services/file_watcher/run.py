@@ -12,11 +12,11 @@ from app.services.file_watcher.sync_services import (
     StockService,
     MaterialService,
     MaterialCuttingCsvService,
-    PickingLogService,
     STOCK_FILES,
     MATERIAL_FILES,
     PICKING_FILES,
     MATERIAL_CUTTING_CSV_BASENAME,
+    run_picking_sync_and_refresh_matched,
 )
 from app.services.file_watcher.excel_processor import (
     ExcelProcessor,
@@ -198,7 +198,6 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
     stock_svc = StockService()
     material_svc = MaterialService()
     cutting_csv_svc = MaterialCuttingCsvService()
-    picking_svc = PickingLogService()
     excel_processor = ExcelProcessor()
     inspection_processor = InspectionExcelProcessor()
     while True:
@@ -237,7 +236,7 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
                 excel_processor.process_file(filepath)
             elif filename in PICKING_FILES:
                 if is_file_enabled(filename):
-                    picking_svc.sync(filepath, filename)
+                    run_picking_sync_and_refresh_matched(filepath, filename)
                 else:
                     logger.debug("ピッキングファイル監視は無効のためスキップ: %s", filename)
             elif filename in STOCK_FILES:
