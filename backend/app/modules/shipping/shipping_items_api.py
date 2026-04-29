@@ -10,7 +10,10 @@
 import asyncio
 import os
 import re
-from typing import List, Optional, Tuple
+import threading
+import uuid
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel
@@ -24,6 +27,45 @@ from app.modules.auth.models import User
 from app.services.file_watcher.sync_services import PickingLogService, execute_full_picking_log_matched_refresh_sync
 
 router = APIRouter()
+
+_PICKING_SYNC_TASKS: Dict[str, Dict[str, Any]] = {}
+_PICKING_SYNC_TASKS_LOCK = threading.Lock()
+
+
+def _utc_now_iso() -> str:
+    return datetime.utcnow().isoformat() + "Z"
+
+
+def _create_picking_sync_task(csv_name: str) -> str:
+    task_id = uuid.uuid4().hex
+    with _PICKING_SYNC_TASKS_LOCK:
+        _PICKING_SYNC_TASKS[task_id] = {
+            "task_id": task_id,
+            "status": "queued",
+            "progress_percent": 0,
+            "message": "queued",
+            "csv_name": csv_name,
+            "created_at": _utc_now_iso(),
+            "started_at": None,
+            "finished_at": None,
+            "updated_rows": 0,
+            "error": None,
+        }
+    return task_id
+
+
+def _update_picking_sync_task(task_id: str, **patch: Any) -> None:
+    with _PICKING_SYNC_TASKS_LOCK:
+        task = _PICKING_SYNC_TASKS.get(task_id)
+        if not task:
+            return
+        task.update(patch)
+
+
+def _get_picking_sync_task(task_id: str) -> Optional[Dict[str, Any]]:
+    with _PICKING_SYNC_TASKS_LOCK:
+        task = _PICKING_SYNC_TASKS.get(task_id)
+        return dict(task) if task else None
 
 
 def _file_watch_csv_base() -> str:
@@ -299,6 +341,82 @@ async def refresh_picking_log_matched(
         "updated_rows": affected,
         "synced_csv": csv_name,
     }
+
+
+def _run_refresh_picking_log_matched_task(task_id: str, csv_path: str, csv_name: str) -> None:
+    _update_picking_sync_task(
+        task_id,
+        status="running",
+        progress_percent=10,
+        message=f"{csv_name} を取り込み中",
+        started_at=_utc_now_iso(),
+    )
+    svc = PickingLogService()
+    try:
+        svc.sync(csv_path, csv_name, raise_on_error=True)
+        _update_picking_sync_task(
+            task_id,
+            progress_percent=70,
+            message="picking_log_matched を再計算中",
+        )
+        affected = int(execute_full_picking_log_matched_refresh_sync() or 0)
+        _update_picking_sync_task(
+            task_id,
+            status="completed",
+            progress_percent=100,
+            message="completed",
+            updated_rows=affected,
+            finished_at=_utc_now_iso(),
+        )
+    except Exception as e:
+        _update_picking_sync_task(
+            task_id,
+            status="failed",
+            progress_percent=100,
+            message="failed",
+            error=str(e),
+            finished_at=_utc_now_iso(),
+        )
+
+
+@router.post("/refresh-picking-log-matched/async")
+async def start_refresh_picking_log_matched_task(
+    current_user: User = Depends(verify_token_and_get_user),
+) -> dict:
+    """非同期ジョブを起動し task_id を返す。進捗は GET /refresh-picking-log-matched/tasks/{task_id} で取得。"""
+    csv_path, csv_name = _resolve_picking_csv_for_shipping_log()
+    base = _file_watch_csv_base()
+    if not csv_path:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "ピッキングログ CSV が見つかりません。"
+                + (f" ({base})" if base else "")
+                + " に PickingLog.csv または Partslog.csv を配置するか、環境変数 FILE_WATCH_BASE_PATH を設定してください。"
+            ),
+        )
+    task_id = _create_picking_sync_task(csv_name)
+    asyncio.create_task(asyncio.to_thread(_run_refresh_picking_log_matched_task, task_id, csv_path, csv_name))
+    return {
+        "success": True,
+        "data": {
+            "task_id": task_id,
+            "status": "queued",
+            "progress_percent": 0,
+            "synced_csv": csv_name,
+        },
+    }
+
+
+@router.get("/refresh-picking-log-matched/tasks/{task_id}")
+async def get_refresh_picking_log_matched_task(
+    task_id: str,
+    current_user: User = Depends(verify_token_and_get_user),
+) -> dict:
+    task = _get_picking_sync_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="タスクが見つかりません")
+    return {"success": True, "data": task}
 
 
 # ---------- POST /items/bulk ----------

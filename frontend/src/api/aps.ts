@@ -453,6 +453,11 @@ export function replanLineSequence(
   return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
 }
 
+/** production_plan_excel 全量再構築 + 順番全表再計算 */
+export function rebuildProductionPlanExcelAll(): Promise<any> {
+  return request.post(`${BASE}/production-plan-excel/rebuild`)
+}
+
 /** 設備別に DB 保存する順次再計算アンカー日（未設定は null） */
 export interface LineReplanAnchorRow {
   line_id: number

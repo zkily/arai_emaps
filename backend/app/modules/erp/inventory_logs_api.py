@@ -416,6 +416,7 @@ async def get_inventory_logs(
             "pre_welding_inspection": "KT11",
             "pre_outsource_inspection": "KT10",
             "pre_outsource_delivery": "KT10",
+            "part_process": "KT18",  # 部品棚卸・部品工程（部品倉庫）
         }
         process_cd = stage_type_map.get(stageType)
         if process_cd:

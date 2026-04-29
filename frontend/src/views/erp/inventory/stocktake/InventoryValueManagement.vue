@@ -43,6 +43,15 @@
           <el-button
             v-if="activeTab === 'product'"
             size="small"
+            class="header-action-btn header-action-btn--product-count"
+            @click="openProductUnitPriceDialog"
+          >
+            <el-icon class="btn-icon"><Printer /></el-icon>
+            製品単価表
+          </el-button>
+          <el-button
+            v-if="activeTab === 'product'"
+            size="small"
             class="header-action-btn header-action-btn--product-amount"
             @click="openProductAmountDialog"
           >
@@ -139,7 +148,7 @@
           <div class="kpi-tile__body">
             <span class="kpi-tile__tag">合計</span>
             <div class="kpi-tile__value">
-              ¥{{ formatNumber(statistics.total?.total_amount || 0) }}
+              ¥{{ formatNumber(displayTotalKpiAmount) }}
             </div>
             <p class="kpi-tile__desc">棚卸金額合計</p>
           </div>
@@ -169,7 +178,7 @@
           <div class="kpi-tile__body">
             <span class="kpi-tile__tag">製品</span>
             <div class="kpi-tile__value">
-              ¥{{ formatNumber(statistics.total?.stay_amount || 0) }}
+              ¥{{ formatNumber(displayProductKpiAmount) }}
             </div>
             <p class="kpi-tile__desc">製品金額</p>
           </div>
@@ -314,7 +323,9 @@
               負数データあり（{{ negativeProductCountCells }}件）
             </span>
           </div>
-          <p class="product-count-dialog__hint">製品CD・製品名と各工程の在庫数量（本数）を一覧表示します。</p>
+          <p class="product-count-dialog__hint">
+            製品CD・製品名と各工程の在庫数量（本数）を一覧表示します。製品CD が末尾「1」でない品目は集計対象外です。
+          </p>
           <div class="product-count-dialog__merge-controls">
             <el-date-picker
               v-model="shipmentDate"
@@ -369,9 +380,9 @@
           show-summary
           :summary-method="productCountSummaryMethod"
         >
-          <el-table-column prop="product_cd" label="製品CD" width="110" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="product_name" label="製品名" width="150" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="kind" label="分類" width="84" fixed="left" align="center" show-overflow-tooltip>
+          <el-table-column prop="product_cd" label="製品CD" width="90" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" width="100" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="kind" label="分類" width="60" fixed="left" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.kind || '—' }}
             </template>
@@ -381,6 +392,8 @@
             :key="proc.process_cd"
             :label="proc.process_name"
             :prop="`qty_${proc.process_cd}`"
+            :class-name="invTotalHighlightClass(proc.process_cd)"
+            :label-class-name="invTotalHighlightClass(proc.process_cd)"
             width="92"
             align="right"
           >
@@ -450,7 +463,8 @@
             </span>
           </div>
           <p class="product-count-dialog__hint">
-            総括・分類別の製品本数・金額に、出荷確定本数を並入して再集計できます（部品集計は対象外）。
+            総括・分類別の製品本数・金額に、出荷確定本数を並入して再集計できます（部品集計は対象外）。製品側は製品CD
+            が末尾「1」の行のみ集計します。
           </p>
           <div class="product-count-dialog__merge-controls">
             <el-date-picker
@@ -525,6 +539,96 @@
     </el-dialog>
 
     <el-dialog
+      v-model="showProductUnitPriceDialog"
+      width="min(96vw, 1180px)"
+      class="product-count-dialog"
+      align-center
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <template #header>
+        <div class="product-count-dialog__header">
+          <div class="product-count-dialog__header-row">
+            <span class="product-count-dialog__title">製品単価表</span>
+            <span v-if="productUnitPriceAsOf" class="product-count-dialog__date-chip">対象日 {{ productUnitPriceAsOf }}</span>
+          </div>
+          <p class="product-count-dialog__hint">
+            製品マスタで status=active かつ product_type=量産品の製品のうち、製品CD が末尾「1」のみ表示します。製品CD・製品名・分類・売価・原価率（外注倉庫単価がある場合は外注倉庫÷売価、それ以外は検査÷売価）と各工程の単価（在庫行の単価、小数2桁）を一覧表示します。
+          </p>
+        </div>
+      </template>
+      <div v-loading="productUnitPriceLoading" class="product-count-dialog__body">
+        <el-table
+          v-if="displayProductUnitPriceRows.length"
+          class="product-count-table"
+          :data="displayProductUnitPriceRows"
+          size="small"
+          :max-height="productCountTableMaxHeight"
+          border
+          stripe
+          show-summary
+          :summary-method="productUnitPriceSummaryMethod"
+        >
+          <el-table-column prop="product_cd" label="製品CD" width="90" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" width="100" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="kind" label="分類" width="60" fixed="left" align="center" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ row.kind || '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="売価" width="96" fixed="left" align="right" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatProductUnitPriceCell(row.selling_price) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="原価率" width="88" fixed="left" align="right" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatProductCostRatio(row) }}
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-for="proc in productUnitPriceProcesses"
+            :key="proc.process_cd"
+            :label="proc.process_name"
+            :prop="`up_${proc.process_cd}`"
+            :class-name="invTotalHighlightClass(proc.process_cd)"
+            :label-class-name="invTotalHighlightClass(proc.process_cd)"
+            width="92"
+            align="right"
+          >
+            <template #default="{ row }">
+              {{ formatProductUnitPriceCell(row[`up_${proc.process_cd}`] as number) }}
+            </template>
+          </el-table-column>
+        </el-table>
+        <div v-if="displayProductUnitPriceRows.length" class="product-count-summary-strip">
+          <span>製品数 <strong>{{ formatNumber(displayProductUnitPriceRows.length, 0) }}</strong></span>
+        </div>
+        <el-empty
+          v-if="!displayProductUnitPriceRows.length && !productUnitPriceLoading"
+          class="product-count-empty"
+          description="表示対象の製品データがありません。"
+          :image-size="72"
+        />
+      </div>
+      <template #footer>
+        <div class="product-count-dialog__footer">
+          <el-button size="small" @click="showProductUnitPriceDialog = false">閉じる</el-button>
+          <div class="product-count-dialog__actions">
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="productUnitPriceLoading || !displayProductUnitPriceRows.length"
+              @click="printProductUnitPriceData"
+            >
+              印刷
+            </el-button>
+          </div>
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="showProductAmountDialog"
       width="min(96vw, 1180px)"
       class="product-count-dialog"
@@ -538,7 +642,9 @@
             <span class="product-count-dialog__title">製品金額棚卸一覧</span>
             <span v-if="productAmountAsOf" class="product-count-dialog__date-chip">対象日 {{ productAmountAsOf }}</span>
           </div>
-          <p class="product-count-dialog__hint">製品CD・製品名と各工程の在庫金額（数量×単価）を一覧表示します。</p>
+          <p class="product-count-dialog__hint">
+            製品CD・製品名と各工程の在庫金額（数量×単価）を一覧表示します。製品CD が末尾「1」でない品目は集計対象外です。
+          </p>
           <div class="product-count-dialog__merge-controls">
             <el-date-picker
               v-model="shipmentAmountDate"
@@ -593,9 +699,9 @@
           show-summary
           :summary-method="productAmountSummaryMethod"
         >
-          <el-table-column prop="product_cd" label="製品CD" width="110" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="product_name" label="製品名" width="150" fixed="left" show-overflow-tooltip />
-          <el-table-column prop="kind" label="分類" width="84" fixed="left" align="center" show-overflow-tooltip>
+          <el-table-column prop="product_cd" label="製品CD" width="90" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="product_name" label="製品名" width="100" fixed="left" show-overflow-tooltip />
+          <el-table-column prop="kind" label="分類" width="60" fixed="left" align="center" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.kind || '—' }}
             </template>
@@ -605,6 +711,8 @@
             :key="proc.process_cd"
             :label="proc.process_name"
             :prop="`amt_${proc.process_cd}`"
+            :class-name="invTotalHighlightClass(proc.process_cd)"
+            :label-class-name="invTotalHighlightClass(proc.process_cd)"
             width="108"
             align="right"
           >
@@ -676,6 +784,7 @@ import {
 } from '@element-plus/icons-vue'
 import { inventoryValueApi, type InventoryValueParams, type MonthlyInventoryReportData } from '@/api/inventoryValue'
 import { getProductList } from '@/api/master/productMaster'
+import type { Product } from '@/types/master'
 import InventoryValueTable from './components/InventoryValueTable.vue'
 import MonthlyInventoryReportPrint from './components/MonthlyInventoryReportPrint.vue'
 
@@ -722,6 +831,15 @@ interface ProductAmountRow {
   [key: string]: string | number | undefined
 }
 
+interface ProductUnitPriceRow {
+  product_cd: string
+  product_name: string
+  kind?: string
+  /** products.unit_price（売価） */
+  selling_price?: number
+  [key: string]: string | number | undefined
+}
+
 const loading = ref(false)
 const activeTab = ref('material')
 
@@ -749,6 +867,12 @@ const productCountLoading = ref(false)
 const baseProductCountRows = ref<ProductCountRow[]>([])
 const productCountProcesses = ref<ProductCountProcess[]>([])
 const productCountAsOf = ref('')
+const showProductUnitPriceDialog = ref(false)
+const productUnitPriceLoading = ref(false)
+const baseProductUnitPriceRows = ref<ProductUnitPriceRow[]>([])
+const productUnitPriceProcesses = ref<ProductCountProcess[]>([])
+const productUnitPriceAsOf = ref('')
+
 const showProductAmountDialog = ref(false)
 const productAmountLoading = ref(false)
 const baseProductAmountRows = ref<ProductAmountRow[]>([])
@@ -767,6 +891,26 @@ interface DestinationItem {
   destination_name: string
 }
 const destinationList = ref<DestinationItem[]>([])
+
+/** 出荷数並入の注記・印刷用：納入先CD をマスタの名称で連結（名称未取得時は CD） */
+function formatShipmentDestNames(cds: string[]): string {
+  const nameByCd = new Map(
+    destinationList.value.map((d) => [
+      String(d.destination_cd ?? '').trim(),
+      String(d.destination_name ?? '').trim(),
+    ]),
+  )
+  return cds
+    .map((cd) => {
+      const key = String(cd ?? '').trim()
+      if (!key) return ''
+      const name = (nameByCd.get(key) ?? '').trim()
+      return name || key
+    })
+    .filter(Boolean)
+    .join(', ')
+}
+
 /** 出荷数並入の納入先初期選択（製品棚卸・統合報告書で共通） */
 const DEFAULT_SHIPMENT_DEST_CDS = [
   'N12', 'N13', 'N17', 'N18', 'N20', 'N21',
@@ -779,6 +923,70 @@ const shipmentMergeEnabled = ref(false)
 const shipmentLoading = ref(false)
 const shipmentByProductCd = ref<Record<string, number>>({})
 
+/** 製品本数・金額・単価棚卸および統合報告書（製品側）の集計対象：製品CD 末尾が「1」のみ */
+function isStocktakeProductCdIncluded(productCd: unknown): boolean {
+  const s = String(productCd ?? '').trim()
+  return s.length > 0 && s.endsWith('1')
+}
+
+/** 出荷のみ・棚卸行が無い製品の表示名（マスタに無ければ CD） */
+function productDisplayNameFromFilter(productCd: string): string {
+  const cd = String(productCd ?? '').trim()
+  if (!cd) return ''
+  const hit = productFilterOptions.value.find((o) => String(o.value ?? '').trim() === cd)
+  const label = String(hit?.label ?? '').trim()
+  return label || cd
+}
+
+/**
+ * source_codes 里存在共享同一在庫列（如 KT10/KT15 -> outsourced_warehouse_inventory）时，
+ * 可能从 stock-panel 拉回同一行多次；按製品×ルート×在庫列去重，避免合计重复。
+ */
+function dedupeProductStockPanelRows(rows: any[]): any[] {
+  const seen = new Set<string>()
+  const out: any[] = []
+  for (const r of rows ?? []) {
+    const cd = String(r?.product_cd ?? '').trim()
+    const route = String(r?.route_cd ?? '').trim()
+    const invCol = String(r?.inventory_column ?? '').trim()
+    const key = `${cd}__${route}__${invCol}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(r)
+  }
+  return out
+}
+
+/**
+ * 製品本数棚卸（出荷並入時）と棚卸統合報告書の製品本数を揃える。
+ * 報告書は production_summary が無くても order_daily の出荷本数を kind 集計に加算するが、
+ * 旧実装は getStockPanel 由来の行だけを map していたため、その差分が欠落していた。
+ */
+function buildShipmentOnlyProductCountRows(shipMap: Record<string, number>, existingCds: Set<string>): ProductCountRow[] {
+  const procs = productCountProcesses.value
+  const extras: ProductCountRow[] = []
+  for (const [cdRaw, qtyRaw] of Object.entries(shipMap)) {
+    const cd = String(cdRaw ?? '').trim()
+    const shipQty = Number(qtyRaw) || 0
+    if (!cd || !isStocktakeProductCdIncluded(cd) || shipQty <= 0 || existingCds.has(cd)) continue
+    const row: ProductCountRow = {
+      product_cd: cd,
+      product_name: productDisplayNameFromFilter(cd),
+    }
+    for (const p of procs) {
+      row[`qty_${p.process_cd}`] = 0
+    }
+    row.qty_WIP_TOTAL = 0
+    row.qty_all = shipQty
+    row.qty_PRODUCT_TOTAL = shipQty
+    extras.push(row)
+  }
+  extras.sort((a, b) =>
+    String(a.product_name ?? '').localeCompare(String(b.product_name ?? ''), 'ja', { sensitivity: 'base' }),
+  )
+  return extras
+}
+
 const displayProductCountRows = computed<ProductCountRow[]>(() => {
   const base = baseProductCountRows.value
   if (!shipmentMergeEnabled.value || !shipmentDate.value || !shipmentDestCds.value.length) {
@@ -787,7 +995,7 @@ const displayProductCountRows = computed<ProductCountRow[]>(() => {
   const shipMap = shipmentByProductCd.value
   const merged = base.map((row) => {
     const cd = String(row.product_cd ?? '').trim()
-    const shipQty = shipMap[cd] ?? 0
+    const shipQty = isStocktakeProductCdIncluded(cd) ? shipMap[cd] ?? 0 : 0
     if (shipQty === 0) return row
     const newRow = { ...row }
     newRow.qty_all = (Number(row.qty_all) || 0) + shipQty
@@ -795,7 +1003,9 @@ const displayProductCountRows = computed<ProductCountRow[]>(() => {
       (Number(newRow.qty_KT09) || 0) + (Number(newRow.qty_all) || 0) + (Number(newRow.qty_KT10) || 0)
     return newRow
   })
-  return applyZeroFilter(merged)
+  const seenCds = new Set(merged.map((r) => String(r.product_cd ?? '').trim()).filter(Boolean))
+  const shipmentOnly = buildShipmentOnlyProductCountRows(shipMap, seenCds)
+  return applyZeroFilter([...merged, ...shipmentOnly])
 })
 
 const displayProductAmountRows = computed<ProductAmountRow[]>(() => {
@@ -806,17 +1016,24 @@ const displayProductAmountRows = computed<ProductAmountRow[]>(() => {
   const shipMap = shipmentAmountByProductCd.value
   const merged = base.map((row) => {
     const cd = String(row.product_cd ?? '').trim()
-    const shipQty = shipMap[cd] ?? 0
+    const shipQty = isStocktakeProductCdIncluded(cd) ? shipMap[cd] ?? 0 : 0
     if (shipQty === 0) return row
     const newRow = { ...row }
-    const upAll = Number(row.up_all) || 0
-    newRow.amt_all = (Number(row.amt_all) || 0) + shipQty * upAll
+    // 棚卸統合報告書と同口径：製品側単価 = 製品側合計金額 / 製品側合計本数
+    const baseProductQty = Number(row.qty_PRODUCT_TOTAL) || 0
+    const baseProductAmt = Number(row.amt_PRODUCT_TOTAL) || 0
+    const mergeUnitPrice = baseProductQty > 0 ? baseProductAmt / baseProductQty : 0
+    const extraAmt = shipQty * mergeUnitPrice
+    // 工程別一覧では倉庫列に並入表示しつつ、製品合計を同額増分
+    newRow.amt_all = (Number(row.amt_all) || 0) + extraAmt
     newRow.amt_PRODUCT_TOTAL =
       (Number(newRow.amt_KT09) || 0) + (Number(newRow.amt_all) || 0) + (Number(newRow.amt_KT10) || 0)
     return newRow
   })
   return applyZeroAmountFilter(merged)
 })
+
+const displayProductUnitPriceRows = computed<ProductUnitPriceRow[]>(() => baseProductUnitPriceRows.value)
 
 function applyZeroFilter(rows: ProductCountRow[]): ProductCountRow[] {
   return rows.filter((row) => {
@@ -829,6 +1046,8 @@ function applyZeroFilter(rows: ProductCountRow[]): ProductCountRow[] {
 
 function applyZeroAmountFilter(rows: ProductAmountRow[]): ProductAmountRow[] {
   return rows.filter((row) => {
+    const cd = String(row.product_cd ?? '').trim()
+    if (!isStocktakeProductCdIncluded(cd)) return false
     const wip = Number(row.amt_WIP_TOTAL) || 0
     const warehouse = Number(row.amt_all) || 0
     const outsourcedWarehouse = Number(row.amt_KT10) || 0
@@ -875,6 +1094,8 @@ const statistics = ref<StatisticsData>({
 const materialStockPanelSum = ref<number | null>(null)
 /** 部品タブ：part_stock の金額合計（stock-panel の sum_total_value）。未取得時は null */
 const componentStockPanelSum = ref<number | null>(null)
+/** 製品 KPI：stock-panel（製品/全部工程）金額列合計（全ページ）。未取得時は null */
+const productStockPanelSum = ref<number | null>(null)
 
 const displayMaterialKpiAmount = computed(() => {
   if (materialStockPanelSum.value !== null && !Number.isNaN(materialStockPanelSum.value)) {
@@ -889,6 +1110,59 @@ const displayComponentKpiAmount = computed(() => {
   }
   return statistics.value.total.component_amount ?? 0
 })
+
+const displayProductKpiAmount = computed(() => {
+  if (productStockPanelSum.value !== null && !Number.isNaN(productStockPanelSum.value)) {
+    return productStockPanelSum.value
+  }
+  return statistics.value.total.stay_amount ?? 0
+})
+
+const displayTotalKpiAmount = computed(() => (
+  (Number(displayMaterialKpiAmount.value) || 0)
+  + (Number(displayComponentKpiAmount.value) || 0)
+  + (Number(displayProductKpiAmount.value) || 0)
+))
+
+async function loadProductStockPanelKpiAmount() {
+  const endDate = dateRange.value?.[1]
+  if (!endDate) {
+    productStockPanelSum.value = 0
+    return
+  }
+  try {
+    const asOf = String(endDate).slice(0, 10)
+    const merged: any[] = []
+    let page = 1
+    const limit = 500
+    let total = 0
+    for (let guard = 0; guard < 500; guard += 1) {
+      const resp = await inventoryValueApi.getStockPanel({
+        tab: 'product',
+        as_of: asOf,
+        process_cd: undefined, // 全部工程
+        page,
+        limit,
+        sort_by: 'product_cd',
+        sort_order: 'asc',
+      })
+      const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
+      const list = inner.list ?? []
+      total = Number(inner.total ?? 0)
+      merged.push(...list)
+      if (!list.length || list.length < limit || merged.length >= total) break
+      page += 1
+    }
+    const sum = merged.reduce((acc, row) => {
+      const cd = String(row?.product_cd ?? '').trim()
+      if (!isStocktakeProductCdIncluded(cd)) return acc
+      return acc + (Number(row?.total_value) || 0)
+    }, 0)
+    productStockPanelSum.value = sum
+  } catch {
+    productStockPanelSum.value = null
+  }
+}
 
 function onMaterialStockDataUpdated(payload: { total?: number; data?: unknown[]; sumTotalValue?: number }) {
   if (typeof payload.sumTotalValue === 'number' && !Number.isNaN(payload.sumTotalValue)) {
@@ -922,6 +1196,85 @@ const formatNumber = (value: number | string | undefined, decimals = 0): string 
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })
+}
+
+/** 製品本数棚卸印刷：数量 0 は空白表示 */
+const formatProductCountPrintQty = (value: number | string | undefined): string => {
+  const n = Number(value) || 0
+  if (n === 0) return ''
+  return formatNumber(n, 0)
+}
+
+/** 製品金額棚卸印刷：金額（工程列）0 は空白表示 */
+const formatProductAmountPrintZero = (value: number | string | undefined): string => {
+  const n = Number(value) || 0
+  if (n === 0) return ''
+  return formatNumber(n, 0)
+}
+
+/** 製品単価表：小数2桁・0 は空白 */
+function formatProductUnitPriceCell(value: number | string | undefined): string {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n === 0) return ''
+  return formatNumber(n, 2)
+}
+
+/** 原価率（％）：外注倉庫(KT10) に単価があれば KT10÷売価、否则 検査(KT09)÷売価。分子0または分母0は null */
+function getProductUnitPriceCostRatioPercent(row: ProductUnitPriceRow): number | null {
+  const sell = Number(row.selling_price) || 0
+  if (!sell) return null
+  const upKt10 = Number(row.up_KT10) || 0
+  const upKt09 = Number(row.up_KT09) || 0
+  const num = upKt10 !== 0 ? upKt10 : upKt09
+  if (!num) return null
+  return (num / sell) * 100
+}
+
+/** 原価率表示：％（小数2桁）、算出不可は空白 */
+function formatProductCostRatio(row: ProductUnitPriceRow): string {
+  const pct = getProductUnitPriceCostRatioPercent(row)
+  if (pct == null) return ''
+  return `${formatNumber(pct, 2)}%`
+}
+
+/** 製品単価表：売価・各工程単価は行数で算術平均、原価率は算出可能な行のみの％の算術平均 */
+function computeProductUnitPriceAverages(
+  rows: ProductUnitPriceRow[],
+  procs: ProductCountProcess[],
+): { sellingAvg: number; ratioAvg: number | null; upAvg: Record<string, number> } {
+  const n = rows.length
+  const upAvg: Record<string, number> = {}
+  for (const p of procs) {
+    upAvg[`up_${p.process_cd}`] = 0
+  }
+  if (!n) {
+    return { sellingAvg: 0, ratioAvg: null, upAvg }
+  }
+  let sellingSum = 0
+  let ratioSum = 0
+  let ratioCnt = 0
+  const upSums: Record<string, number> = { ...upAvg }
+  for (const row of rows) {
+    sellingSum += Number(row.selling_price) || 0
+    const r = getProductUnitPriceCostRatioPercent(row)
+    if (r != null) {
+      ratioSum += r
+      ratioCnt += 1
+    }
+    for (const p of procs) {
+      const k = `up_${p.process_cd}`
+      upSums[k] += Number(row[k]) || 0
+    }
+  }
+  for (const p of procs) {
+    const k = `up_${p.process_cd}`
+    upAvg[k] = upSums[k] / n
+  }
+  return {
+    sellingAvg: sellingSum / n,
+    ratioAvg: ratioCnt > 0 ? ratioSum / ratioCnt : null,
+    upAvg,
+  }
 }
 
 const errorTagType = (code: string) => {
@@ -1027,14 +1380,32 @@ function productCountSummaryMethod(param: { columns: Array<{ property?: string }
   })
 }
 
+function productUnitPriceSummaryMethod(param: { columns: Array<{ property?: string }>; data: ProductUnitPriceRow[] }) {
+  const { columns, data } = param
+  const procs = productUnitPriceProcesses.value
+  const avg = computeProductUnitPriceAverages(data, procs)
+  return columns.map((col, idx) => {
+    if (idx === 0) return '平均'
+    if (idx === 1) return ''
+    if (idx === 2) return ''
+    if (idx === 3) return formatNumber(avg.sellingAvg, 2)
+    if (idx === 4) return avg.ratioAvg != null ? `${formatNumber(avg.ratioAvg, 2)}%` : ''
+    const prop = String(col.property ?? '')
+    if (prop.startsWith('up_')) {
+      return formatNumber(avg.upAvg[prop] ?? 0, 2)
+    }
+    return ''
+  })
+}
+
 const PRODUCT_COUNT_PROCESS_SPECS: ProductCountProcess[] = [
   { process_cd: 'KT01', process_name: '切断', source_codes: ['KT01'] },
   { process_cd: 'KT02', process_name: '面取', source_codes: ['KT02'] },
   { process_cd: 'KT04', process_name: '成型', source_codes: ['KT04'] },
   { process_cd: 'KT05', process_name: 'メッキ', source_codes: ['KT05'] },
-  { process_cd: 'KT06', process_name: '外注メッキ', source_codes: ['KT06', 'KT16'] },
+  { process_cd: 'KT06', process_name: '外注メッキ', source_codes: ['KT06', 'KT17'] },
   { process_cd: 'KT07', process_name: '溶接', source_codes: ['KT07'] },
-  { process_cd: 'KT08', process_name: '外注溶接', source_codes: ['KT08', 'KT17'] },
+  { process_cd: 'KT08', process_name: '外注溶接', source_codes: ['KT08', 'KT16'] },
   { process_cd: 'KT11', process_name: '溶接前検査', source_codes: ['KT11'] },
   { process_cd: 'WIP_TOTAL', process_name: '仕掛品合計', source_codes: [] },
   { process_cd: 'KT09', process_name: '検査', source_codes: ['KT09'] },
@@ -1043,7 +1414,17 @@ const PRODUCT_COUNT_PROCESS_SPECS: ProductCountProcess[] = [
   { process_cd: 'PRODUCT_TOTAL', process_name: '製品合計', source_codes: [] },
 ]
 
+/** 製品単価表：仕掛品合計・製品合計・倉庫を除く工程のみ */
+const PRODUCT_UNIT_PRICE_PROCESS_SPECS: ProductCountProcess[] = PRODUCT_COUNT_PROCESS_SPECS.filter(
+  (p) => p.process_cd !== 'WIP_TOTAL' && p.process_cd !== 'PRODUCT_TOTAL' && p.process_cd !== 'all',
+)
+
 const PRODUCT_COUNT_WIP_SOURCE_CODES = ['KT01', 'KT02', 'KT04', 'KT05', 'KT06', 'KT07', 'KT08', 'KT11'] as const
+
+/** 仕掛品合計・製品合計列の強調（表・印刷共通 class 名） */
+function invTotalHighlightClass(processCd: string): string {
+  return processCd === 'WIP_TOTAL' || processCd === 'PRODUCT_TOTAL' ? 'inv-col-total-highlight' : ''
+}
 
 function escapeHtml(text: unknown): string {
   return String(text ?? '')
@@ -1141,6 +1522,7 @@ const handleMonthChange = (value?: string) => {
 
 const searchData = () => {
   loadStatistics()
+  void loadProductStockPanelKpiAmount()
   loadErrors()
   refreshCurrentTable()
 }
@@ -1221,7 +1603,9 @@ async function fetchShipmentUnits() {
     const map: Record<string, number> = {}
     for (const item of res.data.list) {
       const cd = String(item.product_cd ?? '').trim()
-      if (cd) map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
+      if (cd && isStocktakeProductCdIncluded(cd)) {
+        map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
+      }
     }
     shipmentByProductCd.value = map
   } catch {
@@ -1258,7 +1642,9 @@ async function fetchShipmentAmountUnits() {
     const map: Record<string, number> = {}
     for (const item of res.data.list) {
       const cd = String(item.product_cd ?? '').trim()
-      if (cd) map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
+      if (cd && isStocktakeProductCdIncluded(cd)) {
+        map[cd] = (map[cd] ?? 0) + (Number(item.confirmed_units_sum) || 0)
+      }
     }
     shipmentAmountByProductCd.value = map
   } catch {
@@ -1329,7 +1715,7 @@ async function openProductCountDialog() {
             page += 1
           }
         }
-        return { proc, list: merged }
+        return { proc, list: dedupeProductStockPanelRows(merged) }
       }),
     )
 
@@ -1337,7 +1723,7 @@ async function openProductCountDialog() {
     for (const { proc, list } of results) {
       for (const r of list) {
         const cd = String(r.product_cd ?? '').trim()
-        if (!cd) continue
+        if (!cd || !isStocktakeProductCdIncluded(cd)) continue
         const name = String(r.product_name ?? '').trim() || cd
         const kind = String(r.kind ?? '').trim() || undefined
         if (!byProduct.has(cd)) {
@@ -1427,7 +1813,7 @@ async function openProductAmountDialog() {
             page += 1
           }
         }
-        return { proc, list: merged }
+        return { proc, list: dedupeProductStockPanelRows(merged) }
       }),
     )
 
@@ -1435,16 +1821,18 @@ async function openProductAmountDialog() {
     for (const { proc, list } of results) {
       for (const r of list) {
         const cd = String(r.product_cd ?? '').trim()
-        if (!cd) continue
+        if (!cd || !isStocktakeProductCdIncluded(cd)) continue
         const name = String(r.product_name ?? '').trim() || cd
         const kind = String(r.kind ?? '').trim() || undefined
         if (!byProduct.has(cd)) byProduct.set(cd, { product_cd: cd, product_name: name, kind })
         const row = byProduct.get(cd)!
         if (!row.kind && kind) row.kind = kind
         const amtKey = `amt_${proc.process_cd}`
+        const qtyKey = `qty_${proc.process_cd}`
         const amount =
           Number(r.total_value) || ((Number(r.quantity) || 0) * (Number(r.unit_price) || 0))
         row[amtKey] = (Number(row[amtKey] ?? 0) || 0) + amount
+        row[qtyKey] = (Number(row[qtyKey] ?? 0) || 0) + (Number(r.quantity) || 0)
         if (proc.process_cd === 'all') {
           row.up_all = Number(r.unit_price) || Number(row.up_all) || 0
         }
@@ -1461,7 +1849,9 @@ async function openProductAmountDialog() {
     for (const row of rows) {
       for (const proc of productAmountProcesses.value) {
         const amtKey = `amt_${proc.process_cd}`
+        const qtyKey = `qty_${proc.process_cd}`
         row[amtKey] = Number(row[amtKey] ?? 0)
+        row[qtyKey] = Number(row[qtyKey] ?? 0)
       }
       row.amt_WIP_TOTAL = PRODUCT_COUNT_WIP_SOURCE_CODES.reduce(
         (sum, code) => sum + (Number(row[`amt_${code}`]) || 0),
@@ -1469,6 +1859,8 @@ async function openProductAmountDialog() {
       )
       row.amt_PRODUCT_TOTAL =
         (Number(row.amt_KT09) || 0) + (Number(row.amt_all) || 0) + (Number(row.amt_KT10) || 0)
+      row.qty_PRODUCT_TOTAL =
+        (Number(row.qty_KT09) || 0) + (Number(row.qty_all) || 0) + (Number(row.qty_KT10) || 0)
     }
     baseProductAmountRows.value = rows
     if (!displayProductAmountRows.value.length) ElMessage.info('この条件ではデータがありません')
@@ -1481,21 +1873,225 @@ async function openProductAmountDialog() {
   }
 }
 
+async function openProductUnitPriceDialog() {
+  const endDate = dateRange.value?.[1]
+  if (!endDate) {
+    ElMessage.warning('対象月（月末日）を選択してください')
+    return
+  }
+  showProductUnitPriceDialog.value = true
+  productUnitPriceLoading.value = true
+  baseProductUnitPriceRows.value = []
+  productUnitPriceAsOf.value = String(endDate).slice(0, 10)
+  try {
+    productUnitPriceProcesses.value = PRODUCT_UNIT_PRICE_PROCESS_SPECS
+    const results = await Promise.all(
+      productUnitPriceProcesses.value.map(async (proc) => {
+        const merged: any[] = []
+        if (!proc.source_codes.length) return { proc, list: merged }
+        for (const sourceCode of proc.source_codes) {
+          let page = 1
+          const limit = 500
+          let total = 0
+          for (let guard = 0; guard < 500; guard += 1) {
+            const resp = await inventoryValueApi.getStockPanel({
+              tab: 'product',
+              as_of: productUnitPriceAsOf.value,
+              process_cd: sourceCode === 'all' ? undefined : sourceCode,
+              page,
+              limit,
+              sort_by: 'product_cd',
+              sort_order: 'asc',
+            })
+            const inner = (resp as { data?: { list?: any[]; total?: number } })?.data ?? {}
+            let list = (inner.list ?? []).filter((r: any) => String(r.product_cd ?? '').trim().length > 0)
+            if (sourceCode === 'all') {
+              list = list.filter((r: any) => String(r.inventory_column ?? '') === 'warehouse_inventory')
+            }
+            total = Number(inner.total ?? 0)
+            merged.push(...list)
+            if (!(inner.list ?? []).length || (inner.list ?? []).length < limit || merged.length >= total) break
+            page += 1
+          }
+        }
+        return { proc, list: dedupeProductStockPanelRows(merged) }
+      }),
+    )
+
+    const byProduct = new Map<string, ProductUnitPriceRow>()
+    for (const { proc, list } of results) {
+      if (!proc.source_codes.length) continue
+      for (const r of list) {
+        const cd = String(r.product_cd ?? '').trim()
+        if (!cd || !isStocktakeProductCdIncluded(cd)) continue
+        const name = String(r.product_name ?? '').trim() || cd
+        const kind = String(r.kind ?? '').trim() || undefined
+        if (!byProduct.has(cd)) byProduct.set(cd, { product_cd: cd, product_name: name, kind })
+        const row = byProduct.get(cd)!
+        if (!row.kind && kind) row.kind = kind
+        const upKey = `up_${proc.process_cd}`
+        const up = Number(r.unit_price) || 0
+        const prev = Number(row[upKey] ?? 0) || 0
+        row[upKey] = prev || up
+      }
+    }
+
+    const rowsSorted = [...byProduct.values()].sort((a, b) => {
+      const na = String(a.product_name ?? '').trim()
+      const nb = String(b.product_name ?? '').trim()
+      const byName = na.localeCompare(nb, 'ja', { sensitivity: 'base' })
+      if (byName !== 0) return byName
+      return String(a.product_cd).localeCompare(String(b.product_cd), 'ja', { sensitivity: 'base' })
+    })
+    const sellingMap = new Map<string, number>()
+    const allowedProductCds = new Set<string>()
+    try {
+      /** GET /api/master/products の pageSize 上限は 10000（超過で 422）。active・量産品のみ */
+      const pageSize = 10_000
+      for (let page = 1, guard = 0; guard < 500; page += 1, guard += 1) {
+        const res = await getProductList({
+          page,
+          pageSize,
+          status: 'active',
+          product_type: '量産品',
+        })
+        const list =
+          (res as { data?: { list?: Product[] }; list?: Product[] })?.data?.list ?? (res as any)?.list ?? []
+        for (const p of list as Product[]) {
+          const c = String(p.product_cd ?? '').trim()
+          if (c && isStocktakeProductCdIncluded(c)) {
+            sellingMap.set(c, Number(p.unit_price) || 0)
+            allowedProductCds.add(c)
+          }
+        }
+        if (list.length < pageSize) break
+      }
+    } catch (e) {
+      console.error('製品マスタ単価取得失敗:', e)
+    }
+    const rows = rowsSorted.filter(
+      (row) =>
+        allowedProductCds.has(String(row.product_cd ?? '').trim()) &&
+        isStocktakeProductCdIncluded(row.product_cd),
+    )
+    for (const row of rows) {
+      for (const p of productUnitPriceProcesses.value) {
+        const upKey = `up_${p.process_cd}`
+        row[upKey] = Number(row[upKey] ?? 0) || 0
+      }
+    }
+    for (const row of rows) {
+      const c = String(row.product_cd ?? '').trim()
+      row.selling_price = sellingMap.get(c) ?? 0
+    }
+    baseProductUnitPriceRows.value = rows
+    if (!displayProductUnitPriceRows.value.length) ElMessage.info('この条件ではデータがありません')
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('製品単価データの取得に失敗しました')
+    showProductUnitPriceDialog.value = false
+  } finally {
+    productUnitPriceLoading.value = false
+  }
+}
+
+/** 印刷：明細表の製品名直後に付ける分類列ヘッダ */
+const PRINT_NAME_KIND_HEAD = `<th style="width:115px">製品名</th><th class="th-kind" style="width:52px">分類</th>`
+/** 製品金額棚卸印刷：製品名列を本数印刷より 10% 狭く（115×0.9≈104px） */
+const PRINT_NAME_KIND_HEAD_AMOUNT = `<th style="width:104px">製品名</th><th class="th-kind" style="width:52px">分類</th>`
+/** 製品単価表印刷：製品名・分類・売価列ヘッダ */
+const PRINT_UNIT_PRICE_HEAD = `<th style="width:115px">製品名</th><th class="th-kind" style="width:52px">分類</th><th style="width:88px">売価</th><th style="width:82px">原価率</th>`
+
+function buildProductCountKindAggregateHtml(rows: ProductCountRow[]): string {
+  const processes = productCountProcesses.value
+  if (!rows.length || !processes.length) return ''
+  const groups = groupRowsByKind(rows)
+  const procHeaders = processes
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
+    })
+    .join('')
+  const body = groups
+    .map((grp) => {
+      const count = grp.rows.length
+      const cells = processes
+        .map((p) => {
+          const v = grp.rows.reduce((s, row) => s + (Number(row[`qty_${p.process_cd}`] ?? 0) || 0), 0)
+          const hc = invTotalHighlightClass(p.process_cd)
+          return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(v)}</td>`
+        })
+        .join('')
+      return `<tr><td class="left">${escapeHtml(grp.kind)}</td><td class="num">${formatNumber(count, 0)}</td>${cells}</tr>`
+    })
+    .join('')
+  const grandCells = processes
+    .map((p) => {
+      const v = rows.reduce((s, row) => s + (Number(row[`qty_${p.process_cd}`] ?? 0) || 0), 0)
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(v)}</td>`
+    })
+    .join('')
+  const grandRow = `<tr class="total-row"><td class="total-label">合計</td><td class="num">${formatNumber(rows.length, 0)}</td>${grandCells}</tr>`
+  return `<div class="kind-aggregate-block"><div class="kind-aggregate-title">分類別合計</div><table class="kind-aggregate-table"><thead><tr><th style="width:56px">分類</th><th style="width:72px">要件数</th>${procHeaders}</tr></thead><tbody>${body}${grandRow}</tbody></table></div>`
+}
+
+function buildProductAmountKindAggregateHtml(rows: ProductAmountRow[]): string {
+  const processes = productAmountProcesses.value
+  if (!rows.length || !processes.length) return ''
+  const groups = groupRowsByKind(rows)
+  const procHeaders = processes
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
+    })
+    .join('')
+  const body = groups
+    .map((grp) => {
+      const count = grp.rows.length
+      const cells = processes
+        .map((p) => {
+          const v = grp.rows.reduce((s, row) => s + (Number(row[`amt_${p.process_cd}`] ?? 0) || 0), 0)
+          const hc = invTotalHighlightClass(p.process_cd)
+          return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(v)}</td>`
+        })
+        .join('')
+      return `<tr><td class="left">${escapeHtml(grp.kind)}</td><td class="num">${formatNumber(count, 0)}</td>${cells}</tr>`
+    })
+    .join('')
+  const grandCells = processes
+    .map((p) => {
+      const v = Number(productAmountColumnTotals.value[`amt_${p.process_cd}`] ?? 0)
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(v)}</td>`
+    })
+    .join('')
+  const grandRow = `<tr class="total-row"><td class="total-label">合計</td><td class="num">${formatNumber(rows.length, 0)}</td>${grandCells}</tr>`
+  return `<div class="kind-aggregate-block"><div class="kind-aggregate-title">分類別合計</div><table class="kind-aggregate-table"><thead><tr><th style="width:56px">分類</th><th style="width:72px">要件数</th>${procHeaders}</tr></thead><tbody>${body}${grandRow}</tbody></table></div>`
+}
+
 function buildProductCountPrintHtml(): string {
   const rows = displayProductCountRows.value
   const asOf = escapeHtml(productCountAsOf.value)
   const mergeLabel = shipmentMergeEnabled.value && shipmentDate.value && shipmentDestCds.value.length
-    ? `　※ 出荷数並入（${escapeHtml(shipmentDate.value)} / ${escapeHtml(shipmentDestCds.value.join(', '))}）`
+    ? `　※ 出荷数並入（${escapeHtml(shipmentDate.value)} / ${escapeHtml(formatShipmentDestNames(shipmentDestCds.value))}）`
     : ''
   const headerCells = productCountProcesses.value
-    .map((p) => `<th>${escapeHtml(p.process_name)}</th>`)
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
+    })
     .join('')
   const bodyRows = rows
     .map((row) => {
       const qtyCells = productCountProcesses.value
-        .map((p) => `<td class="num">${formatNumber(Number(row[`qty_${p.process_cd}`] ?? 0), 0)}</td>`)
+        .map((p) => {
+          const hc = invTotalHighlightClass(p.process_cd)
+          return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(row[`qty_${p.process_cd}`])}</td>`
+        })
         .join('')
-      return `<tr><td>${escapeHtml(row.product_name)}</td>${qtyCells}</tr>`
+      const kind = escapeHtml(String(row.kind ?? '').trim() || '—')
+      return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${qtyCells}</tr>`
     })
     .join('')
   const totalCells = productCountProcesses.value
@@ -1504,10 +2100,13 @@ function buildProductCountPrintHtml(): string {
         (sum, row) => sum + (Number(row[`qty_${p.process_cd}`] ?? 0) || 0),
         0,
       )
-      return `<td class="num total-cell">${formatNumber(total, 0)}</td>`
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(total)}</td>`
     })
     .join('')
-  const totalRow = `<tr class="total-row"><td class="total-label">合計</td>${totalCells}</tr>`
+  const totalRow = `<tr class="total-row"><td class="total-label" colspan="2">合計</td>${totalCells}</tr>`
+  const finalGrandTotal = (Number(productCountColumnTotals.value.qty_WIP_TOTAL) || 0)
+    + (Number(productCountColumnTotals.value.qty_PRODUCT_TOTAL) || 0)
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8" /><title>製品本数棚卸</title><style>
     @page { size: A4 landscape; margin: 8mm; }
     * { box-sizing: border-box; }
@@ -1515,9 +2114,16 @@ function buildProductCountPrintHtml(): string {
     .page { padding: 8px; }
     h1 { margin: 0 0 4px; font-size: 16px; }
     .meta { margin: 0 0 8px; color: #64748b; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 2px solid #475569; }
     th, td { border: 1px solid #cbd5e1; padding: 4px 6px; }
-    thead th { background: #f1f5f9; font-weight: 700; text-align: center; }
+    thead th {
+      background: #f1f5f9;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+      border-top: 2px solid #475569;
+      border-bottom: 2px solid #475569;
+    }
     td { overflow-wrap: anywhere; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) { background: #f8fafc; }
@@ -1530,6 +2136,17 @@ function buildProductCountPrintHtml(): string {
     .kind-title { margin: 10px 0 6px; color: #334155; font-weight: 700; font-size: 12px; }
     .group-block:first-of-type .kind-title { margin-top: 0; }
     td.total-cell { font-variant-numeric: tabular-nums; }
+    th.inv-col-total-highlight, td.inv-col-total-highlight {
+      font-weight: 800;
+      border-left: 2px solid #475569 !important;
+      border-right: 2px solid #475569 !important;
+    }
+    td.left { text-align: left; }
+    td.center.kind-cell, th.th-kind { text-align: center; }
+    .kind-aggregate-block { margin-top: 14px; }
+    .kind-aggregate-title { font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+    table.kind-aggregate-table { margin-top: 0; }
+    .print-grand-total { margin-top: 10px; text-align: right; font-size: 12px; font-weight: 800; color: #1e3a8a; }
   </style></head><body><div class="page"><h1>製品本数棚卸</h1><p class="meta">対象日: ${asOf}${mergeLabel}</p>
   ${
     printIncludeKindCount.value
@@ -1537,9 +2154,13 @@ function buildProductCountPrintHtml(): string {
           const grpBody = grp.rows
             .map((row) => {
               const qtyCells = productCountProcesses.value
-                .map((p) => `<td class="num">${formatNumber(Number(row[`qty_${p.process_cd}`] ?? 0), 0)}</td>`)
+                .map((p) => {
+                  const hc = invTotalHighlightClass(p.process_cd)
+                  return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(row[`qty_${p.process_cd}`])}</td>`
+                })
                 .join('')
-              return `<tr><td>${escapeHtml(row.product_name)}</td>${qtyCells}</tr>`
+              const kind = escapeHtml(String(row.kind ?? '').trim() || '—')
+              return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${qtyCells}</tr>`
             })
             .join('')
           const grpTotals = productCountProcesses.value
@@ -1548,13 +2169,16 @@ function buildProductCountPrintHtml(): string {
                 (sum, row) => sum + (Number(row[`qty_${p.process_cd}`] ?? 0) || 0),
                 0,
               )
-              return `<td class="num total-cell">${formatNumber(v, 0)}</td>`
+              const hc = invTotalHighlightClass(p.process_cd)
+              return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductCountPrintQty(v)}</td>`
             })
             .join('')
-          return `<div class="group-block"><div class="kind-title">分類：${escapeHtml(grp.kind)}</div><table><thead><tr><th style="width:150px">製品名</th>${headerCells}</tr></thead><tbody>${grpBody}<tr class="total-row"><td class="total-label">合計</td>${grpTotals}</tr></tbody></table></div>`
+          return `<div class="group-block"><div class="kind-title">分類：${escapeHtml(grp.kind)}</div><table><thead><tr>${PRINT_NAME_KIND_HEAD}${headerCells}</tr></thead><tbody>${grpBody}<tr class="total-row"><td class="total-label" colspan="2">合計</td>${grpTotals}</tr></tbody></table></div>`
         }).join('')
-      : `<table><thead><tr><th style="width:150px">製品名</th>${headerCells}</tr></thead><tbody>${bodyRows}${totalRow}</tbody></table>`
+      : `<table><thead><tr>${PRINT_NAME_KIND_HEAD}${headerCells}</tr></thead><tbody>${bodyRows}${totalRow}</tbody></table>`
   }
+  ${buildProductCountKindAggregateHtml(rows)}
+  <div class="print-grand-total">仕掛品合計 + 製品合計：${formatNumber(finalGrandTotal, 0)}</div>
   </div></body></html>`
 }
 
@@ -1562,21 +2186,35 @@ function buildProductAmountPrintHtml(): string {
   const rows = displayProductAmountRows.value
   const asOf = escapeHtml(productAmountAsOf.value)
   const mergeLabel = shipmentAmountMergeEnabled.value && shipmentAmountDate.value && shipmentAmountDestCds.value.length
-    ? `　※ 出荷数並入（${escapeHtml(shipmentAmountDate.value)} / ${escapeHtml(shipmentAmountDestCds.value.join(', '))}）`
+    ? `　※ 出荷数並入（${escapeHtml(shipmentAmountDate.value)} / ${escapeHtml(formatShipmentDestNames(shipmentAmountDestCds.value))}）`
     : ''
-  const headerCells = productAmountProcesses.value.map((p) => `<th>${escapeHtml(p.process_name)}</th>`).join('')
+  const headerCells = productAmountProcesses.value
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
+    })
+    .join('')
   const bodyRows = rows
     .map((row) => {
       const amtCells = productAmountProcesses.value
-        .map((p) => `<td class="num">${formatNumber(Number(row[`amt_${p.process_cd}`] ?? 0), 0)}</td>`)
+        .map((p) => {
+          const hc = invTotalHighlightClass(p.process_cd)
+          return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(row[`amt_${p.process_cd}`])}</td>`
+        })
         .join('')
-      return `<tr><td>${escapeHtml(row.product_name)}</td>${amtCells}</tr>`
+      const kind = escapeHtml(String(row.kind ?? '').trim() || '—')
+      return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${amtCells}</tr>`
     })
     .join('')
   const totalCells = productAmountProcesses.value
-    .map((p) => `<td class="num total-cell">${formatNumber(productAmountColumnTotals.value[`amt_${p.process_cd}`] ?? 0, 0)}</td>`)
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(productAmountColumnTotals.value[`amt_${p.process_cd}`])}</td>`
+    })
     .join('')
-  const totalRow = `<tr class="total-row"><td class="total-label">合計</td>${totalCells}</tr>`
+  const totalRow = `<tr class="total-row"><td class="total-label" colspan="2">合計</td>${totalCells}</tr>`
+  const finalGrandTotal = (Number(productAmountColumnTotals.value.amt_WIP_TOTAL) || 0)
+    + (Number(productAmountColumnTotals.value.amt_PRODUCT_TOTAL) || 0)
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8" /><title>製品金額棚卸</title><style>
     @page { size: A4 landscape; margin: 8mm; }
     * { box-sizing: border-box; }
@@ -1584,15 +2222,39 @@ function buildProductAmountPrintHtml(): string {
     .page { padding: 8px; }
     h1 { margin: 0 0 4px; font-size: 16px; }
     .meta { margin: 0 0 8px; color: #64748b; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 2px solid #475569; }
     th, td { border: 1px solid #cbd5e1; padding: 4px 6px; }
-    thead th { background: #f1f5f9; font-weight: 700; text-align: center; }
+    thead th {
+      background: #f1f5f9;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+      border-top: 2px solid #475569;
+      border-bottom: 2px solid #475569;
+    }
     td { overflow-wrap: anywhere; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) { background: #f8fafc; }
-    tr.total-row td { background: linear-gradient(180deg, #eff6ff, #dbeafe) !important; color: #1e3a8a; font-weight: 800; }
+    tr.total-row td {
+      background: linear-gradient(180deg, #eff6ff, #dbeafe) !important;
+      color: #1e3a8a;
+      font-weight: 800;
+    }
+    td.total-label { text-align: left; }
     .kind-title { margin: 10px 0 6px; color: #334155; font-weight: 700; font-size: 12px; }
     .group-block:first-of-type .kind-title { margin-top: 0; }
+    td.total-cell { font-variant-numeric: tabular-nums; }
+    th.inv-col-total-highlight, td.inv-col-total-highlight {
+      font-weight: 800;
+      border-left: 2px solid #475569 !important;
+      border-right: 2px solid #475569 !important;
+    }
+    td.left { text-align: left; }
+    td.center.kind-cell, th.th-kind { text-align: center; }
+    .kind-aggregate-block { margin-top: 14px; }
+    .kind-aggregate-title { font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px; }
+    table.kind-aggregate-table { margin-top: 0; }
+    .print-grand-total { margin-top: 10px; text-align: right; font-size: 12px; font-weight: 800; color: #1e3a8a; }
   </style></head><body><div class="page"><h1>製品金額棚卸</h1><p class="meta">対象日: ${asOf}${mergeLabel}</p>
   ${
     printIncludeKindAmount.value
@@ -1600,9 +2262,13 @@ function buildProductAmountPrintHtml(): string {
           const grpBody = grp.rows
             .map((row) => {
               const amtCells = productAmountProcesses.value
-                .map((p) => `<td class="num">${formatNumber(Number(row[`amt_${p.process_cd}`] ?? 0), 0)}</td>`)
+                .map((p) => {
+                  const hc = invTotalHighlightClass(p.process_cd)
+                  return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(row[`amt_${p.process_cd}`])}</td>`
+                })
                 .join('')
-              return `<tr><td>${escapeHtml(row.product_name)}</td>${amtCells}</tr>`
+              const kind = escapeHtml(String(row.kind ?? '').trim() || '—')
+              return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${amtCells}</tr>`
             })
             .join('')
           const grpTotals = productAmountProcesses.value
@@ -1611,13 +2277,16 @@ function buildProductAmountPrintHtml(): string {
                 (sum, row) => sum + (Number(row[`amt_${p.process_cd}`] ?? 0) || 0),
                 0,
               )
-              return `<td class="num total-cell">${formatNumber(v, 0)}</td>`
+              const hc = invTotalHighlightClass(p.process_cd)
+              return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(v)}</td>`
             })
             .join('')
-          return `<div class="group-block"><div class="kind-title">分類：${escapeHtml(grp.kind)}</div><table><thead><tr><th style="width:150px">製品名</th>${headerCells}</tr></thead><tbody>${grpBody}<tr class="total-row"><td class="total-label">合計</td>${grpTotals}</tr></tbody></table></div>`
+          return `<div class="group-block"><div class="kind-title">分類：${escapeHtml(grp.kind)}</div><table><thead><tr>${PRINT_NAME_KIND_HEAD_AMOUNT}${headerCells}</tr></thead><tbody>${grpBody}<tr class="total-row"><td class="total-label" colspan="2">合計</td>${grpTotals}</tr></tbody></table></div>`
         }).join('')
-      : `<table><thead><tr><th style="width:150px">製品名</th>${headerCells}</tr></thead><tbody>${bodyRows}${totalRow}</tbody></table>`
+      : `<table><thead><tr>${PRINT_NAME_KIND_HEAD_AMOUNT}${headerCells}</tr></thead><tbody>${bodyRows}${totalRow}</tbody></table>`
   }
+  ${buildProductAmountKindAggregateHtml(rows)}
+  <div class="print-grand-total">仕掛品合計 + 製品合計：${formatNumber(finalGrandTotal, 0)}</div>
   </div></body></html>`
 }
 
@@ -1635,6 +2304,102 @@ async function printProductCountData() {
   }
   doc.open()
   doc.write(buildProductCountPrintHtml())
+  doc.close()
+  await new Promise((r) => setTimeout(r, 220))
+  const win = iframe.contentWindow
+  const cleanup = () => {
+    if (iframe.parentNode) iframe.remove()
+  }
+  if (!win) {
+    cleanup()
+    return
+  }
+  win.addEventListener('afterprint', cleanup, { once: true })
+  setTimeout(cleanup, 120_000)
+  win.focus()
+  win.print()
+}
+
+function buildProductUnitPricePrintHtml(): string {
+  const rows = displayProductUnitPriceRows.value
+  const asOf = escapeHtml(productUnitPriceAsOf.value)
+  const procs = productUnitPriceProcesses.value
+  const headerCells = procs
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
+    })
+    .join('')
+  const bodyRows = rows
+    .map((row) => {
+      const cells = procs
+        .map((p) => {
+          const hc = invTotalHighlightClass(p.process_cd)
+          return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductUnitPriceCell(row[`up_${p.process_cd}`])}</td>`
+        })
+        .join('')
+      const kind = escapeHtml(String(row.kind ?? '').trim() || '—')
+      const sell = formatProductUnitPriceCell(row.selling_price)
+      const ratio = formatProductCostRatio(row)
+      return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td><td class="num">${sell}</td><td class="num">${ratio}</td>${cells}</tr>`
+    })
+    .join('')
+  const avg = computeProductUnitPriceAverages(rows, procs)
+  const avgProcCells = procs
+    .map((p) => {
+      const hc = invTotalHighlightClass(p.process_cd)
+      const v = avg.upAvg[`up_${p.process_cd}`] ?? 0
+      return `<td class="num${hc ? ` ${hc}` : ''}">${formatNumber(v, 2)}</td>`
+    })
+    .join('')
+  const avgRatioStr = avg.ratioAvg != null ? `${formatNumber(avg.ratioAvg, 2)}%` : ''
+  const avgRow = `<tr class="total-row"><td>平均</td><td class="center kind-cell"></td><td class="num">${formatNumber(avg.sellingAvg, 2)}</td><td class="num">${avgRatioStr}</td>${avgProcCells}</tr>`
+  const tableHtml = `<table><thead><tr>${PRINT_UNIT_PRICE_HEAD}${headerCells}</tr></thead><tbody>${bodyRows}${avgRow}</tbody></table>`
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8" /><title>製品単価表</title><style>
+    @page { size: A4 landscape; margin: 8mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Yu Gothic UI','Meiryo',sans-serif; font-size: 11px; color: #1f2937; }
+    .page { padding: 8px; }
+    h1 { margin: 0 0 4px; font-size: 16px; }
+    .meta { margin: 0 0 8px; color: #64748b; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; border: 2px solid #475569; }
+    th, td { border: 1px solid #cbd5e1; padding: 4px 6px; }
+    thead th {
+      background: #f1f5f9;
+      font-weight: 700;
+      text-align: center;
+      font-size: 10px;
+      border-top: 2px solid #475569;
+      border-bottom: 2px solid #475569;
+    }
+    td { overflow-wrap: anywhere; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    th.inv-col-total-highlight, td.inv-col-total-highlight {
+      font-weight: 800;
+      border-left: 2px solid #475569 !important;
+      border-right: 2px solid #475569 !important;
+    }
+    td.center.kind-cell, th.th-kind { text-align: center; }
+    tr.total-row { background: #edf6ff; font-weight: 700; }
+    tr.total-row td { border-top: 2px solid #3d86cc; background: #edf6ff; color: #0f3f6e; }
+  </style></head><body><div class="page"><h1>製品単価表</h1><p class="meta">対象日: ${asOf}</p>${tableHtml}</div></body></html>`
+}
+
+async function printProductUnitPriceData() {
+  if (!displayProductUnitPriceRows.value.length) return
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText =
+    'position:fixed;left:-12000px;top:0;width:297mm;min-height:210mm;border:0;opacity:0;pointer-events:none'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentDocument
+  if (!doc) {
+    iframe.remove()
+    ElMessage.error('印刷の準備に失敗しました')
+    return
+  }
+  doc.open()
+  doc.write(buildProductUnitPricePrintHtml())
   doc.close()
   await new Promise((r) => setTimeout(r, 220))
   const win = iframe.contentWindow
@@ -1859,7 +2624,7 @@ body {
   border-left: 3px solid #2b79c2;
   border-bottom: 1px solid #d7e2ef;
 }
-table { width: 100%; border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; border: 2px solid #475569; }
 th, td { border: 1px solid #d8e1ec; padding: 5px 7px; }
 th { background: #f3f8fd; font-weight: 600; text-align: center; white-space: nowrap; color: #334155; font-size: 10px; }
 td { text-align: right; background: #fff; }
@@ -1887,6 +2652,7 @@ watch(
   () => {
     materialStockPanelSum.value = null
     componentStockPanelSum.value = null
+    productStockPanelSum.value = null
   },
 )
 
@@ -2432,6 +3198,8 @@ onMounted(() => {
   font-weight: 600;
   color: #334155;
   background: #f1f5f9 !important;
+  border-top: 2px solid #64748b !important;
+  border-bottom: 2px solid #64748b !important;
 }
 
 .product-count-table :deep(.el-table__body .el-table__cell) {
@@ -2449,6 +3217,13 @@ onMounted(() => {
   font-weight: 700;
   padding: 5px 0;
   font-size: 11px;
+}
+
+.product-count-table :deep(th.inv-col-total-highlight.el-table__cell),
+.product-count-table :deep(td.inv-col-total-highlight.el-table__cell) {
+  font-weight: 800 !important;
+  border-left: 2px solid #64748b !important;
+  border-right: 2px solid #64748b !important;
 }
 
 .product-count-summary-strip {

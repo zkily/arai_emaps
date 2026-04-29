@@ -19,6 +19,16 @@ export default {
     tabsCloseLeft: 'Đóng bên trái',
     tabsCloseRight: 'Đóng bên phải',
     query: 'Truy vấn',
+    headerWeatherNagoyaHint:
+      'Nhiệt độ hiện tại gần Nagoya, Nhật Bản (Open-Meteo; làm mới khoảng 15 phút/lần)',
+    headerWeatherNagoya: 'Thời tiết Nagoya',
+    headerWeatherUnavailable: 'Không lấy được dữ liệu thời tiết',
+    headerNotifBellTitle: 'Thông báo & gợi ý',
+    headerNotifTitle: 'Gợi ý',
+    headerNotifPickingIncompleteBody:
+      'Tỷ lệ hoàn thành picking hôm nay: {rate}% (xong {completed}/{total}, đang làm/chưa {pending}). Xem tab Tiến độ.',
+    headerNotifOpenPicking: 'Mở quản lý picking xuất hàng',
+    headerNotifEmpty: 'Hiện không có gợi ý nào.',
   },
   profilePage: {
     title: 'Hồ sơ',

@@ -52,6 +52,16 @@ def _is_missing_table(exc: BaseException, table_name: str) -> bool:
     )
 
 
+def _dashboard_order_daily_exclude_name_contains_kakou():
+    """ダッシュボード用 order_daily 集計: 表示用製品名に「加工」を含む行を除外。
+
+    `_monthly_order_daily_aggregates` の売上（Σ confirmed_units×単価）と確定本数の双方に同一条件で適用する。
+    明細の product_name を優先し、無い場合は products マスタを参照する。
+    """
+    display_name = func.coalesce(OrderDaily.product_name, Product.product_name, "")
+    return ~display_name.like("%加工%")
+
+
 # ========== 受注一覧 ==========
 
 @router.get("/orders")
@@ -106,6 +116,7 @@ async def _monthly_order_daily_aggregates(
 
     - 売上: Σ(confirmed_units × unit_price)
     - 本数: Σ(confirmed_units)
+    - 表示用製品名に「加工」を含む行は除外（ダッシュボード「今月売上」「今月受注」で一致）
     """
     line_amt = func.coalesce(OrderDaily.confirmed_units, 0) * func.coalesce(
         cast(Product.unit_price, Numeric(18, 4)), 0
@@ -118,7 +129,13 @@ async def _monthly_order_daily_aggregates(
         )
         .select_from(OrderDaily)
         .outerjoin(Product, Product.product_cd == OrderDaily.product_cd)
-        .where(and_(OrderDaily.date >= month_start, OrderDaily.date <= month_end))
+        .where(
+            and_(
+                OrderDaily.date >= month_start,
+                OrderDaily.date <= month_end,
+                _dashboard_order_daily_exclude_name_contains_kakou(),
+            )
+        )
     )
     r = await db.execute(q)
     row = r.one()
@@ -219,7 +236,10 @@ async def get_daily_confirmed_series(
     start_date: Optional[date] = Query(None, description="開始日（省略時 JST 今日の 14 日前）"),
     end_date: Optional[date] = Query(None, description="終了日（省略時 JST 今日の 7 日後）"),
 ):
-    """日別受注確定本数（order_daily.confirmed_units の日付合計）。既定レンジ：過去2週＋今日＋将来1週。"""
+    """日別受注確定本数（order_daily.confirmed_units の日付合計）。既定レンジ：過去2週＋今日＋将来1週。
+
+    表示用製品名（明細 product_name、無ければ products）に「加工」を含む行は集計から除外する。
+    """
     today = now_jst().date()
     if start_date is None:
         start_date = today - timedelta(days=14)
@@ -234,7 +254,14 @@ async def get_daily_confirmed_series(
         q = (
             select(OrderDaily.date, func.coalesce(func.sum(units_expr), 0).label("units"))
             .select_from(OrderDaily)
-            .where(and_(OrderDaily.date >= start_date, OrderDaily.date <= end_date))
+            .outerjoin(Product, Product.product_cd == OrderDaily.product_cd)
+            .where(
+                and_(
+                    OrderDaily.date >= start_date,
+                    OrderDaily.date <= end_date,
+                    _dashboard_order_daily_exclude_name_contains_kakou(),
+                )
+            )
             .group_by(OrderDaily.date)
             .order_by(OrderDaily.date)
         )

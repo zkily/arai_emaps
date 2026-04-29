@@ -1013,6 +1013,16 @@ function buildPartPrintDocumentHtml(): string {
   const totalStr = formatNumber(totalAmt, 0)
 
   const kindHeadStyle = `
+    /* 部品棚卸（印刷）数字列：より判読しやすいラテン数字フォントを優先 */
+    .mpt-num,
+    .mpt-amt,
+    .mpt-summary strong,
+    .mpt-subtotal-num,
+    .mpt-subtotal-amt {
+      font-family: 'Arial', 'Helvetica Neue', 'Segoe UI', 'Roboto', 'Noto Sans', sans-serif;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.01em;
+    }
     h2.mpt-kind-head {
       margin: 14px 0 6px;
       font-size: 13px;

@@ -1,4 +1,4 @@
-"""部品在庫データ一括生成（parts.status=1 × 期間 → part_stock）"""
+"""部品在庫データ一括生成（parts.status=0 を除く × 期間 → part_stock。一覧 API と同条件）"""
 from datetime import date as date_type, timedelta
 from typing import List, Tuple
 
@@ -57,7 +57,7 @@ async def generate_part_stock_data(
         )
         .select_from(PartMaster)
         .outerjoin(Supplier, PartMaster.supplier_cd == Supplier.supplier_cd)
-        .where(PartMaster.status == 1)
+        .where(PartMaster.status != 0)
         .order_by(PartMaster.part_cd)
     )
     part_rows = (await db.execute(part_stmt)).all()

@@ -19,6 +19,16 @@ export default {
     tabsCloseLeft: '左側を閉じる',
     tabsCloseRight: '右側を閉じる',
     query: '取得',
+    headerWeatherNagoyaHint:
+      '日本・名古屋付近の現在気温（Open-Meteo、約15分ごとに更新）',
+    headerWeatherNagoya: '名古屋の気温',
+    headerWeatherUnavailable: '天気データを取得できません',
+    headerNotifBellTitle: '通知・ヒント',
+    headerNotifTitle: 'ヒント',
+    headerNotifPickingIncompleteBody:
+      '本日のピッキング完了率は {rate}% です（完了 {completed} / 全 {total}、未完了・進行中 {pending}）。進捗管理タブでご確認ください。',
+    headerNotifOpenPicking: '出荷ピッキング管理を開く',
+    headerNotifEmpty: '現在表示するヒントはありません。',
   },
   profilePage: {
     title: 'プロフィール',

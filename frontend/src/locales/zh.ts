@@ -19,6 +19,16 @@ export default {
     tabsCloseLeft: '关闭左侧',
     tabsCloseRight: '关闭右侧',
     query: '查询',
+    headerWeatherNagoyaHint:
+      '日本名古屋地区当前气温（Open-Meteo，约每 15 分钟更新）',
+    headerWeatherNagoya: '名古屋天气',
+    headerWeatherUnavailable: '天气数据暂不可用',
+    headerNotifBellTitle: '通知与提示',
+    headerNotifTitle: '提示',
+    headerNotifPickingIncompleteBody:
+      '今日拣货完成率为 {rate}%（已完成 {completed} / 共 {total}，未完成或进行中 {pending}）。请在「进度管理」页签查看。',
+    headerNotifOpenPicking: '打开出荷拣货管理',
+    headerNotifEmpty: '当前没有需要留意的提示。',
   },
   profilePage: {
     title: '个人资料',

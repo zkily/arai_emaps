@@ -4917,3 +4917,225 @@ async def generate_cutting_plans_from_schedule(
         if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "Unknown table" in msg):
             msg = "instruction_plans テーブルが存在しません。マイグレーション 052_cutting_instruction_plans.sql を実行してください。"
         raise HTTPException(status_code=500, detail=msg)
+
+
+# ============================
+# メモ（TODO）: cutting instruction notes
+#   - GET    /api/plan/cutting-instruction-notes
+#   - POST   /api/plan/cutting-instruction-notes
+#   - PATCH  /api/plan/cutting-instruction-notes/{note_id}
+#   - DELETE /api/plan/cutting-instruction-notes/{note_id}
+# ============================
+
+
+class CuttingInstructionNoteCreateBody(BaseModel):
+    content: str
+
+
+class CuttingInstructionNoteUpdateBody(BaseModel):
+    content: Optional[str] = None
+    is_done: Optional[int] = None
+
+
+@router.get("/plan/cutting-instruction-notes")
+async def list_cutting_instruction_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    scope = "cutting_instruction"
+    try:
+        rows = (await db.execute(
+            text(
+                """
+                SELECT id, content, is_done, created_by, created_at, updated_at
+                FROM cutting_instruction_notes
+                WHERE scope = :scope
+                ORDER BY is_done ASC, id DESC
+                LIMIT :limit
+                """
+            ),
+            {"scope": scope, "limit": limit},
+        )).mappings().fetchall()
+    except Exception as e:
+        msg = str(e).lower()
+        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        raise
+
+    def _v_dt(v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat()[:19]
+        return str(v)
+
+    notes = [
+        {
+            "id": int(r.get("id")),
+            "content": r.get("content"),
+            "is_done": int(r.get("is_done") or 0),
+            "created_by": r.get("created_by"),
+            "created_at": _v_dt(r.get("created_at")),
+            "updated_at": _v_dt(r.get("updated_at")),
+        }
+        for r in rows
+    ]
+    return {"success": True, "data": {"list": notes}, "message": "OK"}
+
+
+@router.post("/plan/cutting-instruction-notes")
+async def create_cutting_instruction_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    scope = "cutting_instruction"
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+
+    try:
+        await db.execute(
+            text(
+                """
+                INSERT INTO cutting_instruction_notes (scope, content, is_done, created_by)
+                VALUES (:scope, :content, 0, :created_by)
+                """
+            ),
+            {"scope": scope, "content": content, "created_by": getattr(current_user, "username", None)},
+        )
+        note_id = (await db.execute(text("SELECT LAST_INSERT_ID() AS id"))).scalar()
+        await db.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        raise
+
+    if not note_id:
+        return {"success": True, "data": {}, "message": "OK"}
+
+    row = (await db.execute(
+        text(
+            """
+            SELECT id, content, is_done, created_by, created_at, updated_at
+            FROM cutting_instruction_notes
+            WHERE id = :id
+            """
+        ),
+        {"id": int(note_id)},
+    )).mappings().fetchone()
+
+    def _v_dt(v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat()[:19]
+        return str(v)
+
+    created = {
+        "id": int(row.get("id")) if row else int(note_id),
+        "content": row.get("content") if row else content,
+        "is_done": int(row.get("is_done") or 0) if row else 0,
+        "created_by": row.get("created_by") if row else getattr(current_user, "username", None),
+        "created_at": _v_dt(row.get("created_at")) if row else None,
+        "updated_at": _v_dt(row.get("updated_at")) if row else None,
+    }
+    return {"success": True, "data": {"note": created}, "message": "OK"}
+
+
+@router.patch("/plan/cutting-instruction-notes/{note_id}")
+async def update_cutting_instruction_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    scope = "cutting_instruction"
+    updates: list[str] = []
+    params: dict[str, Any] = {"id": note_id, "scope": scope}
+
+    if body.content is not None:
+        content = body.content.strip()
+        if not content:
+            raise HTTPException(status_code=400, detail="content が空です")
+        if len(content) > 200:
+            raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        updates.append("content = :content")
+        params["content"] = content
+
+    if body.is_done is not None:
+        updates.append("is_done = :is_done")
+        params["is_done"] = 1 if int(body.is_done) == 1 else 0
+
+    if not updates:
+        return {"success": True, "data": {}, "message": "OK（更新なし）"}
+
+    try:
+        set_clause = ", ".join(updates)
+        await db.execute(
+            text(f"UPDATE cutting_instruction_notes SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND scope = :scope"),
+            params,
+        )
+        await db.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        raise
+
+    row = (await db.execute(
+        text(
+            """
+            SELECT id, content, is_done, created_by, created_at, updated_at
+            FROM cutting_instruction_notes
+            WHERE id = :id AND scope = :scope
+            """
+        ),
+        {"id": int(note_id), "scope": scope},
+    )).mappings().fetchone()
+
+    def _v_dt(v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat()[:19]
+        return str(v)
+
+    updated = (
+        {
+            "id": int(row.get("id")) if row else note_id,
+            "content": row.get("content") if row else None,
+            "is_done": int(row.get("is_done") or 0) if row else 0,
+            "created_by": row.get("created_by") if row else getattr(current_user, "username", None),
+            "created_at": _v_dt(row.get("created_at")) if row else None,
+            "updated_at": _v_dt(row.get("updated_at")) if row else None,
+        }
+        if row
+        else {"id": note_id}
+    )
+    return {"success": True, "data": {"note": updated}, "message": "OK"}
+
+
+@router.delete("/plan/cutting-instruction-notes/{note_id}")
+async def delete_cutting_instruction_note(
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    scope = "cutting_instruction"
+    try:
+        await db.execute(
+            text("DELETE FROM cutting_instruction_notes WHERE id = :id AND scope = :scope"),
+            {"id": int(note_id), "scope": scope},
+        )
+        await db.commit()
+    except Exception as e:
+        msg = str(e).lower()
+        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        raise
+    return {"success": True, "message": "削除しました"}

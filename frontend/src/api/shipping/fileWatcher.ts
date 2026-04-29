@@ -1,5 +1,7 @@
 import request from '@/utils/request'
 
+const PICKING_SYNC_TIMEOUT_MS = 300000
+
 export interface FileWatcherStatus {
   isRunning: boolean
   watchPath: string
@@ -70,7 +72,11 @@ export function performDeduplicate() {
 }
 
 export function syncToPickingTasks() {
-  return request.post('/api/shipping/items/refresh-picking-log-matched')
+  return request.post('/api/shipping/items/refresh-picking-log-matched/async')
+}
+
+export function getSyncToPickingTasksTask(taskId: string) {
+  return request.get(`/api/shipping/items/refresh-picking-log-matched/tasks/${encodeURIComponent(taskId)}`)
 }
 
 export function getSyncStatus() {

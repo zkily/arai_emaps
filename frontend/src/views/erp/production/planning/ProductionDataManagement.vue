@@ -2417,7 +2417,7 @@ const handleUpdateCarryOver = async () => {
  * 1. 数据来源：stock_transaction_logs（在庫取引履歴）
  * 2. 产品码换算：target_cd 取前 4 位 + '1' → product_cd（与 production_summarys.product_cd 对应）
  * 3. 日期：DATE(transaction_time) → production_summarys.date
- * 4. 处理范围：当月 1 日～今日（日本时区）；先对该范围内所有「実績列」清零，再按日志重新汇总写回
+ * 4. 处理范围：当月 1 日～当月末日（日本时区）；先对该范围内所有「実績列」清零，再按日志重新汇总写回
  *
  * 三、数据分类与计算方式
  * -----------------------------------------------------------------------------
@@ -2454,7 +2454,7 @@ const handleUpdateCarryOver = async () => {
  * | KT13       | （非 process 汇总）入出庫净额 → warehouse_actual           | 倉庫実績        |
  * | KT15       | （非 process 汇总）入出庫净额 → outsourced_warehouse_actual | 外注倉庫実績    |
  *
- * 五、被清零的列（ACTUAL_CLEAR_COLUMNS，当月 1 日～今日）
+ * 五、被清零的列（ACTUAL_CLEAR_COLUMNS，当月 1 日～当月末日）
  * -----------------------------------------------------------------------------
  * cutting_actual, chamfering_actual, molding_actual, plating_actual, welding_actual,
  * inspection_actual, warehouse_actual, outsourced_plating_actual, outsourced_welding_actual,

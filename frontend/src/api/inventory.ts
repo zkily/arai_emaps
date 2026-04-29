@@ -74,6 +74,24 @@ function nextId(items: InventoryLog[]): number {
   return max + 1
 }
 
+/** 統計画面・棚卸ログ API と同じ工程フィルター値 → process_cd（ローカルフォールバック用） */
+const STAGE_TYPE_TO_PROCESS_CD: Record<string, string> = {
+  cutting: 'KT01',
+  surface: 'KT02',
+  sw: 'KT03',
+  forming: 'KT04',
+  plating: 'KT05',
+  welding: 'KT07',
+  inspection: 'KT09',
+  warehouse: 'KT13',
+  outsource_plating: 'KT06',
+  outsource_welding: 'KT08',
+  pre_welding_inspection: 'KT11',
+  pre_outsource_inspection: 'KT10',
+  pre_outsource_delivery: 'KT10',
+  part_process: 'KT18',
+}
+
 function filterRows(items: InventoryLog[], f: InventoryFilters): InventoryLog[] {
   let out = [...items]
   if (f.keyword) {
@@ -87,8 +105,11 @@ function filterRows(items: InventoryLog[], f: InventoryFilters): InventoryLog[] 
   if (f.item) {
     out = out.filter((r) => r.item === f.item)
   }
-  if (f.stageType) {
-    out = out.filter((r) => r.process_cd === f.stageType)
+  if (f.stageType && f.stageType !== 'all') {
+    const pc = STAGE_TYPE_TO_PROCESS_CD[f.stageType]
+    if (pc) {
+      out = out.filter((r) => r.process_cd === pc)
+    }
   }
   if (f.dateRange && f.dateRange.length === 2) {
     const [a, b] = f.dateRange

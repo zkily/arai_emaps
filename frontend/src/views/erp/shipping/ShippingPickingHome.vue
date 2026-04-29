@@ -217,9 +217,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { getJSTToday as getJSTTodayUtil } from '@/utils/dateFormat'
 import {
   Box,
   Calendar,
@@ -234,7 +234,14 @@ import {
   PieChart,
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
-import { refreshPickingLogMatchedFromLog } from '@/api/shipping/picking'
+import {
+  getRefreshPickingLogMatchedTask,
+  startRefreshPickingLogMatchedTask,
+} from '@/api/shipping/picking'
+import {
+  normalizePickingProgressResponse,
+  filterProductDataForPickingProgress,
+} from '@/utils/shippingPickingNewProgressParse'
 import PickingListGenerator from './components/PickingListGenerator.vue'
 import PickingProgress from './components/PickingProgress.vue'
 import PickingHistory from './components/PickingHistory.vue'
@@ -262,8 +269,17 @@ interface ApiResponseBody {
   data?: unknown
 }
 
+interface PickingSyncTaskStatus {
+  task_id: string
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  progress_percent?: number
+  message?: string
+  updated_rows?: number
+  error?: string | null
+}
+
 const { t } = useI18n()
-const getJSTToday = getJSTTodayUtil
+const route = useRoute()
 
 const activeTab = ref('generate')
 const syncLoading = ref(false)
@@ -319,125 +335,35 @@ const fetchProgressData = async () => {
   loading.value.data = true
   try {
     console.log('获取新进度数据...')
-    const response = (await request.get('/api/shipping/picking/new-progress')) as ApiResponseBody & Record<string, unknown>
+    const response = (await request.get('/api/shipping/picking/new-progress')) as ApiResponseBody &
+      Record<string, unknown>
 
     console.log('API响应:', response)
 
-    // 标准化响应格式
-    let responseData
-    if (response?.success !== undefined) {
-      if (!response.success) {
-        console.error('API请求失败:', response.message)
-        ElMessage.error(response.message || 'データの取得に失敗しました')
-        return
-      }
-      responseData = response.data
-    } else if (Array.isArray(response)) {
-      responseData = { palletList: response, progressStats: [], todayOverview: {} }
-    } else if (response && typeof response === 'object') {
-      responseData = response
-    } else {
-      console.error('未知的响应格式:', response)
-      ElMessage.error('データ形式が正しくありません')
+    const normalized = normalizePickingProgressResponse(response)
+    if (!normalized.ok) {
+      console.error('API请求失败:', normalized.message)
+      ElMessage.error(normalized.message || 'データの取得に失敗しました')
       return
     }
-
-    // 过滤函数：排除製品名包含特定关键词的数据
-    const filterProductData = (data: any) => {
-      if (!data) return data
-
-      const excludeKeywords = ['加工', 'アーチ', '料金']
-      const shouldExclude = (productName: string) =>
-        productName && excludeKeywords.some((keyword) => productName.includes(keyword))
-
-      if (Array.isArray(data)) {
-        return data.filter((item: any) => {
-          const productName = item.product_name || item.productName || ''
-          return !shouldExclude(productName)
-        })
-      }
-
-      if (typeof data === 'object') {
-        const filtered = { ...data }
-
-        // 过滤数组数据
-        if (Array.isArray(filtered.palletList)) {
-          filtered.palletList = filtered.palletList.filter((item: any) => {
-            const productName = item.product_name || item.productName || ''
-            return !shouldExclude(productName)
-          })
-        }
-
-        if (Array.isArray(filtered.progressStats)) {
-          filtered.progressStats = filtered.progressStats.filter((item: any) => {
-            const productName = item.product_name || item.productName || ''
-            return !shouldExclude(productName)
-          })
-        }
-
-        // 重新计算当天统计数据
-        if (Array.isArray(filtered.palletList)) {
-          const today = getJSTToday()
-          const todayItems = filtered.palletList.filter((item: any) => {
-            const itemDate = item.shipping_date || item.date || ''
-            return itemDate === today || itemDate.startsWith(today)
-          })
-
-          if (todayItems.length > 0) {
-            const pendingStatuses = ['pending', '進行中', 'in_progress']
-            const completedStatuses = ['completed', '完了', 'finished']
-
-            const totalToday = todayItems.length
-            const pendingToday = todayItems.filter((item: any) =>
-              pendingStatuses.includes(item.status),
-            ).length
-            const completedToday = todayItems.filter((item: any) =>
-              completedStatuses.includes(item.status),
-            ).length
-            const completionRate =
-              totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0
-
-            filtered.todayOverview = {
-              total_today: totalToday,
-              pending_today: pendingToday,
-              completed_today: completedToday,
-              today_completion_rate: completionRate,
-            }
-            filtered.palletList = todayItems
-          } else {
-            // 保持原有统计数据
-            const overview = filtered.todayOverview || {}
-            filtered.todayOverview = {
-              total_today: overview.total_today || 0,
-              pending_today: overview.pending_today || 0,
-              completed_today: overview.completed_today || 0,
-              today_completion_rate: overview.today_completion_rate || 0,
-            }
-          }
-        }
-
-        return filtered
-      }
-
-      return data
-    }
+    const responseData = normalized.responseData
 
     if (responseData && typeof responseData === 'object') {
-      const filteredResponse = filterProductData(responseData)
+      const filteredResponse = filterProductDataForPickingProgress(responseData) as Record<string, unknown>
 
-      palletList.value = filteredResponse.palletList || []
-      progressStats.value = filteredResponse.progressStats || [
+      palletList.value = (filteredResponse.palletList as PalletInfo[]) || []
+      progressStats.value = (filteredResponse.progressStats as ProgressStats[]) || [
         { id: 1, name: 'Test Progress 1' },
         { id: 2, name: 'Test Progress 2' },
       ]
 
       // 设置今日概览数据
-      const overview = filteredResponse.todayOverview
+      const overview = filteredResponse.todayOverview as TodayOverview | undefined
       if (
         overview &&
         (overview.total_today > 0 || overview.pending_today > 0 || overview.completed_today > 0)
       ) {
-        todayOverview.value = overview
+        todayOverview.value = overview as TodayOverview
       } else {
         // 使用默认示例数据
         todayOverview.value = {
@@ -466,6 +392,12 @@ function refreshStats() {
 }
 
 function syncErrorMessage(error: any): string {
+  const isTimeout =
+    error?.code === 'ECONNABORTED' ||
+    String(error?.message || '').toLowerCase().includes('timeout')
+  if (isTimeout) {
+    return 'ピッキングログ突合せの処理に時間がかかっています。しばらくしてから進捗を再読込してください。'
+  }
   const d = error?.response?.data?.detail
   if (typeof d === 'string') return d
   if (Array.isArray(d) && d[0]?.msg) return d.map((x: any) => x.msg).join(' ')
@@ -479,16 +411,46 @@ async function handleSyncData() {
   syncProgressTimer = setInterval(tickSyncProgress, 140)
 
   try {
-    const response = (await refreshPickingLogMatchedFromLog()) as ApiResponseBody
+    const startResponse = (await startRefreshPickingLogMatchedTask()) as ApiResponseBody &
+      Record<string, any>
+    const startData = (startResponse.data ?? startResponse) as Record<string, any>
+    const taskId = String(startData.task_id || '')
+    if (!taskId) {
+      throw new Error(startResponse.message || 'task_id が取得できませんでした')
+    }
+
+    let finalTask: PickingSyncTaskStatus | null = null
+    const maxPoll = 600 // 最大 10 分
+    for (let i = 0; i < maxPoll; i += 1) {
+      await new Promise((r) => setTimeout(r, 1000))
+      const statusResponse = (await getRefreshPickingLogMatchedTask(taskId)) as ApiResponseBody &
+        Record<string, any>
+      const task = (statusResponse.data ?? statusResponse) as PickingSyncTaskStatus
+      const p = Number(task.progress_percent ?? 0)
+      if (Number.isFinite(p)) {
+        syncProgress.value = Math.max(syncProgress.value, Math.min(99, p))
+      }
+      if (task.status === 'completed' || task.status === 'failed') {
+        finalTask = task
+        break
+      }
+    }
+
     clearSyncProgressTimer()
     syncProgress.value = 100
     await new Promise((r) => setTimeout(r, 380))
 
-    if (response.success !== false) {
-      ElMessage.success(response.message || 'ピッキングログ突合せが完了しました')
+    if (!finalTask) {
+      ElMessage.warning('処理は継続中です。しばらくしてから再読込してください。')
+      return
+    }
+    if (finalTask.status === 'completed') {
+      ElMessage.success(
+        finalTask.message || `ピッキングログ突合せが完了しました（更新: ${Number(finalTask.updated_rows || 0)}）`,
+      )
       refreshStats()
     } else {
-      ElMessage.error(response.message || 'ピッキングログ突合せに失敗しました')
+      ElMessage.error(finalTask.error || finalTask.message || 'ピッキングログ突合せに失敗しました')
     }
   } catch (error: any) {
     clearSyncProgressTimer()
@@ -509,6 +471,11 @@ function handleTabChange(tabName: string | number) {
 }
 
 onMounted(() => {
+  const raw = route.query.tab
+  const tab = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw[0] : ''
+  if (tab === 'progress' || tab === 'generate' || tab === 'history') {
+    activeTab.value = tab
+  }
   fetchProgressData()
 })
 

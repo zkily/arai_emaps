@@ -19,6 +19,16 @@ export default {
     tabsCloseLeft: 'Close left',
     tabsCloseRight: 'Close right',
     query: 'Query',
+    headerWeatherNagoyaHint:
+      'Current conditions near Nagoya, Japan (Open-Meteo; refreshed about every 15 minutes)',
+    headerWeatherNagoya: 'Nagoya weather',
+    headerWeatherUnavailable: 'Weather data unavailable',
+    headerNotifBellTitle: 'Notifications',
+    headerNotifTitle: 'Tips',
+    headerNotifPickingIncompleteBody:
+      'Today picking completion is {rate}% ({completed}/{total} done, {pending} in progress or pending). Check the Progress tab.',
+    headerNotifOpenPicking: 'Open shipping picking',
+    headerNotifEmpty: 'Nothing to highlight right now.',
   },
   profilePage: {
     title: 'Profile',

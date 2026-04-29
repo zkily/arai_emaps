@@ -1575,6 +1575,23 @@ _PRODUCT_INVENTORY_COLS = [
     "outsourced_warehouse_inventory",
 ]
 
+# 月报中 production_summarys 在庫列 -> 代表 process_cd（累計単価参照用）
+_INVENTORY_COL_TO_PROCESS_CD = {
+    "cutting_inventory": "KT01",
+    "chamfering_inventory": "KT02",
+    "molding_inventory": "KT04",
+    "plating_inventory": "KT05",
+    "outsourced_plating_inventory": "KT06",
+    "welding_inventory": "KT07",
+    "outsourced_welding_inventory": "KT08",
+    "inspection_inventory": "KT09",
+    "warehouse_inventory": "KT13",
+    "outsourced_warehouse_inventory": "KT10",
+    "pre_welding_inspection_inventory": "KT11",
+    "pre_inspection_inventory": "KT16",
+    "pre_outsourcing_inventory": "KT17",
+}
+
 # kind の並び順
 _KIND_ORDER = {"T": 0, "N": 1, "F": 2}
 
@@ -1584,6 +1601,12 @@ _CATEGORY_MAP = {
     "溶接": "溶接",
     "メカ溶接": "メカ溶接",
 }
+
+
+def _stocktake_product_cd_included(pcd: Optional[str]) -> bool:
+    """棚卸統合報告書の製品側集計：製品CD 末尾が「1」の行のみ（フロントの製品棚卸ダイアログと一致）。"""
+    s = str(pcd or "").strip()
+    return bool(s) and s.endswith("1")
 
 
 @router.get("/report/monthly")
@@ -1603,6 +1626,7 @@ async def get_monthly_inventory_report(
     - parts_non_meka: メカ以外を kind で集計
     - meta: 対象月・集計日時
     - shipment_merge=True のとき、指定出荷日・納入先の確定本数を製品側に加算（単価は当該製品の製品側合計金額÷合計本数で按分）
+    - 製品CD が末尾「1」でない行は製品集計・出荷並入の対象外（実棚卸ダイアログと同一ルール）
     """
     as_of_d = _parse_as_of_date(as_of)
     now_str = datetime.now().strftime("%Y年%m月%d日 %H:%M:%S")
@@ -1612,6 +1636,7 @@ async def get_monthly_inventory_report(
         # ====== 1. 製品データ（production_summarys + snapshot 単価） ======
         prod_base = select(ProductionSummary).where(ProductionSummary.date == as_of_d)
         prod_rows = list((await db.execute(prod_base)).scalars().all())
+        prod_rows = [r for r in prod_rows if _stocktake_product_cd_included(str(r.product_cd or ""))]
 
         prod_codes = sorted({str(r.product_cd).strip() for r in prod_rows if r.product_cd})
         prod_kind_by_cd: Dict[str, str] = {}
@@ -1655,8 +1680,6 @@ async def get_monthly_inventory_report(
 
             key = (pcd, str(r.route_cd or "").strip())
             snaps = snap_by_pair.get(key, [])
-            unit_dec = _pick_cumulative_from_snapshot_rows(snaps, None, 9999)
-            up = _fnum(unit_dec) if unit_dec is not None else 0.0
 
             wip_qty = 0
             for col in _WIP_INVENTORY_COLS:
@@ -1665,8 +1688,20 @@ async def get_monthly_inventory_report(
             for col in _PRODUCT_INVENTORY_COLS:
                 prod_qty += int(getattr(r, col, None) or 0)
 
-            wip_amt = round(wip_qty * up, 2)
-            prod_amt = round(prod_qty * up, 2)
+            def _sum_amount_for_cols(inv_cols: List[str]) -> float:
+                amt = 0.0
+                for inv_col in inv_cols:
+                    qty_col = int(getattr(r, inv_col, None) or 0)
+                    if qty_col <= 0:
+                        continue
+                    proc_cd_col = _INVENTORY_COL_TO_PROCESS_CD.get(inv_col)
+                    unit_dec_col = _pick_cumulative_from_snapshot_rows(snaps, proc_cd_col, 9999)
+                    up_col = _fnum(unit_dec_col) if unit_dec_col is not None else 0.0
+                    amt += float(qty_col) * float(up_col)
+                return round(amt, 2)
+
+            wip_amt = _sum_amount_for_cols(_WIP_INVENTORY_COLS)
+            prod_amt = _sum_amount_for_cols(_PRODUCT_INVENTORY_COLS)
 
             for grp_dict_w, grp_dict_p, grp_key in [
                 (kind_wip, kind_product, kind),
@@ -1711,11 +1746,12 @@ async def get_monthly_inventory_report(
                     .group_by(OrderDaily.product_cd)
                 )
                 ship_rows = list((await db.execute(ship_q)).all())
-                ship_map: Dict[str, int] = {
-                    str(r.product_cd or "").strip(): int(r.confirmed_units_sum or 0)
-                    for r in ship_rows
-                    if str(r.product_cd or "").strip()
-                }
+                ship_map: Dict[str, int] = {}
+                for r in ship_rows:
+                    pcd_s = str(r.product_cd or "").strip()
+                    if not pcd_s or not _stocktake_product_cd_included(pcd_s):
+                        continue
+                    ship_map[pcd_s] = ship_map.get(pcd_s, 0) + int(r.confirmed_units_sum or 0)
                 extra_pcds = set(ship_map.keys()) - set(by_pcd_product.keys())
                 if extra_pcds:
                     pq2 = select(Product.product_cd, Product.kind, Product.category).where(
@@ -1806,7 +1842,14 @@ async def get_monthly_inventory_report(
 
         # ====== 2. 部品データ ======
         part_base = (
-            select(PartStock, PartMaster.kind, PartMaster.category, PartMaster.part_name)
+            select(
+                PartStock,
+                PartMaster.kind,
+                PartMaster.category,
+                PartMaster.part_name,
+                PartMaster.unit_price,
+                PartMaster.exchange_rate,
+            )
             .outerjoin(PartMaster, PartStock.part_cd == PartMaster.part_cd)
             .where(PartStock.date == as_of_d)
         )
@@ -1821,8 +1864,11 @@ async def get_monthly_inventory_report(
             p_cat = str(row[2] or "").strip()
             p_name = str(row[3] or ps.part_name or ps.part_cd or "").strip()
             qty = int(ps.current_stock or 0)
-            up = _fnum(ps.unit_price)
-            amt = round(qty * up, 2)
+            up = _fnum(row[4] if row[4] is not None else ps.unit_price)
+            currency = _fnum(row[5] if row[5] is not None else 1)
+            if currency <= 0:
+                currency = 1.0
+            amt = round(qty * up * currency, 2)
 
             is_meka = "メカ" in p_cat if p_cat else False
 

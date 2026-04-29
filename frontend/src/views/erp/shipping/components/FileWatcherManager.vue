@@ -623,6 +623,7 @@ import {
   getDuplicateStats as getDuplicateStatsAPI,
   performDeduplicate as performDeduplicateAPI,
   syncToPickingTasks as syncToPickingTasksAPI,
+  getSyncToPickingTasksTask as getSyncToPickingTasksTaskAPI,
   getSyncStatus as getSyncStatusAPI,
   getSyncDebugInfo as getSyncDebugInfoAPI,
   type FileWatcherStatus,
@@ -984,8 +985,37 @@ async function syncToPickingTasks() {
     )
 
     syncLoading.value = true
-    const result = (await syncToPickingTasksAPI()) as ApiResponseBody
-    ElMessage.success(result?.message || 'データ同期が正常に完了しました')
+    const startResult = (await syncToPickingTasksAPI()) as ApiResponseBody & Record<string, any>
+    const startData = (startResult.data ?? startResult) as Record<string, any>
+    const taskId = String(startData.task_id || '')
+    if (!taskId) {
+      throw new Error(startResult.message || 'task_id が取得できませんでした')
+    }
+
+    let finalTask: Record<string, any> | null = null
+    const maxPoll = 600 // 最大 10 分
+    for (let i = 0; i < maxPoll; i += 1) {
+      await new Promise((r) => setTimeout(r, 1000))
+      const statusResult = (await getSyncToPickingTasksTaskAPI(taskId)) as ApiResponseBody &
+        Record<string, any>
+      const task = (statusResult.data ?? statusResult) as Record<string, any>
+      if (task.status === 'completed' || task.status === 'failed') {
+        finalTask = task
+        break
+      }
+    }
+
+    if (!finalTask) {
+      ElMessage.warning('同期処理は継続中です。しばらくしてから状態を再読込してください。')
+      return
+    }
+    if (String(finalTask.status) === 'completed') {
+      ElMessage.success(
+        finalTask.message || `データ同期が正常に完了しました（更新: ${Number(finalTask.updated_rows || 0)}）`,
+      )
+    } else {
+      ElMessage.error(finalTask.error || finalTask.message || 'データ同期に失敗しました')
+    }
     await loadSyncStatus()
   } catch (error: unknown) {
     if (error !== 'cancel') {

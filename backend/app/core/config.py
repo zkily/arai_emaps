@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     MATERIAL_RECEIVING_WATCH_BASE_PATH: str = ""
     # 上記ディレクトリ内のファイル名（カンマ区切り）。空＝デフォルト4種（Maruiti/Nagoya/JFE/Okajima）
     MATERIAL_RECEIVING_WATCH_FILES: str = ""
+    # Access 同期（production_plan_excel -> Access）
+    ACCESS_PRODUCTION_PLAN_DB_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\Data\subdata.accdb"
+    ACCESS_PRODUCTION_PLAN_TABLE: str = "A生産予定"
 
     class Config:
         env_file = ".env"

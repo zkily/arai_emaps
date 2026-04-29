@@ -1,4 +1,5 @@
--- production_plan_excel: 按 日付+加工機 分组，按 生産順番 升序（id 作.tie-break）写入 順番 1,2,3...
+-- production_plan_excel: 按 日付+加工機 分组，按 生産順番 升序（id 作 tie-break）写入 順番（仅 1/2）
+-- 规则：每组第 1 条写 1；第 2 条及以后统一写 2。
 -- MySQL 禁止在本表触发器里再次 UPDATE 本表，因此：触发器只写入提示表，由存储过程（或定时 EVENT）执行重算。
 -- 依赖：表 production_plan_excel 已存在且含列 日付、加工機、生産順番、順番；MySQL 8.0+（需窗口函数 ROW_NUMBER）。
 
@@ -39,7 +40,7 @@ BEGIN
       FROM `production_plan_excel`
       WHERE `日付` = v_date AND `加工機` = v_machine
     ) AS r ON e.id = r.id
-    SET e.`順番` = r.rn;
+    SET e.`順番` = CASE WHEN r.rn = 1 THEN 1 ELSE 2 END;
   END LOOP;
   CLOSE cur;
 

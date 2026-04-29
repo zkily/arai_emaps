@@ -97,8 +97,34 @@
 
     <div class="plan-card result-card" v-loading="loading">
       <div class="result-head">
-        <div class="result-title">スケジューリングマトリクス</div>
+        <div class="result-title">
+          <span class="result-title-feature">{{ matrixTitleFeatureLabel }}</span>
+          <span class="result-title-sep" aria-hidden="true">・</span>
+          <span class="result-title-main">スケジューリングマトリクス</span>
+        </div>
         <div class="result-head-actions">
+          <div class="sc-range-selection-ui result-note sc-range-hint">
+            範囲合計：日付列を1回目で開始・2回目で終了（{{ rangeSelectionHint }}）
+            <template v-if="rangeSelectionSummary">
+              <span class="sc-range-sep">｜</span>
+              <span class="sc-range-sum">合計 {{ formatQty(rangeSelectionSummary.itemSum) }}</span>
+              <span class="sc-range-meta">（品目行 {{ rangeSelectionSummary.itemCells }} セル）</span>
+            </template>
+            <template v-else-if="matrixRangeAnchor">
+              <span class="sc-range-sep">｜</span>
+              <span class="sc-range-wait">終了セルをクリック</span>
+            </template>
+            <el-button
+              v-if="matrixRangeAnchor"
+              class="sc-range-clear-btn"
+              link
+              type="primary"
+              size="small"
+              @click.stop="clearMatrixRangeSelection"
+            >
+              解除
+            </el-button>
+          </div>
           <div class="result-note">期間：{{ displayDateRangeText }}</div>
           <el-button class="print-btn" size="small" @click="handlePrint">印刷</el-button>
         </div>
@@ -160,9 +186,12 @@
               <td
                 v-for="date in gridDates"
                 :key="`${row.key}-${date}`"
-                class="numeric-cell data-cell"
+                class="numeric-cell data-cell sc-selectable-cell"
                 :class="getCellClass(row, date)"
                 :title="getCellTitle(row, date)"
+                role="button"
+                tabindex="0"
+                @click.stop="onMatrixDateCellClick(row, date)"
               >
                 <span v-if="row.type === 'item' && getCellValue(row, date)">
                   {{ formatQty(getCellValue(row, date)) }}
@@ -190,7 +219,7 @@
 
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
@@ -330,6 +359,104 @@ const matrixSections = computed(() => {
   return sections
 })
 
+/** マトリクス行キー → 表示順インデックス（範囲選択用） */
+const matrixRowIndexByKey = computed(() => {
+  const m = new Map<string, number>()
+  matrixRows.value.forEach((r, i) => m.set(r.key, i))
+  return m
+})
+
+type MatrixRangeCell = { rowKey: string; date: string }
+const matrixRangeStart = ref<MatrixRangeCell | null>(null)
+const matrixRangeEnd = ref<MatrixRangeCell | null>(null)
+
+const matrixRangeAnchor = computed(() => matrixRangeStart.value)
+
+const rangeSelectionHint = 'Esc 解除可'
+
+const matrixRangeBounds = computed(() => {
+  const s = matrixRangeStart.value
+  const e = matrixRangeEnd.value
+  if (!s) return null
+  const dates = gridDates.value
+  const rows = matrixRowIndexByKey.value
+  const ri0 = rows.get(s.rowKey)
+  const di0 = dates.indexOf(s.date)
+  if (ri0 == null || ri0 < 0 || di0 < 0) return null
+  if (!e) return { rmin: ri0, rmax: ri0, dmin: di0, dmax: di0 }
+  const ri1 = rows.get(e.rowKey)
+  const di1 = dates.indexOf(e.date)
+  if (ri1 == null || ri1 < 0 || di1 < 0) return null
+  return {
+    rmin: Math.min(ri0, ri1),
+    rmax: Math.max(ri0, ri1),
+    dmin: Math.min(di0, di1),
+    dmax: Math.max(di0, di1),
+  }
+})
+
+/** 品目行のみ合算（ライン合計行を混ぜると二重計上になるため） */
+const rangeSelectionSummary = computed(() => {
+  const b = matrixRangeBounds.value
+  const e = matrixRangeEnd.value
+  if (!b || !e) return null
+  const dates = gridDates.value
+  const rows = matrixRows.value
+  let itemSum = 0
+  let itemCells = 0
+  for (let ri = b.rmin; ri <= b.rmax; ri++) {
+    const row = rows[ri]
+    if (!row || row.type !== 'item') continue
+    for (let di = b.dmin; di <= b.dmax; di++) {
+      const date = dates[di]
+      if (!date) continue
+      itemCells += 1
+      itemSum += Number(getCellValue(row, date) ?? 0)
+    }
+  }
+  return { itemSum, itemCells }
+})
+
+function clearMatrixRangeSelection() {
+  matrixRangeStart.value = null
+  matrixRangeEnd.value = null
+}
+
+function onMatrixDateCellClick(row: MatrixRow, date: string) {
+  const pos: MatrixRangeCell = { rowKey: row.key, date }
+  if (!matrixRangeStart.value || matrixRangeEnd.value) {
+    matrixRangeStart.value = pos
+    matrixRangeEnd.value = null
+    return
+  }
+  matrixRangeEnd.value = pos
+}
+
+function isMatrixCellInRangeSelection(row: MatrixRow, date: string): boolean {
+  const b = matrixRangeBounds.value
+  if (!b) return false
+  const ri = matrixRowIndexByKey.value.get(row.key)
+  const di = gridDates.value.indexOf(date)
+  if (ri == null || ri < 0 || di < 0) return false
+  return ri >= b.rmin && ri <= b.rmax && di >= b.dmin && di <= b.dmax
+}
+
+function isMatrixRangeAnchorCell(row: MatrixRow, date: string): boolean {
+  const s = matrixRangeStart.value
+  const e = matrixRangeEnd.value
+  if (!s) return false
+  const hit = (p: MatrixRangeCell) => p.rowKey === row.key && p.date === date
+  if (hit(s)) return true
+  if (e && hit(e)) return true
+  return false
+}
+
+function onMatrixRangeEscape(ev: KeyboardEvent) {
+  if (ev.key !== 'Escape') return
+  if (!matrixRangeStart.value) return
+  clearMatrixRangeSelection()
+}
+
 const lineCount = computed(() => displayBlocks.value.length)
 
 const overallPlannedOutputTotal = computed(() =>
@@ -385,6 +512,15 @@ const displayDateRangeText = computed(() => {
   const [s, e] = searchForm.dateRange || []
   if (!s || !e) return '-'
   return `${s} ~ ${e}`
+})
+
+/** 見出し前段：筛选「工程」と同じ表示名（印刷も result-card 内のため同様に反映） */
+const matrixTitleFeatureLabel = computed(() => {
+  const cd = (searchForm.processCd || '').trim()
+  if (!cd) return '全工程'
+  const p = processOptions.value.find((x) => String(x.process_cd || '').trim() === cd)
+  const name = String(p?.process_name || '').trim()
+  return name || cd
 })
 
 function formatQty(v: number) {
@@ -520,21 +656,31 @@ function getCellTitle(row: MatrixRow, date: string): string {
   return `${date}: ${row.item_name} / ${v}`
 }
 
-function getCellClass(row: MatrixRow, date: string): string {
+function getCellClass(row: MatrixRow, date: string): string | string[] {
   const v = getCellValue(row, date) || 0
   const dueMatch = row.type === 'item' && row.due_date ? row.due_date === date : false
 
-  if (row.type === 'group') return ''
-  if (!v) return dueMatch ? 'cell-due' : ''
-  if (row.type === 'item' && row.material_shortage) return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
+  const tone = (() => {
+    if (row.type === 'group') return ''
+    if (!v) return dueMatch ? 'cell-due' : ''
+    if (row.type === 'item' && row.material_shortage) return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
 
-  const rate = row.completion_rate
-  if (rate != null && Number.isFinite(rate)) {
-    if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
-    if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
-    return dueMatch ? 'tone-low cell-due' : 'tone-low'
-  }
-  return dueMatch ? 'tone-active cell-due' : 'tone-active'
+    const rate = row.completion_rate
+    if (rate != null && Number.isFinite(rate)) {
+      if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
+      if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
+      return dueMatch ? 'tone-low cell-due' : 'tone-low'
+    }
+    return dueMatch ? 'tone-active cell-due' : 'tone-active'
+  })()
+
+  const extra: string[] = []
+  if (isMatrixCellInRangeSelection(row, date)) extra.push('sc-range-selected')
+  if (isMatrixRangeAnchorCell(row, date)) extra.push('sc-range-anchor')
+
+  if (!extra.length) return tone
+  if (!tone) return extra
+  return [tone, ...extra]
 }
 
 function handlePrint() {
@@ -566,6 +712,7 @@ function handlePrint() {
           .matrix-table-wrapper { height: auto !important; max-height: none !important; overflow: visible !important; }
           .result-card { border: none !important; box-shadow: none !important; padding: 0 !important; margin: 0 !important; }
           .result-head-actions .el-button { display: none !important; }
+          .sc-range-selection-ui { display: none !important; }
           tfoot { display: table-row-group !important; }
           .sc-total-footer-row td { position: static !important; bottom: auto !important; }
           .sc-line-section { break-inside: avoid; page-break-inside: avoid; }
@@ -634,9 +781,14 @@ function scheduleAutoLoad() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onMatrixRangeEscape)
   await loadProcessOptions()
   await loadLines()
   await loadGrid()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onMatrixRangeEscape)
 })
 
 watch(
@@ -653,6 +805,10 @@ watch(
   },
   { deep: true },
 )
+
+watch(matrixRows, () => {
+  clearMatrixRangeSelection()
+})
 
 watch(
   () => grid.value,
@@ -874,7 +1030,69 @@ watch(
 .result-head-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.sc-range-selection-ui {
+  max-width: min(520px, 100%);
+  line-height: 1.35;
+  font-size: 11px;
+}
+
+.sc-range-hint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.sc-range-sep {
+  color: #cbd5e1;
+  font-weight: 400;
+}
+
+.sc-range-sum {
+  font-weight: 800;
+  color: #1e40af;
+}
+
+.sc-range-meta {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.sc-range-wait {
+  font-weight: 700;
+  color: #b45309;
+}
+
+.sc-range-clear-btn {
+  margin-left: 2px;
+  padding: 0 4px !important;
+  vertical-align: baseline;
+}
+
+.sc-selectable-cell {
+  cursor: pointer;
+}
+
+.sc-selectable-cell:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.sc-range-selected {
+  box-shadow: inset 0 0 0 999px rgba(59, 130, 246, 0.2) !important;
+}
+
+.sc-range-anchor {
+  outline: 2px solid #2563eb !important;
+  outline-offset: -3px;
+  z-index: 1;
 }
 
 .print-btn {
@@ -922,7 +1140,27 @@ watch(
 }
 
 .result-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 4px;
   font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.result-title-feature {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.result-title-sep {
+  color: #94a3b8;
+  font-weight: 600;
+  user-select: none;
+}
+
+.result-title-main {
   font-weight: 800;
   color: #0f172a;
 }

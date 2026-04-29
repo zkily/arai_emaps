@@ -76,6 +76,7 @@
                 <el-option label="外注溶接" value="outsource_welding" />
                 <el-option label="溶接前検査" value="pre_welding_inspection" />
                 <el-option label="外注検査前" value="pre_outsource_inspection" />
+                <el-option label="部品工程" value="part_process" />
               </el-select>
             </el-form-item>
             <el-form-item label="製品名" class="filter-item filter-item--product">
@@ -1018,6 +1019,7 @@ const printProductStatistics = () => {
     outsource_welding: '外注溶接',
     pre_welding_inspection: '溶接前検査',
     pre_outsource_inspection: '外注検査前',
+    part_process: '部品工程',
   }
 
   // 製品名で昇順ソート

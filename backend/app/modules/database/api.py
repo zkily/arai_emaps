@@ -1,6 +1,7 @@
 """
 production_summarys API（一覧・製品リスト・データ生成）
 """
+import calendar
 import logging
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 
@@ -120,6 +121,50 @@ PROCESS_ON_HOLD_MAPPING = {
     "KT11": "pre_welding_inspection_on_hold",
 }
 ON_HOLD_PROCESS_CDS = list(PROCESS_ON_HOLD_MAPPING.keys())
+# 保留列一括クリア用（PROCESS_ON_HOLD 未対応の外注系 on_hold も含む全列）
+ON_HOLD_CLEAR_COLUMNS = [
+    "cutting_on_hold",
+    "chamfering_on_hold",
+    "molding_on_hold",
+    "plating_on_hold",
+    "welding_on_hold",
+    "inspection_on_hold",
+    "warehouse_on_hold",
+    "outsourced_warehouse_on_hold",
+    "outsourced_plating_on_hold",
+    "outsourced_welding_on_hold",
+    "pre_welding_inspection_on_hold",
+]
+# 不良列一括クリア用（PROCESS_DEFECT 未対応の倉庫・外注系 defect も含む models 上の全列）
+DEFECT_CLEAR_COLUMNS = [
+    "cutting_defect",
+    "chamfering_defect",
+    "molding_defect",
+    "plating_defect",
+    "welding_defect",
+    "inspection_defect",
+    "warehouse_defect",
+    "outsourced_warehouse_defect",
+    "outsourced_plating_defect",
+    "outsourced_welding_defect",
+    "pre_welding_inspection_defect",
+]
+# 廃棄列一括クリア用（PROCESS_SCRAP 未対応の outsourced_warehouse_scrap も含む models 上の全列）
+SCRAP_CLEAR_COLUMNS = [
+    "cutting_scrap",
+    "chamfering_scrap",
+    "molding_scrap",
+    "plating_scrap",
+    "welding_scrap",
+    "inspection_scrap",
+    "warehouse_scrap",
+    "outsourced_warehouse_scrap",
+    "outsourced_plating_scrap",
+    "outsourced_welding_scrap",
+    "pre_welding_inspection_scrap",
+    "pre_inspection_scrap",
+    "pre_outsourcing_scrap",
+]
 
 # 在庫・推移更新：process_cd → 列プレフィックス（cutting, chamfering, ... warehouse, outsourced_warehouse）
 PROCESS_CD_TO_PREFIX = {
@@ -1355,6 +1400,37 @@ def _get_japan_date_string() -> str:
     return now_jst().strftime("%Y-%m-%d")
 
 
+def _jst_month_first_and_last_day() -> tuple[str, str]:
+    """日本時区で当月1日と当月末日の YYYY-MM-DD（実績・不良・廃棄・保留のログ同期窓）。"""
+    today_str = _get_japan_date_string()
+    parts = today_str.split("-")
+    year, month = int(parts[0]), int(parts[1])
+    first_day_str = f"{year}-{month:02d}-01"
+    last_dom = calendar.monthrange(year, month)[1]
+    month_end_str = f"{year}-{month:02d}-{last_dom:02d}"
+    return first_day_str, month_end_str
+
+
+async def _clear_production_summary_columns_jst_month(
+    db: AsyncSession,
+    columns: list[str],
+) -> tuple[int, str, str]:
+    """当月1日～当月末日(JST)の行について指定列を 0 にし commit。戻り値 (cleared_rowcount, first_day, month_end)。"""
+    first_day_str, month_end_str = _jst_month_first_and_last_day()
+    if not columns:
+        return 0, first_day_str, month_end_str
+    clear_values = {col: 0 for col in columns}
+    stmt_clear = (
+        update(ProductionSummary)
+        .where(ProductionSummary.date >= first_day_str, ProductionSummary.date <= month_end_str)
+        .values(**clear_values)
+    )
+    result_clear = await db.execute(stmt_clear)
+    cleared_count = result_clear.rowcount
+    await db.commit()
+    return cleared_count, first_day_str, month_end_str
+
+
 @router.post("/update-actual")
 async def update_production_summarys_actual(
     db: AsyncSession = Depends(get_db),
@@ -1362,23 +1438,11 @@ async def update_production_summarys_actual(
 ):
     """
     stock_transaction_logs の実績・不良・入出庫から production_summarys の各 actual 列を再計算して反映する。
-    当月1日～今日（日本時区）の actual を一旦クリアしてから、ログを集計して書き戻す。
+    当月1日～当月末日（日本時区）の actual を一旦クリアしてから、ログを集計して書き戻す。
     """
-    today_str = _get_japan_date_string()
-    parts = today_str.split("-")
-    year, month = int(parts[0]), int(parts[1])
-    first_day_str = f"{year}-{month:02d}-01"
-
-    # 1) 当月～今日の actual 列を 0 にクリア
-    clear_values = {col: 0 for col in ACTUAL_CLEAR_COLUMNS}
-    stmt_clear = (
-        update(ProductionSummary)
-        .where(ProductionSummary.date >= first_day_str, ProductionSummary.date <= today_str)
-        .values(**clear_values)
+    cleared_count, first_day_str, month_end_str = await _clear_production_summary_columns_jst_month(
+        db, ACTUAL_CLEAR_COLUMNS
     )
-    result_clear = await db.execute(stmt_clear)
-    cleared_count = result_clear.rowcount
-    await db.commit()
 
     # 2) 一般工程：実績+不良 集計（product_cd = 前4桁+'1'）
     process_placeholders = ", ".join([":p%d" % i for i in range(len(GENERAL_PROCESS_CDS))])
@@ -1438,7 +1502,7 @@ async def update_production_summarys_actual(
         msg = f"{cleared_count}件のレコードをクリアしました（集計データなし）"
         return {
             "code": 200,
-            "data": {"updated": 0, "skipped": 0, "cleared": cleared_count, "clearPeriod": f"{first_day_str} ～ {today_str}"},
+            "data": {"updated": 0, "skipped": 0, "cleared": cleared_count, "clearPeriod": f"{first_day_str} ～ {month_end_str}"},
             "message": msg,
         }
 
@@ -1525,7 +1589,7 @@ async def update_production_summarys_actual(
             "skipped": skipped_count,
             "total": len(actual_rows) + len(warehouse_rows) + len(outsourced_warehouse_rows),
             "cleared": cleared_count,
-            "clearPeriod": f"{first_day_str} ～ {today_str}",
+            "clearPeriod": f"{first_day_str} ～ {month_end_str}",
         },
         "message": message,
     }
@@ -1539,8 +1603,12 @@ async def update_production_summarys_defect(
     """
     stock_transaction_logs の transaction_type='不良' を集計し、
     production_summarys の各工程 defect 列に反映する。
-    先清空は行わず、不良ログがある (product_cd, date, process_cd) のみ UPDATE。
+    当月1日～当月末日（日本時区）の全 defect 列を一旦 0 にクリアしてからログを書き戻す。
     """
+    cleared_count, first_day_str, month_end_str = await _clear_production_summary_columns_jst_month(
+        db, DEFECT_CLEAR_COLUMNS
+    )
+
     defect_placeholders = ", ".join([":d%d" % i for i in range(len(DEFECT_PROCESS_CDS))])
     defect_sql = text("""
         SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
@@ -1564,10 +1632,17 @@ async def update_production_summarys_defect(
         defect_rows = []
 
     if not defect_rows:
+        msg = f"{cleared_count}件のレコードの不良列をクリアしました（集計データなし）"
         return {
             "code": 200,
-            "data": {"updated": 0, "skipped": 0, "total": 0},
-            "message": "更新する不良データがありません",
+            "data": {
+                "updated": 0,
+                "skipped": 0,
+                "total": 0,
+                "cleared": cleared_count,
+                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+            },
+            "message": msg,
         }
 
     updated_count = 0
@@ -1600,10 +1675,19 @@ async def update_production_summarys_defect(
             skipped_count += 1
 
     await db.commit()
-    message = f"{updated_count}件の不良データを更新しました（{skipped_count}件スキップ）"
+    message = (
+        f"{cleared_count}件のレコードをクリア後、{updated_count}件の不良データを更新しました"
+        f"（{skipped_count}件スキップ）"
+    )
     return {
         "code": 200,
-        "data": {"updated": updated_count, "skipped": skipped_count, "total": len(defect_rows)},
+        "data": {
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "total": len(defect_rows),
+            "cleared": cleared_count,
+            "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+        },
         "message": message,
     }
 
@@ -1616,8 +1700,12 @@ async def update_production_summarys_scrap(
     """
     stock_transaction_logs の transaction_type='廃棄' を集計し、
     production_summarys の各工程 scrap 列に反映する。
-    先清空は行わず、廃棄ログがある (product_cd, date, process_cd) のみ UPDATE。
+    当月1日～当月末日（日本時区）の全 scrap 列を一旦 0 にクリアしてからログを書き戻す。
     """
+    cleared_count, first_day_str, month_end_str = await _clear_production_summary_columns_jst_month(
+        db, SCRAP_CLEAR_COLUMNS
+    )
+
     scrap_placeholders = ", ".join([":s%d" % i for i in range(len(SCRAP_PROCESS_CDS))])
     scrap_sql = text("""
         SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
@@ -1641,10 +1729,17 @@ async def update_production_summarys_scrap(
         scrap_rows = []
 
     if not scrap_rows:
+        msg = f"{cleared_count}件のレコードの廃棄列をクリアしました（集計データなし）"
         return {
             "code": 200,
-            "data": {"updated": 0, "skipped": 0, "total": 0},
-            "message": "更新する廃棄データがありません",
+            "data": {
+                "updated": 0,
+                "skipped": 0,
+                "total": 0,
+                "cleared": cleared_count,
+                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+            },
+            "message": msg,
         }
 
     updated_count = 0
@@ -1677,10 +1772,19 @@ async def update_production_summarys_scrap(
             skipped_count += 1
 
     await db.commit()
-    message = f"{updated_count}件の廃棄データを更新しました（{skipped_count}件スキップ）"
+    message = (
+        f"{cleared_count}件のレコードをクリア後、{updated_count}件の廃棄データを更新しました"
+        f"（{skipped_count}件スキップ）"
+    )
     return {
         "code": 200,
-        "data": {"updated": updated_count, "skipped": skipped_count, "total": len(scrap_rows)},
+        "data": {
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "total": len(scrap_rows),
+            "cleared": cleared_count,
+            "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+        },
         "message": message,
     }
 
@@ -1693,8 +1797,13 @@ async def update_production_summarys_on_hold(
     """
     stock_transaction_logs の transaction_type='保留' を集計し、
     production_summarys の各工程 on_hold 列に反映する。
-    先清空は行わず、保留ログがある (product_cd, date, process_cd) のみ UPDATE。
+    当月1日～当月末日（日本時区）の全 on_hold 列を一旦 0 にクリアしてから、
+    ログを集計して書き戻す（実績更新と同様。ログが無いセルは 0 のまま）。
     """
+    cleared_count, first_day_str, month_end_str = await _clear_production_summary_columns_jst_month(
+        db, ON_HOLD_CLEAR_COLUMNS
+    )
+
     on_hold_placeholders = ", ".join([":h%d" % i for i in range(len(ON_HOLD_PROCESS_CDS))])
     on_hold_sql = text("""
         SELECT CONCAT(SUBSTRING(target_cd, 1, 4), '1') AS product_cd,
@@ -1718,10 +1827,17 @@ async def update_production_summarys_on_hold(
         on_hold_rows = []
 
     if not on_hold_rows:
+        msg = f"{cleared_count}件のレコードの保留列をクリアしました（集計データなし）"
         return {
             "code": 200,
-            "data": {"updated": 0, "skipped": 0, "total": 0},
-            "message": "更新する保留データがありません",
+            "data": {
+                "updated": 0,
+                "skipped": 0,
+                "total": 0,
+                "cleared": cleared_count,
+                "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+            },
+            "message": msg,
         }
 
     updated_count = 0
@@ -1754,10 +1870,19 @@ async def update_production_summarys_on_hold(
             skipped_count += 1
 
     await db.commit()
-    message = f"{updated_count}件の保留データを更新しました（{skipped_count}件スキップ）"
+    message = (
+        f"{cleared_count}件のレコードをクリア後、{updated_count}件の保留データを更新しました"
+        f"（{skipped_count}件スキップ）"
+    )
     return {
         "code": 200,
-        "data": {"updated": updated_count, "skipped": skipped_count, "total": len(on_hold_rows)},
+        "data": {
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "total": len(on_hold_rows),
+            "cleared": cleared_count,
+            "clearPeriod": f"{first_day_str} ～ {month_end_str}",
+        },
         "message": message,
     }
 

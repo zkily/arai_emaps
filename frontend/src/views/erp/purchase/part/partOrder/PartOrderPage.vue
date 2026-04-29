@@ -1121,6 +1121,8 @@ interface PartOrderItem {
   part_cd: string
   part_name: string
   date: string
+  /** parts.status（0 の行は一覧から除外） */
+  part_master_status?: number
   current_stock: number
   unit: string
   unit_price: number
@@ -1244,6 +1246,13 @@ const supplierOptions = ref<SupplierOption[]>([])
 const partSelectOptions = ref<{ label: string; value: string }[]>([])
 const partSelectLoading = ref(false)
 let partSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+/** parts.status が 0 の行を除外（API 未付与の旧レスポンスはそのまま通す） */
+const excludePartsStatusZero = (item: Record<string, unknown>): boolean => {
+  const s = item.part_master_status ?? item.status
+  if (s === undefined || s === null) return true
+  return Number(s) !== 0
+}
 
 /** 一覧取得の共通クエリ（期間・部品・仕入先） */
 const buildPartStockListParams = (extra?: { order_only?: boolean }): Record<string, unknown> => {
@@ -1394,7 +1403,8 @@ const fetchData = async () => {
     const total = (result as any)?.data?.total ?? 0
 
     if ((result as any)?.success !== false && list) {
-      tableData.value = list.map((item: any) => mapPartStockRow(item))
+      const filtered = list.filter((item: any) => excludePartsStatusZero(item))
+      tableData.value = filtered.map((item: any) => mapPartStockRow(item))
       pagination.total = total
       updateStats()
     } else {
@@ -1423,7 +1433,8 @@ const fetchOrderHistory = async () => {
     const list = (result as any)?.data?.list ?? []
     const total = (result as any)?.data?.total ?? 0
     if ((result as any)?.success !== false && list) {
-      orderHistoryData.value = list.map((item: any) => mapPartStockRow(item))
+      const filtered = list.filter((item: any) => excludePartsStatusZero(item))
+      orderHistoryData.value = filtered.map((item: any) => mapPartStockRow(item))
       pagination.total = total
     } else {
       ElMessage.error('注文履歴の取得に失敗しました')
@@ -1451,7 +1462,8 @@ const fetchInitialStockData = async () => {
       const result = await getPartStockList(apiParams)
       const list = (result as any)?.data?.list ?? []
       if ((result as any)?.success !== false && list.length >= 0) {
-        initialStockData.value = list.map((item: any) => {
+        const filtered = list.filter((item: any) => excludePartsStatusZero(item))
+        initialStockData.value = filtered.map((item: any) => {
           // material_stockデータを初期在庫管理に必要な形式にマッピング
           return {
             ...item,
@@ -1478,7 +1490,8 @@ const fetchInitialStockData = async () => {
         const fallbackResult = await getPartStockList(buildPartStockListParams())
         const fallbackList = (fallbackResult as any)?.data?.list ?? []
         if (fallbackList.length >= 0) {
-          initialStockData.value = fallbackList.map((item: any) => ({
+          const fbFiltered = fallbackList.filter((item: any) => excludePartsStatusZero(item))
+          initialStockData.value = fbFiltered.map((item: any) => ({
             ...item,
             // current_stockをinitial_stockの初期値として使用
             initial_stock: item.current_stock || 0,
@@ -1940,34 +1953,16 @@ const handleSyncPartMaster = async () => {
 
 const handleStockCalculation = async () => {
   try {
-    const hasRange = searchForm.dateRange && searchForm.dateRange.length === 2
-    const rangeExplain = hasRange
-      ? `・使用数・使用計画の同期期間: 画面の期間 ${searchForm.dateRange![0]} ～ ${searchForm.dateRange![1]}（同一区間の両項目を更新）\n`
-      : '・使用数・使用計画の同期期間: 未選択のため「計算開始日～part_stock のデータ最終日」（同一区間の両項目を更新）\n'
-    await ElMessageBox.confirm(
-      '在庫計算を実行しますか？\n\n' +
-        '・計算開始日（現在庫・推移のローリング起点）: part_stock 全体で initial_stock>0 の行のうち最も遅い日付\n' +
-        rangeExplain +
-        '・使用数: production_summarys（welding_actual + welding_defect）× BOM → planned_usage\n' +
-        '・使用計画: production_summarys.welding_actual_plan × BOM → usage_plan_qty\n' +
-        '・現在庫: initial+調整+注文−使用数+前日現在庫\n' +
-        '・在庫推移: initial+調整+注文−使用計画+前日在庫推移',
-      '在庫計算確認',
-      {
-        confirmButtonText: '実行',
-        cancelButtonText: 'キャンセル',
-        type: 'warning',
-      },
-    )
+    await ElMessageBox.confirm('在庫計算を実行しますか？', '在庫計算確認', {
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      type: 'warning',
+    })
 
     stockCalculationLoading.value = true
 
-    const calcParams =
-      hasRange
-        ? { start_date: searchForm.dateRange![0], end_date: searchForm.dateRange![1] }
-        : undefined
-
-    const response = await calculatePartStock(calcParams)
+    // 集計期間は API 側で part_stock（initial>0 錨点日～最大日）に固定。画面の期間は送らない。
+    const response = await calculatePartStock()
     const d = response?.data
 
     if (response?.success !== false) {
@@ -1975,6 +1970,8 @@ const handleStockCalculation = async () => {
       const updated_count = d?.updated_count ?? 0
       const usage_synced = d?.usage_synced ?? 0
       const usage_plan_synced = d?.usage_plan_synced ?? 0
+      const usage_lookup_key_count = d?.usage_lookup_key_count ?? 0
+      const sync_window_row_count = d?.sync_window_row_count ?? 0
       const up = d?.usage_period
       const periodLine =
         up?.start_date && up?.end_date
@@ -1982,7 +1979,7 @@ const handleStockCalculation = async () => {
           : ''
 
       ElMessage.success(
-        `在庫計算が完了しました。${periodLine}\n使用数を同期した行: ${usage_synced}件\n使用計画を同期した行: ${usage_plan_synced}件\n部品別計算: ${calculated_count}件\n現在庫・在庫推移を更新した行: ${updated_count}件`,
+        `在庫計算が完了しました。${periodLine}\n使用数集計キー数(受払×BOM): ${usage_lookup_key_count}件 / 同期期間内 part_stock 行: ${sync_window_row_count}件\n使用数を更新した行: ${usage_synced}件\n使用計画を同期した行: ${usage_plan_synced}件\n部品別計算: ${calculated_count}件\n現在庫・在庫推移を更新した行: ${updated_count}件`,
       )
 
       await fetchData()
@@ -2475,7 +2472,9 @@ const loadParts = async () => {
     let response
     try {
       // 使用正确的materials API路径
-      response = await request.get('/api/master/parts')
+      response = await request.get('/api/master/parts', {
+        params: { page: 1, pageSize: 10000, status: 1 },
+      })
       console.log('成功获取材料数据，使用 /api/master/parts')
     } catch (error) {
       console.log('材料データ取得失敗:', error)
@@ -2511,6 +2510,8 @@ const loadParts = async () => {
         partOptions.value = []
         return
       }
+
+      partOptions.value = (partOptions.value || []).filter((p: any) => excludePartsStatusZero(p))
 
       console.log('第一条材料数据示例:', partOptions.value[0])
       console.log('材料字段检查:', {

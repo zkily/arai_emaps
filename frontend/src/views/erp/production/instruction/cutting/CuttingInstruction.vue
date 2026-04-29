@@ -42,6 +42,22 @@
                 寸法マスタ同期
               </el-button>
             </div>
+            <div class="card-header-notes-btn">
+              <el-button
+                type="default"
+                size="small"
+                class="title-toolbar-btn title-toolbar-btn--note"
+                @click="openCuttingInstructionNotesDialog"
+                :title="'メモ（TODO）'"
+              >
+                <span class="notes-badge-wrap">
+                  <el-icon><Memo /></el-icon>
+                  <span v-if="cuttingInstructionNotesCount > 0" class="notes-count-badge">
+                    {{ cuttingInstructionNotesCount }}
+                  </span>
+                </span>
+              </el-button>
+            </div>
           </div>
         </template>
 
@@ -224,6 +240,7 @@
                 <li class="product-detail-list-item"><span class="detail-label">製品名</span><span class="detail-value">{{ productDetail.product_name ?? '-' }}</span></li>
                 <li class="product-detail-list-item"><span class="detail-label">生産ロット</span><span class="detail-value">{{ productDetail.lot_size ?? '-' }}</span></li>
                 <li class="product-detail-list-item"><span class="detail-label">材料</span><span class="detail-value">{{ productDetail.material_name ?? productDetail.material_cd ?? '-' }}</span></li>
+                <li class="product-detail-list-item"><span class="detail-label">材料束数</span><span class="detail-value">{{ materialPiecesPerBundleForTarget }}</span></li>
                 <li class="product-detail-list-item"><span class="detail-label">取数</span><span class="detail-value">{{ productDetail.take_count ?? '-' }}</span></li>
                 <li class="product-detail-list-item"><span class="detail-label">切断長</span><span class="detail-value">{{ productDetail.cut_length ?? '-' }}</span></li>
                 <li class="product-detail-list-item"><span class="detail-label">面取長</span><span class="detail-value">{{ (productDetail.chamfer_length != null && Number(productDetail.chamfer_length) !== 0) ? productDetail.chamfer_length : '--' }}</span></li>
@@ -772,6 +789,7 @@
                   <li class="product-detail-list-item"><span class="detail-label">製品名</span><span class="detail-value">{{ chamferingProductDetail.product_name ?? '-' }}</span></li>
                   <li class="product-detail-list-item"><span class="detail-label">生産ロット</span><span class="detail-value">{{ chamferingProductDetail.lot_size ?? '-' }}</span></li>
                   <li class="product-detail-list-item"><span class="detail-label">材料</span><span class="detail-value">{{ chamferingProductDetail.material_name ?? chamferingProductDetail.material_cd ?? '-' }}</span></li>
+                  <li class="product-detail-list-item"><span class="detail-label">材料束数</span><span class="detail-value">{{ chamferingMaterialPiecesPerBundleForTarget }}</span></li>
                   <li class="product-detail-list-item"><span class="detail-label">取数</span><span class="detail-value">{{ chamferingProductDetail.take_count ?? '-' }}</span></li>
                   <li class="product-detail-list-item"><span class="detail-label">切断長</span><span class="detail-value">{{ chamferingProductDetail.cut_length ?? '-' }}</span></li>
                   <li class="product-detail-list-item"><span class="detail-label">面取長</span><span class="detail-value">{{ (chamferingProductDetail.chamfer_length != null && Number(chamferingProductDetail.chamfer_length) !== 0) ? chamferingProductDetail.chamfer_length : '--' }}</span></li>
@@ -2992,7 +3010,80 @@
       </template>
     </el-dialog>
 
-    <!-- ■ 指定日 材料数 確認ダイアログ -->
+    <!-- ■ メモ（TODO）確認ダイアログ -->
+    <el-dialog
+      v-model="cuttingInstructionNotesDialogVisible"
+      title="メモ（TODO）"
+      width="520px"
+      class="cutting-instruction-notes-dialog"
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+      :show-close="false"
+    >
+      <div class="cutting-notes-dialog-body">
+        <div class="cutting-notes-add">
+          <el-input
+            v-model="cuttingInstructionNotesNewContent"
+            type="textarea"
+            :rows="2"
+            size="small"
+            maxlength="200"
+            class="cutting-notes-input"
+            placeholder="簡単なメモを入力（短文）"
+          />
+          <div class="cutting-notes-add-actions">
+            <span class="cutting-notes-char-count">{{ cuttingInstructionNotesNewContent.length }}/200</span>
+            <el-button
+              type="primary"
+              size="small"
+              class="cutting-notes-add-btn"
+              :loading="cuttingInstructionNotesSaving"
+              @click="addCuttingInstructionNote"
+            >
+              追加
+            </el-button>
+          </div>
+        </div>
+
+        <el-scrollbar v-loading="cuttingInstructionNotesLoading" max-height="320" class="cutting-notes-scrollbar">
+          <div v-if="!cuttingInstructionNotesLoading && !cuttingInstructionNotesList.length" class="cutting-notes-empty">
+            未登録
+          </div>
+
+          <div
+            v-for="n in cuttingInstructionNotesList"
+            :key="n.id"
+            class="cutting-notes-row"
+          >
+            <el-checkbox
+              :model-value="n.is_done === 1"
+              size="small"
+              @change="val => toggleCuttingInstructionNoteDone(n, val)"
+            />
+            <div class="cutting-notes-row-content" :class="{ 'cutting-notes-row-content--done': n.is_done === 1 }">
+              {{ n.content }}
+            </div>
+            <el-button
+              v-if="n.id != null"
+              type="text"
+              size="small"
+              class="cutting-notes-delete-btn"
+              :disabled="cuttingInstructionNotesSaving"
+              @click="deleteCuttingInstructionNote(n)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </el-scrollbar>
+      </div>
+
+      <template #footer>
+        <div class="cutting-notes-dialog-footer">
+          <el-button size="small" @click="cuttingInstructionNotesDialogVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <el-dialog
       v-model="specifiedDateDialogVisible"
       title="指定日 — 所需材料数"
@@ -3077,7 +3168,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
@@ -3494,6 +3585,106 @@ const cuttingTomorrowUsageSummary = computed<UsageSummary>(() => {
   )
   return buildUsageSummaryByMaterial(filtered)
 })
+
+// ─────────────────────────────────────────────
+// メモ（TODO）
+// ─────────────────────────────────────────────
+interface CuttingInstructionNote {
+  id?: number
+  content?: string | null
+  is_done?: number | boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+const cuttingInstructionNotesDialogVisible = ref(false)
+const cuttingInstructionNotesLoading = ref(false)
+const cuttingInstructionNotesSaving = ref(false)
+const cuttingInstructionNotesList = ref<CuttingInstructionNote[]>([])
+const cuttingInstructionNotesNewContent = ref('')
+
+const cuttingInstructionNotesCount = computed(() => cuttingInstructionNotesList.value.length)
+
+async function loadCuttingInstructionNotes() {
+  cuttingInstructionNotesLoading.value = true
+  try {
+    const res = await request.get<{
+      success?: boolean
+      data?: { list?: CuttingInstructionNote[] }
+      message?: string
+    }>('/api/plan/cutting-instruction-notes', { params: { limit: 200 } })
+
+    cuttingInstructionNotesList.value = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as CuttingInstructionNote[])
+      : []
+  } catch (e) {
+    console.error('メモ（TODO）の取得に失敗:', e)
+    ElMessage.error('メモ（TODO）の取得に失敗しました')
+    cuttingInstructionNotesList.value = []
+  } finally {
+    cuttingInstructionNotesLoading.value = false
+  }
+}
+
+function openCuttingInstructionNotesDialog() {
+  cuttingInstructionNotesDialogVisible.value = true
+  cuttingInstructionNotesNewContent.value = ''
+  loadCuttingInstructionNotes()
+}
+
+async function addCuttingInstructionNote() {
+  const content = cuttingInstructionNotesNewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('内容を入力してください')
+    return
+  }
+  try {
+    cuttingInstructionNotesSaving.value = true
+    await request.post('/api/plan/cutting-instruction-notes', { content })
+    cuttingInstructionNotesNewContent.value = ''
+    await loadCuttingInstructionNotes()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('メモ（TODO）の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    cuttingInstructionNotesSaving.value = false
+  }
+}
+
+async function toggleCuttingInstructionNoteDone(note: CuttingInstructionNote, checked: unknown) {
+  if (!note.id) return
+  const is_done = checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
+  try {
+    cuttingInstructionNotesSaving.value = true
+    await request.patch(`/api/plan/cutting-instruction-notes/${note.id}`, { is_done })
+    note.is_done = is_done
+  } catch (e) {
+    console.error('メモ（TODO）の更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+    await loadCuttingInstructionNotes()
+  } finally {
+    cuttingInstructionNotesSaving.value = false
+  }
+}
+
+async function deleteCuttingInstructionNote(note: CuttingInstructionNote) {
+  if (!note.id) return
+  try {
+    await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
+    cuttingInstructionNotesSaving.value = true
+    await request.delete(`/api/plan/cutting-instruction-notes/${note.id}`)
+    await loadCuttingInstructionNotes()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    // キャンセルは無視
+    if ((e as any)?.message?.includes('cancel') || (e as any)?.name === 'MessageBox') return
+    console.error('メモ（TODO）の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    cuttingInstructionNotesSaving.value = false
+  }
+}
 
 // ─────────────────────────────────────────────
 // 指定日：使用材料数
@@ -4300,6 +4491,7 @@ interface ProductDetail {
   lot_size?: number | null
   material_cd?: string | null
   material_name?: string | null
+  pieces_per_bundle?: number | null
   cut_length?: number | null
   chamfer_length?: number | null
   developed_length?: number | null
@@ -4309,6 +4501,8 @@ interface ProductDetail {
 const selectedProductCd = ref<string | null>(null)
 const productDetail = ref<ProductDetail | null>(null)
 const productDetailLoading = ref(false)
+
+const materialPiecesPerBundleForTarget = computed(() => productDetail.value?.pieces_per_bundle ?? '-')
 
 /** 右侧下：設備能率（equipment_efficiency 表） */
 interface EquipmentEfficiencyRow {
@@ -4332,6 +4526,7 @@ const equipmentEfficiencyListFiltered = computed(() => {
 const selectedChamferingProductCd = ref<string | null>(null)
 const chamferingProductDetail = ref<ProductDetail | null>(null)
 const chamferingProductDetailLoading = ref(false)
+const chamferingMaterialPiecesPerBundleForTarget = computed(() => chamferingProductDetail.value?.pieces_per_bundle ?? '-')
 const chamferingEquipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
 const chamferingEquipmentEfficiencyLoading = ref(false)
 
@@ -7663,6 +7858,7 @@ onMounted(() => {
   loadChamferingBatchList()
   loadKanbanProductNames()
   loadKanbanIssuance()
+  loadCuttingInstructionNotes()
   window.addEventListener('keydown', onProductionDayEditorKeydown)
 })
 onUnmounted(() => {
@@ -9168,10 +9364,187 @@ onUnmounted(() => {
   border-color: #34d399 !important;
   color: #065f46 !important;
 }
+.title-toolbar-btn--note {
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+  border-color: #ddd6fe !important;
+  color: #5b21b6 !important;
+  box-shadow: 0 1px 2px rgba(88, 28, 135, 0.08) !important;
+}
+.title-toolbar-btn--note:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+  border-color: #a78bfa !important;
+  color: #4c1d95 !important;
+}
 .title-toolbar-sync-icon {
   margin-right: 4px;
   font-size: 13px;
   vertical-align: -2px;
+}
+
+.notes-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.notes-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.cutting-instruction-notes-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 24px 48px -20px rgba(76, 29, 149, 0.45);
+}
+.cutting-instruction-notes-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #ede9fe;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 55%, #ecfeff 100%);
+}
+.cutting-instruction-notes-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #4c1d95;
+}
+.cutting-instruction-notes-dialog :deep(.el-dialog__body) {
+  padding: 12px;
+  background: linear-gradient(180deg, #fafaff 0%, #f8fafc 100%);
+}
+.cutting-instruction-notes-dialog :deep(.el-dialog__footer) {
+  padding: 8px 12px 12px;
+  border-top: 1px solid #ecebff;
+  background: #fcfcff;
+}
+
+.cutting-notes-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cutting-notes-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid #e9d5ff;
+  background: linear-gradient(145deg, #ffffff 0%, #f8f5ff 100%);
+  box-shadow: 0 4px 14px -10px rgba(139, 92, 246, 0.45);
+}
+.cutting-notes-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  border-color: #ddd6fe;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.cutting-notes-input :deep(.el-textarea__inner:focus) {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+}
+.cutting-notes-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cutting-notes-char-count {
+  font-size: 11px;
+  color: #7c3aed;
+  font-weight: 600;
+}
+.cutting-notes-add-btn {
+  min-width: 72px;
+  border: none !important;
+  border-radius: 9px !important;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
+  box-shadow: 0 10px 16px -12px rgba(79, 70, 229, 0.7);
+}
+.cutting-notes-add-btn:hover {
+  filter: saturate(1.08) brightness(1.03);
+}
+
+.cutting-notes-scrollbar {
+  padding: 2px 4px 0;
+}
+.cutting-notes-scrollbar :deep(.el-scrollbar__bar.is-vertical > div) {
+  background: rgba(139, 92, 246, 0.32);
+}
+.cutting-notes-empty {
+  padding: 22px 0;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+  border: 1px dashed #ddd6fe;
+  border-radius: 10px;
+  background: #fff;
+}
+.cutting-notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 10px;
+  margin-bottom: 8px;
+  border: 1px solid #ede9fe;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 6px 14px -14px rgba(15, 23, 42, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.cutting-notes-row:hover {
+  border-color: #c4b5fd;
+  box-shadow: 0 12px 20px -18px rgba(124, 58, 237, 0.5);
+  transform: translateY(-1px);
+}
+.cutting-notes-row-content {
+  flex: 1;
+  font-size: 12px;
+  color: #1f2937;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  padding-top: 2px;
+}
+.cutting-notes-row-content--done {
+  color: #9ca3af;
+  text-decoration: line-through;
+}
+.cutting-notes-row :deep(.el-checkbox__inner) {
+  border-radius: 6px;
+  border-color: #c4b5fd;
+}
+.cutting-notes-row :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: #8b5cf6;
+  border-color: #8b5cf6;
+}
+.cutting-notes-delete-btn {
+  color: #94a3b8 !important;
+  border-radius: 8px !important;
+  padding: 4px !important;
+}
+.cutting-notes-delete-btn:hover {
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
+}
+.cutting-notes-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .search-section {
@@ -9594,7 +9967,14 @@ onUnmounted(() => {
 .card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  position: relative;
+}
+
+.card-header-notes-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 
 .header-actions {

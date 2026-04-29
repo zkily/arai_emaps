@@ -673,6 +673,24 @@ def _picking_format_datetime(dt_str, date_str=None):
     return None
 
 
+def _is_picking_header_row(row) -> bool:
+    """判定是否为 PickingLog/Partslog 的表头行（含重复表头）。"""
+    if not row:
+        return False
+    vals = [str(c or "").strip().lower() for c in row]
+    # 常见表头关键词（中日英混在内）
+    header_tokens = {
+        "project", "date", "datetime", "model_no", "person_in_charge",
+        "picking_no", "product_name", "product_code", "product_name_2",
+        "quantity", "shipping_quantity",
+        "プロジェクト", "日付", "日時", "型式", "担当者", "ピッキングno",
+        "品名", "品番", "数量", "出荷数量",
+    }
+    # 任一关键列命中即可判定为表头；避免误判普通数据，要求至少命中2列
+    hit = sum(1 for v in vals if v in header_tokens)
+    return hit >= 2
+
+
 class PickingLogService:
     """PickingLog.csv → shipping_log（重複は (picking_no, product_code, date) で ON DUPLICATE KEY UPDATE）。"""
 
@@ -688,9 +706,11 @@ class PickingLogService:
                 start = 1
         data_rows = [r for r in rows[start:] if r and len(r) >= 8]
         records = []
-        cutoff_date = date.today() - timedelta(days=90)
+        cutoff_date = date.today() - timedelta(days=30)
         skipped_old = 0
         for r in data_rows:
+            if _is_picking_header_row(r):
+                continue
             # 列: project, date, datetime, model_no, person_in_charge, picking_no, product_name, product_code, product_name_2, quantity, shipping_quantity
             rec = {
                 "project": (r[0] or "").strip() if len(r) > 0 else "",
@@ -705,7 +725,7 @@ class PickingLogService:
                 "quantity": _picking_int(r[9]) if len(r) > 9 else 0,
                 "shipping_quantity": _picking_int(r[10]) if len(r) > 10 else 0,
             }
-            # 保持期間外（90日より古い日付）のログは再取込しない
+            # 保持期間外（30日より古い日付）のログは再取込しない
             rec_date = rec["date"]
             if rec_date:
                 try:
@@ -720,7 +740,7 @@ class PickingLogService:
             if rec["picking_no"] or rec["product_code"]:
                 records.append(rec)
         if not records:
-            logger.warning("⚠️ [PickingLog] %s 有効レコードなし（90日超過スキップ: %s）", filename, skipped_old)
+            logger.warning("⚠️ [PickingLog] %s 有効レコードなし（30日超過スキップ: %s）", filename, skipped_old)
             return
         # 同一ファイル内で (picking_no, product_code, date) 重複除去
         seen = set()
@@ -785,7 +805,7 @@ class PickingLogService:
             conn.commit()
             logger.info("%s 処理完了: shipping_log 新規 %s 件, 更新 %s 件", filename, inserted, updated)
             if skipped_old > 0:
-                logger.info("%s 取込時に 90日超過レコード %s 件をスキップ", filename, skipped_old)
+                logger.info("%s 取込時に 30日超過レコード %s 件をスキップ", filename, skipped_old)
             self._refresh_shipping_items_picking_log_matched_for_batch(cursor, unique_records)
             conn.commit()
         except Exception as e:

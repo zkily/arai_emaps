@@ -163,7 +163,7 @@ export function updateProductionSummarysCarryOver() {
   return request.post(`${BASE}/update-carry-over`)
 }
 
-/** 実績データ更新：stock_transaction_logs から actual 列を再計算して production_summarys に反映 */
+/** 実績データ更新：当月（JST）1 日～当月末日の actual を 0 クリア後、stock_transaction_logs から再集計して反映 */
 export function updateProductionSummarysActual() {
   return request.post<{
     data?: { updated?: number; skipped?: number; cleared?: number; clearPeriod?: string }
@@ -171,26 +171,44 @@ export function updateProductionSummarysActual() {
   }>(`${BASE}/update-actual`)
 }
 
-/** 不良データ更新：stock_transaction_logs の不良を集計して production_summarys の defect 列に反映 */
+/** 不良データ更新：当月（JST）1 日～当月末日の各工程 *_defect を 0 クリア後、stock_transaction_logs の不良を集計して反映 */
 export function updateProductionSummarysDefect() {
   return request.post<{
-    data?: { updated?: number; skipped?: number; total?: number }
+    data?: {
+      updated?: number
+      skipped?: number
+      total?: number
+      cleared?: number
+      clearPeriod?: string
+    }
     message?: string
   }>(`${BASE}/update-defect`)
 }
 
-/** 廃棄データ更新：stock_transaction_logs の廃棄を集計して production_summarys の scrap 列に反映 */
+/** 廃棄データ更新：当月（JST）1 日～当月末日の各工程 *_scrap を 0 クリア後、stock_transaction_logs の廃棄を集計して反映 */
 export function updateProductionSummarysScrap() {
   return request.post<{
-    data?: { updated?: number; skipped?: number; total?: number }
+    data?: {
+      updated?: number
+      skipped?: number
+      total?: number
+      cleared?: number
+      clearPeriod?: string
+    }
     message?: string
   }>(`${BASE}/update-scrap`)
 }
 
-/** 保留データ更新：stock_transaction_logs の保留を集計して production_summarys の on_hold 列に反映 */
+/** 保留データ更新：当月（JST）1 日～当月末日の各工程 *_on_hold を 0 クリア後、stock_transaction_logs の保留を集計して反映 */
 export function updateProductionSummarysOnHold() {
   return request.post<{
-    data?: { updated?: number; skipped?: number; total?: number }
+    data?: {
+      updated?: number
+      skipped?: number
+      total?: number
+      cleared?: number
+      clearPeriod?: string
+    }
     message?: string
   }>(`${BASE}/update-on-hold`)
 }

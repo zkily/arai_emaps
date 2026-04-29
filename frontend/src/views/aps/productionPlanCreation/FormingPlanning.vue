@@ -411,7 +411,9 @@
         </el-table-column>
         <el-table-column label="状態" width="85" align="center">
           <template #default="{ row }">
-            <el-tag :type="statusType(row.status)" size="small">{{ statusLabelJa(row.status) }}</el-tag>
+            <el-tag :type="statusType(displayStatusForScheduleRow(row))" size="small">
+              {{ statusLabelJa(displayStatusForScheduleRow(row)) }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="進捗" width="70" align="center">
@@ -580,6 +582,7 @@
                     class="gantt-cell"
                     :class="ganttCellClass(row, d)"
                     :title="ganttCellTitle(row, d)"
+                    @dblclick.stop="openDailyPlanEdit(row, d)"
                   >
                     <div
                       v-if="
@@ -826,6 +829,34 @@
     </el-dialog>
 
     <el-dialog
+      v-model="dailyPlanEditDialogVisible"
+      title="日別計画編集"
+      width="min(420px, 92vw)"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top">
+        <el-form-item label="日付">
+          <el-input :model-value="dailyPlanEditDate" readonly />
+        </el-form-item>
+        <el-form-item label="計画数（本）">
+          <el-input-number
+            v-model="dailyPlanEditQty"
+            :min="0"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dailyPlanEditDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" :loading="dailyPlanEditSaving" @click="saveDailyPlanEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="lineCapacityDaySlotsDialogVisible"
       :title="`設備稼働設定 — ${selectedLineDisplayName}`"
       width="min(560px, 96vw)"
@@ -888,6 +919,7 @@ import {
   fetchLineReplanAnchors,
   saveLineReplanAnchors,
   fetchLineCapacities,
+  updateScheduleDailyPlannedQty,
   productionLineOptionLabel,
   type ProductionLine,
   type LineReplanAnchorRow,
@@ -998,6 +1030,12 @@ const skipNextTotalQtyBlur = ref(false)
 const skipNextSetupTimeBlur = ref(false)
 /** 開始日指定用：Enter 確定直後の blur で二重保存しない */
 const skipNextForcedStartBlur = ref(false)
+/** ガント日別セル（計）編集ダイアログ */
+const dailyPlanEditDialogVisible = ref(false)
+const dailyPlanEditSaving = ref(false)
+const dailyPlanEditScheduleId = ref<number | null>(null)
+const dailyPlanEditDate = ref<string>('')
+const dailyPlanEditQty = ref<number>(0)
 /** el-table インスタンス（行ドラッグ用） */
 const scheduleTableRef = ref<{ $el?: HTMLElement } | null>(null)
 /** 計画一覧は6行分を上限表示し、超過分は縦スクロール */
@@ -1844,6 +1882,52 @@ function onForcedStartDateBlur(row: ScheduleOut) {
   })
 }
 
+function isDailyPlanEditableDate(isoDate: string): boolean {
+  const d = (isoDate || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false
+  return d <= todayIso.value
+}
+
+function openDailyPlanEdit(row: ScheduleGridRow, d: string) {
+  if (!isDailyPlanEditableDate(d)) {
+    ElMessage.warning('日別計画は本日以前のみ編集できます')
+    return
+  }
+  dailyPlanEditScheduleId.value = row.id
+  dailyPlanEditDate.value = d
+  dailyPlanEditQty.value = Math.max(0, Number(row.daily?.[d] || 0))
+  dailyPlanEditDialogVisible.value = true
+}
+
+async function saveDailyPlanEdit() {
+  const sid = dailyPlanEditScheduleId.value
+  const d = (dailyPlanEditDate.value || '').trim()
+  const qty = Math.floor(Number(dailyPlanEditQty.value || 0))
+  if (!sid || !d) return
+  if (!isDailyPlanEditableDate(d)) {
+    ElMessage.warning('日別計画は本日以前のみ編集できます')
+    return
+  }
+  if (!Number.isFinite(qty) || qty < 0) {
+    ElMessage.warning('日別計画は 0 以上の整数を入力してください')
+    return
+  }
+  dailyPlanEditSaving.value = true
+  try {
+    await updateScheduleDailyPlannedQty(sid, {
+      schedule_date: d,
+      planned_qty: qty,
+    })
+    dailyPlanEditDialogVisible.value = false
+    await loadSchedules()
+    ElMessage.success('日別計画を更新しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '日別計画の更新に失敗しました')
+  } finally {
+    dailyPlanEditSaving.value = false
+  }
+}
+
 async function saveForcedStartDate(row: ScheduleOut) {
   if (editingScheduleForcedStartId.value !== row.id) return
   const draft = String(forcedStartDateDrafts.value[row.id] ?? '').trim()
@@ -2292,6 +2376,13 @@ function statusType(s: string): 'success' | 'warning' | 'info' {
   if (s === 'COMPLETED') return 'success'
   if (s === 'IN_PROGRESS') return 'warning'
   return 'info'
+}
+
+/** 計画一覧の状態表示用：終了日が今日より前なら強制的に完了表示にする。 */
+function displayStatusForScheduleRow(row: ScheduleOut): string {
+  const end = (scheduleListDateSpanById.value[row.id]?.end || '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(end) && end < todayIso.value) return 'COMPLETED'
+  return String(row.status || '').trim() || 'PLANNING'
 }
 
 /** 一覧の状態表示（API の英語コード → 日本語） */

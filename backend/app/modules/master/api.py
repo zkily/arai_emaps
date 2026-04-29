@@ -168,22 +168,27 @@ async def get_product_list(
     result = await db.execute(query)
     rows = result.scalars().all()
 
-    # 材料名を付与：material_cd 一覧で materials を取得
+    # 材料情報を付与：material_cd 一覧で materials を取得
     material_cds = [r.material_cd for r in rows if getattr(r, "material_cd", None)]
-    material_names = {}
+    material_info: dict[str, dict[str, object]] = {}
     if material_cds:
         mat_result = await db.execute(
-            select(Material.material_cd, Material.material_name).where(Material.material_cd.in_(material_cds))
+            select(Material.material_cd, Material.material_name, Material.pieces_per_bundle).where(Material.material_cd.in_(material_cds))
         )
         for mat_row in mat_result.all():
-            material_names[mat_row.material_cd] = mat_row.material_name
+            material_info[mat_row.material_cd] = {
+                "material_name": mat_row.material_name,
+                "pieces_per_bundle": mat_row.pieces_per_bundle,
+            }
 
     def _item_with_material(p: Product) -> dict:
         d = _row_to_dict(p)
-        if p.material_cd and p.material_cd in material_names:
-            d["material_name"] = material_names[p.material_cd]
+        if p.material_cd and p.material_cd in material_info:
+            d["material_name"] = material_info[p.material_cd].get("material_name")
+            d["pieces_per_bundle"] = material_info[p.material_cd].get("pieces_per_bundle")
         else:
             d["material_name"] = None
+            d["pieces_per_bundle"] = None
         return d
 
     return {

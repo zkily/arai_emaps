@@ -414,9 +414,9 @@ async def cleanup_shipping_logs(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ) -> dict:
-    """90日以前の shipping_log を削除し、shipping_items.picking_log_matched を再計算"""
+    """30日以前の shipping_log を削除し、shipping_items.picking_log_matched を再計算"""
     result = await db.execute(text(
-        "DELETE FROM shipping_log WHERE date < DATE_SUB(CURDATE(), INTERVAL 90 DAY)"
+        "DELETE FROM shipping_log WHERE date < DATE_SUB(CURDATE(), INTERVAL 30 DAY)"
     ))
     deleted = result.rowcount
     await db.execute(REFRESH_SHIPPING_ITEMS_PICKING_LOG_MATCHED_SQL)
