@@ -170,3 +170,94 @@ class ApsBatchPlan(Base):
     status = Column(String(20), nullable=False, default="PLANNED")
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+
+class ApsPlatingPlanDraft(Base):
+    """メッキ計画 第③区域ドラフト主表"""
+    __tablename__ = "aps_plating_plan_drafts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    plan_date = Column(Date, nullable=False, index=True)
+    version_no = Column(Integer, nullable=False, default=1)
+    status = Column(String(20), nullable=False, default="draft")
+    daily_minutes = Column(Integer, nullable=False, default=600)
+    jigs_per_lap = Column(Integer, nullable=False, default=100)
+    minutes_per_lap = Column(Integer, nullable=False, default=100)
+    total_slots = Column(Integer, nullable=False, default=0)
+    used_slots = Column(Integer, nullable=False, default=0)
+    remain_slots = Column(Integer, nullable=False, default=0)
+    created_by = Column(String(50), nullable=True)
+    updated_by = Column(String(50), nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    items = relationship(
+        "ApsPlatingPlanDraftItem",
+        back_populates="draft",
+        cascade="all, delete-orphan",
+    )
+    board_cards = relationship(
+        "ApsPlatingPlanBoardCard",
+        back_populates="draft",
+        cascade="all, delete-orphan",
+    )
+
+
+class ApsPlatingPlanDraftItem(Base):
+    """メッキ計画 第③区域ドラフト明細"""
+    __tablename__ = "aps_plating_plan_draft_items"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    draft_id = Column(Integer, ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    work_date = Column(Date, nullable=True)
+    product_cd = Column(String(64), nullable=False)
+    product_name = Column(String(255), nullable=False)
+    plating_machine = Column(String(64), nullable=False)
+    kake = Column(Numeric(10, 2), nullable=False, default=0)
+    qty = Column(Integer, nullable=False, default=0)
+    slots = Column(Integer, nullable=False, default=0)
+    source_type = Column(String(32), nullable=False)
+    source_row_key = Column(String(128), nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    draft = relationship("ApsPlatingPlanDraft", back_populates="items")
+
+
+class ApsPlatingPlanBoardCard(Base):
+    """メッキ計画 第④看板枠（周回 lap_no・順 turn_seq）"""
+    __tablename__ = "aps_plating_plan_board_cards"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    draft_id = Column(Integer, ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"), nullable=False)
+    plan_date = Column(Date, nullable=False, index=True)
+    draft_version_no = Column(Integer, nullable=False, default=1)
+    work_date = Column(Date, nullable=True)
+    lap_no = Column(Integer, nullable=False)
+    turn_seq = Column(Integer, nullable=False)
+    product_cd = Column(String(64), nullable=False)
+    product_name = Column(String(255), nullable=False)
+    plating_machine = Column(String(64), nullable=False)
+    kake = Column(Numeric(10, 2), nullable=False, default=0)
+    qty = Column(Integer, nullable=False, default=0)
+    slots = Column(Integer, nullable=False, default=0)
+    board_mark = Column(String(16), nullable=False, default="standard")
+    stable_key = Column(String(128), nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    draft = relationship("ApsPlatingPlanDraft", back_populates="board_cards")
+
+
+class ApsPlatingJigAvailability(Base):
+    """メッキ治具 可用本数（日付別）"""
+    __tablename__ = "aps_plating_jig_availability"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    work_date = Column(Date, nullable=False, index=True)
+    plating_machine = Column(String(64), nullable=False)
+    available_qty = Column(Integer, nullable=False, default=0)
+    updated_by = Column(String(50), nullable=True)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())

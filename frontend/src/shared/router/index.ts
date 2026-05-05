@@ -52,8 +52,14 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/sales', name: 'Sales', component: () => import('@/views/erp/Sales.vue'), meta: { title: '販売管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/quotation', name: 'QuotationList', component: () => import('@/views/erp/sales/quotation/QuotationList.vue'), meta: { title: '見積管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/orders', name: 'SalesOrderList', component: () => import('@/views/erp/sales/SalesOrderList.vue'), meta: { title: '受注一覧', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/edi-import', name: 'EdiImport', component: () => import('@/views/erp/sales/EdiImport.vue'), meta: { title: 'EDI取込', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/forecast', name: 'ForecastList', component: () => import('@/views/erp/sales/forecast/ForecastList.vue'), meta: { title: '内示・フォーキャスト', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/credit', name: 'CreditManagement', component: () => import('@/views/erp/sales/credit/CreditManagement.vue'), meta: { title: '与信管理', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/contract-pricing', name: 'ContractPricingList', component: () => import('@/views/erp/sales/contract/ContractPricingList.vue'), meta: { title: '契約単価管理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/shipping', name: 'ShippingList', component: () => import('@/views/erp/sales/shipping/ShippingList.vue'), meta: { title: '出荷指示', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/recording', name: 'SalesRecording', component: () => import('@/views/erp/sales/shipping/SalesRecording.vue'), meta: { title: '売上計上', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/invoice', name: 'InvoiceList', component: () => import('@/views/erp/sales/invoice/InvoiceList.vue'), meta: { title: '請求書発行', group: '販売管理', requiresAuth: true } },
+      { path: 'erp/sales/return-correction', name: 'ReturnCorrection', component: () => import('@/views/erp/sales/ReturnCorrection.vue'), meta: { title: '赤黒訂正処理', group: '販売管理', requiresAuth: true } },
       { path: 'erp/sales/returns', name: 'ReturnsList', component: () => import('@/views/erp/sales/returns/ReturnsList.vue'), meta: { title: '返品管理(RMA)', group: '販売管理', requiresAuth: true } },
 
       // ========== ERP - 受注管理 (Order Management) ==========
@@ -216,6 +222,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
       { path: 'aps/cutting-planning', name: 'CuttingPlanning', component: () => import('@/views/aps/productionPlanCreation/CuttingPlanning.vue'), meta: { title: '切断計画作成', requiresAuth: true } },
       { path: 'aps/welding-planning', name: 'WeldingPlanning', component: () => import('@/views/aps/productionPlanCreation/WeldingPlanning.vue'), meta: { title: '溶接計画作成', requiresAuth: true } },
+      { path: 'aps/plating-planning', name: 'PlatingPlanning', component: () => import('@/views/aps/productionPlanCreation/PlatingPlanning.vue'), meta: { title: 'メッキ計画作成', requiresAuth: true } },
       { path: 'aps/planning-list', name: 'FormingPlanningList', component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'), meta: { title: '成型計画一覧', requiresAuth: true } },
       { path: 'aps/welding-planning-list', name: 'WeldingPlanningList', component: () => import('@/views/aps/productionPlanOverview/WeldingPlanningList.vue'), meta: { title: '溶接計画一覧', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
@@ -226,10 +233,28 @@ const routes: RouteRecordRaw[] = [
 
       // ========== MES モジュール ==========
       {
+        path: 'mes/instruction/cutting',
+        name: 'MesCuttingInstruction',
+        component: () => import('@/views/mes/instruction/cutting/MesCuttingInstruction.vue'),
+        meta: { title: '切断・面取指示', group: 'MES > 生産指示', requiresAuth: true },
+      },
+      {
         path: 'mes/instruction/forming',
         name: 'MesFormingInstruction',
         component: () => import('@/views/mes/instruction/forming/MesFormingInstruction.vue'),
         meta: { title: '成型指示', group: 'MES > 生産指示', requiresAuth: true, useApsSchedulePlanData: true },
+      },
+      {
+        path: 'mes/instruction/welding',
+        name: 'MesWeldingInstruction',
+        component: () => import('@/views/mes/instruction/welding/MesWeldingInstruction.vue'),
+        meta: { title: '溶接指示', group: 'MES > 生産指示', requiresAuth: true },
+      },
+      {
+        path: 'mes/instruction/plating',
+        name: 'MesPlatingInstruction',
+        component: () => import('@/views/mes/instruction/plating/MesPlatingInstruction.vue'),
+        meta: { title: 'メッキ指示', group: 'MES > 生産指示', requiresAuth: true },
       },
 
       // ========== マスタ管理 ==========

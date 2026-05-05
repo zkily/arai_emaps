@@ -198,6 +198,7 @@ export interface MachineItem {
   available_to?: string
   calendar_id?: number
   efficiency?: number
+  available_qty?: number
   note?: string
   created_at?: string
   updated_at?: string

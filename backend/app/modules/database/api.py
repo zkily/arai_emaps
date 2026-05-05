@@ -331,6 +331,479 @@ async def get_production_summarys_list(
     }
 
 
+# 工程別 (不良+廃棄)/実績：production_summarys を期間集計（列名はホワイトリストのみ）
+_QUALITY_RATE_BY_PROCESS_DEFS: tuple[tuple[str, str, str, str | None, str], ...] = (
+    ("cutting", "切断", "cutting_actual", "cutting_defect", "cutting_scrap"),
+    ("chamfering", "面取", "chamfering_actual", "chamfering_defect", "chamfering_scrap"),
+    ("molding", "成型", "molding_actual", "molding_defect", "molding_scrap"),
+    ("plating", "メッキ", "plating_actual", "plating_defect", "plating_scrap"),
+    ("welding", "溶接", "welding_actual", "welding_defect", "welding_scrap"),
+    ("inspection", "検査", "inspection_actual", "inspection_defect", "inspection_scrap"),
+    ("warehouse", "倉庫", "warehouse_actual", "warehouse_defect", "warehouse_scrap"),
+    (
+        "outsourced_warehouse",
+        "外注倉庫",
+        "outsourced_warehouse_actual",
+        "outsourced_warehouse_defect",
+        "outsourced_warehouse_scrap",
+    ),
+    (
+        "outsourced_plating",
+        "外注メッキ",
+        "outsourced_plating_actual",
+        "outsourced_plating_defect",
+        "outsourced_plating_scrap",
+    ),
+    (
+        "outsourced_welding",
+        "外注溶接",
+        "outsourced_welding_actual",
+        "outsourced_welding_defect",
+        "outsourced_welding_scrap",
+    ),
+    (
+        "pre_welding_inspection",
+        "溶接前検査",
+        "pre_welding_inspection_actual",
+        "pre_welding_inspection_defect",
+        "pre_welding_inspection_scrap",
+    ),
+    ("pre_inspection", "外注支給前", "pre_inspection_actual", None, "pre_inspection_scrap"),
+    ("pre_outsourcing", "外注検査前", "pre_outsourcing_actual", None, "pre_outsourcing_scrap"),
+)
+
+# 主ライン（切断～検査）：連乘合格率 RTY および製品別集計で共通利用
+_MAIN_LINE_PROCESS_KEYS: tuple[str, ...] = (
+    "cutting",
+    "chamfering",
+    "molding",
+    "plating",
+    "welding",
+    "inspection",
+)
+
+
+def _compute_rolled_main_line_yield_loss(metrics_by_key: dict[str, dict]) -> tuple[float | None, float | None]:
+    """
+    r_i = (不良+廃棄)/実績 を各主ライン工程で算出し、
+    RTY = Π(1 - r_i)（実績>0 の工程のみ積に参加）、連乘損失率 = 1 - RTY。
+    """
+    prod_pass = 1.0
+    used = False
+    for key in _MAIN_LINE_PROCESS_KEYS:
+        m = metrics_by_key.get(key)
+        if not m:
+            continue
+        sa = int(m.get("sum_actual") or 0)
+        if sa <= 0:
+            continue
+        bad = int(m.get("sum_defect_and_scrap") or 0)
+        ri = bad / sa
+        if ri > 1.0:
+            ri = 1.0
+        elif ri < 0.0:
+            ri = 0.0
+        prod_pass *= 1.0 - ri
+        used = True
+    if not used:
+        return None, None
+    ry = round(prod_pass, 8)
+    loss = round(1.0 - ry, 8)
+    return ry, loss
+
+
+@router.get("/quality-rate-by-process")
+async def get_quality_rate_by_process(
+    startDate: str = Query(..., description="集計開始日 YYYY-MM-DD"),
+    endDate: str = Query(..., description="集計終了日 YYYY-MM-DD"),
+    process: Optional[str] = Query(
+        None,
+        description="工程キー（cutting / molding 等）。省略時は全工程を返す",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    production_summarys を指定期間で工程別に SUM し、各工程について (defect+scrap)/actual を算出する。
+    actual が 0 の工程は rate は null。
+
+    一覧の「全体比率」に相当する値として、各工程の *_actual を合計してはならない（同一ロットが工程間で二重計上される）。
+    フィルタなし時の summary は主ライン（切断～検査）について RTY=Π(1-r_i)、連乘損失率=1-RTY。
+    フィルタあり時は選択工程の行と同一とする。
+    """
+    try:
+        start_d = date.fromisoformat(startDate.strip()[:10])
+        end_d = date.fromisoformat(endDate.strip()[:10])
+    except ValueError:
+        raise HTTPException(status_code=422, detail="startDate / endDate は YYYY-MM-DD 形式で指定してください")
+    if start_d > end_d:
+        raise HTTPException(status_code=422, detail="開始日は終了日以前である必要があります")
+
+    allowed_keys = {t[0] for t in _QUALITY_RATE_BY_PROCESS_DEFS}
+    if process is not None and process.strip() != "" and process.strip() not in allowed_keys:
+        raise HTTPException(
+            status_code=422,
+            detail=f"process は次のいずれかです: {', '.join(sorted(allowed_keys))}",
+        )
+
+    sum_parts: list[str] = []
+    for key, _label, actual_col, defect_col, scrap_col in _QUALITY_RATE_BY_PROCESS_DEFS:
+        sum_parts.append(f"SUM(COALESCE(`{actual_col}`, 0)) AS `{key}_actual`")
+        if defect_col:
+            sum_parts.append(f"SUM(COALESCE(`{defect_col}`, 0)) AS `{key}_defect`")
+        else:
+            sum_parts.append(f"0 AS `{key}_defect`")
+        sum_parts.append(f"SUM(COALESCE(`{scrap_col}`, 0)) AS `{key}_scrap`")
+
+    sql = (
+        "SELECT "
+        + ", ".join(sum_parts)
+        + " FROM production_summarys WHERE `date` >= :start_date AND `date` <= :end_date"
+    )
+    row = (await db.execute(text(sql), {"start_date": start_d, "end_date": end_d})).mappings().first()
+    if row is None:
+        row = {}
+
+    def _num(v) -> int:
+        if v is None:
+            return 0
+        if isinstance(v, Decimal):
+            return int(v)
+        return int(v)
+
+    proc_filter = process.strip() if process and process.strip() else None
+
+    metrics_by_key: dict[str, dict] = {}
+    for key, label, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
+        sa = _num(row.get(f"{key}_actual"))
+        sd = _num(row.get(f"{key}_defect"))
+        ss = _num(row.get(f"{key}_scrap"))
+        bad = sd + ss
+        rate = None
+        if sa > 0:
+            rate = round(bad / sa, 6)
+        metrics_by_key[key] = {
+            "key": key,
+            "label": label,
+            "sum_actual": sa,
+            "sum_defect": sd,
+            "sum_scrap": ss,
+            "sum_defect_and_scrap": bad,
+            "rate": rate,
+            "rate_percent": round(rate * 100, 4) if rate is not None else None,
+        }
+
+    processes_out: list[dict] = []
+    for key, _label, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
+        if proc_filter and key != proc_filter:
+            continue
+        processes_out.append(metrics_by_key[key])
+
+    if proc_filter:
+        ref_key = proc_filter
+        summary_basis = "selected_process"
+        ref = metrics_by_key.get(ref_key) or {
+            "key": ref_key,
+            "label": "",
+            "sum_actual": 0,
+            "sum_defect": 0,
+            "sum_scrap": 0,
+            "sum_defect_and_scrap": 0,
+            "rate": None,
+            "rate_percent": None,
+        }
+        summary_payload = {
+            "basis": summary_basis,
+            "reference_process_key": ref["key"],
+            "reference_process_label": ref["label"],
+            "sum_actual": ref["sum_actual"],
+            "sum_defect": ref["sum_defect"],
+            "sum_scrap": ref["sum_scrap"],
+            "sum_defect_and_scrap": ref["sum_defect_and_scrap"],
+            "rate": ref["rate"],
+            "rate_percent": ref["rate_percent"],
+            "rolled_yield_rate": None,
+            "rolled_yield_percent": None,
+        }
+    else:
+        ry, loss = _compute_rolled_main_line_yield_loss(metrics_by_key)
+        summary_payload = {
+            "basis": "rolled_main_line",
+            "reference_process_key": "main_line_rolled",
+            "reference_process_label": "主ライン連乘",
+            "sum_actual": 0,
+            "sum_defect": 0,
+            "sum_scrap": 0,
+            "sum_defect_and_scrap": 0,
+            "rate": loss,
+            "rate_percent": round(loss * 100, 4) if loss is not None else None,
+            "rolled_yield_rate": ry,
+            "rolled_yield_percent": round(ry * 100, 4) if ry is not None else None,
+        }
+
+    # 画面カード用：全工程（定義済み工程キー）の不良＋廃棄を単純合計（同一ロットの二重計上は含む）
+    total_defect_scrap_all_processes = sum(int(m.get("sum_defect_and_scrap") or 0) for m in metrics_by_key.values())
+
+    return {
+        "data": {
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+            "process_filter": proc_filter,
+            "processes": processes_out,
+            "summary": summary_payload,
+            "all_processes_defect_scrap_total": total_defect_scrap_all_processes,
+        }
+    }
+
+
+def _main_line_group_select_columns() -> str:
+    parts: list[str] = []
+    for key, _label, actual_col, defect_col, scrap_col in _QUALITY_RATE_BY_PROCESS_DEFS:
+        if key not in _MAIN_LINE_PROCESS_KEYS:
+            continue
+        parts.append(f"SUM(COALESCE(`{actual_col}`, 0)) AS `{key}_actual`")
+        if defect_col:
+            parts.append(f"SUM(COALESCE(`{defect_col}`, 0)) AS `{key}_defect`")
+        else:
+            parts.append(f"0 AS `{key}_defect`")
+        parts.append(f"SUM(COALESCE(`{scrap_col}`, 0)) AS `{key}_scrap`")
+    return ", ".join(parts)
+
+
+def _per_row_all_processes_defect_scrap_expr() -> str:
+    """1 行分：定義済み全工程の不良＋廃棄（defect 列なしの工程は廃棄のみ）。"""
+    terms: list[str] = []
+    for _key, _label, _a, defect_col, scrap_col in _QUALITY_RATE_BY_PROCESS_DEFS:
+        if defect_col:
+            terms.append(f"(COALESCE(`{defect_col}`, 0) + COALESCE(`{scrap_col}`, 0))")
+        else:
+            terms.append(f"COALESCE(`{scrap_col}`, 0)")
+    return "(" + " + ".join(terms) + ")"
+
+
+def _all_processes_defect_scrap_sum_select() -> str:
+    inner = _per_row_all_processes_defect_scrap_expr()
+    return f"COALESCE(SUM({inner}), 0) AS `all_processes_defect_scrap`"
+
+
+# 製品別主ライン一覧の ORDER BY（ホワイトリストのみ・SQL 直結合禁止）
+_PRODUCT_MATRIX_SORT_FIELDS: frozenset[str] = frozenset(
+    {"product_cd", "product_name", "all_processes_defect_scrap", "rty", "rty_loss", *_MAIN_LINE_PROCESS_KEYS}
+)
+
+
+def _product_matrix_rate_order_expr(process_key: str) -> str:
+    """主ライン 1 工程の (不良+廃棄)/実績。実績 0 は NULL（ソートで末尾扱い）。"""
+    if process_key not in _MAIN_LINE_PROCESS_KEYS:
+        raise ValueError(process_key)
+    a = f"`{process_key}_actual`"
+    d = f"`{process_key}_defect`"
+    s = f"`{process_key}_scrap`"
+    return f"(COALESCE({d}, 0) + COALESCE({s}, 0)) * 1.0 / NULLIF({a}, 0)"
+
+
+def _product_matrix_rty_product_expr() -> str:
+    """Π(1−r_i)（実績>0 の工程のみ参加、他は 1）。フロント computeProductMainLineRty と整合。"""
+    parts: list[str] = []
+    for k in _MAIN_LINE_PROCESS_KEYS:
+        a, d, s = f"`{k}_actual`", f"`{k}_defect`", f"`{k}_scrap`"
+        parts.append(
+            f"IF(COALESCE({a}, 0) > 0, "
+            f"1 - LEAST(1, GREATEST(0, (COALESCE({d}, 0) + COALESCE({s}, 0)) * 1.0 / NULLIF({a}, 0))), "
+            f"1)"
+        )
+    return "(" + " * ".join(parts) + ")"
+
+
+def _product_matrix_has_any_actual_expr() -> str:
+    inner = ", ".join(f"COALESCE(`{k}_actual`, 0)" for k in _MAIN_LINE_PROCESS_KEYS)
+    return f"GREATEST({inner})"
+
+
+def _product_matrix_rty_sort_expr() -> str:
+    has = _product_matrix_has_any_actual_expr()
+    prod = _product_matrix_rty_product_expr()
+    return f"(CASE WHEN {has} <= 0 THEN NULL ELSE {prod} END)"
+
+
+def _product_matrix_rty_loss_sort_expr() -> str:
+    has = _product_matrix_has_any_actual_expr()
+    prod = _product_matrix_rty_product_expr()
+    return f"(CASE WHEN {has} <= 0 THEN NULL ELSE (1 - ({prod})) END)"
+
+
+def _product_matrix_order_clause(sort_by: str, sort_order: str) -> str:
+    asc = (sort_order or "asc").strip().lower() != "desc"
+    direction = "ASC" if asc else "DESC"
+
+    def _simple(col: str) -> str:
+        return f"{col} {direction}, `product_cd` ASC"
+
+    def _nulls_last(expr: str) -> str:
+        return (
+            f"(CASE WHEN ({expr}) IS NULL THEN 1 ELSE 0 END) ASC, "
+            f"({expr}) {direction}, `product_cd` ASC"
+        )
+
+    sb = (sort_by or "product_name").strip()
+    if sb not in _PRODUCT_MATRIX_SORT_FIELDS:
+        sb = "product_name"
+    if sb == "product_cd":
+        return _simple("`product_cd`")
+    if sb == "product_name":
+        return _simple("`product_name`")
+    if sb == "all_processes_defect_scrap":
+        return _simple("`all_processes_defect_scrap`")
+    if sb == "rty":
+        return _nulls_last(_product_matrix_rty_sort_expr())
+    if sb == "rty_loss":
+        return _nulls_last(_product_matrix_rty_loss_sort_expr())
+    if sb in _MAIN_LINE_PROCESS_KEYS:
+        return _nulls_last(_product_matrix_rate_order_expr(sb))
+    return _simple("`product_name`")
+
+
+def _product_row_to_main_line_processes(row: dict) -> list[dict]:
+    """GROUP BY 行を製品単位の主ライン工程メトリクスに変換"""
+    out: list[dict] = []
+    for key, label, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
+        if key not in _MAIN_LINE_PROCESS_KEYS:
+            continue
+        def _n(v) -> int:
+            if v is None:
+                return 0
+            if isinstance(v, Decimal):
+                return int(v)
+            return int(v)
+
+        sa = _n(row.get(f"{key}_actual"))
+        sd = _n(row.get(f"{key}_defect"))
+        ss = _n(row.get(f"{key}_scrap"))
+        bad = sd + ss
+        rate = None
+        if sa > 0:
+            rate = round(bad / sa, 6)
+        out.append(
+            {
+                "key": key,
+                "label": label,
+                "sum_actual": sa,
+                "sum_defect": sd,
+                "sum_scrap": ss,
+                "sum_defect_and_scrap": bad,
+                "rate": rate,
+                "rate_percent": round(rate * 100, 4) if rate is not None else None,
+            }
+        )
+    return out
+
+
+@router.get("/quality-rate-by-product")
+async def get_quality_rate_by_product(
+    startDate: str = Query(..., description="集計開始日 YYYY-MM-DD"),
+    endDate: str = Query(..., description="集計終了日 YYYY-MM-DD"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=500),
+    productCd: Optional[str] = Query(None, description="製品CD 完全一致"),
+    keyword: Optional[str] = Query(None, description="製品CD・製品名 の部分一致"),
+    sortBy: str = Query(
+        "product_name",
+        description="ソート列: product_cd, product_name, all_processes_defect_scrap, 主ライン工程キー(cutting等), rty, rty_loss",
+    ),
+    sortOrder: str = Query("asc", description="asc または desc"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    製品別に production_summarys を期間 SUM（GROUP BY product_cd）。
+    各製品について主ライン（切断～検査）の各工程で (不良+廃棄)/実績 を算出する。
+
+    - 同一製品の複数日・複数行は product_cd でまとめて集計する。
+    - 主ラインに存在しない工程は実績が 0 のことがあり、その工程の比率は null。
+    - all_processes_defect_scrap: 期間内・定義済み全工程の不良＋廃棄を日次行ごとに合算してから product_cd で SUM。
+    """
+    try:
+        start_d = date.fromisoformat(startDate.strip()[:10])
+        end_d = date.fromisoformat(endDate.strip()[:10])
+    except ValueError:
+        raise HTTPException(status_code=422, detail="startDate / endDate は YYYY-MM-DD 形式で指定してください")
+    if start_d > end_d:
+        raise HTTPException(status_code=422, detail="開始日は終了日以前である必要があります")
+
+    agg_cols = _main_line_group_select_columns()
+    all_bad_sum = _all_processes_defect_scrap_sum_select()
+    base_where = "`date` >= :start_date AND `date` <= :end_date AND `product_cd` IS NOT NULL AND TRIM(`product_cd`) != ''"
+    params: dict = {"start_date": start_d, "end_date": end_d}
+
+    kw_clause = ""
+    if keyword and keyword.strip():
+        kw = f"%{keyword.strip()}%"
+        params["kw"] = kw
+        kw_clause = " AND (`product_name` LIKE :kw OR `product_cd` LIKE :kw)"
+
+    pcd_clause = ""
+    if productCd and productCd.strip():
+        params["product_cd_eq"] = productCd.strip()
+        pcd_clause = " AND `product_cd` = :product_cd_eq"
+
+    count_sql = (
+        "SELECT COUNT(*) AS c FROM ("
+        f" SELECT `product_cd` FROM `production_summarys` WHERE {base_where}{kw_clause}{pcd_clause}"
+        " GROUP BY `product_cd`"
+        ") x"
+    )
+    count_row = (await db.execute(text(count_sql), params)).mappings().first()
+    total = int(count_row["c"]) if count_row and count_row.get("c") is not None else 0
+
+    offset = (page - 1) * limit
+    params_page = {**params, "limit": limit, "offset": offset}
+
+    so = (sortOrder or "asc").strip().lower()
+    if so not in ("asc", "desc"):
+        so = "asc"
+    order_sql = _product_matrix_order_clause(sortBy, so)
+
+    # 内側で GROUP BY 集計し、外側で ORDER BY する（ORDER BY が集計エイリアスを参照するため
+    # only_full_group_by 下では単一 SELECT に直書きできない）
+    inner_list_sql = (
+        "SELECT `product_cd`, MAX(`product_name`) AS `product_name`, "
+        f"{all_bad_sum}, {agg_cols} FROM `production_summarys` WHERE {base_where}{kw_clause}{pcd_clause}"
+        " GROUP BY `product_cd`"
+    )
+    list_sql = f"SELECT * FROM ({inner_list_sql}) `_p` ORDER BY {order_sql} LIMIT :limit OFFSET :offset"
+    result = await db.execute(text(list_sql), params_page)
+    raw_rows = result.mappings().all()
+
+    products_out: list[dict] = []
+    for r in raw_rows:
+        rd = dict(r)
+        pcd = (rd.get("product_cd") or "").strip()
+        if not pcd:
+            continue
+        products_out.append(
+            {
+                "product_cd": pcd,
+                "product_name": rd.get("product_name") or "",
+                "all_processes_defect_scrap": int(rd.get("all_processes_defect_scrap") or 0),
+                "processes": _product_row_to_main_line_processes(rd),
+            }
+        )
+
+    _label_by_key = {t[0]: t[1] for t in _QUALITY_RATE_BY_PROCESS_DEFS}
+    return {
+        "data": {
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+            "scope": "main_line_cutting_to_inspection",
+            "main_line_labels": [
+                {"key": k, "label": _label_by_key.get(k, k)} for k in _MAIN_LINE_PROCESS_KEYS
+            ],
+            "pagination": {"total": total, "page": page, "limit": limit},
+            "products": products_out,
+        }
+    }
+
+
 @router.get("/inventory-stagnation")
 async def get_inventory_stagnation(
     as_of: Optional[str] = Query(None, description="基準日 YYYY-MM-DD（省略時: JST 当日）"),
@@ -2197,6 +2670,16 @@ def _find_plating_step_index(sequence: list) -> Optional[int]:
     return None
 
 
+def _find_inhouse_plating_step_index(sequence: list) -> Optional[int]:
+    """社内メッキ(plating / 工程 KT05) の位置のみ。外注メッキ(outsourced_plating)は対象外。"""
+    if not sequence:
+        return None
+    try:
+        return sequence.index("plating")
+    except ValueError:
+        return None
+
+
 def _find_molding_step_index(sequence: list) -> Optional[int]:
     """工程順序内で成型(molding)の位置（0-based）。無ければ None。"""
     if not sequence:
@@ -2210,6 +2693,27 @@ def _find_molding_step_index(sequence: list) -> Optional[int]:
 def _pre_plating_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
     """メッキ（または外注メッキ）直前工程の当日在庫。戻り: (値, 直前工程 key)。該当なしは (None, None)。"""
     idx = _find_plating_step_index(sequence)
+    if idx is None or idx <= 0:
+        return None, None
+    prev_key = sequence[idx - 1]
+    cfg = _get_process_config_by_key(prev_key)
+    if not cfg:
+        return None, None
+    inv_f = cfg.get("fields", {}).get("inventory")
+    if not inv_f:
+        return None, None
+    raw = row_dict.get(inv_f)
+    if raw is None:
+        return 0, prev_key
+    try:
+        return int(raw), prev_key
+    except (TypeError, ValueError):
+        return 0, prev_key
+
+
+def _pre_kt05_plating_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
+    """社内メッキ(KT05 / plating) 直前工程の当日在庫。外注メッキはルートに含まれていてもここでは使わない。戻り: (値, 直前工程 key)。"""
+    idx = _find_inhouse_plating_step_index(sequence)
     if idx is None or idx <= 0:
         return None, None
     prev_key = sequence[idx - 1]
@@ -2282,6 +2786,9 @@ async def _enrich_production_summary_rows_pre_plating_inventory(
         val, prev = _pre_plating_inventory_from_row(r, sequence)
         r["pre_plating_inventory"] = val
         r["pre_plating_prev_process"] = prev
+        v_kt05, p_kt05 = _pre_kt05_plating_inventory_from_row(r, sequence)
+        r["pre_kt05_plating_inventory"] = v_kt05
+        r["pre_kt05_plating_prev_process"] = p_kt05
         mv, mprev = _pre_molding_inventory_from_row(r, sequence)
         r["pre_molding_inventory"] = mv
         r["pre_molding_prev_process"] = mprev

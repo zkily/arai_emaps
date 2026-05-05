@@ -362,6 +362,7 @@ class MachineBase(BaseModel):
     available_to: Optional[str] = None
     calendar_id: Optional[int] = None
     efficiency: float = 100.0
+    available_qty: int = 0
     note: Optional[str] = None
 
 
@@ -378,6 +379,7 @@ class MachineUpdate(BaseModel):
     available_to: Optional[str] = None
     calendar_id: Optional[int] = None
     efficiency: Optional[float] = None
+    available_qty: Optional[int] = None
     note: Optional[str] = None
 
 

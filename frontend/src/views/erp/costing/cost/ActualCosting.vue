@@ -1,112 +1,260 @@
 <template>
   <div class="actual-costing">
-    <div class="page-header">
-      <h2>実際原価計算</h2>
-      <p class="subtitle">実績工数・実績材料費に基づく原価配賦</p>
+    <div class="page-hero">
+      <div class="hero-text">
+        <h2>実際原価計算</h2>
+        <p>月次品目別の実績材料費・労務費・間接費を集計。標準原価との対比ベースで原価管理を実現します。</p>
+      </div>
+      <div class="hero-nav">
+        <router-link to="/erp/costing/standard" class="nav-chip">標準原価 設定</router-link>
+        <router-link to="/erp/costing/variance" class="nav-chip accent">差異分析</router-link>
+      </div>
     </div>
 
     <!-- フィルター -->
     <el-card class="filter-card" shadow="never">
-      <el-form :inline="true" :model="filters">
+      <el-form :inline="true" class="compact-form">
         <el-form-item label="対象期間">
-          <el-date-picker v-model="filters.period" type="month" placeholder="月選択" value-format="YYYY-MM" />
-        </el-form-item>
-        <el-form-item label="製造オーダー">
-          <el-input v-model="filters.order_no" placeholder="オーダー番号" clearable />
-        </el-form-item>
-        <el-form-item label="品番">
-          <el-select v-model="filters.product_code" placeholder="品番選択" clearable filterable>
-            <el-option v-for="p in products" :key="p.cd" :label="`${p.cd} - ${p.name}`" :value="p.cd" />
+          <el-select
+            v-model="selectedPeriodId"
+            placeholder="会計期間を選択"
+            filterable
+            style="width: 200px"
+            @change="onPeriodChange"
+          >
+            <el-option
+              v-for="p in periods"
+              :key="p.id"
+              :label="`${p.year_month}（${p.status}）`"
+              :value="p.id"
+            />
           </el-select>
         </el-form-item>
+        <el-form-item label="品番">
+          <el-input v-model="keyword" clearable style="width: 160px" placeholder="絞り込み" @keyup.enter="applyFilter" />
+        </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="handleSearch"><el-icon><Search /></el-icon> 検索</el-button>
+          <el-button type="primary" @click="applyFilter"><el-icon><Search /></el-icon> 検索</el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
-    <!-- ツールバー -->
-    <div class="toolbar">
-      <el-button type="primary" @click="handleCalculate">
-        <el-icon><DataAnalysis /></el-icon> 原価計算実行
-      </el-button>
-      <el-button @click="handleExport">
-        <el-icon><Download /></el-icon> エクスポート
-      </el-button>
+    <!-- サマリー -->
+    <div class="stat-row">
+      <div class="stat-card mat">
+        <div class="stat-icon"><el-icon :size="22"><Box /></el-icon></div>
+        <div class="stat-body">
+          <div class="stat-label">実際材料費</div>
+          <div class="stat-value">¥{{ money(totalActualMaterial) }}</div>
+        </div>
+      </div>
+      <div class="stat-card lab">
+        <div class="stat-icon"><el-icon :size="22"><Timer /></el-icon></div>
+        <div class="stat-body">
+          <div class="stat-label">実際労務費</div>
+          <div class="stat-value">¥{{ money(totalActualLabor) }}</div>
+        </div>
+      </div>
+      <div class="stat-card oh">
+        <div class="stat-icon"><el-icon :size="22"><Setting /></el-icon></div>
+        <div class="stat-body">
+          <div class="stat-label">実際間接費</div>
+          <div class="stat-value">¥{{ money(totalActualOverhead) }}</div>
+        </div>
+      </div>
+      <div class="stat-card total">
+        <div class="stat-icon"><el-icon :size="22"><TrendCharts /></el-icon></div>
+        <div class="stat-body">
+          <div class="stat-label">実際原価合計</div>
+          <div class="stat-value">¥{{ money(totalActual) }}</div>
+        </div>
+      </div>
+      <div class="stat-card items">
+        <div class="stat-icon"><el-icon :size="22"><Document /></el-icon></div>
+        <div class="stat-body">
+          <div class="stat-label">品目数</div>
+          <div class="stat-value">{{ filteredList.length }}</div>
+        </div>
+      </div>
     </div>
 
-    <!-- 実際原価一覧 -->
-    <el-card shadow="never">
-      <el-table :data="costList" v-loading="loading" stripe border>
-        <el-table-column prop="order_no" label="製造オーダー" width="140" fixed />
-        <el-table-column prop="product_code" label="品番" width="120" />
-        <el-table-column prop="product_name" label="品名" min-width="150" show-overflow-tooltip />
-        <el-table-column prop="quantity" label="生産数" width="80" align="right" />
-        <el-table-column label="実績材料費" width="120" align="right">
-          <template #default="{ row }">¥{{ row.actual_material?.toLocaleString() }}</template>
+    <!-- テーブル -->
+    <el-card shadow="never" class="table-card">
+      <el-table v-loading="loading" :data="filteredList" stripe border size="small" class="compact-table">
+        <el-table-column prop="product_cd" label="品番" width="110" fixed />
+        <el-table-column prop="product_name" label="品名" min-width="140" show-overflow-tooltip />
+        <el-table-column label="完成数" width="80" align="right">
+          <template #default="{ row }">{{ fmt(row.finished_good_qty) }}</template>
         </el-table-column>
-        <el-table-column label="実績加工費" width="120" align="right">
-          <template #default="{ row }">¥{{ row.actual_processing?.toLocaleString() }}</template>
+        <el-table-column label="仕掛約当" width="86" align="right">
+          <template #default="{ row }">{{ fmt(row.wip_equivalent_qty) }}</template>
         </el-table-column>
-        <el-table-column label="配賦経費" width="100" align="right">
-          <template #default="{ row }">¥{{ row.allocated_overhead?.toLocaleString() }}</template>
-        </el-table-column>
-        <el-table-column label="実際原価" width="130" align="right">
+        <el-table-column label="実際材料費" width="110" align="right" header-align="center">
           <template #default="{ row }">
-            <span class="total-cost">¥{{ row.total_actual?.toLocaleString() }}</span>
+            <span v-if="row.actual_material_cost != null">¥{{ money(row.actual_material_cost) }}</span>
+            <span v-else class="dim">未入力</span>
           </template>
         </el-table-column>
-        <el-table-column label="単位原価" width="110" align="right">
-          <template #default="{ row }">¥{{ row.unit_cost?.toLocaleString() }}</template>
-        </el-table-column>
-        <el-table-column prop="completion_date" label="完成日" width="110" />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="実際労務費" width="110" align="right" header-align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="handleView(row)">詳細</el-button>
+            <span v-if="row.actual_labor_cost != null">¥{{ money(row.actual_labor_cost) }}</span>
+            <span v-else class="dim">未入力</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="実際間接費" width="110" align="right" header-align="center">
+          <template #default="{ row }">
+            <span v-if="row.actual_overhead_cost != null">¥{{ money(row.actual_overhead_cost) }}</span>
+            <span v-else class="dim">未入力</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="実際合計" width="120" align="right" header-align="center">
+          <template #default="{ row }">
+            <strong class="accent-text">¥{{ money(actualTotal(row)) }}</strong>
+          </template>
+        </el-table-column>
+        <el-table-column label="標準合計" width="120" align="right" header-align="center">
+          <template #default="{ row }">
+            <span>¥{{ money(stdTotal(row)) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="差異" width="110" align="right" header-align="center">
+          <template #default="{ row }">
+            <template v-if="row.variance_grand_total != null">
+              <span :class="row.variance_grand_total <= 0 ? 'fav' : 'unfav'">
+                {{ signedMoney(row.variance_grand_total) }}
+              </span>
+            </template>
+            <span v-else class="dim">—</span>
           </template>
         </el-table-column>
       </el-table>
-
-      <div class="pagination-wrapper">
-        <el-pagination v-model:current-page="pagination.page" v-model:page-size="pagination.pageSize"
-          :total="pagination.total" :page-sizes="[20, 50, 100]" layout="total, sizes, prev, pager, next" background />
+      <div v-if="!filteredList.length && !loading" class="empty-hint">
+        <el-empty :image-size="80" description="データがありません。標準原価画面の「月次実績・差異」タブで品目と実績を入力してください。" />
       </div>
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, DataAnalysis, Download } from '@element-plus/icons-vue'
+import { Search, Box, Timer, Setting, TrendCharts, Document } from '@element-plus/icons-vue'
+import {
+  fetchCostPeriods,
+  fetchPeriodProducts,
+  type CostAccountingPeriod,
+  type CostPeriodProductLine,
+} from '@/api/erp/standardCost'
 
 const loading = ref(false)
-const costList = ref<any[]>([])
-const products = ref<{ cd: string; name: string }[]>([])
+const periods = ref<CostAccountingPeriod[]>([])
+const selectedPeriodId = ref<number | undefined>()
+const allLines = ref<CostPeriodProductLine[]>([])
+const keyword = ref('')
 
-const filters = reactive({ period: '', order_no: '', product_code: '' })
-const pagination = reactive({ page: 1, pageSize: 20, total: 0 })
+const filteredList = computed(() => {
+  if (!keyword.value) return allLines.value
+  const k = keyword.value.toLowerCase()
+  return allLines.value.filter(
+    (r) => r.product_cd.toLowerCase().includes(k) || (r.product_name ?? '').toLowerCase().includes(k),
+  )
+})
 
-onMounted(() => { loadData() })
+function n(v: number | null | undefined): number { return Number(v ?? 0) }
+function money(v: number | null | undefined) {
+  const x = n(v)
+  return Number.isFinite(x) ? x.toLocaleString('ja-JP', { maximumFractionDigits: 0 }) : '0'
+}
+function fmt(v: number | null | undefined) {
+  const x = n(v)
+  return Number.isFinite(x) ? x.toLocaleString('ja-JP', { maximumFractionDigits: 2 }) : '0'
+}
+function signedMoney(v: number) {
+  const x = n(v)
+  return `${x >= 0 ? '+' : ''}¥${money(Math.abs(x))}`
+}
+function actualTotal(r: CostPeriodProductLine) { return n(r.actual_material_cost) + n(r.actual_labor_cost) + n(r.actual_overhead_cost) }
+function stdTotal(r: CostPeriodProductLine) { return n(r.standard_material_allowed) + n(r.standard_labor_allowed) + n(r.standard_overhead_allowed) }
 
-const loadData = async () => {
-  loading.value = true
-  try { costList.value = [] } finally { loading.value = false }
+const totalActualMaterial = computed(() => filteredList.value.reduce((s, r) => s + n(r.actual_material_cost), 0))
+const totalActualLabor = computed(() => filteredList.value.reduce((s, r) => s + n(r.actual_labor_cost), 0))
+const totalActualOverhead = computed(() => filteredList.value.reduce((s, r) => s + n(r.actual_overhead_cost), 0))
+const totalActual = computed(() => totalActualMaterial.value + totalActualLabor.value + totalActualOverhead.value)
+
+async function loadPeriods() {
+  try {
+    periods.value = await fetchCostPeriods()
+    if (periods.value.length && !selectedPeriodId.value) {
+      selectedPeriodId.value = periods.value[0].id
+      await loadData()
+    }
+  } catch { periods.value = [] }
 }
 
-const handleSearch = () => { pagination.page = 1; loadData() }
-const handleCalculate = () => { ElMessage.success('原価計算を実行しました') }
-const handleExport = () => { ElMessage.info('エクスポートしました') }
-const handleView = (row: any) => { ElMessage.info(`オーダー ${row.order_no} の詳細`) }
+async function loadData() {
+  if (!selectedPeriodId.value) { allLines.value = []; return }
+  loading.value = true
+  try {
+    allLines.value = await fetchPeriodProducts(selectedPeriodId.value)
+  } catch {
+    allLines.value = []
+    ElMessage.error('実績データの取得に失敗しました')
+  } finally { loading.value = false }
+}
+
+function onPeriodChange() { loadData() }
+function applyFilter() { /* computed handles it */ }
+
+onMounted(() => loadPeriods())
 </script>
 
 <style scoped>
-.actual-costing { padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.page-header h2 { margin: 0 0 8px 0; color: #303133; }
-.subtitle { margin: 0; color: #909399; font-size: 14px; }
-.filter-card { margin-bottom: 16px; }
-.toolbar { margin-bottom: 16px; display: flex; gap: 12px; }
-.pagination-wrapper { margin-top: 16px; display: flex; justify-content: flex-end; }
-.total-cost { font-weight: bold; color: #409eff; }
+.actual-costing { padding: 16px 20px; }
+
+.page-hero {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 24px; margin-bottom: 14px; border-radius: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+}
+.hero-text h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+.hero-text p { margin: 0; font-size: 13px; opacity: .85; }
+.hero-nav { display: flex; gap: 8px; flex-shrink: 0; }
+.nav-chip {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  background: rgba(255,255,255,.2); color: #fff; text-decoration: none; transition: background .2s;
+}
+.nav-chip:hover { background: rgba(255,255,255,.35); }
+.nav-chip.accent { background: rgba(255,255,255,.92); color: #764ba2; }
+.nav-chip.accent:hover { background: #fff; }
+
+.filter-card { margin-bottom: 12px; }
+.filter-card :deep(.el-card__body) { padding: 12px 16px; }
+.compact-form :deep(.el-form-item) { margin-bottom: 0; }
+
+.stat-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat-card {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  border-radius: 10px; border: 1px solid #ebeef5; background: #fff;
+}
+.stat-icon {
+  width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.stat-card.mat .stat-icon  { background: #e8f5e9; color: #43a047; }
+.stat-card.lab .stat-icon  { background: #e3f2fd; color: #1e88e5; }
+.stat-card.oh .stat-icon   { background: #fff3e0; color: #ef6c00; }
+.stat-card.total .stat-icon { background: #ede7f6; color: #5e35b1; }
+.stat-card.items .stat-icon { background: #fce4ec; color: #c62828; }
+.stat-label { font-size: 11px; color: #909399; }
+.stat-value { font-size: 18px; font-weight: 700; color: #303133; }
+
+.table-card :deep(.el-card__body) { padding: 12px; }
+.compact-table :deep(th .cell) { font-size: 12px; }
+.accent-text { color: #5e35b1; }
+.dim { color: #c0c4cc; font-size: 12px; }
+.fav { color: #67c23a; font-weight: 600; }
+.unfav { color: #f56c6c; font-weight: 600; }
+.empty-hint { padding: 20px 0; }
+
+@media (max-width: 1200px) { .stat-row { grid-template-columns: repeat(3, 1fr); } }
 </style>

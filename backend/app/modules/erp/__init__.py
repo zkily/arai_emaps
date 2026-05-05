@@ -11,6 +11,7 @@ from .master_api import router as master_router
 from .stock_transaction_log_api import router as stock_transaction_log_router
 from .production_actual_api import router as production_actual_router
 from .inventory_value_api import router as inventory_value_router
+from .standard_cost_api import router as standard_cost_router
 
 # メインルーター（すべてのERPサブルーターを統合）
 router = APIRouter()
@@ -26,6 +27,7 @@ router.include_router(master_router)
 router.include_router(stock_transaction_log_router)
 router.include_router(production_actual_router)
 router.include_router(inventory_value_router)
+router.include_router(standard_cost_router)
 
 __all__ = ['router']
 

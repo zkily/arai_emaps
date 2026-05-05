@@ -26,6 +26,8 @@ export interface ProductionSummaryInventoryRow {
   id?: number
   product_cd: string
   product_name: string | null
+  /** メッキ治具（設備マスタ連携） */
+  plating_machine?: string | null
   date: string
   day_of_week: string | null
   cutting_inventory?: number | null
@@ -41,11 +43,94 @@ export interface ProductionSummaryInventoryRow {
   pre_welding_inspection_inventory?: number | null
   pre_inspection_inventory?: number | null
   pre_outsourcing_inventory?: number | null
+  /** 社内メッキ(KT05)直前工程在庫（ルート上 plating の一つ手前のみ。外注メッキは対象外） */
+  pre_kt05_plating_inventory?: number | null
+  pre_kt05_plating_prev_process?: string | null
 }
 
 /** 一覧取得（ページネーション） */
 export function getProductionSummarysList(params: ProductionSummaryListParams) {
   return request.get(BASE, { params })
+}
+
+/** production_summarys を期間集計し、工程別に (不良+廃棄)/実績 を算出 */
+export function getQualityRateByProcess(params: {
+  startDate: string
+  endDate: string
+  process?: string
+}) {
+  return request.get<{
+    data: {
+      start_date: string
+      end_date: string
+      process_filter: string | null
+      processes: Array<{
+        key: string
+        label: string
+        sum_actual: number
+        sum_defect: number
+        sum_scrap: number
+        sum_defect_and_scrap: number
+        rate: number | null
+        rate_percent: number | null
+      }>
+      summary: {
+        basis: 'rolled_main_line' | 'selected_process'
+        reference_process_key: string
+        reference_process_label: string
+        sum_actual: number
+        sum_defect: number
+        sum_scrap: number
+        sum_defect_and_scrap: number
+        rate: number | null
+        rate_percent: number | null
+        rolled_yield_rate: number | null
+        rolled_yield_percent: number | null
+      }
+      /** 全工程の不良＋廃棄数量の単純合計（期間内・工程フィルタとは独立） */
+      all_processes_defect_scrap_total: number
+    }
+  }>(`${BASE}/quality-rate-by-process`, { params })
+}
+
+/** 製品別・主ライン（切断～検査）の工程別（不良+廃棄）/実績（GROUP BY product_cd） */
+export function getQualityRateByProduct(params: {
+  startDate: string
+  endDate: string
+  page?: number
+  limit?: number
+  productCd?: string
+  keyword?: string
+  /** 既定: product_name。all_processes_defect_scrap=全工程不良+廃棄合計。主ライン工程キーは当該工程比率でソート */
+  sortBy?: string
+  /** asc | desc */
+  sortOrder?: 'asc' | 'desc'
+}) {
+  return request.get<{
+    data: {
+      start_date: string
+      end_date: string
+      scope: string
+      main_line_labels: Array<{ key: string; label: string }>
+      pagination: { total: number; page: number; limit: number }
+      products: Array<{
+        product_cd: string
+        product_name: string
+        /** 定義済み全工程の不良＋廃棄（期間内・製品単位） */
+        all_processes_defect_scrap: number
+        processes: Array<{
+          key: string
+          label: string
+          sum_actual: number
+          sum_defect: number
+          sum_scrap: number
+          sum_defect_and_scrap: number
+          rate: number | null
+          rate_percent: number | null
+        }>
+      }>
+    }
+  }>(`${BASE}/quality-rate-by-product`, { params })
 }
 
 /** 製品一覧（重複なし） */

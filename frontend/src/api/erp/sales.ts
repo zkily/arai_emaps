@@ -1,238 +1,275 @@
-/**
- * 销售管理API
- */
 import request from '@/utils/request'
-import type {
-  SalesOrder,
-  SalesOrderItem,
-  SalesDelivery,
-  SalesReturn,
-  SalesQueryParams,
-  SalesStats,
-} from '@/types/erp/sales'
 
-const BASE_URL = '/api/erp/sales'
-
-// ========== 销售订单 ==========
-
-/** 获取销售订单列表 */
-export const getSalesOrderList = (params?: SalesQueryParams) => {
-  return request.get<{ items: SalesOrder[]; total: number }>(`${BASE_URL}/orders`, { params })
-}
-
-/** 获取销售订单详情 */
-export const getSalesOrderById = (id: number) => {
-  return request.get<SalesOrder>(`${BASE_URL}/orders/${id}`)
-}
-
-/** 创建销售订单 */
-export const createSalesOrder = (data: Partial<SalesOrder>) => {
-  return request.post<SalesOrder>(`${BASE_URL}/orders`, data)
-}
-
-/** 更新销售订单 */
-export const updateSalesOrder = (id: number, data: Partial<SalesOrder>) => {
-  return request.put<SalesOrder>(`${BASE_URL}/orders/${id}`, data)
-}
-
-/** 删除销售订单 */
-export const deleteSalesOrder = (id: number) => {
-  return request.delete(`${BASE_URL}/orders/${id}`)
-}
-
-/** 提交销售订单审批 */
-export const submitSalesOrderForApproval = (id: number) => {
-  return request.post(`${BASE_URL}/orders/${id}/submit`)
-}
-
-/** 审批销售订单 */
-export const approveSalesOrder = (id: number, approved: boolean, remarks?: string) => {
-  return request.post(`${BASE_URL}/orders/${id}/approve`, { approved, remarks })
-}
-
-/** 取消销售订单 */
-export const cancelSalesOrder = (id: number, reason: string) => {
-  return request.post(`${BASE_URL}/orders/${id}/cancel`, { reason })
-}
-
-// ========== 销售出库/发货 ==========
-
-/** 获取销售发货列表 */
-export const getSalesDeliveryList = (params?: {
-  order_id?: number
+// ========== Types ==========
+export interface SalesOrderQuery {
+  order_no?: string
   customer_code?: string
   status?: string
   start_date?: string
   end_date?: string
   page?: number
   page_size?: number
-}) => {
-  return request.get<{ items: SalesDelivery[]; total: number }>(`${BASE_URL}/deliveries`, {
-    params,
-  })
 }
 
-/** 创建销售发货单 */
-export const createSalesDelivery = (data: {
-  order_id: number
-  items: Array<{
-    order_item_id: number
-    delivery_quantity: number
-    warehouse_code: string
-    remarks?: string
-  }>
-  delivery_date?: string
-  delivery_address?: string
-  remarks?: string
-}) => {
-  return request.post<SalesDelivery>(`${BASE_URL}/deliveries`, data)
-}
-
-/** 确认发货 */
-export const confirmSalesDelivery = (id: number, tracking_no?: string) => {
-  return request.post(`${BASE_URL}/deliveries/${id}/confirm`, { tracking_no })
-}
-
-/** 完成发货 */
-export const completeSalesDelivery = (id: number) => {
-  return request.post(`${BASE_URL}/deliveries/${id}/complete`)
-}
-
-// ========== 销售退货 ==========
-
-/** 获取销售退货列表 */
-export const getSalesReturnList = (params?: {
-  order_id?: number
+export interface QuotationQuery {
   customer_code?: string
+  status?: string
+  start_date?: string
+  end_date?: string
+  page?: number
+  page_size?: number
+}
+
+export interface InvoiceQuery {
+  customer_code?: string
+  status?: string
+  start_date?: string
+  end_date?: string
+  page?: number
+  page_size?: number
+}
+
+export interface CreditQuery {
+  customer_code?: string
+  risk_level?: string
+  status?: string
+}
+
+export interface ContractPricingQuery {
+  customer_code?: string
+  product_code?: string
   status?: string
   page?: number
   page_size?: number
-}) => {
-  return request.get<{ items: SalesReturn[]; total: number }>(`${BASE_URL}/returns`, { params })
 }
 
-/** 创建销售退货单 */
-export const createSalesReturn = (data: Partial<SalesReturn>) => {
-  return request.post<SalesReturn>(`${BASE_URL}/returns`, data)
+export interface ForecastQuery {
+  customer_code?: string
+  product_code?: string
+  forecast_month?: string
+  status?: string
+  page?: number
+  page_size?: number
 }
 
-/** 审批销售退货 */
-export const approveSalesReturn = (id: number, approved: boolean, remarks?: string) => {
-  return request.post(`${BASE_URL}/returns/${id}/approve`, { approved, remarks })
+export interface ReturnQuery {
+  customer_code?: string
+  status?: string
+  start_date?: string
+  end_date?: string
+  page?: number
+  page_size?: number
 }
 
-/** 确认退货收货 */
-export const confirmSalesReturnReceipt = (
-  id: number,
-  items: Array<{
-    item_id: number
-    received_quantity: number
-    quality_status: string
-    remarks?: string
-  }>,
-) => {
-  return request.post(`${BASE_URL}/returns/${id}/receive`, { items })
-}
-
-// ========== 销售统计 ==========
-
-/** 后端 GET /sales/orders/stats 的原始字段（与 SalesStats 不同名） */
-export interface SalesStatsOrdersApi {
-  /** 当月 sales_order 条数（参考用） */
-  monthly_order_count: number
-  monthly_order_amount: number
-  /** 当月 order_daily.confirmed_units 合计（今月受注卡片用） */
-  monthly_confirmed_units?: number
-  pending_delivery_count: number
-  completed_count: number
-  unpaid_amount: number
-}
-
-function mapOrdersStatsToSalesStats(raw: SalesStatsOrdersApi): SalesStats {
-  const units = raw.monthly_confirmed_units ?? raw.monthly_order_count ?? 0
-  const amount = raw.monthly_order_amount ?? 0
-  return {
-    total_orders: units,
-    total_amount: amount,
-    pending_orders: raw.pending_delivery_count ?? 0,
-    pending_amount: raw.unpaid_amount ?? 0,
-    completed_orders: raw.completed_count ?? 0,
-    completed_amount: 0,
-    this_month_orders: units,
-    this_month_amount: amount,
-    last_month_orders: 0,
-    last_month_amount: 0,
-    month_over_month_rate: 0,
-    average_order_value: units > 0 ? amount / units : 0,
-  }
-}
-
-/** 获取销售统计数据（对接后端 /sales/orders/stats） */
-export const getSalesStats = async (params?: { start_date?: string; end_date?: string }) => {
-  const raw = await request.get<SalesStatsOrdersApi>(`${BASE_URL}/orders/stats`, { params })
-  return mapOrdersStatsToSalesStats(raw as unknown as SalesStatsOrdersApi)
-}
-
-/** 日別受注確定本数（order_daily、既定：過去2週＋将来1週） */
 export interface DailyConfirmedSeriesItem {
   date: string
   confirmed_units: number
 }
 
 export interface DailyConfirmedSeries {
-  as_of_date: string
   start_date: string
   end_date: string
+  as_of_date: string
   items: DailyConfirmedSeriesItem[]
 }
 
-export const getDailyConfirmedSeries = () => {
-  return request.get<DailyConfirmedSeries>(`${BASE_URL}/orders/daily-confirmed-series`)
+// ========== Sales Orders (受注) ==========
+export function getSalesOrders(params: SalesOrderQuery) {
+  return request.get('/api/erp/sales/orders', { params })
 }
 
-/** 获取客户销售排名 */
-export const getCustomerSalesRanking = (params?: {
-  start_date?: string
-  end_date?: string
-  limit?: number
-}) => {
-  return request.get<
-    Array<{
-      customer_code: string
-      customer_name: string
-      total_amount: number
-      order_count: number
-    }>
-  >(`${BASE_URL}/stats/customer-ranking`, { params })
+export function getSalesOrderById(id: number) {
+  return request.get(`/api/erp/sales/orders/${id}`)
 }
 
-/** 获取产品销售排名 */
-export const getProductSalesRanking = (params?: {
-  start_date?: string
-  end_date?: string
-  limit?: number
-}) => {
-  return request.get<
-    Array<{
-      product_code: string
-      product_name: string
-      total_quantity: number
-      total_amount: number
-    }>
-  >(`${BASE_URL}/stats/product-ranking`, { params })
+export function createSalesOrder(data: any) {
+  return request.post('/api/erp/sales/orders', data)
 }
 
-/** 获取销售趋势 */
-export const getSalesTrend = (params?: {
-  start_date?: string
-  end_date?: string
-  group_by?: 'day' | 'week' | 'month'
-}) => {
-  return request.get<
-    Array<{
-      date: string
-      total_amount: number
-      order_count: number
-    }>
-  >(`${BASE_URL}/stats/trend`, { params })
+export function updateSalesOrder(id: number, data: any) {
+  return request.put(`/api/erp/sales/orders/${id}`, data)
+}
+
+export function approveSalesOrder(id: number) {
+  return request.post(`/api/erp/sales/orders/${id}/approve`)
+}
+
+export function cancelSalesOrder(id: number) {
+  return request.post(`/api/erp/sales/orders/${id}/cancel`)
+}
+
+export function getSalesStats() {
+  return request.get('/api/erp/sales/orders/stats')
+}
+
+export function getDailyConfirmedSeries(params?: { start_date?: string; end_date?: string }) {
+  return request.get('/api/erp/sales/orders/daily-confirmed-series', { params })
+}
+
+// ========== Quotations (見積管理) ==========
+export function getQuotations(params: QuotationQuery) {
+  return request.get('/api/erp/sales/quotations', { params })
+}
+
+export function getQuotationById(id: number) {
+  return request.get(`/api/erp/sales/quotations/${id}`)
+}
+
+export function createQuotation(data: any) {
+  return request.post('/api/erp/sales/quotations', data)
+}
+
+export function updateQuotation(id: number, data: any) {
+  return request.put(`/api/erp/sales/quotations/${id}`, data)
+}
+
+export function sendQuotation(id: number) {
+  return request.post(`/api/erp/sales/quotations/${id}/send`)
+}
+
+export function convertQuotationToOrder(id: number) {
+  return request.post(`/api/erp/sales/quotations/${id}/convert-to-order`)
+}
+
+export function deleteQuotation(id: number) {
+  return request.delete(`/api/erp/sales/quotations/${id}`)
+}
+
+// ========== Invoices (請求書) ==========
+export function getInvoices(params: InvoiceQuery) {
+  return request.get('/api/erp/sales/invoices', { params })
+}
+
+export function getInvoiceById(id: number) {
+  return request.get(`/api/erp/sales/invoices/${id}`)
+}
+
+export function createInvoice(data: any) {
+  return request.post('/api/erp/sales/invoices', data)
+}
+
+export function issueInvoice(id: number) {
+  return request.post(`/api/erp/sales/invoices/${id}/issue`)
+}
+
+export function markInvoicePaid(id: number, data?: any) {
+  return request.post(`/api/erp/sales/invoices/${id}/mark-paid`, data)
+}
+
+export function deleteInvoice(id: number) {
+  return request.delete(`/api/erp/sales/invoices/${id}`)
+}
+
+// ========== Credit (与信管理) ==========
+export function getCredits(params?: CreditQuery) {
+  return request.get('/api/erp/sales/credits', { params })
+}
+
+export function getCreditByCustomer(customerCode: string) {
+  return request.get(`/api/erp/sales/credits/${customerCode}`)
+}
+
+export function createOrUpdateCredit(data: any) {
+  return request.post('/api/erp/sales/credits', data)
+}
+
+export function updateCreditLimit(customerCode: string, data: any) {
+  return request.put(`/api/erp/sales/credits/${customerCode}`, data)
+}
+
+export function checkCredit(customerCode: string) {
+  return request.get(`/api/erp/sales/credits/check/${customerCode}`)
+}
+
+// ========== Contract Pricing (契約単価) ==========
+export function getContractPricing(params: ContractPricingQuery) {
+  return request.get('/api/erp/sales/contract-pricing', { params })
+}
+
+export function createContractPricing(data: any) {
+  return request.post('/api/erp/sales/contract-pricing', data)
+}
+
+export function updateContractPricing(id: number, data: any) {
+  return request.put(`/api/erp/sales/contract-pricing/${id}`, data)
+}
+
+export function deleteContractPricing(id: number) {
+  return request.delete(`/api/erp/sales/contract-pricing/${id}`)
+}
+
+export function lookupContractPrice(customerCode: string, productCode: string) {
+  return request.get('/api/erp/sales/contract-pricing/lookup', { params: { customer_code: customerCode, product_code: productCode } })
+}
+
+// ========== Forecast (内示) ==========
+export function getForecasts(params: ForecastQuery) {
+  return request.get('/api/erp/sales/forecasts', { params })
+}
+
+export function createForecast(data: any) {
+  return request.post('/api/erp/sales/forecasts', data)
+}
+
+export function updateForecast(id: number, data: any) {
+  return request.put(`/api/erp/sales/forecasts/${id}`, data)
+}
+
+export function confirmForecast(id: number) {
+  return request.post(`/api/erp/sales/forecasts/${id}/confirm`)
+}
+
+export function deleteForecast(id: number) {
+  return request.delete(`/api/erp/sales/forecasts/${id}`)
+}
+
+// ========== Sales Recordings (売上計上) ==========
+export function getSalesRecordings(params?: { start_date?: string; end_date?: string; page?: number; page_size?: number }) {
+  return request.get('/api/erp/sales/recordings', { params })
+}
+
+export function calculateSalesRecordings(data: { month: string }) {
+  return request.post('/api/erp/sales/recordings/calculate', data)
+}
+
+export function getSalesRecordingSummary(params?: { month?: string }) {
+  return request.get('/api/erp/sales/recordings/summary', { params })
+}
+
+// ========== Returns (返品管理) ==========
+export function getReturns(params: ReturnQuery) {
+  return request.get('/api/erp/sales/returns', { params })
+}
+
+export function getReturnById(id: number) {
+  return request.get(`/api/erp/sales/returns/${id}`)
+}
+
+export function createReturn(data: any) {
+  return request.post('/api/erp/sales/returns', data)
+}
+
+export function updateReturn(id: number, data: any) {
+  return request.put(`/api/erp/sales/returns/${id}`, data)
+}
+
+export function approveReturn(id: number) {
+  return request.post(`/api/erp/sales/returns/${id}/approve`)
+}
+
+export function receiveReturn(id: number) {
+  return request.post(`/api/erp/sales/returns/${id}/receive`)
+}
+
+// ========== Deliveries (出荷) ==========
+export function getDeliveries(params?: any) {
+  return request.get('/api/erp/sales/deliveries', { params })
+}
+
+export function createDelivery(data: any) {
+  return request.post('/api/erp/sales/deliveries', data)
+}
+
+export function confirmDelivery(id: number) {
+  return request.post(`/api/erp/sales/deliveries/${id}/confirm`)
 }

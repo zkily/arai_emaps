@@ -244,6 +244,7 @@ class Machine(Base):
     available_to = Column(Time, default=None)
     calendar_id = Column(Integer)
     efficiency = Column(Numeric(5, 2), default=100.00)
+    available_qty = Column(Integer, default=0)
     note = Column(Text)
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

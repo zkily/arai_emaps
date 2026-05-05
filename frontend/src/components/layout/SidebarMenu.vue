@@ -412,6 +412,10 @@
               <el-icon><Calendar /></el-icon>
               <template #title><span :title="t('menu.APS_WELDING_PLANNING')">{{ t('menu.APS_WELDING_PLANNING') }}</span></template>
             </el-menu-item>
+            <el-menu-item index="/aps/plating-planning">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.APS_PLATING_PLANNING')">{{ t('menu.APS_PLATING_PLANNING') }}</span></template>
+            </el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="aps-production-plan-view">
             <template #title>
@@ -459,9 +463,21 @@
               <el-icon><Document /></el-icon>
               <span :title="t('menu.MES_PRODUCTION_INSTRUCTION')">{{ t('menu.MES_PRODUCTION_INSTRUCTION') }}</span>
             </template>
+            <el-menu-item index="/mes/instruction/cutting">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.MES_CUTTING_INSTRUCTION')">{{ t('menu.MES_CUTTING_INSTRUCTION') }}</span></template>
+            </el-menu-item>
             <el-menu-item index="/mes/instruction/forming">
               <el-icon><Document /></el-icon>
               <template #title><span :title="t('menu.MES_FORMING_INSTRUCTION')">{{ t('menu.MES_FORMING_INSTRUCTION') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/instruction/welding">
+              <el-icon><Connection /></el-icon>
+              <template #title><span :title="t('menu.MES_WELDING_INSTRUCTION')">{{ t('menu.MES_WELDING_INSTRUCTION') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/instruction/plating">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.MES_PLATING_INSTRUCTION')">{{ t('menu.MES_PLATING_INSTRUCTION') }}</span></template>
             </el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
