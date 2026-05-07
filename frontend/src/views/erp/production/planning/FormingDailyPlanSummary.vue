@@ -71,11 +71,13 @@ import { ElMessage } from 'element-plus'
 import { Download, Refresh } from '@element-plus/icons-vue'
 import * as XLSX from 'xlsx'
 import { getProductionSummarysList } from '@/api/database'
+import { fetchProductProcessBOMList } from '@/api/master/productProcessBomMaster'
 
 type MatrixRow = Record<string, string | number>
 type DailyPlanValue = {
   forming: number
   forecastQuantity: number
+  outsourcedWarehouseForecastQuantity: number
   chamferingPlan: number
   swPlan: number
   platingPlan: number
@@ -134,11 +136,41 @@ const cellStyle = ({ column }: { column: { property?: string } }) => {
   return { padding: '6px 8px' }
 }
 
+/** product_process_bom.outsourced_warehouse_process が有効な製品のみ true */
+function hasOutsourcedWarehouseProcessFlag(v: unknown): boolean {
+  if (v === true) return true
+  if (typeof v === 'number') return v !== 0
+  if (typeof v === 'string') return v === '1' || v.toLowerCase() === 'true'
+  return false
+}
+
+async function loadOutsourcedWarehouseProductCdSet(): Promise<Set<string>> {
+  const set = new Set<string>()
+  let page = 1
+  const limit = 500
+  while (true) {
+    const res = (await fetchProductProcessBOMList({ page, limit })) as {
+      data?: { list?: unknown[] }
+      list?: unknown[]
+    }
+    const list = res?.data?.list ?? res?.list ?? []
+    for (const r of list as Array<{ product_cd?: unknown; outsourced_warehouse_process?: unknown }>) {
+      if (!hasOutsourcedWarehouseProcessFlag(r?.outsourced_warehouse_process)) continue
+      const cd = String(r?.product_cd ?? '').trim()
+      if (cd) set.add(cd)
+    }
+    if (!list.length || list.length < limit) break
+    page += 1
+  }
+  return set
+}
+
 const dateColumns = computed(() => Object.keys(dayPlanMap.value).sort((a, b) => a.localeCompare(b)))
 
 const matrixRows = computed<MatrixRow[]>(() => {
   if (dateColumns.value.length === 0) return []
   const forecastRow: MatrixRow = { item: '内示数' }
+  const outsourcedForecastRow: MatrixRow = { item: '外注内示数' }
   const formingRow: MatrixRow = { item: '成型計画数' }
   const chamferingRow: MatrixRow = { item: '面取数' }
   const swRow: MatrixRow = { item: 'SW数' }
@@ -149,6 +181,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
   const outsourcedWarehouseRow: MatrixRow = { item: '外注検査数' }
   let formingTotal = 0
   let forecastTotal = 0
+  let outsourcedForecastTotal = 0
   let chamferingTotal = 0
   let swTotal = 0
   let kt05Total = 0
@@ -160,6 +193,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
   for (const d of dateColumns.value) {
     const formingValue = Number(dayPlanMap.value[d]?.forming ?? 0)
     const forecastValue = Number(dayPlanMap.value[d]?.forecastQuantity ?? 0)
+    const outsourcedForecastValue = Number(dayPlanMap.value[d]?.outsourcedWarehouseForecastQuantity ?? 0)
     const chamferingValue = Number(dayPlanMap.value[d]?.chamferingPlan ?? 0)
     const swValue = Number(dayPlanMap.value[d]?.swPlan ?? 0)
     const kt05Value = Number(dayPlanMap.value[d]?.platingPlan ?? 0)
@@ -169,6 +203,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
     const outsourcedWarehouseValue = Number(dayPlanMap.value[d]?.outsourcedWarehousePlan ?? 0)
     formingRow[d] = formingValue
     forecastRow[d] = forecastValue
+    outsourcedForecastRow[d] = outsourcedForecastValue
     chamferingRow[d] = chamferingValue
     swRow[d] = swValue
     kt05Row[d] = kt05Value
@@ -178,6 +213,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
     outsourcedWarehouseRow[d] = outsourcedWarehouseValue
     formingTotal += formingValue
     forecastTotal += forecastValue
+    outsourcedForecastTotal += outsourcedForecastValue
     chamferingTotal += chamferingValue
     swTotal += swValue
     kt05Total += kt05Value
@@ -189,6 +225,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
 
   formingRow.rowTotal = formingTotal
   forecastRow.rowTotal = forecastTotal
+  outsourcedForecastRow.rowTotal = outsourcedForecastTotal
   chamferingRow.rowTotal = chamferingTotal
   swRow.rowTotal = swTotal
   kt05Row.rowTotal = kt05Total
@@ -198,6 +235,7 @@ const matrixRows = computed<MatrixRow[]>(() => {
   outsourcedWarehouseRow.rowTotal = outsourcedWarehouseTotal
   return [
     forecastRow,
+    outsourcedForecastRow,
     formingRow,
     chamferingRow,
     swRow,
@@ -238,18 +276,22 @@ async function loadData() {
   loading.value = true
   try {
     const { startDate, endDate } = monthStartEnd(yearMonth.value)
-    const res = await getProductionSummarysList({
-      page: 1,
-      limit: 50000,
-      startDate,
-      endDate,
-    })
+    const [res, outsourcedWarehouseProducts] = await Promise.all([
+      getProductionSummarysList({
+        page: 1,
+        limit: 50000,
+        startDate,
+        endDate,
+      }),
+      loadOutsourcedWarehouseProductCdSet(),
+    ])
     const raw = (res as any)?.data?.list ?? (res as any)?.list ?? []
     const byDate = new Map<string, DailyPlanValue>()
 
     for (const item of raw) {
       const date = String(item?.date ?? '').slice(0, 10)
       if (!date) continue
+      const productCd = String(item?.product_cd ?? '').trim()
       const molding = Number(item?.molding_plan ?? 0)
       const forecast = Number(item?.forecast_quantity ?? 0)
       const chamfering = Number(item?.chamfering_plan ?? 0)
@@ -262,6 +304,7 @@ async function loadData() {
       const current = byDate.get(date) ?? {
         forming: 0,
         forecastQuantity: 0,
+        outsourcedWarehouseForecastQuantity: 0,
         chamferingPlan: 0,
         swPlan: 0,
         platingPlan: 0,
@@ -272,6 +315,9 @@ async function loadData() {
       }
       current.forming += Number.isFinite(molding) ? molding : 0
       current.forecastQuantity += Number.isFinite(forecast) ? forecast : 0
+      if (productCd && outsourcedWarehouseProducts.has(productCd)) {
+        current.outsourcedWarehouseForecastQuantity += Number.isFinite(forecast) ? forecast : 0
+      }
       current.chamferingPlan += Number.isFinite(chamfering) ? chamfering : 0
       current.swPlan += Number.isFinite(sw) ? sw : 0
       current.platingPlan += Number.isFinite(plating) ? plating : 0
