@@ -297,6 +297,10 @@
                 <el-icon><Printer /></el-icon>
                 <span>メッキ推奨生産日（印刷）</span>
               </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-welding')">
+                <el-icon><Printer /></el-icon>
+                <span>溶接推奨生産日（印刷）</span>
+              </div>
               <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-molding')">
                 <el-icon><Printer /></el-icon>
                 <span>成型推奨生産日（印刷）</span>
@@ -346,6 +350,7 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="print-rec-plating">メッキ推奨生産日</el-dropdown-item>
+              <el-dropdown-item command="print-rec-welding">溶接推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-molding">成型推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-molding-plan">成型計画推奨生産日</el-dropdown-item>
             </el-dropdown-menu>
@@ -605,7 +610,9 @@
                   </span>
                   <span v-else-if="col.type === 'text'" class="text-cell">
                     {{
-                      col.prop === 'pre_plating_prev_process' || col.prop === 'pre_molding_prev_process'
+                      col.prop === 'pre_plating_prev_process' ||
+                      col.prop === 'pre_molding_prev_process' ||
+                      col.prop === 'pre_welding_prev_process'
                         ? formatPrePlatingPrevKey(row[col.prop])
                         : (row[col.prop] || '-')
                     }}
@@ -617,17 +624,20 @@
                       negative:
                         col.prop !== 'pre_plating_inventory' &&
                         col.prop !== 'pre_molding_inventory' &&
+                        col.prop !== 'pre_welding_inventory' &&
                         (row[col.prop] ?? 0) < 0,
                       positive:
                         col.prop !== 'pre_plating_inventory' &&
                         col.prop !== 'pre_molding_inventory' &&
+                        col.prop !== 'pre_welding_inventory' &&
                         (row[col.prop] ?? 0) > 0,
                     }"
                   >
                     <template
                       v-if="
                         (col.prop === 'pre_plating_inventory' && row.pre_plating_inventory == null) ||
-                        (col.prop === 'pre_molding_inventory' && row.pre_molding_inventory == null)
+                        (col.prop === 'pre_molding_inventory' && row.pre_molding_inventory == null) ||
+                        (col.prop === 'pre_welding_inventory' && row.pre_welding_inventory == null)
                       "
                     >
                       —
@@ -1991,6 +2001,9 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   welding_plan: { label: '溶接計画', group: '溶接', width: 70 },
   welding_actual_plan: { label: '溶接実計', group: '溶接', width: 70 },
   welding_actual_plan_trend: { label: '溶接実計推移', group: '溶接', width: 90 },
+  /** API 計算: ルート上溶接/外注溶接直前工程の在庫列の値 */
+  pre_welding_inventory: { label: '溶接前在庫', group: '溶接', width: 88 },
+  pre_welding_prev_process: { label: '溶接直前工程', group: '溶接', type: 'text', width: 100 },
 
   // 検査
   inspection_carry_over: { label: '検査繰越', group: '検査', width: 70 },
@@ -2023,6 +2036,7 @@ const columnDefinitions: Record<string, { label: string; group: string; type?: s
   outsourced_warehouse_on_hold: { label: '外注倉庫保留品', group: '外注倉庫', width: 110 },
   outsourced_warehouse_inventory: { label: '外注倉庫在庫', group: '外注倉庫', width: 120 },
   outsourced_warehouse_trend: { label: '外注倉庫推移', group: '外注倉庫', width: 100 },
+  outsourced_warehouse_plan: { label: '外注倉庫計画', group: '外注倉庫', width: 100 },
 
   // 外注メッキ
   outsourced_plating_carry_over: { label: '外注メッキ繰越', group: '外注メッキ', width: 110 },
@@ -2222,7 +2236,7 @@ const formatDate = (dateValue: string | Date | null) => {
   return formatDateToString(new Date(dateValue))
 }
 
-/** pre_plating_prev_process（API の工程 key）を短い表示用ラベルに */
+/** pre_*_prev_process（API の工程 key）を短い表示用ラベルに */
 const prePlatingPrevLabels: Record<string, string> = {
   cutting: '切断',
   chamfering: '面取',
@@ -3147,6 +3161,9 @@ const handleDropdownCommand = (command: string) => {
     case 'print-rec-plating':
       handleRecommendedProductionPrint('plating')
       break
+    case 'print-rec-welding':
+      handleRecommendedProductionPrint('welding')
+      break
     case 'print-rec-molding':
       handleRecommendedProductionPrint('molding')
       break
@@ -3165,6 +3182,7 @@ const handleDropdownCommand = (command: string) => {
 
 const handleRecommendedPrintCommand = (command: string) => {
   if (command === 'print-rec-plating') handleRecommendedProductionPrint('plating')
+  else if (command === 'print-rec-welding') handleRecommendedProductionPrint('welding')
   else if (command === 'print-rec-molding') handleRecommendedProductionPrint('molding')
   else if (command === 'print-rec-molding-plan') {
     handleRecommendedProductionPrint('molding', {
@@ -3588,7 +3606,9 @@ function handleCellDoubleClick(
     prop === 'pre_plating_inventory' ||
     prop === 'pre_plating_prev_process' ||
     prop === 'pre_molding_inventory' ||
-    prop === 'pre_molding_prev_process'
+    prop === 'pre_molding_prev_process' ||
+    prop === 'pre_welding_inventory' ||
+    prop === 'pre_welding_prev_process'
   )
     return
   const parts = prop.split('_')
@@ -4276,10 +4296,11 @@ function collectRecommendedProductionRows(
   allData: any[],
   monthStart: string,
   trendKey: string,
-  kind: 'plating' | 'molding',
+  kind: 'plating' | 'molding' | 'welding',
   options?: { primaryDateKeyForPick?: string },
 ): any[] {
-  const productionDateKey = kind === 'plating' ? 'plating_production_date' : 'molding_production_date'
+  const productionDateKey =
+    kind === 'plating' ? 'plating_production_date' : kind === 'molding' ? 'molding_production_date' : 'welding_production_date'
   const primaryDateKeyForPick = options?.primaryDateKeyForPick ?? 'date'
   const secondaryDateKeyForPick = primaryDateKeyForPick === 'date' ? productionDateKey : 'date'
   const bestByProduct = new Map<string, any>()
@@ -4304,9 +4325,10 @@ function collectRecommendedProductionRows(
 }
 
 /** 治具／成型機名 → 推奨生産日 の順（メッキ・成型で同一ルール） */
-function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding'): any[] {
-  const machineKey = kind === 'plating' ? 'plating_machine' : 'molding_machine'
-  const dateKey = kind === 'plating' ? 'plating_production_date' : 'molding_production_date'
+function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding' | 'welding'): any[] {
+  const machineKey = kind === 'plating' ? 'plating_machine' : kind === 'molding' ? 'molding_machine' : 'welding_machine'
+  const dateKey =
+    kind === 'plating' ? 'plating_production_date' : kind === 'molding' ? 'molding_production_date' : 'welding_production_date'
   const dateKeyForSort = (row: any, key: string) => {
     const v = row[key]
     if (v == null || v === '') return '\uffff'
@@ -4329,7 +4351,7 @@ function sortRecommendedPrintRows(rows: any[], kind: 'plating' | 'molding'): any
 
 function buildRecommendedProductionPrintHtml(
   rows: any[],
-  kind: 'plating' | 'molding',
+  kind: 'plating' | 'molding' | 'welding',
   monthStart: string,
   rangeEnd: string,
   options?: { titleOverride?: string; hidePreInventoryColumns?: boolean },
@@ -4350,7 +4372,8 @@ function buildRecommendedProductionPrintHtml(
           footNote:
             'メッキ前在庫・直前工程は、工程ルート上でメッキ（または外注メッキ）の直前工程の前日15時の集計在庫です（一覧と同じ計算）。',
         }
-      : {
+        : kind === 'molding'
+        ? {
           title: '成型推奨生産日リスト',
           machineHeading: '成型機',
           machineKey: 'molding_machine' as const,
@@ -4362,6 +4385,19 @@ function buildRecommendedProductionPrintHtml(
           sumLabel: '成型前在庫合計',
           footNote:
             '成型前在庫・直前工程は、工程ルート上で成型の直前工程の集計在庫です（一覧・メッキ前在庫と同じ算出方式）。',
+        }
+        : {
+          title: '溶接推奨生産日リスト',
+          machineHeading: '溶接機',
+          machineKey: 'welding_machine' as const,
+          dateKey: 'welding_production_date' as const,
+          dateLabel: '推奨生産日',
+          preInvField: 'pre_welding_inventory' as const,
+          prePrevField: 'pre_welding_prev_process' as const,
+          invColHeader: '溶接前在庫',
+          sumLabel: '溶接前在庫合計',
+          footNote:
+            '溶接前在庫・直前工程は、工程ルート上で溶接（または外注溶接）の直前工程の集計在庫です（一覧・メッキ前在庫と同じ算出方式）。',
         }
 
   const sheetTitle = options?.titleOverride ?? pc.title
@@ -4491,7 +4527,7 @@ ${hidePreInvCols ? '' : `<p class="print-note">${pc.footNote}</p>`}
 }
 
 async function handleRecommendedProductionPrint(
-  kind: 'plating' | 'molding',
+  kind: 'plating' | 'molding' | 'welding',
   options?: {
     trendKeyOverride?: string
     titleOverride?: string
@@ -4515,7 +4551,8 @@ async function handleRecommendedProductionPrint(
     })
     const data = (res as any)?.data ?? res
     const list = data?.list ?? []
-    const trendKey = options?.trendKeyOverride ?? (kind === 'plating' ? 'plating_trend' : 'molding_trend')
+    const trendKey =
+      options?.trendKeyOverride ?? (kind === 'plating' ? 'plating_trend' : kind === 'molding' ? 'molding_trend' : 'welding_trend')
     const rawRows = collectRecommendedProductionRows(list, monthStart, trendKey, kind, {
       primaryDateKeyForPick: options?.pickDateKeyOverride,
     })

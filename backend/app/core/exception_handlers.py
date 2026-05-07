@@ -36,7 +36,12 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _http_exc(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         # 401/403/404 系は WARNING、5xx は ERROR
         log = logger.warning if exc.status_code < 500 else logger.error
-        log("HTTPException %s %s -> %s", request.method, request.url.path, exc.status_code)
+        log(
+            "HTTPException {} {} -> {}",
+            request.method,
+            request.url.path,
+            exc.status_code,
+        )
         return JSONResponse(
             status_code=exc.status_code,
             content=_payload(exc.status_code, str(exc.detail) if exc.detail else "HTTP error"),
@@ -46,7 +51,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_exc(request: Request, exc: RequestValidationError) -> JSONResponse:
         logger.warning(
-            "ValidationError %s %s: %s",
+            "ValidationError {} {}: {}",
             request.method,
             request.url.path,
             exc.errors(),
@@ -63,7 +68,10 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(IntegrityError)
     async def _integrity_exc(request: Request, exc: IntegrityError) -> JSONResponse:
         logger.error(
-            "IntegrityError %s %s: %s", request.method, request.url.path, exc.orig
+            "IntegrityError {} {}: {}",
+            request.method,
+            request.url.path,
+            exc.orig,
         )
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -75,7 +83,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(SQLAlchemyError)
     async def _sqla_exc(request: Request, exc: SQLAlchemyError) -> JSONResponse:
-        logger.exception("SQLAlchemyError %s %s", request.method, request.url.path)
+        logger.exception("SQLAlchemyError {} {}", request.method, request.url.path)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_payload(
@@ -87,7 +95,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception) -> JSONResponse:
         # 想定外例外はスタックトレース付きで記録
-        logger.exception("Unhandled %s %s: %s", request.method, request.url.path, exc)
+        logger.exception("Unhandled {} {}: {}", request.method, request.url.path, exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=_payload("internal_error", "サーバ内部エラーが発生しました。"),

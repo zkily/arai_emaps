@@ -37,11 +37,33 @@ SUMMARY_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
     "検査": "inspection_plan",
     "外注メッキ": "outsourced_plating_plan",
     "外注溶接": "outsourced_welding_plan",
+    "外注倉庫": "outsourced_warehouse_plan",
 }
 ALLOWED_SUMMARY_PLAN_COLUMNS = frozenset(SUMMARY_PLAN_COLUMN_BY_PROCESS.values())
 
+# 比較 API の「現行計画」に載せるサマリ列（溶接のみ welding_actual_plan、他は *_plan と同じ）
+SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS: dict[str, str] = {
+    **SUMMARY_PLAN_COLUMN_BY_PROCESS,
+    "溶接": "welding_actual_plan",
+}
+ALLOWED_SUMMARY_CURRENT_PLAN_COLUMNS = frozenset(SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS.values())
+
 # メッキ・検査は「平日一律＋土日任意」の手入力ベースラインで生成する
 FIXED_WEEKDAY_BASELINE_PROCESSES = frozenset({"メッキ", "検査"})
+
+# 成型・溶接は Excel(ppu) ではなく production_summarys の molding_plan / welding_plan を日次ベースラインの正とする
+BASELINE_SUMMARY_PRIORITY_PROCESSES = frozenset({"成型", "溶接"})
+
+# 比較画面の「現行計画」はサマリ／Excel を見ず基準計画と同一値にする（計画差異は常に 0）
+CURRENT_PLAN_MIRROR_BASELINE_PROCESSES = frozenset({
+    "切断",
+    "面取",
+    "メッキ",
+    "検査",
+    "外注メッキ",
+    "外注溶接",
+    "外注倉庫",
+})
 
 
 async def _rows_from_summary_plan_by_date(
@@ -85,19 +107,23 @@ async def _merge_current_plan_from_summary(
     process_name_filter: Optional[str],
     current_plan_map: Dict[Tuple[str, str], float],
 ) -> None:
-    """現行計画マップに production_summarys 由来の日次合計を補完（ppu に同一キーが無い場合のみ）。"""
-    for proc_label, col in SUMMARY_PLAN_COLUMN_BY_PROCESS.items():
+    """現行計画マップに production_summarys 由来の日次合計を反映。成型・溶接は ppu を使わずサマリのみ（溶接は welding_actual_plan、合計 0 の日も行として反映）。切断・面取等は比較時に基準と同期するためマージしない。その他は ppu に無いキーのみ補完。"""
+    for proc_label, col in SUMMARY_CURRENT_PLAN_COLUMN_BY_PROCESS.items():
+        if proc_label in CURRENT_PLAN_MIRROR_BASELINE_PROCESSES:
+            continue
         if process_name_filter and proc_label != process_name_filter:
             continue
-        if col not in ALLOWED_SUMMARY_PLAN_COLUMNS:
+        if col not in ALLOWED_SUMMARY_CURRENT_PLAN_COLUMNS:
             continue
+        summary_priority = proc_label in BASELINE_SUMMARY_PRIORITY_PROCESSES
+        having_sql = "" if summary_priority else f"HAVING COALESCE(SUM(`{col}`), 0) > 0"
         q = text(
             f"""
             SELECT `date` AS plan_date, COALESCE(SUM(`{col}`), 0) AS plan_quantity
             FROM production_summarys
             WHERE `date` BETWEEN :start_date AND :end_date
             GROUP BY `date`
-            HAVING COALESCE(SUM(`{col}`), 0) > 0
+            {having_sql}
             """
         )
         res = await db.execute(q, {"start_date": start_date, "end_date": end_date})
@@ -106,8 +132,11 @@ async def _merge_current_plan_from_summary(
             if not pd:
                 continue
             key = (pd, proc_label)
-            if key not in current_plan_map:
-                current_plan_map[key] = _decimal_float(r.get("plan_quantity"))
+            qty = _decimal_float(r.get("plan_quantity"))
+            if summary_priority:
+                current_plan_map[key] = qty
+            elif key not in current_plan_map:
+                current_plan_map[key] = qty
 
 
 def _date_str(val: Any) -> Optional[str]:
@@ -201,7 +230,7 @@ async def generate_plan_baseline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """対象月を集計し production_plan_baselines に登録（上書き）。ppu に無い工程は production_summarys の *_plan で補完。"""
+    """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接は production_summarys の molding_plan / welding_plan のみ。他は ppu を優先し不足をサマリで補完。"""
     baseline_month = body.get("baselineMonth")
     process_name = body.get("processName") or None
     if not baseline_month:
@@ -260,7 +289,11 @@ async def generate_plan_baseline(
         GROUP BY plan_date, process_name
     """)
     agg_result = await db.execute(agg_sql, {"start_date": start_date, "end_date": end_date, "process_name": process_name})
-    rows = list(agg_result.mappings().fetchall())
+    rows = [
+        r
+        for r in agg_result.mappings().fetchall()
+        if (r.get("process_name") or "").strip() not in BASELINE_SUMMARY_PRIORITY_PROCESSES
+    ]
     ppu_keys: Set[Tuple[str, str]] = set()
     for r in rows:
         pd = _date_str(r.get("plan_date"))
@@ -419,7 +452,14 @@ async def get_plan_baseline_comparison(
         """)
         curr_result = await db.execute(curr_sql, {"start_date": start_date, "end_date": end_date, "process_name": processName or None})
         curr_rows = list(curr_result.mappings().fetchall())
-        current_plan_map = {(_date_str(r["plan_date"]), (r.get("process_name") or "").strip()): _decimal_float(r.get("current_plan")) for r in curr_rows}
+        current_plan_map: Dict[Tuple[str, str], float] = {}
+        for r in curr_rows:
+            pd = _date_str(r.get("plan_date"))
+            proc = (r.get("process_name") or "").strip()
+            if proc in BASELINE_SUMMARY_PRIORITY_PROCESSES or proc in CURRENT_PLAN_MIRROR_BASELINE_PROCESSES:
+                continue
+            if pd:
+                current_plan_map[(pd, proc)] = _decimal_float(r.get("current_plan"))
         await _merge_current_plan_from_summary(db, start_date, end_date, processName or None, current_plan_map)
 
         # 現行実績：stock_transaction_logs を日付+工程で集計（transaction_type='実績'、[start_date, next_month_start)）
@@ -465,7 +505,10 @@ async def get_plan_baseline_comparison(
             if not plan_date:
                 continue
             baseline_plan = base_rows.get(key, 0.0)
-            current_plan = current_plan_map.get(key, 0.0)
+            if proc in CURRENT_PLAN_MIRROR_BASELINE_PROCESSES:
+                current_plan = baseline_plan
+            else:
+                current_plan = current_plan_map.get(key, 0.0)
             raw_actual = actual_map.get(key)  # 実績テーブルに無い場合は None
             current_actual = _resolve_current_actual(plan_date, baseline_plan, current_plan, raw_actual)
             plan_diff = current_plan - baseline_plan

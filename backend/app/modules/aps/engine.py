@@ -30,6 +30,10 @@ from app.modules.aps.models import (
 # 默认标准工时（仅在线体未配置运行时间时使用）
 SCHEDULE_STANDARD_DAY_HOURS = 15.3
 
+# line_capacities / line_capacity_time_slots の先読み日数。run_engine の日別ループ上限（max_iterations=730）より短いと、
+# 該当日以降はカレンダー無し扱いになり machines.default_work_hours に落ちる（稼働設定が効かないように見える）。
+APS_CALENDAR_PRELOAD_DAYS = 730
+
 
 def _time_to_hours(t: time) -> float:
     return t.hour + t.minute / 60.0 + (t.second or 0) / 3600.0
@@ -159,17 +163,39 @@ async def _fetch_slots_by_date(
     return by_date
 
 
+def _line_calendar_is_configured(
+    cal_map: dict[date, float],
+    slots_by_date: Dict[date, List[LineCapacityTimeSlot]],
+) -> bool:
+    """line_capacities または稼働時間帯が 1 件でもあれば、カレンダー運用ありとみなす。"""
+    if cal_map:
+        return True
+    for lst in slots_by_date.values():
+        if lst:
+            return True
+    return False
+
+
 def _resolve_day_operating_hours(
     d: date,
     slots_by_date: Dict[date, List[LineCapacityTimeSlot]],
     cal_map: dict[date, float],
     default_hours: float,
+    *,
+    calendar_configured: bool = False,
 ) -> float:
-    """その日の稼働 h：時間帯行があれば帯の合算のみ。無ければ line_capacities → default。"""
+    """その日の稼働 h：時間帯があれば帯の合算。無ければ line_capacities の当該日。
+    calendar_configured かつ当該日が未登録のときは 0（休日・停止をデフォルト稼働で埋めない）。
+    設備に稼働データが全く無い場合のみ default_hours にフォールバック。
+    """
     slots = slots_by_date.get(d)
     if slots:
         return float(_hours_from_slots(slots))
-    return float(cal_map.get(d, default_hours))
+    if d in cal_map:
+        return float(cal_map[d])
+    if calendar_configured:
+        return 0.0
+    return float(default_hours)
 
 
 def _minutes_from_midnight(t: time) -> int:
@@ -420,7 +446,7 @@ async def run_engine(
     if cal_map_preloaded is not None:
         cal_map = cal_map_preloaded
     else:
-        cal_end = start + timedelta(days=365)
+        cal_end = start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
         cal_result = await db.execute(
             select(LineCapacity)
             .where(
@@ -436,7 +462,7 @@ async def run_engine(
     if slots_by_date_preloaded is not None:
         slots_by_date = slots_by_date_preloaded
     else:
-        cal_end = start + timedelta(days=365)
+        cal_end = start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
         slots_by_date = await _fetch_slots_by_date(db, ps.line_id, start, cal_end)
 
     total_produced = 0
@@ -451,10 +477,16 @@ async def run_engine(
     )
     max_iterations = 730
 
+    calendar_configured = _line_calendar_is_configured(cal_map, slots_by_date)
+
     while remaining > 0 and max_iterations > 0:
         max_iterations -= 1
         avail_hours = _resolve_day_operating_hours(
-            current_date, slots_by_date, cal_map, float(default_hours)
+            current_date,
+            slots_by_date,
+            cal_map,
+            float(default_hours),
+            calendar_configured=calendar_configured,
         )
 
         if avail_hours <= 0:
@@ -550,7 +582,7 @@ async def run_engine(
 async def _next_working_date(
     db: AsyncSession, line_id: int, after_date: date, default_hours: float
 ) -> date:
-    """after_date の翌日から稼働 h > 0（時間帯合算 or line_capacities or default）の最初の日を返す。"""
+    """after_date の翌日から稼働 h > 0 の最初の日を返す（稼働カレンダー優先・未登録日は 0）。"""
     cursor = after_date + timedelta(days=1)
     window_end = cursor + timedelta(days=730)
     cal_result = await db.execute(
@@ -564,9 +596,16 @@ async def _next_working_date(
     )
     cal_map = {r.work_date: float(r.available_hours) for r in cal_result.scalars().all()}
     slots_by_date = await _fetch_slots_by_date(db, line_id, cursor, window_end)
+    calendar_configured = _line_calendar_is_configured(cal_map, slots_by_date)
     d = cursor
     for _ in range(730):
-        h = _resolve_day_operating_hours(d, slots_by_date, cal_map, float(default_hours))
+        h = _resolve_day_operating_hours(
+            d,
+            slots_by_date,
+            cal_map,
+            float(default_hours),
+            calendar_configured=calendar_configured,
+        )
         if h > 0:
             return d
         d += timedelta(days=1)
@@ -620,7 +659,7 @@ async def replan_line_sequential(
         shared_cal_map = cal_map_preloaded
     else:
         cal_start = cursor_date
-        cal_end = cal_start + timedelta(days=365)
+        cal_end = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
         cal_result = await db.execute(
             select(LineCapacity)
             .where(
@@ -638,7 +677,7 @@ async def replan_line_sequential(
         shared_slots = slots_by_date_preloaded
     else:
         cal_start = cursor_date
-        cal_end = cal_start + timedelta(days=365)
+        cal_end = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
         shared_slots = await _fetch_slots_by_date(db, line_id, cal_start, cal_end)
 
     updated: List[ProductionSchedule] = []

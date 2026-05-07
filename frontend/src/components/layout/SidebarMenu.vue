@@ -242,6 +242,14 @@
                 <el-icon><DataLine /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_PLAN_SCHEDULES')">{{ t('menu.ERP_PRODUCTION_PLAN_SCHEDULES') }}</span></template>
               </el-menu-item>
+              <el-menu-item index="/erp/production/monthly-load">
+                <el-icon><DataAnalysis /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_MONTHLY_LOAD')">{{ t('menu.ERP_PRODUCTION_MONTHLY_LOAD') }}</span></template>
+              </el-menu-item>
+              <el-menu-item index="/erp/production/forming-daily-plan">
+                <el-icon><Calendar /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_FORMING_DAILY_PLAN')">{{ t('menu.ERP_PRODUCTION_FORMING_DAILY_PLAN') }}</span></template>
+              </el-menu-item>
             </el-sub-menu>
             <el-sub-menu index="erp-production-requirements">
               <template #title>

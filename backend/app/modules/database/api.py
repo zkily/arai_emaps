@@ -203,7 +203,8 @@ INVENTORY_COLUMNS = [
 # 推移・実計推移の対象 6 工程（cutting, chamfering, molding, plating, welding, inspection）
 TREND_PREFIXES = ["cutting", "chamfering", "molding", "plating", "welding", "inspection"]
 
-# 計画データ更新：schedule_details × 設備 machine_type → processes.process_name → production_summarys の _plan 列（6工程）
+# 計画データ更新：schedule_details.planned_qty を集計し、設備 machine_type → processes と突合した工程名ごとに _plan 列へ反映（6工程）
+# ※ welding_plan のデータソースは schedule_details.planned_qty のみ（溶接工程に振り分けた日別 SUM）。molding_plan 等からの転記は行わない。
 PLAN_PROCESS_MAPPING = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
@@ -213,7 +214,12 @@ PLAN_PROCESS_MAPPING = {
     "検査": "inspection_plan",
 }
 # 計画データ更新前クリア用（_plan + _actual_plan）
-PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + ["sw_plan"]
+PLAN_FIELDS_TO_CLEAR = list(PLAN_PROCESS_MAPPING.values()) + [
+    "sw_plan",
+    "outsourced_plating_plan",
+    "outsourced_welding_plan",
+    "outsourced_warehouse_plan",
+]
 # 清空计算字段（在庫・推移・actual_plan_trend・安全在庫）：date >= startDate 时置 0
 CALCULATED_FIELDS_TO_CLEAR = [
     "safety_stock",
@@ -237,7 +243,9 @@ ACTUAL_PLAN_COLUMNS = [
     ("chamfering_actual", "chamfering_plan", "chamfering_actual_plan"),
     ("molding_actual", "molding_plan", "molding_actual_plan"),
     ("plating_actual", "plating_plan", "plating_actual_plan"),
+    ("outsourced_plating_actual", "outsourced_plating_plan", "outsourced_plating_actual_plan"),
     ("welding_actual", "welding_plan", "welding_actual_plan"),
+    ("outsourced_welding_actual", "outsourced_welding_plan", "outsourced_welding_actual_plan"),
     ("inspection_actual", "inspection_plan", "inspection_actual_plan"),
 ]
 ACTUAL_PLAN_FIELDS_TO_CLEAR = [target_col for _, _, target_col in ACTUAL_PLAN_COLUMNS]
@@ -2476,10 +2484,11 @@ async def update_production_summarys_plan(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    schedule_details.planned_qty を、production_schedules（product_cd）× 設備 machines.machine_type
-    が processes と一致する工程名（成型/溶接/メッキ/切断/面取/検査）に振り分け、
-    production_summarys と同日・同製品で INNER JOIN した行のみ日別集計する。
-    続けて各工程 plan 列へ反映し、actual/plan から actual_plan を更新する。
+    schedule_details.planned_qty（当日計画数量）のみを集計源とする。production_schedules（product_cd）× 設備
+    machines.machine_type が processes と一致する工程名（成型/溶接/メッキ/切断/面取/検査）に振り分け、
+    production_summarys と同日・同製品で INNER JOIN した行のみ日別に SUM して各 *_plan 列へ反映する。
+    社内溶接 welding_plan も他工程と同様、溶接工程へ振り分けられた schedule_details.planned_qty の合計のみ（実績・残数・時間帯配分は使用しない）。
+    続けて actual/plan から actual_plan を更新する。
     startDate を指定した場合はその日～+5ヶ月のみ対象（本月月初起き先清空 plan 再更新用）。
     """
     start_time = time.perf_counter()
@@ -2494,7 +2503,7 @@ async def update_production_summarys_plan(
     # 1) 集計: schedule_details × sch × machines × processes → 6 工程名でグルーピング
     agg_sql_sd = text("""
         SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt, pr.process_name AS process_name,
-               SUM(sd.planned_qty) AS quantity
+               SUM(COALESCE(sd.planned_qty, 0)) AS quantity
         FROM schedule_details sd
         INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
         INNER JOIN machines m ON m.id = sch.line_id
@@ -2583,9 +2592,15 @@ async def update_production_summarys_plan(
         )
 
     # 3) molding_actual_plan 更新後、sw_plan / chamfering_plan / cutting_plan を molding_actual_plan で上書き
-    #    更新前に該当範囲でこれら3列をいったんクリアし、該当工程を持つ製品の行のみ更新する。
+    #    あわせて、molding_plan を工程有無（KT05 / KT06 / KT08）で計画列へ振り分ける。
+    #    外注倉庫（KT15・KT10 マスタ差異）は molding_plan（成型スケジュール集計）を outsourced_warehouse_plan へ反映する。
+    #    更新前に該当範囲で対象列をいったんクリアし、該当工程を持つ製品の行のみ更新する。
     await db.execute(
-        text("UPDATE production_summarys SET sw_plan = 0, chamfering_plan = 0, cutting_plan = 0" + date_filter),
+        text(
+            "UPDATE production_summarys "
+            "SET sw_plan = 0, chamfering_plan = 0, cutting_plan = 0, plating_plan = 0, outsourced_plating_plan = 0, outsourced_welding_plan = 0, outsourced_warehouse_plan = 0"
+            + date_filter
+        ),
         range_params if range_params else {}
     )
     # 切断工程を持つルートの行のみ cutting_plan を molding_actual_plan で更新
@@ -2594,6 +2609,43 @@ async def update_production_summarys_plan(
             UPDATE production_summarys ps
             INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT01'
             SET ps.cutting_plan = ps.molding_actual_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # 社内メッキ工程（KT05）を持つルートのみ plating_plan を molding_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT05'
+            SET ps.plating_plan = ps.molding_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # 外注メッキ工程（KT06）を持つルートのみ outsourced_plating_plan を molding_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT06'
+            SET ps.outsourced_plating_plan = ps.molding_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # 外注溶接工程（KT08）を持つルートのみ outsourced_welding_plan を molding_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd AND prs.process_cd = 'KT08'
+            SET ps.outsourced_welding_plan = ps.molding_plan
+            WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
+        range_params if range_params else {}
+    )
+    # 外注倉庫工程（KT15／KT10 は繰越・在庫と同様のマスタ差異）を持つルートのみ outsourced_warehouse_plan を molding_plan で更新
+    await db.execute(
+        text("""
+            UPDATE production_summarys ps
+            INNER JOIN process_route_steps prs ON prs.route_cd = ps.route_cd
+              AND prs.process_cd IN ('KT15', 'KT10')
+            SET ps.outsourced_warehouse_plan = ps.molding_plan
             WHERE 1=1""" + date_filter.replace("date", "ps.date").replace(":range_start", ":range_start").replace(":range_end", ":range_end")),
         range_params if range_params else {}
     )
@@ -2690,6 +2742,18 @@ def _find_molding_step_index(sequence: list) -> Optional[int]:
         return None
 
 
+def _find_welding_step_index(sequence: list) -> Optional[int]:
+    """工程順序内で社内溶接(welding)または外注溶接(outsourced_welding)の位置（0-based）。無ければ None。"""
+    if not sequence:
+        return None
+    for k in ("welding", "outsourced_welding"):
+        try:
+            return sequence.index(k)
+        except ValueError:
+            continue
+    return None
+
+
 def _pre_plating_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
     """メッキ（または外注メッキ）直前工程の当日在庫。戻り: (値, 直前工程 key)。該当なしは (None, None)。"""
     idx = _find_plating_step_index(sequence)
@@ -2753,10 +2817,31 @@ def _pre_molding_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Opt
         return 0, prev_key
 
 
+def _pre_welding_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
+    """溶接（または外注溶接）直前工程の当日在庫。戻り: (値, 直前工程 key)。該当なしは (None, None)。"""
+    idx = _find_welding_step_index(sequence)
+    if idx is None or idx <= 0:
+        return None, None
+    prev_key = sequence[idx - 1]
+    cfg = _get_process_config_by_key(prev_key)
+    if not cfg:
+        return None, None
+    inv_f = cfg.get("fields", {}).get("inventory")
+    if not inv_f:
+        return None, None
+    raw = row_dict.get(inv_f)
+    if raw is None:
+        return 0, prev_key
+    try:
+        return int(raw), prev_key
+    except (TypeError, ValueError):
+        return 0, prev_key
+
+
 async def _enrich_production_summary_rows_pre_plating_inventory(
     db: AsyncSession, rows: list[dict]
 ) -> None:
-    """一覧各行に pre_plating / pre_molding 系を付与（ルート順は _get_route_sequence と同一）。"""
+    """一覧各行に pre_plating / pre_molding / pre_welding 系を付与（ルート順は _get_route_sequence と同一）。"""
     if not rows:
         return
     route_cds = {(r.get("route_cd") or "").strip() for r in rows if (r.get("route_cd") or "").strip()}
@@ -2792,6 +2877,9 @@ async def _enrich_production_summary_rows_pre_plating_inventory(
         mv, mprev = _pre_molding_inventory_from_row(r, sequence)
         r["pre_molding_inventory"] = mv
         r["pre_molding_prev_process"] = mprev
+        wv, wprev = _pre_welding_inventory_from_row(r, sequence)
+        r["pre_welding_inventory"] = wv
+        r["pre_welding_prev_process"] = wprev
 
 
 def _parse_route_sequence_from_description(description: Optional[str]) -> list:

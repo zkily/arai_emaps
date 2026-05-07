@@ -203,6 +203,8 @@ export default {
     ERP_PRODUCTION_DATA: 'Quản lý dữ liệu sản xuất',
     ERP_PRODUCTION_BASELINE: 'Baseline kế hoạch',
     ERP_PRODUCTION_PLAN_SCHEDULES: '生産スケジュール',
+    ERP_PRODUCTION_MONTHLY_LOAD: 'Tổng hợp tải công đoạn theo tháng',
+    ERP_PRODUCTION_FORMING_DAILY_PLAN: 'Ước tính kế hoạch theo công đoạn',
     ERP_PRODUCTION_INSTRUCTION: 'Chỉ thị sản xuất',
     ERP_PRODUCTION_INSTR_CUTTING: 'Chỉ thị cắt・mặt',
     ERP_PRODUCTION_INSTR_FORMING: 'Chỉ thị tạo hình',

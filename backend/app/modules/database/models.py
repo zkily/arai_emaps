@@ -114,6 +114,7 @@ class ProductionSummary(Base):
     outsourced_warehouse_on_hold = Column(Integer, default=0)
     outsourced_warehouse_inventory = Column(Integer, default=0)
     outsourced_warehouse_trend = Column(Integer, default=0)
+    outsourced_warehouse_plan = Column(Integer, default=0)
     # 外注メッキ
     outsourced_plating_carry_over = Column(Integer, default=0)
     outsourced_plating_actual = Column(Integer, default=0)

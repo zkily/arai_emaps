@@ -40,6 +40,9 @@ export interface ProductionSummaryInventoryRow {
   outsourced_warehouse_inventory?: number | null
   outsourced_plating_inventory?: number | null
   outsourced_welding_inventory?: number | null
+  /** ルート上 溶接/外注溶接 の直前工程の在庫（一覧 enrich と同一） */
+  pre_welding_inventory?: number | null
+  pre_welding_prev_process?: string | null
   pre_welding_inspection_inventory?: number | null
   pre_inspection_inventory?: number | null
   pre_outsourcing_inventory?: number | null
@@ -324,7 +327,7 @@ export function clearProductionSummarysMoldingPlan(startDate: string) {
   )
 }
 
-/** 計画データ更新：schedule_details（× production_schedules × machines × processes）を集計して plan / actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象 */
+/** 計画データ更新：schedule_details.planned_qty を集計（× production_schedules × machines × processes）して各工程 *_plan（溶接は welding_plan）等と actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象 */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{
     data?: { updated?: number; skipped?: number; total?: number; elapsedTime?: number }

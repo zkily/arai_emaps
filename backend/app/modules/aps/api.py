@@ -68,7 +68,13 @@ from app.modules.aps.schemas import (
     LineReplanAnchorOut,
     LineReplanAnchorsBatchBody,
 )
-from app.modules.aps.engine import run_engine, replan_line_sequential, productive_hours_from_slot_rows, _fetch_slots_by_date
+from app.modules.aps.engine import (
+    APS_CALENDAR_PRELOAD_DAYS,
+    run_engine,
+    replan_line_sequential,
+    productive_hours_from_slot_rows,
+    _fetch_slots_by_date,
+)
 from app.services.access_sync.production_plan_excel_sync import sync_production_plan_excel_to_access
 
 router = APIRouter()
@@ -1753,7 +1759,7 @@ async def replan_sequence(
 
     # 共有日历/时间帯を一括先読み
     cal_start = replan_start_anchor or today
-    cal_end_d = cal_start + timedelta(days=365)
+    cal_end_d = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
     cal_result = await db.execute(
         select(LineCapacity)
         .where(

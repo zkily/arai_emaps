@@ -40,7 +40,7 @@
             </div>
             <div class="section-title">
               <h3>ベースライン生成</h3>
-              <span class="section-desc">計画を固定化して比較基準を作成</span>
+              <span class="section-desc">計画を固定化して比較基準を作成（成型・溶接は production_summarys の molding_plan／welding_plan を基準計画に反映）</span>
             </div>
           </div>
           <div class="section-controls">
@@ -268,7 +268,7 @@
                 <div class="column-header">
                   <span>基準計画</span>
                   <el-tooltip
-                    content="ベースライン生成時に固定化された計画値"
+                    content="ベースライン生成時に固定化された計画値。成型・溶接は production_summarys の molding_plan／welding_plan の日次合計。その他は Excel 取込（production_plan_updates）を優先し、無い日はサマリの各 plan 列で補完。"
                     placement="top"
                     effect="dark"
                   >
@@ -287,7 +287,7 @@
                 <div class="column-header">
                   <span>現行計画</span>
                   <el-tooltip
-                    content="production_plan_updates を優先し、無い工程は production_summarys の各 plan 列を日次合計"
+                    content="切断・面取・メッキ・検査・外注メッキ・外注溶接・外注倉庫は現行計画＝基準計画（常に同期）。成型は molding_plan、溶接は welding_actual_plan（サマリのみ、Excel は使用しない。合計 0 の日も反映、該当日サマリが無い日は 0）。上記以外は production_plan_updates を優先し、無い日はサマリの各 plan 列で補完。"
                     placement="top"
                     effect="dark"
                   >
@@ -570,7 +570,7 @@
             </template>
             <template #default="{ row }">
               <span class="util-num" :class="{ 'util-num--negative': row.diffHours < 0 }">{{
-                formatUtilHours(row.diffHours)
+                formatUtilDiffHours(row.diffHours)
               }}</span>
             </template>
           </el-table-column>
@@ -1300,6 +1300,11 @@ function formatUtilNum(v: number | null | undefined): string {
 function formatUtilHours(v: number | null | undefined): string {
   const n = Number(v ?? 0)
   return Number.isFinite(n) ? n.toFixed(1) : '0.0'
+}
+
+function formatUtilDiffHours(v: number | null | undefined): string {
+  const n = Number(v ?? 0)
+  return Number.isFinite(n) ? n.toFixed(0) : '0'
 }
 
 function formatUtilPercent(v: number | null | undefined): string {
@@ -2245,7 +2250,7 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
         <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilHours(r.actualHours))}</td>
         <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilPercent(r.planUtilizationPct))}</td>
         <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;">${esc(formatUtilPercent(r.actualUtilizationPct))}</td>
-        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;${dh}">${esc(formatUtilHours(r.diffHours))}</td>
+        <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;${dh}">${esc(formatUtilDiffHours(r.diffHours))}</td>
         <td style="border:1px solid #bdbdbd;padding:4px 6px;text-align:right;${dp}">${esc(formatUtilPercent(r.diffUtilizationPct))}</td>
       </tr>`
     })
@@ -2496,6 +2501,42 @@ ${wrapDiff(row.actual_diff ?? null)}
     })
     .join('')
 
+  let sumBaseline = 0
+  let sumCurrent = 0
+  let sumPlanDiff = 0
+  let sumActual = 0
+  let sumActualDiff = 0
+  let actualSumCount = 0
+  let actualDiffSumCount = 0
+  for (const row of tab.items) {
+    sumBaseline += Number(row.baseline_plan ?? 0)
+    sumCurrent += Number(row.current_plan ?? 0)
+    sumPlanDiff += Number(row.plan_diff ?? 0)
+    if (row.current_actual !== null && row.current_actual !== undefined) {
+      sumActual += Number(row.current_actual)
+      actualSumCount += 1
+    }
+    if (row.actual_diff !== null && row.actual_diff !== undefined) {
+      sumActualDiff += Number(row.actual_diff)
+      actualDiffSumCount += 1
+    }
+  }
+  const actualTotalCell =
+    actualSumCount > 0
+      ? `<td class="td-num">${esc(formatNumber(sumActual))}</td>`
+      : `<td class="td-num"><span class="diff-muted">-</span></td>`
+  const actualDiffTotalCell =
+    actualDiffSumCount > 0 ? wrapDiff(sumActualDiff) : wrapDiff(null)
+
+  const footerRow = `<tr class="row-total">
+<td class="td-date">${esc('合計')}</td>
+<td class="td-num">${esc(formatNumber(sumBaseline))}</td>
+<td class="td-num">${esc(formatNumber(sumCurrent))}</td>
+${wrapDiff(sumPlanDiff)}
+${actualTotalCell}
+${actualDiffTotalCell}
+</tr>`
+
   const html = `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -2514,6 +2555,8 @@ ${wrapDiff(row.actual_diff ?? null)}
     .diff-neg { color: #c62828; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .diff-pos { color: #047857; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .diff-muted { color: #64748b; }
+    .row-total td { background: #f3f4f6; font-weight: 600; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .row-total .td-date { font-weight: 700; }
   </style>
 </head>
 <body>
@@ -2522,6 +2565,7 @@ ${wrapDiff(row.actual_diff ?? null)}
   <table>
     <thead><tr>${headerRow}</tr></thead>
     <tbody>${bodyRows}</tbody>
+    <tfoot>${footerRow}</tfoot>
   </table>
 </body>
 </html>`
@@ -2563,7 +2607,7 @@ function handlePrintOperationRate() {
         <td class="num">${escHtml(formatUtilHours(r.actualHours))}</td>
         <td class="num">${escHtml(formatUtilPercent(r.planUtilizationPct))}</td>
         <td class="num">${escHtml(formatUtilPercent(r.actualUtilizationPct))}</td>
-        <td class="num ${negHours}">${escHtml(formatUtilHours(r.diffHours))}</td>
+        <td class="num ${negHours}">${escHtml(formatUtilDiffHours(r.diffHours))}</td>
         <td class="num ${negPct}">${escHtml(formatUtilPercent(r.diffUtilizationPct))}</td>
       </tr>`
     })

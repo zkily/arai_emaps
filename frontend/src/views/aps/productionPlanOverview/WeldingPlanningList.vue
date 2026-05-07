@@ -521,6 +521,7 @@ import { Calendar, Goods, OfficeBuilding, Printer, Switch } from '@element-plus/
 import {
   fetchLines,
   fetchSchedulingGrid,
+  rebuildProductionPlanExcelAll,
   replanLineSequence,
   type ScheduleGridRow,
   type SchedulingGridResponse,
@@ -1079,6 +1080,9 @@ function buildReplanConfirmMessage() {
   return h('div', { class: 'forming-replan-confirm' }, [
     h('p', { class: 'forming-replan-confirm__lead' }, '次の工程について、すべての有効設備をラインコード順に順次再計算します。'),
     h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
+    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, 'アンカー日が未来の場合でも、再計算は明日以降を連続で再作成します（空白期間は作りません）。'),
     h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
   ])
 }
@@ -1710,14 +1714,46 @@ async function replanAllLinesForProcess() {
     }
     replanProgressTotal.value = lines.length
     const anchor = replanFallbackAnchorDate.value
+    const failed: string[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-      replanCurrentLineLabel.value = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
-      await replanLineSequence(line.id, anchor)
+      const lineLabel = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
+      replanCurrentLineLabel.value = lineLabel
+      try {
+        await replanLineSequence(line.id, anchor, true)
+      } catch (e: unknown) {
+        failed.push(`${lineLabel}: ${formatApiError(e) || '再計算に失敗しました'}`)
+      }
       replanProgressDone.value = i + 1
     }
+    let rebuildErr = ''
+    replanCurrentLineLabel.value = 'production_plan_excel 再構築'
+    try {
+      await rebuildProductionPlanExcelAll()
+    } catch (e: unknown) {
+      rebuildErr = formatApiError(e) || 'production_plan_excel の再構築に失敗しました'
+    }
     await loadSchedules()
-    ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+    if (failed.length === 0 && !rebuildErr) {
+      ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+    } else {
+      const ok = lines.length - failed.length
+      ElMessage.warning(
+        `再計算完了（成功 ${ok} / 失敗 ${failed.length}）${rebuildErr ? ' / 再構築失敗 1' : ''}`,
+      )
+      const previewLines = [...failed]
+      if (rebuildErr) previewLines.unshift(`production_plan_excel: ${rebuildErr}`)
+      const preview = previewLines.slice(0, 5).join('\n')
+      await ElMessageBox.alert(
+        `${preview}${previewLines.length > 5 ? `\n...ほか ${previewLines.length - 5} 件` : ''}`,
+        '再計算失敗の設備',
+        {
+          type: 'warning',
+          confirmButtonText: 'OK',
+          customClass: 'forming-replan-messagebox',
+        },
+      )
+    }
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e) || '再計算に失敗しました')
     try {
