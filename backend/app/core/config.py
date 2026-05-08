@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     # タイムゾーン
     TIMEZONE: str = "Asia/Tokyo"
     
+    # フロント「api-config.js」の window.__API_BASE__（空＝相対パスで同一オリジンの /api を利用）
+    PUBLIC_API_BASE: str = ""
+
     # ログ設定
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/app.log"

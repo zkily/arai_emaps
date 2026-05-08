@@ -376,6 +376,16 @@
                 <template #title><span>製品関連</span></template>
               </el-menu-item>
             </el-sub-menu>
+            <el-sub-menu index="erp-quality-equipment">
+              <template #title>
+                <el-icon><Operation /></el-icon>
+                <span>設備関連</span>
+              </template>
+              <el-menu-item index="/erp/quality/equipment-association">
+                <el-icon><Document /></el-icon>
+                <template #title><span>ローラー使用管理</span></template>
+              </el-menu-item>
+            </el-sub-menu>
           </el-sub-menu>
 
           <el-sub-menu index="erp-costing">
@@ -511,6 +521,7 @@
             <el-menu-item index="/master/destination/holiday"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.MASTER_DESTINATION_HOLIDAY')">{{ t('menu.MASTER_DESTINATION_HOLIDAY') }}</span></template></el-menu-item>
             <el-menu-item index="/master/carrier"><el-icon><Van /></el-icon><template #title><span :title="t('menu.MASTER_CARRIER')">{{ t('menu.MASTER_CARRIER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/machine"><el-icon><Setting /></el-icon><template #title><span :title="t('menu.MASTER_MACHINE')">{{ t('menu.MASTER_MACHINE') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/roller-master"><el-icon><Histogram /></el-icon><template #title><span :title="t('menu.MASTER_ROLLER_MASTER')">{{ t('menu.MASTER_ROLLER_MASTER') }}</span></template></el-menu-item>
             <el-menu-item index="/master/process"><el-icon><Operation /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS')">{{ t('menu.MASTER_PROCESS') }}</span></template></el-menu-item>
             <el-menu-item index="/master/process-route"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS_ROUTE')">{{ t('menu.MASTER_PROCESS_ROUTE') }}</span></template></el-menu-item>
             <el-menu-item index="/master/product-process-route"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_PROCESS_ROUTE')">{{ t('menu.MASTER_PRODUCT_PROCESS_ROUTE') }}</span></template></el-menu-item>
@@ -525,6 +536,7 @@
             <el-menu-item index="/master/bom/product-process"><el-icon><Connection /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_PROCESS_BOM')">{{ t('menu.MASTER_PRODUCT_PROCESS_BOM') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-machine-config"><el-icon><Setting /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_MACHINE_CONFIG')">{{ t('menu.MASTER_PRODUCT_MACHINE_CONFIG') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/equipment-efficiency"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.MASTER_EQUIPMENT_EFFICIENCY')">{{ t('menu.MASTER_EQUIPMENT_EFFICIENCY') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/bom/roller-bom"><el-icon><Histogram /></el-icon><template #title><span :title="t('menu.MASTER_ROLLER_BOM')">{{ t('menu.MASTER_ROLLER_BOM') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-bom"><el-icon><Document /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_BOM_DETAIL')">{{ t('menu.MASTER_PRODUCT_BOM_DETAIL') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-unit-price"><el-icon><Money /></el-icon><template #title><span :title="t('menu.MASTER_UNIT_PRICE')">{{ t('menu.MASTER_UNIT_PRICE') }}</span></template></el-menu-item>
           </el-sub-menu>
@@ -586,7 +598,7 @@ import {
   User, DataAnalysis, Monitor, Setting, Tools, Grid, Files,
   Collection, List, Connection, Calendar, Timer, CircleCheck, Van,
   TrendCharts, FolderOpened, DataLine, EditPen, Operation, Memo, Tickets,
-  Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload, Delete
+  Expand, Fold, Warning, DocumentAdd, OfficeBuilding, Download, Upload, Delete, Histogram
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()

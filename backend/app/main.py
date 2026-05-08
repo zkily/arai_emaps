@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from loguru import logger
 
 from app.core.config import settings
@@ -168,6 +169,18 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now(JST).isoformat(),
     }
+
+
+@app.get("/api-config.js")
+async def api_config_js():
+    """本番 start.py と同様：index.html から先読みされる API 基底 URL 注入用。"""
+    base = settings.PUBLIC_API_BASE or ""
+    body = f"window.__API_BASE__={base!r};\n"
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="application/javascript; charset=utf-8",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # APIルーターの登録

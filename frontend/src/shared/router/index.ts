@@ -219,6 +219,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/quality/material-association/product-material', name: 'QualityProductMaterialAssociation', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociation.vue'), meta: { title: '製品材料照会', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/material-association/product-material/help', name: 'QualityProductMaterialAssociationHelp', component: () => import('@/views/erp/quality/material-association/ProductMaterialAssociationHelp.vue'), meta: { title: '製品材料照会 操作説明', group: '品質管理 > 材料関連', requiresAuth: true } },
       { path: 'erp/quality/product-association', name: 'QualityProductAssociation', component: () => import('@/views/erp/quality/product-association/ProductAssociationHome.vue'), meta: { title: '製品関連', group: '品質管理 > 製品関連', requiresAuth: true } },
+      { path: 'erp/quality/equipment-association', name: 'QualityEquipmentAssociation', component: () => import('@/views/erp/quality/equipment-association/EquipmentAssociationHome.vue'), meta: { title: 'ローラー使用管理', group: '品質管理 > 設備関連', requiresAuth: true } },
 
       // ========== APS モジュール ==========
       { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
@@ -279,9 +280,12 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
       { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },
+      { path: 'master/bom/roller-bom', name: 'RollerBomManagement', component: () => import('@/views/master/bom/RollerBomManagement.vue'), meta: { title: 'ローラーBOM管理', requiresAuth: true } },
       { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '製品BOM表管理', requiresAuth: true } },
       { path: 'master/bom/process-processing-fee', name: 'ProcessProcessingFeeEditor', component: () => import('@/views/master/bom/ProcessProcessingFeeEditor.vue'), meta: { title: '工程加工費マスタ', requiresAuth: true } },
       { path: 'master/bom/product-unit-price', name: 'ProductProcessUnitPriceEditor', component: () => import('@/views/master/bom/ProductProcessUnitPriceEditor.vue'), meta: { title: '工程別標準原価管理', requiresAuth: true } },
+
+      { path: 'master/roller-master', name: 'RollerMasterManagement', component: () => import('@/views/master/rollerMaster/RollerMasterManagement.vue'), meta: { title: 'ローラーマスタ', requiresAuth: true } },
 
       // ========== システム管理 (System Admin) ==========
       { path: 'system', name: 'System', component: () => import('@/views/system/SystemHome.vue'), meta: { title: 'システム管理', requiresAuth: true } },

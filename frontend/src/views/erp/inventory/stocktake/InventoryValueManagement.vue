@@ -2576,56 +2576,87 @@ function printMonthlyReport() {
 <meta charset="UTF-8" />
 <title>棚卸統合報告書</title>
 <style>
-@page { size: A4 portrait; margin: 10mm 8mm; }
+@page { size: A4 portrait; margin: 2cm 8mm 1cm 8mm; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { zoom: 0.9; height: 100%; }
 body {
   font-family: 'Meiryo', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 10px;
+  font-size: 10.5px;
+  line-height: 1.45;
   color: #0f172a;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 .mir-page {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 188mm;
+  max-width: none;
   margin: 0 auto;
-  padding: 0;
+  padding: 2mm 0 3mm;
+  min-height: 267mm;
+  box-sizing: border-box;
+  page-break-after: avoid;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
-.mir-header { text-align: center; margin-bottom: 5px; }
-.mir-title { font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #0b3a67; }
-.mir-subtitle { font-size: 10px; color: #5f6f85; margin-top: 2px; }
+.mir-header { flex-shrink: 0; text-align: center; margin-bottom: 6px; }
+.mir-title { font-size: 17px; font-weight: 700; letter-spacing: 1px; color: #0b3a67; }
+.mir-subtitle { font-size: 10.5px; color: #5f6f85; margin-top: 2px; line-height: 1.4; }
 .mir-meta {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  font-size: 9px;
+  gap: 6px 10px;
+  font-size: 10px;
   color: #3f4f68;
-  margin-bottom: 7px;
-  padding: 4px 6px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
   background: #eef5ff;
   border: 1px solid #d6e5f7;
   border-radius: 6px;
+  line-height: 1.4;
 }
 .mir-section {
-  margin-bottom: 7px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
   border: 1px solid #d7e2ef;
   border-radius: 6px;
   overflow: hidden;
   background: #fff;
-  page-break-inside: avoid;
+  page-break-inside: auto;
+  break-inside: auto;
 }
 .mir-section-title {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 700;
   color: #0c4a7d;
   background: linear-gradient(90deg, #e8f3ff 0%, #f4f9ff 100%);
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-left: 3px solid #2b79c2;
   border-bottom: 1px solid #d7e2ef;
+  line-height: 1.35;
+}
+.mir-section-title--row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mir-section-title__extra {
+  margin-left: auto;
+  font-weight: 600;
+  color: #334155;
+  font-size: 10px;
 }
 table { width: 100%; border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; border: 2px solid #475569; }
-th, td { border: 1px solid #d8e1ec; padding: 5px 7px; }
+th, td { border: 1px solid #d8e1ec; padding: 9px 10px; vertical-align: middle; line-height: 1.834; }
 th { background: #f3f8fd; font-weight: 600; text-align: center; white-space: nowrap; color: #334155; font-size: 10px; }
 td { text-align: right; background: #fff; }
 td.left { text-align: left; }
@@ -2636,7 +2667,17 @@ tr.total-row td {
   background: #edf6ff;
   color: #0f3f6e;
 }
-.mir-footer { text-align: right; font-size: 8px; color: #6b7f95; margin-top: 4px; }
+.mir-footer {
+  flex-shrink: 0;
+  margin-top: auto;
+  text-align: right;
+  font-size: 9px;
+  color: #6b7f95;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  line-height: 1.4;
+  page-break-after: avoid;
+}
 </style>
 </head>
 <body onload="window.print();window.close();">${html}</body>

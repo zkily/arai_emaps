@@ -128,6 +128,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_QUALITY_PRODUCT_MATERIAL', name: '製品材料照会', path: '/erp/quality/material-association/product-material', parentCode: 'ERP_QUALITY', sortOrder: 1.2 },
   { code: 'ERP_QUALITY_PRODUCT_MATERIAL_HELP', name: '製品材料照会 操作説明', path: '/erp/quality/material-association/product-material/help', parentCode: 'ERP_QUALITY', sortOrder: 1.21 },
   { code: 'ERP_QUALITY_PRODUCT', name: '製品関連', path: '/erp/quality/product-association', parentCode: 'ERP_QUALITY', sortOrder: 2 },
+  { code: 'ERP_QUALITY_EQUIPMENT', name: 'ローラー使用管理', path: '/erp/quality/equipment-association', parentCode: 'ERP_QUALITY', sortOrder: 2.5 },
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },
   { code: 'APS_PRODUCTION_PLAN_CREATE', name: '生産計画作成', icon: 'Calendar', parentCode: 'APS', sortOrder: 1 },
@@ -163,6 +164,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_CUSTOMER', name: '顧客マスタ', path: '/master/customer', parentCode: 'MASTER_LIST', sortOrder: 7 },
   { code: 'MASTER_CARRIER', name: '運送便マスタ', path: '/master/carrier', parentCode: 'MASTER_LIST', sortOrder: 8 },
   { code: 'MASTER_MACHINE', name: '設備マスタ', path: '/master/machine', parentCode: 'MASTER_LIST', sortOrder: 9 },
+  { code: 'MASTER_ROLLER_MASTER', name: 'ローラーマスタ', path: '/master/roller-master', parentCode: 'MASTER_LIST', sortOrder: 9.5 },
   { code: 'MASTER_DESTINATION', name: '納入先マスタ', path: '/master/destination', parentCode: 'MASTER_LIST', sortOrder: 10 },
   { code: 'MASTER_DESTINATION_HOLIDAY', name: '納入先休日設定', path: '/master/destination/holiday', parentCode: 'MASTER_LIST', sortOrder: 11 },
   { code: 'MASTER_BOM', name: 'BOM', parentCode: 'MASTER', sortOrder: 2 },
@@ -170,6 +172,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },
   { code: 'MASTER_PRODUCT_MACHINE_CONFIG', name: '製品機器設定', path: '/master/bom/product-machine-config', parentCode: 'MASTER_BOM', sortOrder: 2 },
   { code: 'MASTER_EQUIPMENT_EFFICIENCY', name: '設備能率管理', path: '/master/bom/equipment-efficiency', parentCode: 'MASTER_BOM', sortOrder: 3 },
+  { code: 'MASTER_ROLLER_BOM', name: 'ローラーBOM管理', path: '/master/bom/roller-bom', parentCode: 'MASTER_BOM', sortOrder: 3.5 },
   { code: 'MASTER_PRODUCT_BOM_DETAIL', name: '製品BOM表管理', path: '/master/bom/product-bom', parentCode: 'MASTER_BOM', sortOrder: 4 },
   { code: 'MASTER_PROCESS_PROCESSING_FEE', name: '工程加工費マスタ', path: '/master/bom/process-processing-fee', parentCode: 'MASTER_LIST', sortOrder: 6.5 },
   { code: 'MASTER_UNIT_PRICE', name: '工程別標準原価', path: '/master/bom/product-unit-price', parentCode: 'MASTER_BOM', sortOrder: 6 },

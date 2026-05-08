@@ -1595,12 +1595,15 @@ _INVENTORY_COL_TO_PROCESS_CD = {
 # kind の並び順
 _KIND_ORDER = {"T": 0, "N": 1, "F": 2}
 
-# category → 表示名
-_CATEGORY_MAP = {
-    "一般": "一般",
-    "溶接": "溶接",
-    "メカ溶接": "メカ溶接",
-}
+def _monthly_report_product_category(pcat: Optional[str]) -> str:
+    """製品マスタ category を棚卸統合報告書「分類別」のキーへ正規化する。"""
+    s = str(pcat or "").strip()
+    if s == "一般":
+        return "一般"
+    if s == "メカ溶接":
+        return "メカ溶接"
+    # 溶接・その他・未設定・マスタ外は「一般溶接」に集約（旧「その他」枠の改称）
+    return "一般溶接"
 
 
 def _stocktake_product_cd_included(pcd: Optional[str]) -> bool:
@@ -1621,7 +1624,7 @@ async def get_monthly_inventory_report(
     """
     棚卸金額報告書（月次）: 全データを一括聚合して返す。
     - overview_by_kind: T/N/F ごとの仕掛品本数/金額・製品本数/金額
-    - overview_by_category: 一般/溶接/メカ溶接/その他
+    - overview_by_category: 一般/一般溶接/メカ溶接（表示順固定）
     - parts_meka: メカ部品明細（kind='T' かつ category に 'メカ'）
     - parts_non_meka: メカ以外を kind で集計
     - meta: 対象月・集計日時
@@ -1649,7 +1652,7 @@ async def get_monthly_inventory_report(
                 cd = str(pcd or "").strip()
                 if cd:
                     prod_kind_by_cd[cd] = (str(pk or "").strip() or "—")
-                    prod_category_by_cd[cd] = (str(pcat or "").strip() or "その他")
+                    prod_category_by_cd[cd] = _monthly_report_product_category(pcat)
 
         pair_keys: List[Tuple[str, str]] = []
         seen_pairs: set = set()
@@ -1674,9 +1677,7 @@ async def get_monthly_inventory_report(
         for r in prod_rows:
             pcd = str(r.product_cd or "").strip()
             kind = prod_kind_by_cd.get(pcd, "—")
-            category = prod_category_by_cd.get(pcd, "その他")
-            if category not in _CATEGORY_MAP:
-                category = "その他"
+            category = prod_category_by_cd.get(pcd, _monthly_report_product_category(None))
 
             key = (pcd, str(r.route_cd or "").strip())
             snaps = snap_by_pair.get(key, [])
@@ -1761,9 +1762,7 @@ async def get_monthly_inventory_report(
                         cd2 = str(pcd2 or "").strip()
                         if not cd2 or cd2 in by_pcd_product:
                             continue
-                        cat2 = str(pcat2 or "").strip() or "その他"
-                        if cat2 not in _CATEGORY_MAP:
-                            cat2 = "その他"
+                        cat2 = _monthly_report_product_category(pcat2)
                         by_pcd_product[cd2] = {
                             "kind": (str(pk2 or "").strip() or "—"),
                             "category": cat2,
@@ -1837,7 +1836,7 @@ async def get_monthly_inventory_report(
 
         overview_by_kind = _build_overview(kind_wip, kind_product, ["T", "N", "F"])
         overview_by_category = _build_overview(
-            cat_wip, cat_product, ["一般", "溶接", "メカ溶接", "その他"]
+            cat_wip, cat_product, ["一般", "一般溶接", "メカ溶接"]
         )
 
         # ====== 2. 部品データ ======
@@ -1873,10 +1872,12 @@ async def get_monthly_inventory_report(
             is_meka = "メカ" in p_cat if p_cat else False
 
             if is_meka:
+                master_unit = _fnum(row[4]) if row[4] is not None else 0.0
                 parts_meka_list.append({
                     "kind": p_kind,
                     "part_cd": ps.part_cd,
                     "part_name": p_name,
+                    "unit_price": round(master_unit, 2),
                     "qty": qty,
                     "amount": amt,
                 })

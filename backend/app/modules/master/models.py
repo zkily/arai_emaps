@@ -609,3 +609,93 @@ class InventoryValueCalcDetail(Base):
     error_code = Column(String(50))
     error_message = Column(String(500))
     created_at = Column(DateTime, default=func.now())
+
+
+# ---------------------------------------------------------------------------
+# ローラーBOM / ローラーマスタ（品質・設備関連）
+# ---------------------------------------------------------------------------
+
+
+class RollerBom(Base):
+    """ローラーBOM（roller_bom）— ローラーと製品・設備の対応"""
+
+    __tablename__ = "roller_bom"
+    __table_args__ = ({"mysql_comment": "ローラーBOM"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主キー")
+    roller_cd = Column(String(50), nullable=False, index=True, comment="ローラーCD")
+    roller_type = Column(String(100), nullable=True, comment="ローラー種類")
+    product_cd = Column(String(50), nullable=False, index=True, comment="製品CD")
+    machine_cd = Column(String(50), nullable=False, index=True, comment="設備CD")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
+
+
+class RollerMaster(Base):
+    """ローラーマスタ（roller_master）— ローラー保守・清掃頻度など"""
+
+    __tablename__ = "roller_master"
+    __table_args__ = ({"mysql_comment": "ローラーマスタ"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主キー")
+    roller_cd = Column(String(50), unique=True, nullable=False, index=True, comment="ローラーCD")
+    roller_name = Column(String(200), nullable=True, comment="ローラー名")
+    exchange_freq_qty = Column(Integer, nullable=True, comment="交換頻度本数")
+    exchange_freq_month = Column(Integer, nullable=True, comment="交換頻度月")
+    cleaning_freq_month = Column(Integer, nullable=True, comment="清掃頻度月")
+    category = Column(String(50), nullable=True, comment="区分")
+    note = Column(Text, nullable=True, comment="備考")
+    machine_cd = Column(String(50), nullable=True, index=True, comment="設備CD")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
+
+
+# ---------------------------------------------------------------------------
+# ローラー使用管理（品質・設備関連）
+# ---------------------------------------------------------------------------
+
+
+class RollerUsageStatus(Base):
+    """ローラー使用状況主表（roller_usage_status）— ローラー毎の使用・交換状況と次回予測"""
+
+    __tablename__ = "roller_usage_status"
+    __table_args__ = ({"mysql_comment": "ローラー使用状況"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主キー")
+    roller_cd = Column(String(50), unique=True, nullable=False, index=True, comment="ローラーCD")
+    roller_type = Column(String(200), nullable=True, comment="ローラー種類")
+    machine_cd = Column(String(50), nullable=True, index=True, comment="設備CD")
+    machine_name = Column(String(100), nullable=True, comment="設備名")
+    # 周期パラメータ（roller_master から同期）
+    exchange_freq_qty = Column(Integer, nullable=True, comment="交換頻度本数")
+    exchange_freq_month = Column(Integer, nullable=True, comment="交換頻度月")
+    cleaning_freq_month = Column(Integer, nullable=True, comment="清掃頻度月")
+    # 実施状況
+    exec_type = Column(String(50), nullable=True, comment="実施内容（ローラー交換/ローラー清掃）")
+    last_exec_date = Column(Date, nullable=True, comment="前回実施日")
+    next_exec_date = Column(Date, nullable=True, comment="次回実施日（予測）")
+    # 生産数量（prod_cumulative_qty=サマリー自動集計、prod_manual_addon_qty=画面からの単一補正）
+    prod_cumulative_qty = Column(Integer, nullable=True, default=0, comment="生産累計数（自動）")
+    prod_manual_addon_qty = Column(Integer, nullable=True, default=0, comment="手入力補正（自動累計に加算）")
+    planned_product_cd = Column(String(50), nullable=True, comment="予定段取品")
+    exchange_remaining_qty = Column(Integer, nullable=True, comment="交換残数")
+    # 追跡
+    source_roller_master_updated_at = Column(DateTime, nullable=True, comment="ローラーマスタ最終同期日時")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新日時")
+
+
+class RollerUsageLog(Base):
+    """ローラー使用登録（roller_usage_log）— 実施ごとの履歴ログ"""
+
+    __tablename__ = "roller_usage_log"
+    __table_args__ = ({"mysql_comment": "ローラー使用登録"})
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="主キー")
+    roller_cd = Column(String(50), nullable=False, index=True, comment="ローラーCD")
+    exec_type = Column(String(50), nullable=False, comment="実施内容（ローラー交換/ローラー清掃）")
+    exec_date = Column(Date, nullable=False, comment="実施日")
+    management_cd = Column(String(100), nullable=True, comment="管理CD")
+    note = Column(Text, nullable=True, comment="備考")
+    created_by = Column(String(100), nullable=True, comment="登録者")
+    created_at = Column(DateTime, default=func.now(), comment="作成日時")

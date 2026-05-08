@@ -329,6 +329,7 @@ export interface MonthlyReportPartMekaRow {
   kind: string
   part_cd: string
   part_name: string
+  unit_price: number
   qty: number
   amount: number
 }
