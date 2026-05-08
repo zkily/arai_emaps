@@ -680,7 +680,18 @@
           <div class="confirm-details">
             <div class="detail-row">
               <span class="detail-label">期間:</span>
-              <span class="detail-value highlight">{{ generateDateRange.start }} ～ {{ generateDateRange.end }}</span>
+              <el-date-picker
+                v-model="generateDateRangeSelection"
+                type="daterange"
+                range-separator="～"
+                start-placeholder="開始日"
+                end-placeholder="終了日"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                :locale="jaLocale"
+                size="small"
+                class="generate-date-picker"
+              />
             </div>
             <div class="detail-row">
               <span class="detail-label">説明:</span>
@@ -1893,6 +1904,20 @@ const showPrintDateDialog = ref(false)
 const printTargetDate = ref<string>('')
 const showGenerateConfirmDialog = ref(false)
 const generateDateRange = ref({ start: '', end: '' })
+const generateDateRangeSelection = computed<string[] | []>({
+  get: () => {
+    const { start, end } = generateDateRange.value
+    if (!start || !end) return []
+    return [start, end]
+  },
+  set: (value) => {
+    if (Array.isArray(value) && value.length === 2) {
+      generateDateRange.value = { start: value[0], end: value[1] }
+      return
+    }
+    generateDateRange.value = { start: '', end: '' }
+  },
+})
 const showProgressDialog = ref(false)
 const progressPercentage = ref(0)
 const progressStatus = ref<'success' | 'exception' | 'warning' | ''>('')
@@ -3334,10 +3359,13 @@ const confirmAllUpdate = async () => {
 }
 
 const confirmGenerateData = async () => {
-  showGenerateConfirmDialog.value = false
   const startDateStr = generateDateRange.value.start
   const endDateStr = generateDateRange.value.end
-  if (!startDateStr || !endDateStr) return
+  if (!startDateStr || !endDateStr) {
+    ElMessage.warning('期間を選択してください')
+    return
+  }
+  showGenerateConfirmDialog.value = false
   generating.value = true
   showProgressDialog.value = true
   progressDialogTitle.value = 'データ生成中'
@@ -6222,6 +6250,10 @@ onUnmounted(() => {
 .detail-value.highlight {
   font-weight: 600;
   color: #0f172a;
+}
+.generate-date-picker {
+  flex: 1;
+  min-width: 260px;
 }
 /* 在庫取引ログ入力ダイアログ */
 .transaction-log-dialog .el-dialog__body {

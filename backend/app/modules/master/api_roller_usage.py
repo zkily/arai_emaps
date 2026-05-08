@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -543,6 +543,57 @@ async def recalculate_predictions(
         val = (await db.execute(sum_q)).scalar()
         return int(val or 0)
 
+    async def _daily_molding_plan_rows(
+        product_cds: List[str], start_date: date, end_date: date
+    ) -> List[Tuple[date, int, Optional[str], Optional[str]]]:
+        """日別の成型計画（molding_actual_plan）を返す。
+
+        戻り値: [(date, day_total_qty, representative_product_name, representative_product_cd), ...]
+        representative は当日 qty が最大の製品（同値時は取得順）。
+        """
+        if not product_cds:
+            return []
+        q = (
+            select(
+                ProductionSummary.date,
+                ProductionSummary.product_name,
+                ProductionSummary.product_cd,
+                ProductionSummary.molding_actual_plan,
+            )
+            .where(ProductionSummary.product_cd.in_(product_cds))
+            .where(ProductionSummary.date >= start_date)
+            .where(ProductionSummary.date <= end_date)
+            .where(ProductionSummary.molding_actual_plan > 0)
+            .order_by(ProductionSummary.date.asc(), ProductionSummary.molding_actual_plan.desc())
+        )
+        rows = (await db.execute(q)).all()
+        if not rows:
+            return []
+
+        grouped: Dict[date, Dict[str, Any]] = {}
+        for d, pname, pcd, qty in rows:
+            if not isinstance(d, date):
+                continue
+            day_qty = int(qty or 0)
+            if d not in grouped:
+                grouped[d] = {
+                    "sum_qty": day_qty,
+                    "rep_name": str(pname) if pname is not None else None,
+                    "rep_cd": str(pcd) if pcd is not None else None,
+                }
+            else:
+                grouped[d]["sum_qty"] += day_qty
+
+        return [
+            (
+                d,
+                int(v["sum_qty"]),
+                v["rep_name"],
+                v["rep_cd"],
+            )
+            for d, v in sorted(grouped.items(), key=lambda x: x[0])
+        ]
+
     async def _pick_latest_molding_plan_row(
         product_cds: List[str], start_date: date, end_date: date
     ) -> tuple[Optional[str], Optional[date]]:
@@ -580,6 +631,7 @@ async def recalculate_predictions(
     synced_from_log = 0
     updated_prod_cumulative_qty = 0
     updated_planned_when_negative_remaining = 0
+    reached_exchange_threshold_count = 0
     for row in rows:
         # 再計算前に生産数累計をクリアし、旧データの残留を除去する
         row.prod_cumulative_qty = 0
@@ -595,30 +647,55 @@ async def recalculate_predictions(
         # last_exec_date ～ 当月月末まで合計し、主表の生産累計数へ反映
         # （交換頻度本数が空または 0 のローラーは 0 のまま／集計しない）
         product_cds = bom_product_map.get((row.roller_cd or "").strip(), [])
+        sum_qty = 0
         if not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty):
             if row.last_exec_date and product_cds:
-                row.prod_cumulative_qty = await _sum_molding_actual_plan(
-                    product_cds, row.last_exec_date, period_end
-                )
+                sum_qty = await _sum_molding_actual_plan(product_cds, row.last_exec_date, period_end)
+                # 要件:
+                # - 生産数累計 < 交換本数: 生産数累計をそのまま表示
+                # - 生産数累計 >= 交換本数: （交換本数 - 生産数累計）を表示（0以下）
+                if row.exchange_freq_qty is not None and sum_qty >= row.exchange_freq_qty:
+                    row.prod_cumulative_qty = row.exchange_freq_qty - sum_qty
+                else:
+                    row.prod_cumulative_qty = sum_qty
                 updated_prod_cumulative_qty += 1
         _apply_prediction(row)
 
-        # 交換残数 < 0（本数超過）のとき、実際サマリー上「計画中」の製品名・該当日で予定段取品／次回実施日を上書き
-        rem = row.exchange_remaining_qty
+        # 生産数累計を日別に段階加算し、交換本数に到達した日を実施日へ設定。
+        # 予定段取品はその到達日に対応する production_summarys の製品名を設定。
         if (
-            rem is not None
-            and rem < 0
+            not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty)
             and row.last_exec_date
             and product_cds
-            and not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty)
+            and row.exchange_freq_qty is not None
+            and row.exchange_freq_qty > 0
         ):
-            lbl, od = await _pick_latest_molding_plan_row(
-                product_cds, row.last_exec_date, period_end
-            )
-            if lbl and od:
-                row.planned_product_cd = lbl
-                row.next_exec_date = od
+            daily_rows = await _daily_molding_plan_rows(product_cds, row.last_exec_date, period_end)
+            running = 0
+            reached_date: Optional[date] = None
+            reached_label: Optional[str] = None
+            for d, day_qty, rep_name, rep_cd in daily_rows:
+                running += day_qty
+                if running >= row.exchange_freq_qty:
+                    reached_date = d
+                    reached_label = _planned_product_label_trunc(rep_name, rep_cd)
+                    break
+
+            if reached_date is not None:
+                row.next_exec_date = reached_date
+                if reached_label:
+                    row.planned_product_cd = reached_label
+                reached_exchange_threshold_count += 1
                 updated_planned_when_negative_remaining += 1
+
+        # 交換残数表示も要件に合わせる:
+        # - 生産数累計 < 交換本数: 生産数累計（正数）
+        # - 生産数累計 >= 交換本数: 交換本数 - 生産数累計（0以下）
+        if row.exchange_freq_qty is not None and row.exchange_freq_qty > 0:
+            if sum_qty >= row.exchange_freq_qty:
+                row.exchange_remaining_qty = row.exchange_freq_qty - sum_qty
+            else:
+                row.exchange_remaining_qty = sum_qty
 
     await db.commit()
     return {
@@ -627,11 +704,13 @@ async def recalculate_predictions(
         "synced_from_log": synced_from_log,
         "updated_prod_cumulative_qty": updated_prod_cumulative_qty,
         "updated_planned_when_negative_remaining": updated_planned_when_negative_remaining,
+        "reached_exchange_threshold_count": reached_exchange_threshold_count,
         "prod_cumulative_period_end": period_end.isoformat(),
         "message": (
             f"{len(rows)} 件の予測を更新しました"
             f"（ログ同期 {synced_from_log} 件 / 累計再計算 {updated_prod_cumulative_qty} 件"
             f"・超過時予定更新 {updated_planned_when_negative_remaining} 件"
+            f"・交換到達日更新 {reached_exchange_threshold_count} 件"
             f"・累計締め {period_end.isoformat()}）"
         ),
     }
