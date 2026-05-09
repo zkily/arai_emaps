@@ -95,11 +95,14 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import dayjs from 'dayjs'
 import * as echarts from 'echarts'
-import { getSalesStats, getDailyConfirmedSeries } from '@/api/erp/sales'
-import type { DailyConfirmedSeries } from '@/api/erp/sales'
+import {
+  getSalesStats,
+  getDailyConfirmedSeries,
+  type DailyConfirmedSeries,
+  type SalesStats,
+} from '@/api/erp/sales'
 import { getInventoryStats } from '@/api/erp/inventory'
 import { getActiveProductCount } from '@/api/master/productMaster'
-import type { SalesStats } from '@/types/erp/sales'
 import type { LocaleType } from '@/i18n'
 import { formatInteger } from '@/utils/formatInteger'
 import type { InventoryStats } from '@/types/erp/inventory'
@@ -358,13 +361,13 @@ const loadDashboardData = async () => {
     statsCards.value = [
       {
         key: 'sales',
-        value: `¥${(sales?.this_month_amount ?? 0).toLocaleString()}`,
+        value: `¥${(sales?.monthly_order_amount ?? 0).toLocaleString()}`,
         icon: markRaw(TrendCharts),
         gradient: 'linear-gradient(135deg, #667eea, #764ba2)',
       },
       {
         key: 'orders',
-        value: formatInteger(sales?.this_month_orders ?? 0, locale.value as LocaleType),
+        value: formatInteger(sales?.monthly_confirmed_units ?? 0, locale.value as LocaleType),
         icon: markRaw(Document),
         gradient: 'linear-gradient(135deg, #f43f5e, #e11d48)',
       },

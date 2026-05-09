@@ -244,8 +244,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'mes/instruction/forming',
         name: 'MesFormingInstruction',
-        component: () => import('@/views/mes/instruction/forming/MesFormingInstruction.vue'),
-        meta: { title: '成型指示', group: 'MES > 生産指示', requiresAuth: true, useApsSchedulePlanData: true },
+        redirect: { name: 'FormingInstruction' },
+        meta: { title: '成型指示', group: 'MES > 生産指示', requiresAuth: true },
       },
       {
         path: 'mes/instruction/welding',

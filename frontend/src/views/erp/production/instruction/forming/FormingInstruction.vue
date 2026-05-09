@@ -32,11 +32,11 @@
             </div>
           </div>
           <el-button
-            @click="refreshPlanData"
             :icon="Refresh"
             size="small"
             type="info"
             class="action-btn refresh-btn"
+            @click="refreshPlanData"
           >
             データ更新
           </el-button>
@@ -58,18 +58,18 @@
                 placeholder="生産日"
                 format="MM/DD"
                 value-format="YYYY-MM-DD"
-                @change="searchPlans"
                 size="small"
                 class="compact-date-picker"
+                @change="searchPlans"
               />
               <div class="date-buttons">
-                <el-button size="small" @click="setDateRange(-1)" class="date-btn prev"
+                <el-button size="small" class="date-btn prev" @click="setDateRange(-1)"
                   >前日</el-button
                 >
-                <el-button size="small" @click="setDateRange(0)" class="date-btn today"
+                <el-button size="small" class="date-btn today" @click="setDateRange(0)"
                   >今日</el-button
                 >
-                <el-button size="small" @click="setDateRange(1)" class="date-btn next"
+                <el-button size="small" class="date-btn next" @click="setDateRange(1)"
                   >翌日</el-button
                 >
               </div>
@@ -78,9 +78,9 @@
               v-model="planSearchForm.machineName"
               placeholder="設備選択"
               clearable
-              @change="searchPlans"
               size="small"
               class="machine-select"
+              @change="searchPlans"
             >
               <el-option
                 v-for="machine in machineOptions"
@@ -93,9 +93,9 @@
               v-model="planSearchForm.keyword"
               placeholder="製品名・設備名検索"
               clearable
-              @input="searchPlans"
               size="small"
               class="keyword-input"
+              @input="searchPlans"
             >
               <template #prefix>
                 <el-icon><Search /></el-icon>
@@ -106,34 +106,34 @@
               placement="top"
             >
               <el-button
-                @click="printInstructions"
                 :icon="Download"
                 size="small"
                 type="success"
                 class="print-btn instruction-btn"
+                @click="printInstructions"
               >
                 指示書発行
               </el-button>
             </el-tooltip>
             <el-tooltip content="プレビューで編集してから印刷" placement="top">
               <el-button
-                @click="openSetupSchedulePreview"
                 size="small"
                 type="primary"
                 class="print-btn"
                 :loading="printingSetupSchedule"
+                @click="openSetupSchedulePreview"
               >
                 段取表プレビュー
               </el-button>
             </el-tooltip>
             <el-tooltip content="編集せずにそのまま印刷" placement="top">
               <el-button
-                @click="printSetupSchedule"
                 :icon="Printer"
                 size="small"
                 type="primary"
                 class="print-btn"
                 :loading="printingSetupSchedule"
+                @click="printSetupSchedule"
               >
               段取表印刷
               </el-button>
@@ -141,19 +141,35 @@
             <el-button
               v-if="showWorkTimeConfig"
               data-work-time-config-button
-              @click="openWorkTimeConfigDialog"
               size="small"
               type="info"
               class="print-btn"
+              @click="openWorkTimeConfigDialog"
             >
               設備運行時間設定
             </el-button>
+            <div class="forming-notes-btn-wrap">
+              <el-button
+                type="default"
+                size="small"
+                class="forming-notes-toolbar-btn"
+                title="メモ（TODO）"
+                @click="openFormingInstructionNotesDialog"
+              >
+                <span class="notes-badge-wrap">
+                  <el-icon><Memo /></el-icon>
+                  <span v-if="formingInstructionNotesCount > 0" class="notes-count-badge">
+                    {{ formingInstructionNotesCount }}
+                  </span>
+                </span>
+              </el-button>
+            </div>
           </div>
         </div>
 
         <el-table
-          :data="planData"
           v-loading="planLoading"
+          :data="planData"
           :style="{ width: '100%' }"
           max-height="245"
           :default-sort="{ prop: 'plan_date', order: 'ascending' }"
@@ -241,10 +257,10 @@
                 :placeholder="
                   isHighlightProduct(row.product_name) ? '新聞紙をかける' : '備考を入力'
                 "
+                clearable
                 @input="handleRemarksInput(row)"
                 @blur="saveRemarks(row)"
                 @keyup.enter="saveRemarks(row)"
-                clearable
               />
             </template>
           </el-table-column>
@@ -253,30 +269,19 @@
       </el-card>
     </div>
 
-    <!-- 生産計画マトリックス -->
-    <div class="matrix-section">
+    <!-- 日別計画・実績生産数（同一APIレコードを plan_date で集計） -->
+    <div class="plan-qty-chart-section">
       <el-card class="section-card">
         <template #header>
           <div class="card-header">
-            <div class="section-title">
-              <el-icon size="20"><Document /></el-icon>
-              <span>生産計画マトリックス</span>
+            <div class="section-title plan-qty-chart-title-row">
+              <el-icon size="20"><TrendCharts /></el-icon>
+              <span>日別計画・実績生産数</span>
+              <span class="plan-qty-chart-sub">計画・実績を日付ごとに合計表示</span>
             </div>
-            <div class="header-actions">
-              <el-input
-                v-model="matrixSearchKeyword"
-                placeholder="設備名・製品名で検索"
-                clearable
-                @input="filterMatrixData"
-                size="small"
-                class="matrix-search-input"
-              >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
+            <div class="header-actions plan-qty-chart-actions">
               <el-date-picker
-                v-model="matrixDateRange"
+                v-model="planQtyChartDateRange"
                 type="daterange"
                 range-separator="〜"
                 start-placeholder="開始日"
@@ -284,152 +289,31 @@
                 format="MM/DD"
                 value-format="YYYY-MM-DD"
                 size="small"
-                @change="loadMatrixData"
                 class="compact-date-picker"
+                @change="loadPlanQtyChartData"
               />
               <div class="month-buttons">
-                <el-button size="small" @click="setMatrixMonth(-1)" class="month-btn prev"
+                <el-button size="small" class="month-btn prev" @click="setPlanQtyChartMonth(-1)"
                   >前月</el-button
                 >
-                <el-button size="small" @click="setMatrixMonth(0)" class="month-btn current"
+                <el-button size="small" class="month-btn current" @click="setPlanQtyChartMonth(0)"
                   >今月</el-button
                 >
-                <el-button size="small" @click="setMatrixMonth(1)" class="month-btn next"
+                <el-button size="small" class="month-btn next" @click="setPlanQtyChartMonth(1)"
                   >翌月</el-button
                 >
-              </div>
-              <div class="matrix-controls">
-                <el-button
-                  @click="exportToExcel"
-                  :icon="Download"
-                  size="small"
-                  type="success"
-                  class="export-btn"
-                >
-                  Excel出力
-                </el-button>
-                <el-button
-                  @click="printMatrix"
-                  :icon="Printer"
-                  size="small"
-                  type="primary"
-                  class="print-btn"
-                >
-                  印刷
-                </el-button>
               </div>
             </div>
           </div>
         </template>
 
-        <div class="matrix-table-wrapper">
-          <table class="matrix-table">
-            <thead>
-              <tr>
-                <th class="sticky-col machine-col">設備</th>
-                <th class="sticky-col product-col">製品名</th>
-                <th class="sticky-col operator-col">生産順位</th>
-                <th class="sticky-col total-col">生産数(合計)</th>
-                <th
-                  v-for="date in matrixDates"
-                  :key="date"
-                  :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
-                >
-                  <div class="date-header">
-                    <div class="date-text">{{ formatMatrixDate(date) }}</div>
-                    <div class="weekday-text">{{ getWeekdayLabel(date) }}</div>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in visibleMatrixRows"
-                :key="row.key"
-                :class="[
-                  'matrix-row',
-                  'machine-group-' + row.group,
-                  {
-                    'group-header': row.isGroupHeader,
-                    'child-row': row.isChildRow,
-                    'row-highlighted': hoveredRow === row.key,
-                  },
-                ]"
-                :style="{ borderLeft: `3px solid ${getMachineColor(row.machine_name)}` }"
-                @mouseenter="handleCellHover(row.key, '')"
-                @mouseleave="handleCellLeave"
-              >
-                <td class="sticky-col machine-col">
-                  <div class="machine-cell">
-                    <el-icon
-                      v-if="row.isGroupHeader"
-                      @click="toggleMachineCollapse(row.machine_name)"
-                      class="collapse-icon"
-                      :class="{ collapsed: row.isCollapsed }"
-                    >
-                      <ArrowDown />
-                    </el-icon>
-                    <span
-                      class="machine-name"
-                      :class="{
-                        'group-header-text': row.isGroupHeader,
-                        'child-text': row.isChildRow,
-                      }"
-                      :style="{ color: getMachineColor(row.machine_name) }"
-                    >
-                      {{ row.machine_name }}
-                    </span>
-                  </div>
-                </td>
-                <td class="sticky-col product-col" :class="{ 'child-text': row.isChildRow }">
-                  {{ row.product_name }}
-                </td>
-                <td
-                  class="sticky-col operator-col numeric-cell"
-                  :class="{ 'child-text': row.isChildRow }"
-                >
-                  {{ row.operator || '' }}
-                </td>
-                <td
-                  class="sticky-col total-col numeric-cell"
-                  :class="{ 'child-text': row.isChildRow }"
-                >
-                  {{ formatQty(row.totalQty) }}
-                </td>
-                <td
-                  v-for="date in matrixDates"
-                  :key="row.key + '-' + date"
-                  class="numeric-cell data-cell"
-                  :class="{
-                    'col-highlighted': hoveredCol === date,
-                    'cell-highlighted': hoveredRow === row.key && hoveredCol === date,
-                    'is-today': isToday(date),
-                  }"
-                  @mouseenter="handleCellHover(row.key, date)"
-                  @mouseleave="handleCellLeave"
-                >
-                  <span v-if="row.dateToQty[date]">{{ formatQty(row.dateToQty[date]) }}</span>
-                  <span v-else class="cell-empty"></span>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="matrix-total-row">
-                <td class="sticky-col machine-col">合計</td>
-                <td class="sticky-col product-col"></td>
-                <td class="sticky-col operator-col"></td>
-                <td class="sticky-col total-col numeric-cell">{{ formatQty(matrixGrandTotal) }}</td>
-                <td
-                  v-for="date in matrixDates"
-                  :key="'total-' + date"
-                  class="numeric-cell"
-                  :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
-                >
-                  {{ formatQty(matrixColumnTotals[date] || 0) }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+        <div v-loading="planQtyChartLoading" class="plan-qty-chart-body">
+          <el-empty
+            v-if="!planQtyChartLoading && !planQtyChartHasData"
+            description="該当期間に計画・実績の数量がありません"
+            class="plan-qty-chart-empty"
+          />
+          <div v-show="planQtyChartHasData" ref="planQtyChartEl" class="plan-qty-chart-canvas" />
         </div>
       </el-card>
     </div>
@@ -444,7 +328,7 @@
     >
       <div class="print-preview-content">
         <div class="print-preview-header">
-          <el-button @click="printInstructions" type="primary" :icon="Download">
+          <el-button type="primary" :icon="Download" @click="printInstructions">
             印刷実行
           </el-button>
           <el-button @click="printPreviewVisible = false"> 閉じる </el-button>
@@ -550,7 +434,7 @@
       </div>
       <template #footer>
         <div class="setup-preview-footer">
-          <el-button @click="printFromSetupSchedulePreview" type="primary" size="default" :icon="Printer">印刷</el-button>
+          <el-button type="primary" size="default" :icon="Printer" @click="printFromSetupSchedulePreview">印刷</el-button>
           <el-button @click="setupSchedulePreviewVisible = false">閉じる</el-button>
         </div>
       </template>
@@ -559,14 +443,14 @@
     <!-- 設備運行時間設定弹窗 -->
     <el-dialog
       v-if="showWorkTimeConfig"
-      data-work-time-config-dialog
       v-model="workTimeConfigDialogVisible"
+      data-work-time-config-dialog
       title="設備運行時間設定"
       width="760px"
       :close-on-click-modal="false"
       class="work-time-dialog"
     >
-      <div class="work-time-dialog__body" v-loading="workTimeConfigLoading">
+      <div v-loading="workTimeConfigLoading" class="work-time-dialog__body">
         <div class="work-time-dialog__toolbar">
           <div>
             <h3 class="work-time-dialog__subtitle">稼働時間帯を設定する設備を管理</h3>
@@ -634,7 +518,7 @@
       <template #footer>
         <div class="dialog-footer work-time-dialog__footer">
           <el-button @click="workTimeConfigDialogVisible = false">閉じる</el-button>
-          <el-button type="primary" @click="saveWorkTimeConfig" :loading="savingWorkTimeConfig">
+          <el-button type="primary" :loading="savingWorkTimeConfig" @click="saveWorkTimeConfig">
             一括保存
           </el-button>
         </div>
@@ -644,18 +528,18 @@
     <!-- 添加/编辑設備運行時間設定弹窗 -->
     <el-dialog
       v-if="showWorkTimeConfig"
-      data-work-time-config-form-dialog
       v-model="workTimeConfigFormDialogVisible"
+      data-work-time-config-form-dialog
       :title="workTimeConfigForm.id ? '設備運行時間設定編集' : '設備運行時間設定追加'"
       width="420px"
       :close-on-click-modal="false"
       class="work-time-form-dialog"
     >
       <el-form
+        ref="workTimeConfigFormRef"
         :model="workTimeConfigForm"
         :rules="workTimeConfigFormRules"
         label-width="110px"
-        ref="workTimeConfigFormRef"
         class="work-time-form"
       >
         <el-form-item label="設備コード" prop="machine_cd">
@@ -663,9 +547,9 @@
             v-model="workTimeConfigForm.machine_cd"
             placeholder="設備コードを選択"
             :disabled="!!workTimeConfigForm.id"
-            @change="handleMachineCdChange"
             filterable
             class="work-time-form__select"
+            @change="handleMachineCdChange"
           >
             <el-option
               v-for="machine in machineOptionsForWorkTime"
@@ -691,11 +575,87 @@
           <el-button @click="workTimeConfigFormDialogVisible = false">キャンセル</el-button>
           <el-button
             type="primary"
-            @click="saveWorkTimeConfigForm"
             :loading="savingWorkTimeConfigForm"
+            @click="saveWorkTimeConfigForm"
           >
             保存
           </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- メモ（TODO）確認ダイアログ（切断指示ページと同機能・成型用 scope） -->
+    <el-dialog
+      v-model="formingInstructionNotesDialogVisible"
+      title="メモ（TODO）"
+      width="520px"
+      class="forming-instruction-notes-dialog"
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+      :show-close="false"
+    >
+      <div class="cutting-notes-dialog-body">
+        <div class="cutting-notes-add">
+          <el-input
+            v-model="formingInstructionNotesNewContent"
+            type="textarea"
+            :rows="2"
+            size="small"
+            maxlength="200"
+            class="cutting-notes-input"
+            placeholder="簡単なメモを入力（短文）"
+          />
+          <div class="cutting-notes-add-actions">
+            <span class="cutting-notes-char-count">{{ formingInstructionNotesNewContent.length }}/200</span>
+            <el-button
+              type="primary"
+              size="small"
+              class="cutting-notes-add-btn"
+              :loading="formingInstructionNotesSaving"
+              @click="addFormingInstructionNote"
+            >
+              追加
+            </el-button>
+          </div>
+        </div>
+
+        <el-scrollbar v-loading="formingInstructionNotesLoading" max-height="320" class="cutting-notes-scrollbar">
+          <div
+            v-if="!formingInstructionNotesLoading && !formingInstructionNotesList.length"
+            class="cutting-notes-empty"
+          >
+            未登録
+          </div>
+
+          <div v-for="n in formingInstructionNotesList" :key="n.id" class="cutting-notes-row">
+            <el-checkbox
+              :model-value="n.is_done === 1"
+              size="small"
+              @change="(val) => toggleFormingInstructionNoteDone(n, val)"
+            />
+            <div
+              class="cutting-notes-row-content"
+              :class="{ 'cutting-notes-row-content--done': n.is_done === 1 }"
+            >
+              {{ n.content }}
+            </div>
+            <el-button
+              v-if="n.id != null"
+              type="text"
+              size="small"
+              class="cutting-notes-delete-btn"
+              :disabled="formingInstructionNotesSaving"
+              @click="deleteFormingInstructionNote(n)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </el-scrollbar>
+      </div>
+
+      <template #footer>
+        <div class="cutting-notes-dialog-footer">
+          <el-button size="small" @click="formingInstructionNotesDialogVisible = false">閉じる</el-button>
         </div>
       </template>
     </el-dialog>
@@ -704,7 +664,13 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'FormingInstruction' })
-import { ref, reactive, onMounted, computed } from 'vue'
+
+/** 開発環境のみ詳細ログ（本番では無出力。no-console 許可の info を使用） */
+function formingDevLog(...args: unknown[]) {
+  if (import.meta.env.DEV) console.info('[FormingInstruction]', ...args)
+}
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import * as echarts from 'echarts'
 /** ERP/MES いずれの画面でも MES 由来 API を利用し、挙動を統一する */
 const planDataApiPath = computed(() => '/api/mes/forming-plan-data')
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
@@ -716,8 +682,9 @@ import {
   Document,
   TrendCharts,
   Monitor,
-  ArrowDown,
   Printer,
+  Memo,
+  Delete,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import {
@@ -748,6 +715,38 @@ interface ApiResponse<T = any> {
   [key: string]: unknown
 }
 
+interface HeaderStats {
+  total: number
+  pending: number
+  inProgress: number
+  completed: number
+}
+
+interface PlanHeaderStats {
+  totalQuantity: number
+  machineCount: number
+}
+
+interface SelectOption {
+  label: string
+  value: string
+}
+
+interface PlanRecord {
+  id?: number | string
+  plan_date?: string
+  machine_name?: string
+  product_name?: string
+  product_cd?: string
+  process_name?: string
+  quantity?: number | string
+  actual_production?: number | string
+  actual_qty?: number | string
+  operator?: number | string
+  remarks?: string
+  [key: string]: any
+}
+
 // 計画検索フォーム
 const planSearchForm = reactive({
   dateRange: [] as string[],
@@ -776,7 +775,7 @@ const searchForm = reactive({
 })
 
 // 統計データ
-const stats = ref({
+const stats = ref<HeaderStats>({
   total: 0,
   pending: 0,
   inProgress: 0,
@@ -784,7 +783,7 @@ const stats = ref({
 })
 
 // 計画生産数統計データ
-const planStats = ref({
+const planStats = ref<PlanHeaderStats>({
   totalQuantity: 0,
   machineCount: 0,
 })
@@ -804,24 +803,19 @@ const pagination = reactive({
 })
 
 // 計画テーブルデータ
-const planData = ref<any[]>([])
-const allFilteredPlanData = ref<any[]>([]) // 存储所有过滤后的数据
+const planData = ref<PlanRecord[]>([])
+const allFilteredPlanData = ref<PlanRecord[]>([]) // 存储所有过滤后的数据
 const planLoading = ref(false)
 
 // 備考保存的防抖定时器Map
 const remarksSaveTimers = new Map<string, NodeJS.Timeout>()
 
-// 二维表 独立日期与数据
-const matrixDateRange = ref<string[]>([])
-const matrixData = ref<any[]>([])
-const matrixLoading = ref(false)
-const matrixSearchKeyword = ref('')
-const filteredMatrixData = ref<any[]>([])
-
-// マトリックス表格增强功能
-const hoveredRow = ref<string | null>(null)
-const hoveredCol = ref<string | null>(null)
-const collapsedMachines = ref<Set<string>>(new Set())
+// 日別計画・実績チャート（旧マトリックスと同API：quantity / actual_production を日別集計）
+const planQtyChartDateRange = ref<string[]>([])
+const planQtyChartLoading = ref(false)
+const planQtyChartRecords = ref<PlanRecord[]>([])
+const planQtyChartEl = ref<HTMLDivElement | null>(null)
+let planQtyChartInstance: echarts.ECharts | null = null
 
 // ========================================
 // 二次元テーブル関連
@@ -917,10 +911,76 @@ const userOptions = ref([
 ])
 
 // 設備オプションデータ
-const machineOptions = ref<any[]>([])
+const machineOptions = ref<SelectOption[]>([])
 
 // 計算プロパティ
 const dialogTitle = computed(() => (isEdit.value ? '成型指示編集' : '新規成型指示作成'))
+
+const getSelectedDateRange = (): [string, string] | null => {
+  if (planSearchForm.dateRange && planSearchForm.dateRange.length >= 1) {
+    const startDate = planSearchForm.dateRange[0]
+    const endDate = planSearchForm.dateRange[1] || startDate
+    return [startDate, endDate]
+  }
+  return null
+}
+
+const getSelectedBaseDate = () => {
+  const selectedRange = getSelectedDateRange()
+  return selectedRange ? selectedRange[0] : JapanDateUtils.getTodayString()
+}
+
+const buildPlanDataQueryParams = (overrides: Record<string, unknown> = {}) => {
+  const params: Record<string, unknown> = {
+    processName: '成型',
+    page: 1,
+    limit: 10000,
+  }
+  if (planSearchForm.dateRange && planSearchForm.dateRange.length === 2) {
+    params.startDate = planSearchForm.dateRange[0]
+    params.endDate = planSearchForm.dateRange[1]
+  }
+  if (planSearchForm.machineName) {
+    params.machineName = planSearchForm.machineName
+  }
+  if (planSearchForm.keyword) {
+    params.keyword = planSearchForm.keyword
+  }
+  return { ...params, ...overrides }
+}
+
+const calculatePlanStatsFromData = (data: PlanRecord[]) => {
+  const totalQuantity = data.reduce(
+    (sum: number, item: PlanRecord) => sum + (parseInt(String(item.quantity ?? ''), 10) || 0),
+    0,
+  )
+  const machinesWithProduction = new Set(
+    data
+      .filter((item: PlanRecord) => parseInt(String(item.quantity ?? ''), 10) > 0)
+      .map((item: PlanRecord) => item.machine_name)
+      .filter((name): name is string => Boolean(name)),
+  )
+  planStats.value = {
+    totalQuantity,
+    machineCount: machinesWithProduction.size,
+  }
+}
+
+const parsePlanDataList = (result: ApiResponse | unknown[] | unknown): unknown[] => {
+  if (Array.isArray(result)) return result as unknown[]
+  if (result && Array.isArray((result as ApiResponse).data)) return (result as ApiResponse).data as unknown[]
+  if (result && Array.isArray((result as ApiResponse).list)) return (result as ApiResponse).list as unknown[]
+  if (result && (result as ApiResponse).data && Array.isArray((result as ApiResponse).data?.list)) {
+    return (result as ApiResponse).data?.list as unknown[]
+  }
+  if (result && (result as ApiResponse).data && Array.isArray((result as ApiResponse).data?.data)) {
+    return (result as ApiResponse).data?.data as unknown[]
+  }
+  if (result && (result as ApiResponse).data && Array.isArray((result as ApiResponse).data?.records)) {
+    return (result as ApiResponse).data?.records as unknown[]
+  }
+  return []
+}
 
 // 初始化搜索表单默认值
 const initializeSearchForm = () => {
@@ -961,30 +1021,20 @@ const setDateRange = (daysOffset: number) => {
 // 設備データを読み込み
 const loadMachineOptions = async () => {
   try {
-    console.log('設備データを読み込み中...')
     const result = (await request.get('/api/master/machines', {
       params: {
         machine_type: '成型',
       },
     })) as ApiResponse
 
-    console.log('API応答結果:', result)
-    console.log('応答データ型:', typeof result)
-    console.log('応答が配列かどうか:', Array.isArray(result))
-
     // request 拦截器返回 response.data；/api/master/machines 返回 { list, total } 或 { data: { list, total } }
     const list: any[] = Array.isArray(result) ? result : (result?.list ?? (result?.data as any)?.list ?? [])
-    if (list.length >= 0) {
-      machineOptions.value = list
-        .map((machine: any) => ({
-          label: machine.machine_name,
-          value: machine.machine_name,
-        }))
-        .sort((a, b) => a.label.localeCompare(b.label)) // 設備名で昇順ソート
-      console.log('設備オプションの読み込み成功:', machineOptions.value)
-    } else {
-      ElMessage.error('設備データの形式が正しくありません')
-    }
+    machineOptions.value = list
+      .map((machine: any) => ({
+        label: machine.machine_name,
+        value: machine.machine_name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)) // 設備名で昇順ソート
   } catch (error) {
     console.error('設備データの読み込みに失敗:', error)
     ElMessage.error('設備データの読み込みに失敗しました')
@@ -993,7 +1043,7 @@ const loadMachineOptions = async () => {
 
 // 計画データを読み込み
 // 默认排序：生産日升序 -> 生産順位升序（数值优先）
-const sortByPlanDateAndOperatorAsc = (a: any, b: any) => {
+const sortByPlanDateAndOperatorAsc = (a: PlanRecord, b: PlanRecord) => {
   const dateA = String(a?.plan_date || '')
   const dateB = String(b?.plan_date || '')
   if (dateA !== dateB) return dateA.localeCompare(dateB)
@@ -1008,40 +1058,19 @@ const sortByPlanDateAndOperatorAsc = (a: any, b: any) => {
 const loadPlanData = async () => {
   planLoading.value = true
   try {
-    const params: any = {}
-
-    if (planSearchForm.dateRange && planSearchForm.dateRange.length === 2) {
-      params.startDate = planSearchForm.dateRange[0]
-      params.endDate = planSearchForm.dateRange[1]
-    }
-    if (planSearchForm.machineName) {
-      params.machineName = planSearchForm.machineName
-    }
-    if (planSearchForm.keyword) {
-      params.keyword = planSearchForm.keyword
-    }
-    // 默认只显示成型相关的数据
-    params.processName = '成型'
-
-    // 前端分页：获取所有数据，设置一个很大的limit值以确保获取所有数据
-    params.page = 1
-    params.limit = 10000 // 设置一个足够大的值以获取所有数据
-
-    console.log('计划数据查询参数:', params)
+    const params = buildPlanDataQueryParams()
     const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
-    console.log('计划数据API响应:', result)
 
     if (result.success) {
+      const records = Array.isArray(result?.data?.records) ? result.data.records : []
       // 过滤掉製品名为空值的数据，以及計画生産数小于等于0的数据
-      const filteredData = result.data.records
+      const filteredData = records
         .filter((item: any) => item.product_name && item.product_name.trim() !== '' && item.quantity > 0)
         .sort(sortByPlanDateAndOperatorAsc)
-      console.log('过滤前数据数量:', result.data.records.length)
-      console.log('过滤后数据数量:', filteredData.length)
-      console.log('关键词筛选参数:', planSearchForm.keyword)
 
       // 存储所有过滤后的数据
       allFilteredPlanData.value = filteredData
+      calculatePlanStatsFromData(filteredData)
 
       // 更新分页总数（基于过滤后的数据）
       planPagination.total = filteredData.length
@@ -1049,16 +1078,6 @@ const loadPlanData = async () => {
       // 前端分页：根据当前页码和每页数量切片数据
       updatePlanDataPagination()
 
-      console.log('最终加载的计划数据:', planData.value)
-      // 调试：检查第一条数据是否包含能率和段取時間字段
-      if (planData.value.length > 0) {
-        const firstItem = planData.value[0]
-        console.log('第一条数据示例:', {
-          efficiency_rate: firstItem.efficiency_rate,
-          setup_time: firstItem.setup_time,
-          allKeys: Object.keys(firstItem),
-        })
-      }
     } else {
       throw new Error(result.message as string || 'データの取得に失敗しました')
     }
@@ -1068,6 +1087,7 @@ const loadPlanData = async () => {
     planData.value = []
     allFilteredPlanData.value = []
     planPagination.total = 0
+    calculatePlanStatsFromData([])
   } finally {
     planLoading.value = false
   }
@@ -1141,6 +1161,7 @@ const loadInstructions = async () => {
 
     // 更新日別指示日期
     updateDailyInstructionDates()
+    loadStats()
   } catch (error) {
     console.error('指示リストの読み込みに失敗:', error)
     ElMessage.error('データの読み込みに失敗しました')
@@ -1174,7 +1195,7 @@ const formatDateLabel = (date: string) => {
 }
 
 // 統計データを読み込み
-const loadStats = async () => {
+const loadStats = () => {
   try {
     stats.value = {
       total: instructions.value.length,
@@ -1187,66 +1208,9 @@ const loadStats = async () => {
   }
 }
 
-// 計画生産数統計を計算（全部筛选数据，不分页）
-const calculatePlanStats = async () => {
-  try {
-    // 获取全部筛选数据（不分页）
-    const params: any = {}
-
-    if (planSearchForm.dateRange && planSearchForm.dateRange.length === 2) {
-      params.startDate = planSearchForm.dateRange[0]
-      params.endDate = planSearchForm.dateRange[1]
-    }
-    if (planSearchForm.machineName) {
-      params.machineName = planSearchForm.machineName
-    }
-    if (planSearchForm.keyword) {
-      params.keyword = planSearchForm.keyword
-    }
-    // 默认只显示成型相关的数据
-    params.processName = '成型'
-
-    // 设置大的limit值来获取全部数据
-    params.page = 1
-    params.limit = 10000
-
-    console.log('统计查询参数:', params)
-    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
-
-    if (result.success) {
-      // 过滤掉製品名为空值的数据
-      const allFilteredData = result.data.records.filter(
-        (item: any) => item.product_name && item.product_name.trim() !== '',
-      )
-
-      // 計算計画生産数合計
-      const totalQuantity = allFilteredData.reduce((sum: number, item: any) => {
-        return sum + (parseInt(item.quantity) || 0)
-      }, 0)
-
-      // 計算設備数（生産数>0）
-      const machinesWithProduction = new Set()
-      allFilteredData.forEach((item: any) => {
-        if (parseInt(item.quantity) > 0) {
-          machinesWithProduction.add(item.machine_name)
-        }
-      })
-
-      planStats.value = {
-        totalQuantity,
-        machineCount: machinesWithProduction.size,
-      }
-
-      console.log('全部筛选数据统计:', {
-        总记录数: allFilteredData.length,
-        计划生产数合计: totalQuantity,
-        设备数: machinesWithProduction.size,
-        设备列表: Array.from(machinesWithProduction),
-      })
-    }
-  } catch (error) {
-    console.error('計画生産数統計の計算に失敗:', error)
-  }
+// 計画生産数統計を再計算（既に取得済みの筛选数据を再利用）
+const calculatePlanStats = () => {
+  calculatePlanStatsFromData(allFilteredPlanData.value)
 }
 
 // 获取行的唯一标识
@@ -1348,7 +1312,6 @@ const saveRemarks = async (row: any, showSuccessMessage = true) => {
 const searchPlans = () => {
   planPagination.currentPage = 1
   loadPlanData()
-  calculatePlanStats() // 同时更新统计
 }
 
 // 計画検索をリセット
@@ -1356,7 +1319,6 @@ const resetPlanSearch = () => {
   // 重置为默认值
   initializeSearchForm()
   searchPlans()
-  calculatePlanStats() // 同时更新统计
 }
 
 // 指示検索
@@ -1547,7 +1509,6 @@ const exportData = () => {
 // データを更新
 const refreshData = () => {
   loadInstructions()
-  loadStats()
 }
 
 // 指示書を印刷
@@ -1673,7 +1634,7 @@ const printInstructions = async () => {
         const checkComplete = () => {
           loadedCount++
           if (loadedCount === totalImages) {
-            console.log('すべての画像（QRコード含む）の読み込みが完了しました')
+            formingDevLog('すべての画像（QRコード含む）の読み込みが完了しました')
             // ヒントを更新、自動印刷を開始
             if (loadingText.parentNode) {
               loadingText.textContent = '読み込み完了、印刷ダイアログを開いています...'
@@ -1744,7 +1705,7 @@ const printInstructions = async () => {
         // すべての画像の読み込み完了を待つ
         await waitForImages()
         // 読み込み完了後、自動的に印刷ダイアログに移動
-        console.log(
+        formingDevLog(
           'すべての画像（QRコード含む）の読み込みが完了し、自動的に印刷ダイアログに移動します',
         )
         // レンダリング完了を確保するため、少し追加で待機
@@ -1765,7 +1726,7 @@ const printInstructions = async () => {
       if (!hasPrinted) {
         try {
           await waitForImages()
-          console.log(
+          formingDevLog(
             'すべての画像（QRコード含む）の読み込みが完了し、自動的に印刷ダイアログに移動します',
           )
           setTimeout(doPrint, 500)
@@ -1905,9 +1866,9 @@ const calculateSmartDateRange = async () => {
 
           if (hasProductionData) {
             validDates.push(dateStr)
-            console.log(`周末 ${dateStr} 有生产计划，已加入范围`)
+            formingDevLog(`周末 ${dateStr} 有生产计划，已加入范围`)
           } else {
-            console.log(`周末 ${dateStr} 无生产计划，已跳过`)
+            formingDevLog(`周末 ${dateStr} 无生产计划，已跳过`)
           }
         } catch (error) {
           console.error(`检查周末 ${dateStr} 生产数据失败:`, error)
@@ -1921,7 +1882,7 @@ const calculateSmartDateRange = async () => {
     const startDate = validDates[0] || ''
     const endDate = validDates[validDates.length - 1] || ''
 
-    console.log('智能日期范围:', {
+    formingDevLog('智能日期范围:', {
       startDate,
       endDate,
       validDates,
@@ -1934,15 +1895,15 @@ const calculateSmartDateRange = async () => {
 
     // 如果基准日是星期六，确保包含星期一以后的数据
     if (baseDayOfWeek === 6) {
-      console.log('基准日是星期六，需要确保包含星期一以后的数据')
+      formingDevLog('基准日是星期六，需要确保包含星期一以后的数据')
     }
     return { startDate, endDate }
   } catch (error) {
     console.error('计算智能日期范围失败:', error)
     // 如果智能算法失败，回退到原始日期范围
-    if (planSearchForm.dateRange && planSearchForm.dateRange.length >= 1) {
-      const startDate = planSearchForm.dateRange[0]
-      const endDate = planSearchForm.dateRange[1] || startDate
+    const selectedRange = getSelectedDateRange()
+    if (selectedRange) {
+      const [startDate, endDate] = selectedRange
       return { startDate, endDate }
     }
     return { startDate: '', endDate: '' }
@@ -1992,56 +1953,19 @@ const getFullPlanDataForPrint = async () => {
       return []
     }
 
-    const params: any = {
-      startDate,
-      endDate,
-    }
-
-    // 设备名过滤
-    if (planSearchForm.machineName) {
-      params.machineName = planSearchForm.machineName
-    }
-
-    // 关键词过滤
-    if (planSearchForm.keyword) {
-      params.keyword = planSearchForm.keyword
-    }
-
-    // 默认只显示成型相关的数据
-    params.processName = '成型'
-
-    // 获取完整数据，不分页
+    const params = buildPlanDataQueryParams({ startDate, endDate })
     const result = (await request.get(planDataApiPath.value, {
-      params: {
-        ...params,
-        page: 1,
-        limit: 10000, // 设置一个很大的数字来获取所有数据
-      },
+      params,
     })) as ApiResponse
 
-    console.log('API返回结果:', result)
+    formingDevLog('API返回结果:', result)
 
-    // 确保返回的是数组格式
-    if (Array.isArray(result)) {
-      return result as unknown[]
-    } else if (result && Array.isArray((result as ApiResponse).data)) {
-      return (result as ApiResponse).data as unknown[]
-    } else if (result && Array.isArray((result as ApiResponse).list)) {
-      return (result as ApiResponse).list as unknown[]
-    } else if (result && result.data && Array.isArray(result.data.list)) {
-      // 处理 {success: true, data: {list: [...]}} 格式
-      return result.data.list
-    } else if (result && result.data && Array.isArray(result.data.data)) {
-      // 处理 {success: true, data: {data: [...]}} 格式
-      return result.data.data
-    } else if (result && result.data && Array.isArray(result.data.records)) {
-      // 处理 {success: true, data: {records: [...]}} 格式
-      return result.data.records
-    } else {
+    const parsedList = parsePlanDataList(result)
+    if (parsedList.length === 0) {
       console.warn('API返回的数据格式不是数组:', result)
-      console.log('尝试访问 result.data:', result.data)
-      return []
+      formingDevLog('尝试访问 result.data:', result.data)
     }
+    return parsedList
   } catch (error) {
     console.error('获取完整计划数据失败:', error)
     return []
@@ -2087,7 +2011,7 @@ const machineCdCache = new Map<string, string>()
 const generateQRCode = (data: string): string => {
   // 如果数据为空，返回一个默认的占位符
   if (!data || data.trim() === '') {
-    console.log('产品CD为空，使用默认占位符')
+    formingDevLog('产品CD为空，使用默认占位符')
     return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjVGNUY1Ii8+Cjx0ZXh0IHg9IjIwIiB5PSIyMCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+TkE8L3RleHQ+Cjwvc3ZnPgo='
   }
 
@@ -2095,7 +2019,7 @@ const generateQRCode = (data: string): string => {
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&qzone=2&format=png&data=${encodeURIComponent(
     data,
   )}`
-  console.log('製品CDのQRコードを生成、製品CD:', data, 'QRコードURL:', qrCodeUrl)
+  formingDevLog('製品CDのQRコードを生成、製品CD:', data, 'QRコードURL:', qrCodeUrl)
   return qrCodeUrl
 }
 
@@ -2108,11 +2032,11 @@ const getMachineCd = async (machineName: string) => {
 
     // 检查缓存
     if (machineCdCache.has(machineName)) {
-      console.log('从缓存获取设备CD:', machineName, '->', machineCdCache.get(machineName))
+      formingDevLog('从缓存获取设备CD:', machineName, '->', machineCdCache.get(machineName))
       return machineCdCache.get(machineName)!
     }
 
-    console.log('正在查询设备CD，设备名:', machineName)
+    formingDevLog('正在查询设备CD，设备名:', machineName)
 
     const result = (await request.get('/api/master/machines', {
       params: {
@@ -2121,7 +2045,7 @@ const getMachineCd = async (machineName: string) => {
       },
     })) as ApiResponse | unknown[]
 
-    console.log('设备查询结果:', result)
+    formingDevLog('设备查询结果:', result)
 
     const list: any[] = Array.isArray(result) ? result : (result?.list ?? (result?.data as any)?.list ?? [])
     if (list.length > 0) {
@@ -2129,7 +2053,7 @@ const getMachineCd = async (machineName: string) => {
       const matchedMachine = list.find((machine: any) => machine.machine_name === machineName)
 
       if (matchedMachine?.machine_cd) {
-        console.log('找到匹配的设备CD:', matchedMachine.machine_cd)
+        formingDevLog('找到匹配的设备CD:', matchedMachine.machine_cd)
         // 缓存结果
         machineCdCache.set(machineName, matchedMachine.machine_cd)
         return matchedMachine.machine_cd
@@ -2138,13 +2062,13 @@ const getMachineCd = async (machineName: string) => {
       // 如果没有精确匹配，使用第一个结果
       const first = list[0]
       if (first?.machine_cd) {
-        console.log('使用第一个结果的设备CD:', first.machine_cd)
+        formingDevLog('使用第一个结果的设备CD:', first.machine_cd)
         machineCdCache.set(machineName, first.machine_cd)
         return first.machine_cd
       }
     }
 
-    console.log('未找到设备CD，设备名:', machineName)
+    formingDevLog('未找到设备CD，设备名:', machineName)
     // 缓存未找到的结果
     machineCdCache.set(machineName, '未指定')
     return '未指定'
@@ -2162,12 +2086,8 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
   const currentDate = JapanDateUtils.formatDate(JapanDateUtils.getTodayString())
 
   // 只显示筛选的基准日，不使用智能算法扩展的日期范围
-  let today = JapanDateUtils.formatDate(JapanDateUtils.getTodayString())
-
-  if (planSearchForm.dateRange && planSearchForm.dateRange.length >= 1) {
-    // 使用筛选条件的基准日（开始日期）
-    today = JapanDateUtils.formatDate(planSearchForm.dateRange[0])
-  }
+  // 使用筛选条件的基准日（开始日期）
+  const today = JapanDateUtils.formatDate(getSelectedBaseDate())
 
   // 获取设备CD
   const machineCd = machineName ? await getMachineCd(machineName) : '未指定'
@@ -2635,7 +2555,7 @@ const generatePrintContent = async (planData: any[], machineName?: string) => {
                       plan.plan_date === planSearchForm.dateRange[0]
 
                     // 调试信息：验证产品CD和产品名的对应关系
-                    console.log('产品数据验证:', {
+                    formingDevLog('产品数据验证:', {
                       product_cd: plan.product_cd,
                       product_name: plan.product_name,
                       plan_date: plan.plan_date,
@@ -2833,7 +2753,7 @@ const loadEfficiencyData = async () => {
           efficiencyCache.set(key, efficiencyRate)
         }
       })
-      console.log('能率データの読み込み成功、合計', efficiencyCache.size, '件のレコード')
+      formingDevLog('能率データの読み込み成功、合計', efficiencyCache.size, '件のレコード')
     } else {
       console.warn('能率数据格式不正确:', result)
     }
@@ -3117,7 +3037,7 @@ class JapanDateUtils {
     const date = new Date(year, month - 1, day)
     date.setDate(date.getDate() + 2) // 星期六+2天=星期一
     const result = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    console.log(`计算下一个星期一: ${dateStr} (星期六) -> ${result} (星期一)`)
+    formingDevLog(`计算下一个星期一: ${dateStr} (星期六) -> ${result} (星期一)`)
     return result
   }
 
@@ -3253,16 +3173,16 @@ class DataIndexUtils {
     const products = dateIndex.get(date) || []
     const dayOfWeek = JapanDateUtils.getDayOfWeek(date)
 
-    console.log(`查找日期 ${date} 的有效产品: 星期${dayOfWeek}, 原始产品数量: ${products.length}`)
+    formingDevLog(`查找日期 ${date} 的有效产品: 星期${dayOfWeek}, 原始产品数量: ${products.length}`)
 
     // 排除星期日，quantity已经在构建索引时过滤了
     if (dayOfWeek === 0) {
-      console.log(`日期 ${date} 是星期日，返回空数组`)
+      formingDevLog(`日期 ${date} 是星期日，返回空数组`)
       return []
     }
 
     const validProducts = products.filter((p) => parseInt(p.quantity) > 0)
-    console.log(`日期 ${date} 的有效产品数量: ${validProducts.length}`)
+    formingDevLog(`日期 ${date} 的有效产品数量: ${validProducts.length}`)
     return validProducts
   }
 
@@ -3287,7 +3207,7 @@ class DataIndexUtils {
       })
       .sort()
 
-    console.log(
+    formingDevLog(
       `查找有效日期: startDate=${startDate}, excludeStartDate=${excludeStartDate}, 找到的日期:`,
       dates,
     )
@@ -3698,7 +3618,7 @@ const getBaselineStartDate = (
     saturday.setDate(baseDate.getDate() - 2) // 回到前一周星期六
     const saturdayStr = saturday.toISOString().split('T')[0]
 
-    console.log(
+    formingDevLog(
       `检查星期一 ${dateStr} 的前一周星期五 ${fridayStr} 和星期六 ${saturdayStr} 的生产情况`,
     )
 
@@ -3722,7 +3642,7 @@ const getBaselineStartDate = (
       // 检查星期五是否是'生产停止'（没有生产数据或数量为0）
       isFridayProductionStop = !hasFridayProduction
 
-      console.log(
+      formingDevLog(
         `前一周星期五 ${fridayStr} 生产情况:`,
         `有生产=${hasFridayProduction}, 生产停止=${isFridayProductionStop}`,
         '产品数据:',
@@ -3737,7 +3657,7 @@ const getBaselineStartDate = (
       })
       isFridayProductionStop = !hasFridayProduction
 
-      console.log(
+      formingDevLog(
         `前一周星期五 ${fridayStr} 生产情况（单设备检查）:`,
         `有生产=${hasFridayProduction}, 生产停止=${isFridayProductionStop}`,
         '产品数据:',
@@ -3760,7 +3680,7 @@ const getBaselineStartDate = (
         return quantity > 0
       })
 
-      console.log(
+      formingDevLog(
         `前一周星期六 ${saturdayStr} 有生产（检查所有设备）:`,
         hasSaturdayProduction,
         '产品数据:',
@@ -3774,7 +3694,7 @@ const getBaselineStartDate = (
         return quantity > 0
       })
 
-      console.log(
+      formingDevLog(
         `前一周星期六 ${saturdayStr} 有生产（单设备检查）:`,
         hasSaturdayProduction,
         '产品数据:',
@@ -3784,7 +3704,7 @@ const getBaselineStartDate = (
 
     // 新增逻辑：如果星期五是'生产停止'且星期六没有生产数据，则使用星期五作为基准日期
     if (isFridayProductionStop && !hasSaturdayProduction) {
-      console.log(
+      formingDevLog(
         `星期五是生产停止且星期六没有生产数据，基准日期设为星期五: ${fridayStr}，开始时间为15:00`,
       )
       return fridayStr
@@ -3792,14 +3712,14 @@ const getBaselineStartDate = (
 
     // 原有逻辑：如果星期六有生产，使用星期六作为基准日期
     if (hasSaturdayProduction) {
-      console.log(`星期一且前一周星期六有生产，基准日期设为星期六: ${saturdayStr}`)
+      formingDevLog(`星期一且前一周星期六有生产，基准日期设为星期六: ${saturdayStr}`)
       return saturdayStr
     }
   }
 
   // 其他情况使用前一个工作日
   const previousWorkingDate = getPreviousWorkingDate(dateStr)
-  console.log(`使用前一个工作日作为基准: ${previousWorkingDate}`)
+  formingDevLog(`使用前一个工作日作为基准: ${previousWorkingDate}`)
   return previousWorkingDate
 }
 
@@ -3809,21 +3729,21 @@ const workTimeConfigCache = new Map<string, any>()
 // 根据设备运行时间配置调整段取開始時間（使用设备名称查询）
 const adjustSetupTimeByWorkConfig = async (setupTime: Date, machineName: string): Promise<Date> => {
   if (!machineName) {
-    console.log('设备名称为空，跳过时间调整')
+    formingDevLog('设备名称为空，跳过时间调整')
     return setupTime
   }
 
   try {
-    console.log(`开始获取设备 ${machineName} 的运行时间配置`)
+    formingDevLog(`开始获取设备 ${machineName} 的运行时间配置`)
 
     // 获取设备运行时间配置
     let workConfig = workTimeConfigCache.get(machineName)
-    console.log(`从缓存中获取设备 ${machineName} 配置:`, workConfig)
+    formingDevLog(`从缓存中获取设备 ${machineName} 配置:`, workConfig)
 
     if (!workConfig) {
-      console.log(`缓存中没有设备 ${machineName} 的配置，开始从API获取`)
+      formingDevLog(`缓存中没有设备 ${machineName} 的配置，开始从API获取`)
       const response = (await request.get(`/api/machine-work-time-config/work-time-config`)) as ApiResponse | unknown[]
-      console.log(`API响应:`, response)
+      formingDevLog(`API响应:`, response)
 
       // 处理不同的响应格式
       const configs: any[] = Array.isArray(response)
@@ -3831,36 +3751,36 @@ const adjustSetupTimeByWorkConfig = async (setupTime: Date, machineName: string)
         : Array.isArray((response as ApiResponse)?.data)
           ? ((response as ApiResponse).data as any[])
           : []
-      console.log(`解析后的配置数据:`, configs)
+      formingDevLog(`解析后的配置数据:`, configs)
 
       if (configs.length > 0) {
-        console.log(`获取到 ${configs.length} 条设备配置数据`)
+        formingDevLog(`获取到 ${configs.length} 条设备配置数据`)
         // 缓存所有配置（使用machine_name作为key）
         configs.forEach((config: any) => {
-          console.log(`缓存设备配置: ${config.machine_name}`, config)
+          formingDevLog(`缓存设备配置: ${config.machine_name}`, config)
           workTimeConfigCache.set(config.machine_name, config)
         })
         workConfig = workTimeConfigCache.get(machineName)
-        console.log(`重新从缓存获取设备 ${machineName} 配置:`, workConfig)
+        formingDevLog(`重新从缓存获取设备 ${machineName} 配置:`, workConfig)
       } else {
-        console.log(`没有获取到任何设备配置数据`)
+        formingDevLog(`没有获取到任何设备配置数据`)
       }
     }
 
     if (!workConfig) {
-      console.log(`未找到设备 ${machineName} 的运行时间配置，跳过时间调整`)
-      console.log(`当前缓存中的所有设备:`, Array.from(workTimeConfigCache.keys()))
+      formingDevLog(`未找到设备 ${machineName} 的运行时间配置，跳过时间调整`)
+      formingDevLog(`当前缓存中的所有设备:`, Array.from(workTimeConfigCache.keys()))
       return setupTime
     }
 
-    console.log(`设备 ${machineName} 的运行时间配置:`, workConfig)
+    formingDevLog(`设备 ${machineName} 的运行时间配置:`, workConfig)
 
     const adjustedTime = new Date(setupTime)
     let currentHour = adjustedTime.getHours()
     let currentMinute = adjustedTime.getMinutes()
     let currentTimeInMinutes = currentHour * 60 + currentMinute
 
-    console.log(
+    formingDevLog(
       `原始段取開始時間: ${adjustedTime.toLocaleString('ja-JP')} (${currentHour}:${String(currentMinute).padStart(2, '0')})`,
     )
 
@@ -3894,10 +3814,10 @@ const adjustSetupTimeByWorkConfig = async (setupTime: Date, machineName: string)
     currentMinute = adjustedTime.getMinutes()
     currentTimeInMinutes = currentHour * 60 + currentMinute
 
-    console.log(
+    formingDevLog(
       `开始检查时间 ${currentHour}:${String(currentMinute).padStart(2, '0')} 需要跳过的不运行时间段`,
     )
-    console.log(
+    formingDevLog(
       `设备运行配置: 17-19=${workConfig.time_slot_17_19}, 19-21=${workConfig.time_slot_19_21}, 6-8=${workConfig.time_slot_6_8}`,
     )
 
@@ -3921,33 +3841,33 @@ const adjustSetupTimeByWorkConfig = async (setupTime: Date, machineName: string)
 
       if (shouldAdjust) {
         totalAdjustmentHours += slot.adjustHours
-        console.log(
+        formingDevLog(
           `时间经过了 ${slot.name} 时间段且设备不运行，累加调整 +${slot.adjustHours} 小时（总计: ${totalAdjustmentHours} 小时）`,
         )
       }
     }
 
     if (totalAdjustmentHours > 0) {
-      console.log(`总共需要调整 ${totalAdjustmentHours} 小时`)
+      formingDevLog(`总共需要调整 ${totalAdjustmentHours} 小时`)
       adjustedTime.setHours(adjustedTime.getHours() + totalAdjustmentHours)
 
       const newHour = adjustedTime.getHours()
       const newMinute = adjustedTime.getMinutes()
-      console.log(
+      formingDevLog(
         `调整后时间: ${adjustedTime.toLocaleString('ja-JP')} (${newHour}:${String(newMinute).padStart(2, '0')})`,
       )
     } else {
-      console.log('无需调整时间')
+      formingDevLog('无需调整时间')
     }
 
     const finalHour = adjustedTime.getHours()
     const finalMinute = adjustedTime.getMinutes()
-    console.log(
+    formingDevLog(
       `最终段取開始時間: ${adjustedTime.toLocaleString('ja-JP')} (${finalHour}:${String(finalMinute).padStart(2, '0')})`,
     )
 
-    console.log(`返回调整后的时间对象:`, adjustedTime)
-    console.log(
+    formingDevLog(`返回调整后的时间对象:`, adjustedTime)
+    formingDevLog(
       `返回时间的详细信息: 年=${adjustedTime.getFullYear()}, 月=${adjustedTime.getMonth() + 1}, 日=${adjustedTime.getDate()}, 时=${adjustedTime.getHours()}, 分=${adjustedTime.getMinutes()}, 秒=${adjustedTime.getSeconds()}`,
     )
 
@@ -3960,35 +3880,35 @@ const adjustSetupTimeByWorkConfig = async (setupTime: Date, machineName: string)
 
 // 获取设备运行时间段配置（使用设备名称查询）
 const getWorkTimeConfig = async (machineName: string): Promise<any | null> => {
-  console.log(`[getWorkTimeConfig] 开始获取设备 ${machineName} 的配置`)
+  formingDevLog(`[getWorkTimeConfig] 开始获取设备 ${machineName} 的配置`)
 
   if (!machineName) {
-    console.log(`[getWorkTimeConfig] 设备名称为空，返回null`)
+    formingDevLog(`[getWorkTimeConfig] 设备名称为空，返回null`)
     return null
   }
 
   // 检查缓存
   if (workTimeConfigCache.has(machineName)) {
     const cachedConfig = workTimeConfigCache.get(machineName)
-    console.log(`[getWorkTimeConfig] 从缓存中获取设备 ${machineName} 的配置:`, cachedConfig)
+    formingDevLog(`[getWorkTimeConfig] 从缓存中获取设备 ${machineName} 的配置:`, cachedConfig)
     return cachedConfig
   }
 
   try {
-    console.log(`[getWorkTimeConfig] 从API获取配置...`)
+    formingDevLog(`[getWorkTimeConfig] 从API获取配置...`)
     const result = (await request.get('/api/machine-work-time-config/work-time-config')) as ApiResponse | unknown[]
-    console.log(`[getWorkTimeConfig] API返回结果:`, result)
+    formingDevLog(`[getWorkTimeConfig] API返回结果:`, result)
 
     const configs: any[] = Array.isArray(result) ? (result as any[]) : Array.isArray((result as ApiResponse)?.data) ? ((result as ApiResponse).data as any[]) : []
-    console.log(`[getWorkTimeConfig] 解析后的配置列表 (共${configs.length}条):`, configs)
+    formingDevLog(`[getWorkTimeConfig] 解析后的配置列表 (共${configs.length}条):`, configs)
 
     // 列出所有设备的machine_name，便于对比
     const allMachineNames = configs.map((item: any) => item.machine_name)
-    console.log(`[getWorkTimeConfig] 所有可用的设备名称:`, allMachineNames)
-    console.log(`[getWorkTimeConfig] 正在查找的设备名称: "${machineName}"`)
+    formingDevLog(`[getWorkTimeConfig] 所有可用的设备名称:`, allMachineNames)
+    formingDevLog(`[getWorkTimeConfig] 正在查找的设备名称: "${machineName}"`)
 
     const config = configs.find((item: any) => item.machine_name === machineName)
-    console.log(`[getWorkTimeConfig] 查找设备 ${machineName} 的配置:`, config)
+    formingDevLog(`[getWorkTimeConfig] 查找设备 ${machineName} 的配置:`, config)
 
     if (config) {
       // 兼容多种数据格式：1/0, true/false, "1"/"0"
@@ -4006,16 +3926,16 @@ const getWorkTimeConfig = async (machineName: string): Promise<any | null> => {
           config.time_slot_6_8 === true ||
           config.time_slot_6_8 === '1',
       }
-      console.log(`[getWorkTimeConfig] 原始配置:`, {
+      formingDevLog(`[getWorkTimeConfig] 原始配置:`, {
         time_slot_17_19: config.time_slot_17_19,
         time_slot_19_21: config.time_slot_19_21,
         time_slot_6_8: config.time_slot_6_8,
       })
-      console.log(`[getWorkTimeConfig] 转换后的配置数据:`, configData)
+      formingDevLog(`[getWorkTimeConfig] 转换后的配置数据:`, configData)
       workTimeConfigCache.set(machineName, configData)
       return configData
     } else {
-      console.log(`[getWorkTimeConfig] 未找到设备 ${machineName} 的配置`)
+      formingDevLog(`[getWorkTimeConfig] 未找到设备 ${machineName} 的配置`)
     }
   } catch (error) {
     console.error('[getWorkTimeConfig] 获取设备运行时间段配置失败:', error)
@@ -4052,10 +3972,10 @@ const addHoursWithWorkTimes = async (
   preloadedWorkTimes?: Map<string, any[]>, // 预加载的运行时间数据（已废弃，保留以兼容）
   allPlanData?: any[], // 所有设备的生产数据，用于检查星期六是否有生产
 ): Promise<Date> => {
-  console.log(`\n========== 开始计算段取開始時間 ==========`)
-  console.log(`起始时间: ${startDate} ${startTime}`)
-  console.log(`需要累加的运行时间: ${workHours} 小时`)
-  console.log(`设备名称: ${machineName}`)
+  formingDevLog(`\n========== 开始计算段取開始時間 ==========`)
+  formingDevLog(`起始时间: ${startDate} ${startTime}`)
+  formingDevLog(`需要累加的运行时间: ${workHours} 小时`)
+  formingDevLog(`设备名称: ${machineName}`)
 
   // 创建起始时间
   let resultTime = new Date(`${startDate}T${startTime}:00`)
@@ -4063,8 +3983,8 @@ const addHoursWithWorkTimes = async (
   // 如果没有设备名称，直接累加小时数
   if (!machineName) {
     resultTime.setTime(resultTime.getTime() + workHours * 60 * 60 * 1000)
-    console.log(`没有设备名称，直接累加 ${workHours} 小时`)
-    console.log(`最终时间: ${resultTime.toLocaleString('ja-JP')}`)
+    formingDevLog(`没有设备名称，直接累加 ${workHours} 小时`)
+    formingDevLog(`最终时间: ${resultTime.toLocaleString('ja-JP')}`)
     return resultTime
   }
 
@@ -4074,18 +3994,18 @@ const addHoursWithWorkTimes = async (
   // 如果没有配置，直接累加小时数
   if (!config) {
     resultTime.setTime(resultTime.getTime() + workHours * 60 * 60 * 1000)
-    console.log(`没有找到设备配置，直接累加 ${workHours} 小时`)
-    console.log(`最终时间: ${resultTime.toLocaleString('ja-JP')}`)
+    formingDevLog(`没有找到设备配置，直接累加 ${workHours} 小时`)
+    formingDevLog(`最终时间: ${resultTime.toLocaleString('ja-JP')}`)
     return resultTime
   }
 
-  console.log(
+  formingDevLog(
     `设备配置: 17-19=${config.time_slot_17_19 ? '○' : '×'}, 19-21=${config.time_slot_19_21 ? '○' : '×'}, 6-8=${config.time_slot_6_8 ? '○' : '×'}`,
   )
 
   // 第一步：先直接累加运行时间
   const intermediateTime = new Date(resultTime.getTime() + workHours * 60 * 60 * 1000)
-  console.log(
+  formingDevLog(
     `第一步：累加 ${workHours} 小时后 = ${intermediateTime.toLocaleString('ja-JP')} (${intermediateTime.getHours()}:${String(intermediateTime.getMinutes()).padStart(2, '0')})`,
   )
 
@@ -4102,8 +4022,8 @@ const addHoursWithWorkTimes = async (
     nonWorkSlots.push({ name: '6-8', start: 6, end: 8, hours: 2 })
   }
 
-  console.log(`\n第二步：检查经过的不运行时间段`)
-  console.log(`不运行时间段列表:`, nonWorkSlots.map((s) => s.name).join(', '))
+  formingDevLog(`\n第二步：检查经过的不运行时间段`)
+  formingDevLog(`不运行时间段列表:`, nonWorkSlots.map((s) => s.name).join(', '))
 
   let totalAdjustmentHours = 0
   const startHour = resultTime.getHours()
@@ -4111,10 +4031,10 @@ const addHoursWithWorkTimes = async (
   const startDay = resultTime.getDate()
   const endDay = intermediateTime.getDate()
 
-  console.log(
+  formingDevLog(
     `起始时间: ${startDay}日 ${startHour}:${String(resultTime.getMinutes()).padStart(2, '0')}`,
   )
-  console.log(
+  formingDevLog(
     `中间时间: ${endDay}日 ${endHour}:${String(intermediateTime.getMinutes()).padStart(2, '0')}`,
   )
 
@@ -4147,23 +4067,23 @@ const addHoursWithWorkTimes = async (
 
     if (crossed) {
       totalAdjustmentHours += slot.hours
-      console.log(`  ✓ 经过了 ${slot.name} 时间段（不运行），需要加 ${slot.hours} 小时`)
+      formingDevLog(`  ✓ 经过了 ${slot.name} 时间段（不运行），需要加 ${slot.hours} 小时`)
     } else {
-      console.log(`  - 未经过 ${slot.name} 时间段`)
+      formingDevLog(`  - 未经过 ${slot.name} 时间段`)
     }
   }
 
-  console.log(`\n第三步：累加不运行时间`)
-  console.log(`总共需要加上的不运行时间: ${totalAdjustmentHours} 小时`)
+  formingDevLog(`\n第三步：累加不运行时间`)
+  formingDevLog(`总共需要加上的不运行时间: ${totalAdjustmentHours} 小时`)
 
   // 第三步：在中间时间基础上累加不运行时间
   resultTime = new Date(intermediateTime.getTime() + totalAdjustmentHours * 60 * 60 * 1000)
-  console.log(
+  formingDevLog(
     `第三步结果: ${resultTime.toLocaleString('ja-JP')} (${resultTime.getHours()}:${String(resultTime.getMinutes()).padStart(2, '0')})`,
   )
 
   // 第三步之二：检查是否经过了没有生产数据的星期六，如果是则跳过星期六6:00到星期一8:00的时间段
-  console.log(`\n第三步之二：检查是否经过没有生产数据的星期六`)
+  formingDevLog(`\n第三步之二：检查是否经过没有生产数据的星期六`)
   let saturdayAdjustmentHours = 0
   if (allPlanData && allPlanData.length > 0) {
     // 遍历从起始时间到当前结果时间之间的所有日期
@@ -4176,7 +4096,7 @@ const addHoursWithWorkTimes = async (
       // 如果是星期六
       if (dayOfWeek === 6) {
         const saturdayStr = checkDate.toISOString().split('T')[0]
-        console.log(`  检查星期六 ${saturdayStr} 是否有生产数据`)
+        formingDevLog(`  检查星期六 ${saturdayStr} 是否有生产数据`)
 
         // 检查该星期六是否有生产数据
         const saturdayProducts = allPlanData.filter((item: any) => {
@@ -4189,7 +4109,7 @@ const addHoursWithWorkTimes = async (
           return quantity > 0
         })
 
-        console.log(
+        formingDevLog(
           `  星期六 ${saturdayStr} ${hasSaturdayProduction ? '有生产数据' : '没有生产数据'}`,
         )
 
@@ -4203,7 +4123,7 @@ const addHoursWithWorkTimes = async (
           const startDateTime = new Date(`${startDate}T${startTime}:00`)
           if (startDateTime < saturdaySixAM && resultTime >= saturdaySixAM) {
             saturdayAdjustmentHours += 50
-            console.log(
+            formingDevLog(
               `  ✓ 经过了星期六 ${saturdayStr} 6:00-星期一8:00时间段（无生产），需要加 50 小时`,
             )
           }
@@ -4216,19 +4136,19 @@ const addHoursWithWorkTimes = async (
 
     if (saturdayAdjustmentHours > 0) {
       resultTime = new Date(resultTime.getTime() + saturdayAdjustmentHours * 60 * 60 * 1000)
-      console.log(
+      formingDevLog(
         `  累加星期六无生产时间段 ${saturdayAdjustmentHours} 小时后: ${resultTime.toLocaleString('ja-JP')} (${resultTime.getHours()}:${String(resultTime.getMinutes()).padStart(2, '0')})`,
       )
     } else {
-      console.log(`  - 未经过需要跳过的星期六时间段`)
+      formingDevLog(`  - 未经过需要跳过的星期六时间段`)
     }
   } else {
-    console.log(`  没有生产数据，跳过星期六检查`)
+    formingDevLog(`  没有生产数据，跳过星期六检查`)
   }
 
   // 第四步：检查最终时间是否落在不运行时间段内，如果是则跳过该时间段
   // 使用循环检查，因为跳过后可能又落在另一个不运行时间段内
-  console.log(`\n第四步：检查最终时间是否落在不运行时间段内`)
+  formingDevLog(`\n第四步：检查最终时间是否落在不运行时间段内`)
   let additionalAdjustment = 0
   const maxIterations = 10 // 防止无限循环
   let iteration = 0
@@ -4237,7 +4157,7 @@ const addHoursWithWorkTimes = async (
     iteration++
     const currentHour = resultTime.getHours()
     const currentMinute = resultTime.getMinutes()
-    console.log(
+    formingDevLog(
       `  检查 (第${iteration}次): ${currentHour}:${String(currentMinute).padStart(2, '0')}`,
     )
 
@@ -4245,7 +4165,7 @@ const addHoursWithWorkTimes = async (
     for (const slot of nonWorkSlots) {
       // 检查当前时间是否在该不运行时间段内
       if (currentHour >= slot.start && currentHour < slot.end) {
-        console.log(
+        formingDevLog(
           `    ✓ 时间落在 ${slot.name} 不运行时间段内 (${slot.start}:00-${slot.end}:00)，跳过 ${slot.hours} 小时`,
         )
         additionalAdjustment += slot.hours
@@ -4256,29 +4176,29 @@ const addHoursWithWorkTimes = async (
     }
 
     if (!foundSlot) {
-      console.log(`    - 时间不在任何不运行时间段内`)
+      formingDevLog(`    - 时间不在任何不运行时间段内`)
       break // 没有找到不运行时间段，退出循环
     }
   }
 
   if (additionalAdjustment > 0) {
-    console.log(
+    formingDevLog(
       `  最终调整后: ${resultTime.toLocaleString('ja-JP')} (${resultTime.getHours()}:${String(resultTime.getMinutes()).padStart(2, '0')})`,
     )
   } else {
-    console.log(`  - 无需调整`)
+    formingDevLog(`  - 无需调整`)
   }
 
-  console.log(`\n最终计算结果:`)
-  console.log(`  起始时间: ${startDate} ${startTime}`)
-  console.log(`  + 运行时间: ${workHours} 小时`)
-  console.log(`  + 经过的不运行时间: ${totalAdjustmentHours} 小时`)
-  console.log(`  + 星期六无生产时间段: ${saturdayAdjustmentHours} 小时`)
-  console.log(`  + 最终时间调整: ${additionalAdjustment} 小时`)
-  console.log(
+  formingDevLog(`\n最终计算结果:`)
+  formingDevLog(`  起始时间: ${startDate} ${startTime}`)
+  formingDevLog(`  + 运行时间: ${workHours} 小时`)
+  formingDevLog(`  + 经过的不运行时间: ${totalAdjustmentHours} 小时`)
+  formingDevLog(`  + 星期六无生产时间段: ${saturdayAdjustmentHours} 小时`)
+  formingDevLog(`  + 最终时间调整: ${additionalAdjustment} 小时`)
+  formingDevLog(
     `  = 最终时间: ${resultTime.toLocaleString('ja-JP')} (${resultTime.getHours()}:${String(resultTime.getMinutes()).padStart(2, '0')})`,
   )
-  console.log(`========== 计算完成 ==========\n`)
+  formingDevLog(`========== 计算完成 ==========\n`)
 
   return resultTime
 }
@@ -4412,12 +4332,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
   const currentDateTime = JapanDateUtils.getCurrentDateTime()
 
   // 获取生产日（与筛选日期一致，使用日本时区）
-  let productionDate = ''
-  if (planSearchForm.dateRange && planSearchForm.dateRange.length >= 1) {
-    productionDate = JapanDateUtils.formatDate(planSearchForm.dateRange[0])
-  } else {
-    productionDate = JapanDateUtils.formatDate(JapanDateUtils.getTodayString())
-  }
+  const productionDate = JapanDateUtils.formatDate(getSelectedBaseDate())
 
   // 按设备分组数据
   const groupedByMachine = groupDataByMachine(planData)
@@ -4428,7 +4343,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
   // ========== 优化：批量预加载数据 ==========
   // 1. 预加载能率数据（如果还未加载）
   if (efficiencyCache.size === 0) {
-    console.log('预加载能率数据...')
+    formingDevLog('预加载能率数据...')
     await loadEfficiencyData()
   }
 
@@ -4449,13 +4364,13 @@ const generateSetupScheduleContent = async (planData: any[]) => {
   let productionPlanSchedulesData: any[] = []
   if (planDataApiPath.value === '/api/mes/forming-plan-data') {
     productionPlanSchedulesData = Array.isArray(planData) ? planData : []
-    console.log(
+    formingDevLog(
       'MES ルート: production_schedules 由来データを使用、记录数:',
       productionPlanSchedulesData.length,
     )
   } else if (monthFilter) {
     try {
-      console.log('production_plan_schedules データを読み込み中、月フィルター:', monthFilter)
+      formingDevLog('production_plan_schedules データを読み込み中、月フィルター:', monthFilter)
       const result = (await request.get('/api/processing-status', {
         params: {
           fileName: monthFilter, // 使用月份筛选 file_name 字段（例如："1月"匹配"加工計画(1月).xlsm"）
@@ -4465,7 +4380,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
       if (result.success && result.data) {
         productionPlanSchedulesData = Array.isArray(result.data) ? result.data : []
-        console.log(
+        formingDevLog(
           '成功加载 production_plan_schedules 数据，记录数:',
           productionPlanSchedulesData.length,
         )
@@ -4655,7 +4570,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
     // 调试：显示索引中的所有日期
     const allDatesInIndex = Array.from(dateIndex.keys()).sort()
-    console.log(`设备 ${machineName} 的数据索引中包含的日期:`, allDatesInIndex)
+    formingDevLog(`设备 ${machineName} 的数据索引中包含的日期:`, allDatesInIndex)
 
     // 获取当前产品（使用索引优化）- 读取指定生产日的数据
     const currentProducts = DataIndexUtils.findValidProducts(dateIndex, filterDate)
@@ -4663,7 +4578,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
     // 从currentProduct中获取machine_cd（读取production_plan_updates表的machine_cd字段）
     const machineCdFromData = (currentProduct as any)?.machine_cd || ''
-    console.log(
+    formingDevLog(
       `[設備CD] 设备名称: ${machineName}, 从当前产品数据中获取的machine_cd: ${machineCdFromData}`,
     )
 
@@ -4743,7 +4658,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     // 新逻辑：次生産品種和次生産品種見込数读取指定生产日下一日的数据
     // 如果下一日是星期六且有数据就读取星期六，如果没有数据就读取星期一
     const findNextProduct = (): { product: any | null; date: string } => {
-      console.log(`开始查找下一个产品，当前筛选日期: ${filterDate}`)
+      formingDevLog(`开始查找下一个产品，当前筛选日期: ${filterDate}`)
 
       const dayOfWeek = JapanDateUtils.getDayOfWeek(filterDate)
 
@@ -4759,7 +4674,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
         })
 
         if (currentProductIndex >= 0 && currentProductIndex < sameDayProducts.length - 1) {
-          console.log(`在同一天找到下一个产品`)
+          formingDevLog(`在同一天找到下一个产品`)
           return { product: sameDayProducts[currentProductIndex + 1], date: filterDate }
         }
       }
@@ -4770,16 +4685,16 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       const nextDateStr = nextDate.toISOString().split('T')[0]
       const nextDayOfWeek = nextDate.getDay() // 0=周日, 1=周一, ..., 6=周六
 
-      console.log(`指定生产日的下一日: ${nextDateStr}, 星期: ${nextDayOfWeek}`)
+      formingDevLog(`指定生产日的下一日: ${nextDateStr}, 星期: ${nextDayOfWeek}`)
 
       // 3. 如果下一日是星期六 (6)
       if (nextDayOfWeek === 6) {
-        console.log(`下一日是星期六，先检查星期六是否有数据`)
+        formingDevLog(`下一日是星期六，先检查星期六是否有数据`)
 
         // 先检查星期六是否有数据
         const saturdayProducts = DataIndexUtils.findValidProducts(dateIndex, nextDateStr)
         if (saturdayProducts.length > 0) {
-          console.log(`星期六有数据，使用星期六的数据:`, saturdayProducts[0])
+          formingDevLog(`星期六有数据，使用星期六的数据:`, saturdayProducts[0])
           return { product: saturdayProducts[0], date: nextDateStr }
         }
 
@@ -4787,42 +4702,42 @@ const generateSetupScheduleContent = async (planData: any[]) => {
         const mondayDate = new Date(nextDateStr)
         mondayDate.setDate(mondayDate.getDate() + 2) // 星期六 + 2天 = 星期一
         const mondayDateStr = mondayDate.toISOString().split('T')[0]
-        console.log(`星期六没有数据，读取星期一的数据: ${mondayDateStr}`)
+        formingDevLog(`星期六没有数据，读取星期一的数据: ${mondayDateStr}`)
 
         const mondayProducts = DataIndexUtils.findValidProducts(dateIndex, mondayDateStr)
         if (mondayProducts.length > 0) {
-          console.log(`星期一有数据:`, mondayProducts[0])
+          formingDevLog(`星期一有数据:`, mondayProducts[0])
           return { product: mondayProducts[0], date: mondayDateStr }
         }
       }
       // 4. 如果下一日是星期日 (0)
       else if (nextDayOfWeek === 0) {
-        console.log(`下一日是星期日，读取星期一的数据`)
+        formingDevLog(`下一日是星期日，读取星期一的数据`)
 
         // 星期日的下一天就是星期一
         const mondayDate = new Date(nextDateStr)
         mondayDate.setDate(mondayDate.getDate() + 1) // 星期日 + 1天 = 星期一
         const mondayDateStr = mondayDate.toISOString().split('T')[0]
-        console.log(`读取星期一的数据: ${mondayDateStr}`)
+        formingDevLog(`读取星期一的数据: ${mondayDateStr}`)
 
         const mondayProducts = DataIndexUtils.findValidProducts(dateIndex, mondayDateStr)
         if (mondayProducts.length > 0) {
-          console.log(`星期一有数据:`, mondayProducts[0])
+          formingDevLog(`星期一有数据:`, mondayProducts[0])
           return { product: mondayProducts[0], date: mondayDateStr }
         }
       }
       // 5. 如果下一日是工作日 (星期一到星期五)
       else {
-        console.log(`下一日是工作日，直接读取下一日的数据`)
+        formingDevLog(`下一日是工作日，直接读取下一日的数据`)
 
         const nextDayProducts = DataIndexUtils.findValidProducts(dateIndex, nextDateStr)
         if (nextDayProducts.length > 0) {
-          console.log(`下一日有数据:`, nextDayProducts[0])
+          formingDevLog(`下一日有数据:`, nextDayProducts[0])
           return { product: nextDayProducts[0], date: nextDateStr }
         }
       }
 
-      console.log(`没有找到下一个产品`)
+      formingDevLog(`没有找到下一个产品`)
       return { product: null, date: '' }
     }
 
@@ -4833,7 +4748,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     const nextProductName = nextProduct ? (nextProduct as any).product_name || '' : ''
     const nextQuantity = nextProduct ? parseInt((nextProduct as any).quantity) || 0 : 0
 
-    console.log(
+    formingDevLog(
       `查找结果: nextProduct=${!!nextProduct}, nextValidDate=${nextValidDate}, nextProductName=${nextProductName}, nextQuantity=${nextQuantity}`,
     )
 
@@ -4866,12 +4781,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     const currentMachineCd = machineCdFromData || ''
 
     // 调试：输出当前产品的完整信息
-    console.log(`[时间配置] 当前产品完整信息:`, currentProduct)
-    console.log(`[时间配置] 设备名称: ${machineName}, 设备代码（仅用于显示）: ${currentMachineCd}`)
-    console.log(
+    formingDevLog(`[时间配置] 当前产品完整信息:`, currentProduct)
+    formingDevLog(`[时间配置] 设备名称: ${machineName}, 设备代码（仅用于显示）: ${currentMachineCd}`)
+    formingDevLog(
       `[时间配置] machine_cd来源: ${machineCdFromData ? 'currentProduct (production_plan_updates表)' : '未找到'}`,
     )
-    console.log(
+    formingDevLog(
       `[时间配置] 注意：时间段配置使用设备名称(${machineName})查询machine_work_time_config表`,
     )
 
@@ -4904,7 +4819,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
       // addHoursWithWorkTimes 已经包含了所有不运行时间段的计算，直接使用结果
       const finalAdjustedTime = calculatedTime
-      console.log(`最终段取開始時間:`, finalAdjustedTime)
+      formingDevLog(`最终段取開始時間:`, finalAdjustedTime)
 
       // 格式化日期时间：YYYY/MM/DD HH:mm:ss
       const year = finalAdjustedTime.getFullYear()
@@ -4914,9 +4829,9 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       const minutes = String(finalAdjustedTime.getMinutes()).padStart(2, '0')
       const seconds = String(finalAdjustedTime.getSeconds()).padStart(2, '0')
 
-      console.log(`格式化后的时间字符串: ${year}/${month}/${day} ${hours}:${minutes}:${seconds}`)
+      formingDevLog(`格式化后的时间字符串: ${year}/${month}/${day} ${hours}:${minutes}:${seconds}`)
       setupPredictedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-      console.log(`设置的 setupPredictedTime:`, setupPredictedTime)
+      formingDevLog(`设置的 setupPredictedTime:`, setupPredictedTime)
     } else {
       // 如果没有時間後段取数据，检查特殊条件：当生産品種是'生产停止'且次生産品種有数据且不是'生产停止'时，显示下一日15:00
       // 注意：这里需要先判断isProductionStop和nextProductName，但finalNextProductName在后面才设置
@@ -4924,7 +4839,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       const shouldUseSpecialCondition =
         isProductionStop && nextProductName !== '' && nextProductName !== '生产停止'
 
-      console.log('特殊条件检查:', {
+      formingDevLog('特殊条件检查:', {
         isProductionStop,
         nextProductName,
         shouldUseSpecialCondition,
@@ -4945,7 +4860,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           saturday.setDate(saturday.getDate() + 1) // 下一天（星期六）
           const saturdayStr = saturday.toISOString().split('T')[0]
 
-          console.log(`检查星期五 ${filterDate} 的下一天星期六 ${saturdayStr} 是否有生产数据`)
+          formingDevLog(`检查星期五 ${filterDate} 的下一天星期六 ${saturdayStr} 是否有生产数据`)
 
           let hasSaturdayProduction = false
 
@@ -4961,7 +4876,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
               return quantity > 0
             })
 
-            console.log(
+            formingDevLog(
               `星期六 ${saturdayStr} 有生产数据:`,
               hasSaturdayProduction,
               '产品数据:',
@@ -4972,7 +4887,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           // 如果星期六没有生产数据，使用星期五当天15:00
           if (!hasSaturdayProduction) {
             const targetDate = new Date(filterDate + 'T15:00:00')
-            console.log(
+            formingDevLog(
               `星期五特殊情况 - 星期六没有生产数据，使用星期五当天15:00，设备名称: ${machineName}`,
             )
 
@@ -4983,7 +4898,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
             const minutes = String(targetDate.getMinutes()).padStart(2, '0')
             const seconds = String(targetDate.getSeconds()).padStart(2, '0')
             setupPredictedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-            console.log(
+            formingDevLog(
               '指定日是星期五且星期六无生产数据，使用星期五当天15:00，设置setupPredictedTime为:',
               setupPredictedTime,
             )
@@ -4998,7 +4913,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
             const minutes = String(targetDate.getMinutes()).padStart(2, '0')
             const seconds = String(targetDate.getSeconds()).padStart(2, '0')
             setupPredictedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-            console.log(
+            formingDevLog(
               '指定日是星期五且星期六有生产数据，使用星期六15:00，设置setupPredictedTime为:',
               setupPredictedTime,
             )
@@ -5010,7 +4925,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
           // 使用指定日（星期六）当天 15:00（无需额外调整，因为没有累加运行时间）
           const targetDate = new Date(filterDate + 'T15:00:00')
-          console.log(`星期六特殊情况 - 使用当天15:00，设备名称: ${machineName}`)
+          formingDevLog(`星期六特殊情况 - 使用当天15:00，设备名称: ${machineName}`)
 
           const year = targetDate.getFullYear()
           const month = String(targetDate.getMonth() + 1).padStart(2, '0')
@@ -5019,7 +4934,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           const minutes = String(targetDate.getMinutes()).padStart(2, '0')
           const seconds = String(targetDate.getSeconds()).padStart(2, '0')
           setupPredictedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-          console.log(
+          formingDevLog(
             '指定日是星期六，使用当天（星期六）15:00，设置setupPredictedTime为:',
             setupPredictedTime,
           )
@@ -5034,7 +4949,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           if (isSpecialMondayCase) {
             // 星期一且前一周星期六有生产，使用星期六15:00作为基准
             targetDate = new Date(baseDate + 'T15:00:00')
-            console.log(`星期一特殊情况：使用前一周星期六 ${baseDate} 15:00 作为段取開始時間`)
+            formingDevLog(`星期一特殊情况：使用前一周星期六 ${baseDate} 15:00 作为段取開始時間`)
           } else {
             // 其他情况：计算下一日15:00
             targetDate = new Date(filterDate + 'T15:00:00')
@@ -5058,16 +4973,16 @@ const generateSetupScheduleContent = async (planData: any[]) => {
                 // 找到第一个有效日期
                 targetDateStr = validDates[0]
                 targetDate = new Date(targetDateStr + 'T15:00:00')
-                console.log('下一日是星期天或无数据，跳到下一个有数据的日期:', targetDateStr)
+                formingDevLog('下一日是星期天或无数据，跳到下一个有数据的日期:', targetDateStr)
               } else {
                 // 如果找不到有效日期，使用原来的下一日（即使它是星期天）
-                console.log('未找到有效日期，使用原下一日:', targetDateStr)
+                formingDevLog('未找到有效日期，使用原下一日:', targetDateStr)
               }
             }
           }
 
           // 无需额外调整（因为这里是直接设置15:00，没有累加运行时间）
-          console.log(`非星期六特殊情况 - 使用计算出的日期15:00，设备名称: ${machineName}`)
+          formingDevLog(`非星期六特殊情况 - 使用计算出的日期15:00，设备名称: ${machineName}`)
 
           // 格式化日期时间：YYYY/MM/DD HH:mm:ss
           const year = targetDate.getFullYear()
@@ -5077,14 +4992,14 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           const minutes = String(targetDate.getMinutes()).padStart(2, '0')
           const seconds = String(targetDate.getSeconds()).padStart(2, '0')
           setupPredictedTime = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`
-          console.log('使用特殊条件，设置setupPredictedTime为:', setupPredictedTime)
+          formingDevLog('使用特殊条件，设置setupPredictedTime为:', setupPredictedTime)
         }
       } else if (nextProduct && (nextProduct as any).plan_date) {
         // 如果不满足特殊条件，使用原来的逻辑：优先使用实际计划的日期
         const setupDate = JapanDateUtils.normalizeDate((nextProduct as any).plan_date)
         if (setupDate) {
           setupPredictedTime = `${setupDate.replace(/-/g, '/')} 6:00:01`
-          console.log(
+          formingDevLog(
             '使用原逻辑（nextProduct日期），设置setupPredictedTime为:',
             setupPredictedTime,
           )
@@ -5092,7 +5007,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       } else if (nextValidDate) {
         // 如果没有实际计划但有计算出的有效日期，使用有效日期
         setupPredictedTime = `${nextValidDate.replace(/-/g, '/')} 6:00:01`
-        console.log('使用原逻辑（nextValidDate），设置setupPredictedTime为:', setupPredictedTime)
+        formingDevLog('使用原逻辑（nextValidDate），设置setupPredictedTime为:', setupPredictedTime)
       }
     }
 
@@ -5120,7 +5035,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       isNextDateSunday = JapanDateUtils.isSunday(nextValidDate)
     }
 
-    console.log(
+    formingDevLog(
       `下一个产品日期判断: nextProductDateStr=${nextProductDateStr}, isNextDateWeekend=${isNextDateWeekend}, isNextDateSunday=${isNextDateSunday}`,
     )
 
@@ -5137,59 +5052,59 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     const finalSetupAfterHours = isSameProduct || isNextDateSunday ? '' : setupAfterHours
     let finalSetupPredictedTime = ''
 
-    console.log(`最终处理逻辑检查:`)
-    console.log(`  isSameProduct: ${isSameProduct}`)
-    console.log(`  isNextDateSunday: ${isNextDateSunday}`)
-    console.log(`  isFilterDateFriday: ${isFilterDateFridayCheck}`)
-    console.log(`  isFilterDateSaturday: ${isFilterDateSaturdayCheck}`)
-    console.log(`  isWeekendSpecialCase: ${isWeekendSpecialCase}`)
-    console.log(`  setupPredictedTime: ${setupPredictedTime}`)
+    formingDevLog(`最终处理逻辑检查:`)
+    formingDevLog(`  isSameProduct: ${isSameProduct}`)
+    formingDevLog(`  isNextDateSunday: ${isNextDateSunday}`)
+    formingDevLog(`  isFilterDateFriday: ${isFilterDateFridayCheck}`)
+    formingDevLog(`  isFilterDateSaturday: ${isFilterDateSaturdayCheck}`)
+    formingDevLog(`  isWeekendSpecialCase: ${isWeekendSpecialCase}`)
+    formingDevLog(`  setupPredictedTime: ${setupPredictedTime}`)
 
     if (isWeekendSpecialCase && setupPredictedTime) {
       // 星期五或星期六特殊情况：使用指定日当天15:00（不受isSameProduct影响）
       finalSetupPredictedTime = setupPredictedTime
-      console.log(
+      formingDevLog(
         `  使用星期五/星期六特殊情况，finalSetupPredictedTime: ${finalSetupPredictedTime}`,
       )
     } else {
       // 其他情况：如果产品名一致，或者日期是星期日，清空
       finalSetupPredictedTime = isSameProduct || isNextDateSunday ? '' : setupPredictedTime
-      console.log(`  使用普通逻辑，finalSetupPredictedTime: ${finalSetupPredictedTime}`)
+      formingDevLog(`  使用普通逻辑，finalSetupPredictedTime: ${finalSetupPredictedTime}`)
     }
     // 如果产品名一致，或者日期是星期日，清空次生産品種；如果没有生产产品，显示'生产停止'
     let finalNextProductName = ''
-    console.log(
+    formingDevLog(
       `决定次生産品種: isSameProduct=${isSameProduct}, isNextDateSunday=${isNextDateSunday}, isNextDateWeekend=${isNextDateWeekend}, nextProductName='${nextProductName}'`,
     )
 
     if (isSameProduct || isNextDateSunday) {
       // 如果日期是星期日，不显示任何数据
-      console.log(`因为产品相同或下一个日期是星期日，清空次生産品種`)
+      formingDevLog(`因为产品相同或下一个日期是星期日，清空次生産品種`)
       finalNextProductName = ''
     } else if (isNextDateWeekend) {
       // 如果下一个产品的日期是周末（星期六或星期日，但星期日已被排除）
       // 这里只处理星期六的情况
-      console.log(`下一个产品日期是周末，检查是否有产品名`)
+      formingDevLog(`下一个产品日期是周末，检查是否有产品名`)
       if (nextProductName && nextProductName.trim() !== '') {
         // 有数据，显示数据
-        console.log(`有产品名，显示: ${nextProductName}`)
+        formingDevLog(`有产品名，显示: ${nextProductName}`)
         finalNextProductName = nextProductName
       } else {
         // 没有数据，显示'生产停止'
-        console.log(`没有产品名，显示生产停止`)
+        formingDevLog(`没有产品名，显示生产停止`)
         finalNextProductName = '生产停止'
       }
     } else if (!nextProductName || nextProductName.trim() === '') {
       // 不是周末，但没有生产产品，显示'生产停止'
-      console.log(`不是周末但没有产品名，显示生产停止`)
+      formingDevLog(`不是周末但没有产品名，显示生产停止`)
       finalNextProductName = '生产停止'
     } else {
       // 不是周末，有生产产品，显示产品名称
-      console.log(`不是周末且有产品名，显示: ${nextProductName}`)
+      formingDevLog(`不是周末且有产品名，显示: ${nextProductName}`)
       finalNextProductName = nextProductName
     }
 
-    console.log(`最终次生産品種: '${finalNextProductName}'`)
+    formingDevLog(`最终次生産品種: '${finalNextProductName}'`)
 
     // 判断次生産見込数：如果和指定生产日是同一天，显示数据；如果不是同一天，不显示数据；如果是星期日，不显示数据
     let finalNextQuantity: number | '' = ''
@@ -5285,11 +5200,11 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           0,
           totalPlanQuantity - actualProduction - defectQty - upstreamDefectQty,
         )
-        console.log(
+        formingDevLog(
           `[生産計画数] 设备: ${machineName}, 产品: ${currentProductName}, 順位: ${currentOperator} (转换为数字: ${operatorAsNumber}), 計画数: ${totalPlanQuantity}, 実績数: ${actualProduction}, 不良数: ${defectQty}, 前工程不良: ${upstreamDefectQty}, 生産残数: ${remainingProduction}`,
         )
       } else {
-        console.log(
+        formingDevLog(
           `[生産計画数] 未找到匹配数据，设备: ${machineName}, 产品: ${currentProductName}, 順位: ${currentOperator} (转换为数字: ${operatorAsNumber}), 查找key: ${scheduleKey}`,
         )
       }
@@ -5297,7 +5212,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
     // 備考字段逻辑：如果当日生产数据有3个产品，把第3个产品名写入備考字段
     let remarksText = ''
-    console.log(
+    formingDevLog(
       `[備考] 检查当日产品数量，设备: ${machineName}, 当日产品数: ${currentProducts.length}`,
     )
 
@@ -5308,10 +5223,10 @@ const generateSetupScheduleContent = async (planData: any[]) => {
 
       if (thirdProductName && thirdProductName.trim() !== '') {
         remarksText = `次生産品種：${thirdProductName}`
-        console.log(`[備考] 当日有3个或以上产品，第3个产品名: ${thirdProductName}`)
+        formingDevLog(`[備考] 当日有3个或以上产品，第3个产品名: ${thirdProductName}`)
       }
     } else {
-      console.log(`[備考] 当日产品数少于3个，不填写備考`)
+      formingDevLog(`[備考] 当日产品数少于3个，不填写備考`)
     }
 
     // 获取operator字段（順位）
@@ -5769,7 +5684,6 @@ const buildSetupSchedulePrintHtml = (data: {
 // 計画データを更新
 const refreshPlanData = () => {
   loadPlanData()
-  calculatePlanStats() // 同时更新统计
 }
 
 // 加载設備下拉框选项
@@ -5834,7 +5748,7 @@ const loadWorkTimeConfig = async () => {
 // 处理时间段勾选变化
 const handleTimeSlotChange = (row: any, slot: string) => {
   // 可以在这里添加实时保存或其他逻辑
-  console.log(
+  formingDevLog(
     `设备 ${row.machine_name} 的 ${slot} 时间段已${row[`time_slot_${slot}`] ? '勾选' : '取消'}`,
   )
 }
@@ -5973,10 +5887,10 @@ const deleteWorkTimeConfig = async (row: any) => {
   }
 }
 
-// 二维表（设备 × 生産日）派生数据
-const matrixDates = computed(() => {
-  if (!matrixDateRange.value || matrixDateRange.value.length !== 2) return [] as string[]
-  const [start, end] = matrixDateRange.value
+// 日別計画・実績チャート（plan_date ごとに quantity / actual を合計）
+const planQtyChartDates = computed(() => {
+  if (!planQtyChartDateRange.value || planQtyChartDateRange.value.length !== 2) return [] as string[]
+  const [start, end] = planQtyChartDateRange.value
   const dates: string[] = []
   const dStart = new Date(start)
   const dEnd = new Date(end)
@@ -5986,140 +5900,314 @@ const matrixDates = computed(() => {
   return dates
 })
 
-type MatrixRow = {
-  key: string
-  machine_name: string
-  product_name: string
-  operator: string
-  totalQty: number
-  dateToQty: Record<string, number>
-  group: number
+const planQtyDailyTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  planQtyChartRecords.value.forEach((x) => {
+    if (!x?.plan_date) return
+    const name = (x.product_name ?? '').trim()
+    if (!name) return
+    const q = parseFloat(String(x.quantity ?? 0)) || 0
+    if (q <= 0) return
+    totals[x.plan_date] = (totals[x.plan_date] || 0) + q
+  })
+  return totals
+})
+
+/** schedule_details.actual_qty（API では actual_production / actual_qty）を日別に合計 */
+const planQtyDailyActualTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  planQtyChartRecords.value.forEach((x) => {
+    if (!x?.plan_date) return
+    const name = (x.product_name ?? '').trim()
+    if (!name) return
+    const a = parseFloat(String(x.actual_production ?? x.actual_qty ?? 0)) || 0
+    if (a <= 0) return
+    totals[x.plan_date] = (totals[x.plan_date] || 0) + a
+  })
+  return totals
+})
+
+const planQtyChartHasData = computed(() => {
+  for (const d of planQtyChartDates.value) {
+    if ((planQtyDailyTotals.value[d] || 0) > 0 || (planQtyDailyActualTotals.value[d] || 0) > 0)
+      return true
+  }
+  return false
+})
+
+function jstCalendarNow(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
 }
 
-const matrixRows = computed<MatrixRow[]>(() => {
-  const map = new Map<string, MatrixRow>()
-  filteredMatrixData.value.forEach((x: any) => {
-    if (!x || !x.machine_name || !x.product_name) return
-    if (!x.quantity || parseFloat(x.quantity) <= 0) return
-    const op = x.operator || ''
-    const key = `${x.machine_name}|${x.product_cd || x.product_name}|${op}`
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        machine_name: x.machine_name,
-        product_name: x.product_name,
-        operator: op,
-        totalQty: 0,
-        dateToQty: {},
-        group: 0,
-      })
-    }
-    const row = map.get(key)!
-    const q = parseFloat(x.quantity) || 0
-    row.totalQty += q
-    if (x.plan_date) {
-      row.dateToQty[x.plan_date] = (row.dateToQty[x.plan_date] || 0) + q
-    }
-  })
-  // 排序：設備 -> 生産順位 -> 製品名（兜底）
-  const sorted = Array.from(map.values()).sort((a, b) => {
-    const m = a.machine_name.localeCompare(b.machine_name)
-    if (m !== 0) return m
+function formatYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
-    // 生産順位优先，尽量按数值比较；为空的排在后面
-    const ao = (a.operator ?? '').toString().trim()
-    const bo = (b.operator ?? '').toString().trim()
-    const an = ao === '' ? Number.POSITIVE_INFINITY : Number(ao)
-    const bn = bo === '' ? Number.POSITIVE_INFINITY : Number(bo)
-
-    if (!Number.isNaN(an) && !Number.isNaN(bn)) {
-      if (an !== bn) return an - bn
-    } else {
-      const os = ao.localeCompare(bo, 'ja')
-      if (os !== 0) return os
-    }
-
-    return a.product_name.localeCompare(b.product_name)
-  })
-
-  // 依設備分组着色：設備变化时递增分组索引
-  let groupIndex = -1
-  let lastMachine = ''
-  sorted.forEach((row) => {
-    if (row.machine_name !== lastMachine) {
-      groupIndex = (groupIndex + 1) % 3 // 使用 3 组颜色循环
-      lastMachine = row.machine_name
-    }
-    row.group = groupIndex
-  })
-
-  return sorted
-})
-
-// 支持折叠的矩阵行数据
-const visibleMatrixRows = computed(() => {
-  const allRows = matrixRows.value
-  const result: any[] = []
-  const machineGroups = new Map<string, any[]>()
-
-  // 按设备分组
-  allRows.forEach((row) => {
-    if (!machineGroups.has(row.machine_name)) {
-      machineGroups.set(row.machine_name, [])
-    }
-    machineGroups.get(row.machine_name)!.push(row)
-  })
-
-  // 为每个设备组添加行
-  machineGroups.forEach((rows, machineName) => {
-    // 添加设备组头部行
-    const isCollapsed = isMachineCollapsed(machineName)
-    const groupTotalQty = rows.reduce((sum, row) => sum + row.totalQty, 0)
-
-    result.push({
-      key: `machine-header-${machineName}`,
-      machine_name: machineName,
-      product_name: `${rows.length}件の製品`,
-      operator: '',
-      totalQty: groupTotalQty,
-      dateToQty: rows.reduce(
-        (acc, row) => {
-          Object.entries(row.dateToQty).forEach(([date, qty]) => {
-            acc[date] = (acc[date] || 0) + qty
-          })
-          return acc
-        },
-        {} as Record<string, number>,
-      ),
-      group: rows[0].group,
-      isGroupHeader: true,
-      isCollapsed,
-      machineColor: getMachineColor(machineName),
-    })
-
-    // 如果未折叠，添加子行
-    if (!isCollapsed) {
-      rows.forEach((row) => {
-        result.push({
-          ...row,
-          isGroupHeader: false,
-          isChildRow: true,
-        })
-      })
-    }
-  })
-
-  return result
-})
-
-// 加载二维表数据（独立于上方列表）
-const loadMatrixData = async () => {
-  if (!matrixDateRange.value || matrixDateRange.value.length !== 2) return
-  matrixLoading.value = true
+function formatPlanQtyChartAxisDate(dateStr: string) {
   try {
-    const params: any = {
-      startDate: matrixDateRange.value[0],
-      endDate: matrixDateRange.value[1],
+    const date = new Date(dateStr + 'T00:00:00')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${month}/${day}`
+  } catch {
+    return dateStr
+  }
+}
+
+function getPlanQtyChartTodayStr() {
+  return formatYmd(jstCalendarNow())
+}
+
+function onPlanQtyChartResize() {
+  planQtyChartInstance?.resize()
+}
+
+function disposePlanQtyChart() {
+  window.removeEventListener('resize', onPlanQtyChartResize)
+  if (planQtyChartInstance) {
+    planQtyChartInstance.dispose()
+    planQtyChartInstance = null
+  }
+}
+
+function barDatumPlan(date: string, todayStr: string, v: number, radiusBar: [number, number, number, number]) {
+  let color: echarts.graphic.LinearGradient
+  if (date < todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#bae6fd' },
+      { offset: 1, color: '#0284c7' },
+    ])
+  } else if (date === todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#6ee7b7' },
+      { offset: 0.55, color: '#34d399' },
+      { offset: 1, color: '#047857' },
+    ])
+  } else {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#f1f5f9' },
+      { offset: 1, color: '#94a3b8' },
+    ])
+  }
+  return {
+    value: v,
+    itemStyle: {
+      color,
+      borderRadius: radiusBar,
+      shadowBlur: date === todayStr ? 14 : 8,
+      shadowColor: date === todayStr ? 'rgba(4, 120, 87, 0.28)' : 'rgba(2, 132, 199, 0.18)',
+      shadowOffsetY: 2,
+    },
+  }
+}
+
+function barDatumActual(date: string, todayStr: string, v: number, radiusBar: [number, number, number, number]) {
+  let color: echarts.graphic.LinearGradient
+  if (date < todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fde68a' },
+      { offset: 1, color: '#d97706' },
+    ])
+  } else if (date === todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fcd34d' },
+      { offset: 0.55, color: '#f59e0b' },
+      { offset: 1, color: '#b45309' },
+    ])
+  } else {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fef3c7' },
+      { offset: 1, color: '#d6d3d1' },
+    ])
+  }
+  return {
+    value: v,
+    itemStyle: {
+      color,
+      borderRadius: radiusBar,
+      shadowBlur: date === todayStr ? 12 : 6,
+      shadowColor: date === todayStr ? 'rgba(180, 83, 9, 0.28)' : 'rgba(217, 119, 6, 0.15)',
+      shadowOffsetY: 2,
+    },
+  }
+}
+
+function updatePlanQtyChart() {
+  const el = planQtyChartEl.value
+  const dates = planQtyChartDates.value
+  const totals = planQtyDailyTotals.value
+  const actualTotals = planQtyDailyActualTotals.value
+  if (!el || dates.length === 0) {
+    disposePlanQtyChart()
+    return
+  }
+  const planValues = dates.map((d) => totals[d] || 0)
+  const actualValues = dates.map((d) => actualTotals[d] || 0)
+  if (!planValues.some((v) => v > 0) && !actualValues.some((v) => v > 0)) {
+    disposePlanQtyChart()
+    return
+  }
+
+  if (!planQtyChartInstance) {
+    planQtyChartInstance = echarts.init(el)
+    window.addEventListener('resize', onPlanQtyChartResize)
+  }
+
+  const cats = dates.map((d) => formatPlanQtyChartAxisDate(d))
+  const todayStr = getPlanQtyChartTodayStr()
+  const todayIdx = dates.indexOf(todayStr)
+
+  const radiusBar: [number, number, number, number] = [6, 6, 0, 0]
+  const planBarData = dates.map((date, idx) =>
+    barDatumPlan(date, todayStr, planValues[idx], radiusBar),
+  )
+  const actualBarData = dates.map((date, idx) =>
+    barDatumActual(date, todayStr, actualValues[idx], radiusBar),
+  )
+
+  const labelFmt = (params: unknown) => {
+    const p = params as { value?: unknown; data?: { value?: unknown } }
+    const v =
+      typeof p.data === 'object' && p.data != null && typeof p.data.value === 'number'
+        ? p.data.value
+        : typeof p.value === 'number'
+          ? p.value
+          : 0
+    if (v === 0) return ''
+    return v.toLocaleString('ja-JP')
+  }
+
+  planQtyChartInstance.setOption(
+    {
+      backgroundColor: 'transparent',
+      animationDuration: 560,
+      textStyle: { fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
+      legend: {
+        top: 6,
+        left: 'center',
+        itemWidth: 12,
+        itemHeight: 12,
+        textStyle: { fontSize: 11, color: '#64748b', fontWeight: 600 },
+        data: ['計画生産数', '実績生産数'],
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(14, 165, 233, 0.06)' } },
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        borderWidth: 0,
+        borderRadius: 10,
+        padding: [10, 14],
+        textStyle: { color: '#f8fafc', fontSize: 12 },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number } | undefined
+          const idx = first?.dataIndex ?? 0
+          const rawDate = dates[idx]
+          if (!rawDate) return ''
+          const pv = planValues[idx] ?? 0
+          const av = actualValues[idx] ?? 0
+          const ps = Number(pv).toLocaleString('ja-JP')
+          const as = Number(av).toLocaleString('ja-JP')
+          return `<div style="font-weight:600;margin-bottom:6px">${rawDate}</div>` +
+            `<div style="opacity:.95;margin-bottom:2px">計画生産数: ${ps}</div>` +
+            `<div style="opacity:.95">実績生産数: ${as}</div>`
+        },
+      },
+      grid: { left: 52, right: 18, top: 52, bottom: dates.length > 14 ? 52 : 44, containLabel: false },
+      xAxis: {
+        type: 'category',
+        data: cats,
+        axisLine: { lineStyle: { color: '#e2e8f0', width: 1 } },
+        axisTick: { show: false },
+        axisLabel: {
+          fontSize: 10,
+          rotate: dates.length > 14 ? 40 : 0,
+          color: '#64748b',
+          margin: 10,
+          fontWeight: 500,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        name: '数量',
+        nameGap: 8,
+        nameTextStyle: { fontSize: 11, color: '#94a3b8', fontWeight: 500 },
+        axisLabel: { fontSize: 10, color: '#94a3b8' },
+        splitLine: { lineStyle: { type: 'dashed', color: '#e8ecf1', width: 1 } },
+        axisLine: { show: false },
+        minInterval: 1,
+      },
+      series: [
+        {
+          name: '計画生産数',
+          type: 'bar',
+          barMaxWidth: 22,
+          barGap: '12%',
+          data: planBarData,
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            fontSize: 8,
+            fontWeight: 500,
+            color: '#475569',
+            formatter: labelFmt,
+          },
+          emphasis: {
+            focus: 'series',
+            itemStyle: { shadowBlur: 16, shadowColor: 'rgba(14, 165, 233, 0.35)' },
+          },
+          markLine:
+            todayIdx >= 0
+              ? {
+                  symbol: 'none',
+                  lineStyle: { color: 'rgba(245, 158, 11, 0.92)', type: 'dashed', width: 1.5 },
+                  label: {
+                    formatter: '今日',
+                    color: '#c2410c',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: [2, 8],
+                    borderRadius: 6,
+                    backgroundColor: 'rgba(254, 243, 199, 0.95)',
+                  },
+                  data: [{ xAxis: todayIdx }],
+                }
+              : undefined,
+        },
+        {
+          name: '実績生産数',
+          type: 'bar',
+          barMaxWidth: 22,
+          data: actualBarData,
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            fontSize: 8,
+            fontWeight: 500,
+            color: '#92400e',
+            formatter: labelFmt,
+          },
+          emphasis: {
+            focus: 'series',
+            itemStyle: { shadowBlur: 14, shadowColor: 'rgba(217, 119, 6, 0.38)' },
+          },
+        },
+      ],
+    },
+    true,
+  )
+  requestAnimationFrame(() => planQtyChartInstance?.resize())
+}
+
+const loadPlanQtyChartData = async () => {
+  if (!planQtyChartDateRange.value || planQtyChartDateRange.value.length !== 2) return
+  planQtyChartLoading.value = true
+  try {
+    const params = {
+      startDate: planQtyChartDateRange.value[0],
+      endDate: planQtyChartDateRange.value[1],
       processName: '成型',
       page: 1,
       limit: 10000,
@@ -6127,143 +6215,39 @@ const loadMatrixData = async () => {
     const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse
     if (result.success) {
       const records = (result.data as { records?: unknown[] })?.records ?? []
-      const filtered = records.filter(
-        (item: any) => item.product_name && item.product_name.trim() !== '',
-      )
-      matrixData.value = filtered
-      filterMatrixData() // 加载数据后应用筛选
+      planQtyChartRecords.value = records.filter(
+        (item: any) => item.product_name && String(item.product_name).trim() !== '',
+      ) as PlanRecord[]
     } else {
-      matrixData.value = []
-      filteredMatrixData.value = []
+      planQtyChartRecords.value = []
     }
   } catch (e) {
-    console.error('二维表データの読み込みに失敗:', e)
-    matrixData.value = []
-    filteredMatrixData.value = []
+    console.error('日別計画チャートの読み込みに失敗:', e)
+    planQtyChartRecords.value = []
   } finally {
-    matrixLoading.value = false
+    planQtyChartLoading.value = false
+    await nextTick()
+    updatePlanQtyChart()
   }
 }
 
-// マトリックスデータ筛选
-const filterMatrixData = () => {
-  if (!matrixSearchKeyword.value || matrixSearchKeyword.value.trim() === '') {
-    // 没有关键词时显示全部数据
-    filteredMatrixData.value = matrixData.value
-  } else {
-    // 根据关键词筛选设备名和产品名
-    const keyword = matrixSearchKeyword.value.toLowerCase().trim()
-    filteredMatrixData.value = matrixData.value.filter((item: any) => {
-      const machineName = (item.machine_name || '').toLowerCase()
-      const productName = (item.product_name || '').toLowerCase()
-      return machineName.includes(keyword) || productName.includes(keyword)
-    })
-  }
-}
-
-// 设置マトリックス月份（使用日本时区）
-const setMatrixMonth = (monthOffset: number) => {
-  // 使用日本时区 (JST, UTC+9)
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+const setPlanQtyChartMonth = (monthOffset: number) => {
+  const now = jstCalendarNow()
   const targetDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-
-  // 获取当月第一天和最后一天
   const firstDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
   const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0)
-
-  // 格式化为YYYY-MM-DD格式
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  const startDate = formatDate(firstDay)
-  const endDate = formatDate(lastDay)
-
-  console.log(`设置月份范围: ${startDate} 到 ${endDate}`)
-
-  matrixDateRange.value = [startDate, endDate]
-  loadMatrixData()
+  planQtyChartDateRange.value = [formatYmd(firstDay), formatYmd(lastDay)]
+  loadPlanQtyChartData()
 }
 
-// マトリックス默认期间：当日往前2天 ～ 往后30天（JST）
-const setDefaultMatrixRange = () => {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+const setDefaultPlanQtyChartRange = () => {
+  const now = jstCalendarNow()
   const start = new Date(now)
   start.setDate(start.getDate() - 2)
   const end = new Date(now)
   end.setDate(end.getDate() + 30)
-
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  matrixDateRange.value = [formatDate(start), formatDate(end)]
-  loadMatrixData()
-}
-
-// 列合计与总合计
-const matrixColumnTotals = computed<Record<string, number>>(() => {
-  const totals: Record<string, number> = {}
-  matrixRows.value.forEach((row) => {
-    Object.entries(row.dateToQty).forEach(([date, qty]) => {
-      totals[date] = (totals[date] || 0) + (qty || 0)
-    })
-  })
-  return totals
-})
-
-const matrixGrandTotal = computed(() => {
-  return matrixRows.value.reduce((sum, r) => sum + (r.totalQty || 0), 0)
-})
-
-// 星期标签（JST）
-const getWeekdayLabel = (date: string) => {
-  try {
-    // 统一到日本时区当天00:00，避免时区偏移
-    const d = new Date(
-      new Date(date + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
-    )
-    return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
-  } catch {
-    return ''
-  }
-}
-
-// 是否为周末（JST）
-const isWeekend = (date: string) => {
-  try {
-    const d = new Date(
-      new Date(date + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
-    )
-    const day = d.getDay()
-    return day === 0 || day === 6
-  } catch {
-    return false
-  }
-}
-
-// 是否为当日（JST）
-const isToday = (date: string) => {
-  try {
-    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-    return date === todayStr
-  } catch {
-    return false
-  }
-}
-
-// 数字格式化（千位分隔）
-const formatQty = (val: number | string) => {
-  const n = typeof val === 'string' ? Number(val) : val
-  if (!isFinite(n as number)) return ''
-  return (n as number).toLocaleString('ja-JP')
+  planQtyChartDateRange.value = [formatYmd(start), formatYmd(end)]
+  loadPlanQtyChartData()
 }
 
 // 数字格式化（简化版）
@@ -6277,358 +6261,8 @@ const formatNumber = (val: number | string) => {
 const formatEfficiencyRate = (val: number | string) => {
   const n = typeof val === 'string' ? Number(val) : val
   if (!isFinite(n as number)) return '-'
-  // 保留1位小数，如果小数部分为0则不显示
   const formatted = (n as number).toFixed(1)
   return formatted.endsWith('.0') ? `${Math.round(n as number)}` : `${formatted}`
-}
-
-// 日期格式化（MM-DD）
-const formatMatrixDate = (dateStr: string) => {
-  try {
-    const date = new Date(dateStr + 'T00:00:00')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${month}-${day}`
-  } catch {
-    return dateStr
-  }
-}
-
-// 根据设备名称生成颜色
-const getMachineColor = (machineName: string) => {
-  if (!machineName) return '#64748b'
-
-  // 预定义的颜色数组，使用现代化的颜色
-  const colors = [
-    '#3b82f6', // 蓝色
-    '#ef4444', // 红色
-    '#10b981', // 绿色
-    '#f59e0b', // 橙色
-    '#8b5cf6', // 紫色
-    '#06b6d4', // 青色
-    '#f97316', // 深橙色
-    '#84cc16', // 青绿色
-    '#ec4899', // 粉色
-    '#6366f1', // 靛蓝色
-    '#14b8a6', // 蓝绿色
-    '#eab308', // 黄色
-  ]
-
-  // 使用设备名称的哈希值来选择颜色，确保相同设备总是相同颜色
-  let hash = 0
-  for (let i = 0; i < machineName.length; i++) {
-    hash = machineName.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
-}
-
-// 切换设备展开/折叠状态
-const toggleMachineCollapse = (machineName: string) => {
-  if (collapsedMachines.value.has(machineName)) {
-    collapsedMachines.value.delete(machineName)
-  } else {
-    collapsedMachines.value.add(machineName)
-  }
-}
-
-// 检查设备是否折叠
-const isMachineCollapsed = (machineName: string) => {
-  return collapsedMachines.value.has(machineName)
-}
-
-// 鼠标悬停处理
-const handleCellHover = (rowKey: string, date: string) => {
-  hoveredRow.value = rowKey
-  hoveredCol.value = date
-}
-
-const handleCellLeave = () => {
-  hoveredRow.value = null
-  hoveredCol.value = null
-}
-
-// Excel导出功能
-const exportToExcel = () => {
-  try {
-    // 准备导出数据
-    const exportData = []
-
-    // 添加表头
-    const headers = [
-      '設備',
-      '製品名',
-      '生産順位',
-      '生産数(合計)',
-      ...matrixDates.value.map((date) => formatMatrixDate(date)),
-    ]
-    exportData.push(headers)
-
-    // 添加数据行
-    matrixRows.value.forEach((row) => {
-      const rowData = [
-        row.machine_name,
-        row.product_name,
-        row.operator || '',
-        row.totalQty,
-        ...matrixDates.value.map((date) => row.dateToQty[date] || ''),
-      ]
-      exportData.push(rowData)
-    })
-
-    // 添加合计行
-    const totalRow = [
-      '合計',
-      '',
-      '',
-      matrixGrandTotal.value,
-      ...matrixDates.value.map((date) => matrixColumnTotals.value[date] || 0),
-    ]
-    exportData.push(totalRow)
-
-    // 转换为CSV格式
-    const csvContent = exportData.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')
-
-    // 创建下载链接
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `生産計画マトリックス_${JapanDateUtils.getTodayString()}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    ElMessage.success('Excelファイルをダウンロードしました')
-  } catch (error) {
-    console.error('Excel导出失败:', error)
-    ElMessage.error('Excelエクスポートに失敗しました')
-  }
-}
-
-// マトリックス打印功能
-const printMatrix = () => {
-  try {
-    // 生成打印内容
-    const printContent = generateMatrixPrintContent()
-
-    // 创建打印窗口
-    const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(printContent)
-      printWindow.document.close()
-      printWindow.focus()
-
-      // 等待内容加载完成后打印
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print()
-          printWindow.close()
-        }, 500)
-      }
-    }
-
-    ElMessage.success('印刷を開始しました')
-  } catch (error) {
-    console.error('印刷に失敗しました:', error)
-    ElMessage.error('印刷に失敗しました')
-  }
-}
-
-// 生成マトリックス打印内容
-const generateMatrixPrintContent = () => {
-  const currentDate = JapanDateUtils.formatDate(JapanDateUtils.getTodayString())
-  const dateRange =
-    matrixDateRange.value.length === 2
-      ? `${formatMatrixDate(matrixDateRange.value[0])} 〜 ${formatMatrixDate(matrixDateRange.value[1])}`
-      : '全期間'
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>生産計画マトリックス</title>
-      <style>
-        @page {
-          size: A3 landscape;
-          margin: 10mm;
-          /* 打印详细设定 */
-          marks: none; /* 不显示裁剪标记 */
-          bleed: 0mm; /* 无出血 */
-          /* 单面打印 */
-          page-break-after: auto;
-        }
-
-        /* 打印媒体查询 - 确保打印样式正确应用 */
-        @media print {
-          @page {
-            size: A3 landscape;
-            margin: 10mm;
-            marks: none;
-            bleed: 0mm;
-          }
-
-          /* 确保打印时不显示背景色（除非需要） */
-          * {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-
-        body {
-          font-family: 'Yu Gothic', 'Hiragino Sans', sans-serif;
-          font-size: 10px;
-          line-height: 1.2;
-          margin: 0;
-          padding: 0;
-          color: #000;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-
-        .print-header {
-          text-align: center;
-          margin-bottom: 15px;
-          border-bottom: 2px solid #000;
-          padding-bottom: 10px;
-        }
-
-        .print-title {
-          font-size: 18px;
-          font-weight: bold;
-          margin-bottom: 5px;
-        }
-
-        .print-info {
-          font-size: 12px;
-          color: #666;
-        }
-
-        .matrix-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 9px;
-        }
-
-        .matrix-table th,
-        .matrix-table td {
-          border: 1px solid #000;
-          padding: 3px 4px;
-          text-align: center;
-          vertical-align: middle;
-        }
-
-        .matrix-table th {
-          background-color: #f0f0f0;
-          font-weight: bold;
-          font-size: 8px;
-        }
-
-        .sticky-col {
-          background-color: #f8f9fa;
-          font-weight: bold;
-        }
-
-        .group-header {
-          background-color: #e3f2fd;
-          font-weight: bold;
-        }
-
-        .child-row {
-          background-color: #fafafa;
-        }
-
-        .numeric-cell {
-          text-align: right;
-        }
-
-        .machine-name {
-          font-weight: bold;
-        }
-
-        .total-row {
-          background-color: #fff3e0;
-          font-weight: bold;
-          border-top: 2px solid #000;
-        }
-
-        .print-footer {
-          margin-top: 15px;
-          text-align: right;
-          font-size: 10px;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="print-header">
-        <div class="print-title">生産計画マトリックス</div>
-        <div class="print-info">
-          期間: ${dateRange} | 印刷日時: ${currentDate}
-        </div>
-      </div>
-
-      <table class="matrix-table">
-        <thead>
-          <tr>
-            <th class="sticky-col">設備</th>
-            <th class="sticky-col">製品名</th>
-            <th class="sticky-col">生産順位</th>
-            <th class="sticky-col">生産数(合計)</th>
-            ${matrixDates.value
-              .map(
-                (date) =>
-                  `<th>${formatMatrixDate(date)}<br><small>${getWeekdayLabel(date)}</small></th>`,
-              )
-              .join('')}
-          </tr>
-        </thead>
-        <tbody>
-          ${visibleMatrixRows.value
-            .map(
-              (row) => `
-            <tr class="${row.isGroupHeader ? 'group-header' : row.isChildRow ? 'child-row' : ''}">
-              <td class="sticky-col">
-                ${row.isGroupHeader ? '▼ ' : row.isChildRow ? '　' : ''}${row.machine_name}
-              </td>
-              <td class="sticky-col">${row.product_name}</td>
-              <td class="sticky-col">${row.operator || ''}</td>
-              <td class="sticky-col numeric-cell">${formatQty(row.totalQty)}</td>
-              ${matrixDates.value
-                .map(
-                  (date) =>
-                    `<td class="numeric-cell">${row.dateToQty[date] ? formatQty(row.dateToQty[date]) : ''}</td>`,
-                )
-                .join('')}
-            </tr>
-          `,
-            )
-            .join('')}
-        </tbody>
-        <tfoot>
-          <tr class="total-row">
-            <td class="sticky-col">合計</td>
-            <td class="sticky-col"></td>
-            <td class="sticky-col"></td>
-            <td class="sticky-col numeric-cell">${formatQty(matrixGrandTotal.value)}</td>
-            ${matrixDates.value
-              .map(
-                (date) =>
-                  `<td class="numeric-cell">${formatQty(matrixColumnTotals.value[date] || 0)}</td>`,
-              )
-              .join('')}
-          </tr>
-        </tfoot>
-      </table>
-
-      <div class="print-footer">
-        Smart-EMAP 生産管理システム
-      </div>
-    </body>
-    </html>
-  `
 }
 
 // 優先度タグスタイルを取得
@@ -6677,6 +6311,103 @@ const getStatusLabel = (status: string) => {
   return statusMap[status] || status
 }
 
+// ─────────────────────────────────────────────
+// メモ（TODO）— cutting と同一 UX、API は forming-instruction-notes（scope: forming_instruction）
+// ─────────────────────────────────────────────
+interface FormingInstructionNote {
+  id?: number
+  content?: string | null
+  is_done?: number | boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+const formingInstructionNotesDialogVisible = ref(false)
+const formingInstructionNotesLoading = ref(false)
+const formingInstructionNotesSaving = ref(false)
+const formingInstructionNotesList = ref<FormingInstructionNote[]>([])
+const formingInstructionNotesNewContent = ref('')
+
+const formingInstructionNotesCount = computed(() => formingInstructionNotesList.value.length)
+
+async function loadFormingInstructionNotes() {
+  formingInstructionNotesLoading.value = true
+  try {
+    const res = await request.get('/api/plan/forming-instruction-notes', { params: { limit: 200 } })
+
+    formingInstructionNotesList.value = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as FormingInstructionNote[])
+      : []
+  } catch (e) {
+    console.error('メモ（TODO）の取得に失敗:', e)
+    ElMessage.error('メモ（TODO）の取得に失敗しました')
+    formingInstructionNotesList.value = []
+  } finally {
+    formingInstructionNotesLoading.value = false
+  }
+}
+
+function openFormingInstructionNotesDialog() {
+  formingInstructionNotesDialogVisible.value = true
+  formingInstructionNotesNewContent.value = ''
+  loadFormingInstructionNotes()
+}
+
+async function addFormingInstructionNote() {
+  const content = formingInstructionNotesNewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('内容を入力してください')
+    return
+  }
+  try {
+    formingInstructionNotesSaving.value = true
+    await request.post('/api/plan/forming-instruction-notes', { content })
+    formingInstructionNotesNewContent.value = ''
+    await loadFormingInstructionNotes()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('メモ（TODO）の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    formingInstructionNotesSaving.value = false
+  }
+}
+
+async function toggleFormingInstructionNoteDone(note: FormingInstructionNote, checked: unknown) {
+  if (!note.id) return
+  const is_done =
+    checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
+  try {
+    formingInstructionNotesSaving.value = true
+    await request.patch(`/api/plan/forming-instruction-notes/${note.id}`, { is_done })
+    note.is_done = is_done
+  } catch (e) {
+    console.error('メモ（TODO）の更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+    await loadFormingInstructionNotes()
+  } finally {
+    formingInstructionNotesSaving.value = false
+  }
+}
+
+async function deleteFormingInstructionNote(note: FormingInstructionNote) {
+  if (!note.id) return
+  try {
+    await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
+    formingInstructionNotesSaving.value = true
+    await request.delete(`/api/plan/forming-instruction-notes/${note.id}`)
+    await loadFormingInstructionNotes()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    if ((e as { message?: string; name?: string })?.message?.includes('cancel')) return
+    if ((e as { name?: string })?.name === 'MessageBox') return
+    console.error('メモ（TODO）の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    formingInstructionNotesSaving.value = false
+  }
+}
+
 // ページ初期化
 onMounted(() => {
   // 先初始化搜索表单默认值
@@ -6684,11 +6415,14 @@ onMounted(() => {
   // 然后加载数据
   loadMachineOptions()
   loadPlanData()
-  calculatePlanStats() // 加载统计
   loadInstructions()
-  loadStats()
-  // 初始化二维表日期：当日往前2天 ～ 往后30天
-  setDefaultMatrixRange()
+  loadFormingInstructionNotes()
+  // 日別計画チャート：当日往前2天 ～ 往后30天（JST）
+  setDefaultPlanQtyChartRange()
+})
+
+onUnmounted(() => {
+  disposePlanQtyChart()
 })
 </script>
 
@@ -7056,6 +6790,178 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.forming-notes-btn-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.forming-notes-toolbar-btn {
+  margin: 0 !important;
+  height: 28px !important;
+  min-width: 36px;
+  padding: 0 10px !important;
+  border-radius: 7px !important;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+  border-color: #ddd6fe !important;
+  color: #5b21b6 !important;
+  box-shadow: 0 1px 2px rgba(88, 28, 135, 0.08) !important;
+}
+
+.forming-notes-toolbar-btn:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+  border-color: #a78bfa !important;
+  color: #4c1d95 !important;
+}
+
+.notes-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notes-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.forming-instruction-notes-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 24px 48px -20px rgba(76, 29, 149, 0.45);
+}
+
+.forming-instruction-notes-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #ede9fe;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 55%, #ecfeff 100%);
+}
+
+.forming-instruction-notes-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5b21b6;
+}
+
+.forming-instruction-notes-dialog :deep(.el-dialog__body) {
+  padding: 12px 16px 8px;
+}
+
+.forming-instruction-notes-dialog :deep(.el-dialog__footer) {
+  padding: 8px 16px 14px;
+}
+
+.cutting-notes-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cutting-notes-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cutting-notes-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  border: 1px solid #e9d5ff;
+  font-size: 12px;
+}
+
+.cutting-notes-input :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+
+.cutting-notes-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cutting-notes-char-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.cutting-notes-add-btn {
+  border-radius: 8px !important;
+}
+
+.cutting-notes-scrollbar {
+  border-radius: 10px;
+}
+
+.cutting-notes-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.cutting-notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid #f3e8ff;
+  margin-bottom: 6px;
+  background: #faf5ff;
+}
+
+.cutting-notes-row:hover {
+  border-color: #e9d5ff;
+}
+
+.cutting-notes-row-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  word-break: break-word;
+}
+
+.cutting-notes-row-content--done {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.cutting-notes-row :deep(.el-checkbox__inner) {
+  border-radius: 4px;
+}
+
+.cutting-notes-delete-btn {
+  flex-shrink: 0;
+  padding: 4px !important;
+  color: #64748b !important;
+}
+
+.cutting-notes-delete-btn:hover {
+  color: #ef4444 !important;
+}
+
+.cutting-notes-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* 成型計画データテーブルエリア：按钮统一现代化 */
@@ -7471,11 +7377,6 @@ onMounted(() => {
   color: white;
 }
 
-.matrix-search-input {
-  width: 170px;
-  border-radius: 7px;
-}
-
 .month-buttons {
   display: flex;
   gap: 3px;
@@ -7514,69 +7415,73 @@ onMounted(() => {
   color: white;
 }
 
-.matrix-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* 日別計画・実績チャート */
+.plan-qty-chart-section {
+  margin-bottom: 12px;
+}
+
+.plan-qty-chart-title-row {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.plan-qty-chart-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
   margin-left: 8px;
 }
 
-/* 生産計画マトリックスエリア：按钮现代化 */
-.matrix-section .month-btn,
-.matrix-section .matrix-controls .export-btn,
-.matrix-section .matrix-controls .print-btn {
+.plan-qty-chart-actions {
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.plan-qty-chart-body {
+  min-height: 320px;
+  position: relative;
+}
+
+.plan-qty-chart-empty {
+  padding: 48px 16px;
+}
+
+.plan-qty-chart-canvas {
+  width: 100%;
+  height: 340px;
+}
+
+.plan-qty-chart-section .month-btn {
   border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow:
     0 7px 16px rgba(15, 23, 42, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.32);
   letter-spacing: 0.2px;
-}
-
-.matrix-section .month-btn {
   border-radius: 9px;
   font-weight: 600;
 }
 
-.matrix-section .matrix-controls .export-btn,
-.matrix-section .matrix-controls .print-btn {
-  border-radius: 9px;
-  font-weight: 700;
-}
-
-.matrix-section .month-btn.prev {
+.plan-qty-chart-section .month-btn.prev {
   background: linear-gradient(145deg, #fb7185 0%, #dc2626 100%);
 }
 
-.matrix-section .month-btn.current {
+.plan-qty-chart-section .month-btn.current {
   background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
 }
 
-.matrix-section .month-btn.next {
+.plan-qty-chart-section .month-btn.next {
   background: linear-gradient(145deg, #34d399 0%, #059669 100%);
 }
 
-.matrix-section .matrix-controls .export-btn {
-  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
-  color: #fff;
-}
-
-.matrix-section .matrix-controls .print-btn {
-  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
-  color: #fff;
-}
-
-.matrix-section .month-btn:hover,
-.matrix-section .matrix-controls .export-btn:hover,
-.matrix-section .matrix-controls .print-btn:hover {
+.plan-qty-chart-section .month-btn:hover {
   transform: translateY(-2px);
   box-shadow:
     0 10px 22px rgba(15, 23, 42, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.34);
 }
 
-.matrix-section .month-btn:active,
-.matrix-section .matrix-controls .export-btn:active,
-.matrix-section .matrix-controls .print-btn:active {
+.plan-qty-chart-section .month-btn:active {
   transform: translateY(0) scale(0.98);
   box-shadow:
     0 3px 9px rgba(15, 23, 42, 0.16),
@@ -7664,105 +7569,10 @@ onMounted(() => {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-/* 主要操作按钮 - 蓝色（指示書発行、段取予定発行、印刷） */
-.print-btn[type='primary'] {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-}
-
-/* 信息操作按钮 - 灰色（設備運行時間設定） */
-.print-btn[type='info'] {
-  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-  color: white;
-}
-
 /* 成功操作按钮 - 绿色（Excel出力） */
 .export-btn[type='success'] {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
   color: white;
-}
-
-/* 設備名称样式 */
-.machine-name {
-  font-weight: 600;
-  font-size: 12px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.machine-name:hover {
-  transform: scale(1.05);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* 设备单元格样式 */
-.machine-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.collapse-icon {
-  cursor: pointer;
-  transition: transform 0.3s ease;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.collapse-icon:hover {
-  color: #3b82f6;
-}
-
-.collapse-icon.collapsed {
-  transform: rotate(-90deg);
-}
-
-/* 分组样式 */
-.group-header {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%);
-  font-weight: 600;
-}
-
-.group-header-text {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.child-row {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.child-text {
-  font-size: 11px;
-  color: #64748b;
-  padding-left: 16px;
-}
-
-/* 行列高亮样式 */
-.row-highlighted {
-  background: rgba(59, 130, 246, 0.1) !important;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
-}
-
-.col-highlighted {
-  background: rgba(59, 130, 246, 0.05) !important;
-}
-
-.cell-highlighted {
-  background: rgba(59, 130, 246, 0.2) !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
-  transform: scale(1.02);
-  z-index: 10;
-  position: relative;
-}
-
-.data-cell {
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.data-cell:hover {
-  transform: scale(1.05);
 }
 
 /* 指示区域样式 */
@@ -8291,146 +8101,6 @@ onMounted(() => {
   gap: 12px;
 }
 
-/* マトリックステーブル */
-.matrix-section {
-  margin-bottom: 12px;
-}
-
-.matrix-table-wrapper {
-  width: 100%;
-  height: 450px;
-  max-height: 450px;
-  overflow: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.5);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.matrix-table {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  font-size: 11px;
-}
-
-.matrix-table th,
-.matrix-table td {
-  border: 1px solid rgba(226, 232, 240, 0.4);
-  padding: 5px 7px;
-  vertical-align: middle;
-  font-size: 11px;
-}
-
-.matrix-table thead th {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  font-weight: 600;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  color: #475569;
-  padding: 6px 8px;
-}
-
-.date-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.1;
-  gap: 1px;
-}
-.date-text {
-  font-size: 10px;
-  color: #475569;
-  font-weight: 500;
-}
-.weekday-text {
-  font-size: 9px;
-  color: #64748b;
-}
-
-.sticky-col {
-  position: sticky;
-  left: 0;
-  background: #fff;
-  z-index: 2;
-  white-space: nowrap;
-  font-weight: 700;
-}
-
-/* 固定左侧四列宽度与偏移（与 sticky 一起使用） */
-.machine-col {
-  width: 70px;
-  min-width: 70px;
-  left: 0;
-}
-.product-col {
-  width: 120px;
-  min-width: 120px;
-  left: 70px;
-}
-.operator-col {
-  width: 70px;
-  min-width: 70px;
-  left: 190px;
-}
-.total-col {
-  width: 100px;
-  min-width: 100px;
-  left: 260px;
-}
-
-/* 表体行固定行高 */
-.matrix-table tbody tr {
-  height: 28px;
-  transition: background-color 0.2s ease;
-}
-
-.matrix-table tbody tr:hover {
-  background-color: rgba(248, 250, 252, 0.8);
-}
-
-/* 交汇单元格（左侧吸附列的表头）层级更高，避免遮挡问题 */
-.matrix-table thead .sticky-col {
-  z-index: 4;
-}
-
-/* 合计行样式 */
-.matrix-table tfoot td {
-  background: #f7fafc !important;
-  font-weight: 700;
-  border-top: 2px solid #cbd5e0;
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-}
-.matrix-total-row .sticky-col {
-  background: #f7fafc !important;
-  z-index: 5; /* 底部合计行与左侧吸附列交汇处提升层级 */
-}
-
-/* 依設備分组的行底色（柔和） */
-.machine-group-0 {
-  background-color: #fafafa;
-}
-.machine-group-1 {
-  background-color: #f9fbff;
-}
-.machine-group-2 {
-  background-color: #fbf9ff;
-}
-
-/* 让左侧吸附列继承行背景（仅限 tbody），表头和合计行保持原样 */
-.matrix-table tbody .sticky-col {
-  background: inherit;
-}
-
-/* 悬浮略微提升对比度 */
-.matrix-row:hover td {
-  filter: brightness(0.98);
-}
-
 /* 数字居中 */
 .numeric-cell {
   text-align: center;
@@ -8442,24 +8112,6 @@ onMounted(() => {
 
 .plan-quantity-cell {
   font-weight: 600 !important;
-}
-
-/* 周末日期表头与合计列显示为红色 */
-.matrix-table thead th.is-weekend .date-text,
-.matrix-table thead th.is-weekend .weekday-text,
-.matrix-table tfoot td.is-weekend {
-  color: #e53e3e;
-}
-
-/* 当日日期背景色为淡黄色 */
-.matrix-table thead th.is-today {
-  background: linear-gradient(135deg, #fef9e7 0%, #fef3c7 100%) !important;
-}
-.matrix-table tbody td.is-today {
-  background-color: #fef9e7 !important;
-}
-.matrix-table tfoot td.is-today {
-  background-color: #fef9e7 !important;
 }
 
 .cell-items {
@@ -8487,11 +8139,6 @@ onMounted(() => {
 }
 .item-op {
   color: #a0aec0;
-}
-
-.cell-empty {
-  color: #cbd5e0;
-  text-align: center;
 }
 
 .section-card :deep(.el-card__body) {

@@ -282,7 +282,6 @@ export default {
     MES: 'MES',
     MES_PRODUCTION_INSTRUCTION: 'Production instruction',
     MES_CUTTING_INSTRUCTION: 'Cutting & chamfering instruction',
-    MES_FORMING_INSTRUCTION: 'Forming instruction',
     MES_WELDING_INSTRUCTION: 'Welding instruction',
     MES_PLATING_INSTRUCTION: 'Plating instruction',
     MASTER: 'Master',

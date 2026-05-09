@@ -73,6 +73,16 @@ export interface DailyConfirmedSeries {
   items: DailyConfirmedSeriesItem[]
 }
 
+/** GET /api/erp/sales/orders/stats */
+export interface SalesStats {
+  monthly_order_count: number
+  monthly_order_amount: number
+  monthly_confirmed_units: number
+  pending_delivery_count: number
+  completed_count: number
+  unpaid_amount: number
+}
+
 // ========== Sales Orders (受注) ==========
 export function getSalesOrders(params: SalesOrderQuery) {
   return request.get('/api/erp/sales/orders', { params })

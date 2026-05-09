@@ -249,6 +249,7 @@
         :embed="true"
         :preset-line-id="selectedMachineId"
         :preset-date-range="ganttRange"
+        @saved="onCapacityDialogSaved"
       />
     </el-dialog>
 
@@ -619,6 +620,11 @@ function openCapacityDialog() {
     return
   }
   capacityDialogVisible.value = true
+}
+
+async function onCapacityDialogSaved() {
+  capacityDialogVisible.value = false
+  await loadActiveTab()
 }
 
 async function openReportDialog() {

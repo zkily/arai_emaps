@@ -146,6 +146,22 @@
                 段取予定発行
               </el-button>
             </el-tooltip>
+            <div class="forming-notes-btn-wrap">
+              <el-button
+                type="default"
+                size="small"
+                class="forming-notes-toolbar-btn"
+                title="メモ（TODO）"
+                @click="openWeldingInstructionNotesDialog"
+              >
+                <span class="notes-badge-wrap">
+                  <el-icon><Memo /></el-icon>
+                  <span v-if="weldingInstructionNotesCount > 0" class="notes-count-badge">
+                    {{ weldingInstructionNotesCount }}
+                  </span>
+                </span>
+              </el-button>
+            </div>
           </div>
         </div>
 
@@ -242,30 +258,19 @@
       </el-card>
     </div>
 
-    <!-- 生産計画マトリックス -->
-    <div class="matrix-section">
+    <!-- 日別計画・実績生産数（成型指示ページと同一チャート・溶接 plan-data） -->
+    <div class="plan-qty-chart-section">
       <el-card class="section-card">
         <template #header>
           <div class="card-header">
-            <div class="section-title">
-              <el-icon size="16"><Document /></el-icon>
-              <span>生産計画マトリックス</span>
+            <div class="section-title plan-qty-chart-title-row">
+              <el-icon size="20"><TrendCharts /></el-icon>
+              <span>日別計画・実績生産数</span>
+              <span class="plan-qty-chart-sub">計画・実績を日付ごとに合計表示</span>
             </div>
-            <div class="header-actions">
-              <el-input
-                v-model="matrixSearchKeyword"
-                placeholder="設備名・製品名で検索"
-                clearable
-                @input="filterMatrixData"
-                size="small"
-                class="matrix-search-input"
-              >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
+            <div class="header-actions plan-qty-chart-actions">
               <el-date-picker
-                v-model="matrixDateRange"
+                v-model="planQtyChartDateRange"
                 type="daterange"
                 range-separator="〜"
                 start-placeholder="開始日"
@@ -273,152 +278,31 @@
                 format="MM/DD"
                 value-format="YYYY-MM-DD"
                 size="small"
-                @change="loadMatrixData"
                 class="compact-date-picker"
+                @change="loadPlanQtyChartData"
               />
               <div class="month-buttons">
-                <el-button size="small" @click="setMatrixMonth(-1)" class="month-btn prev"
+                <el-button size="small" class="month-btn prev" @click="setPlanQtyChartMonth(-1)"
                   >前月</el-button
                 >
-                <el-button size="small" @click="setMatrixMonth(0)" class="month-btn current"
+                <el-button size="small" class="month-btn current" @click="setPlanQtyChartMonth(0)"
                   >今月</el-button
                 >
-                <el-button size="small" @click="setMatrixMonth(1)" class="month-btn next"
+                <el-button size="small" class="month-btn next" @click="setPlanQtyChartMonth(1)"
                   >翌月</el-button
                 >
-              </div>
-              <div class="matrix-controls">
-                <el-button
-                  @click="exportToExcel"
-                  :icon="Download"
-                  size="small"
-                  type="success"
-                  class="export-btn"
-                >
-                  Excel出力
-                </el-button>
-                <el-button
-                  @click="printMatrix"
-                  :icon="Printer"
-                  size="small"
-                  type="primary"
-                  class="print-btn"
-                >
-                  印刷
-                </el-button>
               </div>
             </div>
           </div>
         </template>
 
-        <div class="matrix-table-wrapper">
-          <table class="matrix-table">
-            <thead>
-              <tr>
-                <th class="sticky-col machine-col">設備</th>
-                <th class="sticky-col product-col">製品名</th>
-                <th class="sticky-col operator-col">生産順位</th>
-                <th class="sticky-col total-col">生産数(合計)</th>
-                <th
-                  v-for="date in matrixDates"
-                  :key="date"
-                  :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
-                >
-                  <div class="date-header">
-                    <div class="date-text">{{ formatMatrixDate(date) }}</div>
-                    <div class="weekday-text">{{ getWeekdayLabel(date) }}</div>
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="row in visibleMatrixRows"
-                :key="row.key"
-                :class="[
-                  'matrix-row',
-                  'machine-group-' + row.group,
-                  {
-                    'group-header': row.isGroupHeader,
-                    'child-row': row.isChildRow,
-                    'row-highlighted': hoveredRow === row.key,
-                  },
-                ]"
-                :style="{ borderLeft: `3px solid ${getMachineColor(row.machine_name)}` }"
-                @mouseenter="handleCellHover(row.key, '')"
-                @mouseleave="handleCellLeave"
-              >
-                <td class="sticky-col machine-col">
-                  <div class="machine-cell">
-                    <el-icon
-                      v-if="row.isGroupHeader"
-                      @click="toggleMachineCollapse(row.machine_name)"
-                      class="collapse-icon"
-                      :class="{ collapsed: row.isCollapsed }"
-                    >
-                      <ArrowDown />
-                    </el-icon>
-                    <span
-                      class="machine-name"
-                      :class="{
-                        'group-header-text': row.isGroupHeader,
-                        'child-text': row.isChildRow,
-                      }"
-                      :style="{ color: getMachineColor(row.machine_name) }"
-                    >
-                      {{ row.machine_name }}
-                    </span>
-                  </div>
-                </td>
-                <td class="sticky-col product-col" :class="{ 'child-text': row.isChildRow }">
-                  {{ row.product_name }}
-                </td>
-                <td
-                  class="sticky-col operator-col numeric-cell"
-                  :class="{ 'child-text': row.isChildRow }"
-                >
-                  {{ row.operator || '' }}
-                </td>
-                <td
-                  class="sticky-col total-col numeric-cell"
-                  :class="{ 'child-text': row.isChildRow }"
-                >
-                  {{ formatQty(row.totalQty) }}
-                </td>
-                <td
-                  v-for="date in matrixDates"
-                  :key="row.key + '-' + date"
-                  class="numeric-cell data-cell"
-                  :class="{
-                    'col-highlighted': hoveredCol === date,
-                    'cell-highlighted': hoveredRow === row.key && hoveredCol === date,
-                    'is-today': isToday(date),
-                  }"
-                  @mouseenter="handleCellHover(row.key, date)"
-                  @mouseleave="handleCellLeave"
-                >
-                  <span v-if="row.dateToQty[date]">{{ formatQty(row.dateToQty[date]) }}</span>
-                  <span v-else class="cell-empty"></span>
-                </td>
-              </tr>
-            </tbody>
-            <tfoot>
-              <tr class="matrix-total-row">
-                <td class="sticky-col machine-col">合計</td>
-                <td class="sticky-col product-col"></td>
-                <td class="sticky-col operator-col"></td>
-                <td class="sticky-col total-col numeric-cell">{{ formatQty(matrixGrandTotal) }}</td>
-                <td
-                  v-for="date in matrixDates"
-                  :key="'total-' + date"
-                  class="numeric-cell"
-                  :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
-                >
-                  {{ formatQty(matrixColumnTotals[date] || 0) }}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+        <div v-loading="planQtyChartLoading" class="plan-qty-chart-body">
+          <el-empty
+            v-if="!planQtyChartLoading && !planQtyChartHasData"
+            description="該当期間に計画・実績の数量がありません"
+            class="plan-qty-chart-empty"
+          />
+          <div v-show="planQtyChartHasData" ref="planQtyChartEl" class="plan-qty-chart-canvas" />
         </div>
       </el-card>
     </div>
@@ -504,12 +388,89 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- メモ（TODO）確認ダイアログ（成型・切断と同機能・scope: welding_instruction） -->
+    <el-dialog
+      v-model="weldingInstructionNotesDialogVisible"
+      title="メモ（TODO）"
+      width="520px"
+      class="welding-instruction-notes-dialog"
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+      :show-close="false"
+    >
+      <div class="cutting-notes-dialog-body">
+        <div class="cutting-notes-add">
+          <el-input
+            v-model="weldingInstructionNotesNewContent"
+            type="textarea"
+            :rows="2"
+            size="small"
+            maxlength="200"
+            class="cutting-notes-input"
+            placeholder="簡単なメモを入力（短文）"
+          />
+          <div class="cutting-notes-add-actions">
+            <span class="cutting-notes-char-count">{{ weldingInstructionNotesNewContent.length }}/200</span>
+            <el-button
+              type="primary"
+              size="small"
+              class="cutting-notes-add-btn"
+              :loading="weldingInstructionNotesSaving"
+              @click="addWeldingInstructionNote"
+            >
+              追加
+            </el-button>
+          </div>
+        </div>
+
+        <el-scrollbar v-loading="weldingInstructionNotesLoading" max-height="320" class="cutting-notes-scrollbar">
+          <div
+            v-if="!weldingInstructionNotesLoading && !weldingInstructionNotesList.length"
+            class="cutting-notes-empty"
+          >
+            未登録
+          </div>
+
+          <div v-for="n in weldingInstructionNotesList" :key="n.id" class="cutting-notes-row">
+            <el-checkbox
+              :model-value="n.is_done === 1"
+              size="small"
+              @change="(val) => toggleWeldingInstructionNoteDone(n, val)"
+            />
+            <div
+              class="cutting-notes-row-content"
+              :class="{ 'cutting-notes-row-content--done': n.is_done === 1 }"
+            >
+              {{ n.content }}
+            </div>
+            <el-button
+              v-if="n.id != null"
+              type="text"
+              size="small"
+              class="cutting-notes-delete-btn"
+              :disabled="weldingInstructionNotesSaving"
+              @click="deleteWeldingInstructionNote(n)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </el-scrollbar>
+      </div>
+
+      <template #footer>
+        <div class="cutting-notes-dialog-footer">
+          <el-button size="small" @click="weldingInstructionNotesDialogVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'WeldingInstruction' })
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue'
+import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import {
   Search,
@@ -518,8 +479,9 @@ import {
   Document,
   TrendCharts,
   Monitor,
-  ArrowDown,
   Printer,
+  Memo,
+  Delete,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchPlanBaselineComparison } from '@/api/planBaseline'
@@ -531,6 +493,15 @@ interface ApiResponse<T = unknown> {
   message?: string
   list?: unknown[]
   records?: unknown[]
+}
+
+/** 日別チャート用（excel-monitor plan-data レコードの一部） */
+interface PlanQtyChartRecord {
+  plan_date?: string
+  product_name?: string
+  quantity?: number | string
+  actual_production?: number | string
+  actual_qty?: number | string
 }
 
 // 計画検索フォーム
@@ -627,19 +598,11 @@ const pagination = reactive({
 const planData = ref<any[]>([])
 const planLoading = ref(false)
 
-// マトリックステーブル 独立した日付とデータ
-const matrixDateRange = ref<string[]>([])
-const matrixData = ref<any[]>([])
-const matrixLoading = ref(false)
-const matrixSearchKeyword = ref('')
-const filteredMatrixData = ref<any[]>([])
-
-// マトリックステーブル拡張機能
-const hoveredRow = ref<string | null>(null)
-const hoveredCol = ref<string | null>(null)
-const collapsedMachines = ref<Set<string>>(new Set())
-
-// マトリックステーブル（旧の計画表から派生した計算は削除され、独立した日付とデータに変更）
+const planQtyChartDateRange = ref<string[]>([])
+const planQtyChartLoading = ref(false)
+const planQtyChartRecords = ref<PlanQtyChartRecord[]>([])
+const planQtyChartEl = ref<HTMLDivElement | null>(null)
+let planQtyChartInstance: echarts.ECharts | null = null
 
 // 指示テーブルデータ
 const instructions = ref<any[]>([])
@@ -2638,10 +2601,10 @@ const refreshPlanData = () => {
   loadWeldingPlanComparisonSummary({ silent: true, workingDays: specifiedWorkingDays.value })
 }
 
-// 二维表（设备 × 生産日）派生数据
-const matrixDates = computed(() => {
-  if (!matrixDateRange.value || matrixDateRange.value.length !== 2) return [] as string[]
-  const [start, end] = matrixDateRange.value
+// 日別計画・実績チャート（溶接・/api/excel-monitor/plan-data）
+const planQtyChartDates = computed(() => {
+  if (!planQtyChartDateRange.value || planQtyChartDateRange.value.length !== 2) return [] as string[]
+  const [start, end] = planQtyChartDateRange.value
   const dates: string[] = []
   const dStart = new Date(start)
   const dEnd = new Date(end)
@@ -2651,283 +2614,449 @@ const matrixDates = computed(() => {
   return dates
 })
 
-type MatrixRow = {
-  key: string
-  machine_name: string
-  product_name: string
-  operator: string
-  totalQty: number
-  dateToQty: Record<string, number>
-  group: number
-}
-
-const matrixRows = computed<MatrixRow[]>(() => {
-  const map = new Map<string, MatrixRow>()
-  filteredMatrixData.value.forEach((x: any) => {
-    if (!x || !x.machine_name || !x.product_name) return
-    if (!x.quantity || parseFloat(x.quantity) <= 0) return
-    const op = x.operator || ''
-    const key = `${x.machine_name}|${x.product_cd || x.product_name}|${op}`
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        machine_name: x.machine_name,
-        product_name: x.product_name,
-        operator: op,
-        totalQty: 0,
-        dateToQty: {},
-        group: 0,
-      })
-    }
-    const row = map.get(key)!
-    const q = parseFloat(x.quantity) || 0
-    row.totalQty += q
-    if (x.plan_date) {
-      row.dateToQty[x.plan_date] = (row.dateToQty[x.plan_date] || 0) + q
-    }
-  })
-  // 排序：設備 -> 生産順位 -> 製品名（兜底）
-  const sorted = Array.from(map.values()).sort((a, b) => {
-    const m = a.machine_name.localeCompare(b.machine_name)
-    if (m !== 0) return m
-
-    // 生産順位优先，尽量按数值比较；为空的排在后面
-    const ao = (a.operator ?? '').toString().trim()
-    const bo = (b.operator ?? '').toString().trim()
-    const an = ao === '' ? Number.POSITIVE_INFINITY : Number(ao)
-    const bn = bo === '' ? Number.POSITIVE_INFINITY : Number(bo)
-
-    if (!Number.isNaN(an) && !Number.isNaN(bn)) {
-      if (an !== bn) return an - bn
-    } else {
-      const os = ao.localeCompare(bo, 'ja')
-      if (os !== 0) return os
-    }
-
-    return a.product_name.localeCompare(b.product_name)
-  })
-
-  // 依設備分组着色：設備变化时递增分组索引
-  let groupIndex = -1
-  let lastMachine = ''
-  sorted.forEach((row) => {
-    if (row.machine_name !== lastMachine) {
-      groupIndex = (groupIndex + 1) % 3 // 使用 3 组颜色循环
-      lastMachine = row.machine_name
-    }
-    row.group = groupIndex
-  })
-
-  return sorted
-})
-
-// 支持折叠的矩阵行数据
-const visibleMatrixRows = computed(() => {
-  const allRows = matrixRows.value
-  const result: any[] = []
-  const machineGroups = new Map<string, any[]>()
-
-  // 按设备分组
-  allRows.forEach((row) => {
-    if (!machineGroups.has(row.machine_name)) {
-      machineGroups.set(row.machine_name, [])
-    }
-    machineGroups.get(row.machine_name)!.push(row)
-  })
-
-  // 为每个设备组添加行
-  machineGroups.forEach((rows, machineName) => {
-    // 添加设备组头部行
-    const isCollapsed = isMachineCollapsed(machineName)
-    const groupTotalQty = rows.reduce((sum, row) => sum + row.totalQty, 0)
-
-    result.push({
-      key: `machine-header-${machineName}`,
-      machine_name: machineName,
-      product_name: `${rows.length}件の製品`,
-      operator: '',
-      totalQty: groupTotalQty,
-      dateToQty: rows.reduce(
-        (acc, row) => {
-          Object.entries(row.dateToQty).forEach(([date, qty]) => {
-            acc[date] = (acc[date] || 0) + qty
-          })
-          return acc
-        },
-        {} as Record<string, number>,
-      ),
-      group: rows[0].group,
-      isGroupHeader: true,
-      isCollapsed,
-      machineColor: getMachineColor(machineName),
-    })
-
-    // 如果未折叠，添加子行
-    if (!isCollapsed) {
-      rows.forEach((row) => {
-        result.push({
-          ...row,
-          isGroupHeader: false,
-          isChildRow: true,
-        })
-      })
-    }
-  })
-
-  return result
-})
-
-// 加载二维表数据（独立于上方列表）
-const loadMatrixData = async () => {
-  if (!matrixDateRange.value || matrixDateRange.value.length !== 2) return
-  matrixLoading.value = true
-  try {
-    const params: any = {
-      startDate: matrixDateRange.value[0],
-      endDate: matrixDateRange.value[1],
-      processName: '溶接',
-      page: 1,
-      limit: 10000,
-    }
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse<{ records: any[] }>
-    if (result.success && result.data?.records) {
-      const filtered = result.data.records.filter(
-        (item: any) => item.product_name && item.product_name.trim() !== '',
-      )
-      matrixData.value = filtered
-      filterMatrixData()
-    } else {
-      matrixData.value = []
-      filteredMatrixData.value = []
-    }
-  } catch (e) {
-    console.error('二维表データの読み込みに失敗:', e)
-    matrixData.value = []
-    filteredMatrixData.value = []
-  } finally {
-    matrixLoading.value = false
-  }
-}
-
-// マトリックスデータ筛选
-const filterMatrixData = () => {
-  if (!matrixSearchKeyword.value || matrixSearchKeyword.value.trim() === '') {
-    // 没有关键词时显示全部数据
-    filteredMatrixData.value = matrixData.value
-  } else {
-    // 根据关键词筛选设备名和产品名
-    const keyword = matrixSearchKeyword.value.toLowerCase().trim()
-    filteredMatrixData.value = matrixData.value.filter((item: any) => {
-      const machineName = (item.machine_name || '').toLowerCase()
-      const productName = (item.product_name || '').toLowerCase()
-      return machineName.includes(keyword) || productName.includes(keyword)
-    })
-  }
-}
-
-// 设置マトリックス月份（使用日本时区）
-const setMatrixMonth = (monthOffset: number) => {
-  // 使用日本时区 (JST, UTC+9)
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  const targetDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-
-  // 获取当月第一天和最后一天
-  const firstDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
-  const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0)
-
-  // 格式化为YYYY-MM-DD格式
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  const startDate = formatDate(firstDay)
-  const endDate = formatDate(lastDay)
-
-  console.log(`设置月份范围: ${startDate} 到 ${endDate}`)
-
-  matrixDateRange.value = [startDate, endDate]
-  loadMatrixData()
-}
-
-// マトリックス默认期间：当日往前2天 ～ 往后30天（JST）
-const setDefaultMatrixRange = () => {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
-  const start = new Date(now)
-  start.setDate(start.getDate() - 2)
-  const end = new Date(now)
-  end.setDate(end.getDate() + 30)
-
-  const formatDate = (date: Date) => {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
-  }
-
-  matrixDateRange.value = [formatDate(start), formatDate(end)]
-  loadMatrixData()
-}
-
-// 列合计与总合计
-const matrixColumnTotals = computed<Record<string, number>>(() => {
+const planQtyDailyTotals = computed(() => {
   const totals: Record<string, number> = {}
-  matrixRows.value.forEach((row) => {
-    Object.entries(row.dateToQty).forEach(([date, qty]) => {
-      totals[date] = (totals[date] || 0) + (qty || 0)
-    })
+  planQtyChartRecords.value.forEach((x) => {
+    if (!x?.plan_date) return
+    const name = (x.product_name ?? '').trim()
+    if (!name) return
+    const q = parseFloat(String(x.quantity ?? 0)) || 0
+    if (q <= 0) return
+    totals[x.plan_date] = (totals[x.plan_date] || 0) + q
   })
   return totals
 })
 
-const matrixGrandTotal = computed(() => {
-  return matrixRows.value.reduce((sum, r) => sum + (r.totalQty || 0), 0)
+const planQtyDailyActualTotals = computed(() => {
+  const totals: Record<string, number> = {}
+  planQtyChartRecords.value.forEach((x) => {
+    if (!x?.plan_date) return
+    const name = (x.product_name ?? '').trim()
+    if (!name) return
+    const a = parseFloat(String(x.actual_production ?? x.actual_qty ?? 0)) || 0
+    if (a <= 0) return
+    totals[x.plan_date] = (totals[x.plan_date] || 0) + a
+  })
+  return totals
 })
 
-// 星期标签（JST）
-const getWeekdayLabel = (date: string) => {
+const planQtyChartHasData = computed(() => {
+  for (const d of planQtyChartDates.value) {
+    if ((planQtyDailyTotals.value[d] || 0) > 0 || (planQtyDailyActualTotals.value[d] || 0) > 0)
+      return true
+  }
+  return false
+})
+
+function jstCalendarNow(): Date {
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))
+}
+
+function formatYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function formatPlanQtyChartAxisDate(dateStr: string) {
   try {
-    // 统一到日本时区当天00:00，避免时区偏移
-    const d = new Date(
-      new Date(date + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
-    )
-    return ['日', '月', '火', '水', '木', '金', '土'][d.getDay()]
+    const date = new Date(dateStr + 'T00:00:00')
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${month}/${day}`
   } catch {
-    return ''
+    return dateStr
   }
 }
 
-// 是否为周末（JST）
-const isWeekend = (date: string) => {
-  try {
-    const d = new Date(
-      new Date(date + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }),
-    )
-    const day = d.getDay()
-    return day === 0 || day === 6
-  } catch {
-    return false
+function getPlanQtyChartTodayStr() {
+  return formatYmd(jstCalendarNow())
+}
+
+function onPlanQtyChartResize() {
+  planQtyChartInstance?.resize()
+}
+
+function disposePlanQtyChart() {
+  window.removeEventListener('resize', onPlanQtyChartResize)
+  if (planQtyChartInstance) {
+    planQtyChartInstance.dispose()
+    planQtyChartInstance = null
   }
 }
 
-// 是否为今天（JST）
-const isToday = (date: string) => {
-  try {
-    const today = JapanDateUtils.getTodayString()
-    const normalizedDate = JapanDateUtils.normalizeDate(date)
-    return normalizedDate === today
-  } catch {
-    return false
+function barDatumPlan(date: string, todayStr: string, v: number, radiusBar: [number, number, number, number]) {
+  let color: echarts.graphic.LinearGradient
+  if (date < todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#bae6fd' },
+      { offset: 1, color: '#0284c7' },
+    ])
+  } else if (date === todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#6ee7b7' },
+      { offset: 0.55, color: '#34d399' },
+      { offset: 1, color: '#047857' },
+    ])
+  } else {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#f1f5f9' },
+      { offset: 1, color: '#94a3b8' },
+    ])
+  }
+  return {
+    value: v,
+    itemStyle: {
+      color,
+      borderRadius: radiusBar,
+      shadowBlur: date === todayStr ? 14 : 8,
+      shadowColor: date === todayStr ? 'rgba(4, 120, 87, 0.28)' : 'rgba(2, 132, 199, 0.18)',
+      shadowOffsetY: 2,
+    },
   }
 }
 
-// 数字格式化（千位分隔）
-const formatQty = (val: number | string) => {
-  const n = typeof val === 'string' ? Number(val) : val
-  if (!isFinite(n as number)) return ''
-  return (n as number).toLocaleString('ja-JP')
+function barDatumActual(date: string, todayStr: string, v: number, radiusBar: [number, number, number, number]) {
+  let color: echarts.graphic.LinearGradient
+  if (date < todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fde68a' },
+      { offset: 1, color: '#d97706' },
+    ])
+  } else if (date === todayStr) {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fcd34d' },
+      { offset: 0.55, color: '#f59e0b' },
+      { offset: 1, color: '#b45309' },
+    ])
+  } else {
+    color = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: '#fef3c7' },
+      { offset: 1, color: '#d6d3d1' },
+    ])
+  }
+  return {
+    value: v,
+    itemStyle: {
+      color,
+      borderRadius: radiusBar,
+      shadowBlur: date === todayStr ? 12 : 6,
+      shadowColor: date === todayStr ? 'rgba(180, 83, 9, 0.28)' : 'rgba(217, 119, 6, 0.15)',
+      shadowOffsetY: 2,
+    },
+  }
+}
+
+function updatePlanQtyChart() {
+  const el = planQtyChartEl.value
+  const dates = planQtyChartDates.value
+  const totals = planQtyDailyTotals.value
+  const actualTotals = planQtyDailyActualTotals.value
+  if (!el || dates.length === 0) {
+    disposePlanQtyChart()
+    return
+  }
+  const planValues = dates.map((d) => totals[d] || 0)
+  const actualValues = dates.map((d) => actualTotals[d] || 0)
+  if (!planValues.some((v) => v > 0) && !actualValues.some((v) => v > 0)) {
+    disposePlanQtyChart()
+    return
+  }
+
+  if (!planQtyChartInstance) {
+    planQtyChartInstance = echarts.init(el)
+    window.addEventListener('resize', onPlanQtyChartResize)
+  }
+
+  const cats = dates.map((d) => formatPlanQtyChartAxisDate(d))
+  const todayStr = getPlanQtyChartTodayStr()
+  const todayIdx = dates.indexOf(todayStr)
+
+  const radiusBar: [number, number, number, number] = [6, 6, 0, 0]
+  const planBarData = dates.map((date, idx) =>
+    barDatumPlan(date, todayStr, planValues[idx], radiusBar),
+  )
+  const actualBarData = dates.map((date, idx) =>
+    barDatumActual(date, todayStr, actualValues[idx], radiusBar),
+  )
+
+  const labelFmt = (params: unknown) => {
+    const p = params as { value?: unknown; data?: { value?: unknown } }
+    const v =
+      typeof p.data === 'object' && p.data != null && typeof p.data.value === 'number'
+        ? p.data.value
+        : typeof p.value === 'number'
+          ? p.value
+          : 0
+    if (v === 0) return ''
+    return v.toLocaleString('ja-JP')
+  }
+
+  planQtyChartInstance.setOption(
+    {
+      backgroundColor: 'transparent',
+      animationDuration: 560,
+      textStyle: { fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
+      legend: {
+        top: 6,
+        left: 'center',
+        itemWidth: 12,
+        itemHeight: 12,
+        textStyle: { fontSize: 11, color: '#64748b', fontWeight: 600 },
+        data: ['計画生産数', '実績生産数'],
+      },
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'shadow', shadowStyle: { color: 'rgba(14, 165, 233, 0.06)' } },
+        backgroundColor: 'rgba(15, 23, 42, 0.88)',
+        borderWidth: 0,
+        borderRadius: 10,
+        padding: [10, 14],
+        textStyle: { color: '#f8fafc', fontSize: 12 },
+        formatter: (params: unknown) => {
+          const list = Array.isArray(params) ? params : [params]
+          const first = list[0] as { dataIndex?: number } | undefined
+          const idx = first?.dataIndex ?? 0
+          const rawDate = dates[idx]
+          if (!rawDate) return ''
+          const pv = planValues[idx] ?? 0
+          const av = actualValues[idx] ?? 0
+          const ps = Number(pv).toLocaleString('ja-JP')
+          const as = Number(av).toLocaleString('ja-JP')
+          return `<div style="font-weight:600;margin-bottom:6px">${rawDate}</div>` +
+            `<div style="opacity:.95;margin-bottom:2px">計画生産数: ${ps}</div>` +
+            `<div style="opacity:.95">実績生産数: ${as}</div>`
+        },
+      },
+      grid: { left: 52, right: 18, top: 52, bottom: dates.length > 14 ? 52 : 44, containLabel: false },
+      xAxis: {
+        type: 'category',
+        data: cats,
+        axisLine: { lineStyle: { color: '#e2e8f0', width: 1 } },
+        axisTick: { show: false },
+        axisLabel: {
+          fontSize: 10,
+          rotate: dates.length > 14 ? 40 : 0,
+          color: '#64748b',
+          margin: 10,
+          fontWeight: 500,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        name: '数量',
+        nameGap: 8,
+        nameTextStyle: { fontSize: 11, color: '#94a3b8', fontWeight: 500 },
+        axisLabel: { fontSize: 10, color: '#94a3b8' },
+        splitLine: { lineStyle: { type: 'dashed', color: '#e8ecf1', width: 1 } },
+        axisLine: { show: false },
+        minInterval: 1,
+      },
+      series: [
+        {
+          name: '計画生産数',
+          type: 'bar',
+          barMaxWidth: 22,
+          barGap: '12%',
+          data: planBarData,
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            fontSize: 8,
+            fontWeight: 500,
+            color: '#475569',
+            formatter: labelFmt,
+          },
+          emphasis: {
+            focus: 'series',
+            itemStyle: { shadowBlur: 16, shadowColor: 'rgba(14, 165, 233, 0.35)' },
+          },
+          markLine:
+            todayIdx >= 0
+              ? {
+                  symbol: 'none',
+                  lineStyle: { color: 'rgba(245, 158, 11, 0.92)', type: 'dashed', width: 1.5 },
+                  label: {
+                    formatter: '今日',
+                    color: '#c2410c',
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: [2, 8],
+                    borderRadius: 6,
+                    backgroundColor: 'rgba(254, 243, 199, 0.95)',
+                  },
+                  data: [{ xAxis: todayIdx }],
+                }
+              : undefined,
+        },
+        {
+          name: '実績生産数',
+          type: 'bar',
+          barMaxWidth: 22,
+          data: actualBarData,
+          label: {
+            show: true,
+            position: 'top',
+            distance: 4,
+            fontSize: 8,
+            fontWeight: 500,
+            color: '#92400e',
+            formatter: labelFmt,
+          },
+          emphasis: {
+            focus: 'series',
+            itemStyle: { shadowBlur: 14, shadowColor: 'rgba(217, 119, 6, 0.38)' },
+          },
+        },
+      ],
+    },
+    true,
+  )
+  requestAnimationFrame(() => planQtyChartInstance?.resize())
+}
+
+const loadPlanQtyChartData = async () => {
+  if (!planQtyChartDateRange.value || planQtyChartDateRange.value.length !== 2) return
+  planQtyChartLoading.value = true
+  try {
+    const params = {
+      startDate: planQtyChartDateRange.value[0],
+      endDate: planQtyChartDateRange.value[1],
+      processName: '溶接',
+      page: 1,
+      limit: 10000,
+    }
+    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse<{
+      records?: unknown[]
+    }>
+    if (result.success && Array.isArray(result.data?.records)) {
+      planQtyChartRecords.value = result.data.records.filter(
+        (item: any) => item.product_name && String(item.product_name).trim() !== '',
+      ) as PlanQtyChartRecord[]
+    } else {
+      planQtyChartRecords.value = []
+    }
+  } catch (e) {
+    console.error('日別計画チャートの読み込みに失敗:', e)
+    planQtyChartRecords.value = []
+  } finally {
+    planQtyChartLoading.value = false
+    await nextTick()
+    updatePlanQtyChart()
+  }
+}
+
+const setPlanQtyChartMonth = (monthOffset: number) => {
+  const now = jstCalendarNow()
+  const targetDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const firstDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1)
+  const lastDay = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0)
+  planQtyChartDateRange.value = [formatYmd(firstDay), formatYmd(lastDay)]
+  loadPlanQtyChartData()
+}
+
+const setDefaultPlanQtyChartRange = () => {
+  const now = jstCalendarNow()
+  const start = new Date(now)
+  start.setDate(start.getDate() - 2)
+  const end = new Date(now)
+  end.setDate(end.getDate() + 30)
+  planQtyChartDateRange.value = [formatYmd(start), formatYmd(end)]
+  loadPlanQtyChartData()
+}
+
+// メモ（TODO）— 成型ページと同一 UX、API は welding-instruction-notes（scope: welding_instruction）
+interface WeldingInstructionNote {
+  id?: number
+  content?: string | null
+  is_done?: number | boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+const weldingInstructionNotesDialogVisible = ref(false)
+const weldingInstructionNotesLoading = ref(false)
+const weldingInstructionNotesSaving = ref(false)
+const weldingInstructionNotesList = ref<WeldingInstructionNote[]>([])
+const weldingInstructionNotesNewContent = ref('')
+
+const weldingInstructionNotesCount = computed(() => weldingInstructionNotesList.value.length)
+
+async function loadWeldingInstructionNotes() {
+  weldingInstructionNotesLoading.value = true
+  try {
+    const res = await request.get('/api/plan/welding-instruction-notes', { params: { limit: 200 } })
+
+    weldingInstructionNotesList.value = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as WeldingInstructionNote[])
+      : []
+  } catch (e) {
+    console.error('メモ（TODO）の取得に失敗:', e)
+    ElMessage.error('メモ（TODO）の取得に失敗しました')
+    weldingInstructionNotesList.value = []
+  } finally {
+    weldingInstructionNotesLoading.value = false
+  }
+}
+
+function openWeldingInstructionNotesDialog() {
+  weldingInstructionNotesDialogVisible.value = true
+  weldingInstructionNotesNewContent.value = ''
+  loadWeldingInstructionNotes()
+}
+
+async function addWeldingInstructionNote() {
+  const content = weldingInstructionNotesNewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('内容を入力してください')
+    return
+  }
+  try {
+    weldingInstructionNotesSaving.value = true
+    await request.post('/api/plan/welding-instruction-notes', { content })
+    weldingInstructionNotesNewContent.value = ''
+    await loadWeldingInstructionNotes()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('メモ（TODO）の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    weldingInstructionNotesSaving.value = false
+  }
+}
+
+async function toggleWeldingInstructionNoteDone(note: WeldingInstructionNote, checked: unknown) {
+  if (!note.id) return
+  const is_done =
+    checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
+  try {
+    weldingInstructionNotesSaving.value = true
+    await request.patch(`/api/plan/welding-instruction-notes/${note.id}`, { is_done })
+    note.is_done = is_done
+  } catch (e) {
+    console.error('メモ（TODO）の更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+    await loadWeldingInstructionNotes()
+  } finally {
+    weldingInstructionNotesSaving.value = false
+  }
+}
+
+async function deleteWeldingInstructionNote(note: WeldingInstructionNote) {
+  if (!note.id) return
+  try {
+    await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
+    weldingInstructionNotesSaving.value = true
+    await request.delete(`/api/plan/welding-instruction-notes/${note.id}`)
+    await loadWeldingInstructionNotes()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    if ((e as { message?: string; name?: string })?.message?.includes('cancel')) return
+    if ((e as { name?: string })?.name === 'MessageBox') return
+    console.error('メモ（TODO）の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    weldingInstructionNotesSaving.value = false
+  }
 }
 
 // 数字格式化（简化版）
@@ -2973,337 +3102,6 @@ const formatPlanComparisonValue = (
     return '-'
   }
   return formatPrintableNumber(val as number | string, options)
-}
-
-// 日期格式化（MM-DD）
-const formatMatrixDate = (dateStr: string) => {
-  try {
-    const date = new Date(dateStr + 'T00:00:00')
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    return `${month}-${day}`
-  } catch {
-    return dateStr
-  }
-}
-
-// 根据设备名称生成颜色
-const getMachineColor = (machineName: string) => {
-  if (!machineName) return '#64748b'
-
-  // 预定义的颜色数组，使用现代化的颜色
-  const colors = [
-    '#3b82f6', // 蓝色
-    '#ef4444', // 红色
-    '#10b981', // 绿色
-    '#f59e0b', // 橙色
-    '#8b5cf6', // 紫色
-    '#06b6d4', // 青色
-    '#f97316', // 深橙色
-    '#84cc16', // 青绿色
-    '#ec4899', // 粉色
-    '#6366f1', // 靛蓝色
-    '#14b8a6', // 蓝绿色
-    '#eab308', // 黄色
-  ]
-
-  // 使用设备名称的哈希值来选择颜色，确保相同设备总是相同颜色
-  let hash = 0
-  for (let i = 0; i < machineName.length; i++) {
-    hash = machineName.charCodeAt(i) + ((hash << 5) - hash)
-  }
-  const index = Math.abs(hash) % colors.length
-  return colors[index]
-}
-
-// 切换设备展开/折叠状态
-const toggleMachineCollapse = (machineName: string) => {
-  if (collapsedMachines.value.has(machineName)) {
-    collapsedMachines.value.delete(machineName)
-  } else {
-    collapsedMachines.value.add(machineName)
-  }
-}
-
-// 检查设备是否折叠
-const isMachineCollapsed = (machineName: string) => {
-  return collapsedMachines.value.has(machineName)
-}
-
-// 鼠标悬停处理
-const handleCellHover = (rowKey: string, date: string) => {
-  hoveredRow.value = rowKey
-  hoveredCol.value = date
-}
-
-const handleCellLeave = () => {
-  hoveredRow.value = null
-  hoveredCol.value = null
-}
-
-// Excel导出功能
-const exportToExcel = () => {
-  try {
-    // 准备导出数据
-    const exportData = []
-
-    // 添加表头
-    const headers = [
-      '設備',
-      '製品名',
-      '生産順位',
-      '生産数(合計)',
-      ...matrixDates.value.map((date) => formatMatrixDate(date)),
-    ]
-    exportData.push(headers)
-
-    // 添加数据行
-    matrixRows.value.forEach((row) => {
-      const rowData = [
-        row.machine_name,
-        row.product_name,
-        row.operator || '',
-        row.totalQty,
-        ...matrixDates.value.map((date) => row.dateToQty[date] || ''),
-      ]
-      exportData.push(rowData)
-    })
-
-    // 添加合计行
-    const totalRow = [
-      '合計',
-      '',
-      '',
-      matrixGrandTotal.value,
-      ...matrixDates.value.map((date) => matrixColumnTotals.value[date] || 0),
-    ]
-    exportData.push(totalRow)
-
-    // 转换为CSV格式
-    const csvContent = exportData.map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n')
-
-    // 创建下载链接
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute(
-      'download',
-      `生産計画マトリックス_${new Date().toISOString().split('T')[0]}.csv`,
-    )
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-
-    ElMessage.success('Excelファイルをダウンロードしました')
-  } catch (error) {
-    console.error('Excel导出失败:', error)
-    ElMessage.error('Excelエクスポートに失敗しました')
-  }
-}
-
-// マトリックス打印功能
-const printMatrix = () => {
-  try {
-    // 生成打印内容
-    const printContent = generateMatrixPrintContent()
-
-    // 创建打印窗口
-    const printWindow = window.open('', '_blank')
-    if (printWindow) {
-      printWindow.document.write(printContent)
-      printWindow.document.close()
-      printWindow.focus()
-
-      // 等待内容加载完成后打印
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print()
-          printWindow.close()
-        }, 500)
-      }
-    }
-
-    ElMessage.success('印刷を開始しました')
-  } catch (error) {
-    console.error('打印失败:', error)
-    ElMessage.error('印刷に失敗しました')
-  }
-}
-
-// 生成マトリックス打印内容
-const generateMatrixPrintContent = () => {
-  const currentDate = new Date().toLocaleDateString('ja-JP')
-  const dateRange =
-    matrixDateRange.value.length === 2
-      ? `${formatMatrixDate(matrixDateRange.value[0])} 〜 ${formatMatrixDate(matrixDateRange.value[1])}`
-      : '全期間'
-
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>生産計画マトリックス</title>
-      <style>
-        @page {
-          size: A3 landscape;
-          margin: 10mm;
-        }
-
-        body {
-          font-family: 'Yu Gothic', 'Hiragino Sans', sans-serif;
-          font-size: 10px;
-          line-height: 1.2;
-          margin: 0;
-          padding: 0;
-          color: #000;
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-
-        .print-header {
-          text-align: center;
-          margin-bottom: 15px;
-          border-bottom: 2px solid #000;
-          padding-bottom: 10px;
-        }
-
-        .print-title {
-          font-size: 18px;
-          font-weight: bold;
-          margin-bottom: 5px;
-        }
-
-        .print-info {
-          font-size: 12px;
-          color: #666;
-        }
-
-        .matrix-table {
-          width: 100%;
-          border-collapse: collapse;
-          font-size: 9px;
-        }
-
-        .matrix-table th,
-        .matrix-table td {
-          border: 1px solid #000;
-          padding: 3px 4px;
-          text-align: center;
-          vertical-align: middle;
-        }
-
-        .matrix-table th {
-          background-color: #f0f0f0;
-          font-weight: bold;
-          font-size: 8px;
-        }
-
-        .sticky-col {
-          background-color: #f8f9fa;
-          font-weight: bold;
-        }
-
-        .group-header {
-          background-color: #e3f2fd;
-          font-weight: bold;
-        }
-
-        .child-row {
-          background-color: #fafafa;
-        }
-
-        .numeric-cell {
-          text-align: right;
-        }
-
-        .machine-name {
-          font-weight: bold;
-        }
-
-        .total-row {
-          background-color: #fff3e0;
-          font-weight: bold;
-          border-top: 2px solid #000;
-        }
-
-        .print-footer {
-          margin-top: 15px;
-          text-align: right;
-          font-size: 10px;
-          color: #666;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="print-header">
-        <div class="print-title">生産計画マトリックス</div>
-        <div class="print-info">
-          期間: ${dateRange} | 印刷日時: ${currentDate}
-        </div>
-      </div>
-
-      <table class="matrix-table">
-        <thead>
-          <tr>
-            <th class="sticky-col">設備</th>
-            <th class="sticky-col">製品名</th>
-            <th class="sticky-col">生産順位</th>
-            <th class="sticky-col">生産数(合計)</th>
-            ${matrixDates.value
-              .map(
-                (date) =>
-                  `<th>${formatMatrixDate(date)}<br><small>${getWeekdayLabel(date)}</small></th>`,
-              )
-              .join('')}
-          </tr>
-        </thead>
-        <tbody>
-          ${visibleMatrixRows.value
-            .map(
-              (row) => `
-            <tr class="${row.isGroupHeader ? 'group-header' : row.isChildRow ? 'child-row' : ''}">
-              <td class="sticky-col">
-                ${row.isGroupHeader ? '▼ ' : row.isChildRow ? '　' : ''}${row.machine_name}
-              </td>
-              <td class="sticky-col">${row.product_name}</td>
-              <td class="sticky-col">${row.operator || ''}</td>
-              <td class="sticky-col numeric-cell">${formatQty(row.totalQty)}</td>
-              ${matrixDates.value
-                .map(
-                  (date) =>
-                    `<td class="numeric-cell">${row.dateToQty[date] ? formatQty(row.dateToQty[date]) : ''}</td>`,
-                )
-                .join('')}
-            </tr>
-          `,
-            )
-            .join('')}
-        </tbody>
-        <tfoot>
-          <tr class="total-row">
-            <td class="sticky-col">合計</td>
-            <td class="sticky-col"></td>
-            <td class="sticky-col"></td>
-            <td class="sticky-col numeric-cell">${formatQty(matrixGrandTotal.value)}</td>
-            ${matrixDates.value
-              .map(
-                (date) =>
-                  `<td class="numeric-cell">${formatQty(matrixColumnTotals.value[date] || 0)}</td>`,
-              )
-              .join('')}
-          </tr>
-        </tfoot>
-      </table>
-
-      <div class="print-footer">
-        Smart-EMAP 生産管理システム
-      </div>
-    </body>
-    </html>
-  `
 }
 
 // 能率数据缓存（设备名+产品名 -> efficiency_rate）
@@ -4609,8 +4407,12 @@ onMounted(() => {
   loadWeldingPlanComparisonSummary({ silent: true, workingDays: specifiedWorkingDays.value })
   loadInstructions()
   loadStats()
-  // 初始化二维表日期：当日往前2天 ～ 往后30天
-  setDefaultMatrixRange()
+  loadWeldingInstructionNotes()
+  setDefaultPlanQtyChartRange()
+})
+
+onUnmounted(() => {
+  disposePlanQtyChart()
 })
 </script>
 
@@ -4785,6 +4587,178 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
+.forming-notes-btn-wrap {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.forming-notes-toolbar-btn {
+  margin: 0 !important;
+  height: 28px !important;
+  min-width: 36px;
+  padding: 0 10px !important;
+  border-radius: 7px !important;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+  border-color: #ddd6fe !important;
+  color: #5b21b6 !important;
+  box-shadow: 0 1px 2px rgba(88, 28, 135, 0.08) !important;
+}
+
+.forming-notes-toolbar-btn:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+  border-color: #a78bfa !important;
+  color: #4c1d95 !important;
+}
+
+.notes-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notes-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.welding-instruction-notes-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 24px 48px -20px rgba(76, 29, 149, 0.45);
+}
+
+.welding-instruction-notes-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #ede9fe;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 55%, #ecfeff 100%);
+}
+
+.welding-instruction-notes-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5b21b6;
+}
+
+.welding-instruction-notes-dialog :deep(.el-dialog__body) {
+  padding: 12px 16px 8px;
+}
+
+.welding-instruction-notes-dialog :deep(.el-dialog__footer) {
+  padding: 8px 16px 14px;
+}
+
+.cutting-notes-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cutting-notes-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cutting-notes-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  border: 1px solid #e9d5ff;
+  font-size: 12px;
+}
+
+.cutting-notes-input :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+
+.cutting-notes-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cutting-notes-char-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.cutting-notes-add-btn {
+  border-radius: 8px !important;
+}
+
+.cutting-notes-scrollbar {
+  border-radius: 10px;
+}
+
+.cutting-notes-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.cutting-notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid #f3e8ff;
+  margin-bottom: 6px;
+  background: #faf5ff;
+}
+
+.cutting-notes-row:hover {
+  border-color: #e9d5ff;
+}
+
+.cutting-notes-row-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  word-break: break-word;
+}
+
+.cutting-notes-row-content--done {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+
+.cutting-notes-row :deep(.el-checkbox__inner) {
+  border-radius: 4px;
+}
+
+.cutting-notes-delete-btn {
+  flex-shrink: 0;
+  padding: 4px !important;
+  color: #64748b !important;
+}
+
+.cutting-notes-delete-btn:hover {
+  color: #ef4444 !important;
+}
+
+.cutting-notes-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .date-control {
   display: flex;
   align-items: center;
@@ -4853,11 +4827,6 @@ onMounted(() => {
   font-weight: 500;
 }
 
-.matrix-search-input {
-  width: 180px;
-  border-radius: 8px;
-}
-
 .month-buttons {
   display: flex;
   gap: 4px;
@@ -4900,11 +4869,77 @@ onMounted(() => {
   color: #16a34a;
 }
 
-.matrix-controls {
-  display: flex;
+/* 日別計画・実績チャート */
+.plan-qty-chart-section {
+  margin-bottom: 12px;
+}
+
+.plan-qty-chart-title-row {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.plan-qty-chart-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 8px;
+}
+
+.plan-qty-chart-actions {
+  flex-wrap: wrap;
+  gap: 6px;
   align-items: center;
-  gap: 12px;
-  margin-left: 12px;
+}
+
+.plan-qty-chart-body {
+  min-height: 320px;
+  position: relative;
+}
+
+.plan-qty-chart-empty {
+  padding: 48px 16px;
+}
+
+.plan-qty-chart-canvas {
+  width: 100%;
+  height: 340px;
+}
+
+.plan-qty-chart-section .month-btn {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 7px 16px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  letter-spacing: 0.2px;
+  border-radius: 9px;
+  font-weight: 600;
+}
+
+.plan-qty-chart-section .month-btn.prev {
+  background: linear-gradient(145deg, #fb7185 0%, #dc2626 100%);
+}
+
+.plan-qty-chart-section .month-btn.current {
+  background: linear-gradient(145deg, #60a5fa 0%, #2563eb 100%);
+}
+
+.plan-qty-chart-section .month-btn.next {
+  background: linear-gradient(145deg, #34d399 0%, #059669 100%);
+}
+
+.plan-qty-chart-section .month-btn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 22px rgba(15, 23, 42, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.plan-qty-chart-section .month-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow:
+    0 3px 9px rgba(15, 23, 42, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .export-btn {
@@ -4921,89 +4956,6 @@ onMounted(() => {
   border-radius: 8px;
   padding: 6px 12px;
   font-weight: 500;
-}
-
-/* 設備名称样式 */
-.machine-name {
-  font-weight: 600;
-  font-size: 12px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.machine-name:hover {
-  transform: scale(1.05);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* 设备单元格样式 */
-.machine-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.collapse-icon {
-  cursor: pointer;
-  transition: transform 0.3s ease;
-  color: #64748b;
-  font-size: 14px;
-}
-
-.collapse-icon:hover {
-  color: #3b82f6;
-}
-
-.collapse-icon.collapsed {
-  transform: rotate(-90deg);
-}
-
-/* 分组样式 */
-.group-header {
-  background: linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%);
-  font-weight: 600;
-}
-
-.group-header-text {
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.child-row {
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.child-text {
-  font-size: 11px;
-  color: #64748b;
-  padding-left: 16px;
-}
-
-/* 行列高亮样式 */
-.row-highlighted {
-  background: rgba(59, 130, 246, 0.1) !important;
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
-}
-
-.col-highlighted {
-  background: rgba(59, 130, 246, 0.05) !important;
-}
-
-.cell-highlighted {
-  background: rgba(59, 130, 246, 0.2) !important;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
-  transform: scale(1.02);
-  z-index: 10;
-  position: relative;
-}
-
-.data-cell {
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-.data-cell:hover {
-  transform: scale(1.05);
 }
 
 /* 指示区域样式 */
@@ -5501,176 +5453,9 @@ onMounted(() => {
   gap: 12px;
 }
 
-/* マトリックステーブル */
-.matrix-section {
-  margin-bottom: 8px;
-}
-
-.matrix-table-wrapper {
-  width: 100%;
-  height: 420px;
-  max-height: 420px;
-  overflow: auto;
-  border-radius: 8px;
-  border: 1px solid rgba(226, 232, 240, 0.7);
-}
-
-.matrix-table {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  font-size: 11px;
-}
-
-.matrix-table th,
-.matrix-table td {
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  padding: 3px 5px;
-  vertical-align: middle;
-  font-size: 10px;
-}
-
-.matrix-table thead th {
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  font-weight: 600;
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  color: #475569;
-}
-
-.date-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1.1;
-  gap: 1px;
-}
-.date-text {
-  font-size: 10px;
-  color: #475569;
-  font-weight: 500;
-}
-.weekday-text {
-  font-size: 9px;
-  color: #64748b;
-}
-
-.sticky-col {
-  position: sticky;
-  left: 0;
-  background: #fff;
-  z-index: 2;
-  white-space: nowrap;
-  font-weight: 700;
-}
-
-/* 固定左侧四列宽度与偏移（与 sticky 一起使用） */
-.machine-col {
-  width: 70px;
-  min-width: 70px;
-  left: 0;
-}
-.product-col {
-  width: 120px;
-  min-width: 120px;
-  left: 70px;
-}
-.operator-col {
-  width: 70px;
-  min-width: 70px;
-  left: 190px;
-}
-.total-col {
-  width: 100px;
-  min-width: 100px;
-  left: 260px;
-}
-
-/* 表体行固定行高 */
-.matrix-table tbody tr {
-  height: 26px;
-  transition: background-color 0.2s ease;
-}
-
-.matrix-table tbody tr:hover {
-  background-color: rgba(248, 250, 252, 0.8);
-}
-
-/* 交汇单元格（左侧吸附列的表头）层级更高，避免遮挡问题 */
-.matrix-table thead .sticky-col {
-  z-index: 4;
-}
-
-/* 合计行样式 */
-.matrix-table tfoot td {
-  background: #f7fafc !important;
-  font-weight: 700;
-  border-top: 2px solid #cbd5e0;
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
-}
-.matrix-total-row .sticky-col {
-  background: #f7fafc !important;
-  z-index: 5; /* 底部合计行与左侧吸附列交汇处提升层级 */
-}
-
-/* 依設備分组的行底色（柔和） */
-.machine-group-0 {
-  background-color: #fafafa;
-}
-.machine-group-1 {
-  background-color: #f9fbff;
-}
-.machine-group-2 {
-  background-color: #fbf9ff;
-}
-
-/* 让左侧吸附列继承行背景（仅限 tbody），表头和合计行保持原样 */
-.matrix-table tbody .sticky-col {
-  background: inherit;
-}
-
-/* 悬浮略微提升对比度 */
-.matrix-row:hover td {
-  filter: brightness(0.98);
-}
-
 /* 数字居中 */
 .numeric-cell {
   text-align: center;
-}
-
-/* 周末日期表头与合计列显示为红色 */
-.matrix-table thead th.is-weekend .date-text,
-.matrix-table thead th.is-weekend .weekday-text,
-.matrix-table tfoot td.is-weekend {
-  color: #e53e3e;
-}
-
-/* 当天日期表头、表体和合计列显示为浅黄色背景 */
-.matrix-table thead th.is-today {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
-}
-
-.matrix-table thead th.is-today .date-text,
-.matrix-table thead th.is-today .weekday-text {
-  color: #92400e;
-  font-weight: 700;
-}
-
-.matrix-table tbody td.is-today {
-  background: linear-gradient(135deg, #fef9c3 0%, #fef08a 100%) !important;
-  font-weight: 600;
-}
-
-.matrix-table tfoot td.is-today {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%) !important;
-  color: #92400e;
-  font-weight: 700;
 }
 
 .cell-items {
@@ -5698,11 +5483,6 @@ onMounted(() => {
 }
 .item-op {
   color: #a0aec0;
-}
-
-.cell-empty {
-  color: #cbd5e0;
-  text-align: center;
 }
 
 /* レスポンシブデザイン */
@@ -6476,24 +6256,5 @@ onMounted(() => {
   box-shadow:
     0 10px 20px rgba(15, 23, 42, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.32);
-}
-
-.matrix-section .month-btn,
-.matrix-section .matrix-controls .export-btn,
-.matrix-section .matrix-controls .print-btn {
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow:
-    0 7px 16px rgba(15, 23, 42, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.32);
-}
-
-.matrix-section .matrix-controls .export-btn {
-  background: linear-gradient(145deg, #22c55e 0%, #15803d 100%);
-  color: #fff;
-}
-
-.matrix-section .matrix-controls .print-btn {
-  background: linear-gradient(145deg, #6366f1 0%, #4338ca 100%);
-  color: #fff;
 }
 </style>

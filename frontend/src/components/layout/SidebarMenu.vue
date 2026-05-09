@@ -485,10 +485,6 @@
               <el-icon><Operation /></el-icon>
               <template #title><span :title="t('menu.MES_CUTTING_INSTRUCTION')">{{ t('menu.MES_CUTTING_INSTRUCTION') }}</span></template>
             </el-menu-item>
-            <el-menu-item index="/mes/instruction/forming">
-              <el-icon><Document /></el-icon>
-              <template #title><span :title="t('menu.MES_FORMING_INSTRUCTION')">{{ t('menu.MES_FORMING_INSTRUCTION') }}</span></template>
-            </el-menu-item>
             <el-menu-item index="/mes/instruction/welding">
               <el-icon><Connection /></el-icon>
               <template #title><span :title="t('menu.MES_WELDING_INSTRUCTION')">{{ t('menu.MES_WELDING_INSTRUCTION') }}</span></template>

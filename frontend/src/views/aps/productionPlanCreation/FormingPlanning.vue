@@ -461,7 +461,19 @@
         v-loading="loadingLineCapacityStrip"
         class="line-capacity-below-schedule"
       >
-        <div class="line-capacity-below-hd">設備稼働時間（日別・ガント表示期間と一致）</div>
+        <div class="line-capacity-below-hd-row">
+          <div class="line-capacity-below-hd">設備稼働時間（日別・ガント表示期間と一致）</div>
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            class="line-capacity-below-open-btn"
+            @click="openLineCapacityFromGantt"
+          >
+            <el-icon class="el-icon--left"><Setting /></el-icon>
+            稼働設定
+          </el-button>
+        </div>
         <div class="line-capacity-below-scroll">
           <table class="line-capacity-below-table">
             <thead>
@@ -549,18 +561,21 @@
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-date-col"
-                    :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
+                    :class="{
+                      'is-weekend': ganttDateColumnFlags[d]?.isWeekend,
+                      'is-today': ganttDateColumnFlags[d]?.isToday,
+                    }"
                   >
                     <div class="gantt-date-text">{{ d.slice(5) }}</div>
-                    <div class="gantt-wd-text">{{ getWeekday(d) }}</div>
+                    <div class="gantt-wd-text">{{ ganttDateColumnFlags[d]?.weekdayShort ?? '' }}</div>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="row in ganttRows"
+                  v-for="row in visibleGanttRows"
                   :key="row.id"
-                  :class="['gantt-row', productPaletteClass(row)]"
+                  :class="['gantt-row', ganttProductPaletteClassById[row.id] || 'gpc-0']"
                 >
                   <td
                     class="gantt-sticky gantt-sticky-line gantt-line-dbl"
@@ -573,9 +588,15 @@
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty }}</td>
-                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualForRow(row).toLocaleString() }}</td>
-                  <td class="gantt-sticky gantt-sticky-defect">{{ periodDefectForRow(row).toLocaleString() }}</td>
-                  <td class="gantt-sticky gantt-sticky-upstream">{{ periodUpstreamDefectForRow(row).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">
+                    {{ (ganttPeriodTotalsByScheduleId[row.id]?.actual ?? 0).toLocaleString() }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-defect">
+                    {{ (ganttPeriodTotalsByScheduleId[row.id]?.defect ?? 0).toLocaleString() }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-upstream">
+                    {{ (ganttPeriodTotalsByScheduleId[row.id]?.upstream ?? 0).toLocaleString() }}
+                  </td>
                   <td
                     v-for="d in ganttDates"
                     :key="d"
@@ -648,7 +669,9 @@
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty ?? 0 }}</td>
-                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualByScheduleId(row.schedule_id).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">
+                    {{ (ganttPeriodTotalsByScheduleId[row.schedule_id]?.actual ?? 0).toLocaleString() }}
+                  </td>
                   <td
                     v-for="col in hourlyColumns"
                     :key="col.key"
@@ -754,40 +777,49 @@
     <!-- ガント未表示時も DOM に存在させる（v-if 内だとガント未取得の間はダイアログが無く反応しない） -->
     <el-dialog
       v-model="lineReplanAnchorDialogVisible"
-      width="min(820px, 96vw)"
-      top="5vh"
+      class="plan-line-anchor-dialog"
+      width="min(680px, 94vw)"
+      top="6vh"
       append-to-body
       destroy-on-close
       :close-on-click-modal="false"
       @open="onLineReplanAnchorDialogOpen"
-      class="plan-line-anchor-dialog"
     >
       <template #header>
         <div class="line-anchor-dlg-header">
           <div class="line-anchor-dlg-header-icon" aria-hidden="true">
-            <el-icon :size="26"><Calendar /></el-icon>
+            <el-icon :size="22"><Calendar /></el-icon>
           </div>
           <div class="line-anchor-dlg-header-text">
-            <div class="line-anchor-dlg-title">再計算アンカー日</div>
+            <div class="line-anchor-dlg-title-row">
+              <span class="line-anchor-dlg-title">再計算アンカー日</span>
+              <span class="line-anchor-dlg-badge">設備別</span>
+            </div>
             <div class="line-anchor-dlg-meta">
-              <el-tag size="small" type="primary" effect="light" class="line-anchor-dlg-tag">
+              <el-tag size="small" type="primary" effect="dark" round class="line-anchor-dlg-tag">
                 {{ anchorDialogProcessTag }}
               </el-tag>
-              <span class="line-anchor-dlg-meta-note">上記工程に該当する APS 設備のみ（設備マスタの種別＝工程名／工程CD）</span>
+              <span class="line-anchor-dlg-meta-note">APS 対象設備のみ · 種別＝工程名／工程CD</span>
             </div>
           </div>
         </div>
       </template>
 
       <div class="line-anchor-dlg-inner">
-        <div class="line-anchor-dlg-hint-card">
-          順次再計算の開始日を設備ごとに保存します。保存済みは<strong>最優先</strong>で使われます（今日への繰り上げなし）。クリアすると「基準月1日」と「今日」の従来ロジックに戻ります。
+        <div class="line-anchor-dlg-hint-card" role="note">
+          <span class="line-anchor-dlg-hint-icon" aria-hidden="true">
+            <el-icon :size="18"><InfoFilled /></el-icon>
+          </span>
+          <p class="line-anchor-dlg-hint-text">
+            順次再計算の開始日を設備ごとに保存。<strong>保存済みは最優先</strong>（今日への繰り上げなし）。クリアで基準月1日・今日の従来ロジックに戻ります。
+          </p>
         </div>
 
         <el-empty
           v-if="!loadingLineReplanAnchors && lineReplanAnchorRows.length === 0"
+          class="line-anchor-dlg-empty"
           description="この工程に該当する設備がありません"
-          :image-size="72"
+          :image-size="56"
         />
         <el-table
           v-else
@@ -797,13 +829,13 @@
           border
           stripe
           size="small"
-          max-height="420"
+          max-height="360"
           style="width: 100%"
         >
-          <el-table-column type="index" label="#" width="48" align="center" />
-          <el-table-column prop="line_code" label="設備コード" width="118" />
-          <el-table-column prop="line_name" label="設備名" min-width="160" show-overflow-tooltip />
-          <el-table-column label="アンカー日" width="220" align="center">
+          <el-table-column type="index" label="#" width="44" align="center" />
+          <el-table-column prop="line_code" label="設備コード" width="104" />
+          <el-table-column prop="line_name" label="設備名" width="100" show-overflow-tooltip />
+          <el-table-column label="アンカー日" min-width="250" align="center">
             <template #default="{ row }">
               <el-date-picker
                 v-model="row.anchor_date"
@@ -820,8 +852,8 @@
 
       <template #footer>
         <div class="line-anchor-dlg-footer">
-          <el-button class="btn-soft btn-soft--gray" @click="lineReplanAnchorDialogVisible = false">閉じる</el-button>
-          <el-button type="primary" class="btn-accent btn-accent--primary" :loading="savingLineReplanAnchors" @click="saveLineReplanAnchorsFromDialog">
+          <el-button class="line-anchor-dlg-btn-cancel" @click="lineReplanAnchorDialogVisible = false">閉じる</el-button>
+          <el-button type="primary" class="line-anchor-dlg-btn-save" :loading="savingLineReplanAnchors" @click="saveLineReplanAnchorsFromDialog">
             保存
           </el-button>
         </div>
@@ -893,7 +925,11 @@
         embed
         :preset-line-id="selectedLineId"
         :preset-date-range="lineCapacityDateRange"
+        @saved="onLineCapacityDaySlotsSaved"
       />
+      <template #footer>
+        <el-button @click="lineCapacityDialogVisible = false">閉じる</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -902,7 +938,7 @@
 defineOptions({ name: 'FormingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete } from '@element-plus/icons-vue'
+import { Calendar, Delete, InfoFilled, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 import {
@@ -1219,6 +1255,65 @@ const activeSchedules = computed(() => sortedSchedules.value.filter((s) => s.sta
 
 /** 一覧表示対象（既定は未完了のみ、必要時に完了含む） */
 const visibleSchedules = computed(() => (showCompletedSchedules.value ? sortedSchedules.value : activeSchedules.value))
+
+/** 日別ガント行（一覧と同じ切替：既定は完了スケジュールを非表示） */
+const visibleGanttRows = computed(() =>
+  showCompletedSchedules.value ? ganttRows.value : ganttRows.value.filter((r) => r.status !== 'COMPLETED'),
+)
+
+/** periodActualForRow 等と同一：表示期間が空なら当該マップのキーで合計 */
+function sumScheduleDailyInGanttPeriod(datesPreferred: string[], map: Record<string, number> | undefined): number {
+  const m = map || {}
+  const dates = datesPreferred.length > 0 ? datesPreferred : Object.keys(m)
+  let sum = 0
+  for (const d of dates) {
+    sum += Number(m[d] || 0)
+  }
+  return sum
+}
+
+/** 品名からガント行配色クラス（computed で再利用するため先に定義） */
+function productPaletteClassByName(name: string): string {
+  const base = (name || '').trim()
+  if (!base) return 'gpc-0'
+  let h = 0
+  for (let i = 0; i < base.length; i += 1) {
+    h = ((h << 5) - h + base.charCodeAt(i)) | 0
+  }
+  return `gpc-${Math.abs(h) % 10}`
+}
+
+/** schedule_id → 行の O(1) 参照（時間別セル・実績参照で find を省略） */
+const ganttRowById = computed((): Record<number, ScheduleGridRow> => {
+  const m: Record<number, ScheduleGridRow> = {}
+  for (const r of ganttRows.value) {
+    m[r.id] = r
+  }
+  return m
+})
+
+/** ガント表示期間ごとの実績/不良/前工程不良合計（行ごとにテンプレートで reduce しない） */
+const ganttPeriodTotalsByScheduleId = computed(() => {
+  const gd = ganttDates.value
+  const out: Record<number, { actual: number; defect: number; upstream: number }> = {}
+  for (const row of ganttRows.value) {
+    out[row.id] = {
+      actual: sumScheduleDailyInGanttPeriod(gd, row.actual_daily),
+      defect: sumScheduleDailyInGanttPeriod(gd, row.defect_daily),
+      upstream: sumScheduleDailyInGanttPeriod(gd, row.upstream_defect_daily),
+    }
+  }
+  return out
+})
+
+/** 品名ハッシュ配色（行ごとに毎回計算しない） */
+const ganttProductPaletteClassById = computed((): Record<number, string> => {
+  const out: Record<number, string> = {}
+  for (const row of ganttRows.value) {
+    out[row.id] = productPaletteClassByName(row.item_name)
+  }
+  return out
+})
 
 const scheduleCountBadge = computed(() => `${visibleSchedules.value.length}/${schedules.value.length}`)
 
@@ -2042,6 +2137,22 @@ async function replanAll() {
 
 const todayIso = computed(() => formatYmdInJapan(new Date()))
 
+/** 日別ガントの日付列メタ（ヘッド／セルで同じ判定を共有し曜日文字も再利用） */
+const GANTT_WD_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
+const ganttDateColumnFlags = computed(() => {
+  const today = todayIso.value
+  const out: Record<string, { isWeekend: boolean; isToday: boolean; weekdayShort: string }> = {}
+  for (const d of ganttDates.value) {
+    const wi = weekdayIndexForIsoDate(d)
+    out[d] = {
+      isWeekend: wi === 0 || wi === 6,
+      isToday: d === today,
+      weekdayShort: GANTT_WD_LABELS[wi] ?? '',
+    }
+  }
+  return out
+})
+
 /**
  * 再計算 API（replan-sequence）のクエリ錨点（フォールバック）。
  * 当該設備に DB（aps_line_replan_anchors）があればサーバ側でそちらが最優先される。
@@ -2147,34 +2258,8 @@ function hourlyCellClass(row: HourlyGridRow, col: HourlyGridColumn): Record<stri
   return { 'gantt-active': active, 'gantt-has-actual': active && actual > 0 }
 }
 
-function periodActualForRow(row: ScheduleGridRow): number {
-  const m = row.actual_daily || {}
-  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
-  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
-}
-
-/** ガント表示期間内の不良合計（日別セル defect_daily と一致） */
-function periodDefectForRow(row: ScheduleGridRow): number {
-  const m = row.defect_daily || {}
-  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
-  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
-}
-
-/** ガント表示期間内の前工程不良合計（日別セル upstream_defect_daily と一致） */
-function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
-  const m = row.upstream_defect_daily || {}
-  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
-  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
-}
-
-function periodActualByScheduleId(scheduleId: number): number {
-  const row = ganttRows.value.find((r) => r.id === scheduleId)
-  if (!row) return 0
-  return periodActualForRow(row)
-}
-
 function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number {
-  const row = ganttRows.value.find((r) => r.id === scheduleId)
+  const row = ganttRowById.value[scheduleId]
   if (!row) return 0
   return Number(row.actual_daily?.[d] || 0)
 }
@@ -2214,6 +2299,8 @@ function openLineCapacityDayEdit(d: string) {
 }
 
 async function onLineCapacityDaySlotsSaved() {
+  lineCapacityDaySlotsDialogVisible.value = false
+  lineCapacityDialogVisible.value = false
   await loadLineCapacityStrip()
   await loadGantt()
 }
@@ -2401,7 +2488,7 @@ function isWeekend(d: string): boolean {
 }
 
 function isToday(d: string): boolean {
-  return d === formatYmdInJapan(new Date())
+  return d === todayIso.value
 }
 
 function getWeekday(d: string): string {
@@ -2417,29 +2504,15 @@ function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean
   const remain = row.remaining_daily?.[d] || 0
   const active = qty !== 0 || actual !== 0 || defect !== 0 || upstream !== 0 || remain !== 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
+  const col = ganttDateColumnFlags.value[d]
   return {
     'gantt-active': active,
     'gantt-has-actual': actual > 0,
     'gantt-has-defect': defect !== 0,
     'gantt-range': !!inRange && !active,
-    'is-weekend': isWeekend(d),
-    'is-today': isToday(d),
+    'is-weekend': col?.isWeekend ?? isWeekend(d),
+    'is-today': col?.isToday ?? isToday(d),
   }
-}
-
-function productPaletteClass(row: ScheduleGridRow): string {
-  const base = (row.item_name || '').trim()
-  return productPaletteClassByName(base)
-}
-
-function productPaletteClassByName(name: string): string {
-  const base = (name || '').trim()
-  if (!base) return 'gpc-0'
-  let h = 0
-  for (let i = 0; i < base.length; i += 1) {
-    h = ((h << 5) - h + base.charCodeAt(i)) | 0
-  }
-  return `gpc-${Math.abs(h) % 10}`
 }
 
 function ganttCellTitle(row: ScheduleGridRow, d: string): string {
@@ -2653,12 +2726,25 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   padding-top: 12px;
   border-top: 1px dashed var(--el-border-color);
 }
+.line-capacity-below-hd-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 8px;
+  padding: 0 4px 0 8px;
+  flex-wrap: wrap;
+}
 .line-capacity-below-hd {
   font-size: var(--fs-s);
   font-weight: 700;
   color: var(--c-text-m);
-  margin: 0 0 8px;
-  padding-left: 8px;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.line-capacity-below-open-btn {
+  flex-shrink: 0;
 }
 .line-capacity-below-scroll {
   overflow-x: auto;
@@ -2733,9 +2819,26 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 
 .plan-line-capacity-day-dialog :deep(.el-dialog__body) {
-  padding: 8px 12px 12px;
+  padding: 10px 14px 14px;
   max-height: min(78vh, 720px);
   overflow: auto;
+  box-sizing: border-box;
+}
+
+.plan-line-capacity-day-dialog :deep(.capacity-page--embed) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.plan-line-capacity-day-dialog :deep(.capacity-card) {
+  border: none;
+  box-shadow: none;
+}
+
+.plan-line-capacity-day-dialog :deep(.capacity-card .el-card__body) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
 /* ══════════════════════════════════════════════════
@@ -3244,99 +3347,218 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .gantt-table thead .gantt-line-dbl:hover {
   background-color: rgba(64, 158, 255, 0.1) !important;
 }
+/* ─── 再計算アンカー日（コンパクト・配色付き） ─── */
+.plan-line-anchor-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 48px -12px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(99, 102, 241, 0.08);
+}
 .plan-line-anchor-dialog :deep(.el-dialog__header) {
   margin-right: 0;
-  padding: 16px 20px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 10px 14px 10px;
+  border-bottom: none;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 42%, #f1f5f9 100%);
 }
 .plan-line-anchor-dialog :deep(.el-dialog__body) {
-  padding: 0 20px 16px;
+  padding: 10px 14px 12px;
+  background: linear-gradient(180deg, #fafbfc 0%, #ffffff 28%);
 }
 .plan-line-anchor-dialog :deep(.el-dialog__footer) {
-  padding: 12px 20px 16px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  padding: 8px 14px 12px;
+  border-top: 1px solid rgba(99, 102, 241, 0.12);
+  background: linear-gradient(180deg, #fafbff 0%, #f4f6fb 100%);
 }
 .line-anchor-dlg-header {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 10px;
   text-align: left;
 }
 .line-anchor-dlg-header-icon {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(145deg, rgba(64, 158, 255, 0.18), rgba(64, 158, 255, 0.06));
-  color: var(--el-color-primary);
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 55%, #4338ca 100%);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
 }
 .line-anchor-dlg-header-text {
   min-width: 0;
   flex: 1;
 }
+.line-anchor-dlg-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .line-anchor-dlg-title {
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  letter-spacing: 0.02em;
-  line-height: 1.35;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+}
+.line-anchor-dlg-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(99, 102, 241, 0.28);
 }
 .line-anchor-dlg-meta {
-  margin-top: 8px;
+  margin-top: 4px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  gap: 6px 10px;
 }
 .line-anchor-dlg-tag {
-  font-weight: 500;
+  font-weight: 600;
+  border: none;
 }
 .line-anchor-dlg-meta-note {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+  color: #64748b;
 }
 .line-anchor-dlg-inner {
-  padding-top: 16px;
+  padding-top: 0;
 }
 .line-anchor-dlg-hint-card {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--el-text-color-regular);
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px 8px 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #475569;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.09) 0%, rgba(241, 245, 249, 0.95) 38%);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 9px;
+  border-left: 3px solid #6366f1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+.line-anchor-dlg-hint-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #6366f1;
+  opacity: 0.92;
+}
+.line-anchor-dlg-hint-text {
+  margin: 0;
 }
 .line-anchor-dlg-hint-card strong {
-  color: var(--el-color-primary);
-  font-weight: 600;
+  color: #4338ca;
+  font-weight: 700;
+}
+.line-anchor-dlg-empty :deep(.el-empty__description p) {
+  font-size: 13px;
+  color: #64748b;
 }
 .line-anchor-dlg-table {
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
+  --el-table-border-color: rgba(148, 163, 184, 0.35);
 }
 .line-anchor-dlg-table :deep(.el-table__header th) {
-  font-weight: 600;
-  background: var(--el-fill-color-light) !important;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 0;
+  color: #334155;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e8ecf4 100%) !important;
+}
+.line-anchor-dlg-table :deep(.el-table__body .el-table__cell) {
+  padding: 5px 0;
+}
+.line-anchor-dlg-table :deep(.el-table__row--striped td) {
+  background: rgba(248, 250, 252, 0.85) !important;
 }
 .line-anchor-dlg-picker {
   width: 100%;
-  max-width: 200px;
+  max-width: 176px;
+}
+.line-anchor-dlg-picker :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15) inset;
+}
+.line-anchor-dlg-picker :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35) inset;
 }
 .line-anchor-dlg-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  align-items: center;
+  gap: 8px;
   width: 100%;
 }
+.line-anchor-dlg-btn-cancel {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  color: #475569;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+}
+.line-anchor-dlg-btn-cancel:hover {
+  color: #334155;
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+.line-anchor-dlg-footer .line-anchor-dlg-btn-save.el-button--primary {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  border-color: #4f46e5;
+  background: linear-gradient(145deg, #6366f1 0%, #4f46e5 100%);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+.line-anchor-dlg-footer .line-anchor-dlg-btn-save.el-button--primary:hover {
+  border-color: #4338ca;
+  filter: brightness(1.05);
+}
 .plan-line-capacity-dialog :deep(.el-dialog__body) {
-  padding: 8px 12px 14px;
+  padding: 10px 14px 16px;
   max-height: calc(100vh - 130px);
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.plan-line-capacity-dialog :deep(.capacity-page--embed) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.plan-line-capacity-dialog :deep(.capacity-card) {
+  border: none;
+  box-shadow: none;
+}
+
+.plan-line-capacity-dialog :deep(.capacity-card .el-card__body) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.plan-line-capacity-dialog :deep(.toolbar--embed),
+.plan-line-capacity-day-dialog :deep(.toolbar--embed) {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
 }
 .gantt-sticky-order {
   left: 80px; width: 44px; min-width: 44px; max-width: 44px; text-align: center;
@@ -3379,6 +3601,27 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-weight: 700; font-size: var(--fs-s);
   font-family: var(--font-mono); color: #6d28d9;
   box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06);
+}
+/* 時間別：設備名列（gantt-sticky-line）幅を 40% 縮小（80→48px）し、右側 sticky の left を詰める */
+.gantt-hourly-table .gantt-sticky-line {
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+}
+.gantt-hourly-table .gantt-sticky-order {
+  left: 48px;
+}
+.gantt-hourly-table .gantt-sticky-name {
+  left: 92px;
+}
+.gantt-hourly-table .gantt-sticky-eff {
+  left: 224px;
+}
+.gantt-hourly-table .gantt-sticky-planned {
+  left: 294px;
+}
+.gantt-hourly-table .gantt-sticky-actual {
+  left: 350px;
 }
 .gantt-table thead .gantt-sticky-actual {
   box-shadow: inset -1px 0 0 #c9d1de;

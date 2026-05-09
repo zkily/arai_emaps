@@ -281,7 +281,6 @@ export default {
     MES: 'MES',
     MES_PRODUCTION_INSTRUCTION: '生产指示',
     MES_CUTTING_INSTRUCTION: '切断・面取指示',
-    MES_FORMING_INSTRUCTION: '成型指示',
     MES_WELDING_INSTRUCTION: '溶接指示',
     MES_PLATING_INSTRUCTION: 'メッキ指示',
     MASTER: '主数据管理',

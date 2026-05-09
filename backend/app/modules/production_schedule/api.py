@@ -4920,12 +4920,18 @@ async def generate_cutting_plans_from_schedule(
 
 
 # ============================
-# メモ（TODO）: cutting instruction notes
-#   - GET    /api/plan/cutting-instruction-notes
-#   - POST   /api/plan/cutting-instruction-notes
-#   - PATCH  /api/plan/cutting-instruction-notes/{note_id}
-#   - DELETE /api/plan/cutting-instruction-notes/{note_id}
+# メモ（TODO）: instruction notes（cutting_instruction_notes.scope）
+#   cutting:
+#     GET/POST/PATCH/DELETE /api/plan/cutting-instruction-notes
+#   forming:
+#     GET/POST/PATCH/DELETE /api/plan/forming-instruction-notes
+#   welding:
+#     GET/POST/PATCH/DELETE /api/plan/welding-instruction-notes
 # ============================
+
+INSTRUCTION_NOTE_SCOPE_CUTTING = "cutting_instruction"
+INSTRUCTION_NOTE_SCOPE_FORMING = "forming_instruction"
+INSTRUCTION_NOTE_SCOPE_WELDING = "welding_instruction"
 
 
 class CuttingInstructionNoteCreateBody(BaseModel):
@@ -4937,38 +4943,42 @@ class CuttingInstructionNoteUpdateBody(BaseModel):
     is_done: Optional[int] = None
 
 
-@router.get("/plan/cutting-instruction-notes")
-async def list_cutting_instruction_notes(
-    limit: int = Query(200, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
-    scope = "cutting_instruction"
-    try:
-        rows = (await db.execute(
-            text(
-                """
-                SELECT id, content, is_done, created_by, created_at, updated_at
-                FROM cutting_instruction_notes
-                WHERE scope = :scope
-                ORDER BY is_done ASC, id DESC
-                LIMIT :limit
-                """
-            ),
-            {"scope": scope, "limit": limit},
-        )).mappings().fetchall()
-    except Exception as e:
-        msg = str(e).lower()
-        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
-        raise
+def _instruction_note_datetime_str(v: Any) -> Optional[str]:
+    if v is None:
+        return None
+    if hasattr(v, "isoformat"):
+        return v.isoformat()[:19]
+    return str(v)
 
-    def _v_dt(v: Any) -> Optional[str]:
-        if v is None:
-            return None
-        if hasattr(v, "isoformat"):
-            return v.isoformat()[:19]
-        return str(v)
+
+def _reraise_instruction_notes_db_error(e: Exception) -> None:
+    msg = str(e).lower()
+    if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+        raise HTTPException(
+            status_code=503,
+            detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。",
+        ) from e
+
+
+async def _list_instruction_notes(db: AsyncSession, scope: str, limit: int) -> dict[str, Any]:
+    try:
+        rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT id, content, is_done, created_by, created_at, updated_at
+                    FROM cutting_instruction_notes
+                    WHERE scope = :scope
+                    ORDER BY is_done ASC, id DESC
+                    LIMIT :limit
+                    """
+                ),
+                {"scope": scope, "limit": limit},
+            )
+        ).mappings().fetchall()
+    except Exception as e:
+        _reraise_instruction_notes_db_error(e)
+        raise
 
     notes = [
         {
@@ -4976,27 +4986,20 @@ async def list_cutting_instruction_notes(
             "content": r.get("content"),
             "is_done": int(r.get("is_done") or 0),
             "created_by": r.get("created_by"),
-            "created_at": _v_dt(r.get("created_at")),
-            "updated_at": _v_dt(r.get("updated_at")),
+            "created_at": _instruction_note_datetime_str(r.get("created_at")),
+            "updated_at": _instruction_note_datetime_str(r.get("updated_at")),
         }
         for r in rows
     ]
     return {"success": True, "data": {"list": notes}, "message": "OK"}
 
 
-@router.post("/plan/cutting-instruction-notes")
-async def create_cutting_instruction_note(
-    body: CuttingInstructionNoteCreateBody,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
-    scope = "cutting_instruction"
-    content = (body.content or "").strip()
-    if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
-    if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
-
+async def _create_instruction_note(
+    db: AsyncSession,
+    scope: str,
+    content: str,
+    created_by: Optional[str],
+) -> dict[str, Any]:
     try:
         await db.execute(
             text(
@@ -5005,56 +5008,48 @@ async def create_cutting_instruction_note(
                 VALUES (:scope, :content, 0, :created_by)
                 """
             ),
-            {"scope": scope, "content": content, "created_by": getattr(current_user, "username", None)},
+            {"scope": scope, "content": content, "created_by": created_by},
         )
         note_id = (await db.execute(text("SELECT LAST_INSERT_ID() AS id"))).scalar()
         await db.commit()
     except Exception as e:
-        msg = str(e).lower()
-        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        _reraise_instruction_notes_db_error(e)
         raise
 
     if not note_id:
         return {"success": True, "data": {}, "message": "OK"}
 
-    row = (await db.execute(
-        text(
-            """
-            SELECT id, content, is_done, created_by, created_at, updated_at
-            FROM cutting_instruction_notes
-            WHERE id = :id
-            """
-        ),
-        {"id": int(note_id)},
-    )).mappings().fetchone()
-
-    def _v_dt(v: Any) -> Optional[str]:
-        if v is None:
-            return None
-        if hasattr(v, "isoformat"):
-            return v.isoformat()[:19]
-        return str(v)
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT id, content, is_done, created_by, created_at, updated_at
+                FROM cutting_instruction_notes
+                WHERE id = :id
+                """
+            ),
+            {"id": int(note_id)},
+        )
+    ).mappings().fetchone()
 
     created = {
         "id": int(row.get("id")) if row else int(note_id),
         "content": row.get("content") if row else content,
         "is_done": int(row.get("is_done") or 0) if row else 0,
-        "created_by": row.get("created_by") if row else getattr(current_user, "username", None),
-        "created_at": _v_dt(row.get("created_at")) if row else None,
-        "updated_at": _v_dt(row.get("updated_at")) if row else None,
+        "created_by": row.get("created_by") if row else created_by,
+        "created_at": _instruction_note_datetime_str(row.get("created_at")) if row else None,
+        "updated_at": _instruction_note_datetime_str(row.get("updated_at")) if row else None,
     }
     return {"success": True, "data": {"note": created}, "message": "OK"}
 
 
-@router.patch("/plan/cutting-instruction-notes/{note_id}")
-async def update_cutting_instruction_note(
+async def _update_instruction_note(
+    db: AsyncSession,
+    scope: str,
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
-    scope = "cutting_instruction"
+    current_user: User,
+) -> dict[str, Any]:
     updates: list[str] = []
     params: dict[str, Any] = {"id": note_id, "scope": scope}
 
@@ -5077,33 +5072,28 @@ async def update_cutting_instruction_note(
     try:
         set_clause = ", ".join(updates)
         await db.execute(
-            text(f"UPDATE cutting_instruction_notes SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND scope = :scope"),
+            text(
+                f"UPDATE cutting_instruction_notes SET {set_clause}, updated_at = CURRENT_TIMESTAMP WHERE id = :id AND scope = :scope"
+            ),
             params,
         )
         await db.commit()
     except Exception as e:
-        msg = str(e).lower()
-        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
+        _reraise_instruction_notes_db_error(e)
         raise
 
-    row = (await db.execute(
-        text(
-            """
-            SELECT id, content, is_done, created_by, created_at, updated_at
-            FROM cutting_instruction_notes
-            WHERE id = :id AND scope = :scope
-            """
-        ),
-        {"id": int(note_id), "scope": scope},
-    )).mappings().fetchone()
-
-    def _v_dt(v: Any) -> Optional[str]:
-        if v is None:
-            return None
-        if hasattr(v, "isoformat"):
-            return v.isoformat()[:19]
-        return str(v)
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT id, content, is_done, created_by, created_at, updated_at
+                FROM cutting_instruction_notes
+                WHERE id = :id AND scope = :scope
+                """
+            ),
+            {"id": int(note_id), "scope": scope},
+        )
+    ).mappings().fetchone()
 
     updated = (
         {
@@ -5111,13 +5101,64 @@ async def update_cutting_instruction_note(
             "content": row.get("content") if row else None,
             "is_done": int(row.get("is_done") or 0) if row else 0,
             "created_by": row.get("created_by") if row else getattr(current_user, "username", None),
-            "created_at": _v_dt(row.get("created_at")) if row else None,
-            "updated_at": _v_dt(row.get("updated_at")) if row else None,
+            "created_at": _instruction_note_datetime_str(row.get("created_at")) if row else None,
+            "updated_at": _instruction_note_datetime_str(row.get("updated_at")) if row else None,
         }
         if row
         else {"id": note_id}
     )
     return {"success": True, "data": {"note": updated}, "message": "OK"}
+
+
+async def _delete_instruction_note(db: AsyncSession, scope: str, note_id: int) -> dict[str, Any]:
+    try:
+        await db.execute(
+            text("DELETE FROM cutting_instruction_notes WHERE id = :id AND scope = :scope"),
+            {"id": int(note_id), "scope": scope},
+        )
+        await db.commit()
+    except Exception as e:
+        _reraise_instruction_notes_db_error(e)
+        raise
+    return {"success": True, "message": "削除しました"}
+
+
+@router.get("/plan/cutting-instruction-notes")
+async def list_cutting_instruction_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _list_instruction_notes(db, INSTRUCTION_NOTE_SCOPE_CUTTING, limit)
+
+
+@router.post("/plan/cutting-instruction-notes")
+async def create_cutting_instruction_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+    return await _create_instruction_note(
+        db,
+        INSTRUCTION_NOTE_SCOPE_CUTTING,
+        content,
+        getattr(current_user, "username", None),
+    )
+
+
+@router.patch("/plan/cutting-instruction-notes/{note_id}")
+async def update_cutting_instruction_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_CUTTING, note_id, body, current_user)
 
 
 @router.delete("/plan/cutting-instruction-notes/{note_id}")
@@ -5126,16 +5167,98 @@ async def delete_cutting_instruction_note(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    scope = "cutting_instruction"
-    try:
-        await db.execute(
-            text("DELETE FROM cutting_instruction_notes WHERE id = :id AND scope = :scope"),
-            {"id": int(note_id), "scope": scope},
-        )
-        await db.commit()
-    except Exception as e:
-        msg = str(e).lower()
-        if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。") from e
-        raise
-    return {"success": True, "message": "削除しました"}
+    return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_CUTTING, note_id)
+
+
+@router.get("/plan/forming-instruction-notes")
+async def list_forming_instruction_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _list_instruction_notes(db, INSTRUCTION_NOTE_SCOPE_FORMING, limit)
+
+
+@router.post("/plan/forming-instruction-notes")
+async def create_forming_instruction_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+    return await _create_instruction_note(
+        db,
+        INSTRUCTION_NOTE_SCOPE_FORMING,
+        content,
+        getattr(current_user, "username", None),
+    )
+
+
+@router.patch("/plan/forming-instruction-notes/{note_id}")
+async def update_forming_instruction_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING, note_id, body, current_user)
+
+
+@router.delete("/plan/forming-instruction-notes/{note_id}")
+async def delete_forming_instruction_note(
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING, note_id)
+
+
+@router.get("/plan/welding-instruction-notes")
+async def list_welding_instruction_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _list_instruction_notes(db, INSTRUCTION_NOTE_SCOPE_WELDING, limit)
+
+
+@router.post("/plan/welding-instruction-notes")
+async def create_welding_instruction_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+    return await _create_instruction_note(
+        db,
+        INSTRUCTION_NOTE_SCOPE_WELDING,
+        content,
+        getattr(current_user, "username", None),
+    )
+
+
+@router.patch("/plan/welding-instruction-notes/{note_id}")
+async def update_welding_instruction_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id, body, current_user)
+
+
+@router.delete("/plan/welding-instruction-notes/{note_id}")
+async def delete_welding_instruction_note(
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id)

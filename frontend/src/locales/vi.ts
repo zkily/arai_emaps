@@ -281,7 +281,6 @@ export default {
     MES: 'MES',
     MES_PRODUCTION_INSTRUCTION: 'Chỉ thị sản xuất',
     MES_CUTTING_INSTRUCTION: 'Chỉ thị cắt・vát mép',
-    MES_FORMING_INSTRUCTION: 'Chỉ thị định hình',
     MES_WELDING_INSTRUCTION: 'Chỉ thị hàn',
     MES_PLATING_INSTRUCTION: 'Chỉ thị mạ',
     MASTER: 'Quản lý Master',
