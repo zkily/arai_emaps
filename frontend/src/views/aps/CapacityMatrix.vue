@@ -1,63 +1,113 @@
 <template>
   <div class="cap-matrix-page">
     <div class="plan-hd no-print">
-      <h2 class="plan-hd-title">設備稼働時間表</h2>
+      <h2 class="plan-hd-title">
+        <span class="plan-hd-title-inner">
+          <el-icon class="plan-hd-title-icon"><Grid /></el-icon>
+          設備稼働時間表
+        </span>
+      </h2>
       <p class="plan-hd-sub">設備ごとの日別稼働時間を二次元表で表示します。印刷帳票としても利用できます。</p>
     </div>
 
-    <div class="plan-card filter-card no-print">
-      <el-form :inline="true" class="filter-form">
-        <el-form-item label="工程">
+    <div class="plan-card filter-card filter-card--panel no-print">
+      <el-form :inline="true" class="filter-form" size="small">
+        <el-form-item class="filter-form__item">
+          <template #label>
+            <span class="filter-form__lbl"><el-icon><Operation /></el-icon>工程</span>
+          </template>
           <el-select
             v-model="selectedProcessCd"
             clearable
             filterable
             placeholder="全工程"
-            style="width: 180px"
+            class="filter-form__select filter-form__select--process"
             @change="handleProcessChange"
           >
             <el-option
-              v-for="p in processOptions"
+              v-for="p in matrixProcessOptions"
               :key="p.process_cd"
-              :label="`${p.process_cd} — ${p.process_name}`"
+              :label="processOptionLabel(p)"
               :value="p.process_cd"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="設備">
+        <el-form-item class="filter-form__item">
+          <template #label>
+            <span class="filter-form__lbl"><el-icon><Monitor /></el-icon>設備</span>
+          </template>
           <el-select
             v-model="selectedLineIds"
             multiple
             collapse-tags
             collapse-tags-tooltip
             filterable
-            placeholder="設備を選択（未選択=全件）"
-            style="width: 360px"
+            placeholder="設備を選択"
+            class="filter-form__select filter-form__select--lines"
           >
             <el-option
               v-for="line in lines"
               :key="line.id"
-              :label="productionLineOptionLabel(line)"
+              :label="lineOptionLabel(line)"
               :value="line.id"
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="期間" required>
-          <el-date-picker
-            v-model="dateRange"
-            type="daterange"
-            value-format="YYYY-MM-DD"
-            range-separator="〜"
-            start-placeholder="開始日"
-            end-placeholder="終了日"
-            style="width: 280px"
-          />
+        <el-form-item class="filter-form__item filter-form__item--range" required>
+          <template #label>
+            <span class="filter-form__lbl"><el-icon><Calendar /></el-icon>期間</span>
+          </template>
+          <div class="filter-form__range-row">
+            <el-date-picker
+              v-model="dateRange"
+              type="daterange"
+              value-format="YYYY-MM-DD"
+              range-separator="〜"
+              start-placeholder="開始日"
+              end-placeholder="終了日"
+              class="filter-form__daterange"
+            />
+            <div class="filter-form__quick-months">
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                class="capmx-btn-month-this"
+                :icon="Calendar"
+                @click="applyThisMonthRange"
+              >
+                今月
+              </el-button>
+              <el-button
+                type="success"
+                plain
+                size="small"
+                class="capmx-btn-month-next"
+                :icon="Calendar"
+                @click="applyNextMonthRange"
+              >
+                次月
+              </el-button>
+            </div>
+          </div>
         </el-form-item>
-        <el-form-item label-width="0">
-          <el-button type="primary" :loading="loading" @click="loadMatrix">再取得</el-button>
+        <el-form-item label-width="0" class="filter-form__item filter-form__item--actions">
+          <el-button
+            type="primary"
+            size="small"
+            class="capmx-btn-refresh"
+            :icon="Refresh"
+            :loading="loading"
+            @click="loadMatrix"
+          >
+            再取得
+          </el-button>
           <el-button
             type="warning"
             plain
+            size="small"
+            class="capmx-btn-print"
+            :icon="Printer"
             :disabled="loading || matrixRows.length === 0"
             @click="handlePrint"
           >
@@ -73,14 +123,22 @@
       <div>出力日時：{{ printNowText }}</div>
     </div>
 
-    <div class="plan-card result-card" v-loading="loading">
-      <el-empty v-if="!loading && matrixRows.length === 0" description="データがありません" />
+    <div v-loading="loading" class="plan-card result-card result-card--panel">
+      <el-empty
+        v-if="!loading && matrixRows.length === 0"
+        class="matrix-empty"
+        :image-size="72"
+        description="データがありません"
+      >
+        <template #image>
+          <el-icon class="matrix-empty__icon"><Document /></el-icon>
+        </template>
+      </el-empty>
       <div v-else class="matrix-wrap">
         <table class="matrix-table">
           <thead>
             <tr>
               <th class="sticky-col col-line">設備</th>
-              <th class="sticky-col col-total">期間合計(h)</th>
               <th
                 v-for="d in dateColumns"
                 :key="d"
@@ -95,12 +153,11 @@
           <tbody>
             <tr v-for="row in matrixRows" :key="row.lineId">
               <td class="sticky-col col-line">{{ row.lineLabel }}</td>
-              <td class="sticky-col col-total numeric">{{ formatHours(row.totalHours) }}</td>
               <td
                 v-for="d in dateColumns"
                 :key="`${row.lineId}-${d}`"
                 class="cell"
-                :class="{ 'is-zero': !row.dailyHours[d], 'is-weekend': isWeekend(d) }"
+                :class="cellClasses(row.dailyHours[d], d)"
                 :title="`${formatDate(d)}: ${formatHours(row.dailyHours[d] || 0)}h`"
               >
                 <div class="cell-main">{{ formatHours(row.dailyHours[d] || 0) }}</div>
@@ -117,13 +174,13 @@
 import dayjs from 'dayjs'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Grid, Operation, Monitor, Calendar, Refresh, Printer, Document } from '@element-plus/icons-vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
   fetchLineCapacities,
   fetchLines,
   fetchSchedulingGrid,
-  productionLineOptionLabel,
   type ProductionLine,
 } from '@/api/aps'
 
@@ -134,7 +191,38 @@ type MatrixRow = {
   dailyHours: Record<string, number>
 }
 
+/** プルダウン表示：工程名のみ（空のときは CD） */
+function processOptionLabel(p: ProcessItem): string {
+  const nm = (p.process_name || '').trim()
+  const cd = (p.process_cd || '').trim()
+  return nm || cd || '—'
+}
+
+/** プルダウン表示：設備名のみ（空のときはラインコード） */
+function lineOptionLabel(line: ProductionLine): string {
+  const name = (line.line_name || '').trim()
+  return name || (line.line_code || '').trim() || '—'
+}
+
 const processOptions = ref<ProcessItem[]>([])
+/** 切断・面取・成型・溶接・メッキ（`processes.process_cd`）— 表示順固定 */
+const CAPACITY_MATRIX_PROCESS_ORDER = ['KT01', 'KT02', 'KT04', 'KT07', 'KT05'] as const
+const CAPACITY_MATRIX_PROCESS_SET = new Set<string>(CAPACITY_MATRIX_PROCESS_ORDER)
+
+const matrixProcessOptions = computed(() => {
+  const order = CAPACITY_MATRIX_PROCESS_ORDER
+  const list = processOptions.value.filter((p) =>
+    CAPACITY_MATRIX_PROCESS_SET.has((p.process_cd || '').trim()),
+  )
+  const rank = (cd: string) => {
+    const i = order.indexOf(cd as (typeof CAPACITY_MATRIX_PROCESS_ORDER)[number])
+    return i >= 0 ? i : 999
+  }
+  return [...list].sort(
+    (a, b) => rank((a.process_cd || '').trim()) - rank((b.process_cd || '').trim()),
+  )
+})
+
 const selectedProcessCd = ref<string>('KT04')
 const lines = ref<ProductionLine[]>([])
 const selectedLineIds = ref<number[]>([])
@@ -186,6 +274,44 @@ function formatHours(v: number) {
   return String(Math.round(n))
 }
 
+async function applyThisMonthRange() {
+  dateRange.value = [
+    dayjs().startOf('month').format('YYYY-MM-DD'),
+    dayjs().endOf('month').format('YYYY-MM-DD'),
+  ]
+  await loadMatrix()
+}
+
+async function applyNextMonthRange() {
+  const d = dayjs().add(1, 'month')
+  dateRange.value = [
+    d.startOf('month').format('YYYY-MM-DD'),
+    d.endOf('month').format('YYYY-MM-DD'),
+  ]
+  await loadMatrix()
+}
+
+/** 画面セル：印刷と同じ稼働時間帯の色分け */
+function cellClasses(rawHours: number | undefined, d: string) {
+  const h = Number(rawHours || 0)
+  const weekend = isWeekend(d)
+  const classes: Record<string, boolean> = {
+    'is-zero': !h,
+    'is-weekend': weekend,
+  }
+  if (h > 23) classes['is-high-hours'] = true
+  else if (h >= 20 && h <= 22) classes['is-mid-hours'] = true
+  return classes
+}
+
+function ensureProcessSelectionInMatrixList() {
+  const list = matrixProcessOptions.value
+  const cur = (selectedProcessCd.value || '').trim()
+  if (list.some((p) => (p.process_cd || '').trim() === cur)) return
+  const next = list.find((p) => (p.process_cd || '').trim() === 'KT04') ?? list[0]
+  selectedProcessCd.value = (next?.process_cd || 'KT04').trim() || 'KT04'
+}
+
 async function loadProcessOptions() {
   try {
     const res = await fetchProcesses({ page: 1, pageSize: 5000 })
@@ -194,6 +320,7 @@ async function loadProcessOptions() {
   } catch {
     processOptions.value = []
   }
+  ensureProcessSelectionInMatrixList()
 }
 
 async function loadLinesByProcess() {
@@ -293,7 +420,6 @@ async function handlePrint() {
   `
   const headers = [
     '<th>設備</th>',
-    '<th>期間合計(h)</th>',
     ...dateColumns.value.map((d) => {
       const weekendClass = isWeekend(d) ? ' class="is-weekend"' : ''
       return `<th${weekendClass}>${escHtml(formatDate(d))}<br/><small>${escHtml(getWeekday(d))}</small></th>`
@@ -313,7 +439,7 @@ async function handlePrint() {
         return `<td class="${classes.join(' ')}">${escHtml(formatHours(rawHours))}</td>`
       })
       .join('')
-    return `<tr><td>${escHtml(row.lineLabel)}</td><td class="num">${escHtml(formatHours(row.totalHours))}</td>${cells}</tr>`
+    return `<tr><td>${escHtml(row.lineLabel)}</td>${cells}</tr>`
   }).join('')
 
   const html = `<!doctype html>
@@ -331,8 +457,7 @@ async function handlePrint() {
       th, td { border: 1px solid #cbd5e1; padding: 4px 4px; word-break: break-word; line-height: 1.3; }
       th { background-color: #f1f5f9; font-size: 8px; }
       th small { font-size: 8px; }
-      th:nth-child(1), td:nth-child(1) { width: 35px; }
-      th:nth-child(2), td:nth-child(2) { width: 28px; }
+      th:nth-child(1), td:nth-child(1) { width: 40px; }
       .num { text-align: right; }
       th.is-weekend { color: #dc2626; background-color: #ffecec; }
       td.is-weekend { background-color: #fff5f5; }
@@ -357,7 +482,7 @@ async function handlePrint() {
       <tbody>${rowsHtml}</tbody>
     </table>
     ${summaryHtml}
-    <script>window.onload = () => window.print();<\/script>
+    ${'<scr' + 'ipt>window.onload = () => window.print();</scr' + 'ipt>'}
   </body>
 </html>`
 
@@ -380,149 +505,251 @@ onMounted(async () => {
 
 <style scoped>
 .cap-matrix-page {
-  padding: 10px 12px 12px;
+  padding: 6px 8px 10px;
+  max-width: 1920px;
+  margin: 0 auto;
   background:
-    radial-gradient(circle at 8% -20%, rgba(59, 130, 246, 0.08), transparent 34%),
-    radial-gradient(circle at 110% -24%, rgba(16, 185, 129, 0.08), transparent 30%),
-    #f3f6fb;
+    radial-gradient(circle at 6% -18%, rgba(64, 158, 255, 0.1), transparent 38%),
+    radial-gradient(circle at 104% -20%, rgba(103, 194, 58, 0.08), transparent 32%),
+    var(--el-bg-color-page);
   min-height: 100%;
 }
 .plan-hd {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .plan-hd-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 800;
-  color: #0b1220;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  letter-spacing: 0.02em;
+}
+.plan-hd-title-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-hd-title-icon {
+  font-size: 22px;
+  color: var(--el-color-primary);
 }
 .plan-hd-sub {
-  margin: 3px 0 0;
-  color: #5f6f86;
-  font-size: 12px;
+  margin: 2px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  line-height: 1.45;
 }
 .plan-card {
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 12px;
+  background: var(--el-bg-color);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
   padding: 8px 10px;
-  margin-bottom: 7px;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 8px 20px rgba(15, 23, 42, 0.04);
+  margin-bottom: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+.filter-card--panel {
+  border-left: 3px solid var(--el-color-primary);
+  background: linear-gradient(
+    105deg,
+    var(--el-color-primary-light-9) 0%,
+    var(--el-fill-color-blank) 38%,
+    var(--el-bg-color) 100%
+  );
+}
+.result-card--panel {
+  border-left: 3px solid var(--el-color-success);
+  padding: 6px 8px;
+}
+.filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 6px 10px;
 }
 .filter-form :deep(.el-form-item) {
-  margin-right: 8px;
-  margin-bottom: 4px;
+  margin-right: 0;
+  margin-bottom: 0;
 }
 .filter-form :deep(.el-form-item__label) {
   padding-right: 6px;
+}
+.filter-form__lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+.filter-form__lbl .el-icon {
+  font-size: 14px;
+  color: var(--el-color-primary);
+}
+.filter-form__select--process {
+  width: 110px;
+}
+.filter-form__select--lines {
+  width: 120px;
+}
+.filter-form__range-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.filter-form__daterange {
+  width: 280px;
+}
+.filter-form__quick-months {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.capmx-btn-month-this.is-plain {
+  --el-button-bg-color: var(--el-color-primary-light-9);
+  font-weight: 500;
+  border-radius: 6px;
+}
+.capmx-btn-month-next.is-plain {
+  --el-button-bg-color: var(--el-color-success-light-9);
+  font-weight: 500;
+  border-radius: 6px;
+}
+.capmx-btn-refresh.el-button--primary:not(.is-loading) {
   font-weight: 600;
-  color: #334155;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(64, 158, 255, 0.35);
+}
+.capmx-btn-refresh.el-button--primary:hover:not(.is-disabled) {
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.45);
+}
+.capmx-btn-print.is-plain:not(.is-disabled) {
+  font-weight: 600;
+  border-radius: 6px;
+  --el-button-bg-color: var(--el-color-warning-light-9);
 }
 .filter-form :deep(.el-input__wrapper),
 .filter-form :deep(.el-select__wrapper),
 .filter-form :deep(.el-button) {
-  border-radius: 8px;
+  border-radius: 6px;
+}
+.matrix-empty {
+  padding: 24px 12px;
+}
+.matrix-empty :deep(.el-empty__description) {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+.matrix-empty__icon {
+  font-size: 56px;
+  color: var(--el-color-primary-light-5);
 }
 .matrix-wrap {
   overflow: auto;
-  max-height: calc(100vh - 210px);
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  max-height: calc(100vh - 198px);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: var(--el-bg-color);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 .matrix-table {
   width: max-content;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.25;
   table-layout: fixed;
 }
 .matrix-table th,
 .matrix-table td {
-  border: 1px solid #e7edf5;
-  padding: 5px 8px;
+  border: 1px solid var(--el-border-color-lighter);
+  padding: 2px 4px;
   vertical-align: middle;
 }
 .matrix-table th {
   position: sticky;
   top: 0;
   z-index: 3;
-  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
-  color: #42526a;
-  box-shadow: 0 1px 0 #dbe5f1;
+  background: linear-gradient(180deg, var(--el-fill-color-light) 0%, var(--el-fill-color) 100%);
+  color: var(--el-text-color-regular);
+  box-shadow: 0 1px 0 var(--el-border-color-light);
   font-weight: 700;
   text-align: center;
 }
 .sticky-col {
   position: sticky;
   left: 0;
-  background: #fff;
+  background: var(--el-bg-color);
   z-index: 2;
 }
 .matrix-table th.sticky-col {
   z-index: 4;
 }
 .col-line {
-  width: 80px;
+  width: 48px;
   left: 0;
   text-align: left;
   font-weight: 600;
 }
-.col-total {
-  width: 116px;
-  min-width: 116px;
-  max-width: 116px;
-  left: 80px;
-  text-align: right;
-  font-weight: 700;
-  background: #f7fbff;
-}
-.numeric {
-  text-align: right;
-}
 .date-col {
-  width: 72px;
-  min-width: 72px;
-  max-width: 72px;
+  width: 45px;
+  min-width: 45px;
+  max-width: 45px;
 }
 .date-hd {
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 .wd-hd {
-  font-size: 10px;
-  color: #6b7a90;
+  font-size: 9px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.15;
 }
 .matrix-table tbody tr:nth-child(2n) {
-  background: #fcfdff;
+  background: var(--el-fill-color-blank);
 }
-.matrix-table tbody tr:hover td {
-  background: #f1f7ff;
+.matrix-table tbody tr:hover td.cell {
+  filter: brightness(0.985);
+}
+.matrix-table tbody tr:hover td.sticky-col {
+  background: var(--el-color-primary-light-9);
 }
 .cell.is-zero {
-  color: #9aa8bb;
+  color: var(--el-text-color-placeholder);
 }
 .cell.is-weekend,
 .date-col.is-weekend {
-  background: #fff7f7;
+  background: #fff5f5;
+}
+.date-col.is-weekend .date-hd,
+.date-col.is-weekend .wd-hd {
+  color: var(--el-color-danger);
+}
+/* 印刷プレビューと同じ高稼働の段階色 */
+.cell.is-mid-hours {
+  background: #fff7d6 !important;
+}
+.cell.is-high-hours {
+  background: #f4c98a !important;
 }
 .cell-main {
   font-weight: 700;
-  color: #0f172a;
+  font-size: 11px;
+  color: var(--el-text-color-primary);
   text-align: right;
-  min-width: 38px;
-  letter-spacing: 0.1px;
+  min-width: 30px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 .matrix-table tbody .sticky-col.col-line {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.matrix-table tbody .sticky-col.col-total {
-  color: #0f172a;
 }
 .print-only {
   display: none;
@@ -555,11 +782,12 @@ onMounted(async () => {
   }
   .matrix-table {
     width: 100%;
-    font-size: 10px;
+    font-size: 9px;
+    line-height: 1.2;
   }
   .matrix-table th,
   .matrix-table td {
-    padding: 3px 4px;
+    padding: 2px 3px;
   }
   .matrix-table thead {
     display: table-header-group;

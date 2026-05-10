@@ -1,34 +1,69 @@
 <template>
   <div class="capacity-page" :class="{ 'capacity-page--embed': embed }">
-    <el-card :shadow="embed ? 'never' : 'hover'" class="capacity-card" :body-style="{ padding: embed ? '8px 10px' : '10px 12px' }">
+    <el-card
+      :shadow="embed ? 'never' : 'hover'"
+      class="capacity-card"
+      :body-style="{ padding: embed ? '6px 8px' : '8px 10px' }"
+    >
       <template #header>
         <div v-if="embed" class="card-head card-head--embed card-head--with-actions">
           <div class="card-head__main">
-            <h3 class="card-head__title">設備稼働設定</h3>
+            <h3 class="card-head__title">
+              <span class="card-head__title-inner">
+                <el-icon class="card-head__title-icon"><Setting /></el-icon>
+                設備稼働設定
+              </span>
+            </h3>
             <p class="card-head__desc card-head__desc--embed">
               表示中ライン・ガント期間の時間帯を編集します（保存で反映）。
             </p>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
-            <el-button type="success" size="small" :loading="saving" @click="saveAll">一括保存</el-button>
+            <el-button
+              type="success"
+              size="small"
+              class="lcap-btn-save"
+              :icon="CircleCheck"
+              :loading="saving"
+              @click="saveAll"
+            >
+              一括保存
+            </el-button>
           </div>
         </div>
         <div v-else class="card-head card-head--with-actions">
           <div class="card-head__main">
-            <h3 class="card-head__title">設備稼働設定</h3>
+            <h3 class="card-head__title">
+              <span class="card-head__title-inner">
+                <el-icon class="card-head__title-icon"><Setting /></el-icon>
+                設備稼働設定
+              </span>
+            </h3>
             <p class="card-head__desc">
               日別の稼働時間帯を設定します。「休憩」にした行は稼働合計・排産から除外（稼働帯との重複分のみ差引）。
             </p>
           </div>
           <div v-if="daySlots.length > 0" class="card-head__actions">
-            <el-button type="success" size="small" :loading="saving" @click="saveAll">一括保存</el-button>
+            <el-button
+              type="success"
+              size="small"
+              class="lcap-btn-save"
+              :icon="CircleCheck"
+              :loading="saving"
+              @click="saveAll"
+            >
+              一括保存
+            </el-button>
           </div>
         </div>
       </template>
 
       <template v-if="!embed">
       <el-form class="toolbar toolbar--filter-bar" :inline="true" label-position="left" size="small">
-        <el-form-item label="工程" class="toolbar__item">
+        <el-form-item class="toolbar__item">
+          <template #label>
+            <span class="toolbar__lbl"><el-icon><Operation /></el-icon>工程</span>
+          </template>
           <el-select
             v-model="selectedProcessCd"
             clearable
@@ -45,7 +80,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="設備" class="toolbar__item">
+        <el-form-item class="toolbar__item">
+          <template #label>
+            <span class="toolbar__lbl"><el-icon><Monitor /></el-icon>設備</span>
+          </template>
           <el-select v-model="selectedLineId" placeholder="選択" class="toolbar__select">
             <el-option
               v-for="line in lines"
@@ -55,7 +93,10 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="期間" class="toolbar__item toolbar__item--range">
+        <el-form-item class="toolbar__item toolbar__item--range">
+          <template #label>
+            <span class="toolbar__lbl"><el-icon><Calendar /></el-icon>期間</span>
+          </template>
           <div class="toolbar__range-block">
             <el-date-picker
               v-model="dateRange"
@@ -67,16 +108,33 @@
               class="toolbar__daterange"
             />
             <div class="toolbar__quick-months">
-              <el-button type="primary" plain class="toolbar__quick-month-btn" size="small" @click="applyThisMonthRange">
+              <el-button
+                type="primary"
+                plain
+                class="toolbar__quick-month-btn lcap-btn-month-this"
+                size="small"
+                :icon="Calendar"
+                @click="applyThisMonthRange"
+              >
                 今月
               </el-button>
-              <el-button type="success" plain class="toolbar__quick-month-btn" size="small" @click="applyNextMonthRange">
+              <el-button
+                type="success"
+                plain
+                class="toolbar__quick-month-btn lcap-btn-month-next"
+                size="small"
+                :icon="Calendar"
+                @click="applyNextMonthRange"
+              >
                 次月
               </el-button>
             </div>
           </div>
         </el-form-item>
-        <el-form-item label="土日表示" class="toolbar__item toolbar__item--week">
+        <el-form-item class="toolbar__item toolbar__item--week">
+          <template #label>
+            <span class="toolbar__lbl"><el-icon><Sunny /></el-icon>土日表示</span>
+          </template>
           <div class="toolbar__week-toggles">
             <span class="toolbar__week-toggle">
               <span class="toolbar__week-toggle-label">土曜</span>
@@ -92,7 +150,10 @@
 
       <div v-if="daySlots.length > 0" class="bulk-apply-panel">
         <div class="bulk-apply-panel__head">
-          <span class="bulk-apply-panel__title">一括時間帯</span>
+          <span class="bulk-apply-panel__title">
+            <el-icon class="bulk-apply-panel__title-icon"><Clock /></el-icon>
+            一括時間帯
+          </span>
           <span class="bulk-apply-panel__hint">
             表示中 <strong>{{ displayDaySlots.length }}</strong> 日に同一プリセットを適用（反映には「一括保存」）
           </span>
@@ -104,26 +165,49 @@
           <el-button type="warning" size="small" plain @click="batchApplyPreset('20h')">20H</el-button>
           <el-button plain class="lcap-preset--22h" size="small" @click="batchApplyPreset('22h')">22H</el-button>
           <el-button plain class="lcap-preset--24h" size="small" @click="batchApplyPreset('24h')">24H</el-button>
-          <el-button type="danger" size="small" plain @click="batchApplyPreset('clear')">全日削除</el-button>
+          <el-button
+            type="danger"
+            size="small"
+            plain
+            class="lcap-btn-bulk-clear"
+            :icon="Delete"
+            @click="batchApplyPreset('clear')"
+          >
+            全日削除
+          </el-button>
         </div>
       </div>
       </template>
       <div v-else class="toolbar toolbar--embed">
-        <span class="toolbar-embed__line">{{ embedLineLabel }}</span>
-        <span class="toolbar-embed__range">{{ presetDateRange?.[0] }} 〜 {{ presetDateRange?.[1] }}</span>
-        <el-button type="primary" size="small" :loading="loading" @click="loadData">再取得</el-button>
+        <span class="toolbar-embed__line">
+          <el-icon class="toolbar-embed__ico"><Monitor /></el-icon>
+          {{ embedLineLabel }}
+        </span>
+        <span class="toolbar-embed__range">
+          <el-icon class="toolbar-embed__ico toolbar-embed__ico--muted"><Calendar /></el-icon>
+          {{ presetDateRange?.[0] }} 〜 {{ presetDateRange?.[1] }}
+        </span>
+        <el-button type="primary" size="small" class="lcap-btn-refresh" :icon="Refresh" :loading="loading" @click="loadData">
+          再取得
+        </el-button>
       </div>
 
       <div v-loading="loading" class="calendar-grid-scroll">
         <div class="calendar-grid">
           <div v-if="daySlots.length === 0 && !loading" class="empty">
-            {{ embed ? '設備と期間を選んで「再取得」してください' : '設備と期間を選択すると自動で読み込みます' }}
+            <el-icon class="empty__icon"><Calendar /></el-icon>
+            <p class="empty__text">
+              {{ embed ? '設備と期間を選んで「再取得」してください' : '設備と期間を選択すると自動で読み込みます' }}
+            </p>
           </div>
           <div
             v-else-if="displayDaySlots.length === 0 && !loading && daySlots.length > 0"
-            class="empty"
+            class="empty empty--hint"
           >
-            この条件では表示する日がありません（土曜・日曜の表示をオンにするか、期間を変更してください）
+            <el-icon class="empty__icon"><Sunny /></el-icon>
+            <p class="empty__text">
+              この条件では表示する日がありません（土曜・日曜の表示をオンにするか、期間を変更してください）
+            </p>
           </div>
           <div
             v-for="day in displayDaySlots"
@@ -151,7 +235,10 @@
               <span
                 class="day-card__tag"
                 :class="{ 'day-card__tag--zero': calcProductiveHours(day) <= 0 }"
-              >{{ calcProductiveHours(day).toFixed(1) }}h</span>
+              >
+                <el-icon class="day-card__tag-icon"><Timer /></el-icon>
+                {{ calcProductiveHours(day).toFixed(1) }}h
+              </span>
             </div>
             <div class="day-card__actions">
               <el-button
@@ -212,7 +299,9 @@
                 type="danger"
                 size="small"
                 plain
+                class="lcap-btn-day-clear"
                 :disabled="day.editSlots.length === 0"
+                :icon="Delete"
                 title="この日の時間帯をすべて削除（保存でDB反映）"
                 @click="clearAllSlots(day)"
               >
@@ -268,7 +357,18 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import {
+  Delete,
+  Setting,
+  Operation,
+  Monitor,
+  Calendar,
+  Sunny,
+  Clock,
+  CircleCheck,
+  Refresh,
+  Timer,
+} from '@element-plus/icons-vue'
 import {
   fetchLines,
   fetchLineCapacitySlots,
@@ -736,7 +836,7 @@ function isWeekend(d: string): boolean {
 
 <style scoped>
 .capacity-page {
-  padding: 8px 10px 12px;
+  padding: 6px 8px 10px;
   max-width: 1920px;
   margin: 0 auto;
 }
@@ -751,21 +851,38 @@ function isWeekend(d: string): boolean {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin: 0 0 8px;
-  padding-bottom: 8px;
+  gap: 6px 10px;
+  margin: 0 0 6px;
+  padding: 6px 8px 8px;
   border-bottom: 1px solid var(--el-border-color-extra-light);
   font-size: 12px;
+  border-radius: 8px;
+  background: var(--el-fill-color-lighter);
 }
 
 .toolbar-embed__line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
 .toolbar-embed__range {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--el-text-color-secondary);
   font-variant-numeric: tabular-nums;
+}
+
+.toolbar-embed__ico {
+  font-size: 14px;
+  color: var(--el-color-primary);
+}
+
+.toolbar-embed__ico--muted {
+  color: var(--el-text-color-secondary);
 }
 
 .card-head--with-actions {
@@ -795,8 +912,15 @@ function isWeekend(d: string): boolean {
 }
 
 .capacity-card :deep(.el-card__header) {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--el-border-color-lighter);
+  border-left: 3px solid var(--el-color-primary);
+  background: linear-gradient(
+    105deg,
+    var(--el-color-primary-light-9) 0%,
+    var(--el-fill-color-blank) 42%,
+    var(--el-bg-color) 100%
+  );
 }
 
 .capacity-card :deep(.el-card__body) {
@@ -805,17 +929,28 @@ function isWeekend(d: string): boolean {
 
 .card-head__title {
   margin: 0 0 2px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1.35;
   color: var(--el-text-color-primary);
   letter-spacing: 0.02em;
 }
 
+.card-head__title-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-head__title-icon {
+  font-size: 18px;
+  color: var(--el-color-primary);
+}
+
 .card-head__desc {
   margin: 0;
   font-size: 11px;
-  line-height: 1.45;
+  line-height: 1.4;
   color: var(--el-text-color-secondary);
 }
 
@@ -824,28 +959,47 @@ function isWeekend(d: string): boolean {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0 4px;
-  margin: 0 0 8px;
-  padding-bottom: 8px;
+  margin: 0 0 6px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--el-border-color-extra-light);
 }
 
 .toolbar.toolbar--filter-bar {
-  margin: 0 0 14px;
-  padding: 12px 14px 14px;
-  border-radius: 10px;
+  margin: 0 0 10px;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
   border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-blank);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  gap: 10px 14px;
+  background: linear-gradient(180deg, var(--el-fill-color-blank) 0%, var(--el-fill-color-lighter) 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  gap: 8px 10px;
   align-items: flex-end;
 }
 
+.toolbar__lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+
+.toolbar__lbl .el-icon {
+  font-size: 14px;
+  color: var(--el-color-primary);
+}
+
 .bulk-apply-panel {
-  margin: 0 0 14px;
-  padding: 10px 14px 12px;
-  border-radius: 10px;
+  margin: 0 0 10px;
+  padding: 8px 10px 9px;
+  border-radius: 8px;
   border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-light);
+  background: linear-gradient(
+    135deg,
+    var(--el-color-warning-light-9) 0%,
+    var(--el-fill-color-light) 55%,
+    var(--el-bg-color) 100%
+  );
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
@@ -853,20 +1007,28 @@ function isWeekend(d: string): boolean {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px 12px;
-  margin-bottom: 8px;
+  gap: 6px 10px;
+  margin-bottom: 6px;
 }
 
 .bulk-apply-panel__title {
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
 
+.bulk-apply-panel__title-icon {
+  font-size: 15px;
+  color: var(--el-color-warning);
+}
+
 .bulk-apply-panel__hint {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--el-text-color-secondary);
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .bulk-apply-panel__hint strong {
@@ -877,14 +1039,55 @@ function isWeekend(d: string): boolean {
 .bulk-apply-panel__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: 4px 6px;
   align-items: center;
 }
 
 .bulk-apply-panel__actions :deep(.el-button) {
-  padding: 5px 10px;
+  padding: 4px 8px;
   margin: 0;
   font-size: 11px;
+  border-radius: 6px;
+}
+
+/* 一括保存：緑を強調 */
+.lcap-btn-save.el-button--success:not(.is-loading) {
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(103, 194, 58, 0.35);
+}
+
+.lcap-btn-save.el-button--success:hover:not(.is-disabled) {
+  box-shadow: 0 2px 6px rgba(103, 194, 58, 0.45);
+}
+
+/* 再取得：プライマリをやや立体感 */
+.lcap-btn-refresh.el-button--primary:not(.is-loading) {
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(64, 158, 255, 0.35);
+}
+
+.lcap-btn-refresh.el-button--primary:hover:not(.is-disabled) {
+  box-shadow: 0 2px 6px rgba(64, 158, 255, 0.45);
+}
+
+/* 今月／次月：色の役割をはっきり */
+.lcap-btn-month-this.is-plain {
+  --el-button-bg-color: var(--el-color-primary-light-9);
+}
+
+.lcap-btn-month-next.is-plain {
+  --el-button-bg-color: var(--el-color-success-light-9);
+}
+
+/* 全日削除：危険操作として枠を強める */
+.lcap-btn-bulk-clear.is-plain {
+  font-weight: 600;
+  --el-button-border-color: var(--el-color-danger-light-5);
+}
+
+/* 日別「削除」 */
+.lcap-btn-day-clear.is-plain:not(.is-disabled) {
+  font-weight: 600;
 }
 
 .toolbar :deep(.el-form-item) {
@@ -999,9 +1202,9 @@ function isWeekend(d: string): boolean {
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   align-items: stretch;
-  min-height: 80px;
+  min-height: 72px;
   width: 100%;
   max-width: min(1400px, 100%);
   margin: 0 auto;
@@ -1040,8 +1243,8 @@ function isWeekend(d: string): boolean {
 
 .day-card {
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 4px;
-  padding: 6px 8px 6px;
+  border-radius: 8px;
+  padding: 5px 6px 5px;
   background: var(--el-bg-color);
   transition: border-color 0.15s, box-shadow 0.15s;
   /* grid 子项默认 min-width:auto 会按内容撑破列宽 */
@@ -1051,8 +1254,8 @@ function isWeekend(d: string): boolean {
 }
 
 .day-card:hover {
-  border-color: var(--el-border-color);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.12);
 }
 
 .day-card--weekend {
@@ -1073,9 +1276,9 @@ function isWeekend(d: string): boolean {
 .day-card__top {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 4px;
-  padding-bottom: 4px;
+  gap: 3px;
+  margin-bottom: 3px;
+  padding-bottom: 3px;
   border-bottom: 1px solid var(--el-border-color-extra-light);
 }
 
@@ -1103,33 +1306,68 @@ function isWeekend(d: string): boolean {
 }
 
 .day-card__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  color: #000000;
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+  border: 1px solid var(--el-color-success-light-7);
+}
+
+.day-card__tag-icon {
+  font-size: 12px;
 }
 
 .day-card__tag--zero {
-  color: #ececec;
+  color: var(--el-text-color-placeholder);
+  background: var(--el-fill-color);
+  border-color: var(--el-border-color-lighter);
 }
 
 .day-card__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 3px 4px;
+  gap: 3px;
 }
 
 .day-card__actions :deep(.el-button) {
-  padding: 4px 7px;
+  padding: 3px 6px;
   margin: 0;
   font-size: 11px;
+  border-radius: 6px;
+}
+
+/* プリセット列：種類ごとにトーンを固定（plain の見え方を安定） */
+.day-card__actions :deep(.el-button--info.is-plain) {
+  --el-button-bg-color: var(--el-fill-color-light);
+}
+
+.day-card__actions :deep(.el-button--success.is-plain) {
+  --el-button-bg-color: var(--el-color-success-light-9);
+}
+
+.day-card__actions :deep(.el-button--primary.is-plain) {
+  --el-button-bg-color: var(--el-color-primary-light-9);
+}
+
+.day-card__actions :deep(.el-button--warning.is-plain) {
+  --el-button-bg-color: var(--el-color-warning-light-9);
+}
+
+.day-card__actions :deep(.el-button--danger.is-plain:not(.is-disabled)) {
+  --el-button-bg-color: var(--el-color-danger-light-9);
 }
 
 .slots-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   max-width: 100%;
 }
@@ -1138,16 +1376,17 @@ function isWeekend(d: string): boolean {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-radius: 3px;
+  gap: 5px;
+  padding: 2px 3px;
+  border-radius: 6px;
   min-width: 0;
   max-width: 100%;
   box-sizing: border-box;
 }
 
 .slot-row--rest {
-  background: var(--el-fill-color-light);
+  background: linear-gradient(90deg, var(--el-color-warning-light-9) 0%, var(--el-fill-color-light) 100%);
+  border: 1px dashed var(--el-border-color-lighter);
 }
 
 /* 開始 〜 終了（不换行；flex:1 仅吃剩余空间，避免把侧栏挤出卡片） */
@@ -1225,10 +1464,33 @@ function isWeekend(d: string): boolean {
 
 .empty {
   grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
-  padding: 20px 12px;
+  padding: 14px 10px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
+  border-radius: 8px;
+  border: 1px dashed var(--el-border-color-lighter);
+  background: var(--el-fill-color-lighter);
+}
+
+.empty__icon {
+  font-size: 28px;
+  color: var(--el-color-primary-light-3);
+}
+
+.empty--hint .empty__icon {
+  color: var(--el-color-warning);
+}
+
+.empty__text {
+  margin: 0;
+  max-width: 420px;
+  line-height: 1.45;
 }
 </style>
 

@@ -186,6 +186,8 @@ export interface DailyEquipmentReportRow {
   schedule_date: string
   line_id: number
   line_code: string
+  /** machines.machine_name（設備名） */
+  line_name?: string | null
   order_no: number | null
   item_name: string
   product_cd: string | null
