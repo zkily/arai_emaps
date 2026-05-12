@@ -674,8 +674,11 @@ class RollerUsageStatus(Base):
     exec_type = Column(String(50), nullable=True, comment="実施内容（ローラー交換/ローラー清掃）")
     last_exec_date = Column(Date, nullable=True, comment="前回実施日")
     next_exec_date = Column(Date, nullable=True, comment="次回実施日（予測）")
-    # 生産数量（prod_cumulative_qty=サマリー自動集計、prod_manual_addon_qty=画面からの単一補正）
+    # 生産数量（prod_cumulative_qty=当月月末まで自動、prod_cumulative_qty_prev_month_end=前月末まで自動）
     prod_cumulative_qty = Column(Integer, nullable=True, default=0, comment="生産累計数（自動）")
+    prod_cumulative_qty_prev_month_end = Column(
+        Integer, nullable=True, default=0, comment="生産累計数（前月末まで・自動）"
+    )
     prod_manual_addon_qty = Column(Integer, nullable=True, default=0, comment="手入力補正（自動累計に加算）")
     planned_product_cd = Column(String(50), nullable=True, comment="予定段取品")
     exchange_remaining_qty = Column(Integer, nullable=True, comment="交換残数")

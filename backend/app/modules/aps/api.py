@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, and_, or_, delete, update, text, exists, func, case
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.exc import OperationalError, ProgrammingError, IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -2048,27 +2049,24 @@ async def replan_sequence(
     # 恢复冻结范围内计划（date < today）：仅恢复 planned_qty 与对应时段分配；
     # actual/defect 维持重排后最新同步值，remaining 随之重算。
     if line_schedule_ids:
+        # autoflush=False のため SELECT が同セッション未 flush の明細を見落とし、
+        # 既存行があるのに INSERT して uk_schedule_date に抵触することがある。
+        # MySQL の upsert で冪等に上書きする。
         for (sid, work_date), frozen_planned in frozen_planned_snapshot.items():
-            cur_res = await db.execute(
-                select(ScheduleDetail).where(
-                    ScheduleDetail.schedule_id == sid,
-                    ScheduleDetail.schedule_date == work_date,
+            fp = int(frozen_planned)
+            ins = mysql_insert(ScheduleDetail.__table__).values(
+                schedule_id=int(sid),
+                schedule_date=work_date,
+                planned_qty=fp,
+                actual_qty=0,
+                defect_qty=0,
+                remaining_qty=fp,
+            )
+            await db.execute(
+                ins.on_duplicate_key_update(
+                    planned_qty=ins.inserted.planned_qty,
                 )
             )
-            cur = cur_res.scalar_one_or_none()
-            if cur is None:
-                db.add(
-                    ScheduleDetail(
-                        schedule_id=sid,
-                        schedule_date=work_date,
-                        planned_qty=int(frozen_planned),
-                        actual_qty=0,
-                        defect_qty=0,
-                    )
-                )
-            else:
-                cur.planned_qty = int(frozen_planned)
-                cur.remaining_qty = int(cur.planned_qty or 0) - int(cur.actual_qty or 0) - int(cur.defect_qty or 0)
 
         # 冻结范围内的时段分配按快照恢复（未快照的工单/日期保持当前结果）
         if frozen_slice_snapshot:

@@ -379,7 +379,8 @@ async def run_engine(
     old_details = old_detail_res.scalars().all()
     old_actual_by_date: Dict[date, int] = defaultdict(int)
     old_defect_by_date: Dict[date, int] = defaultdict(int)
-    old_rows_before_start: List[tuple[date, int, int, int]] = []
+    # 同一日の行が複数ある異常データでも uk_schedule_date 違反にならないよう日付で集約する。
+    old_rows_map: Dict[date, tuple[int, int, int]] = {}
     for od in old_details:
         old_actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
         old_defect_by_date[od.schedule_date] += int(getattr(od, "defect_qty", 0) or 0)
@@ -388,12 +389,18 @@ async def run_engine(
             # 実績0・不良0の旧 planned/remaining 行を残すと、日別ガントに
             # 「計0/実0/残N」の浮動残数が再出現するため破棄する。
             if int(od.actual_qty or 0) > 0 or int(getattr(od, "defect_qty", 0) or 0) > 0:
-                old_rows_before_start.append((
-                    od.schedule_date,
-                    int(od.planned_qty or 0),
-                    int(od.actual_qty or 0),
-                    int(getattr(od, "defect_qty", 0) or 0),
-                ))
+                d0 = od.schedule_date
+                p0 = int(od.planned_qty or 0)
+                a0 = int(od.actual_qty or 0)
+                ddef = int(getattr(od, "defect_qty", 0) or 0)
+                if d0 not in old_rows_map:
+                    old_rows_map[d0] = (p0, a0, ddef)
+                else:
+                    op, oa, odg = old_rows_map[d0]
+                    old_rows_map[d0] = (op + p0, oa + a0, odg + ddef)
+    old_rows_before_start: List[tuple[date, int, int, int]] = [
+        (d0, t[0], t[1], t[2]) for d0, t in sorted(old_rows_map.items(), key=lambda x: x[0])
+    ]
 
     await db.execute(
         delete(ScheduleSliceAllocation).where(

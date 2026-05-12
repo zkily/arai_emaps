@@ -304,7 +304,7 @@
             </span>
           </template>
         </el-table-column>
-        <el-table-column label="製品名" width="120">
+        <el-table-column label="製品名" width="125">
           <template #default="{ row }">
             <span class="schedule-item-name-strong">{{ row.item_name }}</span>
           </template>

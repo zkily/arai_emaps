@@ -267,11 +267,15 @@ function formatDate(d: string) {
   return dayjs(d).format('MM/DD')
 }
 
+/** 稼働時間表示：小数部が 0.1 を超える場合は整数部に +1（それ以外は整数部のまま） */
 function formatHours(v: number) {
   const n = Number(v || 0)
   if (!Number.isFinite(n)) return '-'
   if (n === 0) return ''
-  return String(Math.round(n))
+  const intPart = Math.floor(n)
+  const frac = n - intPart
+  const display = frac > 0.1 ? intPart + 1 : intPart
+  return String(display)
 }
 
 async function applyThisMonthRange() {

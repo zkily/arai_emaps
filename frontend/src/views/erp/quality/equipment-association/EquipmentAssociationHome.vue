@@ -101,7 +101,7 @@
         height="calc(100vh - 250px)"
         @sort-change="handleSortChange"
       >
-        <el-table-column prop="roller_cd" label="CD" width="70" fixed show-overflow-tooltip />
+        <el-table-column prop="roller_cd" label="CD" width="75" fixed show-overflow-tooltip sortable/>
         <el-table-column
           prop="roller_type"
           label="ローラー種類"
@@ -109,15 +109,27 @@
           show-overflow-tooltip
           sortable="custom"
         />
+        <el-table-column
+          prop="category"
+          label="区分"
+          width="90"
+          align="center"
+          show-overflow-tooltip
+          sortable="custom"
+        >
+          <template #default="{ row }">
+            {{ rollerCategoryMap[String(row.roller_cd ?? '').trim()] || '—' }}
+          </template>
+        </el-table-column>
         <!-- <el-table-column prop="machine_cd" label="設備CD" width="80" align="center" show-overflow-tooltip /> -->
         <el-table-column prop="machine_name" label="設備名" width="80" show-overflow-tooltip />
         <el-table-column prop="exchange_freq_qty" label="交換本数" width="110" align="center">
           <template #default="{ row }">{{ row.exchange_freq_qty ?? '—' }}</template>
         </el-table-column>
-        <el-table-column prop="exchange_freq_month" label="交換月" width="110" align="center" sortable="custom">
+        <el-table-column prop="exchange_freq_month" label="交換月" width="80" align="center" >
           <template #default="{ row }">{{ row.exchange_freq_month ?? '—' }}</template>
         </el-table-column>
-        <el-table-column prop="cleaning_freq_month" label="清掃月" width="100" align="center" sortable="custom">
+        <el-table-column prop="cleaning_freq_month" label="清掃月" width="80" align="center" >
           <template #default="{ row }">{{ row.cleaning_freq_month ?? '—' }}</template>
         </el-table-column>
         <el-table-column prop="exec_type" label="実施内容" width="120" align="center">
@@ -134,26 +146,41 @@
         <el-table-column prop="last_exec_date" label="前回実施日" width="105" align="center">
           <template #default="{ row }">{{ row.last_exec_date ?? '—' }}</template>
         </el-table-column>
-        <el-table-column prop="prod_cumulative_qty" label="生産数累計" width="100" align="right">
+        <el-table-column prop="prod_cumulative_qty" label="当月末累計" width="100" align="right">
           <template #default="{ row }">{{ fmtNum(row.prod_cumulative_qty) }}</template>
         </el-table-column>
-        <el-table-column prop="prod_manual_addon_qty" label="手入力補正" width="95" align="right">
-          <template #default="{ row }">{{ fmtSignedQty(row.prod_manual_addon_qty) }}</template>
+        <el-table-column
+          prop="prod_cumulative_qty_prev_month_end"
+          label="前月末累計"
+          width="100"
+          align="right"
+        >
+          <template #default="{ row }">{{ fmtNum(row.prod_cumulative_qty_prev_month_end) }}</template>
         </el-table-column>
-        <el-table-column label="合計" width="100" align="right">
-          <template #default="{ row }">{{ prodQtyTotal(row).toLocaleString('ja-JP') }}</template>
+        <el-table-column label="前月末残数" width="100" align="right">
+          <template #default="{ row }">
+            <span :class="remainingClass(prevMonthRemaining(row))">
+              {{ fmtNum(prevMonthRemaining(row)) }}
+            </span>
+          </template>
         </el-table-column>
         <el-table-column prop="planned_product_cd" label="予定段取品" width="120" show-overflow-tooltip>
           <template #default="{ row }">{{ row.planned_product_cd ?? '—' }}</template>
         </el-table-column>
-        <el-table-column prop="next_exec_date" label="実施日" width="105" align="center" sortable="custom">
+        <el-table-column prop="next_exec_date" label="予定実施日" width="115" align="center" sortable="custom">
           <template #default="{ row }">
             <span :class="nextDateClass(row.next_exec_date)">
               {{ row.next_exec_date ?? '—' }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="exchange_remaining_qty" label="残数" width="90" align="right" sortable="custom">
+        <el-table-column
+          v-if="false"
+          prop="exchange_remaining_qty"
+          label="残数"
+          width="90"
+          align="right"
+        >
           <template #default="{ row }">
             <span :class="remainingClass(row.exchange_remaining_qty)">
               {{ fmtNum(row.exchange_remaining_qty) }}
@@ -178,17 +205,6 @@
 
       <div class="ea-result-bar">
         <span>表示 <b>{{ rows.length }}</b> / <b>{{ total }}</b> 件</span>
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          :total="total"
-          :page-sizes="[50, 100, 200]"
-          layout="total, sizes, prev, pager, next, jumper"
-          size="small"
-          background
-          @current-change="loadData"
-          @size-change="() => { currentPage = 1; loadData() }"
-        />
       </div>
     </div>
 
@@ -483,8 +499,6 @@ const printingList = ref(false)
 
 const rows = ref<RollerUsageStatusRow[]>([])
 const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(50)
 
 const filters = ref({ keyword: '', machine_cd: '', exec_type: '' })
 let keywordTimer: ReturnType<typeof setTimeout> | null = null
@@ -575,8 +589,8 @@ const loadData = async () => {
   loading.value = true
   try {
     const res = await fetchRollerUsageStatusList({
-      page: currentPage.value,
-      pageSize: pageSize.value,
+      page: 1,
+      pageSize: 5000,
       ...(filters.value.keyword.trim() ? { keyword: filters.value.keyword.trim() } : {}),
       ...(filters.value.machine_cd ? { machine_cd: filters.value.machine_cd } : {}),
       ...(filters.value.exec_type ? { exec_type: filters.value.exec_type } : {}),
@@ -597,9 +611,9 @@ const loadData = async () => {
 
 const onKeywordInput = () => {
   if (keywordTimer) clearTimeout(keywordTimer)
-  keywordTimer = setTimeout(() => { currentPage.value = 1; loadData() }, 350)
+  keywordTimer = setTimeout(() => { loadData() }, 350)
 }
-const onFilterChange = () => { currentPage.value = 1; loadData() }
+const onFilterChange = () => { loadData() }
 
 const handleSortChange = (data: { prop?: string; order: string | null }) => {
   const prop = data.prop
@@ -611,7 +625,6 @@ const handleSortChange = (data: { prop?: string; order: string | null }) => {
     tableSortBy.value = prop
     tableSortOrder.value = order === 'ascending' ? 'asc' : 'desc'
   }
-  currentPage.value = 1
   loadData()
 }
 
@@ -620,7 +633,6 @@ const clearFilters = () => {
   tableSortBy.value = undefined
   tableSortOrder.value = undefined
   mainTableRef.value?.clearSort?.()
-  currentPage.value = 1
   loadData()
 }
 
@@ -1001,7 +1013,7 @@ const printMainListReport = async () => {
                 )
                 const rt = _escHtml(String(row.roller_type ?? '').trim() || '—')
                 const mn = _escHtml(String(row.machine_name ?? '').trim() || '—')
-                const pqNum = row.prod_cumulative_qty
+                const pqNum = prevMonthRemaining(row)
                 const pq =
                   pqNum == null
                     ? '—'
@@ -1059,8 +1071,8 @@ const printMainListReport = async () => {
     <th style="width:10%">区分</th>
     <th style="width:22%">ローラー種類</th>
     <th style="width:8%">設備名</th>
-    <th style="width:8%">累計</th>
-    <th style="width:17%">予定段取品</th>
+    <th style="width:10%">前月末残数</th>
+    <th style="width:15%">予定生産品種</th>
     <th style="width:11%">実施日</th>
     <th style="width:6%">実施日</th>
     <th style="width:6%">実施者</th>
@@ -1147,6 +1159,17 @@ const fmtSignedQty = (v?: number | null) =>
 
 const prodQtyTotal = (row: RollerUsageStatusRow) =>
   (row.prod_cumulative_qty ?? 0) + (row.prod_manual_addon_qty ?? 0)
+
+// 前月末残数：前月末累計 < 0 のときは累計値そのまま、それ以外は 交換本数 - 前月末累計
+const prevMonthRemaining = (row: RollerUsageStatusRow): number | null => {
+  const prev = row.prod_cumulative_qty_prev_month_end ?? 0
+  if (prev < 0) {
+    return prev
+  }
+  const freq = row.exchange_freq_qty
+  if (freq == null) return null
+  return freq - prev
+}
 
 // ---------------------------------------------------------------------------
 // Init

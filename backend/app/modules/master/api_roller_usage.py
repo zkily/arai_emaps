@@ -37,6 +37,7 @@ action_router = APIRouter()   # prefix=/roller-usage  (sync / recalculate)
 
 # 一覧の並び替え対象（ホワイトリスト）
 ROLLER_USAGE_SORT_COLUMNS = {
+    "category": RollerMaster.category,
     "roller_type": RollerUsageStatus.roller_type,
     "exchange_freq_month": RollerUsageStatus.exchange_freq_month,
     "cleaning_freq_month": RollerUsageStatus.cleaning_freq_month,
@@ -64,6 +65,7 @@ def _status_to_dict(r: RollerUsageStatus) -> dict:
         "last_exec_date": r.last_exec_date.isoformat() if r.last_exec_date else None,
         "next_exec_date": r.next_exec_date.isoformat() if r.next_exec_date else None,
         "prod_cumulative_qty": r.prod_cumulative_qty,
+        "prod_cumulative_qty_prev_month_end": r.prod_cumulative_qty_prev_month_end,
         "prod_manual_addon_qty": r.prod_manual_addon_qty,
         "planned_product_cd": r.planned_product_cd,
         "exchange_remaining_qty": r.exchange_remaining_qty,
@@ -113,11 +115,11 @@ def _current_month_end(d: Optional[date] = None) -> date:
     return first_next - timedelta(days=1)
 
 
-def _next_month_end(d: Optional[date] = None) -> date:
-    """基準日の翌月末日（累計集計の終了日に使用）"""
+def _previous_month_end(d: Optional[date] = None) -> date:
+    """基準日の直前の暦月の末日（前月末までの累計集計の終了日）"""
     base = d or date.today()
-    first_after_next = base.replace(day=1) + relativedelta(months=2)
-    return first_after_next - timedelta(days=1)
+    first_this = base.replace(day=1)
+    return first_this - timedelta(days=1)
 
 
 def _parse_date(v: Any) -> Optional[date]:
@@ -255,6 +257,11 @@ async def list_roller_usage_status(
     sort_col = ROLLER_USAGE_SORT_COLUMNS.get((sort_by or "").strip())
     order_norm = (sort_order or "").strip().lower()
     if sort_col is not None and order_norm in ("asc", "desc"):
+        if (sort_by or "").strip() == "category":
+            list_q = list_q.outerjoin(
+                RollerMaster,
+                RollerMaster.roller_cd == RollerUsageStatus.roller_cd,
+            )
         primary = sort_col.desc() if order_norm == "desc" else sort_col.asc()
         list_q = list_q.order_by(primary, RollerUsageStatus.machine_cd, RollerUsageStatus.roller_cd)
     else:
@@ -529,10 +536,11 @@ async def recalculate_predictions(
             if pcd not in bom_product_map[rcd]:
                 bom_product_map[rcd].append(pcd)
 
-    period_end = _next_month_end()
+    period_end = _current_month_end()
+    prev_month_end = _previous_month_end()
 
     async def _sum_molding_actual_plan(
-        product_cds: List[str], start_date: date, end_date: date
+        product_cds: List[str], start_date: date, end_date: date, machine_cd: Optional[str]
     ) -> int:
         sum_q = (
             select(func.coalesce(func.sum(ProductionSummary.molding_actual_plan), 0))
@@ -540,11 +548,14 @@ async def recalculate_predictions(
             .where(ProductionSummary.date >= start_date)
             .where(ProductionSummary.date <= end_date)
         )
+        machine_cd_norm = (machine_cd or "").strip()
+        if machine_cd_norm:
+            sum_q = sum_q.where(ProductionSummary.molding_machine == machine_cd_norm)
         val = (await db.execute(sum_q)).scalar()
         return int(val or 0)
 
     async def _daily_molding_plan_rows(
-        product_cds: List[str], start_date: date, end_date: date
+        product_cds: List[str], start_date: date, end_date: date, machine_cd: Optional[str]
     ) -> List[Tuple[date, int, Optional[str], Optional[str]]]:
         """日別の成型計画（molding_actual_plan）を返す。
 
@@ -566,6 +577,9 @@ async def recalculate_predictions(
             .where(ProductionSummary.molding_actual_plan > 0)
             .order_by(ProductionSummary.date.asc(), ProductionSummary.molding_actual_plan.desc())
         )
+        machine_cd_norm = (machine_cd or "").strip()
+        if machine_cd_norm:
+            q = q.where(ProductionSummary.molding_machine == machine_cd_norm)
         rows = (await db.execute(q)).all()
         if not rows:
             return []
@@ -595,7 +609,7 @@ async def recalculate_predictions(
         ]
 
     async def _pick_latest_molding_plan_row(
-        product_cds: List[str], start_date: date, end_date: date
+        product_cds: List[str], start_date: date, end_date: date, machine_cd: Optional[str]
     ) -> tuple[Optional[str], Optional[date]]:
         """交換残数マイナス時：BOM 製品のうち、期間内で molding_actual_plan が残っている最終日の行を採用"""
         if not product_cds:
@@ -616,6 +630,9 @@ async def recalculate_predictions(
             )
             .limit(1)
         )
+        machine_cd_norm = (machine_cd or "").strip()
+        if machine_cd_norm:
+            pick_q = pick_q.where(ProductionSummary.molding_machine == machine_cd_norm)
         one = (await db.execute(pick_q)).first()
         if not one:
             return None, None
@@ -630,11 +647,13 @@ async def recalculate_predictions(
 
     synced_from_log = 0
     updated_prod_cumulative_qty = 0
+    updated_prod_cumulative_qty_prev_month = 0
     updated_planned_when_negative_remaining = 0
     reached_exchange_threshold_count = 0
     for row in rows:
         # 再計算前に生産数累計をクリアし、旧データの残留を除去する
         row.prod_cumulative_qty = 0
+        row.prod_cumulative_qty_prev_month_end = 0
 
         latest_log = latest_log_map.get(row.roller_cd or "")
         if latest_log is not None:
@@ -648,9 +667,15 @@ async def recalculate_predictions(
         # （交換頻度本数が空または 0 のローラーは 0 のまま／集計しない）
         product_cds = bom_product_map.get((row.roller_cd or "").strip(), [])
         sum_qty = 0
+        sum_qty_prev = 0
         if not _skip_prod_cumulative_for_exchange_freq(row.exchange_freq_qty):
             if row.last_exec_date and product_cds:
-                sum_qty = await _sum_molding_actual_plan(product_cds, row.last_exec_date, period_end)
+                sum_qty = await _sum_molding_actual_plan(
+                    product_cds, row.last_exec_date, period_end, row.machine_name
+                )
+                sum_qty_prev = await _sum_molding_actual_plan(
+                    product_cds, row.last_exec_date, prev_month_end, row.machine_name
+                )
                 # 要件:
                 # - 生産数累計 < 交換本数: 生産数累計をそのまま表示
                 # - 生産数累計 >= 交換本数: （交換本数 - 生産数累計）を表示（0以下）
@@ -659,6 +684,11 @@ async def recalculate_predictions(
                 else:
                     row.prod_cumulative_qty = sum_qty
                 updated_prod_cumulative_qty += 1
+                if row.exchange_freq_qty is not None and sum_qty_prev >= row.exchange_freq_qty:
+                    row.prod_cumulative_qty_prev_month_end = row.exchange_freq_qty - sum_qty_prev
+                else:
+                    row.prod_cumulative_qty_prev_month_end = sum_qty_prev
+                updated_prod_cumulative_qty_prev_month += 1
         _apply_prediction(row)
 
         # 生産数累計を日別に段階加算し、交換本数に到達した日を実施日へ設定。
@@ -670,7 +700,9 @@ async def recalculate_predictions(
             and row.exchange_freq_qty is not None
             and row.exchange_freq_qty > 0
         ):
-            daily_rows = await _daily_molding_plan_rows(product_cds, row.last_exec_date, period_end)
+            daily_rows = await _daily_molding_plan_rows(
+                product_cds, row.last_exec_date, period_end, row.machine_name
+            )
             running = 0
             reached_date: Optional[date] = None
             reached_label: Optional[str] = None
@@ -703,14 +735,17 @@ async def recalculate_predictions(
         "recalculated": len(rows),
         "synced_from_log": synced_from_log,
         "updated_prod_cumulative_qty": updated_prod_cumulative_qty,
+        "updated_prod_cumulative_qty_prev_month": updated_prod_cumulative_qty_prev_month,
         "updated_planned_when_negative_remaining": updated_planned_when_negative_remaining,
         "reached_exchange_threshold_count": reached_exchange_threshold_count,
         "prod_cumulative_period_end": period_end.isoformat(),
+        "prod_cumulative_prev_month_end": prev_month_end.isoformat(),
         "message": (
             f"{len(rows)} 件の予測を更新しました"
             f"（ログ同期 {synced_from_log} 件 / 累計再計算 {updated_prod_cumulative_qty} 件"
+            f"・前月末累計 {updated_prod_cumulative_qty_prev_month} 件"
             f"・超過時予定更新 {updated_planned_when_negative_remaining} 件"
             f"・交換到達日更新 {reached_exchange_threshold_count} 件"
-            f"・累計締め {period_end.isoformat()}）"
+            f"・累計締め {period_end.isoformat()}／前月末 {prev_month_end.isoformat()}）"
         ),
     }

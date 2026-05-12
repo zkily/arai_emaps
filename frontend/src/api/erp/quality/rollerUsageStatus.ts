@@ -16,6 +16,8 @@ export interface RollerUsageStatusRow {
   last_exec_date?: string | null
   next_exec_date?: string | null
   prod_cumulative_qty?: number | null
+  /** 前月末までの生産累計（再計算で自動更新） */
+  prod_cumulative_qty_prev_month_end?: number | null
   /** 手入力補正（自動累計に加算・マイナス可） */
   prod_manual_addon_qty?: number | null
   planned_product_cd?: string | null
