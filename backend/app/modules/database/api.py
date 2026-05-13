@@ -282,6 +282,25 @@ def _row_to_dict(row) -> dict:
     return d
 
 
+async def _filter_out_inactive_products(db: AsyncSession, rows: list[dict]) -> list[dict]:
+    """products.status が inactive の製品に紐づく行を除く（マスタに無い product_cd はそのまま残す）。"""
+    if not rows:
+        return rows
+    cds = {(r.get("product_cd") or "").strip() for r in rows if (r.get("product_cd") or "").strip()}
+    if not cds:
+        return rows
+    res = await db.execute(select(Product.product_cd, Product.status).where(Product.product_cd.in_(list(cds))))
+    inactive: set[str] = set()
+    for pc, st in res.all():
+        if st is None:
+            continue
+        if str(st).strip().lower() == "inactive":
+            inactive.add((pc or "").strip())
+    if not inactive:
+        return rows
+    return [r for r in rows if (r.get("product_cd") or "").strip() not in inactive]
+
+
 @router.get("")
 async def get_production_summarys_list(
     page: int = Query(1, ge=1, description="ページ"),
@@ -292,10 +311,14 @@ async def get_production_summarys_list(
     keyword: Optional[str] = Query(None, description="製品名キーワード"),
     sortBy: Optional[str] = Query("product_name", description="ソート項目"),
     sortOrder: Optional[str] = Query("ASC", description="ASC/DESC"),
+    excludeInactiveProducts: bool = Query(
+        False,
+        description="true のとき products.status が inactive の製品を除く（マスタ無しは残す）",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """生産サマリー一覧（ページネーション）"""
+    """生産サマリー一覧（ページネーション）。excludeInactiveProducts で products.status=inactive を除外。"""
     q = select(ProductionSummary)
     count_q = select(func.count()).select_from(ProductionSummary)
     conds = []
@@ -311,6 +334,22 @@ async def get_production_summarys_list(
             or_(
                 ProductionSummary.product_name.ilike(k),
                 ProductionSummary.product_cd.ilike(k),
+            )
+        )
+    if excludeInactiveProducts:
+        # MySQL: production_summarys / products の product_cd で collation が混在すると 1267 となるため統一
+        _collation = "utf8mb4_unicode_ci"
+        join_product = (
+            ProductionSummary.product_cd.collate(_collation)
+            == Product.product_cd.collate(_collation)
+        )
+        q = q.outerjoin(Product, join_product)
+        count_q = count_q.outerjoin(Product, join_product)
+        conds.append(
+            or_(
+                Product.id.is_(None),
+                Product.status.is_(None),
+                func.lower(func.trim(Product.status)) != "inactive",
             )
         )
     if conds:
@@ -335,6 +374,222 @@ async def get_production_summarys_list(
         "data": {
             "list": list_data,
             "pagination": {"total": total, "page": page, "limit": limit},
+        }
+    }
+
+
+def _merge_inventory_rows_by_product_and_route(rows: list[dict]) -> list[dict]:
+    """
+    同一末日・同一 (product_cd, route_cd) に複数行がある場合、先に製品×ルート単位で
+    各 *_inventory 列を SUM して 1 代表行にまとめる（メッキ前在庫集計の二重計上防止）。
+    """
+    buckets: dict[tuple[str, str], dict] = {}
+    for r in rows:
+        pcd = (r.get("product_cd") or "").strip()
+        if not pcd:
+            continue
+        rc = (r.get("route_cd") or "").strip()
+        key = (pcd, rc)
+        if key not in buckets:
+            base = dict(r)
+            for col in INVENTORY_COLUMNS:
+                v = base.get(col)
+                try:
+                    base[col] = int(v) if v is not None else 0
+                except (TypeError, ValueError):
+                    base[col] = 0
+            buckets[key] = base
+        else:
+            m = buckets[key]
+            for col in INVENTORY_COLUMNS:
+                try:
+                    add = int(r.get(col) or 0)
+                except (TypeError, ValueError):
+                    add = 0
+                try:
+                    m[col] = int(m.get(col) or 0) + add
+                except (TypeError, ValueError):
+                    pass
+    return list(buckets.values())
+
+
+# 検査の前月繰越：製品×ルートごとの寄与がこの値を超える行のみ総和・内訳に含める（試算画面と同一）
+PREV_CARRY_INSPECTION_CONTRIBUTION_MIN_EXCLUSIVE = 100
+
+
+@router.get("/prev-carry-pre-plating-wip-total")
+async def get_prev_carry_pre_plating_wip_total(
+    month: str = Query(..., description="対象月 YYYY-MM（その月末日の production_summarys を集計）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    前月繰越（メッキ）試算用：指定月の末日について、
+    (1) product_cd × route_cd ごとに *_inventory を合算した代表行を作る。
+    (2) メッキ列：直後が社内メッキ(plating) → molding→なら molding_inventory、welding→なら welding_inventory。
+    (3) 溶接列：直後が社内溶接(welding) の各位置について、直前工程に対応する *_inventory を加算（ルート上の実際の隣接工程すべて）。
+    (4) 検査列：同上ルールだが、製品×ルート代表行ごとの寄与が PREV_CARRY_INSPECTION_CONTRIBUTION_MIN_EXCLUSIVE を超える場合のみ総和へ加算。
+    (5) メッキ・溶接は製品代表ごとに合算。検査は上記閾値付き。
+    products.status が inactive の製品は含めない。
+    """
+    y, mo = _parse_year_month(month)
+    last_d = _last_day_of_month(y, mo)
+    last_day_str = last_d.isoformat()
+    q = select(ProductionSummary).where(ProductionSummary.date == last_day_str)
+    result = await db.execute(q)
+    rows = result.scalars().all()
+    list_data = [_row_to_dict(r) for r in rows]
+    list_data = await _filter_out_inactive_products(db, list_data)
+    merged_rows = _merge_inventory_rows_by_product_and_route(list_data)
+    if not merged_rows:
+        return {
+            "data": {
+                "total": 0,
+                "pre_welding_total": 0,
+                "pre_inspection_total": 0,
+                "as_of_date": last_day_str,
+                "row_count": 0,
+                "raw_row_count": len(list_data),
+            }
+        }
+
+    route_cds = {(r.get("route_cd") or "").strip() for r in merged_rows if (r.get("route_cd") or "").strip()}
+    desc_map: dict[str, str] = {}
+    if route_cds:
+        pr_res = await db.execute(
+            select(ProcessRoute.route_cd, ProcessRoute.description).where(
+                ProcessRoute.route_cd.in_(route_cds)
+            )
+        )
+        for rc, desc in pr_res.all():
+            desc_map[str(rc or "").strip()] = (desc or "").strip()
+    seq_cache: dict[tuple, list] = {}
+
+    async def _seq_for(route_cd: Optional[str], route_description: str) -> list:
+        cache_key = ((route_cd or "").strip(), (route_description or "").strip())
+        if cache_key not in seq_cache:
+            seq_cache[cache_key] = await _get_route_sequence(
+                db, (route_cd or "").strip(), route_description or None
+            )
+        return seq_cache[cache_key]
+
+    grand_plating = 0
+    grand_welding = 0
+    grand_inspection = 0
+    for r in merged_rows:
+        rc = (r.get("route_cd") or "").strip() or None
+        rd = desc_map.get(rc, "") if rc else ""
+        sequence = await _seq_for(rc, rd)
+        grand_plating += _sum_molding_welding_inventory_when_next_is_inhouse_plating(r, sequence)
+        grand_welding += _sum_prev_process_inventory_when_next_is_welding(r, sequence)
+        insp_amt = _sum_prev_process_inventory_when_next_is_inspection(r, sequence)
+        if insp_amt > PREV_CARRY_INSPECTION_CONTRIBUTION_MIN_EXCLUSIVE:
+            grand_inspection += insp_amt
+
+    return {
+        "data": {
+            "total": int(grand_plating),
+            "pre_welding_total": int(grand_welding),
+            "pre_inspection_total": int(grand_inspection),
+            "as_of_date": last_day_str,
+            "row_count": len(merged_rows),
+            "raw_row_count": len(list_data),
+        }
+    }
+
+
+PREV_CARRY_BREAKDOWN_COLUMNS = frozenset({
+    "cutting",
+    "chamfering",
+    "molding",
+    "plating",
+    "welding",
+    "inspection",
+    "warehouse",
+})
+
+
+@router.get("/prev-carry-breakdown")
+async def get_prev_carry_breakdown(
+    month: str = Query(..., description="対象月 YYYY-MM（その月末日の production_summarys を集計）"),
+    column: str = Query(
+        ...,
+        description="cutting|chamfering|molding|plating|welding|inspection|warehouse",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    前月繰越の工程別内訳：月末・製品×ルート代表行ごとの寄与数量（prev-carry-pre-plating-wip-total と同一集計ルール）。
+    column=inspection のときは寄与が PREV_CARRY_INSPECTION_CONTRIBUTION_MIN_EXCLUSIVE を超える行のみ。
+    products.status が inactive の製品は含めない。
+    """
+    col = (column or "").strip().lower()
+    if col not in PREV_CARRY_BREAKDOWN_COLUMNS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"column は {sorted(PREV_CARRY_BREAKDOWN_COLUMNS)} のいずれかです",
+        )
+    y, mo = _parse_year_month(month)
+    last_d = _last_day_of_month(y, mo)
+    last_day_str = last_d.isoformat()
+    q = select(ProductionSummary).where(ProductionSummary.date == last_day_str)
+    result = await db.execute(q)
+    rows = result.scalars().all()
+    list_data = [_row_to_dict(r) for r in rows]
+    list_data = await _filter_out_inactive_products(db, list_data)
+    merged_rows = _merge_inventory_rows_by_product_and_route(list_data)
+
+    route_cds = {(r.get("route_cd") or "").strip() for r in merged_rows if (r.get("route_cd") or "").strip()}
+    desc_map: dict[str, str] = {}
+    if route_cds:
+        pr_res = await db.execute(
+            select(ProcessRoute.route_cd, ProcessRoute.description).where(
+                ProcessRoute.route_cd.in_(route_cds)
+            )
+        )
+        for rc, desc in pr_res.all():
+            desc_map[str(rc or "").strip()] = (desc or "").strip()
+    seq_cache: dict[tuple, list] = {}
+
+    async def _seq_for(route_cd: Optional[str], route_description: str) -> list:
+        cache_key = ((route_cd or "").strip(), (route_description or "").strip())
+        if cache_key not in seq_cache:
+            seq_cache[cache_key] = await _get_route_sequence(
+                db, (route_cd or "").strip(), route_description or None
+            )
+        return seq_cache[cache_key]
+
+    items: list[dict] = []
+    for r in merged_rows:
+        rc = (r.get("route_cd") or "").strip() or None
+        rd = desc_map.get(rc, "") if rc else ""
+        sequence = await _seq_for(rc, rd)
+        amt = _prev_carry_breakdown_contribution(r, sequence, col)
+        if amt == 0:
+            continue
+        if col == "inspection" and amt <= PREV_CARRY_INSPECTION_CONTRIBUTION_MIN_EXCLUSIVE:
+            continue
+        items.append(
+            {
+                "product_cd": (r.get("product_cd") or "").strip(),
+                "product_name": (r.get("product_name") or "") or "",
+                "route_cd": (r.get("route_cd") or "").strip(),
+                "quantity": int(amt),
+            }
+        )
+    items.sort(key=lambda x: -int(x.get("quantity") or 0))
+    total = sum(int(i["quantity"]) for i in items)
+    return {
+        "data": {
+            "month": month.strip(),
+            "column": col,
+            "as_of_date": last_day_str,
+            "items": items,
+            "total": int(total),
+            "row_count": len(items),
+            "merged_row_count": len(merged_rows),
+            "raw_row_count": len(list_data),
         }
     }
 
@@ -2730,6 +2985,119 @@ def _find_inhouse_plating_step_index(sequence: list) -> Optional[int]:
         return sequence.index("plating")
     except ValueError:
         return None
+
+
+def _sum_molding_welding_inventory_when_next_is_inhouse_plating(row_dict: dict, sequence: list) -> int:
+    """
+    ルート上で「次工程が社内メッキ(plating)」となる直前工程が molding のとき molding_inventory、
+    welding のとき welding_inventory のみを加算（同一製品行）。
+    外注溶接(outsourced_welding)や外注メッキは対象外。
+    """
+    total = 0
+    n = len(sequence)
+    for i in range(n - 1):
+        if sequence[i + 1] != "plating":
+            continue
+        prev = sequence[i]
+        if prev == "molding":
+            cfg = _get_process_config_by_key("molding")
+        elif prev == "welding":
+            cfg = _get_process_config_by_key("welding")
+        else:
+            continue
+        if not cfg:
+            continue
+        inv_f = cfg.get("fields", {}).get("inventory")
+        if not inv_f:
+            continue
+        raw = row_dict.get(inv_f)
+        try:
+            total += int(raw) if raw is not None else 0
+        except (TypeError, ValueError):
+            pass
+    return total
+
+
+def _sum_prev_process_inventory_when_next_is_welding(row_dict: dict, sequence: list) -> int:
+    """
+    次工程が社内溶接(welding)となる各隣接ペアについて、直前工程の *_inventory を加算。
+    直前は plating / outsourced_plating / pre_welding_inspection 等、ルート順の実際の一つ前の工程キーに応じた列を使う。
+    """
+    total = 0
+    n = len(sequence)
+    for i in range(n - 1):
+        if sequence[i + 1] != "welding":
+            continue
+        prev = sequence[i]
+        cfg = _get_process_config_by_key(prev)
+        if not cfg:
+            continue
+        inv_f = cfg.get("fields", {}).get("inventory")
+        if not inv_f:
+            continue
+        raw = row_dict.get(inv_f)
+        try:
+            total += int(raw) if raw is not None else 0
+        except (TypeError, ValueError):
+            pass
+    return total
+
+
+def _sum_prev_process_inventory_when_next_is_inspection(row_dict: dict, sequence: list) -> int:
+    """
+    次工程が検査(inspection)となる各隣接ペアについて、直前工程の *_inventory を加算。
+    直前は welding / outsourced_welding / pre_inspection 等、ルート順の実際の一つ前の工程キーに応じた列を使う。
+    """
+    total = 0
+    n = len(sequence)
+    for i in range(n - 1):
+        if sequence[i + 1] != "inspection":
+            continue
+        prev = sequence[i]
+        cfg = _get_process_config_by_key(prev)
+        if not cfg:
+            continue
+        inv_f = cfg.get("fields", {}).get("inventory")
+        if not inv_f:
+            continue
+        raw = row_dict.get(inv_f)
+        try:
+            total += int(raw) if raw is not None else 0
+        except (TypeError, ValueError):
+            pass
+    return total
+
+
+def _prev_carry_breakdown_contribution(row_dict: dict, sequence: list, column: str) -> int:
+    """製品×ルート代表行について、前月繰越の指定工程に寄与する数量（月末在庫反映と同一ルール）。"""
+    if column == "plating":
+        return _sum_molding_welding_inventory_when_next_is_inhouse_plating(row_dict, sequence)
+    if column == "welding":
+        return _sum_prev_process_inventory_when_next_is_welding(row_dict, sequence)
+    if column == "inspection":
+        return _sum_prev_process_inventory_when_next_is_inspection(row_dict, sequence)
+    if column == "warehouse":
+        try:
+            inv_i = int(row_dict.get("inspection_inventory") or 0)
+        except (TypeError, ValueError):
+            inv_i = 0
+        try:
+            wh_i = int(row_dict.get("warehouse_inventory") or 0)
+        except (TypeError, ValueError):
+            wh_i = 0
+        return inv_i + wh_i
+    inv_col = {
+        "cutting": "cutting_inventory",
+        "chamfering": "chamfering_inventory",
+        "molding": "molding_inventory",
+    }.get(column)
+    if not inv_col:
+        return 0
+    raw = row_dict.get(inv_col)
+    try:
+        return int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        return 0
 
 
 def _find_molding_step_index(sequence: list) -> Optional[int]:

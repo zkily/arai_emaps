@@ -1148,7 +1148,7 @@ function confirmForecastUpdate() {
   runUpdateForecastUnits()
 }
 
-/** 内示本数更新：三步ルールで日订单を一括更新（GET daily + POST batch-update） */
+/** 内示本数更新：四段ルールで日订单を一括更新（GET daily + POST batch-update）。取得 end_date は Step1・Step3 の将来90日分に合わせ今日+90日 */
 async function runUpdateForecastUnits() {
   if (updatingForecast.value) return
   updatingForecast.value = true
@@ -1158,13 +1158,14 @@ async function runUpdateForecastUnits() {
   const today = getJapanDate()
   const todayStr = formatDateStr(today)
   const day31Ms = 31 * 24 * 60 * 60 * 1000
+  const day90Ms = 90 * 24 * 60 * 60 * 1000
   const dMin = new Date(today.getTime() - day31Ms)
-  const dMax = new Date(today.getTime() + day31Ms)
+  const dMax90 = new Date(today.getTime() + day90Ms)
   const startDate = formatDateStr(dMin)
-  const endDate = formatDateStr(dMax)
+  const endDate90 = formatDateStr(dMax90)
   const params: { start_date: string; end_date: string; destination_cd?: string } = {
     start_date: startDate,
-    end_date: endDate,
+    end_date: endDate90,
   }
   if (filters.destination_cd) params.destination_cd = filters.destination_cd
   let allRows: OrderDailyItem[] = []
@@ -1189,12 +1190,12 @@ async function runUpdateForecastUnits() {
   let totalSent = 0
   let totalReflected = 0
 
-  // Step1: 納期が今日±31日 かつ confirmed_units > 0 かつ 内示≠確定 の行のみ → forecast_units = confirmed_units（既に一致している行は送らない）
+  // Step1: 納期が過去31日～将来90日 かつ confirmed_units > 0 かつ 内示≠確定 の行のみ → forecast_units = confirmed_units（既に一致している行は送らない）
   const step1List = allRows.filter((r) => {
     const d = normDate(r.delivery_date)
     const cu = Number(r.confirmed_units ?? 0)
     const fu = Number(r.forecast_units ?? 0)
-    return d && d >= startDate && d <= endDate && cu > 0 && fu !== cu
+    return d && d >= startDate && d <= endDate90 && cu > 0 && fu !== cu
   })
   const step1Payloads = step1List.map((r) => ({
     id: r.id,
@@ -1233,14 +1234,14 @@ async function runUpdateForecastUnits() {
   }
   progressPercent.value = 50
 
-  // Step3: 製品ごとに「最後に confirmed_boxes > 0 の日」までで、納期 過去31日～その日、確定本数0・内示>0 をクリア（Step2で既に更新したIDは除く）
+  // Step3: 製品ごとに「過去31日～将来90日」内で最後に confirmed_boxes > 0 の納期 lastD を求め、納期 過去31日～lastD で確定本数0・内示>0 をクリア（Step2で既に更新したIDは除く）
   const step2Ids = new Set(step2List.map((r) => r.id))
   const byProductLastDate = new Map<string, string>()
   for (const r of allRows) {
     const key = r.product_cd || String(r.id)
     const d = normDate(r.delivery_date)
     const cb = Number(r.confirmed_boxes ?? 0)
-    if (cb > 0 && d && d >= startDate && d <= todayStr) {
+    if (cb > 0 && d && d >= startDate && d <= endDate90) {
       const prev = byProductLastDate.get(key) ?? ''
       if (d > prev) byProductLastDate.set(key, d)
     }

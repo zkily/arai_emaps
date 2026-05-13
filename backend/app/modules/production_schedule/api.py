@@ -4925,12 +4925,15 @@ async def generate_cutting_plans_from_schedule(
 #     GET/POST/PATCH/DELETE /api/plan/cutting-instruction-notes
 #   forming:
 #     GET/POST/PATCH/DELETE /api/plan/forming-instruction-notes
+#   forming planning (APS 成型計画作成):
+#     GET/POST/PATCH/DELETE /api/plan/forming-planning-notes
 #   welding:
 #     GET/POST/PATCH/DELETE /api/plan/welding-instruction-notes
 # ============================
 
 INSTRUCTION_NOTE_SCOPE_CUTTING = "cutting_instruction"
 INSTRUCTION_NOTE_SCOPE_FORMING = "forming_instruction"
+INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING = "forming_planning"
 INSTRUCTION_NOTE_SCOPE_WELDING = "welding_instruction"
 
 
@@ -5215,6 +5218,55 @@ async def delete_forming_instruction_note(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING, note_id)
+
+
+@router.get("/plan/forming-planning-notes")
+async def list_forming_planning_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _list_instruction_notes(db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, limit)
+
+
+@router.post("/plan/forming-planning-notes")
+async def create_forming_planning_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+    return await _create_instruction_note(
+        db,
+        INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING,
+        content,
+        getattr(current_user, "username", None),
+    )
+
+
+@router.patch("/plan/forming-planning-notes/{note_id}")
+async def update_forming_planning_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _update_instruction_note(
+        db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, note_id, body, current_user
+    )
+
+
+@router.delete("/plan/forming-planning-notes/{note_id}")
+async def delete_forming_planning_note(
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, note_id)
 
 
 @router.get("/plan/welding-instruction-notes")

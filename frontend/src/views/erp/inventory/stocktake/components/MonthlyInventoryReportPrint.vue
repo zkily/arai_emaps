@@ -30,20 +30,20 @@
           <tr v-for="row in data.overview_by_kind.rows" :key="row.label">
             <td class="center">{{ row.label }}</td>
             <td>{{ fmt(row.wip_qty, 0) }}</td>
-            <td>{{ fmt(row.wip_amount) }}</td>
+            <td>{{ fmtYen(row.wip_amount) }}</td>
             <td>{{ fmt(row.product_qty, 0) }}</td>
-            <td>{{ fmt(row.product_amount) }}</td>
+            <td>{{ fmtYen(row.product_amount) }}</td>
             <td>{{ fmt(row.total_qty, 0) }}</td>
-            <td>{{ fmt(row.total_amount) }}</td>
+            <td>{{ fmtYen(row.total_amount) }}</td>
           </tr>
           <tr class="total-row">
             <td class="center">合計</td>
             <td>{{ fmt(data.overview_by_kind.totals.wip_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_kind.totals.wip_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_kind.totals.wip_amount) }}</td>
             <td>{{ fmt(data.overview_by_kind.totals.product_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_kind.totals.product_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_kind.totals.product_amount) }}</td>
             <td>{{ fmt(data.overview_by_kind.totals.total_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_kind.totals.total_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_kind.totals.total_amount) }}</td>
           </tr>
         </tbody>
       </table>
@@ -68,20 +68,20 @@
           <tr v-for="row in data.overview_by_category.rows" :key="row.label">
             <td class="center">{{ row.label }}</td>
             <td>{{ fmt(row.wip_qty, 0) }}</td>
-            <td>{{ fmt(row.wip_amount) }}</td>
+            <td>{{ fmtYen(row.wip_amount) }}</td>
             <td>{{ fmt(row.product_qty, 0) }}</td>
-            <td>{{ fmt(row.product_amount) }}</td>
+            <td>{{ fmtYen(row.product_amount) }}</td>
             <td>{{ fmt(row.total_qty, 0) }}</td>
-            <td>{{ fmt(row.total_amount) }}</td>
+            <td>{{ fmtYen(row.total_amount) }}</td>
           </tr>
           <tr class="total-row">
             <td class="center">合計</td>
             <td>{{ fmt(data.overview_by_category.totals.wip_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_category.totals.wip_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_category.totals.wip_amount) }}</td>
             <td>{{ fmt(data.overview_by_category.totals.product_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_category.totals.product_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_category.totals.product_amount) }}</td>
             <td>{{ fmt(data.overview_by_category.totals.total_qty, 0) }}</td>
-            <td>{{ fmt(data.overview_by_category.totals.total_amount) }}</td>
+            <td>{{ fmtYen(data.overview_by_category.totals.total_amount) }}</td>
           </tr>
         </tbody>
       </table>
@@ -109,15 +109,15 @@
             <td class="center">{{ row.kind }}</td>
             <td class="left">{{ row.part_cd }}</td>
             <td class="left">{{ row.part_name }}</td>
-            <td>{{ fmt(row.unit_price, 2) }}</td>
+            <td>{{ fmtUsd(row.unit_price, 2) }}</td>
             <td>{{ fmt(row.qty, 0) }}</td>
-            <td>{{ fmt(row.amount) }}</td>
+            <td>{{ fmtYen(row.amount) }}</td>
           </tr>
           <tr class="total-row">
             <td class="center" colspan="3">合計</td>
             <td class="center">—</td>
             <td>{{ fmt(data.parts_meka.totals.qty, 0) }}</td>
-            <td>{{ fmt(data.parts_meka.totals.amount) }}</td>
+            <td>{{ fmtYen(data.parts_meka.totals.amount) }}</td>
           </tr>
         </tbody>
       </table>
@@ -138,12 +138,12 @@
           <tr v-for="row in data.parts_non_meka.rows" :key="row.kind">
             <td class="center">{{ row.kind }}</td>
             <td>{{ fmt(row.qty, 0) }}</td>
-            <td>{{ fmt(row.amount) }}</td>
+            <td>{{ fmtYen(row.amount) }}</td>
           </tr>
           <tr class="total-row">
             <td class="center">合計</td>
             <td>{{ fmt(data.parts_non_meka.totals.qty, 0) }}</td>
-            <td>{{ fmt(data.parts_non_meka.totals.amount) }}</td>
+            <td>{{ fmtYen(data.parts_non_meka.totals.amount) }}</td>
           </tr>
         </tbody>
       </table>
@@ -164,6 +164,25 @@ function fmt(value: number | undefined | null, decimals = 0): string {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })
+}
+
+/** 円貨金額（日本で一般的な全角￥を数字の前に付与） */
+function fmtYen(value: number | undefined | null, decimals = 0): string {
+  if (value == null) return '￥0'
+  const n = Number(value).toLocaleString('ja-JP', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+  return `￥${n}`
+}
+
+/** 米ドル単価 */
+function fmtUsd(value: number | undefined | null, decimals = 2): string {
+  const n = Number(value ?? 0).toLocaleString('ja-JP', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })
+  return `$${n}`
 }
 </script>
 
@@ -264,9 +283,8 @@ table {
 th,
 td {
   border: 1px solid #d8e1ec;
-  /* 前回よりさらに約 +15%（12×1.15 / 11×1.15 / lh×1.15） */
-  padding: 14px 13px;
-  line-height: 1.834;
+  padding: 12px 11px;
+  line-height: 1.559;
   vertical-align: middle;
 }
 
@@ -290,6 +308,10 @@ td.left {
 
 td.center {
   text-align: center;
+}
+
+td:not(.left):not(.center) {
+  font-size: 13.5px;
 }
 
 .w-label {
@@ -379,12 +401,12 @@ td.center {
   }
 
   .mir-title {
-    font-size: 17px;
+    font-size: 19.5px;
     letter-spacing: 1px;
   }
 
   .mir-subtitle {
-    font-size: 10.5px;
+    font-size: 12.5px;
     margin-top: 2px;
     line-height: 1.4;
   }
@@ -392,7 +414,7 @@ td.center {
   .mir-meta {
     flex-shrink: 0;
     gap: 6px 10px;
-    font-size: 10px;
+    font-size: 12.5px;
     margin-bottom: 8px;
     padding: 6px 10px;
     border-radius: 6px;
@@ -408,7 +430,7 @@ td.center {
   }
 
   .mir-section-title {
-    font-size: 11.5px;
+    font-size: 13.5px;
     padding: 6px 10px;
     border-left-width: 3px;
     line-height: 1.35;
@@ -426,27 +448,31 @@ td.center {
     margin-left: auto;
     font-weight: 600;
     color: #334155;
-    font-size: 10px;
+    font-size: 12.5px;
   }
 
   .mir-page table {
-    font-size: 10.5px;
+    font-size: 12.5px;
   }
 
   .mir-page th,
   .mir-page td {
-    padding: 9px 10px;
-    line-height: 1.834;
+    padding: 7.5px 8.5px;
+    line-height: 1.559;
   }
 
   .mir-page th {
-    font-size: 10px;
+    font-size: 12.5px;
+  }
+
+  .mir-page td:not(.left):not(.center) {
+    font-size: 13.5px;
   }
 
   .mir-footer {
     flex-shrink: 0;
     margin-top: auto;
-    font-size: 9px;
+    font-size: 11.5px;
     padding-top: 8px;
     margin-bottom: 0;
     border-top: 1px solid #e2e8f0;

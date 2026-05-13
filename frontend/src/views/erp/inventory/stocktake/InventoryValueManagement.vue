@@ -2581,7 +2581,7 @@ function printMonthlyReport() {
 html { zoom: 0.9; height: 100%; }
 body {
   font-family: 'Meiryo', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', sans-serif;
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.45;
   color: #0f172a;
   -webkit-print-color-adjust: exact;
@@ -2605,15 +2605,15 @@ body {
   break-inside: avoid;
 }
 .mir-header { flex-shrink: 0; text-align: center; margin-bottom: 6px; }
-.mir-title { font-size: 17px; font-weight: 700; letter-spacing: 1px; color: #0b3a67; }
-.mir-subtitle { font-size: 10.5px; color: #5f6f85; margin-top: 2px; line-height: 1.4; }
+.mir-title { font-size: 19.5px; font-weight: 700; letter-spacing: 1px; color: #0b3a67; }
+.mir-subtitle { font-size: 12.5px; color: #5f6f85; margin-top: 2px; line-height: 1.4; }
 .mir-meta {
   flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 10px;
-  font-size: 10px;
+  font-size: 12.5px;
   color: #3f4f68;
   margin-bottom: 8px;
   padding: 6px 10px;
@@ -2633,7 +2633,7 @@ body {
   break-inside: auto;
 }
 .mir-section-title {
-  font-size: 11.5px;
+  font-size: 13.5px;
   font-weight: 700;
   color: #0c4a7d;
   background: linear-gradient(90deg, #e8f3ff 0%, #f4f9ff 100%);
@@ -2653,14 +2653,15 @@ body {
   margin-left: auto;
   font-weight: 600;
   color: #334155;
-  font-size: 10px;
+  font-size: 12.5px;
 }
-table { width: 100%; border-collapse: collapse; font-size: 10.5px; font-variant-numeric: tabular-nums; border: 2px solid #475569; }
-th, td { border: 1px solid #d8e1ec; padding: 9px 10px; vertical-align: middle; line-height: 1.834; }
-th { background: #f3f8fd; font-weight: 600; text-align: center; white-space: nowrap; color: #334155; font-size: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; border: 2px solid #475569; }
+th, td { border: 1px solid #d8e1ec; padding: 7.5px 8.5px; vertical-align: middle; line-height: 1.559; }
+th { background: #f3f8fd; font-weight: 600; text-align: center; white-space: nowrap; color: #334155; font-size: 12.5px; }
 td { text-align: right; background: #fff; }
 td.left { text-align: left; }
 td.center { text-align: center; }
+td:not(.left):not(.center) { font-size: 13.5px; }
 tr.total-row { background: #edf6ff; font-weight: 700; }
 tr.total-row td {
   border-top: 2px solid #3d86cc;
@@ -2671,7 +2672,7 @@ tr.total-row td {
   flex-shrink: 0;
   margin-top: auto;
   text-align: right;
-  font-size: 9px;
+  font-size: 11.5px;
   color: #6b7f95;
   padding-top: 8px;
   border-top: 1px solid #e2e8f0;

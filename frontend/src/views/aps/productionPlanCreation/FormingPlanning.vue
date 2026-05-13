@@ -7,30 +7,30 @@
     </div>
 
     <!-- ─── Filter Bar ─── -->
-    <div class="plan-card setup-section">
+    <div class="plan-card setup-section setup-section--toolbar">
       <div class="setup-bar">
-        <el-form :inline="true" label-position="left" class="setup-form">
-          <el-form-item label="基準開始月">
+        <el-form :inline="true" label-position="left" class="setup-form setup-form--toolbar">
+          <el-form-item label="基準開始月" class="setup-fi setup-fi--month">
             <el-date-picker
               v-model="anchorMonth"
               type="month"
               value-format="YYYY-MM"
               placeholder="先頭計画の着手月"
-              style="width: 120px"
+              class="setup-field setup-field--month"
             />
           </el-form-item>
-          <el-form-item label-width="0">
-            <el-button type="default" class="btn-soft btn-soft--indigo" @click="openLineReplanAnchorDialog">
-              再計算アンカー日設定
+          <el-form-item label-width="0" class="setup-fi setup-fi--anchor">
+            <el-button type="default" class="btn-soft btn-soft--indigo setup-anchor-btn" @click="openLineReplanAnchorDialog">
+              アンカー日設定
             </el-button>
           </el-form-item>
-          <el-form-item label="工程" required>
+          <el-form-item label="工程" required class="setup-fi setup-fi--process">
             <el-select
               v-model="selectedProcessCd"
               filterable
               clearable
               placeholder="先に工程を選択"
-              style="width: 160px"
+              class="setup-field setup-field--process"
               :loading="loadingProcesses"
               @change="onProcessChange"
             >
@@ -42,11 +42,11 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item label="ライン">
+          <el-form-item label="ライン" class="setup-fi setup-fi--line">
             <el-select
               v-model="selectedLineId"
               placeholder="ラインを選択"
-              style="width: 180px"
+              class="setup-field setup-field--line"
               :disabled="!selectedProcessCd"
               :loading="loadingLines"
               @change="onLineChange"
@@ -59,10 +59,28 @@
               />
             </el-select>
           </el-form-item>
-          <el-form-item class="setup-fi-btn" label-width="0">
+          <el-form-item class="setup-fi setup-fi-btn setup-fi--fetch" label-width="0">
             <el-button type="primary" class="btn-accent btn-accent--primary" :loading="loadingSchedules" @click="loadSchedules">
               計画を取得
             </el-button>
+          </el-form-item>
+          <el-form-item label-width="0" class="setup-fi-notes">
+            <div class="forming-planning-notes-btn-wrap">
+              <el-button
+                type="default"
+                size="small"
+                class="forming-notes-toolbar-btn"
+                title="メモ（TODO）"
+                @click="openFormingPlanningNotesDialog"
+              >
+                <span class="notes-badge-wrap">
+                  <el-icon><Memo /></el-icon>
+                  <span v-if="formingPlanningNotesCount > 0" class="notes-count-badge">
+                    {{ formingPlanningNotesCount }}
+                  </span>
+                </span>
+              </el-button>
+            </div>
           </el-form-item>
         </el-form>
         <p
@@ -75,12 +93,12 @@
     </div>
 
     <!-- ─── Add Plan ─── -->
-    <div v-if="selectedLineId" class="plan-card add-section">
+    <div v-if="selectedLineId" class="plan-card add-section add-section--panel">
       <div class="plan-sec-hd add-section-hd">計画追加</div>
-      <div class="add-plan-block">
-        <div class="add-row add-row--top">
+      <div class="add-plan-block add-plan-block--panel">
+        <div class="add-row add-row--top add-zone add-zone--product">
           <el-form :inline="true" :model="newEntry" label-position="left" class="add-form add-form--top">
-            <el-form-item label="製品名" required class="add-fi-product">
+            <el-form-item label="製品名" required class="add-fi-product add-fi-pill">
               <el-select
                 v-model="selectedEeId"
                 filterable
@@ -99,7 +117,7 @@
               </el-select>
             </el-form-item>
           </el-form>
-          <div v-if="eeStatsDisplay" class="ee-stats-chip">
+          <div v-if="eeStatsDisplay" class="ee-stats-chip ee-stats-chip--panel">
             <div class="ee-stat-chip">
               <span class="ee-stat-label">能率</span>
               <span class="ee-readonly">{{ eeStatsDisplay.efficiency_rate }}</span>
@@ -123,14 +141,15 @@
           </div>
         </div>
 
+        <div class="add-zone add-zone--main">
         <el-form :inline="true" :model="newEntry" label-position="left" class="add-form add-form--main">
-          <el-form-item label="入力方式" class="add-fi-tight">
+          <el-form-item label="入力方式" class="add-fi-tight add-fi-pill">
             <el-radio-group v-model="addQtyMode" size="small">
               <el-radio-button value="batch">ロット数</el-radio-button>
               <el-radio-button value="piece">本数</el-radio-button>
             </el-radio-group>
           </el-form-item>
-          <el-form-item label="追加先" class="add-fi-tight">
+          <el-form-item label="追加先" class="add-fi-tight add-fi-pill">
             <div class="add-merge-row">
               <el-radio-group v-model="addMergeMode" size="small">
                 <el-radio-button value="new">新規行</el-radio-button>
@@ -236,6 +255,7 @@
             </el-form-item>
           </template>
         </el-form>
+        </div>
       </div>
       <p v-if="selectedLineId && !loadingEeProducts && eeProducts.length === 0" class="ee-empty-hint add-empty-hint">
         この設備に紐づく設備能率（equipment_efficiency）の製品がありません。
@@ -251,7 +271,7 @@
     </div>
 
     <!-- ─── Schedule List ─── -->
-    <div v-if="schedules.length > 0" class="plan-card schedule-section">
+    <div v-if="schedules.length > 0" class="plan-card schedule-section schedule-section--panel">
       <div class="plan-sec-hd plan-sec-hd--schedule">
         <div class="plan-sec-hd-left">
           計画一覧
@@ -295,7 +315,7 @@
           width="64"
           align="center"
         >
-      <template #header>
+          <template #header>
             <span class="schedule-order-head" title="行をドラッグして順序を変更">順位</span>
           </template>
           <template #default="{ row }">
@@ -327,7 +347,7 @@
                 @keyup.enter.prevent="onTotalQtyEnter(row)"
                 @blur="onTotalQtyBlur(row)"
               />
-        </div>
+            </div>
             <span
               v-else
               class="total-qty-cell total-qty-editable"
@@ -336,7 +356,7 @@
             >
               {{ row.planned_process_qty?.toLocaleString() ?? '—' }}
             </span>
-      </template>
+          </template>
         </el-table-column>
         <el-table-column label="段取(分)" width="80" align="right">
           <template #default="{ row }">
@@ -459,7 +479,7 @@
       <div
         v-if="selectedLineId && ganttDates.length > 0"
         v-loading="loadingLineCapacityStrip"
-        class="line-capacity-below-schedule"
+        class="line-capacity-below-schedule line-capacity-below-schedule--panel"
       >
         <div class="line-capacity-below-hd-row">
           <div class="line-capacity-below-hd">設備稼働時間（日別・ガント表示期間と一致）</div>
@@ -931,6 +951,83 @@
         <el-button @click="lineCapacityDialogVisible = false">閉じる</el-button>
       </template>
     </el-dialog>
+
+    <!-- メモ（TODO）— FormingInstruction と同一 UX、API は forming-planning-notes（scope: forming_planning） -->
+    <el-dialog
+      v-model="formingPlanningNotesDialogVisible"
+      title="メモ（TODO）"
+      width="520px"
+      class="forming-planning-notes-dialog"
+      append-to-body
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+      :show-close="false"
+    >
+      <div class="cutting-notes-dialog-body">
+        <div class="cutting-notes-add">
+          <el-input
+            v-model="formingPlanningNotesNewContent"
+            type="textarea"
+            :rows="2"
+            size="small"
+            maxlength="200"
+            class="cutting-notes-input"
+            placeholder="簡単なメモを入力（短文）"
+          />
+          <div class="cutting-notes-add-actions">
+            <span class="cutting-notes-char-count">{{ formingPlanningNotesNewContent.length }}/200</span>
+            <el-button
+              type="primary"
+              size="small"
+              class="cutting-notes-add-btn"
+              :loading="formingPlanningNotesSaving"
+              @click="addFormingPlanningNote"
+            >
+              追加
+            </el-button>
+          </div>
+        </div>
+
+        <el-scrollbar v-loading="formingPlanningNotesLoading" max-height="320" class="cutting-notes-scrollbar">
+          <div
+            v-if="!formingPlanningNotesLoading && !formingPlanningNotesList.length"
+            class="cutting-notes-empty"
+          >
+            未登録
+          </div>
+
+          <div v-for="n in formingPlanningNotesList" :key="n.id" class="cutting-notes-row">
+            <el-checkbox
+              :model-value="n.is_done === 1"
+              size="small"
+              @change="(val) => toggleFormingPlanningNoteDone(n, val)"
+            />
+            <div
+              class="cutting-notes-row-content"
+              :class="{ 'cutting-notes-row-content--done': n.is_done === 1 }"
+            >
+              {{ n.content }}
+            </div>
+            <el-button
+              v-if="n.id != null"
+              type="text"
+              size="small"
+              class="cutting-notes-delete-btn"
+              :disabled="formingPlanningNotesSaving"
+              @click="deleteFormingPlanningNote(n)"
+            >
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </el-scrollbar>
+      </div>
+
+      <template #footer>
+        <div class="cutting-notes-dialog-footer">
+          <el-button size="small" @click="formingPlanningNotesDialogVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -938,7 +1035,7 @@
 defineOptions({ name: 'FormingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete, InfoFilled, Setting } from '@element-plus/icons-vue'
+import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 import {
@@ -969,6 +1066,7 @@ import {
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import LineCapacity from '../LineCapacity.vue'
+import request from '@/shared/api/request'
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
 function formatYmdInJapan(d: Date): string {
@@ -1556,8 +1654,106 @@ async function onProcessChange() {
   }
 }
 
+// ─────────────────────────────────────────────
+// メモ（TODO）— FormingInstruction と同一 UX、API は forming-planning-notes
+// ─────────────────────────────────────────────
+interface FormingPlanningNote {
+  id?: number
+  content?: string | null
+  is_done?: number | boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+const formingPlanningNotesDialogVisible = ref(false)
+const formingPlanningNotesLoading = ref(false)
+const formingPlanningNotesSaving = ref(false)
+const formingPlanningNotesList = ref<FormingPlanningNote[]>([])
+const formingPlanningNotesNewContent = ref('')
+
+const formingPlanningNotesCount = computed(() => formingPlanningNotesList.value.length)
+
+async function loadFormingPlanningNotes() {
+  formingPlanningNotesLoading.value = true
+  try {
+    const res = await request.get('/api/plan/forming-planning-notes', { params: { limit: 200 } })
+
+    formingPlanningNotesList.value = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as FormingPlanningNote[])
+      : []
+  } catch (e) {
+    console.error('メモ（TODO）の取得に失敗:', e)
+    ElMessage.error('メモ（TODO）の取得に失敗しました')
+    formingPlanningNotesList.value = []
+  } finally {
+    formingPlanningNotesLoading.value = false
+  }
+}
+
+function openFormingPlanningNotesDialog() {
+  formingPlanningNotesDialogVisible.value = true
+  formingPlanningNotesNewContent.value = ''
+  loadFormingPlanningNotes()
+}
+
+async function addFormingPlanningNote() {
+  const content = formingPlanningNotesNewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('内容を入力してください')
+    return
+  }
+  try {
+    formingPlanningNotesSaving.value = true
+    await request.post('/api/plan/forming-planning-notes', { content })
+    formingPlanningNotesNewContent.value = ''
+    await loadFormingPlanningNotes()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('メモ（TODO）の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    formingPlanningNotesSaving.value = false
+  }
+}
+
+async function toggleFormingPlanningNoteDone(note: FormingPlanningNote, checked: unknown) {
+  if (!note.id) return
+  const is_done =
+    checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
+  try {
+    formingPlanningNotesSaving.value = true
+    await request.patch(`/api/plan/forming-planning-notes/${note.id}`, { is_done })
+    note.is_done = is_done
+  } catch (e) {
+    console.error('メモ（TODO）の更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+    await loadFormingPlanningNotes()
+  } finally {
+    formingPlanningNotesSaving.value = false
+  }
+}
+
+async function deleteFormingPlanningNote(note: FormingPlanningNote) {
+  if (!note.id) return
+  try {
+    await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
+    formingPlanningNotesSaving.value = true
+    await request.delete(`/api/plan/forming-planning-notes/${note.id}`)
+    await loadFormingPlanningNotes()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    if ((e as { message?: string; name?: string })?.message?.includes('cancel')) return
+    if ((e as { name?: string })?.name === 'MessageBox') return
+    console.error('メモ（TODO）の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    formingPlanningNotesSaving.value = false
+  }
+}
+
 onMounted(() => {
   loadProcessOptions()
+  loadFormingPlanningNotes()
 })
 
 onBeforeUnmount(() => {
@@ -2842,14 +3038,25 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 }
 
 /* ══════════════════════════════════════════════════
-   Setup Bar（基準開始月・工程・ライン）— 計画追加と同一の高さ・字サイズ
+   Setup toolbar（検索条）：高密度・高さ揃え・ゾーン色分け
    ══════════════════════════════════════════════════ */
+.setup-section--toolbar .setup-bar {
+  padding: 2px 1px 1px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(241, 245, 249, 0.65) 100%);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
 .setup-bar :deep(.el-form--inline) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: var(--gap-s);
   row-gap: 4px;
+}
+.setup-section--toolbar .setup-bar :deep(.el-form--inline) {
+  column-gap: 5px;
+  row-gap: 3px;
 }
 .setup-bar :deep(.el-form--inline .el-form-item) {
   margin-bottom: 0;
@@ -2867,20 +3074,271 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   color: var(--c-text-m);
   padding-right: 5px;
 }
+.setup-section--toolbar .setup-bar :deep(.el-form-item__label) {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
 .setup-bar :deep(.el-form-item__content) {
   display: inline-flex;
   align-items: center;
   min-height: var(--add-h);
   line-height: var(--add-h);
 }
-.setup-fi-btn :deep(.el-button) {
+/* ゾーン色：基準月（藍） */
+.setup-section--toolbar .setup-fi--month {
+  padding: 1px 6px 1px 7px;
+  border-radius: 9px;
+  background: rgba(59, 130, 246, 0.07);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 1px 2px rgba(30, 64, 175, 0.04);
+}
+.setup-section--toolbar .setup-fi--month :deep(.el-form-item__label) {
+  color: #1d4ed8;
+}
+/* アンカー（菫） */
+.setup-section--toolbar .setup-fi--anchor {
+  padding: 1px 5px;
+  border-radius: 9px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+/* 工程（琥珀） */
+.setup-section--toolbar .setup-fi--process {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: rgba(245, 158, 11, 0.07);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  box-shadow: 0 1px 2px rgba(180, 83, 9, 0.05);
+}
+.setup-section--toolbar .setup-fi--process :deep(.el-form-item__label) {
+  color: #c2410c;
+}
+/* ライン（緑） */
+.setup-section--toolbar .setup-fi--line {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  box-shadow: 0 1px 2px rgba(5, 122, 85, 0.05);
+}
+.setup-section--toolbar .setup-fi--line :deep(.el-form-item__label) {
+  color: #047857;
+}
+.setup-section--toolbar .setup-fi--fetch {
+  padding: 0 2px;
+}
+.setup-fi-btn :deep(.el-button),
+.setup-section--toolbar .setup-anchor-btn {
   height: var(--add-h);
   min-height: var(--add-h);
   padding: 0 14px;
   font-size: var(--add-fs);
   border-radius: var(--ctrl-r);
 }
-.setup-section .ee-empty-hint {
+.setup-section--toolbar .setup-anchor-btn {
+  padding: 0 12px;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+  background: linear-gradient(180deg, #ffffff 0%, #eef2ff 100%) !important;
+  color: #3730a3 !important;
+}
+.setup-field--month {
+  width: 122px;
+  max-width: 100%;
+}
+.setup-field--process {
+  width: 164px;
+  max-width: 100%;
+}
+.setup-field--line {
+  width: 186px;
+  max-width: 100%;
+}
+.setup-fi-notes {
+  margin-left: auto;
+  margin-right: 0;
+  align-self: center;
+  padding: 0 1px;
+}
+.setup-fi-notes :deep(.el-form-item__content) {
+  line-height: 1;
+}
+.planning-page .setup-section--toolbar :deep(.el-button:not(.is-disabled):hover) {
+  transform: none;
+}
+.plan-card.setup-section.setup-section--toolbar :deep(.el-date-editor .el-input__wrapper) {
+  height: var(--add-h);
+  min-height: var(--add-h);
+  box-shadow: 0 0 0 1px var(--c-border) inset;
+  border-radius: var(--ctrl-r);
+  padding: 0 var(--ctrl-px);
+  transition: box-shadow 0.15s ease;
+}
+.plan-card.setup-section.setup-section--toolbar :deep(.el-date-editor .el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #c0c4cc inset;
+}
+.plan-card.setup-section.setup-section--toolbar :deep(.el-date-editor .el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--c-accent) inset;
+}
+.plan-card.setup-section.setup-section--toolbar :deep(.el-date-editor .el-input__inner) {
+  font-size: var(--add-fs);
+  height: var(--add-h);
+  line-height: var(--add-h);
+}
+.setup-section--toolbar .ee-empty-hint {
+  margin: 4px 2px 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: var(--fs-s);
+  line-height: 1.45;
+  background: rgba(245, 158, 11, 0.09);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #92400e;
+}
+.forming-planning-notes-btn-wrap {
+  display: flex;
+  align-items: center;
+}
+.forming-notes-toolbar-btn {
+  margin: 0 !important;
+  height: var(--add-h) !important;
+  min-width: 36px;
+  padding: 0 10px !important;
+  border-radius: 7px !important;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%) !important;
+  border-color: #ddd6fe !important;
+  color: #5b21b6 !important;
+  box-shadow: 0 1px 2px rgba(88, 28, 135, 0.08) !important;
+}
+.forming-notes-toolbar-btn:hover {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%) !important;
+  border-color: #a78bfa !important;
+  color: #4c1d95 !important;
+}
+.notes-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.notes-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+.forming-planning-notes-dialog :deep(.el-dialog) {
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 24px 48px -20px rgba(76, 29, 149, 0.45);
+}
+.forming-planning-notes-dialog :deep(.el-dialog__header) {
+  margin-right: 0;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #ede9fe;
+  background: linear-gradient(135deg, #f5f3ff 0%, #eef2ff 55%, #ecfeff 100%);
+}
+.forming-planning-notes-dialog :deep(.el-dialog__title) {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5b21b6;
+}
+.forming-planning-notes-dialog :deep(.el-dialog__body) {
+  padding: 12px 16px 8px;
+}
+.forming-planning-notes-dialog :deep(.el-dialog__footer) {
+  padding: 8px 16px 14px;
+}
+.cutting-notes-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cutting-notes-add {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cutting-notes-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  border: 1px solid #e9d5ff;
+  font-size: 12px;
+}
+.cutting-notes-input :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 1px #c4b5fd inset;
+}
+.cutting-notes-add-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.cutting-notes-char-count {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.cutting-notes-add-btn {
+  border-radius: 8px !important;
+}
+.cutting-notes-scrollbar {
+  border-radius: 10px;
+}
+.cutting-notes-empty {
+  padding: 24px 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.cutting-notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid #f3e8ff;
+  margin-bottom: 6px;
+  background: #faf5ff;
+}
+.cutting-notes-row:hover {
+  border-color: #e9d5ff;
+}
+.cutting-notes-row-content {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+  word-break: break-word;
+}
+.cutting-notes-row-content--done {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+.cutting-notes-row :deep(.el-checkbox__inner) {
+  border-radius: 4px;
+}
+.cutting-notes-delete-btn {
+  flex-shrink: 0;
+  padding: 4px !important;
+  color: #64748b !important;
+}
+.cutting-notes-delete-btn:hover {
+  color: #ef4444 !important;
+}
+.cutting-notes-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.setup-section:not(.setup-section--toolbar) .ee-empty-hint {
   margin: 6px 0 0;
 }
 
@@ -2889,10 +3347,18 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
    ══════════════════════════════════════════════════ */
 .plan-card.add-section,
 .plan-card.setup-section {
-  padding: 8px 10px;
   /* 計画追加・検索条件で共通のコントロール寸法 */
   --add-h:  var(--ctrl-h);
   --add-fs: var(--fs-base);
+}
+.plan-card.add-section {
+  padding: 8px 10px;
+}
+.plan-card.setup-section.setup-section--toolbar {
+  padding: 5px 8px 6px;
+  background: linear-gradient(155deg, #ffffff 0%, #f8fafc 38%, #f0f9ff 100%);
+  border-color: rgba(59, 130, 246, 0.14);
+  box-shadow: var(--card-sh), inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 .add-section-hd {
   margin-bottom: 8px !important;
@@ -2900,7 +3366,122 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-size: var(--fs-base) !important;
 }
 
-/* ── block layout ── */
+/* ═════ 計画追加パネル（検索条と揃えた現代 UI） ═════ */
+.plan-card.add-section.add-section--panel {
+  padding: 6px 10px 8px;
+  background: linear-gradient(165deg, #ffffff 0%, #fafbfc 42%, #f0fdf4 100%);
+  border-color: rgba(16, 185, 129, 0.14);
+  box-shadow: var(--card-sh), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+.add-section--panel .add-section-hd {
+  margin-bottom: 6px !important;
+  padding-left: 10px !important;
+  border-left-color: #10b981;
+}
+.add-plan-block--panel {
+  gap: 5px;
+}
+.add-section--panel .add-zone {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+.add-section--panel .add-zone--product {
+  padding: 4px 8px 5px;
+  border-color: rgba(59, 130, 246, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 246, 255, 0.45) 100%);
+}
+.add-section--panel .add-zone--main {
+  padding: 5px 8px 6px;
+  border-color: rgba(16, 185, 129, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(236, 253, 245, 0.38) 100%);
+}
+.add-section--panel .add-row--top {
+  gap: 5px 8px;
+  align-items: center;
+}
+.add-section--panel .add-form :deep(.el-form-item) {
+  margin-right: 6px;
+}
+.add-section--panel .add-form :deep(.el-form-item__label) {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.add-section--panel .add-fi-product :deep(.el-form-item__label) {
+  color: #1d4ed8;
+}
+.add-section--panel .add-zone--main .add-fi-tight :deep(.el-form-item__label) {
+  color: #047857;
+}
+.add-section--panel .add-fi-merge :deep(.el-form-item__label) {
+  color: #b45309;
+}
+.add-section--panel .add-fi-qty :deep(.el-form-item__label) {
+  color: #0f766e;
+}
+.add-section--panel .add-fi-pill {
+  padding: 1px 2px;
+  border-radius: 8px;
+}
+.add-section--panel .add-fi-product.add-fi-pill {
+  padding: 1px 6px 1px 4px;
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.14);
+}
+.add-section--panel .add-zone--main .add-fi-tight.add-fi-pill {
+  padding: 1px 6px;
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid rgba(16, 185, 129, 0.12);
+}
+.add-section--panel .ee-stats-chip--panel {
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  background: linear-gradient(95deg, #ffffff 0%, #eff6ff 50%, #ecfdf5 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  padding: 0 8px 0 10px;
+}
+.add-section--panel .ee-stats-chip--panel .ee-stat-chip {
+  border-right-color: rgba(148, 163, 184, 0.4);
+  padding-right: 8px;
+  margin-right: 6px;
+}
+.add-section--panel .ee-stats-chip--panel .ee-stat-label {
+  color: #475569;
+  font-weight: 600;
+}
+.add-section--panel .ee-stats-chip--panel .ee-readonly {
+  color: #0f172a;
+}
+.add-section--panel .add-merge-hint {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  color: #92400e;
+  font-weight: 500;
+  font-size: var(--fs-xs);
+}
+.add-section--panel .add-qty-hint {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(13, 148, 136, 0.07);
+  border: 1px solid rgba(45, 212, 191, 0.28);
+  color: #0f766e;
+  max-width: min(520px, 62vw);
+}
+.add-section--panel .add-empty-hint {
+  margin-top: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.09);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  font-size: var(--fs-s);
+  line-height: 1.45;
+  color: #92400e;
+}
+.add-section--panel :deep(.el-radio-button__inner) {
+  font-weight: 600;
+}
 .add-plan-block { display: flex; flex-direction: column; gap: 6px; }
 
 /* ── row 1: product + stats chip ── */
@@ -3149,6 +3730,107 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 /* ══════════════════════════════════════════════════
    Schedule List
    ══════════════════════════════════════════════════ */
+/* ── 計画一覧パネル（表 + 設備稼働条） ── */
+.plan-card.schedule-section.schedule-section--panel {
+  padding: 6px 10px 10px;
+  background: linear-gradient(168deg, #ffffff 0%, #f8fafc 42%, #eff6ff 100%);
+  border-color: rgba(59, 130, 246, 0.14);
+  box-shadow: var(--card-sh), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+.schedule-section--panel .plan-sec-hd.plan-sec-hd--schedule {
+  margin-bottom: 6px;
+  padding: 7px 10px 7px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-left: 3px solid #2563eb;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(239, 246, 255, 0.55) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  gap: 8px;
+}
+.schedule-section--panel .plan-sec-hd--schedule .plan-sec-sub {
+  margin-left: 0;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  font-weight: 500;
+}
+.schedule-section--panel .plan-sec-badge {
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.22);
+}
+.schedule-section--panel .schedule-actions {
+  padding: 3px 5px 3px 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  gap: 6px;
+}
+.schedule-section--panel .schedule-completed-switch {
+  margin-right: 0;
+}
+.schedule-section--panel .schedule-table {
+  margin-top: 2px;
+}
+.schedule-section--panel .schedule-table :deep(.el-table) {
+  border-radius: 10px;
+  overflow: hidden;
+  --el-table-border-color: rgba(148, 163, 184, 0.32);
+}
+.schedule-section--panel .schedule-table :deep(.el-table__header th) {
+  padding: 4px 5px;
+  font-size: var(--fs-s);
+  font-weight: 700;
+  color: #334155;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+.schedule-section--panel .schedule-table :deep(.el-table__body-wrapper tbody tr:hover td) {
+  background: linear-gradient(90deg, #f0f9ff 0%, #f8fafc 100%) !important;
+}
+.schedule-section--panel .schedule-item-name-strong {
+  color: #0f172a;
+}
+.schedule-section--panel .line-capacity-below-schedule--panel {
+  margin-top: 10px;
+  padding: 8px 8px 6px;
+  border-top: none;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(236, 253, 245, 0.55) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.schedule-section--panel .line-capacity-below-hd-row {
+  margin: 0 0 6px;
+  padding: 0 2px 0 4px;
+}
+.schedule-section--panel .line-capacity-below-hd {
+  font-size: var(--fs-base);
+  font-weight: 700;
+  color: #0f766e;
+}
+.schedule-section--panel .line-capacity-below-open-btn {
+  font-weight: 600;
+  border-radius: var(--ctrl-r);
+}
+.schedule-section--panel .line-capacity-below-scroll {
+  margin: 0 -2px;
+  padding: 0 2px 2px;
+}
+.schedule-section--panel .line-capacity-below-table th,
+.schedule-section--panel .line-capacity-below-table td {
+  border-color: rgba(148, 163, 184, 0.28);
+  padding: 4px 3px;
+}
+.schedule-section--panel .line-capacity-below-table thead th {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #065f46;
+}
+.schedule-section--panel .lcb-sticky.lcb-label {
+  background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+  box-shadow: 2px 0 6px rgba(15, 23, 42, 0.06);
+}
+
 .schedule-empty {
   display: flex;
   align-items: center;

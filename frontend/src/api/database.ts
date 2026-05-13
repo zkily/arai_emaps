@@ -14,6 +14,8 @@ export interface ProductionSummaryListParams {
   keyword?: string
   sortBy?: string
   sortOrder?: 'ASC' | 'DESC'
+  /** true のとき products.status が inactive の行を除く */
+  excludeInactiveProducts?: boolean
 }
 
 export interface ProductionSummaryProduct {
@@ -54,6 +56,43 @@ export interface ProductionSummaryInventoryRow {
 /** 一覧取得（ページネーション） */
 export function getProductionSummarysList(params: ProductionSummaryListParams) {
   return request.get(BASE, { params })
+}
+
+/** 月末・製品×ルート集約後の前月繰越：メッキ・溶接・検査（ルート隣接／検査は寄与>100のみ）。倉庫は一覧の warehouse_inventory 列合計で別途反映 */
+export function getPrevCarryPrePlatingWipTotal(params: { month: string }) {
+  return request.get<{
+    data: {
+      total: number
+      pre_welding_total: number
+      pre_inspection_total: number
+      as_of_date: string
+      row_count: number
+      raw_row_count?: number
+    }
+  }>(`${BASE}/prev-carry-pre-plating-wip-total`, { params })
+}
+
+/** 前月繰越の工程別内訳（製品×ルート・寄与数量>0 のみ） */
+export interface PrevCarryBreakdownItem {
+  product_cd: string
+  product_name: string
+  route_cd: string
+  quantity: number
+}
+
+export function getPrevCarryBreakdown(params: { month: string; column: string }) {
+  return request.get<{
+    data: {
+      month: string
+      column: string
+      as_of_date: string
+      items: PrevCarryBreakdownItem[]
+      total: number
+      row_count: number
+      merged_row_count?: number
+      raw_row_count?: number
+    }
+  }>(`${BASE}/prev-carry-breakdown`, { params })
 }
 
 /** production_summarys を期間集計し、工程別に (不良+廃棄)/実績 を算出 */
@@ -498,4 +537,39 @@ export function getReorderPointList(params: { as_of_date?: string; product_cd?: 
     `${KPI_BASE}/reorder-point`,
     { params }
   )
+}
+
+/** 工程別計画試算（FormingDailyPlanSummary）：期間×工程の運行日 */
+const FORMING_DAILY_PLAN_BASE = '/api/database/forming-daily-plan'
+
+/** 工程別運行日：process_key ごとのチェックされた日历日 */
+export interface ProcessRunCalendarItemDTO {
+  process_key: string
+  dates: string[]
+}
+
+export function getFormingDailyPlanProcessRunDays(params: { startDate: string; endDate: string }) {
+  return request.get<{
+    data: {
+      configured: boolean
+      startDate: string
+      endDate: string
+      items: ProcessRunCalendarItemDTO[]
+    }
+  }>(`${FORMING_DAILY_PLAN_BASE}/process-run-days`, { params })
+}
+
+export function putFormingDailyPlanProcessRunDays(body: {
+  startDate: string
+  endDate: string
+  items: ProcessRunCalendarItemDTO[]
+}) {
+  return request.put<{
+    data: {
+      configured: boolean
+      startDate: string
+      endDate: string
+      items: ProcessRunCalendarItemDTO[]
+    }
+  }>(`${FORMING_DAILY_PLAN_BASE}/process-run-days`, body)
 }
