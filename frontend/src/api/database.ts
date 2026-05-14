@@ -100,6 +100,8 @@ export function getQualityRateByProcess(params: {
   startDate: string
   endDate: string
   process?: string
+  /** false で金額集計を省略（数量・比率のみ・高速）。二段取得の第1段用 */
+  includeAmounts?: boolean
 }) {
   return request.get<{
     data: {
@@ -113,6 +115,11 @@ export function getQualityRateByProcess(params: {
         sum_defect: number
         sum_scrap: number
         sum_defect_and_scrap: number
+        /** 不良数量×当該製品×当該工程完了時点累計単価の合計（円） */
+        sum_defect_amount: number
+        /** 廃棄数量×同上単価の合計（円） */
+        sum_scrap_amount: number
+        sum_defect_and_scrap_amount: number
         rate: number | null
         rate_percent: number | null
       }>

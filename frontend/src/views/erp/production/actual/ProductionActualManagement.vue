@@ -158,7 +158,16 @@
               @click="handlePrintTable"
               class="print-table-btn"
             >
-              印刷
+              取引ログ印刷
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :icon="Printer"
+              @click="handlePrintMatrixTable"
+              class="print-table-btn"
+            >
+              日別マトリクス印刷
             </el-button>
           </div>
         </div>
@@ -1743,6 +1752,31 @@ const formatDateTime = (value: string | undefined) => {
   })
 }
 
+/** 印刷用 HTML エスケープ */
+const escapeHtmlText = (raw: string) =>
+  raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+/** 取引日時から日付キー（YYYY-MM-DD）を取得 */
+const transactionDateKey = (row: StockActualLogRecord): string => {
+  const t = row.transaction_time
+  if (!t) return ''
+  const s = String(t)
+  const m = s.match(/^(\d{4}-\d{2}-\d{2})/)
+  if (m) return m[1]
+  return formatDateString(new Date(s))
+}
+
+/** YYYY-MM-DD を表示用 M/D に短縮 */
+const formatShortDateHeader = (ymd: string) => {
+  const p = ymd.split('-')
+  if (p.length !== 3) return ymd
+  return `${Number(p[1])}/${Number(p[2])}`
+}
+
 // ウィンドウリサイズ処理
 const handleResize = () => {
   dailyTrendChart?.resize()
@@ -2158,6 +2192,382 @@ const handlePrintTable = async () => {
     ElMessage.success('印刷準備が完了しました')
   } catch (error) {
     console.error('テーブル印刷エラー:', error)
+    ElMessage.error('印刷に失敗しました')
+  }
+}
+
+/** 取引ログ一覧を「工程・設備・製品 × 日付」の二次元表で印刷（A3 横） */
+const handlePrintMatrixTable = async () => {
+  try {
+    if (tableData.value.length === 0) {
+      ElMessage.warning('印刷するデータがありません')
+      return
+    }
+
+    const params: any = {
+      page: 1,
+      limit: 10000,
+      process_cd: searchForm.process_cd || undefined,
+      transaction_type: searchForm.transaction_type || undefined,
+      target_name: searchForm.target_name || undefined,
+      machine_name: searchForm.machine_name || undefined,
+      date_from: searchForm.date_from || undefined,
+      date_to: searchForm.date_to || undefined,
+      sort_by: 'transaction_time',
+      sort_order: 'ASC',
+    }
+
+    ElMessage.info('データを取得中...')
+    const response = await getStockActualLogs(params)
+
+    if (!response?.success || !response.data) {
+      ElMessage.error('データの取得に失敗しました')
+      return
+    }
+
+    const allData = response.data.list || []
+    if (allData.length === 0) {
+      ElMessage.warning('印刷するデータがありません')
+      return
+    }
+
+    /** この工程では設備名が空の行をマトリクス印刷から除外する */
+    const SKIP_EMPTY_MACHINE_PROCESS_NAMES = new Set(['切断', '面取', '成型', '溶接', 'メッキ'])
+
+    const resolveProcessDisplayForPrint = (row: StockActualLogRecord): string => {
+      const n = String(row.process_name || '').trim()
+      if (n) return n
+      const cd = String(row.process_cd || '').trim()
+      if (cd) {
+        const p = processList.value.find((x) => String(x.process_cd) === cd)
+        if (p?.process_name) return String(p.process_name).trim()
+        return cd
+      }
+      return '-'
+    }
+
+    const isEmptyMachineLabel = (machine: string): boolean => {
+      const m = machine.trim()
+      if (!m) return true
+      if (m === '-') return true
+      if (m === '－') return true
+      if (m === '—') return true
+      return false
+    }
+
+    type MatrixAgg = {
+      process: string
+      machine: string
+      product: string
+      byDate: Map<string, number>
+    }
+
+    const dateSet = new Set<string>()
+    const rowMap = new Map<string, MatrixAgg>()
+
+    for (const row of allData) {
+      const dk = transactionDateKey(row)
+      if (!dk) continue
+
+      const process = resolveProcessDisplayForPrint(row)
+      const machine = String(row.machine_name || '-').trim() || '-'
+      if (SKIP_EMPTY_MACHINE_PROCESS_NAMES.has(process) && isEmptyMachineLabel(machine)) {
+        continue
+      }
+      const product = String(row.target_name || '-').trim() || '-'
+      const rowKey = [process, machine, product].join('\u0001')
+
+      dateSet.add(dk)
+      const qty = Number(row.quantity || 0)
+
+      let agg = rowMap.get(rowKey)
+      if (!agg) {
+        agg = { process, machine, product, byDate: new Map() }
+        rowMap.set(rowKey, agg)
+      }
+      agg.byDate.set(dk, (agg.byDate.get(dk) || 0) + qty)
+    }
+
+    if (rowMap.size === 0) {
+      ElMessage.warning(
+        'マトリクス印刷の対象データがありません（切断・面取・成型・溶接・メッキで設備名が空の行は除いています）',
+      )
+      return
+    }
+
+    const sortedDates = Array.from(dateSet).sort()
+    if (sortedDates.length === 0) {
+      ElMessage.warning('日付が取得できたデータがありません')
+      return
+    }
+
+    const matrixRows = Array.from(rowMap.values()).sort((a, b) => {
+      const c1 = a.process.localeCompare(b.process, 'ja')
+      if (c1 !== 0) return c1
+      const c2 = a.machine.localeCompare(b.machine, 'ja')
+      if (c2 !== 0) return c2
+      return a.product.localeCompare(b.product, 'ja')
+    })
+
+    /** 工程 → 設備名 → 行データ（印刷時の階層表示用） */
+    const byProcess = new Map<string, Map<string, MatrixAgg[]>>()
+    for (const r of matrixRows) {
+      if (!byProcess.has(r.process)) {
+        byProcess.set(r.process, new Map())
+      }
+      const byMachine = byProcess.get(r.process)!
+      if (!byMachine.has(r.machine)) {
+        byMachine.set(r.machine, [])
+      }
+      byMachine.get(r.machine)!.push(r)
+    }
+    const sortedProcessKeys = Array.from(byProcess.keys()).sort((a, b) => a.localeCompare(b, 'ja'))
+
+    const colTotals = new Map<string, number>()
+    for (const d of sortedDates) colTotals.set(d, 0)
+    for (const r of matrixRows) {
+      for (const d of sortedDates) {
+        const v = r.byDate.get(d) || 0
+        colTotals.set(d, (colTotals.get(d) || 0) + v)
+      }
+    }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされています。ブラウザの設定を確認してください。')
+      return
+    }
+
+    const dateRangeLabel =
+      searchForm.date_from && searchForm.date_to
+        ? `${searchForm.date_from} ～ ${searchForm.date_to}`
+        : '全期間'
+
+    const filterInfo: string[] = []
+    if (
+      searchForm.transaction_type &&
+      searchForm.transaction_type !== 'ALL' &&
+      searchForm.transaction_type !== '実績'
+    ) {
+      filterInfo.push('取引タイプ: ' + searchForm.transaction_type)
+    }
+    if (searchForm.target_name) {
+      filterInfo.push('製品名: ' + searchForm.target_name)
+    }
+    if (searchForm.machine_name) {
+      filterInfo.push('設備: ' + searchForm.machine_name)
+    }
+    const filterText = filterInfo.length > 0 ? filterInfo.join(' | ') : ''
+
+    const fmtQty = (n: number) => {
+      if (n === 0) return ''
+      const s = n.toLocaleString('ja-JP', { maximumFractionDigits: 2 })
+      return s
+    }
+
+    const htmlParts: string[] = []
+    htmlParts.push('<!DOCTYPE html>')
+    htmlParts.push('<html>')
+    htmlParts.push('<head>')
+    htmlParts.push('<meta charset="UTF-8">')
+    htmlParts.push('<title>取引ログ一覧（日別集計）</title>')
+    htmlParts.push('<style>')
+    htmlParts.push('@page { size: A3 landscape; margin: 8mm; }')
+    htmlParts.push('* { margin: 0; padding: 0; box-sizing: border-box; }')
+    htmlParts.push(
+      'body { font-family: "游ゴシック", "Yu Gothic", "YuGothic", "Meiryo", "メイリオ", sans-serif; padding: 10px; background: #fff; color: #111827; }',
+    )
+    htmlParts.push(
+      '.print-header { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #2563eb; }',
+    )
+    htmlParts.push(
+      '.print-header-row { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 10px 16px; }',
+    )
+    htmlParts.push(
+      '.print-title { font-size: 18px; font-weight: 700; color: #0f172a; margin: 0; text-align: left; flex: 1; min-width: 12em; }',
+    )
+    htmlParts.push(
+      '.print-period { font-size: 12px; color: #475569; font-weight: 600; text-align: right; white-space: nowrap; flex-shrink: 0; }',
+    )
+    htmlParts.push('.print-filters { font-size: 11px; color: #475569; margin-top: 6px; text-align: left; }')
+    htmlParts.push('.matrix-wrap { width: 100%; overflow: visible; }')
+    htmlParts.push(
+      '.matrix-table tbody.matrix-machine-tbody { break-inside: avoid; page-break-inside: avoid; }',
+    )
+    htmlParts.push(
+      '.matrix-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 10px; margin-top: 8px; line-height: 1.44; }',
+    )
+    htmlParts.push(
+      '.matrix-table th, .matrix-table td { border: 1px solid #94a3b8; padding: 2.4px 3.6px; vertical-align: middle; word-wrap: break-word; overflow-wrap: anywhere; }',
+    )
+    htmlParts.push(
+      '.matrix-table th { background: #e2e8f0; font-weight: 700; color: #0f172a; text-align: center; }',
+    )
+    htmlParts.push('.matrix-table .sticky-col { background: #f1f5f9; text-align: left; font-weight: 600; }')
+    htmlParts.push(
+      '.matrix-table .matrix-product-name { width: 150px; max-width: 150px; min-width: 150px; box-sizing: border-box; text-align: left; font-weight: 600; padding-left: 18px; padding-right: 6px; }',
+    )
+    htmlParts.push('.matrix-table .num { text-align: right; font-variant-numeric: tabular-nums; }')
+    htmlParts.push('.matrix-table .date-th { font-size: 9px; line-height: 1.26; padding: 4.8px 1.2px; }')
+    htmlParts.push(
+      '.matrix-table .total-row th, .matrix-table .total-row td { background: #fef9c3; font-weight: 700; }',
+    )
+    htmlParts.push(
+      '.matrix-table .row-total { background: #ecfdf5; font-weight: 700; text-align: right; }',
+    )
+    htmlParts.push(
+      '.matrix-table .matrix-group-process td { background: #bfdbfe; font-weight: 700; font-size: 11px; text-align: left; padding: 6px 9.6px; border-color: #60a5fa; }',
+    )
+    htmlParts.push(
+      '.matrix-table .matrix-group-machine td { background: #e0e7ff; font-weight: 700; font-size: 10px; text-align: left; padding: 4.8px 9.6px 4.8px 26.4px; border-color: #818cf8; }',
+    )
+    htmlParts.push(
+      '.matrix-table .matrix-subtotal-machine td, .matrix-table .matrix-subtotal-machine th { background: #c7d2fe; font-weight: 700; border-color: #64748b; }',
+    )
+    htmlParts.push(
+      '.matrix-table .matrix-subtotal-label { text-align: right !important; padding-right: 8px !important; font-size: 9px; color: #1e293b; }',
+    )
+    htmlParts.push(
+      '@media print { body { padding: 0; } .matrix-table { font-size: 9px; line-height: 1.44; } .matrix-table th, .matrix-table td { padding: 1.2px 2.4px; } .matrix-table .matrix-product-name { width: 150px !important; max-width: 150px !important; min-width: 150px !important; padding-left: 14px !important; padding-right: 4px !important; } .matrix-table tbody.matrix-machine-tbody { break-inside: avoid !important; page-break-inside: avoid !important; } .matrix-table .date-th { font-size: 8px; padding: 3.6px 1.2px; } .matrix-table .matrix-group-process td { font-size: 10px; padding: 4.8px 8px; } .matrix-table .matrix-group-machine td { font-size: 9px; padding: 3.6px 8px 3.6px 26px; } .matrix-table .matrix-subtotal-label { font-size: 8px !important; } }',
+    )
+    htmlParts.push('</style>')
+    htmlParts.push('</head>')
+    htmlParts.push('<body>')
+    htmlParts.push('<div class="print-header">')
+    htmlParts.push('<div class="print-header-row">')
+    htmlParts.push('<div class="print-title">取引ログ一覧表（日別数量集計）</div>')
+    htmlParts.push(
+      '<div class="print-period">期間: ' + escapeHtmlText(dateRangeLabel) + '</div>',
+    )
+    htmlParts.push('</div>')
+    if (filterText) {
+      htmlParts.push('<div class="print-filters">' + escapeHtmlText(filterText) + '</div>')
+    }
+    htmlParts.push('</div>')
+    htmlParts.push('<div class="matrix-wrap">')
+    htmlParts.push('<table class="matrix-table">')
+    htmlParts.push('<thead><tr>')
+    htmlParts.push('<th style="width:150px;min-width:150px;max-width:150px;" class="matrix-product-name">製品名</th>')
+    for (const d of sortedDates) {
+      htmlParts.push(
+        '<th class="date-th num" title="' +
+          escapeHtmlText(d) +
+          '">' +
+          escapeHtmlText(formatShortDateHeader(d)) +
+          '</th>',
+      )
+    }
+    htmlParts.push('<th style="width: 4%;" class="num">行計</th>')
+    htmlParts.push('</tr></thead>')
+
+    const matrixColSpan = 1 + sortedDates.length + 1
+
+    for (const proc of sortedProcessKeys) {
+      htmlParts.push('<tbody>')
+      htmlParts.push('<tr class="matrix-group-process">')
+      htmlParts.push(
+        '<td colspan="' +
+          matrixColSpan +
+          '">【工程】' +
+          escapeHtmlText(proc) +
+          '</td>',
+      )
+      htmlParts.push('</tr>')
+      htmlParts.push('</tbody>')
+
+      const byMachine = byProcess.get(proc)!
+      const sortedMachines = Array.from(byMachine.keys()).sort((a, b) => a.localeCompare(b, 'ja'))
+      for (const mach of sortedMachines) {
+        htmlParts.push('<tbody class="matrix-machine-tbody">')
+        htmlParts.push('<tr class="matrix-group-machine">')
+        htmlParts.push(
+          '<td colspan="' +
+            matrixColSpan +
+            '">【設備名】' +
+            escapeHtmlText(mach) +
+            '</td>',
+        )
+        htmlParts.push('</tr>')
+
+        const prodRows = byMachine.get(mach)!
+        prodRows.sort((a, b) => a.product.localeCompare(b.product, 'ja'))
+        for (const r of prodRows) {
+          let rowSum = 0
+          htmlParts.push('<tr>')
+          htmlParts.push(
+            '<td class="sticky-col matrix-product-name">' + escapeHtmlText(r.product) + '</td>',
+          )
+          for (const d of sortedDates) {
+            const v = r.byDate.get(d) || 0
+            rowSum += v
+            htmlParts.push('<td class="num">' + escapeHtmlText(fmtQty(v)) + '</td>')
+          }
+          htmlParts.push('<td class="num row-total">' + escapeHtmlText(fmtQty(rowSum) || '0') + '</td>')
+          htmlParts.push('</tr>')
+        }
+
+        const machineDateTotals = new Map<string, number>()
+        for (const d of sortedDates) {
+          machineDateTotals.set(d, 0)
+        }
+        let machineGrand = 0
+        for (const r of prodRows) {
+          let rowSum = 0
+          for (const d of sortedDates) {
+            const v = r.byDate.get(d) || 0
+            machineDateTotals.set(d, (machineDateTotals.get(d) || 0) + v)
+            rowSum += v
+          }
+          machineGrand += rowSum
+        }
+        htmlParts.push('<tr class="matrix-subtotal-machine">')
+        htmlParts.push(
+          '<th scope="row" class="sticky-col matrix-product-name matrix-subtotal-label">設備計</th>',
+        )
+        for (const d of sortedDates) {
+          const sv = machineDateTotals.get(d) || 0
+          htmlParts.push('<td class="num">' + escapeHtmlText(fmtQty(sv)) + '</td>')
+        }
+        htmlParts.push(
+          '<td class="num row-total">' +
+            escapeHtmlText(machineGrand === 0 ? '0' : machineGrand.toLocaleString('ja-JP')) +
+            '</td>',
+        )
+        htmlParts.push('</tr>')
+
+        htmlParts.push('</tbody>')
+      }
+    }
+
+    htmlParts.push('<tbody>')
+    htmlParts.push('<tr class="total-row">')
+    htmlParts.push('<th style="text-align:right;padding-right:8px;">総計</th>')
+    let grand = 0
+    for (const d of sortedDates) {
+      const t = colTotals.get(d) || 0
+      grand += t
+      htmlParts.push('<td class="num">' + escapeHtmlText(fmtQty(t) || '0') + '</td>')
+    }
+    htmlParts.push('<td class="num">' + escapeHtmlText(grand.toLocaleString('ja-JP')) + '</td>')
+    htmlParts.push('</tr>')
+    htmlParts.push('</tbody>')
+    htmlParts.push('</table></div>')
+    htmlParts.push('<script>')
+    htmlParts.push('window.onload = function() {')
+    htmlParts.push('setTimeout(function() {')
+    htmlParts.push('window.print();')
+    htmlParts.push('window.onafterprint = function() { window.close(); };')
+    htmlParts.push('}, 500);')
+    htmlParts.push('};')
+    htmlParts.push('<' + '/script>')
+    htmlParts.push('<' + '/body>')
+    htmlParts.push('<' + '/html>')
+
+    printWindow.document.write(htmlParts.join('\n'))
+    printWindow.document.close()
+    ElMessage.success('印刷準備が完了しました')
+  } catch (error) {
+    console.error('マトリクス印刷エラー:', error)
     ElMessage.error('印刷に失敗しました')
   }
 }

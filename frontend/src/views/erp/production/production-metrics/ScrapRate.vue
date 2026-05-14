@@ -55,7 +55,7 @@
         </div>
       </div>
 
-      <div class="scrap-kpi">
+      <div class="scrap-kpi scrap-kpi--process-bound" v-loading="loadingProcessAgg">
         <div class="scrap-kpi__item">
           <el-icon class="scrap-kpi__water scrap-kpi__water--rose"><TrendCharts /></el-icon>
           <div class="scrap-kpi__label">{{ summaryCardTitle }}</div>
@@ -91,11 +91,11 @@
           <span class="scrap-charts__note">工程＝一覧と連動 · 製品チャート＝条件内全件（廃棄率高順・上位表示）</span>
         </div>
         <div class="scrap-charts__grid">
-          <div class="scrap-chart-card">
+          <div class="scrap-chart-card scrap-chart-card--process-bound" v-loading="loadingProcessAgg">
             <div class="scrap-chart-card__title">工程別 比率（不良＋廃棄÷実績）</div>
             <div ref="processRateChartRef" class="scrap-chart-host" />
           </div>
-          <div class="scrap-chart-card">
+          <div class="scrap-chart-card scrap-chart-card--process-bound" v-loading="loadingProcessAgg">
             <div class="scrap-chart-card__title">工程別 不良・廃棄（数量）</div>
             <div ref="processVolumeChartRef" class="scrap-chart-host" />
           </div>
@@ -113,7 +113,16 @@
           <span class="scrap-block__title">工程別集計</span>
         </div>
         <div class="scrap-table-shell scrap-table-shell--process">
-          <el-table v-loading="loading" :data="rows" size="small" border stripe class="scrap-table scrap-table--process">
+          <el-table
+            v-loading="loadingProcessAgg"
+            :data="rows"
+            size="small"
+            border
+            stripe
+            class="scrap-table scrap-table--process"
+            show-summary
+            :summary-method="getProcessSummaries"
+          >
             <el-table-column
               prop="label"
               label="工程"
@@ -163,6 +172,36 @@
               <template #default="{ row }">{{ fmtInt(row.sum_defect_and_scrap) }}</template>
             </el-table-column>
             <el-table-column
+              prop="sum_defect_amount"
+              label="不良金額（合計）"
+              width="140"
+              align="right"
+              class-name="scrap-td--num scrap-td--defect"
+              label-class-name="scrap-th--num scrap-th--defect"
+            >
+              <template #default="{ row }">{{ fmtYen(row.sum_defect_amount) }}</template>
+            </el-table-column>
+            <el-table-column
+              prop="sum_scrap_amount"
+              label="廃棄金額（合計）"
+              width="140"
+              align="right"
+              class-name="scrap-td--num scrap-td--scrap"
+              label-class-name="scrap-th--num scrap-th--scrap"
+            >
+              <template #default="{ row }">{{ fmtYen(row.sum_scrap_amount) }}</template>
+            </el-table-column>
+            <el-table-column
+              prop="sum_defect_and_scrap_amount"
+              label="不良金額＋廃棄金額"
+              width="150"
+              align="right"
+              class-name="scrap-td--num scrap-td--sum"
+              label-class-name="scrap-th--num scrap-th--sum"
+            >
+              <template #default="{ row }">{{ fmtYen(row.sum_defect_and_scrap_amount) }}</template>
+            </el-table-column>
+            <el-table-column
               label="廃棄率（％）"
               min-width="120"
               align="right"
@@ -174,6 +213,7 @@
               </template>
             </el-table-column>
           </el-table>
+          <p v-if="processAmountsSyncing" class="scrap-process-amount-hint">金額列を読込中…</p>
         </div>
       </section>
 
@@ -190,7 +230,7 @@
         </div>
         <div class="scrap-table-shell scrap-table-shell--wide scrap-table-shell--product">
           <el-table
-            v-loading="loading"
+            v-loading="loadingProductMatrix"
             :data="productRows"
             size="small"
             border
@@ -309,7 +349,11 @@ import {
 
 const iconHero = markRaw(DataAnalysis)
 const gradient = 'linear-gradient(135deg, #f56c6c, #ff7875)'
-const loading = ref(false)
+const loadingProductMatrix = ref(false)
+/** 工程別 KPI・チャート2枚・工程別集計表の数量・比率取得中 */
+const loadingProcessAgg = ref(false)
+/** 工程別金額列のみ第2段 API 取得中 */
+const processAmountsSyncing = ref(false)
 
 const today = new Date()
 const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -404,6 +448,9 @@ const rows = ref<
     sum_defect: number
     sum_scrap: number
     sum_defect_and_scrap: number
+    sum_defect_amount: number
+    sum_scrap_amount: number
+    sum_defect_and_scrap_amount: number
     rate: number | null
     rate_percent: number | null
   }>
@@ -467,6 +514,51 @@ const summaryBadSub = computed(() => {
 function fmtInt(n: number | null | undefined) {
   if (n == null || Number.isNaN(n)) return '—'
   return n.toLocaleString('ja-JP')
+}
+
+/** 円（端数は四捨五入して整数表示） */
+function fmtYen(n: number | null | undefined) {
+  if (n == null || Number.isNaN(n)) return '—'
+  const v = Math.round(Number(n))
+  return `¥${v.toLocaleString('ja-JP')}`
+}
+
+/** 工程別集計表フッター合計（廃棄率列は全体加重：不良＋廃棄÷実績） */
+function getProcessSummaries(param: { columns: { property?: string }[]; data: typeof rows.value }) {
+  const { columns, data } = param
+  const list = data || []
+  let tActual = 0
+  let tDef = 0
+  let tScr = 0
+  let tDefAmt = 0
+  let tScrAmt = 0
+  for (const r of list) {
+    tActual += Number(r.sum_actual) || 0
+    tDef += Number(r.sum_defect) || 0
+    tScr += Number(r.sum_scrap) || 0
+    tDefAmt += Number(r.sum_defect_amount) || 0
+    tScrAmt += Number(r.sum_scrap_amount) || 0
+  }
+  const tBad = tDef + tScr
+  const tBadAmt = tDefAmt + tScrAmt
+  const rateStr = tActual > 0 ? `${((tBad / tActual) * 100).toFixed(2)} %` : '—'
+  const sums: string[] = []
+  columns.forEach((col, index) => {
+    if (index === 0) {
+      sums.push('合計')
+      return
+    }
+    const p = col.property
+    if (p === 'sum_actual') sums.push(fmtInt(tActual))
+    else if (p === 'sum_defect') sums.push(fmtInt(tDef))
+    else if (p === 'sum_scrap') sums.push(fmtInt(tScr))
+    else if (p === 'sum_defect_and_scrap') sums.push(fmtInt(tBad))
+    else if (p === 'sum_defect_amount') sums.push(fmtYen(tDefAmt))
+    else if (p === 'sum_scrap_amount') sums.push(fmtYen(tScrAmt))
+    else if (p === 'sum_defect_and_scrap_amount') sums.push(fmtYen(tBadAmt))
+    else sums.push(rateStr)
+  })
+  return sums
 }
 
 function fmtPct(p: number | null | undefined) {
@@ -793,29 +885,26 @@ function syncScrapCharts() {
 }
 
 watch(
-  () => [rows.value, productRows.value, productChartRows.value, productChartLoading.value, loading.value],
+  () => [
+    rows.value,
+    productRows.value,
+    productChartRows.value,
+    productChartLoading.value,
+    loadingProductMatrix.value,
+    loadingProcessAgg.value,
+    processAmountsSyncing.value,
+  ],
   () => {
     syncScrapCharts()
   },
   { deep: true }
 )
 
-async function fetchProcessSummary() {
-  const dr = dateRange.value
-  if (!dr?.[0] || !dr?.[1]) return
-  const res = await getQualityRateByProcess({
-    startDate: dr[0],
-    endDate: dr[1],
-    process: process.value || undefined,
-  })
-  const body = res as {
-    data?: {
-      processes?: typeof rows.value
-      summary?: Summary
-      all_processes_defect_scrap_total?: number
-    }
-  }
-  const d = body.data
+function applyQualityProcessPayload(d: {
+  processes?: typeof rows.value
+  summary?: Summary
+  all_processes_defect_scrap_total?: number
+} | null) {
   if (!d) {
     rows.value = []
     summary.value = emptySummary()
@@ -840,6 +929,70 @@ async function fetchProcessSummary() {
         rolled_yield_percent: s.rolled_yield_percent ?? null,
       }
     : emptySummary()
+}
+
+function mergeProcessAmountColumnsFromPayload(d: { processes?: typeof rows.value } | null) {
+  const procs = d?.processes
+  if (!procs?.length) return
+  const byKey = new Map(procs.map((p) => [p.key, p]))
+  rows.value = rows.value.map((r) => {
+    const src = byKey.get(r.key)
+    if (!src) return r
+    return {
+      ...r,
+      sum_defect_amount: Number(src.sum_defect_amount) || 0,
+      sum_scrap_amount: Number(src.sum_scrap_amount) || 0,
+      sum_defect_and_scrap_amount: Number(src.sum_defect_and_scrap_amount) || 0,
+    }
+  })
+}
+
+async function fetchProcessSummary() {
+  const dr = dateRange.value
+  if (!dr?.[0] || !dr?.[1]) return
+  loadingProcessAgg.value = true
+  processAmountsSyncing.value = false
+  const proc = process.value || undefined
+  try {
+    const resFast = await getQualityRateByProcess({
+      startDate: dr[0],
+      endDate: dr[1],
+      process: proc,
+      includeAmounts: false,
+    })
+    const bodyFast = resFast as {
+      data?: {
+        processes?: typeof rows.value
+        summary?: Summary
+        all_processes_defect_scrap_total?: number
+      }
+    }
+    applyQualityProcessPayload(bodyFast.data ?? null)
+  } catch (e: unknown) {
+    console.error(e)
+    applyQualityProcessPayload(null)
+    ElMessage.error('工程別データの取得に失敗しました')
+    return
+  } finally {
+    loadingProcessAgg.value = false
+  }
+
+  processAmountsSyncing.value = true
+  try {
+    const resAmt = await getQualityRateByProcess({
+      startDate: dr[0],
+      endDate: dr[1],
+      process: proc,
+      includeAmounts: true,
+    })
+    const bodyAmt = resAmt as { data?: { processes?: typeof rows.value } }
+    mergeProcessAmountColumnsFromPayload(bodyAmt.data ?? null)
+  } catch (e: unknown) {
+    console.error(e)
+    ElMessage.warning('工程別金額の取得に失敗しました（数量は表示済み）')
+  } finally {
+    processAmountsSyncing.value = false
+  }
 }
 
 function productOptionLabel(p: { product_cd: string; product_name?: string | null }) {
@@ -958,16 +1111,21 @@ async function fetchAll() {
     ElMessage.warning('期間を選択してください')
     return
   }
-  loading.value = true
-  try {
-    await Promise.all([fetchProcessSummary(), fetchProductMatrix()])
-  } catch (e: unknown) {
-    console.error(e)
-    ElMessage.error('データの取得に失敗しました')
-  } finally {
-    loading.value = false
-    void refreshProductChartAllPages()
-  }
+  await Promise.all([
+    (async () => {
+      loadingProductMatrix.value = true
+      try {
+        await fetchProductMatrix()
+      } catch (e: unknown) {
+        console.error(e)
+        ElMessage.error('製品別データの取得に失敗しました')
+      } finally {
+        loadingProductMatrix.value = false
+      }
+    })(),
+    fetchProcessSummary(),
+  ])
+  void refreshProductChartAllPages()
 }
 
 let filterDebounce: ReturnType<typeof setTimeout> | null = null
@@ -985,14 +1143,14 @@ watch([dateRange, process, filterProductCd], () => scheduleAutoFetch(), { deep: 
 async function loadProductMatrixWithSpinner() {
   const dr = dateRange.value
   if (!dr?.[0] || !dr?.[1]) return
-  loading.value = true
+  loadingProductMatrix.value = true
   try {
     await fetchProductMatrix()
   } catch (e: unknown) {
     console.error(e)
     ElMessage.error('製品別データの取得に失敗しました')
   } finally {
-    loading.value = false
+    loadingProductMatrix.value = false
   }
 }
 
@@ -1550,6 +1708,29 @@ onBeforeUnmount(() => {
 
 .scrap-table-shell--process {
   background: linear-gradient(180deg, #fafbff 0%, #fff 48%);
+}
+
+.scrap-kpi--process-bound {
+  position: relative;
+  min-height: 96px;
+}
+
+.scrap-chart-card--process-bound {
+  position: relative;
+  min-height: 200px;
+}
+
+.scrap-process-amount-hint {
+  margin: 8px 4px 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.scrap-table-shell--process :deep(.el-table__footer-wrapper .el-table__cell) {
+  font-weight: 700;
+  font-size: 12px;
+  background: #f1f5f9 !important;
+  color: #334155;
 }
 
 .scrap-table-shell--product {

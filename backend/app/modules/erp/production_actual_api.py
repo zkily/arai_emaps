@@ -3,7 +3,8 @@
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, distinct
+from sqlalchemy import select, func, distinct, or_
+from sqlalchemy.orm import aliased
 from typing import Optional, List
 from decimal import Decimal
 
@@ -39,12 +40,19 @@ def _apply_filters(
         )
         query = query.where(StockTransactionLog.target_cd.in_(product_subq))
     if machine_name and machine_name.strip():
+        pat = f"%{machine_name.strip()}%"
         machine_subq = (
             select(Machine.machine_cd)
-            .where(Machine.machine_name.like(f"%{machine_name.strip()}%"))
+            .where(Machine.machine_name.like(pat))
             .scalar_subquery()
         )
-        query = query.where(StockTransactionLog.machine_cd.in_(machine_subq))
+        # ログの machine_cd はマスタの設備CDのほか、現場名（切断機名等）がそのまま入る場合がある
+        query = query.where(
+            or_(
+                StockTransactionLog.machine_cd.in_(machine_subq),
+                StockTransactionLog.machine_cd.like(pat),
+            )
+        )
     if date_from:
         query = query.where(StockTransactionLog.transaction_time >= date_from)
     if date_to:
@@ -90,18 +98,29 @@ async def get_production_actual_logs(
     total_result = await db.execute(count_q)
     total = total_result.scalar() or 0
 
-    # list with joins (Process, Product, Machine)
+    # list with joins（設備：machine_cd がマスタの CD と一致しない場合、名称一致で解決）
+    MachineByCd = aliased(Machine)
+    MachineByName = aliased(Machine)
+    resolved_machine_name = func.coalesce(
+        MachineByCd.machine_name,
+        MachineByName.machine_name,
+        StockTransactionLog.machine_cd,
+    )
     list_q = (
         select(
             StockTransactionLog,
             Process.process_name,
             Product.product_name,
-            Machine.machine_name,
+            resolved_machine_name,
         )
         .select_from(StockTransactionLog)
         .outerjoin(Process, StockTransactionLog.process_cd == Process.process_cd)
         .outerjoin(Product, StockTransactionLog.target_cd == Product.product_cd)
-        .outerjoin(Machine, StockTransactionLog.machine_cd == Machine.machine_cd)
+        .outerjoin(MachineByCd, StockTransactionLog.machine_cd == MachineByCd.machine_cd)
+        .outerjoin(
+            MachineByName,
+            StockTransactionLog.machine_cd == MachineByName.machine_name,
+        )
     )
     list_q = _apply_filters(
         list_q,

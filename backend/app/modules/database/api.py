@@ -14,6 +14,7 @@ import math
 import re
 import time
 from typing import Optional
+from collections import defaultdict
 from datetime import date, timedelta, datetime
 from datetime import time as dt_time
 from decimal import Decimal
@@ -23,7 +24,7 @@ from app.core.datetime_utils import now_jst, JST
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
-from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, Destination
+from app.modules.master.models import Product, ProductProcessBOM, ProcessRoute, ProcessRouteStep, ProductRouteStep, Destination
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 
 router = APIRouter(prefix="/production-summarys", tags=["production-summarys"])
@@ -675,6 +676,158 @@ def _compute_rolled_main_line_yield_loss(metrics_by_key: dict[str, dict]) -> tup
     return ry, loss
 
 
+def _int_qty(v) -> int:
+    if v is None:
+        return 0
+    if isinstance(v, Decimal):
+        return int(v)
+    return int(v)
+
+
+# process_route_steps の KT10（外注倉庫）を PROCESS_CD_TO_PREFIX に含めない履歴互換
+_PROCESS_CD_TO_PREFIX_FOR_QUALITY_AMT = dict(PROCESS_CD_TO_PREFIX)
+_PROCESS_CD_TO_PREFIX_FOR_QUALITY_AMT.setdefault("KT10", "outsourced_warehouse")
+
+
+async def _async_compute_quality_process_amounts_by_prefix(
+    db: AsyncSession,
+    start_d: date,
+    end_d: date,
+) -> dict[str, dict[str, float]]:
+    """
+    製品×ルート×日の不良・廃棄数量に、当該製品×ルート×基準日の
+    「工程完了時点累計単価」（在庫評価 API と同じ _build_cumulative_unit_price_by_step）を乗じて金額を集計する。
+    工程キーは product_route_steps.process_cd を PROCESS_CD_TO_PREFIX 経由で対応付ける。
+    """
+    from app.modules.erp.inventory_value_api import (
+        _build_cumulative_unit_price_by_step,
+        _lookup_cumulative_price,
+    )
+
+    select_cols = ["ps.`product_cd`", "ps.`route_cd`", "ps.`date`"]
+    for key, _label, _a, defect_col, scrap_col in _QUALITY_RATE_BY_PROCESS_DEFS:
+        if defect_col:
+            select_cols.append(f"SUM(COALESCE(ps.`{defect_col}`, 0)) AS `{key}_defect`")
+        else:
+            select_cols.append(f"0 AS `{key}_defect`")
+        select_cols.append(f"SUM(COALESCE(ps.`{scrap_col}`, 0)) AS `{key}_scrap`")
+    grp_sql = (
+        "SELECT "
+        + ", ".join(select_cols)
+        + " FROM production_summarys ps "
+        + "WHERE ps.`date` >= :start_date AND ps.`date` <= :end_date "
+        + "GROUP BY ps.`product_cd`, ps.`route_cd`, ps.`date`"
+    )
+    grouped = (await db.execute(text(grp_sql), {"start_date": start_d, "end_date": end_d})).mappings().all()
+
+    product_cds: set[str] = set()
+    for gr in grouped:
+        pc = (gr.get("product_cd") or "").strip() if gr.get("product_cd") is not None else ""
+        if pc:
+            product_cds.add(pc)
+
+    prod_by_cd: dict[str, Product] = {}
+    if product_cds:
+        cds = list(product_cds)
+        for i in range(0, len(cds), 500):
+            chunk = cds[i : i + 500]
+            res = await db.execute(select(Product).where(Product.product_cd.in_(chunk)))
+            for p in res.scalars().all():
+                if p.product_cd:
+                    prod_by_cd[str(p.product_cd).strip()] = p
+
+    step_cache: dict[tuple[str, str], dict[str, int]] = {}
+    cum_cache: dict[tuple[str, str, date], tuple[dict, int]] = {}
+
+    async def load_step_map(product_cd: str, route_cd: str) -> dict[str, int]:
+        k = (product_cd, route_cd)
+        if k in step_cache:
+            return step_cache[k]
+        if not route_cd:
+            step_cache[k] = {}
+            return step_cache[k]
+        q = (
+            select(ProductRouteStep)
+            .where(
+                ProductRouteStep.product_cd == product_cd,
+                ProductRouteStep.route_cd == route_cd,
+            )
+            .order_by(ProductRouteStep.step_no)
+        )
+        rows = list((await db.execute(q)).scalars().all())
+        m: dict[str, int] = {}
+        for st in rows:
+            pcd = (st.process_cd or "").strip()
+            pref = _PROCESS_CD_TO_PREFIX_FOR_QUALITY_AMT.get(pcd)
+            if pref:
+                m[pref] = int(st.step_no)
+        step_cache[k] = m
+        return m
+
+    async def load_cum(product_cd: str, route_cd: str, target_date: date, take_count: int) -> tuple[dict, int]:
+        ck = (product_cd, route_cd, target_date)
+        if ck in cum_cache:
+            return cum_cache[ck]
+        if not route_cd:
+            cum_cache[ck] = ({}, 0)
+            return cum_cache[ck]
+        cum_by_step, max_sn = await _build_cumulative_unit_price_by_step(
+            db, product_cd, route_cd, target_date, take_count
+        )
+        cum_cache[ck] = (cum_by_step, max_sn)
+        return cum_by_step, max_sn
+
+    totals_def: defaultdict[str, Decimal] = defaultdict(lambda: Decimal(0))
+    totals_scr: defaultdict[str, Decimal] = defaultdict(lambda: Decimal(0))
+
+    for gr in grouped:
+        pc = (gr.get("product_cd") or "").strip() if gr.get("product_cd") is not None else ""
+        if not pc:
+            continue
+        raw_route = gr.get("route_cd")
+        route_raw = (raw_route or "").strip() if raw_route is not None else ""
+        prod = prod_by_cd.get(pc)
+        route_eff = route_raw
+        if not route_eff and prod and (prod.route_cd or "").strip():
+            route_eff = (prod.route_cd or "").strip()
+
+        d_val = gr.get("date")
+        if isinstance(d_val, datetime):
+            d_val = d_val.date()
+        if not isinstance(d_val, date):
+            continue
+
+        take_count = int(prod.take_count) if prod and prod.take_count and int(prod.take_count) > 0 else 1
+
+        step_map = await load_step_map(pc, route_eff)
+        cum_by_step, max_sn = await load_cum(pc, route_eff, d_val, take_count)
+
+        for key, _label, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
+            dqty = _int_qty(gr.get(f"{key}_defect"))
+            sqty = _int_qty(gr.get(f"{key}_scrap"))
+            if dqty == 0 and sqty == 0:
+                continue
+            st_no = step_map.get(key)
+            if st_no is None:
+                unit_p = Decimal(0)
+            else:
+                unit_p, _rid = _lookup_cumulative_price(cum_by_step, max_sn, int(st_no))
+            totals_def[key] += unit_p * Decimal(dqty)
+            totals_scr[key] += unit_p * Decimal(sqty)
+
+    out: dict[str, dict[str, float]] = {}
+    for key, _l, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
+        d_amt = totals_def[key]
+        s_amt = totals_scr[key]
+        tot = d_amt + s_amt
+        out[key] = {
+            "sum_defect_amount": float(d_amt.quantize(Decimal("0.01"))),
+            "sum_scrap_amount": float(s_amt.quantize(Decimal("0.01"))),
+            "sum_defect_and_scrap_amount": float(tot.quantize(Decimal("0.01"))),
+        }
+    return out
+
+
 @router.get("/quality-rate-by-process")
 async def get_quality_rate_by_process(
     startDate: str = Query(..., description="集計開始日 YYYY-MM-DD"),
@@ -682,6 +835,10 @@ async def get_quality_rate_by_process(
     process: Optional[str] = Query(
         None,
         description="工程キー（cutting / molding 等）。省略時は全工程を返す",
+    ),
+    includeAmounts: bool = Query(
+        True,
+        description="False のとき工程別金額列の集計を省略（数量・比率のみ・高速）。二段取得用",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
@@ -693,6 +850,8 @@ async def get_quality_rate_by_process(
     一覧の「全体比率」に相当する値として、各工程の *_actual を合計してはならない（同一ロットが工程間で二重計上される）。
     フィルタなし時の summary は主ライン（切断～検査）について RTY=Π(1-r_i)、連乘損失率=1-RTY。
     フィルタあり時は選択工程の行と同一とする。
+
+    `includeAmounts=false` のとき工程別金額列の集計（重い処理）を省略し、数量・比率のみ返す。フロントは二段取得で体感速度を改善できる。
     """
     try:
         start_d = date.fromisoformat(startDate.strip()[:10])
@@ -755,6 +914,28 @@ async def get_quality_rate_by_process(
             "rate": rate,
             "rate_percent": round(rate * 100, 4) if rate is not None else None,
         }
+
+    zero_amounts = {
+        t[0]: {
+            "sum_defect_amount": 0.0,
+            "sum_scrap_amount": 0.0,
+            "sum_defect_and_scrap_amount": 0.0,
+        }
+        for t in _QUALITY_RATE_BY_PROCESS_DEFS
+    }
+    if includeAmounts:
+        try:
+            amounts_by_key = await _async_compute_quality_process_amounts_by_prefix(db, start_d, end_d)
+        except Exception:
+            logger.exception("quality-rate-by-process: 金額集計に失敗しました（数量・比率は従来どおり）")
+            amounts_by_key = zero_amounts
+    else:
+        amounts_by_key = zero_amounts
+    for key, m in metrics_by_key.items():
+        am = amounts_by_key.get(key) or {}
+        m["sum_defect_amount"] = float(am.get("sum_defect_amount") or 0)
+        m["sum_scrap_amount"] = float(am.get("sum_scrap_amount") or 0)
+        m["sum_defect_and_scrap_amount"] = float(am.get("sum_defect_and_scrap_amount") or 0)
 
     processes_out: list[dict] = []
     for key, _label, _a, _d, _s in _QUALITY_RATE_BY_PROCESS_DEFS:
