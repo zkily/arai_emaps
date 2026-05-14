@@ -42,8 +42,8 @@ router = APIRouter()
 
 # マイグレーション未実行時の案内（1146 = テーブル不存在）
 SCHEMA_MIGRATION_HINT = (
-    "MySQL で `backend/database/migrations/230_product_cost_cumulative_snapshots.sql` "
-    "を対象データベースに実行してください。"
+    "リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、"
+    "`backend/database/migrations/02_baseline_full_schema.sql` を対象データベースに適用してください。"
 )
 
 

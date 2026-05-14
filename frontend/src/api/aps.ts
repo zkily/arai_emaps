@@ -196,6 +196,13 @@ export interface DailyEquipmentReportRow {
   available_hours: number | null
 }
 
+/** スケジューリングマトリクス：日セル内の上流状態別按分（本数） */
+export interface DailyUpstreamTintSeg {
+  in_cutting: number
+  in_instruction: number
+  only_planned: number
+}
+
 export interface ScheduleGridRow {
   id: number
   order_no?: number | null
@@ -229,6 +236,10 @@ export interface ScheduleGridRow {
   defect_qty_sum?: number
   /** 当製造指示の aps_batch_plans.upstream_defect_qty 合計（FormingPlanning 前工程不良と同趣旨） */
   upstream_defect_qty_total?: number
+  /** aps_batch_plans が1件以上ある（マトリクス上流状態色分け用） */
+  has_aps_batch_plans?: boolean
+  /** 日別・ロット上流状態別按分（cutting_management / instruction_plans / 計画のみ） */
+  daily_upstream_tint?: Record<string, DailyUpstreamTintSeg>
 }
 
 export interface LineGridBlock {

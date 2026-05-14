@@ -124,39 +124,28 @@ backend/app/modules/erp/
 
 ### 1. データベースマイグレーション実行
 
+新規環境ではリポジトリルートで `py scripts/bootstrap_full_database.py` を推奨します（`mysql` クライアント必須）。
+
+手動で流す場合の例（受注関連 DDL は全て `02_baseline_full_schema.sql` に含まれます）:
+
 ```bash
-# MySQLにログイン
-mysql -u root -p
-
-# データベース選択
-USE smart_emap;
-
-# マイグレーション実行
-source backend/database/migrations/002_create_order_tables.sql;
+mysql -u root -p eams_db < backend/database/migrations/02_baseline_full_schema.sql
 ```
 
-または、Pythonスクリプトから実行：
+**注意**: 以下の Python で `;` 分割して流す方法は **トリガー等を壊すため非推奨**です。必ず `mysql` CLI または上記 bootstrap スクリプトを使用してください。
+
+<details>
+<summary>非推奨（参考のみ）</summary>
 
 ```bash
 cd backend
 python -c "
-import asyncio
-from sqlalchemy import text
-from app.core.database import engine
-
-async def run_migration():
-    async with engine.begin() as conn:
-        with open('database/migrations/002_create_order_tables.sql', 'r', encoding='utf-8') as f:
-            sql = f.read()
-            # SQLステートメントを分割して実行
-            for statement in sql.split(';'):
-                if statement.strip():
-                    await conn.execute(text(statement))
-    print('Migration completed successfully!')
-
-asyncio.run(run_migration())
+# 非推奨: トリガー・ストアド内のセミコロンで誤分割される
+print('Use py scripts/bootstrap_full_database.py instead')
 "
 ```
+
+</details>
 
 ### 2. バックエンド起動
 

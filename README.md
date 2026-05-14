@@ -33,7 +33,7 @@ Smart-EMAPsは、製造業における経営資源の最適化、高精度な生
 | **Webフレームワーク** | FastAPI 0.109+                     |
 | **ASGIサーバー**      | Uvicorn 0.27+                      |
 | **ORM**               | SQLAlchemy 2.0+                    |
-| **マイグレーション**  | 番号付き SQL スクリプト（`backend/database/migrations/*.sql`） |
+| **マイグレーション**  | 全量基线 `02_baseline_full_schema.sql` + 増分 `03_*.sql` 以降；新库推荐 `py scripts/bootstrap_full_database.py` |
 | **データベース**      | MySQL 8.0+ (aiomysql, PyMySQL)     |
 | **認証**              | JWT (python-jose), Passlib, Bcrypt |
 | **バリデーション**    | Pydantic 2.5+, Pydantic Settings   |
@@ -196,6 +196,10 @@ Smart-EMAPs/
   - `materials`, `products`, `machines`, `processes`: 基本マスタ群
   - `production_orders`, `production_schedules`, `production_results`: 生産指図・スケジュール・実績
 - **接続文字列**: `.env` の `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` から生成（`Settings.get_database_url()`）
+- **全庫バックアップ（mysqldump）**:
+  - 手動: 管理画面のバックアップ API または `POST /api/system/settings/backup/manual`（`backend/app/modules/system/settings_api.py`）。
+  - 日次自動: `backend/.env` の `DB_AUTO_BACKUP_ENABLED=true` と `DB_AUTO_BACKUP_TIME=HH:MM`（`TIMEZONE`、既定 `Asia/Tokyo`）。起動時に当日の正点を逃していれば `DB_AUTO_BACKUP_CATCHUP_ON_START=true`（既定）で起動直後に 1 回補完し得る（同日に正点でもう 1 回走ることがある）。保存先は `BACKUP_DEFAULT_STORAGE_PATH`（既定は社内共有の `Mysql-backup` UNC）。UI の `backup_settings.storage_path` が有効ならそちらを優先。
+  - **注意**: 複数 Uvicorn worker だと各プロセスが同じループを持ち、**重複バックアップ**し得る。本番は worker 1 推奨、または OS のタスクスケジューラで `mysqldump` を実行する方式を検討。
 
 ## ✨ 主要機能
 
@@ -388,6 +392,18 @@ python start.py
 
 #### 1. データベースの初期化
 
+**新库一条命令（推荐）**：在仓库根目录配置好 `backend/.env` 的 `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME`，并安装 **MySQL 客户端**（`mysql` 在 PATH 中，或通过环境变量 `MYSQL_BIN` / 脚本参数 `--mysql` 指定 `mysql.exe` 全路径）。然后执行：
+
+```bash
+py scripts/bootstrap_full_database.py
+```
+
+上述脚本会：`CREATE DATABASE IF NOT EXISTS`（与 `DB_NAME` 一致）→ 执行 `backend/database/init/01_init.sql` → 按编号顺序执行 `backend/database/migrations/*.sql`。仅预览不执行可加 `--dry-run`；**开发空库**需要整库重建时可加 `--drop-database`（会 `DROP DATABASE`，危险）。
+
+---
+
+**手动分步（従来どおり）**：
+
 ```bash
 mysql -u root -p
 ```
@@ -401,13 +417,13 @@ GRANT ALL PRIVILEGES ON eams_db.* TO 'emap_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-シェルから初期化スクリプトを流します。
+`004_create_system_tables.sql` より前に **`users` テーブル**が必要なため、先に次を実行します（中身は users のみの最小前提＋任意の開発用管理者 1 件です。旧版の全表ダミー DDL は含みません）。
 
 ```bash
 mysql -u emap_user -p eams_db < backend/database/init/01_init.sql
 ```
 
-続けて `backend/database/migrations/` 配下の SQL を**番号順**に適用します。APS まわりの新規環境では基線 `200_unified_aps_schema.sql` とその後の増分をどう扱うか、[backend/database/migrations/README.md](backend/database/migrations/README.md) を参照してください。
+続けてマイグレーションは **`backend/database/migrations/02_baseline_full_schema.sql` 1 本**（旧 002～260 をマージ済み）と、必要に応じた **`03_*.sql` 以降の増分**です。手動適用する場合は MySQL クライアントで当該 DB を選択してから本ファイルを流してください。詳細は [backend/database/migrations/README.md](backend/database/migrations/README.md) を参照してください。
 
 #### 2. バックエンドセットアップ
 

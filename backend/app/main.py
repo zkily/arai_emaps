@@ -86,6 +86,100 @@ async def _api_logs_cleanup_loop():
             await asyncio.sleep(300)
 
 
+async def _maybe_catchup_auto_backup() -> None:
+    from app.services.full_database_backup import (
+        has_successful_auto_backup_today,
+        is_past_schedule_today,
+        load_backup_run_preferences,
+        local_now_for_schedule,
+        parse_schedule_hh_mm,
+        perform_full_database_backup,
+    )
+
+    if not settings.DB_AUTO_BACKUP_CATCHUP_ON_START:
+        return
+    try:
+        h, m = parse_schedule_hh_mm(settings.DB_AUTO_BACKUP_TIME)
+    except ValueError as e:
+        logger.warning("DB auto backup catch-up: invalid schedule: {}", e)
+        return
+    now_local = local_now_for_schedule()
+    if not is_past_schedule_today(now_local, h, m):
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            if await has_successful_auto_backup_today(db, now_local=now_local):
+                return
+            storage_path, retention, compress = await load_backup_run_preferences(db)
+            await perform_full_database_backup(
+                db,
+                backup_type="auto",
+                created_by=None,
+                storage_path=storage_path,
+                retention=retention,
+                compress=compress,
+            )
+        logger.info("DB auto backup: catch-up on start completed")
+    except Exception as e:
+        logger.warning("DB auto backup catch-up failed: {}", e)
+
+
+async def _run_scheduled_auto_backup_once() -> None:
+    from app.services.full_database_backup import (
+        load_backup_run_preferences,
+        perform_full_database_backup,
+    )
+
+    async with AsyncSessionLocal() as db:
+        storage_path, retention, compress = await load_backup_run_preferences(db)
+        await perform_full_database_backup(
+            db,
+            backup_type="auto",
+            created_by=None,
+            storage_path=storage_path,
+            retention=retention,
+            compress=compress,
+        )
+
+
+async def _db_auto_backup_loop():
+    from app.services.full_database_backup import (
+        local_now_for_schedule,
+        parse_schedule_hh_mm,
+        seconds_until_next_schedule,
+    )
+
+    if not settings.DB_AUTO_BACKUP_ENABLED:
+        return
+    logger.info(
+        "📦 DB 自動バックアップタスク開始（毎日 {}、CATCHUP_ON_START={}）",
+        settings.DB_AUTO_BACKUP_TIME,
+        settings.DB_AUTO_BACKUP_CATCHUP_ON_START,
+    )
+    await asyncio.sleep(5)
+    try:
+        h, m = parse_schedule_hh_mm(settings.DB_AUTO_BACKUP_TIME)
+    except ValueError as e:
+        logger.error("DB_AUTO_BACKUP_TIME が無効です: {}", e)
+        return
+    await _maybe_catchup_auto_backup()
+    while True:
+        try:
+            now_local = local_now_for_schedule()
+            wait_seconds = seconds_until_next_schedule(now_local, h, m)
+            logger.debug("DB auto backup: sleep {:.0f}s until next run", wait_seconds)
+            await asyncio.sleep(wait_seconds)
+            run_at = local_now_for_schedule().strftime("%Y-%m-%d %H:%M:%S")
+            await _run_scheduled_auto_backup_once()
+            logger.info("📦 DB 自動バックアップ完了: 実行時刻={}", run_at)
+        except asyncio.CancelledError:
+            logger.info("🛑 DB 自動バックアップタスク停止")
+            raise
+        except Exception as e:
+            logger.warning("DB 自動バックアップでエラー: {}", e)
+            await asyncio.sleep(300)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションライフサイクル管理"""
@@ -102,13 +196,18 @@ async def lifespan(app: FastAPI):
             "📂 ファイル監視: API プロセス内バックグラウンドを有効化"
             "（FILE_WATCH_START_WITH_API）"
         )
-    cleanup_task = asyncio.create_task(_api_logs_cleanup_loop())
+    cleanup_tasks = [
+        asyncio.create_task(_api_logs_cleanup_loop()),
+        asyncio.create_task(_db_auto_backup_loop()),
+    ]
     yield
-    cleanup_task.cancel()
-    try:
-        await cleanup_task
-    except asyncio.CancelledError:
-        pass
+    for t in cleanup_tasks:
+        t.cancel()
+    for t in cleanup_tasks:
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
     logger.info("🛑 Smart-EMAP システム停止中...")
 
 

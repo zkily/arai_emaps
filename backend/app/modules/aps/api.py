@@ -66,6 +66,7 @@ from app.modules.aps.schemas import (
     ApsBatchPlanOut,
     ProgressLotItem,
     ProductionProgressResponse,
+    DailyUpstreamTintSeg,
     LineReplanAnchorOut,
     LineReplanAnchorsBatchBody,
 )
@@ -798,8 +799,8 @@ async def list_schedules(
         result = await db.execute(q)
     except (OperationalError, ProgrammingError) as e:
         msg = (
-            "計画一覧の取得に失敗しました。DB に production_schedules.product_cd 等が無い可能性があります。"
-            " migrations/098_production_schedules_product_cd_if_missing.sql を適用してください。"
+            "計画一覧の取得に失敗しました。production_schedules.product_cd 等が無い、またはマイグレーション未適用の可能性があります。"
+            " `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
         )
         if getattr(e, "orig", None):
             msg = f"{msg} ({e.orig!s})"
@@ -916,8 +917,8 @@ async def create_schedule(
     except (OperationalError, ProgrammingError) as e:
         await db.rollback()
         msg = (
-            "計画の保存に失敗しました。production_schedules に product_cd 列が無い場合は "
-            "migrations/098_production_schedules_product_cd_if_missing.sql を適用してください。"
+            "計画の保存に失敗しました。production_schedules に product_cd 列が無い等、マイグレーション未適用の可能性があります。"
+            " `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
         )
         if getattr(e, "orig", None):
             msg = f"{msg} ({e.orig!s})"
@@ -1195,6 +1196,7 @@ async def get_scheduling_grid(
         upstream_defect_total_rows: dict[int, int] = defaultdict(int)
         slice_rows: dict[int, dict[str, int]] = defaultdict(dict)
         slice_bounds: dict[int, tuple[Optional[date], Optional[date]]] = {}
+        slices_by_sched: dict[int, list] = defaultdict(list)
 
         line_slice_dates: set[str] = set()
         if schedule_ids:
@@ -1271,6 +1273,20 @@ async def get_scheduling_grid(
                     continue
                 slice_bounds[int(sid)] = (min_d, max_d)
 
+            slice_detail_result = await db.execute(
+                select(ScheduleSliceAllocation)
+                .where(ScheduleSliceAllocation.schedule_id.in_(schedule_ids))
+                .order_by(
+                    ScheduleSliceAllocation.schedule_id,
+                    ScheduleSliceAllocation.work_date,
+                    ScheduleSliceAllocation.period_start,
+                    ScheduleSliceAllocation.sort_order,
+                    ScheduleSliceAllocation.id,
+                )
+            )
+            for sl in slice_detail_result.scalars().all():
+                slices_by_sched[int(sl.schedule_id)].append(sl)
+
         # 计算每个工单的“下一个工单起点边界”（优先使用 next 的最早 slice 日）
         next_boundary_by_sid: dict[int, Optional[date]] = {}
         for idx, ps in enumerate(schedules):
@@ -1282,6 +1298,8 @@ async def get_scheduling_grid(
                     next_boundary = bnd
                     break
             next_boundary_by_sid[int(ps.id)] = next_boundary
+
+        batch_by_sid, lot_upstream_state = await _schedule_batch_upstream_context(db, schedule_ids)
 
         rows: list[ScheduleGridRow] = []
         daily_totals: dict[str, int] = defaultdict(int)
@@ -1411,6 +1429,19 @@ async def get_scheduling_grid(
                     - int(upstream_defect_daily.get(k, 0) or 0)
                 )
 
+            batches_here = batch_by_sid.get(sid, [])
+            has_aps_batch_plans = len(batches_here) > 0
+            daily_upstream_tint: dict[str, DailyUpstreamTintSeg] = {}
+            if has_aps_batch_plans:
+                daily_upstream_tint = _daily_upstream_tint_map_for_schedule(
+                    daily,
+                    dates_list,
+                    sid,
+                    batches_here,
+                    slices_by_sched.get(sid, []),
+                    lot_upstream_state,
+                )
+
             rows.append(ScheduleGridRow(
                 id=ps.id,
                 order_no=ps.order_no,
@@ -1439,6 +1470,8 @@ async def get_scheduling_grid(
                 remaining_daily=remaining_daily,
                 defect_qty_sum=defect_qty_sum,
                 upstream_defect_qty_total=int(upstream_defect_total_rows.get(sid, 0) or 0),
+                has_aps_batch_plans=has_aps_batch_plans,
+                daily_upstream_tint=daily_upstream_tint,
             ))
             sum_planned_process += int(ps.planned_process_qty or 0)
             sum_planned_output += int(ps.planned_output_qty or 0)
@@ -3198,6 +3231,233 @@ def _instruction_management_code(
     ln = str(lot_number or "")
     ln2 = ln.zfill(2)[-2:]  # LPAD(COALESCE(lot_number,''),2,'0')
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
+
+
+def _lot_progress_key(aps_schedule_id: int, lot_number: str) -> str:
+    return f"{int(aps_schedule_id)}_{str(lot_number or '')}"
+
+
+def _lot_planned_daily_from_slices_for_schedule(
+    aps_schedule_id: int,
+    batches: List[ApsBatchPlan],
+    slices: list,
+) -> dict[str, dict[str, int]]:
+    """
+    ロット別：スライス時間帯と aps_batch_plans の start/end 重なりで日別配分。
+    get_production_progress の lot_planned_daily 構築と同趣旨。
+    """
+    out: dict[str, dict[str, int]] = {}
+    if not batches or not slices:
+        return out
+    sid = int(aps_schedule_id)
+    for batch in batches:
+        if int(batch.aps_schedule_id) != sid:
+            continue
+        lk = _lot_progress_key(batch.aps_schedule_id, str(batch.lot_number or ""))
+        daily_map: dict[str, int] = {}
+        b_start = batch.start_date
+        b_end = batch.end_date
+        if not b_start or not b_end:
+            out[lk] = daily_map
+            continue
+        for sl in slices:
+            if int(sl.schedule_id) != sid:
+                continue
+            sl_start = _combine_work_date_and_time(sl.work_date, sl.period_start, end_of_day=False)
+            is_eod = sl.period_end == time(0, 0, 0) and sl.period_start != time(0, 0, 0)
+            sl_end = _combine_work_date_and_time(sl.work_date, sl.period_end, end_of_day=is_eod)
+            if sl_end <= b_start or sl_start >= b_end:
+                continue
+            sq = int(sl.planned_qty or 0)
+            if sq <= 0:
+                continue
+            overlap_start = max(sl_start, b_start)
+            overlap_end = min(sl_end, b_end)
+            sl_dur = max(1.0, (sl_end - sl_start).total_seconds())
+            overlap_dur = max(0.0, (overlap_end - overlap_start).total_seconds())
+            portion = int(round(sq * overlap_dur / sl_dur))
+            if portion <= 0:
+                continue
+            d_key = sl.work_date.isoformat()
+            daily_map[d_key] = daily_map.get(d_key, 0) + portion
+        out[lk] = daily_map
+    return out
+
+
+def _split_int_by_weights(total: int, weights: dict[str, int]) -> dict[str, int]:
+    """weights に比例して total を整数配分（合計一致）。"""
+    keys = [k for k in weights]
+    if total <= 0:
+        return {k: 0 for k in keys}
+    ws = [max(0, int(weights.get(k, 0) or 0)) for k in keys]
+    ssum = sum(ws)
+    if ssum <= 0:
+        return {k: 0 for k in keys}
+    raw_fracs: list[tuple[float, str]] = []
+    acc = 0
+    out: dict[str, int] = {}
+    for k, w in zip(keys, ws):
+        val = total * w / ssum
+        q = int(val)
+        out[k] = q
+        acc += q
+        raw_fracs.append((val - q, k))
+    rem = total - acc
+    raw_fracs.sort(key=lambda x: (-x[0], x[1]))
+    for i in range(rem):
+        out[raw_fracs[i][1]] += 1
+    return out
+
+
+def _daily_upstream_tint_map_for_schedule(
+    daily: dict[str, int],
+    dates_list: list[str],
+    aps_schedule_id: int,
+    batches: List[ApsBatchPlan],
+    slices: list,
+    lot_upstream_state: dict[str, str],
+) -> dict[str, DailyUpstreamTintSeg]:
+    if not batches:
+        return {}
+    sid = int(aps_schedule_id)
+    lot_planned = _lot_planned_daily_from_slices_for_schedule(sid, batches, slices)
+    lot_keys = [_lot_progress_key(sid, str(b.lot_number or "")) for b in batches if int(b.aps_schedule_id) == sid]
+    lot_keys = list(dict.fromkeys(lot_keys))
+    out: dict[str, DailyUpstreamTintSeg] = {}
+    for d in dates_list:
+        t_total = int(daily.get(d, 0) or 0)
+        if t_total <= 0:
+            continue
+        shares = {lk: int(lot_planned.get(lk, {}).get(d, 0) or 0) for lk in lot_keys}
+        portions = _split_int_by_weights(t_total, shares)
+        if sum(portions.values()) == 0:
+            w_sched: dict[str, int] = {}
+            for b in batches:
+                if int(b.aps_schedule_id) != sid:
+                    continue
+                lk0 = _lot_progress_key(sid, str(b.lot_number or ""))
+                w_sched[lk0] = max(0, int(_batch_display_planned_qty(b)))
+            portions = _split_int_by_weights(t_total, w_sched)
+        if sum(portions.values()) == 0:
+            out[d] = DailyUpstreamTintSeg(in_cutting=0, in_instruction=0, only_planned=t_total)
+            continue
+        ic = ins = pl = 0
+        for lk, qty in portions.items():
+            if qty <= 0:
+                continue
+            st = lot_upstream_state.get(lk, "planned")
+            if st == "cutting":
+                ic += qty
+            elif st == "instruction":
+                ins += qty
+            else:
+                pl += qty
+        out[d] = DailyUpstreamTintSeg(in_cutting=ic, in_instruction=ins, only_planned=pl)
+    return out
+
+
+async def _schedule_batch_upstream_context(
+    db: AsyncSession, schedule_ids: list[int],
+) -> tuple[dict[int, list[ApsBatchPlan]], dict[str, str]]:
+    """
+    各製造指示の APS ロット一覧と、ロットキー別の上流状態（cutting / instruction / planned）。
+    """
+    if not schedule_ids:
+        return {}, {}
+    by_sched: dict[int, list[ApsBatchPlan]] = defaultdict(list)
+    batch_result = await db.execute(
+        select(ApsBatchPlan).where(ApsBatchPlan.aps_schedule_id.in_(schedule_ids))
+    )
+    line_batches = batch_result.scalars().all()
+    for b in line_batches:
+        by_sched[int(b.aps_schedule_id)].append(b)
+    if not line_batches:
+        return dict(by_sched), {}
+
+    bids = [int(b.id) for b in line_batches]
+    mc_by_bid: dict[int, str] = {}
+    for b in line_batches:
+        bid = int(b.id)
+        mc_by_bid[bid] = _instruction_management_code(
+            b.production_month,
+            b.production_line or "",
+            b.product_cd or "",
+            b.priority_order,
+            int(b.production_lot_size or 0),
+            b.lot_number or "",
+        )
+
+    hit_bids_cm: set[int] = set()
+    if bids:
+        res_b = await db.execute(
+            text(
+                "SELECT DISTINCT aps_batch_plan_id FROM cutting_management "
+                "WHERE aps_batch_plan_id IN :bids AND aps_batch_plan_id IS NOT NULL"
+            ),
+            {"bids": tuple(bids)},
+        )
+        for row in res_b.mappings().all():
+            x = row.get("aps_batch_plan_id")
+            if x is not None:
+                hit_bids_cm.add(int(x))
+
+    all_mcs = tuple({str(v) for v in mc_by_bid.values() if v})
+    hit_mcs_cm: set[str] = set()
+    if all_mcs:
+        res_m = await db.execute(
+            text("SELECT DISTINCT management_code FROM cutting_management WHERE management_code IN :mcs"),
+            {"mcs": all_mcs},
+        )
+        for row in res_m.mappings().all():
+            mc0 = row.get("management_code")
+            if mc0 is not None:
+                hit_mcs_cm.add(str(mc0))
+
+    hit_bids_ins: set[int] = set()
+    hit_mcs_ins: set[str] = set()
+    try:
+        if bids:
+            ins_b = await db.execute(
+                text(
+                    "SELECT DISTINCT aps_batch_plan_id FROM instruction_plans "
+                    "WHERE aps_batch_plan_id IN :bids AND aps_batch_plan_id IS NOT NULL"
+                ),
+                {"bids": tuple(bids)},
+            )
+            for row in ins_b.mappings().all():
+                x = row.get("aps_batch_plan_id")
+                if x is not None:
+                    hit_bids_ins.add(int(x))
+        if all_mcs:
+            ins_m = await db.execute(
+                text(
+                    "SELECT DISTINCT management_code FROM instruction_plans "
+                    "WHERE management_code IN :mcs"
+                ),
+                {"mcs": all_mcs},
+            )
+            for row in ins_m.mappings().all():
+                mc0 = row.get("management_code")
+                if mc0 is not None:
+                    hit_mcs_ins.add(str(mc0))
+    except (OperationalError, ProgrammingError):
+        pass
+
+    lot_upstream_state: dict[str, str] = {}
+    for b in line_batches:
+        bid = int(b.id)
+        mc = mc_by_bid[bid]
+        lk = _lot_progress_key(b.aps_schedule_id, str(b.lot_number or ""))
+        in_cm = bid in hit_bids_cm or mc in hit_mcs_cm
+        in_ins = bid in hit_bids_ins or mc in hit_mcs_ins
+        if in_cm:
+            lot_upstream_state[lk] = "cutting"
+        elif in_ins:
+            lot_upstream_state[lk] = "instruction"
+        else:
+            lot_upstream_state[lk] = "planned"
+
+    return dict(by_sched), lot_upstream_state
 
 
 async def _upstream_defect_qty_for_batch_plan_id_only(db: AsyncSession, batch_plan_id: int) -> int:

@@ -221,6 +221,15 @@ class ScheduleWithLineOut(ScheduleOut):
 
 # ──────────────────── Scheduling Grid ────────────────────
 
+
+class DailyUpstreamTintSeg(BaseModel):
+    """APS ロット上流状態別の按分本数（マトリクス日セル背景用）。合計は当日 daily と一致させる。"""
+
+    in_cutting: int = Field(0, description="cutting_management 登録済ロット由来")
+    in_instruction: int = Field(0, description="instruction_plans のみ（切断未移行）")
+    only_planned: int = Field(0, description="上流未同期・計画のみ")
+
+
 class ScheduleGridRow(BaseModel):
     """一行 = 一個工単 + 展平された日別 planned_qty"""
     id: int
@@ -255,6 +264,14 @@ class ScheduleGridRow(BaseModel):
     upstream_defect_qty_total: int = Field(
         0,
         description="当製造指示の aps_batch_plans.upstream_defect_qty 合計（切断+面取・FormingPlanning と同趣旨）",
+    )
+    has_aps_batch_plans: bool = Field(
+        False,
+        description="当製造指示に aps_batch_plans が1件以上あるか（マトリクス上流状態色分け用）",
+    )
+    daily_upstream_tint: Dict[str, DailyUpstreamTintSeg] = Field(
+        default_factory=dict,
+        description="日付(YYYY-MM-DD)ごとの上流状態別按分（スライス×ロット窓の比率で daily を分割）",
     )
 
 

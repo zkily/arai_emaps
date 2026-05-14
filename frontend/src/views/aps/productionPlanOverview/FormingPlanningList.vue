@@ -1531,6 +1531,22 @@ function buildUtilizationPrintHtml(): string {
 </html>`
 }
 
+/** ガント日別印刷：画面上と同じ表示条件。文言は出さず数値の色のみで区別（データなしは行自体を出さない） */
+function buildGanttPrintDayCell(row: ScheduleGridRow, d: string): string {
+  if (!ganttCellHasAnyMarker(row, d)) return '<td class="cell-day"></td>'
+  const segs: string[] = []
+  const p = ganttDayQty(row.daily?.[d])
+  if (p !== 0) segs.push(`<div class="cell-qty cell-qty--plan">${escHtml(formatNum(p))}</div>`)
+  const a = ganttDayQty(row.actual_daily?.[d])
+  if (a !== 0) segs.push(`<div class="cell-qty cell-qty--actual">${escHtml(formatNum(a))}</div>`)
+  if (shouldShowGanttRemain(row, d)) {
+    const r = ganttDayQty(row.remaining_daily?.[d])
+    segs.push(`<div class="cell-qty cell-qty--remain">${escHtml(formatNum(r))}</div>`)
+  }
+  if (segs.length === 0) return '<td class="cell-day"></td>'
+  return `<td class="cell-day"><div class="cell-day-stack">${segs.join('')}</div></td>`
+}
+
 function buildGanttPrintHtml(): string {
   const title = '成型計画一覧（ガント日別）'
   const printedAt = new Date().toLocaleString('ja-JP', {
@@ -1541,9 +1557,25 @@ function buildGanttPrintHtml(): string {
     minute: '2-digit',
   })
   const dateCols = ganttDates.value
-    .map((d) => `<th class="date-col">${escHtml(d.slice(5))}</th>`)
+    .map(
+      (d) =>
+        `<th class="date-col"><div class="date-col-date">${escHtml(d.slice(5))}</div><div class="date-col-wd">${escHtml(getWeekday(d))}</div></th>`,
+    )
     .join('')
-  const emptyDateCells = ganttDates.value.map(() => '<td></td>').join('')
+  const nDates = ganttDates.value.length
+  const fixedColPct = { line: 7, order: 3.5, name: 13, eff: 5, planned: 5, actual: 5 }
+  const sumFixed = fixedColPct.line + fixedColPct.order + fixedColPct.name + fixedColPct.eff + fixedColPct.planned + fixedColPct.actual
+  const dayColPct = nDates > 0 ? (100 - sumFixed) / nDates : 0
+  const colgroup = `<colgroup>
+    <col style="width:${fixedColPct.line}%" />
+    <col style="width:${fixedColPct.order}%" />
+    <col style="width:${fixedColPct.name}%" />
+    <col style="width:${fixedColPct.eff}%" />
+    <col style="width:${fixedColPct.planned}%" />
+    <col style="width:${fixedColPct.actual}%" />
+    ${ganttDates.value.map(() => `<col class="col-day" style="width:${dayColPct}%" />`).join('')}
+  </colgroup>`
+  const emptyDateCells = ganttDates.value.map(() => '<td class="cell-day"></td>').join('')
   const rowsHtml = ganttGroups.value
     .map((group) => {
       const lineLabel = group.lineLabel
@@ -1559,20 +1591,7 @@ function buildGanttPrintHtml(): string {
       </tr>`
       const body = lineRows
         .map((row) => {
-          const cells = ganttDates.value
-            .map((d) => {
-              const p = ganttDayQty(row.daily?.[d])
-              const a = ganttDayQty(row.actual_daily?.[d])
-              const showRemain = shouldShowGanttRemain(row, d)
-              const r = showRemain ? ganttDayQty(row.remaining_daily?.[d]) : 0
-              if (p === 0 && a === 0 && r === 0) return '<td></td>'
-              const chunks: string[] = []
-              if (p !== 0) chunks.push(`${p}`)
-              if (a !== 0) chunks.push(`${a}`)
-              if (r !== 0) chunks.push(`${r}`)
-              return `<td class="num cell-data">${escHtml(chunks.join(' / '))}</td>`
-            })
-            .join('')
+          const cells = ganttDates.value.map((d) => buildGanttPrintDayCell(row, d)).join('')
           return `<tr>
             <td class="line-col"></td>
             <td class="num indent-col order-col">${escHtml(String(row.order_no ?? '—'))}</td>
@@ -1600,20 +1619,51 @@ function buildGanttPrintHtml(): string {
     .tt { font-size: 16px; font-weight: 800; color: #1e3a8a; }
     .meta { margin-top: 3px; color: #475569; font-size: 10px; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    th, td { border: 1px solid #cbd5e1; padding: 3px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    th, td { border: 1px solid #cbd5e1; padding: 3px 4px; vertical-align: top; box-sizing: border-box; }
     th { background: linear-gradient(180deg, #eaf3ff 0%, #dceafe 100%); font-weight: 800; color: #334155; }
     .left { text-align: left; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; }
-    .date-col { font-size: 9px; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; white-space: nowrap; }
+    th.date-col,
+    td.cell-day {
+      text-align: center;
+      overflow: hidden;
+      padding: 3px 2px;
+    }
+    .date-col { font-size: 8px; line-height: 1.15; }
+    .date-col-date { font-weight: 700; }
+    .date-col-wd { color: #64748b; font-weight: 600; font-size: 8px; }
+    .cell-day { font-size: 8px; line-height: 1.2; }
+    .cell-day-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 1px;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0 auto;
+    }
+    .cell-qty {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      font-family: Consolas, "Courier New", monospace;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .cell-qty--plan { color: #2563eb; }
+    .cell-qty--actual { color: #059669; }
+    .cell-qty--remain { color: #7c3aed; }
     .group-block { break-inside: avoid; page-break-inside: avoid; }
-    .name-col { color: #0f172a; font-weight: 700; width: 110px; max-width: 110px; }
-    .line-col { font-weight: 800; width: 80px; max-width: 80px; white-space: normal; }
-    .order-col { width: calc(2ch + 10px); max-width: calc(2ch + 10px); }
-    .eff-col { width: calc(6ch + 12px); max-width: calc(6ch + 12px); }
-    .planned-col { width: calc(5ch + 20px); max-width: calc(5ch + 20px); }
-    .act-col { width: calc(5ch + 20px); max-width: calc(5ch + 20px); }
+    .name-col { color: #0f172a; font-weight: 700; white-space: normal; word-break: break-word; }
+    .line-col { font-weight: 800; white-space: normal; word-break: break-word; }
+    .order-col { white-space: nowrap; }
+    .eff-col { white-space: nowrap; }
+    .planned-col { white-space: nowrap; }
+    .act-col { white-space: nowrap; }
     .indent-col { padding-left: 10px; }
-    .cell-data { font-size: 9px; }
     .group-row td { background: #e2e8f0; color: #1e293b; font-weight: 800; text-align: left; border-top: 2px solid #94a3b8; }
     tbody tr:nth-child(odd) { background: #fcfdff; }
     tbody tr:nth-child(even) { background: #f7fbff; }
@@ -1626,6 +1676,7 @@ function buildGanttPrintHtml(): string {
     <div class="meta">期間：${escHtml(displayRangeText.value)}　工程：${escHtml(selectedProcessLabel())}　表示期間：${escHtml(displayRangeText.value)}　印刷日時：${escHtml(printedAt)}</div>
   </div>
   <table>
+    ${colgroup}
     <thead>
       <tr>
         <th class="left line-col">設備</th>

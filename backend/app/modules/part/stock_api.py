@@ -59,7 +59,7 @@ router = APIRouter()
 def _is_missing_part_stock_table_error(exc: BaseException) -> bool:
     """
     MySQL 1146: Table '...part_stock' doesn't exist
-    （マイグレーション `224_part_purchase_tables.sql` 未実行時）
+    （マイグレーション `02_baseline_full_schema.sql` 未適用時）
     """
     depth = 0
     cur: BaseException | None = exc
@@ -201,7 +201,7 @@ async def list_part_stocks(
     except Exception as e:
         if _is_missing_part_stock_table_error(e):
             logger.warning(
-                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             return {"success": True, "data": {"list": [], "total": 0}}
         logger.exception("list_part_stocks failed: %s", e)
@@ -238,7 +238,7 @@ async def get_latest_part_stocks(
     except Exception as e:
         if _is_missing_part_stock_table_error(e):
             logger.warning(
-                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             return {"success": True, "data": []}
         raise
@@ -273,7 +273,7 @@ async def calculate_part_stock(
     except Exception as e:
         if _is_missing_part_stock_table_error(e):
             logger.warning(
-                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             return {
                 "success": True,
@@ -553,7 +553,7 @@ async def get_part_stock_summary(
     except Exception as e:
         if _is_missing_part_stock_table_error(e):
             logger.warning(
-                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             total_parts = below_zero = 0
             total_value = 0.0
@@ -588,7 +588,7 @@ async def list_distinct_part_stock_supplier_names(
     except Exception as e:
         if _is_missing_part_stock_table_error(e):
             logger.warning(
-                "part_stock テーブルがありません。database/migrations/224_part_purchase_tables.sql を実行してください。"
+                "part_stock テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。"
             )
             return {"success": True, "data": []}
         raise

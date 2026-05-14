@@ -2,7 +2,6 @@
 システム設定 API エンドポイント
 システムログ、採番ルール、ワークフロー、通知、データ管理
 """
-import asyncio
 import logging
 import os
 from datetime import datetime, date, timedelta
@@ -23,12 +22,9 @@ from app.services.data_management_io import (
     build_master_export_xlsx,
     import_master_csv,
 )
-from app.services.mysql_backup import (
-    run_mysqldump_to_file,
-    apply_retention,
-    normalize_backup_storage_path,
-    is_windows_posix_backup_placeholder,
-)
+from app.services.backup_paths import final_backup_storage_dir
+from app.services.full_database_backup import load_backup_run_preferences, perform_full_database_backup
+from app.services.mysql_backup import normalize_backup_storage_path, is_windows_posix_backup_placeholder
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.system.settings_models import (
@@ -1238,17 +1234,6 @@ async def download_import_template(
 
 
 # バックアップ API
-def _final_backup_storage_dir(raw: Optional[str]) -> str:
-    """
-    バックアップ保存ディレクトリ。
-    Windows で DB に残った Linux 既定 '/backup/' はドライブ直下 \\backup になってしまうため、既定 UNC に置き換える。
-    """
-    rp = (raw or "").strip()
-    if is_windows_posix_backup_placeholder(rp):
-        rp = ""
-    return normalize_backup_storage_path(rp or app_config.BACKUP_DEFAULT_STORAGE_PATH)
-
-
 @router.get("/backup/settings", response_model=BackupSettingResponse, summary="バックアップ設定取得")
 async def get_backup_settings(
     db: AsyncSession = Depends(get_db),
@@ -1296,7 +1281,7 @@ async def update_backup_settings(
     setting = result.scalar_one_or_none()
     
     dumped = data.model_dump()
-    dumped["storage_path"] = _final_backup_storage_dir(dumped.get("storage_path"))
+    dumped["storage_path"] = final_backup_storage_dir(dumped.get("storage_path"))
 
     if not setting:
         setting = BackupSetting(id=1, **dumped, updated_by=current_user.id)
@@ -1360,72 +1345,19 @@ async def create_manual_backup(
 
     _ = data  # include_files 等は将来拡張用
 
-    result = await db.execute(select(BackupSetting).where(BackupSetting.id == 1))
-    setting = result.scalar_one_or_none()
-    raw_path = (setting.storage_path or "").strip() if setting else ""
-    storage_path = _final_backup_storage_dir(raw_path)
-    compress = bool(setting.compression_enabled) if setting else True
-    retention = int(setting.retention_count) if setting else 7
-
-    now = datetime.now()
-    ext = ".sql.gz" if compress else ".sql"
-    filename = f"backup_{now.strftime('%Y%m%d_%H%M%S')}{ext}"
-    full_path = os.path.join(storage_path, filename)
-
-    history = BackupHistory(
-        filename=filename,
-        file_path=full_path,
-        backup_type="manual",
-        status="running",
-        started_at=now,
-        created_by=current_user.id,
-    )
-    db.add(history)
-    await db.commit()
-    await db.refresh(history)
-
-    def _run_dump() -> int:
-        os.makedirs(storage_path, exist_ok=True)
-        return run_mysqldump_to_file(
-            out_path=full_path,
-            host=app_config.DB_HOST,
-            port=app_config.DB_PORT,
-            user=app_config.DB_USER,
-            password=app_config.DB_PASSWORD,
-            database=app_config.DB_NAME,
-            compress=compress,
-            mysqldump_bin=(app_config.MYSQLDUMP_BIN or "mysqldump").strip() or "mysqldump",
-        )
-
     try:
-        size = await asyncio.to_thread(_run_dump)
+        storage_path, retention, compress = await load_backup_run_preferences(db)
+        return await perform_full_database_backup(
+            db,
+            backup_type="manual",
+            created_by=current_user.id,
+            storage_path=storage_path,
+            retention=retention,
+            compress=compress,
+        )
     except Exception as e:
         logger.exception("Manual backup failed")
-        history.status = "failed"
-        history.error_message = str(e)[:2000]
-        history.completed_at = datetime.now()
-        await db.commit()
         raise HTTPException(status_code=500, detail=f"バックアップに失敗しました: {e!s}") from e
-
-    history.status = "completed"
-    history.file_path = full_path
-    history.file_size = size
-    history.completed_at = datetime.now()
-    await db.commit()
-
-    try:
-        await asyncio.to_thread(apply_retention, storage_path, retention)
-    except Exception:
-        logger.exception("apply_retention failed")
-
-    logger.info("Manual backup OK: %s (%s bytes) by %s", full_path, size, current_user.username)
-    return {
-        "message": "バックアップが完了しました",
-        "filename": filename,
-        "file_path": full_path,
-        "file_size": size,
-        "id": history.id,
-    }
 
 
 @router.post("/backup/{backup_id}/restore", summary="バックアップから復元")

@@ -327,7 +327,7 @@ async def get_sales_order_by_id(
         if _is_missing_table(e, "sales_order") or _is_missing_table(e, "sales_order_item"):
             raise HTTPException(
                 status_code=503,
-                detail="sales_order テーブルがありません。マイグレーション backend/database/migrations/248_ensure_sales_core_tables.sql を実行してください。",
+                detail="sales_order テーブルがありません。リポジトリルートで `py scripts/bootstrap_full_database.py` を実行するか、`backend/database/migrations/02_baseline_full_schema.sql` を適用してください。",
             )
         raise
 

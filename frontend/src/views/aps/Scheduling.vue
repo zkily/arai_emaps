@@ -101,6 +101,22 @@
           <span class="result-title-feature">{{ matrixTitleFeatureLabel }}</span>
           <span class="result-title-sep" aria-hidden="true">・</span>
           <span class="result-title-main">スケジューリングマトリクス</span>
+          <div class="sc-matrix-legend" aria-label="マトリクスセル背景の凡例">
+            <span class="sc-legend-item">
+              <span class="sc-legend-swatch sc-legend-swatch--actual" aria-hidden="true" />
+              <span class="sc-legend-text">実績</span>
+            </span>
+            <span class="sc-legend-sep" aria-hidden="true">｜</span>
+            <span class="sc-legend-item">
+              <span class="sc-legend-swatch sc-legend-swatch--cm" aria-hidden="true" />
+              <span class="sc-legend-text">切断指示済</span>
+            </span>
+            <span class="sc-legend-sep" aria-hidden="true">｜</span>
+            <span class="sc-legend-item">
+              <span class="sc-legend-swatch sc-legend-swatch--plan" aria-hidden="true" />
+              <span class="sc-legend-text">計画</span>
+            </span>
+          </div>
         </div>
         <div class="result-head-actions">
           <div class="sc-range-selection-ui result-note sc-range-hint">
@@ -188,13 +204,14 @@
                 :key="`${row.key}-${date}`"
                 class="numeric-cell data-cell sc-selectable-cell"
                 :class="getCellClass(row, date)"
+                :style="getCellUpstreamStyle(row, date)"
                 :title="getCellTitle(row, date)"
                 role="button"
                 tabindex="0"
                 @click.stop="onMatrixDateCellClick(row, date)"
               >
-                <span v-if="row.type === 'item' && getCellValue(row, date)">
-                  {{ formatQty(getCellValue(row, date)) }}
+                <span v-if="row.type === 'item' && getCellDisplayValue(row, date)">
+                  {{ formatQty(getCellDisplayValue(row, date)) }}
                 </span>
               </td>
             </tr>
@@ -225,6 +242,7 @@ import type { ProcessItem } from '@/types/master'
 import {
   fetchLines,
   fetchSchedulingGrid,
+  type DailyUpstreamTintSeg,
   type LineGridBlock,
   type ProductionLine,
   type ScheduleGridRow,
@@ -262,6 +280,11 @@ type MatrixItemRow = {
   completion_rate?: number | null
   due_date?: string | null
   daily: Record<string, number>
+  /** schedule_details.actual_qty 日別（実績） */
+  actual_daily?: Record<string, number>
+  /** aps_batch_plans がある日セル：ロット別上流状態をスライス按分で合成（背景は inline style） */
+  has_aps_batch_plans?: boolean
+  daily_upstream_tint?: Record<string, DailyUpstreamTintSeg>
 }
 
 type MatrixRow = MatrixGroupRow | MatrixItemRow
@@ -319,7 +342,9 @@ const displayBlocks = computed<LineGridBlock[]>(() => {
       sum_planned_output_qty += Number(r.planned_output_qty ?? 0)
       sum_planned_process_qty += Number(r.planned_process_qty ?? 0)
       for (const d of dates) {
-        daily_totals[d] = (daily_totals[d] ?? 0) + Number((r.daily ?? {})[d] ?? 0)
+        daily_totals[d] =
+          (daily_totals[d] ?? 0) +
+          matrixCellDisplayQty((r.daily ?? {}) as Record<string, number>, (r.actual_daily ?? {}) as Record<string, number>, d)
       }
     }
     out.push({
@@ -411,7 +436,7 @@ const rangeSelectionSummary = computed(() => {
       const date = dates[di]
       if (!date) continue
       itemCells += 1
-      itemSum += Number(getCellValue(row, date) ?? 0)
+      itemSum += Number(getCellDisplayValue(row, date) ?? 0)
     }
   }
   return { itemSum, itemCells }
@@ -501,8 +526,14 @@ const overallDailyTotals = computed(() => {
   const totals: Record<string, number> = {}
   for (const date of gridDates.value) totals[date] = 0
   for (const block of displayBlocks.value) {
-    for (const [date, qty] of Object.entries(block.daily_totals ?? {})) {
-      totals[date] = (totals[date] ?? 0) + (qty ?? 0)
+    for (const r of block.rows ?? []) {
+      for (const date of gridDates.value) {
+        totals[date] += matrixCellDisplayQty(
+          (r.daily ?? {}) as Record<string, number>,
+          (r.actual_daily ?? {}) as Record<string, number>,
+          date,
+        )
+      }
     }
   }
   return totals
@@ -556,13 +587,65 @@ function isToday(iso: string) {
   return iso === dayjs().format('YYYY-MM-DD')
 }
 
+/** マトリクス日セル：過去=実績、当日=実績優先（>0）、未来=計画 */
+function matrixCellDisplayQty(
+  plannedDaily: Record<string, number>,
+  actualDaily: Record<string, number> | undefined,
+  dateIso: string,
+): number {
+  const planned = Number(plannedDaily?.[dateIso] ?? 0)
+  const actual = Number(actualDaily?.[dateIso] ?? 0)
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  if (dateIso < todayStr) return actual
+  if (dateIso > todayStr) return planned
+  return actual > 0 ? actual : planned
+}
+
+/** 当日セルが計画本数を表示しているか（上流色分けは計画に対してのみ適用） */
+function plannedUpstreamTintActiveForItem(row: MatrixRow, dateIso: string): boolean {
+  if (row.type !== 'item') return false
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  if (dateIso < todayStr) return false
+  if (dateIso > todayStr) return true
+  const actual = Number(row.actual_daily?.[dateIso] ?? 0)
+  return actual <= 0
+}
+
+/** 実績かつ本数>0 のセルのみ浅黄（過去日は実績>0、当日は実績を表示している日かつ>0） */
+function cellShowsActualDisplay(row: MatrixRow, date: string): boolean {
+  if (row.type !== 'item') return false
+  const v = getCellDisplayValue(row, date) || 0
+  if (v <= 0) return false
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  const actual = Number(row.actual_daily?.[date] ?? 0)
+  if (date < todayStr) return true
+  if (date > todayStr) return false
+  return actual > 0
+}
+
 function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
   const rows: MatrixRow[] = []
   blocks.forEach((block: LineGridBlock, blockIndex) => {
     const periodRows = (block.rows ?? []).filter((r) =>
-      gridDates.value.some((date) => Number((r.daily ?? {})[date] ?? 0) > 0),
+      gridDates.value.some((date) => {
+        const p = Number((r.daily ?? {})[date] ?? 0)
+        const a = Number((r.actual_daily ?? {})[date] ?? 0)
+        return p > 0 || a > 0
+      }),
     )
     if (!periodRows.length) return
+
+    const groupDisplayTotals: Record<string, number> = {}
+    for (const d of gridDates.value) groupDisplayTotals[d] = 0
+    for (const r of periodRows) {
+      for (const d of gridDates.value) {
+        groupDisplayTotals[d] += matrixCellDisplayQty(
+          (r.daily ?? {}) as Record<string, number>,
+          (r.actual_daily ?? {}) as Record<string, number>,
+          d,
+        )
+      }
+    }
 
     const lineName = resolveLineName(block.line_id, block.line_code)
     const groupRow: MatrixGroupRow = {
@@ -573,7 +656,7 @@ function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
       line_name: lineName,
       utilization_rate: null,
       sum_planned_output_qty: block.sum_planned_output_qty ?? 0,
-      daily_totals: block.daily_totals ?? {},
+      daily_totals: groupDisplayTotals,
       sum_adjust_qty: 0,
       sum_setup_time: 0,
       avg_efficiency: null,
@@ -613,6 +696,9 @@ function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
         completion_rate: r.completion_rate ?? null,
         due_date: r.due_date ?? null,
         daily: r.daily ?? {},
+        actual_daily: r.actual_daily ?? {},
+        has_aps_batch_plans: !!r.has_aps_batch_plans,
+        daily_upstream_tint: r.daily_upstream_tint ?? {},
       })
     })
 
@@ -644,26 +730,83 @@ function isIgnoredLine(lineName: string) {
   return normalized === '成型他' || normalized === 'FM-026'
 }
 
-function getCellValue(row: MatrixRow, date: string): number {
+function getCellDisplayValue(row: MatrixRow, date: string): number {
   if (row.type === 'group') return row.daily_totals?.[date] ?? 0
-  return row.daily?.[date] ?? 0
+  if (row.type !== 'item') return 0
+  return matrixCellDisplayQty(row.daily ?? {}, row.actual_daily, date)
+}
+
+function cellUsesUpstreamTintBackground(row: MatrixRow, date: string): boolean {
+  if (row.type !== 'item' || row.material_shortage) return false
+  if (!row.has_aps_batch_plans) return false
+  if (!plannedUpstreamTintActiveForItem(row, date)) return false
+  const planned = Number(row.daily?.[date] ?? 0)
+  if (planned <= 0) return false
+  const seg = row.daily_upstream_tint?.[date]
+  if (!seg) return false
+  const t = Number(seg.in_cutting ?? 0) + Number(seg.in_instruction ?? 0) + Number(seg.only_planned ?? 0)
+  return t > 0
+}
+
+function getCellUpstreamStyle(row: MatrixRow, date: string): Record<string, string> | undefined {
+  if (!cellUsesUpstreamTintBackground(row, date)) return undefined
+  if (row.type !== 'item') return undefined
+  const seg = row.daily_upstream_tint?.[date]
+  if (!seg) return undefined
+  const a = Number(seg.in_cutting ?? 0)
+  const b = Number(seg.in_instruction ?? 0)
+  const c = Number(seg.only_planned ?? 0)
+  const g = b + c
+  const t = a + g
+  if (t <= 0) return undefined
+  const red = 'rgba(254, 202, 202, 0.82)'
+  const green = 'rgba(187, 247, 208, 0.62)'
+  if (a === t) return { background: red }
+  if (a === 0) return { background: green }
+  const p1 = (a / t) * 100
+  return {
+    background: `linear-gradient(to right, ${red} 0%, ${red} ${p1}%, ${green} ${p1}%, ${green} 100%)`,
+  }
 }
 
 function getCellTitle(row: MatrixRow, date: string): string {
-  const v = getCellValue(row, date) || 0
-  if (!v) return `${date}: 計画なし`
-  if (row.type === 'group') return `${date}: ライン合計 ${v}`
-  return `${date}: ${row.item_name} / ${v}`
+  const disp = getCellDisplayValue(row, date) || 0
+  const todayStr = dayjs().format('YYYY-MM-DD')
+  if (row.type === 'group') {
+    if (!disp) return `${date}: ライン合計なし`
+    return `${date}: ライン合計 ${disp}`
+  }
+  const planned = Number(row.daily?.[date] ?? 0)
+  const actual = Number(row.actual_daily?.[date] ?? 0)
+  const modeLabel = date < todayStr ? '実績' : date > todayStr ? '計画' : actual > 0 ? '実績' : '計画'
+  const seg = row.daily_upstream_tint?.[date]
+  const tintSum = seg
+    ? Number(seg.in_cutting ?? 0) + Number(seg.in_instruction ?? 0) + Number(seg.only_planned ?? 0)
+    : 0
+  const cutHint =
+    tintSum > 0 && planned > 0 && plannedUpstreamTintActiveForItem(row, date)
+      ? ` / CM:${seg!.in_cutting} 指示:${seg!.in_instruction} 計画:${seg!.only_planned}`
+      : ''
+  if (!disp) return `${date}: ${row.item_name} / —（${modeLabel}）計${planned} 実${actual}${cutHint}`
+  return `${date}: ${row.item_name} / ${disp}（${modeLabel}・計${planned}/実${actual}）${cutHint}`
 }
 
 function getCellClass(row: MatrixRow, date: string): string | string[] {
-  const v = getCellValue(row, date) || 0
+  const v = getCellDisplayValue(row, date) || 0
   const dueMatch = row.type === 'item' && row.due_date ? row.due_date === date : false
+  const upstreamBg = cellUsesUpstreamTintBackground(row, date)
 
   const tone = (() => {
     if (row.type === 'group') return ''
+    if (row.type === 'item' && row.material_shortage) {
+      if (!v) return dueMatch ? 'cell-due' : ''
+      return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
+    }
+    if (row.type === 'item' && cellShowsActualDisplay(row, date) && !upstreamBg) {
+      return dueMatch ? 'sc-cell-actual cell-due' : 'sc-cell-actual'
+    }
     if (!v) return dueMatch ? 'cell-due' : ''
-    if (row.type === 'item' && row.material_shortage) return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
+    if (upstreamBg) return dueMatch ? 'cell-due' : ''
 
     const rate = row.completion_rate
     if (rate != null && Number.isFinite(rate)) {
@@ -1022,9 +1165,10 @@ watch(
 
 .result-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 8px;
+  gap: 10px;
 }
 
 .result-head-actions {
@@ -1033,6 +1177,7 @@ watch(
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+  padding-top: 2px;
 }
 
 .sc-range-selection-ui {
@@ -1141,12 +1286,65 @@ watch(
 
 .result-title {
   display: flex;
-  align-items: baseline;
+  flex-direction: row;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0 4px;
+  gap: 4px 10px;
   font-size: 14px;
   font-weight: 800;
   color: #0f172a;
+}
+
+.sc-matrix-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-left: 4px;
+  padding-left: 10px;
+  border-left: 1px solid #e2e8f0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1.35;
+}
+
+.sc-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sc-legend-text {
+  font-weight: 600;
+  color: #475569;
+}
+
+.sc-legend-sep {
+  color: #cbd5e1;
+  font-weight: 400;
+  user-select: none;
+}
+
+.sc-legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  flex-shrink: 0;
+}
+
+.sc-legend-swatch--actual {
+  background: rgba(254, 249, 195, 0.88);
+}
+
+.sc-legend-swatch--cm {
+  background: rgba(254, 202, 202, 0.82);
+}
+
+.sc-legend-swatch--plan {
+  background: rgba(187, 247, 208, 0.62);
 }
 
 .result-title-feature {
@@ -1317,6 +1515,11 @@ watch(
   color: #dc2626;
   font-size: 9px;
   font-weight: 700;
+}
+
+/** 実績表示セル（過去日・当日に実績あり）：浅黄 */
+.sc-cell-actual {
+  background: rgba(254, 249, 195, 0.88);
 }
 
 .tone-active {

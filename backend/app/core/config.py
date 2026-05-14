@@ -5,6 +5,7 @@
 import os
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from typing import List, Optional, Tuple
 
@@ -27,9 +28,17 @@ class Settings(BaseSettings):
     DB_NAME: str = "eams_db"
     DATABASE_URL: Optional[str] = None  # 自動生成（未設定の場合）
     # データベース全件バックアップ（mysqldump）の既定保存先（UNC 可）。UI 未設定時のデフォルト。
-    BACKUP_DEFAULT_STORAGE_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\バックアップ"
+    BACKUP_DEFAULT_STORAGE_PATH: str = (
+        r"\\192.168.1.200\社内共有\02_生産管理部\バックアップ\Mysql-backup"
+    )
     # mysqldump 実行ファイル。空または "mysqldump" のとき PATH と Windows 標準インストール先を自動探索
     MYSQLDUMP_BIN: str = "mysqldump"
+    # .env による日次自動全庫バックアップ（FastAPI プロセス内 asyncio）。TIMEZONE（既定 Asia/Tokyo）で解釈。
+    DB_AUTO_BACKUP_ENABLED: bool = False
+    DB_AUTO_BACKUP_TIME: str = "02:00"  # HH:MM（24 時間制）
+    DB_AUTO_BACKUP_CATCHUP_ON_START: bool = True
+    DB_AUTO_BACKUP_RETENTION: int = 7
+    DB_AUTO_BACKUP_COMPRESS: bool = True
     
     # JWT設定
     JWT_SECRET: Optional[str] = None  # JWT_SECRET_KEYのエイリアス
@@ -101,6 +110,21 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+
+    @field_validator("DB_AUTO_BACKUP_TIME")
+    @classmethod
+    def validate_db_auto_backup_time(cls, v: str) -> str:
+        s = (v or "").strip()
+        parts = s.split(":")
+        if len(parts) != 2:
+            raise ValueError("DB_AUTO_BACKUP_TIME は HH:MM（24 時間制）で指定してください")
+        try:
+            h, m = int(parts[0]), int(parts[1])
+        except ValueError as e:
+            raise ValueError("DB_AUTO_BACKUP_TIME の時・分が数値ではありません") from e
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError("DB_AUTO_BACKUP_TIME の時刻が範囲外です")
+        return f"{h:02d}:{m:02d}"
     
     def get_database_url(self) -> str:
         """DATABASE_URLを取得（自動生成または設定値）"""

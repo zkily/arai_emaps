@@ -1,39 +1,41 @@
-# Migrations Folder Guide
+# Migrations（数据库迁移）
 
-本目录存放 MySQL 迁移脚本（以文件名前缀数字表示历史顺序）。
+## 当前结构（编号约定）
 
-## 当前现状
+- **`../init/01_init.sql`**：最先执行，仅创建 `users` 表及可选开发用管理员（`004` 等迁移依赖 `users` 已存在）。
+- **`02_baseline_full_schema.sql`**：全量基线（由原 `002`～`260` 共 159 个脚本按序合并），供**新库**一次性执行（含 `DELIMITER` 的触发器/存储过程，需用 `mysql` 客户端执行）。
+- **增量迁移**：今后新 DDL/DML 请使用 **`03_`、`04_`…** 递增前缀的新 `.sql` 文件（勿随意改写已发布的 `02_` 大文件，除非团队约定整库重建并协调所有环境）。
 
-- 文件以 `NNN_name.sql` 为主，按编号递增维护。
-- `082_production_summarys_add_sw_plan.sql` 已重编号为 `087_production_summarys_add_sw_plan.sql`（消除与 `082_material_stock_sub_current_stock_trigger.sql` 的重复编号）。
-- 存在跨阶段补丁：例如 `098_production_schedules_product_cd_if_missing.sql`（幂等补丁脚本）。
-- 焊接受入触发器验证说明见 `backend/database/docs/046_welding_receiving_good_qty_trigger_verified.md`（可执行脚本仍在 `046_welding_receiving_good_qty_trigger.sql`）。
+## 新库一条命令
 
-## 建议执行原则
+在仓库根目录配置 `backend/.env` 的 `DB_*` 后执行：
 
-- 老环境升级：按历史编号逐个执行（保持现有兼容性）。
-- 新环境初始化：优先使用「合并基线迁移」（见 `200_unified_aps_schema.sql`），再执行其后的增量脚本。
-- 任何新迁移必须：
-  - 使用未占用的新编号（建议从当前最大编号继续）。
-  - 优先写成幂等（`IF NOT EXISTS` / 信息架构检查）。
-  - 明确注释「适用场景：全新库 / 老库升级 / 回滚补丁」。
+```bash
+py scripts/bootstrap_full_database.py
+```
 
-## 业务分组（便于查找）
+脚本会执行 `01_init.sql`，再按数字顺序执行 `migrations` 下全部 `NNN_*.sql`（即 `02_` 基线，以及将来追加的 `03_` 等）。
 
-- `002` - `040`: 订单/主数据/ERP/系统基础表
-- `041` - `073`: 焊接/电镀/切断/倒角/看板相关
-- `074` - `086`: 材料管理与用量追踪（`087` 为 production_summarys 补丁，接在 086 之后）
-- `091` - `106`: APS 排产相关（甘特、时段、批次、实绩同步）
-- `215` 以降: 部品マスタ・購買・在庫など（`224_part_purchase_tables.sql` に部品在庫作成・廃止テーブル削除・列整合を統合）
-  - **部品在庫 API / 画面**で `Table '...part_stock' doesn't exist` (1146) が出る場合は、対象 DB に **`224_part_purchase_tables.sql` を未実行**のことが多い。MySQL で当該 DB を選択してから本ファイルを実行する（例: `mysql -u USER -p eams_db < backend/database/migrations/224_part_purchase_tables.sql`）。
+可选：`--dry-run`、`--drop-database`（会删库）。详见仓库根目录 `README.md`。
 
-## 本次整理产物
+## 已上线数据库
 
-- 新增 `200_unified_aps_schema.sql`：
-  - 将 APS 相关关键表结构合并为单一基线脚本（新库可一键执行）。
-  - 保留触发器与索引定义，减少碎片化脚本串行执行成本。
-  - 使用幂等写法，避免重复执行直接失败。
+- **不要**对已有库再整文件执行 `02_baseline_full_schema.sql`（会与触发器/过程等重复定义）。
+- 继续只执行**新增**的增量文件（如 `03_xxx.sql`），或按备份/运维流程处理。
 
-## 后续整理建议（可选）
+## 设计备忘：046 / 047 溶接受入触发器
 
-- 为迁移执行器增加「已执行版本记录表」（例如 `schema_migrations`），避免人工漏跑。
+以下是对 `outsourcing_welding_receivings` 上 **good_qty / 受入** 相关触发器校验时的结论摘要（逻辑已并入 `02_baseline_full_schema.sql` 对应段落）。
+
+- **订单 status**：用「受入数合计与注文数」判定受入完；入庫数归 0 时是否回到 `ordered` 需与业务确认。
+- **outsourcing_welding_stock 与 NULL welding_type**：唯一键下 NULL 易导致重复行或重复扣减；实现上宜用「先 UPDATE，未命中再 INSERT」、减少时 `LIMIT 1` 等策略。
+- **supplier_cd 长度**：若 `outsourcing_stock_transactions.supplier_cd` 与受入表长度不一致，需统一或限制业务代码长度。
+
+## 基线维护说明
+
+- 日常变更请通过 **`03_` 及更大编号** 的增量 SQL 提交。
+- 若必须从历史 git 中恢复旧版分散迁移再合并，可在本地用脚本或手工拼接生成新的 `02_` 基线文件（仓库内不附带合并脚本）。
+
+## 后续可选改进
+
+- 增加 `schema_migrations` 表记录已执行版本，避免人工漏跑。
