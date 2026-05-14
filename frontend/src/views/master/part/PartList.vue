@@ -174,7 +174,7 @@
       :total="total"
       layout="total, prev, pager, next"
       class="pagination"
-      small
+      size="small"
       @current-change="fetchList"
     />
 

@@ -637,7 +637,7 @@
       </el-table>
       <div class="pagination-wrap pbe-pagination">
         <el-pagination
-          small
+          size="small"
           layout="total, prev, pager, next"
           :total="headerTotal"
           :page-size="pageSize"

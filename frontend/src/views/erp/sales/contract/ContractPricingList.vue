@@ -84,7 +84,7 @@
           </template>
         </el-table>
         <div class="pagination-wrap" v-if="total > pageSize">
-          <el-pagination :current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" small @current-change="p=>{page=p;fetchData()}" />
+          <el-pagination :current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" size="small" @current-change="p=>{page=p;fetchData()}" />
         </div>
       </div>
     </div>

@@ -100,7 +100,17 @@
             <div ref="processVolumeChartRef" class="scrap-chart-host" />
           </div>
           <div v-loading="productChartLoading" class="scrap-chart-card scrap-chart-card--span2">
-            <div class="scrap-chart-card__title">製品別 不良＋廃棄（本）と 廃棄率（1−RTY）（％）</div>
+            <div class="scrap-chart-card__title scrap-chart-card__title--product-combo">
+              <span class="scrap-chart-card__title-text">製品別 不良＋廃棄（本）と 廃棄率（1−RTY）（％）</span>
+              <span v-if="productChartDataHint === 'updating'" class="scrap-data-hint scrap-data-hint--busy scrap-data-hint--in-title">
+                <el-icon class="scrap-data-hint__ico is-loading"><Loading /></el-icon>
+                データ更新中…
+              </span>
+              <span v-else-if="productChartDataHint === 'done'" class="scrap-data-hint scrap-data-hint--ok scrap-data-hint--in-title">
+                <el-icon class="scrap-data-hint__ico"><CircleCheck /></el-icon>
+                更新完了
+              </span>
+            </div>
             <div class="scrap-chart-card__sub">{{ productChartSubLine }}</div>
             <div ref="productComboChartRef" class="scrap-chart-host scrap-chart-host--wide" />
           </div>
@@ -111,6 +121,14 @@
         <div class="scrap-block__head">
           <el-icon class="scrap-block__ico scrap-block__ico--indigo"><Histogram /></el-icon>
           <span class="scrap-block__title">工程別集計</span>
+          <span v-if="processAggDataHint === 'updating'" class="scrap-data-hint scrap-data-hint--busy">
+            <el-icon class="scrap-data-hint__ico is-loading"><Loading /></el-icon>
+            データ更新中…
+          </span>
+          <span v-else-if="processAggDataHint === 'done'" class="scrap-data-hint scrap-data-hint--ok">
+            <el-icon class="scrap-data-hint__ico"><CircleCheck /></el-icon>
+            更新完了
+          </span>
         </div>
         <div class="scrap-table-shell scrap-table-shell--process">
           <el-table
@@ -315,7 +333,7 @@
           :total="productTotal"
           :page-size="productLimit"
           :current-page="productPage"
-          small
+          size="small"
           @current-change="onProductPageChange"
         />
       </section>
@@ -337,6 +355,7 @@ import {
   Operation,
   PieChart,
   Printer,
+  Loading,
   TrendCharts,
   WarningFilled,
 } from '@element-plus/icons-vue'
@@ -354,6 +373,9 @@ const loadingProductMatrix = ref(false)
 const loadingProcessAgg = ref(false)
 /** 工程別金額列のみ第2段 API 取得中 */
 const processAmountsSyncing = ref(false)
+
+/** 工程別：数量取得 or 金額同期のいずれかが進行中（タイトル横ステータス用） */
+const processAggBusy = computed(() => loadingProcessAgg.value || processAmountsSyncing.value)
 
 const today = new Date()
 const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
@@ -409,11 +431,58 @@ const productRows = ref<ProductMatrixRow[]>([])
 /** 製品チャート用：期間・製品絞込下の全ページを rty_loss 降順で取得した一覧（表示は上位のみ切詰） */
 const productChartRows = ref<ProductMatrixRow[]>([])
 const productChartLoading = ref(false)
+/** fetchAll：並列取得〜チャート全件取得まで true（タイトル「データ更新中」用） */
+const productChartPipelineBusy = ref(false)
 const productChartTotal = ref(0)
 const CHART_PRODUCT_DISPLAY_CAP = 80
 /** 印刷・製品チャート全件取得のページサイズ（API 上限 500） */
 const PRINT_FETCH_LIMIT = 500
 const PRINT_MAX_PAGES = 40
+
+type ScrapDataHintPhase = 'idle' | 'updating' | 'done'
+const productChartDataHint = ref<ScrapDataHintPhase>('idle')
+const processAggDataHint = ref<ScrapDataHintPhase>('idle')
+let productChartHintDoneTimer: ReturnType<typeof setTimeout> | null = null
+let processAggHintDoneTimer: ReturnType<typeof setTimeout> | null = null
+const HINT_DONE_DISPLAY_MS = 2600
+
+const productChartBusyForHint = computed(
+  () => productChartLoading.value || productChartPipelineBusy.value,
+)
+
+watch(productChartBusyForHint, (busy, prevBusy) => {
+  if (busy) {
+    if (productChartHintDoneTimer) {
+      clearTimeout(productChartHintDoneTimer)
+      productChartHintDoneTimer = null
+    }
+    productChartDataHint.value = 'updating'
+  } else if (prevBusy) {
+    productChartDataHint.value = 'done'
+    if (productChartHintDoneTimer) clearTimeout(productChartHintDoneTimer)
+    productChartHintDoneTimer = setTimeout(() => {
+      productChartDataHint.value = 'idle'
+      productChartHintDoneTimer = null
+    }, HINT_DONE_DISPLAY_MS)
+  }
+})
+
+watch(processAggBusy, (busy, prevBusy) => {
+  if (busy) {
+    if (processAggHintDoneTimer) {
+      clearTimeout(processAggHintDoneTimer)
+      processAggHintDoneTimer = null
+    }
+    processAggDataHint.value = 'updating'
+  } else if (prevBusy) {
+    processAggDataHint.value = 'done'
+    if (processAggHintDoneTimer) clearTimeout(processAggHintDoneTimer)
+    processAggHintDoneTimer = setTimeout(() => {
+      processAggDataHint.value = 'idle'
+      processAggHintDoneTimer = null
+    }, HINT_DONE_DISPLAY_MS)
+  }
+})
 
 const productChartSubLine = computed(() => {
   const n = productChartRows.value.length
@@ -1111,21 +1180,26 @@ async function fetchAll() {
     ElMessage.warning('期間を選択してください')
     return
   }
-  await Promise.all([
-    (async () => {
-      loadingProductMatrix.value = true
-      try {
-        await fetchProductMatrix()
-      } catch (e: unknown) {
-        console.error(e)
-        ElMessage.error('製品別データの取得に失敗しました')
-      } finally {
-        loadingProductMatrix.value = false
-      }
-    })(),
-    fetchProcessSummary(),
-  ])
-  void refreshProductChartAllPages()
+  productChartPipelineBusy.value = true
+  try {
+    await Promise.all([
+      (async () => {
+        loadingProductMatrix.value = true
+        try {
+          await fetchProductMatrix()
+        } catch (e: unknown) {
+          console.error(e)
+          ElMessage.error('製品別データの取得に失敗しました')
+        } finally {
+          loadingProductMatrix.value = false
+        }
+      })(),
+      fetchProcessSummary(),
+    ])
+    await refreshProductChartAllPages()
+  } finally {
+    productChartPipelineBusy.value = false
+  }
 }
 
 let filterDebounce: ReturnType<typeof setTimeout> | null = null
@@ -1393,6 +1467,14 @@ onBeforeUnmount(() => {
   if (resizeTimer) {
     clearTimeout(resizeTimer)
     resizeTimer = null
+  }
+  if (productChartHintDoneTimer) {
+    clearTimeout(productChartHintDoneTimer)
+    productChartHintDoneTimer = null
+  }
+  if (processAggHintDoneTimer) {
+    clearTimeout(processAggHintDoneTimer)
+    processAggHintDoneTimer = null
   }
   disposeScrapCharts()
 })
@@ -1668,6 +1750,44 @@ onBeforeUnmount(() => {
   color: #475569;
   margin-bottom: 2px;
   letter-spacing: 0.01em;
+}
+
+.scrap-chart-card__title--product-combo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 2px;
+}
+
+.scrap-chart-card__title-text {
+  min-width: 0;
+}
+
+.scrap-data-hint--in-title {
+  flex-shrink: 0;
+}
+
+.scrap-data-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.scrap-data-hint__ico {
+  font-size: 14px;
+}
+
+.scrap-data-hint--busy {
+  color: #2563eb;
+}
+
+.scrap-data-hint--ok {
+  color: #059669;
 }
 
 .scrap-chart-card__sub {

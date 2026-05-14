@@ -92,7 +92,7 @@
           :total="total"
           :page-sizes="[20, 50, 100, 200]"
           layout="total, sizes, prev, pager, next"
-          small
+          size="small"
           background
           @current-change="fetchList"
           @size-change="onSizeChange"

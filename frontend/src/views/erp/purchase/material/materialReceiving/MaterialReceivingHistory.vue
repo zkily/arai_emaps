@@ -377,7 +377,7 @@
             :page-sizes="[10, 20, 50, 100]"
             :total="totalCount || 0"
             layout="sizes, prev, pager, next, jumper"
-            small
+            size="small"
             @size-change="handlePageSizeChange"
             @current-change="handlePageChange"
             class="modern-pagination"

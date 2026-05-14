@@ -111,7 +111,7 @@
           v-model:current-page="page"
           :page-size="pageSize"
           :total="total"
-          small
+          size="small"
           layout="total, prev, pager, next"
           @current-change="loadList"
         />
