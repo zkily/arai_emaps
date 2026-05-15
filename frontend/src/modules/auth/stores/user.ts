@@ -102,7 +102,6 @@ export const useUserStore = defineStore(
       }
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
-      localStorage.removeItem(REMEMBER_ME_KEY)
       sessionStorage.removeItem(TOKEN_KEY)
       sessionStorage.removeItem(USER_KEY)
     }

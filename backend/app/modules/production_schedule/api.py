@@ -2484,6 +2484,8 @@ class UpdateCuttingManagementBody(BaseModel):
     defect_qty: Optional[int] = None
     use_material_stock_sub: Optional[int] = None  # 0/1
     usage_count: Optional[float] = None  # 1=1本, <1=按分
+    start_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
+    end_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
 
 
 @router.patch("/plan/cutting-management/{cutting_id}")
@@ -2535,6 +2537,30 @@ async def update_cutting_management(
                 params["usage_count"] = uc
         except (TypeError, ValueError):
             pass
+    if body.start_date is not None:
+        sd = body.start_date.strip()[:10] if body.start_date and len(body.start_date.strip()) >= 10 else None
+        if sd:
+            try:
+                parts = sd.split("-")
+                if len(parts) == 3:
+                    params["start_date"] = datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+                    updates.append("start_date = :start_date")
+            except (ValueError, IndexError):
+                pass
+        else:
+            updates.append("start_date = NULL")
+    if body.end_date is not None:
+        ed = body.end_date.strip()[:10] if body.end_date and len(body.end_date.strip()) >= 10 else None
+        if ed:
+            try:
+                parts = ed.split("-")
+                if len(parts) == 3:
+                    params["end_date"] = datetime(int(parts[0]), int(parts[1]), int(parts[2]))
+                    updates.append("end_date = :end_date")
+            except (ValueError, IndexError):
+                pass
+        else:
+            updates.append("end_date = NULL")
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
