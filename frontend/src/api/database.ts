@@ -45,6 +45,9 @@ export interface ProductionSummaryInventoryRow {
   /** ルート上 溶接/外注溶接 の直前工程の在庫（一覧 enrich と同一） */
   pre_welding_inventory?: number | null
   pre_welding_prev_process?: string | null
+  /** 溶接直前のさらに一つ手前の工程在庫（一覧 enrich と同一） */
+  pre_pre_welding_inventory?: number | null
+  pre_pre_welding_prev_process?: string | null
   pre_welding_inspection_inventory?: number | null
   pre_inspection_inventory?: number | null
   pre_outsourcing_inventory?: number | null

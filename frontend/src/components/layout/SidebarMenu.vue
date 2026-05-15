@@ -476,22 +476,34 @@
             <el-icon><Monitor /></el-icon>
             <span :title="t('menu.MES')">{{ t('menu.MES') }}</span>
           </template>
-          <el-sub-menu index="mes-instruction">
+          <el-sub-menu index="mes-actualDataCollection">
             <template #title>
-              <el-icon><Document /></el-icon>
-              <span :title="t('menu.MES_PRODUCTION_INSTRUCTION')">{{ t('menu.MES_PRODUCTION_INSTRUCTION') }}</span>
+              <el-icon><DataLine /></el-icon>
+              <span :title="t('menu.MES_ACTUAL_DATA_COLLECTION')">{{ t('menu.MES_ACTUAL_DATA_COLLECTION') }}</span>
             </template>
-            <el-menu-item index="/mes/instruction/cutting">
+            <el-menu-item index="/mes/actualDataCollection/cutting">
               <el-icon><Operation /></el-icon>
-              <template #title><span :title="t('menu.MES_CUTTING_INSTRUCTION')">{{ t('menu.MES_CUTTING_INSTRUCTION') }}</span></template>
+              <template #title><span :title="t('menu.MES_ACTUAL_CUTTING')">{{ t('menu.MES_ACTUAL_CUTTING') }}</span></template>
             </el-menu-item>
-            <el-menu-item index="/mes/instruction/welding">
+            <el-menu-item index="/mes/actualDataCollection/chamfering">
+              <el-icon><Tools /></el-icon>
+              <template #title><span :title="t('menu.MES_ACTUAL_CHAMFERING')">{{ t('menu.MES_ACTUAL_CHAMFERING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/actualDataCollection/forming">
+              <el-icon><Box /></el-icon>
+              <template #title><span :title="t('menu.MES_ACTUAL_FORMING')">{{ t('menu.MES_ACTUAL_FORMING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/actualDataCollection/plating">
+              <el-icon><Histogram /></el-icon>
+              <template #title><span :title="t('menu.MES_ACTUAL_PLATING')">{{ t('menu.MES_ACTUAL_PLATING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/actualDataCollection/welding">
               <el-icon><Connection /></el-icon>
-              <template #title><span :title="t('menu.MES_WELDING_INSTRUCTION')">{{ t('menu.MES_WELDING_INSTRUCTION') }}</span></template>
+              <template #title><span :title="t('menu.MES_ACTUAL_WELDING')">{{ t('menu.MES_ACTUAL_WELDING') }}</span></template>
             </el-menu-item>
-            <el-menu-item index="/mes/instruction/plating">
-              <el-icon><Operation /></el-icon>
-              <template #title><span :title="t('menu.MES_PLATING_INSTRUCTION')">{{ t('menu.MES_PLATING_INSTRUCTION') }}</span></template>
+            <el-menu-item index="/mes/actualDataCollection/inspection">
+              <el-icon><CircleCheck /></el-icon>
+              <template #title><span :title="t('menu.MES_ACTUAL_INSPECTION')">{{ t('menu.MES_ACTUAL_INSPECTION') }}</span></template>
             </el-menu-item>
           </el-sub-menu>
         </el-sub-menu>

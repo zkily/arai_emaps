@@ -3387,6 +3387,27 @@ def _pre_welding_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Opt
         return 0, prev_key
 
 
+def _pre_pre_welding_inventory_from_row(row_dict: dict, sequence: list) -> tuple[Optional[int], Optional[str]]:
+    """溶接直前工程のさらに一つ手前の工程の当日在庫。戻り: (値, その工程 key)。該当なしは (None, None)。"""
+    idx = _find_welding_step_index(sequence)
+    if idx is None or idx < 2:
+        return None, None
+    prev_prev_key = sequence[idx - 2]
+    cfg = _get_process_config_by_key(prev_prev_key)
+    if not cfg:
+        return None, None
+    inv_f = cfg.get("fields", {}).get("inventory")
+    if not inv_f:
+        return None, None
+    raw = row_dict.get(inv_f)
+    if raw is None:
+        return 0, prev_prev_key
+    try:
+        return int(raw), prev_prev_key
+    except (TypeError, ValueError):
+        return 0, prev_prev_key
+
+
 async def _enrich_production_summary_rows_pre_plating_inventory(
     db: AsyncSession, rows: list[dict]
 ) -> None:
@@ -3429,6 +3450,9 @@ async def _enrich_production_summary_rows_pre_plating_inventory(
         wv, wprev = _pre_welding_inventory_from_row(r, sequence)
         r["pre_welding_inventory"] = wv
         r["pre_welding_prev_process"] = wprev
+        ppw, ppwprev = _pre_pre_welding_inventory_from_row(r, sequence)
+        r["pre_pre_welding_inventory"] = ppw
+        r["pre_pre_welding_prev_process"] = ppwprev
 
 
 def _parse_route_sequence_from_description(description: Optional[str]) -> list:

@@ -4927,6 +4927,8 @@ async def generate_cutting_plans_from_schedule(
 #     GET/POST/PATCH/DELETE /api/plan/forming-instruction-notes
 #   forming planning (APS 成型計画作成):
 #     GET/POST/PATCH/DELETE /api/plan/forming-planning-notes
+#   welding planning (APS 溶接計画作成):
+#     GET/POST/PATCH/DELETE /api/plan/welding-planning-notes
 #   welding:
 #     GET/POST/PATCH/DELETE /api/plan/welding-instruction-notes
 # ============================
@@ -4934,6 +4936,7 @@ async def generate_cutting_plans_from_schedule(
 INSTRUCTION_NOTE_SCOPE_CUTTING = "cutting_instruction"
 INSTRUCTION_NOTE_SCOPE_FORMING = "forming_instruction"
 INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING = "forming_planning"
+INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING = "welding_planning"
 INSTRUCTION_NOTE_SCOPE_WELDING = "welding_instruction"
 
 
@@ -5267,6 +5270,55 @@ async def delete_forming_planning_note(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, note_id)
+
+
+@router.get("/plan/welding-planning-notes")
+async def list_welding_planning_notes(
+    limit: int = Query(200, ge=1, le=1000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _list_instruction_notes(db, INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING, limit)
+
+
+@router.post("/plan/welding-planning-notes")
+async def create_welding_planning_note(
+    body: CuttingInstructionNoteCreateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    content = (body.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content を指定してください")
+    if len(content) > 200:
+        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+    return await _create_instruction_note(
+        db,
+        INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING,
+        content,
+        getattr(current_user, "username", None),
+    )
+
+
+@router.patch("/plan/welding-planning-notes/{note_id}")
+async def update_welding_planning_note(
+    note_id: int,
+    body: CuttingInstructionNoteUpdateBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _update_instruction_note(
+        db, INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING, note_id, body, current_user
+    )
+
+
+@router.delete("/plan/welding-planning-notes/{note_id}")
+async def delete_welding_planning_note(
+    note_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING, note_id)
 
 
 @router.get("/plan/welding-instruction-notes")

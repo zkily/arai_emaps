@@ -10,7 +10,7 @@
         </div>
       </div>
 
-      <!-- 出荷確認リストカレンダー（オワリ便・社内便等グループ別印刷） -->
+      <!-- 出荷確認リストカレンダー（オワリ便・鈴鹿便・社内便等グループ別印刷） -->
       <ShippingCalendarDialog :model-value="true" inline report-type="list" />
 
       <div class="filter-section">

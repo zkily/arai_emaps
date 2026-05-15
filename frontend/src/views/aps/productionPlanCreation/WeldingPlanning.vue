@@ -64,6 +64,24 @@
               計画を取得
             </el-button>
           </el-form-item>
+          <el-form-item label-width="0" class="setup-fi-notes">
+            <div class="welding-planning-notes-btn-wrap">
+              <el-button
+                type="default"
+                size="small"
+                class="welding-notes-toolbar-btn"
+                title="メモ（TODO）"
+                @click="openWeldingPlanningNotesDialog"
+              >
+                <span class="notes-badge-wrap">
+                  <el-icon><Memo /></el-icon>
+                  <span v-if="weldingPlanningNotesCount > 0" class="notes-count-badge">
+                    {{ weldingPlanningNotesCount }}
+                  </span>
+                </span>
+              </el-button>
+            </div>
+          </el-form-item>
         </el-form>
         <p
           v-if="selectedProcessCd && !loadingLines && lines.length === 0"
@@ -513,7 +531,7 @@
     </div>
 
     <!-- ─── Gantt ─── -->
-    <div v-if="ganttDates.length > 0 || progressLots.length > 0" class="plan-card gantt-section">
+    <div v-if="ganttDates.length > 0 || hourlyColumns.length > 0" class="plan-card gantt-section">
       <div class="gantt-status-legend">
         <span class="legend-item"><i class="legend-dot legend-dot--planned" />計画中</span>
         <span class="legend-item"><i class="legend-dot legend-dot--released" />指示済</span>
@@ -556,23 +574,25 @@
                   <th class="gantt-sticky gantt-sticky-planned">計画数</th>
                   <th class="gantt-sticky gantt-sticky-actual">実績数</th>
                   <th class="gantt-sticky gantt-sticky-defect" title="表示期間内の不良合計（在庫ログ・不良）">不良数</th>
-                  <th class="gantt-sticky gantt-sticky-upstream" title="表示期間内の前工程不良合計（切断・面取）">前工程不良</th>
                   <th
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-date-col"
-                    :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
+                    :class="{
+                      'is-weekend': ganttDateColumnFlags[d]?.isWeekend,
+                      'is-today': ganttDateColumnFlags[d]?.isToday,
+                    }"
                   >
                     <div class="gantt-date-text">{{ d.slice(5) }}</div>
-                    <div class="gantt-wd-text">{{ getWeekday(d) }}</div>
+                    <div class="gantt-wd-text">{{ ganttDateColumnFlags[d]?.weekdayShort ?? '' }}</div>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="row in ganttRows"
+                  v-for="row in visibleGanttRows"
                   :key="row.id"
-                  :class="['gantt-row', productPaletteClass(row)]"
+                  :class="['gantt-row', ganttProductPaletteClassById[row.id] || 'gpc-0']"
                 >
                   <td
                     class="gantt-sticky gantt-sticky-line gantt-line-dbl"
@@ -582,25 +602,77 @@
                     {{ selectedLineDisplayName }}
                   </td>
                   <td class="gantt-sticky gantt-sticky-order">{{ row.order_no ?? '—' }}</td>
-                  <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
+                  <td class="gantt-sticky gantt-sticky-name gantt-name">
+                    <el-tooltip
+                      placement="top-start"
+                      :show-after="350"
+                      :disabled="!scheduleProductCd(row.id)"
+                      popper-class="gantt-name-upstream-popper"
+                      @show="() => { void ensureUpstreamSummaryForSchedule(row.id) }"
+                    >
+                      <template #content>
+                        <div class="gantt-name-upstream-tip">
+                          <template v-if="upstreamTipState(row.id).kind === 'loading'">
+                            <p>読み込み中…</p>
+                          </template>
+                          <template v-else-if="upstreamTipState(row.id).kind === 'error'">
+                            <p>{{ upstreamTipState(row.id).err }}</p>
+                          </template>
+                          <template v-else>
+                            <p>基準日: <b>{{ todayIso }}</b></p>
+                            <p>
+                              溶接直前在庫（当日合算）:
+                              <b>{{ (upstreamTipState(row.id).pre ?? 0).toLocaleString() }}</b> 本
+                            </p>
+                            <p v-if="upstreamTipState(row.id).prePreApplicable">
+                              <template v-if="upstreamTipState(row.id).prePreProcessJa">
+                                「{{ upstreamTipState(row.id).prePreProcessJa }}」在庫(当日合算):
+                              </template>
+                              <template v-else>
+                                一つ手前の工程在庫:
+                              </template>
+                              <b>{{ (upstreamTipState(row.id).prePre ?? 0).toLocaleString() }}</b> 本
+                            </p>
+                            <p>
+                              成型計画（当日を含む・累計）:
+                              <b>{{ (upstreamTipState(row.id).future ?? 0).toLocaleString() }}</b> 本
+                            </p>
+                            <p v-if="upstreamTipState(row.id).moldingPlanPeriodStart" class="upstream-tip-period">
+                              累計対象期間:
+                              <b>{{ upstreamTipState(row.id).moldingPlanPeriodStart }}</b>
+                              ～
+                              <b>{{ upstreamTipState(row.id).moldingPlanPeriodEnd }}</b>
+                            </p>
+                            <p v-else class="upstream-tip-period upstream-tip-muted">
+                              累計対象期間: ガント表示範囲に基準日以降の日がありません
+                            </p>
+                          </template>
+                        </div>
+                      </template>
+                      <span class="gantt-name-wrap">{{ row.item_name }}</span>
+                    </el-tooltip>
+                  </td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty }}</td>
-                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualForRow(row).toLocaleString() }}</td>
-                  <td class="gantt-sticky gantt-sticky-defect">{{ periodDefectForRow(row).toLocaleString() }}</td>
-                  <td class="gantt-sticky gantt-sticky-upstream">{{ periodUpstreamDefectForRow(row).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">
+                    {{ (ganttPeriodTotalsByScheduleId[row.id]?.actual ?? 0).toLocaleString() }}
+                  </td>
+                  <td class="gantt-sticky gantt-sticky-defect">
+                    {{ (ganttPeriodTotalsByScheduleId[row.id]?.defect ?? 0).toLocaleString() }}
+                  </td>
                   <td
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-cell"
                     :class="ganttCellClass(row, d)"
                     :title="ganttCellTitle(row, d)"
+                    @dblclick.stop="openDailyPlanEdit(row, d)"
                   >
                     <div
                       v-if="
                         (row.daily[d] || 0) !== 0 ||
                         (row.actual_daily?.[d] || 0) !== 0 ||
                         (row.defect_daily?.[d] || 0) !== 0 ||
-                        (row.upstream_defect_daily?.[d] || 0) !== 0 ||
                         (row.remaining_daily?.[d] || 0) !== 0
                       "
                       class="gantt-layered"
@@ -608,7 +680,6 @@
                       <span class="gantt-layer gantt-layer--plan"><b class="gl-lbl">計</b>{{ row.daily[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--actual"><b class="gl-lbl">実</b>{{ row.actual_daily?.[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--defect"><b class="gl-lbl">不</b>{{ row.defect_daily?.[d] || 0 }}</span>
-                      <span class="gantt-layer gantt-layer--upstream"><b class="gl-lbl">前</b>{{ row.upstream_defect_daily?.[d] || 0 }}</span>
                       <span class="gantt-layer gantt-layer--remain"><b class="gl-lbl">残</b>{{ row.remaining_daily?.[d] || 0 }}</span>
                     </div>
                   </td>
@@ -659,7 +730,9 @@
                   <td class="gantt-sticky gantt-sticky-name gantt-name">{{ row.item_name }}</td>
                   <td class="gantt-sticky gantt-sticky-eff">{{ formatEfficiencyRatePiecesPerH(row.efficiency_rate) }}</td>
                   <td class="gantt-sticky gantt-sticky-planned">{{ row.planned_process_qty ?? 0 }}</td>
-                  <td class="gantt-sticky gantt-sticky-actual">{{ periodActualByScheduleId(row.schedule_id).toLocaleString() }}</td>
+                  <td class="gantt-sticky gantt-sticky-actual">
+                    {{ (ganttPeriodTotalsByScheduleId[row.schedule_id]?.actual ?? 0).toLocaleString() }}
+                  </td>
                   <td
                     v-for="col in hourlyColumns"
                     :key="col.key"
@@ -672,91 +745,6 @@
                 </tr>
               </tbody>
             </table>
-          </div>
-        </el-tab-pane>
-
-        <!-- ─── 生産進捗（ロット別ステータス甘特） ─── -->
-        <el-tab-pane label="生産進捗" name="progress">
-          <div v-if="sortedProgressLots.length === 0 && !loadingProgress" class="gantt-hourly-placeholder">
-            <el-empty description="進捗データがありません（ライン順で再計算後に表示されます）" />
-          </div>
-          <div v-else class="gantt-scroll gantt-scroll--progress">
-            <table class="gantt-table gantt-progress-table">
-              <thead>
-                <tr>
-                  <th class="gantt-sticky gantt-sticky-line">ライン</th>
-                  <th class="gantt-sticky gantt-sticky-order">順位</th>
-                  <th class="gantt-sticky gantt-sticky-name">品名</th>
-                  <th class="gantt-sticky gantt-sticky-eff">ロット</th>
-                  <th class="gantt-sticky gantt-sticky-planned">計画数</th>
-                  <th class="pgs-th-cutting" title="cutting_management（上流切断・実績/計画本数）">切断(本)</th>
-                  <th class="pgs-th-status">ステータス</th>
-                  <th class="pgs-th-prediction">完了予測</th>
-                  <th
-                    v-for="d in progressDisplayDates"
-                    :key="d"
-                    class="gantt-date-col"
-                    :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
-                  >
-                    <div class="gantt-date-text">{{ d.slice(5) }}</div>
-                    <div class="gantt-wd-text">{{ getWeekday(d) }}</div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(lot, idx) in sortedProgressLots"
-                  :key="`${lot.aps_schedule_id}_${lot.lot_number}`"
-                  :class="['gantt-row', `gantt-rc-${idx % 10}`]"
-                >
-                  <td class="gantt-sticky gantt-sticky-line">{{ lot.production_line || selectedLineDisplayName }}</td>
-                  <td class="gantt-sticky gantt-sticky-order">{{ lot.order_no ?? '—' }}</td>
-                  <td class="gantt-sticky gantt-sticky-name gantt-name">{{ lot.product_name }}</td>
-                  <td class="gantt-sticky gantt-sticky-eff pgs-lot-num">#{{ lot.lot_number }}</td>
-                  <td
-                    class="gantt-sticky gantt-sticky-planned pgs-planned-cell"
-                    :title="progressPlannedCellTitle(lot)"
-                  >
-                    <span class="pgs-planned-main">{{ lot.planned_quantity?.toLocaleString() }}</span>
-                    <span v-if="(lot.upstream_defect_qty ?? 0) > 0" class="pgs-eff-sub">
-                      有効 {{ weldingEffectiveDisplay(lot).toLocaleString() }}（上流不良 {{ (lot.upstream_defect_qty ?? 0).toLocaleString() }}）
-                    </span>
-                  </td>
-                  <td class="pgs-cutting-cell">
-                    <span class="pgs-cutting-qty">{{ cuttingProgressDisplay(lot) }}</span>
-                    <el-tag
-                      v-if="lot.cutting_completed && lot.progress_status === 'IN_PROGRESS'"
-                      type="success"
-                      size="small"
-                      class="pgs-cutting-done-tag"
-                    >確定</el-tag>
-                  </td>
-                  <td class="pgs-status-cell">
-                    <el-tag :type="progressStatusType(lot.progress_status)" size="small" effect="dark">
-                      {{ progressStatusLabel(lot.progress_status) }}
-                    </el-tag>
-                  </td>
-                  <td class="pgs-prediction-cell">{{ formatPrediction(lot.predicted_completion) }}</td>
-                  <td
-                    v-for="d in progressDisplayDates"
-                    :key="d"
-                    class="gantt-cell"
-                    :class="progressCellClass(lot, d)"
-                    :title="`${lot.product_name} #${lot.lot_number}: ${((progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d]) || ''}個`"
-                  >
-                    <span
-                      v-if="((progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d] || 0) > 0"
-                      class="gantt-qty"
-                    >{{ (progressLotDaily[`${lot.aps_schedule_id}_${lot.lot_number}`] || {})[d] }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p class="pgs-footnote">
-              全ロットを本工程（溶接）の計画・実績として表示。日別セルは schedule_details／在庫ログ同期の<strong>溶接実績</strong>。
-              「計画数」は計画一覧のロット本数。上流不良がある場合は切断+面取の defect を management_code で合算し、<strong>有効</strong>は再計算後の溶接ロット本数（aps_batch_plans）に合わせます。
-              「ステータス」「切断(本)」は上流（instruction_plans／cutting_management）のみの情報で、行の表示とは独立します。
-            </p>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -849,6 +837,34 @@
     </el-dialog>
 
     <el-dialog
+      v-model="dailyPlanEditDialogVisible"
+      title="日別計画編集"
+      width="min(420px, 92vw)"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <el-form label-position="top">
+        <el-form-item label="日付">
+          <el-input :model-value="dailyPlanEditDate" readonly />
+        </el-form-item>
+        <el-form-item label="計画数（本）">
+          <el-input-number
+            v-model="dailyPlanEditQty"
+            :min="0"
+            :step="1"
+            :precision="0"
+            controls-position="right"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dailyPlanEditDialogVisible = false">キャンセル</el-button>
+        <el-button type="primary" :loading="dailyPlanEditSaving" @click="saveDailyPlanEdit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
       v-model="lineCapacityDaySlotsDialogVisible"
       :title="`設備稼働設定 — ${selectedLineDisplayName}`"
       width="min(560px, 96vw)"
@@ -888,6 +904,106 @@
         @saved="onLineCapacityDaySlotsSaved"
       />
     </el-dialog>
+
+    <!-- メモ（TODO）— welding-planning-notes API -->
+    <el-dialog
+      v-model="weldingPlanningNotesDialogVisible"
+      width="min(440px, 94vw)"
+      class="welding-planning-notes-dialog"
+      append-to-body
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+      :show-close="false"
+    >
+      <template #header>
+        <div class="welding-todo-header">
+          <div class="welding-todo-header__lead">
+            <span class="welding-todo-header__icon" aria-hidden="true"><el-icon><Memo /></el-icon></span>
+            <span class="welding-todo-header__title">メモ（TODO）</span>
+            <span class="welding-todo-header__sep">·</span>
+            <span class="welding-todo-header__subtitle">短文で記録</span>
+          </div>
+          <span v-if="weldingPlanningNotesCount > 0" class="welding-todo-header__badge">{{ weldingPlanningNotesCount }}</span>
+        </div>
+      </template>
+
+      <div class="welding-todo-shell">
+        <section class="welding-todo-compose" aria-label="新規メモ">
+          <div class="welding-todo-compose__head">
+            <span class="welding-todo-compose__label">新規</span>
+            <el-button
+              type="primary"
+              size="small"
+              class="welding-todo-btn-primary"
+              :loading="weldingPlanningNotesSaving"
+              @click="addWeldingPlanningNote"
+            >
+              追加
+            </el-button>
+          </div>
+          <el-input
+            v-model="weldingPlanningNotesNewContent"
+            type="textarea"
+            :rows="2"
+            maxlength="200"
+            show-word-limit
+            class="welding-todo-textarea"
+            placeholder="やることを一文で入力…"
+          />
+        </section>
+
+        <section class="welding-todo-board" aria-label="タスク一覧">
+          <div class="welding-todo-board__head">
+            <span class="welding-todo-board__title">一覧</span>
+            <span
+              v-if="!weldingPlanningNotesLoading && weldingPlanningNotesList.length > 0"
+              class="welding-todo-board__meta"
+            >
+              未完了 {{ weldingPlanningNotesPendingCount }} · 計 {{ weldingPlanningNotesCount }}
+            </span>
+          </div>
+
+          <el-scrollbar v-loading="weldingPlanningNotesLoading" max-height="300" class="welding-todo-scrollbar">
+            <template v-if="!weldingPlanningNotesLoading && weldingPlanningNotesList.length === 0">
+              <p class="welding-todo-empty">メモがありません。上の欄から追加してください。</p>
+            </template>
+            <ul v-else-if="weldingPlanningNotesList.length > 0" class="welding-todo-list" role="list">
+              <li
+                v-for="n in weldingPlanningNotesList"
+                :key="n.id"
+                class="welding-todo-row"
+                :class="{ 'welding-todo-row--done': n.is_done === 1 }"
+              >
+                <el-checkbox
+                  :model-value="n.is_done === 1"
+                  class="welding-todo-row__check"
+                  @change="(val) => toggleWeldingPlanningNoteDone(n, val)"
+                />
+                <span class="welding-todo-row__body">{{ n.content }}</span>
+                <el-button
+                  v-if="n.id != null"
+                  link
+                  type="danger"
+                  class="welding-todo-row__del"
+                  :disabled="weldingPlanningNotesSaving"
+                  @click="deleteWeldingPlanningNote(n)"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
+              </li>
+            </ul>
+          </el-scrollbar>
+        </section>
+      </div>
+
+      <template #footer>
+        <div class="welding-todo-footer">
+          <el-button size="small" class="welding-todo-footer__btn" @click="weldingPlanningNotesDialogVisible = false">
+            閉じる
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -895,7 +1011,7 @@
 defineOptions({ name: 'WeldingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete, InfoFilled, Setting } from '@element-plus/icons-vue'
+import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 import {
@@ -912,6 +1028,7 @@ import {
   fetchLineReplanAnchors,
   saveLineReplanAnchors,
   fetchLineCapacities,
+  updateScheduleDailyPlannedQty,
   productionLineOptionLabel,
   type ProductionLine,
   type LineReplanAnchorRow,
@@ -925,6 +1042,8 @@ import {
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import LineCapacity from '../LineCapacity.vue'
+import { getProductionSummarysList } from '@/api/database'
+import request from '@/shared/api/request'
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
 function formatYmdInJapan(d: Date): string {
@@ -1022,6 +1141,12 @@ const skipNextTotalQtyBlur = ref(false)
 const skipNextSetupTimeBlur = ref(false)
 /** 開始日指定用：Enter 確定直後の blur で二重保存しない */
 const skipNextForcedStartBlur = ref(false)
+/** ガント日別セル（計）編集ダイアログ */
+const dailyPlanEditDialogVisible = ref(false)
+const dailyPlanEditSaving = ref(false)
+const dailyPlanEditScheduleId = ref<number | null>(null)
+const dailyPlanEditDate = ref<string>('')
+const dailyPlanEditQty = ref<number>(0)
 /** el-table インスタンス（行ドラッグ用） */
 const scheduleTableRef = ref<{ $el?: HTMLElement } | null>(null)
 /** 計画一覧は6行分を上限表示し、超過分は縦スクロール */
@@ -1082,25 +1207,12 @@ const lineCapacitySingleDayRange = computed((): [string, string] | null => {
 const ganttRows = ref<ScheduleGridRow[]>([])
 const hourlyColumns = ref<HourlyGridColumn[]>([])
 const hourlyRows = ref<HourlyGridRow[]>([])
-/** 生産進捗：全ロットを表示。日別＝溶接計画・実績。ステータス・切断(本)列＝上流 instruction/cutting */
+/** 進捗 API 結果（計画一覧の進捗サマリ用） */
 const progressLots = ref<ProgressLotItem[]>([])
-const progressLotDaily = ref<Record<string, Record<string, number>>>({})
-/** 日別セル: ACTUAL | PLANNED | WAIT_UPSTREAM */
-const progressLotDailySource = ref<Record<string, Record<string, string>>>({})
-const loadingProgress = ref(false)
-/** ガント表示タブ：daily | hourly | progress */
+/** ガント表示タブ：daily | hourly */
 const activeGanttTab = ref('daily')
 /** 計画を取得 API を一度でも成功で呼んだか（空配列含む） */
 const schedulesFetched = ref(false)
-
-/** 生産進捗の日付列：表示期間起点の全日（日次ガントと揃え、実績ゼロの日も列を出す） */
-const progressDisplayDates = computed(() => {
-  if (ganttDates.value.length > 0) return ganttDates.value
-  const month = (anchorMonth.value || DEFAULT_ANCHOR_MONTH).trim()
-  const sd = (ganttRange.value?.[0] || anchorDate.value || firstDayOfMonthIso(month)).trim()
-  const ed = (ganttRange.value?.[1] || lastDayOfMonthOffsetIso(month, 1)).trim()
-  return expandDateRangeIso(sd, ed)
-})
 
 /** 日次ガント行から「セルに何かしら出る」暦日を列挙（計画一覧の期日をガント表示と揃える） */
 function isoDatesWithGridActivity(gr: ScheduleGridRow): string[] {
@@ -1168,22 +1280,6 @@ const scheduleProgressMap = computed(() => {
   return map
 })
 
-/** 生産進捗の行を順位順に安定ソート（同順位内は計画ID→ロット番号） */
-const sortedProgressLots = computed(() => {
-  return [...progressLots.value].sort((a, b) => {
-    const oa = a.order_no ?? 1_000_000 + a.aps_schedule_id
-    const ob = b.order_no ?? 1_000_000 + b.aps_schedule_id
-    if (oa !== ob) return oa - ob
-    if (a.aps_schedule_id !== b.aps_schedule_id) return a.aps_schedule_id - b.aps_schedule_id
-    const la = Number(a.lot_number)
-    const lb = Number(b.lot_number)
-    const na = Number.isFinite(la)
-    const nb = Number.isFinite(lb)
-    if (na && nb && la !== lb) return la - lb
-    return String(a.lot_number).localeCompare(String(b.lot_number))
-  })
-})
-
 watch(anchorMonth, (v) => {
   if (!v) return
   anchorDate.value = firstDayOfMonthIso(v)
@@ -1205,6 +1301,53 @@ const activeSchedules = computed(() => sortedSchedules.value.filter((s) => s.sta
 
 /** 一覧表示対象（既定は未完了のみ、必要時に完了含む） */
 const visibleSchedules = computed(() => (showCompletedSchedules.value ? sortedSchedules.value : activeSchedules.value))
+
+/** 日別ガント行（一覧と同じ切替：既定は完了スケジュールを非表示） */
+const visibleGanttRows = computed(() =>
+  showCompletedSchedules.value ? ganttRows.value : ganttRows.value.filter((r) => r.status !== 'COMPLETED'),
+)
+
+/** periodActualForRow 等と同一：表示期間が空なら当該マップのキーで合計 */
+function sumScheduleDailyInGanttPeriod(datesPreferred: string[], map: Record<string, number> | undefined): number {
+  const m = map || {}
+  const dates = datesPreferred.length > 0 ? datesPreferred : Object.keys(m)
+  let sum = 0
+  for (const d of dates) {
+    sum += Number(m[d] || 0)
+  }
+  return sum
+}
+
+/** schedule_id → 行の O(1) 参照（時間別セル・実績参照で find を省略） */
+const ganttRowById = computed((): Record<number, ScheduleGridRow> => {
+  const m: Record<number, ScheduleGridRow> = {}
+  for (const r of ganttRows.value) {
+    m[r.id] = r
+  }
+  return m
+})
+
+/** ガント表示期間ごとの実績/不良合計（行ごとにテンプレートで reduce しない） */
+const ganttPeriodTotalsByScheduleId = computed(() => {
+  const gd = ganttDates.value
+  const out: Record<number, { actual: number; defect: number }> = {}
+  for (const row of ganttRows.value) {
+    out[row.id] = {
+      actual: sumScheduleDailyInGanttPeriod(gd, row.actual_daily),
+      defect: sumScheduleDailyInGanttPeriod(gd, row.defect_daily),
+    }
+  }
+  return out
+})
+
+/** 品名ハッシュ配色（行ごとに毎回計算しない） */
+const ganttProductPaletteClassById = computed((): Record<number, string> => {
+  const out: Record<number, string> = {}
+  for (const row of ganttRows.value) {
+    out[row.id] = productPaletteClassByName(row.item_name)
+  }
+  return out
+})
 
 const scheduleCountBadge = computed(() => `${visibleSchedules.value.length}/${schedules.value.length}`)
 
@@ -1389,7 +1532,7 @@ async function persistScheduleOrderAfterDrag(oldIndex: number, newIndex: number)
     await Promise.all(
       updates.map((u) => updateSchedule(u.id, { order_no: u.order_no, run_immediately: false })),
     )
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), true)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     ElMessage.success('生産順を更新しました')
   } catch (e: unknown) {
@@ -1447,8 +1590,109 @@ async function onProcessChange() {
   }
 }
 
+// ─────────────────────────────────────────────
+// メモ（TODO）— FormingPlanning と同一 UX、API は welding-planning-notes
+// ─────────────────────────────────────────────
+interface WeldingPlanningNote {
+  id?: number
+  content?: string | null
+  is_done?: number | boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+const weldingPlanningNotesDialogVisible = ref(false)
+const weldingPlanningNotesLoading = ref(false)
+const weldingPlanningNotesSaving = ref(false)
+const weldingPlanningNotesList = ref<WeldingPlanningNote[]>([])
+const weldingPlanningNotesNewContent = ref('')
+
+const weldingPlanningNotesCount = computed(() => weldingPlanningNotesList.value.length)
+const weldingPlanningNotesPendingCount = computed(
+  () => weldingPlanningNotesList.value.filter((n) => n.is_done !== 1).length,
+)
+
+async function loadWeldingPlanningNotes() {
+  weldingPlanningNotesLoading.value = true
+  try {
+    const res = await request.get('/api/plan/welding-planning-notes', { params: { limit: 200 } })
+
+    weldingPlanningNotesList.value = (res as any)?.success
+      ? (((res as any).data?.list ?? []) as WeldingPlanningNote[])
+      : []
+  } catch (e) {
+    console.error('メモ（TODO）の取得に失敗:', e)
+    ElMessage.error('メモ（TODO）の取得に失敗しました')
+    weldingPlanningNotesList.value = []
+  } finally {
+    weldingPlanningNotesLoading.value = false
+  }
+}
+
+function openWeldingPlanningNotesDialog() {
+  weldingPlanningNotesDialogVisible.value = true
+  weldingPlanningNotesNewContent.value = ''
+  loadWeldingPlanningNotes()
+}
+
+async function addWeldingPlanningNote() {
+  const content = weldingPlanningNotesNewContent.value.trim()
+  if (!content) {
+    ElMessage.warning('内容を入力してください')
+    return
+  }
+  try {
+    weldingPlanningNotesSaving.value = true
+    await request.post('/api/plan/welding-planning-notes', { content })
+    weldingPlanningNotesNewContent.value = ''
+    await loadWeldingPlanningNotes()
+    ElMessage.success('追加しました')
+  } catch (e) {
+    console.error('メモ（TODO）の追加に失敗:', e)
+    ElMessage.error('追加に失敗しました')
+  } finally {
+    weldingPlanningNotesSaving.value = false
+  }
+}
+
+async function toggleWeldingPlanningNoteDone(note: WeldingPlanningNote, checked: unknown) {
+  if (!note.id) return
+  const is_done =
+    checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
+  try {
+    weldingPlanningNotesSaving.value = true
+    await request.patch(`/api/plan/welding-planning-notes/${note.id}`, { is_done })
+    note.is_done = is_done
+  } catch (e) {
+    console.error('メモ（TODO）の更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+    await loadWeldingPlanningNotes()
+  } finally {
+    weldingPlanningNotesSaving.value = false
+  }
+}
+
+async function deleteWeldingPlanningNote(note: WeldingPlanningNote) {
+  if (!note.id) return
+  try {
+    await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
+    weldingPlanningNotesSaving.value = true
+    await request.delete(`/api/plan/welding-planning-notes/${note.id}`)
+    await loadWeldingPlanningNotes()
+    ElMessage.success('削除しました')
+  } catch (e) {
+    if ((e as { message?: string; name?: string })?.message?.includes('cancel')) return
+    if ((e as { name?: string })?.name === 'MessageBox') return
+    console.error('メモ（TODO）の削除に失敗:', e)
+    ElMessage.error('削除に失敗しました')
+  } finally {
+    weldingPlanningNotesSaving.value = false
+  }
+}
+
 onMounted(() => {
   loadProcessOptions()
+  loadWeldingPlanningNotes()
 })
 
 onBeforeUnmount(() => {
@@ -1632,7 +1876,7 @@ async function addSchedule() {
       // 本数モードの合算では planned_batch_count を送らない。
       // 送ると backend 側で「batch_count × lot_size」に丸められ、本数指定が崩れる。
       await updateSchedule(targetId, updateBody)
-      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate(), true)
+      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
 
       selectedEeId.value = null
       plannedQtyInput.value = ''
@@ -1924,7 +2168,7 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
     const lotSize = Number(row.lot_size_snapshot ?? 0)
     // 「合計(本)」編集は本数を真値として扱うため planned_batch_count は送らない。
     await updateSchedule(row.id, updateBody)
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), true)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     if (lotSize > 0) {
       const nextBatchCount = Math.max(1, Math.ceil(val / lotSize))
@@ -1970,7 +2214,7 @@ async function replanAll() {
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
   replanning.value = true
   try {
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), true)
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
     await loadSchedules()
     ElMessage.success('順次再計算が完了しました')
   } catch (e: unknown) {
@@ -1981,6 +2225,250 @@ async function replanAll() {
 }
 
 const todayIso = computed(() => formatYmdInJapan(new Date()))
+
+/** 日別ガントの日付列メタ（ヘッド／セルで同じ判定を共有し曜日文字も再利用） */
+const GANTT_WD_LABELS = ['日', '月', '火', '水', '木', '金', '土'] as const
+const ganttDateColumnFlags = computed(() => {
+  const today = todayIso.value
+  const out: Record<string, { isWeekend: boolean; isToday: boolean; weekdayShort: string }> = {}
+  for (const d of ganttDates.value) {
+    const wi = weekdayIndexForIsoDate(d)
+    out[d] = {
+      isWeekend: wi === 0 || wi === 6,
+      isToday: d === today,
+      weekdayShort: GANTT_WD_LABELS[wi] ?? '',
+    }
+  }
+  return out
+})
+
+/** ガント（日別）品名ツールチップ：production_summarys を製品 CD で取得 */
+type UpstreamTipEntry =
+  | { status: 'loading' }
+  | {
+      status: 'ok'
+      pre: number
+      /** 溶接直前のさらに一つ手前の工程在庫。ルート上に該当が無い場合は行自体を出さない */
+      prePreApplicable: boolean
+      prePre: number
+      prePreProcessJa: string | null
+      future: number
+      /** 成型 molding_plan 累計に含めたガント日の最小日（基準日以降のみ） */
+      moldingPlanPeriodStart: string
+      /** 同上・最大日 */
+      moldingPlanPeriodEnd: string
+    }
+  | { status: 'error'; err: string }
+
+const upstreamTipByProductCd = ref<Record<string, UpstreamTipEntry>>({})
+const upstreamFetchInflight = new Set<string>()
+
+function parseProductionSummaryListResponse(res: unknown): Record<string, unknown>[] {
+  const r = res as { data?: unknown; list?: unknown }
+  const data = r?.data ?? r
+  const inner =
+    (data as { list?: unknown })?.list ?? (data as { data?: { list?: unknown } })?.data?.list
+  return Array.isArray(inner) ? (inner as Record<string, unknown>[]) : []
+}
+
+function numProductionSummaryCell(v: unknown): number {
+  if (v === null || v === undefined || v === '') return 0
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+function scheduleProductCd(scheduleId: number): string {
+  const s = schedules.value.find((x) => x.id === scheduleId)
+  return (s?.product_cd || '').trim()
+}
+
+/** 溶接直前の一つ手前の工程 key → 表示名（ルートが複数で異なる場合は null） */
+const UPSTREAM_PRE_PRE_PROCESS_JA: Record<string, string> = {
+  cutting: '切断',
+  chamfering: '面取',
+  molding: '成型',
+  plating: 'メッキ',
+  welding: '溶接',
+  inspection: '検査',
+  warehouse: '倉庫',
+  outsourced_warehouse: '外注倉庫',
+  outsourced_plating: '外注メッキ',
+  outsourced_welding: '外注溶接',
+  pre_welding_inspection: '溶接前検査',
+  pre_inspection: '外注支給前',
+  pre_outsourcing: '外注検査前',
+}
+
+function upstreamPrePreProcessLabelJa(keys: Set<string>): string | null {
+  if (keys.size !== 1) return null
+  const k = [...keys][0]!
+  return UPSTREAM_PRE_PRE_PROCESS_JA[k] ?? k
+}
+
+function upstreamTipState(scheduleId: number): {
+  kind: 'no' | 'loading' | 'ok' | 'error'
+  pre?: number
+  prePreApplicable?: boolean
+  prePre?: number
+  prePreProcessJa?: string | null
+  future?: number
+  moldingPlanPeriodStart?: string
+  moldingPlanPeriodEnd?: string
+  err?: string
+} {
+  const cd = scheduleProductCd(scheduleId)
+  if (!cd) return { kind: 'no' }
+  const e = upstreamTipByProductCd.value[cd]
+  if (!e) return { kind: 'loading' }
+  if (e.status === 'loading') return { kind: 'loading' }
+  if (e.status === 'error') return { kind: 'error', err: e.err }
+  return {
+    kind: 'ok',
+    pre: e.pre,
+    prePreApplicable: e.prePreApplicable,
+    prePre: e.prePre,
+    prePreProcessJa: e.prePreProcessJa,
+    future: e.future,
+    moldingPlanPeriodStart: e.moldingPlanPeriodStart,
+    moldingPlanPeriodEnd: e.moldingPlanPeriodEnd,
+  }
+}
+
+async function ensureUpstreamSummaryForSchedule(scheduleId: number): Promise<void> {
+  const cd = scheduleProductCd(scheduleId)
+  if (!cd) return
+  const dates = ganttDates.value
+  if (!dates.length) return
+  const today = todayIso.value
+  const sorted = [...dates].sort()
+  const start = sorted[0]!
+  const end = sorted[sorted.length - 1]!
+  let fetchStart = start
+  let fetchEnd = end
+  if (today < fetchStart) fetchStart = today
+  if (today > fetchEnd) fetchEnd = today
+  const cur = upstreamTipByProductCd.value[cd]
+  if (cur?.status === 'ok') return
+  if (upstreamFetchInflight.has(cd)) return
+  upstreamFetchInflight.add(cd)
+  upstreamTipByProductCd.value = { ...upstreamTipByProductCd.value, [cd]: { status: 'loading' } }
+  try {
+    const res = await getProductionSummarysList({
+      page: 1,
+      limit: 50000,
+      startDate: fetchStart,
+      endDate: fetchEnd,
+      productCd: cd,
+      sortBy: 'date',
+      sortOrder: 'ASC',
+    })
+    const list = parseProductionSummaryListResponse(res)
+    const ganttSet = new Set(ganttDates.value)
+    const sortedFromToday = [...ganttDates.value]
+      .map((d) => (d || '').trim())
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= today)
+      .sort()
+    const moldingPlanPeriodStart = sortedFromToday[0] ?? ''
+    const moldingPlanPeriodEnd =
+      sortedFromToday.length > 0 ? sortedFromToday[sortedFromToday.length - 1]! : ''
+    let pre = 0
+    let future = 0
+    let prePre = 0
+    const prePreProcessKeys = new Set<string>()
+    let prePreApplicable = false
+    for (const r of list) {
+      const date = String(r.date ?? '').trim()
+      if (date === today) {
+        pre += numProductionSummaryCell(r.pre_welding_inventory)
+        const rawPp = r.pre_pre_welding_inventory
+        if (rawPp !== null && rawPp !== undefined) {
+          prePreApplicable = true
+          prePre += numProductionSummaryCell(rawPp)
+          const pk = String(r.pre_pre_welding_prev_process ?? '').trim()
+          if (pk) prePreProcessKeys.add(pk)
+        }
+      }
+      if (date >= today && ganttSet.has(date)) {
+        future += numProductionSummaryCell(r.molding_plan)
+      }
+    }
+    upstreamTipByProductCd.value = {
+      ...upstreamTipByProductCd.value,
+      [cd]: {
+        status: 'ok',
+        pre,
+        prePreApplicable,
+        prePre,
+        prePreProcessJa: upstreamPrePreProcessLabelJa(prePreProcessKeys),
+        future,
+        moldingPlanPeriodStart,
+        moldingPlanPeriodEnd,
+      },
+    }
+  } catch (e: unknown) {
+    upstreamTipByProductCd.value = {
+      ...upstreamTipByProductCd.value,
+      [cd]: { status: 'error', err: formatApiError(e) || '取得に失敗しました' },
+    }
+  } finally {
+    upstreamFetchInflight.delete(cd)
+  }
+}
+
+watch(
+  [ganttDates, schedules],
+  () => {
+    upstreamTipByProductCd.value = {}
+    upstreamFetchInflight.clear()
+  },
+  { deep: true },
+)
+
+function isDailyPlanEditableDate(isoDate: string): boolean {
+  const d = (isoDate || '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false
+  return d <= todayIso.value
+}
+
+function openDailyPlanEdit(row: ScheduleGridRow, d: string) {
+  if (!isDailyPlanEditableDate(d)) {
+    ElMessage.warning('日別計画は本日以前のみ編集できます')
+    return
+  }
+  dailyPlanEditScheduleId.value = row.id
+  dailyPlanEditDate.value = d
+  dailyPlanEditQty.value = Math.max(0, Number(row.daily?.[d] || 0))
+  dailyPlanEditDialogVisible.value = true
+}
+
+async function saveDailyPlanEdit() {
+  const sid = dailyPlanEditScheduleId.value
+  const d = (dailyPlanEditDate.value || '').trim()
+  const qty = Math.floor(Number(dailyPlanEditQty.value || 0))
+  if (!sid || !d) return
+  if (!isDailyPlanEditableDate(d)) {
+    ElMessage.warning('日別計画は本日以前のみ編集できます')
+    return
+  }
+  if (!Number.isFinite(qty) || qty < 0) {
+    ElMessage.warning('日別計画は 0 以上の整数を入力してください')
+    return
+  }
+  dailyPlanEditSaving.value = true
+  try {
+    await updateScheduleDailyPlannedQty(sid, {
+      schedule_date: d,
+      planned_qty: qty,
+    })
+    dailyPlanEditDialogVisible.value = false
+    await loadSchedules()
+    ElMessage.success('日別計画を更新しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e) || '日別計画の更新に失敗しました')
+  } finally {
+    dailyPlanEditSaving.value = false
+  }
+}
 
 /**
  * 再計算 API（replan-sequence）のクエリ錨点（フォールバック）。
@@ -2100,13 +2588,6 @@ function periodDefectForRow(row: ScheduleGridRow): number {
   return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
-/** ガント表示期間内の前工程不良合計（日別セル upstream_defect_daily と一致） */
-function periodUpstreamDefectForRow(row: ScheduleGridRow): number {
-  const m = row.upstream_defect_daily || {}
-  const dates = ganttDates.value.length > 0 ? ganttDates.value : Object.keys(m)
-  return dates.reduce((sum, d) => sum + Number(m[d] || 0), 0)
-}
-
 function periodActualByScheduleId(scheduleId: number): number {
   const row = ganttRows.value.find((r) => r.id === scheduleId)
   if (!row) return 0
@@ -2114,7 +2595,7 @@ function periodActualByScheduleId(scheduleId: number): number {
 }
 
 function periodActualByScheduleIdAndDate(scheduleId: number, d: string): number {
-  const row = ganttRows.value.find((r) => r.id === scheduleId)
+  const row = ganttRowById.value[scheduleId]
   if (!row) return 0
   return Number(row.actual_daily?.[d] || 0)
 }
@@ -2205,22 +2686,13 @@ async function onGanttRangeChange() {
 async function loadProgress() {
   if (!selectedLineId.value) {
     progressLots.value = []
-    progressLotDaily.value = {}
-    progressLotDailySource.value = {}
     return
   }
-  loadingProgress.value = true
   try {
     const res = await fetchProductionProgress(selectedLineId.value)
     progressLots.value = res.lots ?? []
-    progressLotDaily.value = res.lot_daily ?? {}
-    progressLotDailySource.value = res.lot_daily_source ?? {}
   } catch {
     progressLots.value = []
-    progressLotDaily.value = {}
-    progressLotDailySource.value = {}
-  } finally {
-    loadingProgress.value = false
   }
 }
 
@@ -2252,66 +2724,6 @@ function progressStatusSourceTable(s: string): string {
   if (s === 'RELEASED') return '（上流指示済み）'
   if (s === 'PLANNED') return '（上流未同期）'
   return '—'
-}
-function progressCellClass(lot: ProgressLotItem, d: string): Record<string, boolean> {
-  const key = `${lot.aps_schedule_id}_${lot.lot_number}`
-  const qty = (progressLotDaily.value[key] || {})[d] || 0
-  const src = (progressLotDailySource.value[key] || {})[d] || 'PLANNED'
-  const base: Record<string, boolean> = { 'gantt-active': qty > 0 }
-  if (qty <= 0) return base
-  if (src === 'ACTUAL') {
-    base['pgs-src-actual'] = true
-    return base
-  }
-  if (src === 'WAIT_UPSTREAM') {
-    base['pgs-src-wait-upstream'] = true
-    return base
-  }
-  base[`pgs-${lot.progress_status.toLowerCase()}`] = true
-  return base
-}
-function formatPrediction(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.replace('T', ' ').slice(0, 16)
-  return new Intl.DateTimeFormat('sv-SE', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(d)
-}
-
-/** cutting_management の実績/計画（溶接の日別セル・在庫ログ実績とは別） */
-function cuttingProgressDisplay(lot: ProgressLotItem): string {
-  if (lot.progress_status !== 'IN_PROGRESS') return '—'
-  const p = lot.cutting_planned_qty
-  const a = lot.cutting_actual_qty
-  if (p == null && a == null) return '—'
-  const pn = Number(p ?? 0)
-  const an = Number(a ?? 0)
-  return `${an.toLocaleString()}/${pn.toLocaleString()}`
-}
-
-/** 溶接ロットの有効計画本数（API 未対応時は 計画−上流不良） */
-function weldingEffectiveDisplay(lot: ProgressLotItem): number {
-  if (lot.forming_effective_planned_qty != null && lot.forming_effective_planned_qty !== undefined) {
-    return Math.max(0, Number(lot.forming_effective_planned_qty))
-  }
-  const pq = Number(lot.planned_quantity ?? 0)
-  const u = Number(lot.upstream_defect_qty ?? 0)
-  return Math.max(0, pq - u)
-}
-
-function progressPlannedCellTitle(lot: ProgressLotItem): string {
-  const u = Number(lot.upstream_defect_qty ?? 0)
-  const eff = weldingEffectiveDisplay(lot)
-  const base = `計画一覧: ${(lot.planned_quantity ?? 0).toLocaleString()} 本`
-  if (u <= 0) return `${base}。上流不良なし。溶接有効 ${eff.toLocaleString()} 本`
-  return `${base}。切断+面取の上流不良 ${u.toLocaleString()} 本。溶接有効 ${eff.toLocaleString()} 本（management_code 一致で集計）`
 }
 
 function statusType(s: string): 'success' | 'warning' | 'info' {
@@ -2348,17 +2760,17 @@ function ganttCellClass(row: ScheduleGridRow, d: string): Record<string, boolean
   const qty = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const defect = row.defect_daily?.[d] || 0
-  const upstream = row.upstream_defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  const active = qty !== 0 || actual !== 0 || defect !== 0 || upstream !== 0 || remain !== 0
+  const active = qty !== 0 || actual !== 0 || defect !== 0 || remain !== 0
   const inRange = row.start_date && row.end_date && d >= row.start_date && d <= row.end_date
+  const col = ganttDateColumnFlags.value[d]
   return {
     'gantt-active': active,
     'gantt-has-actual': actual > 0,
     'gantt-has-defect': defect !== 0,
     'gantt-range': !!inRange && !active,
-    'is-weekend': isWeekend(d),
-    'is-today': isToday(d),
+    'is-weekend': col?.isWeekend ?? isWeekend(d),
+    'is-today': col?.isToday ?? isToday(d),
   }
 }
 
@@ -2381,10 +2793,9 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   const planned = row.daily[d] || 0
   const actual = row.actual_daily?.[d] || 0
   const defect = row.defect_daily?.[d] || 0
-  const upstream = row.upstream_defect_daily?.[d] || 0
   const remain = row.remaining_daily?.[d] || 0
-  if (planned !== 0 || actual !== 0 || defect !== 0 || upstream !== 0 || remain !== 0) {
-    return `${row.item_name}: 計画 ${planned} / 実績(良) ${actual} / 不良 ${defect} / 前工程不良 ${upstream} / 残 ${remain}`
+  if (planned !== 0 || actual !== 0 || defect !== 0 || remain !== 0) {
+    return `${row.item_name}: 計画 ${planned} / 実績(良) ${actual} / 不良 ${defect} / 残 ${remain}`
   }
   return ''
 }
@@ -2801,6 +3212,309 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .setup-field--line {
   width: 186px;
   max-width: 100%;
+}
+.setup-fi-notes {
+  margin-left: auto;
+  margin-right: 0;
+  align-self: center;
+  padding: 0 1px;
+}
+.setup-fi-notes :deep(.el-form-item__content) {
+  line-height: 1;
+}
+.welding-planning-notes-btn-wrap {
+  display: flex;
+  align-items: center;
+}
+.welding-notes-toolbar-btn {
+  margin: 0 !important;
+  height: var(--add-h) !important;
+  min-width: 36px;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+}
+.welding-notes-toolbar-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+.notes-badge-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.notes-count-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+/* ── メモ（TODO）ダイアログ：ミニマル・低動效 ── */
+.welding-planning-notes-dialog :deep(.el-dialog) {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 20px 50px -12px rgba(15, 23, 42, 0.18);
+}
+.welding-planning-notes-dialog :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 0;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+.welding-planning-notes-dialog :deep(.el-dialog__body) {
+  padding: 0;
+  background: #f8fafc;
+}
+.welding-planning-notes-dialog :deep(.el-dialog__footer) {
+  margin: 0;
+  padding: 8px 12px 10px;
+  border-top: 1px solid #f1f5f9;
+  background: #fff;
+}
+.welding-todo-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+}
+.welding-todo-header__lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.welding-todo-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  color: #0ea5e9;
+  font-size: 15px;
+}
+.welding-todo-header__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+.welding-todo-header__sep {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1;
+}
+.welding-todo-header__subtitle {
+  font-size: 11px;
+  line-height: 1.2;
+  color: #94a3b8;
+}
+.welding-todo-header__badge {
+  flex-shrink: 0;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 22px;
+  text-align: center;
+}
+.welding-todo-shell {
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.welding-todo-compose {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+.welding-todo-compose__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.welding-todo-compose__label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.welding-todo-textarea :deep(.el-textarea__inner) {
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #1e293b;
+  padding: 6px 10px;
+  min-height: 52px !important;
+  box-shadow: none;
+}
+.welding-todo-textarea :deep(.el-textarea__inner:hover) {
+  border-color: #cbd5e1;
+}
+.welding-todo-textarea :deep(.el-textarea__inner:focus) {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.12);
+}
+.welding-todo-textarea :deep(.el-input__count) {
+  font-size: 10px;
+  color: #94a3b8;
+  background: transparent;
+  line-height: 1.2;
+}
+.welding-todo-btn-primary {
+  border-radius: 7px !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%) !important;
+  box-shadow: none !important;
+}
+.welding-todo-btn-primary:hover {
+  background: linear-gradient(180deg, #38bdf8 0%, #0369a1 100%) !important;
+}
+.welding-todo-board {
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+.welding-todo-board__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+.welding-todo-board__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+}
+.welding-todo-board__meta {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+.welding-todo-scrollbar {
+  padding: 4px 6px 6px;
+}
+.welding-todo-scrollbar :deep(.el-scrollbar__wrap) {
+  overscroll-behavior: contain;
+}
+.welding-todo-empty {
+  margin: 0;
+  padding: 12px 8px 14px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+.welding-todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.welding-todo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid #f1f5f9;
+  background: #fafafa;
+}
+.welding-todo-row--done {
+  opacity: 0.72;
+  border-color: #ecfdf5;
+  background: #f8fafc;
+}
+.welding-todo-row--done .welding-todo-row__body {
+  text-decoration: line-through;
+  color: #94a3b8;
+}
+.welding-todo-row__check {
+  margin-top: 1px;
+  flex-shrink: 0;
+  height: auto !important;
+}
+.welding-todo-row__check :deep(.el-checkbox__inner) {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  border-color: #cbd5e1;
+}
+.welding-todo-row__check :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  border-color: #0ea5e9;
+  background-color: #0ea5e9;
+}
+.welding-todo-row__body {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #1e293b;
+  word-break: break-word;
+}
+.welding-todo-row__del {
+  flex-shrink: 0;
+  padding: 2px !important;
+  margin: -2px -2px -2px 0 !important;
+  font-size: 14px !important;
+  color: #94a3b8 !important;
+}
+.welding-todo-row__del:hover {
+  color: #ef4444 !important;
+}
+.welding-todo-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+.welding-todo-footer__btn {
+  border-radius: 7px !important;
+  padding: 5px 12px !important;
+  border-color: #e2e8f0 !important;
+  color: #475569 !important;
+  background: #fff !important;
+}
+.welding-todo-footer__btn:hover {
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  background: #f8fafc !important;
 }
 .planning-page .setup-section--toolbar :deep(.el-button:not(.is-disabled):hover) {
   transform: none;
@@ -3454,10 +4168,6 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   max-height: 450px;
   overflow-y: auto;
 }
-.gantt-scroll--progress {
-  max-height: 450px;
-  overflow-y: auto;
-}
 .gantt-scroll--hourly {
   max-height: 450px;
   overflow-y: auto;
@@ -3874,28 +4584,6 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   border-bottom: 2px solid #f59e0b !important;
 }
 
-/* ─── Per-Row Color Palette (10 colors, used in progress Gantt) ─── */
-.gantt-rc-0 td.gantt-active { background: #3b82f6; color: #fff; }
-.gantt-rc-0 td.gantt-range  { background: #eff6ff; }
-.gantt-rc-1 td.gantt-active { background: #10b981; color: #fff; }
-.gantt-rc-1 td.gantt-range  { background: #ecfdf5; }
-.gantt-rc-2 td.gantt-active { background: #8b5cf6; color: #fff; }
-.gantt-rc-2 td.gantt-range  { background: #f5f3ff; }
-.gantt-rc-3 td.gantt-active { background: #f59e0b; color: #fff; }
-.gantt-rc-3 td.gantt-range  { background: #fffbeb; }
-.gantt-rc-4 td.gantt-active { background: #ec4899; color: #fff; }
-.gantt-rc-4 td.gantt-range  { background: #fdf2f8; }
-.gantt-rc-5 td.gantt-active { background: #0ea5e9; color: #fff; }
-.gantt-rc-5 td.gantt-range  { background: #f0f9ff; }
-.gantt-rc-6 td.gantt-active { background: #f43f5e; color: #fff; }
-.gantt-rc-6 td.gantt-range  { background: #fff1f2; }
-.gantt-rc-7 td.gantt-active { background: #84cc16; color: #fff; }
-.gantt-rc-7 td.gantt-range  { background: #f7fee7; }
-.gantt-rc-8 td.gantt-active { background: #6366f1; color: #fff; }
-.gantt-rc-8 td.gantt-range  { background: #eef2ff; }
-.gantt-rc-9 td.gantt-active { background: #14b8a6; color: #fff; }
-.gantt-rc-9 td.gantt-range  { background: #f0fdfa; }
-
 /* 状态图例 + 表示期间 */
 .gantt-status-legend {
   display: flex;
@@ -3948,11 +4636,6 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
 .legend-dot--actual { background: linear-gradient(135deg, #0f766e, #115e59); }
 .legend-dot--wait-upstream { background: linear-gradient(135deg, #a78bfa, #7c3aed); }
 
-.gantt-row.grs-planned td.gantt-active { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
-.gantt-row.grs-released td.gantt-active { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
-.gantt-row.grs-in_progress td.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }
-.gantt-row.grs-completed td.gantt-active { background: linear-gradient(135deg, #34d399, #059669) !important; color: #fff; }
-
 /* 日別 / 時間別 甘特：按产品着色（同产品稳定同色・10色） */
 .gantt-row.gpc-0 td.gantt-active { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; }
 .gantt-row.gpc-1 td.gantt-active { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #fff; }
@@ -3971,120 +4654,34 @@ td.gantt-has-actual {
   color: #fff !important;
 }
 
-/* ══════════════════════════════════════════════════
-   Progress Gantt (生産進捗)
-   ══════════════════════════════════════════════════ */
-.pgs-th-status,
-.pgs-th-prediction {
-  position: sticky;
-  z-index: 100;
-  background: #e8edf5 !important;
-  background-color: #e8edf5 !important;
-  font-size: var(--fs-s);
-  white-space: nowrap;
-  font-weight: 700;
-}
-/* 生産進捗：計画数右端 382px の次に「切断」、その次ステータス・完了予測 */
-.pgs-th-cutting {
-  position: sticky;
-  left: 382px;
-  width: 88px; min-width: 88px; max-width: 88px;
-  z-index: 100;
-  background: #e8edf5 !important;
-  font-size: var(--fs-s);
-  white-space: nowrap;
-  font-weight: 700;
-  box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5;
-}
-.pgs-th-status     { left: 470px; width: 80px; min-width: 80px; max-width: 80px;
-  box-shadow: inset -1px 0 0 #d4dae5, 2px 0 0 #e8edf5; }
-.pgs-th-prediction { left: 550px; width: 110px; min-width: 110px; max-width: 110px;
-  box-shadow: inset -1px 0 0 #d4dae5, 3px 0 6px rgba(0,21,41,.06); }
-.pgs-cutting-cell {
-  position: sticky;
-  left: 382px;
-  width: 88px; min-width: 88px; max-width: 88px;
-  z-index: 100;
-  background: #fbfcfe;
-  background-color: #fbfcfe !important;
-  box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
-  text-align: center;
-  vertical-align: middle;
-  font-size: var(--fs-xs);
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-  color: var(--c-text-h);
-}
-.pgs-cutting-qty { display: block; line-height: 1.25; }
-.pgs-cutting-done-tag { margin-top: 2px; transform: scale(0.92); transform-origin: center top; }
-.pgs-status-cell {
-  position: sticky;
-  left: 470px; width: 80px; min-width: 80px; max-width: 80px;
-  z-index: 100;
-  background: #fbfcfe;
-  background-color: #fbfcfe !important;
-  box-shadow: inset -1px 0 0 #e2e6ed, 2px 0 0 #fbfcfe;
-  text-align: center;
-}
-.pgs-prediction-cell {
-  position: sticky;
-  left: 550px; width: 110px; min-width: 110px; max-width: 110px;
-  z-index: 100;
-  background: #fbfcfe;
-  background-color: #fbfcfe !important;
-  box-shadow: inset -1px 0 0 #e2e6ed, 3px 0 6px rgba(0,21,41,.06);
-  text-align: center;
-  font-size: var(--fs-xs);
-  color: var(--c-text-m);
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-}
-.pgs-footnote {
-  margin: 10px 4px 0;
-  font-size: var(--fs-xs);
-  color: var(--c-text-s);
-  line-height: 1.5;
-  max-width: 920px;
-}
-.pgs-footnote strong { color: var(--c-text-m); font-weight: 600; }
-.pgs-lot-num { font-weight: 700; text-align: center; font-family: var(--font-mono); }
-
-.pgs-planned-cell {
-  vertical-align: middle;
-  line-height: 1.25;
-}
-.pgs-planned-main {
-  display: block;
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-}
-.pgs-eff-sub {
-  display: block;
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--c-text-s);
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-/* 実績セル（溶接 schedule_details.actual_qty／在庫ログ同期の溶接実績） */
-.gantt-progress-table td.pgs-src-actual.gantt-active {
-  background: linear-gradient(135deg, #0f766e, #115e59) !important;
-  color: #fff !important;
-}
-/* 上流待ち：未指示 or 工単欠料、いまは計画按分のみ */
-.gantt-progress-table td.pgs-src-wait-upstream.gantt-active {
-  background: linear-gradient(135deg, #a78bfa, #7c3aed) !important;
-  color: #fff !important;
-}
-/* 溶接計画のみ（指示済〜）— ロットステータス別 */
-.gantt-progress-table td.pgs-planned.gantt-active   { background: linear-gradient(135deg, #94a3b8, #64748b) !important; color: #fff; }
-.gantt-progress-table td.pgs-released.gantt-active   { background: linear-gradient(135deg, #fbbf24, #d97706) !important; color: #fff; }
-.gantt-progress-table td.pgs-in_progress.gantt-active { background: linear-gradient(135deg, #60a5fa, #2563eb) !important; color: #fff; }
-.gantt-progress-table td.pgs-completed.gantt-active   { background: linear-gradient(135deg, #34d399, #059669) !important; color: #fff; }
-
 /* 開始日指定カレンダー：表格/ダイアログより前面に表示 */
 :global(.forced-start-date-popper) {
   z-index: 4000 !important;
+}
+
+.gantt-name-wrap {
+  cursor: help;
+  border-bottom: 1px dotted color-mix(in srgb, var(--c-text-m) 38%, transparent);
+}
+
+:global(.gantt-name-upstream-popper) {
+  max-width: 380px;
+  line-height: 1.45;
+  font-size: 12px;
+}
+.gantt-name-upstream-tip p {
+  margin: 0 0 6px;
+}
+.gantt-name-upstream-tip p:last-child {
+  margin-bottom: 0;
+}
+.gantt-name-upstream-tip .upstream-tip-period {
+  font-size: 12px;
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+.gantt-name-upstream-tip .upstream-tip-muted {
+  color: var(--c-text-s, #64748b);
+  font-weight: 500;
 }
 </style>
