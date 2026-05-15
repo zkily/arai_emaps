@@ -261,7 +261,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  /** report=出荷報告書（默认）, schedule=出荷予定表（オワリ便・吉良・社内便等）, list=出荷確認リスト（オワリ便・社内便等） */
+  /** report=出荷報告書（默认）, schedule=出荷予定表（オワリ便・吉良・社内便等）, list=出荷確認リスト（オワリ便・鈴鹿便・社内便等） */
   reportType: {
     type: String,
     default: 'report',
@@ -340,15 +340,15 @@ const weekdays = ['日', '月', '火', '水', '木', '金', '土']
 // 显示用：去掉「出荷報告書-」前缀（按钮、打印标题、履历标题统一用短名）
 const stripReportPrefix = (name) => (name || '').replace(/^出荷報告書-?/, '')
 
-// reportType=list 时仅显示オワリ便・社内便
-const LIST_ALLOWED_GROUP_NAMES = ['オワリ便', '社内便']
+// reportType=list 时仅显示オワリ便・鈴鹿便・社内便
+const LIST_ALLOWED_GROUP_NAMES = ['オワリ便', '鈴鹿便', '社内便']
 function isAllowedGroupForList(group) {
   if (!group) return false
   const name = stripReportPrefix(group.groupName || group.group_name || '')
   return LIST_ALLOWED_GROUP_NAMES.includes(name)
 }
 
-// reportType=schedule 时：出荷予定表（オワリ便・吉良・社内便等）；report 时：出荷報告書；list 时：出荷確認リスト（オワリ便・社内便等）
+// reportType=schedule 时：出荷予定表（オワリ便・吉良・社内便等）；report 时：出荷報告書；list 时：出荷確認リスト（オワリ便・鈴鹿便・社内便等）
 const isSchedule = computed(() => props.reportType === 'schedule')
 const isList = computed(() => props.reportType === 'list')
 const groupsPageKey = computed(() => {
@@ -373,7 +373,7 @@ const calendarTitle = computed(() => {
 })
 const calendarSubtitle = computed(() => {
   if (isSchedule.value) return '（オワリ便・吉良・社内便等のグループ別に印刷）'
-  if (isList.value) return '（オワリ便・社内便等のグループ別に印刷）'
+  if (isList.value) return '（オワリ便・鈴鹿便・社内便等のグループ別に印刷）'
   return '（発行説明：当日--終了便・社内便 翌日--鈴鹿便）'
 })
 

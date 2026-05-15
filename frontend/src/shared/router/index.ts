@@ -236,30 +236,17 @@ const routes: RouteRecordRaw[] = [
 
       // ========== MES モジュール ==========
       {
-        path: 'mes/instruction/cutting',
-        name: 'MesCuttingInstruction',
-        component: () => import('@/views/mes/instruction/cutting/MesCuttingInstruction.vue'),
-        meta: { title: '切断・面取指示', group: 'MES > 生産指示', requiresAuth: true },
-      },
-      {
-        path: 'mes/instruction/forming',
+        path: 'mes/productionActualSummary/forming',
         name: 'MesFormingInstruction',
         redirect: { name: 'FormingInstruction' },
-        meta: { title: '成型指示', group: 'MES > 生産指示', requiresAuth: true },
+        meta: { title: '成型指示', group: 'MES > 生産実績集計', requiresAuth: true },
       },
-      {
-        path: 'mes/instruction/welding',
-        name: 'MesWeldingInstruction',
-        component: () => import('@/views/mes/instruction/welding/MesWeldingInstruction.vue'),
-        meta: { title: '溶接指示', group: 'MES > 生産指示', requiresAuth: true },
-      },
-      {
-        path: 'mes/instruction/plating',
-        name: 'MesPlatingInstruction',
-        component: () => import('@/views/mes/instruction/plating/MesPlatingInstruction.vue'),
-        meta: { title: 'メッキ指示', group: 'MES > 生産指示', requiresAuth: true },
-      },
-
+      { path: 'mes/actualDataCollection/cutting', name: 'MesActualDataCollectionCutting', component: () => import('@/views/mes/actualDataCollection/cutting/CuttingActualDataCollection.vue'), meta: { title: '切断実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      { path: 'mes/actualDataCollection/chamfering', name: 'MesActualDataCollectionChamfering', component: () => import('@/views/mes/actualDataCollection/chamfering/ChamferingActualDataCollection.vue'), meta: { title: '面取実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      { path: 'mes/actualDataCollection/forming', name: 'MesActualDataCollectionForming', component: () => import('@/views/mes/actualDataCollection/forming/FormingActualDataCollection.vue'), meta: { title: '成型実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      { path: 'mes/actualDataCollection/plating', name: 'MesActualDataCollectionPlating', component: () => import('@/views/mes/actualDataCollection/plating/PlatingActualDataCollection.vue'), meta: { title: 'メッキ実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      { path: 'mes/actualDataCollection/welding', name: 'MesActualDataCollectionWelding', component: () => import('@/views/mes/actualDataCollection/welding/WeldingActualDataCollection.vue'), meta: { title: '溶接実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      { path: 'mes/actualDataCollection/inspection', name: 'MesActualDataCollectionInspection', component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollection.vue'), meta: { title: '検査実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       // ========== マスタ管理 ==========
       { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },
       { path: 'master/product', name: 'ProductList', component: () => import('@/views/master/product/ProductList.vue'), meta: { title: '製品マスタ', requiresAuth: true } },

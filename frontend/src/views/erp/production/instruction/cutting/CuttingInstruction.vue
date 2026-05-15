@@ -4559,16 +4559,53 @@ const planMaterialNameOptions = computed(() => {
   })
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'ja'))
 })
+
+/** 生産ロット一覧：開始日 → ライン → 順位 → No（lot_number）昇順（デフォルト表示順） */
+function compareCuttingPlanRowsForLotList(a: CuttingPlanRow, b: CuttingPlanRow): number {
+  const da = String(a.start_date ?? '').trim().slice(0, 10)
+  const db = String(b.start_date ?? '').trim().slice(0, 10)
+  if (da !== db) {
+    if (!da && !db) return 0
+    if (!da) return 1
+    if (!db) return -1
+    return da.localeCompare(db)
+  }
+  const la = String(a.production_line ?? '').trim()
+  const lb = String(b.production_line ?? '').trim()
+  if (la !== lb) {
+    if (!la && !lb) return 0
+    if (!la) return 1
+    if (!lb) return -1
+    return la.localeCompare(lb, 'ja', { numeric: true })
+  }
+  const na = a.priority_order != null && !Number.isNaN(Number(a.priority_order)) ? Number(a.priority_order) : null
+  const nb = b.priority_order != null && !Number.isNaN(Number(b.priority_order)) ? Number(b.priority_order) : null
+  if (na != null && nb != null) {
+    if (na !== nb) return na - nb
+  } else if (na == null && nb != null) {
+    return 1
+  } else if (na != null && nb == null) {
+    return -1
+  }
+
+  const lotA = String(a.lot_number ?? '').trim()
+  const lotB = String(b.lot_number ?? '').trim()
+  if (!lotA && !lotB) return 0
+  if (!lotA) return 1
+  if (!lotB) return -1
+  return lotA.localeCompare(lotB, 'ja', { numeric: true })
+}
+
 const planListFiltered = computed(() => {
   const raw = plans.value
   const pn = (planSearchForm.product_name ?? '').trim()
   const mn = (planSearchForm.material_name ?? '').trim()
-  if (!pn && !mn) return raw
-  return raw.filter(
+  const filtered = !pn && !mn ? raw.slice() : raw.filter(
     (r) =>
       (!pn || (r.product_name ?? '').trim() === pn) &&
       (!mn || (r.material_name ?? '').trim() === mn)
   )
+  return filtered.sort(compareCuttingPlanRowsForLotList)
 })
 /** 生産ロット一覧のクライアント側ページネーション用 */
 const planListForTable = computed(() => {

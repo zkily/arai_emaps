@@ -1531,6 +1531,19 @@ function buildUtilizationPrintHtml(): string {
 </html>`
 }
 
+/**
+ * 成型計画一覧（ガント日別）印刷：左6列の幅（%）。日付列は (100 − 合計) を日数で均等分割。
+ * 設備・品名の表示幅を調整する場合はこの数値のみ変更する。
+ */
+const GANTT_PRINT_FIXED_COL_PCT = {
+  line: 3, // 設備
+  order: 3, // 順位
+  name: 10, // 品名
+  eff: 3.8, // 能率
+  planned: 3.8, // 計画数
+  actual: 3.8, // 実績数
+} as const
+
 /** ガント日別印刷：画面上と同じ表示条件。文言は出さず数値の色のみで区別（データなしは行自体を出さない） */
 function buildGanttPrintDayCell(row: ScheduleGridRow, d: string): string {
   if (!ganttCellHasAnyMarker(row, d)) return '<td class="cell-day"></td>'
@@ -1563,16 +1576,21 @@ function buildGanttPrintHtml(): string {
     )
     .join('')
   const nDates = ganttDates.value.length
-  const fixedColPct = { line: 7, order: 3.5, name: 13, eff: 5, planned: 5, actual: 5 }
-  const sumFixed = fixedColPct.line + fixedColPct.order + fixedColPct.name + fixedColPct.eff + fixedColPct.planned + fixedColPct.actual
+  const sumFixed =
+    GANTT_PRINT_FIXED_COL_PCT.line +
+    GANTT_PRINT_FIXED_COL_PCT.order +
+    GANTT_PRINT_FIXED_COL_PCT.name +
+    GANTT_PRINT_FIXED_COL_PCT.eff +
+    GANTT_PRINT_FIXED_COL_PCT.planned +
+    GANTT_PRINT_FIXED_COL_PCT.actual
   const dayColPct = nDates > 0 ? (100 - sumFixed) / nDates : 0
   const colgroup = `<colgroup>
-    <col style="width:${fixedColPct.line}%" />
-    <col style="width:${fixedColPct.order}%" />
-    <col style="width:${fixedColPct.name}%" />
-    <col style="width:${fixedColPct.eff}%" />
-    <col style="width:${fixedColPct.planned}%" />
-    <col style="width:${fixedColPct.actual}%" />
+    <col class="col-line" style="width:${GANTT_PRINT_FIXED_COL_PCT.line}%" />
+    <col class="col-order" style="width:${GANTT_PRINT_FIXED_COL_PCT.order}%" />
+    <col class="col-name" style="width:${GANTT_PRINT_FIXED_COL_PCT.name}%" />
+    <col class="col-eff" style="width:${GANTT_PRINT_FIXED_COL_PCT.eff}%" />
+    <col class="col-planned" style="width:${GANTT_PRINT_FIXED_COL_PCT.planned}%" />
+    <col class="col-actual" style="width:${GANTT_PRINT_FIXED_COL_PCT.actual}%" />
     ${ganttDates.value.map(() => `<col class="col-day" style="width:${dayColPct}%" />`).join('')}
   </colgroup>`
   const emptyDateCells = ganttDates.value.map(() => '<td class="cell-day"></td>').join('')
@@ -1621,6 +1639,12 @@ function buildGanttPrintHtml(): string {
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     th, td { border: 1px solid #cbd5e1; padding: 3px 4px; vertical-align: top; box-sizing: border-box; }
     th { background: linear-gradient(180deg, #eaf3ff 0%, #dceafe 100%); font-weight: 800; color: #334155; }
+    table thead th:not(.date-col) {
+      text-align: center;
+      font-size: 10px;
+      line-height: 1.25;
+      vertical-align: middle;
+    }
     .left { text-align: left; }
     .num { text-align: right; font-variant-numeric: tabular-nums; font-family: Consolas, "Courier New", monospace; white-space: nowrap; }
     th.date-col,
@@ -1657,8 +1681,19 @@ function buildGanttPrintHtml(): string {
     .cell-qty--actual { color: #059669; }
     .cell-qty--remain { color: #7c3aed; }
     .group-block { break-inside: avoid; page-break-inside: avoid; }
-    .name-col { color: #0f172a; font-weight: 700; white-space: normal; word-break: break-word; }
-    .line-col { font-weight: 800; white-space: normal; word-break: break-word; }
+    th.line-col,
+    td.line-col {
+      min-width: 0;
+      font-size: 9px;
+    }
+    th.name-col,
+    td.name-col {
+      min-width: 0;
+      font-size: 9px;
+      line-height: 1.25;
+    }
+    .name-col { color: #0f172a; font-weight: 700; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
+    .line-col { font-weight: 800; white-space: normal; word-break: break-word; overflow-wrap: anywhere; }
     .order-col { white-space: nowrap; }
     .eff-col { white-space: nowrap; }
     .planned-col { white-space: nowrap; }
