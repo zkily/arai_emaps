@@ -2524,7 +2524,7 @@
     <el-dialog
       v-model="cuttingDoneDialogVisible"
       title="切断済リスト"
-      width="min(98vw, 1200px)"
+      width="min(98vw, 1420px)"
       destroy-on-close
       class="cutting-done-dialog"
       @open="loadCuttingDoneList"
@@ -2592,6 +2592,40 @@
           <el-table-column prop="defect_qty" label="不良数" width="84" align="right" />
           <el-table-column prop="production_completed_check" label="生産完了" width="92" align="center">
             <template #default="{ row }">{{ row.production_completed_check ? '切断済' : '未切断' }}</template>
+          </el-table-column>
+          <el-table-column prop="start_date" label="開始日" width="108" align="center">
+            <template #default="{ row }">
+              <template v-if="isEditingCuttingDoneCell(row, 'start_date')">
+                <el-date-picker
+                  :model-value="row.start_date ? String(row.start_date).slice(0, 10) : ''"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 100%"
+                  clearable
+                  @change="(v: string) => saveCuttingDoneCell(row, 'start_date', v)"
+                  @blur="cuttingDoneEditingCell = null"
+                />
+              </template>
+              <span v-else class="editable-cell" @dblclick="startEditCuttingDoneCell(row, 'start_date')">{{ row.start_date ? String(row.start_date).slice(0, 10) : '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="end_date" label="終了日" width="108" align="center">
+            <template #default="{ row }">
+              <template v-if="isEditingCuttingDoneCell(row, 'end_date')">
+                <el-date-picker
+                  :model-value="row.end_date ? String(row.end_date).slice(0, 10) : ''"
+                  type="date"
+                  value-format="YYYY-MM-DD"
+                  size="small"
+                  style="width: 100%"
+                  clearable
+                  @change="(v: string) => saveCuttingDoneCell(row, 'end_date', v)"
+                  @blur="cuttingDoneEditingCell = null"
+                />
+              </template>
+              <span v-else class="editable-cell" @dblclick="startEditCuttingDoneCell(row, 'end_date')">{{ row.end_date ? String(row.end_date).slice(0, 10) : '-' }}</span>
+            </template>
           </el-table-column>
           <el-table-column label="管理コード" width="122" align="center">
             <template #default="{ row }">{{ getManagementCodeLast5(row) }}</template>
@@ -4068,6 +4102,8 @@ const cuttingDoneFilter = reactive({
   only_completed: false,
 })
 const cuttingDonePagination = reactive({ currentPage: 1, pageSize: 50 })
+const cuttingDoneEditingCell = ref<{ rowId: number; prop: string } | null>(null)
+const cuttingDoneSavingCell = ref(false)
 const cuttingDoneProductNameOptions = computed(() => {
   const set = new Set<string>()
   cuttingDoneRawList.value.forEach((row) => {
@@ -4755,6 +4791,16 @@ function getCurrentMonthYYYYMM(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** 当月の開始日・終了日（YYYY-MM-DD） */
+function getCurrentMonthPeriod(): string[] {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = d.getMonth() + 1
+  const mm = String(m).padStart(2, '0')
+  const lastDay = new Date(y, m, 0).getDate()
+  return [`${y}-${mm}-01`, `${y}-${mm}-${String(lastDay).padStart(2, '0')}`]
+}
+
 const syncLengthsFromProducts = async () => {
   try {
     await ElMessageBox.confirm(
@@ -4849,8 +4895,38 @@ function resetDataManagementFilter() {
   dataManagementFilter.product_name = ''
 }
 
+function isEditingCuttingDoneCell(row: CuttingManagementRow, prop: string) {
+  const c = cuttingDoneEditingCell.value
+  return c && row.id !== undefined && c.rowId === row.id && c.prop === prop
+}
+
+function startEditCuttingDoneCell(row: CuttingManagementRow, prop: string) {
+  if (row.id == null || cuttingDoneSavingCell.value) return
+  cuttingDoneEditingCell.value = { rowId: row.id, prop }
+}
+
+async function saveCuttingDoneCell(row: CuttingManagementRow, prop: 'start_date' | 'end_date', value: unknown) {
+  if (row.id == null) return
+  cuttingDoneEditingCell.value = null
+  cuttingDoneSavingCell.value = true
+  const dateStr = value != null && String(value).trim() !== '' ? String(value).slice(0, 10) : ''
+  try {
+    await request.patch(`/api/plan/cutting-management/${row.id}`, {
+      [prop]: dateStr,
+    })
+    ;(row as Record<string, unknown>)[prop] = dateStr || null
+    ElMessage.success('更新しました')
+  } catch (e) {
+    console.error('切断済リストの更新に失敗:', e)
+    ElMessage.error('更新に失敗しました')
+  } finally {
+    cuttingDoneSavingCell.value = false
+  }
+}
+
 function openCuttingDoneDialog() {
   resetCuttingDoneFilter()
+  cuttingDoneEditingCell.value = null
   cuttingDoneDialogVisible.value = true
 }
 
@@ -4859,7 +4935,7 @@ function onCuttingDoneFilterChange() {
 }
 
 function resetCuttingDoneFilter() {
-  cuttingDoneFilter.period = []
+  cuttingDoneFilter.period = getCurrentMonthPeriod()
   cuttingDoneFilter.product_name = ''
   cuttingDoneFilter.only_completed = false
   cuttingDonePagination.currentPage = 1
@@ -9856,6 +9932,15 @@ onUnmounted(() => {
 }
 .cutting-done-table-wrap :deep(.el-table--small .cell) {
   line-height: 1.3;
+}
+.cutting-done-table-wrap .editable-cell {
+  cursor: pointer;
+  min-height: 1em;
+  display: inline-block;
+}
+.cutting-done-table-wrap .editable-cell:hover {
+  background: var(--el-fill-color-light);
+  border-radius: 2px;
 }
 .cutting-done-footer {
   display: flex;
