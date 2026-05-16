@@ -1,0 +1,31 @@
+---
+description: Smart-EMAPs 仓库结构、安全与协作约定（全局）
+alwaysApply: true
+---
+
+# Smart-EMAPs 项目约定
+
+## 技术栈与目录
+
+- **前端**：Vue 3、Vite、TypeScript、Pinia、Vue Router、Element Plus、`frontend/src/`。
+- **后端**：FastAPI、异步 SQLAlchemy、Pydantic、`backend/app/`（业务按 `modules/` 拆分）。
+- **文档**：`docs/`（构建部署、业务说明等）。
+
+## 改动原则
+
+- 仅为当前任务修改必要文件；避免无关重构与顺手「清理」。
+- 新增功能优先沿用现有模块划分、命名与调用方式（前端 `api/` 与视图分层，后端路由与服务分层）。
+
+## 安全与配置
+
+- 勿将 `.env`、密钥、连接串提交入库；示例配置用 `.env.example` 一类方式说明。
+- 用户未明确要求时不要主动执行 `git commit` / `git push`。
+
+## 代码风格（仓库已有工具）
+
+- **Python**：`pyproject.toml` 中 Black 行宽 100、`isort` profile black；与现有类型注解、日志（loguru）用法保持一致。
+- **前端**：遵循现有 ESLint / Prettier；复杂改动后可考虑 `npm run lint:check` 与 `npm run type-check`。
+
+## 语言说明
+
+- 仓库内注释与文档多为日文或中英混排，**新增注释可与当前文件语言保持一致**；与本仓库无关的用户对话可按用户偏好使用简体中文。

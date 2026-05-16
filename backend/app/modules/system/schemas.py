@@ -195,7 +195,7 @@ class UserSearchParams(BaseModel):
     email: Optional[str] = None
     status: Optional[UserStatus] = None
     page: int = Field(1, ge=1)
-    page_size: int = Field(10, ge=1, le=100)
+    page_size: int = Field(10, ge=1, le=500)
 
 
 class PaginatedUserResponse(BaseModel):

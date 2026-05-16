@@ -6,6 +6,7 @@ desktop.ini
 # IDE設定
 .vscode/*
 !.vscode/settings.json
+!.vscode/tasks.json
 .idea/
 *.swp
 *.swo
@@ -19,6 +20,10 @@ logs/
 .env
 .env.local
 .env.*.local
+
+# start.py 自動生成の開発用 TLS 証明書
+backend/certs/dev-lan.*
+!backend/certs/.gitkeep
 
 # Python関連
 __pycache__/

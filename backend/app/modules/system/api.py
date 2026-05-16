@@ -51,7 +51,7 @@ async def get_users(
     department_id: Optional[int] = Query(None, description="部門IDで絞り込み"),
     status: Optional[str] = Query(None, description="ステータスで絞り込み"),
     page: int = Query(1, ge=1, description="ページ番号"),
-    page_size: int = Query(10, ge=1, le=100, description="1ページあたりの件数"),
+    page_size: int = Query(10, ge=1, le=500, description="1ページあたりの件数（最大500・MESドロップダウン等）"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):

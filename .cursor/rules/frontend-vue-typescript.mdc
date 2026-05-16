@@ -1,0 +1,120 @@
+---
+description: 前端 Vue 3 + TypeScript 约定（含页面 UI 密度与按钮语义）
+globs:
+  - "frontend/**/*.vue"
+  - "frontend/**/*.ts"
+alwaysApply: false
+---
+
+# 前端（Vue / TS）
+
+## 结构
+
+- **HTTP**：通过 `frontend/src/api/request`（或现有封装）发起请求；模块 API 放在 `frontend/src/api/<领域>/`，与页面对应。
+- **页面**：`frontend/src/views/`；布局与入口页在 `layouts/`、`router` 等处保持与现有一致。
+- **状态**：Pinia；持久化已用插件时沿用现有 store 写法。
+
+## 组件与语法
+
+- 优先 **Vue 3 Composition API** / `<script setup lang="ts">`；若当前文件为 Options API，则以最小改动扩展，避免大规模重写。
+- UI 以 **Element Plus** 为主；表格等复杂场景注意项目是否已使用 `vxe-table` 等，保持一致。
+
+## 类型与质量
+
+- 为 props、API 响应补充合理类型；避免滥用 `any`，必要时集中收窄并与后端 schema 对齐。
+- 字符串与时间处理优先使用项目已有工具（如 **dayjs**、**vue-i18n** 键名风格）。
+
+---
+
+## 生成页面时的 UI 与布局（精美、紧凑、少留白）
+
+生成或改版**业务页**（列表 + 筛选 + 表格 + 分页）时，在默认 Element Plus 基础上向本仓库已有页面靠拢：信息密度高、层级清晰、操作按钮一眼可辨。
+
+### 布局紧凑
+
+- **页面容器**：外层用单一根 class（如 `.xxx-page`）包住工具栏 + 内容，便于 `:deep()` 统一收紧间距。
+- **垂直节奏**：区块之间优先 **8～12px**；避免大块 `margin-bottom: 24px` 链式堆叠；工具栏与表格之间 **6～10px** 即可。
+- **横向**：筛选区用 `el-row` + `el-col` 或 `display: flex; flex-wrap: wrap; gap: 8px; align-items: center;`，表单项 `size="small"`；按钮组 `gap: 6～8px`。
+- **卡片 / 表格**：需要时用 `el-card` 的 `body-style` 收紧 padding；表格 `size="small"`；分页区 `margin-top: 8～12px` 居中或右对齐，与项目同类页一致。
+- **对话框**：表单项 `label-width` 与当前模块其他弹窗对齐；底部按钮条右对齐，主次从左到右「次 → 主」或「取消 → 确定」。
+
+### 减少无效空白
+
+- 避免无意义的占位列、空 `el-divider`、重复标题；统计与筛选能同一行则同一行（`min-width: 0` + `flex: 1` 防止撑破）。
+- 长列表以**表格密度**为主，次要说明用 `el-tooltip` 或次要文字色，而不是再加一整行说明。
+
+### 按钮颜色与语义（必须区分）
+
+用 **Element Plus 的 `type` + `plain`** 表达语义，与仓库内常见做法一致；需要更强视觉层次时再在页面 scoped 样式里用 BEM 类名修饰（参考各页对 `.el-button--primary` 等的 `:deep` 渐变与阴影）。
+
+| 语义 | 推荐 | 说明 |
+|------|------|------|
+| 主流程 / 保存 / 提交 | `type="primary"` | 每屏 1 个主按钮即可 |
+| 成功类 / 导出 Excel 等 | `type="success"`，必要时 `plain` | 与「提交」区分 |
+| 删除 / 不可逆 | `type="danger"` | 危险操作单独红色 |
+| 警告 / 重置 / 需谨慎 | `type="warning"` 或 `plain` | 与主按钮区分 |
+| 取消 / 关闭 / 次要 | `type="default"` 或 `plain` / 弱边框样式 | 降低视觉权重 |
+
+- **同一工具栏**：主操作 primary，次操作 default/plain，危险 danger，不要把多个按钮都做成 primary。
+- **图标**：关键操作可加 `el-icon`（与 `Home.vue`、各业务页一致），保持对齐与 `size="small"` 协调。
+
+### 视觉精致度（克制）
+
+- **圆角 / 阴影**：轻微即可（如 `border-radius: 6～8px`，hover 时略抬升 `translateY(-1px)` + 柔和 `box-shadow`），与 `WeldingPlanning`、`FormingDailyPlanSummary` 等页同级，避免花哨动画堆叠。
+- **渐变按钮**：若本页已有渐变主按钮，danger/success 用同级深浅变化，保持一套调色板（蓝 / 绿 / 红 / 琥珀）。
+- **文字层级**：标题 `font-weight: 600`；辅助说明用中性灰；数字列表尽量 `tabular-nums` 对齐。
+
+### 状态与空数据
+
+- 表格 `v-loading`；空数据用 `el-empty` 或简短文案，避免留白过大。
+- 错误提示用 `ElMessage` / `ElNotification` 与项目现有封装一致，不重复弹多层。
+
+## 示例（API 模块）
+
+```typescript
+import request from '../request'
+
+export interface FooParams {
+  id: number
+}
+
+export const getFoo = (params: FooParams) => {
+  return request.get<FooParams, { name: string }>('/api/master/foo', { params })
+}
+```
+
+## 示例（紧凑工具栏 + 语义按钮）
+
+```vue
+<div class="foo-page">
+  <div class="foo-page__toolbar">
+    <el-input v-model="q" placeholder="检索…" clearable size="small" class="foo-page__search" />
+    <div class="foo-page__actions">
+      <el-button size="small" @click="onReset">重置</el-button>
+      <el-button size="small" type="success" plain @click="onExport">导出</el-button>
+      <el-button size="small" type="primary" @click="onSave">保存</el-button>
+    </div>
+  </div>
+  <el-table v-loading="loading" size="small" :data="rows" />
+</div>
+```
+
+```scss
+.foo-page__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.foo-page__search {
+  width: 220px;
+  min-width: 160px;
+}
+.foo-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+}
+```

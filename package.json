@@ -1,0 +1,17 @@
+{
+  "name": "smart-emaps",
+  "private": true,
+  "description": "Monorepo root — frontend lives in frontend/. Scripts delegate via npm --prefix.",
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "build:check": "npm --prefix frontend run build:check",
+    "preview": "npm --prefix frontend run preview",
+    "serve": "npm --prefix frontend run serve",
+    "lint": "npm --prefix frontend run lint",
+    "lint:check": "npm --prefix frontend run lint:check",
+    "format": "npm --prefix frontend run format",
+    "format:check": "npm --prefix frontend run format:check",
+    "type-check": "npm --prefix frontend run type-check"
+  }
+}

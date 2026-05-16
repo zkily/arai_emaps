@@ -61,6 +61,8 @@ class Settings(BaseSettings):
         "https://127.0.0.1:5000",
         "https://localhost:3005",
         "https://127.0.0.1:3005",
+        "https://localhost:5005",
+        "https://127.0.0.1:5005",
     ]
     
     # 開発環境でネットワークアクセスを許可する場合

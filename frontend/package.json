@@ -23,6 +23,7 @@
     "element-plus": "^2.5.0",
     "file-saver": "^2.0.5",
     "html2canvas": "^1.4.1",
+    "html5-qrcode": "^2.3.8",
     "jspdf": "^4.1.0",
     "markdown-it": "^14.1.1",
     "pinia": "^2.1.7",

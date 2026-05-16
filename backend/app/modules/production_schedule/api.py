@@ -9,7 +9,7 @@
 import logging
 import re
 from decimal import Decimal
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -25,7 +25,87 @@ from app.modules.auth.models import User
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# MES 切断実績（マイグレーション 03〜06、未適用 DB では一覧 SQL から除外）
+_CUTTING_MGMT_MES_COLUMNS = (
+    "mes_production_started_at",
+    "mes_production_ended_at",
+    "mes_net_production_sec",
+    "mes_paused_accum_sec",
+    "mes_setup_time_min",
+    "mes_operator_user_id",
+    "mes_scanned_code",
+)
 _COMPONENT_REQUIREMENTS_PLAN_COLUMNS = frozenset({"molding_actual_plan", "molding_plan"})
+_TOKYO_TZINFO_CACHE: Any = None
+
+
+def _tokyo_tzinfo():
+    """Asia/Tokyo。Windows 等で tzdata 未導入のときは UTC+9 固定で代替（日本は DST なし）。"""
+    global _TOKYO_TZINFO_CACHE
+    if _TOKYO_TZINFO_CACHE is not None:
+        return _TOKYO_TZINFO_CACHE
+    try:
+        from zoneinfo import ZoneInfo
+
+        _TOKYO_TZINFO_CACHE = ZoneInfo("Asia/Tokyo")
+    except Exception:
+        _TOKYO_TZINFO_CACHE = timezone(timedelta(hours=9))
+    return _TOKYO_TZINFO_CACHE
+
+
+async def _get_cutting_mgmt_columns(db: AsyncSession) -> set[str]:
+    """cutting_management の既存列名（マイグレーション未適用列を SQL から除外するため）。"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'cutting_management'
+            """)
+        )
+        return {str(r[0]) for r in result.fetchall()}
+    except Exception as e:
+        logger.warning("cutting_management column introspection failed: %s", e)
+        return set()
+
+
+def _cutting_mgmt_mes_select_fragment(existing: set[str]) -> str:
+    parts = [f"`cutting_management`.`{c}`" for c in _CUTTING_MGMT_MES_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _mes_column_migration_hint(column: str) -> str:
+    hints = {
+        "mes_production_started_at": "03_cutting_management_mes_actual_fields.sql",
+        "mes_production_ended_at": "03_cutting_management_mes_actual_fields.sql",
+        "mes_setup_time_min": "03_cutting_management_mes_actual_fields.sql",
+        "mes_operator_user_id": "03_cutting_management_mes_actual_fields.sql",
+        "mes_net_production_sec": "04_cutting_management_mes_net_production_sec.sql",
+        "mes_paused_accum_sec": "05_cutting_management_mes_paused_accum_sec.sql",
+        "mes_scanned_code": "06_cutting_management_mes_scanned_code.sql",
+    }
+    mig = hints.get(column, "03〜06_cutting_management_mes_*.sql")
+    return f"列 `{column}` がありません。backend/database/migrations/{mig} を実行してください。"
+
+
+def _parse_mes_datetime_to_naive_tokyo(val: Optional[str]) -> Optional[datetime]:
+    """ISO 8601 文字列を Asia/Tokyo の壁時計時刻（タイムゾーン無し）に正規化して MySQL DATETIME に保存する。"""
+    if val is None:
+        return None
+    s = (val or "").strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(_tokyo_tzinfo()).replace(tzinfo=None)
+    return dt
+
+
 _WELDING_USE_DRIVER_SQL = "(COALESCE(ps.welding_actual, 0) + COALESCE(ps.welding_defect, 0))"
 
 
@@ -1545,6 +1625,8 @@ async def get_cutting_management_list(
 
     # WHERE は修飾なし（cutting_management のみ該当列を持つため曖昧でない）。:param の誤置換を防ぐ
     where_clause = " AND ".join(conditions)
+    cm_cols = await _get_cutting_mgmt_columns(db)
+    mes_select = _cutting_mgmt_mes_select_fragment(cm_cols)
     # 生産時間を実時計算: product_cd + 切断機(cutting_machine)=machines_name で equipment_efficiency を結合し efficiency_rate を取得、生産数/能率
     sql = text(f"""
         SELECT `cutting_management`.id, `cutting_management`.production_month, `cutting_management`.production_day,
@@ -1559,6 +1641,7 @@ async def get_cutting_management_list(
                `cutting_management`.scrap_length, `cutting_management`.material_name, `cutting_management`.material_manufacturer,
                `cutting_management`.standard_specification, `cutting_management`.production_completed_check, `cutting_management`.material_usage_reflected,
                `cutting_management`.use_material_stock_sub, `cutting_management`.usage_count,
+               {mes_select}
                `cutting_management`.cd,
                `cutting_management`.created_at, `cutting_management`.updated_at, `cutting_management`.remarks,
                `equipment_efficiency`.efficiency_rate AS efficiency_rate
@@ -1579,6 +1662,14 @@ async def get_cutting_management_list(
             raise HTTPException(
                 status_code=503,
                 detail="cutting_management テーブルが存在しません。マイグレーション 053_cutting_management.sql を実行してください。",
+            ) from e
+        if "unknown column" in msg:
+            for col in _CUTTING_MGMT_MES_COLUMNS:
+                if col in msg:
+                    raise HTTPException(status_code=503, detail=_mes_column_migration_hint(col)) from e
+            raise HTTPException(
+                status_code=503,
+                detail="cutting_management に未適用の列があります。backend/database/migrations/03〜06_cutting_management_mes_*.sql を実行してください。",
             ) from e
         return JSONResponse(
             status_code=500,
@@ -1652,6 +1743,13 @@ async def get_cutting_management_list(
             "material_usage_reflected": row.get("material_usage_reflected") or "未反映",
             "use_material_stock_sub": row.get("use_material_stock_sub"),
             "usage_count": _v(row, "usage_count", 1),
+            "mes_production_started_at": _v(row, "mes_production_started_at"),
+            "mes_production_ended_at": _v(row, "mes_production_ended_at"),
+            "mes_net_production_sec": row.get("mes_net_production_sec"),
+            "mes_paused_accum_sec": row.get("mes_paused_accum_sec"),
+            "mes_setup_time_min": row.get("mes_setup_time_min"),
+            "mes_operator_user_id": row.get("mes_operator_user_id"),
+            "mes_scanned_code": row.get("mes_scanned_code"),
             "cd": row.get("cd"),
             "created_at": _v(row, "created_at"),
             "updated_at": _v(row, "updated_at"),
@@ -2486,6 +2584,13 @@ class UpdateCuttingManagementBody(BaseModel):
     usage_count: Optional[float] = None  # 1=1本, <1=按分
     start_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
     end_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
+    mes_production_started_at: Optional[str] = None  # ISO8601（空文字でクリア）
+    mes_production_ended_at: Optional[str] = None  # ISO8601（空文字でクリア）
+    mes_net_production_sec: Optional[int] = None  # 净生産秒（一時停止除く）
+    mes_paused_accum_sec: Optional[int] = None  # 一時停止累計秒
+    mes_setup_time_min: Optional[int] = None  # 段取（分）
+    mes_operator_user_id: Optional[int] = None  # users.id（0以下でクリア）
+    mes_scanned_code: Optional[str] = None  # バーコード/QR 読取（空文字でクリア）
 
 
 @router.patch("/plan/cutting-management/{cutting_id}")
@@ -2496,6 +2601,7 @@ async def update_cutting_management(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """切断指示1件を更新（切断機・生産数・生産順・完了・備考）。"""
+    cm_cols = await _get_cutting_mgmt_columns(db)
     updates: list[str] = []
     params: dict = {"cid": cutting_id}
     if body.production_day is not None:
@@ -2561,6 +2667,61 @@ async def update_cutting_management(
                 pass
         else:
             updates.append("end_date = NULL")
+    if body.mes_production_started_at is not None:
+        if "mes_production_started_at" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_production_started_at"))
+        raw = body.mes_production_started_at.strip() if isinstance(body.mes_production_started_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_started_at = NULL")
+        else:
+            sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
+            if sdt:
+                params["mes_production_started_at"] = sdt
+                updates.append("mes_production_started_at = :mes_production_started_at")
+    if body.mes_production_ended_at is not None:
+        if "mes_production_ended_at" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_production_ended_at"))
+        raw = body.mes_production_ended_at.strip() if isinstance(body.mes_production_ended_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_ended_at = NULL")
+        else:
+            edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
+            if edt:
+                params["mes_production_ended_at"] = edt
+                updates.append("mes_production_ended_at = :mes_production_ended_at")
+    if body.mes_net_production_sec is not None:
+        if "mes_net_production_sec" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_net_production_sec"))
+        updates.append("mes_net_production_sec = :mes_net_production_sec")
+        params["mes_net_production_sec"] = max(0, int(body.mes_net_production_sec))
+    if body.mes_paused_accum_sec is not None:
+        if "mes_paused_accum_sec" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_paused_accum_sec"))
+        updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
+        params["mes_paused_accum_sec"] = max(0, int(body.mes_paused_accum_sec))
+    if body.mes_setup_time_min is not None:
+        if "mes_setup_time_min" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_setup_time_min"))
+        updates.append("mes_setup_time_min = :mes_setup_time_min")
+        params["mes_setup_time_min"] = max(0, int(body.mes_setup_time_min))
+    if body.mes_operator_user_id is not None:
+        if "mes_operator_user_id" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_operator_user_id"))
+        oid = int(body.mes_operator_user_id)
+        if oid <= 0:
+            updates.append("mes_operator_user_id = NULL")
+        else:
+            params["mes_operator_user_id"] = oid
+            updates.append("mes_operator_user_id = :mes_operator_user_id")
+    if body.mes_scanned_code is not None:
+        if "mes_scanned_code" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_scanned_code"))
+        raw_mc = body.mes_scanned_code.strip() if isinstance(body.mes_scanned_code, str) else ""
+        if raw_mc == "":
+            updates.append("mes_scanned_code = NULL")
+        else:
+            params["mes_scanned_code"] = raw_mc[:512]
+            updates.append("mes_scanned_code = :mes_scanned_code")
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:

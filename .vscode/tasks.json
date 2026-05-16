@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "npm",
+      "script": "dev",
+      "path": "frontend/",
+      "problemMatcher": [],
+      "label": "frontend: dev (Vite)",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "type": "npm",
+      "script": "build",
+      "path": "frontend/",
+      "problemMatcher": [],
+      "label": "frontend: build"
+    },
+    {
+      "type": "npm",
+      "script": "type-check",
+      "path": "frontend/",
+      "problemMatcher": "$tsc",
+      "label": "frontend: type-check"
+    },
+    {
+      "type": "npm",
+      "script": "lint:check",
+      "path": "frontend/",
+      "problemMatcher": [],
+      "label": "frontend: lint:check"
+    }
+  ]
+}

@@ -21,6 +21,10 @@ PROJECT_ROOT = Path(__file__).parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 FRONTEND_DIR = PROJECT_ROOT / "frontend"
 DIST_DIR = FRONTEND_DIR / "dist"
+CERTS_DIR = BACKEND_DIR / "certs"
+DEFAULT_SSL_CERT = CERTS_DIR / "dev-lan.crt"
+DEFAULT_SSL_KEY = CERTS_DIR / "dev-lan.key"
+DEFAULT_SSL_META = CERTS_DIR / "dev-lan.meta.json"
 
 processes: List[subprocess.Popen] = []
 should_exit = False
@@ -33,9 +37,9 @@ _prod_static_ssl_ctx: Optional[Any] = None  # main で設定。dist HTTPS 用 SS
 CONFIG = {
     "backend_port": 8005,
     "frontend_dev_port": 5000,
-    "frontend_prod_port": 3005,
-    # HTTPS 有効時: 3005 は TLS、プレーン HTTP はこのポート（同一 TCP ポートに HTTP/HTTPS 併用不可）
-    "frontend_prod_http_fallback_port": 3004,
+    "frontend_prod_https_port": 5005,
+    # HTTPS 有効時: 5005=TLS、3005=プレーン HTTP（同一 TCP ポートに HTTP/HTTPS 併用不可）
+    "frontend_prod_http_port": 3005,
     "backend_host": "0.0.0.0",
     # 起動時に自動検出したローカルIPを設定
     "production_ip": "127.0.0.1",
@@ -74,6 +78,157 @@ def _resolve_ssl_path(rel_or_abs: str) -> Path:
     if cand.is_file():
         return cand
     return p
+
+
+def generate_self_signed_lan_cert(cert_path: Path, key_path: Path, hostnames: List[str]) -> None:
+    """LAN / localhost 向け自己署名証明書（cryptography）"""
+    import datetime
+    import ipaddress
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    cert_path.parent.mkdir(parents=True, exist_ok=True)
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    primary = next((h for h in hostnames if h and h != "127.0.0.1"), "localhost")
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, primary)])
+
+    san: List[x509.GeneralName] = []
+    seen: set[str] = set()
+    for raw in hostnames:
+        h = (raw or "").strip()
+        if not h or h in seen:
+            continue
+        seen.add(h)
+        try:
+            san.append(x509.IPAddress(ipaddress.ip_address(h)))
+        except ValueError:
+            san.append(x509.DNSName(h))
+
+    now = datetime.datetime.utcnow()
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + datetime.timedelta(days=825))
+        .add_extension(x509.SubjectAlternativeName(san), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    key_path.write_bytes(
+        key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    )
+
+
+def ensure_ssl_certificate_files(network_ip: str) -> bool:
+    """
+    HTTPS_ENABLED 時、SSL_* 未設定またはファイル欠落なら backend/certs/dev-lan.* を自動生成。
+    戻り値: 証明書が利用可能なら True
+    """
+    if not _env_truthy("HTTPS_ENABLED"):
+        return False
+
+    cert_env = os.environ.get("SSL_CERTFILE", "").strip()
+    key_env = os.environ.get("SSL_KEYFILE", "").strip()
+    if cert_env and key_env:
+        cpath = _resolve_ssl_path(cert_env)
+        kpath = _resolve_ssl_path(key_env)
+        if cpath.is_file() and kpath.is_file():
+            return True
+        print_color(
+            f"⚠️  設定された証明書が見つかりません: cert={cpath} key={kpath} → 自動生成を試みます",
+            Colors.YELLOW,
+        )
+
+    san_hosts = ["localhost", "127.0.0.1"]
+    nip = (network_ip or "").strip()
+    if nip and nip not in san_hosts:
+        san_hosts.append(nip)
+
+    need_gen = True
+    if DEFAULT_SSL_CERT.is_file() and DEFAULT_SSL_KEY.is_file() and DEFAULT_SSL_META.is_file():
+        try:
+            meta = json.loads(DEFAULT_SSL_META.read_text(encoding="utf-8"))
+            if meta.get("san") == san_hosts:
+                need_gen = False
+        except Exception:
+            need_gen = True
+
+    if need_gen:
+        try:
+            generate_self_signed_lan_cert(DEFAULT_SSL_CERT, DEFAULT_SSL_KEY, san_hosts)
+            DEFAULT_SSL_META.write_text(
+                json.dumps({"san": san_hosts, "generated_at": time.time()}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            print_color(
+                f"🔐 LAN 用自己署名証明書を生成しました: {DEFAULT_SSL_CERT}",
+                Colors.GREEN,
+            )
+            print_color(
+                f"   SAN: {', '.join(san_hosts)}（スマホでは初回「詳細」→証明書を信頼）",
+                Colors.YELLOW,
+            )
+        except Exception as e:
+            print_color(f"❌ 証明書の自動生成に失敗しました: {e}", Colors.RED)
+            print_color(
+                "   pip install cryptography または OpenSSL で手動生成してください。",
+                Colors.YELLOW,
+            )
+            return False
+
+    os.environ["SSL_CERTFILE"] = str(DEFAULT_SSL_CERT.relative_to(BACKEND_DIR)).replace("\\", "/")
+    os.environ["SSL_KEYFILE"] = str(DEFAULT_SSL_KEY.relative_to(BACKEND_DIR)).replace("\\", "/")
+    return True
+
+
+def ensure_prod_dist_available(network_ip: str) -> bool:
+    """
+    frontend/dist が無い場合、HTTPS:5005 を起動できるよう最小 index を配置。
+    本番ビルド済みの dist がある場合はそのまま利用。
+    """
+    index = DIST_DIR / "index.html"
+    if index.is_file():
+        return True
+
+    dev_port = CONFIG["frontend_dev_port"]
+    print_color(
+        f"⚠️  frontend/dist がありません。:5005 用に開発サーバー ({dev_port}) へ誘導する最小ページを配置します。",
+        Colors.YELLOW,
+    )
+    print_color(
+        "   本番同等の画面が必要な場合: cd frontend && npm run build",
+        Colors.YELLOW,
+    )
+    try:
+        DIST_DIR.mkdir(parents=True, exist_ok=True)
+        lan = (network_ip or "127.0.0.1").strip()
+        dev_url = f"https://{lan}:{dev_port}/"
+        local_url = f"https://localhost:{dev_port}/"
+        html = f"""<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta http-equiv="refresh" content="0;url={dev_url}"/>
+<title>Smart-EMAP</title></head>
+<body style="font-family:sans-serif;padding:2rem">
+<p>dist 未ビルドのため開発サーバーへ移動します。</p>
+<p><a href="{dev_url}">{dev_url}</a></p>
+<p><a href="{local_url}">{local_url}</a></p>
+</body></html>"""
+        index.write_text(html, encoding="utf-8")
+        return True
+    except Exception as e:
+        print_color(f"❌ dist 最小配置に失敗: {e}", Colors.RED)
+        return False
 
 
 def build_uvicorn_ssl_args() -> List[str]:
@@ -666,8 +821,9 @@ def _run_prod_server(ssl_context: Optional[Any], port: int, label: str) -> None:
         httpd = ServerClass(("0.0.0.0", port), handler)
         with production_httpds_lock:
             production_httpds.append(httpd)
+        lip = CONFIG.get("production_ip", "127.0.0.1")
         print_color(
-            f"✅ 本番サーバー起動 [{label}]: {scheme}://{CONFIG['production_ip']}:{port}/",
+            f"✅ 本番サーバー起動 [{label}] 0.0.0.0:{port} → {scheme}://localhost:{port}/ ・ {scheme}://{lip}:{port}/",
             Colors.GREEN,
         )
         httpd.serve_forever()
@@ -688,45 +844,34 @@ def _run_prod_server(ssl_context: Optional[Any], port: int, label: str) -> None:
 
 
 def start_production_server():
-    """本番 dist。証明書ありなら {frontend_prod_port}=HTTPS・{frontend_prod_http_fallback_port}=HTTP。無ければ HTTP のみ。"""
+    """本番 dist。証明書ありなら :5005=HTTPS・:3005=HTTP。無ければ HTTP のみ :3005。"""
 
-    if not DIST_DIR.exists():
-        print_color(f"⚠️  distフォルダが見つかりません: {DIST_DIR}", Colors.YELLOW)
-        print_color("   npm run build を実行してビルドしてください", Colors.YELLOW)
-        if _env_truthy("HTTPS_ENABLED"):
-            bip = CONFIG["production_ip"]
-            if CONFIG.get("backend_use_https"):
-                api_url = f"https://{bip}:{CONFIG['backend_port']}"
-            else:
-                api_url = f"https://{bip}:{CONFIG['frontend_prod_port']}"
-            print_color(
-                f"   HTTPS 向けビルド例: VITE_API_HTTPS=true、VITE_API_BASE_URL={api_url}（API も TLS 時）",
-                Colors.YELLOW,
-            )
-            if sys.platform == "win32":
+    if not (DIST_DIR / "index.html").is_file():
+        if not ensure_prod_dist_available(CONFIG.get("production_ip", "127.0.0.1")):
+            if _env_truthy("HTTPS_ENABLED"):
+                bip = CONFIG["production_ip"]
+                if CONFIG.get("backend_use_https"):
+                    api_url = f"https://{bip}:{CONFIG['backend_port']}"
+                else:
+                    api_url = f"https://{bip}:{CONFIG['frontend_prod_https_port']}"
                 print_color(
-                    f"   cmd: cd frontend && set VITE_API_HTTPS=true&& set VITE_API_BASE_URL={api_url}&& npm run build",
+                    f"   HTTPS 向けビルド例: VITE_API_HTTPS=true、VITE_API_BASE_URL={api_url}",
                     Colors.YELLOW,
                 )
-            else:
-                print_color(
-                    f"   sh: cd frontend && VITE_API_HTTPS=true VITE_API_BASE_URL={api_url} npm run build",
-                    Colors.YELLOW,
-                )
-        return False
+            return False
 
     prod_ssl = _prod_static_ssl_ctx
     if prod_ssl:
-        fb = CONFIG["frontend_prod_http_fallback_port"]
+        fb = CONFIG["frontend_prod_http_port"]
         threading.Thread(
             target=_run_prod_server,
             args=(None, fb, "HTTP"),
             daemon=True,
         ).start()
         time.sleep(0.25)
-        _run_prod_server(prod_ssl, CONFIG["frontend_prod_port"], "HTTPS")
+        _run_prod_server(prod_ssl, CONFIG["frontend_prod_https_port"], "HTTPS")
     else:
-        _run_prod_server(None, CONFIG["frontend_prod_port"], "HTTP")
+        _run_prod_server(None, CONFIG["frontend_prod_http_port"], "HTTP")
 
 
 def wait_for_port(port: int, timeout: int = 60) -> bool:
@@ -739,52 +884,126 @@ def wait_for_port(port: int, timeout: int = 60) -> bool:
     return False
 
 
+def ssl_certificates_configured() -> bool:
+    """HTTPS_ENABLED かつ証明書ファイルが解決できるか"""
+    if not _env_truthy("HTTPS_ENABLED"):
+        return False
+    cert = os.environ.get("SSL_CERTFILE", "").strip()
+    key = os.environ.get("SSL_KEYFILE", "").strip()
+    if not cert or not key:
+        return False
+    cpath = _resolve_ssl_path(cert)
+    kpath = _resolve_ssl_path(key)
+    return cpath.is_file() and kpath.is_file()
+
+
+def banner_hosts(network_ip: str) -> List[tuple[str, str]]:
+    """起動バナー用 (表示ラベル, ホスト名) — localhost / 127.0.0.1 / LAN"""
+    seen: set[str] = set()
+    hosts: List[tuple[str, str]] = []
+    for label, host in (
+        ("localhost", "localhost"),
+        ("127.0.0.1", "127.0.0.1"),
+    ):
+        if host not in seen:
+            seen.add(host)
+            hosts.append((label, host))
+    nip = (network_ip or "").strip()
+    if nip and nip not in seen:
+        seen.add(nip)
+        hosts.append(("Network (LAN)", nip))
+    return hosts
+
+
+def _print_url_lines(
+    hosts: List[tuple[str, str]],
+    scheme: str,
+    port: int,
+    path: str = "/",
+    indent: str = "   ",
+) -> None:
+    for label, host in hosts:
+        print(f"{indent}➜  {label:<16} {scheme}://{host}:{port}{path}")
+
+
 def print_success_banner(network_ip: str):
-    """起動成功バナーを表示"""
+    """起動成功バナーを表示（全ホスト × HTTP、証明書あり時は HTTPS も併記）"""
     backend_port = CONFIG["backend_port"]
     dev_port = CONFIG["frontend_dev_port"]
-    prod_port = CONFIG["frontend_prod_port"]
-    prod_http_fb = CONFIG["frontend_prod_http_fallback_port"]
-    prod_ip = CONFIG["production_ip"]
+    prod_https_port = CONFIG["frontend_prod_https_port"]
+    prod_http_port = CONFIG["frontend_prod_http_port"]
     be_tls = CONFIG.get("backend_use_https", False)
-    fe_dev_scheme = "https" if be_tls else "http"
-    be_scheme = "https" if be_tls else "http"
     dist_tls = CONFIG.get("frontend_prod_https", False)
-    
+    dev_https = CONFIG.get("frontend_dev_https", False)
+    certs_ok = CONFIG.get("ssl_certs_configured", False)
+    hosts = banner_hosts(network_ip)
+
     print()
     print("=" * 65)
     print("🚀 Smart-EMAP システムが起動しました")
     print("=" * 65)
     print()
-    print(f"📱 フロントエンド【開発モード】:")
-    print(f"   ➜  Local:   {fe_dev_scheme}://localhost:{dev_port}/")
-    if network_ip != '127.0.0.1':
-        print(f"   ➜  Network: {fe_dev_scheme}://{network_ip}:{dev_port}/")
-    print()
-    print(f"🌐 フロントエンド【本番モード】(dist):")
-    if dist_tls:
-        print(f"   ➜  HTTPS (推奨): https://localhost:{prod_port}/")
-        print(f"   ➜  HTTP:          http://localhost:{prod_http_fb}/")
-        if network_ip != '127.0.0.1':
-            print(f"   ➜  Network HTTPS: https://{prod_ip}:{prod_port}/")
-            print(f"   ➜  Network HTTP:  http://{prod_ip}:{prod_http_fb}/")
-        print(f"   （同一ポートに HTTP と TLS は併用できないため TLS 時は HTTP を {prod_http_fb} に分離）")
+
+    print("📱 フロントエンド【開発モード】 (Vite :5000):")
+    if dev_https:
+        print("   【HTTPS — 現在リッスン中】")
+        _print_url_lines(hosts, "https", dev_port)
+        if certs_ok:
+            print("   【HTTP — 同一ポートでは利用不可・参考】")
+            _print_url_lines(hosts, "http", dev_port)
     else:
-        print(f"   ➜  Local:   http://localhost:{prod_port}/")
-        print(f"   ➜  Network: http://{prod_ip}:{prod_port}/")
+        print("   【HTTP — 現在リッスン中】")
+        _print_url_lines(hosts, "http", dev_port)
+        if certs_ok:
+            print("   【HTTPS — VITE_DEV_HTTPS=true + 証明書で利用（スマホカメラ等）】")
+            _print_url_lines(hosts, "https", dev_port)
     print()
-    print(f"🔧 バックエンド API:")
-    print(f"   ➜  Local:   {be_scheme}://localhost:{backend_port}")
-    if network_ip != '127.0.0.1':
-        print(f"   ➜  Network: {be_scheme}://{network_ip}:{backend_port}")
-    print(f"   ➜  Docs:    {be_scheme}://localhost:{backend_port}/docs")
+
+    print("🌐 フロントエンド【本番モード】 (dist):")
+    if dist_tls:
+        print(f"   【HTTPS — ポート {prod_https_port}】")
+        _print_url_lines(hosts, "https", prod_https_port)
+        print(f"   【HTTP — ポート {prod_http_port}】")
+        _print_url_lines(hosts, "http", prod_http_port)
+    else:
+        print(f"   【HTTP — ポート {prod_http_port}】")
+        _print_url_lines(hosts, "http", prod_http_port)
+        if certs_ok:
+            print(f"   【HTTPS — ポート {prod_https_port}（HTTPS_ENABLED + 証明書適用時）】")
+            _print_url_lines(hosts, "https", prod_https_port)
+    print()
+
+    print("🔧 バックエンド API:")
+    if be_tls:
+        print("   【HTTPS — 現在リッスン中】")
+        _print_url_lines(hosts, "https", backend_port, path="")
+        _print_url_lines(hosts, "https", backend_port, path="/docs")
+        if certs_ok:
+            print("   【HTTP — 参考（TLS 有効時は未リッスン）】")
+            _print_url_lines(hosts, "http", backend_port, path="")
+    else:
+        print("   【HTTP — 現在リッスン中】")
+        _print_url_lines(hosts, "http", backend_port, path="")
+        _print_url_lines(hosts, "http", backend_port, path="/docs")
+        if certs_ok:
+            print("   【HTTPS — HTTPS_ENABLED + 証明書適用時】")
+            _print_url_lines(hosts, "https", backend_port, path="")
+            _print_url_lines(hosts, "https", backend_port, path="/docs")
+    print()
     if dist_tls and not be_tls:
         print(
-            f"   ➜  本番 dist の API: 相対パス /api（api-config は空・{prod_port} 番と同一オリジンでプロキシ）"
+            f"   ➜  本番 dist の API: 相対パス /api（https://…:{prod_https_port} と同一オリジンでプロキシ）"
         )
     else:
-        api_cfg = f"{be_scheme}://{prod_ip}:{backend_port}"
-        print(f"   ➜  本番 dist の API 基址 (api-config.js / __API_BASE__): {api_cfg}")
+        api_scheme = "https" if be_tls else "http"
+        api_host = hosts[-1][1] if hosts else "localhost"
+        print(
+            f"   ➜  本番 dist API 基址 (api-config.js): {api_scheme}://{api_host}:{backend_port}"
+        )
+    if certs_ok:
+        print(
+            "   ➜  スマホ・タブレット: 上記 Network (LAN) の HTTPS URL を使用（HTTP ではカメラ等が制限される場合あり）"
+        )
     print()
     print("=" * 65)
     print("   Ctrl+C で停止")
@@ -807,20 +1026,35 @@ def main():
             load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
         except Exception:
             pass
+
+        # start.py: LAN スマホ向け HTTPS（.env で HTTPS_ENABLED=false の場合は無効）
+        if not _env_truthy("START_DISABLE_AUTO_HTTPS"):
+            os.environ.setdefault("HTTPS_ENABLED", "true")
+
+        if _env_truthy("HTTPS_ENABLED"):
+            ensure_ssl_certificate_files(network_ip)
+            if not _env_truthy("CORS_ALLOW_ALL"):
+                print_color(
+                    "💡 LAN の https アクセスで API が拒否される場合 backend/.env に CORS_ALLOW_ALL=true を設定",
+                    Colors.YELLOW,
+                )
+
         uvicorn_ssl = build_uvicorn_ssl_args()
         CONFIG["backend_use_https"] = bool(uvicorn_ssl)
         CONFIG["backend_scheme"] = "https" if uvicorn_ssl else "http"
+        CONFIG["ssl_certs_configured"] = ssl_certificates_configured()
 
         global _prod_static_ssl_ctx
         _prod_static_ssl_ctx = build_prod_static_ssl_context()
         CONFIG["frontend_prod_https"] = bool(_prod_static_ssl_ctx)
+        CONFIG["frontend_dev_https"] = bool(uvicorn_ssl)
 
         if uvicorn_ssl:
             print_color("🔒 バックエンド API: HTTPS（uvicorn TLS）", Colors.GREEN)
         if _prod_static_ssl_ctx:
             print_color(
-                f"🔒 dist 本番: https://{CONFIG['production_ip']}:{CONFIG['frontend_prod_port']}/ "
-                f"・HTTP は http://{CONFIG['production_ip']}:{CONFIG['frontend_prod_http_fallback_port']}/",
+                f"🔒 dist 本番: https://{CONFIG['production_ip']}:{CONFIG['frontend_prod_https_port']}/ "
+                f"・HTTP は http://{CONFIG['production_ip']}:{CONFIG['frontend_prod_http_port']}/",
                 Colors.GREEN,
             )
             print_color(
@@ -829,7 +1063,14 @@ def main():
             )
         elif _env_truthy("HTTPS_ENABLED"):
             print_color(
-                "⚠️  HTTPS_ENABLED ですが dist 用 TLS 証明書が無効のため、本番 dist は HTTP のみです。",
+                "⚠️  HTTPS_ENABLED ですが証明書が無効のため、:5005 は HTTPS で起動できません。"
+                " cryptography のインストールを確認してください。",
+                Colors.YELLOW,
+            )
+        if not (DIST_DIR / "index.html").is_file():
+            print_color(
+                f"⚠️  frontend/dist 未ビルド: :{CONFIG['frontend_prod_https_port']} は誘導ページのみ。"
+                f" 実アプリは https://{network_ip}:{CONFIG['frontend_dev_port']}/（開発）を使用",
                 Colors.YELLOW,
             )
 
@@ -839,9 +1080,11 @@ def main():
         if not check_port(CONFIG["frontend_dev_port"], "フロントエンド開発"):
             sys.exit(1)
         if CONFIG["frontend_prod_https"]:
-            if not check_port(CONFIG["frontend_prod_http_fallback_port"], "フロントエンド本番(HTTP)"):
+            if not check_port(CONFIG["frontend_prod_http_port"], "フロントエンド本番(HTTP)"):
                 sys.exit(1)
-        if not check_port(CONFIG["frontend_prod_port"], "フロントエンド本番(HTTPS/TLS)" if CONFIG["frontend_prod_https"] else "フロントエンド本番"):
+            if not check_port(CONFIG["frontend_prod_https_port"], "フロントエンド本番(HTTPS)"):
+                sys.exit(1)
+        elif not check_port(CONFIG["frontend_prod_http_port"], "フロントエンド本番(HTTP)"):
             sys.exit(1)
         
         print("\nサービスを起動中...")
@@ -882,11 +1125,12 @@ def main():
         
         backend_ready = wait_for_port(CONFIG["backend_port"], timeout=30)
         dev_ready = wait_for_port(CONFIG["frontend_dev_port"], timeout=60)
-        prod_ready = wait_for_port(CONFIG["frontend_prod_port"], timeout=10)
         if CONFIG["frontend_prod_https"]:
-            prod_ready = prod_ready and wait_for_port(
-                CONFIG["frontend_prod_http_fallback_port"], timeout=10
+            prod_ready = wait_for_port(CONFIG["frontend_prod_https_port"], timeout=10) and wait_for_port(
+                CONFIG["frontend_prod_http_port"], timeout=10
             )
+        else:
+            prod_ready = wait_for_port(CONFIG["frontend_prod_http_port"], timeout=10)
         
         if not backend_ready:
             print_color("❌ バックエンドサーバーの起動に失敗しました", Colors.RED)

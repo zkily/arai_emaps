@@ -1,0 +1,39 @@
+---
+description: 后端 FastAPI + Python 约定
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# 后端（FastAPI）
+
+## 结构
+
+- 入口：`backend/app/main.py`；业务在 `backend/app/modules/<模块>/`（路由、schemas、服务分层与相邻文件保持一致）。
+- 配置：`app/core/config.py`；数据库：`AsyncSessionLocal` 等现有异步会话模式。
+- 统一异常与日志：使用项目已注册的 exception handlers 与 **loguru**，避免裸 `print`。
+
+## API 与数据
+
+- 请求/响应模型用 **Pydantic**（v2 语法与项目现有 schema 一致）。
+- 路由前缀、`/api/` 路径风格与同级模块保持一致；新增路由需在 `main.py`（或既有聚合处）按现有方式注册。
+
+## 代码风格
+
+- **Black** 行宽 100；**isort**（profile black）。导入顺序与类型注解风格对齐同目录已有文件。
+- 异步视图与 DB 操作保持 `async` 一致性；勿在无必要时混用阻塞调用。
+
+## 示例（路由片段）
+
+```python
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
+
+router = APIRouter(prefix="/api/example", tags=["example"])
+
+
+@router.get("/health")
+async def health(db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+    return {"status": "ok"}
+```
