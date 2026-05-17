@@ -16,6 +16,7 @@ from typing import Any, List, Optional
 import threading
 import http.server
 import socketserver
+import ssl
 
 PROJECT_ROOT = Path(__file__).parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
@@ -604,9 +605,41 @@ def start_file_watcher(output_buffer: List[str]) -> subprocess.Popen:
     return process
 
 
+def _is_client_disconnect(exc: BaseException) -> bool:
+    """ブラウザ側の接続切断（WinError 10053 等）。サーバー障害ではない。"""
+    if isinstance(exc, (ConnectionAbortedError, ConnectionResetError, BrokenPipeError, ssl.SSLEOFError)):
+        return True
+    if isinstance(exc, OSError):
+        if getattr(exc, "winerror", None) in (10053, 10054):
+            return True
+        if exc.errno in (32, 54, 104):
+            return True
+    cause = exc.__cause__
+    if cause is not None and cause is not exc and _is_client_disconnect(cause):
+        return True
+    return False
+
+
 class ProductionHandler(http.server.SimpleHTTPRequestHandler):
     """本番用静的ファイルサーバー（SPAルーティング + APIプロキシ対応）"""
     
+    def handle(self):
+        try:
+            super().handle()
+        except Exception as e:
+            if _is_client_disconnect(e):
+                return
+            raise
+
+    def _safe_write(self, data: bytes) -> bool:
+        try:
+            self.wfile.write(data)
+            return True
+        except Exception as e:
+            if _is_client_disconnect(e):
+                return False
+            raise
+
     def __init__(self, *args, directory=None, **kwargs):
         self.directory = directory or str(DIST_DIR)
         # parse_request 失敗 → send_error → end_headers の時点では未設定になり得る（Py3.14 等）
@@ -637,7 +670,7 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
-        self.wfile.write(payload)
+        self._safe_write(payload)
     
     def _proxy_to_backend(self):
         """APIリクエストをバックエンドにプロキシ（Content-Length で返すとブラウザが正しく JSON を解釈する）"""
@@ -676,7 +709,7 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
                         self.send_header(key, value)
                 self.send_header('Content-Length', len(response_body))
                 self.end_headers()
-                self.wfile.write(response_body)
+                self._safe_write(response_body)
 
         except urllib.error.HTTPError as e:
             self.send_response(e.code)
@@ -686,8 +719,10 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             err_body = e.read()
             self.send_header('Content-Length', len(err_body))
             self.end_headers()
-            self.wfile.write(err_body)
+            self._safe_write(err_body)
         except Exception as e:
+            if _is_client_disconnect(e):
+                return
             self._send_bad_gateway(e)
     
     def do_GET(self):
@@ -709,12 +744,17 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Content-Length", len(body))
             self.end_headers()
-            self.wfile.write(body)
+            self._safe_write(body)
             return
 
         path = self.translate_path(self.path)
         if os.path.exists(path) and os.path.isfile(path):
-            super().do_GET()
+            try:
+                super().do_GET()
+            except Exception as e:
+                if not _is_client_disconnect(e):
+                    raise
+            return
         else:
             self.path = '/index.html'
             path = self.translate_path(self.path)
@@ -737,7 +777,7 @@ class ProductionHandler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", len(body))
             self.end_headers()
-            self.wfile.write(body)
+            self._safe_write(body)
     
     def do_POST(self):
         if self.path.startswith('/api'):

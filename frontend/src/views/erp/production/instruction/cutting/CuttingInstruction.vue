@@ -6123,7 +6123,7 @@ async function saveCuttingEdit() {
       production_lot_size: cuttingEditForm.production_lot_size,
       lot_number: cuttingEditForm.lot_number?.trim() || null,
       production_sequence: cuttingEditForm.production_sequence,
-      remarks: cuttingEditForm.remarks?.trim() || null,
+      remarks: (cuttingEditForm.remarks ?? '').trim(),
       use_material_stock_sub: cuttingEditForm.use_material_stock_sub,
       usage_count: cuttingEditForm.usage_count,
     })
@@ -6181,7 +6181,7 @@ async function saveChamferingEdit() {
       production_lot_size: chamferingEditForm.production_lot_size,
       lot_number: chamferingEditForm.lot_number?.trim() || null,
       production_sequence: chamferingEditForm.production_sequence,
-      remarks: chamferingEditForm.remarks?.trim() || null,
+      remarks: (chamferingEditForm.remarks ?? '').trim(),
     })
     ElMessage.success('保存しました')
     chamferingEditDialogVisible.value = false

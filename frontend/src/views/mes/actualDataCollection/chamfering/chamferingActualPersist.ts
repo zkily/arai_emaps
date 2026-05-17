@@ -1,8 +1,8 @@
-/** MES 切断実績収集画面のローカル復元（リロード・タブ閉鎖・設備切替後も計測状態を保持） */
+/** MES 面取実績収集画面のローカル復元（リロード・タブ閉鎖・設備切替後も計測状態を保持） */
 
-export const CUTTING_ACTUAL_PERSIST_KEY = 'smart_emap_mes_cutting_actual_v2'
+export const CHAMFERING_ACTUAL_PERSIST_KEY = 'smart_emap_mes_chamfering_actual_v2'
 
-const LEGACY_V1_KEY = 'smart_emap_mes_cutting_actual_v1'
+const LEGACY_V1_KEY = 'smart_emap_mes_chamfering_actual_v1'
 
 const PERSIST_TTL_MS = 48 * 60 * 60 * 1000
 
@@ -35,7 +35,7 @@ interface PersistScopeData {
   sessions: Record<string, PersistedPlanSession>
 }
 
-export interface CuttingActualPersistStoreV2 {
+export interface ChamferingActualPersistStoreV2 {
   v: 2
   productionDay: string
   selectedMachineId: number | null
@@ -69,7 +69,7 @@ function getStorage(): Storage | null {
 }
 
 function readRawKeys(): string[] {
-  const keys = [CUTTING_ACTUAL_PERSIST_KEY, LEGACY_V1_KEY]
+  const keys = [CHAMFERING_ACTUAL_PERSIST_KEY, LEGACY_V1_KEY]
   try {
     const legacySession = sessionStorage.getItem(LEGACY_V1_KEY)
     if (legacySession) keys.push(`session:${LEGACY_V1_KEY}`)
@@ -82,14 +82,14 @@ function readRawKeys(): string[] {
 function readAnyRaw(): { raw: string; fromKey: string } | null {
   const storage = getStorage()
   if (!storage) return null
-  for (const key of [CUTTING_ACTUAL_PERSIST_KEY, LEGACY_V1_KEY]) {
+  for (const key of [CHAMFERING_ACTUAL_PERSIST_KEY, LEGACY_V1_KEY]) {
     const raw = storage.getItem(key)
     if (raw) return { raw, fromKey: key }
   }
   try {
     const raw = sessionStorage.getItem(LEGACY_V1_KEY)
     if (raw) {
-      storage.setItem(CUTTING_ACTUAL_PERSIST_KEY, raw)
+      storage.setItem(CHAMFERING_ACTUAL_PERSIST_KEY, raw)
       sessionStorage.removeItem(LEGACY_V1_KEY)
       return { raw, fromKey: LEGACY_V1_KEY }
     }
@@ -99,10 +99,10 @@ function readAnyRaw(): { raw: string; fromKey: string } | null {
   return null
 }
 
-function writeStore(store: CuttingActualPersistStoreV2): void {
+function writeStore(store: ChamferingActualPersistStoreV2): void {
   const storage = getStorage()
   if (!storage) return
-  storage.setItem(CUTTING_ACTUAL_PERSIST_KEY, JSON.stringify(store))
+  storage.setItem(CHAMFERING_ACTUAL_PERSIST_KEY, JSON.stringify(store))
   try {
     sessionStorage.removeItem(LEGACY_V1_KEY)
   } catch {
@@ -133,7 +133,7 @@ export function makePersistScopeKey(productionDay: string, machineId: number | n
   return `${day}::${machineId ?? 'none'}`
 }
 
-function emptyStoreV2(): CuttingActualPersistStoreV2 {
+function emptyStoreV2(): ChamferingActualPersistStoreV2 {
   return {
     v: 2,
     productionDay: '',
@@ -143,7 +143,7 @@ function emptyStoreV2(): CuttingActualPersistStoreV2 {
   }
 }
 
-function migrateV1ToV2(p: CuttingActualPagePersistV1): CuttingActualPersistStoreV2 {
+function migrateV1ToV2(p: CuttingActualPagePersistV1): ChamferingActualPersistStoreV2 {
   const store = emptyStoreV2()
   store.productionDay = p.productionDay
   store.selectedMachineId = p.selectedMachineId
@@ -153,21 +153,21 @@ function migrateV1ToV2(p: CuttingActualPagePersistV1): CuttingActualPersistStore
   return store
 }
 
-function pruneExpiredScopes(store: CuttingActualPersistStoreV2): void {
+function pruneExpiredScopes(store: ChamferingActualPersistStoreV2): void {
   const now = Date.now()
   for (const [key, scope] of Object.entries(store.scopes)) {
     if (now - scope.savedAt > PERSIST_TTL_MS) delete store.scopes[key]
   }
 }
 
-function parseStore(raw: string): CuttingActualPersistStoreV2 | null {
+function parseStore(raw: string): ChamferingActualPersistStoreV2 | null {
   const parsed = JSON.parse(raw) as unknown
   if (!parsed || typeof parsed !== 'object') return null
   const p = parsed as { v?: number }
 
   if (p.v === 2) {
-    const s = parsed as Partial<CuttingActualPersistStoreV2>
-    const store: CuttingActualPersistStoreV2 = {
+    const s = parsed as Partial<ChamferingActualPersistStoreV2>
+    const store: ChamferingActualPersistStoreV2 = {
       v: 2,
       productionDay: typeof s.productionDay === 'string' ? s.productionDay : '',
       selectedMachineId:
@@ -190,7 +190,7 @@ function parseStore(raw: string): CuttingActualPersistStoreV2 | null {
   return null
 }
 
-function loadStore(): CuttingActualPersistStoreV2 | null {
+function loadStore(): ChamferingActualPersistStoreV2 | null {
   try {
     const found = readAnyRaw()
     if (!found) return null
@@ -225,7 +225,7 @@ export function getScopeSessions(
 }
 
 /** 画面フィルタ（生産日・最後に選んだ設備・確定済除外） */
-export function loadCuttingActualPersist(): CuttingActualPagePersistSnapshot | null {
+export function loadChamferingActualPersist(): CuttingActualPagePersistSnapshot | null {
   const store = loadStore()
   if (!store) return null
   const key = makePersistScopeKey(store.productionDay, store.selectedMachineId)
@@ -238,7 +238,7 @@ export function loadCuttingActualPersist(): CuttingActualPagePersistSnapshot | n
   }
 }
 
-export function saveCuttingActualPersist(payload: CuttingActualPagePersistSnapshot): void {
+export function saveChamferingActualPersist(payload: CuttingActualPagePersistSnapshot): void {
   try {
     const store = loadStore() ?? emptyStoreV2()
     const key = makePersistScopeKey(payload.productionDay, payload.selectedMachineId)
@@ -254,11 +254,11 @@ export function saveCuttingActualPersist(payload: CuttingActualPagePersistSnapsh
     pruneExpiredScopes(store)
     writeStore(store)
   } catch (e) {
-    console.warn('[cuttingActual] persist save failed', e)
+    console.warn('[chamferingActual] persist save failed', e)
   }
 }
 
-export function clearCuttingActualPersist(): void {
+export function clearChamferingActualPersist(): void {
   removeStored()
 }
 

@@ -101,7 +101,7 @@ async function startScanner(): Promise<void> {
     scanning.value = true
   } catch (e: unknown) {
     console.error(e)
-    ElMessage.error(t('mesCuttingActual.scanCameraFailed'))
+    ElMessage.error(t('mesChamferingActual.scanCameraFailed'))
     await stopScanner()
   } finally {
     starting.value = false
@@ -136,7 +136,7 @@ onUnmounted(() => {
   <el-dialog
     :model-value="modelValue"
     class="mes-barcode-scan-dialog"
-    :title="t('mesCuttingActual.scanDialogTitle')"
+    :title="t('mesChamferingActual.scanDialogTitle')"
     width="min(96vw, 420px)"
     align-center
     destroy-on-close
@@ -151,24 +151,24 @@ onUnmounted(() => {
         :management-code="managementCode"
       />
     </div>
-    <p class="mes-barcode-scan-dialog__hint">{{ t('mesCuttingActual.scanDialogHint') }}</p>
+    <p class="mes-barcode-scan-dialog__hint">{{ t('mesChamferingActual.scanDialogHint') }}</p>
     <div :id="SCANNER_ELEMENT_ID" class="mes-barcode-scan-dialog__viewport" />
     <div class="mes-barcode-scan-dialog__actions">
       <el-button :loading="starting" :disabled="scanning && starting" @click="toggleCamera">
         <el-icon><Switch /></el-icon>
         {{
           useFrontCamera
-            ? t('mesCuttingActual.scanUseRearCamera')
-            : t('mesCuttingActual.scanUseFrontCamera')
+            ? t('mesChamferingActual.scanUseRearCamera')
+            : t('mesChamferingActual.scanUseFrontCamera')
         }}
       </el-button>
       <el-button v-if="!scanning" type="primary" :loading="starting" @click="startScanner">
         <el-icon><Camera /></el-icon>
-        {{ t('mesCuttingActual.scanRetryCamera') }}
+        {{ t('mesChamferingActual.scanRetryCamera') }}
       </el-button>
     </div>
     <template #footer>
-      <el-button @click="closeDialog">{{ t('mesCuttingActual.btnCancelEdit') }}</el-button>
+      <el-button @click="closeDialog">{{ t('mesChamferingActual.btnCancelEdit') }}</el-button>
     </template>
   </el-dialog>
 </template>

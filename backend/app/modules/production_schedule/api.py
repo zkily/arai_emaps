@@ -6,6 +6,7 @@
 - GET /plan/batch/material-requirements-summary: instruction_plans を期間（start_date 優先）で集計し材料所要本数を返す
 - POST /plan/batch/generate-from-schedule: 生産月で production_plan_schedules から切断指示計画(instruction_plans)を生成
 """
+import json
 import logging
 import re
 from decimal import Decimal
@@ -25,12 +26,13 @@ from app.modules.auth.models import User
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# MES 切断実績（マイグレーション 03〜06、未適用 DB では一覧 SQL から除外）
+# MES 切断実績（マイグレーション 03〜07、未適用 DB では一覧 SQL から除外）
 _CUTTING_MGMT_MES_COLUMNS = (
     "mes_production_started_at",
     "mes_production_ended_at",
     "mes_net_production_sec",
     "mes_paused_accum_sec",
+    "mes_production_is_paused",
     "mes_setup_time_min",
     "mes_operator_user_id",
     "mes_scanned_code",
@@ -82,10 +84,277 @@ def _mes_column_migration_hint(column: str) -> str:
         "mes_operator_user_id": "03_cutting_management_mes_actual_fields.sql",
         "mes_net_production_sec": "04_cutting_management_mes_net_production_sec.sql",
         "mes_paused_accum_sec": "05_cutting_management_mes_paused_accum_sec.sql",
+        "mes_production_is_paused": "07_cutting_management_mes_production_is_paused.sql",
         "mes_scanned_code": "06_cutting_management_mes_scanned_code.sql",
     }
-    mig = hints.get(column, "03〜06_cutting_management_mes_*.sql")
+    mig = hints.get(column, "03〜07_cutting_management_mes_*.sql")
     return f"列 `{column}` がありません。backend/database/migrations/{mig} を実行してください。"
+
+
+async def _reject_concurrent_mes_production_on_machine(
+    db: AsyncSession,
+    cutting_id: int,
+    cm_cols: set[str],
+) -> None:
+    """同一切断機・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    if "mes_production_started_at" not in cm_cols or "mes_production_ended_at" not in cm_cols:
+        return
+    scope = await db.execute(
+        text("""
+            SELECT cutting_machine, production_day
+            FROM cutting_management
+            WHERE id = :cid
+            LIMIT 1
+        """),
+        {"cid": cutting_id},
+    )
+    scope_row = scope.fetchone()
+    if not scope_row or not scope_row[0] or scope_row[1] is None:
+        return
+    machine = str(scope_row[0]).strip()
+    prod_day = scope_row[1]
+    conflict = await db.execute(
+        text("""
+            SELECT id, production_sequence, product_name, product_cd
+            FROM cutting_management
+            WHERE cutting_machine = :machine
+              AND production_day = :pday
+              AND id <> :cid
+              AND mes_production_started_at IS NOT NULL
+              AND mes_production_ended_at IS NULL
+            LIMIT 1
+        """),
+        {"cid": cutting_id, "machine": machine, "pday": prod_day},
+    )
+    other = conflict.fetchone()
+    if not other:
+        return
+    oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
+    label_parts: list[str] = []
+    if pseq is not None:
+        label_parts.append(f"順{pseq}")
+    name = (pname or pcd or "").strip() if (pname or pcd) else ""
+    if name:
+        label_parts.append(str(name)[:80])
+    label = " ".join(label_parts) if label_parts else f"ID {oid}"
+    raise HTTPException(
+        status_code=409,
+        detail=f"この切断機では他の製品が生産中です（{label}）。先に生産終了してください。",
+    )
+
+
+_CHAMFERING_MGMT_MES_COLUMNS = _CUTTING_MGMT_MES_COLUMNS
+
+_INSPECTION_MGMT_MES_COLUMNS = (
+    "mes_production_started_at",
+    "mes_production_ended_at",
+    "mes_net_production_sec",
+    "mes_paused_accum_sec",
+    "mes_production_is_paused",
+    "mes_inspector_user_id",
+    "mes_defect_by_item",
+)
+
+
+async def _get_chamfering_mgmt_columns(db: AsyncSession) -> set[str]:
+    """chamfering_management の既存列名（マイグレーション未適用列を SQL から除外するため）。"""
+    try:
+        result = await db.execute(
+            text("""
+                SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'chamfering_management'
+            """)
+        )
+        return {str(r[0]) for r in result.fetchall()}
+    except Exception as e:
+        logger.warning("chamfering_management column introspection failed: %s", e)
+        return set()
+
+
+def _chamfering_mgmt_mes_select_fragment(existing: set[str]) -> str:
+    parts = [f"`chamfering_management`.`{c}`" for c in _CHAMFERING_MGMT_MES_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _chamfering_mes_column_migration_hint(column: str) -> str:
+    return (
+        f"列 `{column}` がありません。"
+        "backend/database/migrations/08_chamfering_management_mes_fields.sql を実行してください。"
+    )
+
+
+async def _reject_concurrent_mes_production_on_chamfering_machine(
+    db: AsyncSession,
+    chamfering_id: int,
+    cm_cols: set[str],
+) -> None:
+    """同一面取機・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    if "mes_production_started_at" not in cm_cols or "mes_production_ended_at" not in cm_cols:
+        return
+    scope = await db.execute(
+        text("""
+            SELECT chamfering_machine, production_day
+            FROM chamfering_management
+            WHERE id = :cid
+            LIMIT 1
+        """),
+        {"cid": chamfering_id},
+    )
+    scope_row = scope.fetchone()
+    if not scope_row or not scope_row[0] or scope_row[1] is None:
+        return
+    machine = str(scope_row[0]).strip()
+    prod_day = scope_row[1]
+    conflict = await db.execute(
+        text("""
+            SELECT id, production_sequence, product_name, product_cd
+            FROM chamfering_management
+            WHERE chamfering_machine = :machine
+              AND production_day = :pday
+              AND id <> :cid
+              AND mes_production_started_at IS NOT NULL
+              AND mes_production_ended_at IS NULL
+            LIMIT 1
+        """),
+        {"cid": chamfering_id, "machine": machine, "pday": prod_day},
+    )
+    other = conflict.fetchone()
+    if not other:
+        return
+    oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
+    label_parts: list[str] = []
+    if pseq is not None:
+        label_parts.append(f"順{pseq}")
+    name = (pname or pcd or "").strip() if (pname or pcd) else ""
+    if name:
+        label_parts.append(str(name)[:80])
+    label = " ".join(label_parts) if label_parts else f"ID {oid}"
+    raise HTTPException(
+        status_code=409,
+        detail=f"この面取機では他の製品が生産中です（{label}）。先に生産終了してください。",
+    )
+
+
+async def _get_inspection_mgmt_columns(db: AsyncSession) -> set[str]:
+    try:
+        result = await db.execute(
+            text("""
+                SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'inspection_management'
+            """)
+        )
+        return {str(r[0]) for r in result.fetchall()}
+    except Exception as e:
+        logger.warning("inspection_management column introspection failed: %s", e)
+        return set()
+
+
+def _inspection_mgmt_mes_select_fragment(existing: set[str]) -> str:
+    parts = [f"`inspection_management`.`{c}`" for c in _INSPECTION_MGMT_MES_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _inspection_mes_column_migration_hint(column: str) -> str:
+    return (
+        f"列 `{column}` がありません。"
+        "backend/database/migrations/09_inspection_management.sql を実行してください。"
+    )
+
+
+async def _reject_concurrent_mes_production_on_inspection_day(
+    db: AsyncSession,
+    inspection_id: int,
+    im_cols: set[str],
+) -> None:
+    """同一生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    if "mes_production_started_at" not in im_cols or "mes_production_ended_at" not in im_cols:
+        return
+    scope = await db.execute(
+        text("""
+            SELECT production_day
+            FROM inspection_management
+            WHERE id = :iid
+            LIMIT 1
+        """),
+        {"iid": inspection_id},
+    )
+    scope_row = scope.fetchone()
+    if not scope_row or scope_row[0] is None:
+        return
+    prod_day = scope_row[0]
+    conflict = await db.execute(
+        text("""
+            SELECT id, production_sequence, product_name, product_cd
+            FROM inspection_management
+            WHERE production_day = :pday
+              AND id <> :iid
+              AND mes_production_started_at IS NOT NULL
+              AND mes_production_ended_at IS NULL
+            LIMIT 1
+        """),
+        {"iid": inspection_id, "pday": prod_day},
+    )
+    other = conflict.fetchone()
+    if not other:
+        return
+    oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
+    label_parts: list[str] = []
+    if pseq is not None:
+        label_parts.append(f"順{pseq}")
+    name = (pname or pcd or "").strip() if (pname or pcd) else ""
+    if name:
+        label_parts.append(str(name)[:80])
+    label = " ".join(label_parts) if label_parts else f"ID {oid}"
+    raise HTTPException(
+        status_code=409,
+        detail=f"この生産日では他の製品が検査生産中です（{label}）。先に生産終了してください。",
+    )
+
+
+def _parse_mes_defect_by_item_for_db(val: Any) -> Optional[str]:
+    """dict / JSON 文字列を MySQL JSON 列用の文字列に正規化。"""
+    if val is None:
+        return None
+    if isinstance(val, dict):
+        cleaned: dict[str, int] = {}
+        for k, v in val.items():
+            if not k:
+                continue
+            try:
+                n = int(v)
+            except (TypeError, ValueError):
+                continue
+            if n > 0:
+                cleaned[str(k)] = n
+        return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
+    if isinstance(val, str):
+        raw = val.strip()
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            raise ValueError("mes_defect_by_item must be a JSON object")
+        return _parse_mes_defect_by_item_for_db(parsed)
+    raise ValueError("mes_defect_by_item must be object or JSON string")
+
+
+def _sum_defect_qty_from_item_json(raw: Any) -> int:
+    if raw is None:
+        return 0
+    try:
+        if isinstance(raw, str):
+            data = json.loads(raw) if raw.strip() else {}
+        elif isinstance(raw, dict):
+            data = raw
+        else:
+            return 0
+        if not isinstance(data, dict):
+            return 0
+        return sum(max(0, int(v)) for v in data.values() if v is not None)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return 0
 
 
 def _parse_mes_datetime_to_naive_tokyo(val: Optional[str]) -> Optional[datetime]:
@@ -1747,6 +2016,7 @@ async def get_cutting_management_list(
             "mes_production_ended_at": _v(row, "mes_production_ended_at"),
             "mes_net_production_sec": row.get("mes_net_production_sec"),
             "mes_paused_accum_sec": row.get("mes_paused_accum_sec"),
+            "mes_production_is_paused": row.get("mes_production_is_paused"),
             "mes_setup_time_min": row.get("mes_setup_time_min"),
             "mes_operator_user_id": row.get("mes_operator_user_id"),
             "mes_scanned_code": row.get("mes_scanned_code"),
@@ -2588,6 +2858,7 @@ class UpdateCuttingManagementBody(BaseModel):
     mes_production_ended_at: Optional[str] = None  # ISO8601（空文字でクリア）
     mes_net_production_sec: Optional[int] = None  # 净生産秒（一時停止除く）
     mes_paused_accum_sec: Optional[int] = None  # 一時停止累計秒
+    mes_production_is_paused: Optional[int] = None  # 0=稼働中, 1=一時停止（未開始/終了は NULL）
     mes_setup_time_min: Optional[int] = None  # 段取（分）
     mes_operator_user_id: Optional[int] = None  # users.id（0以下でクリア）
     mes_scanned_code: Optional[str] = None  # バーコード/QR 読取（空文字でクリア）
@@ -2615,8 +2886,38 @@ async def update_cutting_management(
             except (ValueError, IndexError):
                 pass
     if body.cutting_machine is not None:
+        new_cm = (body.cutting_machine or "").strip()
+        if not new_cm:
+            raise HTTPException(status_code=400, detail="切断機を指定してください")
+        cur = await db.execute(
+            text("""
+                SELECT cutting_machine, production_completed_check,
+                       mes_production_started_at, mes_production_ended_at
+                FROM cutting_management
+                WHERE id = :cid
+                LIMIT 1
+            """),
+            {"cid": cutting_id},
+        )
+        cur_row = cur.fetchone()
+        if not cur_row:
+            raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+        old_cm = (str(cur_row[0]).strip() if cur_row[0] else "")
+        if old_cm != new_cm:
+            if int(cur_row[1] or 0) == 1:
+                raise HTTPException(status_code=400, detail="実績確定済のため切断機を変更できません")
+            if "mes_production_ended_at" in cm_cols:
+                ended_at = cur_row[3]
+                if ended_at is not None and str(ended_at).strip():
+                    raise HTTPException(status_code=400, detail="生産終了済のため切断機を変更できません")
+            if "mes_production_started_at" in cm_cols and "mes_production_ended_at" in cm_cols:
+                started_at = cur_row[2]
+                ended_at = cur_row[3]
+                if started_at is not None and str(started_at).strip():
+                    if ended_at is None or not str(ended_at).strip():
+                        raise HTTPException(status_code=400, detail="生産中のため切断機を変更できません")
         updates.append("cutting_machine = :cutting_machine")
-        params["cutting_machine"] = (body.cutting_machine or "").strip() or None
+        params["cutting_machine"] = new_cm
     if body.actual_production_quantity is not None:
         updates.append("actual_production_quantity = :actual_production_quantity")
         params["actual_production_quantity"] = body.actual_production_quantity
@@ -2676,6 +2977,7 @@ async def update_cutting_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
+                await _reject_concurrent_mes_production_on_machine(db, cutting_id, cm_cols)
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
     if body.mes_production_ended_at is not None:
@@ -2692,18 +2994,41 @@ async def update_cutting_management(
     if body.mes_net_production_sec is not None:
         if "mes_net_production_sec" not in cm_cols:
             raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_net_production_sec"))
-        updates.append("mes_net_production_sec = :mes_net_production_sec")
-        params["mes_net_production_sec"] = max(0, int(body.mes_net_production_sec))
+        net_sec = int(body.mes_net_production_sec)
+        if net_sec < 0:
+            updates.append("mes_net_production_sec = NULL")
+        else:
+            updates.append("mes_net_production_sec = :mes_net_production_sec")
+            params["mes_net_production_sec"] = max(0, net_sec)
     if body.mes_paused_accum_sec is not None:
         if "mes_paused_accum_sec" not in cm_cols:
             raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_paused_accum_sec"))
-        updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
-        params["mes_paused_accum_sec"] = max(0, int(body.mes_paused_accum_sec))
+        pause_sec = int(body.mes_paused_accum_sec)
+        if pause_sec < 0:
+            updates.append("mes_paused_accum_sec = NULL")
+        else:
+            updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
+            params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_production_is_paused is not None:
+        if "mes_production_is_paused" not in cm_cols:
+            raise HTTPException(
+                status_code=503, detail=_mes_column_migration_hint("mes_production_is_paused")
+            )
+        flag = int(body.mes_production_is_paused)
+        if flag < 0:
+            updates.append("mes_production_is_paused = NULL")
+        else:
+            params["mes_production_is_paused"] = 1 if flag else 0
+            updates.append("mes_production_is_paused = :mes_production_is_paused")
     if body.mes_setup_time_min is not None:
         if "mes_setup_time_min" not in cm_cols:
             raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_setup_time_min"))
-        updates.append("mes_setup_time_min = :mes_setup_time_min")
-        params["mes_setup_time_min"] = max(0, int(body.mes_setup_time_min))
+        setup_min = int(body.mes_setup_time_min)
+        if setup_min < 0:
+            updates.append("mes_setup_time_min = NULL")
+        else:
+            updates.append("mes_setup_time_min = :mes_setup_time_min")
+            params["mes_setup_time_min"] = max(0, setup_min)
     if body.mes_operator_user_id is not None:
         if "mes_operator_user_id" not in cm_cols:
             raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_operator_user_id"))
@@ -3642,6 +3967,9 @@ async def get_chamfering_management_list(
         conditions.append("chamfering_machine = :chamfering_machine")
         params["chamfering_machine"] = chamfering_machine.strip()
 
+    where_clause = " AND ".join(conditions)
+    cm_cols = await _get_chamfering_mgmt_columns(db)
+    mes_select = _chamfering_mgmt_mes_select_fragment(cm_cols)
     sql = text(f"""
         SELECT `chamfering_management`.id, `chamfering_management`.cutting_management_id, `chamfering_management`.production_month,
                `chamfering_management`.production_day, `chamfering_management`.production_line, `chamfering_management`.chamfering_machine,
@@ -3651,14 +3979,15 @@ async def get_chamfering_management_list(
                `chamfering_management`.cutting_length, `chamfering_management`.chamfering_length, `chamfering_management`.developed_length,
                `chamfering_management`.material_name, `chamfering_management`.management_code, `chamfering_management`.has_sw_process,
                `chamfering_management`.production_completed_check, `chamfering_management`.no_count, `chamfering_management`.remarks, `chamfering_management`.cd,
+               {mes_select}
                `chamfering_management`.created_at,
                `equipment_efficiency`.efficiency_rate AS efficiency_rate
         FROM `chamfering_management`
         LEFT JOIN `equipment_efficiency`
           ON `chamfering_management`.product_cd = `equipment_efficiency`.product_cd
          AND `chamfering_management`.chamfering_machine = `equipment_efficiency`.machines_name
-        WHERE {" AND ".join(conditions)}
-        ORDER BY `chamfering_management`.production_day DESC, `chamfering_management`.chamfering_machine ASC,
+        WHERE {where_clause}
+        ORDER BY `chamfering_management`.production_day ASC, `chamfering_management`.chamfering_machine ASC,
                  `chamfering_management`.production_sequence ASC
         LIMIT :limit
     """)
@@ -3670,6 +3999,14 @@ async def get_chamfering_management_list(
             raise HTTPException(
                 status_code=503,
                 detail="chamfering_management テーブルが存在しません。マイグレーション 054_chamfering_management.sql を実行してください。",
+            ) from e
+        if "unknown column" in msg:
+            for col in _CHAMFERING_MGMT_MES_COLUMNS:
+                if col in msg:
+                    raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint(col)) from e
+            raise HTTPException(
+                status_code=503,
+                detail="chamfering_management に未適用の列があります。backend/database/migrations/08_chamfering_management_mes_fields.sql を実行してください。",
             ) from e
         raise
     rows = result.mappings().fetchall()
@@ -3726,6 +4063,14 @@ async def get_chamfering_management_list(
             "no_count": 1 if row.get("no_count") else 0,
             "remarks": row.get("remarks"),
             "cd": row.get("cd"),
+            "mes_production_started_at": _v(row, "mes_production_started_at"),
+            "mes_production_ended_at": _v(row, "mes_production_ended_at"),
+            "mes_net_production_sec": row.get("mes_net_production_sec"),
+            "mes_paused_accum_sec": row.get("mes_paused_accum_sec"),
+            "mes_production_is_paused": row.get("mes_production_is_paused"),
+            "mes_setup_time_min": row.get("mes_setup_time_min"),
+            "mes_operator_user_id": row.get("mes_operator_user_id"),
+            "mes_scanned_code": row.get("mes_scanned_code"),
             "created_at": _v(row, "created_at"),
         }
     data = [_cham_row(dict(r)) for r in rows]
@@ -3960,7 +4305,7 @@ async def create_chamfering_management(
 
 
 class UpdateChamferingManagementBody(BaseModel):
-    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・不良数・生産順・備考・生産日）"""
+    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・不良数・生産順・備考・生産日・MES）"""
     production_completed_check: Optional[bool] = None
     no_count: Optional[bool] = None
     chamfering_machine: Optional[str] = None
@@ -3969,6 +4314,14 @@ class UpdateChamferingManagementBody(BaseModel):
     production_sequence: Optional[int] = None
     remarks: Optional[str] = None
     production_day: Optional[str] = None  # YYYY-MM-DD
+    mes_production_started_at: Optional[str] = None  # ISO8601（空文字でクリア）
+    mes_production_ended_at: Optional[str] = None  # ISO8601（空文字でクリア）
+    mes_net_production_sec: Optional[int] = None
+    mes_paused_accum_sec: Optional[int] = None
+    mes_production_is_paused: Optional[int] = None  # 0=稼働中, 1=一時停止
+    mes_setup_time_min: Optional[int] = None
+    mes_operator_user_id: Optional[int] = None
+    mes_scanned_code: Optional[str] = None
 
 
 @router.patch("/plan/chamfering-management/{chamfering_id}")
@@ -3978,43 +4331,145 @@ async def update_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取指示1件の production_completed_check / no_count / chamfering_machine / actual_production_quantity / production_sequence / remarks を更新。"""
-    res = await db.execute(
-        text("SELECT id FROM chamfering_management WHERE id = :mid"),
-        {"mid": chamfering_id},
-    )
-    if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
-    updates = []
+    """面取指示1件を更新（面取機・生産数・生産順・完了・備考・MES 実績等）。"""
+    cm_cols = await _get_chamfering_mgmt_columns(db)
+    updates: list[str] = []
     params: dict = {"mid": chamfering_id}
+    if body.production_day is not None:
+        d = _parse_date_ymd(body.production_day)
+        if d is not None:
+            updates.append("production_month = :production_month")
+            params["production_month"] = d.replace(day=1)
+            updates.append("production_day = :production_day")
+            params["production_day"] = d
+    if body.chamfering_machine is not None:
+        new_cm = (body.chamfering_machine or "").strip()
+        if not new_cm:
+            raise HTTPException(status_code=400, detail="面取機を指定してください")
+        cur = await db.execute(
+            text("""
+                SELECT chamfering_machine, production_completed_check,
+                       mes_production_started_at, mes_production_ended_at
+                FROM chamfering_management
+                WHERE id = :mid
+                LIMIT 1
+            """),
+            {"mid": chamfering_id},
+        )
+        cur_row = cur.fetchone()
+        if not cur_row:
+            raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+        old_cm = (str(cur_row[0]).strip() if cur_row[0] else "")
+        if old_cm != new_cm:
+            if int(cur_row[1] or 0) == 1:
+                raise HTTPException(status_code=400, detail="実績確定済のため面取機を変更できません")
+            if "mes_production_ended_at" in cm_cols:
+                ended_at = cur_row[3]
+                if ended_at is not None and str(ended_at).strip():
+                    raise HTTPException(status_code=400, detail="生産終了済のため面取機を変更できません")
+            if "mes_production_started_at" in cm_cols and "mes_production_ended_at" in cm_cols:
+                started_at = cur_row[2]
+                ended_at = cur_row[3]
+                if started_at is not None and str(started_at).strip():
+                    if ended_at is None or not str(ended_at).strip():
+                        raise HTTPException(status_code=400, detail="生産中のため面取機を変更できません")
+        updates.append("chamfering_machine = :chamfering_machine")
+        params["chamfering_machine"] = new_cm
     if body.production_completed_check is not None:
         updates.append("production_completed_check = :production_completed_check")
         params["production_completed_check"] = 1 if body.production_completed_check else 0
     if body.no_count is not None:
         updates.append("no_count = :no_count")
         params["no_count"] = 1 if body.no_count else 0
-    if body.chamfering_machine is not None:
-        updates.append("chamfering_machine = :chamfering_machine")
-        params["chamfering_machine"] = body.chamfering_machine.strip() or None
     if body.actual_production_quantity is not None:
         updates.append("actual_production_quantity = :actual_production_quantity")
         params["actual_production_quantity"] = body.actual_production_quantity
-    if body.defect_qty is not None:
-        updates.append("defect_qty = :defect_qty")
-        params["defect_qty"] = max(0, body.defect_qty)
     if body.production_sequence is not None:
         updates.append("production_sequence = :production_sequence")
         params["production_sequence"] = body.production_sequence
     if body.remarks is not None:
         updates.append("remarks = :remarks")
-        params["remarks"] = body.remarks.strip() or None
-    if body.production_day is not None:
-        d = _parse_date_ymd(body.production_day)
-        if d is not None:
-            updates.append("production_month = :production_month")
-            params["production_month"] = d.replace(day=1)  # production_month = 当月1日
-            updates.append("production_day = :production_day")
-            params["production_day"] = d
+        params["remarks"] = (body.remarks or "").strip() or None
+    if body.defect_qty is not None:
+        updates.append("defect_qty = :defect_qty")
+        params["defect_qty"] = max(0, body.defect_qty)
+    if body.mes_production_started_at is not None:
+        if "mes_production_started_at" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_production_started_at"))
+        raw = body.mes_production_started_at.strip() if isinstance(body.mes_production_started_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_started_at = NULL")
+        else:
+            sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
+            if sdt:
+                await _reject_concurrent_mes_production_on_chamfering_machine(db, chamfering_id, cm_cols)
+                params["mes_production_started_at"] = sdt
+                updates.append("mes_production_started_at = :mes_production_started_at")
+    if body.mes_production_ended_at is not None:
+        if "mes_production_ended_at" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_production_ended_at"))
+        raw = body.mes_production_ended_at.strip() if isinstance(body.mes_production_ended_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_ended_at = NULL")
+        else:
+            edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
+            if edt:
+                params["mes_production_ended_at"] = edt
+                updates.append("mes_production_ended_at = :mes_production_ended_at")
+    if body.mes_net_production_sec is not None:
+        if "mes_net_production_sec" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_net_production_sec"))
+        net_sec = int(body.mes_net_production_sec)
+        if net_sec < 0:
+            updates.append("mes_net_production_sec = NULL")
+        else:
+            updates.append("mes_net_production_sec = :mes_net_production_sec")
+            params["mes_net_production_sec"] = max(0, net_sec)
+    if body.mes_paused_accum_sec is not None:
+        if "mes_paused_accum_sec" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_paused_accum_sec"))
+        pause_sec = int(body.mes_paused_accum_sec)
+        if pause_sec < 0:
+            updates.append("mes_paused_accum_sec = NULL")
+        else:
+            updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
+            params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_production_is_paused is not None:
+        if "mes_production_is_paused" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_production_is_paused"))
+        flag = int(body.mes_production_is_paused)
+        if flag < 0:
+            updates.append("mes_production_is_paused = NULL")
+        else:
+            params["mes_production_is_paused"] = 1 if flag else 0
+            updates.append("mes_production_is_paused = :mes_production_is_paused")
+    if body.mes_setup_time_min is not None:
+        if "mes_setup_time_min" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_setup_time_min"))
+        setup_min = int(body.mes_setup_time_min)
+        if setup_min < 0:
+            updates.append("mes_setup_time_min = NULL")
+        else:
+            updates.append("mes_setup_time_min = :mes_setup_time_min")
+            params["mes_setup_time_min"] = max(0, setup_min)
+    if body.mes_operator_user_id is not None:
+        if "mes_operator_user_id" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_operator_user_id"))
+        oid = int(body.mes_operator_user_id)
+        if oid <= 0:
+            updates.append("mes_operator_user_id = NULL")
+        else:
+            params["mes_operator_user_id"] = oid
+            updates.append("mes_operator_user_id = :mes_operator_user_id")
+    if body.mes_scanned_code is not None:
+        if "mes_scanned_code" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint("mes_scanned_code"))
+        raw_mc = body.mes_scanned_code.strip() if isinstance(body.mes_scanned_code, str) else ""
+        if raw_mc == "":
+            updates.append("mes_scanned_code = NULL")
+        else:
+            params["mes_scanned_code"] = raw_mc[:512]
+            updates.append("mes_scanned_code = :mes_scanned_code")
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
@@ -5553,3 +6008,315 @@ async def delete_welding_instruction_note(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id)
+
+
+# ---------- 検査指示（inspection_management）・MES検査実績収集 ----------
+
+
+@router.get("/plan/inspection-management/list")
+async def get_inspection_management_list(
+    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
+    hide_completed: bool = Query(False, description="実績確定済を除外"),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査指示一覧（MES検査実績収集）。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+        )
+    mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
+    where_parts: list[str] = ["1=1"]
+    params: dict[str, Any] = {"lim": limit}
+    if production_day:
+        d = _parse_date_ymd(production_day)
+        if d is None:
+            raise HTTPException(status_code=400, detail="production_day が不正です")
+        where_parts.append("inspection_management.production_day = :production_day")
+        params["production_day"] = d
+    if hide_completed:
+        where_parts.append("inspection_management.production_completed_check = 0")
+    where_sql = " AND ".join(where_parts)
+    sql = f"""
+        SELECT inspection_management.id,
+               inspection_management.production_month,
+               inspection_management.production_day,
+               inspection_management.production_sequence,
+               inspection_management.product_cd,
+               inspection_management.product_name,
+               inspection_management.actual_production_quantity,
+               inspection_management.defect_qty,
+               inspection_management.mes_defect_by_item,
+               inspection_management.production_completed_check,
+               {mes_frag}
+               inspection_management.remarks,
+               inspection_management.created_at,
+               inspection_management.updated_at
+        FROM inspection_management
+        WHERE {where_sql}
+        ORDER BY inspection_management.production_day ASC,
+                 inspection_management.production_sequence ASC,
+                 inspection_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        msg = str(e).lower()
+        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            ) from e
+        for col in _INSPECTION_MGMT_MES_COLUMNS:
+            if col in msg:
+                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    out: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        raw_def = item.get("mes_defect_by_item")
+        if raw_def is not None and not isinstance(raw_def, dict):
+            try:
+                item["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+            except json.JSONDecodeError:
+                item["mes_defect_by_item"] = None
+        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+            v = item.get(k)
+            if isinstance(v, datetime):
+                item[k] = v.isoformat()
+        for k in ("production_month", "production_day"):
+            v = item.get(k)
+            if isinstance(v, date):
+                item[k] = v.isoformat()
+        out.append(item)
+    return {"success": True, "data": out}
+
+
+class CreateInspectionManagementBody(BaseModel):
+    production_day: str
+    product_cd: str
+    product_name: str
+    mes_inspector_user_id: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+@router.post("/plan/inspection-management")
+async def create_inspection_management(
+    body: CreateInspectionManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査指示1件を新規作成（MESで製品選択後・生産開始前）。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    d = _parse_date_ymd(body.production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    product_cd = (body.product_cd or "").strip()
+    product_name = (body.product_name or "").strip()
+    if not product_cd:
+        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+    if not product_name:
+        product_name = product_cd
+    prod_month = d.replace(day=1)
+    seq_row = await db.execute(
+        text(
+            "SELECT COALESCE(MAX(production_sequence), 0) + 1 AS n FROM inspection_management "
+            "WHERE production_day = :pday"
+        ),
+        {"pday": d},
+    )
+    seq = int(seq_row.scalar() or 1)
+    inspector_id = body.mes_inspector_user_id
+    params: dict[str, Any] = {
+        "production_month": prod_month,
+        "production_day": d,
+        "production_sequence": seq,
+        "product_cd": product_cd,
+        "product_name": product_name,
+        "remarks": (body.remarks or "").strip() or None,
+    }
+    cols = [
+        "production_month",
+        "production_day",
+        "production_sequence",
+        "product_cd",
+        "product_name",
+        "remarks",
+    ]
+    vals = [
+        ":production_month",
+        ":production_day",
+        ":production_sequence",
+        ":product_cd",
+        ":product_name",
+        ":remarks",
+    ]
+    if inspector_id is not None and int(inspector_id) > 0 and "mes_inspector_user_id" in im_cols:
+        cols.append("mes_inspector_user_id")
+        vals.append(":mes_inspector_user_id")
+        params["mes_inspector_user_id"] = int(inspector_id)
+    try:
+        res = await db.execute(
+            text(
+                f"INSERT INTO inspection_management ({', '.join(cols)}) "
+                f"VALUES ({', '.join(vals)})"
+            ),
+            params,
+        )
+        await db.commit()
+        new_id = res.lastrowid
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "data": {"id": new_id}, "message": "作成しました"}
+
+
+class UpdateInspectionManagementBody(BaseModel):
+    production_day: Optional[str] = None
+    production_sequence: Optional[int] = None
+    actual_production_quantity: Optional[int] = None
+    defect_qty: Optional[int] = None
+    production_completed_check: Optional[bool] = None
+    remarks: Optional[str] = None
+    mes_production_started_at: Optional[str] = None
+    mes_production_ended_at: Optional[str] = None
+    mes_net_production_sec: Optional[int] = None
+    mes_paused_accum_sec: Optional[int] = None
+    mes_production_is_paused: Optional[int] = None
+    mes_inspector_user_id: Optional[int] = None
+    mes_defect_by_item: Optional[Any] = None
+
+
+@router.patch("/plan/inspection-management/{inspection_id}")
+async def update_inspection_management(
+    inspection_id: int,
+    body: UpdateInspectionManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査指示1件を更新（MES 実績・不良内訳・検査員等）。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    updates: list[str] = []
+    params: dict[str, Any] = {"iid": inspection_id}
+    if body.production_day is not None:
+        d = _parse_date_ymd(body.production_day)
+        if d is not None:
+            updates.append("production_month = :production_month")
+            params["production_month"] = d.replace(day=1)
+            updates.append("production_day = :production_day")
+            params["production_day"] = d
+    if body.production_completed_check is not None:
+        updates.append("production_completed_check = :production_completed_check")
+        params["production_completed_check"] = 1 if body.production_completed_check else 0
+    if body.actual_production_quantity is not None:
+        updates.append("actual_production_quantity = :actual_production_quantity")
+        params["actual_production_quantity"] = max(0, int(body.actual_production_quantity))
+    if body.production_sequence is not None:
+        updates.append("production_sequence = :production_sequence")
+        params["production_sequence"] = int(body.production_sequence)
+    if body.remarks is not None:
+        updates.append("remarks = :remarks")
+        params["remarks"] = (body.remarks or "").strip() or None
+    if body.defect_qty is not None:
+        updates.append("defect_qty = :defect_qty")
+        params["defect_qty"] = max(0, int(body.defect_qty))
+    if body.mes_production_started_at is not None:
+        if "mes_production_started_at" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_production_started_at"))
+        raw = body.mes_production_started_at.strip() if isinstance(body.mes_production_started_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_started_at = NULL")
+        else:
+            sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
+            if sdt:
+                await _reject_concurrent_mes_production_on_inspection_day(db, inspection_id, im_cols)
+                params["mes_production_started_at"] = sdt
+                updates.append("mes_production_started_at = :mes_production_started_at")
+    if body.mes_production_ended_at is not None:
+        if "mes_production_ended_at" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_production_ended_at"))
+        raw = body.mes_production_ended_at.strip() if isinstance(body.mes_production_ended_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_ended_at = NULL")
+        else:
+            edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
+            if edt:
+                params["mes_production_ended_at"] = edt
+                updates.append("mes_production_ended_at = :mes_production_ended_at")
+    if body.mes_net_production_sec is not None:
+        if "mes_net_production_sec" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_net_production_sec"))
+        net_sec = int(body.mes_net_production_sec)
+        if net_sec < 0:
+            updates.append("mes_net_production_sec = NULL")
+        else:
+            updates.append("mes_net_production_sec = :mes_net_production_sec")
+            params["mes_net_production_sec"] = max(0, net_sec)
+    if body.mes_paused_accum_sec is not None:
+        if "mes_paused_accum_sec" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_paused_accum_sec"))
+        pause_sec = int(body.mes_paused_accum_sec)
+        if pause_sec < 0:
+            updates.append("mes_paused_accum_sec = NULL")
+        else:
+            updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
+            params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_production_is_paused is not None:
+        if "mes_production_is_paused" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_production_is_paused"))
+        flag = int(body.mes_production_is_paused)
+        if flag < 0:
+            updates.append("mes_production_is_paused = NULL")
+        else:
+            params["mes_production_is_paused"] = 1 if flag else 0
+            updates.append("mes_production_is_paused = :mes_production_is_paused")
+    if body.mes_inspector_user_id is not None:
+        if "mes_inspector_user_id" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_inspector_user_id"))
+        iid = int(body.mes_inspector_user_id)
+        if iid <= 0:
+            updates.append("mes_inspector_user_id = NULL")
+        else:
+            params["mes_inspector_user_id"] = iid
+            updates.append("mes_inspector_user_id = :mes_inspector_user_id")
+    if body.mes_defect_by_item is not None:
+        if "mes_defect_by_item" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_defect_by_item"))
+        try:
+            if body.mes_defect_by_item == "" or body.mes_defect_by_item == {}:
+                updates.append("mes_defect_by_item = NULL")
+                updates.append("defect_qty = 0")
+            else:
+                json_str = _parse_mes_defect_by_item_for_db(body.mes_defect_by_item)
+                if json_str is None:
+                    updates.append("mes_defect_by_item = NULL")
+                    updates.append("defect_qty = 0")
+                else:
+                    params["mes_defect_by_item"] = json_str
+                    updates.append("mes_defect_by_item = CAST(:mes_defect_by_item AS JSON)")
+                    params["defect_qty"] = _sum_defect_qty_from_item_json(json_str)
+                    updates.append("defect_qty = :defect_qty")
+        except (ValueError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=400, detail=f"mes_defect_by_item が不正です: {e}") from e
+    if not updates:
+        return {"success": True, "message": "変更なし"}
+    try:
+        await db.execute(
+            text(f"UPDATE inspection_management SET {', '.join(updates)} WHERE id = :iid"),
+            params,
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "更新しました"}

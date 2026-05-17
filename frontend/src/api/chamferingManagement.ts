@@ -1,17 +1,19 @@
 /**
- * 切断指示 cutting_management（/api/plan/cutting-management/*）
+ * 面取指示 chamfering_management（/api/plan/chamfering-management/*）
  */
 import request from '@/shared/api/request'
+import { getMachineList } from '@/api/master/machineMaster'
+import type { MachineItem } from '@/types/master'
 
-const LIST = '/api/plan/cutting-management/list'
+const LIST = '/api/plan/chamfering-management/list'
 
-/** GET /plan/cutting-management/list の行（レスポンス data の要素） */
-export interface CuttingManagementListRow {
+/** GET /plan/chamfering-management/list の行（レスポンス data の要素） */
+export interface ChamferingManagementListRow {
   id?: number
   production_month?: string | null
   production_day?: string | null
   production_line?: string | null
-  cutting_machine?: string | null
+  chamfering_machine?: string | null
   production_sequence?: number | null
   priority_order?: number | null
   product_cd?: string | null
@@ -41,7 +43,7 @@ export interface CuttingManagementListRow {
   material_usage_reflected?: string | null
   use_material_stock_sub?: number | null
   usage_count?: number | null
-  /** MES 切断実績収集 */
+  /** MES 面取実績収集 */
   mes_production_started_at?: string | null
   mes_production_ended_at?: string | null
   mes_net_production_sec?: number | null
@@ -58,25 +60,25 @@ export interface CuttingManagementListRow {
   updated_at?: string | null
 }
 
-export interface CuttingManagementListResponse {
+export interface ChamferingManagementListResponse {
   success?: boolean
-  data?: CuttingManagementListRow[]
+  data?: ChamferingManagementListRow[]
   message?: string
 }
 
-export function fetchCuttingManagementList(params: {
+export function fetchChamferingManagementList(params: {
   production_day?: string | null
   production_month?: string | null
-  cutting_machine?: string | null
+  chamfering_machine?: string | null
   production_line?: string | null
   limit?: number
-}): Promise<CuttingManagementListResponse> {
-  return request.get(LIST, { params }) as Promise<CuttingManagementListResponse>
+}): Promise<ChamferingManagementListResponse> {
+  return request.get(LIST, { params }) as Promise<ChamferingManagementListResponse>
 }
 
-export interface PatchCuttingManagementBody {
+export interface PatchChamferingManagementBody {
   production_day?: string | null
-  cutting_machine?: string | null
+  chamfering_machine?: string | null
   production_sequence?: number
   actual_production_quantity?: number
   production_completed_check?: boolean
@@ -92,41 +94,62 @@ export interface PatchCuttingManagementBody {
   mes_scanned_code?: string | null
 }
 
-export interface SplitCuttingToNextDayBody {
+export interface SplitChamferingToNextDayBody {
   today_quantity: number
   next_day?: string | null
 }
 
-export function patchCuttingManagement(
-  cuttingId: number,
-  body: PatchCuttingManagementBody,
+export function patchChamferingManagement(
+  chamferingId: number,
+  body: PatchChamferingManagementBody,
 ): Promise<{ success?: boolean; message?: string }> {
-  return request.patch(`/api/plan/cutting-management/${cuttingId}`, body) as Promise<{
+  return request.patch(`/api/plan/chamfering-management/${chamferingId}`, body) as Promise<{
     success?: boolean
     message?: string
   }>
 }
 
-export interface ReorderCuttingManagementBody {
-  cutting_machine: string
+export interface ReorderChamferingManagementBody {
+  chamfering_machine: string
+  production_day: string
   ordered_ids: number[]
 }
 
-export function reorderCuttingManagement(
-  body: ReorderCuttingManagementBody,
+export function reorderChamferingManagement(
+  body: ReorderChamferingManagementBody,
 ): Promise<{ success?: boolean; message?: string }> {
-  return request.post('/api/plan/cutting-management/reorder', body) as Promise<{
+  return request.post('/api/plan/chamfering-management/reorder', body) as Promise<{
     success?: boolean
     message?: string
   }>
 }
 
-export function splitCuttingManagementToNextDay(
-  cuttingId: number,
-  body: SplitCuttingToNextDayBody,
+export function splitChamferingManagementToNextDay(
+  chamferingId: number,
+  body: SplitChamferingToNextDayBody,
 ): Promise<{ success?: boolean; message?: string }> {
-  return request.post(`/api/plan/cutting-management/${cuttingId}/split-to-next-day`, body) as Promise<{
+  return request.post(`/api/plan/chamfering-management/${chamferingId}/split-to-next-day`, body) as Promise<{
     success?: boolean
     message?: string
   }>
+}
+
+export interface ChamferingMesMachine {
+  id: number
+  machine_cd: string
+  machine_name: string
+}
+
+/** 面取機一覧（設備マスタ・名称に「面取」を含む） */
+export async function fetchChamferingMesMachines(): Promise<ChamferingMesMachine[]> {
+  const result = await getMachineList({ keyword: '面取', pageSize: 500 })
+  const list: MachineItem[] = result.data?.list ?? result.list ?? []
+  return list
+    .filter((r) => r.machine_name && String(r.machine_name).includes('面取'))
+    .map((r) => ({
+      id: Number(r.id),
+      machine_cd: String(r.machine_cd ?? ''),
+      machine_name: String(r.machine_name ?? ''),
+    }))
+    .filter((m) => Number.isFinite(m.id) && m.id > 0)
 }

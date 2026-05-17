@@ -49,6 +49,9 @@ import HeaderBar from '@/components/layout/HeaderBar.vue'
 import TabsNav from '@/components/layout/TabsNav.vue'
 
 const MOBILE_BREAKPOINT = 768
+/** 平板幅（与项目内 1024px 断点一致）；触控大屏上限 */
+const TABLET_BREAKPOINT = 1024
+const TABLET_TOUCH_MAX_WIDTH = 1280
 
 const route = useRoute()
 const router = useRouter()
@@ -56,21 +59,46 @@ const tabsStore = useTabsStore()
 
 const isCollapsed = ref(false)
 const isMobile = ref(false)
+const isTablet = ref(false)
 
-function checkMobile() {
-  isMobile.value = window.innerWidth < MOBILE_BREAKPOINT
-  if (isMobile.value) {
+let tabletTouchMq: MediaQueryList | null = null
+
+function syncTabletTouchMq(): boolean {
+  if (typeof window === 'undefined') return false
+  tabletTouchMq ??= window.matchMedia('(hover: none) and (pointer: coarse)')
+  return tabletTouchMq.matches
+}
+
+/** 平板：窄屏带宽，或触控设备且宽度未达桌面级 */
+function isTabletViewport(width: number): boolean {
+  if (width < MOBILE_BREAKPOINT) return false
+  if (width <= TABLET_BREAKPOINT) return true
+  return syncTabletTouchMq() && width < TABLET_TOUCH_MAX_WIDTH
+}
+
+function shouldAutoCollapseSidebar(): boolean {
+  return isMobile.value || isTablet.value
+}
+
+function checkViewport() {
+  const w = window.innerWidth
+  isMobile.value = w < MOBILE_BREAKPOINT
+  isTablet.value = isTabletViewport(w)
+  if (shouldAutoCollapseSidebar()) {
     isCollapsed.value = true
   }
 }
 
 onMounted(() => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
+  checkViewport()
+  window.addEventListener('resize', checkViewport)
+  tabletTouchMq = window.matchMedia('(hover: none) and (pointer: coarse)')
+  tabletTouchMq.addEventListener('change', checkViewport)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('resize', checkViewport)
+  tabletTouchMq?.removeEventListener('change', checkViewport)
 })
 
 watch(
@@ -84,7 +112,7 @@ watch(
     ) {
       router.replace({ path: tabsStore.activeTab })
       tabsStore.clearJustRestored()
-      if (isMobile.value) {
+      if (shouldAutoCollapseSidebar()) {
         isCollapsed.value = true
       }
       return
@@ -93,7 +121,7 @@ watch(
     if (tabsStore.justRestored) {
       tabsStore.clearJustRestored()
     }
-    if (isMobile.value) {
+    if (shouldAutoCollapseSidebar()) {
       isCollapsed.value = true
     }
   },
