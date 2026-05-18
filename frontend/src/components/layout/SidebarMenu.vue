@@ -547,6 +547,7 @@
             <el-menu-item index="/master/bom/roller-bom"><el-icon><Histogram /></el-icon><template #title><span :title="t('menu.MASTER_ROLLER_BOM')">{{ t('menu.MASTER_ROLLER_BOM') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-bom"><el-icon><Document /></el-icon><template #title><span :title="t('menu.MASTER_PRODUCT_BOM_DETAIL')">{{ t('menu.MASTER_PRODUCT_BOM_DETAIL') }}</span></template></el-menu-item>
             <el-menu-item index="/master/bom/product-unit-price"><el-icon><Money /></el-icon><template #title><span :title="t('menu.MASTER_UNIT_PRICE')">{{ t('menu.MASTER_UNIT_PRICE') }}</span></template></el-menu-item>
+            <el-menu-item index="/master/bom/process-defect-items"><el-icon><Warning /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS_DEFECT_ITEMS')">{{ t('menu.MASTER_PROCESS_DEFECT_ITEMS') }}</span></template></el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
         

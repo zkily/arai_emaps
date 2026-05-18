@@ -53,7 +53,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Connection, Tools, ArrowRight, Setting, Document, Money, Operation, Histogram } from '@element-plus/icons-vue'
+import { Connection, Tools, ArrowRight, Setting, Document, Money, Operation, Histogram, Warning } from '@element-plus/icons-vue'
 import { markRaw, type Component } from 'vue'
 
 const { t } = useI18n()
@@ -123,6 +123,15 @@ const bomModules: BomModule[] = [
     icon: markRaw(Operation),
     color: '#909399',
     gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+  },
+  {
+    name: 'processDefectItems',
+    titleKey: 'bomHome.processDefectItemsTitle',
+    descKey: 'bomHome.processDefectItemsDesc',
+    path: '/master/bom/process-defect-items',
+    icon: markRaw(Warning),
+    color: '#f59e0b',
+    gradient: 'linear-gradient(135deg, #fbbf24 0%, #f97316 100%)',
   },
   {
     name: 'productUnitPrice',

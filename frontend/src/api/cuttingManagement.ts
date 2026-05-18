@@ -49,6 +49,8 @@ export interface CuttingManagementListRow {
   /** 0=稼働中, 1=一時停止（多端末同期） */
   mes_production_is_paused?: number | null
   mes_setup_time_min?: number | null
+  mes_saw_blade_exchange_min?: number | null
+  mes_repair_min?: number | null
   mes_operator_user_id?: number | null
   mes_scanned_code?: string | null
   cd?: string | null
@@ -88,6 +90,8 @@ export interface PatchCuttingManagementBody {
   mes_paused_accum_sec?: number
   mes_production_is_paused?: number
   mes_setup_time_min?: number
+  mes_saw_blade_exchange_min?: number
+  mes_repair_min?: number
   mes_operator_user_id?: number
   mes_scanned_code?: string | null
 }

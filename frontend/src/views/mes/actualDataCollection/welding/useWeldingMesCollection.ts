@@ -2,16 +2,21 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  createInspectionManagement,
-  fetchInspectionManagementList,
-  patchInspectionManagement,
-  type InspectionManagementListRow,
-  type PatchInspectionManagementBody,
-} from '@/api/inspectionManagement'
-import { getProducts, type ProductItem } from '@/api/erp/optionsData'
+  createWeldingManagement,
+  fetchWeldingManagementList,
+  patchWeldingManagement,
+  type WeldingManagementListRow,
+  type PatchWeldingManagementBody,
+} from '@/api/weldingManagement'
 import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
+import {
+  fetchWeldingMesMachines,
+  fetchWeldingMesProducts,
+  type WeldingMesMachine,
+  type WeldingMesProductOption,
+} from '@/api/weldingMesEquipment'
 import { formatDateTimeJST, getJSTToday } from '@/utils/dateFormat'
-import { INSPECTION_DEFECT_DETECTION_PROCESS_CD } from './inspectionActualConfig'
+import { WELDING_DEFECT_DETECTION_PROCESS_CD } from './weldingActualConfig'
 import {
   applyPersistedSessionsForScope,
   emptySession,
@@ -21,13 +26,13 @@ import {
   freezePausedAccumMs,
   readPausedAccumMs,
   hydratePlanSessionFromRow,
-  loadInspectionActualPersist,
+  loadWeldingActualPersist,
   makePersistScopeKey,
   reconcileInProgressTimer,
-  saveInspectionActualPersist,
+  saveWeldingActualPersist,
   serializePlanSessions,
   type PlanSessionLike,
-} from './inspectionActualPersist'
+} from './weldingActualPersist'
 import {
   emptyDefectCountsFromItems,
   loadMesDefectItemsForProcess,
@@ -40,12 +45,12 @@ import {
   flushOfflinePatchQueue,
   getOfflineQueueCount,
   isNetworkOrServerDownError,
-} from './inspectionActualOfflineSync'
+} from './weldingActualOfflineSync'
 import { getMesClientInstanceId } from './mesClientInstance'
 
 type MesLockOwner = 'mine' | 'other' | 'unclaimed'
 
-export type InspectionMgmtRow = InspectionManagementListRow & { id: number }
+export type WeldingMgmtRow = WeldingManagementListRow & { id: number }
 
 interface PlanSession extends PlanSessionLike {}
 
@@ -55,38 +60,23 @@ function shiftDateYmd(ymd: string, delta: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-const INSPECTION_PRODUCT_NAME_EXCLUDES = ['加工', 'アーチ'] as const
-
-/** 検査 MES：製品 CD 末尾が 1、製品名に除外語なし、製品名昇順 */
-function filterInspectionProductOptions(list: ProductItem[]): ProductItem[] {
-  return list
-    .filter((p) => {
-      if (p.is_active === false) return false
-      const code = (p.product_code ?? '').trim()
-      if (code.length === 0 || !code.endsWith('1')) return false
-      const name = p.product_name ?? ''
-      if (INSPECTION_PRODUCT_NAME_EXCLUDES.some((kw) => name.includes(kw))) return false
-      return true
-    })
-    .sort((a, b) =>
-      (a.product_name ?? '').localeCompare(b.product_name ?? '', 'ja', { sensitivity: 'base' }),
-    )
-}
-
-export function useInspectionMesCollection() {
+export function useWeldingMesCollection() {
   const { t, te } = useI18n()
 
   const productionDay = ref(getJSTToday())
-  const inspectorUserId = ref<number | null>(null)
+  const selectedWeldingMachineId = ref<number | null>(null)
+  const machines = ref<WeldingMesMachine[]>([])
+  const operatorUserId = ref<number | null>(null)
   const selectedProductCode = ref<string | null>(null)
   const activePlanId = ref<number | null>(null)
-  const products = ref<ProductItem[]>([])
-  const inspectors = ref<UserListItem[]>([])
-  const managementRows = ref<InspectionMgmtRow[]>([])
+  const products = ref<WeldingMesProductOption[]>([])
+  const operators = ref<UserListItem[]>([])
+  const managementRows = ref<WeldingMgmtRow[]>([])
   const sessions = reactive<Record<number, PlanSession>>({})
 
   const loadingProducts = ref(false)
-  const loadingInspectors = ref(false)
+  const loadingMachines = ref(false)
+  const loadingOperators = ref(false)
   const loadingPlans = ref(false)
   const loadingDefectItems = ref(false)
   const defectItems = ref<MesDefectItemOption[]>([])
@@ -104,8 +94,9 @@ export function useInspectionMesCollection() {
   const localMesEchoUntil = new Map<number, number>()
   /** 本端末で生産開始した plan（他端末 hydrate の在産と区別） */
   const locallyOperatedPlanIds = ref<Set<number>>(new Set())
-  /** resumeInProgressSession 等で inspectorUserId watch の誤判定を抑止 */
-  let suppressInspectorUserWatch = false
+  /** resumeInProgressSession 等で operatorUserId watch の誤判定を抑止 */
+  let suppressOperatorUserWatch = false
+  let suppressMachineWatch = false
   /** 検査生産中ストリップ・他端末在産の同期（一覧 GET、セッション hydrate は本端末のみ） */
   const MES_SYNC_INTERVAL_MS = 5000
   const MES_SYNC_INTERVAL_HIDDEN_MS = 15000
@@ -130,22 +121,32 @@ export function useInspectionMesCollection() {
     return sessions[id] ?? null
   })
 
+  const selectedWeldingMachineName = computed(() => {
+    const id = selectedWeldingMachineId.value
+    if (id == null) return ''
+    const m = machines.value.find((x) => x.id === id)
+    return (m?.machine_name || m?.machine_cd || '').trim()
+  })
+
   function currentScopeKey(): string {
-    return makePersistScopeKey((productionDay.value ?? '').trim())
+    return makePersistScopeKey(
+      (productionDay.value ?? '').trim(),
+      selectedWeldingMachineId.value,
+    )
   }
 
   function refreshOfflineQueueCount(): void {
     offlineQueueCount.value = getOfflineQueueCount()
   }
 
-  function mesPatchBody(body: PatchInspectionManagementBody): PatchInspectionManagementBody {
+  function mesPatchBody(body: PatchWeldingManagementBody): PatchWeldingManagementBody {
     return {
       ...body,
       mes_client_instance_id: getMesClientInstanceId(),
     }
   }
 
-  function rowMesLockOwner(row: InspectionMgmtRow | null | undefined): MesLockOwner {
+  function rowMesLockOwner(row: WeldingMgmtRow | null | undefined): MesLockOwner {
     if (!row) return 'unclaimed'
     const lock = (row.mes_client_instance_id ?? '').trim()
     if (!lock) return 'unclaimed'
@@ -172,27 +173,27 @@ export function useInspectionMesCollection() {
     }
   }
 
-  function canResumeSession(row: InspectionMgmtRow): boolean {
+  function canResumeSession(row: WeldingMgmtRow): boolean {
     if (row.id == null || !isRowMesProductionActive(row)) return false
     return rowMesLockOwner(row) !== 'other'
   }
 
   async function patchWithOfflineSync(
     planId: number,
-    body: PatchInspectionManagementBody,
+    body: PatchWeldingManagementBody,
     options?: { silentQueue?: boolean },
   ): Promise<boolean> {
     const payload = mesPatchBody(body)
     if (!navigator.onLine) {
       enqueueOfflinePatch(currentScopeKey(), planId, payload)
       refreshOfflineQueueCount()
-      if (!options?.silentQueue) ElMessage.warning(t('mesInspectionActual.offlineQueued'))
+      if (!options?.silentQueue) ElMessage.warning(t('mesWeldingActual.offlineQueued'))
       return false
     }
     try {
-      const res = await patchInspectionManagement(planId, payload)
+      const res = await patchWeldingManagement(planId, payload)
       if (res && res.success === false) {
-        if (!options?.silentQueue) ElMessage.warning(res.message || t('mesInspectionActual.saveFailed'))
+        if (!options?.silentQueue) ElMessage.warning(res.message || t('mesWeldingActual.saveFailed'))
         return false
       }
       return true
@@ -200,7 +201,7 @@ export function useInspectionMesCollection() {
       if (isNetworkOrServerDownError(e)) {
         enqueueOfflinePatch(currentScopeKey(), planId, payload)
         refreshOfflineQueueCount()
-        if (!options?.silentQueue) ElMessage.warning(t('mesInspectionActual.offlineQueued'))
+        if (!options?.silentQueue) ElMessage.warning(t('mesWeldingActual.offlineQueued'))
         return false
       }
       const { status, detail } = httpErrorFromUnknown(e)
@@ -218,13 +219,13 @@ export function useInspectionMesCollection() {
     if (getOfflineQueueCount() === 0) return
     flushingOfflineQueue = true
     try {
-      const { ok, fail } = await flushOfflinePatchQueue(patchInspectionManagement)
+      const { ok, fail } = await flushOfflinePatchQueue(patchWeldingManagement)
       refreshOfflineQueueCount()
       if (ok > 0) {
-        ElMessage.success(t('mesInspectionActual.offlineSyncOk', { n: ok }))
+        ElMessage.success(t('mesWeldingActual.offlineSyncOk', { n: ok }))
         if (options?.reloadAfter) await loadPlans()
       }
-      if (fail > 0) ElMessage.warning(t('mesInspectionActual.offlineSyncPartial'))
+      if (fail > 0) ElMessage.warning(t('mesWeldingActual.offlineSyncPartial'))
     } finally {
       flushingOfflineQueue = false
     }
@@ -255,9 +256,10 @@ export function useInspectionMesCollection() {
   function flushPersistToStorage(): void {
     const day = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return
-    saveInspectionActualPersist({
+    saveWeldingActualPersist({
       productionDay: day,
-      inspectorUserId: inspectorUserId.value,
+      selectedWeldingMachineId: selectedWeldingMachineId.value,
+      operatorUserId: operatorUserId.value,
       selectedProductCode: selectedProductCode.value,
       activePlanId: activePlanId.value,
       sessions: serializePlanSessions(sessions),
@@ -265,13 +267,26 @@ export function useInspectionMesCollection() {
     })
   }
 
-  function loadLocallyOperatedPlanIds(day: string): void {
-    const blob = loadInspectionActualPersist()
+  function loadLocallyOperatedPlanIds(day: string, machineId: number | null): void {
+    const blob = loadWeldingActualPersist()
     const ids =
-      blob && makePersistScopeKey(blob.productionDay) === makePersistScopeKey(day)
+      blob &&
+      makePersistScopeKey(blob.productionDay, blob.selectedWeldingMachineId) ===
+        makePersistScopeKey(day, machineId)
         ? blob.operatedPlanIds ?? []
         : []
     locallyOperatedPlanIds.value = new Set(ids)
+  }
+
+  function rowWeldingMachine(row: WeldingMgmtRow): string {
+    return (row.welding_machine ?? '').trim()
+  }
+
+  function rowMatchesSelectedMachine(row: WeldingMgmtRow): boolean {
+    const name = selectedWeldingMachineName.value
+    if (!name) return true
+    const rm = rowWeldingMachine(row)
+    return !rm || rm === name
   }
 
   function markPlanLocallyOperated(planId: number): void {
@@ -354,7 +369,7 @@ export function useInspectionMesCollection() {
   }
 
   function mesTimerCheckpointBody(planId: number): Pick<
-    PatchInspectionManagementBody,
+    PatchWeldingManagementBody,
     'mes_net_production_sec' | 'mes_paused_accum_sec' | 'mes_production_is_paused'
   > {
     const s = ensureSession(planId)
@@ -392,7 +407,7 @@ export function useInspectionMesCollection() {
     }, 400)
   }
 
-  function isRowMesProductionActive(row: InspectionMgmtRow): boolean {
+  function isRowMesProductionActive(row: WeldingMgmtRow): boolean {
     if (row.id != null && sessions[row.id]) {
       const sess = sessions[row.id]
       if (sess.wallStart != null && sess.wallEnd == null) return true
@@ -403,95 +418,114 @@ export function useInspectionMesCollection() {
     return ended == null || !String(ended).trim()
   }
 
-  function rowInspectorId(row: InspectionMgmtRow): number | null {
-    const v = row.mes_inspector_user_id
+  function rowOperatorId(row: WeldingMgmtRow): number | null {
+    const v = row.mes_operator_user_id
     if (v == null || !Number.isFinite(Number(v))) return null
     return Number(v)
   }
 
-  function inspectorNameById(userId: number | null | undefined): string {
+  function operatorNameById(userId: number | null | undefined): string {
     if (userId == null) return ''
-    const u = inspectors.value.find((x) => x.id === userId)
+    const u = operators.value.find((x) => x.id === userId)
     return (u?.full_name || u?.username || '').trim()
   }
 
-  /** 同一検査員が別製品を同時に生産中か（検査員ごとに1件まで） */
-  function findOtherActiveRowForInspector(inspectorId: number, excludeId: number): InspectionMgmtRow | null {
+  /** 同一溶接設備で別製品を同時に生産中か */
+  function findOtherActiveRowForMachine(excludeId: number): WeldingMgmtRow | null {
+    const machine = selectedWeldingMachineName.value
+    if (!machine) return null
     for (const row of managementRows.value) {
       if (row.id === excludeId) continue
       if (!isRowMesProductionActive(row)) continue
-      if (rowInspectorId(row) === inspectorId) return row
+      if (rowWeldingMachine(row) !== machine) continue
+      return row
     }
     return null
   }
 
-  function findInProgressRowForInspector(inspectorId: number): InspectionMgmtRow | null {
+  function findInProgressRowForOperator(inspectorId: number): WeldingMgmtRow | null {
     for (const row of managementRows.value) {
-      if (rowInspectorId(row) !== inspectorId) continue
+      if (rowOperatorId(row) !== inspectorId) continue
+      if (!rowMatchesSelectedMachine(row)) continue
       if (isRowMesProductionActive(row)) return row
     }
     return null
   }
 
-  function rowShortLabel(row: InspectionMgmtRow): string {
+  function findInProgressRowForMachine(): WeldingMgmtRow | null {
+    const machine = selectedWeldingMachineName.value
+    if (!machine) return null
+    for (const row of managementRows.value) {
+      if (rowWeldingMachine(row) !== machine) continue
+      if (isRowMesProductionActive(row)) return row
+    }
+    return null
+  }
+
+  function rowShortLabel(row: WeldingMgmtRow): string {
     const name = (row.product_name || row.product_cd || '').trim()
     return name || `#${row.id}`
   }
 
-  function isRowProductionCompleted(row: InspectionMgmtRow): boolean {
+  function isRowProductionCompleted(row: WeldingMgmtRow): boolean {
     return Number(row.production_completed_check ?? 0) === 1
   }
 
-  /** 当該検査員の未確定オープン行（同一製品でも検査員ごとに別行） */
-  function findOpenRowForInspectorProduct(
-    code: string,
-    inspectorId: number,
-  ): InspectionMgmtRow | null {
+  /** 当該設備・溶接作業者の未確定オープン行 */
+  function findOpenRowForScope(code: string, inspectorId: number): WeldingMgmtRow | null {
+    const machine = selectedWeldingMachineName.value
     for (const row of managementRows.value) {
       if (row.product_cd !== code) continue
       if (isRowProductionCompleted(row)) continue
-      if (rowInspectorId(row) !== inspectorId) continue
+      if (rowOperatorId(row) !== inspectorId) continue
+      if (machine && rowWeldingMachine(row) && rowWeldingMachine(row) !== machine) continue
       return row
     }
     return null
   }
 
   async function ensurePlanForProduct(code: string, name: string): Promise<number | null> {
-    const inspId = inspectorUserId.value
+    const inspId = operatorUserId.value
     if (inspId == null) return null
-    const existing = findOpenRowForInspectorProduct(code, inspId)
+    const machine = selectedWeldingMachineName.value
+    if (!machine) {
+      ElMessage.warning(t('mesWeldingActual.machineRequired'))
+      return null
+    }
+    const existing = findOpenRowForScope(code, inspId)
     if (existing?.id != null) return existing.id
     const day = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null
     try {
-      const res = await createInspectionManagement({
+      const res = await createWeldingManagement({
         production_day: day,
         product_cd: code,
         product_name: name,
-        mes_inspector_user_id: inspId,
+        welding_machine: machine,
+        mes_operator_user_id: inspId,
       })
       const newId = res?.data?.id
       if (newId == null) {
-        ElMessage.error(res?.message || t('mesInspectionActual.saveFailed'))
+        ElMessage.error(res?.message || t('mesWeldingActual.saveFailed'))
         return null
       }
       await loadPlans()
       return Number(newId)
     } catch (e) {
       console.error(e)
-      ElMessage.error(t('mesInspectionActual.saveFailed'))
+      ElMessage.error(t('mesWeldingActual.saveFailed'))
       return null
     }
   }
 
-  function compareInspectionMgmtRows(a: InspectionMgmtRow, b: InspectionMgmtRow): number {
+  function compareWeldingMgmtRows(a: WeldingMgmtRow, b: WeldingMgmtRow): number {
     const seqA = a.production_sequence ?? 0
     const seqB = b.production_sequence ?? 0
     if (seqA !== seqB) return seqA - seqB
     return a.id - b.id
   }
 
-  function copyInspectionRowFromServer(target: InspectionMgmtRow, fresh: InspectionMgmtRow): void {
+  function copyWeldingRowFromServer(target: WeldingMgmtRow, fresh: WeldingMgmtRow): void {
     target.production_sequence = fresh.production_sequence
     target.product_cd = fresh.product_cd
     target.product_name = fresh.product_name
@@ -504,8 +538,23 @@ export function useInspectionMesCollection() {
     target.mes_net_production_sec = fresh.mes_net_production_sec
     target.mes_paused_accum_sec = fresh.mes_paused_accum_sec
     target.mes_production_is_paused = fresh.mes_production_is_paused
-    target.mes_inspector_user_id = fresh.mes_inspector_user_id
+    target.mes_operator_user_id = fresh.mes_operator_user_id
     target.mes_client_instance_id = fresh.mes_client_instance_id
+    target.welding_machine = fresh.welding_machine
+  }
+
+  function listQueryParams(dayStr: string): {
+    production_day: string
+    welding_machine?: string
+    limit: number
+  } {
+    const params: { production_day: string; welding_machine?: string; limit: number } = {
+      production_day: dayStr,
+      limit: 2000,
+    }
+    const machine = selectedWeldingMachineName.value
+    if (machine) params.welding_machine = machine
+    return params
   }
 
   /** 他端末行は一覧のみ更新；本端末操作行だけタイマー session をサーバーと同期 */
@@ -516,34 +565,35 @@ export function useInspectionMesCollection() {
     return row != null && rowMesLockOwner(row) === 'mine'
   }
 
-  function mergeManagementRowsFromServer(freshRows: InspectionMgmtRow[]): Map<number, InspectionMgmtRow> {
+  function mergeManagementRowsFromServer(freshRows: WeldingMgmtRow[]): Map<number, WeldingMgmtRow> {
     const byId = new Map(freshRows.map((r) => [r.id, r]))
     const known = new Set(managementRows.value.map((r) => r.id))
     for (const row of managementRows.value) {
       const fresh = byId.get(row.id)
-      if (fresh) copyInspectionRowFromServer(row, fresh)
+      if (fresh) copyWeldingRowFromServer(row, fresh)
     }
-    const additions: InspectionMgmtRow[] = []
+    const additions: WeldingMgmtRow[] = []
     for (const fresh of freshRows) {
       if (known.has(fresh.id)) continue
       additions.push({ ...fresh })
     }
     if (additions.length > 0) {
       managementRows.value.push(...additions)
-      managementRows.value.sort(compareInspectionMgmtRows)
+      managementRows.value.sort(compareWeldingMgmtRows)
     }
     return byId
   }
 
   async function syncMesStateFromServer(): Promise<void> {
     if (mesSyncInFlight || !navigator.onLine) return
+    if (selectedWeldingMachineId.value == null) return
     const day = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return
     mesSyncInFlight = true
     try {
-      const res = await fetchInspectionManagementList({ production_day: day, limit: 2000 })
+      const res = await fetchWeldingManagementList(listQueryParams(day))
       if (!res.success || !res.data) return
-      const freshRows = (res.data ?? []).filter((r): r is InspectionMgmtRow => r.id != null)
+      const freshRows = (res.data ?? []).filter((r): r is WeldingMgmtRow => r.id != null)
       const byId = mergeManagementRowsFromServer(freshRows)
       for (const row of managementRows.value) {
         const fresh = byId.get(row.id)
@@ -573,21 +623,23 @@ export function useInspectionMesCollection() {
   async function loadPlans(): Promise<void> {
     const dayStr = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
-      ElMessage.warning(t('mesInspectionActual.invalidProductionDay'))
+      ElMessage.warning(t('mesWeldingActual.invalidProductionDay'))
+      return
+    }
+    if (selectedWeldingMachineId.value == null) {
+      managementRows.value = []
+      activePlanId.value = null
       return
     }
     loadingPlans.value = true
     try {
-      loadLocallyOperatedPlanIds(dayStr)
-      const res = await fetchInspectionManagementList({
-        production_day: dayStr,
-        limit: 2000,
-      })
+      loadLocallyOperatedPlanIds(dayStr, selectedWeldingMachineId.value)
+      const res = await fetchWeldingManagementList(listQueryParams(dayStr))
       if (!res.success) {
-        ElMessage.error(res.message || t('mesInspectionActual.loadPlansFailed'))
+        ElMessage.error(res.message || t('mesWeldingActual.loadPlansFailed'))
         return
       }
-      const rows = (res.data ?? []).filter((r): r is InspectionMgmtRow => r.id != null)
+      const rows = (res.data ?? []).filter((r): r is WeldingMgmtRow => r.id != null)
       managementRows.value = rows
       for (const r of rows) {
         const sess = ensureSession(r.id)
@@ -597,19 +649,20 @@ export function useInspectionMesCollection() {
       }
       const restored = applyPersistedSessionsForScope(
         dayStr,
+        selectedWeldingMachineId.value,
         rows.map((r) => r.id),
         ensureSession,
       )
       for (const r of rows) normalizeSessionDefects(ensureSession(r.id))
-      if (restored) ElMessage.info(t('mesInspectionActual.stateRestored'))
+      if (restored) ElMessage.info(t('mesWeldingActual.stateRestored'))
       flushPersistToStorage()
       void tryFlushOfflineQueue()
       tryReclaimOperatedPlansOnLoad()
       detachFromRemoteInProgressContext()
-      bindContextFromInspector()
+      bindContextFromSelection()
     } catch (e) {
       console.error(e)
-      ElMessage.error(t('mesInspectionActual.loadPlansFailed'))
+      ElMessage.error(t('mesWeldingActual.loadPlansFailed'))
     } finally {
       loadingPlans.value = false
     }
@@ -621,27 +674,37 @@ export function useInspectionMesCollection() {
       activePlanId.value = null
       return
     }
-    const inspId = inspectorUserId.value
+    const inspId = operatorUserId.value
     if (inspId == null) {
       activePlanId.value = null
       return
     }
-    const row = findOpenRowForInspectorProduct(code, inspId)
+    const row = findOpenRowForScope(code, inspId)
     activePlanId.value = row?.id ?? null
   }
 
-  /** 検査員切替時：当該検査員の生産中行を優先してフォーカス */
-  function bindContextFromInspector(): void {
-    const inspId = inspectorUserId.value
-    if (inspId == null) {
-      bindActivePlanFromSelection()
+  /** 設備・作業者・製品の選択に応じてアクティブ行を紐付け */
+  function bindContextFromSelection(): void {
+    const inProgMachine = findInProgressRowForMachine()
+    if (
+      inProgMachine?.product_cd &&
+      inProgMachine.id != null &&
+      isPlanLocallyOperated(inProgMachine.id)
+    ) {
+      selectedProductCode.value = inProgMachine.product_cd
+      activePlanId.value = inProgMachine.id
+      const ri = rowOperatorId(inProgMachine)
+      if (ri != null) operatorUserId.value = ri
       return
     }
-    const inProg = findInProgressRowForInspector(inspId)
-    if (inProg?.product_cd && inProg.id != null && isPlanLocallyOperated(inProg.id)) {
-      selectedProductCode.value = inProg.product_cd
-      activePlanId.value = inProg.id
-      return
+    const inspId = operatorUserId.value
+    if (inspId != null) {
+      const inProg = findInProgressRowForOperator(inspId)
+      if (inProg?.product_cd && inProg.id != null && isPlanLocallyOperated(inProg.id)) {
+        selectedProductCode.value = inProg.product_cd
+        activePlanId.value = inProg.id
+        return
+      }
     }
     bindActivePlanFromSelection()
   }
@@ -660,45 +723,45 @@ export function useInspectionMesCollection() {
     if (owner === 'other') {
       selectedProductCode.value = null
       activePlanId.value = null
-      const ri = rowInspectorId(row)
-      if (ri != null && inspectorUserId.value === ri) inspectorUserId.value = null
+      const ri = rowOperatorId(row)
+      if (ri != null && operatorUserId.value === ri) operatorUserId.value = null
     }
   }
 
   /** ページ復帰時：選択中検査員のサーバー在産行を本端末操作対象に復帰 */
   function tryReclaimOperatedPlansOnLoad(): void {
-    const inspId = inspectorUserId.value
+    const inspId = operatorUserId.value
     if (inspId == null) return
-    const row = findInProgressRowForInspector(inspId)
+    const row = findInProgressRowForOperator(inspId)
     if (row?.id != null && isRowMesProductionActive(row) && rowMesLockOwner(row) === 'mine') {
       markPlanLocallyOperated(row.id)
       syncActivePlanSessionFromRow(row.id)
     }
   }
 
-  async function resumeInProgressSession(row: InspectionMgmtRow): Promise<void> {
-    const ri = rowInspectorId(row)
+  async function resumeInProgressSession(row: WeldingMgmtRow): Promise<void> {
+    const ri = rowOperatorId(row)
     if (ri == null) {
-      ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
+      ElMessage.warning(t('mesWeldingActual.inspectorRequired'))
       return
     }
     if (row.id == null || !isRowMesProductionActive(row)) return
     if (rowMesLockOwner(row) === 'other') {
-      ElMessage.warning(t('mesInspectionActual.sessionLockedByOtherTerminal'))
+      ElMessage.warning(t('mesWeldingActual.sessionLockedByOtherTerminal'))
       return
     }
-    suppressInspectorUserWatch = true
+    suppressOperatorUserWatch = true
     try {
       if (rowMesLockOwner(row) !== 'mine') {
         const ok = await patchWithOfflineSync(row.id, {
           mes_claim_client_lock: true,
-          mes_inspector_user_id: ri,
+          mes_operator_user_id: ri,
         })
         if (!ok && navigator.onLine) return
         await loadPlans()
         const fresh = managementRows.value.find((r) => r.id === row.id)
         if (!fresh || rowMesLockOwner(fresh) === 'other') {
-          ElMessage.warning(t('mesInspectionActual.sessionLockedByOtherTerminal'))
+          ElMessage.warning(t('mesWeldingActual.sessionLockedByOtherTerminal'))
           return
         }
       }
@@ -706,58 +769,62 @@ export function useInspectionMesCollection() {
       if (row.product_cd) selectedProductCode.value = row.product_cd
       activePlanId.value = row.id
       syncActivePlanSessionFromRow(row.id)
-      inspectorUserId.value = ri
+      operatorUserId.value = ri
       schedulePersist()
-      ElMessage.success(t('mesInspectionActual.sessionResumed'))
+      ElMessage.success(t('mesWeldingActual.sessionResumed'))
     } finally {
       void nextTick(() => {
-        suppressInspectorUserWatch = false
+        suppressOperatorUserWatch = false
       })
     }
   }
 
-  function focusInProgressRow(row: InspectionMgmtRow): void {
+  function focusInProgressRow(row: WeldingMgmtRow): void {
     if (row.product_cd) selectedProductCode.value = row.product_cd
     activePlanId.value = row.id
-    const ri = rowInspectorId(row)
+    const ri = rowOperatorId(row)
     if (ri != null) {
       if (!isRowMesProductionActive(row) || isPlanLocallyOperated(row.id)) {
-        inspectorUserId.value = ri
+        operatorUserId.value = ri
       }
-    } else if (inspectorUserId.value == null) {
-      ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
+    } else if (operatorUserId.value == null) {
+      ElMessage.warning(t('mesWeldingActual.inspectorRequired'))
       return
     }
   }
 
   const inProgressRows = computed(() =>
-    managementRows.value.filter((r) => isRowMesProductionActive(r) && !isRowProductionCompleted(r)),
+    managementRows.value.filter(
+      (r) =>
+        rowMatchesSelectedMachine(r) &&
+        isRowMesProductionActive(r) &&
+        !isRowProductionCompleted(r),
+    ),
   )
 
   /** 他端末でロック中の検査員は選択不可 */
-  function isInspectorOptionDisabled(inspectorId: number): boolean {
-    const busyRow = findInProgressRowForInspector(inspectorId)
+  function isOperatorOptionDisabled(inspectorId: number): boolean {
+    const busyRow = findInProgressRowForOperator(inspectorId)
     if (!busyRow?.id) return false
     if (rowMesLockOwner(busyRow) === 'other') return true
     if (rowMesLockOwner(busyRow) === 'mine') return false
     return true
   }
 
-  function inspectorOptionLabel(u: UserListItem): string {
+  function operatorOptionLabel(u: UserListItem): string {
     const base = (u.full_name || u.username || '').trim() || String(u.id)
-    if (!isInspectorOptionDisabled(u.id)) return base
-    return `${base} (${t('mesInspectionActual.inspectorInProgress')})`
+    if (!isOperatorOptionDisabled(u.id)) return base
+    return `${base} (${t('mesWeldingActual.inspectorInProgress')})`
   }
 
   const completedRows = computed(() =>
-    managementRows.value.filter((r) => isRowProductionCompleted(r)),
+    managementRows.value.filter((r) => rowMatchesSelectedMachine(r) && isRowProductionCompleted(r)),
   )
 
-  /** 検査員・製品が選ばれていれば生産カードを表示（同一製品の再実績も可） */
+  /** 溶接設備・製品が選ばれていれば生産カードを表示（作業者はカード内で選択） */
   const showPlanProductionCard = computed(() => {
     const code = selectedProductCode.value
-    const inspId = inspectorUserId.value
-    return Boolean(code && inspId != null)
+    return Boolean(selectedWeldingMachineId.value != null && code)
   })
 
   const elapsedDisplay = computed(() => {
@@ -787,7 +854,13 @@ export function useInspectionMesCollection() {
   })
 
   const canStart = computed(() => {
-    if (inspectorUserId.value == null || !selectedProductCode.value) return false
+    if (
+      selectedWeldingMachineId.value == null ||
+      operatorUserId.value == null ||
+      !selectedProductCode.value
+    ) {
+      return false
+    }
     const planId = activePlanId.value
     const row = activeRow.value
     if (planId != null && row && isRowMesProductionActive(row) && !canOperateActivePlan.value) {
@@ -822,14 +895,16 @@ export function useInspectionMesCollection() {
 
   const timerStatusLabel = computed(() => {
     const map = { idle: 'timerIdle', running: 'timerRunning', paused: 'timerPaused', ended: 'timerEnded' } as const
-    return t(`mesInspectionActual.${map[timerStatusKey.value]}`)
+    return t(`mesWeldingActual.${map[timerStatusKey.value]}`)
   })
 
   const canEditDefects = computed(
     () => canOperateActivePlan.value && activePlanSessionInProgress(),
   )
 
-  const canScanProduct = computed(() => !canEnd.value)
+  const canScanProduct = computed(
+    () => selectedWeldingMachineId.value != null && !canEnd.value,
+  )
 
   const showSessionRecoveryAlert = computed(() => {
     const id = activePlanId.value
@@ -862,7 +937,7 @@ export function useInspectionMesCollection() {
 
   function openProductScanDialog(): void {
     if (!canScanProduct.value) {
-      ElMessage.warning(t('mesInspectionActual.switchProductBlocked'))
+      ElMessage.warning(t('mesWeldingActual.switchProductBlocked'))
       return
     }
     productScanDialogVisible.value = true
@@ -872,16 +947,16 @@ export function useInspectionMesCollection() {
     const trimmed = code.trim()
     if (!trimmed) return
     if (!canScanProduct.value) {
-      ElMessage.warning(t('mesInspectionActual.switchProductBlocked'))
+      ElMessage.warning(t('mesWeldingActual.switchProductBlocked'))
       return
     }
     if (!/^\d{5}$/.test(trimmed)) {
-      ElMessage.warning(t('mesInspectionActual.scanProductInvalidDigits'))
+      ElMessage.warning(t('mesWeldingActual.scanProductInvalidDigits'))
       return
     }
     const productCd = resolveProductCodeFromScan(trimmed)
     if (!productCd) {
-      ElMessage.warning(t('mesInspectionActual.scanProductNotFound', { code: trimmed }))
+      ElMessage.warning(t('mesWeldingActual.scanProductNotFound', { code: trimmed }))
       return
     }
     selectedProductCode.value = productCd
@@ -889,7 +964,7 @@ export function useInspectionMesCollection() {
     const label = p?.product_name
       ? `${productCd} · ${p.product_name}`
       : productCd
-    ElMessage.success(t('mesInspectionActual.scanProductSelected', { label }))
+    ElMessage.success(t('mesWeldingActual.scanProductSelected', { label }))
   }
 
   function formatElapsed(ms: number): string {
@@ -909,7 +984,7 @@ export function useInspectionMesCollection() {
   /** 生産開始日時（wallStart またはサーバー mes_production_started_at） */
   function resolveSessionWallStartMs(
     sess: PlanSession,
-    row?: InspectionMgmtRow | null,
+    row?: WeldingMgmtRow | null,
   ): number | null {
     if (sess.wallStart != null) return sess.wallStart
     const started = row?.mes_production_started_at
@@ -929,27 +1004,20 @@ export function useInspectionMesCollection() {
     return Math.max(0, now - ws)
   }
 
-  /** 確定実績表：一時停止累計（DB 優先、無ければ壁時計−净稼働） */
-  function rowPausedAccumSec(row: InspectionMgmtRow, now = tickNow.value): number {
+  /** 確定実績表：一時停止累計（DB またはボタン操作セッション） */
+  function rowPausedAccumSec(row: WeldingMgmtRow, now = tickNow.value): number {
     const stored = row.mes_paused_accum_sec
     if (stored != null && Number.isFinite(Number(stored))) {
       return Math.max(0, Math.round(Number(stored)))
     }
-    const started = row.mes_production_started_at
-    if (!started || !String(started).trim()) return 0
-    const ws = Date.parse(String(started))
-    if (Number.isNaN(ws)) return 0
-    const ended = row.mes_production_ended_at
-    const we =
-      ended != null && String(ended).trim() ? Date.parse(String(ended)) : now
-    if (Number.isNaN(we)) return 0
-    const wallSec = Math.max(0, Math.floor((we - ws) / 1000))
-    const netSec = Math.max(0, row.mes_net_production_sec ?? 0)
-    return Math.max(0, wallSec - netSec)
+    if (row.id != null && sessions[row.id]) {
+      return Math.max(0, Math.round(readPausedAccumMs(sessions[row.id], now) / 1000))
+    }
+    return 0
   }
 
   /** 確定実績表：開始〜終了（未終了は現在）の壁時計秒 */
-  function rowWallElapsedSec(row: InspectionMgmtRow, now = tickNow.value): number {
+  function rowWallElapsedSec(row: WeldingMgmtRow, now = tickNow.value): number {
     const started = row.mes_production_started_at
     if (!started || !String(started).trim()) return Math.max(0, row.mes_net_production_sec ?? 0)
     const ws = Date.parse(String(started))
@@ -972,7 +1040,7 @@ export function useInspectionMesCollection() {
   function timerPhaseLabel(sess: PlanSession): string {
     const ph = timerPhase(sess)
     const map = { idle: 'timerIdle', running: 'timerRunning', paused: 'timerPaused', ended: 'timerEnded' } as const
-    return t(`mesInspectionActual.${map[ph]}`)
+    return t(`mesWeldingActual.${map[ph]}`)
   }
 
   function formatWall(ts: number | null | undefined): string {
@@ -1000,8 +1068,8 @@ export function useInspectionMesCollection() {
 
   const showOfflineAlert = computed(() => isBrowserOffline.value || offlineQueueCount.value > 0)
   const offlineAlertText = computed(() => {
-    if (isBrowserOffline.value) return t('mesInspectionActual.offlineBanner')
-    return t('mesInspectionActual.offlinePendingSync', { n: offlineQueueCount.value })
+    if (isBrowserOffline.value) return t('mesWeldingActual.offlineBanner')
+    return t('mesWeldingActual.offlinePendingSync', { n: offlineQueueCount.value })
   })
 
   function defectCount(itemId: string): number {
@@ -1018,25 +1086,29 @@ export function useInspectionMesCollection() {
   }
 
   async function onStartProduction(): Promise<void> {
-    if (inspectorUserId.value == null) {
-      ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
+    if (selectedWeldingMachineId.value == null) {
+      ElMessage.warning(t('mesWeldingActual.machineRequired'))
+      return
+    }
+    if (operatorUserId.value == null) {
+      ElMessage.warning(t('mesWeldingActual.inspectorRequired'))
       return
     }
     const code = selectedProductCode.value
     const p = products.value.find((x) => x.product_code === code)
     if (!code || !p) return
     const name = (p.product_name || '').trim() || code
-    const inspId = inspectorUserId.value
-    let planId = findOpenRowForInspectorProduct(code, inspId)?.id ?? null
+    const inspId = operatorUserId.value
+    let planId = findOpenRowForScope(code, inspId)?.id ?? null
     if (planId == null) {
       planId = await ensurePlanForProduct(code, name)
       if (planId == null) return
     }
     activePlanId.value = planId
-    const other = findOtherActiveRowForInspector(inspId, planId)
+    const other = findOtherActiveRowForMachine(planId)
     if (other) {
       ElMessage.warning(
-        t('mesInspectionActual.inspectorAlreadyProducing', { label: rowShortLabel(other) }),
+        t('mesWeldingActual.machineAlreadyProducing', { label: rowShortLabel(other) }),
       )
       return
     }
@@ -1048,7 +1120,7 @@ export function useInspectionMesCollection() {
       const ok = await patchWithOfflineSync(planId, {
         mes_production_started_at: new Date(now).toISOString(),
         mes_production_is_paused: 0,
-        mes_inspector_user_id: inspectorUserId.value,
+        mes_operator_user_id: operatorUserId.value,
       })
       if (!ok && navigator.onLine) return
     } catch (e: unknown) {
@@ -1056,7 +1128,7 @@ export function useInspectionMesCollection() {
       if (status === 409 && detail) {
         ElMessage.warning(detail)
       } else {
-        ElMessage.error(detail || t('mesInspectionActual.saveFailed'))
+        ElMessage.error(detail || t('mesWeldingActual.saveFailed'))
       }
       void loadPlans()
       return
@@ -1068,7 +1140,7 @@ export function useInspectionMesCollection() {
     s.pauseSliceStart = null
     s.runningSliceStart = now
     schedulePersist()
-    ElMessage.success(t('mesInspectionActual.started'))
+    ElMessage.success(t('mesWeldingActual.started'))
   }
 
   function onPauseProduction(): void {
@@ -1120,7 +1192,7 @@ export function useInspectionMesCollection() {
     const activeMs = ws != null ? Math.max(0, now - ws) : 0
     return {
       productName: row.product_name,
-      inspectorName: inspectorLabel.value || t('mesInspectionActual.inspectorMissing'),
+      operatorName: operatorLabel.value || t('mesWeldingActual.inspectorMissing'),
       wallStart: ws,
       wallEnd: now,
       activeMs,
@@ -1130,10 +1202,10 @@ export function useInspectionMesCollection() {
     }
   })
 
-  const inspectorLabel = computed(() => {
-    const id = inspectorUserId.value
+  const operatorLabel = computed(() => {
+    const id = operatorUserId.value
     if (id == null) return ''
-    const u = inspectors.value.find((x) => x.id === id)
+    const u = operators.value.find((x) => x.id === id)
     return (u?.full_name || u?.username || '').trim()
   })
 
@@ -1144,11 +1216,11 @@ export function useInspectionMesCollection() {
     if (id == null || !s || !preview) return
     const qty = Math.round(Number(String(endDialogQty.value).trim()))
     if (!Number.isFinite(qty) || qty < 0) {
-      ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
+      ElMessage.warning(t('mesWeldingActual.qtyInvalid'))
       return
     }
     if (!navigator.onLine) {
-      ElMessage.warning(t('mesInspectionActual.needOnlineForEnd'))
+      ElMessage.warning(t('mesWeldingActual.needOnlineForEnd'))
       return
     }
     const now = Date.now()
@@ -1163,7 +1235,7 @@ export function useInspectionMesCollection() {
         mes_net_production_sec: netProductionSeconds(s),
         mes_paused_accum_sec: Math.max(0, Math.round((s.pausedAccumMs ?? 0) / 1000)),
         mes_production_is_paused: 0,
-        mes_inspector_user_id: inspectorUserId.value ?? undefined,
+        mes_operator_user_id: operatorUserId.value ?? undefined,
         mes_defect_by_item: { ...s.defects },
         actual_production_quantity: qty,
         production_completed_check: true,
@@ -1174,7 +1246,7 @@ export function useInspectionMesCollection() {
       endDialogVisible.value = false
       activePlanId.value = null
       Object.assign(sessions[id], emptySession(makeEmptyDefectCounts()))
-      ElMessage.success(t('mesInspectionActual.completeSaved'))
+      ElMessage.success(t('mesWeldingActual.completeSaved'))
       await loadPlans()
     } finally {
       endDialogSubmitting.value = false
@@ -1209,18 +1281,42 @@ export function useInspectionMesCollection() {
   }
 
   function restorePageFilters(): void {
-    const blob = loadInspectionActualPersist()
+    const blob = loadWeldingActualPersist()
     if (!blob) return
     if (blob.productionDay && /^\d{4}-\d{2}-\d{2}$/.test(blob.productionDay)) {
       productionDay.value = blob.productionDay
     }
-    if (blob.inspectorUserId != null) inspectorUserId.value = blob.inspectorUserId
+    if (blob.selectedWeldingMachineId != null) {
+      selectedWeldingMachineId.value = blob.selectedWeldingMachineId
+    }
+    if (blob.operatorUserId != null) operatorUserId.value = blob.operatorUserId
     if (blob.selectedProductCode) selectedProductCode.value = blob.selectedProductCode
     if (blob.activePlanId != null) activePlanId.value = blob.activePlanId
   }
 
   watch(productionDay, () => {
     schedulePersist()
+    void loadPlans()
+  })
+
+  watch(selectedWeldingMachineId, (newId, oldId) => {
+    if (suppressMachineWatch) {
+      schedulePersist()
+      return
+    }
+    selectedProductCode.value = null
+    activePlanId.value = null
+    if (newId == null) {
+      products.value = []
+      managementRows.value = []
+      schedulePersist()
+      return
+    }
+    if (oldId != null && newId !== oldId) {
+      operatorUserId.value = null
+    }
+    schedulePersist()
+    void loadProducts()
     void loadPlans()
   })
 
@@ -1231,7 +1327,7 @@ export function useInspectionMesCollection() {
     }
     const inProgress = activePlanId.value != null && session.value && isProductionInProgress(session.value)
     if (inProgress && activeRow.value?.product_cd !== code) {
-      ElMessage.warning(t('mesInspectionActual.switchProductBlocked'))
+      ElMessage.warning(t('mesWeldingActual.switchProductBlocked'))
       selectedProductCode.value = activeRow.value?.product_cd ?? null
       return
     }
@@ -1239,21 +1335,21 @@ export function useInspectionMesCollection() {
     schedulePersist()
   })
 
-  watch(inspectorUserId, (newId, oldId) => {
+  watch(operatorUserId, (newId, oldId) => {
     if (newId == null) {
       schedulePersist()
       return
     }
-    if (suppressInspectorUserWatch) {
+    if (suppressOperatorUserWatch) {
       schedulePersist()
       return
     }
-    if (isInspectorOptionDisabled(newId)) {
-      const busyRow = findInProgressRowForInspector(newId)
-      inspectorUserId.value = oldId ?? null
+    if (isOperatorOptionDisabled(newId)) {
+      const busyRow = findInProgressRowForOperator(newId)
+      operatorUserId.value = oldId ?? null
       ElMessage.warning(
-        t('mesInspectionActual.inspectorBusyElsewhere', {
-          inspector: inspectorNameById(newId) || String(newId),
+        t('mesWeldingActual.inspectorBusyElsewhere', {
+          inspector: operatorNameById(newId) || String(newId),
           label: busyRow ? rowShortLabel(busyRow) : '—',
         }),
       )
@@ -1262,15 +1358,15 @@ export function useInspectionMesCollection() {
     const planId = activePlanId.value
     const sess = planId != null ? sessions[planId] : null
     if (sess && isProductionInProgress(sess)) {
-      const rowInsp = activeRow.value ? rowInspectorId(activeRow.value) : null
+      const rowInsp = activeRow.value ? rowOperatorId(activeRow.value) : null
       if (rowInsp != null && rowInsp !== newId) {
-        inspectorUserId.value = oldId ?? rowInsp
-        ElMessage.warning(t('mesInspectionActual.switchInspectorBlocked'))
+        operatorUserId.value = oldId ?? rowInsp
+        ElMessage.warning(t('mesWeldingActual.switchInspectorBlocked'))
         return
       }
     }
     detachFromRemoteInProgressContext()
-    bindContextFromInspector()
+    bindContextFromSelection()
     const planIdAfter = activePlanId.value
     const sessAfter = planIdAfter != null ? sessions[planIdAfter] : null
     if (
@@ -1279,7 +1375,7 @@ export function useInspectionMesCollection() {
       (!sessAfter || !isProductionInProgress(sessAfter))
     ) {
       if (canServerPatchPlan(planIdAfter)) {
-        void patchWithOfflineSync(planIdAfter, { mes_inspector_user_id: newId }, { silentQueue: true })
+        void patchWithOfflineSync(planIdAfter, { mes_operator_user_id: newId }, { silentQueue: true })
       }
     }
     schedulePersist()
@@ -1295,18 +1391,37 @@ export function useInspectionMesCollection() {
     productionDay.value = getJSTToday()
   }
 
+  async function loadMachines(): Promise<void> {
+    loadingMachines.value = true
+    try {
+      machines.value = await fetchWeldingMesMachines()
+    } catch (e) {
+      console.error(e)
+      ElMessage.error(t('mesWeldingActual.loadMachinesFailed'))
+    } finally {
+      loadingMachines.value = false
+    }
+  }
+
   async function loadProducts(): Promise<void> {
+    const machineId = selectedWeldingMachineId.value
+    if (machineId == null) {
+      products.value = []
+      return
+    }
     loadingProducts.value = true
     try {
-      products.value = filterInspectionProductOptions((await getProducts()) ?? [])
+      products.value = await fetchWeldingMesProducts(machineId)
       const code = selectedProductCode.value
       if (code && !products.value.some((p) => p.product_code === code)) {
         const inProgress =
           activePlanId.value != null && session.value != null && isProductionInProgress(session.value)
         if (!inProgress) selectedProductCode.value = null
       }
-    } catch {
-      ElMessage.error(t('mesInspectionActual.loadProductsFailed'))
+    } catch (e) {
+      console.error(e)
+      products.value = []
+      ElMessage.error(t('mesWeldingActual.loadProductsFailed'))
     } finally {
       loadingProducts.value = false
     }
@@ -1315,27 +1430,27 @@ export function useInspectionMesCollection() {
   async function loadDefectItems(): Promise<void> {
     loadingDefectItems.value = true
     try {
-      defectItems.value = await loadMesDefectItemsForProcess(INSPECTION_DEFECT_DETECTION_PROCESS_CD)
+      defectItems.value = await loadMesDefectItemsForProcess(WELDING_DEFECT_DETECTION_PROCESS_CD)
       for (const sess of Object.values(sessions)) {
         normalizeSessionDefects(sess)
       }
     } catch {
       defectItems.value = []
-      ElMessage.error(t('mesInspectionActual.loadDefectItemsFailed'))
+      ElMessage.error(t('mesWeldingActual.loadDefectItemsFailed'))
     } finally {
       loadingDefectItems.value = false
     }
   }
 
-  async function loadInspectors(): Promise<void> {
-    loadingInspectors.value = true
+  async function loadOperators(): Promise<void> {
+    loadingOperators.value = true
     try {
       const res = (await getUsers({ page: 1, page_size: 500, status: 'active' })) as unknown as PaginatedUserResponse
-      inspectors.value = res?.items ?? []
+      operators.value = res?.items ?? []
     } catch {
-      ElMessage.error(t('mesInspectionActual.loadInspectorsFailed'))
+      ElMessage.error(t('mesWeldingActual.loadOperatorsFailed'))
     } finally {
-      loadingInspectors.value = false
+      loadingOperators.value = false
     }
   }
 
@@ -1371,7 +1486,7 @@ export function useInspectionMesCollection() {
   }
 
   interface ConfirmedHistoryEditDraft {
-    inspectorUserId: number | null
+    operatorUserId: number | null
     actualQty: number | null
     defects: Record<string, number>
     wallStart: Date | null
@@ -1385,13 +1500,13 @@ export function useInspectionMesCollection() {
   }
 
   const confirmedEditDialogVisible = ref(false)
-  const confirmedEditRow = ref<InspectionMgmtRow | null>(null)
+  const confirmedEditRow = ref<WeldingMgmtRow | null>(null)
   const confirmedEditPlanId = ref<number | null>(null)
   const confirmedEditForm = ref<ConfirmedHistoryEditDraft | null>(null)
   const confirmedEditSaving = ref(false)
   const confirmedEditClearing = ref(false)
 
-  function buildClearInspectionMesPatchBody(): PatchInspectionManagementBody {
+  function buildClearInspectionMesPatchBody(): PatchWeldingManagementBody {
     return {
       production_completed_check: false,
       mes_production_started_at: '',
@@ -1399,7 +1514,7 @@ export function useInspectionMesCollection() {
       mes_net_production_sec: -1,
       mes_paused_accum_sec: -1,
       mes_production_is_paused: -1,
-      mes_inspector_user_id: 0,
+      mes_operator_user_id: 0,
       mes_defect_by_item: {},
     }
   }
@@ -1455,7 +1570,7 @@ export function useInspectionMesCollection() {
     confirmedEditClearing.value = false
   }
 
-  function openConfirmedHistoryEdit(row: InspectionMgmtRow): void {
+  function openConfirmedHistoryEdit(row: WeldingMgmtRow): void {
     const id = row.id
     if (id == null || !isRowProductionCompleted(row)) return
     const sess = ensureSession(id)
@@ -1464,7 +1579,7 @@ export function useInspectionMesCollection() {
     confirmedEditRow.value = row
     confirmedEditPlanId.value = id
     confirmedEditForm.value = {
-      inspectorUserId: rowInspectorId(row),
+      operatorUserId: rowOperatorId(row),
       actualQty:
         row.actual_production_quantity != null && Number.isFinite(Number(row.actual_production_quantity))
           ? Math.round(Number(row.actual_production_quantity))
@@ -1509,43 +1624,43 @@ export function useInspectionMesCollection() {
     const draft = confirmedEditForm.value
     if (!row || planId == null || !draft) return
     if (!navigator.onLine) {
-      ElMessage.warning(t('mesInspectionActual.needOnlineForEdit'))
+      ElMessage.warning(t('mesWeldingActual.needOnlineForEdit'))
       return
     }
-    if (draft.inspectorUserId == null || draft.inspectorUserId <= 0) {
-      ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
+    if (draft.operatorUserId == null || draft.operatorUserId <= 0) {
+      ElMessage.warning(t('mesWeldingActual.inspectorRequired'))
       return
     }
     if (draft.actualQty != null && (!Number.isFinite(draft.actualQty) || draft.actualQty < 0)) {
-      ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
+      ElMessage.warning(t('mesWeldingActual.qtyInvalid'))
       return
     }
     const ws = draft.wallStart?.getTime()
     const we = draft.wallEnd?.getTime()
     if (ws == null || !Number.isFinite(ws) || we == null || !Number.isFinite(we)) {
-      ElMessage.warning(t('mesInspectionActual.editTimeRequired'))
+      ElMessage.warning(t('mesWeldingActual.editTimeRequired'))
       return
     }
     if (we < ws) {
-      ElMessage.warning(t('mesInspectionActual.editTimeOrder'))
+      ElMessage.warning(t('mesWeldingActual.editTimeOrder'))
       return
     }
     const wallSec = (we - ws) / 1000
     const pauseSec = Math.max(0, Math.round(draft.pausedAccumSec))
     if (!Number.isFinite(pauseSec) || pauseSec > wallSec) {
-      ElMessage.warning(t('mesInspectionActual.editPauseTooLong'))
+      ElMessage.warning(t('mesWeldingActual.editPauseTooLong'))
       return
     }
 
     applyConfirmedEditToSession(planId, draft)
     const defects = mergeSessionDefects(draft.defects)
-    const body: PatchInspectionManagementBody = {
+    const body: PatchWeldingManagementBody = {
       mes_production_started_at: new Date(ws).toISOString(),
       mes_production_ended_at: new Date(we).toISOString(),
       mes_paused_accum_sec: pauseSec,
       mes_net_production_sec: Math.max(0, Math.round(wallSec - pauseSec)),
       mes_production_is_paused: 0,
-      mes_inspector_user_id: draft.inspectorUserId,
+      mes_operator_user_id: draft.operatorUserId,
       mes_defect_by_item: defects,
       production_completed_check: true,
     }
@@ -1557,13 +1672,13 @@ export function useInspectionMesCollection() {
     try {
       const ok = await patchWithOfflineSync(planId, body)
       if (!ok) return
-      ElMessage.success(t('mesInspectionActual.confirmedEditSaved'))
+      ElMessage.success(t('mesWeldingActual.confirmedEditSaved'))
       clearConfirmedEditState()
       flushPersistToStorage()
       await loadPlans()
     } catch (e: unknown) {
       console.error(e)
-      ElMessage.error(t('mesInspectionActual.saveFailed'))
+      ElMessage.error(t('mesWeldingActual.saveFailed'))
     } finally {
       confirmedEditSaving.value = false
     }
@@ -1574,16 +1689,16 @@ export function useInspectionMesCollection() {
     const planId = confirmedEditPlanId.value
     if (!row || planId == null) return
     if (!navigator.onLine) {
-      ElMessage.warning(t('mesInspectionActual.needOnlineForEdit'))
+      ElMessage.warning(t('mesWeldingActual.needOnlineForEdit'))
       return
     }
     try {
       await ElMessageBox.confirm(
-        t('mesInspectionActual.clearMesConfirmMessage'),
-        t('mesInspectionActual.clearMesConfirmTitle'),
+        t('mesWeldingActual.clearMesConfirmMessage'),
+        t('mesWeldingActual.clearMesConfirmTitle'),
         {
           type: 'warning',
-          confirmButtonText: t('mesInspectionActual.btnClearMesActual'),
+          confirmButtonText: t('mesWeldingActual.btnClearMesActual'),
           cancelButtonText: t('common.cancel'),
         },
       )
@@ -1596,13 +1711,13 @@ export function useInspectionMesCollection() {
     try {
       const ok = await patchWithOfflineSync(planId, buildClearInspectionMesPatchBody())
       if (!ok) return
-      ElMessage.success(t('mesInspectionActual.clearMesSaved'))
+      ElMessage.success(t('mesWeldingActual.clearMesSaved'))
       clearConfirmedEditState()
       flushPersistToStorage()
       await loadPlans()
     } catch (e: unknown) {
       console.error(e)
-      ElMessage.error(t('mesInspectionActual.saveFailed'))
+      ElMessage.error(t('mesWeldingActual.saveFailed'))
     } finally {
       confirmedEditClearing.value = false
     }
@@ -1624,7 +1739,10 @@ export function useInspectionMesCollection() {
   async function init(): Promise<void> {
     setupLifecycle()
     refreshOfflineQueueCount()
-    await Promise.all([loadProducts(), loadInspectors(), loadDefectItems()])
+    await Promise.all([loadMachines(), loadOperators(), loadDefectItems()])
+    if (selectedWeldingMachineId.value != null) {
+      await loadProducts()
+    }
     await loadPlans()
     void tryFlushOfflineQueue({ reloadAfter: true })
   }
@@ -1637,7 +1755,10 @@ export function useInspectionMesCollection() {
     openProductScanDialog,
     onProductBarcodeScanned,
     productionDay,
-    inspectorUserId,
+    selectedWeldingMachineId,
+    machines,
+    loadingMachines,
+    operatorUserId,
     selectedProductCode,
     activePlanId,
     activeRow,
@@ -1648,16 +1769,16 @@ export function useInspectionMesCollection() {
     rowMesLockOwner,
     isPlanLocallyOperated,
     showSessionRecoveryAlert,
-    inspectorNameById,
-    isInspectorOptionDisabled,
-    inspectorOptionLabel,
+    operatorNameById,
+    isOperatorOptionDisabled,
+    operatorOptionLabel,
     products,
-    inspectors,
+    operators,
     managementRows,
     completedRows,
     showPlanProductionCard,
     loadingProducts,
-    loadingInspectors,
+    loadingOperators,
     loadingPlans,
     endDialogVisible,
     endDialogQty,
@@ -1674,7 +1795,7 @@ export function useInspectionMesCollection() {
     showOfflineAlert,
     offlineAlertText,
     endDialogPreview,
-    inspectorLabel,
+    operatorLabel,
     shiftProductionDay,
     setProductionDayToday,
     loadPlans,

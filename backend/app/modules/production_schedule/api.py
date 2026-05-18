@@ -34,6 +34,8 @@ _CUTTING_MGMT_MES_COLUMNS = (
     "mes_paused_accum_sec",
     "mes_production_is_paused",
     "mes_setup_time_min",
+    "mes_saw_blade_exchange_min",
+    "mes_repair_min",
     "mes_operator_user_id",
     "mes_scanned_code",
 )
@@ -81,6 +83,8 @@ def _mes_column_migration_hint(column: str) -> str:
         "mes_production_started_at": "03_cutting_management_mes_actual_fields.sql",
         "mes_production_ended_at": "03_cutting_management_mes_actual_fields.sql",
         "mes_setup_time_min": "03_cutting_management_mes_actual_fields.sql",
+        "mes_saw_blade_exchange_min": "11_cutting_management_mes_blade_repair_min.sql",
+        "mes_repair_min": "11_cutting_management_mes_blade_repair_min.sql",
         "mes_operator_user_id": "03_cutting_management_mes_actual_fields.sql",
         "mes_net_production_sec": "04_cutting_management_mes_net_production_sec.sql",
         "mes_paused_accum_sec": "05_cutting_management_mes_paused_accum_sec.sql",
@@ -152,6 +156,18 @@ _INSPECTION_MGMT_MES_COLUMNS = (
     "mes_paused_accum_sec",
     "mes_production_is_paused",
     "mes_inspector_user_id",
+    "mes_client_instance_id",
+    "mes_defect_by_item",
+)
+
+_WELDING_MGMT_MES_COLUMNS = (
+    "mes_production_started_at",
+    "mes_production_ended_at",
+    "mes_net_production_sec",
+    "mes_paused_accum_sec",
+    "mes_production_is_paused",
+    "mes_operator_user_id",
+    "mes_client_instance_id",
     "mes_defect_by_item",
 )
 
@@ -236,6 +252,53 @@ async def _reject_concurrent_mes_production_on_chamfering_machine(
     )
 
 
+async def _reject_concurrent_mes_production_on_welding_machine(
+    db: AsyncSession,
+    welding_id: int,
+    wm_cols: set[str],
+) -> None:
+    """同一溶接設備・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    if "welding_machine" not in wm_cols:
+        return
+    if "mes_production_started_at" not in wm_cols or "mes_production_ended_at" not in wm_cols:
+        return
+    scope = await db.execute(
+        text("""
+            SELECT welding_machine, production_day
+            FROM welding_management
+            WHERE id = :wid
+            LIMIT 1
+        """),
+        {"wid": welding_id},
+    )
+    scope_row = scope.fetchone()
+    if not scope_row or not scope_row[0] or scope_row[1] is None:
+        return
+    machine = str(scope_row[0]).strip()
+    prod_day = scope_row[1]
+    conflict = await db.execute(
+        text("""
+            SELECT id, production_sequence, product_name, product_cd
+            FROM welding_management
+            WHERE welding_machine = :machine
+              AND production_day = :pday
+              AND id <> :wid
+              AND mes_production_started_at IS NOT NULL
+              AND mes_production_ended_at IS NULL
+            LIMIT 1
+        """),
+        {"wid": welding_id, "machine": machine, "pday": prod_day},
+    )
+    other = conflict.fetchone()
+    if not other:
+        return
+    label = _welding_mes_conflict_label(other[0], other[1], other[2], other[3])
+    raise HTTPException(
+        status_code=409,
+        detail=f"この溶接設備では他の製品が生産中です（{label}）。先に生産終了してください。",
+    )
+
+
 async def _get_inspection_mgmt_columns(db: AsyncSession) -> set[str]:
     try:
         result = await db.execute(
@@ -257,23 +320,96 @@ def _inspection_mgmt_mes_select_fragment(existing: set[str]) -> str:
 
 
 def _inspection_mes_column_migration_hint(column: str) -> str:
+    if column == "mes_client_instance_id":
+        return (
+            f"列 `{column}` がありません。"
+            "backend/database/migrations/12_inspection_management_mes_client_instance.sql を実行してください。"
+        )
     return (
         f"列 `{column}` がありません。"
         "backend/database/migrations/09_inspection_management.sql を実行してください。"
     )
 
 
-async def _reject_concurrent_mes_production_on_inspection_day(
+def _normalize_mes_client_instance_id(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return s[:64]
+
+
+def _inspection_row_mes_in_progress(started: Any, ended: Any) -> bool:
+    if started is None or not str(started).strip():
+        return False
+    if ended is None or not str(ended).strip():
+        return True
+    return False
+
+
+async def _fetch_inspection_row_mes_state(
     db: AsyncSession,
     inspection_id: int,
     im_cols: set[str],
+) -> dict[str, Any]:
+    select_cols = ["mes_production_started_at", "mes_production_ended_at"]
+    if "mes_client_instance_id" in im_cols:
+        select_cols.append("mes_client_instance_id")
+    sql = (
+        f"SELECT {', '.join(select_cols)} FROM inspection_management WHERE id = :iid LIMIT 1"
+    )
+    result = await db.execute(text(sql), {"iid": inspection_id})
+    row = result.mappings().first()
+    return dict(row) if row else {}
+
+
+def _reject_inspection_mes_client_lock_conflict(
+    existing_lock: Optional[str],
+    client_id: Optional[str],
+    *,
+    force_release: bool,
 ) -> None:
-    """同一生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    if not existing_lock or not client_id or existing_lock == client_id or force_release:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail="この検査生産は他の端末で生産中です。当該端末で生産終了してください。",
+    )
+
+
+def _inspection_mes_conflict_label(
+    oid: int,
+    pseq: Any,
+    pname: Any,
+    pcd: Any,
+) -> str:
+    label_parts: list[str] = []
+    if pseq is not None:
+        label_parts.append(f"順{pseq}")
+    name = (pname or pcd or "").strip() if (pname or pcd) else ""
+    if name:
+        label_parts.append(str(name)[:80])
+    return " ".join(label_parts) if label_parts else f"ID {oid}"
+
+
+async def _reject_concurrent_mes_production_on_inspection_start(
+    db: AsyncSession,
+    inspection_id: int,
+    im_cols: set[str],
+    *,
+    inspector_user_id: Optional[int] = None,
+) -> None:
+    """検査 MES 生産開始時：同一検査員の他製品在産を拒否（同一製品の並行生産は可）。"""
     if "mes_production_started_at" not in im_cols or "mes_production_ended_at" not in im_cols:
         return
+    need_inspector_col = inspector_user_id is not None and inspector_user_id > 0
+    if need_inspector_col and "mes_inspector_user_id" not in im_cols:
+        need_inspector_col = False
+
     scope = await db.execute(
         text("""
-            SELECT production_day
+            SELECT production_day, product_cd, mes_inspector_user_id
             FROM inspection_management
             WHERE id = :iid
             LIMIT 1
@@ -284,33 +420,180 @@ async def _reject_concurrent_mes_production_on_inspection_day(
     if not scope_row or scope_row[0] is None:
         return
     prod_day = scope_row[0]
-    conflict = await db.execute(
-        text("""
-            SELECT id, production_sequence, product_name, product_cd
-            FROM inspection_management
-            WHERE production_day = :pday
-              AND id <> :iid
-              AND mes_production_started_at IS NOT NULL
-              AND mes_production_ended_at IS NULL
-            LIMIT 1
-        """),
-        {"iid": inspection_id, "pday": prod_day},
+    row_inspector = scope_row[2]
+    effective_inspector = inspector_user_id if inspector_user_id and inspector_user_id > 0 else row_inspector
+
+    if need_inspector_col and effective_inspector:
+        inspector_conflict = await db.execute(
+            text("""
+                SELECT id, production_sequence, product_name, product_cd
+                FROM inspection_management
+                WHERE production_day = :pday
+                  AND mes_inspector_user_id = :inspector
+                  AND id <> :iid
+                  AND mes_production_started_at IS NOT NULL
+                  AND mes_production_ended_at IS NULL
+                LIMIT 1
+            """),
+            {
+                "iid": inspection_id,
+                "pday": prod_day,
+                "inspector": int(effective_inspector),
+            },
+        )
+        other = inspector_conflict.fetchone()
+        if other:
+            label = _inspection_mes_conflict_label(other[0], other[1], other[2], other[3])
+            raise HTTPException(
+                status_code=409,
+                detail=f"この検査員は既に他の製品を検査生産中です（{label}）。先に生産終了してください。",
+            )
+
+
+async def _get_welding_mgmt_columns(db: AsyncSession) -> set[str]:
+    try:
+        result = await db.execute(
+            text("""
+                SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = 'welding_management'
+            """)
+        )
+        return {str(r[0]) for r in result.fetchall()}
+    except Exception as e:
+        logger.warning("welding_management column introspection failed: %s", e)
+        return set()
+
+
+def _welding_mgmt_mes_select_fragment(existing: set[str]) -> str:
+    parts = [f"`welding_management`.`{c}`" for c in _WELDING_MGMT_MES_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _welding_mes_column_migration_hint(column: str) -> str:
+    return (
+        f"列 `{column}` がありません。"
+        "backend/database/migrations/13_welding_management.sql を実行してください。"
     )
-    other = conflict.fetchone()
-    if not other:
+
+
+def _normalize_mes_client_instance_id(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    return s[:64]
+
+
+def _welding_row_mes_in_progress(started: Any, ended: Any) -> bool:
+    if started is None or not str(started).strip():
+        return False
+    if ended is None or not str(ended).strip():
+        return True
+    return False
+
+
+async def _fetch_welding_row_mes_state(
+    db: AsyncSession,
+    welding_id: int,
+    im_cols: set[str],
+) -> dict[str, Any]:
+    select_cols = ["mes_production_started_at", "mes_production_ended_at"]
+    if "mes_client_instance_id" in im_cols:
+        select_cols.append("mes_client_instance_id")
+    sql = (
+        f"SELECT {', '.join(select_cols)} FROM welding_management WHERE id = :wid LIMIT 1"
+    )
+    result = await db.execute(text(sql), {"wid": welding_id})
+    row = result.mappings().first()
+    return dict(row) if row else {}
+
+
+def _reject_welding_mes_client_lock_conflict(
+    existing_lock: Optional[str],
+    client_id: Optional[str],
+    *,
+    force_release: bool,
+) -> None:
+    if not existing_lock or not client_id or existing_lock == client_id or force_release:
         return
-    oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
+    raise HTTPException(
+        status_code=409,
+        detail="この溶接生産は他の端末で生産中です。当該端末で生産終了してください。",
+    )
+
+
+def _welding_mes_conflict_label(
+    oid: int,
+    pseq: Any,
+    pname: Any,
+    pcd: Any,
+) -> str:
     label_parts: list[str] = []
     if pseq is not None:
         label_parts.append(f"順{pseq}")
     name = (pname or pcd or "").strip() if (pname or pcd) else ""
     if name:
         label_parts.append(str(name)[:80])
-    label = " ".join(label_parts) if label_parts else f"ID {oid}"
-    raise HTTPException(
-        status_code=409,
-        detail=f"この生産日では他の製品が検査生産中です（{label}）。先に生産終了してください。",
+    return " ".join(label_parts) if label_parts else f"ID {oid}"
+
+
+async def _reject_concurrent_mes_production_on_welding_start(
+    db: AsyncSession,
+    welding_id: int,
+    im_cols: set[str],
+    *,
+    operator_user_id: Optional[int] = None,
+) -> None:
+    """溶接 MES 生産開始時：同一溶接作業者の他製品在産を拒否（同一製品の並行生産は可）。"""
+    if "mes_production_started_at" not in im_cols or "mes_production_ended_at" not in im_cols:
+        return
+    need_operator_col = operator_user_id is not None and operator_user_id > 0
+    if need_operator_col and "mes_operator_user_id" not in im_cols:
+        need_operator_col = False
+
+    scope = await db.execute(
+        text("""
+            SELECT production_day, product_cd, mes_operator_user_id
+            FROM welding_management
+            WHERE id = :wid
+            LIMIT 1
+        """),
+        {"wid": welding_id},
     )
+    scope_row = scope.fetchone()
+    if not scope_row or scope_row[0] is None:
+        return
+    prod_day = scope_row[0]
+    row_operator = scope_row[2]
+    effective_operator = operator_user_id if operator_user_id and operator_user_id > 0 else row_operator
+
+    if need_operator_col and effective_operator:
+        operator_conflict = await db.execute(
+            text("""
+                SELECT id, production_sequence, product_name, product_cd
+                FROM welding_management
+                WHERE production_day = :pday
+                  AND mes_operator_user_id = :operator
+                  AND id <> :wid
+                  AND mes_production_started_at IS NOT NULL
+                  AND mes_production_ended_at IS NULL
+                LIMIT 1
+            """),
+            {
+                "wid": welding_id,
+                "pday": prod_day,
+                "operator": int(effective_operator),
+            },
+        )
+        other = operator_conflict.fetchone()
+        if other:
+            label = _welding_mes_conflict_label(other[0], other[1], other[2], other[3])
+            raise HTTPException(
+                status_code=409,
+                detail=f"この溶接作業者は既に他の製品を溶接生産中です（{label}）。先に生産終了してください。",
+            )
 
 
 def _parse_mes_defect_by_item_for_db(val: Any) -> Optional[str]:
@@ -2018,6 +2301,8 @@ async def get_cutting_management_list(
             "mes_paused_accum_sec": row.get("mes_paused_accum_sec"),
             "mes_production_is_paused": row.get("mes_production_is_paused"),
             "mes_setup_time_min": row.get("mes_setup_time_min"),
+            "mes_saw_blade_exchange_min": row.get("mes_saw_blade_exchange_min"),
+            "mes_repair_min": row.get("mes_repair_min"),
             "mes_operator_user_id": row.get("mes_operator_user_id"),
             "mes_scanned_code": row.get("mes_scanned_code"),
             "cd": row.get("cd"),
@@ -2860,6 +3145,8 @@ class UpdateCuttingManagementBody(BaseModel):
     mes_paused_accum_sec: Optional[int] = None  # 一時停止累計秒
     mes_production_is_paused: Optional[int] = None  # 0=稼働中, 1=一時停止（未開始/終了は NULL）
     mes_setup_time_min: Optional[int] = None  # 段取（分）
+    mes_saw_blade_exchange_min: Optional[int] = None  # 鋸刃交換（分）
+    mes_repair_min: Optional[int] = None  # 修理（分）
     mes_operator_user_id: Optional[int] = None  # users.id（0以下でクリア）
     mes_scanned_code: Optional[str] = None  # バーコード/QR 読取（空文字でクリア）
 
@@ -3029,6 +3316,26 @@ async def update_cutting_management(
         else:
             updates.append("mes_setup_time_min = :mes_setup_time_min")
             params["mes_setup_time_min"] = max(0, setup_min)
+    if body.mes_saw_blade_exchange_min is not None:
+        if "mes_saw_blade_exchange_min" not in cm_cols:
+            raise HTTPException(
+                status_code=503, detail=_mes_column_migration_hint("mes_saw_blade_exchange_min")
+            )
+        blade_min = int(body.mes_saw_blade_exchange_min)
+        if blade_min < 0:
+            updates.append("mes_saw_blade_exchange_min = NULL")
+        else:
+            updates.append("mes_saw_blade_exchange_min = :mes_saw_blade_exchange_min")
+            params["mes_saw_blade_exchange_min"] = max(0, blade_min)
+    if body.mes_repair_min is not None:
+        if "mes_repair_min" not in cm_cols:
+            raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_repair_min"))
+        repair_min = int(body.mes_repair_min)
+        if repair_min < 0:
+            updates.append("mes_repair_min = NULL")
+        else:
+            updates.append("mes_repair_min = :mes_repair_min")
+            params["mes_repair_min"] = max(0, repair_min)
     if body.mes_operator_user_id is not None:
         if "mes_operator_user_id" not in cm_cols:
             raise HTTPException(status_code=503, detail=_mes_column_migration_hint("mes_operator_user_id"))
@@ -6193,6 +6500,9 @@ class UpdateInspectionManagementBody(BaseModel):
     mes_production_is_paused: Optional[int] = None
     mes_inspector_user_id: Optional[int] = None
     mes_defect_by_item: Optional[Any] = None
+    mes_client_instance_id: Optional[str] = None
+    mes_claim_client_lock: Optional[bool] = None
+    mes_force_release: Optional[bool] = None
 
 
 @router.patch("/plan/inspection-management/{inspection_id}")
@@ -6206,8 +6516,46 @@ async def update_inspection_management(
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    row_mes = await _fetch_inspection_row_mes_state(db, inspection_id, im_cols)
+    in_progress = _inspection_row_mes_in_progress(
+        row_mes.get("mes_production_started_at"),
+        row_mes.get("mes_production_ended_at"),
+    )
+    client_id = _normalize_mes_client_instance_id(body.mes_client_instance_id)
+    force_release = bool(body.mes_force_release)
+    existing_lock = _normalize_mes_client_instance_id(row_mes.get("mes_client_instance_id"))
+    has_client_col = "mes_client_instance_id" in im_cols
+
     updates: list[str] = []
     params: dict[str, Any] = {"iid": inspection_id}
+
+    if body.mes_claim_client_lock:
+        if not has_client_col:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_client_instance_id"))
+        if not client_id:
+            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="検査生産中ではないため接続できません")
+        allow_inspector_reclaim = False
+        if body.mes_inspector_user_id is not None and "mes_inspector_user_id" in im_cols:
+            try:
+                claim_inspector = int(body.mes_inspector_user_id)
+            except (TypeError, ValueError):
+                claim_inspector = 0
+            if claim_inspector > 0:
+                insp_row = await db.execute(
+                    text(
+                        "SELECT mes_inspector_user_id FROM inspection_management WHERE id = :iid LIMIT 1"
+                    ),
+                    {"iid": inspection_id},
+                )
+                row_insp = insp_row.scalar()
+                if row_insp is not None and int(row_insp) == claim_inspector:
+                    allow_inspector_reclaim = True
+        if not allow_inspector_reclaim:
+            _reject_inspection_mes_client_lock_conflict(existing_lock, client_id, force_release=force_release)
+        params["mes_client_instance_id"] = client_id
+        updates.append("mes_client_instance_id = :mes_client_instance_id")
     if body.production_day is not None:
         d = _parse_date_ymd(body.production_day)
         if d is not None:
@@ -6239,7 +6587,30 @@ async def update_inspection_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
-                await _reject_concurrent_mes_production_on_inspection_day(db, inspection_id, im_cols)
+                start_inspector: Optional[int] = None
+                if body.mes_inspector_user_id is not None:
+                    try:
+                        parsed_inspector = int(body.mes_inspector_user_id)
+                        if parsed_inspector > 0:
+                            start_inspector = parsed_inspector
+                    except (TypeError, ValueError):
+                        start_inspector = None
+                await _reject_concurrent_mes_production_on_inspection_start(
+                    db,
+                    inspection_id,
+                    im_cols,
+                    inspector_user_id=start_inspector,
+                )
+                if has_client_col:
+                    if not client_id:
+                        raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+                    _reject_inspection_mes_client_lock_conflict(
+                        existing_lock,
+                        client_id,
+                        force_release=force_release,
+                    )
+                    params["mes_client_instance_id"] = client_id
+                    updates.append("mes_client_instance_id = :mes_client_instance_id")
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
     if body.mes_production_ended_at is not None:
@@ -6251,8 +6622,16 @@ async def update_inspection_management(
         else:
             edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
             if edt:
+                if in_progress:
+                    _reject_inspection_mes_client_lock_conflict(
+                        existing_lock,
+                        client_id,
+                        force_release=force_release,
+                    )
                 params["mes_production_ended_at"] = edt
                 updates.append("mes_production_ended_at = :mes_production_ended_at")
+                if has_client_col:
+                    updates.append("mes_client_instance_id = NULL")
     if body.mes_net_production_sec is not None:
         if "mes_net_production_sec" not in im_cols:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_net_production_sec"))
@@ -6308,11 +6687,466 @@ async def update_inspection_management(
                     updates.append("defect_qty = :defect_qty")
         except (ValueError, json.JSONDecodeError) as e:
             raise HTTPException(status_code=400, detail=f"mes_defect_by_item が不正です: {e}") from e
+
+    mes_control_touched = (
+        body.mes_net_production_sec is not None
+        or body.mes_paused_accum_sec is not None
+        or body.mes_production_is_paused is not None
+        or body.mes_defect_by_item is not None
+        or (body.mes_inspector_user_id is not None and in_progress)
+    )
+    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock:
+        _reject_inspection_mes_client_lock_conflict(
+            existing_lock,
+            client_id,
+            force_release=force_release,
+        )
+        if not existing_lock and client_id:
+            params["mes_client_instance_id"] = client_id
+            if "mes_client_instance_id = :mes_client_instance_id" not in updates:
+                updates.append("mes_client_instance_id = :mes_client_instance_id")
+
     if not updates:
         return {"success": True, "message": "変更なし"}
     try:
         await db.execute(
             text(f"UPDATE inspection_management SET {', '.join(updates)} WHERE id = :iid"),
+            params,
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "更新しました"}
+
+
+# ---------- 溶接指示（welding_management）・MES溶接実績収集 ----------
+
+
+@router.get("/plan/welding-management/list")
+async def get_welding_management_list(
+    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
+    welding_machine: Optional[str] = Query(None, description="溶接設備名（完全一致）"),
+    hide_completed: bool = Query(False, description="実績確定済を除外"),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """溶接指示一覧（MES溶接実績収集）。"""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+        )
+    mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
+    where_parts: list[str] = ["1=1"]
+    params: dict[str, Any] = {"lim": limit}
+    if production_day:
+        d = _parse_date_ymd(production_day)
+        if d is None:
+            raise HTTPException(status_code=400, detail="production_day が不正です")
+        where_parts.append("welding_management.production_day = :production_day")
+        params["production_day"] = d
+    if hide_completed:
+        where_parts.append("welding_management.production_completed_check = 0")
+    if welding_machine is not None and welding_machine.strip():
+        if "welding_machine" not in wm_cols:
+            raise HTTPException(
+                status_code=503,
+                detail="列 `welding_machine` がありません。backend/database/migrations/14_welding_management_welding_machine.sql を実行してください。",
+            )
+        where_parts.append("welding_management.welding_machine = :welding_machine")
+        params["welding_machine"] = welding_machine.strip()
+    where_sql = " AND ".join(where_parts)
+    wm_machine_col = (
+        "welding_management.welding_machine,\n               "
+        if "welding_machine" in wm_cols
+        else ""
+    )
+    sql = f"""
+        SELECT welding_management.id,
+               welding_management.production_month,
+               welding_management.production_day,
+               welding_management.production_sequence,
+               welding_management.product_cd,
+               welding_management.product_name,
+               {wm_machine_col}welding_management.actual_production_quantity,
+               welding_management.defect_qty,
+               welding_management.mes_defect_by_item,
+               welding_management.production_completed_check,
+               {mes_frag}
+               welding_management.remarks,
+               welding_management.created_at,
+               welding_management.updated_at
+        FROM welding_management
+        WHERE {where_sql}
+        ORDER BY welding_management.production_day ASC,
+                 welding_management.production_sequence ASC,
+                 welding_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        msg = str(e).lower()
+        if "welding_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+            ) from e
+        for col in _WELDING_MGMT_MES_COLUMNS:
+            if col in msg:
+                raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint(col)) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    out: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        raw_def = item.get("mes_defect_by_item")
+        if raw_def is not None and not isinstance(raw_def, dict):
+            try:
+                item["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+            except json.JSONDecodeError:
+                item["mes_defect_by_item"] = None
+        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+            v = item.get(k)
+            if isinstance(v, datetime):
+                item[k] = v.isoformat()
+        for k in ("production_month", "production_day"):
+            v = item.get(k)
+            if isinstance(v, date):
+                item[k] = v.isoformat()
+        out.append(item)
+    return {"success": True, "data": out}
+
+
+class CreateWeldingManagementBody(BaseModel):
+    production_day: str
+    product_cd: str
+    product_name: str
+    welding_machine: Optional[str] = None
+    mes_operator_user_id: Optional[int] = None
+    remarks: Optional[str] = None
+
+
+@router.post("/plan/welding-management")
+async def create_welding_management(
+    body: CreateWeldingManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """溶接指示1件を新規作成（MESで製品選択後・生産開始前）。"""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(status_code=503, detail="welding_management テーブルが存在しません。")
+    d = _parse_date_ymd(body.production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    product_cd = (body.product_cd or "").strip()
+    product_name = (body.product_name or "").strip()
+    if not product_cd:
+        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+    if not product_name:
+        product_name = product_cd
+    prod_month = d.replace(day=1)
+    seq_row = await db.execute(
+        text(
+            "SELECT COALESCE(MAX(production_sequence), 0) + 1 AS n FROM welding_management "
+            "WHERE production_day = :pday"
+        ),
+        {"pday": d},
+    )
+    seq = int(seq_row.scalar() or 1)
+    inspector_id = body.mes_operator_user_id
+    params: dict[str, Any] = {
+        "production_month": prod_month,
+        "production_day": d,
+        "production_sequence": seq,
+        "product_cd": product_cd,
+        "product_name": product_name,
+        "remarks": (body.remarks or "").strip() or None,
+    }
+    cols = [
+        "production_month",
+        "production_day",
+        "production_sequence",
+        "product_cd",
+        "product_name",
+        "remarks",
+    ]
+    vals = [
+        ":production_month",
+        ":production_day",
+        ":production_sequence",
+        ":product_cd",
+        ":product_name",
+        ":remarks",
+    ]
+    if inspector_id is not None and int(inspector_id) > 0 and "mes_operator_user_id" in wm_cols:
+        cols.append("mes_operator_user_id")
+        vals.append(":mes_operator_user_id")
+        params["mes_operator_user_id"] = int(inspector_id)
+    wm_name = (body.welding_machine or "").strip()
+    if wm_name and "welding_machine" in wm_cols:
+        cols.append("welding_machine")
+        vals.append(":welding_machine")
+        params["welding_machine"] = wm_name
+    try:
+        res = await db.execute(
+            text(
+                f"INSERT INTO welding_management ({', '.join(cols)}) "
+                f"VALUES ({', '.join(vals)})"
+            ),
+            params,
+        )
+        await db.commit()
+        new_id = res.lastrowid
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "data": {"id": new_id}, "message": "作成しました"}
+
+
+class UpdateWeldingManagementBody(BaseModel):
+    production_day: Optional[str] = None
+    welding_machine: Optional[str] = None
+    production_sequence: Optional[int] = None
+    actual_production_quantity: Optional[int] = None
+    defect_qty: Optional[int] = None
+    production_completed_check: Optional[bool] = None
+    remarks: Optional[str] = None
+    mes_production_started_at: Optional[str] = None
+    mes_production_ended_at: Optional[str] = None
+    mes_net_production_sec: Optional[int] = None
+    mes_paused_accum_sec: Optional[int] = None
+    mes_production_is_paused: Optional[int] = None
+    mes_operator_user_id: Optional[int] = None
+    mes_defect_by_item: Optional[Any] = None
+    mes_client_instance_id: Optional[str] = None
+    mes_claim_client_lock: Optional[bool] = None
+    mes_force_release: Optional[bool] = None
+
+
+@router.patch("/plan/welding-management/{welding_id}")
+async def update_welding_management(
+    welding_id: int,
+    body: UpdateWeldingManagementBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """溶接指示1件を更新（MES 実績・不良内訳・溶接員等）。"""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(status_code=503, detail="welding_management テーブルが存在しません。")
+    row_mes = await _fetch_welding_row_mes_state(db, welding_id, wm_cols)
+    in_progress = _welding_row_mes_in_progress(
+        row_mes.get("mes_production_started_at"),
+        row_mes.get("mes_production_ended_at"),
+    )
+    client_id = _normalize_mes_client_instance_id(body.mes_client_instance_id)
+    force_release = bool(body.mes_force_release)
+    existing_lock = _normalize_mes_client_instance_id(row_mes.get("mes_client_instance_id"))
+    has_client_col = "mes_client_instance_id" in wm_cols
+
+    updates: list[str] = []
+    params: dict[str, Any] = {"wid": welding_id}
+
+    if body.mes_claim_client_lock:
+        if not has_client_col:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_client_instance_id"))
+        if not client_id:
+            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="溶接生産中ではないため接続できません")
+        allow_inspector_reclaim = False
+        if body.mes_operator_user_id is not None and "mes_operator_user_id" in wm_cols:
+            try:
+                claim_inspector = int(body.mes_operator_user_id)
+            except (TypeError, ValueError):
+                claim_inspector = 0
+            if claim_inspector > 0:
+                insp_row = await db.execute(
+                    text(
+                        "SELECT mes_operator_user_id FROM welding_management WHERE id = :wid LIMIT 1"
+                    ),
+                    {"wid": welding_id},
+                )
+                row_insp = insp_row.scalar()
+                if row_insp is not None and int(row_insp) == claim_inspector:
+                    allow_inspector_reclaim = True
+        if not allow_inspector_reclaim:
+            _reject_welding_mes_client_lock_conflict(existing_lock, client_id, force_release=force_release)
+        params["mes_client_instance_id"] = client_id
+        updates.append("mes_client_instance_id = :mes_client_instance_id")
+    if body.production_day is not None:
+        d = _parse_date_ymd(body.production_day)
+        if d is not None:
+            updates.append("production_month = :production_month")
+            params["production_month"] = d.replace(day=1)
+            updates.append("production_day = :production_day")
+            params["production_day"] = d
+    if body.production_completed_check is not None:
+        updates.append("production_completed_check = :production_completed_check")
+        params["production_completed_check"] = 1 if body.production_completed_check else 0
+    if body.actual_production_quantity is not None:
+        updates.append("actual_production_quantity = :actual_production_quantity")
+        params["actual_production_quantity"] = max(0, int(body.actual_production_quantity))
+    if body.production_sequence is not None:
+        updates.append("production_sequence = :production_sequence")
+        params["production_sequence"] = int(body.production_sequence)
+    if body.remarks is not None:
+        updates.append("remarks = :remarks")
+        params["remarks"] = (body.remarks or "").strip() or None
+    if body.welding_machine is not None and "welding_machine" in wm_cols:
+        wm_val = (body.welding_machine or "").strip()
+        if wm_val:
+            updates.append("welding_machine = :welding_machine")
+            params["welding_machine"] = wm_val
+        else:
+            updates.append("welding_machine = NULL")
+    if body.defect_qty is not None:
+        updates.append("defect_qty = :defect_qty")
+        params["defect_qty"] = max(0, int(body.defect_qty))
+    if body.mes_production_started_at is not None:
+        if "mes_production_started_at" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_production_started_at"))
+        raw = body.mes_production_started_at.strip() if isinstance(body.mes_production_started_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_started_at = NULL")
+        else:
+            sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
+            if sdt:
+                start_inspector: Optional[int] = None
+                if body.mes_operator_user_id is not None:
+                    try:
+                        parsed_inspector = int(body.mes_operator_user_id)
+                        if parsed_inspector > 0:
+                            start_inspector = parsed_inspector
+                    except (TypeError, ValueError):
+                        start_inspector = None
+                if "welding_machine" in wm_cols:
+                    await _reject_concurrent_mes_production_on_welding_machine(
+                        db, welding_id, wm_cols
+                    )
+                else:
+                    await _reject_concurrent_mes_production_on_welding_start(
+                        db,
+                        welding_id,
+                        wm_cols,
+                        inspector_user_id=start_inspector,
+                    )
+                if has_client_col:
+                    if not client_id:
+                        raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+                    _reject_welding_mes_client_lock_conflict(
+                        existing_lock,
+                        client_id,
+                        force_release=force_release,
+                    )
+                    params["mes_client_instance_id"] = client_id
+                    updates.append("mes_client_instance_id = :mes_client_instance_id")
+                params["mes_production_started_at"] = sdt
+                updates.append("mes_production_started_at = :mes_production_started_at")
+    if body.mes_production_ended_at is not None:
+        if "mes_production_ended_at" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_production_ended_at"))
+        raw = body.mes_production_ended_at.strip() if isinstance(body.mes_production_ended_at, str) else ""
+        if raw == "":
+            updates.append("mes_production_ended_at = NULL")
+        else:
+            edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
+            if edt:
+                if in_progress:
+                    _reject_welding_mes_client_lock_conflict(
+                        existing_lock,
+                        client_id,
+                        force_release=force_release,
+                    )
+                params["mes_production_ended_at"] = edt
+                updates.append("mes_production_ended_at = :mes_production_ended_at")
+                if has_client_col:
+                    updates.append("mes_client_instance_id = NULL")
+    if body.mes_net_production_sec is not None:
+        if "mes_net_production_sec" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_net_production_sec"))
+        net_sec = int(body.mes_net_production_sec)
+        if net_sec < 0:
+            updates.append("mes_net_production_sec = NULL")
+        else:
+            updates.append("mes_net_production_sec = :mes_net_production_sec")
+            params["mes_net_production_sec"] = max(0, net_sec)
+    if body.mes_paused_accum_sec is not None:
+        if "mes_paused_accum_sec" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_paused_accum_sec"))
+        pause_sec = int(body.mes_paused_accum_sec)
+        if pause_sec < 0:
+            updates.append("mes_paused_accum_sec = NULL")
+        else:
+            updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
+            params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_production_is_paused is not None:
+        if "mes_production_is_paused" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_production_is_paused"))
+        flag = int(body.mes_production_is_paused)
+        if flag < 0:
+            updates.append("mes_production_is_paused = NULL")
+        else:
+            params["mes_production_is_paused"] = 1 if flag else 0
+            updates.append("mes_production_is_paused = :mes_production_is_paused")
+    if body.mes_operator_user_id is not None:
+        if "mes_operator_user_id" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_operator_user_id"))
+        iid = int(body.mes_operator_user_id)
+        if iid <= 0:
+            updates.append("mes_operator_user_id = NULL")
+        else:
+            params["mes_operator_user_id"] = iid
+            updates.append("mes_operator_user_id = :mes_operator_user_id")
+    if body.mes_defect_by_item is not None:
+        if "mes_defect_by_item" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_defect_by_item"))
+        try:
+            if body.mes_defect_by_item == "" or body.mes_defect_by_item == {}:
+                updates.append("mes_defect_by_item = NULL")
+                updates.append("defect_qty = 0")
+            else:
+                json_str = _parse_mes_defect_by_item_for_db(body.mes_defect_by_item)
+                if json_str is None:
+                    updates.append("mes_defect_by_item = NULL")
+                    updates.append("defect_qty = 0")
+                else:
+                    params["mes_defect_by_item"] = json_str
+                    updates.append("mes_defect_by_item = CAST(:mes_defect_by_item AS JSON)")
+                    params["defect_qty"] = _sum_defect_qty_from_item_json(json_str)
+                    updates.append("defect_qty = :defect_qty")
+        except (ValueError, json.JSONDecodeError) as e:
+            raise HTTPException(status_code=400, detail=f"mes_defect_by_item が不正です: {e}") from e
+
+    mes_control_touched = (
+        body.mes_net_production_sec is not None
+        or body.mes_paused_accum_sec is not None
+        or body.mes_production_is_paused is not None
+        or body.mes_defect_by_item is not None
+        or (body.mes_operator_user_id is not None and in_progress)
+    )
+    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock:
+        _reject_welding_mes_client_lock_conflict(
+            existing_lock,
+            client_id,
+            force_release=force_release,
+        )
+        if not existing_lock and client_id:
+            params["mes_client_instance_id"] = client_id
+            if "mes_client_instance_id = :mes_client_instance_id" not in updates:
+                updates.append("mes_client_instance_id = :mes_client_instance_id")
+
+    if not updates:
+        return {"success": True, "message": "変更なし"}
+    try:
+        await db.execute(
+            text(f"UPDATE welding_management SET {', '.join(updates)} WHERE id = :wid"),
             params,
         )
         await db.commit()

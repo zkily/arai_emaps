@@ -19,6 +19,7 @@ from app.modules.master.api_options import router as options_router
 from app.modules.master.api_product_bom import router as product_bom_router
 from app.modules.master.api_product_process_unit_price import router as product_unit_price_router
 from app.modules.master.api_process_processing_fee import router as process_processing_fee_router
+from app.modules.master.api_process_defect_item import router as process_defect_item_router
 from app.modules.master.api_part_master import router as part_master_router
 from app.modules.master.api_product_cost_snapshot import router as product_cost_snapshot_router
 from app.modules.master.api_roller_bom import router as roller_bom_router
@@ -52,6 +53,7 @@ router.include_router(equipment_efficiency_router, prefix="/equipment-efficiency
 router.include_router(product_bom_router, prefix="/product-bom", tags=["明細BOM"])
 router.include_router(product_unit_price_router, prefix="/product-process-unit-prices", tags=["工程別標準原価"])
 router.include_router(process_processing_fee_router, prefix="/process-processing-fees", tags=["工程加工費マスタ"])
+router.include_router(process_defect_item_router, prefix="/process-defect-items", tags=["工程別不良項目マスタ"])
 router.include_router(product_cost_snapshot_router, prefix="/product-cost-snapshots", tags=["累計単価スナップショット"])
 router.include_router(roller_bom_router, prefix="/roller-bom", tags=["ローラーBOM"])
 router.include_router(roller_master_router, prefix="/roller-master", tags=["ローラーマスタ"])

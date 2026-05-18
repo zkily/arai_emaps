@@ -177,6 +177,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_ROLLER_BOM', name: 'ローラーBOM管理', path: '/master/bom/roller-bom', parentCode: 'MASTER_BOM', sortOrder: 3.5 },
   { code: 'MASTER_PRODUCT_BOM_DETAIL', name: '製品BOM表管理', path: '/master/bom/product-bom', parentCode: 'MASTER_BOM', sortOrder: 4 },
   { code: 'MASTER_PROCESS_PROCESSING_FEE', name: '工程加工費マスタ', path: '/master/bom/process-processing-fee', parentCode: 'MASTER_LIST', sortOrder: 6.5 },
+  { code: 'MASTER_PROCESS_DEFECT_ITEMS', name: '工程別不良項目マスタ', path: '/master/bom/process-defect-items', parentCode: 'MASTER_BOM', sortOrder: 5 },
   { code: 'MASTER_UNIT_PRICE', name: '工程別標準原価', path: '/master/bom/product-unit-price', parentCode: 'MASTER_BOM', sortOrder: 6 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
   { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },

@@ -112,9 +112,27 @@
               <span class="sc-legend-text">切断指示済</span>
             </span>
             <span class="sc-legend-sep" aria-hidden="true">｜</span>
-            <span class="sc-legend-item">
+            <span class="sc-legend-item sc-legend-item--plan-toggle">
               <span class="sc-legend-swatch sc-legend-swatch--plan" aria-hidden="true" />
               <span class="sc-legend-text">計画</span>
+              <el-tooltip
+                :content="
+                  matrixPlanExtendMode
+                    ? '表示：5日前以前＝実績、それ以降（当日含む）＝計画'
+                    : '表示：当日以前＝実績、当日以降＝計画（当日は実績があれば実績）'
+                "
+                placement="top"
+              >
+                <el-switch
+                  v-model="matrixPlanExtendMode"
+                  class="sc-legend-mode-switch"
+                  size="small"
+                  inline-prompt
+                  active-text="拡張"
+                  inactive-text="標準"
+                  aria-label="マトリクス表示モード切替"
+                />
+              </el-tooltip>
             </span>
           </div>
         </div>
@@ -294,6 +312,8 @@ const lines = ref<ProductionLine[]>([])
 const grid = ref<SchedulingGridResponse | null>(null)
 const loading = ref(false)
 const printRootRef = ref<HTMLElement | null>(null)
+/** false=標準（当日以前実績）、true=拡張（5日前以前実績・それ以降計画） */
+const matrixPlanExtendMode = ref(false)
 
 const searchForm = reactive<{
   processCd: string
@@ -587,7 +607,29 @@ function isToday(iso: string) {
   return iso === dayjs().format('YYYY-MM-DD')
 }
 
-/** マトリクス日セル：過去=実績、当日=実績優先（>0）、未来=計画 */
+function matrixTodayStr() {
+  return dayjs().format('YYYY-MM-DD')
+}
+
+/** 実績表示の境界日（この日以前は実績側） */
+function matrixActualBoundaryStr() {
+  const todayStr = matrixTodayStr()
+  if (!matrixPlanExtendMode.value) return todayStr
+  return dayjs(todayStr).subtract(5, 'day').format('YYYY-MM-DD')
+}
+
+function matrixCellDisplayMode(dateIso: string, actualQty: number): 'actual' | 'plan' {
+  const todayStr = matrixTodayStr()
+  const boundary = matrixActualBoundaryStr()
+  if (matrixPlanExtendMode.value) {
+    return dateIso <= boundary ? 'actual' : 'plan'
+  }
+  if (dateIso < todayStr) return 'actual'
+  if (dateIso > todayStr) return 'plan'
+  return actualQty > 0 ? 'actual' : 'plan'
+}
+
+/** マトリクス日セル：標準=過去実績・当日実績優先・未来計画／拡張=5日前以前実績・以降計画 */
 function matrixCellDisplayQty(
   plannedDaily: Record<string, number>,
   actualDaily: Record<string, number> | undefined,
@@ -595,32 +637,23 @@ function matrixCellDisplayQty(
 ): number {
   const planned = Number(plannedDaily?.[dateIso] ?? 0)
   const actual = Number(actualDaily?.[dateIso] ?? 0)
-  const todayStr = dayjs().format('YYYY-MM-DD')
-  if (dateIso < todayStr) return actual
-  if (dateIso > todayStr) return planned
-  return actual > 0 ? actual : planned
+  return matrixCellDisplayMode(dateIso, actual) === 'actual' ? actual : planned
 }
 
-/** 当日セルが計画本数を表示しているか（上流色分けは計画に対してのみ適用） */
+/** 計画本数を表示しているか（上流色分けは計画に対してのみ適用） */
 function plannedUpstreamTintActiveForItem(row: MatrixRow, dateIso: string): boolean {
   if (row.type !== 'item') return false
-  const todayStr = dayjs().format('YYYY-MM-DD')
-  if (dateIso < todayStr) return false
-  if (dateIso > todayStr) return true
   const actual = Number(row.actual_daily?.[dateIso] ?? 0)
-  return actual <= 0
+  return matrixCellDisplayMode(dateIso, actual) === 'plan'
 }
 
-/** 実績かつ本数>0 のセルのみ浅黄（過去日は実績>0、当日は実績を表示している日かつ>0） */
+/** 実績かつ本数>0 のセルのみ浅黄 */
 function cellShowsActualDisplay(row: MatrixRow, date: string): boolean {
   if (row.type !== 'item') return false
   const v = getCellDisplayValue(row, date) || 0
   if (v <= 0) return false
-  const todayStr = dayjs().format('YYYY-MM-DD')
   const actual = Number(row.actual_daily?.[date] ?? 0)
-  if (date < todayStr) return true
-  if (date > todayStr) return false
-  return actual > 0
+  return matrixCellDisplayMode(date, actual) === 'actual'
 }
 
 function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
@@ -771,14 +804,13 @@ function getCellUpstreamStyle(row: MatrixRow, date: string): Record<string, stri
 
 function getCellTitle(row: MatrixRow, date: string): string {
   const disp = getCellDisplayValue(row, date) || 0
-  const todayStr = dayjs().format('YYYY-MM-DD')
   if (row.type === 'group') {
     if (!disp) return `${date}: ライン合計なし`
     return `${date}: ライン合計 ${disp}`
   }
   const planned = Number(row.daily?.[date] ?? 0)
   const actual = Number(row.actual_daily?.[date] ?? 0)
-  const modeLabel = date < todayStr ? '実績' : date > todayStr ? '計画' : actual > 0 ? '実績' : '計画'
+  const modeLabel = matrixCellDisplayMode(date, actual) === 'actual' ? '実績' : '計画'
   const seg = row.daily_upstream_tint?.[date]
   const tintSum = seg
     ? Number(seg.in_cutting ?? 0) + Number(seg.in_instruction ?? 0) + Number(seg.only_planned ?? 0)
@@ -1345,6 +1377,16 @@ watch(
 
 .sc-legend-swatch--plan {
   background: rgba(187, 247, 208, 0.62);
+}
+
+.sc-legend-item--plan-toggle {
+  gap: 6px;
+}
+
+.sc-legend-mode-switch {
+  margin-left: 2px;
+  --el-switch-on-color: #16a34a;
+  --el-switch-off-color: #94a3b8;
 }
 
 .result-title-feature {

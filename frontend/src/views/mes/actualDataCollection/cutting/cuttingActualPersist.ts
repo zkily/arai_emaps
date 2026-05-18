@@ -17,6 +17,8 @@ export interface PersistedPlanSession {
   wallEnd: number | null
   operatorUserId: number | null
   setupTimeMin: number | undefined
+  sawBladeExchangeMin: number | undefined
+  repairMin: number | undefined
 }
 
 export interface PlanSessionLike {
@@ -28,6 +30,8 @@ export interface PlanSessionLike {
   wallEnd: number | null
   operatorUserId: number | null
   setupTimeMin: number | undefined
+  sawBladeExchangeMin: number | undefined
+  repairMin: number | undefined
 }
 
 interface PersistScopeData {
@@ -411,6 +415,8 @@ export function serializePlanSessions(
       wallEnd: s.wallEnd,
       operatorUserId: s.operatorUserId,
       setupTimeMin: s.setupTimeMin,
+      sawBladeExchangeMin: s.sawBladeExchangeMin,
+      repairMin: s.repairMin,
     }
   }
   return out
@@ -431,6 +437,17 @@ export function mergePlanSessionFromPersist(
     }
     if (persisted.setupTimeMin !== undefined && persisted.setupTimeMin !== base.setupTimeMin) {
       base.setupTimeMin = persisted.setupTimeMin
+      changed = true
+    }
+    if (
+      persisted.sawBladeExchangeMin !== undefined &&
+      persisted.sawBladeExchangeMin !== base.sawBladeExchangeMin
+    ) {
+      base.sawBladeExchangeMin = persisted.sawBladeExchangeMin
+      changed = true
+    }
+    if (persisted.repairMin !== undefined && persisted.repairMin !== base.repairMin) {
+      base.repairMin = persisted.repairMin
       changed = true
     }
   }

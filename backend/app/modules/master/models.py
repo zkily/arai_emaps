@@ -424,6 +424,23 @@ class ProductBomLine(Base):
 # ---------------------------------------------------------------------------
 
 
+class ProcessDefectItem(Base):
+    """工程別不良項目（process_defect_items）— 収集工程ごとの選択肢、帰属工程で責任工程を指定"""
+
+    __tablename__ = "process_defect_items"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    detection_process_cd = Column(String(20), nullable=False, index=True)
+    attributable_process_cd = Column(String(20), nullable=False, index=True)
+    defect_cd = Column(String(50), nullable=False)
+    defect_name = Column(String(100), nullable=False)
+    sort_order = Column(Integer, nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="active")
+    remarks = Column(String(255))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class ProcessProcessingFee(Base):
     """工程加工費（process_processing_fees）— 所属工程と加工方法ごとに加工費が異なる"""
 

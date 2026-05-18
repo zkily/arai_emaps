@@ -270,6 +270,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/bom/roller-bom', name: 'RollerBomManagement', component: () => import('@/views/master/bom/RollerBomManagement.vue'), meta: { title: 'ローラーBOM管理', requiresAuth: true } },
       { path: 'master/bom/product-bom', name: 'ProductBomEditor', component: () => import('@/views/master/bom/ProductBomEditor.vue'), meta: { title: '製品BOM表管理', requiresAuth: true } },
       { path: 'master/bom/process-processing-fee', name: 'ProcessProcessingFeeEditor', component: () => import('@/views/master/bom/ProcessProcessingFeeEditor.vue'), meta: { title: '工程加工費マスタ', requiresAuth: true } },
+      { path: 'master/bom/process-defect-items', name: 'ProcessDefectItemManagement', component: () => import('@/views/master/bom/ProcessDefectItemManagement.vue'), meta: { title: '工程別不良項目マスタ', requiresAuth: true } },
       { path: 'master/bom/product-unit-price', name: 'ProductProcessUnitPriceEditor', component: () => import('@/views/master/bom/ProductProcessUnitPriceEditor.vue'), meta: { title: '工程別標準原価管理', requiresAuth: true } },
 
       { path: 'master/roller-master', name: 'RollerMasterManagement', component: () => import('@/views/master/rollerMaster/RollerMasterManagement.vue'), meta: { title: 'ローラーマスタ', requiresAuth: true } },

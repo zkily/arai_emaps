@@ -30,6 +30,7 @@ import {
   Rank,
   ArrowLeft,
   ArrowRight,
+  Tools,
 } from '@element-plus/icons-vue'
 import MesBarcodeScanDialog from './MesBarcodeScanDialog.vue'
 import ScanRegisteredHint from './ScanRegisteredHint.vue'
@@ -77,6 +78,8 @@ interface PlanSession {
   wallEnd: number | null
   operatorUserId: number | null
   setupTimeMin: number | undefined
+  sawBladeExchangeMin: number | undefined
+  repairMin: number | undefined
 }
 
 function emptySession(): PlanSession {
@@ -89,7 +92,33 @@ function emptySession(): PlanSession {
     wallEnd: null,
     operatorUserId: null,
     setupTimeMin: undefined,
+    sawBladeExchangeMin: undefined,
+    repairMin: undefined,
   }
+}
+
+function roundMesMinute(val: number | undefined): number | undefined {
+  if (val === undefined || val === null || !Number.isFinite(Number(val))) return undefined
+  return Math.max(0, Math.round(Number(val)))
+}
+
+function appendMesMinuteFieldsToPatch(
+  body: PatchCuttingManagementBody,
+  s: Pick<PlanSession, 'setupTimeMin' | 'sawBladeExchangeMin' | 'repairMin'>,
+): void {
+  const setup = roundMesMinute(s.setupTimeMin)
+  if (setup !== undefined) body.mes_setup_time_min = setup
+  const blade = roundMesMinute(s.sawBladeExchangeMin)
+  if (blade !== undefined) body.mes_saw_blade_exchange_min = blade
+  const repair = roundMesMinute(s.repairMin)
+  if (repair !== undefined) body.mes_repair_min = repair
+}
+
+function mesMinuteFromRow(
+  val: number | null | undefined,
+): number | undefined {
+  if (val == null || !Number.isFinite(Number(val))) return undefined
+  return Math.max(0, Math.round(Number(val)))
 }
 
 /** 生産日（YYYY-MM-DD） */
@@ -635,6 +664,8 @@ async function onBarcodeScanned(code: string): Promise<void> {
 interface ConfirmedEditDraft {
   operatorUserId: number | null
   setupTimeMin: number | undefined
+  sawBladeExchangeMin: number | undefined
+  repairMin: number | undefined
   actualQty: number | null
   wallStart: Date | null
   wallEnd: Date | null
@@ -662,6 +693,8 @@ function buildClearMesFieldsPatchBody(): PatchCuttingManagementBody {
     mes_paused_accum_sec: -1,
     mes_production_is_paused: -1,
     mes_setup_time_min: -1,
+    mes_saw_blade_exchange_min: -1,
+    mes_repair_min: -1,
     mes_operator_user_id: 0,
     mes_scanned_code: '',
   }
@@ -709,6 +742,8 @@ function restoreConfirmedEditSessionFromDraft(planId: number, draft: ConfirmedEd
   const sess = ensureSession(planId)
   sess.operatorUserId = draft.operatorUserId
   sess.setupTimeMin = draft.setupTimeMin
+  sess.sawBladeExchangeMin = draft.sawBladeExchangeMin
+  sess.repairMin = draft.repairMin
   sess.wallStart = draft.savedWallStart
   sess.wallEnd = draft.savedWallEnd
   sess.pausedAccumMs = draft.savedPausedAccumMs
@@ -733,6 +768,8 @@ function openConfirmedEditDialog(row: CuttingMgmtRow): void {
   confirmedEditForm.value = {
     operatorUserId: sess.operatorUserId,
     setupTimeMin: sess.setupTimeMin,
+    sawBladeExchangeMin: sess.sawBladeExchangeMin,
+    repairMin: sess.repairMin,
     actualQty:
       row.actual_production_quantity != null && Number.isFinite(Number(row.actual_production_quantity))
         ? Math.round(Number(row.actual_production_quantity))
@@ -793,6 +830,8 @@ async function submitConfirmedEdit(): Promise<void> {
   const sess = ensureSession(planId)
   sess.operatorUserId = draft.operatorUserId
   sess.setupTimeMin = draft.setupTimeMin
+  sess.sawBladeExchangeMin = draft.sawBladeExchangeMin
+  sess.repairMin = draft.repairMin
 
   const body: PatchCuttingManagementBody = {
     mes_production_started_at: new Date(ws).toISOString(),
@@ -804,9 +843,7 @@ async function submitConfirmedEdit(): Promise<void> {
   if (draft.operatorUserId != null && draft.operatorUserId > 0) {
     body.mes_operator_user_id = draft.operatorUserId
   }
-  if (draft.setupTimeMin !== undefined && draft.setupTimeMin !== null && Number.isFinite(Number(draft.setupTimeMin))) {
-    body.mes_setup_time_min = Math.max(0, Math.round(Number(draft.setupTimeMin)))
-  }
+  appendMesMinuteFieldsToPatch(body, draft)
 
   const oldActual = Math.round(Number(row.actual_production_quantity ?? 0))
   const roundedNew =
@@ -1029,6 +1066,8 @@ function mesEndTrackingPatchBody(planId: number): Pick<
   | 'mes_net_production_sec'
   | 'mes_paused_accum_sec'
   | 'mes_setup_time_min'
+  | 'mes_saw_blade_exchange_min'
+  | 'mes_repair_min'
   | 'mes_operator_user_id'
 > {
   finalizeProductionTimer(planId)
@@ -1039,6 +1078,8 @@ function mesEndTrackingPatchBody(planId: number): Pick<
     | 'mes_net_production_sec'
     | 'mes_paused_accum_sec'
     | 'mes_setup_time_min'
+    | 'mes_saw_blade_exchange_min'
+    | 'mes_repair_min'
     | 'mes_operator_user_id'
   > = {
     mes_production_ended_at:
@@ -1046,10 +1087,7 @@ function mesEndTrackingPatchBody(planId: number): Pick<
     mes_net_production_sec: netProductionSeconds(s),
     mes_paused_accum_sec: pausedAccumSeconds(s),
   }
-  const st = s.setupTimeMin
-  if (st !== undefined && st !== null && Number.isFinite(Number(st))) {
-    body.mes_setup_time_min = Math.max(0, Math.round(Number(st)))
-  }
+  appendMesMinuteFieldsToPatch(body, s)
   if (s.operatorUserId != null && s.operatorUserId > 0) {
     body.mes_operator_user_id = s.operatorUserId
   }
@@ -1852,6 +1890,8 @@ async function syncMesStateFromServer(): Promise<void> {
       row.mes_paused_accum_sec = fresh.mes_paused_accum_sec
       row.mes_production_is_paused = fresh.mes_production_is_paused
       row.mes_setup_time_min = fresh.mes_setup_time_min
+      row.mes_saw_blade_exchange_min = fresh.mes_saw_blade_exchange_min
+      row.mes_repair_min = fresh.mes_repair_min
       row.mes_operator_user_id = fresh.mes_operator_user_id
       row.mes_scanned_code = fresh.mes_scanned_code
       row.production_completed_check = fresh.production_completed_check
@@ -1866,9 +1906,12 @@ async function syncMesStateFromServer(): Promise<void> {
       if (fresh.mes_operator_user_id != null && Number.isFinite(Number(fresh.mes_operator_user_id))) {
         sess.operatorUserId = Number(fresh.mes_operator_user_id)
       }
-      if (fresh.mes_setup_time_min != null && Number.isFinite(Number(fresh.mes_setup_time_min))) {
-        sess.setupTimeMin = Math.max(0, Math.round(Number(fresh.mes_setup_time_min)))
-      }
+      const setupMin = mesMinuteFromRow(fresh.mes_setup_time_min)
+      if (setupMin !== undefined) sess.setupTimeMin = setupMin
+      const bladeMin = mesMinuteFromRow(fresh.mes_saw_blade_exchange_min)
+      if (bladeMin !== undefined) sess.sawBladeExchangeMin = bladeMin
+      const repairMin = mesMinuteFromRow(fresh.mes_repair_min)
+      if (repairMin !== undefined) sess.repairMin = repairMin
     }
   } catch {
     /* ネットワーク揺らぎ時は次回ポーリングで再試行 */
@@ -1924,10 +1967,9 @@ async function loadPlans() {
           r.mes_operator_user_id != null && Number.isFinite(Number(r.mes_operator_user_id))
             ? Number(r.mes_operator_user_id)
             : null,
-        setupTimeMin:
-          r.mes_setup_time_min != null && Number.isFinite(Number(r.mes_setup_time_min))
-            ? Math.round(Number(r.mes_setup_time_min))
-            : undefined,
+        setupTimeMin: mesMinuteFromRow(r.mes_setup_time_min),
+        sawBladeExchangeMin: mesMinuteFromRow(r.mes_saw_blade_exchange_min),
+        repairMin: mesMinuteFromRow(r.mes_repair_min),
       }
       hydratePlanSessionFromRow(sess, r)
       if (sess.wallStart != null && sess.wallEnd == null) {
@@ -2349,63 +2391,96 @@ onUnmounted(() => {
                     />
                   </el-select>
                 </div>
-                <div class="plan-meta-field plan-meta-field--setup">
-                  <span class="plan-meta-field__label">
-                    <el-icon class="plan-meta-field__icon" aria-hidden="true"><Clock /></el-icon>
-                    {{ t('mesCuttingActual.setupTime') }}
-                    <span class="plan-meta-field__unit">（{{ t('mesCuttingActual.setupTimeUnit') }}）</span>
-                  </span>
-                  <el-input-number
-                    v-model="ensureSession(row.id).setupTimeMin"
-                    :min="0"
-                    :step="1"
-                    :precision="0"
-                    :disabled="isCuttingRowConfirmedForDisplay(row)"
-                    class="plan-field__number plan-field__number--setup"
-                  />
-                </div>
               </div>
             </div>
 
             <div class="plan-row__ops">
-            <div class="plan-row__timer">
-              <div
-                class="timer-compact"
-                :class="`timer-compact--${timerPhase(ensureSession(row.id))}`"
-              >
-                <div class="timer-compact__top">
-                  <span class="timer-compact__label">
-                    <el-icon class="timer-compact__label-icon" aria-hidden="true"><Clock /></el-icon>
-                    {{ t('mesCuttingActual.elapsed') }}
-                  </span>
-                  <span class="timer-compact__phase">{{ timerPhaseLabel(ensureSession(row.id)) }}</span>
-                </div>
-                <div class="timer-compact__readout-row">
-                  <div
-                    class="timer-compact__readout"
-                    :class="{
-                      'timer-compact__readout--display-frozen':
-                        timerPhase(ensureSession(row.id)) === 'paused',
-                    }"
-                  >{{ formatElapsed(operationDisplayMs(ensureSession(row.id))) }}</div>
-                  <div
-                    v-if="ensureSession(row.id).wallStart != null"
-                    class="timer-compact__pause-side"
-                  >
-                    <span class="timer-compact__pause-label">{{ t('mesCuttingActual.pausedAccum') }}</span>
-                    <span class="timer-compact__pause-value">{{
-                      formatElapsed(pausedAccumMs(ensureSession(row.id)))
-                    }}</span>
-                  </div>
-                </div>
-                <div class="timer-compact__walls">
-                  <span>{{ formatWall(ensureSession(row.id).wallStart) }}</span>
-                  <span class="timer-compact__sep">→</span>
-                  <span>{{ formatWall(ensureSession(row.id).wallEnd) }}</span>
-                </div>
+              <div class="plan-meta-field plan-meta-field--setup">
+                <span class="plan-meta-field__label">
+                  <el-icon class="plan-meta-field__icon" aria-hidden="true"><Clock /></el-icon>
+                  {{ t('mesCuttingActual.setupTime') }}
+                  <span class="plan-meta-field__unit">（{{ t('mesCuttingActual.setupTimeUnit') }}）</span>
+                </span>
+                <el-input-number
+                  v-model="ensureSession(row.id).setupTimeMin"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  :disabled="isCuttingRowConfirmedForDisplay(row)"
+                  class="plan-field__number plan-field__number--setup"
+                />
+              </div>
+              <div class="plan-meta-field plan-meta-field--blade">
+                <span class="plan-meta-field__label">
+                  <el-icon class="plan-meta-field__icon" aria-hidden="true"><SetUp /></el-icon>
+                  {{ t('mesCuttingActual.sawBladeExchange') }}
+                  <span class="plan-meta-field__unit">（{{ t('mesCuttingActual.setupTimeUnit') }}）</span>
+                </span>
+                <el-input-number
+                  v-model="ensureSession(row.id).sawBladeExchangeMin"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  :disabled="isCuttingRowConfirmedForDisplay(row)"
+                  class="plan-field__number plan-field__number--minutes"
+                />
+              </div>
+              <div class="plan-meta-field plan-meta-field--repair">
+                <span class="plan-meta-field__label">
+                  <el-icon class="plan-meta-field__icon" aria-hidden="true"><Tools /></el-icon>
+                  {{ t('mesCuttingActual.repairTime') }}
+                  <span class="plan-meta-field__unit">（{{ t('mesCuttingActual.setupTimeUnit') }}）</span>
+                </span>
+                <el-input-number
+                  v-model="ensureSession(row.id).repairMin"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  :disabled="isCuttingRowConfirmedForDisplay(row)"
+                  class="plan-field__number plan-field__number--minutes"
+                />
               </div>
             </div>
+
             <div class="plan-row__actions">
+                <div class="plan-row__timer">
+                <div
+                  class="timer-compact"
+                  :class="`timer-compact--${timerPhase(ensureSession(row.id))}`"
+                >
+                  <div class="timer-compact__top">
+                    <span class="timer-compact__label">
+                      <el-icon class="timer-compact__label-icon" aria-hidden="true"><Clock /></el-icon>
+                      {{ t('mesCuttingActual.elapsed') }}
+                    </span>
+                    <span class="timer-compact__phase">{{ timerPhaseLabel(ensureSession(row.id)) }}</span>
+                  </div>
+                  <div class="timer-compact__readout-row">
+                    <div
+                      class="timer-compact__readout"
+                      :class="{
+                        'timer-compact__readout--display-frozen':
+                          timerPhase(ensureSession(row.id)) === 'paused',
+                      }"
+                    >{{ formatElapsed(operationDisplayMs(ensureSession(row.id))) }}</div>
+                    <div
+                      v-if="ensureSession(row.id).wallStart != null"
+                      class="timer-compact__pause-side"
+                    >
+                      <span class="timer-compact__pause-label">{{ t('mesCuttingActual.pausedAccum') }}</span>
+                      <span class="timer-compact__pause-value">{{
+                        formatElapsed(pausedAccumMs(ensureSession(row.id)))
+                      }}</span>
+                    </div>
+                  </div>
+                  <div class="timer-compact__walls">
+                    <span>{{ formatWall(ensureSession(row.id).wallStart) }}</span>
+                    <span class="timer-compact__sep">→</span>
+                    <span>{{ formatWall(ensureSession(row.id).wallEnd) }}</span>
+                  </div>
+                </div>
+              </div>
+
               <el-button
                 class="plan-act-btn plan-act-btn--start"
                 :class="{
@@ -2453,7 +2528,6 @@ onUnmounted(() => {
                 <el-icon><SetUp /></el-icon>
                 {{ t('mesCuttingActual.btnChangeMachine') }}
               </el-button>
-            </div>
             </div>
 
           </div>
@@ -2760,6 +2834,36 @@ onUnmounted(() => {
             >
               <el-input-number
                 v-model="confirmedEditForm.setupTimeMin"
+                size="small"
+                :min="0"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+                class="confirmed-edit-full"
+              />
+            </el-form-item>
+          </div>
+          <div class="confirmed-edit-form-row">
+            <el-form-item
+              :label="`${t('mesCuttingActual.sawBladeExchange')}（${t('mesCuttingActual.setupTimeUnit')}）`"
+              class="confirmed-edit-form-item"
+            >
+              <el-input-number
+                v-model="confirmedEditForm.sawBladeExchangeMin"
+                size="small"
+                :min="0"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+                class="confirmed-edit-full"
+              />
+            </el-form-item>
+            <el-form-item
+              :label="`${t('mesCuttingActual.repairTime')}（${t('mesCuttingActual.setupTimeUnit')}）`"
+              class="confirmed-edit-form-item"
+            >
+              <el-input-number
+                v-model="confirmedEditForm.repairMin"
                 size="small"
                 :min="0"
                 :step="1"
@@ -3448,6 +3552,10 @@ onUnmounted(() => {
 }
 
 .plan-row {
+  --plan-meta-control-h: 32px;
+  --plan-meta-block-h: calc(var(--plan-meta-control-h) + 10px);
+  --plan-run-block-height: 5.25rem;
+  --plan-act-btn-width: 6.25rem;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -3470,23 +3578,105 @@ onUnmounted(() => {
 }
 
 .plan-row-remarks {
+  --plan-remarks-shine: rgba(255, 255, 255, 0.92);
+  position: relative;
   flex: 0 1 auto;
   min-width: 0;
   max-width: min(28rem, 100%);
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
-  border-radius: 4px;
+  padding: 2px 10px;
+  border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--el-color-danger);
   line-height: 1.35;
-  background: var(--el-color-danger-light-9);
+  background-color: var(--el-color-danger-light-9);
+  background-image: linear-gradient(
+    105deg,
+    var(--el-color-danger-light-9) 0%,
+    var(--el-color-danger-light-9) 38%,
+    #fff1f2 48%,
+    var(--plan-remarks-shine) 50%,
+    #fff1f2 52%,
+    var(--el-color-danger-light-9) 62%,
+    var(--el-color-danger-light-9) 100%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
   border: 1px solid var(--el-color-danger-light-5);
-  box-shadow: 0 0 0 1px rgba(245, 108, 108, 0.15);
+  box-shadow:
+    0 0 0 1px rgba(245, 108, 108, 0.2),
+    0 0 8px rgba(245, 108, 108, 0.22);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  animation:
+    plan-row-remarks-shine 2.6s ease-in-out infinite,
+    plan-row-remarks-glow 1.8s ease-in-out infinite;
+}
+
+.plan-row-remarks::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  animation: plan-row-remarks-flash 2.6s ease-in-out infinite;
+}
+
+@keyframes plan-row-remarks-shine {
+  0%,
+  18%,
+  100% {
+    background-position: 120% 0;
+  }
+  42%,
+  58% {
+    background-position: -20% 0;
+  }
+}
+
+@keyframes plan-row-remarks-glow {
+  0%,
+  100% {
+    border-color: var(--el-color-danger-light-5);
+    box-shadow:
+      0 0 0 1px rgba(245, 108, 108, 0.18),
+      0 0 6px rgba(245, 108, 108, 0.2);
+  }
+  50% {
+    border-color: var(--el-color-danger);
+    box-shadow:
+      0 0 0 2px rgba(245, 108, 108, 0.38),
+      0 0 14px rgba(245, 108, 108, 0.48);
+  }
+}
+
+@keyframes plan-row-remarks-flash {
+  0%,
+  24%,
+  100% {
+    opacity: 0;
+  }
+  44%,
+  52% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-row-remarks {
+    background-image: none;
+    animation: plan-row-remarks-glow 2.4s ease-in-out infinite;
+  }
+
+  .plan-row-remarks::after {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 .plan-row__meta {
@@ -3533,8 +3723,6 @@ onUnmounted(() => {
 }
 
 .plan-meta-chips {
-  --plan-meta-control-h: 32px;
-  --plan-meta-block-h: calc(var(--plan-meta-control-h) + 10px);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3551,31 +3739,25 @@ onUnmounted(() => {
 }
 
 .plan-row__ops {
-  --plan-run-block-height: 5.25rem;
-  --plan-act-btn-width: 6.25rem;
   box-sizing: border-box;
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  height: var(--plan-run-block-height);
-  max-height: var(--plan-run-block-height);
-  overflow: hidden;
 }
 
-.plan-row__ops .plan-row__timer {
+.plan-row__ops .plan-meta-field--setup,
+.plan-row__ops .plan-meta-field--blade,
+.plan-row__ops .plan-meta-field--repair {
   flex: 0 0 auto;
-  height: var(--plan-run-block-height);
-  max-height: var(--plan-run-block-height);
-  overflow: hidden;
+  align-self: center;
+  box-sizing: border-box;
+  min-height: var(--plan-meta-block-h);
+  height: var(--plan-meta-block-h);
 }
 
-.plan-row__ops .plan-row__actions {
+.plan-row > .plan-row__actions .plan-row__timer {
   flex: 0 0 auto;
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
   height: var(--plan-run-block-height);
   max-height: var(--plan-run-block-height);
   overflow: hidden;
@@ -3646,6 +3828,18 @@ onUnmounted(() => {
   border-color: #fcd34d;
 }
 
+.plan-meta-field--blade {
+  --plan-meta-control-w: 118px;
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  border-color: #67e8f9;
+}
+
+.plan-meta-field--repair {
+  --plan-meta-control-w: 118px;
+  background: linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%);
+  border-color: #fda4af;
+}
+
 .plan-meta-field__label {
   display: inline-flex;
   align-items: center;
@@ -3665,6 +3859,14 @@ onUnmounted(() => {
   color: #b45309;
 }
 
+.plan-meta-field--blade .plan-meta-field__label {
+  color: #0e7490;
+}
+
+.plan-meta-field--repair .plan-meta-field__label {
+  color: #be123c;
+}
+
 .plan-meta-field__icon {
   font-size: 0.9rem;
 }
@@ -3676,7 +3878,9 @@ onUnmounted(() => {
 
 .plan-meta-field .plan-field__control--operator,
 .plan-meta-field .plan-field__number--setup,
-.plan-meta-field .plan-field__number--setup :deep(.el-input-number) {
+.plan-meta-field .plan-field__number--setup :deep(.el-input-number),
+.plan-meta-field .plan-field__number--minutes,
+.plan-meta-field .plan-field__number--minutes :deep(.el-input-number) {
   width: var(--plan-meta-control-w);
   max-width: 100%;
   justify-self: start;
@@ -3701,7 +3905,23 @@ onUnmounted(() => {
   color: #b45309;
 }
 
-.plan-meta-field--setup :deep(.el-input-number) {
+.plan-meta-field--blade :deep(.el-input-number__decrease),
+.plan-meta-field--blade :deep(.el-input-number__increase) {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: #67e8f9;
+  color: #0e7490;
+}
+
+.plan-meta-field--repair :deep(.el-input-number__decrease),
+.plan-meta-field--repair :deep(.el-input-number__increase) {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: #fda4af;
+  color: #be123c;
+}
+
+.plan-meta-field--setup :deep(.el-input-number),
+.plan-meta-field--blade :deep(.el-input-number),
+.plan-meta-field--repair :deep(.el-input-number) {
   height: var(--plan-meta-control-h);
   line-height: var(--plan-meta-control-h);
 }
@@ -3712,6 +3932,22 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.92);
   border-color: #fcd34d;
   box-shadow: 0 1px 2px rgba(180, 83, 9, 0.08);
+}
+
+.plan-meta-field--blade :deep(.el-input__wrapper) {
+  min-height: var(--plan-meta-control-h);
+  height: var(--plan-meta-control-h);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #67e8f9;
+  box-shadow: 0 1px 2px rgba(14, 116, 144, 0.08);
+}
+
+.plan-meta-field--repair :deep(.el-input__wrapper) {
+  min-height: var(--plan-meta-control-h);
+  height: var(--plan-meta-control-h);
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #fda4af;
+  box-shadow: 0 1px 2px rgba(190, 18, 60, 0.08);
 }
 
 .plan-field--inline .plan-field__label {
@@ -3882,7 +4118,7 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.plan-row__ops .timer-compact {
+.plan-row > .plan-row__actions .timer-compact {
   height: 100%;
   max-height: var(--plan-run-block-height);
   padding: 6px 8px;
@@ -3892,21 +4128,21 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.plan-row__ops .timer-compact__readout-row {
+.plan-row > .plan-row__actions .timer-compact__readout-row {
   margin: 1px 0;
 }
 
-.plan-row__ops .timer-compact__readout {
+.plan-row > .plan-row__actions .timer-compact__readout {
   font-size: 1.1rem;
   line-height: 1.05;
 }
 
-.plan-row__ops .timer-compact__pause-value {
+.plan-row > .plan-row__actions .timer-compact__pause-value {
   font-size: 0.88rem;
   line-height: 1.05;
 }
 
-.plan-row__ops .timer-compact__walls {
+.plan-row > .plan-row__actions .timer-compact__walls {
   font-size: 0.68rem;
   line-height: 1.1;
 }
@@ -4115,11 +4351,12 @@ onUnmounted(() => {
   color: inherit;
 }
 
-.plan-row__actions {
+.plan-row > .plan-row__actions {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  align-items: stretch;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 6px;
+  min-height: var(--plan-run-block-height);
 }
 
 .plan-act-btn {
@@ -4136,7 +4373,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.plan-row__ops .plan-act-btn {
+.plan-row > .plan-row__actions .plan-act-btn {
   box-sizing: border-box;
   width: var(--plan-act-btn-width, 6.25rem);
   min-width: var(--plan-act-btn-width, 6.25rem);
@@ -4148,7 +4385,7 @@ onUnmounted(() => {
   line-height: 1.15;
 }
 
-.plan-row__ops .plan-act-btn :deep(span) {
+.plan-row > .plan-row__actions .plan-act-btn :deep(span) {
   line-height: 1.15;
 }
 

@@ -1,6 +1,6 @@
 /** MES 検査実績収集：ローカル復元（多端末・オフライン計測） */
 
-export const INSPECTION_ACTUAL_PERSIST_KEY = 'smart_emap_mes_inspection_actual_v2'
+export const WELDING_ACTUAL_PERSIST_KEY = 'smart_emap_mes_welding_actual_v2'
 
 const PERSIST_TTL_MS = 48 * 60 * 60 * 1000
 
@@ -31,18 +31,20 @@ interface PersistScopeData {
   operatedPlanIds?: number[]
 }
 
-export interface InspectionActualPersistStoreV2 {
+export interface WeldingActualPersistStoreV2 {
   v: 2
   productionDay: string
-  inspectorUserId: number | null
+  selectedWeldingMachineId: number | null
+  operatorUserId: number | null
   selectedProductCode: string | null
   activePlanId: number | null
   scopes: Record<string, PersistScopeData>
 }
 
-export interface InspectionActualPagePersistSnapshot {
+export interface WeldingActualPagePersistSnapshot {
   productionDay: string
-  inspectorUserId: number | null
+  selectedWeldingMachineId: number | null
+  operatorUserId: number | null
   selectedProductCode: string | null
   activePlanId: number | null
   sessions: Record<string, PersistedPlanSession>
@@ -57,42 +59,49 @@ function getStorage(): Storage | null {
   }
 }
 
-function emptyStoreV2(): InspectionActualPersistStoreV2 {
+function emptyStoreV2(): WeldingActualPersistStoreV2 {
   return {
     v: 2,
     productionDay: '',
-    inspectorUserId: null,
+    selectedWeldingMachineId: null,
+    operatorUserId: null,
     selectedProductCode: null,
     activePlanId: null,
     scopes: {},
   }
 }
 
-export function makePersistScopeKey(productionDay: string): string {
-  return (productionDay ?? '').trim() || '—'
+export function makePersistScopeKey(productionDay: string, machineId: number | null): string {
+  const day = (productionDay ?? '').trim() || '—'
+  return `${day}::${machineId ?? 'none'}`
 }
 
-function pruneExpiredScopes(store: InspectionActualPersistStoreV2): void {
+function pruneExpiredScopes(store: WeldingActualPersistStoreV2): void {
   const now = Date.now()
   for (const [key, scope] of Object.entries(store.scopes)) {
     if (now - scope.savedAt > PERSIST_TTL_MS) delete store.scopes[key]
   }
 }
 
-function loadStore(): InspectionActualPersistStoreV2 | null {
+function loadStore(): WeldingActualPersistStoreV2 | null {
   const storage = getStorage()
   if (!storage) return null
   try {
-    const raw = storage.getItem(INSPECTION_ACTUAL_PERSIST_KEY)
+    const raw = storage.getItem(WELDING_ACTUAL_PERSIST_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as Partial<InspectionActualPersistStoreV2>
+    const parsed = JSON.parse(raw) as Partial<WeldingActualPersistStoreV2>
     if (parsed.v !== 2) return null
-    const store: InspectionActualPersistStoreV2 = {
+    const store: WeldingActualPersistStoreV2 = {
       v: 2,
       productionDay: typeof parsed.productionDay === 'string' ? parsed.productionDay : '',
-      inspectorUserId:
-        parsed.inspectorUserId != null && Number.isFinite(Number(parsed.inspectorUserId))
-          ? Number(parsed.inspectorUserId)
+      selectedWeldingMachineId:
+        parsed.selectedWeldingMachineId != null &&
+        Number.isFinite(Number(parsed.selectedWeldingMachineId))
+          ? Number(parsed.selectedWeldingMachineId)
+          : null,
+      operatorUserId:
+        parsed.operatorUserId != null && Number.isFinite(Number(parsed.operatorUserId))
+          ? Number(parsed.operatorUserId)
           : null,
       selectedProductCode:
         typeof parsed.selectedProductCode === 'string' ? parsed.selectedProductCode : null,
@@ -109,17 +118,20 @@ function loadStore(): InspectionActualPersistStoreV2 | null {
   }
 }
 
-function writeStore(store: InspectionActualPersistStoreV2): void {
+function writeStore(store: WeldingActualPersistStoreV2): void {
   const storage = getStorage()
   if (!storage) return
   pruneExpiredScopes(store)
-  storage.setItem(INSPECTION_ACTUAL_PERSIST_KEY, JSON.stringify(store))
+  storage.setItem(WELDING_ACTUAL_PERSIST_KEY, JSON.stringify(store))
 }
 
-export function getScopeSessions(productionDay: string): Record<string, PersistedPlanSession> | null {
+export function getScopeSessions(
+  productionDay: string,
+  machineId: number | null,
+): Record<string, PersistedPlanSession> | null {
   const store = loadStore()
   if (!store) return null
-  const key = makePersistScopeKey(productionDay)
+  const key = makePersistScopeKey(productionDay, machineId)
   const scope = store.scopes[key]
   if (!scope) return null
   if (Date.now() - scope.savedAt > PERSIST_TTL_MS) {
@@ -130,17 +142,18 @@ export function getScopeSessions(productionDay: string): Record<string, Persiste
   return scope.sessions
 }
 
-export function loadInspectionActualPersist(): InspectionActualPagePersistSnapshot | null {
+export function loadWeldingActualPersist(): WeldingActualPagePersistSnapshot | null {
   const store = loadStore()
   if (!store) return null
-  const key = makePersistScopeKey(store.productionDay)
+  const key = makePersistScopeKey(store.productionDay, store.selectedWeldingMachineId)
   const scope = store.scopes[key]
   const operatedPlanIds = Array.isArray(scope?.operatedPlanIds)
     ? scope.operatedPlanIds.filter((id) => Number.isFinite(Number(id))).map((id) => Number(id))
     : []
   return {
     productionDay: store.productionDay,
-    inspectorUserId: store.inspectorUserId,
+    selectedWeldingMachineId: store.selectedWeldingMachineId,
+    operatorUserId: store.operatorUserId,
     selectedProductCode: store.selectedProductCode,
     activePlanId: store.activePlanId,
     sessions: scope?.sessions ?? {},
@@ -148,12 +161,13 @@ export function loadInspectionActualPersist(): InspectionActualPagePersistSnapsh
   }
 }
 
-export function saveInspectionActualPersist(payload: InspectionActualPagePersistSnapshot): void {
+export function saveWeldingActualPersist(payload: WeldingActualPagePersistSnapshot): void {
   try {
     const store = loadStore() ?? emptyStoreV2()
-    const key = makePersistScopeKey(payload.productionDay)
+    const key = makePersistScopeKey(payload.productionDay, payload.selectedWeldingMachineId)
     store.productionDay = payload.productionDay
-    store.inspectorUserId = payload.inspectorUserId
+    store.selectedWeldingMachineId = payload.selectedWeldingMachineId
+    store.operatorUserId = payload.operatorUserId
     store.selectedProductCode = payload.selectedProductCode
     store.activePlanId = payload.activePlanId
     if (/^\d{4}-\d{2}-\d{2}$/.test(payload.productionDay)) {
@@ -166,7 +180,7 @@ export function saveInspectionActualPersist(payload: InspectionActualPagePersist
     }
     writeStore(store)
   } catch (e) {
-    console.warn('[inspectionActual] persist save failed', e)
+    console.warn('[weldingActual] persist save failed', e)
   }
 }
 
@@ -222,9 +236,8 @@ export function hydratePlanSessionFromRow(
     }
     if (pausedSec != null && Number.isFinite(Number(pausedSec))) {
       sess.pausedAccumMs = Math.max(0, Math.round(Number(pausedSec))) * 1000
-    } else if (!Number.isNaN(ws)) {
-      const wallSpan = Math.max(0, we - ws)
-      sess.pausedAccumMs = Math.max(0, wallSpan - (sess.activeAccumMs ?? 0))
+    } else {
+      sess.pausedAccumMs = 0
     }
     return
   }
@@ -247,9 +260,6 @@ export function hydratePlanSessionFromRow(
   if (pausedFlag === true) {
     sess.runningSliceStart = null
     sess.pauseSliceStart = now
-    if (nsec == null) {
-      sess.pausedAccumMs = Math.max(0, now - ws)
-    }
     return
   }
 
@@ -274,7 +284,7 @@ export function flushRunningSlice(sess: PlanSessionLike, now = Date.now()): void
   }
 }
 
-/** 一時停止累計の表示用（セッションを変更しない） */
+/** 一時停止累計の表示用（一時停止ボタン操作分のみ。セッションを変更しない） */
 export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) return 0
 
@@ -282,21 +292,10 @@ export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): numbe
   if (sess.pauseSliceStart != null) {
     ms += Math.max(0, at - sess.pauseSliceStart)
   }
-
-  const wallEnd = sess.wallEnd ?? at
-  const wallSpan = Math.max(0, wallEnd - sess.wallStart)
-  let netMs = sess.activeAccumMs ?? 0
-  if (sess.runningSliceStart != null && sess.wallEnd == null) {
-    netMs += Math.max(0, at - sess.runningSliceStart)
-  }
-  const derived = Math.max(0, wallSpan - Math.min(Math.max(0, netMs), wallSpan))
-  return Math.max(0, Math.max(ms, derived))
+  return Math.max(0, ms)
 }
 
-/**
- * 生産終了時に一時停止累計を確定（明示累計と壁時計−净稼働の大きい方）。
- * 戻り値はミリ秒。
- */
+/** 生産終了時に一時停止累計を確定（一時停止ボタンで積み上げた分のみ）。戻り値はミリ秒。 */
 export function freezePausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) {
     sess.pausedAccumMs = 0
@@ -310,14 +309,7 @@ export function freezePausedAccumMs(sess: PlanSessionLike, at = Date.now()): num
     sess.pauseSliceStart = null
   }
 
-  const wallEnd = sess.wallEnd ?? at
-  const wallSpan = Math.max(0, wallEnd - sess.wallStart)
-  let netMs = sess.activeAccumMs ?? 0
-  if (sess.runningSliceStart != null && sess.wallEnd == null) {
-    netMs += Math.max(0, at - sess.runningSliceStart)
-  }
-  const derived = Math.max(0, wallSpan - Math.min(Math.max(0, netMs), wallSpan))
-  const total = Math.max(ms, derived)
+  const total = Math.max(0, ms)
   sess.pausedAccumMs = total
   return total
 }
@@ -380,10 +372,11 @@ export function serializePlanSessions(
 
 export function applyPersistedSessionsForScope(
   scopeDay: string,
+  machineId: number | null,
   rowIds: number[],
   ensureSession: (planId: number) => PlanSessionLike,
 ): boolean {
-  const scopeSessions = getScopeSessions(scopeDay)
+  const scopeSessions = getScopeSessions(scopeDay, machineId)
   if (!scopeSessions) return false
   let any = false
   for (const id of rowIds) {

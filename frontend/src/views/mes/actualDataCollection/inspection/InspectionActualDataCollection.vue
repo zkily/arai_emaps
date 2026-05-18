@@ -1,15 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   ArrowRight,
   Calendar,
   CircleCheck,
   Clock,
+  Camera,
   DataLine,
+  Edit,
+  InfoFilled,
   Minus,
   Plus,
+  Printer,
+  RefreshLeft,
   User,
   VideoPause,
   VideoPlay,
@@ -17,6 +23,7 @@ import {
 import { setLocale, type LocaleType } from '@/i18n'
 import { formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
 import { formatDurationMs, parseDefectsFromRow } from './inspectionActualPersist'
+import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useInspectionMesCollection, type InspectionMgmtRow } from './useInspectionMesCollection'
 
 defineOptions({ name: 'InspectionActualDataCollection' })
@@ -24,15 +31,27 @@ defineOptions({ name: 'InspectionActualDataCollection' })
 const { t, locale } = useI18n()
 const mes = useInspectionMesCollection()
 const {
-  INSPECTION_DEFECT_ITEMS,
+  defectItems,
+  loadingDefectItems,
   productionDay,
   inspectorUserId,
   selectedProductCode,
+  activePlanId,
   activeRow,
-  hideCompleted,
+  inProgressRows,
+  focusInProgressRow,
+  resumeInProgressSession,
+  canResumeSession,
+  rowMesLockOwner,
+  isPlanLocallyOperated,
+  showSessionRecoveryAlert,
+  inspectorNameById,
+  isInspectorOptionDisabled,
+  inspectorOptionLabel,
   products,
   inspectors,
   completedRows,
+  showPlanProductionCard,
   loadingProducts,
   loadingInspectors,
   loadingPlans,
@@ -58,16 +77,36 @@ const {
   submitProductionEnd,
   defectCount,
   bumpDefect,
+  defectItemLabel,
   defectRowsForRecord,
+  productScanDialogVisible,
+  canScanProduct,
+  openProductScanDialog,
+  onProductBarcodeScanned,
   workSession,
   formatElapsed,
   operationDisplayMs,
-  pausedAccumMs,
+  rowWallElapsedSec,
+  rowPausedAccumSec,
+  pausedDisplay,
   timerPhase,
   timerPhaseLabel,
   formatWall,
+  sessionWallStartTs,
   init,
   teardownLifecycle,
+  confirmedEditDialogVisible,
+  confirmedEditRow,
+  confirmedEditForm,
+  confirmedEditSaving,
+  confirmedEditClearing,
+  confirmedEditElapsedPreview,
+  openConfirmedHistoryEdit,
+  closeConfirmedHistoryEdit,
+  submitConfirmedHistoryEdit,
+  clearConfirmedHistoryMesAndSave,
+  confirmedEditDefectCount,
+  bumpConfirmedEditDefect,
 } = mes
 
 /** タブレット/スマホでは filterable オフ（タップでソフトキーボードを出さない） */
@@ -132,6 +171,18 @@ function formatDurationSec(sec: number | null | undefined): string {
   return formatDurationMs(Math.max(0, (sec ?? 0) * 1000))
 }
 
+/** 秒 → 分（整数・分単位表示） */
+function formatSecondsAsMinutes(sec: number | null | undefined): string {
+  const s = Math.max(0, sec ?? 0)
+  return String(Math.round(s / 60))
+}
+
+function historyDefectQty(row: InspectionMgmtRow): number {
+  const stored = Number(row.defect_qty ?? 0)
+  if (Number.isFinite(stored) && stored > 0) return Math.round(stored)
+  return defectRowsForHistory(row).reduce((sum, d) => sum + d.qty, 0)
+}
+
 function defectRowsForHistory(rec: InspectionMgmtRow) {
   return defectRowsForRecord(parseDefectsFromRow(rec.mes_defect_by_item))
 }
@@ -140,6 +191,180 @@ function formatDefectsCell(rec: InspectionMgmtRow): string {
   const rows = defectRowsForHistory(rec)
   if (!rows.length) return '—'
   return rows.map((r) => `${r.label} ${r.qty}`).join('、')
+}
+
+/** 不良率 = 不良数 ÷ 生産数（%・小数1位） */
+function formatDefectRate(row: InspectionMgmtRow): string {
+  const prod = Number(row.actual_production_quantity ?? 0)
+  const defects = Number(row.defect_qty ?? 0)
+  if (!Number.isFinite(prod) || prod <= 0) return '—'
+  const pct = (Math.max(0, defects) / prod) * 100
+  return `${pct.toFixed(1)}%`
+}
+
+/** 能率 = 生産数 ÷（稼働時間 − 一時停止）［時間単位・整数］ */
+function formatEfficiencyRate(row: InspectionMgmtRow): string {
+  const prod = Number(row.actual_production_quantity ?? 0)
+  if (!Number.isFinite(prod) || prod <= 0) return '—'
+  const netSec = Math.max(0, rowWallElapsedSec(row) - rowPausedAccumSec(row))
+  if (netSec <= 0) return '—'
+  const hours = netSec / 3600
+  const rate = prod / hours
+  if (!Number.isFinite(rate)) return '—'
+  return String(Math.round(rate))
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function historyDefectCellForPrint(row: InspectionMgmtRow): string {
+  const qty = historyDefectQty(row)
+  if (qty <= 0) return '—'
+  return String(qty)
+}
+
+function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
+  const day = (productionDay.value ?? '').trim()
+  const title = t('mesInspectionActual.historyTitle')
+  const dayLabel = t('mesInspectionActual.productionDay')
+  const printedLabel = t('mesInspectionActual.printedAt')
+  const rowCountLabel = t('mesInspectionActual.printRowCount', { n: rows.length })
+
+  const headers = [
+    t('mesInspectionActual.inspector'),
+    t('mesInspectionActual.productName'),
+    t('mesInspectionActual.productionQty'),
+    t('mesInspectionActual.defectQty'),
+    t('mesInspectionActual.defectRate'),
+    t('mesInspectionActual.efficiencyRate'),
+    t('mesInspectionActual.productionStart'),
+    t('mesInspectionActual.productionEnd'),
+    t('mesInspectionActual.elapsedMinutes'),
+    t('mesInspectionActual.pausedAccumMinutes'),
+  ]
+
+  const th = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')
+  const numericColIndexes = new Set([2, 3, 4, 5, 8, 9])
+  const body = rows
+    .map((row) => {
+      const cells = [
+        inspectorNameForUserId(row.mes_inspector_user_id),
+        row.product_name || '—',
+        String(row.actual_production_quantity ?? 0),
+        historyDefectCellForPrint(row),
+        formatDefectRate(row),
+        formatEfficiencyRate(row),
+        formatRecordTime(row.mes_production_started_at),
+        formatRecordTime(row.mes_production_ended_at),
+        formatSecondsAsMinutes(rowWallElapsedSec(row)),
+        formatSecondsAsMinutes(rowPausedAccumSec(row)),
+      ]
+      return `<tr>${cells
+        .map((c, i) => {
+          const cls = numericColIndexes.has(i) ? ' class="num"' : ''
+          return `<td${cls}>${escapeHtml(c)}</td>`
+        })
+        .join('')}</tr>`
+    })
+    .join('')
+
+  const printedAt = formatDateTimeJST(new Date(), intlLocale.value, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+
+  return `<!DOCTYPE html>
+<html lang="${String(locale.value)}">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif; margin: 12mm; color: #111; font-size: 11px; }
+    h1 { margin: 0 0 4px; font-size: 16px; }
+    .meta { margin: 0 0 12px; color: #444; font-size: 11px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #333; padding: 5px 6px; text-align: left; vertical-align: top; }
+    th { background: #e8f5f3; font-weight: 700; }
+    td.num { text-align: right; }
+    @media print { body { margin: 8mm; } }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <p class="meta">${escapeHtml(dayLabel)}: ${escapeHtml(day || '—')} &nbsp;|&nbsp; ${escapeHtml(printedLabel)}: ${escapeHtml(printedAt)} &nbsp;|&nbsp; ${escapeHtml(rowCountLabel)}</p>
+  <table>
+    <thead><tr>${th}</tr></thead>
+    <tbody>${body}</tbody>
+  </table>
+</body>
+</html>`
+}
+
+const historyPrintFrameRef = ref<HTMLIFrameElement | null>(null)
+
+function runPrintOnWindow(win: Window): void {
+  const trigger = () => {
+    try {
+      win.focus()
+      win.print()
+    } catch (e) {
+      console.error(e)
+      ElMessage.error(t('mesInspectionActual.printFailed'))
+    }
+  }
+  if (win.document.readyState === 'complete') {
+    setTimeout(trigger, 250)
+  } else {
+    win.addEventListener('load', () => setTimeout(trigger, 250), { once: true })
+  }
+}
+
+function printCompletedHistoryTable(): void {
+  const rows = completedRows.value
+  if (!rows.length) return
+
+  const html = buildCompletedHistoryPrintHtml(rows)
+
+  const iframe = historyPrintFrameRef.value
+  const iframeWin = iframe?.contentWindow
+  if (iframe && iframeWin) {
+    const doc = iframe.contentDocument ?? iframeWin.document
+    doc.open()
+    doc.write(html)
+    doc.close()
+    runPrintOnWindow(iframeWin)
+    return
+  }
+
+  const printWindow = window.open('about:blank', '_blank')
+  if (!printWindow) {
+    ElMessage.warning(t('mesInspectionActual.printBlocked'))
+    return
+  }
+  printWindow.document.open()
+  printWindow.document.write(html)
+  printWindow.document.close()
+  runPrintOnWindow(printWindow)
+  printWindow.addEventListener(
+    'afterprint',
+    () => {
+      try {
+        printWindow.close()
+      } catch {
+        /* ignore */
+      }
+    },
+    { once: true },
+  )
 }
 
 const localeIconOptions: { value: LocaleType; label: string; glyph: string }[] = [
@@ -273,8 +498,9 @@ onUnmounted(() => {
             <el-option
               v-for="u in inspectors"
               :key="u.id"
-              :label="u.full_name || u.username"
+              :label="inspectorOptionLabel(u)"
               :value="u.id"
+              :disabled="isInspectorOptionDisabled(u.id)"
             />
           </el-select>
         </div>
@@ -284,43 +510,79 @@ onUnmounted(() => {
             <el-icon><DataLine /></el-icon>
           </span>
           <span class="toolbar-field-row__label">{{ t('mesInspectionActual.selectProduct') }}</span>
-          <el-select
-            v-model="selectedProductCode"
-            :filterable="touchSelectFilterable"
-            clearable
-            teleported
-            class="toolbar-control product-select-toolbar"
-            :placeholder="t('mesInspectionActual.productPlaceholder')"
-            :loading="loadingProducts"
-            :disabled="canEnd"
-            @visible-change="onMesSelectVisibleChange"
-          >
-            <el-option
-              v-for="p in products"
-              :key="p.product_code"
-              :label="`${p.product_code} · ${p.product_name}`"
-              :value="p.product_code"
-            />
-          </el-select>
-        </div>
-
-        <div
-          class="toolbar-field-row toolbar-field-row--switch toolbar-filter-switch"
-          :class="{ 'toolbar-filter-switch--active': hideCompleted }"
-        >
-          <span class="toolbar-field-row__label toolbar-filter-switch__text">{{
-            t('mesInspectionActual.hideCompleted')
-          }}</span>
-          <el-switch
-            v-model="hideCompleted"
-            class="toolbar-filter-switch__control"
-            inline-prompt
-            :active-text="t('mesInspectionActual.filterSwitchOn')"
-            :inactive-text="t('mesInspectionActual.filterSwitchOff')"
-          />
+          <div class="toolbar-product-scan-wrap">
+            <el-select
+              v-model="selectedProductCode"
+              :filterable="touchSelectFilterable"
+              clearable
+              teleported
+              class="toolbar-control product-select-toolbar"
+              :placeholder="t('mesInspectionActual.productPlaceholder')"
+              :loading="loadingProducts"
+              :disabled="canEnd"
+              @visible-change="onMesSelectVisibleChange"
+            >
+              <el-option
+                v-for="p in products"
+                :key="p.product_code"
+                :label="`${p.product_code} · ${p.product_name}`"
+                :value="p.product_code"
+              />
+            </el-select>
+            <el-button
+              type="warning"
+              plain
+              class="toolbar-product-scan-btn"
+              :disabled="!canScanProduct || loadingProducts"
+              @click="openProductScanDialog"
+            >
+              <el-icon><Camera /></el-icon>
+              {{ t('mesInspectionActual.btnScanCode') }}
+            </el-button>
+          </div>
         </div>
       </div>
     </el-card>
+
+    <div
+      v-if="inProgressRows.length > 0"
+      class="in-progress-strip"
+      role="region"
+      :aria-label="t('mesInspectionActual.inProgressStripTitle')"
+    >
+      <span class="in-progress-strip__title">{{ t('mesInspectionActual.inProgressStripTitle') }}</span>
+      <div class="in-progress-strip__chips">
+        <div
+          v-for="row in inProgressRows"
+          :key="row.id"
+          class="in-progress-chip-wrap"
+          :class="{ 'in-progress-chip-wrap--active': row.id === activePlanId }"
+        >
+          <button type="button" class="in-progress-chip" @click="focusInProgressRow(row)">
+            <span class="in-progress-chip__product">{{
+              row.product_name || row.product_cd || '—'
+            }}</span>
+            <span class="in-progress-chip__inspector">{{
+              inspectorNameById(row.mes_inspector_user_id) || t('mesInspectionActual.inspectorMissing')
+            }}</span>
+            <span v-if="rowMesLockOwner(row) === 'other'" class="in-progress-chip__lock-hint">
+              {{ t('mesInspectionActual.sessionLockedByOtherTerminalShort') }}
+            </span>
+          </button>
+          <div class="in-progress-chip__actions">
+            <el-button
+              v-if="canResumeSession(row)"
+              size="small"
+              type="primary"
+              plain
+              @click.stop="resumeInProgressSession(row)"
+            >
+              {{ t('mesInspectionActual.btnResumeSession') }}
+            </el-button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div v-if="showOfflineAlert" class="offline-strip" role="status">
       <span class="offline-strip__dot" aria-hidden="true" />
@@ -331,7 +593,26 @@ onUnmounted(() => {
       <template v-if="!selectedProductCode">
         <el-empty :description="t('mesInspectionActual.emptySelectProduct')" />
       </template>
-      <template v-else>
+      <template v-else-if="showPlanProductionCard">
+      <el-alert
+        v-if="showSessionRecoveryAlert"
+        type="info"
+        :closable="false"
+        show-icon
+        class="session-recovery-alert"
+      >
+        <template #title>{{ t('mesInspectionActual.sessionRecoveryTitle') }}</template>
+        <p class="session-recovery-alert__text">{{ t('mesInspectionActual.sessionRecoveryHint') }}</p>
+        <el-button
+          v-if="activeRow"
+          type="primary"
+          size="small"
+          class="session-recovery-alert__btn"
+          @click="resumeInProgressSession(activeRow)"
+        >
+          {{ t('mesInspectionActual.btnResumeSession') }}
+        </el-button>
+      </el-alert>
       <el-card shadow="hover" class="plan-row-card">
         <div class="plan-row">
           <div class="plan-row__head">
@@ -382,8 +663,9 @@ onUnmounted(() => {
                 <el-option
                   v-for="u in inspectors"
                   :key="u.id"
-                  :label="u.full_name || u.username"
+                  :label="inspectorOptionLabel(u)"
                   :value="u.id"
+                  :disabled="isInspectorOptionDisabled(u.id)"
                 />
               </el-select>
               </div>
@@ -408,22 +690,18 @@ onUnmounted(() => {
                 <div class="timer-compact__readout-row">
                   <div
                     class="timer-compact__readout"
-                    :class="{
-                      'timer-compact__readout--display-frozen':
-                        currentSession && timerPhase(currentSession) === 'paused',
-                    }"
                   >
                     {{ formatElapsed(currentSession ? operationDisplayMs(currentSession) : 0) }}
                   </div>
-                  <div v-if="currentSession?.wallStart != null" class="timer-compact__pause-side">
+                  <div v-if="currentSession && sessionWallStartTs(currentSession) != null" class="timer-compact__pause-side">
                     <span class="timer-compact__pause-label">{{ t('mesInspectionActual.pausedAccum') }}</span>
-                    <span class="timer-compact__pause-value">{{
-                      formatElapsed(pausedAccumMs(currentSession))
-                    }}</span>
+                    <span class="timer-compact__pause-value">{{ pausedDisplay }}</span>
                   </div>
                 </div>
                 <div class="timer-compact__walls">
-                  <span>{{ formatWall(currentSession?.wallStart ?? null) }}</span>
+                  <span>{{
+                    formatWall(currentSession ? sessionWallStartTs(currentSession) : null)
+                  }}</span>
                   <span class="timer-compact__sep">→</span>
                   <span>{{ formatWall(currentSession?.wallEnd ?? null) }}</span>
                 </div>
@@ -474,14 +752,17 @@ onUnmounted(() => {
               <h3 class="defect-panel__title">{{ t('mesInspectionActual.defectByItem') }}</h3>
               <p class="defect-panel__hint">{{ t('mesInspectionActual.defectHint') }}</p>
             </div>
-            <div class="defect-grid">
+            <div v-loading="loadingDefectItems" class="defect-grid">
+              <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
+                {{ t('mesInspectionActual.defectItemsEmpty') }}
+              </p>
               <div
-                v-for="item in INSPECTION_DEFECT_ITEMS"
+                v-for="item in defectItems"
                 :key="item.id"
                 class="defect-cell"
                 :class="{ 'defect-cell--active': defectCount(item.id) > 0 }"
               >
-                <span class="defect-cell__label">{{ t(`mesInspectionActual.${item.labelKey}`) }}</span>
+                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
                 <div class="defect-stepper">
                   <el-button
                     class="defect-stepper__btn"
@@ -506,8 +787,9 @@ onUnmounted(() => {
         </div>
       </el-card>
       </template>
+    </div>
 
-      <section v-if="!hideCompleted && completedRows.length > 0" class="inspection-history-section">
+    <section v-if="completedRows.length > 0" class="inspection-history-section">
         <el-card shadow="never" class="inspection-history-table-card">
           <header class="inspection-history-table-card__head">
             <div class="inspection-history-table-card__title-row">
@@ -518,9 +800,12 @@ onUnmounted(() => {
                 {{ t('mesInspectionActual.historyTitle') }}
               </h2>
             </div>
-            <span class="inspection-history-table-card__count">
-              {{ completedRows.length }}
-            </span>
+            <div class="inspection-history-table-card__actions">
+              <span class="inspection-history-table-card__count">{{ completedRows.length }}</span>
+              <el-button size="small" :icon="Printer" @click="printCompletedHistoryTable">
+                {{ t('mesInspectionActual.btnPrintHistory') }}
+              </el-button>
+            </div>
           </header>
           <div class="inspection-history-table-wrap">
             <el-table
@@ -531,26 +816,9 @@ onUnmounted(() => {
               row-key="id"
             >
               <el-table-column
-                :label="t('mesInspectionActual.historyColProductCd')"
-                min-width="104"
-                fixed="left"
-              >
-                <template #default="{ row }">
-                  <span class="hist-cell-code">{{ row.product_cd || '—' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
-                :label="t('mesInspectionActual.productName')"
-                min-width="148"
-                show-overflow-tooltip
-              >
-                <template #default="{ row }">
-                  <span class="hist-cell-name">{{ row.product_name || '—' }}</span>
-                </template>
-              </el-table-column>
-              <el-table-column
                 :label="t('mesInspectionActual.inspector')"
-                min-width="100"
+                width="120"
+                fixed="left"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -558,6 +826,15 @@ onUnmounted(() => {
                     <el-icon class="hist-cell-inspector__icon" aria-hidden="true"><User /></el-icon>
                     {{ inspectorNameForUserId(row.mes_inspector_user_id) }}
                   </span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesInspectionActual.productName')"
+                width="120"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
+                  <span class="hist-cell-name">{{ row.product_name || '—' }}</span>
                 </template>
               </el-table-column>
               <el-table-column
@@ -572,8 +849,43 @@ onUnmounted(() => {
                 </template>
               </el-table-column>
               <el-table-column
+                :label="t('mesInspectionActual.defectQty')"
+                width="80"
+                align="right"
+              >
+                <template #default="{ row }">
+                  <el-tooltip
+                    v-if="historyDefectQty(row) > 0"
+                    :content="formatDefectsCell(row)"
+                    placement="top"
+                    :show-after="200"
+                  >
+                    <span class="hist-cell-defect-qty">{{ historyDefectQty(row).toLocaleString() }}</span>
+                  </el-tooltip>
+                  <span v-else class="hist-cell-empty">—</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesInspectionActual.defectRate')"
+                width="88"
+                align="right"
+              >
+                <template #default="{ row }">
+                  <span class="hist-cell-rate">{{ formatDefectRate(row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesInspectionActual.efficiencyRate')"
+                width="80"
+                align="right"
+              >
+                <template #default="{ row }">
+                  <span class="hist-cell-efficiency">{{ formatEfficiencyRate(row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
                 :label="t('mesInspectionActual.productionStart')"
-                min-width="118"
+                width="150"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_started_at) }}</span>
@@ -581,125 +893,378 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionEnd')"
-                min-width="118"
+                width="150"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_ended_at) }}</span>
                 </template>
               </el-table-column>
               <el-table-column
-                :label="t('mesInspectionActual.elapsed')"
-                width="92"
+                :label="t('mesInspectionActual.elapsedMinutes')"
+                width="110"
                 align="right"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-duration hist-cell-duration--active">{{
-                    formatDurationSec(row.mes_net_production_sec)
+                    formatSecondsAsMinutes(rowWallElapsedSec(row))
                   }}</span>
                 </template>
               </el-table-column>
               <el-table-column
-                :label="t('mesInspectionActual.pausedAccum')"
-                width="92"
+                :label="t('mesInspectionActual.pausedAccumMinutes')"
+                width="110"
                 align="right"
               >
                 <template #default="{ row }">
                   <span
                     class="hist-cell-duration"
-                    :class="{ 'hist-cell-duration--muted': !(row.mes_paused_accum_sec ?? 0) }"
+                    :class="{ 'hist-cell-duration--muted': !rowPausedAccumSec(row) }"
                   >
-                    {{ formatDurationSec(row.mes_paused_accum_sec) }}
+                    {{ formatSecondsAsMinutes(rowPausedAccumSec(row)) }}
                   </span>
                 </template>
               </el-table-column>
               <el-table-column
-                :label="t('mesInspectionActual.defectByItem')"
-                min-width="140"
-                show-overflow-tooltip
+                :label="t('mesInspectionActual.historyActions')"
+                width="88"
+                fixed="right"
+                align="center"
               >
                 <template #default="{ row }">
-                  <div v-if="defectRowsForHistory(row).length" class="hist-cell-defects">
-                    <el-tag
-                      v-for="d in defectRowsForHistory(row)"
-                      :key="d.id"
-                      size="small"
-                      type="warning"
-                      effect="plain"
-                      class="hist-cell-defects__tag"
-                    >
-                      {{ d.label }} <strong>{{ d.qty }}</strong>
-                    </el-tag>
-                  </div>
-                  <span v-else class="hist-cell-empty">—</span>
+                  <el-button
+                    link
+                    type="primary"
+                    size="small"
+                    class="hist-cell-action-btn"
+                    @click="openConfirmedHistoryEdit(row)"
+                  >
+                    <el-icon><Edit /></el-icon>
+                    {{ t('mesInspectionActual.btnEditConfirmed') }}
+                  </el-button>
                 </template>
               </el-table-column>
             </el-table>
           </div>
+          <iframe
+            ref="historyPrintFrameRef"
+            class="inspection-history-print-frame"
+            title="print"
+            tabindex="-1"
+            aria-hidden="true"
+          />
         </el-card>
-      </section>
-    </div>
+    </section>
 
     <el-dialog
       v-model="endDialogVisible"
-      :title="t('mesInspectionActual.endDialogTitle')"
-      width="480px"
+      width="min(96vw, 440px)"
+      :show-close="true"
       append-to-body
       destroy-on-close
       align-center
       class="production-end-dialog"
       @close="closeEndDialog"
     >
+      <template #header>
+        <header class="end-dialog-header">
+          <span class="end-dialog-header__icon" aria-hidden="true">
+            <el-icon :size="20"><CircleCheck /></el-icon>
+          </span>
+          <div class="end-dialog-header__text">
+            <h3 class="end-dialog-header__title">{{ t('mesInspectionActual.endDialogTitle') }}</h3>
+            <p class="end-dialog-header__sub">{{ t('mesInspectionActual.endDialogIntro') }}</p>
+          </div>
+        </header>
+      </template>
+
       <div v-if="endDialogPreview" class="end-dialog-body">
-        <p class="end-dialog-product">{{ displayProductCd }} · {{ displayProductName }}</p>
-        <div class="end-dialog-meta">
-          <div class="end-dialog-meta-item">
-            <span class="end-dialog-meta-label">{{ t('mesInspectionActual.inspector') }}</span>
-            <span class="end-dialog-meta-value">{{ endDialogPreview.inspectorName }}</span>
+        <section class="end-dialog-product-card">
+          <span class="end-dialog-product-card__cd">{{ displayProductCd }}</span>
+          <span class="end-dialog-product-card__name">{{ displayProductName }}</span>
+        </section>
+        <div class="end-dialog-stats">
+          <div class="end-dialog-stat">
+            <span class="end-dialog-stat__label">{{ t('mesInspectionActual.inspector') }}</span>
+            <span class="end-dialog-stat__value">{{ endDialogPreview.inspectorName }}</span>
           </div>
-          <div class="end-dialog-meta-item">
-            <span class="end-dialog-meta-label">{{ t('mesInspectionActual.productionStart') }}</span>
-            <span class="end-dialog-meta-value">{{ formatRecordTime(endDialogPreview.wallStart) }}</span>
+          <div class="end-dialog-stat">
+            <span class="end-dialog-stat__label">{{ t('mesInspectionActual.productionStart') }}</span>
+            <span class="end-dialog-stat__value">{{ formatRecordTime(endDialogPreview.wallStart) }}</span>
           </div>
-          <div class="end-dialog-meta-item">
-            <span class="end-dialog-meta-label">{{ t('mesInspectionActual.productionEnd') }}</span>
-            <span class="end-dialog-meta-value">{{ formatRecordTime(endDialogPreview.wallEnd) }}</span>
+          <div class="end-dialog-stat">
+            <span class="end-dialog-stat__label">{{ t('mesInspectionActual.productionEnd') }}</span>
+            <span class="end-dialog-stat__value">{{ formatRecordTime(endDialogPreview.wallEnd) }}</span>
+          </div>
+          <div class="end-dialog-stat">
+            <span class="end-dialog-stat__label">{{ t('mesInspectionActual.elapsed') }}</span>
+            <span class="end-dialog-stat__value">{{ formatDurationMs(endDialogPreview.activeMs) }}</span>
+          </div>
+          <div
+            v-if="endDialogPreview.defectTotal > 0"
+            class="end-dialog-stat end-dialog-stat--defect"
+          >
+            <span class="end-dialog-stat__label">{{ t('mesInspectionActual.defectTotal') }}</span>
+            <span class="end-dialog-stat__value">{{ endDialogPreview.defectTotal }}</span>
           </div>
         </div>
-        <div v-if="endDialogPreview.defectTotal > 0" class="end-dialog-field">
-          <span class="end-dialog-label">{{ t('mesInspectionActual.defectByItem') }}</span>
-          <ul class="history-defects">
-            <li v-for="row in defectRowsForRecord(endDialogPreview.defects)" :key="row.id">
-              <span>{{ row.label }}</span>
-              <strong>{{ row.qty }}</strong>
-            </li>
-          </ul>
-        </div>
-        <div class="end-dialog-field">
-          <span class="end-dialog-label">{{ t('mesInspectionActual.productionQty') }}</span>
+        <section
+          v-if="endDialogPreview.defectTotal > 0 && defectRowsForRecord(endDialogPreview.defects).length"
+          class="end-dialog-defects"
+        >
+          <span class="end-dialog-defects__label">{{ t('mesInspectionActual.defectByItem') }}</span>
+          <div class="end-dialog-defects__chips">
+            <span
+              v-for="row in defectRowsForRecord(endDialogPreview.defects)"
+              :key="row.id"
+              class="end-dialog-defect-chip"
+            >
+              <span class="end-dialog-defect-chip__name">{{ row.label }}</span>
+              <strong class="end-dialog-defect-chip__qty">{{ row.qty }}</strong>
+            </span>
+          </div>
+        </section>
+
+        <section class="end-dialog-qty">
+          <label class="end-dialog-qty__label" for="inspection-end-qty-input">
+            {{ t('mesInspectionActual.productionQty') }}
+          </label>
           <el-input
+            id="inspection-end-qty-input"
             v-model="endDialogQty"
-            class="end-dialog-input"
+            class="end-dialog-qty__input"
+            size="large"
             inputmode="numeric"
             :placeholder="t('mesInspectionActual.productionQtyPlaceholder')"
             clearable
             @keyup.enter="submitProductionEnd"
           />
-        </div>
-        <div class="end-dialog-actions">
+        </section>
+      </div>
+
+      <template v-if="endDialogPreview" #footer>
+        <div class="end-dialog-footer">
           <el-button
-            class="end-dialog-btn end-dialog-btn--full"
+            class="end-dialog-footer__btn end-dialog-footer__btn--cancel"
+            :disabled="endDialogSubmitting"
+            @click="closeEndDialog"
+          >
+            {{ t('common.cancel') }}
+          </el-button>
+          <el-button
+            class="end-dialog-footer__btn end-dialog-footer__btn--confirm"
             type="primary"
             :loading="endDialogSubmitting"
             @click="submitProductionEnd"
           >
+            <el-icon class="end-dialog-footer__btn-icon"><CircleCheck /></el-icon>
             {{ t('mesInspectionActual.btnConfirmEnd') }}
           </el-button>
-          <el-button class="end-dialog-btn end-dialog-btn--cancel" :disabled="endDialogSubmitting" @click="closeEndDialog">
-            {{ t('common.cancel') }}
+        </div>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="confirmedEditDialogVisible"
+      width="min(96vw, 520px)"
+      append-to-body
+      destroy-on-close
+      align-center
+      class="confirmed-edit-dialog"
+      @close="closeConfirmedHistoryEdit"
+    >
+      <template #header>
+        <div class="confirmed-edit-header">
+          <div class="confirmed-edit-header__main">
+            <span class="confirmed-edit-header__icon" aria-hidden="true">
+              <el-icon :size="18"><Edit /></el-icon>
+            </span>
+            <span class="confirmed-edit-header__text">
+              <span class="confirmed-edit-header__title">{{
+                t('mesInspectionActual.confirmedEditDialogTitle')
+              }}</span>
+              <span class="confirmed-edit-header__sub">{{ t('mesInspectionActual.historyTitle') }}</span>
+            </span>
+          </div>
+          <el-button
+            v-if="confirmedEditRow"
+            class="confirmed-edit-header__clear"
+            size="small"
+            :loading="confirmedEditClearing"
+            :disabled="confirmedEditSaving || confirmedEditClearing"
+            @click="clearConfirmedHistoryMesAndSave"
+          >
+            <el-icon class="confirmed-edit-header__clear-icon"><RefreshLeft /></el-icon>
+            {{ t('mesInspectionActual.btnClearMesActual') }}
           </el-button>
         </div>
+      </template>
+      <div v-if="confirmedEditRow && confirmedEditForm" class="confirmed-edit-body">
+        <div class="confirmed-edit-hero">
+          <span class="confirmed-edit-badge">{{ t('mesInspectionActual.historyTitle') }}</span>
+          <span class="confirmed-edit-hero__product">
+            <strong>{{ confirmedEditRow.product_cd || '—' }}</strong>
+            <span class="confirmed-edit-hero__sep">·</span>
+            {{ confirmedEditRow.product_name || '—' }}
+          </span>
+        </div>
+        <el-form label-position="top" size="small" class="confirmed-edit-form">
+          <section class="confirmed-edit-section confirmed-edit-section--people">
+            <h4 class="confirmed-edit-section__title">
+              <el-icon :size="14"><User /></el-icon>
+              {{ t('mesInspectionActual.inspector') }} / {{ t('mesInspectionActual.productionQty') }}
+            </h4>
+            <el-form-item :label="t('mesInspectionActual.inspector')" class="confirmed-edit-form-item">
+              <el-select
+                v-model="confirmedEditForm.inspectorUserId"
+                filterable
+                size="small"
+                :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
+                :loading="loadingInspectors"
+                class="confirmed-edit-full"
+              >
+                <el-option
+                  v-for="u in inspectors"
+                  :key="u.id"
+                  :label="inspectorOptionLabel(u)"
+                  :value="u.id"
+                  :disabled="isInspectorOptionDisabled(u.id)"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item :label="t('mesInspectionActual.productionQty')" class="confirmed-edit-form-item">
+              <el-input-number
+                v-model="confirmedEditForm.actualQty"
+                size="small"
+                :min="0"
+                :step="1"
+                :precision="0"
+                controls-position="right"
+                class="confirmed-edit-full"
+              />
+            </el-form-item>
+          </section>
+          <section class="confirmed-edit-section confirmed-edit-section--defects">
+            <h4 class="confirmed-edit-section__title">
+              {{ t('mesInspectionActual.defectByItem') }}
+            </h4>
+            <div v-loading="loadingDefectItems" class="confirmed-edit-defect-grid">
+              <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
+                {{ t('mesInspectionActual.defectItemsEmpty') }}
+              </p>
+              <div
+                v-for="item in defectItems"
+                :key="item.id"
+                class="defect-cell defect-cell--compact"
+                :class="{ 'defect-cell--active': confirmedEditDefectCount(item.id) > 0 }"
+              >
+                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
+                <div class="defect-stepper">
+                  <el-button
+                    class="defect-stepper__btn"
+                    circle
+                    :icon="Minus"
+                    :disabled="confirmedEditDefectCount(item.id) <= 0"
+                    @click="bumpConfirmedEditDefect(item.id, -1)"
+                  />
+                  <span class="defect-stepper__val">{{ confirmedEditDefectCount(item.id) }}</span>
+                  <el-button
+                    class="defect-stepper__btn"
+                    circle
+                    type="primary"
+                    :icon="Plus"
+                    @click="bumpConfirmedEditDefect(item.id, 1)"
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="confirmed-edit-section confirmed-edit-section--time">
+            <h4 class="confirmed-edit-section__title">
+              <el-icon :size="14"><Clock /></el-icon>
+              {{ t('mesInspectionActual.productionStart') }} / {{ t('mesInspectionActual.elapsed') }}
+            </h4>
+            <div class="confirmed-edit-form-row">
+              <el-form-item :label="t('mesInspectionActual.productionStart')" class="confirmed-edit-form-item">
+                <el-date-picker
+                  v-model="confirmedEditForm.wallStart"
+                  type="datetime"
+                  size="small"
+                  :editable="false"
+                  teleported
+                  format="YYYY/MM/DD HH:mm"
+                  class="confirmed-edit-full"
+                />
+              </el-form-item>
+              <el-form-item :label="t('mesInspectionActual.productionEnd')" class="confirmed-edit-form-item">
+                <el-date-picker
+                  v-model="confirmedEditForm.wallEnd"
+                  type="datetime"
+                  size="small"
+                  :editable="false"
+                  teleported
+                  format="YYYY/MM/DD HH:mm"
+                  class="confirmed-edit-full"
+                />
+              </el-form-item>
+            </div>
+            <div class="confirmed-edit-form-row confirmed-edit-form-row--metrics">
+              <el-form-item
+                :label="`${t('mesInspectionActual.pausedAccum')}（${t('mesInspectionActual.pausedAccumUnit')}）`"
+                class="confirmed-edit-form-item"
+              >
+                <el-input-number
+                  v-model="confirmedEditForm.pausedAccumSec"
+                  size="small"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  class="confirmed-edit-full"
+                />
+              </el-form-item>
+              <el-form-item :label="t('mesInspectionActual.elapsed')" class="confirmed-edit-form-item">
+                <div class="confirmed-edit-elapsed" role="status">
+                  <span class="confirmed-edit-elapsed__value">{{ confirmedEditElapsedPreview }}</span>
+                </div>
+              </el-form-item>
+            </div>
+          </section>
+          <div class="confirmed-edit-hint" role="note">
+            <el-icon class="confirmed-edit-hint__icon" :size="14"><InfoFilled /></el-icon>
+            <span>{{ t('mesInspectionActual.confirmedEditPauseHint') }}</span>
+          </div>
+        </el-form>
       </div>
+      <template #footer>
+        <div class="confirmed-edit-footer">
+          <el-button
+            class="confirmed-edit-btn confirmed-edit-btn--cancel"
+            size="small"
+            :disabled="confirmedEditSaving || confirmedEditClearing"
+            @click="closeConfirmedHistoryEdit"
+          >
+            {{ t('common.cancel') }}
+          </el-button>
+          <el-button
+            class="confirmed-edit-btn confirmed-edit-btn--save"
+            type="primary"
+            size="small"
+            :loading="confirmedEditSaving"
+            :disabled="confirmedEditClearing"
+            @click="submitConfirmedHistoryEdit"
+          >
+            {{ t('mesInspectionActual.btnSaveConfirmed') }}
+          </el-button>
+        </div>
+      </template>
     </el-dialog>
+
+    <MesBarcodeScanDialog
+      v-model="productScanDialogVisible"
+      locale-ns="mesInspectionActual"
+      scanner-region-id="mes-insp-barcode-scanner-region"
+      @scanned="onProductBarcodeScanned"
+    />
   </div>
 </template>
 
@@ -829,6 +1394,115 @@ onUnmounted(() => {
   color: var(--el-text-color-primary);
 }
 
+.in-progress-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--el-color-success-light-9);
+  border: 1px solid var(--el-color-success-light-5);
+}
+
+.in-progress-strip__title {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--el-color-success-dark-2);
+}
+
+.in-progress-strip__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.in-progress-chip-wrap {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--el-color-success-light-3);
+  background: #fff;
+}
+
+.in-progress-chip-wrap--active {
+  border-color: var(--el-color-success);
+  box-shadow: 0 0 0 1px var(--el-color-success);
+}
+
+.in-progress-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.in-progress-chip__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 2px 2px;
+}
+
+.in-progress-chip__actions .el-button {
+  margin: 0;
+  padding: 4px 8px;
+  height: 26px;
+}
+
+.session-recovery-alert {
+  margin-bottom: 8px;
+}
+
+.session-recovery-alert__text {
+  margin: 4px 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.session-recovery-alert__btn {
+  margin-top: 2px;
+}
+
+.in-progress-chip__product {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.2;
+}
+
+.in-progress-chip__inspector {
+  font-size: 0.68rem;
+  color: var(--el-text-color-secondary);
+  line-height: 1.2;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-progress-chip__lock-hint {
+  font-size: 0.62rem;
+  color: var(--el-color-warning-dark-2);
+  line-height: 1.2;
+}
+
+.product-locked-alert {
+  margin-bottom: 8px;
+}
+
 .offline-strip {
   display: flex;
   align-items: center;
@@ -865,6 +1539,7 @@ onUnmounted(() => {
 .toolbar-card {
   --toolbar-h: 36px;
   --toolbar-day-picker-w: 150px;
+  --toolbar-inspector-select-w: 110px;
   --toolbar-machine-select-w: 115px;
   --toolbar-machine-gap: 6px;
   --toolbar-day-gap: 5px;
@@ -1033,43 +1708,6 @@ onUnmounted(() => {
   display: inline-flex;
   flex: 0 0 auto;
   max-width: var(--toolbar-machine-select-w);
-}
-
-.toolbar-field-row--switch.toolbar-filter-switch {
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-blank);
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.toolbar-filter-switch--active {
-  border-color: var(--el-color-success-light-5);
-  background: linear-gradient(180deg, var(--el-color-success-light-9) 0%, var(--el-fill-color-blank) 100%);
-  box-shadow: 0 0 0 1px var(--el-color-success-light-7);
-}
-
-.toolbar-filter-switch--active .toolbar-filter-switch__text {
-  color: var(--el-color-success-dark-2);
-}
-
-.toolbar-filter-switch__control {
-  --el-switch-on-color: var(--el-color-success);
-  --el-switch-off-color: var(--el-border-color);
-}
-
-.toolbar-filter-switch__control :deep(.el-switch__core) {
-  min-width: 44px;
-  height: 22px;
-  border-radius: 11px;
-}
-
-.toolbar-filter-switch__control :deep(.el-switch__inner) {
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .toolbar-load-btn {
@@ -2377,202 +3015,273 @@ onUnmounted(() => {
 
 .production-end-dialog :deep(.el-dialog) {
   max-width: 94vw;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18);
+}
+
+.production-end-dialog :deep(.el-dialog__header) {
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+}
+
+.production-end-dialog :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+}
+
+.production-end-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.production-end-dialog :deep(.el-dialog__headerbtn:hover .el-dialog__close) {
+  color: #fff;
+}
+
+.production-end-dialog :deep(.el-dialog__body) {
+  padding: 8px 12px 6px;
+}
+
+.production-end-dialog :deep(.el-dialog__footer) {
+  padding: 6px 12px 10px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.end-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 40px 10px 12px;
+  background: linear-gradient(135deg, #047857 0%, #059669 48%, #34d399 100%);
+  color: #fff;
+}
+
+.end-dialog-header__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.end-dialog-header__text {
+  min-width: 0;
+  flex: 1;
+}
+
+.end-dialog-header__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+}
+
+.end-dialog-header__sub {
+  margin: 3px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  opacity: 0.92;
 }
 
 .end-dialog-body {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.end-dialog-product {
-  margin: 0;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.35;
-  word-break: break-word;
-  color: var(--el-text-color-primary);
-}
-
-.end-dialog-warn {
-  margin: 0;
-}
-
-.end-dialog-warn :deep(.el-alert__content) {
-  padding: 0;
-}
-
-.end-dialog-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.end-dialog-label {
-  font-weight: 600;
-  font-size: 0.84rem;
-  color: var(--el-text-color-regular);
-}
-
-.end-dialog-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
 
-.end-dialog-meta-item {
+.end-dialog-product-card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  gap: 2px;
   padding: 8px 10px;
   border-radius: 8px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 55%, var(--el-fill-color-blank) 100%);
+  border: 1px solid #a7f3d0;
+}
+
+.end-dialog-product-card__cd {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #047857;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-dialog-product-card__name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--el-text-color-primary);
+  word-break: break-word;
+}
+
+.end-dialog-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+@media (min-width: 400px) {
+  .end-dialog-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.end-dialog-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
   background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color-lighter);
 }
 
-.end-dialog-meta-label {
-  font-size: 0.72rem;
+.end-dialog-stat--defect {
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fcd34d;
+}
+
+.end-dialog-stat__label {
+  font-size: 0.65rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  line-height: 1.2;
   color: var(--el-text-color-secondary);
 }
 
-.end-dialog-meta-value {
-  font-size: 0.92rem;
+.end-dialog-stat__value {
+  font-size: 0.8rem;
   font-weight: 700;
+  line-height: 1.25;
   color: var(--el-text-color-primary);
   word-break: break-word;
-}
-
-.end-dialog-meta-missing {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--el-color-warning-dark-2);
-}
-
-.end-dialog-input {
-  width: 100%;
-}
-
-.end-dialog-input :deep(.el-input__wrapper) {
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: var(--el-fill-color-blank);
-  box-shadow:
-    inset 0 1px 2px rgba(15, 23, 42, 0.04),
-    0 0 0 1px var(--el-border-color-lighter);
-  transition:
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-}
-
-.end-dialog-input :deep(.el-input__wrapper:hover) {
-  box-shadow:
-    inset 0 1px 2px rgba(15, 23, 42, 0.04),
-    0 0 0 1px var(--el-border-color);
-}
-
-.end-dialog-input :deep(.el-input__wrapper.is-focus) {
-  background: #fff;
-  box-shadow:
-    inset 0 1px 2px rgba(15, 23, 42, 0.03),
-    0 0 0 1px var(--el-color-primary-light-5),
-    0 0 0 3px var(--el-color-primary-light-9);
-}
-
-.end-dialog-input :deep(.el-input__inner) {
-  font-size: 1rem;
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-align: left;
 }
 
-@media (max-width: 420px) {
-  .end-dialog-meta {
-    grid-template-columns: 1fr;
-  }
+.end-dialog-stat--defect .end-dialog-stat__value {
+  color: #b45309;
 }
 
-.end-dialog-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.end-dialog-btn {
-  min-height: 40px;
-  margin: 0 !important;
-  font-weight: 600;
-  border-radius: 8px;
-  border: none;
-}
-
-.end-dialog-btn--full:not(.is-disabled) {
-  background: linear-gradient(180deg, #3ecf7a 0%, var(--el-color-success) 100%);
-  color: #fff;
-}
-
-.end-dialog-btn--defer:not(.is-disabled) {
-  background: linear-gradient(180deg, #ffc857 0%, var(--el-color-warning) 100%);
-  color: #5c3d00;
-}
-
-.end-dialog-defer-settings {
+.end-dialog-defects {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
-  border: 1px solid #fcd34d;
+  gap: 4px;
 }
 
-.end-dialog-defer-day {
-  width: 100%;
+.end-dialog-defects__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
 }
 
-.end-dialog-defer-day :deep(.el-input__wrapper) {
-  width: 100%;
+.end-dialog-defects__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
-.end-dialog-defer-remainder {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: #92400e;
+.end-dialog-defect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  font-size: 0.72rem;
+  line-height: 1.2;
 }
 
-.end-dialog-defer-subsequent {
-  height: auto;
-  line-height: 1.35;
-  white-space: normal;
-}
-
-.end-dialog-defer-subsequent :deep(.el-checkbox__label) {
-  font-size: 0.78rem;
-  line-height: 1.35;
+.end-dialog-defect-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 10rem;
   color: var(--el-text-color-regular);
 }
 
-.end-dialog-btn--cancel {
-  grid-column: 1 / -1;
+.end-dialog-defect-chip__qty {
+  font-weight: 800;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
 }
 
-.production-end-dialog :deep(.el-dialog__header) {
-  padding: 12px 14px 8px;
-  margin-right: 0;
+.end-dialog-qty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--el-fill-color-blank);
+  border: 1px solid var(--el-border-color-lighter);
 }
 
-.production-end-dialog :deep(.el-dialog__body) {
-  padding: 8px 14px 14px;
-}
-
-.production-end-dialog :deep(.el-dialog__title) {
-  font-size: 1rem;
+.end-dialog-qty__label {
+  font-size: 0.75rem;
   font-weight: 700;
+  color: var(--el-text-color-regular);
+}
+
+.end-dialog-qty__input {
+  width: 100%;
+}
+
+.end-dialog-qty__input :deep(.el-input__wrapper) {
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--el-border-color-lighter);
+}
+
+.end-dialog-qty__input :deep(.el-input__wrapper.is-focus) {
+  box-shadow:
+    0 0 0 1px var(--el-color-success-light-5),
+    0 0 0 3px var(--el-color-success-light-9);
+}
+
+.end-dialog-qty__input :deep(.el-input__inner) {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.end-dialog-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.end-dialog-footer__btn {
+  min-height: 36px;
+  margin: 0 !important;
+  padding: 0 14px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
+.end-dialog-footer__btn-icon {
+  margin-right: 4px;
+}
+
+.end-dialog-footer__btn--confirm:not(.is-disabled) {
+  border: none;
+  background: linear-gradient(180deg, #34d399 0%, #059669 100%);
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
+}
+
+.end-dialog-footer__btn--cancel {
+  flex: 0 0 auto;
 }
 
 .confirmed-edit-dialog :deep(.el-dialog) {
@@ -2786,6 +3495,32 @@ onUnmounted(() => {
   color: #2563eb;
 }
 
+.confirmed-edit-section--defects {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.confirmed-edit-defect-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.defect-cell--compact {
+  padding: 8px;
+}
+
+.defect-cell--compact .defect-cell__label {
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.hist-cell-action-btn {
+  padding: 0 4px;
+}
+
 .confirmed-edit-form :deep(.confirmed-edit-form-item) {
   margin-bottom: 6px;
 }
@@ -2890,46 +3625,57 @@ onUnmounted(() => {
 }
 
 
-/* 検査：不良項目パネル */
+/* 検査：不良項目パネル（1行7項目・コンパクト） */
 .defect-panel {
-  margin-top: 10px;
-  padding: 10px 10px 4px;
-  border-radius: 8px;
+  margin-top: 6px;
+  padding: 6px 6px 2px;
+  border-radius: 6px;
   border: 1px solid var(--el-border-color-lighter);
   background: linear-gradient(180deg, var(--el-fill-color-blank) 0%, var(--el-fill-color-light) 100%);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .defect-panel__head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 6px;
-  margin-bottom: 8px;
+  gap: 4px;
+  margin-bottom: 4px;
 }
 .defect-panel__title {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--el-text-color-primary);
 }
 .defect-panel__hint {
   margin: 0;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--el-text-color-secondary);
+}
+.defect-panel__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--el-text-color-secondary);
+  text-align: center;
+  padding: 6px 0;
 }
 .defect-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(7, 118px);
+  gap: 4px;
+  width: max-content;
+  min-width: min(100%, calc(7 * 118px + 6 * 4px));
 }
-@media (min-width: 520px) { .defect-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 900px) { .defect-grid { grid-template-columns: repeat(4, 1fr); } }
 .defect-cell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 8px;
+  gap: 4px;
+  min-width: 0;
+  padding: 5px 6px;
+  border-radius: 6px;
   border: 1px solid var(--el-border-color-lighter);
   background: var(--el-fill-color-blank);
 }
@@ -2938,43 +3684,76 @@ onUnmounted(() => {
   background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
 }
 .defect-cell__label {
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  line-height: 1.3;
-  min-height: 2.2em;
+  line-height: 1.25;
+  min-height: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .defect-stepper {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 2px;
 }
 .defect-stepper__val {
   flex: 1;
+  min-width: 0;
   text-align: center;
-  font-size: 1.35rem;
+  font-size: 1.05rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 .defect-stepper__btn {
-  width: 40px !important;
-  height: 40px !important;
+  width: 30px !important;
+  height: 30px !important;
   padding: 0 !important;
+  flex-shrink: 0;
+}
+.defect-stepper__btn :deep(.el-icon) {
+  font-size: 14px;
 }
 .toolbar-field-row--inspector .toolbar-inspector-select {
-  width: min(176px, 100%) !important;
-  max-width: 176px;
+  width: min(var(--toolbar-inspector-select-w), 100%) !important;
+  max-width: var(--toolbar-inspector-select-w);
+  flex: 0 0 var(--toolbar-inspector-select-w);
+}
+.toolbar-field-row--inspector .toolbar-inspector-select :deep(.el-select__wrapper),
+.toolbar-field-row--inspector .toolbar-inspector-select :deep(.el-input__wrapper) {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.toolbar-product-scan-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   flex: 1 1 auto;
+  min-width: 0;
 }
 .toolbar-field-row--product .product-select-toolbar {
   width: min(280px, 100%) !important;
   flex: 1 1 auto;
+  min-width: 0;
+}
+.toolbar-product-scan-btn {
+  height: var(--toolbar-h);
+  min-height: var(--toolbar-h);
+  padding: 0 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.toolbar-product-scan-btn .el-icon {
+  margin-right: 2px;
 }
 .toolbar-field-row--inspector {
   flex: 0 1 auto;
-  max-width: max-content;
+  max-width: calc(var(--toolbar-inspector-select-w) + var(--toolbar-h) + 5.5rem);
   gap: var(--toolbar-machine-gap, 6px);
-  padding: 0 8px 0 0;
+  padding: 0 5px 0 0;
   border-radius: 10px;
   border: 1px solid #c4b5fd;
   background: linear-gradient(165deg, #f5f3ff 0%, var(--el-fill-color-blank) 55%, #ede9fe 100%);
@@ -3002,6 +3781,18 @@ onUnmounted(() => {
   --hist-accent: #0d9488;
   --hist-accent-soft: #ccfbf1;
   margin-top: 14px;
+}
+
+.inspection-history-print-frame {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .inspection-history-table-card {
@@ -3060,6 +3851,13 @@ onUnmounted(() => {
   font-weight: 700;
   color: var(--el-text-color-primary);
   line-height: 1.35;
+}
+
+.inspection-history-table-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .inspection-history-table-card__count {
@@ -3176,6 +3974,28 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
   color: var(--el-color-success-dark-2);
   background: var(--el-color-success-light-9);
+}
+
+.hist-cell-rate {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #b45309;
+}
+
+.hist-cell-efficiency {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0369a1;
+}
+
+.hist-cell-defect-qty {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #b45309;
+  cursor: default;
 }
 
 .hist-cell-time {
