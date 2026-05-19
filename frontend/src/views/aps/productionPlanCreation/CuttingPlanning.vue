@@ -2,7 +2,7 @@
   <div class="cutting-planning-page">
     <div class="page-header">
       <div>
-        <h2 class="page-title">切断計画作成</h2>
+        <h2 class="page-title">切断計画作成（作成中）</h2>
         <p class="page-subtitle">instruction_plans を元に切断機へ自動排産し、ガント・下発・進捗確認まで一括管理します。</p>
       </div>
     </div>

@@ -185,7 +185,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-schedules', name: 'ProductionPlanScheduleView', component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'), meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true } },
-      { path: 'erp/production/monthly-load', name: 'MonthlyProcessLoadSummary', component: () => import('@/views/erp/production/planning/MonthlyProcessLoadSummary.vue'), meta: { title: '月度工程負荷サマリ', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/forming-daily-plan', name: 'FormingDailyPlanSummary', component: () => import('@/views/erp/production/planning/FormingDailyPlanSummary.vue'), meta: { title: '工程別計画試算', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/instruction/cutting', name: 'CuttingInstruction', component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'), meta: { title: '切断・面取指示', group: '生産管理 > 生産指示', requiresAuth: true } },
       { path: 'erp/production/instruction/forming', name: 'FormingInstruction', component: () => import('@/views/erp/production/instruction/forming/FormingInstruction.vue'), meta: { title: '成型指示', group: '生産管理 > 生産指示', requiresAuth: true } },
@@ -229,8 +228,8 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/quality/equipment-association', name: 'QualityEquipmentAssociation', component: () => import('@/views/erp/quality/equipment-association/EquipmentAssociationHome.vue'), meta: { title: 'ローラー使用管理', group: '品質管理 > 設備関連', requiresAuth: true } },
 
       // ========== APS モジュール ==========
-      { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
       { path: 'aps/cutting-planning', name: 'CuttingPlanning', component: () => import('@/views/aps/productionPlanCreation/CuttingPlanning.vue'), meta: { title: '切断計画作成', requiresAuth: true } },
+      { path: 'aps/planning', name: 'FormingPlanning', component: () => import('@/views/aps/productionPlanCreation/FormingPlanning.vue'), meta: { title: '成型計画作成', requiresAuth: true } },
       { path: 'aps/welding-planning', name: 'WeldingPlanning', component: () => import('@/views/aps/productionPlanCreation/WeldingPlanning.vue'), meta: { title: '溶接計画作成', requiresAuth: true } },
       { path: 'aps/plating-planning', name: 'PlatingPlanning', component: () => import('@/views/aps/productionPlanCreation/PlatingPlanning.vue'), meta: { title: 'メッキ計画作成', requiresAuth: true } },
       { path: 'aps/planning-list', name: 'FormingPlanningList', component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'), meta: { title: '成型計画一覧', requiresAuth: true } },

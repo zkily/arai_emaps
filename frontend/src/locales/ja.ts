@@ -145,7 +145,7 @@ export default {
   menu: {
     DASHBOARD: 'ダッシュボード',
     ERP: 'ERP管理メニュー',
-    ERP_SALES: '販売管理',
+    ERP_SALES: '販売管理(営業)',
     ERP_SALES_HOME: '販売ホーム',
     ERP_SALES_QUOTATION: '見積管理',
     ERP_SALES_ORDERS: '受注一覧',
@@ -204,7 +204,6 @@ export default {
     ERP_PRODUCTION_DATA: '生産データ管理',
     ERP_PRODUCTION_BASELINE: '計画ベースライン',
     ERP_PRODUCTION_PLAN_SCHEDULES: '生産スケジュール',
-    ERP_PRODUCTION_MONTHLY_LOAD: '月度工程負荷サマリ',
     ERP_PRODUCTION_FORMING_DAILY_PLAN: '工程別計画試算',
     ERP_PRODUCTION_INSTRUCTION: '生産指示',
     ERP_PRODUCTION_INSTR_CUTTING: '切断・面取指示',

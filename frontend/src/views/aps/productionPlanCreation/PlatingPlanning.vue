@@ -1,7 +1,7 @@
 <template>
   <div class="plating-planning-page">
     <header class="page-header">
-      <h1 class="page-title">メッキ計画作成</h1>
+      <h1 class="page-title">メッキ計画作成（作成中）</h1>
       <nav class="page-flow" aria-label="作業手順">
         <span class="flow-i">① 在庫</span>
         <span class="flow-dot" />

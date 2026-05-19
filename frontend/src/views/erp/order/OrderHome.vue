@@ -6,15 +6,20 @@
       <div class="gradient-orb orb-3" />
     </div>
 
-    <header class="page-head">
+    <header class="page-head page-head--glass">
       <div class="page-head-icon">
         <el-icon :size="28"><Document /></el-icon>
       </div>
-      <div>
+      <div class="page-head-text">
         <h1 class="page-head-title">受注管理</h1>
         <p class="page-head-sub">月次・日次の受注と納入先履歴を一元管理</p>
       </div>
     </header>
+
+    <h2 class="section-label">
+      <el-icon class="section-label-icon"><DataLine /></el-icon>
+      当月サマリ
+    </h2>
 
     <!-- 合計カード（OrderMonthlyList.vue と同一内容・当月サマリ） -->
     <div
@@ -153,8 +158,13 @@
       </el-card>
     </div>
 
+    <h2 class="section-label section-label--analytics">
+      <el-icon class="section-label-icon"><TrendCharts /></el-icon>
+      分析・推移
+    </h2>
+
     <!-- 月別チャート + 日別チャート -->
-    <section class="analytics-block">
+    <section ref="analyticsBlockRef" class="analytics-block">
       <el-card class="analytics-card chart-card chart-card--premium" shadow="never">
         <template #header>
           <div class="analytics-card-head analytics-card-head--chart">
@@ -241,30 +251,41 @@
       </el-card>
     </section>
 
-    <!-- 中：アイコンリング（機能への導線） -->
-    <section class="icon-ring" aria-label="機能メニュー">
-      <router-link to="/erp/order/monthly" class="icon-ring-item icon-ring-item--violet">
-        <div class="icon-bubble">
-          <el-icon :size="36"><Calendar /></el-icon>
+    <h2 class="section-label">
+      <el-icon class="section-label-icon"><Grid /></el-icon>
+      機能メニュー
+    </h2>
+
+    <section class="quick-nav" aria-label="機能メニュー">
+      <router-link to="/erp/order/monthly" class="quick-nav-card quick-nav-card--violet">
+        <div class="quick-nav-card__icon">
+          <el-icon :size="32"><Calendar /></el-icon>
         </div>
-        <span class="icon-ring-title">月受注</span>
-        <span class="icon-ring-hint">月別・内示</span>
+        <div class="quick-nav-card__body">
+          <span class="quick-nav-card__title">月受注</span>
+          <span class="quick-nav-card__hint">月別・内示</span>
+        </div>
+        <el-icon class="quick-nav-card__arrow"><ArrowRight /></el-icon>
       </router-link>
-      <div class="icon-ring-connector" aria-hidden="true" />
-      <router-link to="/erp/order/daily" class="icon-ring-item icon-ring-item--cyan">
-        <div class="icon-bubble">
-          <el-icon :size="36"><Clock /></el-icon>
+      <router-link to="/erp/order/daily" class="quick-nav-card quick-nav-card--cyan">
+        <div class="quick-nav-card__icon">
+          <el-icon :size="32"><Clock /></el-icon>
         </div>
-        <span class="icon-ring-title">日受注</span>
-        <span class="icon-ring-hint">日別・確定</span>
+        <div class="quick-nav-card__body">
+          <span class="quick-nav-card__title">日受注</span>
+          <span class="quick-nav-card__hint">日別・確定</span>
+        </div>
+        <el-icon class="quick-nav-card__arrow"><ArrowRight /></el-icon>
       </router-link>
-      <div class="icon-ring-connector" aria-hidden="true" />
-      <router-link to="/erp/order/destination-history" class="icon-ring-item icon-ring-item--amber">
-        <div class="icon-bubble">
-          <el-icon :size="36"><DataAnalysis /></el-icon>
+      <router-link to="/erp/order/destination-history" class="quick-nav-card quick-nav-card--amber">
+        <div class="quick-nav-card__icon">
+          <el-icon :size="32"><DataAnalysis /></el-icon>
         </div>
-        <span class="icon-ring-title">納入先履歴</span>
-        <span class="icon-ring-hint">分析・照会</span>
+        <div class="quick-nav-card__body">
+          <span class="quick-nav-card__title">納入先履歴</span>
+          <span class="quick-nav-card__hint">分析・照会</span>
+        </div>
+        <el-icon class="quick-nav-card__arrow"><ArrowRight /></el-icon>
       </router-link>
     </section>
   </div>
@@ -278,11 +299,14 @@ import { useI18n } from 'vue-i18n'
 import { formatInteger } from '@/utils/formatInteger'
 import type { LocaleType } from '@/i18n'
 import {
+  ArrowRight,
   Calendar,
   Check,
   Clock,
   DataAnalysis,
+  DataLine,
   Document,
+  Grid,
   Monitor,
   OfficeBuilding,
   Operation,
@@ -299,6 +323,9 @@ const { t, locale } = useI18n()
 const statsLoading = ref(true)
 const chartLoading = ref(false)
 const dailyLoading = ref(false)
+
+const analyticsBlockRef = ref<HTMLElement | null>(null)
+let analyticsResizeObserver: ResizeObserver | null = null
 
 const monthlyChartRef = ref<HTMLDivElement | null>(null)
 let monthlyEcharts: echarts.ECharts | null = null
@@ -983,9 +1010,15 @@ onMounted(() => {
   loadMonthlyChartSeries()
   loadDailyChartData()
   window.addEventListener('resize', onChartResize)
+  if (typeof ResizeObserver !== 'undefined' && analyticsBlockRef.value) {
+    analyticsResizeObserver = new ResizeObserver(() => onChartResize())
+    analyticsResizeObserver.observe(analyticsBlockRef.value)
+  }
 })
 
 onUnmounted(() => {
+  analyticsResizeObserver?.disconnect()
+  analyticsResizeObserver = null
   window.removeEventListener('resize', onChartResize)
   disposeMonthlyChart()
   disposeDailyChart()
@@ -995,12 +1028,22 @@ onUnmounted(() => {
 
 <style scoped>
 .order-home {
+  --oh-gap: 12px;
+  --oh-gap-lg: 16px;
+  --oh-radius: 14px;
+  --oh-max: min(100%, 1440px);
+  --oh-chart-h: clamp(240px, 38vw, 340px);
+  --oh-chart-daily-h: clamp(260px, 42vw, 360px);
+  --oh-chart-rank-h: clamp(280px, 50vh, 400px);
+
   position: relative;
   min-height: 100%;
-  padding: 20px 22px 28px;
-  overflow: hidden;
-  max-width: 1200px;
+  width: 100%;
+  max-width: var(--oh-max);
   margin: 0 auto;
+  padding: clamp(12px, 2.5vw, 24px) clamp(14px, 3vw, 28px) clamp(20px, 4vw, 36px);
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 .dynamic-background {
@@ -1042,13 +1085,51 @@ onUnmounted(() => {
   right: 15%;
 }
 
+.section-label {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.section-label--analytics {
+  margin-top: 4px;
+}
+
+.section-label-icon {
+  font-size: 16px;
+  color: #6366f1;
+}
+
 .page-head {
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: var(--oh-gap-lg);
+}
+
+.page-head--glass {
+  padding: 14px 16px;
+  border-radius: var(--oh-radius);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+}
+
+.page-head-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .page-head-icon {
@@ -1083,10 +1164,34 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-  gap: 8px;
-  margin-bottom: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--oh-gap);
+  margin-bottom: var(--oh-gap-lg);
   min-height: 72px;
+}
+
+@media (min-width: 576px) {
+  .summary-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .summary-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .summary-cards {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1400px) {
+  .summary-cards {
+    grid-template-columns: repeat(auto-fill, minmax(152px, 1fr));
+  }
 }
 
 .summary-cards.animate-in-delay-1 {
@@ -1225,10 +1330,21 @@ onUnmounted(() => {
 .analytics-block {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 22px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--oh-gap);
+  margin-bottom: var(--oh-gap-lg);
+}
+
+@media (min-width: 1100px) {
+  .analytics-block {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--oh-gap-lg);
+  }
+
+  .analytics-block .product-rank-card {
+    grid-column: 1 / -1;
+  }
 }
 
 .analytics-card {
@@ -1260,7 +1376,8 @@ onUnmounted(() => {
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 10px 12px;
+  width: 100%;
 }
 
 .analytics-card-head-left {
@@ -1297,15 +1414,18 @@ onUnmounted(() => {
   font-size: 11px;
   color: #64748b;
   font-weight: 500;
-  line-height: 1.4;
-  max-width: 520px;
+  line-height: 1.45;
+  max-width: 100%;
 }
 
 .chart-legend-hint {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
   font-size: 11px;
   font-weight: 600;
   color: #64748b;
@@ -1313,6 +1433,14 @@ onUnmounted(() => {
   border-radius: 999px;
   background: linear-gradient(135deg, rgba(248, 250, 252, 0.95) 0%, rgba(241, 245, 249, 0.9) 100%);
   border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .chart-legend-hint {
+    width: auto;
+    max-width: none;
+  }
 }
 
 .legend-dot {
@@ -1366,7 +1494,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 318px;
+  height: var(--oh-chart-h);
+  min-height: 220px;
 }
 
 .chart-card--premium-daily :deep(.el-card__header) {
@@ -1400,7 +1529,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 340px;
+  height: var(--oh-chart-daily-h);
+  min-height: 240px;
 }
 
 .chart-card--premium-rank :deep(.el-card__header) {
@@ -1427,8 +1557,8 @@ onUnmounted(() => {
   position: relative;
   z-index: 1;
   width: 100%;
-  min-height: 360px;
-  height: 380px;
+  min-height: 260px;
+  height: var(--oh-chart-rank-h);
 }
 
 .chart-legend-hint--rank {
@@ -1465,102 +1595,213 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.35);
 }
 
-/* --- アイコンリング --- */
-.icon-ring {
+/* --- 機能メニュー（レスポンシブカード） --- */
+.quick-nav {
   position: relative;
   z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px 4px;
-  padding: 20px 16px;
-  margin-bottom: 20px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 18px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--oh-gap);
+  margin-bottom: clamp(16px, 3vw, 28px);
 }
 
-.icon-ring-item {
+@media (min-width: 640px) {
+  .quick-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 960px) {
+  .quick-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.quick-nav-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: 12px;
+  padding: 14px 16px;
   text-decoration: none;
   color: inherit;
-  border-radius: 16px;
+  border-radius: var(--oh-radius);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
   transition:
-    transform 0.2s ease,
-    background 0.2s ease;
-  min-width: 120px;
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
+  min-width: 0;
 }
 
-.icon-ring-item:hover {
-  transform: translateY(-3px);
-  background: rgba(255, 255, 255, 0.85);
+.quick-nav-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
+  border-color: rgba(99, 102, 241, 0.28);
 }
 
-.icon-bubble {
-  width: 80px;
-  height: 80px;
-  border-radius: 22px;
+.quick-nav-card:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.quick-nav-card__icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.14);
 }
 
-.icon-ring-item--violet .icon-bubble {
+.quick-nav-card--violet .quick-nav-card__icon {
   background: linear-gradient(145deg, #7c3aed 0%, #a78bfa 100%);
 }
 
-.icon-ring-item--cyan .icon-bubble {
+.quick-nav-card--cyan .quick-nav-card__icon {
   background: linear-gradient(145deg, #0891b2 0%, #22d3ee 100%);
 }
 
-.icon-ring-item--amber .icon-bubble {
+.quick-nav-card--amber .quick-nav-card__icon {
   background: linear-gradient(145deg, #d97706 0%, #fbbf24 100%);
 }
 
-.icon-ring-title {
+.quick-nav-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.quick-nav-card__title {
   font-size: 15px;
   font-weight: 800;
   color: #0f172a;
+  line-height: 1.3;
 }
 
-.icon-ring-hint {
+.quick-nav-card__hint {
   font-size: 12px;
   color: #64748b;
   font-weight: 500;
+  line-height: 1.35;
 }
 
-.icon-ring-connector {
-  width: 32px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #cbd5e1, transparent);
-  align-self: center;
-  margin-top: -28px;
-  opacity: 0.9;
+.quick-nav-card__arrow {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: #cbd5e1;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
 }
 
-@media (max-width: 720px) {
-  .icon-ring-connector {
-    display: none;
+.quick-nav-card:hover .quick-nav-card__arrow {
+  color: #6366f1;
+  transform: translateX(3px);
+}
+
+@media (max-width: 639px) {
+  .page-head {
+    flex-wrap: wrap;
+    gap: 12px;
   }
-}
 
-@media (max-width: 480px) {
-
-  .order-home {
-    padding: 14px;
+  .page-head-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
   }
 
   .page-head-title {
     font-size: 18px;
+  }
+
+  .page-head-sub {
+    font-size: 12px;
+  }
+
+  .summary-title {
+    font-size: 10px;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .summary-value {
+    font-size: 15px;
+  }
+
+  .card-icon {
+    width: 30px;
+    height: 30px;
+    font-size: 14px;
+  }
+
+  .analytics-card-title {
+    font-size: 13px;
+  }
+
+  .analytics-card-sub {
+    font-size: 10px;
+  }
+
+  .analytics-card-head-left {
+    width: 100%;
+  }
+
+  .monthly-chart-shell,
+  .daily-chart-shell,
+  .product-rank-chart-shell {
+    padding: 6px 8px 10px;
+  }
+
+  .monthly-chart-shell::before,
+  .daily-chart-shell::before {
+    margin: 6px 8px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .order-home {
+    --oh-gap: 8px;
+    --oh-gap-lg: 12px;
+  }
+
+  .page-head--glass {
+    padding: 12px 14px;
+  }
+
+  .quick-nav-card {
+    padding: 12px 14px;
+  }
+
+  .quick-nav-card__icon {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-cards.animate-in-delay-1,
+  .summary-card.modern-card,
+  .quick-nav-card {
+    animation: none;
+    transition: none;
+  }
+
+  .summary-card.modern-card:hover,
+  .quick-nav-card:hover {
+    transform: none;
   }
 }
 </style>

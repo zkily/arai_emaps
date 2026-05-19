@@ -17,7 +17,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP', name: 'ERP管理メニュー', icon: 'Management', sortOrder: 1 },
 
   // ===== 1. 販売管理 (Sales / SD) =====
-  { code: 'ERP_SALES', name: '販売管理', path: '/erp/sales', icon: 'Sell', parentCode: 'ERP', sortOrder: 1 },
+  { code: 'ERP_SALES', name: '販売管理(営業)', path: '/erp/sales', icon: 'Sell', parentCode: 'ERP', sortOrder: 1 },
   { code: 'ERP_SALES_HOME', name: '販売ホーム', path: '/erp/sales', parentCode: 'ERP_SALES', sortOrder: 0 },
   { code: 'ERP_SALES_QUOTATION', name: '見積管理', path: '/erp/sales/quotation', parentCode: 'ERP_SALES', sortOrder: 1 },
   { code: 'ERP_SALES_ORDERS', name: '受注一覧', path: '/erp/sales/orders', parentCode: 'ERP_SALES', sortOrder: 2 },
@@ -75,7 +75,6 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
-  { code: 'ERP_PRODUCTION_MONTHLY_LOAD', name: '月度工程負荷サマリ', path: '/erp/production/monthly-load', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4 },
   { code: 'ERP_PRODUCTION_FORMING_DAILY_PLAN', name: '工程别计划试算', path: '/erp/production/forming-daily-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.5 },
   { code: 'ERP_PRODUCTION_REQUIREMENTS', name: '生産需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION', sortOrder: 5.7 },
   { code: 'ERP_PRODUCTION_MAT_REQ', name: '材料需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 1 },
@@ -132,8 +131,8 @@ export const menuConfig: MenuConfigItem[] = [
 
   { code: 'APS', name: 'APS管理メニュー', icon: 'DataAnalysis', sortOrder: 2 },
   { code: 'APS_PRODUCTION_PLAN_CREATE', name: '生産計画作成', icon: 'Calendar', parentCode: 'APS', sortOrder: 1 },
-  { code: 'APS_PLANNING', name: '成型計画作成', path: '/aps/planning', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 1 },
-  { code: 'APS_CUTTING_PLANNING', name: '切断計画作成', path: '/aps/cutting-planning', icon: 'Operation', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 2 },
+  { code: 'APS_CUTTING_PLANNING', name: '切断計画作成', path: '/aps/cutting-planning', icon: 'Operation', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 1 },
+  { code: 'APS_PLANNING', name: '成型計画作成', path: '/aps/planning', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 2 },
   { code: 'APS_WELDING_PLANNING', name: '溶接計画作成', path: '/aps/welding-planning', icon: 'Calendar', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 3 },
   { code: 'APS_PLATING_PLANNING', name: 'メッキ計画作成', path: '/aps/plating-planning', icon: 'Operation', parentCode: 'APS_PRODUCTION_PLAN_CREATE', sortOrder: 4 },
   { code: 'APS_PRODUCTION_PLAN_VIEW', name: '生産計画一覧', icon: 'List', parentCode: 'APS', sortOrder: 1.5 },
