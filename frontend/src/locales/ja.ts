@@ -281,6 +281,7 @@ export default {
     APS_BATCH_PLANS: 'APSロット計画',
     MES: 'MES管理メニュー',
     MES_ACTUAL_DATA_COLLECTION: '実績収集',
+    MES_PRODUCTION_MONITOR: '生産モニター',
     MES_ACTUAL_CUTTING: '切断実績収集',
     MES_ACTUAL_CHAMFERING: '面取実績収集',
     MES_ACTUAL_FORMING: '成型実績収集',
@@ -1621,6 +1622,7 @@ export default {
   },
   mesInspectionActual: {
     title: '検査実績収集',
+    helpOpen: '操作説明を開く',
     subtitle:
       '生産日と検査員を選び、製品ごとに生産開始・一時停止・終了を記録します。実績は inspection_management に保存され、不良は項目別に +/- で入力します。',
     productionDay: '生産日',
@@ -1689,6 +1691,7 @@ export default {
     qtyInvalid: '生産数を正しく入力してください',
     completeSaved: '実績を保存しました',
     historyTitle: '本日の確定実績',
+    historyProductionQtyTotal: '生産数合計',
     btnPrintHistory: '印刷',
     printedAt: '印刷日時',
     printBlocked: 'ポップアップがブロックされました。ブラウザで印刷ウィンドウを許可してください。',
@@ -1828,6 +1831,7 @@ export default {
     qtyInvalid: '生産数を正しく入力してください',
     completeSaved: '実績を保存しました',
     historyTitle: '本日の確定実績',
+    historyProductionQtyTotal: '生産数合計',
     btnPrintHistory: '印刷',
     printedAt: '印刷日時',
     printBlocked: 'ポップアップがブロックされました。ブラウザで印刷ウィンドウを許可してください。',

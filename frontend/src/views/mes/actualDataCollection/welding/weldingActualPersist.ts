@@ -142,6 +142,62 @@ export function getScopeSessions(
   return scope.sessions
 }
 
+export interface WeldingPersistMachineActivity {
+  machineId: number
+  planId: number
+  paused: boolean
+}
+
+/** 生産モニター：指定生産日の全設備スコープから在産セッションを収集 */
+export function collectWeldingPersistForMonitorDay(productionDay: string): {
+  sessionsByPlanId: Map<number, PersistedPlanSession>
+  machineActivities: WeldingPersistMachineActivity[]
+} {
+  const sessionsByPlanId = new Map<number, PersistedPlanSession>()
+  const machineActivities: WeldingPersistMachineActivity[] = []
+  const store = loadStore()
+  if (!store) return { sessionsByPlanId, machineActivities }
+
+  const day = (productionDay ?? '').trim()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { sessionsByPlanId, machineActivities }
+
+  const prefix = `${day}::`
+  const now = Date.now()
+  for (const [scopeKey, scope] of Object.entries(store.scopes)) {
+    if (!scopeKey.startsWith(prefix)) continue
+    if (now - scope.savedAt > PERSIST_TTL_MS) continue
+    const machinePart = scopeKey.slice(prefix.length)
+    if (machinePart === 'none') continue
+    const machineId = Number(machinePart)
+    if (!Number.isFinite(machineId)) continue
+
+    for (const [planIdStr, sess] of Object.entries(scope.sessions ?? {})) {
+      const planId = Number(planIdStr)
+      if (!Number.isFinite(planId)) continue
+      sessionsByPlanId.set(planId, sess)
+      if (sess.wallStart != null && sess.wallEnd == null) {
+        const paused = sess.pauseSliceStart != null
+        machineActivities.push({ machineId, planId, paused })
+      }
+    }
+  }
+  return { sessionsByPlanId, machineActivities }
+}
+
+/** 生産モニター：当該設備スコープの溶接作業者（localStorage、同一端末のみ） */
+export function getWeldingPersistOperatorUserId(
+  productionDay: string,
+  machineId: number,
+): number | null {
+  const store = loadStore()
+  if (!store) return null
+  const day = (productionDay ?? '').trim()
+  if (store.productionDay !== day || store.selectedWeldingMachineId !== machineId) return null
+  const id = store.operatorUserId
+  if (id == null || !Number.isFinite(Number(id)) || Number(id) <= 0) return null
+  return Number(id)
+}
+
 export function loadWeldingActualPersist(): WeldingActualPagePersistSnapshot | null {
   const store = loadStore()
   if (!store) return null

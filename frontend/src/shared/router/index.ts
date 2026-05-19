@@ -30,6 +30,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
     meta: { title: '生産計画ベースライン管理 操作説明', requiresAuth: false },
   },
+  // 検査実績収集 操作説明（公開ページ：ログイン不要）
+  {
+    path: '/mes/actualDataCollection/inspection/help',
+    name: 'InspectionActualDataCollectionHelp',
+    component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollectionHelp.vue'),
+    meta: { title: '検査実績収集 操作説明', requiresAuth: false },
+  },
   // メインレイアウト配下のルート
   {
     path: '/',
@@ -241,6 +248,7 @@ const routes: RouteRecordRaw[] = [
         redirect: { name: 'FormingInstruction' },
         meta: { title: '成型指示', group: 'MES > 生産実績集計', requiresAuth: true },
       },
+      { path: 'mes/actualDataCollection/monitor', name: 'MesProductionMonitor', component: () => import('@/views/mes/actualDataCollection/monitor/ProductionMonitorDashboard.vue'), meta: { title: '生産モニター', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/cutting', name: 'MesActualDataCollectionCutting', component: () => import('@/views/mes/actualDataCollection/cutting/CuttingActualDataCollection.vue'), meta: { title: '切断実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/chamfering', name: 'MesActualDataCollectionChamfering', component: () => import('@/views/mes/actualDataCollection/chamfering/ChamferingActualDataCollection.vue'), meta: { title: '面取実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/forming', name: 'MesActualDataCollectionForming', component: () => import('@/views/mes/actualDataCollection/forming/FormingActualDataCollection.vue'), meta: { title: '成型実績収集', group: 'MES > 実績収集', requiresAuth: true } },

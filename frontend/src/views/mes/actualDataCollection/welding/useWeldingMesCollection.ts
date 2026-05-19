@@ -15,7 +15,7 @@ import {
   type WeldingMesMachine,
   type WeldingMesProductOption,
 } from '@/api/weldingMesEquipment'
-import { formatDateTimeJST, getJSTToday } from '@/utils/dateFormat'
+import { formatDateTimeJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
 import { WELDING_DEFECT_DETECTION_PROCESS_CD } from './weldingActualConfig'
 import {
   applyPersistedSessionsForScope,
@@ -53,12 +53,6 @@ type MesLockOwner = 'mine' | 'other' | 'unclaimed'
 export type WeldingMgmtRow = WeldingManagementListRow & { id: number }
 
 interface PlanSession extends PlanSessionLike {}
-
-function shiftDateYmd(ymd: string, delta: number): string {
-  const d = new Date(ymd + 'T12:00:00+09:00')
-  d.setDate(d.getDate() + delta)
-  return d.toISOString().slice(0, 10)
-}
 
 export function useWeldingMesCollection() {
   const { t, te } = useI18n()
@@ -1384,7 +1378,7 @@ export function useWeldingMesCollection() {
   function shiftProductionDay(delta: number): void {
     const base = (productionDay.value ?? '').trim().slice(0, 10)
     const anchor = /^\d{4}-\d{2}-\d{2}$/.test(base) ? base : getJSTToday()
-    productionDay.value = shiftDateYmd(anchor, delta)
+    productionDay.value = shiftDateYmdJST(anchor, delta)
   }
 
   function setProductionDayToday(): void {

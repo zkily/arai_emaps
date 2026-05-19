@@ -10,7 +10,7 @@ import {
 } from '@/api/inspectionManagement'
 import { getProducts, type ProductItem } from '@/api/erp/optionsData'
 import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
-import { formatDateTimeJST, getJSTToday } from '@/utils/dateFormat'
+import { formatDateTimeJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
 import { INSPECTION_DEFECT_DETECTION_PROCESS_CD } from './inspectionActualConfig'
 import {
   applyPersistedSessionsForScope,
@@ -48,12 +48,6 @@ type MesLockOwner = 'mine' | 'other' | 'unclaimed'
 export type InspectionMgmtRow = InspectionManagementListRow & { id: number }
 
 interface PlanSession extends PlanSessionLike {}
-
-function shiftDateYmd(ymd: string, delta: number): string {
-  const d = new Date(ymd + 'T12:00:00+09:00')
-  d.setDate(d.getDate() + delta)
-  return d.toISOString().slice(0, 10)
-}
 
 const INSPECTION_PRODUCT_NAME_EXCLUDES = ['加工', 'アーチ'] as const
 
@@ -1288,7 +1282,7 @@ export function useInspectionMesCollection() {
   function shiftProductionDay(delta: number): void {
     const base = (productionDay.value ?? '').trim().slice(0, 10)
     const anchor = /^\d{4}-\d{2}-\d{2}$/.test(base) ? base : getJSTToday()
-    productionDay.value = shiftDateYmd(anchor, delta)
+    productionDay.value = shiftDateYmdJST(anchor, delta)
   }
 
   function setProductionDayToday(): void {

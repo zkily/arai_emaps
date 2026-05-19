@@ -281,6 +281,7 @@ export default {
     APS_BATCH_PLANS: 'APS Lot Plans',
     MES: 'MES',
     MES_ACTUAL_DATA_COLLECTION: 'Actual data collection',
+    MES_PRODUCTION_MONITOR: 'Production monitor',
     MES_ACTUAL_CUTTING: 'Cutting — actual collection',
     MES_ACTUAL_CHAMFERING: 'Chamfering — actual collection',
     MES_ACTUAL_FORMING: 'Forming — actual collection',
@@ -1623,6 +1624,7 @@ export default {
   },
   mesInspectionActual: {
     title: 'Inspection — actual collection',
+    helpOpen: 'Open operation manual',
     subtitle:
       'Pick production date and inspector, then record start, pause, and end per product. Enter defects per category with +/-; confirm production quantity at end (saved on device; server sync planned).',
     productionDay: 'Production date',
@@ -1690,6 +1692,7 @@ export default {
     qtyInvalid: 'Enter a valid production quantity',
     completeSaved: 'Actuals saved',
     historyTitle: "Today's confirmed records",
+    historyProductionQtyTotal: 'Production total',
     btnPrintHistory: 'Print',
     printedAt: 'Printed at',
     printBlocked: 'Popup blocked. Allow pop-ups and try again.',
@@ -1828,6 +1831,7 @@ export default {
     qtyInvalid: 'Enter a valid production quantity',
     completeSaved: 'Actuals saved',
     historyTitle: "Today's confirmed records",
+    historyProductionQtyTotal: 'Production total',
     btnPrintHistory: 'Print',
     printedAt: 'Printed at',
     printBlocked: 'Popup blocked. Allow pop-ups and try again.',

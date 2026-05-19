@@ -146,6 +146,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 6 },
   { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
   { code: 'MES_ACTUAL_DATA_COLLECTION', name: '実績収集', parentCode: 'MES', sortOrder: 1 },
+  { code: 'MES_PRODUCTION_MONITOR', name: '生産モニター', path: '/mes/actualDataCollection/monitor', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 0 },
   { code: 'MES_ACTUAL_CUTTING', name: '切断実績収集', path: '/mes/actualDataCollection/cutting', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 1 },
   { code: 'MES_ACTUAL_CHAMFERING', name: '面取実績収集', path: '/mes/actualDataCollection/chamfering', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 2 },
   { code: 'MES_ACTUAL_FORMING', name: '成型実績収集', path: '/mes/actualDataCollection/forming', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 3 },

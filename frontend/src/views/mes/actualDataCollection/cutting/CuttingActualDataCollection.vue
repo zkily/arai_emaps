@@ -45,7 +45,15 @@ import {
 import { fetchCuttingPlanningMachines, type CuttingPlanningMachine } from '@/api/cuttingPlanning'
 import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
 import { setLocale, type LocaleType } from '@/i18n'
-import { formatDateTimeJST, getJSTToday, localeForIntl } from '@/utils/dateFormat'
+import {
+  formatDateTimeJST,
+  formatDateWithWeekdayJST,
+  getJSTToday,
+  isWeekendInJST,
+  localeForIntl,
+  nextWeekdayYmdJST,
+  shiftDateYmdJST,
+} from '@/utils/dateFormat'
 import {
   applyPersistedSessionsForScope,
   flushPauseSlice,
@@ -127,7 +135,7 @@ const productionDay = ref(getJSTToday())
 function shiftProductionDay(deltaDays: number): void {
   const base = (productionDay.value ?? '').trim().slice(0, 10)
   const anchor = /^\d{4}-\d{2}-\d{2}$/.test(base) ? base : getJSTToday()
-  productionDay.value = shiftDateYmd(anchor, deltaDays)
+  productionDay.value = shiftDateYmdJST(anchor, deltaDays)
 }
 
 function setProductionDayToday(): void {
@@ -369,19 +377,8 @@ function normalizeProductionDayKey(val: string | null | undefined): string {
 /** グループ見出し用の日付表示 */
 function formatGroupDayLabel(dayKey: string): string {
   if (dayKey === '—') return t('mesCuttingActual.noProductionDay')
-  const m = dayKey.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-  if (!m) return dayKey
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
-  try {
-    return new Intl.DateTimeFormat(intlLocale.value, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      weekday: 'short',
-    }).format(d)
-  } catch {
-    return dayKey
-  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return dayKey
+  return formatDateWithWeekdayJST(dayKey, intlLocale.value) || dayKey
 }
 
 /** 材料名（品名と同じ行に表示） */
@@ -1337,31 +1334,12 @@ const endDialogDeferDay = ref('')
 /** 同一生産日・同設備で当該行より後の計画も同じ日へ順延 */
 const endDialogDeferSubsequent = ref(false)
 
-function shiftDateYmd(dateStr: string, deltaDays: number): string {
-  const d = new Date(`${dateStr.slice(0, 10)}T12:00:00`)
-  d.setDate(d.getDate() + deltaDays)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-/** 翌平日（土日は翌月曜） */
 function nextWeekdayFromProductionDay(dateStr: string): string {
-  let s = shiftDateYmd(dateStr, 1)
-  const d = new Date(`${s}T12:00:00`)
-  const w = d.getDay()
-  if (w === 0) d.setDate(d.getDate() + 1)
-  else if (w === 6) d.setDate(d.getDate() + 2)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
+  return nextWeekdayYmdJST(dateStr)
 }
 
 function disabledWeekendDeferDate(date: Date): boolean {
-  const w = date.getDay()
-  return w === 0 || w === 6
+  return isWeekendInJST(date)
 }
 
 const endDialogDeferRemainder = computed(() => {

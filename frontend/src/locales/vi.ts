@@ -280,6 +280,7 @@ export default {
     APS_BATCH_PLANS: 'Kế hoạch lô hàng (APS)',
     MES: 'MES',
     MES_ACTUAL_DATA_COLLECTION: 'Thu thập số liệu thực tế',
+    MES_PRODUCTION_MONITOR: 'Giám sát sản xuất',
     MES_ACTUAL_CUTTING: 'Thu thập thực tế cắt',
     MES_ACTUAL_CHAMFERING: 'Thu thập thực tế vát mép',
     MES_ACTUAL_FORMING: 'Thu thập thực tế định hình',
@@ -1622,6 +1623,7 @@ export default {
   },
   mesInspectionActual: {
     title: 'Thu thập thực tế kiểm tra',
+    helpOpen: 'Mở hướng dẫn vận hành',
     subtitle:
       'Chọn ngày sản xuất và người kiểm tra, ghi bắt đầu/tạm dừng/kết thúc theo sản phẩm. Nhập lỗi theo hạng mục bằng +/-; xác nhận số lượng khi kết thúc (lưu trên thiết bị; đồng bộ máy chủ sẽ bổ sung).',
     productionDay: 'Ngày sản xuất',
@@ -1689,6 +1691,7 @@ export default {
     qtyInvalid: 'Nhập số lượng hợp lệ',
     completeSaved: 'Đã lưu thực tế',
     historyTitle: 'Thực tế đã xác nhận hôm nay',
+    historyProductionQtyTotal: 'Tổng số lượng SX',
     btnPrintHistory: 'In',
     printedAt: 'Thời gian in',
     printBlocked: 'Cửa sổ bật lên bị chặn. Vui lòng cho phép và thử lại.',
@@ -1829,6 +1832,7 @@ export default {
     qtyInvalid: 'Nhập số lượng hợp lệ',
     completeSaved: 'Đã lưu thực tế',
     historyTitle: 'Thực tế đã xác nhận hôm nay',
+    historyProductionQtyTotal: 'Tổng số lượng SX',
     btnPrintHistory: 'In',
     printedAt: 'Thời gian in',
     printBlocked: 'Cửa sổ bật lên bị chặn. Vui lòng cho phép và thử lại.',

@@ -19,6 +19,7 @@ import {
   User,
   VideoPause,
   VideoPlay,
+  QuestionFilled,
 } from '@element-plus/icons-vue'
 import { setLocale, type LocaleType } from '@/i18n'
 import { formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
@@ -175,6 +176,10 @@ function formatDurationSec(sec: number | null | undefined): string {
 function formatSecondsAsMinutes(sec: number | null | undefined): string {
   const s = Math.max(0, sec ?? 0)
   return String(Math.round(s / 60))
+}
+
+function goHelpPage(): void {
+  window.open('/mes/actualDataCollection/inspection/help', '_blank', 'noopener')
 }
 
 function historyDefectQty(row: InspectionMgmtRow): number {
@@ -401,6 +406,16 @@ onUnmounted(() => {
               <el-icon><DataLine /></el-icon>
             </span>
             <span class="page-title__text">{{ t('mesInspectionActual.title') }}</span>
+            <el-tooltip :content="t('mesInspectionActual.helpOpen')" placement="bottom">
+              <button
+                type="button"
+                class="page-title__help"
+                :aria-label="t('mesInspectionActual.helpOpen')"
+                @click="goHelpPage"
+              >
+                <el-icon :size="18"><QuestionFilled /></el-icon>
+              </button>
+            </el-tooltip>
           </h1>
         </div>
         <div
@@ -1354,6 +1369,30 @@ onUnmounted(() => {
   font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1.25;
+}
+
+.page-title__help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.page-title__help:hover {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
 }
 
 .page-title__icon {

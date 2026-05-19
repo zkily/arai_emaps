@@ -481,6 +481,10 @@
               <el-icon><DataLine /></el-icon>
               <span :title="t('menu.MES_ACTUAL_DATA_COLLECTION')">{{ t('menu.MES_ACTUAL_DATA_COLLECTION') }}</span>
             </template>
+            <el-menu-item index="/mes/actualDataCollection/monitor">
+              <el-icon><Monitor /></el-icon>
+              <template #title><span :title="t('menu.MES_PRODUCTION_MONITOR')">{{ t('menu.MES_PRODUCTION_MONITOR') }}</span></template>
+            </el-menu-item>
             <el-menu-item index="/mes/actualDataCollection/cutting">
               <el-icon><Operation /></el-icon>
               <template #title><span :title="t('menu.MES_ACTUAL_CUTTING')">{{ t('menu.MES_ACTUAL_CUTTING') }}</span></template>

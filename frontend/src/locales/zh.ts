@@ -280,6 +280,7 @@ export default {
     APS_BATCH_PLANS: 'APS 批量计划',
     MES: 'MES',
     MES_ACTUAL_DATA_COLLECTION: '实绩收集',
+    MES_PRODUCTION_MONITOR: '生产监控',
     MES_ACTUAL_CUTTING: '切断实绩收集',
     MES_ACTUAL_CHAMFERING: '倒角实绩收集',
     MES_ACTUAL_FORMING: '成型实绩收集',
@@ -1617,6 +1618,7 @@ export default {
   },
   mesInspectionActual: {
     title: '检查实绩收集',
+    helpOpen: '打开操作说明',
     subtitle:
       '选择生产日期与检查员，按产品记录开始、暂停、结束；实绩保存至 inspection_management，不良按项目用 +/- 录入。',
     productionDay: '生产日期',
@@ -1684,6 +1686,7 @@ export default {
     qtyInvalid: '请输入有效的生产数量',
     completeSaved: '实绩已保存',
     historyTitle: '当日已确定实绩',
+    historyProductionQtyTotal: '生产数合计',
     btnPrintHistory: '打印',
     printedAt: '打印时间',
     printBlocked: '弹窗被拦截，请允许浏览器弹出窗口后重试。',
@@ -1815,6 +1818,7 @@ export default {
     qtyInvalid: '请输入有效的生产数量',
     completeSaved: '实绩已保存',
     historyTitle: '当日已确定实绩',
+    historyProductionQtyTotal: '生产数合计',
     btnPrintHistory: '打印',
     printedAt: '打印时间',
     printBlocked: '弹窗被拦截，请允许浏览器弹出窗口后重试。',

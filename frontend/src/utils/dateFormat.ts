@@ -91,6 +91,66 @@ export function formatDateTimeJST(
   })
 }
 
+/** Date を JST 暦日で YYYY-MM-DD に変換 */
+export function formatDateToYmdJST(date: Date): string {
+  if (isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: JST_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(date)
+    .replace(/\//g, '-')
+}
+
+/** YYYY-MM-DD に暦日で加算（JST、クライアント TZ に依存しない） */
+export function shiftDateYmdJST(ymd: string, deltaDays: number): string {
+  const base = (ymd ?? '').trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(base)) return getJSTToday()
+  const d = new Date(`${base}T12:00:00+09:00`)
+  d.setDate(d.getDate() + deltaDays)
+  return formatDateToYmdJST(d)
+}
+
+/** JST 曜日（0=日 … 6=土） */
+export function getJSTDayOfWeek(ymdOrDate: string | Date): number {
+  const d =
+    typeof ymdOrDate === 'string'
+      ? parseDateAsJST(ymdOrDate.slice(0, 10))
+      : ymdOrDate
+  if (!d || isNaN(d.getTime())) return 0
+  const wd = new Intl.DateTimeFormat('en-US', {
+    timeZone: JST_TIMEZONE,
+    weekday: 'short',
+  }).format(d)
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  }
+  return map[wd] ?? 0
+}
+
+/** 翌平日（土日は翌月曜）— JST 暦日 */
+export function nextWeekdayYmdJST(dateStr: string): string {
+  let s = shiftDateYmdJST(dateStr, 1)
+  let w = getJSTDayOfWeek(s)
+  if (w === 0) s = shiftDateYmdJST(s, 1)
+  else if (w === 6) s = shiftDateYmdJST(s, 2)
+  return s
+}
+
+/** el-date-picker 用：JST 上で土日を無効化 */
+export function isWeekendInJST(date: Date): boolean {
+  const w = getJSTDayOfWeek(date)
+  return w === 0 || w === 6
+}
+
 /** i18n の locale を Intl 用にマッピング（en -> en-US, ja -> ja-JP 等） */
 export function localeForIntl(locale: string): string {
   const map: Record<string, string> = {
