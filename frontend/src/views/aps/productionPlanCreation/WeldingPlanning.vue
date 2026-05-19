@@ -1532,7 +1532,7 @@ async function persistScheduleOrderAfterDrag(oldIndex: number, newIndex: number)
     await Promise.all(
       updates.map((u) => updateSchedule(u.id, { order_no: u.order_no, run_immediately: false })),
     )
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), false)
     await loadSchedules()
     ElMessage.success('生産順を更新しました')
   } catch (e: unknown) {
@@ -1876,7 +1876,7 @@ async function addSchedule() {
       // 本数モードの合算では planned_batch_count を送らない。
       // 送ると backend 側で「batch_count × lot_size」に丸められ、本数指定が崩れる。
       await updateSchedule(targetId, updateBody)
-      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
+      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate(), false)
 
       selectedEeId.value = null
       plannedQtyInput.value = ''
@@ -2168,7 +2168,7 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
     const lotSize = Number(row.lot_size_snapshot ?? 0)
     // 「合計(本)」編集は本数を真値として扱うため planned_batch_count は送らない。
     await updateSchedule(row.id, updateBody)
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), false)
     await loadSchedules()
     if (lotSize > 0) {
       const nextBatchCount = Math.max(1, Math.ceil(val / lotSize))
@@ -2214,7 +2214,7 @@ async function replanAll() {
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
   replanning.value = true
   try {
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), false)
     await loadSchedules()
     ElMessage.success('順次再計算が完了しました')
   } catch (e: unknown) {

@@ -28,6 +28,14 @@ from app.modules.aps.models import (
 )
 
 # 默认标准工时（仅在线体未配置运行时间时使用）
+
+
+def _machine_is_welding_line(machine: Machine) -> bool:
+    """machine_type が溶接工程と一致するか（/lines?processCd=KT07 と同趣旨の同期判定）。"""
+    mt = (machine.machine_type or "").strip()
+    if not mt:
+        return False
+    return mt in ("溶接", "KT07")
 SCHEDULE_STANDARD_DAY_HOURS = 15.3
 
 # line_capacities / line_capacity_time_slots の先読み日数。run_engine の日別ループ上限（max_iterations=730）より短いと、
@@ -388,7 +396,13 @@ async def run_engine(
             # 重排起点より前は「実績または不良あり」の履歴のみ保持する。
             # 実績0・不良0の旧 planned/remaining 行を残すと、日別ガントに
             # 「計0/実0/残N」の浮動残数が再出現するため破棄する。
-            if int(od.actual_qty or 0) > 0 or int(getattr(od, "defect_qty", 0) or 0) > 0:
+            # 溶接は他工程由来の不良のみの行を保持しない（本工程実績0の誤表示を防ぐ）。
+            defect_only = int(od.actual_qty or 0) == 0 and int(getattr(od, "defect_qty", 0) or 0) > 0
+            keep_prestart = int(od.actual_qty or 0) > 0 or (
+                int(getattr(od, "defect_qty", 0) or 0) > 0
+                and not (_machine_is_welding_line(line) and defect_only)
+            )
+            if keep_prestart:
                 d0 = od.schedule_date
                 p0 = int(od.planned_qty or 0)
                 a0 = int(od.actual_qty or 0)

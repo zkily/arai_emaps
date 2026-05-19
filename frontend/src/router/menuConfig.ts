@@ -193,4 +193,6 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_DATA', name: 'データ管理', path: '/system/data', parentCode: 'SYSTEM_SETTINGS', sortOrder: 5 },
   { code: 'SYSTEM_MENUS', name: 'メニュー管理', path: '/system/menus', parentCode: 'SYSTEM_SETTINGS', sortOrder: 6 },
   { code: 'SYSTEM_FILE_WATCHER', name: 'ファイル監視設定', path: '/system/file-watcher', parentCode: 'SYSTEM_SETTINGS', sortOrder: 7 },
+  { code: 'SYSTEM_DATABASE', name: 'データベース', icon: 'Coin', parentCode: 'SYSTEM', sortOrder: 3 },
+  { code: 'SYSTEM_DB_ORDER_DAILY', name: 'order_daily', path: '/system/database/order/daily', parentCode: 'SYSTEM_DATABASE', sortOrder: 1 },
 ]

@@ -294,6 +294,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/data', name: 'DataManagement', component: () => import('@/views/system/settings/DataManagement.vue'), meta: { title: 'データ管理', requiresAuth: true } },
       { path: 'system/menus', name: 'MenuManagement', component: () => import('@/views/system/settings/MenuManagement.vue'), meta: { title: 'メニュー管理', requiresAuth: true } },
       { path: 'system/file-watcher', name: 'FileWatcherSetting', component: () => import('@/views/system/settings/FileWatcherSetting.vue'), meta: { title: 'ファイル監視設定', requiresAuth: true } },
+      { path: 'system/database/order/daily', name: 'SystemDbOrderDaily', component: () => import('@/views/system/database/order/OrderDailyBrowse.vue'), meta: { title: 'order_daily（DB）', requiresAuth: true } },
     ],
   },
 ]

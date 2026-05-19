@@ -95,6 +95,8 @@ def _dec(v) -> float:
 _APS_EE_STANDARD_DAY_HOURS = Decimal("15.3")
 # 成型工程 CD：在庫ログの不良同期は transaction_type=不良 かつ process_cd 一致のみ（instruction_plans 同期と同一）
 _APS_FORMING_PROCESS_CD = "KT04"
+# 溶接工程 CD：溶接設備の不良同期・実績考慮再排産は当該工程のみ
+_APS_WELDING_PROCESS_CD = "KT07"
 
 
 async def _load_equipment_efficiency_rows_for_machine(
@@ -1698,7 +1700,8 @@ async def replan_sequence(
     ライン順で再計算（実績考慮を統合）。
     ステップ 1: anchor から通常の順次排産（ガント生成）
     ステップ 2: stock_transaction_logs → schedule_details.actual_qty / defect_qty 同期
-    ステップ 3: 良品実績または不良のある工単は「最終発生日の翌日」から残数（計画−良品−不良）で再排産
+    ステップ 3: 良品実績（溶接は当工程実績のみ）のある工単は「最終実績日の翌日」から残数で再排産。
+    他工程不良のみでは再排産起点を動かさない（溶接ガントの誤った先行日付を防ぐ）。
     同期後: aps_batch_plans はロットごとに cutting/chamfering の upstream_defect_qty を取り込み、成型 planned_quantity を有効本数へ更新
 
     アンカー日の優先順位: aps_line_replan_anchors に当該 line_id の行があればその日付（今日繰り上げなし） >
@@ -1884,9 +1887,21 @@ async def replan_sequence(
     )
     line_head_schedule_id = line_head_result.scalar_one_or_none()
 
-    has_any_activity = any(
-        v.get("total_actual", 0) > 0 or v.get("total_defect", 0) > 0 for v in agg_map.values()
+    is_welding_line = (
+        await _machine_matches_process_cd(db, line_machine, _APS_WELDING_PROCESS_CD)
+        if line_machine
+        else False
     )
+
+    def _schedule_has_replan_activity(info: dict) -> bool:
+        if int(info.get("total_actual", 0) or 0) > 0:
+            return True
+        # 成型など：当工程の不良のみで活動ありとみなす（在庫ログ KT04 同期）
+        if not is_welding_line and int(info.get("total_defect", 0) or 0) > 0:
+            return True
+        return False
+
+    has_any_activity = any(_schedule_has_replan_activity(v) for v in agg_map.values())
     replan_debug_rows: list[dict[str, Any]] = []
     if has_any_activity:
             cursor_date_r = replan_start_anchor or updated[0].start_date or now_jst().date()
@@ -1907,14 +1922,16 @@ async def replan_sequence(
                 lg = info.get("last_actual_date")
                 lb = info.get("last_defect_date")
                 last_activity_dt: Optional[date] = None
-                if lg is not None and lb is not None:
+                if is_welding_line:
+                    last_activity_dt = lg
+                elif lg is not None and lb is not None:
                     last_activity_dt = max(lg, lb)
                 else:
                     last_activity_dt = lg or lb
 
-                if info["total_actual"] > 0 or info["total_defect"] > 0:
+                if _schedule_has_replan_activity(info):
                     if last_activity_dt is not None:
-                        # 良品実績または不良があれば、最終発生日の翌日から再排産。
+                        # 当工程の良品実績（溶接は実績日のみ）があれば、最終発生日の翌日から再排産。
                         replan_start = last_activity_dt + timedelta(days=1)
                         if replan_start > cursor_date_r:
                             cursor_date_r = replan_start
@@ -3001,13 +3018,24 @@ async def _last_actual_date_for_line(db: AsyncSession, line_id: int) -> Optional
     return rows.scalar_one_or_none()
 
 
+async def _stock_log_defect_process_cd_for_machine(
+    db: AsyncSession, machine: Machine
+) -> Optional[str]:
+    """在庫ログ不良同期に使う process_cd（設備の工程に合わせる。未判定は同期しない）。"""
+    if await _machine_matches_process_cd(db, machine, _APS_WELDING_PROCESS_CD):
+        return _APS_WELDING_PROCESS_CD
+    if await _machine_matches_process_cd(db, machine, _APS_FORMING_PROCESS_CD):
+        return _APS_FORMING_PROCESS_CD
+    return None
+
+
 async def _sync_actual_from_stock_logs(
     db: AsyncSession, ps: ProductionSchedule, *, machine: Optional[Machine] = None
 ):
     """
-    成型：stock_transaction_logs を schedule_details に日別同期する。
+    stock_transaction_logs を schedule_details に日別同期する。
     - transaction_type='実績' → actual_qty（良品・machine_cd 一致）
-    - transaction_type='不良' かつ process_cd=成型(KT04) → defect_qty
+    - transaction_type='不良' かつ process_cd=当設備工程（成型 KT04 / 溶接 KT07）→ defect_qty
       マッチ：TRIM(ps.product_cd)=TRIM(target_cd)、DATE(transaction_time)=schedule_date、
       SUM(quantity)。不良は在庫ログに machine_cd が無い場合があるため device 一致は課さない。
     同一ライン・同一製品の前順位工単に配賦済みの良品/不良を控除し、二重計上を防ぐ。
@@ -3082,28 +3110,30 @@ async def _sync_actual_from_stock_logs(
             d = date.fromisoformat(d)
         actual_by_date[d] = int(row.qty or 0)
 
-    agg_def = await db.execute(
-        select(
-            sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
-            sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
-        )
-        .where(
-            sa_func.trim(StockTransactionLog.transaction_type) == "不良",
-            sa_func.trim(sa_func.coalesce(StockTransactionLog.process_cd, ""))
-            == _APS_FORMING_PROCESS_CD,
-            StockTransactionLog.transaction_time.isnot(None),
-            sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
-            sa_func.date(StockTransactionLog.transaction_time) <= max_d,
-            sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
-        )
-        .group_by(sa_func.date(StockTransactionLog.transaction_time))
-    )
+    defect_process_cd = await _stock_log_defect_process_cd_for_machine(db, machine)
     defect_by_date: dict[date, int] = {}
-    for row in agg_def.all():
-        d = row.tx_date
-        if isinstance(d, str):
-            d = date.fromisoformat(d)
-        defect_by_date[d] = int(row.qty or 0)
+    if defect_process_cd:
+        agg_def = await db.execute(
+            select(
+                sa_func.date(StockTransactionLog.transaction_time).label("tx_date"),
+                sa_func.coalesce(sa_func.sum(StockTransactionLog.quantity), 0).label("qty"),
+            )
+            .where(
+                sa_func.trim(StockTransactionLog.transaction_type) == "不良",
+                sa_func.trim(sa_func.coalesce(StockTransactionLog.process_cd, ""))
+                == defect_process_cd,
+                StockTransactionLog.transaction_time.isnot(None),
+                sa_func.date(StockTransactionLog.transaction_time) >= lookback_d,
+                sa_func.date(StockTransactionLog.transaction_time) <= max_d,
+                sa_func.trim(StockTransactionLog.target_cd) == product_cd_norm,
+            )
+            .group_by(sa_func.date(StockTransactionLog.transaction_time))
+        )
+        for row in agg_def.all():
+            d = row.tx_date
+            if isinstance(d, str):
+                d = date.fromisoformat(d)
+            defect_by_date[d] = int(row.qty or 0)
 
     # 同一ライン・同一製品で前順位工単に既に配賦済みの実績を控除し、
     # 同日実績の二重計上（複数工単への重複反映）を防ぐ。

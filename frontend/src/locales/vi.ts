@@ -327,6 +327,8 @@ export default {
     SYSTEM_DATA: 'Quản lý dữ liệu',
     SYSTEM_MENUS: 'Quản lý menu',
     SYSTEM_FILE_WATCHER: 'Cài đặt giám sát tệp',
+    SYSTEM_DATABASE: 'Cơ sở dữ liệu',
+    SYSTEM_DB_ORDER_DAILY: 'order_daily',
     COLLAPSE: 'Thu gọn',
   },
   masterHome: {

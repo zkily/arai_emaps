@@ -581,6 +581,17 @@
             <el-menu-item index="/system/menus"><el-icon><List /></el-icon><template #title><span :title="t('menu.SYSTEM_MENUS')">{{ t('menu.SYSTEM_MENUS') }}</span></template></el-menu-item>
             <el-menu-item index="/system/file-watcher"><el-icon><Monitor /></el-icon><template #title><span :title="t('menu.SYSTEM_FILE_WATCHER')">{{ t('menu.SYSTEM_FILE_WATCHER') }}</span></template></el-menu-item>
           </el-sub-menu>
+
+          <el-sub-menu index="system-database">
+            <template #title>
+              <el-icon><Coin /></el-icon>
+              <span :title="t('menu.SYSTEM_DATABASE')">{{ t('menu.SYSTEM_DATABASE') }}</span>
+            </template>
+            <el-menu-item index="/system/database/order/daily">
+              <el-icon><List /></el-icon>
+              <template #title><span :title="t('menu.SYSTEM_DB_ORDER_DAILY')">{{ t('menu.SYSTEM_DB_ORDER_DAILY') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
         </el-sub-menu>
       </el-menu>
     </el-scrollbar>
