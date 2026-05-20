@@ -68,6 +68,17 @@
             <el-option v-for="name in machineOptions" :key="name" :label="name" :value="name" />
           </el-select>
         </el-form-item>
+        <el-form-item :label="t('productionPlanSchedule.productName')">
+          <el-select
+            v-model="filterProductName"
+            clearable
+            filterable
+            :placeholder="t('productionPlanSchedule.all')"
+            style="width: 200px"
+          >
+            <el-option v-for="name in productOptions" :key="name" :label="name" :value="name" />
+          </el-select>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -781,7 +792,8 @@ function buildPrintFilterSummary(): string {
   const monthStr = `${filterMonth.value}${t('productionPlanSchedule.monthSuffix')}`
   const eng = filterEngineering.value ? filterEngineering.value : t('productionPlanSchedule.all')
   const mach = filterMachineName.value ? filterMachineName.value : t('productionPlanSchedule.all')
-  return `${t('productionPlanSchedule.monthCol')}：${escHtml(monthStr)}　${t('productionPlanSchedule.engineeringCol')}：${escHtml(eng)}　${t('productionPlanSchedule.machineName')}：${escHtml(mach)}`
+  const prod = filterProductName.value ? filterProductName.value : t('productionPlanSchedule.all')
+  return `${t('productionPlanSchedule.monthCol')}：${escHtml(monthStr)}　${t('productionPlanSchedule.engineeringCol')}：${escHtml(eng)}　${t('productionPlanSchedule.machineName')}：${escHtml(mach)}　${t('productionPlanSchedule.productName')}：${escHtml(prod)}`
 }
 
 function buildPrintHtml(): string {
@@ -911,6 +923,7 @@ const tableGanttDates = ref<string[]>([])
 const filterMonth = ref(new Date().getMonth() + 1)
 const filterEngineering = ref('')
 const filterMachineName = ref('')
+const filterProductName = ref('')
 
 const enrichedRows = computed<EnrichedRow[]>(() => {
   const suffix = t('productionPlanSchedule.monthSuffix')
@@ -940,6 +953,15 @@ const machineOptions = computed(() => {
   return [...set].sort((a, b) => a.localeCompare(b, 'ja'))
 })
 
+const productOptions = computed(() => {
+  const set = new Set<string>()
+  afterMonthAndEngineering.value.forEach((r) => {
+    const n = (r.item_name ?? '').toString().trim()
+    if (n) set.add(n)
+  })
+  return [...set].sort((a, b) => a.localeCompare(b, 'ja'))
+})
+
 watch([afterMonthAndEngineering, filterMachineName], () => {
   const names = new Set(machineOptions.value)
   if (filterMachineName.value && !names.has(filterMachineName.value)) {
@@ -947,10 +969,20 @@ watch([afterMonthAndEngineering, filterMachineName], () => {
   }
 })
 
+watch([afterMonthAndEngineering, filterProductName], () => {
+  const names = new Set(productOptions.value)
+  if (filterProductName.value && !names.has(filterProductName.value)) {
+    filterProductName.value = ''
+  }
+})
+
 const displayRows = computed(() => {
   let list = afterMonthAndEngineering.value
   if (filterMachineName.value) {
     list = list.filter((r) => (r.lineLabel ?? '').toString().trim() === filterMachineName.value)
+  }
+  if (filterProductName.value) {
+    list = list.filter((r) => (r.item_name ?? '').toString().trim() === filterProductName.value)
   }
   return [...list].sort((a, b) => {
     const ma = String(a.lineLabel ?? '')
