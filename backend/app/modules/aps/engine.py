@@ -14,7 +14,7 @@ from datetime import date, time, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.datetime_utils import now_jst
@@ -37,6 +37,148 @@ def _machine_is_welding_line(machine: Machine) -> bool:
         return False
     return mt in ("溶接", "KT07")
 SCHEDULE_STANDARD_DAY_HOURS = 15.3
+
+
+def hourly_piece_rate_from_daily_capacity(daily_capacity: int) -> float:
+    """
+    個/h。daily_capacity はフロント・マスタで ⌊能率×15.3⌋ として保存されるため、
+    設備 default_work_hours では割らない（不一致だと日次上限が膨らみ、ライン順で同日に過剰配分される）。
+    """
+    if int(daily_capacity or 0) <= 0:
+        return 0.0
+    return float(daily_capacity) / SCHEDULE_STANDARD_DAY_HOURS
+
+
+def resolve_schedule_piece_rate(
+    ps: ProductionSchedule,
+    ee_rows: Optional[Sequence[Any]] = None,
+) -> tuple[float, bool]:
+    """
+    排産用の個/h を決定する。
+
+    優先: equipment_efficiency.efficiency_rate（ガント「能率」列と同一ソース）。
+    無い場合のみ production_schedules.daily_capacity ÷ 15.3。
+
+    Returns:
+        (hourly_piece_rate, from_equipment_efficiency)
+    """
+    pcd = (ps.product_cd or "").strip()
+    iname = (ps.item_name or "").strip()
+    name_hits: List[float] = []
+    if ee_rows:
+        for r in ee_rows:
+            rcd = (getattr(r, "product_cd", None) or "").strip()
+            rname = (getattr(r, "product_name", None) or "").strip()
+            try:
+                rate = float(getattr(r, "efficiency_rate", 0) or 0)
+            except (TypeError, ValueError):
+                rate = 0.0
+            if rate <= 0:
+                continue
+            if pcd and rcd and pcd == rcd:
+                return rate, True
+            if iname and rname and iname == rname:
+                name_hits.append(rate)
+        if name_hits:
+            return float(name_hits[0]), True
+    dc = int(ps.daily_capacity or 0)
+    if dc > 0:
+        return hourly_piece_rate_from_daily_capacity(dc), False
+    return 0.0, False
+
+
+def capacity_efficiency_factor(from_equipment_efficiency: bool, efficiency_pct: float) -> float:
+    """
+    設備能率マスタの本/H を使う場合はそのまま（表示能率と一致）。
+    daily_capacity フォールバック時のみ production_schedules.efficiency（%）を乗算。
+    """
+    if from_equipment_efficiency:
+        return 1.0
+    return float(efficiency_pct or 100) / 100.0
+
+
+def _segments_total_minutes(segments: List[tuple[int, int]]) -> int:
+    return sum(max(0, em - sm) for sm, em in segments)
+
+
+def _cap_minute_segments_to_limit(
+    segments: List[tuple[int, int]], max_minutes: int
+) -> List[tuple[int, int]]:
+    """稼働カレンダー h を超えないよう、生産可能区間の合計分を上限で切り詰める。"""
+    if max_minutes <= 0 or not segments:
+        return []
+    out: List[tuple[int, int]] = []
+    used = 0
+    for sm, em in segments:
+        if used >= max_minutes:
+            break
+        seg_len = max(0, em - sm)
+        take = min(seg_len, max_minutes - used)
+        if take > 0:
+            out.append((sm, sm + take))
+            used += take
+    return out
+
+
+def day_planned_qty_cap(
+    productive_hours: float,
+    hourly_piece_rate: float,
+    efficiency_pct: float,
+) -> int:
+    """1 日の理論上限個数：⌊ 個/h × 能率% × 生産可能時間(h) ⌋（表示能率・稼働 h と一致）。"""
+    eff_factor = float(efficiency_pct or 100) / 100.0
+    rate = float(hourly_piece_rate)
+    if productive_hours <= 0 or rate <= 0 or eff_factor <= 0:
+        return 0
+    return int(math.floor(rate * eff_factor * productive_hours + 1e-9))
+
+
+def advance_line_cursor_after_slice(
+    slice_row: ScheduleSliceAllocation,
+    hourly_piece_rate: float,
+    efficiency_pct: float,
+) -> tuple[date, time]:
+    """ライン順次排産：工単終了後の (日付, 時刻) 游标。"""
+    cand_date = slice_row.work_date
+    cand_time = slice_allocation_cursor_end(slice_row, hourly_piece_rate, efficiency_pct)
+    if cand_time == time(0, 0, 0) and slice_row.period_start != time(0, 0, 0):
+        cand_date = cand_date + timedelta(days=1)
+        cand_time = time(0, 0, 0)
+    return cand_date, cand_time
+
+
+def slice_allocation_cursor_end(
+    slice_row: ScheduleSliceAllocation,
+    hourly_piece_rate: float,
+    efficiency_pct: float,
+) -> time:
+    """
+    次工単の開始時刻。区間が未満杯のときは planned_qty に見合う時刻まで進め、
+    残り時間を後続工単に渡す（満杯なら period_end）。
+    """
+    qty = int(slice_row.planned_qty or 0)
+    if qty <= 0:
+        return slice_row.period_end
+    start = slice_row.period_start
+    end = slice_row.period_end
+    len_min = _chunk_length_minutes(start, end)
+    if len_min <= 0:
+        return end
+    eff_factor = float(efficiency_pct or 100) / 100.0
+    rate = float(hourly_piece_rate)
+    if rate <= 0 or eff_factor <= 0:
+        return end
+    max_qty = int(math.floor(rate * eff_factor * (len_min / 60.0) + 1e-9))
+    if qty >= max_qty:
+        return end
+    used_min = int(math.ceil(qty / (rate * eff_factor) * 60.0 - 1e-9))
+    used_min = max(1, min(used_min, len_min))
+    sm = _minutes_from_midnight(start)
+    em = _minutes_from_midnight(end)
+    if em > sm:
+        return _minutes_to_time(sm + used_min)
+    return end
+
 
 # line_capacities / line_capacity_time_slots の先読み日数。run_engine の日別ループ上限（max_iterations=730）より短いと、
 # 該当日以降はカレンダー無し扱いになり machines.default_work_hours に落ちる（稼働設定が効かないように見える）。
@@ -285,6 +427,55 @@ def _split_segments_to_hour_chunks(segments: List[tuple[int, int]]) -> List[tupl
     return chunks
 
 
+async def _next_sort_order_for_work_date(
+    db: AsyncSession, schedule_id: int, work_date: date
+) -> int:
+    res = await db.execute(
+        select(func.coalesce(func.max(ScheduleSliceAllocation.sort_order), -1)).where(
+            ScheduleSliceAllocation.schedule_id == schedule_id,
+            ScheduleSliceAllocation.work_date == work_date,
+        )
+    )
+    return int(res.scalar() or -1) + 1
+
+
+async def _merge_or_insert_slice_allocation(
+    db: AsyncSession,
+    schedule_id: int,
+    work_date: date,
+    period_start: time,
+    period_end: time,
+    give: int,
+    sort_order: int,
+    *,
+    merge_existing_period: bool,
+) -> ScheduleSliceAllocation:
+    """uk_ssa_sched_period 衝突時は planned_qty を加算（末尾追記用）。"""
+    if merge_existing_period:
+        res = await db.execute(
+            select(ScheduleSliceAllocation).where(
+                ScheduleSliceAllocation.schedule_id == schedule_id,
+                ScheduleSliceAllocation.work_date == work_date,
+                ScheduleSliceAllocation.period_start == period_start,
+                ScheduleSliceAllocation.period_end == period_end,
+            )
+        )
+        existing = res.scalars().first()
+        if existing is not None:
+            existing.planned_qty = int(existing.planned_qty or 0) + int(give)
+            return existing
+    sa = ScheduleSliceAllocation(
+        schedule_id=schedule_id,
+        work_date=work_date,
+        period_start=period_start,
+        period_end=period_end,
+        planned_qty=int(give),
+        sort_order=int(sort_order),
+    )
+    db.add(sa)
+    return sa
+
+
 async def _persist_slice_allocations(
     db: AsyncSession,
     schedule_id: int,
@@ -297,6 +488,9 @@ async def _persist_slice_allocations(
     hourly_piece_rate: float,
     efficiency_pct: float,
     start_from_minute: Optional[int] = None,
+    *,
+    merge_existing_period: bool = False,
+    sort_order_start: Optional[int] = None,
 ) -> int:
     """
     1 日分を時間区間に配分して schedule_slice_allocations に保存。
@@ -317,9 +511,8 @@ async def _persist_slice_allocations(
     if rate <= 0 or eff_factor <= 0:
         return 0
     rem = int(today_qty)
-    sort_base = 0
+    sort_base = 0 if sort_order_start is None else int(sort_order_start)
     total_placed = 0
-    last_alloc: Optional[ScheduleSliceAllocation] = None
     for st, et in chunks:
         len_min = _chunk_length_minutes(st, et)
         chunk_hours = len_min / 60.0
@@ -327,16 +520,16 @@ async def _persist_slice_allocations(
         cap = int(math.floor(rate * eff_factor * chunk_hours + 1e-9))
         give = min(rem, cap)
         if give > 0:
-            sa = ScheduleSliceAllocation(
-                schedule_id=schedule_id,
-                work_date=work_date,
-                period_start=st,
-                period_end=et,
-                planned_qty=give,
-                sort_order=sort_base,
+            await _merge_or_insert_slice_allocation(
+                db,
+                schedule_id,
+                work_date,
+                st,
+                et,
+                give,
+                sort_base,
+                merge_existing_period=merge_existing_period,
             )
-            db.add(sa)
-            last_alloc = sa
             total_placed += give
             rem -= give
         sort_base += 1
@@ -355,6 +548,7 @@ async def run_engine(
     machine_obj: Optional["Machine"] = None,
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
+    ee_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> ProductionSchedule:
     """
     指定された工単に対して排産推算を実行する。
@@ -457,12 +651,13 @@ async def run_engine(
     efficiency_pct = float(ps.efficiency or 100)
     setup_minutes = int(ps.setup_time or 0) if use_setup_time else 0
 
-    base_day_hours = float(line.default_work_hours or 0)
-    if base_day_hours <= 0:
-        base_day_hours = SCHEDULE_STANDARD_DAY_HOURS
-    if base_day_hours <= 0:
-        raise ValueError("base_day_hours must be > 0")
-    hourly_piece_rate = float(daily_capacity) / base_day_hours
+    hourly_piece_rate, rate_from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
+    if hourly_piece_rate <= 0:
+        hourly_piece_rate = hourly_piece_rate_from_daily_capacity(daily_capacity)
+        rate_from_ee = False
+    if hourly_piece_rate <= 0:
+        raise ValueError("hourly_piece_rate must be > 0")
+    cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
 
     if cal_map_preloaded is not None:
         cal_map = cal_map_preloaded
@@ -529,24 +724,25 @@ async def run_engine(
             int(setup_minutes),
             start_from_minute=start_from_minute,
         )
+        # 時間帯マスタの合計が line_capacities.available_hours を超える場合、カレンダー h で上限
+        max_prod_min = max(0, int(round(float(avail_hours) * 60)))
+        segs = _cap_minute_segments_to_limit(segs, max_prod_min)
         chunks = _split_segments_to_hour_chunks(segs)
         if not chunks:
             current_date += timedelta(days=1)
             continue
 
-        eff_factor = float(efficiency_pct or 100) / 100.0
         rate = float(hourly_piece_rate)
-        if rate <= 0 or eff_factor <= 0:
+        if rate <= 0 or cap_eff_factor <= 0:
             current_date += timedelta(days=1)
             continue
 
-        total_cap = 0
-        for st, et in chunks:
-            len_min = _chunk_length_minutes(st, et)
-            chunk_hours = len_min / 60.0
-            cap = int(math.floor(rate * eff_factor * chunk_hours + 1e-9))
-            total_cap += cap
-
+        productive_hours = sum(
+            _chunk_length_minutes(st, et) / 60.0 for st, et in chunks
+        )
+        total_cap = day_planned_qty_cap(
+            productive_hours, rate, cap_eff_factor * 100.0
+        )
         today_qty = min(total_cap, remaining)
 
         if today_qty > 0:
@@ -560,7 +756,7 @@ async def run_engine(
                 int(setup_minutes),
                 today_qty,
                 hourly_piece_rate,
-                efficiency_pct,
+                cap_eff_factor * 100.0,
                 start_from_minute=start_from_minute,
             )
             if placed > 0:
@@ -598,6 +794,364 @@ async def run_engine(
         ps.status = "PLANNING"
 
     return ps
+
+
+async def _upsert_schedule_detail_planned_qty(
+    db: AsyncSession,
+    schedule_id: int,
+    work_date: date,
+    add_planned: int,
+    actual_qty: int,
+    defect_qty: int,
+) -> None:
+    """日別明細の planned_qty に加算（既存行があれば UPDATE）。"""
+    if add_planned <= 0:
+        return
+    res = await db.execute(
+        select(ScheduleDetail).where(
+            ScheduleDetail.schedule_id == schedule_id,
+            ScheduleDetail.schedule_date == work_date,
+        )
+    )
+    row = res.scalars().first()
+    if row is not None:
+        row.planned_qty = int(row.planned_qty or 0) + int(add_planned)
+        return
+    db.add(
+        ScheduleDetail(
+            schedule_id=schedule_id,
+            schedule_date=work_date,
+            planned_qty=int(add_planned),
+            actual_qty=int(actual_qty),
+            defect_qty=int(defect_qty),
+        )
+    )
+
+
+async def run_engine_append_qty(
+    db: AsyncSession,
+    schedule_id: int,
+    additional_qty: int,
+    *,
+    ps_obj: Optional["ProductionSchedule"] = None,
+    machine_obj: Optional["Machine"] = None,
+    cal_map_preloaded: Optional[dict[date, float]] = None,
+    slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
+    ee_rows_preloaded: Optional[Sequence[Any]] = None,
+) -> tuple[ProductionSchedule, date, time, int]:
+    """
+    既存の日別・スライス計画を維持したまま、末尾から additional_qty 本だけ追記する。
+    合計(本)の小幅増加時にライン全件再計算で日別が組み替わるのを防ぐ。
+
+    Returns:
+        (schedule, 新游标日, 新游标时刻, 実際に追記した本数)
+    """
+    add_qty = int(additional_qty or 0)
+    if add_qty <= 0:
+        raise ValueError("additional_qty must be > 0")
+
+    ps = ps_obj or await db.get(ProductionSchedule, schedule_id)
+    if ps is None:
+        raise ValueError(f"ProductionSchedule id={schedule_id} not found")
+
+    line = machine_obj or await db.get(Machine, ps.line_id)
+    if line is None:
+        raise ValueError(f"Machine id={ps.line_id} not found")
+
+    last_q = await db.execute(
+        select(ScheduleSliceAllocation)
+        .where(ScheduleSliceAllocation.schedule_id == schedule_id)
+        .order_by(
+            ScheduleSliceAllocation.work_date.desc(),
+            ScheduleSliceAllocation.sort_order.desc(),
+            ScheduleSliceAllocation.id.desc(),
+        )
+        .limit(1)
+    )
+    last = last_q.scalars().first()
+    if last is None:
+        raise ValueError("no existing slice plan to append to")
+
+    hourly_piece_rate, rate_from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
+    daily_capacity = int(ps.daily_capacity or 0)
+    if hourly_piece_rate <= 0:
+        hourly_piece_rate = hourly_piece_rate_from_daily_capacity(daily_capacity)
+        rate_from_ee = False
+    if hourly_piece_rate <= 0:
+        raise ValueError("hourly_piece_rate must be > 0")
+
+    efficiency_pct = float(ps.efficiency or 100)
+    cap_eff_factor = capacity_efficiency_factor(rate_from_ee, efficiency_pct)
+    ps_rate = hourly_piece_rate
+    ps_eff = cap_eff_factor * 100.0
+    start_date, start_time = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
+
+    default_hours = float(line.default_work_hours or 0)
+    if default_hours <= 0:
+        default_hours = 8.0
+
+    if cal_map_preloaded is not None:
+        cal_map = cal_map_preloaded
+    else:
+        cal_end = start_date + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+        cal_result = await db.execute(
+            select(LineCapacity)
+            .where(
+                LineCapacity.line_id == ps.line_id,
+                LineCapacity.work_date >= start_date,
+                LineCapacity.work_date <= cal_end,
+            )
+        )
+        cal_map = {
+            row.work_date: float(row.available_hours) for row in cal_result.scalars().all()
+        }
+    if slots_by_date_preloaded is not None:
+        slots_by_date = slots_by_date_preloaded
+    else:
+        cal_end = start_date + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+        slots_by_date = await _fetch_slots_by_date(db, ps.line_id, start_date, cal_end)
+
+    detail_res = await db.execute(
+        select(ScheduleDetail).where(ScheduleDetail.schedule_id == schedule_id)
+    )
+    actual_by_date: Dict[date, int] = defaultdict(int)
+    defect_by_date: Dict[date, int] = defaultdict(int)
+    for od in detail_res.scalars().all():
+        actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
+        defect_by_date[od.schedule_date] += int(getattr(od, "defect_qty", 0) or 0)
+
+    remaining = add_qty
+    current_date = start_date
+    is_first_day = True
+    initial_start_from_minute = _minutes_from_midnight(start_time)
+    max_iterations = 730
+    calendar_configured = _line_calendar_is_configured(cal_map, slots_by_date)
+    total_appended = 0
+    actual_end = ps.end_date or start_date
+
+    while remaining > 0 and max_iterations > 0:
+        max_iterations -= 1
+        avail_hours = _resolve_day_operating_hours(
+            current_date,
+            slots_by_date,
+            cal_map,
+            float(default_hours),
+            calendar_configured=calendar_configured,
+        )
+        if avail_hours <= 0:
+            current_date += timedelta(days=1)
+            continue
+
+        start_from_minute = initial_start_from_minute if is_first_day else None
+        if is_first_day:
+            is_first_day = False
+
+        day_slot_list = slots_by_date.get(current_date) or []
+        segs = _productive_minute_segments(
+            day_slot_list,
+            avail_hours,
+            False,
+            0,
+            start_from_minute=start_from_minute,
+        )
+        max_prod_min = max(0, int(round(float(avail_hours) * 60)))
+        segs = _cap_minute_segments_to_limit(segs, max_prod_min)
+        chunks = _split_segments_to_hour_chunks(segs)
+        if not chunks:
+            current_date += timedelta(days=1)
+            continue
+
+        rate = float(hourly_piece_rate)
+        if rate <= 0 or cap_eff_factor <= 0:
+            current_date += timedelta(days=1)
+            continue
+
+        productive_hours = sum(
+            _chunk_length_minutes(st, et) / 60.0 for st, et in chunks
+        )
+        total_cap = day_planned_qty_cap(productive_hours, rate, cap_eff_factor * 100.0)
+        today_qty = min(total_cap, remaining)
+        if today_qty <= 0:
+            current_date += timedelta(days=1)
+            continue
+
+        sort_start = await _next_sort_order_for_work_date(db, schedule_id, current_date)
+        placed = await _persist_slice_allocations(
+            db,
+            schedule_id,
+            current_date,
+            day_slot_list,
+            avail_hours,
+            False,
+            0,
+            today_qty,
+            hourly_piece_rate,
+            cap_eff_factor * 100.0,
+            start_from_minute=start_from_minute,
+            merge_existing_period=True,
+            sort_order_start=sort_start,
+        )
+        if placed > 0:
+            await _upsert_schedule_detail_planned_qty(
+                db,
+                schedule_id,
+                current_date,
+                placed,
+                int(actual_by_date.get(current_date, 0)),
+                int(defect_by_date.get(current_date, 0)),
+            )
+            remaining -= placed
+            total_appended += placed
+            actual_end = current_date
+
+        current_date += timedelta(days=1)
+
+    if total_appended <= 0:
+        raise ValueError("could not append planned qty (no capacity)")
+
+    last_q2 = await db.execute(
+        select(ScheduleSliceAllocation)
+        .where(ScheduleSliceAllocation.schedule_id == schedule_id)
+        .order_by(
+            ScheduleSliceAllocation.work_date.desc(),
+            ScheduleSliceAllocation.sort_order.desc(),
+            ScheduleSliceAllocation.id.desc(),
+        )
+        .limit(1)
+    )
+    last2 = last_q2.scalars().first()
+    if last2 is not None:
+        new_date, new_time = advance_line_cursor_after_slice(last2, ps_rate, ps_eff)
+    else:
+        new_date, new_time = actual_end, time(0, 0, 0)
+
+    prev_out = int(ps.planned_output_qty or 0)
+    ps.planned_output_qty = prev_out + total_appended
+    if ps.end_date is None or actual_end > ps.end_date:
+        ps.end_date = actual_end
+    ps.due_date = ps.end_date
+    total_needed = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
+    if total_needed > 0:
+        ps.completion_rate = Decimal(
+            str(round(int(ps.planned_output_qty or 0) / total_needed * 100, 2))
+        )
+
+    return ps, new_date, new_time, total_appended
+
+
+async def replan_following_schedules_on_line(
+    db: AsyncSession,
+    line_id: int,
+    after_schedule_id: int,
+    cursor_date: date,
+    cursor_time: time,
+    *,
+    machine_obj: Optional["Machine"] = None,
+    cal_map_preloaded: Optional[dict[date, float]] = None,
+    slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
+    ee_rows_preloaded: Optional[Sequence[Any]] = None,
+) -> List[ProductionSchedule]:
+    """指定工単の後続（順位）のみ、游标から再排産。"""
+    anchor = await db.get(ProductionSchedule, after_schedule_id)
+    if anchor is None:
+        return []
+
+    result = await db.execute(
+        select(ProductionSchedule)
+        .where(
+            ProductionSchedule.line_id == line_id,
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
+        )
+        .order_by(
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no.asc(),
+            ProductionSchedule.id,
+        )
+    )
+    schedules = result.scalars().all()
+    start_idx = 0
+    for i, ps in enumerate(schedules):
+        if int(ps.id) == int(after_schedule_id):
+            start_idx = i + 1
+            break
+
+    line = machine_obj or await db.get(Machine, line_id)
+    if line is None:
+        raise ValueError(f"Machine id={line_id} not found")
+
+    cursor_d = cursor_date
+    cursor_t = cursor_time
+    updated: List[ProductionSchedule] = []
+
+    for idx, ps in enumerate(schedules[start_idx:], start=start_idx):
+        replannable = (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS")
+        if not replannable:
+            last_q = await db.execute(
+                select(ScheduleSliceAllocation)
+                .where(ScheduleSliceAllocation.schedule_id == ps.id)
+                .order_by(
+                    ScheduleSliceAllocation.work_date.desc(),
+                    ScheduleSliceAllocation.sort_order.desc(),
+                    ScheduleSliceAllocation.id.desc(),
+                )
+                .limit(1)
+            )
+            last = last_q.scalars().first()
+            if last is not None:
+                ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
+                if ps_rate <= 0:
+                    ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+                    from_ee = False
+                ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
+                cand_d, cand_t = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
+                if (cand_d, cand_t) > (cursor_d, cursor_t):
+                    cursor_d, cursor_t = cand_d, cand_t
+            continue
+
+        use_setup = idx != 0
+        forced_start = getattr(ps, "forced_start_date", None)
+        effective_start = cursor_d
+        effective_start_time = cursor_t
+        if forced_start is not None and forced_start > effective_start:
+            effective_start = forced_start
+            effective_start_time = time(0, 0, 0)
+
+        ps = await run_engine(
+            db,
+            ps.id,
+            override_start_date=effective_start,
+            override_start_time=effective_start_time,
+            use_setup_time=use_setup,
+            ps_obj=ps,
+            machine_obj=line,
+            cal_map_preloaded=cal_map_preloaded,
+            slots_by_date_preloaded=slots_by_date_preloaded,
+            ee_rows_preloaded=ee_rows_preloaded,
+        )
+        updated.append(ps)
+        await db.flush()
+
+        last_q = await db.execute(
+            select(ScheduleSliceAllocation)
+            .where(ScheduleSliceAllocation.schedule_id == ps.id)
+            .order_by(
+                ScheduleSliceAllocation.work_date.desc(),
+                ScheduleSliceAllocation.sort_order.desc(),
+                ScheduleSliceAllocation.id.desc(),
+            )
+            .limit(1)
+        )
+        last = last_q.scalars().first()
+        if last is not None:
+            ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
+            if ps_rate <= 0:
+                ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+                from_ee = False
+            ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
+            cursor_d, cursor_t = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
+
+    await db.flush()
+    return updated
 
 
 async def _next_working_date(
@@ -641,6 +1195,7 @@ async def replan_line_sequential(
     machine_obj: Optional["Machine"] = None,
     cal_map_preloaded: Optional[dict[date, float]] = None,
     slots_by_date_preloaded: Optional[Dict[date, List["LineCapacityTimeSlot"]]] = None,
+    ee_rows_preloaded: Optional[Sequence[Any]] = None,
 ) -> List[ProductionSchedule]:
     """
     指定産線の全工単（PLANNING / IN_PROGRESS / COMPLETED）を order_no 順に串接重算する。
@@ -725,6 +1280,7 @@ async def replan_line_sequential(
                 machine_obj=line,
                 cal_map_preloaded=shared_cal_map,
                 slots_by_date_preloaded=shared_slots,
+                ee_rows_preloaded=ee_rows_preloaded,
             )
             updated.append(ps)
             await db.flush()
@@ -734,8 +1290,8 @@ async def replan_line_sequential(
             .where(ScheduleSliceAllocation.schedule_id == ps.id)
             .order_by(
                 ScheduleSliceAllocation.work_date.desc(),
-                ScheduleSliceAllocation.period_end.desc(),
                 ScheduleSliceAllocation.sort_order.desc(),
+                ScheduleSliceAllocation.id.desc(),
             )
             .limit(1)
         )
@@ -743,11 +1299,12 @@ async def replan_line_sequential(
         cand_date = None
         cand_time = time(0, 0, 0)
         if last is not None:
-            cand_date = last.work_date
-            cand_time = last.period_end
-            if cand_time == time(0, 0, 0) and last.period_start != time(0, 0, 0):
-                cand_date = cand_date + timedelta(days=1)
-                cand_time = time(0, 0, 0)
+            ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows_preloaded)
+            if ps_rate <= 0:
+                ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+                from_ee = False
+            ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
+            cand_date, cand_time = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
         else:
             cand_date = ps.end_date
             cand_time = time(0, 0, 0)

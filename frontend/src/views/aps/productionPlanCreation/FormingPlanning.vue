@@ -1033,7 +1033,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'FormingPlanning' })
-import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
@@ -1045,6 +1045,7 @@ import {
   updateSchedule,
   deleteSchedule,
   replanLineSequence,
+  appendSchedulePlannedQty,
   fetchSchedulingGrid,
   fetchSchedulingHourlyGrid,
   fetchEquipmentEfficiencyProducts,
@@ -1064,6 +1065,7 @@ import {
   type ProgressLotItem,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
+import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
 import type { ProcessItem } from '@/types/master'
 import LineCapacity from '../LineCapacity.vue'
 import request from '@/shared/api/request'
@@ -1937,7 +1939,11 @@ async function addSchedule() {
       // 本数モードの合算では planned_batch_count を送らない。
       // 送ると backend 側で「batch_count × lot_size」に丸められ、本数指定が崩れる。
       await updateSchedule(targetId, updateBody)
-      await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
+      if (deltaPieces > 0) {
+        await appendSchedulePlannedQty(targetId, deltaPieces)
+      } else {
+        await replanLineSequence(selectedLineId.value!, effectiveReplanAnchorDate())
+      }
 
       selectedEeId.value = null
       plannedQtyInput.value = ''
@@ -2261,7 +2267,8 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
   }
   const cur = Number(row.planned_process_qty ?? 0)
   const curBatchCount = Number(row.planned_batch_count ?? 0)
-  if (val === cur) {
+  const delta = val - cur
+  if (delta === 0) {
     editingScheduleTotalId.value = null
     return
   }
@@ -2275,7 +2282,12 @@ async function saveTotalPlannedQty(row: ScheduleOut) {
     const lotSize = Number(row.lot_size_snapshot ?? 0)
     // 「合計(本)」編集は本数を真値として扱うため planned_batch_count は送らない。
     await updateSchedule(row.id, updateBody)
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    if (delta > 0) {
+      // 増加時は末尾追記のみ（全ライン再計算で 5/23 690→1196 のように日別が組み替わるのを防ぐ）
+      await appendSchedulePlannedQty(row.id, delta)
+    } else {
+      await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    }
     await loadSchedules()
     if (lotSize > 0) {
       const nextBatchCount = Math.max(1, Math.ceil(val / lotSize))
@@ -2317,8 +2329,46 @@ async function loadSchedulesEditingPreserve(scheduleId: number) {
   }
 }
 
+function buildSingleLineReplanConfirmMessage() {
+  const lineLabel = selectedLineDisplayName.value
+  const ln = lines.value.find((l) => l.id === selectedLineId.value)
+  const code = ln?.line_code?.trim() || ''
+  const anchor = effectiveReplanAnchorDate()
+  const nameBlockChildren = [h('div', { class: 'forming-replan-confirm__name' }, lineLabel)]
+  if (code && code !== lineLabel) {
+    nameBlockChildren.push(h('div', { class: 'forming-replan-confirm__code' }, code))
+  }
+  return h('div', { class: 'forming-replan-confirm' }, [
+    h('p', { class: 'forming-replan-confirm__lead' }, '選択中の設備について、順位どおりに再計算します。'),
+    h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
+    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
+    h(
+      'p',
+      { class: 'forming-replan-confirm__lead' },
+      `設備に保存済みの再計算アンカー日があれば最優先。未設定時は基準月（${anchorDate.value || '—'}）と本日（${todayIso.value}）の遅い方（${anchor}）を使用します。`,
+    ),
+    h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
+  ])
+}
+
 async function replanAll() {
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
+  try {
+    await ElMessageBox.confirm(buildSingleLineReplanConfirmMessage(), {
+      title: 'ライン順で再計算',
+      type: 'warning',
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      customClass: 'forming-replan-messagebox',
+      center: false,
+      showClose: true,
+      closeOnClickModal: false,
+      distinguishCancelAndClose: true,
+    })
+  } catch {
+    return
+  }
   replanning.value = true
   try {
     await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
@@ -2355,10 +2405,7 @@ const ganttDateColumnFlags = computed(() => {
  * ここでは基準月1日と日本の今日の大きい方のみ（過去の月初に固定しない）。
  */
 function effectiveReplanAnchorDate(): string {
-  const anchor = (anchorDate.value || '').trim()
-  const today = todayIso.value
-  if (!anchor) return today
-  return anchor >= today ? anchor : today
+  return computeEffectiveReplanAnchorDate(anchorDate.value, todayIso.value)
 }
 
 function openLineReplanAnchorDialog() {
@@ -4636,5 +4683,121 @@ td.gantt-has-actual {
 /* 開始日指定カレンダー：表格/ダイアログより前面に表示 */
 :global(.forced-start-date-popper) {
   z-index: 4000 !important;
+}
+</style>
+
+<!-- MessageBox は body へ teleport されるため、ライン順再計算の確認ダイアログ用はグローバル -->
+<style>
+.forming-replan-messagebox.el-message-box {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(10px);
+}
+.forming-replan-messagebox .el-message-box__header {
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 42%, #fde68a 100%);
+}
+.forming-replan-messagebox .el-message-box__headerbtn {
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: background 0.2s ease;
+}
+.forming-replan-messagebox .el-message-box__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+.forming-replan-messagebox .el-message-box__title {
+  width: 100%;
+  padding: 18px 48px 16px 20px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.forming-replan-messagebox .el-message-box__status {
+  display: none;
+}
+.forming-replan-messagebox .el-message-box__container {
+  padding: 0 20px 4px;
+}
+.forming-replan-messagebox .el-message-box__message {
+  padding: 0;
+}
+.forming-replan-messagebox .el-message-box__btns {
+  padding: 14px 20px 18px;
+  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.65) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+.forming-replan-messagebox .el-message-box__btns .el-button {
+  min-width: 108px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 10px 20px;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--default {
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  color: #475569;
+  background: #fff;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--primary {
+  border: none;
+  background: linear-gradient(135deg, #ea580c 0%, #dc2626 52%, #b91c1c 100%);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.35);
+}
+
+.forming-replan-confirm {
+  padding: 6px 0 10px;
+}
+.forming-replan-confirm__lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569;
+}
+.forming-replan-confirm__name-block {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 247, 237, 0.92) 100%);
+  border: 1px solid rgba(252, 165, 165, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.forming-replan-confirm__name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #dc2626;
+  letter-spacing: 0.02em;
+}
+.forming-replan-confirm__code {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.forming-replan-confirm__q {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 }
 </style>

@@ -184,6 +184,10 @@ class ScheduleDailyPlanUpdateBody(BaseModel):
     planned_qty: int = Field(ge=0, description="日別計画数（0 以上の整数）")
 
 
+class ScheduleAppendPlannedBody(BaseModel):
+    additional_qty: int = Field(gt=0, description="既存計画の末尾に追記する本数")
+
+
 class ScheduleOut(BaseModel):
     id: int
     line_id: int

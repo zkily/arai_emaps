@@ -715,6 +715,12 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import {
+  computeEffectiveReplanAnchorDate,
+  firstDayOfMonthIso,
+  formatYmdInJapan,
+  ymFromIsoDate,
+} from '@/views/aps/shared/replanAnchor'
 
 defineOptions({ name: 'FormingPlanningList' })
 
@@ -737,29 +743,30 @@ const replanProgressPercent = computed(() => {
 })
 const replanProgressText = computed(() => `${replanProgressDone.value} / ${replanProgressTotal.value}`)
 
-/** 再計算 API のクエリ用アンカー（DB の aps_line_replan_anchors があればサーバ側で優先） */
-function formatYmdInJapan(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Tokyo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(d)
-}
-
-const replanFallbackAnchorDate = computed(() => formatYmdInJapan(new Date()))
-
+/** 日本時区基準の本日±N日（YYYY-MM-DD） */
 function offsetDateIso(offsetDays: number): string {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  d.setDate(d.getDate() + offsetDays)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${dd}`
+  const today = formatYmdInJapan(new Date())
+  const base = new Date(`${today}T12:00:00+09:00`)
+  base.setDate(base.getDate() + offsetDays)
+  return formatYmdInJapan(base)
 }
 
 const dateRange = ref<[string, string]>([offsetDateIso(-1), offsetDateIso(30)])
+
+const todayIso = computed(() => formatYmdInJapan(new Date()))
+
+/** 検索期間の月初（作成画面の基準月1日と同じ錨点候補） */
+const replanAnchorDateIso = computed(() => {
+  const rangeStart = (dateRange.value?.[0] || '').trim()
+  const ym = ymFromIsoDate(rangeStart) || formatYmInJapan()
+  return firstDayOfMonthIso(ym)
+})
+
+/** 再計算 API クエリ錨点（DB aps_line_replan_anchors があればサーバ優先） */
+const effectiveReplanAnchorDate = computed(() =>
+  computeEffectiveReplanAnchorDate(replanAnchorDateIso.value, todayIso.value),
+)
+
 /** 設備操業度タブ専用：集計月（検索期間とは独立） */
 function formatYmInJapan(d = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
@@ -1450,6 +1457,11 @@ function buildReplanConfirmMessage() {
     h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
     h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
     h('p', { class: 'forming-replan-confirm__lead' }, 'アンカー日が未来の場合でも、再計算は明日以降を連続で再作成します（空白期間は作りません）。'),
+    h(
+      'p',
+      { class: 'forming-replan-confirm__lead' },
+      `設備ごとに保存済みの再計算アンカー日があれば最優先。未設定時は検索期間の月初（${replanAnchorDateIso.value}）と本日（${todayIso.value}）の遅い方（${effectiveReplanAnchorDate.value}）をフォールバックに使います。`,
+    ),
     h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
   ])
 }
@@ -2267,7 +2279,7 @@ async function replanAllLinesForProcess() {
       return
     }
     replanProgressTotal.value = lines.length
-    const anchor = replanFallbackAnchorDate.value
+    const anchor = effectiveReplanAnchorDate.value
     const failed: string[] = []
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
@@ -2280,21 +2292,27 @@ async function replanAllLinesForProcess() {
       }
       replanProgressDone.value = i + 1
     }
+    const okCount = lines.length - failed.length
     let rebuildErr = ''
-    replanCurrentLineLabel.value = 'production_plan_excel 再構築'
-    try {
-      await rebuildProductionPlanExcelAll()
-    } catch (e: unknown) {
-      rebuildErr = formatApiError(e) || 'production_plan_excel の再構築に失敗しました'
+    let rebuildSkipped = false
+    if (okCount > 0) {
+      replanCurrentLineLabel.value = 'production_plan_excel 再構築'
+      try {
+        await rebuildProductionPlanExcelAll()
+      } catch (e: unknown) {
+        rebuildErr = formatApiError(e) || 'production_plan_excel の再構築に失敗しました'
+      }
+    } else {
+      rebuildSkipped = true
     }
     await loadSchedules()
     if (failed.length === 0 && !rebuildErr) {
       ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
     } else {
-      const ok = lines.length - failed.length
-      ElMessage.warning(
-        `再計算完了（成功 ${ok} / 失敗 ${failed.length}）${rebuildErr ? ' / 再構築失敗 1' : ''}`,
-      )
+      const parts = [`再計算完了（成功 ${okCount} / 失敗 ${failed.length}）`]
+      if (rebuildErr) parts.push('再構築失敗 1')
+      if (rebuildSkipped) parts.push('全件失敗のため excel 再構築をスキップ')
+      ElMessage.warning(parts.join(' / '))
       const previewLines = [...failed]
       if (rebuildErr) previewLines.unshift(`production_plan_excel: ${rebuildErr}`)
       const preview = previewLines.slice(0, 5).join('\n')
@@ -2332,8 +2350,6 @@ function formatGroupEfficiency(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(Number(v))) return '—'
   return `${Math.round(Number(v))}本/H`
 }
-
-const todayIso = computed(() => formatYmdInJapan(new Date()))
 
 function isWeekend(d: string): boolean {
   const day = new Date(d).getDay()

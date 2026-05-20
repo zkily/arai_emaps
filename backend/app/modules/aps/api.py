@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 from datetime import date, timedelta, datetime, time
 from decimal import Decimal
-from typing import Optional, List, Dict, Any, Iterable
+from typing import Optional, List, Dict, Any, Iterable, Sequence
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, and_, or_, delete, update, text, exists, func, case
@@ -55,6 +55,7 @@ from app.modules.aps.schemas import (
     ScheduleCreateBody,
     ScheduleUpdateBody,
     ScheduleDailyPlanUpdateBody,
+    ScheduleAppendPlannedBody,
     ScheduleOut,
     ScheduleWithLineOut,
     ScheduleGridRow,
@@ -72,9 +73,16 @@ from app.modules.aps.schemas import (
 )
 from app.modules.aps.engine import (
     APS_CALENDAR_PRELOAD_DAYS,
+    SCHEDULE_STANDARD_DAY_HOURS,
     run_engine,
     replan_line_sequential,
+    run_engine_append_qty,
+    replan_following_schedules_on_line,
     productive_hours_from_slot_rows,
+    hourly_piece_rate_from_daily_capacity,
+    resolve_schedule_piece_rate,
+    capacity_efficiency_factor,
+    advance_line_cursor_after_slice,
     _fetch_slots_by_date,
 )
 from app.services.access_sync.production_plan_excel_sync import sync_production_plan_excel_to_access
@@ -128,27 +136,50 @@ def _resolve_efficiency_rate_pieces_per_hour(
     ps: ProductionSchedule,
     ee_rows: List[EquipmentEfficiency],
 ) -> Optional[float]:
-    """
-    表示用：equipment_efficiency.efficiency_rate（本/H）。
-    製品コード→品名の順でマスタ照合。無ければ日産能力÷標準15.3hで概算。
-    """
-    pcd = (ps.product_cd or "").strip()
-    iname = (ps.item_name or "").strip()
-    name_hits: List[float] = []
-    for r in ee_rows:
-        rcd = (r.product_cd or "").strip()
-        rname = (r.product_name or "").strip()
-        rate = _dec(r.efficiency_rate)
-        if pcd and rcd and pcd == rcd:
-            return rate
-        if iname and rname and iname == rname:
-            name_hits.append(rate)
-    if name_hits:
-        return name_hits[0]
-    dc = int(ps.daily_capacity or 0)
-    if dc > 0:
-        return round(float(Decimal(dc) / _APS_EE_STANDARD_DAY_HOURS), 2)
+    """表示用：equipment_efficiency.efficiency_rate（本/H）。排産エンジンと同一ロジック。"""
+    rate, _from_ee = resolve_schedule_piece_rate(ps, ee_rows)
+    if rate > 0:
+        return round(float(rate), 2)
     return None
+
+
+def _sync_schedules_daily_capacity_from_ee(
+    schedules: Sequence[ProductionSchedule],
+    ee_rows: List[EquipmentEfficiency],
+) -> None:
+    """再計算前に daily_capacity を設備能率マスタ（⌊本/H×15.3⌋）へ揃える。"""
+    for ps in schedules:
+        rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows)
+        if not from_ee or rate <= 0:
+            continue
+        new_dc = int(math.floor(rate * SCHEDULE_STANDARD_DAY_HOURS))
+        if new_dc > 0:
+            ps.daily_capacity = new_dc
+
+
+def _replan_actual_done_and_remaining(
+    planned_total: int,
+    period_actual: int,
+    period_defect: int,
+    upstream_defect_total: int,
+) -> tuple[int, int]:
+    """
+    実績あり工単の Step3 再排産用。
+
+    残数（本）＝ 計画総数 − 良品実績 − 当工程不良（gross）。
+    旧ロジックは前工程不良を actual_done に全量加算し、既に実績で相殺済みの分まで
+    控除して未来計画が不足していた（例: 7801→7064）。前工程不良は日別「前」行で参照。
+    """
+    _ = upstream_defect_total
+    gross_remaining = max(
+        0,
+        int(planned_total or 0) - int(period_actual or 0) - int(period_defect or 0),
+    )
+    actual_done = min(
+        int(planned_total or 0),
+        max(0, int(period_actual or 0) + int(period_defect or 0)),
+    )
+    return actual_done, gross_remaining
 
 
 def _aps_machine_selectable_clause():
@@ -1017,6 +1048,92 @@ async def update_schedule(
     return _schedule_to_out(ps)
 
 
+@router.post("/schedules/{schedule_id}/append-planned")
+async def append_schedule_planned_qty(
+    schedule_id: int,
+    body: ScheduleAppendPlannedBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    合計(本)増加時：既存日別計画の末尾に追記し、後続順位のみ必要なら再串接。
+    ライン全件 replan-sequence による日別組替えを避ける。
+    """
+    ps = await db.get(ProductionSchedule, schedule_id)
+    if ps is None:
+        raise HTTPException(404, "工単が見つかりません")
+
+    line_machine = await db.get(Machine, ps.line_id)
+    if line_machine is None:
+        raise HTTPException(404, "設備が見つかりません")
+
+    ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+    cal_start = ps.start_date or now_jst().date()
+    cal_end_d = cal_start + timedelta(days=APS_CALENDAR_PRELOAD_DAYS)
+    cal_result = await db.execute(
+        select(LineCapacity)
+        .where(
+            LineCapacity.line_id == ps.line_id,
+            LineCapacity.work_date >= cal_start,
+            LineCapacity.work_date <= cal_end_d,
+        )
+    )
+    shared_cal_map = {
+        row.work_date: float(row.available_hours) for row in cal_result.scalars().all()
+    }
+    shared_slots = await _fetch_slots_by_date(db, ps.line_id, cal_start, cal_end_d)
+
+    try:
+        ps, new_date, new_time, appended = await run_engine_append_qty(
+            db,
+            schedule_id,
+            int(body.additional_qty),
+            ps_obj=ps,
+            machine_obj=line_machine,
+            cal_map_preloaded=shared_cal_map,
+            slots_by_date_preloaded=shared_slots,
+            ee_rows_preloaded=ee_rows,
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+    await db.flush()
+    following = await replan_following_schedules_on_line(
+        db,
+        int(ps.line_id),
+        schedule_id,
+        new_date,
+        new_time,
+        machine_obj=line_machine,
+        cal_map_preloaded=shared_cal_map,
+        slots_by_date_preloaded=shared_slots,
+        ee_rows_preloaded=ee_rows,
+    )
+    for fps in following:
+        await _sync_actual_from_stock_logs(db, fps, machine=line_machine)
+    await db.flush()
+
+    is_forming = await _machine_matches_process_cd(
+        db, line_machine, _APS_INSTRUCTION_PLANS_SYNC_PROCESS_CD
+    )
+    if is_forming:
+        await _sync_instruction_plans_from_aps_schedule(
+            db, ps, machine=line_machine, is_forming_line=True
+        )
+        for fps in following:
+            await _sync_instruction_plans_from_aps_schedule(
+                db, fps, machine=line_machine, is_forming_line=True
+            )
+    await db.flush()
+
+    return {
+        "success": True,
+        "appended_qty": int(appended),
+        "following_replanned": len(following),
+        "data": _schedule_to_out(ps).model_dump(),
+    }
+
+
 @router.put("/schedules/{schedule_id}/daily-planned")
 async def update_schedule_daily_planned_qty(
     schedule_id: int,
@@ -1383,18 +1500,8 @@ async def get_scheduling_grid(
                     first_key = keys[0]
                     upstream_defect_daily[first_key] = int(upstream_total)
 
-            # ガント日別「計画」は有効本数として表示（前工程不良を日別按分で控除）
-            for k, u in upstream_defect_daily.items():
-                if int(u or 0) <= 0:
-                    continue
-                try:
-                    d0 = date.fromisoformat(k)
-                except ValueError:
-                    d0 = None
-                # 今天及以前不改写“計画”。
-                if d0 is not None and d0 <= today_jst:
-                    continue
-                daily[k] = max(0, int(daily.get(k, 0) or 0) - int(u or 0))
+            # ガント日別「計」は排産エンジンが置いた gross 本数（スライス/明細の合計）。
+            # 前工程不良は「前」行と残＝計−実−不−前 で示し、計から再控除しない（二重控除防止）。
 
             for k, v in daily.items():
                 daily_totals[k] += int(v or 0)
@@ -1811,12 +1918,27 @@ async def replan_sequence(
     }
     shared_slots = await _fetch_slots_by_date(db, line_id, cal_start, cal_end_d)
 
+    ee_rows: List[EquipmentEfficiency] = []
+    if line_machine is not None:
+        ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line_machine)
+    all_line_sched_res = await db.execute(
+        select(ProductionSchedule).where(
+            ProductionSchedule.line_id == line_id,
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
+        )
+    )
+    all_line_schedules = list(all_line_sched_res.scalars().all())
+    if ee_rows and all_line_schedules:
+        _sync_schedules_daily_capacity_from_ee(all_line_schedules, ee_rows)
+        await db.flush()
+
     # ── Step 1: 通常の順次排産 ──
     updated = await replan_line_sequential(
         db, line_id, replan_start_anchor,
         machine_obj=line_machine,
         cal_map_preloaded=shared_cal_map,
         slots_by_date_preloaded=shared_slots,
+        ee_rows_preloaded=ee_rows,
     )
     await db.flush()
 
@@ -1941,13 +2063,12 @@ async def replan_sequence(
                     period_defect = info["total_defect"]
                     planned_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
                     upstream_defect_total = int(upstream_defect_by_schedule.get(sid, 0) or 0)
-                    # 工単消化量＝良品実績＋不良＋前工程不良
-                    # （残＝合計(本)−良品実績−不良−前工程不良）
-                    actual_done_for_engine = min(
+                    actual_done_for_engine, remaining = _replan_actual_done_and_remaining(
                         planned_total,
-                        max(0, int(period_actual or 0) + int(period_defect or 0) + int(upstream_defect_total or 0)),
+                        int(period_actual or 0),
+                        int(period_defect or 0),
+                        upstream_defect_total,
                     )
-                    remaining = max(0, planned_total - actual_done_for_engine)
                     if includeDebug:
                         replan_debug_rows.append({
                             "schedule_id": int(ps.id),
@@ -1986,6 +2107,7 @@ async def replan_sequence(
                         machine_obj=line_machine,
                         cal_map_preloaded=shared_cal_map,
                         slots_by_date_preloaded=shared_slots,
+                        ee_rows_preloaded=ee_rows,
                     )
                 else:
                     if includeDebug:
@@ -2019,6 +2141,7 @@ async def replan_sequence(
                         machine_obj=line_machine,
                         cal_map_preloaded=shared_cal_map,
                         slots_by_date_preloaded=shared_slots,
+                        ee_rows_preloaded=ee_rows,
                     )
 
                 await db.flush()
@@ -2027,18 +2150,21 @@ async def replan_sequence(
                     .where(ScheduleSliceAllocation.schedule_id == ps.id)
                     .order_by(
                         ScheduleSliceAllocation.work_date.desc(),
-                        ScheduleSliceAllocation.period_end.desc(),
                         ScheduleSliceAllocation.sort_order.desc(),
+                        ScheduleSliceAllocation.id.desc(),
                     )
                     .limit(1)
                 )
                 last = last_q.scalars().first()
                 if last is not None:
-                    cursor_date_r = last.work_date
-                    cursor_time_r = last.period_end
-                    if cursor_time_r == time(0, 0, 0) and last.period_start != time(0, 0, 0):
-                        cursor_date_r = cursor_date_r + timedelta(days=1)
-                        cursor_time_r = time(0, 0, 0)
+                    ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows)
+                    if ps_rate <= 0:
+                        ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+                        from_ee = False
+                    ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
+                    cursor_date_r, cursor_time_r = advance_line_cursor_after_slice(
+                        last, ps_rate, ps_eff
+                    )
                 else:
                     cursor_date_r = ps.end_date or (cursor_date_r + timedelta(days=1))
                     cursor_time_r = time(0, 0, 0)

@@ -1009,7 +1009,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'WeldingPlanning' })
-import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
@@ -1041,6 +1041,7 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
 import LineCapacity from '../LineCapacity.vue'
 import { getProductionSummarysList } from '@/api/database'
 import request from '@/shared/api/request'
@@ -2210,8 +2211,47 @@ async function loadSchedulesEditingPreserve(scheduleId: number) {
   }
 }
 
+function buildSingleLineReplanConfirmMessage() {
+  const lineLabel = selectedLineDisplayName.value
+  const ln = lines.value.find((l) => l.id === selectedLineId.value)
+  const code = ln?.line_code?.trim() || ''
+  const anchor = effectiveReplanAnchorDate()
+  const nameBlockChildren = [h('div', { class: 'forming-replan-confirm__name' }, lineLabel)]
+  if (code && code !== lineLabel) {
+    nameBlockChildren.push(h('div', { class: 'forming-replan-confirm__code' }, code))
+  }
+  return h('div', { class: 'forming-replan-confirm' }, [
+    h('p', { class: 'forming-replan-confirm__lead' }, '選択中の溶接設備について、順位どおりに再計算します。'),
+    h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
+    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
+    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
+    h(
+      'p',
+      { class: 'forming-replan-confirm__lead' },
+      `設備に保存済みの再計算アンカー日があれば最優先。未設定時は基準月（${anchorDate.value || '—'}）と本日（${todayIso.value}）の遅い方（${anchor}）を使用します。`,
+    ),
+    h('p', { class: 'forming-replan-confirm__lead' }, '※ 溶接：切断指示 は同期しません（aps_schedules / aps_batch_plans のみ更新）。'),
+    h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
+  ])
+}
+
 async function replanAll() {
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
+  try {
+    await ElMessageBox.confirm(buildSingleLineReplanConfirmMessage(), {
+      title: 'ライン順で再計算',
+      type: 'warning',
+      confirmButtonText: '実行',
+      cancelButtonText: 'キャンセル',
+      customClass: 'forming-replan-messagebox',
+      center: false,
+      showClose: true,
+      closeOnClickModal: false,
+      distinguishCancelAndClose: true,
+    })
+  } catch {
+    return
+  }
   replanning.value = true
   try {
     await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate(), false)
@@ -2473,13 +2513,10 @@ async function saveDailyPlanEdit() {
 /**
  * 再計算 API（replan-sequence）のクエリ錨点（フォールバック）。
  * 当該設備に DB（aps_line_replan_anchors）があればサーバ側でそちらが最優先される。
- * ここでは基準月1日と日本の今日の大きい方のみ（過去の月初に固定しない）。
+ * 共通ロジックは `views/aps/shared/replanAnchor.ts` を参照。
  */
 function effectiveReplanAnchorDate(): string {
-  const anchor = (anchorDate.value || '').trim()
-  const today = todayIso.value
-  if (!anchor) return today
-  return anchor >= today ? anchor : today
+  return computeEffectiveReplanAnchorDate(anchorDate.value, todayIso.value)
 }
 
 function openLineReplanAnchorDialog() {
@@ -4683,5 +4720,121 @@ td.gantt-has-actual {
 .gantt-name-upstream-tip .upstream-tip-muted {
   color: var(--c-text-s, #64748b);
   font-weight: 500;
+}
+</style>
+
+<!-- MessageBox は body へ teleport されるため、ライン順再計算の確認ダイアログ用はグローバル -->
+<style>
+.forming-replan-messagebox.el-message-box {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: none;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(148, 163, 184, 0.18);
+  backdrop-filter: blur(10px);
+}
+.forming-replan-messagebox .el-message-box__header {
+  padding: 0;
+  margin: 0;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.45);
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 42%, #fde68a 100%);
+}
+.forming-replan-messagebox .el-message-box__headerbtn {
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  transition: background 0.2s ease;
+}
+.forming-replan-messagebox .el-message-box__headerbtn:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+.forming-replan-messagebox .el-message-box__title {
+  width: 100%;
+  padding: 18px 48px 16px 20px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #0f172a;
+  line-height: 1.25;
+}
+.forming-replan-messagebox .el-message-box__status {
+  display: none;
+}
+.forming-replan-messagebox .el-message-box__container {
+  padding: 0 20px 4px;
+}
+.forming-replan-messagebox .el-message-box__message {
+  padding: 0;
+}
+.forming-replan-messagebox .el-message-box__btns {
+  padding: 14px 20px 18px;
+  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.65) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+}
+.forming-replan-messagebox .el-message-box__btns .el-button {
+  min-width: 108px;
+  border-radius: 999px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 10px 20px;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--default {
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  color: #475569;
+  background: #fff;
+}
+.forming-replan-messagebox .el-message-box__btns .el-button--primary {
+  border: none;
+  background: linear-gradient(135deg, #ea580c 0%, #dc2626 52%, #b91c1c 100%);
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.35);
+}
+
+.forming-replan-confirm {
+  padding: 6px 0 10px;
+}
+.forming-replan-confirm__lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569;
+}
+.forming-replan-confirm__name-block {
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(254, 242, 242, 0.95) 0%, rgba(255, 247, 237, 0.92) 100%);
+  border: 1px solid rgba(252, 165, 165, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.forming-replan-confirm__name {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #dc2626;
+  letter-spacing: 0.02em;
+}
+.forming-replan-confirm__code {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.forming-replan-confirm__q {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
 }
 </style>

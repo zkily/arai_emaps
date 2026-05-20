@@ -455,6 +455,16 @@ export function runAllSchedules(lineId?: number, sequential?: boolean): Promise<
 /**
  * @param syncInstructionPlans false のとき instruction_plans を更新しない（排産・aps_batch_plans のみ）。溶接計画作成ページ向け。
  */
+/** 合計(本)増加時：既存日別計画の末尾に追記（全ライン再計算しない） */
+export function appendSchedulePlannedQty(
+  scheduleId: number,
+  additionalQty: number,
+): Promise<{ success: boolean; appended_qty: number; following_replanned: number }> {
+  return request.post(`${BASE}/schedules/${scheduleId}/append-planned`, {
+    additional_qty: additionalQty,
+  })
+}
+
 export function replanLineSequence(
   lineId: number,
   anchorStartDate?: string,
