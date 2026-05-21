@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { touchActivity } from '@/utils/inactivity'
+import { isPublicPagePath } from '@/utils/publicPages'
 
 // APIベースURLの取得
 // 開発: 相対パスでViteプロキシ経由。本番: api-config.js で直叩きURLがあればそれを使用（高速）
@@ -61,7 +62,7 @@ service.interceptors.request.use(
     const isAuthLogin = path.endsWith('/api/auth/login') || path === 'api/auth/login'
 
     if (token && !isAuthLogin) {
-      if (isTokenExpired(token)) {
+      if (isTokenExpired(token) && !isPublicPagePath()) {
         ElMessage.error('トークンの有効期限が切れました。再度ログインしてください。')
         userStore.clearLocalSession()
         window.location.href = '/login'
@@ -88,9 +89,10 @@ service.interceptors.response.use(
       const { status, data } = error.response
       const currentPath = window.location.pathname
       const isLoginPage = currentPath === '/login' || currentPath === '/'
-      
-      // ログインページでは、エラーメッセージを表示しない（Login.vueで処理するため）
-      if (isLoginPage) {
+      const isPublicPage = isPublicPagePath(currentPath)
+
+      // ログイン・公開ページでは、エラーメッセージを表示しない
+      if (isLoginPage || isPublicPage) {
         // エラーをそのまま返す（Login.vueで処理）
         return Promise.reject(error)
       }
@@ -157,7 +159,7 @@ service.interceptors.response.use(
       // ネットワークエラーの場合も、ログインページでは表示しない
       const currentPath = window.location.pathname
       const isLoginPage = currentPath === '/login' || currentPath === '/'
-      if (!isLoginPage) {
+      if (!isLoginPage && !isPublicPagePath(currentPath)) {
         ElMessage.error('ネットワークエラーが発生しました。サーバーに接続できません。')
       }
     }

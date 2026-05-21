@@ -32,13 +32,19 @@ import { getUserInfo } from '@/modules/auth/api'
 import { ElMessage } from 'element-plus'
 import { connectWebSocket, disconnectWebSocket } from '@/modules/websocket/utils'
 import { startInactivityCheck, stopInactivityCheck } from '@/utils/inactivity'
+import { isPublicPagePath } from '@/utils/publicPages'
 
 const userStore = useUserStore()
 
 // WebSocket接続とトークン検証
 onMounted(async () => {
   console.log('Smart-EMAP システム起動')
-  
+
+  // マニュアル・操作説明など公開ページではトークン検証・WS 接続を行わない
+  if (isPublicPagePath()) {
+    return
+  }
+
   // ログインしている場合
   if (userStore.isAuthenticated) {
     // WebSocket接続を確立（リアルタイム通知用）

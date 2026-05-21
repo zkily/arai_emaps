@@ -37,12 +37,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollectionHelp.vue'),
     meta: { title: '検査実績収集 操作説明', requiresAuth: false },
   },
-  // マニュアルホーム（メインレイアウト外・独立2カラムページ）
+  // マニュアルホーム（公開・ログイン不要。新規タブでも sessionStorage 非共有の影響を受けない）
   {
     path: '/manuals/:slug?',
     name: 'ManualHome',
     component: () => import('@/views/manual/ManualHome.vue'),
-    meta: { title: 'マニュアル', requiresAuth: true, standalone: true },
+    meta: { title: 'マニュアル', requiresAuth: false, standalone: true },
   },
   // メインレイアウト配下のルート
   {
