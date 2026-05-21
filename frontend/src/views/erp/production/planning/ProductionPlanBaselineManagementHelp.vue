@@ -38,8 +38,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
-import MarkdownIt from 'markdown-it'
 import { ElMessage } from 'element-plus'
+import { getStandaloneManualMarkdown, normalizeManualMarkdown } from '@/views/manual/manualAssets'
+import { renderHelpMarkdown } from '@/utils/markdownHelpRender'
 import { Document, Printer, QuestionFilled } from '@element-plus/icons-vue'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
@@ -50,9 +51,7 @@ const pdfSaving = ref(false)
 const isCapturingPdf = ref(false)
 const helpCaptureEl = ref<HTMLElement | null>(null)
 
-const DOC_FILENAME = 'ppb_manual_ja.md'
-// 部分浏览器对包含日文/中文的路径不稳定，使用 encodeURIComponent 规避编码问题
-const DOC_URL = `/docs/${encodeURIComponent(DOC_FILENAME)}`
+const DOC_FILENAME = 'plan-baseline_ja.md'
 
 function sanitizeHtml(input: string): string {
   // 简易安全过滤：移除 script 标签以及 on* 事件属性，避免把任意 HTML 当成可信内容
@@ -65,23 +64,11 @@ function sanitizeHtml(input: string): string {
 
 onMounted(async () => {
   try {
-    const res = await fetch(DOC_URL)
-    if (!res.ok) {
-      throw new Error(`Failed to load help doc: ${res.status}`)
+    const mdText = getStandaloneManualMarkdown(DOC_FILENAME)
+    if (!mdText) {
+      throw new Error(`Failed to load help doc: ${DOC_FILENAME}`)
     }
-
-    const mdText = await res.text()
-    const md = new MarkdownIt({
-      html: true,
-      linkify: true,
-      breaks: true,
-      typographer: true,
-    })
-
-    // markdown 文件里的图片是相对路径（./images/...），这里统一改为绝对路径（/images/...）
-    const normalizedMd = mdText.replace(/\.\/images\//g, '/images/')
-
-    renderedHtml.value = sanitizeHtml(md.render(normalizedMd))
+    renderedHtml.value = sanitizeHtml(renderHelpMarkdown(normalizeManualMarkdown(mdText)))
   } catch (e: any) {
     console.error(e)
     ElMessage.error(e?.message ?? '操作説明の読み込みに失敗しました')

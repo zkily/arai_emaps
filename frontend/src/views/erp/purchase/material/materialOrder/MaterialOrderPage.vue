@@ -554,9 +554,43 @@
               prop="material_name"
               label="材料名"
               min-width="180"
-              show-overflow-tooltip
               sortable
-            />
+            >
+              <template #default="{ row }">
+                <el-tooltip
+                  placement="top"
+                  effect="dark"
+                  :show-after="250"
+                  :disabled="!row.material_cd"
+                  @before-show="ensureMaterialProductsMap"
+                >
+                  <template #content>
+                    <div class="material-order-products-tooltip">
+                      <div class="material-order-products-tooltip__title">使用製品</div>
+                      <div
+                        v-if="materialProductsLoading && !materialProductsLoaded"
+                        class="material-order-products-tooltip__hint"
+                      >
+                        読込中…
+                      </div>
+                      <template v-else-if="getMaterialProductLines(row.material_cd).length">
+                        <div
+                          v-for="p in getMaterialProductLines(row.material_cd)"
+                          :key="p.product_cd"
+                          class="material-order-products-tooltip__line"
+                        >
+                          {{ p.product_cd }} — {{ p.product_name || '—' }}
+                        </div>
+                      </template>
+                      <div v-else class="material-order-products-tooltip__hint">
+                        該当製品なし（製品マスタの材料CD未設定）
+                      </div>
+                    </div>
+                  </template>
+                  <span class="material-name-with-products">{{ row.material_name }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
             <el-table-column
               prop="supplier_name"
               label="仕入先"
@@ -1641,6 +1675,7 @@ import { calculateMaterialStock } from '@/api/materialStockCalculation'
 import { generateMaterialStockData } from '@/api/materialDataGeneration'
 import { updateMaterialQuantities, updateMaterialRemarks } from '@/api/materialStockUpdate'
 import type { MaterialQuantityUpdate } from '@/api/materialStockUpdate'
+import { getProductList } from '@/api/master/productMaster'
 
 // 定义类型接口
 interface MaterialOrderItem {
@@ -1725,6 +1760,58 @@ const orderConfirmDialogVisible = ref(false)
 const orderNotes = ref('')
 const activeTab = ref('stock') // デフォルトは材料日別在庫タブ
 const materialMasterSyncLoading = ref(false)
+
+/** 材料注文タブ：材料CD → 使用製品（製品マスタ products.material_cd） */
+interface MaterialProductLine {
+  product_cd: string
+  product_name: string
+}
+const materialProductsMap = ref<Record<string, MaterialProductLine[]>>({})
+const materialProductsLoaded = ref(false)
+const materialProductsLoading = ref(false)
+let materialProductsFetchPromise: Promise<void> | null = null
+
+function getMaterialProductLines(materialCd: string | undefined | null): MaterialProductLine[] {
+  const cd = String(materialCd || '').trim()
+  if (!cd) return []
+  return materialProductsMap.value[cd] ?? []
+}
+
+async function fetchMaterialProductsMap(): Promise<void> {
+  materialProductsLoading.value = true
+  try {
+    const res = await getProductList({ page: 1, pageSize: 10000 })
+    const list = res?.data?.list ?? res?.list ?? []
+    const map: Record<string, MaterialProductLine[]> = {}
+    for (const p of list) {
+      const mcd = (p.material_cd || '').trim()
+      if (!mcd) continue
+      if (!map[mcd]) map[mcd] = []
+      map[mcd].push({
+        product_cd: p.product_cd,
+        product_name: p.product_name || '',
+      })
+    }
+    for (const lines of Object.values(map)) {
+      lines.sort((a, b) => a.product_cd.localeCompare(b.product_cd, 'ja'))
+    }
+    materialProductsMap.value = map
+    materialProductsLoaded.value = true
+  } catch (error) {
+    console.error('製品一覧（材料別）の取得に失敗しました:', error)
+    materialProductsMap.value = {}
+  } finally {
+    materialProductsLoading.value = false
+  }
+}
+
+async function ensureMaterialProductsMap(): Promise<void> {
+  if (materialProductsLoaded.value) return
+  if (!materialProductsFetchPromise) {
+    materialProductsFetchPromise = fetchMaterialProductsMap()
+  }
+  await materialProductsFetchPromise
+}
 
 // 材料详情弹窗相关数据
 const materialDetailDialogVisible = ref(false)
@@ -2743,6 +2830,9 @@ const _formatDateTime = (dateTime: string): string => {
 
 const handleTabChange = (tabName: string | number) => {
   activeTab.value = String(tabName)
+  if (activeTab.value === 'order') {
+    void ensureMaterialProductsMap()
+  }
   refreshListForActiveTab()
 }
 
@@ -6081,6 +6171,38 @@ ${groupBlocks}
 .material-name-clickable:hover {
   background-color: #e0f2fe;
   transform: translateX(2px);
+}
+
+/* 材料注文タブ：材料名ホバーで使用製品を表示 */
+.material-name-with-products {
+  cursor: help;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.material-order-products-tooltip {
+  max-width: 360px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.material-order-products-tooltip__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.material-order-products-tooltip__line {
+  white-space: nowrap;
+}
+
+.material-order-products-tooltip__hint {
+  color: rgba(255, 255, 255, 0.88);
 }
 
 /* 数值显示样式优化 */

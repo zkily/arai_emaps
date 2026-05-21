@@ -1,6 +1,6 @@
 # 検査実績収集 — スクリーンショット用フォルダ
 
-操作説明書 `frontend/public/docs/inspection_actual_manual_ja.md` から参照する画像を、このフォルダに配置してください。
+操作説明書 `frontend/src/views/manual/docs/inspection-actual_ja.md` から参照する画像を、このフォルダに配置してください。
 
 ## 推奨ファイル名一覧
 

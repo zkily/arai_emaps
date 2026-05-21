@@ -120,6 +120,21 @@
           </div>
         </el-popover>
 
+        <!-- マニュアル -->
+        <div
+          class="header-action header-action--icon header-action--manual"
+          role="button"
+          tabindex="0"
+          :title="t('operationManual.homeTitle')"
+          :aria-label="t('operationManual.homeTitle')"
+          @click="openManualHome"
+          @keydown.enter.prevent="openManualHome"
+        >
+          <span class="header-manual-core" aria-hidden="true">
+            <el-icon class="header-manual-icon" :size="17"><Reading /></el-icon>
+          </span>
+        </div>
+
         <div class="header-divider" aria-hidden="true" />
 
         <el-dropdown @command="handleCommand" trigger="click" popper-class="header-dropdown-popper">
@@ -182,7 +197,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
   FullScreen, Aim, User, SwitchButton, ArrowDown, Clock,
-  Menu, Close, Promotion, Star, Bell, Warning
+  Menu, Close, Promotion, Star, Bell, Warning, Reading
 } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -210,6 +225,11 @@ defineEmits<{
 
 const router = useRouter()
 const userStore = useUserStore()
+
+function openManualHome() {
+  const resolved = router.resolve({ name: 'ManualHome' })
+  window.open(resolved.href, '_blank', 'noopener,noreferrer')
+}
 
 const currentTime = ref(dayjs().tz('Asia/Tokyo').format('MM/DD (ddd) HH:mm'))
 const isFullscreen = ref(false)
@@ -697,6 +717,96 @@ const handleCommand = async (command: string) => {
     rgba(224, 231, 255, 0.35) 50%,
     rgba(129, 140, 248, 0.22) 100%
   );
+}
+
+/* マニュアル */
+.header-action--manual {
+  position: relative;
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(52, 211, 153, 0.2) 42%,
+    rgba(6, 78, 59, 0.35) 100%
+  );
+  border-color: rgba(167, 243, 208, 0.42);
+  box-shadow:
+    var(--hdr-inset),
+    0 4px 14px rgba(6, 95, 70, 0.22);
+}
+
+.header-action--manual:hover {
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(110, 231, 183, 0.28) 45%,
+    rgba(4, 47, 46, 0.38) 100%
+  );
+  border-color: rgba(209, 250, 229, 0.55);
+  transform: translateY(-1px);
+  box-shadow:
+    var(--hdr-inset),
+    var(--hdr-shadow-raised),
+    0 0 20px rgba(52, 211, 153, 0.25);
+}
+
+.header-action--manual:focus-visible {
+  outline: 2px solid rgba(167, 243, 208, 0.9);
+  outline-offset: 2px;
+}
+
+.header-manual-core {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(
+    125% 125% at 28% 18%,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(167, 243, 208, 0.28) 48%,
+    rgba(16, 185, 129, 0.15) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 1px 4px rgba(6, 78, 59, 0.2);
+  transition:
+    transform 0.25s var(--hdr-ease),
+    box-shadow 0.25s ease,
+    background 0.25s ease;
+}
+
+.header-action--manual:hover .header-manual-core {
+  transform: scale(1.06);
+  background: radial-gradient(
+    125% 125% at 28% 18%,
+    rgba(255, 255, 255, 0.62) 0%,
+    rgba(209, 250, 229, 0.4) 50%,
+    rgba(52, 211, 153, 0.22) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 2px 8px rgba(16, 185, 129, 0.35);
+}
+
+.header-action--manual:active .header-manual-core {
+  transform: scale(0.98);
+}
+
+.header-manual-icon {
+  color: #ecfdf5;
+  filter: drop-shadow(0 1px 2px rgba(6, 78, 59, 0.45));
+}
+
+.header-action--manual:hover .header-manual-icon {
+  color: #fff;
+  filter: drop-shadow(0 0 6px rgba(167, 243, 208, 0.65));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-action--manual:hover .header-manual-core {
+    transform: none;
+  }
 }
 
 .header-notif-badge {

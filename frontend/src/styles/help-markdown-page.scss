@@ -1,0 +1,243 @@
+/* 操作説明 Markdown ビューア共通（OperationManualViewer 等） */
+.help-page {
+  min-height: calc(100vh - 60px);
+  position: relative;
+  padding: 22px 16px;
+  background: linear-gradient(180deg, rgba(64, 158, 255, 0.06), rgba(255, 255, 255, 0));
+}
+
+.help-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 240px at 20% 0%, rgba(64, 158, 255, 0.14), transparent 60%),
+    radial-gradient(540px 220px at 90% 10%, rgba(59, 130, 246, 0.1), transparent 55%);
+  pointer-events: none;
+}
+
+.help-shell {
+  position: relative;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.help-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.help-title-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(64, 158, 255, 0.1);
+  border: 1px solid rgba(64, 158, 255, 0.18);
+  box-shadow: 0 10px 30px rgba(64, 158, 255, 0.1);
+}
+
+.help-title-icon {
+  color: #409eff;
+  font-size: 20px;
+}
+
+.help-title-text h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: 0.2px;
+}
+
+.help-title-text p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.help-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.help-page.is-capturing .help-actions,
+.help-page.is-capturing .help-bg {
+  display: none !important;
+}
+
+.help-page.is-capturing .help-card {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+.help-card {
+  padding: 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.help-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 26px 10px;
+  color: #475569;
+  font-size: 14px;
+}
+
+.help-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(64, 158, 255, 0.25);
+  border-top-color: rgba(64, 158, 255, 0.95);
+  animation: help-spin 1s linear infinite;
+}
+
+@keyframes help-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.help-content {
+  line-height: 1.8;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.help-content :deep(p) {
+  margin: 0 0 12px;
+}
+
+.help-content :deep(h1),
+.help-content :deep(h2) {
+  margin: 22px 0 10px;
+  font-size: 18px;
+  font-weight: 800;
+  padding-left: 12px;
+  border-left: 4px solid rgba(64, 158, 255, 0.9);
+}
+
+.help-content :deep(h3),
+.help-content :deep(h4) {
+  margin: 18px 0 8px;
+  font-weight: 750;
+  padding-left: 10px;
+  border-left: 3px solid rgba(59, 130, 246, 0.55);
+}
+
+.help-content :deep(a) {
+  color: #2563eb;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+.help-content :deep(a:hover) {
+  border-bottom-color: rgba(37, 99, 235, 0.55);
+}
+
+.help-content :deep(ul),
+.help-content :deep(ol) {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+
+.help-content :deep(li) {
+  margin: 4px 0;
+}
+
+.help-content :deep(blockquote) {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-left: 4px solid rgba(64, 158, 255, 0.85);
+  background: rgba(64, 158, 255, 0.08);
+  border-radius: 10px;
+}
+
+.help-content :deep(hr) {
+  border: none;
+  border-top: 1px solid rgba(148, 163, 184, 0.35);
+  margin: 18px 0;
+}
+
+.help-content :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.help-content :deep(th),
+.help-content :deep(td) {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.help-content :deep(th) {
+  background: rgba(64, 158, 255, 0.08);
+  font-weight: 750;
+}
+
+.help-content :deep(pre) {
+  background: #0b1220;
+  color: #e5e7eb;
+  padding: 14px;
+  overflow: auto;
+  border-radius: 12px;
+}
+
+.help-content :deep(code) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: rgba(59, 130, 246, 0.08);
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.help-content :deep(pre code) {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.help-content :deep(img) {
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(2, 6, 23, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+@media print {
+  .help-page {
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .help-bg,
+  .help-actions {
+    display: none !important;
+  }
+
+  .help-card {
+    border: none !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+}

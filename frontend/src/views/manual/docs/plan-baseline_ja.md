@@ -1,8 +1,8 @@
 # 生産計画ベースライン管理 画面 操作説明
 
-対象画面：`erp/production/planning/ProductionPlanBaselineManagement.vue`
+対象画面：`frontend/src/views/erp/production/planning/ProductionPlanBaselineManagement.vue`
 
-本ページ内容は「生産計画ベースライン管理」画面のユーザー向け操作手順をまとめたものです。  
+本書は「生産計画ベースライン管理」画面のユーザー向け操作手順をまとめたものです。  
 月次のベースライン計画を生成・修正し、現行計画・実績との比較（推移/差異）と、工程別PDF報告書の発行までを説明します。
 
 ---
@@ -35,8 +35,13 @@
   - ![ベースライン比較一覧](./images/ProductionPlanBaselineManagement/comparison_list.png)
 - ベースライン計画修正ダイアログ（データ取得・入力・保存/削除・一括保存）
   - ![ベースライン計画修正ダイアログ](./images/ProductionPlanBaselineManagement/adjustment_dialog.png)
+- 基準計画の入力ダイアログ（固定化入力：平日/土曜/日曜）
+  - ![基準計画の入力ダイアログ](./images/ProductionPlanBaselineManagement/fixed_baseline_dialog.png)
 - 操業度カード（対象月・工程・検索＋テーブル）
   - ![操業度カード](./images/ProductionPlanBaselineManagement/operation_rate_card.png)
+- 工程別報告書発行（PDF）進捗ダイアログ
+  - ![工程別PDF発行_進捗](./images/ProductionPlanBaselineManagement/export_pdf_progress.png)
+
 ---
 
 ## 3. 操作手順
@@ -49,7 +54,8 @@
 4. 生成が完了すると、比較データが更新されます（画面内の比較一覧が最新状態になります）。
 5. 生成対象が `メッキ` または `検査` の場合、`基準計画の入力` ダイアログが表示されます（平日・土曜・日曜の固定入力が必要です）。
 
- - ![ベースライン生成エリア](./images/ProductionPlanBaselineManagement/baseline_generate_area.png)
+※スクリーンショット：ベースライン生成エリア
+※画像：./images/ProductionPlanBaselineManagement/baseline_generate_area.png
 
 ---
 
@@ -71,7 +77,8 @@
 4. 比較一覧（「ベースライン比較一覧」）が更新され、工程別タブが表示されます。
 5. `クリア` を押すと、検索条件がリセットされます（再度 `検索` が必要です）。
 
-- ![比較条件エリア](./images/ProductionPlanBaselineManagement/comparison_filter_area.png)
+※スクリーンショット：比較条件エリア
+※画像：./images/ProductionPlanBaselineManagement/comparison_filter_area.png
 
 ---
 
@@ -90,7 +97,8 @@
 
 また、工程タブ内には `合計` ブロックが表示されます（現行計画合計・計画差異合計・現行実績合計・計画対実績差）。
 
-- ![ベースライン比較一覧](./images/ProductionPlanBaselineManagement/comparison_list.png)
+※スクリーンショット：ベースライン比較一覧
+※画像：./images/ProductionPlanBaselineManagement/comparison_list.png
 
 ---
 
@@ -106,7 +114,8 @@
 6. ダイアログ下部の `変更を一括保存` を押すと、変更があった行だけまとめて保存されます。
 7. `閉じる` でダイアログを閉じます。
 
-- ![ベースライン計画修正ダイアログ](./images/ProductionPlanBaselineManagement/adjustment_dialog.png)
+※スクリーンショット：ベースライン計画修正ダイアログ
+※画像：./images/ProductionPlanBaselineManagement/adjustment_dialog.png
 
 ---
 
@@ -120,37 +129,32 @@
 4. `生成` をクリックすると、入力内容がベースライン生成に反映されます。
 5. `キャンセル` でダイアログを閉じることもできます。
 
+※スクリーンショット：基準計画の入力ダイアログ
+※画像：./images/ProductionPlanBaselineManagement/fixed_baseline_dialog.png
+
 ---
 
-### 3.7 操業度（APS 設備操業度・月次）の確認
+### 3.7 操業度（production_plan_rate）の確認
 
-「操業度」カードでは、成型計画一覧の「設備操業度」と同じ集計（スケジュールグリッド由来）で、設備別の計画／実績・操業度を表示します。カード見出しでは **対象月・工程・検索・印刷** を **同一行** にまとめ、余白を抑えたレイアウトです（狭い画面では折り返します）。
+「操業度」カードでは、指定した `対象月` と `工程` に対して、操業度差異の一覧を表示します。
 
-<div class="ppb-help-opbar" role="presentation" aria-hidden="true">
-  <div class="ppb-help-opbar__cluster">
-    <span class="ppb-help-opbar__k">対象月</span>
-    <span class="ppb-help-opbar__pill">2026年04月</span>
-  </div>
-  <div class="ppb-help-opbar__cluster">
-    <span class="ppb-help-opbar__k">工程</span>
-    <span class="ppb-help-opbar__pill ppb-help-opbar__pill--wide">KT04 — 成型</span>
-  </div>
-  <span class="ppb-help-opbar__btn ppb-help-opbar__btn--primary">検索</span>
-  <span class="ppb-help-opbar__btn ppb-help-opbar__btn--muted">印刷</span>
-</div>
+1. 操業度カードで `対象月` を選択します。
+2. `工程` を選択します（必要に応じて「全て」）。
+3. `検索` をクリックします。
+4. テーブルが更新されます。
 
-1. `対象月` を選択します（`YYYY-MM`）。
-2. `工程` を選択します（工程マスタのコード付き表示）。
-3. 条件変更時は自動で再集計されます。必要に応じて `検索` をクリックしても同じです。
-4. `印刷` で、現在表示中の設備操業度表を印刷します。
+表列（操業度テーブル）：
 
-主な表列（操業度テーブル）：
+1. `月`
+2. `工程`
+3. `ラインCD`
+4. `ライン`
+5. `操業度差異`（表示上はマイナス/プラスで色分けされた差異テキスト）
+6. `ファイル名`
+7. `取込日時`
 
-1. `設備`／`指示数`／`理論稼働(H)`／`計画数`／`実績数`
-2. `計画時間(H)`／`実績時間(H)`／`計画操業度`／`実績操業度`
-3. `操業度差異(H)`／`差異操業度(%)`
-
-- ![操業度カード](./images/ProductionPlanBaselineManagement/operation_rate_card.png)
+※スクリーンショット：操業度カード
+※画像：./images/ProductionPlanBaselineManagement/operation_rate_card.png
 
 ---
 
@@ -161,6 +165,9 @@
 1. 比較一覧が表示されている状態で、`工程別報告書発行` をクリックします。
 2. `工程別PDF発行` の進捗ダイアログが表示され、PDF生成・保存が進行します。
 3. 完了すると、正常保存結果が通知されます（保存件数やエラーメッセージ）。
+
+※スクリーンショット：工程別PDF発行（進捗）
+※画像：./images/ProductionPlanBaselineManagement/export_pdf_progress.png
 
 ---
 

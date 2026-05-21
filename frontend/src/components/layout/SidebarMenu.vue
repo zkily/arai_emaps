@@ -550,7 +550,7 @@
             <el-menu-item index="/master/bom/process-defect-items"><el-icon><Warning /></el-icon><template #title><span :title="t('menu.MASTER_PROCESS_DEFECT_ITEMS')">{{ t('menu.MASTER_PROCESS_DEFECT_ITEMS') }}</span></template></el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
-        
+
         <el-sub-menu v-if="userStore.hasPermission('all')" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>

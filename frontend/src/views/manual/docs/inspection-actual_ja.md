@@ -74,7 +74,7 @@
 
 ## 3. 推奨スクリーンショット一覧
 
-実運用マニュアル用の画像は `frontend/public/images/InspectionActualDataCollection/` に配置します。ファイル名の詳細は同フォルダの [README.md](/images/InspectionActualDataCollection/README.md) を参照してください。
+実運用マニュアル用の画像は `frontend/src/views/manual/images/InspectionActualDataCollection/` に配置します。ファイル名の詳細は [README.md](../images/InspectionActualDataCollection/README.md) を参照してください。
 
 | 番号 | 画像パス | 用途 |
 |------|----------|------|

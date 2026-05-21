@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getStandaloneManualMarkdown, normalizeManualMarkdown } from '@/views/manual/manualAssets'
 import {
   bindHelpContentAnchorNav,
   renderHelpMarkdown,
@@ -56,9 +57,7 @@ const helpCaptureEl = ref<HTMLElement | null>(null)
 const helpContentEl = ref<HTMLElement | null>(null)
 let unbindAnchorNav: (() => void) | null = null
 
-const DOC_FILENAME = 'inspection_actual_manual_ja.md'
-// 部分浏览器对包含日文/中文的路径不稳定，使用 encodeURIComponent 规避编码问题
-const DOC_URL = `/docs/${encodeURIComponent(DOC_FILENAME)}`
+const DOC_FILENAME = 'inspection-actual_ja.md'
 
 function sanitizeHtml(input: string): string {
   // 简易安全过滤：移除 script 标签以及 on* 事件属性，避免把任意 HTML 当成可信内容
@@ -71,13 +70,11 @@ function sanitizeHtml(input: string): string {
 
 onMounted(async () => {
   try {
-    const res = await fetch(DOC_URL)
-    if (!res.ok) {
-      throw new Error(`Failed to load help doc: ${res.status}`)
+    const mdText = getStandaloneManualMarkdown(DOC_FILENAME)
+    if (!mdText) {
+      throw new Error(`Failed to load help doc: ${DOC_FILENAME}`)
     }
-
-    const mdText = await res.text()
-    renderedHtml.value = sanitizeHtml(renderHelpMarkdown(mdText))
+    renderedHtml.value = sanitizeHtml(renderHelpMarkdown(normalizeManualMarkdown(mdText)))
   } catch (e: any) {
     console.error(e)
     ElMessage.error(e?.message ?? '操作説明の読み込みに失敗しました')
