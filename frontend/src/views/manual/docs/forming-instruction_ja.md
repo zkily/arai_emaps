@@ -3,9 +3,8 @@
 | 項目 | 内容 |
 |------|------|
 | テーマ | 成型工程における生産指示の発行、現場実績収集、ERP／APS への反映 |
-| 対象システム | Smart-EMAPs |
 | 主な対象画面 | 成型指示、生産実績管理、生産データ管理、成型計画一覧、成型計画作成 |
-| 関連資料 | `PLCシステム_計画数アップロード_操作手順.pdf`、`ハンディターミナル操作マニュアル` |
+
 
 本書は、成型工程の **日次運用フロー** を、メニュー操作・現場作業・データ照合・計画修正まで一通り説明します。
 
@@ -32,33 +31,57 @@
 
 成型工程の **1 日（1 サイクル）** は、おおむね次の流れで進めます。上から順に実施し、前の工程が終わってから次へ進めてください。
 
-```mermaid
-flowchart TD
-  subgraph office["計画・事務（ERP）— 指示の準備"]
-    A["成型生産指示書の発行・印刷"]
-  end
+<div class="forming-workflow" role="img" aria-label="成型工程 業務フロー AからK">
+  <p class="forming-workflow__title">成型工程指示・実績収集業務フロー（A → K）</p>
 
-  subgraph field["成型現場 — 実績の収集"]
-    B["新規指示書の配布と記入済み指示書の回収"]
-    C["PLC 収集データの印刷"]
-    D["ハンディターミナル（HT）で実績登録"]
-  end
+  <section class="forming-workflow__lane forming-workflow__lane--office">
+    <header class="forming-workflow__lane-hd">計画・事務（ERP）— 指示の準備</header>
+    <div class="forming-workflow__steps">
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">A</span><span class="forming-workflow__text">成型生産指示書の発行・印刷</span></div>
+    </div>
+  </section>
 
-  subgraph sync["事務（ERP）— 照合と反映"]
-    E["生産実績管理で PLC・HT・指示書と照合"]
-    F["生産データ管理で全部一括更新"]
-    G["必要な場合のみ在庫 TAB で数量を修正"]
-  end
+  <div class="forming-workflow__connector" aria-hidden="true">↓</div>
 
-  subgraph aps["計画（APS）— 計画の見直しと掲示"]
-    H["成型計画一覧でライン順に再計算"]
-    I["生産残を確認し、合計数量などを修正"]
-    J["もう一度再計算して計画を確定"]
-    K["段替予定表を印刷し、現場に掲示"]
-  end
+  <section class="forming-workflow__lane forming-workflow__lane--field">
+    <header class="forming-workflow__lane-hd">成型現場 — 実績の収集</header>
+    <div class="forming-workflow__steps forming-workflow__steps--row">
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">B</span><span class="forming-workflow__text">新規指示書の配布と記入済み指示書の回収</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">C</span><span class="forming-workflow__text">PLC 収集データの印刷</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">D</span><span class="forming-workflow__text">ハンディターミナル（HT）で実績登録</span></div>
+    </div>
+  </section>
 
-  A --> B --> C --> D --> E --> F --> G --> H --> I --> J --> K
-```
+  <div class="forming-workflow__connector" aria-hidden="true">↓</div>
+
+  <section class="forming-workflow__lane forming-workflow__lane--sync">
+    <header class="forming-workflow__lane-hd">事務（ERP）— 照合と反映</header>
+    <div class="forming-workflow__steps forming-workflow__steps--row">
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">E</span><span class="forming-workflow__text">生産実績管理で PLC・HT・指示書と照合</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">F</span><span class="forming-workflow__text">生産データ管理で全部一括更新</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step forming-workflow__step--optional"><span class="forming-workflow__badge">G</span><span class="forming-workflow__text">必要な場合のみ在庫 TAB で数量を修正</span></div>
+    </div>
+  </section>
+
+  <div class="forming-workflow__connector" aria-hidden="true">↓</div>
+
+  <section class="forming-workflow__lane forming-workflow__lane--aps">
+    <header class="forming-workflow__lane-hd">計画（APS）— 計画の見直しと掲示</header>
+    <div class="forming-workflow__steps forming-workflow__steps--row">
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">H</span><span class="forming-workflow__text">成型計画一覧でライン順に再計算</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">I</span><span class="forming-workflow__text">生産残を確認し、合計数量などを修正</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">J</span><span class="forming-workflow__text">もう一度再計算して計画を確定</span></div>
+      <span class="forming-workflow__arrow" aria-hidden="true">→</span>
+      <div class="forming-workflow__step"><span class="forming-workflow__badge">K</span><span class="forming-workflow__text">段替予定表を印刷し、現場に掲示</span></div>
+    </div>
+  </section>
+</div>
 
 | 段階 | 作業内容 | 主な担当 |
 |------|----------|----------|
@@ -81,9 +104,7 @@ flowchart TD
    **ERP管理メニュー** → **生産管理** → **生産指示** → **成型指示**
 3. 画面タイトル **「成型指示書発行管理」** が表示されます。
 
-| 項目 | 値 |
-|------|-----|
-| URL パス | `/erp/production/instruction/forming` |
+| 操作順 | 
 
 ![メニューから成型指示を開く](./images/FormingInstructionManual/02_menu_forming_instruction.png)
 
@@ -120,8 +141,8 @@ flowchart TD
 
 4. **印刷処理の流れ**
    - システムが有効な **成型設備ごとに 1 ページ** の指示書 HTML を生成します。
-   - 画面上にプレビュー用 iframe が表示され、**QR コード（製品 CD）の読込** が完了するまで「QRコード読み込み中...」と表示されます。
-   - 読込完了後、**ブラウザの印刷ダイアログが自動的に開きます**（A5 横向き）。
+   - 画面上にプレビューが表示され、**QR コード（製品 CD）の読込** が完了するまで「QRコード読み込み中...」と表示されます。
+   - 読込完了後、**ブラウザの印刷ダイアログが自動的に開きます**<span style="color: #dc2626; font-weight: 700;">（A5 横向き）</span>。
    - プレビュー右上の **×** ボタンでキャンセルできます（印刷を中止したい場合）。
 
    ![指示書印刷プレビュー](./images/FormingInstructionManual/06_instruction_print_preview.png)
@@ -155,7 +176,7 @@ flowchart TD
 
 ## 3. 現場での指示書交換
 
-この工程は **Smart-EMAPs 画面上の操作ではなく、成型現場での物理的な手順** です。
+この工程は **システム画面上の操作ではなく、成型現場での物理的な手順** です。
 
 ### 3.1 目的
 
@@ -165,12 +186,10 @@ flowchart TD
 
 ### 3.2 手順
 
-1. 計画担当が **新規発行した指示書**（第 2 章）を各成型ラインへ配布する。
-2. 現場担当者は、**前日までに使用し記入済みの指示書** を計画担当（または指定の回収場所）へ返却する。
+1. 集計担当者が **新規発行した指示書**（第 2 章）を各成型ラインへ配布する。
+2. 現場担当者は、**前日までに使用し記入済みの指示書** を集計担当者へ返却する。
 3. 返却時に確認する項目（例）：
-   - 製品名・ロット・生産数の手書き記入が読み取れるか
-   - 段替・停止などの特記事項が記載されているか
-   - 指示書が欠番・欠落していないか
+   - ・生産数の手書き記入が読み取れるか
 4. 回収した指示書は、PLC データ・HT 実績と突合するための **現場記録** として保管する。
 
 ![現場での指示書交換](./images/FormingInstructionManual/08_site_exchange.png)
@@ -179,7 +198,7 @@ flowchart TD
 
 - 指示書の交換は **シフト開始前** または **日替わり時** に実施するのが望ましいです。
 - 新しい指示書を渡す前に、旧指示書から **未反映の実績が無いか** 現場リーダーに確認してください。
-- 計画変更が当日中に入った場合は、再発行した指示書で **差し替え** ます（口頭のみの伝達は避ける）。
+- 計画変更が当日中に入った場合は、再発行した指示書で **差し替え** ます。
 
 ---
 
@@ -192,6 +211,8 @@ flowchart TD
 ### 4.2 参照資料
 
 詳細なボタン操作・画面遷移は、社内資料 **「PLCシステム_計画数アップロード_操作手順.pdf」** に従ってください。
+
+社内資料の保存場所：**社内共有フォルダ** ⇒ **生産管理部** ⇒ **マニュアル**
 
 ### 4.3 実施タイミング
 
@@ -215,36 +236,39 @@ flowchart TD
 
 ### 5.1 概要
 
-現場担当者は **ハンディターミナル（HT）** を用いて、成型実績（良品数・不良・段替等）を登録します。登録データは後続の ERP 照合（第 6 章）の入力源の一つとなります。
+作業担当者は **ハンディターミナル（HT）** を用いて、成型実績を登録します。
 
-### 5.2 参照資料
+### 5.2 操作手順（画像参照）
 
-端末の起動、ログイン、実績入力、送信操作は **「ハンディターミナル操作マニュアル」** を参照してください。
+端末の起動、ログイン、実績入力、送信操作は、**下記画像** の順に実施してください。
+
+| 操作 | 内容 |
+|------|------|
+| 起動 | 端末の電源投入・初期画面の表示 |
+| ログイン | 担当者でサインイン |
+| 実績入力 | 製品・設備・数量・の登録 |
+| 送信 | 入力内容の確定と送信 |
+
+![ハンディターミナル：起動・ログイン・実績入力・送信](./images/FormingInstructionManual/10_handy_terminal.png)
 
 ### 5.3 実施タイミングと注意
 
 | 項目 | 内容 |
 |------|------|
-| 実施タイミング | ロット生産完了時、段替時、シフト終了時 等 |
-| 入力内容 | 製品、設備、数量、不良（該当時） |
+| 実施タイミング | 当日生産締め時 |
+| 入力内容 | 製品、設備、数量 |
 | 照合前確認 | PLC 印刷データ・指示書の記入内容と数量が大きく乖離していないか |
-
-![ハンディターミナル実績登録](./images/FormingInstructionManual/10_handy_terminal.png)
 
 ---
 
 ## 6. 実績照合（生産実績管理）
 
-PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、ERP 上の在庫取引ログ（実績）と **照合** します。
+PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、ERP 上の在庫取引実績と **照合** します。
 
 ### 6.1 画面へのアクセス
 
 1. **ERP管理メニュー** → **生産管理** → **生産実績** → **生産実績管理**
-2. 画面タイトル **「生産実績管理」**（副題：工程別に在庫取引ログ（実績）を横断分析します）
-
-| 項目 | 値 |
-|------|-----|
-| URL パス | `/erp/production/actual-management` |
+2. 画面タイトル **「生産実績管理」**
 
 ![メニューから生産実績管理](./images/FormingInstructionManual/11_menu_actual_management.png)
 
@@ -273,8 +297,6 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 5. **帳票出力**（任意）
    - **取引ログ印刷**：一覧を印刷
-   - **日別マトリクス印刷**：日別マトリクス形式で印刷
-   - **生産実績分析チャート** エリアの **印刷**：グラフ付きレポート
 
 ![実績照合の例](./images/FormingInstructionManual/13_actual_reconcile.png)
 
@@ -285,23 +307,18 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 | 1 | 対象日の成型実績件数が PLC／HT と同程度か | ☐ |
 | 2 | 設備名・製品 CD が指示書と一致しているか | ☐ |
 | 3 | 数量の合計が指示書・PLC の合計と一致するか | ☐ |
-| 4 | 不良・保留が別タイプで正しく分かれているか | ☐ |
-| 5 | 修正・削除した行について記録（理由）を残したか | ☐ |
 
 ---
 
 ## 7. 収集実績のデータベース更新（全部一括更新）
 
-照合が完了したら、収集済み実績を **production_summarys 等の集計テーブル** へ反映します。
+照合が完了したら、収集済み実績を **データベース管理集計テーブル** へ反映します。
 
 ### 7.1 画面へのアクセス
 
 1. **ERP管理メニュー** → **生産管理** → **生産計画** → **生産データ管理**
 2. 画面タイトル **「生産データ管理」**（副題：受注・実績・在庫を一元管理）
 
-| 項目 | 値 |
-|------|-----|
-| URL パス | `/erp/production/data-management` |
 
 > メニュー上は「生産計画」の下に「生産データ管理」があります。画面上部の **「各種更新機能」** ドロップダウンから一括更新を実行します。
 
@@ -332,7 +349,7 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 ### 7.3 実行タイミングの目安
 
 - 第 6 章の照合・修正が **すべて完了した後** に 1 回実行する。
-- 営業時間中の実行は他ユーザーに影響するため、**シフト間・業務終了後** を推奨。
+
 
 ---
 
@@ -342,8 +359,9 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 ### 8.1 在庫 TAB を開く
 
-1. **生産データ管理** 画面の下部タブ列から **「在庫」**（📦 アイコン）をクリックします。
-2. 製品別・日付別の在庫列（例：`molding_inventory` 成型在庫、`molding_actual` 成型実績 等）が表示されます。
+ **生産データ管理** 画面の下部タブ列から **「在庫」**（📦 アイコン）をクリックします。
+
+![生産データ管理：下部タブ列の「在庫」位置](./images/FormingInstructionManual/16_inventory_tab.png)
 
 ### 8.2 セルのダブルクリック修正
 
@@ -358,7 +376,7 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
    | 倉庫（KT13） | 入庫、出庫、廃棄、保留 |
    | 外注（KT15） | 入庫、廃棄 |
 
-4. **登録** を実行すると `stock_transaction_logs` に取引が追加され、後続の在庫再計算で反映されます。
+4. **登録** を実行すると `データベース管理表` に取引が追加され、後続の在庫再計算で反映されます。
 5. 大幅な修正を多数行う場合は、再度 **全部一括更新** または **在庫・推移更新** の実行を検討してください。
 
 ![在庫 TAB ダブルクリック](./images/FormingInstructionManual/16_inventory_tab_dblclick.png)
@@ -367,7 +385,6 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 - 製品が当該工程ルートに含まれない場合、「製品は工程に属していません」と表示されます。
 - 基本情報列（日付・製品 CD 等）のダブルクリックではダイアログは開きません。
-- 修正理由は別途台帳に記録し、監査時に説明できるようにしてください。
 
 ---
 
@@ -380,28 +397,23 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 1. **APS管理メニュー** → **生産計画一覧** → **成型計画一覧**
 2. 画面タイトル **「成型計画一覧」**
 3. **期間** と **工程** を指定し、一覧／ガントを表示します。
-4. 右上 **「成型ライン順で再計算」** ボタン（オレンジ色・warning）をクリックします。
+4. 右上 **「成型ライン順で再計算」** ボタン（オレンジ色）をクリックします。
 5. 確認メッセージを読み、実行を承認します。
    - 過去日の日別計画は固定されます。
    - 本日分は実績がある場合のみ固定、ない場合は当日以降を再計算します。
 6. **再計算進捗** バーで設備ごとの進行を確認します。
 
-| 項目 | 値 |
-|------|-----|
-| URL パス | `/aps/planning-list` |
-
-![成型計画一覧と再計算](./images/FormingInstructionManual/17_menu_forming_plan_list.png)  
 ![成型ライン順で再計算ボタン](./images/FormingInstructionManual/18_replan_button.png)
 
 ### 9.2 生産残の確認（要修正判定）
 
-再計算完了後、日別ガントおよび一覧表の **「残」** 列を確認します。
+再計算完了後、日別ガントおよび一覧表の **「翌日の計画残数」** を確認します。
 
 **修正が必要な典型パターン：**
 
 | パターン | 判定基準 | リスク |
 |----------|----------|--------|
-| A. 少量残 | **残 &lt; 50 本** 程度でロットが実質完了していない | 次計画に残数が持ち越されず、欠品・過剰生産の原因 |
+| A. 少量残 | **残 &lt; 50 本** 程度でロットが実質生産完了した | 次計画に残数が持ち越されず|
 | B. 次品種着手済み | **残 &gt; 0** なのに **次の品種の計画／実績が既に開始** している | 同一設備で 2 品種が重なった計画になる |
 
 ![残数確認（ガント／一覧）](./images/FormingInstructionManual/19_remain_check_gantt.png)
@@ -431,7 +443,7 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 | 項目 | 値 |
 |------|-----|
 | 設備 | 成型 03 号機 |
-| 製品 | ABC-1234 |
+| 製品 | GC7 CTR |
 | 合計(本)（修正前） | 1,200 本 |
 | 実績累計 | 1,165 本 |
 | 残 | **35 本**（50 未満） |
@@ -440,7 +452,7 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 **対応**
 
-1. 成型計画作成で ABC-1234 の行を開く。
+1. 成型計画作成で GC7 CTR の行を開く。
 2. **合計(本)** を `1200` → **`1165`** に変更（実績に合わせて残を 0 にする）。
 3. 保存後、成型計画一覧で **再度「成型ライン順で再計算」** を実行。
 4. ガント上で **残 = 0** または残表示が消えることを確認。
@@ -499,12 +511,10 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 ### 10.4 現場掲示
 
-1. 印刷した **成型生産計画段替予定表** を、各成型ラインの掲示板に掲出します。
+1. 印刷した **成型生産計画段替予定表** を、成型工程工程の掲示板に掲出します。
 2. 掲示対象：**翌日分** および **翌稼働日（翌日+1 稼働日）** が一覧で分かる部分。
 3. 古い段替表は必ず **剥がして差し替え**、複数版の混在を防ぎます。
 4. 計画変更が入った場合は、再計算 → 再印刷 → **再掲示** をセットで実施します。
-
-![現場掲示](./images/FormingInstructionManual/23_site_posting.png)
 
 ---
 
@@ -527,7 +537,8 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 | 13 | [13_actual_reconcile.png](./images/FormingInstructionManual/13_actual_reconcile.png) | 照合例 |
 | 14 | [14_menu_data_management.png](./images/FormingInstructionManual/14_menu_data_management.png) | 生産データ管理 |
 | 15 | [15_all_batch_update.png](./images/FormingInstructionManual/15_all_batch_update.png) | 一括更新 |
-| 16 | [16_inventory_tab_dblclick.png](./images/FormingInstructionManual/16_inventory_tab_dblclick.png) | 在庫修正 |
+| 16 | [16_inventory_tab.png](./images/FormingInstructionManual/16_inventory_tab.png) | 在庫 TAB 位置 |
+| — | [16_inventory_tab_dblclick.png](./images/FormingInstructionManual/16_inventory_tab_dblclick.png) | 在庫セル修正 |
 | 17 | [17_menu_forming_plan_list.png](./images/FormingInstructionManual/17_menu_forming_plan_list.png) | 成型計画一覧 |
 | 18 | [18_replan_button.png](./images/FormingInstructionManual/18_replan_button.png) | 再計算 |
 | 19 | [19_remain_check_gantt.png](./images/FormingInstructionManual/19_remain_check_gantt.png) | 残確認 |

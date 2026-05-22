@@ -8,8 +8,8 @@
 
 | ファイル名 | 内容 |
 |------------|------|
-| `01_workflow_overview.png` | 全体フロー（任意：紙の手順表やホワイトボード写真） |
-| `02_menu_forming_instruction.png` | メニュー：ERP → 生産管理 → 生産指示 → 成型指示 |
+| `01_workflow_overview.png` | 全体フロー（任意・参考用。本文は A〜K の HTML 図式を使用） |
+| `02_menu_forming_instruction.png` | メニュー：ERP管理メニュー → 生産管理 → 生産指示 → 成型指示 |
 | `03_forming_instruction_overview.png` | 成型指示書発行管理 画面全体 |
 | `04_forming_date_nextday.png` | 生産日を「翌日」に設定した検索バー |
 | `05_instruction_issue_button.png` | 「指示書発行」ボタン（緑色）を強調 |
@@ -17,12 +17,13 @@
 | `07_instruction_printed_sample.png` | 印刷された成型生産指示書（現物または PDF） |
 | `08_site_exchange.png` | 現場での指示書交換（新規発行分と記入済み分） |
 | `09_plc_print.png` | PLC 収集データ印刷画面（参考 PDF 相当） |
-| `10_handy_terminal.png` | ハンディターミナル実績登録画面 |
+| `10_handy_terminal.png` | HT：起動・ログイン・実績入力・送信（操作手順画像） |
 | `11_menu_actual_management.png` | メニュー：生産実績管理 |
 | `12_actual_management_filter.png` | 生産実績管理：成型タブ・フィルタ |
 | `13_actual_reconcile.png` | PLC／HT と ERP 実績の照合例 |
 | `14_menu_data_management.png` | メニュー：生産データ管理 |
 | `15_all_batch_update.png` | 「各種更新機能」→「全部一括更新」 |
+| `16_inventory_tab.png` | 生産データ管理：下部タブ列の「在庫」位置 |
 | `16_inventory_tab_dblclick.png` | 在庫 TAB・セルダブルクリック |
 | `17_menu_forming_plan_list.png` | メニュー：成型計画一覧 |
 | `18_replan_button.png` | 「成型ライン順で再計算」ボタン |

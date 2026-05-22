@@ -6,16 +6,25 @@
         <span class="manual-sidebar__title">{{ t('operationManual.homeTitle') }}</span>
       </div>
       <nav class="manual-sidebar__nav">
-        <div
-          v-for="item in manuals"
-          :key="item.slug"
-          class="manual-sidebar__item"
-          :class="{ 'manual-sidebar__item--active': item.slug === activeSlug }"
-          @click="selectManual(item.slug)"
+        <section
+          v-for="group in manualNavGroups"
+          :key="group.category"
+          class="manual-sidebar__group"
         >
-          <el-icon :size="16"><Memo /></el-icon>
-          <span class="manual-sidebar__item-text">{{ item.pageTitle }}</span>
-        </div>
+          <h3 class="manual-sidebar__group-title">
+            {{ t(OPERATION_MANUAL_CATEGORY_I18N_KEY[group.category]) }}
+          </h3>
+          <div
+            v-for="item in group.items"
+            :key="item.slug"
+            class="manual-sidebar__item"
+            :class="{ 'manual-sidebar__item--active': item.slug === activeSlug }"
+            @click="selectManual(item.slug)"
+          >
+            <el-icon :size="16"><Memo /></el-icon>
+            <span class="manual-sidebar__item-text">{{ item.pageTitle }}</span>
+          </div>
+        </section>
       </nav>
       <div class="manual-sidebar__footer">
         <el-button
@@ -28,21 +37,10 @@
           <el-icon><Printer /></el-icon>
           <span>{{ t('operationManual.print') }}</span>
         </el-button>
-        <el-button
-          class="manual-sidebar__pdf-btn"
-          type="primary"
-          plain
-          size="small"
-          :loading="pdfSaving"
-          @click="handlePdfSave"
-        >
-          <el-icon><Document /></el-icon>
-          <span>{{ t('operationManual.savePdf') }}</span>
-        </el-button>
       </div>
     </aside>
 
-    <main class="manual-content" ref="manualCaptureEl">
+    <main class="manual-content" ref="manualScrollEl">
       <div v-if="loading" class="manual-content__loading">
         <div class="manual-content__spinner" />
         <span>{{ t('operationManual.loading') }}</span>
@@ -50,8 +48,8 @@
       <div v-else-if="loadError" class="manual-content__error">
         <p>{{ loadError }}</p>
       </div>
-      <template v-else>
-        <div class="manual-content__header" :class="{ 'is-capturing': isCapturingPdf }">
+      <div v-else class="manual-print-area">
+        <div class="manual-content__header">
           <div class="manual-content__title-badge">
             <el-icon :size="20"><QuestionFilled /></el-icon>
           </div>
@@ -63,10 +61,21 @@
         <div
           ref="helpContentEl"
           class="manual-content__body help-content"
-          :class="{ 'is-capturing': isCapturingPdf }"
           v-html="renderedHtml"
         />
-      </template>
+      </div>
+
+      <el-button
+        v-show="showTocFab"
+        class="manual-toc-fab"
+        type="primary"
+        round
+        :aria-label="t('operationManual.backToToc')"
+        @click="scrollToToc"
+      >
+        <el-icon><Top /></el-icon>
+        <span class="manual-toc-fab__label">{{ t('operationManual.backToToc') }}</span>
+      </el-button>
     </main>
   </div>
 </template>
@@ -76,10 +85,14 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Document, Memo, Notebook, Printer, QuestionFilled } from '@element-plus/icons-vue'
-import html2canvas from 'html2canvas'
-import { jsPDF } from 'jspdf'
-import { OPERATION_MANUALS, getOperationManualBySlug } from '@/config/operationManuals'
+import { Memo, Notebook, Printer, QuestionFilled, Top } from '@element-plus/icons-vue'
+import {
+  OPERATION_MANUALS,
+  OPERATION_MANUAL_CATEGORY_I18N_KEY,
+  getOperationManualBySlug,
+  getOperationManualNavGroups,
+} from '@/config/operationManuals'
+import { runBrowserPrint } from '@/utils/manualPrintCapture'
 import { getManualMarkdown, normalizeManualMarkdown } from '@/views/manual/manualAssets'
 import {
   bindHelpContentAnchorNav,
@@ -94,6 +107,7 @@ const router = useRouter()
 const { t } = useI18n()
 
 const manuals = OPERATION_MANUALS
+const manualNavGroups = getOperationManualNavGroups()
 
 const activeSlug = computed(() => String(route.params.slug ?? manuals[0]?.slug ?? ''))
 const manual = computed(() => getOperationManualBySlug(activeSlug.value))
@@ -102,11 +116,42 @@ const currentTitle = computed(() => manual.value?.pageTitle ?? t('operationManua
 const loading = ref(true)
 const loadError = ref('')
 const renderedHtml = ref('')
-const pdfSaving = ref(false)
-const isCapturingPdf = ref(false)
-const manualCaptureEl = ref<HTMLElement | null>(null)
+const manualScrollEl = ref<HTMLElement | null>(null)
 const helpContentEl = ref<HTMLElement | null>(null)
 let unbindAnchorNav: (() => void) | null = null
+
+const showTocFab = computed(
+  () => !loading.value && !loadError.value && Boolean(renderedHtml.value),
+)
+
+const TOC_HEADING_IDS = ['目次', 'toc', 'table-of-contents', 'mokuji']
+
+function scrollToToc(): void {
+  const scrollEl = manualScrollEl.value
+  const root = helpContentEl.value
+  if (!scrollEl || !root) return
+
+  let target: HTMLElement | null = null
+  for (const id of TOC_HEADING_IDS) {
+    const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    if (el) {
+      target = el
+      break
+    }
+  }
+  if (!target) {
+    target = root.querySelector<HTMLElement>('h2')
+  }
+  if (!target) return
+
+  const scrollTop =
+    scrollEl.scrollTop +
+    target.getBoundingClientRect().top -
+    scrollEl.getBoundingClientRect().top -
+    12
+  scrollEl.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' })
+  history.replaceState(null, '', `#${encodeURIComponent(target.id || TOC_HEADING_IDS[0])}`)
+}
 
 function sanitizeHtml(input: string): string {
   return input
@@ -181,65 +226,11 @@ onUnmounted(() => {
 })
 
 function handlePrint() {
-  window.print()
-}
-
-async function handlePdfSave() {
   if (loading.value || loadError.value) {
     ElMessage.warning(t('operationManual.loading'))
     return
   }
-  if (!manualCaptureEl.value) return
-
-  try {
-    pdfSaving.value = true
-    isCapturingPdf.value = true
-    await nextTick()
-    await new Promise((r) => setTimeout(r, 200))
-
-    const canvas = await html2canvas(manualCaptureEl.value, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    })
-
-    const imgData = canvas.toDataURL('image/jpeg', 0.92)
-    const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4', compress: true })
-    const pageWidth = pdf.internal.pageSize.getWidth()
-    const pageHeight = pdf.internal.pageSize.getHeight()
-    const imgWidthMm = pageWidth
-    const imgHeightMm = (canvas.height / canvas.width) * imgWidthMm
-
-    let heightLeft = imgHeightMm
-    let position = 0
-    pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
-    heightLeft -= pageHeight
-
-    while (heightLeft > 0.8) {
-      position = heightLeft - imgHeightMm
-      pdf.addPage()
-      pdf.addImage(imgData, 'JPEG', 0, position, imgWidthMm, imgHeightMm, undefined, 'FAST')
-      heightLeft -= pageHeight
-    }
-
-    const fileName = `${currentTitle.value}_${t('operationManual.subtitle')}.pdf`
-    const url = URL.createObjectURL(pdf.output('blob'))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-    ElMessage.success(t('operationManual.pdfStarted'))
-  } catch (e: unknown) {
-    console.error(e)
-    ElMessage.error(t('operationManual.pdfFailed'))
-  } finally {
-    isCapturingPdf.value = false
-    pdfSaving.value = false
-  }
+  runBrowserPrint(manualScrollEl.value)
 }
 </script>
 
@@ -286,7 +277,22 @@ async function handlePdfSave() {
 .manual-sidebar__nav {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 10px;
+  padding: 12px 10px 16px;
+}
+
+.manual-sidebar__group + .manual-sidebar__group {
+  margin-top: 14px;
+}
+
+.manual-sidebar__group-title {
+  margin: 0 0 6px;
+  padding: 0 8px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: none;
+  color: rgba(199, 210, 254, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .manual-sidebar__item {
@@ -343,11 +349,52 @@ async function handlePdfSave() {
 }
 
 .manual-content {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow-y: auto;
   padding: 28px 36px;
   scroll-behavior: smooth;
+}
+
+.manual-toc-fab {
+  position: fixed;
+  right: 36px;
+  bottom: 28px;
+  z-index: 20;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 22px;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.35), 0 2px 8px rgba(15, 23, 42, 0.12);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.manual-toc-fab .el-icon {
+  margin-right: 6px;
+  font-size: 16px;
+}
+
+.manual-toc-fab__label {
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .manual-toc-fab {
+    right: 16px;
+    bottom: 16px;
+    padding: 0 14px;
+  }
+
+  .manual-toc-fab__label {
+    font-size: 12px;
+  }
+}
+
+@media print {
+  .manual-toc-fab {
+    display: none !important;
+  }
 }
 
 .manual-content__loading {
@@ -384,10 +431,6 @@ async function handlePdfSave() {
   align-items: center;
   gap: 14px;
   margin-bottom: 20px;
-}
-
-.manual-content__header.is-capturing {
-  display: none;
 }
 
 .manual-content__title-badge {
@@ -427,13 +470,6 @@ async function handlePdfSave() {
   font-size: 14px;
 }
 
-.manual-content__body.is-capturing {
-  background: #ffffff !important;
-  backdrop-filter: none !important;
-  box-shadow: none !important;
-  border-color: rgba(148, 163, 184, 0.18) !important;
-}
-
 @media (max-width: 768px) {
   .manual-home {
     flex-direction: column;
@@ -448,20 +484,7 @@ async function handlePdfSave() {
   }
 }
 
-@media print {
-  .manual-sidebar {
-    display: none !important;
-  }
-  .manual-content {
-    padding: 0 !important;
-  }
-  .manual-content__header {
-    display: none !important;
-  }
-  .manual-content__body {
-    border: none !important;
-    box-shadow: none !important;
-    background: #fff !important;
-  }
+.manual-print-area {
+  width: 100%;
 }
 </style>

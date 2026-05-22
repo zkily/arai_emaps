@@ -7,7 +7,10 @@
 | ファイル | 内容 | 画像フォルダ |
 |----------|------|----------------|
 | `forming-instruction_ja.md` | 成型工程 生産指示・実績収集 | `../images/FormingInstructionManual/` |
-| `cutting-instruction_ja.md` | 切断・面取指示管理 | `../images/CuttingInstruction/`（要追加） |
+| `forming-planning_ja.md` | 成型工程 計画作成（受注→在庫→計画→指示→実績→日次サイクル） | `../images/FormingPlanningManual/` |
+| `welding-instruction_ja.md` | 溶接工程 生産指示・実績収集（PLC 手順なし） | `../images/WeldingInstructionManual/` |
+| `welding-planning_ja.md` | 溶接工程 計画作成（受注→在庫→計画→指示→実績→日次サイクル） | `../images/WeldingPlanningManual/` |
+| `cutting-instruction_ja.md` | 切断面取 生産指示・実績収集 | `../images/CuttingInstructionManual/` |
 | `plan-baseline_ja.md` | 生産計画ベースライン管理 | `../images/ProductionPlanBaselineManagement/` |
 | `inspection-actual_ja.md` | 検査実績収集 | `../images/InspectionActualDataCollection/` |
 
@@ -15,7 +18,7 @@
 
 1. 本フォルダに `{slug}_ja.md` を追加。
 2. 画像は `../images/YourFolder/` に配置し、MD 内は `./images/YourFolder/xxx.png` を使用。
-3. `frontend/src/config/operationManuals.ts` の `OPERATION_MANUALS` にエントリを追加。
+3. `frontend/src/config/operationManuals.ts` の `OPERATION_MANUALS` にエントリを追加（`category`: `planning` / `instructionActual` / `mes` / `pageOperation`）。
 
 ## 表示
 

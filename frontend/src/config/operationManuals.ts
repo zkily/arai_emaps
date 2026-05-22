@@ -4,6 +4,9 @@
  * - 画面: frontend/src/views/manual/ManualViewer.vue
  */
 
+/** ManualHome 左サイドバーの分類 */
+export type OperationManualCategory = 'planning' | 'instructionActual' | 'mes' | 'pageOperation'
+
 export interface OperationManualEntry {
   /** URL スラッグ（/operation-manuals/:slug） */
   slug: string
@@ -13,7 +16,25 @@ export interface OperationManualEntry {
   pageTitle: string
   /** MD 相対パス（docs/ からの相対、例: forming-instruction_ja.md） */
   docFile: string
+  /** 全体の表示順（未分類時のフォールバック） */
   sortOrder: number
+  /** サイドバー分類 */
+  category: OperationManualCategory
+}
+
+/** 分類の表示順（ManualHome 左メニュー） */
+export const OPERATION_MANUAL_CATEGORY_ORDER: OperationManualCategory[] = [
+  'planning',
+  'instructionActual',
+  'mes',
+  'pageOperation',
+]
+
+export const OPERATION_MANUAL_CATEGORY_I18N_KEY: Record<OperationManualCategory, string> = {
+  planning: 'operationManual.categoryPlanning',
+  instructionActual: 'operationManual.categoryInstructionActual',
+  mes: 'operationManual.categoryMes',
+  pageOperation: 'operationManual.categoryPageOperation',
 }
 
 export const OPERATION_MANUAL_PARENT_CODE = 'OPERATION_MANUALS'
@@ -22,34 +43,77 @@ export const OPERATION_MANUAL_ROUTE_PREFIX = '/operation-manuals'
 
 export const OPERATION_MANUALS: OperationManualEntry[] = [
   {
-    slug: 'forming-instruction',
-    menuCode: 'OP_MANUAL_FORMING',
-    pageTitle: '成型工程 生産指示・実績収集',
-    docFile: 'forming-instruction_ja.md',
+    slug: 'forming-planning',
+    menuCode: 'OP_MANUAL_FORMING_PLANNING',
+    pageTitle: '成型工程 計画作成',
+    docFile: 'forming-planning_ja.md',
     sortOrder: 1,
+    category: 'planning',
   },
   {
-    slug: 'cutting-instruction',
-    menuCode: 'OP_MANUAL_CUTTING',
-    pageTitle: '切断・面取指示管理',
-    docFile: 'cutting-instruction_ja.md',
+    slug: 'welding-planning',
+    menuCode: 'OP_MANUAL_WELDING_PLANNING',
+    pageTitle: '溶接工程 計画作成',
+    docFile: 'welding-planning_ja.md',
     sortOrder: 2,
+    category: 'planning',
   },
   {
     slug: 'plan-baseline',
     menuCode: 'OP_MANUAL_PLAN_BASELINE',
     pageTitle: '生産計画ベースライン管理',
     docFile: 'plan-baseline_ja.md',
-    sortOrder: 3,
+    sortOrder: 5,
+    category: 'pageOperation',
+  },
+  {
+    slug: 'forming-instruction',
+    menuCode: 'OP_MANUAL_FORMING',
+    pageTitle: '成型工程 生産指示・実績収集',
+    docFile: 'forming-instruction_ja.md',
+    sortOrder: 4,
+    category: 'instructionActual',
+  },
+  {
+    slug: 'welding-instruction',
+    menuCode: 'OP_MANUAL_WELDING',
+    pageTitle: '溶接工程 生産指示・実績収集',
+    docFile: 'welding-instruction_ja.md',
+    sortOrder: 5,
+    category: 'instructionActual',
+  },
+  {
+    slug: 'cutting-instruction',
+    menuCode: 'OP_MANUAL_CUTTING',
+    pageTitle: '切断面取 生産指示・実績収集',
+    docFile: 'cutting-instruction_ja.md',
+    sortOrder: 6,
+    category: 'instructionActual',
   },
   {
     slug: 'inspection-actual',
     menuCode: 'OP_MANUAL_INSPECTION',
     pageTitle: '検査実績収集',
     docFile: 'inspection-actual_ja.md',
-    sortOrder: 4,
+    sortOrder: 7,
+    category: 'mes',
   },
 ]
+
+export interface OperationManualNavGroup {
+  category: OperationManualCategory
+  items: OperationManualEntry[]
+}
+
+/** ManualHome 用：分類ごとにマニュアルをグループ化（空の分類は除外） */
+export function getOperationManualNavGroups(): OperationManualNavGroup[] {
+  return OPERATION_MANUAL_CATEGORY_ORDER.map((category) => ({
+    category,
+    items: OPERATION_MANUALS.filter((m) => m.category === category).sort(
+      (a, b) => a.sortOrder - b.sortOrder,
+    ),
+  })).filter((g) => g.items.length > 0)
+}
 
 export function getOperationManualPath(slug: string): string {
   return `${OPERATION_MANUAL_ROUTE_PREFIX}/${slug}`

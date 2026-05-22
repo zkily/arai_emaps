@@ -505,7 +505,57 @@
                     操業度差異(H)
                   </span>
                 </template>
-                <template #default="{ row }"><span class="util-num" :class="{ 'util-num--negative': row.diffHours < 0 }">{{ formatHours(row.diffHours) }}</span></template>
+                <template #default="{ row }">
+                  <el-popover
+                    trigger="hover"
+                    placement="left"
+                    :width="480"
+                    :show-after="300"
+                    popper-class="diff-hours-popover"
+                  >
+                    <template #reference>
+                      <span
+                        class="util-num util-num--hoverable"
+                        :class="{ 'util-num--negative': row.diffHours < 0 }"
+                      >{{ formatHours(row.diffHours) }}</span>
+                    </template>
+                    <div class="diff-hours-detail">
+                      <div class="diff-hours-detail__title">{{ row.lineLabel }}　操業度差異 内訳</div>
+                      <table class="diff-hours-detail__table">
+                        <thead>
+                          <tr>
+                            <th class="left">品名</th>
+                            <th class="num">能率</th>
+                            <th class="num">計画数</th>
+                            <th class="num">実績数</th>
+                            <th class="num">差異数</th>
+                            <th class="num">差異(H)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="d in row.diffHoursDetails" :key="d.scheduleId">
+                            <td class="left" :title="d.itemName">{{ d.itemName }}</td>
+                            <td class="num">{{ d.efficiencyRate > 0 ? d.efficiencyRate.toFixed(1) : '—' }}</td>
+                            <td class="num">{{ formatNum(d.plannedQty) }}</td>
+                            <td class="num">{{ formatNum(d.actualQty) }}</td>
+                            <td class="num" :class="{ 'neg': d.diffQty < 0 }">{{ formatNum(d.diffQty) }}</td>
+                            <td class="num" :class="{ 'neg': d.diffHours < 0 }">{{ d.diffHours.toFixed(1) }}</td>
+                          </tr>
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td class="left" colspan="4">合計</td>
+                            <td class="num" :class="{ 'neg': row.diffQty < 0 }">{{ formatNum(row.diffQty) }}</td>
+                            <td class="num" :class="{ 'neg': row.diffHours < 0 }">{{ row.diffHours.toFixed(1) }}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                      <div class="diff-hours-detail__formula">
+                        算式：Σ((実績−計画) ÷ 能率)　※最終実績日まで集計
+                      </div>
+                    </div>
+                  </el-popover>
+                </template>
               </el-table-column>
               <el-table-column label="差異操業度(%)" width="130" align="right">
                 <template #default="{ row }"><span class="util-num" :class="{ 'util-num--negative': row.diffUtilizationPct < 0 }">{{ formatPercent(row.diffUtilizationPct) }}</span></template>
@@ -1168,6 +1218,16 @@ const utilizationMonthLabelJp = computed(() => {
   return `${Number(p[1])}年${Number(p[2])}月`
 })
 
+interface DiffHoursDetail {
+  scheduleId: number
+  itemName: string
+  efficiencyRate: number
+  plannedQty: number
+  actualQty: number
+  diffQty: number
+  diffHours: number
+}
+
 interface LineUtilizationRow {
   lineId: number
   lineLabel: string
@@ -1182,6 +1242,7 @@ interface LineUtilizationRow {
   diffUtilizationPct: number
   planUtilizationPct: number
   actualUtilizationPct: number
+  diffHoursDetails: DiffHoursDetail[]
 }
 
 const utilizationRows = computed<LineUtilizationRow[]>(() => {
@@ -1222,6 +1283,7 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
       diffUtilizationPct: 0,
       planUtilizationPct: 0,
       actualUtilizationPct: 0,
+      diffHoursDetails: [] as DiffHoursDetail[],
     }
     item.scheduleCount += 1
     item.plannedQty += plannedQty
@@ -1230,6 +1292,17 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
     item.actualHours += actualHours
     item.diffQty += diffQtyRow
     item.diffHours += diffHoursRow
+    const diffPlannedQty = diffDates.reduce((sum, d) => sum + Number(row.daily?.[d] ?? 0), 0)
+    const diffActualQty = diffDates.reduce((sum, d) => sum + Number(row.actual_daily?.[d] ?? 0), 0)
+    item.diffHoursDetails.push({
+      scheduleId: row.id,
+      itemName: (row.item_name || '').trim() || `ID ${row.id}`,
+      efficiencyRate: rate,
+      plannedQty: diffPlannedQty,
+      actualQty: diffActualQty,
+      diffQty: diffQtyRow,
+      diffHours: diffHoursRow,
+    })
     map.set(lineId, item)
   }
   const result = Array.from(map.values())
@@ -3553,6 +3626,14 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
 .util-num--negative {
   color: #dc2626;
 }
+.util-num--hoverable {
+  cursor: default;
+  border-bottom: 1px dashed #94a3b8;
+  transition: border-color 0.15s;
+  &:hover {
+    border-color: #3b82f6;
+  }
+}
 
 /* 一覧（表）：ガントと揃えた浅色・区切り・ヘッダー */
 .schedule-table-wrap {
@@ -4106,5 +4187,76 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   font-size: 13px;
   font-weight: 600;
   color: #334155;
+}
+</style>
+
+<style>
+.diff-hours-popover {
+  padding: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+.diff-hours-detail {
+  padding: 14px 16px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.diff-hours-detail__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 10px;
+  letter-spacing: 0.02em;
+}
+.diff-hours-detail__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.diff-hours-detail__table th,
+.diff-hours-detail__table td {
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.diff-hours-detail__table th {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  border-bottom: 2px solid #e2e8f0;
+  text-transform: none;
+}
+.diff-hours-detail__table td {
+  font-size: 12px;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+}
+.diff-hours-detail__table tbody tr:hover {
+  background: #f8fafc;
+}
+.diff-hours-detail__table tfoot td {
+  font-weight: 800;
+  color: #0f172a;
+  border-top: 2px solid #cbd5e1;
+  border-bottom: none;
+  padding-top: 6px;
+}
+.diff-hours-detail__table .left {
+  text-align: left;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diff-hours-detail__table .num {
+  text-align: right;
+}
+.diff-hours-detail__table .neg {
+  color: #dc2626;
+}
+.diff-hours-detail__formula {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-style: italic;
 }
 </style>
