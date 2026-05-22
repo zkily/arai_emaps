@@ -329,6 +329,25 @@ export interface ProgressLotItem {
   upstream_defect_qty?: number
   /** 成型有効計画 = planned_quantity（表示）− upstream_defect_qty、下限0 */
   forming_effective_planned_qty?: number
+  /** 計画一覧進捗数字の判定元 */
+  status_determined_by?: string | null
+  /** ステータス・切断の修正先 */
+  edit_location_hint?: string | null
+  /** 順位・工単・ロットの位置要約 */
+  position_summary?: string | null
+  in_cutting_management?: boolean
+  in_cutting_by_management_code?: boolean
+  in_cutting_by_batch_plan_id?: boolean
+  cutting_management_code_in_db?: string | null
+  cutting_management_row_id?: number | null
+  in_instruction_plans?: boolean
+  in_instruction_by_management_code?: boolean
+  in_instruction_by_batch_plan_id?: boolean
+  instruction_management_code_in_db?: string | null
+  cutting_match_field?: string | null
+  instruction_match_field?: string | null
+  /** 進捗判定の主データ表；未登録時は null */
+  upstream_data_table?: string | null
 }
 
 /** 生産進捗日別セル：成型の実績・計画（schedule_details）。切断本数は ProgressLotItem.cutting_* */
@@ -339,6 +358,22 @@ export interface ProductionProgressResponse {
   dates: string[]
   lot_daily: Record<string, Record<string, number>>
   lot_daily_source?: Record<string, Record<string, ProgressDailySource>>
+}
+
+export interface UpstreamApsBatchPlanLinkItem {
+  batch_plan_id: number
+  cutting_management_id?: number | null
+}
+
+export interface UpstreamApsBatchPlanLinksBody {
+  items: UpstreamApsBatchPlanLinkItem[]
+  new_aps_batch_plan_id?: number | null
+  update_instruction_plans?: boolean
+}
+
+export interface UpstreamApsBatchPlanLinksResult {
+  cutting_updated: number
+  instruction_updated: number
 }
 
 // ──────────── API calls ────────────
@@ -465,15 +500,47 @@ export function appendSchedulePlannedQty(
   })
 }
 
+export interface ReplanSequenceResponse {
+  success?: boolean
+  message?: string
+  data?: {
+    count?: number
+    residual_aware_path?: boolean
+    skipped_step1?: boolean
+    replan_anchor_debug?: Record<string, unknown>
+    replan_debug?: Record<string, unknown>[]
+  }
+}
+
 export function replanLineSequence(
   lineId: number,
   anchorStartDate?: string,
   syncInstructionPlans = true,
-): Promise<any> {
-  const params: Record<string, any> = {}
+  includeDebug = false,
+): Promise<ReplanSequenceResponse> {
+  const params: Record<string, string | boolean> = {}
   if (anchorStartDate) params.anchorStartDate = anchorStartDate
   if (!syncInstructionPlans) params.syncInstructionPlans = false
+  if (includeDebug) params.includeDebug = true
   return request.post(`${BASE}/lines/${lineId}/replan-sequence`, null, { params })
+}
+
+/** 再計算 API レスポンスを画面向け短文に（開発時は経路・耗時を付与） */
+export function formatReplanSequenceSuccessMessage(
+  res: ReplanSequenceResponse | undefined,
+  elapsedMs?: number,
+): string {
+  const base = (res?.message || '').trim() || '順次再計算が完了しました'
+  const d = res?.data
+  const parts: string[] = [base]
+  if (d?.skipped_step1) {
+    parts.push('実績経路（Step1省略）')
+  } else if (d?.residual_aware_path === false) {
+    parts.push('通常順次')
+  }
+  if (typeof d?.count === 'number') parts.push(`${d.count}件`)
+  if (elapsedMs != null && elapsedMs >= 0) parts.push(`${elapsedMs}ms`)
+  return parts.join(' · ')
 }
 
 /** production_plan_excel 全量再構築 + 順番全表再計算 */
@@ -540,6 +607,16 @@ export function deleteLineProductStandard(id: number): Promise<any> {
 
 export function fetchProductionProgress(lineId: number): Promise<ProductionProgressResponse> {
   return request.get(`${BASE}/production-progress`, { params: { lineId } })
+}
+
+export function patchUpstreamApsBatchPlanLinks(
+  body: UpstreamApsBatchPlanLinksBody,
+): Promise<{
+  success: boolean
+  message?: string
+  data: UpstreamApsBatchPlanLinksResult
+}> {
+  return request.patch(`${BASE}/upstream-aps-batch-plan-links`, body)
 }
 
 export function fetchDailyEquipmentReport(

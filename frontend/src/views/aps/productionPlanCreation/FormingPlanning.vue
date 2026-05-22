@@ -290,6 +290,15 @@
             class="schedule-completed-switch"
           />
           <el-button
+            type="primary"
+            size="small"
+            plain
+            :disabled="!selectedLineId || progressLots.length === 0"
+            @click="openManagementCodeTraceDialog"
+          >
+            管理コード所在
+          </el-button>
+          <el-button
             type="warning"
             size="small"
             class="schedule-replan-btn btn-accent btn-accent--warning"
@@ -459,6 +468,24 @@
                     <div class="schedule-progress-pop__row"><b>ステータス：</b>{{ progressStatusLabel(st.status) }}</div>
                     <div class="schedule-progress-pop__row"><b>件数：</b>{{ st.count }}</div>
                     <div class="schedule-progress-pop__row"><b>進捗：</b>{{ progressStatusSourceTable(st.status) }}</div>
+                    <template v-for="lot in scheduleProgressLotsForStatus(row.id, st.status)" :key="`${lot.aps_schedule_id}_${lot.lot_number}`">
+                      <div class="schedule-progress-pop__divider" />
+                      <div class="schedule-progress-pop__row schedule-progress-pop__mc">
+                        <b>管理コード：</b>
+                        <span class="schedule-progress-pop__mc-val">{{ lot.management_code || '—' }}</span>
+                      </div>
+                      <div class="schedule-progress-pop__row"><b>APS位置：</b>{{ lot.position_summary || '—' }}</div>
+                      <div class="schedule-progress-pop__row">
+                        <b>データ所在：</b>{{ managementCodeTablePresence(lot) }}
+                      </div>
+                      <div
+                        v-if="lot.in_cutting_by_batch_plan_id && lot.cutting_management_code_in_db !== (lot.management_code || '').trim()"
+                        class="schedule-progress-pop__row schedule-progress-pop__warn"
+                      >
+                        切断はバッチID照合。DBの management_code は「{{ lot.cutting_management_code_in_db || '空' }}」— 照会コードでは切断済リストに出ない場合があります。
+                      </div>
+                      <div class="schedule-progress-pop__row"><b>補足：</b>{{ lot.edit_location_hint || '—' }}</div>
+                    </template>
                   </div>
                 </el-popover>
               </template>
@@ -1028,6 +1055,153 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="managementCodeTraceVisible"
+      title="管理コード所在照会"
+      width="min(980px, 96vw)"
+      top="5vh"
+      append-to-body
+      destroy-on-close
+      class="mgmt-code-trace-dialog"
+    >
+      <p class="mgmt-code-trace-lead">
+        一覧の<strong>管理コード</strong>は APS ロットから再計算した照合用コードです。
+        <strong>cutting_management あり（バッチIDのみ）</strong>は、表示コードではなく
+        <code>aps_batch_plan_id</code> で行が見つかった場合です（DB の <code>management_code</code> が別・空のことがあります）。
+        切断済リストでは <strong>DB登録コード</strong> 列またはバッチIDで検索してください。
+      </p>
+      <el-input
+        v-model="managementCodeTraceFilter"
+        clearable
+        placeholder="管理コード・製品名・表名で検索"
+        class="mgmt-code-trace-filter"
+      />
+      <el-table
+        ref="managementCodeTraceTableRef"
+        :data="managementCodeTraceRows"
+        size="small"
+        border
+        stripe
+        max-height="min(52vh, 480px)"
+        empty-text="該当する管理コードがありません"
+        :row-key="managementCodeTraceRowKey"
+        @selection-change="onManagementCodeTraceSelectionChange"
+      >
+        <el-table-column type="selection" width="42" fixed="left" />
+        <el-table-column label="ロットID" width="88" align="center">
+          <template #default="{ row }">{{ row.batch_plan_id }}</template>
+        </el-table-column>
+        <el-table-column label="照会用コード" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.management_code || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="DB登録コード" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ cuttingDbManagementCodeDisplay(row) }}</template>
+        </el-table-column>
+        <el-table-column label="データ所在" min-width="260">
+          <template #default="{ row }">
+            <div class="mgmt-code-table-presence">
+              <el-tag
+                v-if="row.in_cutting_by_management_code"
+                type="success"
+                size="small"
+                effect="plain"
+              >
+                cutting 管理コード一致
+              </el-tag>
+              <el-tag
+                v-else-if="row.in_cutting_by_batch_plan_id"
+                type="warning"
+                size="small"
+                effect="plain"
+              >
+                cutting バッチIDのみ
+              </el-tag>
+              <el-tag v-else type="info" size="small" effect="plain">cutting なし</el-tag>
+              <el-tag
+                v-if="row.in_instruction_by_management_code"
+                type="success"
+                size="small"
+                effect="plain"
+              >
+                指示 管理コード一致
+              </el-tag>
+              <el-tag
+                v-else-if="row.in_instruction_by_batch_plan_id"
+                type="warning"
+                size="small"
+                effect="plain"
+              >
+                指示 バッチIDのみ
+              </el-tag>
+              <el-tag v-else type="info" size="small" effect="plain">指示 なし</el-tag>
+            </div>
+            <div v-if="row.cutting_management_row_id" class="mgmt-code-match-hint">
+              cutting_management.id={{ row.cutting_management_row_id }}
+              <span v-if="row.batch_plan_id"> · aps_batch_plan_id={{ row.batch_plan_id }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="進捗判定" width="120" align="center">
+          <template #default="{ row }">
+            <span class="mgmt-code-primary-table">{{ upstreamPrimaryTableLabel(row) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="position_summary" label="APS内位置" min-width="180" show-overflow-tooltip />
+        <el-table-column label="製品" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.product_name }}</template>
+        </el-table-column>
+        <el-table-column label="進捗状態" width="88" align="center">
+          <template #default="{ row }">
+            <el-tag :type="progressStatusType(row.progress_status)" size="small" effect="plain">
+              {{ progressStatusLabel(row.progress_status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="修正の目安" min-width="200" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.edit_location_hint || '—' }}</template>
+        </el-table-column>
+      </el-table>
+      <div class="mgmt-code-trace-link-bar">
+        <span class="mgmt-code-trace-link-label">選択行の upstream 紐付け</span>
+        <el-input-number
+          v-model="traceLinkTargetBatchPlanId"
+          :min="1"
+          :controls="true"
+          :disabled="traceLinkSaving"
+          placeholder="aps_batch_plan_id"
+          class="mgmt-code-trace-link-id"
+        />
+        <el-checkbox v-model="traceLinkUpdateInstruction" :disabled="traceLinkSaving">
+          instruction_plans も更新
+        </el-checkbox>
+        <el-button
+          size="small"
+          type="primary"
+          :loading="traceLinkSaving"
+          :disabled="managementCodeTraceSelection.length === 0"
+          @click="applyTraceBatchPlanLink(false)"
+        >
+          選択に設定
+        </el-button>
+        <el-button
+          size="small"
+          type="warning"
+          plain
+          :loading="traceLinkSaving"
+          :disabled="managementCodeTraceSelection.length === 0"
+          @click="applyTraceBatchPlanLink(true)"
+        >
+          選択をクリア
+        </el-button>
+        <span v-if="managementCodeTraceSelection.length" class="mgmt-code-trace-link-hint">
+          {{ managementCodeTraceSelection.length }} 件選択中
+        </span>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="managementCodeTraceVisible = false">閉じる</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1045,11 +1219,13 @@ import {
   updateSchedule,
   deleteSchedule,
   replanLineSequence,
+  formatReplanSequenceSuccessMessage,
   appendSchedulePlannedQty,
   fetchSchedulingGrid,
   fetchSchedulingHourlyGrid,
   fetchEquipmentEfficiencyProducts,
   fetchProductionProgress,
+  patchUpstreamApsBatchPlanLinks,
   fetchLineReplanAnchors,
   saveLineReplanAnchors,
   fetchLineCapacities,
@@ -1238,6 +1414,14 @@ const progressLotDaily = ref<Record<string, Record<string, number>>>({})
 /** 日別セル: ACTUAL | PLANNED | WAIT_UPSTREAM */
 const progressLotDailySource = ref<Record<string, Record<string, string>>>({})
 const loadingProgress = ref(false)
+/** 管理コード位置照会ダイアログ */
+const managementCodeTraceVisible = ref(false)
+const managementCodeTraceFilter = ref('')
+const managementCodeTraceTableRef = ref<{ clearSelection?: () => void } | null>(null)
+const managementCodeTraceSelection = ref<ProgressLotItem[]>([])
+const traceLinkTargetBatchPlanId = ref<number | null>(null)
+const traceLinkUpdateInstruction = ref(true)
+const traceLinkSaving = ref(false)
 /** ガント表示タブ：daily | hourly | progress */
 const activeGanttTab = ref('daily')
 /** 計画を取得 API を一度でも成功で呼んだか（空配列含む） */
@@ -1331,6 +1515,20 @@ const sortedProgressLots = computed(() => {
     const nb = Number.isFinite(lb)
     if (na && nb && la !== lb) return la - lb
     return String(a.lot_number).localeCompare(String(b.lot_number))
+  })
+})
+
+const managementCodeTraceRows = computed(() => {
+  const q = managementCodeTraceFilter.value.trim().toLowerCase()
+  const rows = sortedProgressLots.value
+  if (!q) return rows
+  return rows.filter((lot) => {
+    const mc = (lot.management_code || '').toLowerCase()
+    const pos = (lot.position_summary || '').toLowerCase()
+    const prod = (lot.product_name || '').toLowerCase()
+    const lotNo = String(lot.lot_number || '')
+    const tables = managementCodeTablePresence(lot).toLowerCase()
+    return mc.includes(q) || pos.includes(q) || prod.includes(q) || lotNo.includes(q) || tables.includes(q)
   })
 })
 
@@ -2370,10 +2568,21 @@ async function replanAll() {
     return
   }
   replanning.value = true
+  const includeDebug = import.meta.env.DEV
   try {
-    await replanLineSequence(selectedLineId.value, effectiveReplanAnchorDate())
+    const t0 = performance.now()
+    const res = await replanLineSequence(
+      selectedLineId.value,
+      effectiveReplanAnchorDate(),
+      true,
+      includeDebug,
+    )
+    const elapsedMs = Math.round(performance.now() - t0)
     await loadSchedules()
-    ElMessage.success('順次再計算が完了しました')
+    ElMessage.success(formatReplanSequenceSuccessMessage(res, elapsedMs))
+    if (includeDebug && res?.data) {
+      console.debug('[replan-sequence]', res.data)
+    }
   } catch (e: unknown) {
     ElMessage.error(formatApiError(e) || '再計算に失敗しました')
   } finally {
@@ -2641,6 +2850,121 @@ function progressStatusSourceTable(s: string): string {
   if (s === 'PLANNED') return '（上流未同期）'
   return '—'
 }
+
+/** cutting_management / instruction_plans の登録有無（検索用短文） */
+function managementCodeTablePresence(lot: ProgressLotItem): string {
+  const parts: string[] = []
+  if (lot.in_cutting_by_management_code) parts.push('cutting:コード一致')
+  else if (lot.in_cutting_by_batch_plan_id) {
+    parts.push(`cutting:バッチIDのみ db=${lot.cutting_management_code_in_db || '空'}`)
+  }
+  if (lot.in_instruction_by_management_code) parts.push('指示:コード一致')
+  else if (lot.in_instruction_by_batch_plan_id) {
+    parts.push(`指示:バッチIDのみ db=${lot.instruction_management_code_in_db || '空'}`)
+  }
+  if (parts.length === 0) return '未登録'
+  return parts.join(' / ')
+}
+
+function cuttingDbManagementCodeDisplay(lot: ProgressLotItem): string {
+  if (!lot.in_cutting_management) return '—'
+  const db = (lot.cutting_management_code_in_db || '').trim()
+  if (!db) return '（空）'
+  const shown = (lot.management_code || '').trim()
+  if (shown && db !== shown) return `${db} ≠照会`
+  return db
+}
+
+function upstreamPrimaryTableLabel(lot: ProgressLotItem): string {
+  if (lot.upstream_data_table === 'cutting_management') return 'cutting_management'
+  if (lot.upstream_data_table === 'instruction_plans') return 'instruction_plans'
+  return '未登録'
+}
+
+function scheduleProgressLotsForStatus(scheduleId: number, status: string): ProgressLotItem[] {
+  return progressLots.value.filter(
+    (l) => l.aps_schedule_id === scheduleId && l.progress_status === status,
+  )
+}
+
+function managementCodeTraceRowKey(row: ProgressLotItem): string {
+  return String(row.batch_plan_id)
+}
+
+function onManagementCodeTraceSelectionChange(rows: ProgressLotItem[]) {
+  managementCodeTraceSelection.value = rows
+  if (rows.length === 1) {
+    traceLinkTargetBatchPlanId.value = rows[0]!.batch_plan_id
+  }
+}
+
+async function applyTraceBatchPlanLink(clear: boolean) {
+  const sel = managementCodeTraceSelection.value
+  if (sel.length === 0) {
+    ElMessage.warning('行を選択してください')
+    return
+  }
+  if (!clear) {
+    const tid = traceLinkTargetBatchPlanId.value
+    if (tid == null || !Number.isFinite(tid) || tid < 1) {
+      ElMessage.warning('aps_batch_plan_id を入力してください')
+      return
+    }
+  }
+  const newId = clear ? null : traceLinkTargetBatchPlanId.value
+  const msg = clear
+    ? `選択した ${sel.length} 件について、cutting_management${
+        traceLinkUpdateInstruction.value ? ' と instruction_plans' : ''
+      } の aps_batch_plan_id をクリアします。よろしいですか？`
+    : `選択した ${sel.length} 件の upstream 紐付けを aps_batch_plan_id=${newId} に設定します。よろしいですか？`
+  try {
+    await ElMessageBox.confirm(msg, 'upstream 紐付け更新', {
+      type: clear ? 'warning' : 'info',
+      confirmButtonText: clear ? 'クリア' : '設定',
+    })
+  } catch {
+    return
+  }
+  traceLinkSaving.value = true
+  try {
+    const res = await patchUpstreamApsBatchPlanLinks({
+      items: sel.map((row) => ({
+        batch_plan_id: row.batch_plan_id,
+        cutting_management_id: row.cutting_management_row_id ?? undefined,
+      })),
+      new_aps_batch_plan_id: newId,
+      update_instruction_plans: traceLinkUpdateInstruction.value,
+    })
+    ElMessage.success(res.message || '更新しました')
+    await loadProgress()
+    managementCodeTraceSelection.value = []
+    managementCodeTraceTableRef.value?.clearSelection?.()
+  } catch (e: unknown) {
+    const err = e as { message?: string; response?: { data?: { detail?: string } } }
+    const detail = err.response?.data?.detail
+    ElMessage.error(
+      typeof detail === 'string' ? detail : err.message || 'upstream 紐付けの更新に失敗しました',
+    )
+  } finally {
+    traceLinkSaving.value = false
+  }
+}
+
+function openManagementCodeTraceDialog() {
+  if (!selectedLineId.value) {
+    ElMessage.warning('先に設備を選択してください')
+    return
+  }
+  if (progressLots.value.length === 0) {
+    ElMessage.warning('進捗データがありません。先に「ライン順で再計算」を実行してください')
+    return
+  }
+  managementCodeTraceFilter.value = ''
+  managementCodeTraceSelection.value = []
+  traceLinkTargetBatchPlanId.value = null
+  managementCodeTraceVisible.value = true
+}
+
 function progressCellClass(lot: ProgressLotItem, d: string): Record<string, boolean> {
   const key = `${lot.aps_schedule_id}_${lot.lot_number}`
   const qty = (progressLotDaily.value[key] || {})[d] || 0
@@ -3935,6 +4259,66 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   margin-top: 4px;
 }
 .schedule-progress-none { color: var(--c-text-s); font-size: var(--fs-s); }
+.schedule-progress-pop__divider {
+  margin: 8px 0 4px;
+  border-top: 1px dashed #e2e8f0;
+}
+.schedule-progress-pop__mc-val {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+.schedule-progress-pop__warn {
+  color: #b45309;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.mgmt-code-table-presence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mgmt-code-match-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #64748b;
+}
+.mgmt-code-primary-table {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+.mgmt-code-trace-lead {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.5;
+}
+.mgmt-code-trace-filter {
+  margin-bottom: 12px;
+  max-width: 420px;
+}
+.mgmt-code-trace-link-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+.mgmt-code-trace-link-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.mgmt-code-trace-link-id {
+  width: 160px;
+}
+.mgmt-code-trace-link-hint {
+  font-size: 12px;
+  color: #64748b;
+}
 
 /* ── 合計(本) inline-edit ── */
 .total-qty-cell {

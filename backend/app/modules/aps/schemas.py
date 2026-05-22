@@ -377,6 +377,92 @@ class ProgressLotItem(BaseModel):
         0,
         description="成型有効計画本数（計画表示−前工程不良、下限0）",
     )
+    status_determined_by: Optional[str] = Field(
+        None,
+        description="進捗ステータス判定元: CUTTING_BY_MC / CUTTING_BY_BATCH_ID / INSTRUCTION / PLANNED",
+    )
+    edit_location_hint: Optional[str] = Field(
+        None,
+        description="ステータス・切断本数の修正先（画面・テーブル）",
+    )
+    position_summary: Optional[str] = Field(
+        None,
+        description="ライン内位置（順位・工単・ロット）の要約",
+    )
+    in_cutting_management: bool = Field(
+        False,
+        description="cutting_management に行がある（管理コード一致または aps_batch_plan_id）",
+    )
+    in_cutting_by_management_code: bool = Field(
+        False,
+        description="cutting_management.management_code が照会表示コードと一致",
+    )
+    in_cutting_by_batch_plan_id: bool = Field(
+        False,
+        description="cutting_management.aps_batch_plan_id のみ一致（DB の management_code は別・空のことがある）",
+    )
+    cutting_management_code_in_db: Optional[str] = Field(
+        None,
+        description="cutting_management に登録されている management_code（照合時に取得）",
+    )
+    cutting_management_row_id: Optional[int] = Field(
+        None,
+        description="cutting_management.id（バッチ照合時の修正用）",
+    )
+    in_instruction_plans: bool = Field(
+        False,
+        description="instruction_plans に当該管理コードまたは aps_batch_plan_id で行がある",
+    )
+    in_instruction_by_management_code: bool = Field(
+        False,
+        description="instruction_plans.management_code が照会表示コードと一致",
+    )
+    in_instruction_by_batch_plan_id: bool = Field(
+        False,
+        description="instruction_plans.aps_batch_plan_id のみ一致",
+    )
+    instruction_management_code_in_db: Optional[str] = Field(
+        None,
+        description="instruction_plans に登録されている management_code",
+    )
+    cutting_match_field: Optional[str] = Field(
+        None,
+        description="進捗判定の切断照合キー: management_code | aps_batch_plan_id",
+    )
+    instruction_match_field: Optional[str] = Field(
+        None,
+        description="製造指示照合キー: management_code | aps_batch_plan_id",
+    )
+    upstream_data_table: Optional[str] = Field(
+        None,
+        description="進捗ステータス判定に効く主テーブル: cutting_management | instruction_plans | 未登録",
+    )
+
+
+class UpstreamApsBatchPlanLinkItem(BaseModel):
+    """管理コード所在照会からの upstream 紐付け更新対象"""
+    batch_plan_id: int = Field(..., description="aps_batch_plans.id（照会行のロット）")
+    cutting_management_id: Optional[int] = Field(
+        None,
+        description="cutting_management.id。省略時は batch_plan_id で該当切断行を更新",
+    )
+
+
+class UpstreamApsBatchPlanLinksBody(BaseModel):
+    items: List[UpstreamApsBatchPlanLinkItem] = Field(..., min_length=1)
+    new_aps_batch_plan_id: Optional[int] = Field(
+        None,
+        description="設定する aps_batch_plans.id。null で cutting_management / instruction_plans の紐付けをクリア",
+    )
+    update_instruction_plans: bool = Field(
+        True,
+        description="true のとき instruction_plans.aps_batch_plan_id も同様に更新",
+    )
+
+
+class UpstreamApsBatchPlanLinksResult(BaseModel):
+    cutting_updated: int = 0
+    instruction_updated: int = 0
 
 
 class ProductionProgressResponse(BaseModel):

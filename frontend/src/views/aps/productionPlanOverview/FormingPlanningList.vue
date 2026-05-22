@@ -2353,18 +2353,30 @@ async function replanAllLinesForProcess() {
     }
     replanProgressTotal.value = lines.length
     const anchor = effectiveReplanAnchorDate.value
+    const includeDebug = import.meta.env.DEV
     const failed: string[] = []
+    let skippedStep1Count = 0
+    const t0All = performance.now()
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const lineLabel = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
       replanCurrentLineLabel.value = lineLabel
       try {
-        await replanLineSequence(line.id, anchor)
+        const t0Line = performance.now()
+        const res = await replanLineSequence(line.id, anchor, true, includeDebug)
+        if (res?.data?.skipped_step1) skippedStep1Count += 1
+        if (includeDebug && res?.data) {
+          console.debug(
+            `[replan-sequence] ${lineLabel}`,
+            { ...res.data, elapsedMs: Math.round(performance.now() - t0Line) },
+          )
+        }
       } catch (e: unknown) {
         failed.push(`${lineLabel}: ${formatApiError(e) || '再計算に失敗しました'}`)
       }
       replanProgressDone.value = i + 1
     }
+    const totalElapsedMs = Math.round(performance.now() - t0All)
     const okCount = lines.length - failed.length
     let rebuildErr = ''
     let rebuildSkipped = false
@@ -2380,7 +2392,12 @@ async function replanAllLinesForProcess() {
     }
     await loadSchedules()
     if (failed.length === 0 && !rebuildErr) {
-      ElMessage.success(`全 ${lines.length} 設備の順次再計算が完了しました`)
+      const okParts = [`全 ${lines.length} 設備の順次再計算が完了しました`]
+      if (skippedStep1Count > 0) {
+        okParts.push(`実績経路（Step1省略）${skippedStep1Count} 台`)
+      }
+      okParts.push(`${totalElapsedMs}ms`)
+      ElMessage.success(okParts.join(' · '))
     } else {
       const parts = [`再計算完了（成功 ${okCount} / 失敗 ${failed.length}）`]
       if (rebuildErr) parts.push('再構築失敗 1')

@@ -2557,6 +2557,16 @@
               <el-option v-for="name in cuttingDoneProductNameOptions" :key="name" :label="name" :value="name" />
             </el-select>
           </el-form-item>
+          <el-form-item label="管理コード">
+            <el-input
+              v-model="cuttingDoneFilter.management_code"
+              placeholder="management_code（部分一致）"
+              clearable
+              style="width: 200px"
+              @input="onCuttingDoneFilterChange"
+              @clear="onCuttingDoneFilterChange"
+            />
+          </el-form-item>
           <el-form-item label="生産完了チェック">
             <el-switch
               v-model="cuttingDoneFilter.only_completed"
@@ -2627,8 +2637,13 @@
               <span v-else class="editable-cell" @dblclick="startEditCuttingDoneCell(row, 'end_date')">{{ row.end_date ? String(row.end_date).slice(0, 10) : '-' }}</span>
             </template>
           </el-table-column>
-          <el-table-column label="管理コード" width="122" align="center">
-            <template #default="{ row }">{{ getManagementCodeLast5(row) }}</template>
+          <el-table-column
+            prop="management_code"
+            label="管理コード"
+            min-width="200"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">{{ formatCuttingDoneManagementCode(row) }}</template>
           </el-table-column>
         </el-table>
       </div>
@@ -4099,6 +4114,7 @@ const cuttingDoneRawList = ref<CuttingManagementRow[]>([])
 const cuttingDoneFilter = reactive({
   period: [] as string[],
   product_name: '',
+  management_code: '',
   only_completed: false,
 })
 const cuttingDonePagination = reactive({ currentPage: 1, pageSize: 50 })
@@ -4115,6 +4131,7 @@ const cuttingDoneProductNameOptions = computed(() => {
 const cuttingDoneListFiltered = computed(() => {
   const [startDay, endDay] = cuttingDoneFilter.period
   const productName = cuttingDoneFilter.product_name
+  const mcQ = (cuttingDoneFilter.management_code || '').trim().toLowerCase()
   const onlyCompleted = cuttingDoneFilter.only_completed
   return cuttingDoneRawList.value.filter((row) => {
     const day = formatDateOnly(String(row.production_day ?? ''))
@@ -4122,6 +4139,10 @@ const cuttingDoneListFiltered = computed(() => {
     if (endDay && day && day > endDay) return false
     if (startDay && !day) return false
     if (productName && (row.product_name ?? '') !== productName) return false
+    if (mcQ) {
+      const mc = (row.management_code != null ? String(row.management_code) : '').trim().toLowerCase()
+      if (!mc.includes(mcQ)) return false
+    }
     if (onlyCompleted && !row.production_completed_check) return false
     return true
   })
@@ -4131,7 +4152,12 @@ const cuttingDoneListPaged = computed(() => {
   return cuttingDoneListFiltered.value.slice(start, start + cuttingDonePagination.pageSize)
 })
 watch(
-  () => [cuttingDoneFilter.period, cuttingDoneFilter.product_name, cuttingDoneFilter.only_completed],
+  () => [
+    cuttingDoneFilter.period,
+    cuttingDoneFilter.product_name,
+    cuttingDoneFilter.management_code,
+    cuttingDoneFilter.only_completed,
+  ],
   () => {
     cuttingDonePagination.currentPage = 1
   },
@@ -4937,14 +4963,15 @@ function onCuttingDoneFilterChange() {
 function resetCuttingDoneFilter() {
   cuttingDoneFilter.period = getCurrentMonthPeriod()
   cuttingDoneFilter.product_name = ''
+  cuttingDoneFilter.management_code = ''
   cuttingDoneFilter.only_completed = false
   cuttingDonePagination.currentPage = 1
 }
 
-function getManagementCodeLast5(row: CuttingManagementRow): string {
+/** 切断済リスト：DB の management_code 列をそのまま表示（cd や末尾5桁は使わない） */
+function formatCuttingDoneManagementCode(row: CuttingManagementRow): string {
   const raw = row.management_code != null ? String(row.management_code).trim() : ''
-  if (!raw) return '-'
-  return raw.slice(-5)
+  return raw || '-'
 }
 
 async function loadCuttingDoneList() {

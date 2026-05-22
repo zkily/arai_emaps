@@ -70,6 +70,8 @@ from app.modules.aps.schemas import (
     DailyUpstreamTintSeg,
     LineReplanAnchorOut,
     LineReplanAnchorsBatchBody,
+    UpstreamApsBatchPlanLinksBody,
+    UpstreamApsBatchPlanLinksResult,
 )
 from app.modules.aps.engine import (
     APS_CALENDAR_PRELOAD_DAYS,
@@ -157,6 +159,78 @@ def _sync_schedules_daily_capacity_from_ee(
             ps.daily_capacity = new_dc
 
 
+def _upstream_defect_daily_allocation_keys(
+    daily: dict[str, int],
+    *,
+    start_iso: Optional[str],
+    end_iso: Optional[str],
+    forced_start_iso: Optional[str],
+    min_slice_iso: Optional[str],
+) -> list[tuple[str, int]]:
+    """
+    前工程不良の日別表示用：有効な生産日のみを按分対象とする。
+    ロット合計（upstream_defect_qty）は日付に紐づかないが、ガント「前」行表示のため
+    日別計画本数で按分する。開始日指定・工単 start/end 外の孤立日別計画は除外する。
+    """
+    floor_iso = start_iso
+    if forced_start_iso and (floor_iso is None or forced_start_iso > floor_iso):
+        floor_iso = forced_start_iso
+    if min_slice_iso and (floor_iso is None or min_slice_iso > floor_iso):
+        floor_iso = min_slice_iso
+
+    weighted: list[tuple[str, int]] = []
+    for k in sorted(daily.keys()):
+        w = max(0, int(daily.get(k, 0) or 0))
+        if w <= 0:
+            continue
+        if floor_iso and k < floor_iso:
+            continue
+        if end_iso and k > end_iso:
+            continue
+        weighted.append((k, w))
+    return weighted
+
+
+def _build_upstream_defect_daily(
+    upstream_total: int,
+    daily: dict[str, int],
+    *,
+    start_iso: Optional[str],
+    end_iso: Optional[str],
+    forced_start_iso: Optional[str],
+    min_slice_iso: Optional[str],
+) -> dict[str, int]:
+    """ロット合計 upstream を有効生産日の計画本数比で按分（最大剰余）。対象日が無ければ日別は出さない。"""
+    if upstream_total <= 0 or not daily:
+        return {}
+    weighted_keys = _upstream_defect_daily_allocation_keys(
+        daily,
+        start_iso=start_iso,
+        end_iso=end_iso,
+        forced_start_iso=forced_start_iso,
+        min_slice_iso=min_slice_iso,
+    )
+    if not weighted_keys:
+        return {}
+    total_weight = sum(w for _k, w in weighted_keys)
+    capped_total = min(int(upstream_total), total_weight) if total_weight > 0 else 0
+    if capped_total <= 0:
+        return {}
+    out: dict[str, int] = {}
+    acc = 0
+    remainders: list[tuple[float, str]] = []
+    for k, w in weighted_keys:
+        raw = capped_total * (w / total_weight)
+        q = int(raw)
+        out[k] = q
+        acc += q
+        remainders.append((raw - q, k))
+    rem = capped_total - acc
+    for _frac, k in sorted(remainders, key=lambda x: (-x[0], x[1]))[:rem]:
+        out[k] = int(out.get(k, 0) or 0) + 1
+    return out
+
+
 def _replan_actual_done_and_remaining(
     planned_total: int,
     period_actual: int,
@@ -166,20 +240,318 @@ def _replan_actual_done_and_remaining(
     """
     実績あり工単の Step3 再排産用。
 
-    残数（本）＝ 計画総数 − 良品実績 − 当工程不良（gross）。
-    旧ロジックは前工程不良を actual_done に全量加算し、既に実績で相殺済みの分まで
-    控除して未来計画が不足していた（例: 7801→7064）。前工程不良は日別「前」行で参照。
+    有効本数 ＝ 計画総数 − 前工程不良（upstream）。残数 ＝ 有効 − 良品実績 − 当工程不良。
+    run_engine の actual_done_qty は upstream＋実績＋不良の合算（上限 planned_total）とし、
+    前工程不良を二重控除しない（旧: upstream を actual に足し過ぎて 7801→7064 の不足があった）。
     """
-    _ = upstream_defect_total
-    gross_remaining = max(
-        0,
-        int(planned_total or 0) - int(period_actual or 0) - int(period_defect or 0),
-    )
-    actual_done = min(
-        int(planned_total or 0),
-        max(0, int(period_actual or 0) + int(period_defect or 0)),
-    )
+    pt = int(planned_total or 0)
+    upstream = max(0, int(upstream_defect_total or 0))
+    pa = max(0, int(period_actual or 0))
+    pd = max(0, int(period_defect or 0))
+    effective_total = max(0, pt - upstream)
+    gross_remaining = max(0, effective_total - pa - pd)
+    actual_done = min(pt, upstream + pa + pd)
     return actual_done, gross_remaining
+
+
+async def _line_cursor_after_schedule(
+    db: AsyncSession,
+    ps: ProductionSchedule,
+    ee_rows: Optional[Sequence[Any]],
+    cursor_date: date,
+    cursor_time: time,
+) -> tuple[date, time]:
+    """ライン順次排産（Step1/3）：工単終了位置で游标を前進（既存游标より前には戻さない）。"""
+    last_q = await db.execute(
+        select(ScheduleSliceAllocation)
+        .where(ScheduleSliceAllocation.schedule_id == ps.id)
+        .order_by(
+            ScheduleSliceAllocation.work_date.desc(),
+            ScheduleSliceAllocation.sort_order.desc(),
+            ScheduleSliceAllocation.id.desc(),
+        )
+        .limit(1)
+    )
+    last = last_q.scalars().first()
+    cand_date = cursor_date
+    cand_time = cursor_time
+    if last is not None:
+        ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows)
+        if ps_rate <= 0:
+            ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
+            from_ee = False
+        ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
+        cand_date, cand_time = advance_line_cursor_after_slice(last, ps_rate, ps_eff)
+    elif ps.end_date is not None:
+        cand_date = ps.end_date
+        cand_time = time(0, 0, 0)
+    if (cand_date, cand_time) > (cursor_date, cursor_time):
+        return cand_date, cand_time
+    return cursor_date, cursor_time
+
+
+def _schedule_has_replan_activity(info: dict, *, is_welding_line: bool) -> bool:
+    if int(info.get("total_actual", 0) or 0) > 0:
+        return True
+    if not is_welding_line and int(info.get("total_defect", 0) or 0) > 0:
+        return True
+    return False
+
+
+async def _fetch_line_replan_activity_maps(
+    db: AsyncSession,
+    sched_ids: List[int],
+) -> tuple[dict[int, dict], dict[int, int]]:
+    """日別明細集計と aps_batch_plans の upstream 合計（Step3 残数用）。"""
+    agg_map: dict[int, dict] = {}
+    upstream_by_schedule: dict[int, int] = {}
+    if not sched_ids:
+        return agg_map, upstream_by_schedule
+
+    actual_agg_res = await db.execute(
+        select(
+            ScheduleDetail.schedule_id,
+            func.coalesce(func.sum(ScheduleDetail.actual_qty), 0).label("total_actual"),
+            func.coalesce(func.sum(ScheduleDetail.defect_qty), 0).label("total_defect"),
+            func.coalesce(func.sum(ScheduleDetail.planned_qty), 0).label("total_planned"),
+            func.max(
+                case(
+                    (ScheduleDetail.actual_qty > 0, ScheduleDetail.schedule_date),
+                    else_=None,
+                )
+            ).label("last_actual_date"),
+            func.max(
+                case(
+                    (ScheduleDetail.defect_qty > 0, ScheduleDetail.schedule_date),
+                    else_=None,
+                )
+            ).label("last_defect_date"),
+        )
+        .where(ScheduleDetail.schedule_id.in_(sched_ids))
+        .group_by(ScheduleDetail.schedule_id)
+    )
+    for row in actual_agg_res.all():
+        agg_map[row.schedule_id] = {
+            "total_actual": int(row.total_actual or 0),
+            "total_defect": int(row.total_defect or 0),
+            "total_planned": int(row.total_planned or 0),
+            "last_actual_date": row.last_actual_date,
+            "last_defect_date": row.last_defect_date,
+        }
+
+    upstream_defect_res = await db.execute(
+        select(
+            ApsBatchPlan.aps_schedule_id.label("sid"),
+            func.coalesce(func.sum(ApsBatchPlan.upstream_defect_qty), 0).label("upstream_defect_total"),
+        )
+        .where(ApsBatchPlan.aps_schedule_id.in_(sched_ids))
+        .group_by(ApsBatchPlan.aps_schedule_id)
+    )
+    upstream_by_schedule = {
+        int(r.sid): int(r.upstream_defect_total or 0)
+        for r in upstream_defect_res.all()
+    }
+    return agg_map, upstream_by_schedule
+
+
+async def _activity_info_for_schedule(
+    db: AsyncSession,
+    sid: int,
+    info: dict,
+    forced_start_ps: Optional[date],
+) -> dict:
+    """開始日指定以降に実績・不良を集計し直す。"""
+    period_actual = int(info.get("total_actual", 0) or 0)
+    period_defect = int(info.get("total_defect", 0) or 0)
+    lg = info.get("last_actual_date")
+    lb = info.get("last_defect_date")
+    if forced_start_ps is None:
+        return info
+    filt_res = await db.execute(
+        select(
+            func.coalesce(func.sum(ScheduleDetail.actual_qty), 0),
+            func.coalesce(func.sum(ScheduleDetail.defect_qty), 0),
+            func.max(
+                case(
+                    (ScheduleDetail.actual_qty > 0, ScheduleDetail.schedule_date),
+                    else_=None,
+                )
+            ),
+            func.max(
+                case(
+                    (ScheduleDetail.defect_qty > 0, ScheduleDetail.schedule_date),
+                    else_=None,
+                )
+            ),
+        ).where(
+            ScheduleDetail.schedule_id == sid,
+            ScheduleDetail.schedule_date >= forced_start_ps,
+        )
+    )
+    filt_row = filt_res.one()
+    return {
+        **info,
+        "total_actual": int(filt_row[0] or 0),
+        "total_defect": int(filt_row[1] or 0),
+        "last_actual_date": filt_row[2],
+        "last_defect_date": filt_row[3],
+    }
+
+
+async def _replan_line_sequential_residual_aware(
+    db: AsyncSession,
+    *,
+    all_line_schedules: List[ProductionSchedule],
+    replan_start_anchor: Optional[date],
+    agg_map: dict[int, dict],
+    upstream_defect_by_schedule: dict[int, int],
+    is_welding_line: bool,
+    line_machine: Optional[Machine],
+    shared_cal_map: dict[date, float],
+    shared_slots: Dict[date, List[Any]],
+    ee_rows: List[EquipmentEfficiency],
+    include_debug: bool = False,
+) -> tuple[List[ProductionSchedule], list[dict[str, Any]]]:
+    """
+    実績/不良ありライン向けの単一遍次排産（旧 Step3）。
+    COMPLETED 占位 + 残数 run_engine。Step1 の全量無残数排産は行わない。
+    """
+    cursor_date_r = (
+        replan_start_anchor
+        or (all_line_schedules[0].start_date if all_line_schedules else None)
+        or now_jst().date()
+    )
+    cursor_time_r = time(0, 0, 0)
+    replanned_ids: set[int] = set()
+    replan_debug_rows: list[dict[str, Any]] = []
+
+    for idx, ps in enumerate(all_line_schedules):
+        replannable = (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS")
+        if not replannable:
+            cursor_date_r, cursor_time_r = await _line_cursor_after_schedule(
+                db, ps, ee_rows, cursor_date_r, cursor_time_r
+            )
+            continue
+
+        sid = ps.id
+        info = await _activity_info_for_schedule(
+            db,
+            sid,
+            agg_map.get(
+                sid,
+                {
+                    "total_actual": 0,
+                    "total_defect": 0,
+                    "total_planned": 0,
+                    "last_actual_date": None,
+                    "last_defect_date": None,
+                },
+            ),
+            getattr(ps, "forced_start_date", None),
+        )
+        lg = info.get("last_actual_date")
+        lb = info.get("last_defect_date")
+        last_activity_dt: Optional[date] = None
+        if is_welding_line:
+            last_activity_dt = lg
+        elif lg is not None and lb is not None:
+            last_activity_dt = max(lg, lb)
+        else:
+            last_activity_dt = lg or lb
+
+        has_activity = _schedule_has_replan_activity(info, is_welding_line=is_welding_line)
+        if has_activity and last_activity_dt is not None:
+            replan_start = last_activity_dt + timedelta(days=1)
+            if replan_start > cursor_date_r:
+                cursor_date_r = replan_start
+                cursor_time_r = time(0, 0, 0)
+
+        forced_start = getattr(ps, "forced_start_date", None)
+        effective_replan_start = cursor_date_r
+        effective_replan_time = cursor_time_r
+        if forced_start is not None and forced_start > effective_replan_start:
+            effective_replan_start = forced_start
+            effective_replan_time = time(0, 0, 0)
+
+        period_actual = int(info.get("total_actual", 0) or 0)
+        period_defect = int(info.get("total_defect", 0) or 0)
+
+        if has_activity:
+            planned_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
+            upstream_defect_total = int(upstream_defect_by_schedule.get(sid, 0) or 0)
+            actual_done_for_engine, remaining = _replan_actual_done_and_remaining(
+                planned_total,
+                period_actual,
+                period_defect,
+                upstream_defect_total,
+            )
+            if include_debug:
+                replan_debug_rows.append({
+                    "schedule_id": int(ps.id),
+                    "order_no": int(ps.order_no or 0),
+                    "status": ps.status or "PLANNING",
+                    "total_planned": int(info.get("total_planned", 0) or 0),
+                    "total_actual": period_actual,
+                    "total_defect": period_defect,
+                    "upstream_defect_total": upstream_defect_total,
+                    "remaining_for_replan": int(remaining or 0),
+                    "planned_total": planned_total,
+                    "actual_done_for_engine": int(actual_done_for_engine or 0),
+                    "last_actual_date": lg.isoformat() if lg else None,
+                    "last_defect_date": lb.isoformat() if lb else None,
+                    "last_activity_date": last_activity_dt.isoformat() if last_activity_dt else None,
+                    "replan_start_date": effective_replan_start.isoformat(),
+                })
+            ps = await run_engine(
+                db,
+                ps.id,
+                override_start_date=effective_replan_start,
+                override_start_time=effective_replan_time,
+                actual_done_qty=actual_done_for_engine,
+                use_setup_time=False,
+                ps_obj=ps,
+                machine_obj=line_machine,
+                cal_map_preloaded=shared_cal_map,
+                slots_by_date_preloaded=shared_slots,
+                ee_rows_preloaded=ee_rows,
+            )
+        else:
+            if include_debug:
+                replan_debug_rows.append({
+                    "schedule_id": int(ps.id),
+                    "order_no": int(ps.order_no or 0),
+                    "status": ps.status or "PLANNING",
+                    "total_planned": int(info.get("total_planned", 0) or 0),
+                    "total_actual": period_actual,
+                    "total_defect": period_defect,
+                    "remaining_for_replan": int(info.get("total_planned", 0) or 0),
+                    "planned_total": int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0),
+                    "actual_done_for_engine": 0,
+                    "last_actual_date": None,
+                    "last_defect_date": None,
+                    "replan_start_date": effective_replan_start.isoformat(),
+                })
+            ps = await run_engine(
+                db,
+                ps.id,
+                override_start_date=effective_replan_start,
+                override_start_time=effective_replan_time,
+                use_setup_time=idx != 0,
+                ps_obj=ps,
+                machine_obj=line_machine,
+                cal_map_preloaded=shared_cal_map,
+                slots_by_date_preloaded=shared_slots,
+                ee_rows_preloaded=ee_rows,
+            )
+
+        replanned_ids.add(int(ps.id))
+        await db.flush()
+        cursor_date_r, cursor_time_r = await _line_cursor_after_schedule(
+            db, ps, ee_rows, cursor_date_r, cursor_time_r
+        )
+
+    updated = [ps for ps in all_line_schedules if int(ps.id) in replanned_ids]
+    return updated, replan_debug_rows
 
 
 def _aps_machine_selectable_clause():
@@ -1477,28 +1849,22 @@ async def get_scheduling_grid(
                 if d0 <= today_jst:
                     daily[dk] = int(dv or 0)
 
-            upstream_defect_daily: dict[str, int] = {}
             upstream_total = int(upstream_defect_total_rows.get(sid, 0) or 0)
-            if upstream_total > 0 and daily:
-                keys = sorted(daily.keys())
-                weighted_keys = [(k, max(0, int(daily.get(k, 0) or 0))) for k in keys]
-                total_weight = sum(w for _k, w in weighted_keys)
-                capped_total = min(upstream_total, total_weight) if total_weight > 0 else 0
-                if capped_total > 0:
-                    acc = 0
-                    remainders: list[tuple[float, str]] = []
-                    for k, w in weighted_keys:
-                        raw = capped_total * (w / total_weight)
-                        q = int(raw)
-                        upstream_defect_daily[k] = q
-                        acc += q
-                        remainders.append((raw - q, k))
-                    rem = capped_total - acc
-                    for _frac, k in sorted(remainders, key=lambda x: (-x[0], x[1]))[:rem]:
-                        upstream_defect_daily[k] = int(upstream_defect_daily.get(k, 0) or 0) + 1
-                elif total_weight == 0:
-                    first_key = keys[0]
-                    upstream_defect_daily[first_key] = int(upstream_total)
+            forced_start_iso = (
+                ps.forced_start_date.isoformat()
+                if getattr(ps, "forced_start_date", None)
+                else None
+            )
+            min_slice_day, _max_slice_day = slice_bounds.get(sid, (None, None))
+            min_slice_iso = min_slice_day.isoformat() if min_slice_day else None
+            upstream_defect_daily = _build_upstream_defect_daily(
+                upstream_total,
+                daily,
+                start_iso=ps_start_iso,
+                end_iso=ps_end_iso,
+                forced_start_iso=forced_start_iso,
+                min_slice_iso=min_slice_iso,
+            )
 
             # ガント日別「計」は排産エンジンが置いた gross 本数（スライス/明細の合計）。
             # 前工程不良は「前」行と残＝計−実−不−前 で示し、計から再控除しない（二重控除防止）。
@@ -1737,6 +2103,73 @@ async def get_aps_batch_plans(
     return list(result.scalars().all())
 
 
+@router.patch("/upstream-aps-batch-plan-links")
+async def patch_upstream_aps_batch_plan_links(
+    body: UpstreamApsBatchPlanLinksBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    cutting_management / instruction_plans の aps_batch_plan_id を一括設定またはクリア。
+    管理コード所在照会で「バッチIDのみ」不一致を解消する用途。
+    """
+    new_id = body.new_aps_batch_plan_id
+    if new_id is not None:
+        bp = await db.get(ApsBatchPlan, int(new_id))
+        if bp is None:
+            raise HTTPException(status_code=404, detail="指定の aps_batch_plan_id は aps_batch_plans に存在しません")
+
+    cutting_updated = 0
+    instruction_updated = 0
+    touched_cutting_ids: set[int] = set()
+
+    for item in body.items:
+        bid = int(item.batch_plan_id)
+        cid = int(item.cutting_management_id) if item.cutting_management_id is not None else None
+
+        if cid is not None and cid not in touched_cutting_ids:
+            res = await db.execute(
+                text(
+                    "UPDATE cutting_management SET aps_batch_plan_id = :new_id WHERE id = :cid"
+                ),
+                {"new_id": new_id, "cid": cid},
+            )
+            touched_cutting_ids.add(cid)
+            cutting_updated += int(res.rowcount or 0)
+        elif cid is None:
+            res = await db.execute(
+                text(
+                    "UPDATE cutting_management SET aps_batch_plan_id = :new_id "
+                    "WHERE aps_batch_plan_id = :bid"
+                ),
+                {"new_id": new_id, "bid": bid},
+            )
+            cutting_updated += int(res.rowcount or 0)
+
+        if body.update_instruction_plans:
+            res_ins = await db.execute(
+                text(
+                    "UPDATE instruction_plans SET aps_batch_plan_id = :new_id "
+                    "WHERE aps_batch_plan_id = :bid"
+                ),
+                {"new_id": new_id, "bid": bid},
+            )
+            instruction_updated += int(res_ins.rowcount or 0)
+
+    await db.commit()
+    action = "クリア" if new_id is None else f"設定（{new_id}）"
+    return {
+        "success": True,
+        "message": (
+            f"upstream 紐付けを{action}しました（切断 {cutting_updated} 件・指示 {instruction_updated} 件）"
+        ),
+        "data": UpstreamApsBatchPlanLinksResult(
+            cutting_updated=cutting_updated,
+            instruction_updated=instruction_updated,
+        ).model_dump(),
+    }
+
+
 # ═══════════════════ Run All / Sequential ═══════════════════
 
 @router.post("/production-plan-excel/rebuild")
@@ -1805,14 +2238,14 @@ async def replan_sequence(
 ):
     """
     ライン順で再計算（実績考慮を統合）。
-    ステップ 1: anchor から通常の順次排産（ガント生成）
-    ステップ 2: stock_transaction_logs → schedule_details.actual_qty / defect_qty 同期
-    ステップ 3: 良品実績（溶接は当工程実績のみ）のある工単は「最終実績日の翌日」から残数で再排産。
-    他工程不良のみでは再排産起点を動かさない（溶接ガントの誤った先行日付を防ぐ）。
-    同期後: aps_batch_plans はロットごとに cutting/chamfering の upstream_defect_qty を取り込み、成型 planned_quantity を有効本数へ更新
 
-    アンカー日の優先順位: aps_line_replan_anchors に当該 line_id の行があればその日付（今日繰り上げなし） >
-    クエリ anchorStartDate > 無指定時は replan_line_sequential 側の既定。
+    - 当該ラインに実績/不良が無い: anchor から通常順次排産のみ（旧 Step1）+ 在庫同期。
+    - 実績/不良あり: Step1 を省略し、在庫同期後に残数考慮の単一遍次排産（旧 Step3）のみ。
+
+    溶接は当工程実績のみを活動とみなす。成型は当工程不良も活動扱い。
+    同期後: aps_batch_plans はロットごとに upstream_defect を反映した有効本数へ更新。
+
+    アンカー日の優先順位: aps_line_replan_anchors > クエリ anchorStartDate > engine 既定。
     """
     anchor = None
     ar_row = await db.get(ApsLineReplanAnchor, line_id)
@@ -1927,252 +2360,74 @@ async def replan_sequence(
             ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS", "COMPLETED"]),
         )
     )
-    all_line_schedules = list(all_line_sched_res.scalars().all())
+    all_line_schedules = sorted(
+        all_line_sched_res.scalars().all(),
+        key=lambda ps: (ps.order_no is None, ps.order_no or 0, ps.id),
+    )
     if ee_rows and all_line_schedules:
         _sync_schedules_daily_capacity_from_ee(all_line_schedules, ee_rows)
         await db.flush()
 
-    # ── Step 1: 通常の順次排産 ──
-    updated = await replan_line_sequential(
-        db, line_id, replan_start_anchor,
-        machine_obj=line_machine,
-        cal_map_preloaded=shared_cal_map,
-        slots_by_date_preloaded=shared_slots,
-        ee_rows_preloaded=ee_rows,
-    )
-    await db.flush()
+    replannable_on_line = [
+        ps for ps in all_line_schedules if (ps.status or "").upper() in ("PLANNING", "IN_PROGRESS")
+    ]
+    await _purge_pre_forced_start_schedule_rows(db, replannable_on_line)
 
-    # ── Step 2: stock_transaction_logs → schedule_details.actual_qty 同期（一括取得） ──
-    for ps in updated:
+    # 在庫同期（活動判定前）：stock_transaction_logs → schedule_details
+    for ps in replannable_on_line:
         await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
     await db.flush()
+    await _purge_pre_forced_start_schedule_rows(db, replannable_on_line)
 
-    # ── Step 3: 実績または不良がある工単は残数ベースで再排産 ──
-    # 一括集計：良品実績 / 不良 / planned / 最終活動日 を schedule_id ごとに取得
-    sched_ids = [ps.id for ps in updated]
-    actual_agg_res = await db.execute(
-            select(
-                ScheduleDetail.schedule_id,
-                func.coalesce(func.sum(ScheduleDetail.actual_qty), 0).label("total_actual"),
-                func.coalesce(func.sum(ScheduleDetail.defect_qty), 0).label("total_defect"),
-                func.coalesce(func.sum(ScheduleDetail.planned_qty), 0).label("total_planned"),
-                func.max(
-                    case(
-                        (ScheduleDetail.actual_qty > 0, ScheduleDetail.schedule_date),
-                        else_=None,
-                    )
-                ).label("last_actual_date"),
-                func.max(
-                    case(
-                        (ScheduleDetail.defect_qty > 0, ScheduleDetail.schedule_date),
-                        else_=None,
-                    )
-                ).label("last_defect_date"),
-            )
-            .where(ScheduleDetail.schedule_id.in_(sched_ids))
-            .group_by(ScheduleDetail.schedule_id)
-        )
-    agg_map: dict[int, dict] = {}
-    for row in actual_agg_res.all():
-        agg_map[row.schedule_id] = {
-                "total_actual": int(row.total_actual or 0),
-                "total_defect": int(row.total_defect or 0),
-                "total_planned": int(row.total_planned or 0),
-                "last_actual_date": row.last_actual_date,
-                "last_defect_date": row.last_defect_date,
-        }
-
-        # schedule ごとの前工程不良（upstream_defect）合計を先読み。
-        # Step3 の残数計算で planned_total から控除する。
-    upstream_defect_res = await db.execute(
-        select(
-            ApsBatchPlan.aps_schedule_id.label("sid"),
-            func.coalesce(func.sum(ApsBatchPlan.upstream_defect_qty), 0).label("upstream_defect_total"),
-        )
-        .where(ApsBatchPlan.aps_schedule_id.in_(sched_ids))
-        .group_by(ApsBatchPlan.aps_schedule_id)
-    )
-    upstream_defect_by_schedule: dict[int, int] = {
-        int(r.sid): int(r.upstream_defect_total or 0)
-        for r in upstream_defect_res.all()
-    }
-
-    line_head_result = await db.execute(
-        select(ProductionSchedule.id)
-        .where(ProductionSchedule.line_id == line_id)
-        .order_by(
-            ProductionSchedule.order_no.is_(None),
-            ProductionSchedule.order_no.asc(),
-            ProductionSchedule.id,
-        )
-        .limit(1)
-    )
-    line_head_schedule_id = line_head_result.scalar_one_or_none()
-
+    sched_ids = [ps.id for ps in replannable_on_line]
+    agg_map, upstream_defect_by_schedule = await _fetch_line_replan_activity_maps(db, sched_ids)
     is_welding_line = (
         await _machine_matches_process_cd(db, line_machine, _APS_WELDING_PROCESS_CD)
         if line_machine
         else False
     )
-
-    def _schedule_has_replan_activity(info: dict) -> bool:
-        if int(info.get("total_actual", 0) or 0) > 0:
-            return True
-        # 成型など：当工程の不良のみで活動ありとみなす（在庫ログ KT04 同期）
-        if not is_welding_line and int(info.get("total_defect", 0) or 0) > 0:
-            return True
-        return False
-
-    has_any_activity = any(_schedule_has_replan_activity(v) for v in agg_map.values())
+    has_any_activity = any(
+        _schedule_has_replan_activity(v, is_welding_line=is_welding_line) for v in agg_map.values()
+    )
     replan_debug_rows: list[dict[str, Any]] = []
+    skipped_step1 = False
+
     if has_any_activity:
-            cursor_date_r = replan_start_anchor or updated[0].start_date or now_jst().date()
-            cursor_time_r = time(0, 0, 0)
+        skipped_step1 = True
+        updated, replan_debug_rows = await _replan_line_sequential_residual_aware(
+            db,
+            all_line_schedules=all_line_schedules,
+            replan_start_anchor=replan_start_anchor,
+            agg_map=agg_map,
+            upstream_defect_by_schedule=upstream_defect_by_schedule,
+            is_welding_line=is_welding_line,
+            line_machine=line_machine,
+            shared_cal_map=shared_cal_map,
+            shared_slots=shared_slots,
+            ee_rows=ee_rows,
+            include_debug=includeDebug,
+        )
+        await db.flush()
+    else:
+        updated = await replan_line_sequential(
+            db,
+            line_id,
+            replan_start_anchor,
+            machine_obj=line_machine,
+            cal_map_preloaded=shared_cal_map,
+            slots_by_date_preloaded=shared_slots,
+            ee_rows_preloaded=ee_rows,
+        )
+        await db.flush()
 
-            for ps in updated:
-                sid = ps.id
-                info = agg_map.get(
-                    sid,
-                    {
-                        "total_actual": 0,
-                        "total_defect": 0,
-                        "total_planned": 0,
-                        "last_actual_date": None,
-                        "last_defect_date": None,
-                    },
-                )
-                lg = info.get("last_actual_date")
-                lb = info.get("last_defect_date")
-                last_activity_dt: Optional[date] = None
-                if is_welding_line:
-                    last_activity_dt = lg
-                elif lg is not None and lb is not None:
-                    last_activity_dt = max(lg, lb)
-                else:
-                    last_activity_dt = lg or lb
+    for ps in updated:
+        await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
+    await db.flush()
+    await _purge_pre_forced_start_schedule_rows(db, updated)
 
-                if _schedule_has_replan_activity(info):
-                    if last_activity_dt is not None:
-                        # 当工程の良品実績（溶接は実績日のみ）があれば、最終発生日の翌日から再排産。
-                        replan_start = last_activity_dt + timedelta(days=1)
-                        if replan_start > cursor_date_r:
-                            cursor_date_r = replan_start
-                            cursor_time_r = time(0, 0, 0)
-
-                    period_actual = info["total_actual"]
-                    period_defect = info["total_defect"]
-                    planned_total = int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0)
-                    upstream_defect_total = int(upstream_defect_by_schedule.get(sid, 0) or 0)
-                    actual_done_for_engine, remaining = _replan_actual_done_and_remaining(
-                        planned_total,
-                        int(period_actual or 0),
-                        int(period_defect or 0),
-                        upstream_defect_total,
-                    )
-                    if includeDebug:
-                        replan_debug_rows.append({
-                            "schedule_id": int(ps.id),
-                            "order_no": int(ps.order_no or 0),
-                            "status": ps.status or "PLANNING",
-                            "total_planned": int(info.get("total_planned", 0) or 0),
-                            "total_actual": int(period_actual or 0),
-                            "total_defect": int(period_defect or 0),
-                            "upstream_defect_total": int(upstream_defect_total or 0),
-                            "remaining_for_replan": int(remaining or 0),
-                            "planned_total": int(planned_total or 0),
-                            "actual_done_for_engine": int(actual_done_for_engine or 0),
-                            "last_actual_date": lg.isoformat() if lg else None,
-                            "last_defect_date": lb.isoformat() if lb else None,
-                            "last_activity_date": last_activity_dt.isoformat() if last_activity_dt else None,
-                            "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
-                        })
-
-                    forced_start = getattr(ps, "forced_start_date", None)
-                    effective_replan_start = cursor_date_r
-                    effective_replan_time = cursor_time_r
-                    if forced_start is not None and forced_start > effective_replan_start:
-                        effective_replan_start = forced_start
-                        effective_replan_time = time(0, 0, 0)
-                    # 既に当該工単で実績/不良が出ている場合は、同一製品の継続生産として扱う。
-                    # Step3 の再排産開始日（最終活動日の翌日）で段取を再控除すると
-                    # 日量が不当に下がるため、use_setup_time=False に固定する。
-                    ps = await run_engine(
-                        db,
-                        ps.id,
-                        override_start_date=effective_replan_start,
-                        override_start_time=effective_replan_time,
-                        actual_done_qty=actual_done_for_engine,
-                        use_setup_time=False,
-                        ps_obj=ps,
-                        machine_obj=line_machine,
-                        cal_map_preloaded=shared_cal_map,
-                        slots_by_date_preloaded=shared_slots,
-                        ee_rows_preloaded=ee_rows,
-                    )
-                else:
-                    if includeDebug:
-                        replan_debug_rows.append({
-                            "schedule_id": int(ps.id),
-                            "order_no": int(ps.order_no or 0),
-                            "status": ps.status or "PLANNING",
-                            "total_planned": int(info.get("total_planned", 0) or 0),
-                            "total_actual": int(info.get("total_actual", 0) or 0),
-                            "total_defect": int(info.get("total_defect", 0) or 0),
-                            "remaining_for_replan": int(info.get("total_planned", 0) or 0),
-                            "planned_total": int(ps.planned_process_qty or 0) + int(ps.prev_month_carryover or 0),
-                            "actual_done_for_engine": 0,
-                            "last_actual_date": None,
-                            "last_defect_date": None,
-                            "replan_start_date": cursor_date_r.isoformat() if cursor_date_r else None,
-                        })
-                    forced_start = getattr(ps, "forced_start_date", None)
-                    effective_replan_start = cursor_date_r
-                    effective_replan_time = cursor_time_r
-                    if forced_start is not None and forced_start > effective_replan_start:
-                        effective_replan_start = forced_start
-                        effective_replan_time = time(0, 0, 0)
-                    ps = await run_engine(
-                        db,
-                        ps.id,
-                        override_start_date=effective_replan_start,
-                        override_start_time=effective_replan_time,
-                        use_setup_time=(line_head_schedule_id is None or ps.id != int(line_head_schedule_id)),
-                        ps_obj=ps,
-                        machine_obj=line_machine,
-                        cal_map_preloaded=shared_cal_map,
-                        slots_by_date_preloaded=shared_slots,
-                        ee_rows_preloaded=ee_rows,
-                    )
-
-                await db.flush()
-                last_q = await db.execute(
-                    select(ScheduleSliceAllocation)
-                    .where(ScheduleSliceAllocation.schedule_id == ps.id)
-                    .order_by(
-                        ScheduleSliceAllocation.work_date.desc(),
-                        ScheduleSliceAllocation.sort_order.desc(),
-                        ScheduleSliceAllocation.id.desc(),
-                    )
-                    .limit(1)
-                )
-                last = last_q.scalars().first()
-                if last is not None:
-                    ps_rate, from_ee = resolve_schedule_piece_rate(ps, ee_rows)
-                    if ps_rate <= 0:
-                        ps_rate = hourly_piece_rate_from_daily_capacity(int(ps.daily_capacity or 0))
-                        from_ee = False
-                    ps_eff = capacity_efficiency_factor(from_ee, float(ps.efficiency or 100)) * 100.0
-                    cursor_date_r, cursor_time_r = advance_line_cursor_after_slice(
-                        last, ps_rate, ps_eff
-                    )
-                else:
-                    cursor_date_r = ps.end_date or (cursor_date_r + timedelta(days=1))
-                    cursor_time_r = time(0, 0, 0)
-
-            # Step 2 再実行：重排後に再同期
-            for ps in updated:
-                await _sync_actual_from_stock_logs(db, ps, machine=line_machine)
-            await db.flush()
+    # 最終：開始日指定前の孤立日別行を除去（当日分の再同期後も）
+    if updated:
+        await _purge_pre_forced_start_schedule_rows(db, updated)
 
     # instruction_plans 同期（事前に共通データを一括取得）
     # syncInstructionPlans=false のときは成型設備でも instruction_plans に触れない（排産・aps_batch_plans のみ）
@@ -2278,16 +2533,24 @@ async def replan_sequence(
         ),
     }
     logger.info(
-        "[重排锚点] 线体=%s，请求锚点=%s，DB锚点=%s，实际执行锚点=%s，清理起点=%s，是否发生锚点钳制=%s",
+        "[重排锚点] 线体=%s，请求锚点=%s，DB锚点=%s，实际执行锚点=%s，清理起点=%s，是否发生锚点钳制=%s，"
+        "实绩路径=%s，跳过Step1=%s，件数=%s",
         anchor_debug_payload["line_id"],
         anchor_debug_payload["requested_anchor"],
         anchor_debug_payload["db_anchor"],
         anchor_debug_payload["effective_anchor"],
         anchor_debug_payload["clear_from"],
         "是" if anchor_debug_payload["anchor_clamped_to_clear_from"] else "否",
+        "是" if has_any_activity else "否",
+        "是" if skipped_step1 else "否",
+        len(updated),
     )
 
-    data: dict[str, Any] = {"count": len(updated)}
+    data: dict[str, Any] = {
+        "count": len(updated),
+        "residual_aware_path": bool(has_any_activity),
+        "skipped_step1": skipped_step1,
+    }
     if includeDebug:
         data["replan_anchor_debug"] = {
             "requested_anchor": anchor_debug_payload["requested_anchor"],
@@ -2298,10 +2561,11 @@ async def replan_sequence(
         }
         data["replan_debug"] = replan_debug_rows
 
+    msg_suffix = "（実績考慮・単遍）" if has_any_activity else ""
     return {
         "success": True,
         "data": data,
-        "message": f"{len(updated)}件の工単を再計算しました（実績考慮済み）",
+        "message": f"{len(updated)}件の工単を再計算しました{msg_suffix}",
     }
 
 
@@ -2887,48 +3151,139 @@ async def get_production_progress(
         )
 
         progress_status = "PLANNED"
+        status_determined_by = "PLANNED"
+        edit_location_hint = "どちらの表にも未登録 — 成型計画で「ライン順で再計算」で instruction_plans を同期"
+        in_cutting_management = False
+        in_cutting_by_management_code = False
+        in_cutting_by_batch_plan_id = False
+        cutting_management_code_in_db: Optional[str] = None
+        cutting_management_row_id: Optional[int] = None
+        in_instruction_plans = False
+        in_instruction_by_management_code = False
+        in_instruction_by_batch_plan_id = False
+        instruction_management_code_in_db: Optional[str] = None
+        cutting_match_field: Optional[str] = None
+        instruction_match_field: Optional[str] = None
+        upstream_data_table: Optional[str] = None
         cut_planned: Optional[int] = None
         cut_actual: Optional[int] = None
         cut_done: Optional[bool] = None
+        mc_norm = (mc or "").strip()
         try:
             cut_res = await db.execute(
                 text(
-                    "SELECT planned_quantity, actual_production_quantity, "
+                    "SELECT id, management_code, planned_quantity, actual_production_quantity, "
                     "COALESCE(production_completed_check, 0) AS pcc "
                     "FROM cutting_management WHERE management_code = :mc LIMIT 1"
                 ),
-                {"mc": mc},
+                {"mc": mc_norm},
             )
             cut_row = cut_res.mappings().first()
-            if cut_row is None:
+            if cut_row is not None:
+                in_cutting_by_management_code = True
+                cutting_match_field = "management_code"
+            elif batch.id is not None:
                 cut_res_bid = await db.execute(
                     text(
-                        "SELECT planned_quantity, actual_production_quantity, "
+                        "SELECT id, management_code, planned_quantity, actual_production_quantity, "
                         "COALESCE(production_completed_check, 0) AS pcc "
                         "FROM cutting_management WHERE aps_batch_plan_id = :bid "
                         "ORDER BY id DESC LIMIT 1"
                     ),
-                    {"bid": batch.id},
+                    {"bid": int(batch.id)},
                 )
                 cut_row = cut_res_bid.mappings().first()
+                if cut_row is not None:
+                    in_cutting_by_batch_plan_id = True
+                    cutting_match_field = "aps_batch_plan_id"
             if cut_row is not None:
+                in_cutting_management = True
+                cutting_management_row_id = int(cut_row.get("id") or 0) or None
+                db_mc = (cut_row.get("management_code") or "")
+                cutting_management_code_in_db = str(db_mc).strip() or None
                 progress_status = "IN_PROGRESS"
+                status_determined_by = (
+                    "CUTTING_BY_MC" if in_cutting_by_management_code else "CUTTING_BY_BATCH_ID"
+                )
+                upstream_data_table = "cutting_management"
+                if in_cutting_by_management_code:
+                    edit_location_hint = (
+                        "cutting_management（管理コード一致）— 切断済リストで当該コードを検索"
+                    )
+                else:
+                    edit_location_hint = (
+                        "cutting_management（aps_batch_plan_id のみ）— "
+                        f"DB上の management_code は「{cutting_management_code_in_db or '空'}」。"
+                        f"切断済リストはバッチID={batch.id} または DBコードで検索"
+                    )
                 cut_planned = int(cut_row.get("planned_quantity") or 0)
                 cut_actual = int(cut_row.get("actual_production_quantity") or 0)
                 cut_done = bool(int(cut_row.get("pcc") or 0))
-            else:
-                ins_q = await db.execute(
+
+            ins_row = None
+            ins_res_mc = await db.execute(
+                text(
+                    "SELECT id, management_code FROM instruction_plans "
+                    "WHERE management_code = :mc ORDER BY id DESC LIMIT 1"
+                ),
+                {"mc": mc_norm},
+            )
+            ins_row = ins_res_mc.mappings().first()
+            if ins_row is not None:
+                in_instruction_by_management_code = True
+                instruction_match_field = "management_code"
+            elif batch.id is not None:
+                ins_res_bid = await db.execute(
                     text(
-                        "SELECT id FROM instruction_plans "
-                        "WHERE aps_batch_plan_id = :bid OR management_code = :mc "
-                        "ORDER BY id DESC LIMIT 1"
+                        "SELECT id, management_code FROM instruction_plans "
+                        "WHERE aps_batch_plan_id = :bid ORDER BY id DESC LIMIT 1"
                     ),
-                    {"bid": batch.id, "mc": mc},
+                    {"bid": int(batch.id)},
                 )
-                if ins_q.scalar() is not None:
-                    progress_status = "RELEASED"
+                ins_row = ins_res_bid.mappings().first()
+                if ins_row is not None:
+                    in_instruction_by_batch_plan_id = True
+                    instruction_match_field = "aps_batch_plan_id"
+            if ins_row is not None:
+                in_instruction_plans = True
+                instruction_management_code_in_db = (
+                    str(ins_row.get("management_code") or "").strip() or None
+                )
+
+            if not in_cutting_management and in_instruction_plans:
+                progress_status = "RELEASED"
+                status_determined_by = "INSTRUCTION"
+                upstream_data_table = "instruction_plans"
+                if in_instruction_by_management_code:
+                    edit_location_hint = (
+                        "instruction_plans（管理コード一致）— 製造指示で修正"
+                    )
+                else:
+                    edit_location_hint = (
+                        "instruction_plans（aps_batch_plan_id のみ）— "
+                        f"DB上の management_code は「{instruction_management_code_in_db or '空'}」"
+                    )
+            elif in_cutting_management and in_instruction_plans:
+                cut_hint = (
+                    "管理コード一致"
+                    if in_cutting_by_management_code
+                    else f"バッチIDのみ（DBコード={cutting_management_code_in_db or '空'}）"
+                )
+                ins_hint = (
+                    "管理コード一致"
+                    if in_instruction_by_management_code
+                    else f"バッチIDのみ（DBコード={instruction_management_code_in_db or '空'}）"
+                )
+                edit_location_hint = (
+                    f"進捗は cutting_management（{cut_hint}）。instruction_plans にも行あり（{ins_hint}）"
+                )
         except (OperationalError, ProgrammingError):
             pass
+
+        order_label = ps.order_no if ps.order_no is not None else "—"
+        position_summary = (
+            f"順位 {order_label} · 工単 ID {int(ps.id)} · ロット #{batch.lot_number}"
+        )
 
         start_iso = batch.start_date.isoformat() if batch.start_date else None
         end_iso = batch.end_date.isoformat() if batch.end_date else None
@@ -2955,6 +3310,21 @@ async def get_production_progress(
             cutting_completed=cut_done,
             upstream_defect_qty=u_def,
             forming_effective_planned_qty=eff_qty,
+            status_determined_by=status_determined_by,
+            edit_location_hint=edit_location_hint,
+            position_summary=position_summary,
+            in_cutting_management=in_cutting_management,
+            in_cutting_by_management_code=in_cutting_by_management_code,
+            in_cutting_by_batch_plan_id=in_cutting_by_batch_plan_id,
+            cutting_management_code_in_db=cutting_management_code_in_db,
+            cutting_management_row_id=cutting_management_row_id,
+            in_instruction_plans=in_instruction_plans,
+            in_instruction_by_management_code=in_instruction_by_management_code,
+            in_instruction_by_batch_plan_id=in_instruction_by_batch_plan_id,
+            instruction_management_code_in_db=instruction_management_code_in_db,
+            cutting_match_field=cutting_match_field,
+            instruction_match_field=instruction_match_field,
+            upstream_data_table=upstream_data_table,
         ))
 
         lot_key = f"{batch.aps_schedule_id}_{batch.lot_number}"
@@ -3144,6 +3514,68 @@ async def _last_actual_date_for_line(db: AsyncSession, line_id: int) -> Optional
     return rows.scalar_one_or_none()
 
 
+async def _purge_pre_forced_start_schedule_rows(
+    db: AsyncSession,
+    schedules: Sequence[ProductionSchedule],
+) -> None:
+    """開始日指定より前の日別計画・スライスを削除（後順位への計画・実績のにじみ防止）。"""
+    for ps in schedules:
+        if (ps.status or "").upper() == "COMPLETED":
+            continue
+        fs = getattr(ps, "forced_start_date", None)
+        if fs is None:
+            continue
+        await db.execute(
+            delete(ScheduleDetail).where(
+                ScheduleDetail.schedule_id == ps.id,
+                ScheduleDetail.schedule_date < fs,
+            )
+        )
+        await db.execute(
+            delete(ScheduleSliceAllocation).where(
+                ScheduleSliceAllocation.schedule_id == ps.id,
+                ScheduleSliceAllocation.work_date < fs,
+            )
+        )
+    await db.flush()
+
+
+async def _schedule_id_owning_actual_on_date(
+    db: AsyncSession,
+    line_id: int,
+    product_cd_norm: str,
+    work_date: date,
+) -> Optional[int]:
+    """
+    同一ライン・同一製品で、当該日の良品実績を配賦すべき工単 ID。
+    計画（planned_qty>0）がある行のうち順位が最小のものを優先する。
+    開始日指定より前の日付は対象外。
+    """
+    from sqlalchemy import func as sa_func
+
+    res = await db.execute(
+        select(ProductionSchedule.id)
+        .join(ScheduleDetail, ScheduleDetail.schedule_id == ProductionSchedule.id)
+        .where(
+            ProductionSchedule.line_id == line_id,
+            sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
+            ScheduleDetail.schedule_date == work_date,
+            ScheduleDetail.planned_qty > 0,
+            or_(
+                ProductionSchedule.forced_start_date.is_(None),
+                ScheduleDetail.schedule_date >= ProductionSchedule.forced_start_date,
+            ),
+        )
+        .order_by(
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no.asc(),
+            ProductionSchedule.id.asc(),
+        )
+        .limit(1)
+    )
+    return res.scalar_one_or_none()
+
+
 async def _stock_log_defect_process_cd_for_machine(
     db: AsyncSession, machine: Machine
 ) -> Optional[str]:
@@ -3190,9 +3622,21 @@ async def _sync_actual_from_stock_logs(
     all_dates = [det.schedule_date for det in details]
     min_d = min(all_dates)
     max_d = max(all_dates)
-    # 90 日固定窓だと長期工単や遅延補録を取りこぼすため、
-    # 当該工単の明細期間（min_d..max_d）を実績同期の検索窓とする。
+    # 当該工単の明細期間を基準にするが、同一ライン・同一製品の他工単が
+    # より早い日付を持つ場合はそちらまで遡る（前順位の実績控除漏れを防ぐ）。
+    line_min_res = await db.execute(
+        select(func.min(ScheduleDetail.schedule_date))
+        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+        .where(
+            ProductionSchedule.line_id == ps.line_id,
+            func.trim(func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
+        )
+    )
+    line_min_d = line_min_res.scalar_one_or_none()
     lookback_d = min_d
+    if line_min_d is not None and line_min_d < lookback_d:
+        lookback_d = line_min_d
+    forced_start = getattr(ps, "forced_start_date", None)
 
     machine_cd_norm = (machine.machine_cd or "").strip() if machine is not None else ""
     machine_name_norm = (machine.machine_name or "").strip() if machine is not None else ""
@@ -3284,7 +3728,6 @@ async def _sync_actual_from_stock_logs(
         .where(
             ProductionSchedule.line_id == ps.line_id,
             sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
-            ScheduleDetail.schedule_date >= lookback_d,
             ScheduleDetail.schedule_date <= max_d,
             ScheduleDetail.schedule_id != ps.id,
             prior_cond,
@@ -3306,7 +3749,6 @@ async def _sync_actual_from_stock_logs(
         .where(
             ProductionSchedule.line_id == ps.line_id,
             sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
-            ScheduleDetail.schedule_date >= lookback_d,
             ScheduleDetail.schedule_date <= max_d,
             ScheduleDetail.schedule_id != ps.id,
             prior_cond,
@@ -3319,16 +3761,31 @@ async def _sync_actual_from_stock_logs(
             continue
         prior_defect_by_date[d0] = int(q0 or 0)
 
+    details_to_drop: list[ScheduleDetail] = []
     for det in details:
-        raw_actual = actual_by_date.get(det.schedule_date, 0)
-        raw_defect = defect_by_date.get(det.schedule_date, 0)
-        already_assigned = prior_assigned_by_date.get(det.schedule_date, 0)
-        already_defect = prior_defect_by_date.get(det.schedule_date, 0)
+        dte = det.schedule_date
+        if forced_start is not None and dte < forced_start:
+            details_to_drop.append(det)
+            continue
+
+        raw_actual = actual_by_date.get(dte, 0)
+        raw_defect = defect_by_date.get(dte, 0)
+        already_assigned = prior_assigned_by_date.get(dte, 0)
+        already_defect = prior_defect_by_date.get(dte, 0)
         actual = max(0, raw_actual - already_assigned)
         defect = max(0, raw_defect - already_defect)
+
+        owner_id = await _schedule_id_owning_actual_on_date(db, ps.line_id, product_cd_norm, dte)
+        if owner_id is not None and int(owner_id) != int(ps.id):
+            actual = 0
+            defect = 0
+
         det.actual_qty = actual
         det.defect_qty = defect
         det.remaining_qty = int(det.planned_qty or 0) - int(actual) - int(defect)
+
+    for det in details_to_drop:
+        await db.delete(det)
 
 
 async def _schedule_has_actual(db: AsyncSession, schedule_id: int) -> bool:

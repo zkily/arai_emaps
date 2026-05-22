@@ -583,10 +583,15 @@ async def run_engine(
     old_defect_by_date: Dict[date, int] = defaultdict(int)
     # 同一日の行が複数ある異常データでも uk_schedule_date 違反にならないよう日付で集約する。
     old_rows_map: Dict[date, tuple[int, int, int]] = {}
+    forced_start_floor = getattr(ps, "forced_start_date", None)
+
     for od in old_details:
         old_actual_by_date[od.schedule_date] += int(od.actual_qty or 0)
         old_defect_by_date[od.schedule_date] += int(getattr(od, "defect_qty", 0) or 0)
         if od.schedule_date < start:
+            # 開始日指定より前の日付は、誤って同期された実績・計画を引き継がない。
+            if forced_start_floor is not None and od.schedule_date < forced_start_floor:
+                continue
             # 重排起点より前は「実績または不良あり」の履歴のみ保持する。
             # 実績0・不良0の旧 planned/remaining 行を残すと、日別ガントに
             # 「計0/実0/残N」の浮動残数が再出現するため破棄する。
@@ -762,6 +767,9 @@ async def run_engine(
             if placed > 0:
                 oa = int(old_actual_by_date.get(current_date, 0))
                 odg = int(old_defect_by_date.get(current_date, 0))
+                if forced_start_floor is not None and current_date < forced_start_floor:
+                    oa = 0
+                    odg = 0
                 db.add(
                     ScheduleDetail(
                         schedule_id=schedule_id,
