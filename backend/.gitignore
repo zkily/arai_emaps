@@ -1,0 +1,15 @@
+# ローカル仮想環境（リポジトリ外で venv を使う場合は不要）
+venv/
+
+# 実行時ログ（ルート .gitignore の logs/ と併用）
+logs/
+
+# 開発用 TLS（start.py 生成。ルート .gitignore と同様）
+certs/dev-lan.*
+
+# ローカル環境変数
+.env
+
+# Python キャッシュ
+__pycache__/
+*.py[cod]

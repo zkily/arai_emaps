@@ -67,6 +67,7 @@ Smart-EMAPs/
 │   │   └── main.py            # アプリケーションエントリーポイント
 │   ├── database/              # データベース初期化スクリプト + 番号付きマイグレーション SQL
 │   ├── data/                  # ファイル監視の永続フラグ等
+│   ├── README.md              # バックエンド構成・モジュール一覧
 │   ├── pyproject.toml         # Black / isort / mypy / pytest 統一設定
 │   ├── .flake8                # Flake8 設定（Black 互換）
 │   ├── requirements.txt       # Python 依存関係

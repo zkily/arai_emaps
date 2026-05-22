@@ -2,33 +2,34 @@
 マスタ管理モジュール（製品マスタ・材料マスタ等）
 """
 from fastapi import APIRouter
-from app.modules.master.api import router as product_router
-from app.modules.master.api_material import router as material_router
-from app.modules.master.api_supplier import router as supplier_router
-from app.modules.master.api_process_route import router as process_route_router
-from app.modules.master.api_process import router as process_router
-from app.modules.master.api_destination import router as destination_router
-from app.modules.master.api_customer import router as customer_router
-from app.modules.master.api_carrier import router as carrier_router
-from app.modules.master.api_machine import router as machine_router
-from app.modules.master.api_product_route_steps import router as product_route_steps_router
-from app.modules.master.api_product_process_bom import router as product_process_bom_router
-from app.modules.master.api_product_machine_config import router as product_machine_config_router
-from app.modules.master.api_equipment_efficiency import router as equipment_efficiency_router
-from app.modules.master.api_options import router as options_router
-from app.modules.master.api_product_bom import router as product_bom_router
-from app.modules.master.api_product_process_unit_price import router as product_unit_price_router
-from app.modules.master.api_process_processing_fee import router as process_processing_fee_router
-from app.modules.master.api_process_defect_item import router as process_defect_item_router
-from app.modules.master.api_part_master import router as part_master_router
-from app.modules.master.api_product_cost_snapshot import router as product_cost_snapshot_router
-from app.modules.master.api_roller_bom import router as roller_bom_router
-from app.modules.master.api_roller_master import router as roller_master_router
-from app.modules.master.api_roller_usage import (
-    status_router as roller_usage_status_router,
-    log_router as roller_usage_log_router,
+
+from app.modules.master.routers.api import router as product_router
+from app.modules.master.routers.api_carrier import router as carrier_router
+from app.modules.master.routers.api_customer import router as customer_router
+from app.modules.master.routers.api_destination import router as destination_router
+from app.modules.master.routers.api_equipment_efficiency import router as equipment_efficiency_router
+from app.modules.master.routers.api_machine import router as machine_router
+from app.modules.master.routers.api_material import router as material_router
+from app.modules.master.routers.api_options import router as options_router
+from app.modules.master.routers.api_part_master import router as part_master_router
+from app.modules.master.routers.api_process import router as process_router
+from app.modules.master.routers.api_process_defect_item import router as process_defect_item_router
+from app.modules.master.routers.api_process_processing_fee import router as process_processing_fee_router
+from app.modules.master.routers.api_process_route import router as process_route_router
+from app.modules.master.routers.api_product_bom import router as product_bom_router
+from app.modules.master.routers.api_product_cost_snapshot import router as product_cost_snapshot_router
+from app.modules.master.routers.api_product_machine_config import router as product_machine_config_router
+from app.modules.master.routers.api_product_process_bom import router as product_process_bom_router
+from app.modules.master.routers.api_product_process_unit_price import router as product_unit_price_router
+from app.modules.master.routers.api_product_route_steps import router as product_route_steps_router
+from app.modules.master.routers.api_roller_bom import router as roller_bom_router
+from app.modules.master.routers.api_roller_master import router as roller_master_router
+from app.modules.master.routers.api_roller_usage import (
     action_router as roller_usage_action_router,
+    log_router as roller_usage_log_router,
+    status_router as roller_usage_status_router,
 )
+from app.modules.master.routers.api_supplier import router as supplier_router
 
 router = APIRouter()
 router.include_router(options_router, prefix="/options", tags=["マスタオプション"])
