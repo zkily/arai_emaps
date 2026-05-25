@@ -324,6 +324,82 @@ class StockService:
 
 # ---------- MaterialService: 材料日志 → material_logs ----------
 
+# material_logs 列長（02_baseline / マイグレーション 17 と一致）
+_MATERIAL_LOG_STR_LIMITS: dict[str, int] = {
+    "item": 100,
+    "log_time": 20,
+    "hd_no": 50,
+    "remarks": 500,
+    "material_cd": 50,
+    "material_name": 200,
+    "process_cd": 50,
+    # 既定 100（baseline）。17 番マイグレーション適用後は config で 255 に拡張可
+    "manufacture_no": 100,
+    "length": 50,
+    "supplier": 200,
+    "material_quality": 100,
+    "note": 500,
+}
+
+
+def _clamp_material_str(value, max_len: int) -> str:
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if len(s) <= max_len:
+        return s
+    return s[:max_len]
+
+
+def _material_manufacture_no_max_len() -> int:
+    try:
+        return max(1, int(getattr(settings, "MATERIAL_LOG_MANUFACTURE_NO_MAX", 100)))
+    except (TypeError, ValueError):
+        return 100
+
+
+def _normalize_manufacture_no(raw) -> str:
+    """CSV 製造番号を DB 向けに正規化（指数表記・小数 → 整数文字列、列長で切り詰め）"""
+    if raw is None:
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    if "." in s or "e" in s.lower():
+        try:
+            s = str(float(s)).split(".")[0]
+        except (ValueError, TypeError):
+            pass
+    return _clamp_material_str(s, _material_manufacture_no_max_len())
+
+
+def _sanitize_material_log_record(record: dict) -> int:
+    """INSERT 前に文字列列を切り詰め。戻り値は切り詰めたフィールド数。"""
+    n = 0
+    m_no_limits = {**_MATERIAL_LOG_STR_LIMITS, "manufacture_no": _material_manufacture_no_max_len()}
+    for field, max_len in m_no_limits.items():
+        if field == "manufacture_no":
+            continue
+        if field not in record:
+            continue
+        val = record.get(field)
+        if val is None or not isinstance(val, str):
+            continue
+        clipped = _clamp_material_str(val, max_len)
+        if clipped != val:
+            record[field] = clipped
+            n += 1
+    m_no = _normalize_manufacture_no(record.get("manufacture_no"))
+    if m_no != (record.get("manufacture_no") or ""):
+        record["manufacture_no"] = m_no
+        n += 1
+    record["log_time"] = normalize_time_str(record.get("log_time"))
+    t_clipped = _clamp_material_str(record["log_time"], _MATERIAL_LOG_STR_LIMITS["log_time"])
+    if t_clipped != record["log_time"]:
+        record["log_time"] = t_clipped
+        n += 1
+    return n
+
 
 def _log_time_key_for_material_sync(t) -> str:
     """DB / CSV の時刻を material_logs 突合用キーに正規化（HH:MM:SS）"""
@@ -526,11 +602,20 @@ class MaterialService:
                     d["note"] = key
                     unique_map[key] = d
             final_list = list(unique_map.values())
+            truncated_fields = 0
             for d in final_list:
                 if d.get("log_date") == "":
                     d["log_date"] = "1970-01-01"
                 if d.get("manufacture_date") == "":
                     d["manufacture_date"] = None
+                truncated_fields += _sanitize_material_log_record(d)
+            if truncated_fields > 0:
+                logger.warning(
+                    "⚠️ [Material] %s: %s フィールドを列長に合わせて切り詰め（manufacture_no 上限 %s）",
+                    filename,
+                    truncated_fields,
+                    _material_manufacture_no_max_len(),
+                )
             insert_sql = """
                 INSERT INTO material_logs (
                     item, log_date, log_time, hd_no, remarks,
@@ -589,12 +674,7 @@ class MaterialService:
                 "note": "",
             }
             if "Nagoya" in filename:
-                m_no = row[5]
-                try:
-                    if m_no and "." in m_no:
-                        m_no = str(float(m_no)).split(".")[0]
-                except Exception:
-                    pass
+                m_no = _normalize_manufacture_no(row[5] if len(row) > 5 else "")
                 base.update(
                     {
                         "material_cd": "10040",
@@ -613,7 +693,7 @@ class MaterialService:
                 base.update(
                     {
                         "material_cd": "10087",
-                        "manufacture_no": row[5],
+                        "manufacture_no": _normalize_manufacture_no(row[5] if len(row) > 5 else ""),
                         "manufacture_date": base["log_date"],
                         "pieces_per_bundle": 250,
                         "length": "4730",
@@ -641,7 +721,7 @@ class MaterialService:
                 base.update(
                     {
                         "material_cd": "",
-                        "manufacture_no": row[6] if len(row) > 6 else "",
+                        "manufacture_no": _normalize_manufacture_no(row[6] if len(row) > 6 else ""),
                         "manufacture_date": base["log_date"],
                         "pieces_per_bundle": pieces,
                         "length": str(length),
@@ -655,7 +735,7 @@ class MaterialService:
             elif "Maruiti" in filename:
                 col6 = row[5]
                 m_cd = col6[32:35] if len(col6) >= 35 else ""
-                m_no = col6[0:8] if len(col6) >= 8 else ""
+                m_no = _normalize_manufacture_no(col6[0:8] if len(col6) >= 8 else "")
                 pieces = (
                     int(col6[66:69])
                     if len(col6) >= 69 and col6[66:69].isdigit()

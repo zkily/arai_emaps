@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     FILE_WATCH_STOCK_INSERT_BATCH: int = 2000
     # 在庫 CSV 同期: 本日を含む直近 N 日のみ DELETE 後 INSERT（0=従来どおり source_file 全削除）
     FILE_WATCH_STOCK_REPLACE_DAYS: int = 7
+    # material_logs.manufacture_no 取込時の最大文字数（DB が varchar(255) なら 255）
+    MATERIAL_LOG_MANUFACTURE_NO_MAX: int = 100
     FILE_WATCH_INSPECTION_EXCEL_PATH: str = ""  # 検査管理指標 Excel のフルパス
     # 材料切断ログ CSV（material_cutting_logs 取込・監視）。空なら FILE_WATCH_BASE_PATH/materialCutting.csv
     MATERIAL_CUTTING_CSV_PATH: str = ""
