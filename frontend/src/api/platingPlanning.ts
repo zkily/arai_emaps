@@ -18,6 +18,10 @@ export interface PlatingDraftItemBody {
 /** 第④看板 1 枠（POST/PUT 写入；plan_date / draft_version_no 由服务端填） */
 export interface PlatingBoardCardBody {
   work_date?: string | null
+  /** 当該周目的日历日（跨日计划） */
+  lap_work_date?: string | null
+  lap_start_time?: string | null
+  lap_end_time?: string | null
   lap_no: number
   turn_seq: number
   product_cd: string
@@ -34,7 +38,11 @@ export interface PlatingDraftBody {
   plan_date: string
   daily_minutes: number
   jigs_per_lap: number
+  /** ボード段数（周目数） */
+  max_laps: number
   minutes_per_lap: number
+  /** ボード第1段開始時刻 HH:mm */
+  board_start_time?: string | null
   total_slots: number
   used_slots: number
   remain_slots: number

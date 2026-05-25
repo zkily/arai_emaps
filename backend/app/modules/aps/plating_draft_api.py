@@ -37,6 +37,9 @@ class PlatingBoardCardBody(BaseModel):
     """第④看板 1 枠；plan_date / draft_version_no 由服务端写入"""
 
     work_date: Optional[date] = None
+    lap_work_date: Optional[date] = None
+    lap_start_time: Optional[str] = None
+    lap_end_time: Optional[str] = None
     lap_no: int = 0
     turn_seq: int = 0
     product_cd: str = ""
@@ -53,7 +56,9 @@ class PlatingDraftBody(BaseModel):
     plan_date: date
     daily_minutes: int = 600
     jigs_per_lap: int = 100
+    max_laps: int = 1
     minutes_per_lap: int = 100
+    board_start_time: Optional[str] = Field(None, description="ボード第1段開始 HH:mm")
     total_slots: int = 0
     used_slots: int = 0
     remain_slots: int = 0
@@ -89,7 +94,9 @@ class PlatingDraftOut(BaseModel):
     status: str
     daily_minutes: int
     jigs_per_lap: int
+    max_laps: int
     minutes_per_lap: int
+    board_start_time: Optional[str] = None
     total_slots: int
     used_slots: int
     remain_slots: int
@@ -157,6 +164,7 @@ async def _load_board_cards(
             )
         )
     q = q.order_by(
+        ApsPlatingPlanBoardCard.lap_work_date.asc(),
         ApsPlatingPlanBoardCard.lap_no.asc(),
         ApsPlatingPlanBoardCard.turn_seq.asc(),
         ApsPlatingPlanBoardCard.id.asc(),
@@ -166,7 +174,15 @@ async def _load_board_cards(
 
 def _board_cards_to_out(cards: List[ApsPlatingPlanBoardCard]) -> List[PlatingBoardCardOut]:
     out: List[PlatingBoardCardOut] = []
-    for c in sorted(cards, key=lambda x: (int(x.lap_no or 0), int(x.turn_seq or 0), int(x.id or 0))):
+    for c in sorted(
+        cards,
+        key=lambda x: (
+            x.lap_work_date or x.work_date or x.plan_date,
+            int(x.lap_no or 0),
+            int(x.turn_seq or 0),
+            int(x.id or 0),
+        ),
+    ):
         out.append(
             PlatingBoardCardOut(
                 id=int(c.id),
@@ -174,6 +190,9 @@ def _board_cards_to_out(cards: List[ApsPlatingPlanBoardCard]) -> List[PlatingBoa
                 plan_date=c.plan_date,
                 draft_version_no=int(c.draft_version_no or 1),
                 work_date=c.work_date,
+                lap_work_date=c.lap_work_date,
+                lap_start_time=(c.lap_start_time or "").strip() or None,
+                lap_end_time=(c.lap_end_time or "").strip() or None,
                 lap_no=int(c.lap_no or 0),
                 turn_seq=int(c.turn_seq or 0),
                 product_cd=c.product_cd or "",
@@ -202,7 +221,9 @@ def _to_out(
         status=row.status or "draft",
         daily_minutes=int(row.daily_minutes or 0),
         jigs_per_lap=int(row.jigs_per_lap or 0),
+        max_laps=int(row.max_laps or 1),
         minutes_per_lap=int(row.minutes_per_lap or 0),
+        board_start_time=(row.board_start_time or "").strip() or None,
         total_slots=int(row.total_slots or 0),
         used_slots=int(row.used_slots or 0),
         remain_slots=int(row.remain_slots or 0),
@@ -246,6 +267,9 @@ async def _replace_board_cards(
                 plan_date=plan_d,
                 draft_version_no=int(draft_version_no or 1),
                 work_date=bc.work_date,
+                lap_work_date=bc.lap_work_date,
+                lap_start_time=(bc.lap_start_time or "").strip() or None,
+                lap_end_time=(bc.lap_end_time or "").strip() or None,
                 lap_no=int(bc.lap_no or 0),
                 turn_seq=int(bc.turn_seq or 0),
                 product_cd=(bc.product_cd or "").strip() or "",
@@ -277,7 +301,9 @@ async def create_plating_draft(
         status="draft",
         daily_minutes=body.daily_minutes,
         jigs_per_lap=body.jigs_per_lap,
+        max_laps=max(1, int(body.max_laps or 1)),
         minutes_per_lap=body.minutes_per_lap,
+        board_start_time=(body.board_start_time or "").strip() or None,
         total_slots=body.total_slots,
         used_slots=body.used_slots,
         remain_slots=body.remain_slots,
@@ -328,10 +354,13 @@ async def update_plating_draft(
     row = await db.get(ApsPlatingPlanDraft, draft_id)
     if row is None:
         raise HTTPException(404, "草稿不存在")
-    row.plan_date = body.plan_date
+    # plan_date は (plan_date, version_no) UK のため更新しない（ボードの計画日は lap_work_date で表現）
+    plan_d = row.plan_date
     row.daily_minutes = body.daily_minutes
     row.jigs_per_lap = body.jigs_per_lap
+    row.max_laps = max(1, int(body.max_laps or 1))
     row.minutes_per_lap = body.minutes_per_lap
+    row.board_start_time = (body.board_start_time or "").strip() or None
     row.total_slots = body.total_slots
     row.used_slots = body.used_slots
     row.remain_slots = body.remain_slots
@@ -357,7 +386,7 @@ async def update_plating_draft(
     await db.flush()
     ver = int(row.version_no or 1)
     if body.board_cards is not None:
-        await _replace_board_cards(db, draft_id, body.plan_date, ver, body.board_cards)
+        await _replace_board_cards(db, draft_id, plan_d, ver, body.board_cards)
     q = (
         select(ApsPlatingPlanDraft)
         .options(

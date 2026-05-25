@@ -3,20 +3,292 @@
     <header class="page-header">
       <h1 class="page-title">メッキ計画作成（作成中）</h1>
       <nav class="page-flow" aria-label="作業手順">
-        <span class="flow-i">① 在庫</span>
+        <span class="flow-i">① 投入ボード</span>
         <span class="flow-dot" />
-        <span class="flow-i">② 下書き</span>
-        <span class="flow-dot" />
-        <span class="flow-i">③ 投入ボード</span>
+        <span class="flow-i">② 在庫</span>
       </nav>
     </header>
+
+    <el-card shadow="never" class="pp-card pp-card--jig">
+      <template #header>
+        <div class="section-head-row">
+          <span class="pp-card-title">メッキ治具</span>
+          <div class="toolbar-inline">
+            <el-form-item label="作業日" class="mb-0 pp-form-compact">
+              <el-date-picker
+                v-model="draftWorkDate"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="作業日を選択"
+                size="small"
+                class="pp-date"
+              />
+            </el-form-item>
+            <el-button size="small" @click="void loadJigAvailability()">再読込</el-button>
+            <el-button type="primary" size="small" :loading="savingJigAvailability" @click="saveJigAvailabilityForm">
+              保存
+            </el-button>
+          </div>
+        </div>
+      </template>
+      <div class="jig-card-meta">
+        <span class="jig-meta-pill">作業日：{{ draftWorkDate || '—' }}</span>
+        <span class="jig-meta-pill">対象治具：{{ jigAvailabilityRows.length }} 件</span>
+        <span class="jig-meta-pill jig-meta-pill--hint">使用可能本数は設備マスタ（available_qty）と連携</span>
+      </div>
+      <div v-loading="loadingJigAvailability" class="jig-card-list-wrap">
+        <div class="jig-card-list">
+          <div
+            v-for="row in jigAvailabilityRows"
+            :key="row.plating_machine"
+            class="jig-pick-card"
+            draggable="true"
+            :title="`${row.plating_machine}・使用可能${Math.max(0, Math.floor(Number(row.available_qty) || 0))}本・①ボードへドラッグで投入`"
+            @dragstart="onJigCardDragStart($event, row)"
+            @dragend="onJigCardDragEnd"
+          >
+            <span class="jig-pick-card__label">{{ formatJigPickLabel(row) }}</span>
+          </div>
+        </div>
+        <p v-if="!loadingJigAvailability && jigAvailabilityRows.length === 0" class="jig-card-list-empty">
+          データがありません
+        </p>
+        <p v-else-if="jigAvailabilityRows.length > 0" class="jig-card-list-hint">
+          カードを①メッキ投入スケジュールボードへドラッグし、本数を指定して投入
+        </p>
+      </div>
+    </el-card>
+
+    <el-card shadow="never" class="pp-card pp-card--board">
+      <template #header>
+        <div class="section-head-row">
+          <span class="pp-card-title">① メッキ投入スケジュールボード</span>
+          <div class="toolbar-inline">
+            <el-button type="primary" size="small" @click="openAppendLayoutDialog">
+              追加レイアウト
+            </el-button>
+            <el-button size="small" :disabled="!canUseLapCopy" @click="openLapCopyDialog">周目コピー</el-button>
+            <el-button size="small" @click="clearSchedule">ボードをクリア</el-button>
+            <el-button
+              size="small"
+              type="info"
+              plain
+              :icon="Printer"
+              :disabled="!hasPrintableScheduleRows"
+              @click="printScheduleBoard"
+            >
+              印刷
+            </el-button>
+            <span class="board-legend">オレンジ枠＝標準配置から変更</span>
+          </div>
+        </div>
+      </template>
+
+      <div class="board-cond-banner board-cond-banner--view-range">
+        <span class="board-cond-label">表示期間</span>
+        <span class="board-cond-val"><strong>{{ boardViewRangeLabel }}</strong></span>
+        <span class="board-cond-sep">（本日-2日〜+3日）</span>
+      </div>
+      <div v-if="layoutBoardReady" class="board-cond-banner">
+        <span class="board-cond-label">レイアウト</span>
+        <span class="board-cond-val">計画 <strong>{{ layoutBlocksSummary }}</strong></span>
+        <span class="board-cond-sep">／</span>
+        <span class="board-cond-val">1周 <strong>{{ layoutJigsPerLap }}</strong> 本</span>
+        <span class="board-cond-sep">／</span>
+        <span class="board-cond-val">計 <strong>{{ layoutMaxLaps }}</strong> 周</span>
+        <span class="board-cond-sep">／</span>
+        <span class="board-cond-hint">②の製品を治具枠へドラッグで割当・枠内ドラッグで並べ替え</span>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">総枠数</span>
+          <span class="kpi-chip-v">{{ kpi.totalSlots }}</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">使用中</span>
+          <span class="kpi-chip-v">{{ kpi.usedSlots }}</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">空き枠</span>
+          <span class="kpi-chip-v">{{ kpi.remainSlots }}</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">充填率</span>
+          <span class="kpi-chip-v">{{ kpi.utilizationPct }}%</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">見込み時間（分）</span>
+          <span class="kpi-chip-v">{{ kpi.estimatedMinutes }}</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">割当枠数</span>
+          <span class="kpi-chip-v">{{ scheduleCards.length }}</span>
+        </div>
+        <div class="kpi-chip">
+          <span class="kpi-chip-l">計画数量</span>
+          <span class="kpi-chip-v">{{ kpi.totalPlannedQty }}</span>
+        </div>
+      </div>
+
+      <div
+        class="lap-board"
+        :class="{ 'lap-board--jig-drop': jigBoardDragActive }"
+        @dragover.prevent="onJigToBoardDragOver"
+        @dragleave="onJigToBoardDragLeave"
+        @drop.prevent="onJigToBoardDrop($event)"
+      >
+        <template v-if="lapBoardDisplayRows.length > 0">
+          <div class="lap-board-outer">
+            <div class="lap-board-layout">
+              <div class="lap-board-row lap-board-row--head">
+                <div class="lap-rail-cell lap-rail-head">周</div>
+                <div class="lap-board-grid lap-board-head" :style="lapBoardColsGridStyle">
+                  <div v-for="h in lapColumnHeaders" :key="h.i" class="lap-col-head">
+                    <span class="lap-col-head-n">{{ h.i }}</span>
+                    <span class="lap-col-head-s">本</span>
+                  </div>
+                </div>
+              </div>
+              <template v-for="item in lapBoardDisplayRows" :key="item.key">
+                <div
+                  v-if="item.kind === 'date'"
+                  class="lap-board-row lap-board-row--date"
+                >
+                  <div class="lap-rail-cell lap-rail-date">{{ item.dateLabel }}</div>
+                  <div
+                    class="lap-board-grid lap-board-date-row lap-date-scroll-row"
+                    :style="lapBoardColsGridStyle"
+                  >
+                    <div class="lap-date-band-scroll" />
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="lap-board-row lap-board-row--lap"
+                  :class="{ 'lap-board-row--jig-drop': jigDropHoverLap === item.row.lap_no }"
+                >
+                  <div
+                    class="lap-rail-cell lap-rail-lap"
+                    :class="{ 'lap-rail-lap--jig-drop': jigDropHoverLap === item.row.lap_no }"
+                  >
+                    <span class="lap-label-no">第{{ item.row.lap_display_no }}周目</span>
+                    <span v-if="lapTimeRangeLabel(item.row.lap_no)" class="lap-label-time">{{
+                      lapTimeRangeLabel(item.row.lap_no)
+                    }}</span>
+                  </div>
+                  <div
+                    class="lap-board-grid lap-board-body-row lap-board-body-row--lap"
+                    :style="lapBoardColsGridStyle"
+                    :data-lap-no="String(item.row.lap_no)"
+                    @dragover.prevent.stop="onJigToBoardDragOver($event, item.row.lap_no)"
+                    @drop.prevent.stop="onJigToBoardDrop($event, item.row.lap_no)"
+                  >
+              <!-- 割当後：同一周内で隣列かつ同一品番の枠を横方向に結合表示（製品名・本数） -->
+              <template v-if="item.row.mergedLeft != null">
+                <div class="lap-merged-host" :style="innerMergedGridStyle">
+                  <div
+                    v-for="ms in item.row.mergedLeft"
+                    :key="ms.key"
+                    class="lap-merged-seg"
+                    :class="[
+                      'sched-color-' + schedColorIndexForProductCd(ms.product_cd),
+                      ms.boardMark === 'manual' ? 'lap-merged-seg--manual' : ms.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
+                      isJigProductCd(ms.product_cd) ? 'lap-merged-seg--board-draggable' : '',
+                      draggingInventoryRow && isJigProductCd(ms.product_cd) ? 'lap-merged-seg--product-drop' : '',
+                      productDropHoverBlockKey === ms.key ? 'lap-merged-seg--product-drop-hover' : '',
+                    ]"
+                    :style="{ gridColumn: `${ms.startCol} / span ${ms.span}`, gridRow: '1' }"
+                    :data-block-ids="ms.cardIds.join(',')"
+                    @dragover.prevent.stop="onProductToJigBlockDragOver($event, ms)"
+                    @dragleave.stop="onProductToJigBlockDragLeave"
+                    @drop.prevent.stop="onProductToJigBlockDrop($event, ms, item.row.lap_no)"
+                    @dblclick.stop="onBoardMergedSegDblClick(ms, item.row.lap_no)"
+                  >
+                    <div class="lap-merged-label-stack" :title="boardMergedSegTitle(ms)">
+                      <span class="lap-merged-text lap-merged-text--jig">{{
+                        formatPlatingBoardLabel(ms.plating_machine, ms.span)
+                      }}</span>
+                      <span v-if="formatJigBlockProductCalc(ms)" class="lap-merged-text lap-merged-text--calc">{{
+                        formatJigBlockProductCalc(ms)
+                      }}</span>
+                    </div>
+                  </div>
+                  <div
+                    v-if="(item.row.mergedTail?.length ?? 0) > 0"
+                    class="lap-merged-tail"
+                    :style="{ gridColumn: `${lapBoardColCount} / span 1`, gridRow: '1' }"
+                  >
+                    <div
+                      v-for="tc in item.row.mergedTail"
+                      :key="tc.id"
+                      class="lap-merged-tail-item"
+                      :class="[
+                        'sched-color-' + schedColorIndexForProductCd(tc.product_cd),
+                        tc.boardMark === 'manual' ? 'lap-merged-seg--manual' : tc.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
+                        isJigProductCd(tc.product_cd) ? 'lap-merged-seg--board-draggable' : '',
+                      ]"
+                      :data-card-id="tc.id"
+                      @dblclick.stop="onBoardScheduleCardDblClick(tc)"
+                    >
+                      <span
+                        class="lap-merged-text"
+                        :title="boardTailCardTitle(tc)"
+                      >{{ formatPlatingBoardLabel(tc.product_name, 1) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <div
+                  v-for="(cell, ci) in item.row.cells"
+                  :key="`${item.row.lap_no}-${ci}`"
+                  class="lap-col"
+                  :class="{ 'lap-col--empty': cell.segments.length === 0 }"
+                >
+                  <div class="lap-track lap-track--grid" :data-lap-no="item.row.lap_no">
+                    <div
+                      v-for="seg in cell.segments"
+                      :key="`${item.row.lap_no}-${ci}-${seg.key}`"
+                      class="lap-segment lap-segment--cell"
+                      :class="[
+                        'sched-color-' + schedColorIndexForProductCd(seg.product_cd),
+                        seg.boardMark === 'manual' ? 'lap-segment--manual' : seg.boardMark === 'rush' ? 'lap-segment--rush' : '',
+                      ]"
+                      :data-seg-key="seg.key"
+                      :style="{ flex: seg.slotCount }"
+                    >
+                      <span
+                        class="lap-segment-text"
+                        :title="`${seg.plating_machine}・治具1本`"
+                      >{{ formatPlatingBoardLabel(seg.product_name, 1) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        <div v-else class="board-empty">
+          {{
+            layoutBoardReady
+              ? 'メッキ治具カードをここへドラッグして本数を指定してください'
+              : `「追加レイアウト」で計画日と段数を指定してください（表示：${boardViewRangeLabel}）`
+          }}
+        </div>
+      </div>
+    </el-card>
 
     <el-card shadow="never" class="pp-card pp-card--summary">
       <template #header>
         <div class="section-head-row">
-          <span class="pp-card-title pp-card-title--summary">① メッキ前在庫／見込数量（基準日は各ペインで指定）</span>
+          <span class="pp-card-title pp-card-title--summary">② メッキ前在庫／見込数量（基準日は各ペインで指定）</span>
         </div>
       </template>
+      <p class="summary-drag-hint">行を①の治具枠（例：J曲3段 (20)）へドラッグすると製品を割当し、生産数を表示します</p>
 
       <el-row :gutter="10" class="pair-row">
         <el-col :xs="24" :md="12" class="summary-col summary-col--left">
@@ -116,150 +388,184 @@
       </el-row>
     </el-card>
 
-    <el-card shadow="never" class="pp-card pp-card--draft">
-      <template #header>
-        <div class="section-head-row">
-          <div class="draft-head-main">
-            <span class="pp-card-title">② 下書き（ドラッグで登録）</span>
-            <span class="draft-head-hint">ドラッグ＆ドロップで行を追加</span>
-          </div>
-          <div class="toolbar-inline">
-            <el-form-item label="作業日" class="mb-0 pp-form-compact">
-              <el-date-picker
-                v-model="draftWorkDate"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="作業日を選択"
-                size="small"
-                class="pp-date"
-              />
-            </el-form-item>
-            <el-button size="small" @click="openJigAvailabilityDialog">治具使用数設定</el-button>
-          </div>
+    <el-dialog
+      v-model="jigDropDialogVisible"
+      title="治具投入数量"
+      width="420px"
+      class="jig-drop-dialog"
+      destroy-on-close
+      @closed="resetJigDropDialog"
+    >
+      <template v-if="jigDropPending">
+        <p class="jig-drop-dialog-name">{{ jigDropPending.plating_machine }}</p>
+        <div class="jig-drop-dialog-meta">
+          <span class="jig-meta-pill">第{{ lapDisplayNo(jigDropPending.target_lap) }}周目</span>
+          <span class="jig-meta-pill">当該周 使用可能 {{ jigDropPending.available_max }} 本</span>
+          <span class="jig-meta-pill">当該周 配置済 {{ jigDropPending.used_on_board }} 本</span>
+          <span class="jig-meta-pill">今回最大 {{ jigDropQtyMax }} 本</span>
         </div>
+        <p class="jig-drop-dialog-hint">
+          第{{ lapDisplayNo(jigDropPending.target_lap) }}周目の空き枠へ順に配置します（他周目は別枠で再計算・例：20 本 → 当該周の 1〜20 本目）
+        </p>
+        <el-form-item label="投入本数" class="jig-drop-qty-item">
+          <el-input-number
+            v-model="jigDropQty"
+            :min="1"
+            :max="jigDropQtyMax"
+            :step="1"
+            controls-position="right"
+            class="pp-input-num"
+          />
+        </el-form-item>
       </template>
-      <div class="draft-wrap">
-        <div class="draft-toolbar" @dragover.prevent @drop.prevent="onDropToDraftTarget">
-          <span class="draft-toolbar-title">下書き一覧</span>
-          <span class="draft-toolbar-meta">{{ draftItems.length }} 件</span>
-        </div>
-        <div class="draft-stat-grid">
-          <div class="draft-stat-card">
-            <span class="draft-stat-label">行数</span>
-            <span class="draft-stat-value">{{ draftStats.rowCount }}</span>
-          </div>
-          <div class="draft-stat-card">
-            <span class="draft-stat-label">生産数合計</span>
-            <span class="draft-stat-value">{{ draftStats.totalQty }}</span>
-          </div>
-          <div class="draft-stat-card">
-            <span class="draft-stat-label">必要治具本数合計</span>
-            <span class="draft-stat-value">{{ draftStats.totalSlots }}</span>
-          </div>
-        </div>
-        <el-table
-          ref="draftTableRef"
-          :data="draftItems"
-          :row-key="(row: DraftItem) => row.uid"
-          border
-          stripe
-          size="small"
-          :height="TABLE_H"
-          empty-text="①の表から行をドラッグしてください"
-          class="pp-table draft-target-table"
-        >
-          <el-table-column label="#" width="52" align="center">
-            <template #default="{ $index }">{{ $index + 1 }}</template>
-          </el-table-column>
-          <el-table-column prop="work_date" label="作業日" width="108" align="center" />
-          <el-table-column label="製品名" min-width="160" show-overflow-tooltip>
-            <template #default="{ row }">
-              <span class="draft-row-drag-handle" :title="row.product_name">{{ row.product_name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="plating_machine" label="メッキ治具" width="120" show-overflow-tooltip />
-          <el-table-column prop="kake" label="掛け数" width="72" align="right" />
-          <el-table-column label="生産数" width="108" align="right">
-            <template #default="{ row }">
-              <div class="qty-cell-edit">
-                <el-input-number
-                  v-if="editingQtyUid === row.uid"
-                  v-model="editingQtyValue"
-                  :min="0"
-                  :step="1"
-                  controls-position="right"
-                  size="small"
-                  @keydown.enter.prevent="commitQtyEdit(row.uid)"
-                  @blur="commitQtyEdit(row.uid)"
-                />
-                <span v-else class="qty-readonly" @dblclick="startQtyEdit(row)">
-                  {{ row.qty }}
-                </span>
-              </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="" width="72" align="center" fixed="right">
-            <template #default="{ row }">
-              <el-button text type="danger" size="small" @click.stop="removeDraftItem(row.uid)">削除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-    </el-card>
-
-    <el-dialog v-model="jigDialogVisible" title="メッキ治具の使用可能本数" width="680px" class="jig-dialog" destroy-on-close>
-      <div class="jig-dialog-meta">
-        <span class="jig-meta-pill">作業日：{{ draftWorkDate || '—' }}</span>
-        <span class="jig-meta-pill">対象治具：{{ jigAvailabilityRows.length }} 件</span>
-      </div>
-      <el-table :data="jigAvailabilityRows" border stripe size="small" max-height="420" class="jig-edit-table">
-        <el-table-column type="index" label="#" width="52" align="center" />
-        <el-table-column prop="plating_machine" label="メッキ治具" min-width="200" show-overflow-tooltip />
-        <el-table-column label="使用可能本数" width="180" align="right">
-          <template #default="{ row, $index }">
-            <el-input-number
-              v-model="row.available_qty"
-              :min="0"
-              :step="1"
-              controls-position="right"
-              style="width: 130px"
-              @keydown.enter.prevent="focusNextJigQtyInput($index)"
-            />
-          </template>
-        </el-table-column>
-      </el-table>
       <template #footer>
-        <el-button @click="jigDialogVisible = false">キャンセル</el-button>
-        <el-button type="primary" :loading="savingJigAvailability" @click="saveJigAvailabilityForm">保存</el-button>
+        <el-button size="small" @click="jigDropDialogVisible = false">キャンセル</el-button>
+        <el-button size="small" type="primary" :disabled="jigDropQtyMax < 1" @click="confirmJigDropToBoard">確定</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="boardJigEditDialogVisible"
+      title="ボード上の治具本数"
+      width="420px"
+      class="jig-drop-dialog"
+      destroy-on-close
+      @closed="resetBoardJigEditDialog"
+    >
+      <template v-if="boardJigEditPending">
+        <p class="jig-drop-dialog-name">{{ boardJigEditPending.plating_machine }}</p>
+        <p class="jig-drop-dialog-hint">第{{ lapDisplayNo(boardJigEditPending.lap_no) }}周目・現在 {{ boardJigEditPending.cardIds.length }} 本</p>
+        <div class="jig-drop-dialog-meta">
+          <span class="jig-meta-pill">当該周 使用可能 {{ getJigAvailMaxFromMaster(boardJigEditPending.plating_machine) }} 本</span>
+          <span class="jig-meta-pill">変更後最大 {{ boardJigEditQtyMax }} 本</span>
+        </div>
+        <el-form-item label="本数" class="jig-drop-qty-item">
+          <el-input-number
+            v-model="boardJigEditQty"
+            :min="1"
+            :max="boardJigEditQtyMax"
+            :step="1"
+            controls-position="right"
+            class="pp-input-num"
+          />
+        </el-form-item>
+      </template>
+      <template #footer>
+        <el-button size="small" @click="boardJigEditDialogVisible = false">キャンセル</el-button>
+        <el-button size="small" type="primary" :disabled="boardJigEditQtyMax < 1" @click="confirmBoardJigQtyEdit">
+          確定
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="lapCopyDialogVisible"
+      title="周目データのコピー"
+      width="440px"
+      class="tpl-dialog lap-copy-dialog"
+      destroy-on-close
+    >
+      <p class="tpl-dialog-hint">指定した周目の割当を別の周目へ複製します（コピー先の既存データは上書きされます）。</p>
+      <div class="tpl-compact-grid lap-copy-grid">
+        <div class="tpl-field">
+          <div class="tpl-field-label">コピー元</div>
+          <el-select v-model="lapCopyFrom" size="small" class="lap-copy-select">
+            <el-option
+              v-for="opt in lapCopyLapOptions"
+              :key="`from-${opt.value}`"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+        <div class="tpl-field">
+          <div class="tpl-field-label">コピー先</div>
+          <el-select v-model="lapCopyTo" size="small" class="lap-copy-select">
+            <el-option
+              v-for="opt in lapCopyLapOptions"
+              :key="`to-${opt.value}`"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </div>
+      </div>
+      <p class="jig-drop-dialog-hint">
+        第{{ lapDisplayNo(lapCopyFrom) }}周目 → 第{{ lapDisplayNo(lapCopyTo) }}周目（{{ lapCopySourceCount }} 枠を複製）
+      </p>
+      <template #footer>
+        <el-button size="small" @click="lapCopyDialogVisible = false">キャンセル</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :disabled="lapCopyFrom === lapCopyTo || lapCopySourceCount === 0"
+          @click="confirmCopyLapSchedule"
+        >
+          コピー
+        </el-button>
       </template>
     </el-dialog>
 
     <el-dialog
       v-model="templateDialogVisible"
-      title="標準レイアウト"
-      width="400px"
+      title="追加レイアウト"
+      width="520px"
       class="tpl-dialog"
       destroy-on-close
     >
-      <p class="tpl-dialog-hint">空き枠の列数と段数のみ設定します。品番の割り当ては②の「計画に割当」で行います。</p>
-      <div class="tpl-preview-row">
-        <span class="tpl-preview-pill">1周 {{ tplFormJigsPerLap }} 本</span>
-        <span class="tpl-preview-pill">最大 {{ tplFormMaxLaps }} 周</span>
-      </div>
-      <div class="tpl-compact-grid">
+      <p class="tpl-dialog-hint">
+        計画日・開始時刻・段数を指定し、①ボードの<strong>末尾に周目を追加</strong>します（既存の割当は保持）。治具投入はメッキ治具カードをボードへドラッグしてください。
+      </p>
+      <p v-if="layoutBoardReady && layoutMaxLaps > 0" class="tpl-dialog-append-note">
+        現在 {{ layoutMaxLaps }} 周まで表示中。新規追加は各計画日の<strong>第1周目</strong>から（日付ごとに周番号をリセット）。
+      </p>
+      <div class="tpl-compact-grid tpl-compact-grid--schedule">
+        <div class="tpl-field tpl-field--wide">
+          <div class="tpl-field-label">計画日</div>
+          <el-date-picker
+            v-model="tplFormPlanDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="日付を選択"
+            size="small"
+            class="tpl-date"
+          />
+        </div>
+        <div class="tpl-field">
+          <div class="tpl-field-label">開始時刻</div>
+          <el-time-picker
+            v-model="tplFormStartTime"
+            format="HH:mm"
+            value-format="HH:mm"
+            placeholder="開始時刻"
+            size="small"
+            class="tpl-time"
+          />
+        </div>
+        <div class="tpl-field">
+          <div class="tpl-field-label">1段あたり（分）</div>
+          <el-input-number
+            v-model="tplFormMinutesPerLap"
+            :min="1"
+            :max="600"
+            :step="5"
+            controls-position="right"
+            class="pp-input-num tpl-input-num"
+          />
+        </div>
         <div class="tpl-field">
           <div class="tpl-field-label">1周あたりの治具本数（列数）</div>
           <el-input-number
             v-model="tplFormJigsPerLap"
             :min="1"
-            :max="200"
+            :max="300"
             :step="1"
             controls-position="right"
             class="pp-input-num tpl-input-num"
           />
         </div>
         <div class="tpl-field">
-          <div class="tpl-field-label">最大周数（ボード段数）</div>
+          <div class="tpl-field-label">ボード段数</div>
           <el-input-number
             v-model="tplFormMaxLaps"
             :min="1"
@@ -270,170 +576,25 @@
           />
         </div>
       </div>
+      <div v-if="tplLapSchedulePreview.length > 0" class="tpl-schedule-preview">
+        <div class="tpl-schedule-preview-title">各段の予定時刻</div>
+        <el-table :data="tplLapSchedulePreview" size="small" border stripe class="tpl-schedule-table">
+          <el-table-column prop="board_lap_no" label="ボード周" width="64" align="center">
+            <template #default="{ row }">第{{ row.board_lap_no }}周</template>
+          </el-table-column>
+          <el-table-column prop="lap_no" label="追加段" width="56" align="center">
+            <template #default="{ row }">第{{ row.lap_no }}段</template>
+          </el-table-column>
+          <el-table-column prop="work_date_label" label="日付" width="100" align="center" />
+          <el-table-column prop="start" label="開始" width="72" align="center" />
+          <el-table-column prop="end" label="終了" width="72" align="center" />
+        </el-table>
+      </div>
       <template #footer>
         <el-button size="small" @click="templateDialogVisible = false">キャンセル</el-button>
-        <el-button size="small" type="primary" @click="confirmStandardTemplate">確定</el-button>
+        <el-button size="small" type="primary" @click="confirmAppendLayout">追加</el-button>
       </template>
     </el-dialog>
-
-    <el-card shadow="never" class="pp-card pp-card--board">
-      <template #header>
-        <div class="section-head-row">
-          <span class="pp-card-title">③ メッキ投入スケジュールボード</span>
-          <div class="toolbar-inline">
-            <el-button type="primary" size="small" @click="openStandardTemplateDialog">
-              標準レイアウト
-            </el-button>
-            <el-button type="success" size="small" :disabled="!layoutBoardReady || draftItems.length === 0" @click="mergeDraftIntoSchedule">
-              計画に割当
-            </el-button>
-            <el-button size="small" @click="clearSchedule">ボードをクリア</el-button>
-            <el-button
-              size="small"
-              type="info"
-              plain
-              :icon="Printer"
-              :disabled="!hasPrintableScheduleRows"
-              @click="printScheduleBoard"
-            >
-              印刷
-            </el-button>
-            <span class="board-legend">オレンジ枠＝標準配置から変更</span>
-          </div>
-        </div>
-      </template>
-
-      <div v-if="layoutBoardReady" class="board-cond-banner">
-        <span class="board-cond-label">レイアウト条件</span>
-        <span class="board-cond-val">1周 <strong>{{ layoutJigsPerLap }}</strong> 本</span>
-        <span class="board-cond-sep">／</span>
-        <span class="board-cond-val">最大 <strong>{{ layoutMaxLaps }}</strong> 周</span>
-      </div>
-
-      <div class="kpi-grid">
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">総枠数</span>
-          <span class="kpi-chip-v">{{ kpi.totalSlots }}</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">使用中</span>
-          <span class="kpi-chip-v">{{ kpi.usedSlots }}</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">空き枠</span>
-          <span class="kpi-chip-v">{{ kpi.remainSlots }}</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">充填率</span>
-          <span class="kpi-chip-v">{{ kpi.utilizationPct }}%</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">見込み時間（分）</span>
-          <span class="kpi-chip-v">{{ kpi.estimatedMinutes }}</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">割当枠数</span>
-          <span class="kpi-chip-v">{{ scheduleCards.length }}</span>
-        </div>
-        <div class="kpi-chip">
-          <span class="kpi-chip-l">計画数量</span>
-          <span class="kpi-chip-v">{{ kpi.totalPlannedQty }}</span>
-        </div>
-      </div>
-
-      <div class="lap-board">
-        <template v-if="lapGridRows.length > 0">
-          <div class="lap-board-scroll">
-            <div class="lap-board-grid lap-board-head" :style="lapBoardGridStyle">
-              <div class="lap-corner">周</div>
-              <div v-for="h in lapColumnHeaders" :key="h.i" class="lap-col-head">
-                <span class="lap-col-head-n">{{ h.i }}</span>
-                <span class="lap-col-head-s">本</span>
-              </div>
-            </div>
-            <div
-              v-for="row in lapGridRows"
-              :key="row.lap_no"
-              class="lap-board-grid lap-board-body-row"
-              :style="lapBoardGridStyle"
-              :data-lap-no="String(row.lap_no)"
-            >
-              <div class="lap-label">第{{ row.lap_no }}周目</div>
-              <!-- 割当後：同一周内で隣列かつ同一品番の枠を横方向に結合表示（製品名・本数） -->
-              <template v-if="row.mergedLeft != null">
-                <div class="lap-merged-host" :style="innerMergedGridStyle">
-                  <div
-                    v-for="ms in row.mergedLeft"
-                    :key="ms.key"
-                    class="lap-merged-seg"
-                    :class="[
-                      'sched-color-' + schedColorIndexForProductCd(ms.product_cd),
-                      ms.boardMark === 'manual' ? 'lap-merged-seg--manual' : ms.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
-                    ]"
-                    :style="{ gridColumn: `${ms.startCol} / span ${ms.span}`, gridRow: '1' }"
-                  >
-                    <span
-                      class="lap-merged-text"
-                      :title="`${ms.plating_machine}・治具${ms.span}本・生産${ms.slotCount}本`"
-                    >{{ formatPlatingBoardLabel(ms.product_name, ms.span) }}</span>
-                  </div>
-                  <div
-                    v-if="(row.mergedTail?.length ?? 0) > 0"
-                    class="lap-merged-tail"
-                    :style="{ gridColumn: `${lapBoardColCount} / span 1`, gridRow: '1' }"
-                  >
-                    <div
-                      v-for="tc in row.mergedTail"
-                      :key="tc.id"
-                      class="lap-merged-tail-item"
-                      :class="[
-                        'sched-color-' + schedColorIndexForProductCd(tc.product_cd),
-                        tc.boardMark === 'manual' ? 'lap-merged-seg--manual' : tc.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
-                      ]"
-                    >
-                      <span
-                        class="lap-merged-text"
-                        :title="`${tc.plating_machine}・治具1本・生産${tc.qty}本`"
-                      >{{ formatPlatingBoardLabel(tc.product_name, 1) }}</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              <template v-else>
-                <div
-                  v-for="(cell, ci) in row.cells"
-                  :key="`${row.lap_no}-${ci}`"
-                  class="lap-col"
-                  :class="{ 'lap-col--empty': cell.segments.length === 0 }"
-                >
-                  <div class="lap-track lap-track--grid" :data-lap-no="row.lap_no">
-                    <div
-                      v-for="seg in cell.segments"
-                      :key="`${row.lap_no}-${ci}-${seg.key}`"
-                      class="lap-segment lap-segment--cell"
-                      :class="[
-                        'sched-color-' + schedColorIndexForProductCd(seg.product_cd),
-                        seg.boardMark === 'manual' ? 'lap-segment--manual' : seg.boardMark === 'rush' ? 'lap-segment--rush' : '',
-                      ]"
-                      :data-seg-key="seg.key"
-                      :style="{ flex: seg.slotCount }"
-                    >
-                      <span
-                        class="lap-segment-text"
-                        :title="`${seg.plating_machine}・治具1本`"
-                      >{{ formatPlatingBoardLabel(seg.product_name, 1) }}</span>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
-        <div v-else class="board-empty">
-          {{ layoutBoardReady ? '②の「看板に割当」で枠へ割り当てるか、ドラッグで順序を調整してください' : '「標準レイアウト」で1周の本数と表示段数を設定してください' }}
-        </div>
-      </div>
-    </el-card>
   </div>
 </template>
 
@@ -448,7 +609,6 @@ import { getMachineList, updateMachine, type MachineListResponse } from '@/api/m
 import type { MachineItem } from '@/types/master'
 import {
   createPlatingDraft,
-  deletePlatingDraft,
   fetchPlatingDraftById,
   fetchLatestPlatingDraftByDate,
   updatePlatingDraft,
@@ -456,6 +616,7 @@ import {
   type PlatingBoardCardOut,
   type PlatingDraftItemBody,
   type PlatingDraftItemOut,
+  type PlatingDraftOut,
 } from '@/api/platingPlanning'
 
 defineOptions({ name: 'PlatingPlanning' })
@@ -528,6 +689,9 @@ function apiItemToBody(it: PlatingDraftItemOut): PlatingDraftItemBody {
 function apiBoardCardToBody(bc: PlatingBoardCardOut): PlatingBoardCardBody {
   return {
     work_date: bc.work_date ?? null,
+    lap_work_date: bc.lap_work_date ?? null,
+    lap_start_time: bc.lap_start_time ?? null,
+    lap_end_time: bc.lap_end_time ?? null,
     lap_no: bc.lap_no,
     turn_seq: bc.turn_seq,
     product_cd: bc.product_cd,
@@ -551,7 +715,12 @@ interface ScheduleCard {
   kake: number
   qty: number
   slots: number
+  /** ボード表示用の周目（複数日マージ時は通し番号） */
   lap_no: number
+  /** API 保存時の元 lap_no（draft 内） */
+  persist_lap_no?: number
+  /** 他 plan_date の draft から読み込んだ行 */
+  source_draft_id?: number
   turn_seq: number
   colorIdx: number
   boardMark: BoardMark
@@ -564,16 +733,292 @@ const isBoardHydratingFromApi = ref(false)
 
 const TABLE_H = 340
 
-const jigsPerLap = ref(100)
+const DEFAULT_JIGS_PER_LAP = 129
+
+/** ①ボード既定表示：本日から -2 日〜 +3 日（JST） */
+const BOARD_VIEW_DATE_OFFSET_MIN = -2
+const BOARD_VIEW_DATE_OFFSET_MAX = 3
+
+const boardViewRange = computed(() => {
+  const today = todayYmdJapan()
+  return {
+    from: addDaysYmdJapan(today, BOARD_VIEW_DATE_OFFSET_MIN),
+    to: addDaysYmdJapan(today, BOARD_VIEW_DATE_OFFSET_MAX),
+  }
+})
+
+const boardViewRangeLabel = computed(() => {
+  const { from, to } = boardViewRange.value
+  return `${formatBoardDateLabel(from)}〜${formatBoardDateLabel(to)}`
+})
+
+function enumerateYmdRange(from: string, to: string): string[] {
+  const out: string[] = []
+  let d = from
+  while (d <= to) {
+    out.push(d)
+    if (d === to) break
+    d = addDaysYmdJapan(d, 1)
+  }
+  return out
+}
+
+function isYmdInBoardView(ymd: string | null | undefined): boolean {
+  const d = (ymd || '').trim().slice(0, 10)
+  if (!d) return false
+  const { from, to } = boardViewRange.value
+  return d >= from && d <= to
+}
+
+function boardCardLapWorkDate(bc: PlatingBoardCardOut, planKey: string): string {
+  return String(bc.lap_work_date || bc.work_date || planKey).slice(0, 10)
+}
+
+function isLapNoInBoardView(lapNo: number, scheduleByLap?: Map<number, LapScheduleSlot>): boolean {
+  const map = scheduleByLap ?? new Map(buildGlobalLapSchedule().map((s) => [s.lap_no, s]))
+  const wd = map.get(lapNo)?.work_date
+  if (!wd) return true
+  return isYmdInBoardView(wd)
+}
+
+function scheduleCardsForCurrentDraft(): ScheduleCard[] {
+  const id = currentDraftId.value
+  if (!id) return scheduleCards.value
+  return scheduleCards.value.filter((c) => !c.source_draft_id || c.source_draft_id === id)
+}
+
+const jigsPerLap = ref(DEFAULT_JIGS_PER_LAP)
 const minutesPerLap = ref(100)
 
-/** ③ボード：標準レイアウト確定後の列数・段数（②の下書き一覧とは別保持。ダイアログで変更） */
+/** ①ボード：追加レイアウトで積み上げる周目ブロック */
+interface BoardLayoutBlock {
+  plan_date: string
+  start_time: string
+  minutes_per_lap: number
+  jigs_per_lap: number
+  lap_count: number
+  base_lap_no: number
+}
+
 const templateDialogVisible = ref(false)
-const tplFormJigsPerLap = ref(100)
+const tplFormPlanDate = ref(todayYmdJapan())
+const tplFormStartTime = ref('08:00')
+const tplFormMinutesPerLap = ref(100)
+const tplFormJigsPerLap = ref(DEFAULT_JIGS_PER_LAP)
 const tplFormMaxLaps = ref(1)
 const layoutBoardReady = ref(false)
-const layoutJigsPerLap = ref(100)
+const layoutBlocks = ref<BoardLayoutBlock[]>([])
+const layoutPlanDate = ref(todayYmdJapan())
+const layoutStartTime = ref('08:00')
+const layoutMinutesPerLap = ref(100)
+const layoutJigsPerLap = ref(DEFAULT_JIGS_PER_LAP)
 const layoutMaxLaps = ref(1)
+
+const DEFAULT_BOARD_START_TIME = '08:00'
+
+function normalizeBoardStartTimeHm(v: string | null | undefined): string {
+  const s = String(v ?? '').trim()
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return DEFAULT_BOARD_START_TIME
+  const h = Math.min(23, Math.max(0, Number(m[1])))
+  const min = Math.min(59, Math.max(0, Number(m[2])))
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
+}
+
+interface LapScheduleSlot {
+  lap_no: number
+  work_date: string
+  work_date_label: string
+  start: string
+  end: string
+}
+
+function formatBoardDateLabel(ymd: string): string {
+  const d = dayjs.tz(ymd, 'YYYY-MM-DD', TZ_JP)
+  if (!d.isValid()) return ymd
+  return d.format('M/D（ddd）')
+}
+
+function buildLapScheduleRows(
+  planDate: string,
+  startTime: string,
+  minutesPerSegment: number,
+  lapCount: number,
+): LapScheduleSlot[] {
+  const d = (planDate || '').trim()
+  const t = normalizeBoardStartTimeHm(startTime)
+  const cycle = Math.max(1, Math.floor(Number(minutesPerSegment) || 1))
+  const laps = Math.max(1, Math.floor(Number(lapCount) || 1))
+  if (!d) return []
+  const base = dayjs.tz(`${d} ${t}`, 'YYYY-MM-DD HH:mm', TZ_JP)
+  if (!base.isValid()) return []
+  return Array.from({ length: laps }, (_, i) => {
+    const lapNo = i + 1
+    const startDt = base.add((lapNo - 1) * cycle, 'minute')
+    const endDt = startDt.add(cycle, 'minute')
+    const workDate = startDt.format('YYYY-MM-DD')
+    return {
+      lap_no: lapNo,
+      work_date: workDate,
+      work_date_label: formatBoardDateLabel(workDate),
+      start: startDt.format('HH:mm'),
+      end: endDt.format('HH:mm'),
+    }
+  })
+}
+
+function buildGlobalLapSchedule(): LapScheduleSlot[] {
+  if (!layoutBoardReady.value) return []
+  if (layoutBlocks.value.length === 0) {
+    return buildLapScheduleRows(
+      layoutPlanDate.value,
+      layoutStartTime.value,
+      layoutMinutesPerLap.value,
+      layoutMaxLaps.value,
+    )
+  }
+  const out: LapScheduleSlot[] = []
+  for (const block of layoutBlocks.value) {
+    const rows = buildLapScheduleRows(
+      block.plan_date,
+      block.start_time,
+      block.minutes_per_lap,
+      block.lap_count,
+    )
+    for (const r of rows) {
+      out.push({ ...r, lap_no: block.base_lap_no + r.lap_no - 1 })
+    }
+  }
+  return out.sort((a, b) => a.lap_no - b.lap_no).filter((s) => isYmdInBoardView(s.work_date))
+}
+
+function currentLayoutLapSchedule(): LapScheduleSlot[] {
+  return buildGlobalLapSchedule()
+}
+
+/** 計画日（lap_work_date）ごとに 1 から振り直した表示用周番号 */
+const lapDisplayNoMap = computed(() => {
+  const map = new Map<number, number>()
+  const byDate = new Map<string, number[]>()
+  for (const s of buildGlobalLapSchedule()) {
+    const list = byDate.get(s.work_date) ?? []
+    list.push(s.lap_no)
+    byDate.set(s.work_date, list)
+  }
+  for (const laps of byDate.values()) {
+    const sorted = [...laps].sort((a, b) => a - b)
+    sorted.forEach((lapNo, idx) => map.set(lapNo, idx + 1))
+  }
+  return map
+})
+
+function lapDisplayNo(lapNo: number): number {
+  return lapDisplayNoMap.value.get(lapNo) ?? lapNo
+}
+
+const layoutBlocksSummary = computed(() => {
+  if (layoutBlocks.value.length === 0) {
+    return layoutBoardReady.value ? formatBoardDateLabel(layoutPlanDate.value) : '—'
+  }
+  return layoutBlocks.value
+    .filter((b) => isYmdInBoardView(b.plan_date))
+    .map((b) => `${formatBoardDateLabel(b.plan_date)}×${b.lap_count}`)
+    .join('＋')
+})
+
+const tplLapSchedulePreview = computed(() => {
+  const rows = buildLapScheduleRows(
+    tplFormPlanDate.value,
+    tplFormStartTime.value,
+    tplFormMinutesPerLap.value,
+    tplFormMaxLaps.value,
+  )
+  return rows.map((r) => ({ ...r, board_lap_no: r.lap_no }))
+})
+
+function syncLayoutBlocksFromDraftHeader() {
+  const ml = layoutMaxLaps.value
+  if (ml < 1) {
+    layoutBlocks.value = []
+    return
+  }
+  layoutBlocks.value = [
+    {
+      plan_date: layoutPlanDate.value,
+      start_time: layoutStartTime.value,
+      minutes_per_lap: layoutMinutesPerLap.value,
+      jigs_per_lap: layoutJigsPerLap.value,
+      lap_count: ml,
+      base_lap_no: 1,
+    },
+  ]
+}
+
+function inferLayoutBlocksFromBoard(
+  rawBoard: Array<{
+    lap_no: number
+    lap_work_date?: string | null
+    lap_start_time?: string | null
+    lap_end_time?: string | null
+  }>,
+  header: {
+    plan_date: string
+    board_start_time: string
+    minutes_per_lap: number
+    jigs_per_lap: number
+    max_laps: number
+  },
+): BoardLayoutBlock[] {
+  const maxLap = Math.max(
+    header.max_laps,
+    rawBoard.length > 0 ? Math.max(...rawBoard.map((b) => b.lap_no)) : 0,
+    0,
+  )
+  if (maxLap < 1) return []
+
+  const lapMeta = new Map<number, { wd: string; start: string }>()
+  for (const bc of rawBoard) {
+    const ln = bc.lap_no
+    if (lapMeta.has(ln)) continue
+    const wd = String(bc.lap_work_date || header.plan_date).slice(0, 10)
+    const start = normalizeBoardStartTimeHm(bc.lap_start_time || header.board_start_time)
+    lapMeta.set(ln, { wd, start })
+  }
+
+  const blocks: BoardLayoutBlock[] = []
+  let i = 1
+  while (i <= maxLap) {
+    const meta = lapMeta.get(i)
+    const wd = meta?.wd || header.plan_date
+    const start = meta?.start || header.board_start_time
+    let j = i
+    while (j < maxLap) {
+      const next = lapMeta.get(j + 1)
+      const nextWd = next?.wd || wd
+      if (nextWd !== wd) break
+      j++
+    }
+    blocks.push({
+      plan_date: wd,
+      start_time: normalizeBoardStartTimeHm(start),
+      minutes_per_lap: header.minutes_per_lap,
+      jigs_per_lap: header.jigs_per_lap,
+      lap_count: j - i + 1,
+      base_lap_no: i,
+    })
+    i = j + 1
+  }
+  return blocks
+}
+
+function lapTimeRangeLabel(lapNo: number): string {
+  const row = currentLayoutLapSchedule().find((r) => r.lap_no === lapNo)
+  return row ? `${row.start}–${row.end}` : ''
+}
+
+type LapBoardDisplayItem =
+  | { kind: 'date'; key: string; work_date: string; dateLabel: string }
+  | { kind: 'lap'; key: string; row: LapGridRow }
 
 /** メッキ前在庫（左ペイン）の基準日 */
 const leftInventoryDate = ref(todayYmdJapan())
@@ -628,47 +1073,49 @@ interface DraftSourceItem {
   qty: number
 }
 
-interface DraftItem extends DraftSourceItem {
-  uid: string
-  /** サーバー行 id（CuttingInstruction の並び替え比較と同様のタイブレーク用） */
-  id?: number
-  work_date: string
-  slots: number
-  sort_order: number
-}
-
-const draftItems = ref<DraftItem[]>([])
-const draftStats = computed(() => {
-  const rowCount = draftItems.value.length
-  const totalQty = draftItems.value.reduce((s, it) => s + Math.max(0, Math.floor(num(it.qty))), 0)
-  const totalSlots = draftItems.value.reduce((s, it) => s + Math.max(0, Math.floor(num(it.slots))), 0)
-  return { rowCount, totalQty, totalSlots }
-})
-const draftTableRef = ref<any>(null)
 const draftWorkDate = ref(todayYmdJapan())
 /** loadLatestDraft 内で作業日を補正している間は draftWorkDate の watch で再取得しない */
 const syncingDraftWorkDateFromLoad = ref(false)
-const editingQtyUid = ref<string | null>(null)
-
-/** planDate（API）＝基準日。作業日だけ変えたい場合と揃えたいときに使う */
-function alignBaseDateToDraftWorkDate() {
-  const d = draftWorkDate.value
-  if (!d) {
-    ElMessage.warning('作業日を先に指定してください')
-    return
-  }
-  leftInventoryDate.value = d
-  rightGenDate.value = addDaysYmdJapan(d, 1)
-  ElMessage.info(`在庫の基準日を ${d}、見込みの参照日を ${rightGenDate.value} にしました`)
-}
-const editingQtyValue = ref<number>(0)
 const loadingDraft = ref(false)
-const savingDraft = ref(false)
 const currentDraftId = ref<number | null>(null)
+/** PUT 時の plan_date（草稿ヘッダー）。追加レイアウトの計画日とは別に固定 */
+const draftRecordPlanDate = ref('')
 const draggingSource = ref<DraftSourceItem | null>(null)
-const jigDialogVisible = ref(false)
+const loadingJigAvailability = ref(false)
 const savingJigAvailability = ref(false)
 const jigAvailabilityRows = ref<{ machine_id: number | null; plating_machine: string; available_qty: number }[]>([])
+const jigDropDialogVisible = ref(false)
+const jigDropPending = ref<{
+  plating_machine: string
+  available_max: number
+  used_on_board: number
+  target_lap: number
+} | null>(null)
+const jigDropQty = ref(1)
+const jigDropQtyMax = ref(1)
+const jigDropPreferLap = ref<number | null>(null)
+const jigBoardDragActive = ref(false)
+const jigDropHoverLap = ref<number | null>(null)
+const draggingJigToBoard = ref<{
+  machine_id: number | null
+  plating_machine: string
+  available_qty: number
+} | null>(null)
+const draggingInventoryRow = ref(false)
+const productDropHoverBlockKey = ref<string | null>(null)
+const boardJigEditDialogVisible = ref(false)
+const boardJigEditPending = ref<{
+  lap_no: number
+  plating_machine: string
+  product_cd: string
+  product_name: string
+  cardIds: string[]
+} | null>(null)
+const boardJigEditQty = ref(1)
+const boardJigEditQtyMax = ref(1)
+const lapCopyDialogVisible = ref(false)
+const lapCopyFrom = ref(1)
+const lapCopyTo = ref(2)
 
 /** 左表「直前工程在庫」列の合計 */
 const leftPrevInventoryTotal = computed(() =>
@@ -780,21 +1227,11 @@ function calcRequiredJigCountFromQty(qty: number | string, kakeRaw: string): str
   return val.toFixed(2)
 }
 
-function cloneSourceToDraft(src: DraftSourceItem): DraftItem {
-  const kake = src.kake > 0 ? src.kake : 1
-  const qty = Math.max(0, num(src.qty))
-  return {
-    ...src,
-    uid: `di-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    work_date: draftWorkDate.value || todayYmdJapan(),
-    slots: Math.ceil(qty / kake),
-    sort_order: draftItems.value.length + 1,
-  }
-}
-
 function onDragFromLeftRow(row: LeftPaneRow, evt?: DragEvent) {
+  draggingInventoryRow.value = true
   if (evt?.dataTransfer) {
     evt.dataTransfer.effectAllowed = 'copy'
+    evt.dataTransfer.setData('application/x-plating-inventory', row.product_cd || row.product_name)
     evt.dataTransfer.setData('text/plain', row.product_cd || row.product_name)
   }
   draggingSource.value = {
@@ -809,8 +1246,10 @@ function onDragFromLeftRow(row: LeftPaneRow, evt?: DragEvent) {
 }
 
 function onDragFromRightRow(row: RightPaneRow, evt?: DragEvent) {
+  draggingInventoryRow.value = true
   if (evt?.dataTransfer) {
     evt.dataTransfer.effectAllowed = 'copy'
+    evt.dataTransfer.setData('application/x-plating-inventory', row.product_cd || row.product_name)
     evt.dataTransfer.setData('text/plain', row.product_cd || row.product_name)
   }
   draggingSource.value = {
@@ -821,20 +1260,6 @@ function onDragFromRightRow(row: RightPaneRow, evt?: DragEvent) {
     plating_machine: row.plating_machine,
     kake: parseKakeCount(row.plating_efficiency) ?? 0,
     qty: num(row.gen_qty),
-  }
-}
-
-async function onDropToDraftTarget() {
-  if (!draggingSource.value) return
-  const item = cloneSourceToDraft(draggingSource.value)
-  draftItems.value = [...draftItems.value, item]
-  refreshDraftSortOrder()
-  draggingSource.value = null
-  try {
-    await persistDraft(false)
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('自動保存に失敗しました。「下書きを保存」から再試行してください')
   }
 }
 
@@ -851,21 +1276,12 @@ function bindTableRowDrag(tableRef: { value: any }, rows: LeftPaneRow[] | RightP
       if (side === 'left') onDragFromLeftRow(row as LeftPaneRow, ev)
       else onDragFromRightRow(row as RightPaneRow, ev)
     }
+    ;(tr as HTMLTableRowElement).ondragend = () => {
+      draggingInventoryRow.value = false
+      productDropHoverBlockKey.value = null
+      if (!jigDropDialogVisible.value) draggingSource.value = null
+    }
   })
-}
-
-/**
- * CuttingInstruction.vue と同様の並び：主キー production_sequence 相当＝sort_order、同順は id、無 id は uid。
- * （参照: cuttingManagementList ソート `(a.production_sequence ?? 0) - (b.production_sequence ?? 0)` 次 `(a.id ?? 0) - (b.id ?? 0)`）
- */
-function compareDraftItemBySequence(a: DraftItem, b: DraftItem): number {
-  const sa = a.sort_order ?? 0
-  const sb = b.sort_order ?? 0
-  if (sa !== sb) return sa - sb
-  const ida = a.id ?? 0
-  const idb = b.id ?? 0
-  if (ida !== idb) return ida - idb
-  return String(a.uid).localeCompare(String(b.uid))
 }
 
 /** API 明細行用（Cutting と同様：sort_order → id） */
@@ -879,159 +1295,73 @@ function comparePlatingApiDraftItemBySequence(
   return (a.id ?? 0) - (b.id ?? 0)
 }
 
-function refreshDraftSortOrder() {
-  draftItems.value = draftItems.value.map((it, idx) => ({ ...it, sort_order: idx + 1 }))
-}
-
-/** CuttingInstruction.onDropCuttingRowForReorder と同じ：reordered.splice(fromIdx,1); splice(toIdx,0,dragged) */
-function reorderDraftListByIndex<T>(list: T[], oldIndex: number, newIndex: number): T[] {
-  const reordered = [...list]
-  const [dragged] = reordered.splice(oldIndex, 1)
-  reordered.splice(newIndex, 0, dragged)
-  return reordered
-}
-
-/** ② 上下ドラッグ確定後：全行を新順で作り直し、sort_order・qty・slots を一括で整合 */
-function applyFullDraftReorderAfterDrag(ordered: DraftItem[]) {
-  draftItems.value = ordered.map((it, idx) => {
-    const kake = it.kake > 0 ? it.kake : 1
-    const qty = Math.max(0, Math.floor(num(it.qty)))
-    const slots = Math.max(0, Math.ceil(qty / kake) || 0)
-    return {
-      ...it,
-      sort_order: idx + 1,
-      qty,
-      slots,
-    }
-  })
-}
-
-function recalcDraftItemSlots(uid: string) {
-  const idx = draftItems.value.findIndex((x) => x.uid === uid)
-  if (idx < 0) return
-  const it = draftItems.value[idx]
-  const kake = it.kake > 0 ? it.kake : 1
-  draftItems.value[idx] = {
-    ...it,
-    qty: Math.max(0, Math.floor(num(it.qty))),
-    slots: Math.ceil(Math.max(0, num(it.qty)) / kake),
-  }
-}
-
-function onDraftQtyChange(uid: string, qty: number) {
-  const idx = draftItems.value.findIndex((x) => x.uid === uid)
-  if (idx < 0) return
-  draftItems.value[idx] = {
-    ...draftItems.value[idx],
-    qty: Math.max(0, Math.floor(num(qty))),
-  }
-  recalcDraftItemSlots(uid)
-  refreshDraftSortOrder()
-}
-
-function startQtyEdit(row: DraftItem) {
-  editingQtyUid.value = row.uid
-  editingQtyValue.value = Math.max(0, Math.floor(num(row.qty)))
-}
-
-async function commitQtyEdit(uid: string) {
-  if (editingQtyUid.value !== uid) return
-  onDraftQtyChange(uid, editingQtyValue.value)
-  editingQtyUid.value = null
-  try {
-    await persistDraft(false)
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('生産数の自動保存に失敗しました。通信状況を確認してください')
-  }
-}
-
-function removeDraftItem(uid: string) {
-  draftItems.value = draftItems.value.filter((x) => x.uid !== uid)
-  refreshDraftSortOrder()
-}
-
-function clearDraftItems() {
-  draftItems.value = []
-}
-
-async function deleteCurrentDraft() {
-  if (!currentDraftId.value) return
-  try {
-    await deletePlatingDraft(currentDraftId.value)
-    ElMessage.success(`下書き（ID ${currentDraftId.value}）を削除しました`)
-    currentDraftId.value = null
-    draftItems.value = []
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('サーバー上の下書き削除に失敗しました')
-  }
-}
-
-function toDraftItemBody(it: DraftItem): PlatingDraftItemBody {
-  return {
-    sort_order: it.sort_order,
-    work_date: it.work_date || null,
-    product_cd: it.product_cd,
-    product_name: it.product_name,
-    plating_machine: it.plating_machine,
-    kake: it.kake,
-    qty: it.qty,
-    slots: it.slots,
-    source_type: it.source_type,
-    source_row_key: it.source_key,
-  }
-}
-
-async function buildDraftPayload(items?: PlatingDraftItemBody[]) {
+async function buildDraftPayload(items: PlatingDraftItemBody[]) {
   const board_cards = await mergePersistBoardCards()
+  const planDate = draftRecordPlanDate.value || draftWorkDate.value || todayYmdJapan()
   return {
-    plan_date: draftWorkDate.value || todayYmdJapan(),
+    plan_date: planDate,
     daily_minutes: PLATING_DAY_MINUTES,
-    jigs_per_lap: jigsPerLap.value,
-    minutes_per_lap: minutesPerLap.value,
+    jigs_per_lap: layoutBoardReady.value ? layoutJigsPerLap.value : jigsPerLap.value,
+    max_laps: layoutBoardReady.value ? layoutMaxLaps.value : 1,
+    minutes_per_lap: layoutBoardReady.value ? layoutMinutesPerLap.value : minutesPerLap.value,
+    board_start_time: layoutBoardReady.value ? normalizeBoardStartTimeHm(layoutStartTime.value) : null,
     total_slots: kpi.value.totalSlots,
     used_slots: kpi.value.usedSlots,
     remain_slots: kpi.value.remainSlots,
-    items: items ?? draftItems.value.map(toDraftItemBody),
+    items,
     board_cards,
   }
 }
 
-/** 更新時に他作業日の行をマージし、PUT が現在表示分のみで aps_plating_plan_draft_items を誤削除しないようにする */
+/** 更新時に他作業日の明細行を残し、当該作業日分はボードのみで管理する */
 async function mergePersistItems(): Promise<PlatingDraftItemBody[]> {
-  if (!currentDraftId.value) {
-    return draftItems.value.map(toDraftItemBody)
-  }
+  if (!currentDraftId.value) return []
   const existing = await fetchPlatingDraftById(currentDraftId.value)
   const wd = draftWorkDate.value || todayYmdJapan()
   const plan = String(existing.plan_date || '').slice(0, 10) || wd
-  const kept = existing.items
+  return existing.items
     .filter((it) => effectiveItemWorkDate(it, plan) !== wd)
     .sort(comparePlatingApiDraftItemBySequence)
     .map(apiItemToBody)
-  // 画面上の②の行順＝ draftItems の配列順（ドラッグ後はここが正。sort_order のみで再ソートしない）
-  const mine = draftItems.value.map(toDraftItemBody)
-  return [...kept, ...mine].map((x, i) => ({ ...x, sort_order: i + 1 }))
+    .map((x, i) => ({ ...x, sort_order: i + 1 }))
 }
 
 function scheduleCardsToBoardBodies(workDateYmd: string): PlatingBoardCardBody[] {
-  return [...scheduleCards.value]
+  const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
+  return [...scheduleCardsForCurrentDraft()]
     .filter((c) => c.qty > 0)
-    .sort((a, b) => a.lap_no - b.lap_no || a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
-    .map((c) => ({
-      work_date: workDateYmd,
-      lap_no: c.lap_no,
-      turn_seq: c.turn_seq,
-      product_cd: c.product_cd,
-      product_name: c.product_name,
-      plating_machine: c.plating_machine,
-      kake: c.kake,
-      qty: c.qty,
-      slots: c.slots,
-      board_mark: c.boardMark,
-      stable_key: (c.id || '').slice(0, 128) || null,
-    }))
+    .sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap) || a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+    .map((c) => {
+      const slot = scheduleByLap.get(c.lap_no)
+      return {
+        work_date: workDateYmd,
+        lap_work_date: slot?.work_date ?? workDateYmd,
+        lap_start_time: slot?.start ?? null,
+        lap_end_time: slot?.end ?? null,
+        lap_no: c.persist_lap_no ?? c.lap_no,
+        turn_seq: c.turn_seq,
+        product_cd: c.product_cd,
+        product_name: c.product_name,
+        plating_machine: c.plating_machine,
+        kake: c.kake,
+        qty: c.qty,
+        slots: c.slots,
+        board_mark: c.boardMark,
+        stable_key: (c.id || '').slice(0, 128) || null,
+      }
+    })
+}
+
+/** ボード表示・保存：日历日 → 周目番号 */
+function compareLapNoForBoardSort(
+  lapA: number,
+  lapB: number,
+  scheduleByLap: Map<number, LapScheduleSlot>,
+): number {
+  const da = scheduleByLap.get(lapA)?.work_date ?? ''
+  const db = scheduleByLap.get(lapB)?.work_date ?? ''
+  if (da !== db) return da.localeCompare(db)
+  return lapA - lapB
 }
 
 /** 更新時に他作業日のボード行をマージし、PUT で aps_plating_plan_board_cards を誤削除しない */
@@ -1057,13 +1387,16 @@ function cancelBoardAutosaveTimer() {
   }
 }
 
+function canPersistBoard(): boolean {
+  if (!draftWorkDate.value) return false
+  return layoutBoardReady.value
+}
+
 /** ドラッグ等の高頻度変更：デバウンス後に aps_plating_plan_board_cards へ書込（persistDraft の board_cards 経由） */
 function scheduleBoardAutosave() {
   if (isBoardHydratingFromApi.value) return
   if (loadingDraft.value) return
-  if (savingDraft.value) return
-  if (!draftWorkDate.value) return
-  if (draftItems.value.length === 0) return
+  if (!canPersistBoard()) return
   cancelBoardAutosaveTimer()
   boardAutosaveTimer = setTimeout(() => {
     boardAutosaveTimer = null
@@ -1076,9 +1409,7 @@ async function flushBoardPersist() {
   cancelBoardAutosaveTimer()
   if (isBoardHydratingFromApi.value) return
   if (loadingDraft.value) return
-  if (savingDraft.value) return
-  if (!draftWorkDate.value) return
-  if (draftItems.value.length === 0) return
+  if (!canPersistBoard()) return
   try {
     await persistDraft(false)
   } catch (e) {
@@ -1091,18 +1422,12 @@ async function persistDraft(notify = true) {
     if (notify) ElMessage.warning('作業日を指定してください')
     return
   }
-  // 画面上の上から下の順に sort_order を 1…n に揃える（API と行番号表示の整合）
-  refreshDraftSortOrder()
   let items: PlatingDraftItemBody[]
   try {
     items = await mergePersistItems()
   } catch (e) {
     console.error(e)
-    if (notify) ElMessage.error('下書き明細の取得に失敗しました')
-    return
-  }
-  if (items.length === 0) {
-    if (notify) ElMessage.warning('②の下書きに1件以上のデータがありません')
+    if (notify) ElMessage.error('計画データの取得に失敗しました')
     return
   }
   const body = await buildDraftPayload(items)
@@ -1111,23 +1436,74 @@ async function persistDraft(notify = true) {
   } else {
     const created = await createPlatingDraft(body)
     currentDraftId.value = created.id
-  }
-}
-
-async function saveDraftToBackend() {
-  savingDraft.value = true
-  try {
-    await persistDraft(true)
-    ElMessage.success('②の下書きと③のボードを保存しました')
-  } catch (e) {
-    console.error(e)
-    ElMessage.error('下書きの保存に失敗しました')
-  } finally {
-    savingDraft.value = false
+    draftRecordPlanDate.value = String(created.plan_date || body.plan_date).slice(0, 10)
   }
 }
 
 type LoadLatestDraftOpts = { autoMode?: boolean; autoSyncWorkDate?: boolean }
+
+type BoardCardWithDisplayLap = PlatingBoardCardOut & { persist_lap_no: number }
+
+function assignDisplayLapNumbers(boards: PlatingBoardCardOut[]): BoardCardWithDisplayLap[] {
+  const sorted = [...boards].sort((a, b) => {
+    const planA = String(a.plan_date || '').slice(0, 10)
+    const planB = String(b.plan_date || '').slice(0, 10)
+    const da = boardCardLapWorkDate(a, planA)
+    const db = boardCardLapWorkDate(b, planB)
+    if (da !== db) return da.localeCompare(db)
+    if (a.lap_no !== b.lap_no) return a.lap_no - b.lap_no
+    if (a.turn_seq !== b.turn_seq) return a.turn_seq - b.turn_seq
+    return (a.id ?? 0) - (b.id ?? 0)
+  })
+  const lapKeyToNo = new Map<string, number>()
+  let nextLap = 0
+  return sorted.map((bc) => {
+    const persist_lap_no = Number(bc.lap_no) || 0
+    const planKey = String(bc.plan_date || '').slice(0, 10)
+    const wd = boardCardLapWorkDate(bc, planKey)
+    const key = `${bc.draft_id}-${wd}-${persist_lap_no}`
+    if (!lapKeyToNo.has(key)) {
+      nextLap += 1
+      lapKeyToNo.set(key, nextLap)
+    }
+    return { ...bc, persist_lap_no, lap_no: lapKeyToNo.get(key)! }
+  })
+}
+
+/** 表示期間内の各 plan_date からボード行を集約（本日基準 -2〜+3 日） */
+async function loadBoardAcrossViewRange(): Promise<{
+  boardCards: BoardCardWithDisplayLap[]
+  primary: PlatingDraftOut | null
+}> {
+  const { from, to } = boardViewRange.value
+  const dates = enumerateYmdRange(from, to)
+  const today = todayYmdJapan()
+  const anchor = draftWorkDate.value || today
+  const merged: PlatingBoardCardOut[] = []
+  let primary: PlatingDraftOut | null = null
+
+  for (const planD of dates) {
+    try {
+      const head = await fetchLatestPlatingDraftByDate(planD)
+      if (!head) continue
+      const full = await fetchPlatingDraftById(head.id)
+      const planKey = String(full.plan_date || planD).slice(0, 10)
+      const inRange = (full.board_cards || []).filter((bc) => isYmdInBoardView(boardCardLapWorkDate(bc, planKey)))
+      if (inRange.length > 0) merged.push(...inRange)
+      if (planD === anchor) primary = full
+      else if (!primary && planD === today) primary = full
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  if (!primary) {
+    const head = await fetchLatestPlatingDraftByDate(anchor)
+    if (head) primary = await fetchPlatingDraftById(head.id)
+  }
+
+  return { boardCards: assignDisplayLapNumbers(merged), primary }
+}
 
 async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
   let autoMode = false
@@ -1142,27 +1518,29 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
   const planDateForDraft = draftWorkDate.value || todayYmdJapan()
   loadingDraft.value = true
   try {
-    const head = await fetchLatestPlatingDraftByDate(planDateForDraft)
-    if (!head) {
-      draftItems.value = []
+    const { boardCards: mergedBoard, primary } = await loadBoardAcrossViewRange()
+    if (!primary) {
       currentDraftId.value = null
+      draftRecordPlanDate.value = ''
       scheduleCards.value = []
       standardPositions.value = new Map()
       layoutBoardReady.value = false
-      if (!autoMode) ElMessage.warning('この日付の下書きはありません')
+      layoutBlocks.value = []
+      if (!autoMode) ElMessage.warning('表示期間内の計画データはありません')
       return
     }
-    const planKey = String(head.plan_date || planDateForDraft).slice(0, 10)
-    const rowsNormalized = (head.items || []).map((it) => ({
-      ...it,
-      work_date: effectiveItemWorkDate(it, planKey),
+
+    const display = primary
+    const planKey = String(display.plan_date || planDateForDraft).slice(0, 10)
+    const boardDates = mergedBoard.map((bc) => ({
+      work_date: effectiveItemWorkDate(bc, planKey),
     }))
 
     let wd = draftWorkDate.value || planDateForDraft
-    if (autoSyncWorkDate && rowsNormalized.length > 0) {
-      const hasMatch = rowsNormalized.some((it) => it.work_date === wd)
+    if (autoSyncWorkDate && boardDates.length > 0) {
+      const hasMatch = boardDates.some((it) => it.work_date === wd)
       if (!hasMatch) {
-        wd = dominantWorkDateFromItems(rowsNormalized)
+        wd = dominantWorkDateFromItems(boardDates)
       }
     }
     if (wd !== draftWorkDate.value) {
@@ -1172,44 +1550,58 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
       syncingDraftWorkDateFromLoad.value = false
     }
 
-    const display = await fetchPlatingDraftById(head.id, wd)
     currentDraftId.value = display.id
-    const displayPlanKey = String(display.plan_date || wd).slice(0, 10)
-    draftItems.value = (display.items || [])
-      .map((it, idx) => ({
-        uid: `ld-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-        id: it.id,
-        work_date: effectiveItemWorkDate(it, displayPlanKey),
-        source_key: it.source_row_key || `${it.source_type}-${it.product_cd}-${idx}`,
-        source_type: it.source_type as 'left_inventory' | 'right_gen',
-        product_cd: it.product_cd,
-        product_name: it.product_name,
-        plating_machine: it.plating_machine,
-        kake: Number(it.kake) || 0,
-        qty: Number(it.qty) || 0,
-        slots: Number(it.slots) || 0,
-        sort_order: Number(it.sort_order) || idx + 1,
-      }))
-      .sort(compareDraftItemBySequence)
-    refreshDraftSortOrder()
+    draftRecordPlanDate.value = planKey
 
     isBoardHydratingFromApi.value = true
     try {
       const jp = Math.max(1, Math.floor(Number(display.jigs_per_lap) || 0))
+      const mp = Math.max(1, Math.floor(Number(display.minutes_per_lap) || 100))
       if (jp > 0) jigsPerLap.value = jp
-      const rawBoard = display.board_cards || []
-      if (rawBoard.length > 0) {
+      minutesPerLap.value = mp
+      layoutMinutesPerLap.value = mp
+      layoutPlanDate.value = String(display.plan_date || planKey).slice(0, 10) || planKey
+      layoutStartTime.value = normalizeBoardStartTimeHm(display.board_start_time)
+      const maxLapsFromDraft = Math.max(1, Math.floor(Number(display.max_laps) || 0))
+      const rawBoard = mergedBoard
+      const hasLayout =
+        jp > 0 && (Boolean(display.board_start_time) || maxLapsFromDraft >= 1)
+      if (hasLayout) {
         layoutBoardReady.value = true
         layoutJigsPerLap.value = jp > 0 ? jp : layoutJigsPerLap.value
-        const maxLap = Math.max(1, ...rawBoard.map((b) => b.lap_no))
-        layoutMaxLaps.value = maxLap
+        const maxFromCards = rawBoard.length > 0 ? Math.max(...rawBoard.map((b) => b.lap_no)) : 0
+        layoutMaxLaps.value = Math.max(maxLapsFromDraft, maxFromCards, 1)
+        const inferred = inferLayoutBlocksFromBoard(rawBoard, {
+          plan_date: layoutPlanDate.value,
+          board_start_time: layoutStartTime.value,
+          minutes_per_lap: layoutMinutesPerLap.value,
+          jigs_per_lap: layoutJigsPerLap.value,
+          max_laps: layoutMaxLaps.value,
+        })
+        layoutBlocks.value =
+          inferred.length > 0
+            ? inferred
+            : (() => {
+                syncLayoutBlocksFromDraftHeader()
+                return layoutBlocks.value
+              })()
+      } else {
+        layoutBlocks.value = []
+      }
+      if (rawBoard.length > 0) {
+        const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
         scheduleCards.value = rawBoard
           .slice()
-          .sort((a, b) => a.lap_no - b.lap_no || a.turn_seq - b.turn_seq || (a.id ?? 0) - (b.id ?? 0))
+          .sort(
+            (a, b) =>
+              compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap) ||
+              a.turn_seq - b.turn_seq ||
+              (a.id ?? 0) - (b.id ?? 0),
+          )
           .map((bc, idx) => {
             const mk: BoardMark =
               bc.board_mark === 'rush' || bc.board_mark === 'manual' ? bc.board_mark : 'standard'
-            const id = (bc.stable_key || '').trim() || `db-${bc.id}-${idx}`
+            const id = (bc.stable_key || '').trim() || `db-${bc.draft_id}-${bc.id}-${idx}`
             return {
               id,
               product_cd: bc.product_cd,
@@ -1218,7 +1610,9 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
               kake: Number(bc.kake) || 0,
               qty: Number(bc.qty) || 0,
               slots: Number(bc.slots) || 0,
-              lap_no: bc.lap_no,
+              lap_no: Number(bc.lap_no) || 0,
+              persist_lap_no: Number(bc.persist_lap_no) || Number(bc.lap_no) || 0,
+              source_draft_id: bc.draft_id,
               turn_seq: bc.turn_seq,
               colorIdx: idx,
               boardMark: mk,
@@ -1229,10 +1623,13 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
             .filter((c) => c.boardMark === 'standard')
             .map((c) => [c.id, { lap_no: c.lap_no, turn_seq: c.turn_seq }]),
         )
-      } else {
+      } else if (!hasLayout) {
         scheduleCards.value = []
         standardPositions.value = new Map()
         layoutBoardReady.value = false
+      } else {
+        scheduleCards.value = []
+        standardPositions.value = new Map()
       }
     } finally {
       void nextTick(() => {
@@ -1242,16 +1639,17 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
       })
     }
 
-    if (!autoMode) ElMessage.success(`下書き（ID ${display.id}）を読み込みました`)
+    if (!autoMode) ElMessage.success(`計画（ID ${display.id}）を読み込みました`)
   } catch (e) {
     console.error(e)
-    if (!autoMode) ElMessage.error('下書きの読み込みに失敗しました')
+    if (!autoMode) ElMessage.error('計画の読み込みに失敗しました')
   } finally {
     loadingDraft.value = false
   }
 }
 
 async function loadJigAvailability() {
+  loadingJigAvailability.value = true
   try {
     const res = (await getMachineList({ page: 1, pageSize: 10000 })) as MachineListResponse
     const rows = ((res?.data?.list ?? res?.list ?? []) as MachineItem[]).filter((r) =>
@@ -1298,12 +1696,430 @@ async function loadJigAvailability() {
       plating_machine: machine,
       available_qty: 0,
     }))
+  } finally {
+    loadingJigAvailability.value = false
   }
 }
 
-async function openJigAvailabilityDialog() {
-  await loadJigAvailability()
-  jigDialogVisible.value = true
+/** 当該周目に既に配置されている治具本数（他周目は含めない） */
+function countBoardSlotsForMachine(platingMachine: string, lapNo: number): number {
+  const key = normalizeMachineKey(platingMachine)
+  return scheduleCards.value.filter(
+    (c) =>
+      c.qty > 0 &&
+      c.lap_no === lapNo &&
+      normalizeMachineKey(c.plating_machine) === key,
+  ).length
+}
+
+function getJigAvailMaxFromMaster(platingMachine: string): number {
+  const row = jigAvailabilityRows.value.find(
+    (r) => normalizeMachineKey(r.plating_machine) === normalizeMachineKey(platingMachine),
+  )
+  return row ? Math.max(0, Math.floor(Number(row.available_qty) || 0)) : 0
+}
+
+function resolveJigDropTargetLap(preferLap: number | null): number {
+  const maxLaps = layoutMaxLaps.value
+  if (preferLap != null && preferLap >= 1 && preferLap <= maxLaps) return preferLap
+  return 1
+}
+
+/** 当該周目のボード空き枠数（列数ベース） */
+function countBoardSlotsRemainingOnLap(lapNo: number): number {
+  if (!layoutBoardReady.value) return 0
+  const usedOnLap = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo).length
+  return Math.max(0, lapBoardColCount.value - usedOnLap)
+}
+
+function getJigQtyMaxForLap(platingMachine: string, lapNo: number, currentBlockSize = 0): number {
+  const avail = getJigAvailMaxFromMaster(platingMachine)
+  const usedOnLap = countBoardSlotsForMachine(platingMachine, lapNo)
+  const jigMax = Math.max(0, avail - usedOnLap + currentBlockSize)
+  const boardMax = countBoardSlotsRemainingOnLap(lapNo) + currentBlockSize
+  return Math.max(0, Math.min(jigMax, boardMax))
+}
+
+function findNextSequentialBoardSlots(
+  count: number,
+  preferLap?: number | null,
+): { lap_no: number; turn_seq: number }[] {
+  if (!layoutBoardReady.value || count <= 0) return []
+  const maxLaps = layoutMaxLaps.value
+  /** 特定周へドロップ時は当該周のみ。未指定時は第1周から順に各周で上限を別計算 */
+  const lapOrder: number[] =
+    preferLap != null && preferLap >= 1 && preferLap <= maxLaps
+      ? [preferLap]
+      : Array.from({ length: maxLaps }, (_, i) => i + 1)
+  const out: { lap_no: number; turn_seq: number }[] = []
+  for (const lap of lapOrder) {
+    let nextTurn = 1
+    while (out.length < count) {
+      const occupied = scheduleCards.value.some(
+        (c) => c.qty > 0 && c.lap_no === lap && c.turn_seq === nextTurn,
+      )
+      if (!occupied) out.push({ lap_no: lap, turn_seq: nextTurn })
+      nextTurn += 1
+      if (nextTurn > 5000) break
+    }
+    if (out.length >= count) break
+  }
+  return out.slice(0, count)
+}
+
+function resetJigDropDialog() {
+  jigDropPending.value = null
+  jigDropPreferLap.value = null
+  jigDropQty.value = 1
+  jigDropQtyMax.value = 1
+}
+
+function openJigDropDialog(
+  row: { plating_machine: string; available_qty: number },
+  preferLap: number | null,
+) {
+  if (!layoutBoardReady.value) {
+    ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
+    return
+  }
+  const targetLap = resolveJigDropTargetLap(preferLap)
+  const availableMax = getJigAvailMaxFromMaster(row.plating_machine)
+  const usedOnLap = countBoardSlotsForMachine(row.plating_machine, targetLap)
+  const maxQty = getJigQtyMaxForLap(row.plating_machine, targetLap)
+  if (maxQty <= 0) {
+    const remainJig = Math.max(0, availableMax - usedOnLap)
+    const remainBoard = countBoardSlotsRemainingOnLap(targetLap)
+    if (remainJig <= 0) {
+      ElMessage.warning(
+        `${row.plating_machine} は第${lapDisplayNo(targetLap)}周目で使用可能本数を超えています（当該周 ${availableMax} 本・済 ${usedOnLap} 本）`,
+      )
+    } else if (remainBoard <= 0) {
+      ElMessage.warning(`第${lapDisplayNo(targetLap)}周目に空き枠がありません`)
+    } else {
+      ElMessage.warning(`第${lapDisplayNo(targetLap)}周目へ投入できません`)
+    }
+    return
+  }
+  jigDropPending.value = {
+    plating_machine: row.plating_machine,
+    available_max: availableMax,
+    used_on_board: usedOnLap,
+    target_lap: targetLap,
+  }
+  jigDropPreferLap.value = targetLap
+  jigDropQtyMax.value = maxQty
+  jigDropQty.value = maxQty
+  jigDropDialogVisible.value = true
+}
+
+function isJigProductCd(productCd: string): boolean {
+  return String(productCd || '').startsWith('__jig__')
+}
+
+function createJigScheduleCard(platingMachine: string, lapNo: number, turnSeq: number): ScheduleCard {
+  const mKey = normalizeMachineKey(platingMachine)
+  const productCd = `__jig__${mKey}`
+  return {
+    id: `jig-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    product_cd: productCd,
+    product_name: platingMachine,
+    plating_machine: platingMachine,
+    kake: 1,
+    qty: 1,
+    slots: 1,
+    lap_no: lapNo,
+    turn_seq: turnSeq,
+    colorIdx: schedColorIndexForProductCd(productCd),
+    boardMark: 'manual',
+  }
+}
+
+function getJigEditQtyMax(platingMachine: string, lapNo: number, currentBlockSize: number): number {
+  return Math.max(1, getJigQtyMaxForLap(platingMachine, lapNo, currentBlockSize))
+}
+
+function getMergedSegCards(ms: LapMergedSegment): ScheduleCard[] {
+  const ids = new Set(ms.cardIds)
+  return scheduleCards.value.filter((c) => ids.has(c.id) && c.qty > 0)
+}
+
+function formatQtyDisplay(n: number): string {
+  const v = Number(n)
+  if (!Number.isFinite(v)) return '0'
+  return Number.isInteger(v) ? String(v) : v.toFixed(2)
+}
+
+/** 治具枠に製品割当後：例 D01L RR (60) */
+function formatJigBlockProductCalc(ms: LapMergedSegment): string | null {
+  const cards = getMergedSegCards(ms)
+  const product = cards.find((c) => !isJigProductCd(c.product_cd))
+  if (!product) return null
+  const slots = Math.max(0, Math.floor(Number(ms.span) || 0))
+  const kake = product.kake > 0 ? product.kake : 1
+  const total = slots * kake
+  return `${product.product_name} (${formatQtyDisplay(total)})`
+}
+
+function boardMergedSegTitle(ms: LapMergedSegment): string {
+  const base = `${ms.plating_machine}・${ms.span}本`
+  const calc = formatJigBlockProductCalc(ms)
+  if (!isJigProductCd(ms.product_cd)) return base
+  const hints = ['②の行をドラッグで製品割当', '行内ドラッグで移動', 'ダブルクリックで本数変更']
+  return calc ? `${base}・${calc}・${hints.join('・')}` : `${base}・${hints.join('・')}`
+}
+
+function resolveInventoryDragSource(): DraftSourceItem | null {
+  return draggingSource.value
+}
+
+function assignProductToJigBlock(ms: LapMergedSegment, lapNo: number, src: DraftSourceItem) {
+  if (!isJigProductCd(ms.product_cd)) return
+  const jigMachine = String(ms.plating_machine || '').trim()
+  const srcJig = String(src.plating_machine || '').trim()
+  if (srcJig && jigMachine && normalizeMachineKey(srcJig) !== normalizeMachineKey(jigMachine)) {
+    ElMessage.warning(`製品のメッキ治具（${srcJig}）と枠（${jigMachine}）が一致しません`)
+    return
+  }
+  const kake = src.kake > 0 ? src.kake : 1
+  const slots = Math.max(0, Math.floor(Number(ms.span) || 0))
+  const ids = new Set(ms.cardIds)
+  scheduleCards.value = scheduleCards.value.map((c) => {
+    if (!ids.has(c.id) || c.qty <= 0 || c.lap_no !== lapNo) return c
+    return {
+      ...c,
+      product_cd: src.product_cd,
+      product_name: src.product_name,
+      plating_machine: jigMachine || c.plating_machine,
+      kake,
+      qty: 1,
+      slots: 1,
+      boardMark: 'manual' as BoardMark,
+      colorIdx: schedColorIndexForProductCd(src.product_cd),
+    }
+  })
+  refreshMarksAgainstStandardPositions()
+  const total = slots * kake
+  ElMessage.success(
+    `${src.product_name} を ${jigMachine}（${slots}本）に割当：${slots}×${formatQtyDisplay(kake)}=${formatQtyDisplay(total)}`,
+  )
+  void flushBoardPersist()
+}
+
+function onProductToJigBlockDragOver(e: DragEvent, ms?: LapMergedSegment) {
+  if (!draggingInventoryRow.value && !draggingSource.value) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  if (ms) productDropHoverBlockKey.value = ms.key
+}
+
+function onProductToJigBlockDragLeave(e: DragEvent) {
+  const rel = e.relatedTarget as Node | null
+  const el = e.currentTarget as HTMLElement | null
+  if (el && rel && el.contains(rel)) return
+  productDropHoverBlockKey.value = null
+}
+
+function onProductToJigBlockDrop(e: DragEvent, ms: LapMergedSegment, lapNo: number) {
+  e.preventDefault()
+  e.stopPropagation()
+  productDropHoverBlockKey.value = null
+  draggingInventoryRow.value = false
+  const src = resolveInventoryDragSource()
+  draggingSource.value = null
+  if (!src) return
+  if (!layoutBoardReady.value) {
+    ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
+    return
+  }
+  assignProductToJigBlock(ms, lapNo, src)
+}
+
+function boardTailCardTitle(tc: ScheduleCard): string {
+  const base = `${tc.plating_machine}・治具1本`
+  return isJigProductCd(tc.product_cd) ? `${base}・ダブルクリックで本数変更` : `${base}・生産${tc.qty}本`
+}
+
+function findJigBlockCardIds(cardId: string, lapNo: number): string[] {
+  const sorted = scheduleCards.value
+    .filter((c) => c.qty > 0 && c.lap_no === lapNo)
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  const idx = sorted.findIndex((c) => c.id === cardId)
+  if (idx < 0) return []
+  const mk = mergeKeyForScheduleCard(sorted[idx])
+  let start = idx
+  let end = idx
+  while (start > 0 && mergeKeyForScheduleCard(sorted[start - 1]) === mk) start -= 1
+  while (end < sorted.length - 1 && mergeKeyForScheduleCard(sorted[end + 1]) === mk) end += 1
+  return sorted.slice(start, end + 1).map((c) => c.id)
+}
+
+function resizeJigBlockOnLap(lapNo: number, cardIds: string[], newQty: number) {
+  const block = scheduleCards.value.filter((c) => cardIds.includes(c.id))
+  if (block.length === 0) return
+  const platingMachine = block[0].plating_machine
+  const insertTurn = Math.min(...block.map((c) => c.turn_seq))
+  const blockEnd = Math.max(...block.map((c) => c.turn_seq))
+  const qty = Math.max(1, Math.floor(Number(newQty) || 0))
+
+  const without = scheduleCards.value.filter((c) => !cardIds.includes(c.id))
+  const lapRest = without
+    .filter((c) => c.qty > 0 && c.lap_no === lapNo)
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  const before = lapRest.filter((c) => c.turn_seq < insertTurn)
+  const after = lapRest.filter((c) => c.turn_seq > blockEnd)
+
+  const newBlock: ScheduleCard[] = []
+  for (let i = 0; i < qty; i += 1) {
+    newBlock.push(createJigScheduleCard(platingMachine, lapNo, insertTurn + i))
+  }
+  const merged = [...before, ...newBlock, ...after]
+  merged.forEach((c, i) => {
+    c.turn_seq = i + 1
+  })
+
+  const others = without.filter((c) => c.lap_no !== lapNo || c.qty <= 0)
+  scheduleCards.value = [...others, ...merged]
+  refreshMarksAgainstStandardPositions()
+}
+
+function resetBoardJigEditDialog() {
+  boardJigEditPending.value = null
+  boardJigEditQty.value = 1
+  boardJigEditQtyMax.value = 1
+}
+
+function openBoardJigQtyEdit(ms: LapMergedSegment, lapNo: number) {
+  if (!isJigProductCd(ms.product_cd)) return
+  const maxQty = getJigEditQtyMax(ms.plating_machine, lapNo, ms.cardIds.length)
+  boardJigEditPending.value = {
+    lap_no: lapNo,
+    plating_machine: ms.plating_machine,
+    product_cd: ms.product_cd,
+    product_name: ms.product_name,
+    cardIds: [...ms.cardIds],
+  }
+  boardJigEditQtyMax.value = maxQty
+  boardJigEditQty.value = ms.cardIds.length
+  boardJigEditDialogVisible.value = true
+}
+
+function onBoardMergedSegDblClick(ms: LapMergedSegment, lapNo: number) {
+  openBoardJigQtyEdit(ms, lapNo)
+}
+
+function onBoardScheduleCardDblClick(card: ScheduleCard) {
+  if (!isJigProductCd(card.product_cd)) return
+  const cardIds = findJigBlockCardIds(card.id, card.lap_no)
+  if (cardIds.length === 0) return
+  const maxQty = getJigEditQtyMax(card.plating_machine, card.lap_no, cardIds.length)
+  boardJigEditPending.value = {
+    lap_no: card.lap_no,
+    plating_machine: card.plating_machine,
+    product_cd: card.product_cd,
+    product_name: card.product_name,
+    cardIds,
+  }
+  boardJigEditQtyMax.value = maxQty
+  boardJigEditQty.value = cardIds.length
+  boardJigEditDialogVisible.value = true
+}
+
+function confirmBoardJigQtyEdit() {
+  const pending = boardJigEditPending.value
+  if (!pending) return
+  const qty = Math.max(1, Math.min(boardJigEditQtyMax.value, Math.floor(Number(boardJigEditQty.value) || 0)))
+  const prev = pending.cardIds.length
+  if (qty === prev) {
+    boardJigEditDialogVisible.value = false
+    return
+  }
+  resizeJigBlockOnLap(pending.lap_no, pending.cardIds, qty)
+  boardJigEditDialogVisible.value = false
+  const diff = qty - prev
+  ElMessage.success(
+    diff > 0
+      ? `${pending.plating_machine} を ${diff} 本増やしました（計 ${qty} 本）`
+      : `${pending.plating_machine} を ${-diff} 本減らしました（計 ${qty} 本）`,
+  )
+  void flushBoardPersist()
+}
+
+function confirmJigDropToBoard() {
+  const pending = jigDropPending.value
+  if (!pending) return
+  const qty = Math.max(1, Math.min(jigDropQtyMax.value, Math.floor(Number(jigDropQty.value) || 0)))
+  const slots = findNextSequentialBoardSlots(qty, jigDropPreferLap.value)
+  if (slots.length === 0) {
+    ElMessage.warning('割り当て可能な枠がありません')
+    return
+  }
+  const newCards: ScheduleCard[] = slots.map((s) =>
+    createJigScheduleCard(pending.plating_machine, s.lap_no, s.turn_seq),
+  )
+  scheduleCards.value = [...scheduleCards.value, ...newCards]
+  jigDropDialogVisible.value = false
+  ElMessage.success(`${pending.plating_machine} を ${newCards.length} 枠（本）に配置しました`)
+  void flushBoardPersist()
+}
+
+function onJigCardDragStart(
+  e: DragEvent,
+  row: { machine_id: number | null; plating_machine: string; available_qty: number },
+) {
+  if (!layoutBoardReady.value) {
+    e.preventDefault()
+    ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
+    return
+  }
+  draggingJigToBoard.value = row
+  jigBoardDragActive.value = true
+  e.dataTransfer?.setData('application/x-plating-jig', row.plating_machine)
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy'
+}
+
+function onJigCardDragEnd() {
+  jigBoardDragActive.value = false
+  jigDropHoverLap.value = null
+  draggingJigToBoard.value = null
+}
+
+function onJigToBoardDragOver(e: DragEvent, lapNo?: number) {
+  const types = e.dataTransfer?.types
+  if (!draggingJigToBoard.value && !types?.includes?.('application/x-plating-jig')) return
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+  jigBoardDragActive.value = true
+  if (lapNo != null) jigDropHoverLap.value = lapNo
+}
+
+function onJigToBoardDragLeave(e: DragEvent) {
+  const rel = e.relatedTarget as Node | null
+  const board = (e.currentTarget as HTMLElement | null)
+  if (board && rel && board.contains(rel)) return
+  jigDropHoverLap.value = null
+}
+
+function onJigToBoardDrop(e: DragEvent, lapNo?: number) {
+  e.preventDefault()
+  jigBoardDragActive.value = false
+  jigDropHoverLap.value = null
+  const machine =
+    draggingJigToBoard.value?.plating_machine ||
+    e.dataTransfer?.getData('application/x-plating-jig') ||
+    ''
+  const row =
+    draggingJigToBoard.value ||
+    jigAvailabilityRows.value.find((r) => r.plating_machine === machine)
+  draggingJigToBoard.value = null
+  if (!row) return
+  openJigDropDialog(row, lapNo ?? null)
+}
+
+/** メッキ治具カード表示：例 J曲3段（22） */
+function formatJigPickLabel(row: { plating_machine: string; available_qty: number }): string {
+  const name = String(row.plating_machine || '—').trim() || '—'
+  const qty = Math.max(0, Math.floor(Number(row.available_qty) || 0))
+  return `${name}（${qty}）`
 }
 
 async function saveJigAvailabilityForm() {
@@ -1317,29 +2133,13 @@ async function saveJigAvailabilityForm() {
       })
     }
     ElMessage.success('メッキ治具の使用可能本数を保存しました')
-    jigDialogVisible.value = false
+    await loadJigAvailability()
   } catch (e) {
     console.error(e)
     ElMessage.error('メッキ治具の使用可能本数の保存に失敗しました')
   } finally {
     savingJigAvailability.value = false
   }
-}
-
-function focusNextJigQtyInput(currIndex: number) {
-  const inputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('.jig-edit-table .el-input-number__input'),
-  )
-  if (inputs.length === 0) return
-  const next = inputs[currIndex + 1]
-  if (next) {
-    next.focus()
-    next.select()
-    return
-  }
-  // 最終行で Enter を押したら先頭行にフォーカスを戻し、連続入力しやすくする
-  inputs[0].focus()
-  inputs[0].select()
 }
 
 /** メッキ治具文字列 → machines.efficiency（machine_name 主、machine_cd 補助） */
@@ -1534,7 +2334,7 @@ async function loadSummaryPair() {
 const PLATING_DAY_MINUTES = 600
 
 const boardLapsPerDay = computed(() => {
-  const cycle = minutesPerLap.value
+  const cycle = layoutBoardReady.value ? layoutMinutesPerLap.value : minutesPerLap.value
   if (cycle <= 0) return 0
   return Math.floor(PLATING_DAY_MINUTES / cycle)
 })
@@ -1554,175 +2354,155 @@ function schedColorIndexForProductCd(productCd: string): number {
   return Math.abs(h) % 8
 }
 
-function getJigAvailabilityLimitMap(): Map<string, number> {
-  const map = new Map<string, number>()
-  for (const r of jigAvailabilityRows.value) {
-    const key = normalizeMachineKey(r.plating_machine)
-    if (!key) continue
-    const n = Math.max(0, Math.floor(Number(r.available_qty) || 0))
-    map.set(key, n)
+const canUseLapCopy = computed(() => layoutBoardReady.value && layoutMaxLaps.value >= 2)
+
+const lapCopyLapOptions = computed(() => {
+  const scheduleByLap = new Map(buildGlobalLapSchedule().map((s) => [s.lap_no, s]))
+  return lapGridRows.value.map((r) => {
+    const wd = scheduleByLap.get(r.lap_no)?.work_date
+    const prefix = wd ? `${formatBoardDateLabel(wd)} ` : ''
+    return { value: r.lap_no, label: `${prefix}第${r.lap_display_no}周目` }
+  })
+})
+
+const lapCopySourceCount = computed(
+  () => scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapCopyFrom.value).length,
+)
+
+function openLapCopyDialog() {
+  if (!canUseLapCopy.value) {
+    ElMessage.warning('周目コピーには追加レイアウト後・2周目以上が必要です')
+    return
   }
-  return map
+  const rows = lapGridRows.value
+  lapCopyFrom.value = rows[0]?.lap_no ?? 1
+  lapCopyTo.value = rows.length >= 2 ? rows[1]!.lap_no : rows[0]?.lap_no ?? 1
+  lapCopyDialogVisible.value = true
 }
 
-interface JigDemand {
-  product_cd: string
-  product_name: string
-  plating_machine: string
-  kake: number
-  qty: number
-  slots: number
+function renumberLapTurnSeq(lapNo: number) {
+  const lapCards = scheduleCards.value
+    .filter((c) => c.qty > 0 && c.lap_no === lapNo)
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  lapCards.forEach((c, i) => {
+    c.turn_seq = i + 1
+  })
 }
 
-/** ②下書きの並びで治具の初出順を決め、未登録分は使用可能本数マスタ順、その後は残り */
-function buildPlatingMachineOrderForSchedule(
-  machinesWithDemandKeys: Set<string>,
-  demandByMachine: Map<string, JigDemand[]>,
-): string[] {
-  const displayForKey = (k: string): string => {
-    const arr = demandByMachine.get(k)
-    const d0 = arr?.[0]
-    const name = d0 && String(d0.plating_machine || '').trim()
-    return name || k
+function confirmCopyLapSchedule() {
+  const from = lapCopyFrom.value
+  const to = lapCopyTo.value
+  if (!layoutBoardReady.value) return
+  if (from === to) {
+    ElMessage.warning('コピー元とコピー先は別の周目を指定してください')
+    return
   }
-  const seen = new Set<string>()
-  const ordered: string[] = []
-  /** ②テーブルの上から下の行順（draftItems の配列順）で治具の初出順を決める */
-  for (const it of draftItems.value) {
-    const m = String(it.plating_machine || '').trim()
-    if (!m || m === '—') continue
-    const k = normalizeMachineKey(m)
-    if (!machinesWithDemandKeys.has(k) || seen.has(k)) continue
-    seen.add(k)
-    ordered.push(displayForKey(k))
+  const sourceCards = scheduleCards.value
+    .filter((c) => c.qty > 0 && c.lap_no === from)
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  if (sourceCards.length === 0) {
+    ElMessage.warning(`第${lapDisplayNo(from)}周目にコピーするデータがありません`)
+    return
   }
-  for (const r of jigAvailabilityRows.value) {
-    const m = String(r.plating_machine || '').trim()
-    if (!m || m === '—') continue
-    const k = normalizeMachineKey(m)
-    if (!machinesWithDemandKeys.has(k) || seen.has(k)) continue
-    seen.add(k)
-    ordered.push(displayForKey(k))
-  }
-  for (const k of machinesWithDemandKeys) {
-    if (seen.has(k)) continue
-    seen.add(k)
-    ordered.push(displayForKey(k))
-  }
-  return ordered
-}
-
-function buildJigCardsFromDemand(demands: JigDemand[], capLaps?: number): ScheduleCard[] {
-  const cycle = minutesPerLap.value
-  const lapsPerDay = cycle > 0 ? Math.floor(PLATING_DAY_MINUTES / cycle) : 0
-  if (lapsPerDay <= 0) return []
-  const cap = capLaps != null && capLaps > 0 ? Math.min(lapsPerDay, capLaps) : lapsPerDay
-  const lapUpper = Math.max(0, cap)
-
-  const limits = getJigAvailabilityLimitMap()
-
-  const demandByMachine = new Map<string, JigDemand[]>()
-  const machinesFromDemand = new Set<string>()
-  for (const d of demands) {
-    const m = String(d.plating_machine || '').trim()
-    if (!m || m === '—') continue
-    machinesFromDemand.add(m)
-    const key = normalizeMachineKey(m)
-    const arr = demandByMachine.get(key) ?? []
-    arr.push({ ...d, plating_machine: m })
-    demandByMachine.set(key, arr)
+  const cols = lapBoardColCount.value
+  if (sourceCards.length > cols) {
+    ElMessage.warning(
+      `第${lapDisplayNo(from)}周目は ${sourceCards.length} 枠あり、1周の列数（${cols} 本）を超えるためコピーできません`,
+    )
+    return
   }
 
-  const machinesWithDemand = new Set(Array.from(machinesFromDemand, (m) => normalizeMachineKey(m)))
-  const orderedMachines = buildPlatingMachineOrderForSchedule(machinesWithDemand, demandByMachine)
-
-  const out: ScheduleCard[] = []
-  let colorCounter = 0
-  for (let lap = 1; lap <= lapUpper; lap += 1) {
-    let turnSeq = 1
-    for (const machine of orderedMachines) {
-      const mKey = normalizeMachineKey(machine)
-      // 需要のある治具のみ並べ、空回りを避ける
-      if (!machinesWithDemand.has(mKey)) continue
-      const perLap = limits.get(mKey) ?? 0
-      if (perLap <= 0) continue
-      const q = demandByMachine.get(mKey) ?? []
-      for (let jigIdx = 1; jigIdx <= perLap; jigIdx += 1) {
-        const head = q[0]
-        if (!head || head.slots <= 0 || head.qty <= 0) continue
-        const kake = head.kake > 0 ? head.kake : 1
-        const allocQty = Math.min(head.qty, kake)
-        head.qty -= allocQty
-        head.slots -= 1
-        if (head.slots <= 0 || head.qty <= 0) q.shift()
-        out.push({
-          id: `jig-${lap}-${turnSeq}-${jigIdx}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-          product_cd: head.product_cd,
-          product_name: head.product_name,
-          plating_machine: machine,
-          kake,
-          qty: allocQty,
-          slots: 1,
-          lap_no: lap,
-          turn_seq: turnSeq,
-          colorIdx: colorCounter++,
-          boardMark: 'standard',
-        })
-      }
-      turnSeq += 1
+  const jigTotals = new Map<string, { machine: string; count: number }>()
+  for (const c of sourceCards) {
+    const key = normalizeMachineKey(c.plating_machine)
+    const cur = jigTotals.get(key) ?? { machine: c.plating_machine, count: 0 }
+    cur.count += 1
+    jigTotals.set(key, cur)
+  }
+  for (const { machine, count } of jigTotals.values()) {
+    const max = getJigAvailMaxFromMaster(machine)
+    if (count > max) {
+      ElMessage.warning(`${machine} は第${lapDisplayNo(to)}周目で使用可能 ${max} 本までです（コピー内容 ${count} 本）`)
+      return
     }
   }
-  return out
+
+  const ts = Date.now()
+  const newCards: ScheduleCard[] = sourceCards.map((c, i) => ({
+    ...c,
+    id: `lap-copy-${ts}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+    lap_no: to,
+    turn_seq: c.turn_seq,
+    boardMark: 'manual' as BoardMark,
+  }))
+
+  const others = scheduleCards.value.filter((c) => c.lap_no !== to)
+  scheduleCards.value = [...others, ...newCards]
+  renumberLapTurnSeq(to)
+  refreshMarksAgainstStandardPositions()
+  lapCopyDialogVisible.value = false
+  ElMessage.success(`第${lapDisplayNo(from)}周目の ${newCards.length} 枠を第${lapDisplayNo(to)}周目へコピーしました`)
+  void flushBoardPersist()
 }
 
-function openStandardTemplateDialog() {
+function openAppendLayoutDialog() {
+  tplFormPlanDate.value = draftWorkDate.value || todayYmdJapan()
+  tplFormStartTime.value = layoutBoardReady.value ? layoutStartTime.value : DEFAULT_BOARD_START_TIME
+  tplFormMinutesPerLap.value = layoutBoardReady.value ? layoutMinutesPerLap.value : minutesPerLap.value
   tplFormJigsPerLap.value = layoutBoardReady.value ? layoutJigsPerLap.value : jigsPerLap.value
   const d = boardLapsPerDay.value
-  tplFormMaxLaps.value = layoutBoardReady.value ? layoutMaxLaps.value : Math.max(1, Math.min(500, d > 0 ? d : 1))
+  tplFormMaxLaps.value = layoutBoardReady.value
+    ? 1
+    : Math.max(1, Math.min(500, d > 0 ? d : 1))
   templateDialogVisible.value = true
 }
 
-function confirmStandardTemplate() {
-  const j = Math.floor(Number(tplFormJigsPerLap.value) || 1)
-  const laps = Math.floor(Number(tplFormMaxLaps.value) || 1)
-  layoutJigsPerLap.value = Math.max(1, Math.min(200, j))
-  layoutMaxLaps.value = Math.max(1, Math.min(500, laps))
+function confirmAppendLayout() {
+  const planDate = (tplFormPlanDate.value || '').trim()
+  if (!planDate) {
+    ElMessage.warning('計画日を指定してください')
+    return
+  }
+  if (tplLapSchedulePreview.value.length === 0) {
+    ElMessage.warning('開始時刻・段数を確認してください')
+    return
+  }
+  const j = Math.max(1, Math.min(300, Math.floor(Number(tplFormJigsPerLap.value) || 1)))
+  const laps = Math.max(1, Math.min(500, Math.floor(Number(tplFormMaxLaps.value) || 1)))
+  const cycle = Math.max(1, Math.min(600, Math.floor(Number(tplFormMinutesPerLap.value) || 1)))
+  const startHm = normalizeBoardStartTimeHm(tplFormStartTime.value)
+  const baseLapNo = layoutBoardReady.value && layoutMaxLaps.value > 0 ? layoutMaxLaps.value + 1 : 1
+
+  if (layoutBoardReady.value && layoutJigsPerLap.value !== j) {
+    ElMessage.warning(`1周の本数を ${layoutJigsPerLap.value} から ${j} に変更します（ボード全体）`)
+  }
+
+  layoutBlocks.value.push({
+    plan_date: planDate,
+    start_time: startHm,
+    minutes_per_lap: cycle,
+    jigs_per_lap: j,
+    lap_count: laps,
+    base_lap_no: baseLapNo,
+  })
+  layoutMaxLaps.value = baseLapNo + laps - 1
+  layoutPlanDate.value = planDate
+  layoutStartTime.value = startHm
+  layoutMinutesPerLap.value = cycle
+  layoutJigsPerLap.value = j
+  jigsPerLap.value = j
+  minutesPerLap.value = cycle
   layoutBoardReady.value = true
-  scheduleCards.value = []
-  standardPositions.value = new Map()
   templateDialogVisible.value = false
   void nextTick(() => {
     if (!scheduleCards.value.some((c) => c.qty > 0)) initLapTrackSortables()
   })
-  ElMessage.success('空き枠を表示しました。②の「看板に割当」から投入してください')
-  void flushBoardPersist()
-}
-
-/** ②の下書きをボード枠へ自動割当（標準ロジック） */
-function mergeDraftIntoSchedule() {
-  if (!layoutBoardReady.value) {
-    ElMessage.warning('先に「標準レイアウト」で枠の条件を確定してください')
-    return
-  }
-  if (draftItems.value.length === 0) {
-    ElMessage.warning('②の下書きにデータがありません')
-    return
-  }
-  const demands: JigDemand[] = draftItems.value.map((it) => ({
-      product_cd: it.product_cd,
-      product_name: it.product_name,
-      plating_machine: it.plating_machine,
-      kake: it.kake > 0 ? it.kake : 1,
-      qty: Math.max(0, Math.floor(num(it.qty))),
-      slots: Math.max(0, Math.floor(num(it.slots))),
-    }))
-  const built = buildJigCardsFromDemand(demands, layoutMaxLaps.value)
-  const pos = new Map<string, { lap_no: number; turn_seq: number }>()
-  for (const c of built) pos.set(c.id, { lap_no: c.lap_no, turn_seq: c.turn_seq })
-  standardPositions.value = pos
-  scheduleCards.value = built
+  const preview = buildLapScheduleRows(planDate, startHm, cycle, laps)
+  const last = preview[preview.length - 1]
   ElMessage.success(
-    `割当てが完了しました（${built.length} 枠・合計 ${built.reduce((s, c) => s + c.qty, 0)} 本）`,
+    last
+      ? `${formatBoardDateLabel(planDate)}：第1〜${laps}周目を追加しました（${startHm}〜${last.end}）`
+      : `${formatBoardDateLabel(planDate)}：第1〜${laps}周目の空き枠を追加しました`,
   )
   void flushBoardPersist()
 }
@@ -1755,6 +2535,8 @@ interface LapMergedSegment {
 
 interface LapGridRow {
   lap_no: number
+  /** 同一計画日内の表示用周番（1 始まり） */
+  lap_display_no: number
   cells: LapGridCell[]
   /** null＝未割当の空枠（列セル表示）／配列＝左側列の横結合バー */
   mergedLeft: LapMergedSegment[] | null
@@ -1765,14 +2547,22 @@ interface LapGridRow {
 /** 1周あたりの治具本数＝列数（レイアウト確定後は layout を優先） */
 const lapBoardColCount = computed(() => {
   const j = Math.floor(Number(layoutBoardReady.value ? layoutJigsPerLap.value : jigsPerLap.value) || 0)
-  return Math.max(1, Math.min(200, j > 0 ? j : 1))
+  return Math.max(1, Math.min(300, j > 0 ? j : 1))
 })
 
 /** 各「本」列：約 3 桁分の幅（ch＝数字 0 の幅基準）＋横スクロールで全体を閲覧 */
 const lapBoardColTrack = 'minmax(3ch, 3ch)'
 
+const lapLabelColWidth = '76px'
+
+/** 右側本数列は横スクロール、周列は各行で sticky 固定 */
+const lapBoardColsGridStyle = computed(() => ({
+  gridTemplateColumns: `repeat(${lapBoardColCount.value}, ${lapBoardColTrack})`,
+}))
+
+/** 印刷 HTML 用（周列＋本数列の一体グリッド） */
 const lapBoardGridStyle = computed(() => ({
-  gridTemplateColumns: `52px repeat(${lapBoardColCount.value}, ${lapBoardColTrack})`,
+  gridTemplateColumns: `${lapLabelColWidth} repeat(${lapBoardColCount.value}, ${lapBoardColTrack})`,
 }))
 
 /** 横結合バー用：ヘッダー列と同じ本数・同じ列幅 */
@@ -1895,6 +2685,12 @@ const lapGridRows = computed<LapGridRow[]>(() => {
     if (lapNumbers.length === 0) return []
   }
 
+  const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
+  if (scheduleByLap.size > 0) {
+    lapNumbers.sort((a, b) => compareLapNoForBoardSort(a, b, scheduleByLap))
+  }
+  lapNumbers = lapNumbers.filter((lapNo) => isLapNoInBoardView(lapNo, scheduleByLap))
+
   return lapNumbers.map((lapNo) => {
     const cards = (byLap.get(lapNo) ?? []).sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
     const bins = binCardsIntoColumns(cards, n)
@@ -1903,8 +2699,39 @@ const lapGridRows = computed<LapGridRow[]>(() => {
     }))
     const mergedLeft = cards.length > 0 ? buildMergedLeftSegments(cards, lapNo, n) : null
     const mergedTail = cards.length > 0 ? (binCardsIntoColumns(cards, n)[n - 1] ?? []) : null
-    return { lap_no: lapNo, cells, mergedLeft, mergedTail }
+    return {
+      lap_no: lapNo,
+      lap_display_no: lapDisplayNo(lapNo),
+      cells,
+      mergedLeft,
+      mergedTail,
+    }
   })
+})
+
+/** 周目列：日付が変わる直前に日付区切り行を挿入 */
+const lapBoardDisplayRows = computed<LapBoardDisplayItem[]>(() => {
+  const laps = lapGridRows.value
+  if (laps.length === 0) return []
+  const schedule = currentLayoutLapSchedule()
+  const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
+  const out: LapBoardDisplayItem[] = []
+  let prevDate = ''
+  for (const row of laps) {
+    const slot = scheduleByLap.get(row.lap_no)
+    const wd = slot?.work_date ?? layoutPlanDate.value
+    if (wd && wd !== prevDate) {
+      out.push({
+        kind: 'date',
+        key: `date-${wd}-${row.lap_no}`,
+        work_date: wd,
+        dateLabel: slot?.work_date_label ?? formatBoardDateLabel(wd),
+      })
+      prevDate = wd
+    }
+    out.push({ kind: 'lap', key: `lap-${row.lap_no}`, row })
+  }
+  return out
 })
 
 function refreshMarksAgainstStandardPositions() {
@@ -1922,7 +2749,7 @@ function refreshMarksAgainstStandardPositions() {
 function readScheduleCardsFromBoardDom(): ScheduleCard[] | null {
   const n = lapBoardColCount.value
   const idToCard = new Map(scheduleCards.value.map((c) => [c.id, c]))
-  const rows = [...document.querySelectorAll<HTMLElement>('.lap-board-body-row')]
+  const rows = [...document.querySelectorAll<HTMLElement>('.lap-board-body-row--lap')]
     .map((el) => ({ lap_no: Number(el.dataset.lapNo) || 0, el }))
     .filter((r) => r.lap_no > 0)
     .sort((a, b) => a.lap_no - b.lap_no)
@@ -1963,6 +2790,54 @@ function syncScheduleOrderFromLapTracks() {
   refreshMarksAgainstStandardPositions()
 }
 
+function readOrderedCardIdsFromLapRow(lapEl: HTMLElement): string[] {
+  const ids: string[] = []
+  const host = lapEl.querySelector('.lap-merged-host')
+  if (host) {
+    host.querySelectorAll<HTMLElement>('.lap-merged-seg[data-block-ids]').forEach((seg) => {
+      const raw = seg.dataset.blockIds || ''
+      for (const id of raw.split(',')) {
+        const t = id.trim()
+        if (t) ids.push(t)
+      }
+    })
+  }
+  const tail = lapEl.querySelector('.lap-merged-tail')
+  if (tail) {
+    tail.querySelectorAll<HTMLElement>('.lap-merged-tail-item[data-card-id]').forEach((item) => {
+      const id = item.dataset.cardId?.trim()
+      if (id) ids.push(id)
+    })
+  }
+  return ids
+}
+
+function syncScheduleOrderFromMergedRow(lapEl: HTMLElement, lapNo: number) {
+  const orderedIds = readOrderedCardIdsFromLapRow(lapEl)
+  if (orderedIds.length === 0) return
+
+  const lapCardMap = new Map(
+    scheduleCards.value
+      .filter((c) => c.qty > 0 && c.lap_no === lapNo)
+      .map((c) => [c.id, c] as const),
+  )
+  const reordered: ScheduleCard[] = []
+  for (const id of orderedIds) {
+    const c = lapCardMap.get(id)
+    if (c) reordered.push(c)
+  }
+  for (const c of lapCardMap.values()) {
+    if (!orderedIds.includes(c.id)) reordered.push(c)
+  }
+  reordered.forEach((c, i) => {
+    c.turn_seq = i + 1
+  })
+
+  const others = scheduleCards.value.filter((c) => c.lap_no !== lapNo || c.qty <= 0)
+  scheduleCards.value = [...others, ...reordered]
+  refreshMarksAgainstStandardPositions()
+}
+
 function removeScheduleCard(id: string) {
   const next = scheduleCards.value.filter((c) => c.id !== id)
   const byLap = new Map<number, ScheduleCard[]>()
@@ -1984,42 +2859,68 @@ function removeScheduleCard(id: string) {
   void flushBoardPersist()
 }
 
-let draftTableSortable: Sortable | null = null
 let lapTrackSortables: Sortable[] = []
-
-function destroyDraftTableSortable() {
-  draftTableSortable?.destroy()
-  draftTableSortable = null
-}
-
-function initDraftTableSortable() {
-  destroyDraftTableSortable()
-  const tableEl = draftTableRef.value?.$el as HTMLElement | undefined
-  if (!tableEl) return
-  const tbody = tableEl.querySelector('.el-table__body-wrapper tbody') as HTMLElement | null
-  if (!tbody) return
-  draftTableSortable = Sortable.create(tbody, {
-    animation: 150,
-    /** 製品名列のみ掴んで行移動（生産数・削除等はドラッグしない） */
-    handle: '.draft-row-drag-handle',
-    onEnd: async (evt) => {
-      if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return
-      const arr = reorderDraftListByIndex(draftItems.value, evt.oldIndex, evt.newIndex)
-      applyFullDraftReorderAfterDrag(arr)
-      await nextTick()
-      try {
-        await persistDraft(false)
-      } catch (e) {
-        console.error(e)
-        ElMessage.error('並び順の自動保存に失敗しました。通信状況を確認してください')
-      }
-    },
-  })
-}
+let lapMergedSortables: Sortable[] = []
 
 function destroyLapTrackSortables() {
   for (const s of lapTrackSortables) s.destroy()
   lapTrackSortables = []
+}
+
+function destroyLapMergedSortables() {
+  for (const s of lapMergedSortables) s.destroy()
+  lapMergedSortables = []
+}
+
+function initLapMergedSortables() {
+  destroyLapMergedSortables()
+  const hosts = Array.from(document.querySelectorAll<HTMLElement>('.lap-merged-host'))
+  for (const host of hosts) {
+    const row = host.closest<HTMLElement>('.lap-board-body-row')
+    const lapNo = Number(row?.dataset.lapNo) || 0
+    if (!row || lapNo <= 0) continue
+    const s = Sortable.create(host, {
+      animation: 120,
+      draggable: '.lap-merged-seg--board-draggable',
+      ghostClass: 'lap-merged-seg--ghost',
+      onEnd: () => {
+        nextTick(() => {
+          syncScheduleOrderFromMergedRow(row, lapNo)
+          void flushBoardPersist()
+        })
+      },
+    })
+    lapMergedSortables.push(s)
+  }
+  const tails = Array.from(document.querySelectorAll<HTMLElement>('.lap-merged-tail'))
+  for (const tail of tails) {
+    const row = tail.closest<HTMLElement>('.lap-board-body-row')
+    const lapNo = Number(row?.dataset.lapNo) || 0
+    if (!row || lapNo <= 0) continue
+    const items = tail.querySelectorAll('.lap-merged-tail-item--board-draggable, .lap-merged-tail-item.lap-merged-seg--board-draggable')
+    if (items.length < 2) continue
+    const s = Sortable.create(tail, {
+      animation: 120,
+      draggable: '.lap-merged-seg--board-draggable',
+      onEnd: () => {
+        nextTick(() => {
+          syncScheduleOrderFromMergedRow(row, lapNo)
+          void flushBoardPersist()
+        })
+      },
+    })
+    lapMergedSortables.push(s)
+  }
+}
+
+function initBoardLapSortables() {
+  if (scheduleCards.value.some((c) => c.qty > 0)) {
+    destroyLapTrackSortables()
+    initLapMergedSortables()
+  } else {
+    destroyLapMergedSortables()
+    initLapTrackSortables()
+  }
 }
 
 function initLapTrackSortables() {
@@ -2033,6 +2934,7 @@ function initLapTrackSortables() {
       onEnd: () => {
         nextTick(() => {
           syncScheduleOrderFromLapTracks()
+          void flushBoardPersist()
         })
       },
     })
@@ -2041,7 +2943,9 @@ function initLapTrackSortables() {
 }
 
 /** 数量が入っている割当枠のみ印刷対象 */
-const hasPrintableScheduleRows = computed(() => scheduleCards.value.some((c) => num(c.qty) > 0))
+const hasPrintableScheduleRows = computed(() =>
+  scheduleCards.value.some((c) => num(c.qty) > 0 && isLapNoInBoardView(c.lap_no)),
+)
 
 function escapeHtmlForPrint(s: string): string {
   return String(s ?? '')
@@ -2059,20 +2963,33 @@ function boardMarkSegClass(m: BoardMark, merged: boolean): string {
   return ''
 }
 
+function buildLapDateRowPrintHtml(dateLabel: string, n: number): string {
+  const gridStyle = `grid-template-columns:76px repeat(${n},${LAP_PRINT_COL_TRACK})`
+  return `<div class="lap-board-grid lap-board-date-row" style="${gridStyle}"><div class="lap-date-label">${escapeHtmlForPrint(
+    dateLabel,
+  )}</div><div class="lap-date-band"></div></div>`
+}
+
 /** 画面上の lap-board と同じ構造を印刷 HTML に組み立てる */
 function buildLapBoardRowPrintHtml(row: LapGridRow, n: number): string {
-  const gridStyle = `grid-template-columns:52px repeat(${n},${LAP_PRINT_COL_TRACK})`
+  const gridStyle = `grid-template-columns:76px repeat(${n},${LAP_PRINT_COL_TRACK})`
   const innerGrid = `grid-template-columns:repeat(${n},${LAP_PRINT_COL_TRACK})`
-  const lapLabel = `第${row.lap_no}周目`
+  const timeLbl = lapTimeRangeLabel(row.lap_no)
+  const lapLabel = timeLbl
+    ? `第${row.lap_display_no}周目\n${timeLbl}`
+    : `第${row.lap_display_no}周目`
 
   if (row.mergedLeft != null) {
     const leftSegs = row.mergedLeft
       .map((ms) => {
         const ci = schedColorIndexForProductCd(ms.product_cd)
         const mk = boardMarkSegClass(ms.boardMark, true)
-        return `<div class="lap-merged-seg sched-color-${ci} ${mk}" style="grid-column:${ms.startCol} / span ${ms.span};grid-row:1"><span class="lap-merged-text">${escapeHtmlForPrint(
-          formatPlatingBoardLabel(ms.product_name, ms.span),
-        )}</span></div>`
+        const calc = formatJigBlockProductCalc(ms)
+        const jigLbl = escapeHtmlForPrint(formatPlatingBoardLabel(ms.plating_machine, ms.span))
+        const inner = calc
+          ? `<span class="lap-merged-text lap-merged-text--jig">${jigLbl}</span><span class="lap-merged-text lap-merged-text--calc">${escapeHtmlForPrint(calc)}</span>`
+          : `<span class="lap-merged-text lap-merged-text--jig">${jigLbl}</span>`
+        return `<div class="lap-merged-seg sched-color-${ci} ${mk}" style="grid-column:${ms.startCol} / span ${ms.span};grid-row:1"><div class="lap-merged-label-stack">${inner}</div></div>`
       })
       .join('')
     let tailHtml = ''
@@ -2119,17 +3036,17 @@ function printScheduleBoard() {
     ElMessage.warning('印刷できる割当データがありません')
     return
   }
-  const gridRows = lapGridRows.value
-  if (gridRows.length === 0) {
-    ElMessage.warning('ボード表示がありません（標準レイアウトと割当を確認してください）')
+  const displayRows = lapBoardDisplayRows.value
+  if (displayRows.length === 0) {
+    ElMessage.warning('ボード表示がありません（追加レイアウトと割当を確認してください）')
     return
   }
   const k = kpi.value
   const workDate = draftWorkDate.value || '—'
   const printedAt = dayjs().tz(TZ_JP).format('YYYY-MM-DD HH:mm:ss')
   const layoutDesc = layoutBoardReady.value
-    ? `レイアウト：1周 ${layoutJigsPerLap.value} 本／最大 ${layoutMaxLaps.value} 周`
-    : 'レイアウト：未確定（標準レイアウト未設定）'
+    ? `レイアウト：${layoutBlocksSummary.value}／1周 ${layoutJigsPerLap.value} 本／計 ${layoutMaxLaps.value} 周`
+    : 'レイアウト：未確定（追加レイアウト未設定）'
 
   const n = lapBoardColCount.value
   const headCols = Array.from({ length: n }, (_, i) => i + 1)
@@ -2138,8 +3055,14 @@ function printScheduleBoard() {
         `<div class="lap-col-head"><span class="lap-col-head-n">${i}</span><span class="lap-col-head-s">本</span></div>`,
     )
     .join('')
-  const headGridStyle = `grid-template-columns:52px repeat(${n},${LAP_PRINT_COL_TRACK})`
-  const boardBody = gridRows.map((row) => buildLapBoardRowPrintHtml(row, n)).join('')
+  const headGridStyle = `grid-template-columns:76px repeat(${n},${LAP_PRINT_COL_TRACK})`
+  const boardBody = displayRows
+    .map((item) =>
+      item.kind === 'date'
+        ? buildLapDateRowPrintHtml(item.dateLabel, n)
+        : buildLapBoardRowPrintHtml(item.row, n),
+    )
+    .join('')
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
@@ -2172,6 +3095,16 @@ function printScheduleBoard() {
       break-inside: avoid; page-break-inside: avoid;
     }
     .lap-board-body-row:last-of-type { border-radius: 0 0 6px 6px; }
+    .lap-board-date-row {
+      border: 1px solid #ebeef5; border-top: none; background: #ecf5ff;
+      break-inside: avoid; page-break-inside: avoid;
+    }
+    .lap-date-label {
+      display: flex; align-items: center; justify-content: flex-end; padding: 4px 6px;
+      font-size: 11px; font-weight: 700; color: #409eff;
+      border-right: 1px solid #d9ecff; background: #ecf5ff;
+    }
+    .lap-date-band { grid-column: 2 / -1; min-height: 26px; background: #ecf5ff; }
     .lap-corner {
       display: flex; align-items: center; justify-content: center; padding: 5px 3px;
       font-size: 10px; font-weight: 600; color: #909399;
@@ -2196,22 +3129,25 @@ function printScheduleBoard() {
       box-sizing: border-box; border-right: none;
     }
     .lap-merged-seg {
-      min-width: 0; display: flex; align-items: center; justify-content: center;
+      position: relative; min-width: 0;
       padding: 3px 4px; margin: 2px 0; box-sizing: border-box;
       border: 1px solid rgba(0,0,0,0.06); border-radius: 6px;
     }
     .lap-merged-seg--manual { outline: 2px solid #fa8c16; outline-offset: -1px; z-index: 1; }
     .lap-merged-seg--rush { outline: 2px solid #cf1322; outline-offset: -1px; z-index: 1; }
-    .lap-merged-text {
-      font-size: 10px; line-height: 1.25; text-align: center; overflow: hidden; text-overflow: ellipsis;
-      white-space: nowrap; max-width: 100%; font-weight: 600; color: #303133;
+    .lap-merged-label-stack {
+      position: absolute; top: 2px; right: 3px; left: 3px; bottom: 2px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 2px; overflow: hidden;
     }
+    .lap-merged-text { line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #303133; }
+    .lap-merged-text--jig { align-self: flex-end; font-size: 9px; text-align: right; }
+    .lap-merged-text--calc { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%); font-size: 11px; text-align: left; font-weight: 700; color: #409eff; }
     .lap-merged-tail {
       display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 2px;
       box-sizing: border-box; border-left: 1px solid #ebeef5;
     }
     .lap-merged-tail-item {
-      flex: 0 0 auto; min-height: 22px; display: flex; align-items: center; justify-content: center;
+      position: relative; flex: 0 0 auto; min-height: 22px;
       padding: 2px 3px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.06); box-sizing: border-box;
     }
     .lap-col {
@@ -2232,13 +3168,14 @@ function printScheduleBoard() {
       border-radius: 4px; overflow: hidden; background: #f5f7fa;
     }
     .lap-segment--cell {
-      min-height: 20px; display: flex; align-items: center; justify-content: space-between;
-      gap: 4px; padding: 2px 4px; border-radius: 2px;
+      position: relative; min-height: 20px; padding: 2px 4px; border-radius: 2px;
     }
     .lap-segment--manual { outline: 2px solid #fa8c16; outline-offset: -1px; z-index: 1; }
     .lap-segment--rush { outline: 2px solid #cf1322; outline-offset: -1px; z-index: 1; }
     .lap-segment-text {
-      font-size: 10px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      position: absolute; top: 2px; right: 3px; left: auto;
+      font-size: 9px; line-height: 1.2; text-align: right; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 6px); font-weight: 600;
     }
     @media print {
       @page { size: A3 landscape; margin: 8mm; }
@@ -2374,19 +3311,22 @@ function clearSchedule() {
   scheduleCards.value = []
   standardPositions.value = new Map()
   layoutBoardReady.value = false
+  layoutBlocks.value = []
   void flushBoardPersist()
 }
 
 watch(
   scheduleCards,
   () => {
-    const hasCards = scheduleCards.value.some((c) => c.qty > 0)
-    if (hasCards) destroyLapTrackSortables()
-    else void nextTick(() => initLapTrackSortables())
+    nextTick(() => initBoardLapSortables())
     scheduleBoardAutosave()
   },
   { deep: true },
 )
+
+watch(lapGridRows, () => {
+  nextTick(() => initBoardLapSortables())
+})
 watch(leftRows, () => { nextTick(() => bindTableRowDrag(leftTableRef, leftRows.value, 'left')) })
 watch(rightRows, () => { nextTick(() => bindTableRowDrag(rightTableRef, rightRows.value, 'right')) })
 watch(
@@ -2403,28 +3343,24 @@ watch(
   () => {
     if (syncingDraftWorkDateFromLoad.value) return
     void loadLatestDraft({ autoMode: true, autoSyncWorkDate: false })
+    void loadJigAvailability()
   },
   { flush: 'sync' },
 )
-watch(draftItems, () => {
-  nextTick(initDraftTableSortable)
-}, { deep: true })
-
 onMounted(() => {
   void loadLatestDraft({ autoMode: true, autoSyncWorkDate: true })
   loadJigAvailability()
   nextTick(() => {
     bindTableRowDrag(leftTableRef, leftRows.value, 'left')
     bindTableRowDrag(rightTableRef, rightRows.value, 'right')
-    initDraftTableSortable()
-    initLapTrackSortables()
+    initBoardLapSortables()
   })
 })
 
 onBeforeUnmount(() => {
   cancelBoardAutosaveTimer()
-  destroyDraftTableSortable()
   destroyLapTrackSortables()
+  destroyLapMergedSortables()
 })
 </script>
 
@@ -2501,6 +3437,34 @@ onBeforeUnmount(() => {
   padding: 10px 12px;
 }
 
+.pp-card--jig {
+  border-color: color-mix(in oklab, var(--el-color-success) 22%, var(--pp-border));
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--el-color-success-light-9) 42%, transparent) 0%, transparent 58%),
+    var(--el-bg-color);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.035);
+}
+
+.pp-card--jig :deep(.el-card__header) {
+  background:
+    linear-gradient(90deg, color-mix(in oklab, var(--el-color-success-light-9) 62%, transparent), transparent 72%),
+    var(--el-fill-color-blank);
+}
+
+.jig-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.jig-meta-pill--hint {
+  color: var(--el-text-color-placeholder);
+  background: transparent;
+  border: 1px dashed var(--el-border-color-lighter);
+}
+
 .pp-card--board :deep(.el-card__body) {
   padding-top: 8px;
 }
@@ -2523,37 +3487,11 @@ onBeforeUnmount(() => {
   letter-spacing: 0.2px;
 }
 
-.pp-card--draft {
-  border-color: color-mix(in oklab, var(--el-color-warning) 24%, var(--pp-border));
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--el-color-warning-light-9) 48%, transparent) 0%, transparent 58%),
-    var(--el-bg-color);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.035);
-}
-
-.pp-card--draft :deep(.el-card__header) {
-  background:
-    linear-gradient(90deg, color-mix(in oklab, var(--el-color-warning-light-9) 66%, transparent), transparent 72%),
-    var(--el-fill-color-blank);
-}
-
-.draft-head-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.draft-head-hint {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in oklab, var(--el-color-warning) 42%, var(--el-border-color-lighter));
-  background: color-mix(in oklab, var(--el-color-warning-light-9) 78%, var(--el-bg-color));
-  color: color-mix(in oklab, var(--el-color-warning) 70%, var(--el-text-color-regular));
+.summary-drag-hint {
+  margin: 0 0 8px;
   font-size: 11px;
-  font-weight: 600;
+  line-height: 1.4;
+  color: var(--el-text-color-secondary);
 }
 
 .board-cond-banner {
@@ -2585,11 +3523,26 @@ onBeforeUnmount(() => {
   opacity: 0.55;
 }
 
+.board-cond-hint {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+}
+
 .tpl-dialog-hint {
   margin: 0 0 8px;
   font-size: 11px;
   color: var(--el-text-color-secondary);
   line-height: 1.4;
+}
+
+.tpl-dialog-append-note {
+  margin: 0 0 10px;
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  border-radius: 6px;
 }
 
 .tpl-dialog :deep(.el-dialog) {
@@ -2638,6 +3591,44 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.tpl-compact-grid--schedule {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 10px;
+}
+
+.tpl-field--wide {
+  grid-column: 1 / -1;
+}
+
+.tpl-date,
+.tpl-time {
+  width: 100%;
+}
+
+.tpl-schedule-preview {
+  margin-top: 4px;
+}
+
+.tpl-schedule-preview-title {
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.tpl-schedule-table :deep(.el-table__cell) {
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.lap-copy-grid {
+  margin-bottom: 8px;
+}
+
+.lap-copy-select {
+  width: 100%;
 }
 
 .tpl-field {
@@ -2840,139 +3831,6 @@ onBeforeUnmount(() => {
   background: color-mix(in oklab, var(--el-color-success-light-9) 56%, transparent);
 }
 
-.draft-wrap {
-  border: 1px solid color-mix(in oklab, var(--el-color-warning) 22%, var(--el-border-color-lighter));
-  border-radius: 10px;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--el-color-warning-light-9) 40%, transparent) 0%, transparent 110px),
-    var(--el-fill-color-blank);
-}
-
-.draft-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 7px 10px;
-  font-size: 12px;
-  border-bottom: 1px solid color-mix(in oklab, var(--el-color-warning) 18%, var(--el-border-color-lighter));
-  background:
-    linear-gradient(90deg, color-mix(in oklab, var(--el-color-warning-light-8) 52%, transparent), transparent 74%),
-    var(--el-bg-color);
-}
-
-.draft-toolbar-title {
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-
-.draft-toolbar-meta {
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in oklab, var(--el-color-warning-dark-2) 56%, var(--el-text-color-secondary));
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.draft-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 8px 10px 4px;
-}
-
-.draft-stat-card {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 9px;
-  border-radius: 9px;
-  border: 1px solid color-mix(in oklab, var(--el-color-warning) 26%, var(--el-border-color-lighter));
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--el-color-warning-light-9) 76%, transparent), transparent),
-    var(--el-bg-color);
-}
-
-.draft-stat-label {
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-}
-
-.draft-stat-value {
-  font-size: 14px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: color-mix(in oklab, var(--el-color-warning-dark-2) 82%, var(--el-text-color-primary));
-  letter-spacing: 0.2px;
-}
-
-.draft-row-drag-handle {
-  cursor: grab;
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-  color: color-mix(in oklab, var(--el-color-warning-dark-2) 72%, var(--el-text-color-primary));
-  font-weight: 600;
-  border-bottom: 1px dashed transparent;
-  transition: color 120ms ease, border-color 120ms ease;
-}
-
-.draft-row-drag-handle:hover {
-  color: color-mix(in oklab, var(--el-color-warning-dark-2) 86%, var(--el-text-color-primary));
-  border-color: color-mix(in oklab, var(--el-color-warning) 60%, transparent);
-}
-
-.draft-row-drag-handle:active {
-  cursor: grabbing;
-}
-
-.qty-cell-edit {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-}
-
-.qty-cell-edit :deep(.el-input-number) {
-  width: 88px;
-}
-
-.qty-readonly {
-  display: inline-block;
-  min-width: 48px;
-  text-align: right;
-  cursor: text;
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid color-mix(in oklab, var(--el-color-warning-light-7) 45%, transparent);
-  background: color-mix(in oklab, var(--el-color-warning-light-9) 60%, var(--el-bg-color));
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.qty-readonly:hover {
-  background: color-mix(in oklab, var(--el-color-warning-light-8) 72%, var(--el-bg-color));
-  border-color: color-mix(in oklab, var(--el-color-warning) 50%, var(--el-border-color-lighter));
-}
-
-.draft-target-table :deep(.el-table__header th) {
-  background: color-mix(in oklab, var(--el-color-warning-light-9) 78%, var(--el-bg-color));
-}
-
-.draft-target-table :deep(.el-table__row:hover > td.el-table__cell) {
-  background: color-mix(in oklab, var(--el-color-warning-light-9) 56%, transparent);
-}
-
-@media (max-width: 900px) {
-  .draft-stat-grid {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
-}
-
 :deep(.table-row-draggable td) {
   cursor: grab;
 }
@@ -3016,15 +3874,130 @@ onBeforeUnmount(() => {
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   background: var(--el-fill-color-blank);
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
 }
 
-.lap-board-scroll {
+.lap-board--jig-drop {
+  border-color: color-mix(in oklab, var(--el-color-primary) 55%, var(--el-border-color));
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--el-color-primary-light-5) 40%, transparent);
+}
+
+.lap-board-row--jig-drop .lap-rail-lap,
+.lap-board-row--jig-drop .lap-board-body-row {
+  background: color-mix(in oklab, var(--el-color-primary-light-9) 65%, transparent);
+}
+
+.jig-drop-dialog-name {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.jig-drop-dialog-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.jig-drop-dialog-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.45;
+}
+
+.jig-drop-qty-item {
+  margin-bottom: 0;
+}
+
+.lap-board-outer {
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overflow-y: visible;
-  border-radius: 6px;
   scrollbar-gutter: stable;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  background: var(--el-bg-color);
+}
+
+.lap-board-layout {
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+}
+
+.lap-board-row {
+  display: grid;
+  grid-template-columns: 76px max-content;
+  align-items: stretch;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.lap-board-row:last-child {
+  border-bottom: none;
+}
+
+.lap-rail-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 6px 4px 4px;
+  box-sizing: border-box;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  border-right: 1px solid var(--el-border-color-lighter);
+  background: var(--el-fill-color-blank);
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.06);
+}
+
+.lap-board-row--head .lap-rail-cell,
+.lap-board-row--head .lap-board-grid {
+  min-height: 36px;
+}
+
+.lap-rail-head {
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+}
+
+.lap-board-row--date .lap-rail-cell,
+.lap-board-row--date .lap-board-grid {
+  min-height: 28px;
+}
+
+.lap-rail-date {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--el-color-primary);
+  background: color-mix(in oklab, var(--el-color-primary-light-9) 85%, var(--el-bg-color));
+}
+
+.lap-board-row--lap .lap-rail-cell,
+.lap-board-row--lap .lap-board-grid {
+  min-height: 38px;
+}
+
+.lap-rail-lap {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-blank);
+}
+
+.lap-rail-lap--jig-drop {
+  background: color-mix(in oklab, var(--el-color-primary-light-9) 65%, var(--el-fill-color-blank));
 }
 
 .lap-board-grid {
@@ -3032,29 +4005,34 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 0;
   width: max-content;
+  min-width: 100%;
   box-sizing: border-box;
 }
 
 .lap-board-head {
   margin-bottom: 0;
-  border-radius: 6px 6px 0 0;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
   border-bottom: none;
   background: var(--el-bg-color);
 }
 
 .lap-board-body-row {
-  border: 1px solid var(--el-border-color-lighter);
-  border-top: none;
   background: var(--el-bg-color);
+  height: 100%;
 }
 
-.lap-board-body-row:last-of-type {
-  border-radius: 0 0 6px 6px;
+.lap-board-date-row,
+.lap-date-scroll-row {
+  background: color-mix(in oklab, var(--el-color-primary-light-9) 72%, var(--el-bg-color));
+  height: 100%;
 }
 
-.lap-corner,
+.lap-date-band-scroll {
+  grid-column: 1 / -1;
+  min-height: 28px;
+  background: color-mix(in oklab, var(--el-color-primary-light-9) 45%, var(--el-bg-color));
+}
+
 .lap-col-head {
   display: flex;
   align-items: center;
@@ -3090,32 +4068,31 @@ onBeforeUnmount(() => {
   border-right: none;
 }
 
-.lap-board-body-row .lap-label {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
-  border-right: 1px solid var(--el-border-color-lighter);
-  background: var(--el-fill-color-blank);
+.lap-label-no {
+  white-space: nowrap;
+}
+
+.lap-label-time {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--el-color-primary) 65%, var(--el-text-color-secondary));
+  white-space: nowrap;
 }
 
 .lap-merged-host {
-  grid-column: 2 / -1;
+  grid-column: 1 / -1;
   display: grid;
   align-items: stretch;
-  min-height: 38px;
+  min-height: 100%;
+  height: 100%;
   box-sizing: border-box;
   border-right: none;
 }
 
 .lap-merged-seg {
+  position: relative;
   min-width: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 3px 4px;
   margin: 2px 0;
   box-sizing: border-box;
@@ -3135,16 +4112,72 @@ onBeforeUnmount(() => {
   z-index: 1;
 }
 
+.lap-merged-seg--board-draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.lap-merged-seg--board-draggable:active {
+  cursor: grabbing;
+}
+
+.lap-merged-seg--ghost {
+  opacity: 0.5;
+}
+
+.lap-merged-tail-item.lap-merged-seg--board-draggable {
+  cursor: grab;
+}
+
+.lap-merged-label-stack {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  left: 3px;
+  bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .lap-merged-text {
-  font-size: 10px;
   line-height: 1.25;
-  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
   font-weight: 600;
   color: var(--el-text-color-primary);
+}
+
+.lap-merged-text--jig {
+  align-self: flex-end;
+  font-size: 9px;
+  text-align: right;
+}
+
+.lap-merged-text--calc {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  text-align: left;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--el-color-primary) 75%, var(--el-text-color-primary));
+}
+
+.lap-merged-seg--product-drop {
+  outline: 2px dashed color-mix(in oklab, var(--el-color-primary) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.lap-merged-seg--product-drop-hover {
+  background: color-mix(in oklab, var(--el-color-primary-light-8) 45%, transparent) !important;
 }
 
 .lap-merged-tail {
@@ -3158,11 +4191,9 @@ onBeforeUnmount(() => {
 }
 
 .lap-merged-tail-item {
+  position: relative;
   flex: 0 0 auto;
   min-height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 2px 3px;
   border-radius: 4px;
   border: 1px solid rgba(0, 0, 0, 0.06);
@@ -3172,6 +4203,7 @@ onBeforeUnmount(() => {
 .lap-col {
   min-width: 0;
   max-width: 100%;
+  height: 100%;
   border-right: 1px solid var(--el-border-color-lighter);
   padding: 2px 1px;
   display: flex;
@@ -3197,7 +4229,8 @@ onBeforeUnmount(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 36px;
+  min-height: 100%;
+  height: 100%;
   gap: 2px;
   border-radius: 4px;
   overflow: hidden;
@@ -3205,11 +4238,8 @@ onBeforeUnmount(() => {
 }
 
 .lap-segment--cell {
+  position: relative;
   min-height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
   padding: 2px 4px;
   border-radius: 2px;
 }
@@ -3233,11 +4263,20 @@ onBeforeUnmount(() => {
 }
 
 .lap-segment-text {
-  font-size: 10px;
-  line-height: 1.25;
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  left: auto;
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: right;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: calc(100% - 6px);
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  pointer-events: none;
 }
 
 .board-empty {
@@ -3253,14 +4292,6 @@ onBeforeUnmount(() => {
   margin-bottom: 0;
 }
 
-.jig-dialog-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
 .jig-meta-pill {
   display: inline-flex;
   align-items: center;
@@ -3272,18 +4303,70 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
-.jig-edit-table {
+.jig-card-list-wrap {
+  min-height: 52px;
+}
+
+.jig-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.jig-pick-card {
+  flex: 0 0 140px;
+  width: 140px;
+  max-width: 140px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
   border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--el-color-success) 36%, var(--el-border-color-lighter));
+  background: color-mix(in oklab, var(--el-color-success-light-9) 72%, var(--el-bg-color));
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  cursor: grab;
+  user-select: none;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.jig-pick-card:hover {
+  border-color: color-mix(in oklab, var(--el-color-success) 55%, var(--el-border-color));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+
+.jig-pick-card:active {
+  cursor: grabbing;
+}
+
+.jig-pick-card__label {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--el-text-color-primary);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
-.jig-edit-table :deep(.el-table__cell) {
-  padding-top: 4px;
-  padding-bottom: 4px;
+.jig-card-list-empty,
+.jig-card-list-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
 }
 
-.jig-edit-table :deep(.el-input-number) {
-  width: 112px !important;
+.jig-card-list-hint {
+  color: var(--el-text-color-secondary);
 }
 
 @media (max-width: 900px) {
