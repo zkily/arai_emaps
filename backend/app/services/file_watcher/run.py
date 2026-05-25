@@ -1,5 +1,5 @@
 # coding: utf-8
-"""ファイル監視の起動：PollingObserver + 共通タスクキュー + ワーカースレッド（ポーリングをブロックしない）"""
+"""ファイル監視の起動：PollingObserver + CSV/Excel 別キュー・別ワーカー（相互にブロックしない）"""
 import os
 import time
 import logging
@@ -32,7 +32,8 @@ from app.services.file_watcher.enabled_config import is_file_enabled, is_excel_w
 
 logger = logging.getLogger(__name__)
 
-WORKER_COUNT = max(1, getattr(settings, "FILE_WATCH_EXCEL_WORKERS", 3))
+EXCEL_WORKER_COUNT = max(1, getattr(settings, "FILE_WATCH_EXCEL_WORKERS", 3))
+CSV_WORKER_COUNT = max(1, getattr(settings, "FILE_WATCH_CSV_WORKERS", 2))
 POLL_INTERVAL = getattr(settings, "FILE_WATCH_POLL_INTERVAL", 1.0)  # ネットワークパスは 1 秒ポーリング推奨
 STABILITY_POLL_INTERVAL = 0.5  # ファイル安定検知の間隔（秒）
 STABILITY_COUNT = 3  # 連続 N 回サイズ不変で安定とみなす
@@ -193,33 +194,22 @@ def _material_cutting_csv_polling_loop(task_queue, poll_interval, stop_event):
         last_mtime = mtime
 
 
-def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
-    """ワーカー：キューから (filepath, filename) を取得し、ファイル安定後に種別で処理；同一 Excel は 1 ワーカーのみ"""
+def _csv_worker(csv_task_queue, in_queue_csv_paths):
+    """在庫/材料/ピッキング CSV 専用ワーカー（Excel キューと独立）"""
     stock_svc = StockService()
     material_svc = MaterialService()
     cutting_csv_svc = MaterialCuttingCsvService()
-    excel_processor = ExcelProcessor()
-    inspection_processor = InspectionExcelProcessor()
     while True:
         try:
-            item = task_queue.get()
+            item = csv_task_queue.get()
         except Exception:
             break
         filepath, filename = item if isinstance(item, (list, tuple)) and len(item) >= 2 else (None, None)
+        path_key = os.path.normpath(os.path.abspath(filepath)) if filepath else ""
         try:
             if filepath is None or filename is None:
                 continue
-            in_queue_filenames.discard(filename)
-            if is_excel_target_file(filename) or is_inspection_excel_file(filename):
-                with excel_lock:
-                    if filename in processing_excel:
-                        logger.debug("Excel は他ワーカーで処理中のためスキップ: %s", filename)
-                        try:
-                            task_queue.task_done()
-                        except Exception:
-                            pass
-                        continue
-                    processing_excel.add(filename)
+            in_queue_csv_paths.discard(path_key)
             wait_for_file_stable(
                 filepath,
                 timeout=10,
@@ -229,12 +219,8 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
             if not os.path.isfile(filepath):
                 logger.warning("ファイルが存在しないためスキップ: %s", filename)
                 continue
-            logger.info("処理開始: %s", filename)
-            if is_inspection_excel_file(filename):
-                inspection_processor.process_file(filepath)
-            elif is_excel_target_file(filename):
-                excel_processor.process_file(filepath)
-            elif filename in PICKING_FILES:
+            logger.info("[CSV] 処理開始: %s", filename)
+            if filename in PICKING_FILES:
                 if is_file_enabled(filename):
                     run_picking_sync_and_refresh_matched(filepath, filename)
                 else:
@@ -256,13 +242,63 @@ def _file_worker(task_queue, in_queue_filenames, processing_excel, excel_lock):
                     material_svc.sync(filepath, filename)
                 else:
                     logger.debug("材料ファイル監視は無効のためスキップ: %s", filename)
+            else:
+                logger.warning("[CSV] 未対応ファイルのためスキップ: %s", filename)
         except Exception as e:
-            logger.error("処理失敗 %s: %s", filename, e, exc_info=True)
+            logger.error("[CSV] 処理失敗 %s: %s", filename, e, exc_info=True)
+        finally:
+            try:
+                csv_task_queue.task_done()
+            except Exception:
+                pass
+
+
+def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, excel_lock):
+    """生産計画 Excel 専用ワーカー；同一 Excel は 1 ワーカーのみ処理"""
+    excel_processor = ExcelProcessor()
+    inspection_processor = InspectionExcelProcessor()
+    while True:
+        try:
+            item = excel_task_queue.get()
+        except Exception:
+            break
+        filepath, filename = item if isinstance(item, (list, tuple)) and len(item) >= 2 else (None, None)
+        try:
+            if filepath is None or filename is None:
+                continue
+            in_queue_excel_filenames.discard(filename)
+            with excel_lock:
+                if filename in processing_excel:
+                    logger.debug("Excel は他ワーカーで処理中のためスキップ: %s", filename)
+                    try:
+                        excel_task_queue.task_done()
+                    except Exception:
+                        pass
+                    continue
+                processing_excel.add(filename)
+            wait_for_file_stable(
+                filepath,
+                timeout=10,
+                poll_interval=STABILITY_POLL_INTERVAL,
+                stable_count=STABILITY_COUNT,
+            )
+            if not os.path.isfile(filepath):
+                logger.warning("ファイルが存在しないためスキップ: %s", filename)
+                continue
+            logger.info("[Excel] 処理開始: %s", filename)
+            if is_inspection_excel_file(filename):
+                inspection_processor.process_file(filepath)
+            elif is_excel_target_file(filename):
+                excel_processor.process_file(filepath)
+            else:
+                logger.warning("[Excel] 未対応ファイルのためスキップ: %s", filename)
+        except Exception as e:
+            logger.error("[Excel] 処理失敗 %s: %s", filename, e, exc_info=True)
         finally:
             if is_excel_target_file(filename) or is_inspection_excel_file(filename):
                 processing_excel.discard(filename)
             try:
-                task_queue.task_done()
+                excel_task_queue.task_done()
             except Exception:
                 pass
 
@@ -304,7 +340,13 @@ def run_watcher():
         logger.info("📂 Excel 計画与 CSV 共用路径")
     if inspection_excel_path:
         logger.info("📂 検査管理指標 Excel パス: %s", inspection_excel_path)
-    logger.info("📊 ポーリング間隔: %.1f 秒、ワーカー: %s 個", POLL_INTERVAL, WORKER_COUNT)
+    excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
+    logger.info(
+        "📊 ポーリング間隔: %.1f 秒、CSV ワーカー: %s、Excel ワーカー: %s",
+        POLL_INTERVAL,
+        CSV_WORKER_COUNT,
+        EXCEL_WORKER_COUNT if excel_watcher_enabled else 0,
+    )
     cutting_csv_display = os.path.basename(settings.get_material_cutting_csv_path()) or MATERIAL_CUTTING_CSV_BASENAME
     logger.info(
         "📑 監視対象: 在庫 %s 件、材料 %s 件、材料切断 %s、ピッキング %s 件、Excel 計画 %s 件、検査管理指標 %s",
@@ -315,28 +357,45 @@ def run_watcher():
         len(EXCEL_FILES),
         "有効" if inspection_excel_path else "未設定",
     )
-    excel_watcher_enabled = (os.environ.get("DISABLE_EXCEL_WATCHER", "").strip().lower() != "true") and is_excel_watcher_enabled()
     if not excel_watcher_enabled:
         logger.info("📌 Excel 監視は無効です（環境変数またはシステム設定）")
     if excel_watcher_enabled and excel_path:
         _scan_excel_files_at_startup(excel_path, None)
 
-    task_queue = queue.Queue()
-    in_queue_filenames = set()
-    processing_excel = set()  # 処理中の Excel ファイル名（同一ファイルの複数ワーカーによるデッドロック防止）
+    csv_task_queue = queue.Queue()
+    excel_task_queue = queue.Queue()
+    in_queue_excel_filenames = set()
+    in_queue_csv_paths = set()
+    processing_excel = set()
     excel_lock = threading.Lock()
-    for _ in range(WORKER_COUNT):
-        t = threading.Thread(
-            target=_file_worker,
-            args=(task_queue, in_queue_filenames, processing_excel, excel_lock),
+    for i in range(CSV_WORKER_COUNT):
+        threading.Thread(
+            target=_csv_worker,
+            args=(csv_task_queue, in_queue_csv_paths),
             daemon=True,
-        )
-        t.start()
+            name=f"FileWatcher-CsvWorker-{i + 1}",
+        ).start()
+    if excel_watcher_enabled:
+        for i in range(EXCEL_WORKER_COUNT):
+            threading.Thread(
+                target=_excel_worker,
+                args=(
+                    excel_task_queue,
+                    in_queue_excel_filenames,
+                    processing_excel,
+                    excel_lock,
+                ),
+                daemon=True,
+                name=f"FileWatcher-ExcelWorker-{i + 1}",
+            ).start()
+    logger.info("✅ CSV / Excel 別キュー・別ワーカーで起動（相互ブロックなし）")
 
     handler = UnifiedHandler(
-        task_queue=task_queue,
+        csv_task_queue=csv_task_queue,
+        excel_task_queue=excel_task_queue,
         excel_watcher_enabled=excel_watcher_enabled,
-        in_queue_filenames=in_queue_filenames,
+        in_queue_excel_filenames=in_queue_excel_filenames,
+        in_queue_csv_paths=in_queue_csv_paths,
     )
     observer = PollingObserver(timeout=POLL_INTERVAL)
     observer.schedule(handler, csv_path, recursive=False)
@@ -386,7 +445,7 @@ def run_watcher():
     stop_polling = threading.Event()
     material_poll_thread = threading.Thread(
         target=_material_csv_polling_loop,
-        args=(task_queue, POLL_INTERVAL, stop_polling),
+        args=(csv_task_queue, POLL_INTERVAL, stop_polling),
         daemon=True,
         name="MaterialCsvMtimePoll",
     )
@@ -398,7 +457,7 @@ def run_watcher():
     )
     cutting_poll_thread = threading.Thread(
         target=_material_cutting_csv_polling_loop,
-        args=(task_queue, POLL_INTERVAL, stop_polling),
+        args=(csv_task_queue, POLL_INTERVAL, stop_polling),
         daemon=True,
         name="MaterialCuttingCsvMtimePoll",
     )
@@ -411,14 +470,26 @@ def run_watcher():
     if excel_watcher_enabled and excel_path:
         excel_poll_thread = threading.Thread(
             target=_excel_polling_loop,
-            args=(excel_path, task_queue, POLL_INTERVAL, stop_polling, in_queue_filenames),
+            args=(
+                excel_path,
+                excel_task_queue,
+                POLL_INTERVAL,
+                stop_polling,
+                in_queue_excel_filenames,
+            ),
             daemon=True,
         )
         excel_poll_thread.start()
     if excel_watcher_enabled and inspection_excel_path and os.path.isfile(inspection_excel_path):
         inspection_poll_thread = threading.Thread(
             target=_inspection_excel_polling_loop,
-            args=(inspection_excel_path, task_queue, POLL_INTERVAL, stop_polling, in_queue_filenames),
+            args=(
+                inspection_excel_path,
+                excel_task_queue,
+                POLL_INTERVAL,
+                stop_polling,
+                in_queue_excel_filenames,
+            ),
             daemon=True,
         )
         inspection_poll_thread.start()

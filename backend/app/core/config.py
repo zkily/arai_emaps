@@ -93,7 +93,13 @@ class Settings(BaseSettings):
     FILE_WATCH_EXCEL_BASE_PATH: str = ""  # Excel 計画ディレクトリ（省略時は BASE と共用）
     FILE_WATCH_POLL_INTERVAL: float = 1.0  # ネットワークパスは 1 秒推奨
     FILE_WATCH_DEBOUNCE_SEC: int = 2
-    FILE_WATCH_EXCEL_WORKERS: int = 3  # 同時処理は最大 3 ファイル
+    FILE_WATCH_EXCEL_WORKERS: int = 3  # Excel 計画の同時処理数
+    FILE_WATCH_CSV_WORKERS: int = 2  # 在庫/材料/ピッキング CSV の専用ワーカー数（Excel キューと分離）
+    # 在庫 CSV（MoldingRecord 等）: 内容未変なら DB 同期をスキップ、INSERT バッチサイズ
+    FILE_WATCH_STOCK_SKIP_UNCHANGED: bool = True
+    FILE_WATCH_STOCK_INSERT_BATCH: int = 2000
+    # 在庫 CSV 同期: 本日を含む直近 N 日のみ DELETE 後 INSERT（0=従来どおり source_file 全削除）
+    FILE_WATCH_STOCK_REPLACE_DAYS: int = 7
     FILE_WATCH_INSPECTION_EXCEL_PATH: str = ""  # 検査管理指標 Excel のフルパス
     # 材料切断ログ CSV（material_cutting_logs 取込・監視）。空なら FILE_WATCH_BASE_PATH/materialCutting.csv
     MATERIAL_CUTTING_CSV_PATH: str = ""

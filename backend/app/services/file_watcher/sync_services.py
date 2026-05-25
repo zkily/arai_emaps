@@ -1,13 +1,24 @@
 # coding: utf-8
 """在庫取引・材料ログ同期サービス（MySQL へ同期）"""
+import hashlib
 import logging
+import os
 import random
+import threading
 from datetime import date, timedelta
+
 import mysql.connector
+from mysql.connector import pooling
+
 from app.core.config import settings
 from app.services.file_watcher.utils import read_csv_content, normalize_date_str, normalize_time_str
 
 logger = logging.getLogger(__name__)
+
+_STOCK_SYNC_LOCK = threading.Lock()
+_STOCK_SYNC_FINGERPRINT: dict[str, str] = {}
+_DB_POOL: pooling.MySQLConnectionPool | None = None
+_DB_POOL_LOCK = threading.Lock()
 
 # 在庫取引ファイル → stock_transaction_logs
 STOCK_FILES = [
@@ -38,18 +49,88 @@ PICKING_FILES = [
 MATERIAL_CUTTING_CSV_BASENAME = "materialCutting.csv"
 
 
+def _get_db_pool() -> pooling.MySQLConnectionPool:
+    global _DB_POOL
+    if _DB_POOL is not None:
+        return _DB_POOL
+    with _DB_POOL_LOCK:
+        if _DB_POOL is None:
+            pool_size = max(4, int(getattr(settings, "FILE_WATCH_EXCEL_WORKERS", 3)) + 2)
+            _DB_POOL = pooling.MySQLConnectionPool(
+                pool_name="file_watcher_pool",
+                pool_size=pool_size,
+                pool_reset_session=True,
+                host=settings.DB_HOST,
+                port=settings.DB_PORT,
+                user=settings.DB_USER,
+                password=settings.DB_PASSWORD,
+                database=settings.DB_NAME,
+            )
+        return _DB_POOL
+
+
 def get_db_connection():
-    """プロジェクト設定の同期用 MySQL 接続（ファイル監視用）"""
-    return mysql.connector.connect(
-        host=settings.DB_HOST,
-        port=settings.DB_PORT,
-        user=settings.DB_USER,
-        password=settings.DB_PASSWORD,
-        database=settings.DB_NAME,
-    )
+    """プロジェクト設定の同期用 MySQL 接続（ファイル監視用・コネクションプール）"""
+    return _get_db_pool().get_connection()
 
 
-# ---------- StockService: 全量镜像同步 ----------
+def _stock_values_fingerprint(filepath: str, values: list) -> str:
+    """解析後データの指紋（DB 同期スキップ判定用）"""
+    try:
+        st = os.stat(filepath)
+        mtime_ns, size = st.st_mtime_ns, st.st_size
+    except OSError:
+        mtime_ns, size = 0, 0
+    h = hashlib.blake2b(digest_size=16)
+    h.update(str(mtime_ns).encode())
+    h.update(str(size).encode())
+    h.update(str(len(values)).encode())
+    if values:
+        h.update(repr(values[0]).encode())
+        h.update(repr(values[-1]).encode())
+        if len(values) > 2:
+            h.update(repr(values[len(values) // 2]).encode())
+    return h.hexdigest()
+
+
+def _stock_sync_should_skip(path_key: str, fingerprint: str) -> bool:
+    if not getattr(settings, "FILE_WATCH_STOCK_SKIP_UNCHANGED", True):
+        return False
+    with _STOCK_SYNC_LOCK:
+        return _STOCK_SYNC_FINGERPRINT.get(path_key) == fingerprint
+
+
+def _stock_sync_mark_done(path_key: str, fingerprint: str) -> None:
+    with _STOCK_SYNC_LOCK:
+        _STOCK_SYNC_FINGERPRINT[path_key] = fingerprint
+
+
+def _stock_replace_days() -> int:
+    try:
+        return int(getattr(settings, "FILE_WATCH_STOCK_REPLACE_DAYS", 7))
+    except (TypeError, ValueError):
+        return 7
+
+
+def _stock_replace_cutoff_str() -> str | None:
+    """
+    直近 N 日（本日含む）の起点日時。N<=0 のとき None（全件置換モード）。
+    例: N=7 → 6 日前 00:00:00 以降を置換対象。
+    """
+    days = _stock_replace_days()
+    if days <= 0:
+        return None
+    start = date.today() - timedelta(days=days - 1)
+    return f"{start.isoformat()} 00:00:00"
+
+
+def _stock_row_in_replace_window(transaction_time: str, cutoff: str | None) -> bool:
+    if cutoff is None:
+        return True
+    return (transaction_time or "") >= cutoff
+
+
+# ---------- StockService: 滚动窗口 / 全量镜像同步 ----------
 
 
 class MaterialCuttingCsvService:
@@ -76,21 +157,59 @@ class MaterialCuttingCsvService:
 
 
 class StockService:
-    """库存交易 CSV → stock_transaction_logs（按 source_file 删除旧数据后插入）"""
+    """
+    在庫 CSV → stock_transaction_logs。
+    既定: 同一 source_file の「直近 N 日」だけ DELETE 後に CSV の同窗口行を INSERT（N=FILE_WATCH_STOCK_REPLACE_DAYS）。
+    N<=0 のとき従来どおり source_file 全削除→全行 INSERT。
+    """
 
     def sync(self, filepath, filename):
         rows = read_csv_content(filepath)
         if not rows or len(rows) < 2:
             return
         data_rows = rows[1:]
+        parse_kind = self._parse_kind_for_filename(filename)
+        values = []
+        for row in data_rows:
+            vals = self._parse_row(parse_kind, filename, row)
+            if vals:
+                values.append(vals)
+        cutoff = _stock_replace_cutoff_str()
+        replace_days = _stock_replace_days()
+        to_insert = [
+            v
+            for v in values
+            if _stock_row_in_replace_window(v[7], cutoff)  # transaction_time
+        ]
+        skipped_parse = len(data_rows) - len(values)
+        skipped_old_csv = len(values) - len(to_insert)
+        path_key = os.path.normpath(os.path.abspath(filepath))
+        fingerprint = _stock_values_fingerprint(filepath, to_insert if cutoff else values)
+        if _stock_sync_should_skip(path_key, fingerprint):
+            logger.info(
+                "%s 内容未変のため DB 同期をスキップ（窗口 %s 行）",
+                filename,
+                len(to_insert),
+            )
+            return
+        batch_size = max(100, int(getattr(settings, "FILE_WATCH_STOCK_INSERT_BATCH", 2000)))
         conn = get_db_connection()
         conn.autocommit = False
         cursor = conn.cursor()
         try:
-            cursor.execute(
-                "DELETE FROM stock_transaction_logs WHERE source_file = %s",
-                (filename,),
-            )
+            if cutoff is None:
+                cursor.execute(
+                    "DELETE FROM stock_transaction_logs WHERE source_file = %s",
+                    (filename,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    DELETE FROM stock_transaction_logs
+                    WHERE source_file = %s AND transaction_time >= %s
+                    """,
+                    (filename, cutoff),
+                )
             deleted = cursor.rowcount
             sql = """
                 INSERT INTO stock_transaction_logs
@@ -98,19 +217,33 @@ class StockService:
                  quantity, unit, transaction_time, order_no, machine_cd, remarks, source_file)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
-            values = []
-            for row in data_rows:
-                vals = self._parse_row(filename, row)
-                if vals:
-                    values.append(vals)
-            if values:
-                cursor.executemany(sql, values)
-                inserted = cursor.rowcount
-            else:
-                inserted = 0
+            inserted = 0
+            if to_insert:
+                for i in range(0, len(to_insert), batch_size):
+                    chunk = to_insert[i : i + batch_size]
+                    cursor.executemany(sql, chunk)
+                    inserted += cursor.rowcount or len(chunk)
             conn.commit()
-            skipped = len(data_rows) - len(values)
-            logger.info("%s 処理完了: %s件処理, %s件スキップ", filename, inserted, skipped)
+            _stock_sync_mark_done(path_key, fingerprint)
+            if cutoff:
+                logger.info(
+                    "%s 処理完了（直近%s日）: DELETE %s, INSERT %s, CSV窗口外 %s, 解析スキップ %s, 起点>=%s",
+                    filename,
+                    replace_days,
+                    deleted,
+                    inserted,
+                    skipped_old_csv,
+                    skipped_parse,
+                    cutoff,
+                )
+            else:
+                logger.info(
+                    "%s 処理完了（全件置換）: DELETE %s, INSERT %s, 解析スキップ %s",
+                    filename,
+                    deleted,
+                    inserted,
+                    skipped_parse,
+                )
         except Exception as e:
             conn.rollback()
             logger.error("❌ [Stock] エラー %s: %s", filename, e)
@@ -118,30 +251,42 @@ class StockService:
             cursor.close()
             conn.close()
 
-    def _parse_row(self, filename, cols):
+    @staticmethod
+    def _parse_kind_for_filename(filename: str) -> str:
+        if "PlatingRecord" in filename:
+            return "plating"
+        if "Stock" in filename:
+            return "stock"
+        if "Molding" in filename:
+            return "molding"
+        if "Welding" in filename:
+            return "welding"
+        return "default"
+
+    def _parse_row(self, parse_kind: str, filename: str, cols):
         try:
             stock_type, unit, doc_no, machine = "仕掛品", "本", None, None
-            if "PlatingRecord" in filename:
+            if parse_kind == "plating":
                 if len(cols) < 9:
                     return None
                 date_s, time_s, doc_no, target = cols[1], cols[2], cols[3], cols[5]
                 qty = float(cols[7] or 0) * float(cols[8] or 0)
                 loc, proc, trans = "工程中間在庫", "KT05", "実績"
-            elif "Stock" in filename:
+            elif parse_kind == "stock":
                 if len(cols) < 9:
                     return None
                 trans, date_s, time_s = cols[0], cols[1], cols[2]
                 doc_no, target = cols[4], cols[5]
                 qty = float(cols[7] or 0) * float(cols[8] or 0)
                 stock_type, loc, proc = "製品", "製品倉庫", "KT13"
-            elif "Molding" in filename or "Welding" in filename:
+            elif parse_kind in ("molding", "welding"):
                 if len(cols) < 9:
                     return None
                 date_s, time_s = cols[1], cols[2]
                 doc_no, machine, target = cols[4], cols[5], cols[6]
                 qty = float(cols[8] or 0)
                 trans, loc = "実績", "工程中間在庫"
-                proc = "KT04" if "Molding" in filename else "KT07"
+                proc = "KT04" if parse_kind == "molding" else "KT07"
             else:
                 if len(cols) < 9:
                     return None
