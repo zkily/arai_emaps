@@ -359,6 +359,29 @@ class ProgressLotItem(BaseModel):
     predicted_completion: Optional[str] = Field(None, description="予測完了日時 = end_date")
     progress_status: str = Field("PLANNED", description="PLANNED / RELEASED / IN_PROGRESS / COMPLETED")
     management_code: Optional[str] = None
+    production_lot_size_forming: Optional[int] = Field(
+        None, description="aps_batch_plans.production_lot_size（スライス残口径・照会码用）",
+    )
+    production_lot_size_instruction: Optional[int] = Field(
+        None, description="計画一覧合計から算出するロット数（instruction_plans 同期码用）",
+    )
+    management_code_instruction: Optional[str] = Field(
+        None, description="指示同期用 management_code（ロット数が異なると照会码と不一致になり得る）",
+    )
+    lot_size_code_dual_source: bool = Field(
+        False,
+        description="成型ロット数と指示ロット数が異なる、または照会码と指示码不一致",
+    )
+    schedule_slice_total: Optional[int] = Field(
+        None, description="工単スライス残合計（成型ロット数の算出元）",
+    )
+    schedule_full_plan_total: Optional[int] = Field(
+        None, description="工単計画一覧合計（指示ロット数の算出元）",
+    )
+    in_instruction_plans_by_instruction_code: bool = Field(
+        False,
+        description="instruction_plans に指示用コードで行がある（照会码とは別）",
+    )
     production_line: str = ""
     cutting_planned_qty: Optional[int] = Field(
         None, description="切断指示 cutting_management.planned_quantity（生産中ロットのみ）"
@@ -391,27 +414,35 @@ class ProgressLotItem(BaseModel):
     )
     in_cutting_management: bool = Field(
         False,
-        description="cutting_management に行がある（管理コード一致または aps_batch_plan_id）",
+        description="cutting_management に行があり、照会 management_code と DB management_code が一致",
     )
     in_cutting_by_management_code: bool = Field(
         False,
-        description="cutting_management.management_code が照会表示コードと一致",
+        description="cutting_management.management_code が照会表示コードと一致（in_cutting_management と同義）",
     )
     in_cutting_by_batch_plan_id: bool = Field(
         False,
-        description="cutting_management.aps_batch_plan_id のみ一致（DB の management_code は別・空のことがある）",
+        description="廃止: バッチIDのみ一致は進捗・所在の紐付けに含めない（常に false）",
     )
     cutting_management_code_in_db: Optional[str] = Field(
         None,
-        description="cutting_management に登録されている management_code（照合時に取得）",
+        description="紐付け成立時の cutting_management.management_code",
     )
     cutting_management_row_id: Optional[int] = Field(
         None,
-        description="cutting_management.id（バッチ照合時の修正用）",
+        description="紐付け成立時の cutting_management.id",
+    )
+    cutting_batch_link_mismatch_id: Optional[int] = Field(
+        None,
+        description="aps_batch_plan_id のみ一致し code 不一致の切断行 id（参考・進捗には未使用）",
+    )
+    cutting_batch_link_mismatch_db_code: Optional[str] = Field(
+        None,
+        description="上記不一致行の DB management_code",
     )
     in_instruction_plans: bool = Field(
         False,
-        description="instruction_plans に当該管理コードまたは aps_batch_plan_id で行がある",
+        description="instruction_plans に行があり、照会 management_code と DB が一致",
     )
     in_instruction_by_management_code: bool = Field(
         False,
@@ -419,7 +450,7 @@ class ProgressLotItem(BaseModel):
     )
     in_instruction_by_batch_plan_id: bool = Field(
         False,
-        description="instruction_plans.aps_batch_plan_id のみ一致",
+        description="廃止: バッチIDのみ一致は紐付けに含めない（常に false）",
     )
     instruction_management_code_in_db: Optional[str] = Field(
         None,
@@ -462,6 +493,25 @@ class UpstreamApsBatchPlanLinksBody(BaseModel):
 
 class UpstreamApsBatchPlanLinksResult(BaseModel):
     cutting_updated: int = 0
+    instruction_updated: int = 0
+
+
+class ReassignCuttingManagementLotBody(BaseModel):
+    """cutting_management を正しい APS ロットへ移管（管理コード再生成 + aps_batch_plan_id 設定）"""
+    cutting_management_id: int = Field(..., description="cutting_management.id")
+    target_batch_plan_id: int = Field(..., description="移管先 aps_batch_plans.id")
+    update_instruction_plans: bool = Field(
+        True,
+        description="true のとき移管先ロットの management_code に一致する instruction_plans の aps_batch_plan_id も更新",
+    )
+
+
+class ReassignCuttingManagementLotResult(BaseModel):
+    cutting_management_id: int
+    previous_batch_plan_id: Optional[int] = None
+    target_batch_plan_id: int
+    previous_management_code: Optional[str] = None
+    new_management_code: str
     instruction_updated: int = 0
 
 

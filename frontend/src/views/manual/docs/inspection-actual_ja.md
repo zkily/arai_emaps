@@ -2,9 +2,7 @@
 
 | 項目 | 内容 |
 |------|------|
-| 対象画面 | `frontend/src/views/mes/actualDataCollection/inspection/InspectionActualDataCollection.vue` |
 | メニュー | **MES実績収集** → **検査実績収集** |
-| URL パス | `/mes/actualDataCollection/inspection` |
 | 画面名（画面上） | **検査実績収集** |
 | 保存先（サーバー） | `inspection_management` テーブル（MES 実績フィールド） |
 | 不良項目マスタ | 工程別不良項目マスタ、`detection_process_cd = KT09`（検査工程） |

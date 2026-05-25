@@ -479,10 +479,11 @@
                         <b>データ所在：</b>{{ managementCodeTablePresence(lot) }}
                       </div>
                       <div
-                        v-if="lot.in_cutting_by_batch_plan_id && lot.cutting_management_code_in_db !== (lot.management_code || '').trim()"
+                        v-if="lot.cutting_batch_link_mismatch_id"
                         class="schedule-progress-pop__row schedule-progress-pop__warn"
                       >
-                        切断はバッチID照合。DBの management_code は「{{ lot.cutting_management_code_in_db || '空' }}」— 照会コードでは切断済リストに出ない場合があります。
+                        誤紐付け候補 id={{ lot.cutting_batch_link_mismatch_id }}（DBコード
+                        {{ lot.cutting_batch_link_mismatch_db_code || '空' }} ≠ 照会）。進捗には含めません。
                       </div>
                       <div class="schedule-progress-pop__row"><b>補足：</b>{{ lot.edit_location_hint || '—' }}</div>
                     </template>
@@ -1058,148 +1059,207 @@
 
     <el-dialog
       v-model="managementCodeTraceVisible"
-      title="管理コード所在照会"
-      width="min(980px, 96vw)"
-      top="5vh"
+      width="min(920px, 94vw)"
+      top="4vh"
       append-to-body
       destroy-on-close
+      :show-close="true"
       class="mgmt-code-trace-dialog"
+      @closed="managementCodeTraceFilter = ''"
     >
-      <p class="mgmt-code-trace-lead">
-        一覧の<strong>管理コード</strong>は APS ロットから再計算した照合用コードです。
-        <strong>cutting_management あり（バッチIDのみ）</strong>は、表示コードではなく
-        <code>aps_batch_plan_id</code> で行が見つかった場合です（DB の <code>management_code</code> が別・空のことがあります）。
-        切断済リストでは <strong>DB登録コード</strong> 列またはバッチIDで検索してください。
-      </p>
-      <el-input
-        v-model="managementCodeTraceFilter"
-        clearable
-        placeholder="管理コード・製品名・表名で検索"
-        class="mgmt-code-trace-filter"
-      />
-      <el-table
-        ref="managementCodeTraceTableRef"
-        :data="managementCodeTraceRows"
-        size="small"
-        border
-        stripe
-        max-height="min(52vh, 480px)"
-        empty-text="該当する管理コードがありません"
-        :row-key="managementCodeTraceRowKey"
-        @selection-change="onManagementCodeTraceSelectionChange"
-      >
-        <el-table-column type="selection" width="42" fixed="left" />
-        <el-table-column label="ロットID" width="88" align="center">
-          <template #default="{ row }">{{ row.batch_plan_id }}</template>
-        </el-table-column>
-        <el-table-column label="照会用コード" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.management_code || '—' }}</template>
-        </el-table-column>
-        <el-table-column label="DB登録コード" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ cuttingDbManagementCodeDisplay(row) }}</template>
-        </el-table-column>
-        <el-table-column label="データ所在" min-width="260">
-          <template #default="{ row }">
-            <div class="mgmt-code-table-presence">
-              <el-tag
-                v-if="row.in_cutting_by_management_code"
-                type="success"
-                size="small"
-                effect="plain"
-              >
-                cutting 管理コード一致
-              </el-tag>
-              <el-tag
-                v-else-if="row.in_cutting_by_batch_plan_id"
-                type="warning"
-                size="small"
-                effect="plain"
-              >
-                cutting バッチIDのみ
-              </el-tag>
-              <el-tag v-else type="info" size="small" effect="plain">cutting なし</el-tag>
-              <el-tag
-                v-if="row.in_instruction_by_management_code"
-                type="success"
-                size="small"
-                effect="plain"
-              >
-                指示 管理コード一致
-              </el-tag>
-              <el-tag
-                v-else-if="row.in_instruction_by_batch_plan_id"
-                type="warning"
-                size="small"
-                effect="plain"
-              >
-                指示 バッチIDのみ
-              </el-tag>
-              <el-tag v-else type="info" size="small" effect="plain">指示 なし</el-tag>
-            </div>
-            <div v-if="row.cutting_management_row_id" class="mgmt-code-match-hint">
-              cutting_management.id={{ row.cutting_management_row_id }}
-              <span v-if="row.batch_plan_id"> · aps_batch_plan_id={{ row.batch_plan_id }}</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="進捗判定" width="120" align="center">
-          <template #default="{ row }">
-            <span class="mgmt-code-primary-table">{{ upstreamPrimaryTableLabel(row) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="position_summary" label="APS内位置" min-width="180" show-overflow-tooltip />
-        <el-table-column label="製品" min-width="120" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.product_name }}</template>
-        </el-table-column>
-        <el-table-column label="進捗状態" width="88" align="center">
-          <template #default="{ row }">
-            <el-tag :type="progressStatusType(row.progress_status)" size="small" effect="plain">
-              {{ progressStatusLabel(row.progress_status) }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="修正の目安" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.edit_location_hint || '—' }}</template>
-        </el-table-column>
-      </el-table>
-      <div class="mgmt-code-trace-link-bar">
-        <span class="mgmt-code-trace-link-label">選択行の upstream 紐付け</span>
-        <el-input-number
-          v-model="traceLinkTargetBatchPlanId"
-          :min="1"
-          :controls="true"
-          :disabled="traceLinkSaving"
-          placeholder="aps_batch_plan_id"
-          class="mgmt-code-trace-link-id"
-        />
-        <el-checkbox v-model="traceLinkUpdateInstruction" :disabled="traceLinkSaving">
-          instruction_plans も更新
-        </el-checkbox>
-        <el-button
+      <template #header>
+        <div class="mct-header">
+          <div class="mct-header__main">
+            <span class="mct-header__title">管理コード所在</span>
+            <span class="mct-header__badge">{{ managementCodeTraceFilteredCount }} ロット</span>
+          </div>
+          <el-tooltip
+            placement="bottom-end"
+            :show-after="200"
+            popper-class="mct-tooltip"
+          >
+            <template #content>
+              <div class="mct-tooltip__body">
+                照会コード＝成型ロット数（スライス残）。指示コード＝一覧合計ロット数。<br />
+                紐付けは照会コードと DB が一致した場合のみ。誤紐付けは候補表示のみ。
+              </div>
+            </template>
+            <button type="button" class="mct-header__info" aria-label="説明">
+              <el-icon><InfoFilled /></el-icon>
+            </button>
+          </el-tooltip>
+        </div>
+      </template>
+
+      <div class="mct-shell">
+        <div class="mct-toolbar">
+          <el-input
+            v-model="managementCodeTraceFilter"
+            clearable
+            placeholder="コード・製品・ロット…"
+            class="mct-search"
+            :prefix-icon="Search"
+          />
+          <span v-if="managementCodeTraceSelection.length" class="mct-sel-count">
+            {{ managementCodeTraceSelection.length }} 件選択
+          </span>
+        </div>
+
+        <el-table
+          ref="managementCodeTraceTableRef"
+          :data="managementCodeTraceRows"
           size="small"
-          type="primary"
-          :loading="traceLinkSaving"
-          :disabled="managementCodeTraceSelection.length === 0"
-          @click="applyTraceBatchPlanLink(false)"
+          class="mct-table"
+          max-height="min(50vh, 440px)"
+          empty-text="該当ロットがありません"
+          :row-key="managementCodeTraceRowKey"
+          :row-class-name="mctTableRowClass"
+          @selection-change="onManagementCodeTraceSelectionChange"
         >
-          選択に設定
-        </el-button>
-        <el-button
-          size="small"
-          type="warning"
-          plain
-          :loading="traceLinkSaving"
-          :disabled="managementCodeTraceSelection.length === 0"
-          @click="applyTraceBatchPlanLink(true)"
-        >
-          選択をクリア
-        </el-button>
-        <span v-if="managementCodeTraceSelection.length" class="mgmt-code-trace-link-hint">
-          {{ managementCodeTraceSelection.length }} 件選択中
-        </span>
+          <el-table-column type="selection" width="40" fixed="left" />
+          <el-table-column label="ID" width="64" align="center" fixed="left">
+            <template #default="{ row }">
+              <span class="mct-id">{{ row.batch_plan_id }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="管理コード" min-width="220">
+            <template #default="{ row }">
+              <div class="mct-mc-block">
+                <code class="mct-mc">{{ row.management_code || '—' }}</code>
+                <div v-if="row.lot_size_code_dual_source" class="mct-mc-meta">
+                  <span>成型{{ row.production_lot_size_forming ?? '—' }}</span>
+                  <span class="mct-mc-meta__sep">/</span>
+                  <span>指示{{ row.production_lot_size_instruction ?? '—' }}</span>
+                </div>
+                <code
+                  v-if="row.lot_size_code_dual_source && row.management_code_instruction"
+                  class="mct-mc mct-mc--sub"
+                >
+                  {{ row.management_code_instruction }}
+                </code>
+                <code
+                  v-else-if="traceCuttingState(row) === 'mismatch' && row.cutting_batch_link_mismatch_db_code"
+                  class="mct-mc mct-mc--warn"
+                >
+                  DB {{ row.cutting_batch_link_mismatch_db_code }}
+                </code>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="所在" width="132" align="center">
+            <template #default="{ row }">
+              <div class="mct-pills">
+                <span class="mct-pill" :class="`mct-pill--cut-${traceCuttingState(row)}`">切断</span>
+                <span class="mct-pill" :class="`mct-pill--ins-${traceInstructionState(row)}`">指示</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="進捗" width="76" align="center">
+            <template #default="{ row }">
+              <el-tag
+                :type="progressStatusType(row.progress_status)"
+                size="small"
+                effect="light"
+                round
+                class="mct-status-tag"
+              >
+                {{ progressStatusLabel(row.progress_status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="製品 / 位置" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <div class="mct-prod">{{ row.product_name }}</div>
+              <div class="mct-pos">{{ row.position_summary }}</div>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div v-if="managementCodeTraceSelection.length" class="mct-panel">
+          <div v-if="traceReassignSource" class="mct-panel__block">
+            <div class="mct-panel__title">誤紐付け修正</div>
+            <div class="mct-panel__row">
+              <span class="mct-panel__meta">
+                cutting #{{ traceReassignSource.cutting_management_row_id ?? traceReassignSource.cutting_batch_link_mismatch_id }}
+                → 現 batch {{ traceReassignSource.batch_plan_id }}
+              </span>
+            </div>
+            <div class="mct-panel__row mct-panel__row--actions">
+              <el-select
+                v-model="traceReassignTargetBatchPlanId"
+                filterable
+                clearable
+                placeholder="移管先ロット"
+                size="small"
+                class="mct-select"
+                :disabled="traceReassignSaving"
+              >
+                <el-option
+                  v-for="lot in traceReassignTargetOptions"
+                  :key="lot.batch_plan_id"
+                  :label="traceReassignLotOptionLabel(lot)"
+                  :value="lot.batch_plan_id"
+                />
+              </el-select>
+              <el-checkbox v-model="traceReassignUpdateInstruction" :disabled="traceReassignSaving" size="small">
+                指示も更新
+              </el-checkbox>
+              <el-button
+                size="small"
+                type="primary"
+                :loading="traceReassignSaving"
+                :disabled="!traceReassignTargetBatchPlanId"
+                @click="applyTraceReassignLot"
+              >
+                移管
+              </el-button>
+            </div>
+            <code v-if="traceReassignPreview" class="mct-preview">{{ traceReassignPreview }}</code>
+          </div>
+
+          <div class="mct-panel__block mct-panel__block--link">
+            <div class="mct-panel__title">upstream 紐付け</div>
+            <div class="mct-panel__row mct-panel__row--actions">
+              <el-input-number
+                v-model="traceLinkTargetBatchPlanId"
+                :min="1"
+                :controls="false"
+                size="small"
+                :disabled="traceLinkSaving"
+                placeholder="batch_plan_id"
+                class="mct-batch-id"
+              />
+              <el-checkbox v-model="traceLinkUpdateInstruction" :disabled="traceLinkSaving" size="small">
+                指示も更新
+              </el-checkbox>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                :loading="traceLinkSaving"
+                @click="applyTraceBatchPlanLink(false)"
+              >
+                設定
+              </el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="traceLinkSaving"
+                @click="applyTraceBatchPlanLink(true)"
+              >
+                クリア
+              </el-button>
+            </div>
+          </div>
+        </div>
       </div>
+
       <template #footer>
-        <el-button size="small" @click="managementCodeTraceVisible = false">閉じる</el-button>
+        <div class="mct-footer">
+          <span class="mct-footer__hint">紐付けはコード完全一致時のみ有効</span>
+          <el-button size="small" @click="managementCodeTraceVisible = false">閉じる</el-button>
+        </div>
       </template>
     </el-dialog>
   </div>
@@ -1209,7 +1269,7 @@
 defineOptions({ name: 'FormingPlanning' })
 import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, h } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Delete, InfoFilled, Memo, Setting } from '@element-plus/icons-vue'
+import { Calendar, Delete, InfoFilled, Memo, Search, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
 import {
@@ -1226,6 +1286,7 @@ import {
   fetchEquipmentEfficiencyProducts,
   fetchProductionProgress,
   patchUpstreamApsBatchPlanLinks,
+  reassignCuttingManagementLot,
   fetchLineReplanAnchors,
   saveLineReplanAnchors,
   fetchLineCapacities,
@@ -1422,6 +1483,9 @@ const managementCodeTraceSelection = ref<ProgressLotItem[]>([])
 const traceLinkTargetBatchPlanId = ref<number | null>(null)
 const traceLinkUpdateInstruction = ref(true)
 const traceLinkSaving = ref(false)
+const traceReassignTargetBatchPlanId = ref<number | null>(null)
+const traceReassignUpdateInstruction = ref(true)
+const traceReassignSaving = ref(false)
 /** ガント表示タブ：daily | hourly | progress */
 const activeGanttTab = ref('daily')
 /** 計画を取得 API を一度でも成功で呼んだか（空配列含む） */
@@ -1527,10 +1591,69 @@ const managementCodeTraceRows = computed(() => {
     const pos = (lot.position_summary || '').toLowerCase()
     const prod = (lot.product_name || '').toLowerCase()
     const lotNo = String(lot.lot_number || '')
-    const tables = managementCodeTablePresence(lot).toLowerCase()
-    return mc.includes(q) || pos.includes(q) || prod.includes(q) || lotNo.includes(q) || tables.includes(q)
+    const instrMc = (lot.management_code_instruction || '').toLowerCase()
+    const dbMc = (lot.cutting_management_code_in_db || lot.cutting_batch_link_mismatch_db_code || '').toLowerCase()
+    return (
+      mc.includes(q) ||
+      pos.includes(q) ||
+      prod.includes(q) ||
+      lotNo.includes(q) ||
+      instrMc.includes(q) ||
+      dbMc.includes(q)
+    )
   })
 })
+
+const managementCodeTraceFilteredCount = computed(() => managementCodeTraceRows.value.length)
+
+type TraceCuttingState = 'ok' | 'none' | 'mismatch'
+
+function traceCuttingState(row: ProgressLotItem): TraceCuttingState {
+  if (row.in_cutting_by_management_code) return 'ok'
+  if (row.cutting_batch_link_mismatch_id) return 'mismatch'
+  return 'none'
+}
+
+function traceInstructionState(row: ProgressLotItem): 'ok' | 'instr_code' | 'none' {
+  if (row.in_instruction_by_management_code) return 'ok'
+  if (row.in_instruction_plans_by_instruction_code) return 'instr_code'
+  return 'none'
+}
+
+function mctTableRowClass({ row }: { row: ProgressLotItem }): string {
+  const cls: string[] = []
+  if (traceCuttingState(row) === 'mismatch') cls.push('mct-row--mismatch')
+  if (row.lot_size_code_dual_source) cls.push('mct-row--dual')
+  return cls.join(' ')
+}
+
+/** 誤紐付け修正：1行選択かつ cutting 行（一致）または誤紐付け候補 */
+const traceReassignSource = computed((): ProgressLotItem | null => {
+  const sel = managementCodeTraceSelection.value
+  if (sel.length !== 1) return null
+  const row = sel[0]!
+  const cid = row.cutting_management_row_id ?? row.cutting_batch_link_mismatch_id
+  if (!cid) return null
+  return row
+})
+
+const traceReassignTargetOptions = computed(() => {
+  const src = traceReassignSource.value
+  if (!src) return sortedProgressLots.value
+  return sortedProgressLots.value.filter((lot) => lot.batch_plan_id !== src.batch_plan_id)
+})
+
+const traceReassignPreview = computed((): string => {
+  const tid = traceReassignTargetBatchPlanId.value
+  if (tid == null) return ''
+  const lot = sortedProgressLots.value.find((l) => l.batch_plan_id === tid)
+  return (lot?.management_code || '').trim()
+})
+
+function traceReassignLotOptionLabel(lot: ProgressLotItem): string {
+  const mc = (lot.management_code || '—').trim()
+  return `${lot.batch_plan_id} · ${mc} · ロット${lot.lot_number}`
+}
 
 watch(anchorMonth, (v) => {
   if (!v) return
@@ -2854,25 +2977,33 @@ function progressStatusSourceTable(s: string): string {
 /** cutting_management / instruction_plans の登録有無（検索用短文） */
 function managementCodeTablePresence(lot: ProgressLotItem): string {
   const parts: string[] = []
+  if (lot.lot_size_code_dual_source) {
+    parts.push(
+      `口径:成型${lot.production_lot_size_forming ?? '?'}指示${lot.production_lot_size_instruction ?? '?'}`,
+    )
+  }
   if (lot.in_cutting_by_management_code) parts.push('cutting:コード一致')
-  else if (lot.in_cutting_by_batch_plan_id) {
-    parts.push(`cutting:バッチIDのみ db=${lot.cutting_management_code_in_db || '空'}`)
+  else if (lot.cutting_batch_link_mismatch_id) {
+    parts.push(`cutting:誤紐付け候補 id=${lot.cutting_batch_link_mismatch_id}`)
   }
   if (lot.in_instruction_by_management_code) parts.push('指示:コード一致')
-  else if (lot.in_instruction_by_batch_plan_id) {
-    parts.push(`指示:バッチIDのみ db=${lot.instruction_management_code_in_db || '空'}`)
+  else if (lot.in_instruction_plans_by_instruction_code) {
+    parts.push('指示:指示用コードのみ')
   }
   if (parts.length === 0) return '未登録'
   return parts.join(' / ')
 }
 
 function cuttingDbManagementCodeDisplay(lot: ProgressLotItem): string {
-  if (!lot.in_cutting_management) return '—'
-  const db = (lot.cutting_management_code_in_db || '').trim()
-  if (!db) return '（空）'
-  const shown = (lot.management_code || '').trim()
-  if (shown && db !== shown) return `${db} ≠照会`
-  return db
+  if (lot.in_cutting_management) {
+    const db = (lot.cutting_management_code_in_db || '').trim()
+    if (!db) return '（空）'
+    return db
+  }
+  if (lot.cutting_batch_link_mismatch_db_code) {
+    return `${lot.cutting_batch_link_mismatch_db_code} ≠照会`
+  }
+  return '—'
 }
 
 function upstreamPrimaryTableLabel(lot: ProgressLotItem): string {
@@ -2895,6 +3026,56 @@ function onManagementCodeTraceSelectionChange(rows: ProgressLotItem[]) {
   managementCodeTraceSelection.value = rows
   if (rows.length === 1) {
     traceLinkTargetBatchPlanId.value = rows[0]!.batch_plan_id
+  }
+  traceReassignTargetBatchPlanId.value = null
+}
+
+async function applyTraceReassignLot() {
+  const src = traceReassignSource.value
+  const cuttingId = src?.cutting_management_row_id ?? src?.cutting_batch_link_mismatch_id
+  const targetId = traceReassignTargetBatchPlanId.value
+  if (!src || !cuttingId) {
+    ElMessage.warning('誤紐付け修正対象の cutting 行を 1 件選択してください')
+    return
+  }
+  if (targetId == null || !Number.isFinite(targetId) || targetId < 1) {
+    ElMessage.warning('移管先 APS ロットを選択してください')
+    return
+  }
+  const targetLot = sortedProgressLots.value.find((l) => l.batch_plan_id === targetId)
+  const targetMc = (targetLot?.management_code || traceReassignPreview.value || '—').trim()
+  const msg = [
+    `cutting_management.id=${src.cutting_management_row_id} を`,
+    `aps_batch_plan_id=${targetId}（管理コード: ${targetMc}）へ移管します。`,
+    '品番・ロット等を移管先に合わせ、管理コードを再生成します。',
+    'よろしいですか？',
+  ].join('\n')
+  try {
+    await ElMessageBox.confirm(msg, '誤紐付け修正（C + B）', {
+      type: 'warning',
+      confirmButtonText: '移管',
+    })
+  } catch {
+    return
+  }
+  traceReassignSaving.value = true
+  try {
+    const res = await reassignCuttingManagementLot({
+      cutting_management_id: cuttingId,
+      target_batch_plan_id: targetId,
+      update_instruction_plans: traceReassignUpdateInstruction.value,
+    })
+    ElMessage.success(res.message || '移管しました')
+    await loadProgress()
+    managementCodeTraceSelection.value = []
+    traceReassignTargetBatchPlanId.value = null
+    managementCodeTraceTableRef.value?.clearSelection?.()
+  } catch (e: unknown) {
+    const err = e as { message?: string; response?: { data?: { detail?: string } } }
+    const detail = err.response?.data?.detail
+    ElMessage.error(typeof detail === 'string' ? detail : err.message || '誤紐付け修正に失敗しました')
+  } finally {
+    traceReassignSaving.value = false
   }
 }
 
@@ -2962,6 +3143,7 @@ function openManagementCodeTraceDialog() {
   managementCodeTraceFilter.value = ''
   managementCodeTraceSelection.value = []
   traceLinkTargetBatchPlanId.value = null
+  traceReassignTargetBatchPlanId.value = null
   managementCodeTraceVisible.value = true
 }
 
@@ -4283,41 +4465,285 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   font-size: 11px;
   color: #64748b;
 }
+.mgmt-code-match-hint.is-mismatch {
+  color: #b45309;
+}
+.mgmt-code-lot-size-cell {
+  font-size: 11px;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+.mgmt-code-instruction-code-hint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #b45309;
+  font-family: ui-monospace, monospace;
+}
 .mgmt-code-primary-table {
   font-family: ui-monospace, monospace;
   font-size: 12px;
   font-weight: 600;
 }
-.mgmt-code-trace-lead {
-  margin: 0 0 12px;
-  font-size: 13px;
+.mgmt-code-trace-dialog :deep(.el-dialog__header) {
+  padding: 12px 16px 8px;
+  margin-right: 0;
+}
+.mgmt-code-trace-dialog :deep(.el-dialog__body) {
+  padding: 0 16px 10px;
+}
+.mgmt-code-trace-dialog :deep(.el-dialog__footer) {
+  padding: 8px 16px 12px;
+  border-top: 1px solid #eef2f6;
+}
+.mct-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding-right: 28px;
+}
+.mct-header__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.mct-header__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--c-text-h, #0f172a);
+  letter-spacing: 0.02em;
+}
+.mct-header__badge {
+  font-size: 11px;
+  font-weight: 500;
   color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 2px 9px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.mct-header__info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mct-header__info:hover {
+  background: #f1f5f9;
+  color: var(--c-accent, #2563eb);
+}
+.mct-tooltip__body {
+  max-width: 280px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.mct-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mct-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mct-search {
+  flex: 1;
+  max-width: 360px;
+}
+.mct-search :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #e2e8f0 inset;
+}
+.mct-sel-count {
+  font-size: 12px;
+  color: var(--c-accent, #2563eb);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.mct-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+.mct-table :deep(.el-table__header th) {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 0;
+}
+.mct-table :deep(.el-table__body td) {
+  padding: 5px 0;
+}
+.mct-table :deep(.el-table__row.mct-row--mismatch > td) {
+  background: #fffbeb !important;
+}
+.mct-table :deep(.el-table__row.mct-row--dual > td) {
+  background: #fff7ed !important;
+}
+.mct-id {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+}
+.mct-mc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mct-mc {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #0f172a;
+  word-break: break-all;
+}
+.mct-mc--sub {
+  font-size: 10px;
+  color: #b45309;
+}
+.mct-mc--warn {
+  font-size: 10px;
+  color: #dc2626;
+}
+.mct-mc-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+.mct-mc-meta__sep {
+  opacity: 0.5;
+}
+.mct-pills {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.mct-pill {
+  display: inline-block;
+  min-width: 44px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
   line-height: 1.5;
+  text-align: center;
 }
-.mgmt-code-trace-filter {
-  margin-bottom: 12px;
-  max-width: 420px;
+.mct-pill--cut-ok {
+  background: #ecfdf5;
+  color: #047857;
 }
-.mgmt-code-trace-link-bar {
+.mct-pill--cut-none {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.mct-pill--cut-mismatch {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.mct-pill--ins-ok {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.mct-pill--ins-instr_code {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.mct-pill--ins-none {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.mct-status-tag {
+  border: none;
+}
+.mct-prod {
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+  line-height: 1.3;
+}
+.mct-pos {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.3;
+  margin-top: 1px;
+}
+.mct-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+}
+.mct-panel__block + .mct-panel__block--link {
+  padding-top: 8px;
+  border-top: 1px dashed #cbd5e1;
+}
+.mct-panel__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.mct-panel__row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 12px;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  gap: 8px;
 }
-.mgmt-code-trace-link-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
+.mct-panel__row--actions {
+  margin-top: 2px;
 }
-.mgmt-code-trace-link-id {
-  width: 160px;
+.mct-panel__meta {
+  font-size: 11px;
+  color: #475569;
+  font-family: ui-monospace, monospace;
 }
-.mgmt-code-trace-link-hint {
-  font-size: 12px;
-  color: #64748b;
+.mct-select {
+  flex: 1 1 200px;
+  min-width: 160px;
+  max-width: 340px;
+}
+.mct-batch-id {
+  width: 120px;
+}
+.mct-preview {
+  display: block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #166534;
+  word-break: break-all;
+}
+.mct-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+.mct-footer__hint {
+  font-size: 11px;
+  color: #94a3b8;
 }
 
 /* ── 合計(本) inline-edit ── */

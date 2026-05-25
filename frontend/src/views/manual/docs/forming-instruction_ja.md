@@ -22,8 +22,7 @@
 8. [データベース調整（在庫 TAB）](#8-データベース調整在庫-tab)
 9. [APS 再計算と生産残の修正](#9-aps-再計算と生産残の修正)
 10. [段取表印刷と現場掲示](#10-段取表印刷と現場掲示)
-11. [推奨スクリーンショット一覧](#11-推奨スクリーンショット一覧)
-12. [よくあるメッセージと対処](#12-よくあるメッセージと対処)
+11. [よくあるメッセージと対処](#11-よくあるメッセージと対処)
 
 ---
 
@@ -518,38 +517,7 @@ PLC 印刷データ・HT 登録データ・現場指示書の記入内容を、E
 
 ---
 
-## 11. 推奨スクリーンショット一覧
-
-| 番号 | 画像 | 用途 |
-|------|------|------|
-| 01 | [01_workflow_overview.png](./images/FormingInstructionManual/01_workflow_overview.png) | 業務フロー |
-| 02 | [02_menu_forming_instruction.png](./images/FormingInstructionManual/02_menu_forming_instruction.png) | メニュー（成型指示） |
-| 03 | [03_forming_instruction_overview.png](./images/FormingInstructionManual/03_forming_instruction_overview.png) | 成型指示画面全体 |
-| 04 | [04_forming_date_nextday.png](./images/FormingInstructionManual/04_forming_date_nextday.png) | 翌日設定 |
-| 05 | [05_instruction_issue_button.png](./images/FormingInstructionManual/05_instruction_issue_button.png) | 指示書発行 |
-| 06 | [06_instruction_print_preview.png](./images/FormingInstructionManual/06_instruction_print_preview.png) | 印刷プレビュー |
-| 07 | [07_instruction_printed_sample.png](./images/FormingInstructionManual/07_instruction_printed_sample.png) | 指示書サンプル |
-| 08 | [08_site_exchange.png](./images/FormingInstructionManual/08_site_exchange.png) | 現場交換 |
-| 09 | [09_plc_print.png](./images/FormingInstructionManual/09_plc_print.png) | PLC 印刷 |
-| 10 | [10_handy_terminal.png](./images/FormingInstructionManual/10_handy_terminal.png) | HT 登録 |
-| 11 | [11_menu_actual_management.png](./images/FormingInstructionManual/11_menu_actual_management.png) | メニュー（実績管理） |
-| 12 | [12_actual_management_filter.png](./images/FormingInstructionManual/12_actual_management_filter.png) | 実績照合 |
-| 13 | [13_actual_reconcile.png](./images/FormingInstructionManual/13_actual_reconcile.png) | 照合例 |
-| 14 | [14_menu_data_management.png](./images/FormingInstructionManual/14_menu_data_management.png) | 生産データ管理 |
-| 15 | [15_all_batch_update.png](./images/FormingInstructionManual/15_all_batch_update.png) | 一括更新 |
-| 16 | [16_inventory_tab.png](./images/FormingInstructionManual/16_inventory_tab.png) | 在庫 TAB 位置 |
-| — | [16_inventory_tab_dblclick.png](./images/FormingInstructionManual/16_inventory_tab_dblclick.png) | 在庫セル修正 |
-| 17 | [17_menu_forming_plan_list.png](./images/FormingInstructionManual/17_menu_forming_plan_list.png) | 成型計画一覧 |
-| 18 | [18_replan_button.png](./images/FormingInstructionManual/18_replan_button.png) | 再計算 |
-| 19 | [19_remain_check_gantt.png](./images/FormingInstructionManual/19_remain_check_gantt.png) | 残確認 |
-| 20 | [20_forming_planning_total_qty.png](./images/FormingInstructionManual/20_forming_planning_total_qty.png) | 合計(本)修正 |
-| 21 | [21_setup_schedule_print.png](./images/FormingInstructionManual/21_setup_schedule_print.png) | 段取表印刷 |
-| 22 | [22_setup_schedule_sample.png](./images/FormingInstructionManual/22_setup_schedule_sample.png) | 段替予定表 |
-| 23 | [23_site_posting.png](./images/FormingInstructionManual/23_site_posting.png) | 現場掲示 |
-
----
-
-## 12. よくあるメッセージと対処
+## 11. よくあるメッセージと対処
 
 | メッセージ | 画面 | 対処 |
 |------------|------|------|

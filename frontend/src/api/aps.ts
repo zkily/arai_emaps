@@ -320,6 +320,13 @@ export interface ProgressLotItem {
   predicted_completion?: string | null
   progress_status: 'PLANNED' | 'RELEASED' | 'IN_PROGRESS' | 'COMPLETED'
   management_code?: string | null
+  production_lot_size_forming?: number | null
+  production_lot_size_instruction?: number | null
+  management_code_instruction?: string | null
+  lot_size_code_dual_source?: boolean
+  schedule_slice_total?: number | null
+  schedule_full_plan_total?: number | null
+  in_instruction_plans_by_instruction_code?: boolean
   production_line: string
   /** cutting_management（切断指示）— 生産中ロットのみ */
   cutting_planned_qty?: number | null
@@ -340,6 +347,9 @@ export interface ProgressLotItem {
   in_cutting_by_batch_plan_id?: boolean
   cutting_management_code_in_db?: string | null
   cutting_management_row_id?: number | null
+  /** aps_batch_plan_id のみ一致・code 不一致の参考（進捗には未使用） */
+  cutting_batch_link_mismatch_id?: number | null
+  cutting_batch_link_mismatch_db_code?: string | null
   in_instruction_plans?: boolean
   in_instruction_by_management_code?: boolean
   in_instruction_by_batch_plan_id?: boolean
@@ -373,6 +383,21 @@ export interface UpstreamApsBatchPlanLinksBody {
 
 export interface UpstreamApsBatchPlanLinksResult {
   cutting_updated: number
+  instruction_updated: number
+}
+
+export interface ReassignCuttingManagementLotBody {
+  cutting_management_id: number
+  target_batch_plan_id: number
+  update_instruction_plans?: boolean
+}
+
+export interface ReassignCuttingManagementLotResult {
+  cutting_management_id: number
+  previous_batch_plan_id?: number | null
+  target_batch_plan_id: number
+  previous_management_code?: string | null
+  new_management_code: string
   instruction_updated: number
 }
 
@@ -617,6 +642,16 @@ export function patchUpstreamApsBatchPlanLinks(
   data: UpstreamApsBatchPlanLinksResult
 }> {
   return request.patch(`${BASE}/upstream-aps-batch-plan-links`, body)
+}
+
+export function reassignCuttingManagementLot(
+  body: ReassignCuttingManagementLotBody,
+): Promise<{
+  success: boolean
+  message?: string
+  data: ReassignCuttingManagementLotResult
+}> {
+  return request.post(`${BASE}/reassign-cutting-management-lot`, body)
 }
 
 export function fetchDailyEquipmentReport(

@@ -4,18 +4,28 @@
 
 本フォルダ（`frontend/src/views/manual/images/CuttingInstructionManual/`）にスクリーンショットを配置してください。
 
-## 自動生成済み（メニュー・フロー・プレースホルダ）
+## 自動生成済み（メニュー・フロー）
 
 | ファイル名 | 内容 |
 |------------|------|
-| `01_workflow_overview.png` | 全体フロー（ロット登録→指示→カンバン→実績確定） |
-| `02_menu_cutting_instruction.png` | メニュー：ERP管理メニュー → 生産管理 → 生産指示 → 切断・面取指示 |
+| `01_workflow_overview.png` | 全体フロー図（A→I、3 スイムレーン。成型マニュアルと同スタイル） |
+| `02_menu_cutting_instruction.png` | メニュー導線図（4 段シェブロン。成型・溶接マニュアルと同スタイル） |
 
-## 画面キャプチャ（プレースホルダ／要差し替え）
+## 第 3 章 画面構成（5 ブロック）
 
 | ファイル名 | 内容 |
 |------------|------|
-| `03_cutting_instruction_overview.png` | 切断・面取指示管理 画面全体 |
+| `03_block01_production_lot_list.png` | ① 生産ロット一覧（上部左） |
+| `03_block02_product_efficiency.png` | ② 製品情報・設備能率（上部右） |
+| `03_block03_cutting_usage.png` | ③ 切断指示＋使用材料数（中部） |
+| `03_block04_chamfering.png` | ④ 面取ロット＋面取指示（中下部） |
+| `03_block05_kanban.png` | ⑤ カンバン発行（最下部） |
+
+## 画面キャプチャ（各章・要差し替え時は実画面で上書き可）
+
+| ファイル名 | 内容 |
+|------------|------|
+| `03_cutting_instruction_overview.png` | （旧）画面全体。第 3 章では未使用 |
 | `04_production_lot_list.png` | 生産ロット一覧＋フィルタ |
 | `05_product_detail_efficiency.png` | 製品情報・設備能率（切断） |
 | `06_drag_drop_lot_to_cutting.png` | D&D：ロット→切断指示 |
@@ -34,4 +44,5 @@
 | `19_new_lot_dialog.png` | 新規ロット追加ダイアログ |
 | `20_confirm_actual_result.png` | 実績確定結果ダイアログ |
 
-実運用時は上記プレースホルダを **実画面のスクリーンショット** に差し替えてください。
+| 版 | 1.0 |
+| 制作日 | 2026-05-25 |

@@ -72,6 +72,8 @@ from app.modules.aps.schemas import (
     LineReplanAnchorsBatchBody,
     UpstreamApsBatchPlanLinksBody,
     UpstreamApsBatchPlanLinksResult,
+    ReassignCuttingManagementLotBody,
+    ReassignCuttingManagementLotResult,
 )
 from app.modules.aps.engine import (
     APS_CALENDAR_PRELOAD_DAYS,
@@ -2170,6 +2172,119 @@ async def patch_upstream_aps_batch_plan_links(
     }
 
 
+@router.post("/reassign-cutting-management-lot")
+async def reassign_cutting_management_lot(
+    body: ReassignCuttingManagementLotBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    誤って aps_batch_plan_id だけで紐づいた cutting_management を、
+    移管先 APS ロットの品番・ロット等に合わせて更新し management_code を再生成（DB トリガー）した上で
+    aps_batch_plan_id を正しいロットへ付け替える（C + B）。
+    """
+    cid = int(body.cutting_management_id)
+    target_bid = int(body.target_batch_plan_id)
+
+    cm_res = await db.execute(
+        text(
+            "SELECT id, management_code, aps_batch_plan_id FROM cutting_management WHERE id = :cid LIMIT 1"
+        ),
+        {"cid": cid},
+    )
+    cm_row = cm_res.mappings().first()
+    if cm_row is None:
+        raise HTTPException(status_code=404, detail="cutting_management が見つかりません")
+
+    bp = await db.get(ApsBatchPlan, target_bid)
+    if bp is None:
+        raise HTTPException(status_code=404, detail="移管先 aps_batch_plan_id は aps_batch_plans に存在しません")
+
+    new_mc = _instruction_management_code(
+        bp.production_month,
+        bp.production_line,
+        bp.product_cd,
+        bp.priority_order,
+        bp.production_lot_size,
+        bp.lot_number,
+    )
+    dup_res = await db.execute(
+        text(
+            "SELECT id FROM cutting_management WHERE management_code = :mc AND id <> :cid LIMIT 1"
+        ),
+        {"mc": new_mc, "cid": cid},
+    )
+    dup = dup_res.mappings().first()
+    if dup is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"移管先の管理コード「{new_mc}」は既に cutting_management.id={int(dup['id'])} が使用中です"
+            ),
+        )
+
+    prev_mc = (str(cm_row.get("management_code") or "").strip() or None)
+    prev_bid_raw = cm_row.get("aps_batch_plan_id")
+    prev_bid = int(prev_bid_raw) if prev_bid_raw is not None else None
+
+    await db.execute(
+        text(
+            """
+            UPDATE cutting_management SET
+              production_month = :production_month,
+              production_line = :production_line,
+              product_cd = :product_cd,
+              product_name = :product_name,
+              priority_order = :priority_order,
+              production_lot_size = :production_lot_size,
+              lot_number = :lot_number,
+              aps_batch_plan_id = :target_bid
+            WHERE id = :cid
+            """
+        ),
+        {
+            "cid": cid,
+            "target_bid": target_bid,
+            "production_month": bp.production_month,
+            "production_line": bp.production_line,
+            "product_cd": bp.product_cd,
+            "product_name": bp.product_name,
+            "priority_order": bp.priority_order,
+            "production_lot_size": int(bp.production_lot_size or 0),
+            "lot_number": str(bp.lot_number or ""),
+        },
+    )
+
+    instruction_updated = 0
+    if body.update_instruction_plans:
+        res_ins = await db.execute(
+            text(
+                "UPDATE instruction_plans SET aps_batch_plan_id = :target_bid "
+                "WHERE management_code = :mc"
+            ),
+            {"target_bid": target_bid, "mc": new_mc},
+        )
+        instruction_updated = int(res_ins.rowcount or 0)
+
+    await db.commit()
+    result = ReassignCuttingManagementLotResult(
+        cutting_management_id=cid,
+        previous_batch_plan_id=prev_bid,
+        target_batch_plan_id=target_bid,
+        previous_management_code=prev_mc,
+        new_management_code=new_mc,
+        instruction_updated=instruction_updated,
+    )
+    return {
+        "success": True,
+        "message": (
+            f"cutting_management.id={cid} をロット {target_bid} へ移管しました"
+            f"（管理コード: {prev_mc or '—'} → {new_mc}）"
+        ),
+        "data": result.model_dump(),
+    }
+
+
 # ═══════════════════ Run All / Sequential ═══════════════════
 
 @router.post("/production-plan-excel/rebuild")
@@ -3136,10 +3251,20 @@ async def get_production_progress(
     sched_lot_keys: dict[int, list[str]] = defaultdict(list)
     lots: list[ProgressLotItem] = []
 
+    sched_lot_size_ctx: dict[int, dict[str, int]] = {}
+    for ps in schedules:
+        sched_lot_size_ctx[ps.id] = _schedule_lot_size_code_context(
+            ps, slices_by_sched.get(ps.id, [])
+        )
+
     for batch in batches:
         ps = schedule_map.get(batch.aps_schedule_id)
         if not ps:
             continue
+
+        ls_ctx = sched_lot_size_ctx.get(ps.id, {})
+        pls_forming_row = int(batch.production_lot_size or 0)
+        pls_instruction = int(ls_ctx.get("production_lot_size_instruction") or 0)
 
         mc = _instruction_management_code(
             production_month=batch.production_month,
@@ -3149,7 +3274,19 @@ async def get_production_progress(
             production_lot_size=batch.production_lot_size,
             lot_number=batch.lot_number,
         )
-
+        mc_instruction = _instruction_management_code(
+            production_month=batch.production_month,
+            production_line=batch.production_line,
+            product_cd=batch.product_cd,
+            priority_order=batch.priority_order,
+            production_lot_size=pls_instruction if pls_instruction > 0 else batch.production_lot_size,
+            lot_number=batch.lot_number,
+        )
+        mc_norm = (mc or "").strip()
+        mc_instr_norm = (mc_instruction or "").strip()
+        lot_size_code_dual_source = (pls_instruction > 0 and pls_forming_row != pls_instruction) or (
+            mc_instr_norm != mc_norm
+        )
         progress_status = "PLANNED"
         status_determined_by = "PLANNED"
         edit_location_hint = "どちらの表にも未登録 — 成型計画で「ライン順で再計算」で instruction_plans を同期"
@@ -3158,6 +3295,8 @@ async def get_production_progress(
         in_cutting_by_batch_plan_id = False
         cutting_management_code_in_db: Optional[str] = None
         cutting_management_row_id: Optional[int] = None
+        cutting_batch_link_mismatch_id: Optional[int] = None
+        cutting_batch_link_mismatch_db_code: Optional[str] = None
         in_instruction_plans = False
         in_instruction_by_management_code = False
         in_instruction_by_batch_plan_id = False
@@ -3168,7 +3307,7 @@ async def get_production_progress(
         cut_planned: Optional[int] = None
         cut_actual: Optional[int] = None
         cut_done: Optional[bool] = None
-        mc_norm = (mc or "").strip()
+        in_instruction_plans_by_instruction_code = False
         try:
             cut_res = await db.execute(
                 text(
@@ -3182,43 +3321,33 @@ async def get_production_progress(
             if cut_row is not None:
                 in_cutting_by_management_code = True
                 cutting_match_field = "management_code"
-            elif batch.id is not None:
-                cut_res_bid = await db.execute(
-                    text(
-                        "SELECT id, management_code, planned_quantity, actual_production_quantity, "
-                        "COALESCE(production_completed_check, 0) AS pcc "
-                        "FROM cutting_management WHERE aps_batch_plan_id = :bid "
-                        "ORDER BY id DESC LIMIT 1"
-                    ),
-                    {"bid": int(batch.id)},
-                )
-                cut_row = cut_res_bid.mappings().first()
-                if cut_row is not None:
-                    in_cutting_by_batch_plan_id = True
-                    cutting_match_field = "aps_batch_plan_id"
-            if cut_row is not None:
                 in_cutting_management = True
                 cutting_management_row_id = int(cut_row.get("id") or 0) or None
                 db_mc = (cut_row.get("management_code") or "")
                 cutting_management_code_in_db = str(db_mc).strip() or None
                 progress_status = "IN_PROGRESS"
-                status_determined_by = (
-                    "CUTTING_BY_MC" if in_cutting_by_management_code else "CUTTING_BY_BATCH_ID"
-                )
+                status_determined_by = "CUTTING_BY_MC"
                 upstream_data_table = "cutting_management"
-                if in_cutting_by_management_code:
-                    edit_location_hint = (
-                        "cutting_management（管理コード一致）— 切断済リストで当該コードを検索"
-                    )
-                else:
-                    edit_location_hint = (
-                        "cutting_management（aps_batch_plan_id のみ）— "
-                        f"DB上の management_code は「{cutting_management_code_in_db or '空'}」。"
-                        f"切断済リストはバッチID={batch.id} または DBコードで検索"
-                    )
+                edit_location_hint = (
+                    "cutting_management（管理コード一致）— 切断済リストで当該コードを検索"
+                )
                 cut_planned = int(cut_row.get("planned_quantity") or 0)
                 cut_actual = int(cut_row.get("actual_production_quantity") or 0)
                 cut_done = bool(int(cut_row.get("pcc") or 0))
+            elif batch.id is not None:
+                cut_bid_res = await db.execute(
+                    text(
+                        "SELECT id, management_code FROM cutting_management "
+                        "WHERE aps_batch_plan_id = :bid ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"bid": int(batch.id)},
+                )
+                cut_bid_row = cut_bid_res.mappings().first()
+                if cut_bid_row is not None:
+                    bid_db_mc = str(cut_bid_row.get("management_code") or "").strip()
+                    if bid_db_mc and bid_db_mc != mc_norm:
+                        cutting_batch_link_mismatch_id = int(cut_bid_row.get("id") or 0) or None
+                        cutting_batch_link_mismatch_db_code = bid_db_mc
 
             ins_row = None
             ins_res_mc = await db.execute(
@@ -3232,50 +3361,51 @@ async def get_production_progress(
             if ins_row is not None:
                 in_instruction_by_management_code = True
                 instruction_match_field = "management_code"
-            elif batch.id is not None:
-                ins_res_bid = await db.execute(
-                    text(
-                        "SELECT id, management_code FROM instruction_plans "
-                        "WHERE aps_batch_plan_id = :bid ORDER BY id DESC LIMIT 1"
-                    ),
-                    {"bid": int(batch.id)},
-                )
-                ins_row = ins_res_bid.mappings().first()
-                if ins_row is not None:
-                    in_instruction_by_batch_plan_id = True
-                    instruction_match_field = "aps_batch_plan_id"
-            if ins_row is not None:
                 in_instruction_plans = True
                 instruction_management_code_in_db = (
                     str(ins_row.get("management_code") or "").strip() or None
                 )
+            elif mc_instr_norm and mc_instr_norm != mc_norm:
+                ins_res_instr = await db.execute(
+                    text(
+                        "SELECT id, management_code FROM instruction_plans "
+                        "WHERE management_code = :mc ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"mc": mc_instr_norm},
+                )
+                ins_instr_row = ins_res_instr.mappings().first()
+                if ins_instr_row is not None:
+                    in_instruction_plans_by_instruction_code = True
+                    in_instruction_plans = True
+                    instruction_management_code_in_db = (
+                        str(ins_instr_row.get("management_code") or "").strip() or None
+                    )
+                    instruction_match_field = "management_code_instruction"
 
             if not in_cutting_management and in_instruction_plans:
                 progress_status = "RELEASED"
                 status_determined_by = "INSTRUCTION"
                 upstream_data_table = "instruction_plans"
-                if in_instruction_by_management_code:
-                    edit_location_hint = (
-                        "instruction_plans（管理コード一致）— 製造指示で修正"
-                    )
-                else:
-                    edit_location_hint = (
-                        "instruction_plans（aps_batch_plan_id のみ）— "
-                        f"DB上の management_code は「{instruction_management_code_in_db or '空'}」"
-                    )
-            elif in_cutting_management and in_instruction_plans:
-                cut_hint = (
-                    "管理コード一致"
-                    if in_cutting_by_management_code
-                    else f"バッチIDのみ（DBコード={cutting_management_code_in_db or '空'}）"
-                )
-                ins_hint = (
-                    "管理コード一致"
-                    if in_instruction_by_management_code
-                    else f"バッチIDのみ（DBコード={instruction_management_code_in_db or '空'}）"
-                )
                 edit_location_hint = (
-                    f"進捗は cutting_management（{cut_hint}）。instruction_plans にも行あり（{ins_hint}）"
+                    "instruction_plans（管理コード一致）— 製造指示で修正"
+                )
+            elif in_cutting_management and in_instruction_plans:
+                edit_location_hint = (
+                    "進捗は cutting_management（管理コード一致）。"
+                    "instruction_plans にも行あり（管理コード一致）"
+                )
+            elif cutting_batch_link_mismatch_id is not None:
+                edit_location_hint = (
+                    f"aps_batch_plan_id={batch.id} に切断行 id={cutting_batch_link_mismatch_id} が紐づくが、"
+                    f"DBコード「{cutting_batch_link_mismatch_db_code or '空'}」≠ 照会「{mc_norm}」。"
+                    "進捗・所在には含めない。誤紐付け修正または aps_batch_plan_id クリアを推奨。"
+                )
+            elif lot_size_code_dual_source:
+                edit_location_hint = (
+                    f"ロット数口径が二重：成型={pls_forming_row}（スライス残 {ls_ctx.get('slice_total', 0)}）、"
+                    f"指示={pls_instruction}（一覧合計 {ls_ctx.get('full_plan_total', 0)}）。"
+                    f"照会码={mc_norm}、指示同期码={mc_instr_norm}。"
+                    "instruction は指示用コードで検索。"
                 )
         except (OperationalError, ProgrammingError):
             pass
@@ -3304,6 +3434,13 @@ async def get_production_progress(
             predicted_completion=end_iso,
             progress_status=progress_status,
             management_code=mc,
+            production_lot_size_forming=pls_forming_row,
+            production_lot_size_instruction=pls_instruction if pls_instruction > 0 else None,
+            management_code_instruction=mc_instruction if lot_size_code_dual_source else None,
+            lot_size_code_dual_source=lot_size_code_dual_source,
+            schedule_slice_total=int(ls_ctx.get("slice_total") or 0) or None,
+            schedule_full_plan_total=int(ls_ctx.get("full_plan_total") or 0) or None,
+            in_instruction_plans_by_instruction_code=in_instruction_plans_by_instruction_code,
             production_line=batch.production_line or "",
             cutting_planned_qty=cut_planned,
             cutting_actual_qty=cut_actual,
@@ -3318,6 +3455,8 @@ async def get_production_progress(
             in_cutting_by_batch_plan_id=in_cutting_by_batch_plan_id,
             cutting_management_code_in_db=cutting_management_code_in_db,
             cutting_management_row_id=cutting_management_row_id,
+            cutting_batch_link_mismatch_id=cutting_batch_link_mismatch_id,
+            cutting_batch_link_mismatch_db_code=cutting_batch_link_mismatch_db_code,
             in_instruction_plans=in_instruction_plans,
             in_instruction_by_management_code=in_instruction_by_management_code,
             in_instruction_by_batch_plan_id=in_instruction_by_batch_plan_id,
@@ -3846,6 +3985,32 @@ def _instruction_management_code(
     return f"{yy}{mm}{product_cd}{line_suffix}{po2}-{pls2}-{ln2}"
 
 
+def _schedule_lot_size_code_context(ps: ProductionSchedule, slices: list) -> dict[str, int]:
+    """
+    工単ごとのロット数口径（再計算同期と同じ定義）。
+    - forming: スライス残合計から算出する production_lot_size_engine
+    - instruction: 計画一覧合計 full_plan_total から算出する production_lot_size_ip
+    """
+    slice_total = sum(int(s.planned_qty or 0) for s in slices)
+    full_plan_total = int(ps.planned_process_qty or 0) + int(getattr(ps, "prev_month_carryover", 0) or 0)
+    if full_plan_total <= 0:
+        full_plan_total = slice_total
+    lot_size_snapshot = int(getattr(ps, "lot_size_snapshot", 0) or 0)
+    pls_engine = 0
+    pls_instruction = 0
+    if lot_size_snapshot > 0:
+        if slice_total > 0:
+            pls_engine, _ = _aps_build_batch_qty_rows(slice_total, lot_size_snapshot)
+        if full_plan_total > 0:
+            pls_instruction, _ = _aps_build_batch_qty_rows(full_plan_total, lot_size_snapshot)
+    return {
+        "slice_total": slice_total,
+        "full_plan_total": full_plan_total,
+        "production_lot_size_forming": int(pls_engine),
+        "production_lot_size_instruction": int(pls_instruction),
+    }
+
+
 def _lot_progress_key(aps_schedule_id: int, lot_number: str) -> str:
     return f"{int(aps_schedule_id)}_{str(lot_number or '')}"
 
@@ -4004,13 +4169,22 @@ async def _schedule_batch_upstream_context(
     if bids:
         res_b = await db.execute(
             text(
-                "SELECT DISTINCT aps_batch_plan_id FROM cutting_management "
-                "WHERE aps_batch_plan_id IN :bids AND aps_batch_plan_id IS NOT NULL"
+                """
+                SELECT DISTINCT abp.id
+                FROM aps_batch_plans abp
+                INNER JOIN cutting_management cm ON cm.aps_batch_plan_id = abp.id
+                  AND TRIM(cm.product_cd) = TRIM(abp.product_cd)
+                  AND TRIM(COALESCE(cm.lot_number, '')) = TRIM(COALESCE(abp.lot_number, ''))
+                  AND cm.production_month = abp.production_month
+                  AND COALESCE(cm.priority_order, 0) = COALESCE(abp.priority_order, 0)
+                  AND COALESCE(cm.production_lot_size, 0) = COALESCE(abp.production_lot_size, 0)
+                WHERE abp.id IN :bids
+                """
             ),
             {"bids": tuple(bids)},
         )
         for row in res_b.mappings().all():
-            x = row.get("aps_batch_plan_id")
+            x = row.get("id")
             if x is not None:
                 hit_bids_cm.add(int(x))
 
@@ -4032,13 +4206,30 @@ async def _schedule_batch_upstream_context(
         if bids:
             ins_b = await db.execute(
                 text(
-                    "SELECT DISTINCT aps_batch_plan_id FROM instruction_plans "
-                    "WHERE aps_batch_plan_id IN :bids AND aps_batch_plan_id IS NOT NULL"
+                    """
+                    SELECT DISTINCT abp.id
+                    FROM aps_batch_plans abp
+                    INNER JOIN instruction_plans ip ON ip.aps_batch_plan_id = abp.id
+                      AND TRIM(ip.management_code) = TRIM(
+                        CONCAT(
+                          RIGHT(YEAR(abp.production_month), 2),
+                          LPAD(MONTH(abp.production_month), 2, '0'),
+                          abp.product_cd,
+                          RIGHT(COALESCE(abp.production_line, ''), 2),
+                          LPAD(COALESCE(abp.priority_order, 0), 2, '0'),
+                          '-',
+                          LPAD(COALESCE(abp.production_lot_size, 0), 2, '0'),
+                          '-',
+                          LPAD(COALESCE(abp.lot_number, ''), 2, '0')
+                        )
+                      )
+                    WHERE abp.id IN :bids
+                    """
                 ),
                 {"bids": tuple(bids)},
             )
             for row in ins_b.mappings().all():
-                x = row.get("aps_batch_plan_id")
+                x = row.get("id")
                 if x is not None:
                     hit_bids_ins.add(int(x))
         if all_mcs:
@@ -4073,25 +4264,45 @@ async def _schedule_batch_upstream_context(
     return dict(by_sched), lot_upstream_state
 
 
-async def _upstream_defect_qty_for_batch_plan_id_only(db: AsyncSession, batch_plan_id: int) -> int:
-    """cutting_management.aps_batch_plan_id が付いている行のみで切断不良＋紐づく面取不良を合算（顺位に依存しない）。"""
+# cutting_management ↔ aps_batch_plans の「業務上一致」JOIN（照会・進捗・不良と共通）
+_CUTTING_ABP_FIELD_ALIGN_SQL = """
+INNER JOIN aps_batch_plans abp ON abp.id = :bid
+  AND cm.aps_batch_plan_id = abp.id
+  AND TRIM(cm.product_cd) = TRIM(abp.product_cd)
+  AND TRIM(COALESCE(cm.lot_number, '')) = TRIM(COALESCE(abp.lot_number, ''))
+  AND cm.production_month = abp.production_month
+  AND COALESCE(cm.priority_order, 0) = COALESCE(abp.priority_order, 0)
+  AND COALESCE(cm.production_lot_size, 0) = COALESCE(abp.production_lot_size, 0)
+"""
+
+
+async def _upstream_defect_qty_for_aligned_batch_plan(db: AsyncSession, batch_plan_id: int) -> int:
+    """
+    aps_batch_plans と cutting の品番・ロット・月・顺位・ロット数が一致する行のみ不良合算。
+    aps_batch_plan_id だけの誤紐付けは含めない（照会バインディングと同趣旨）。
+    """
     bid = int(batch_plan_id)
     if bid <= 0:
         return 0
     cut_res = await db.execute(
         text(
-            "SELECT COALESCE(SUM(COALESCE(defect_qty, 0)), 0) AS s FROM cutting_management "
-            "WHERE aps_batch_plan_id = :bid"
+            f"""
+            SELECT COALESCE(SUM(COALESCE(cm.defect_qty, 0)), 0) AS s
+            FROM cutting_management cm
+            {_CUTTING_ABP_FIELD_ALIGN_SQL}
+            """
         ),
         {"bid": bid},
     )
     cut_def = int(cut_res.scalar() or 0)
     ch_res = await db.execute(
         text(
-            "SELECT COALESCE(SUM(COALESCE(cm.defect_qty, 0)), 0) AS s "
-            "FROM chamfering_management cm "
-            "INNER JOIN cutting_management c ON c.id = cm.cutting_management_id "
-            "WHERE c.aps_batch_plan_id = :bid"
+            f"""
+            SELECT COALESCE(SUM(COALESCE(ch.defect_qty, 0)), 0) AS s
+            FROM chamfering_management ch
+            INNER JOIN cutting_management cm ON cm.id = ch.cutting_management_id
+            {_CUTTING_ABP_FIELD_ALIGN_SQL}
+            """
         ),
         {"bid": bid},
     )
@@ -4101,8 +4312,8 @@ async def _upstream_defect_qty_for_batch_plan_id_only(db: AsyncSession, batch_pl
 
 async def _upstream_defect_qty_for_management_code_fallback(db: AsyncSession, management_code: str) -> int:
     """
-    management_code のみで照合（従来）。切断行が無い場合は面取のみ management_code 一致で合算。
-    顺位変更で code がズレた場合は cutting に aps_batch_plan_id が入っていれば _upstream_defect_qty_for_batch_plan_id_only を使う。
+    management_code 一致で切断・面取不良を合算（照会コードと DB コードが一致する行のみ）。
+    切断行が無い場合は面取のみ management_code 一致で合算。
     """
     mc = (management_code or "").strip()
     if not mc:
@@ -4144,16 +4355,42 @@ async def _upstream_defect_qty_resolved(
     batch_plan_id: Optional[int],
     management_code: str,
 ) -> int:
-    """優先: cutting_management.aps_batch_plan_id。無ければ management_code フォールバック。"""
+    """
+    前工程不良合算（照会・進捗の紐付け規則に合わせる）。
+
+    1. 照会 management_code と cutting_management.management_code が一致 → その行＋面取
+    2. 上記が無く、aps_batch_plans と cutting がフィールド一致で紐づく → 一致行のみ合算
+    3. 切断は無いが面取のみ code 一致 → 面取のみ
+    4. 誤紐付け（batch_id のみ・code 不一致）は 0（不良を他ロットに持ち込まない）
+    """
+    mc = (management_code or "").strip()
+    if mc:
+        cut_mc_res = await db.execute(
+            text(
+                "SELECT COUNT(*) AS c FROM cutting_management WHERE management_code = :mc"
+            ),
+            {"mc": mc},
+        )
+        if int(cut_mc_res.scalar() or 0) > 0:
+            return await _upstream_defect_qty_for_management_code_fallback(db, mc)
+
     bid = int(batch_plan_id) if batch_plan_id is not None else 0
     if bid > 0:
-        cnt_res = await db.execute(
-            text("SELECT COUNT(*) AS c FROM cutting_management WHERE aps_batch_plan_id = :bid"),
+        align_cnt = await db.execute(
+            text(
+                f"""
+                SELECT COUNT(*) AS c FROM cutting_management cm
+                {_CUTTING_ABP_FIELD_ALIGN_SQL}
+                """
+            ),
             {"bid": bid},
         )
-        if int(cnt_res.scalar() or 0) > 0:
-            return await _upstream_defect_qty_for_batch_plan_id_only(db, bid)
-    return await _upstream_defect_qty_for_management_code_fallback(db, management_code)
+        if int(align_cnt.scalar() or 0) > 0:
+            return await _upstream_defect_qty_for_aligned_batch_plan(db, bid)
+
+    if mc:
+        return await _upstream_defect_qty_for_management_code_fallback(db, mc)
+    return 0
 
 
 async def _upstream_defect_qty_by_lots(
@@ -4194,7 +4431,7 @@ async def _backfill_cutting_management_aps_batch_plan_id(
     db: AsyncSession,
     schedule_id: int,
 ) -> None:
-    """同一成型工単の aps_batch_plans と切断行を品番・ロット・生産月で突合し aps_batch_plan_id を補完する。"""
+    """同一成型工単の aps_batch_plans と切断行を品番・ロット・生産月・顺位・ロット数で突合し aps_batch_plan_id を補完する。"""
     await db.execute(
         text(
             """
@@ -4204,6 +4441,8 @@ async def _backfill_cutting_management_aps_batch_plan_id(
              AND TRIM(cm.product_cd) = TRIM(abp.product_cd)
              AND TRIM(COALESCE(cm.lot_number, '')) = TRIM(COALESCE(abp.lot_number, ''))
              AND cm.production_month = abp.production_month
+             AND COALESCE(cm.priority_order, 0) = COALESCE(abp.priority_order, 0)
+             AND COALESCE(cm.production_lot_size, 0) = COALESCE(abp.production_lot_size, 0)
             SET cm.aps_batch_plan_id = abp.id
             WHERE cm.aps_batch_plan_id IS NULL
             """
@@ -4348,6 +4587,56 @@ async def _machine_matches_process_cd(
     if pcc and mt == pcc:
         return True
     return False
+
+
+def _norm_lot_number(v: Any) -> str:
+    s = str(v or "").strip()
+    s2 = s.lstrip("0")
+    return s2 if s2 else "0"
+
+
+async def _cutting_identity_lock_for_instruction_sync(
+    db: AsyncSession,
+    *,
+    production_month: date,
+    production_line: str,
+    product_cd: str,
+    target_lot_norms: set[str],
+) -> tuple[set[str], set[str]]:
+    """
+    計画数量変更で management_code が変わっても、既に cutting_management にあるロットは
+    instruction_plans の新規 INSERT 対象から外す。
+    戻り値: (ロックするロットの正規化キー, 既存切断の management_code 集合)
+    """
+    locked_norms: set[str] = set()
+    legacy_mcs: set[str] = set()
+    if not target_lot_norms:
+        return locked_norms, legacy_mcs
+    res = await db.execute(
+        text(
+            """
+            SELECT TRIM(COALESCE(lot_number, '')) AS lot_number,
+                   TRIM(COALESCE(management_code, '')) AS management_code
+            FROM cutting_management
+            WHERE production_month = :production_month
+              AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
+              AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
+            """
+        ),
+        {
+            "production_month": production_month,
+            "production_line": str(production_line),
+            "product_cd": (product_cd or "").strip(),
+        },
+    )
+    for row in res.mappings().all():
+        ln_norm = _norm_lot_number(row.get("lot_number"))
+        if ln_norm in target_lot_norms:
+            locked_norms.add(ln_norm)
+            mc = str(row.get("management_code") or "").strip()
+            if mc:
+                legacy_mcs.add(mc)
+    return locked_norms, legacy_mcs
 
 
 async def _instruction_plans_chamfer_sw_flags(
@@ -4718,10 +5007,7 @@ async def _sync_instruction_plans_from_aps_schedule(
     ins_orphan_by_lot: dict[str, dict] = {}
     target_lot_numbers = [str(b["lot_number"]) for b in batches_instruction]
     all_lot_numbers_for_lock = list(dict.fromkeys([*target_lot_numbers, *list(existing_bp_by_lot.keys())]))
-    def _norm_lot(v: Any) -> str:
-        s = str(v or "").strip()
-        s2 = s.lstrip("0")
-        return s2 if s2 else "0"
+    lot_norms_for_lock = {_norm_lot_number(x) for x in all_lot_numbers_for_lock}
 
     lot_numbers_for_lookup = tuple(target_lot_numbers)
     if lot_numbers_for_lookup:
@@ -4732,7 +5018,6 @@ async def _sync_instruction_plans_from_aps_schedule(
                 FROM instruction_plans
                 WHERE production_month = :production_month
                   AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
-                  AND priority_order = :priority_order
                   AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
                   AND lot_number IN :lot_numbers
                 ORDER BY id DESC
@@ -4741,33 +5026,51 @@ async def _sync_instruction_plans_from_aps_schedule(
             {
                 "production_month": production_month,
                 "production_line": str(production_line),
-                "priority_order": ps.order_no,
                 "product_cd": production_product_cd,
                 "lot_numbers": lot_numbers_for_lookup,
             },
         )
         for r in orphan_res.mappings().all():
             lot_key = str(r["lot_number"])
-            # aps_batch_plan_id が空の行だけを回収対象にする（既に紐づく行は ins_by_bid 側で更新）
-            if r.get("aps_batch_plan_id") is None and lot_key not in ins_orphan_by_lot:
-                ins_orphan_by_lot[lot_key] = {
-                    "id": r["id"],
-                    "aps_batch_plan_id": r["aps_batch_plan_id"],
-                }
+            if lot_key in ins_orphan_by_lot:
+                continue
+            ins_orphan_by_lot[lot_key] = {
+                "id": r["id"],
+                "aps_batch_plan_id": r.get("aps_batch_plan_id"),
+            }
 
     # cutting_management に既に存在するロットは「上流着手済み」とみなし、
-    # management_code 変更（04-xx -> 06-xx 等）が起きても instruction_plans を新規作成/更新しない。
-    # これにより、既存切断指示との整合を維持する。
-    cutting_locked_lots: set[str] = set()
-    lot_norms_for_lock = {_norm_lot(x) for x in all_lot_numbers_for_lock}
+    # management_code 変更（計画数量変更で production_lot_size 変化等）が起きても instruction_plans を新規作成しない。
+    cutting_locked_lot_norms: set[str] = set()
+    identity_locked, identity_cut_mcs = await _cutting_identity_lock_for_instruction_sync(
+        db,
+        production_month=production_month,
+        production_line=str(production_line),
+        product_cd=production_product_cd,
+        target_lot_norms=lot_norms_for_lock,
+    )
+    cutting_locked_lot_norms |= identity_locked
+    cutting_exists |= identity_cut_mcs
     lot_by_bid: dict[int, str] = {
         int(bid): str(ln) for ln, bid in plan_id_by_lot.items() if bid is not None
     }
-    # 1) aps_batch_plan_id 優先で lock 判定（最も安定）
+    # 1) aps_batch_plan_id で lock：切断行の顺位・ロット数が APS ロットと一致する場合のみ
     if lot_by_bid:
         bid_rows = tuple(sorted(lot_by_bid.keys()))
         bid_lock_res = await db.execute(
-            text("SELECT DISTINCT aps_batch_plan_id FROM cutting_management WHERE aps_batch_plan_id IN :bids"),
+            text(
+                """
+                SELECT DISTINCT abp.id
+                FROM aps_batch_plans abp
+                INNER JOIN cutting_management cm ON cm.aps_batch_plan_id = abp.id
+                  AND TRIM(cm.product_cd) = TRIM(abp.product_cd)
+                  AND TRIM(COALESCE(cm.lot_number, '')) = TRIM(COALESCE(abp.lot_number, ''))
+                  AND cm.production_month = abp.production_month
+                  AND COALESCE(cm.priority_order, 0) = COALESCE(abp.priority_order, 0)
+                  AND COALESCE(cm.production_lot_size, 0) = COALESCE(abp.production_lot_size, 0)
+                WHERE abp.id IN :bids
+                """
+            ),
             {"bids": bid_rows},
         )
         for r in bid_lock_res.all():
@@ -4776,34 +5079,24 @@ async def _sync_instruction_plans_from_aps_schedule(
                 continue
             lot = lot_by_bid.get(int(bid))
             if lot is not None:
-                cutting_locked_lots.add(str(lot))
+                cutting_locked_lot_norms.add(_norm_lot_number(lot))
 
-    # 2) 旧データ互換: aps_batch_plan_id 未設定行は lot で lock 判定（ゼロ埋め差異を吸収）
-    if lot_norms_for_lock:
-        locked_res = await db.execute(
+    # 1b) 管理コード完全一致の切断行があれば lock
+    if all_mcs:
+        mc_lock_res = await db.execute(
             text(
                 """
-                SELECT DISTINCT lot_number
+                SELECT DISTINCT TRIM(COALESCE(lot_number, '')) AS lot_number
                 FROM cutting_management
-                WHERE production_month = :production_month
-                  AND TRIM(COALESCE(production_line, '')) = TRIM(COALESCE(:production_line, ''))
-                  AND priority_order = :priority_order
-                  AND TRIM(COALESCE(product_cd, '')) = TRIM(COALESCE(:product_cd, ''))
+                WHERE management_code IN :mcs
                 """
             ),
-            {
-                "production_month": production_month,
-                "production_line": str(production_line),
-                "priority_order": ps.order_no,
-                "product_cd": production_product_cd,
-            },
+            {"mcs": tuple(all_mcs)},
         )
-        for r in locked_res.all():
-            lot_raw = r[0]
-            if lot_raw is None:
-                continue
-            if _norm_lot(lot_raw) in lot_norms_for_lock:
-                cutting_locked_lots.add(str(lot_raw))
+        for r in mc_lock_res.mappings().all():
+            ln = str(r.get("lot_number") or "").strip()
+            if ln:
+                cutting_locked_lot_norms.add(_norm_lot_number(ln))
 
     _ip_update_sql = text(
         "UPDATE instruction_plans SET "
@@ -4822,7 +5115,7 @@ async def _sync_instruction_plans_from_aps_schedule(
 
     for idx, b in enumerate(batches_instruction):
         lot_number = b["lot_number"]
-        if str(lot_number) in cutting_locked_lots:
+        if _norm_lot_number(lot_number) in cutting_locked_lot_norms:
             continue
         batch_planned_qty = int(b["planned_quantity"])
         start_dt = b["start_date"]
@@ -4909,11 +5202,11 @@ async def _sync_instruction_plans_from_aps_schedule(
     # 減算同期:
     # 本同期で対象外になった旧ロットは、未着手（cutting 未存在）のみ instruction_plans から削除する。
     # 既に cutting に存在するロットは locking を維持し、履歴を保持する。
-    target_lot_norms = {_norm_lot(x) for x in target_lot_numbers}
-    locked_lot_norms = {_norm_lot(x) for x in cutting_locked_lots}
+    target_lot_norms = {_norm_lot_number(x) for x in target_lot_numbers}
+    locked_lot_norms = set(cutting_locked_lot_norms)
     stale_lots_unlocked = [
         lot for lot in plan_id_by_lot.keys()
-        if _norm_lot(lot) not in target_lot_norms and _norm_lot(lot) not in locked_lot_norms
+        if _norm_lot_number(lot) not in target_lot_norms and _norm_lot_number(lot) not in locked_lot_norms
     ]
     stale_bid_ids = [
         int(plan_id_by_lot[lot]) for lot in stale_lots_unlocked
