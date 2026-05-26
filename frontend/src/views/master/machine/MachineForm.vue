@@ -48,7 +48,8 @@
                 <el-select
                   v-model="form.machine_type"
                   :placeholder="t('master.common.select')"
-                  clearable
+                  :clearable="!props.lockMachineType"
+                  :disabled="!!props.lockMachineType"
                   class="full-width"
                 >
                   <el-option :label="t('master.machine.typeCutting')" value="切断" />
@@ -160,7 +161,10 @@ import type { MachineItem } from '@/types/master'
 
 const { t } = useI18n()
 
-const props = withDefaults(defineProps<{ visible: boolean; data?: MachineItem | null }>(), { visible: false, data: undefined })
+const props = withDefaults(
+  defineProps<{ visible: boolean; data?: MachineItem | null; lockMachineType?: string }>(),
+  { visible: false, data: undefined, lockMachineType: undefined },
+)
 const emit = defineEmits(['update:visible', 'refresh'])
 
 const visible = ref(props.visible)
@@ -220,7 +224,7 @@ watch(() => props.visible, (val) => {
         id: props.data.id,
         machine_cd: props.data.machine_cd ?? '',
         machine_name: props.data.machine_name ?? '',
-        machine_type: props.data.machine_type ?? '',
+        machine_type: props.lockMachineType || props.data.machine_type || '',
         status: props.data.status ?? 'active',
         available_from: props.data.available_from ?? '',
         available_to: props.data.available_to ?? '',
@@ -231,6 +235,7 @@ watch(() => props.visible, (val) => {
       })
     } else {
       resetForm()
+      if (props.lockMachineType) form.machine_type = props.lockMachineType
     }
   }
 })
@@ -243,7 +248,7 @@ async function submitForm() {
     const payload: Partial<MachineItem> = {
       machine_cd: form.machine_cd,
       machine_name: form.machine_name,
-      machine_type: form.machine_type || undefined,
+      machine_type: props.lockMachineType || form.machine_type || undefined,
       status: form.status,
       available_from: form.available_from || undefined,
       available_to: form.available_to || undefined,
