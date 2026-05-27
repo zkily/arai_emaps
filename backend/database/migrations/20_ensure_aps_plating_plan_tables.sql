@@ -92,26 +92,26 @@ SET @sql := IF(
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS aps_plating_plan_board_cards (
-  id BIGINT NOT NULL AUTO_INCREMENT,
-  draft_id INT NOT NULL,
-  plan_date DATE NOT NULL COMMENT '计划日',
-  draft_version_no INT NOT NULL DEFAULT 1,
-  work_date DATE NULL COMMENT '作業日',
-  lap_work_date DATE NULL COMMENT '当該周目の日历日',
-  lap_start_time VARCHAR(5) NULL COMMENT '当該周目開始 HH:mm',
-  lap_end_time VARCHAR(5) NULL COMMENT '当該周目終了 HH:mm',
-  lap_no INT NOT NULL,
-  turn_seq INT NOT NULL,
-  product_cd VARCHAR(64) NOT NULL,
-  product_name VARCHAR(255) NOT NULL,
-  plating_machine VARCHAR(64) NOT NULL,
-  kake DECIMAL(10, 2) NOT NULL DEFAULT 0,
-  qty INT NOT NULL DEFAULT 0,
-  slots INT NOT NULL DEFAULT 0,
-  board_mark VARCHAR(16) NOT NULL DEFAULT 'standard',
-  stable_key VARCHAR(128) NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主キー',
+  draft_id INT NOT NULL COMMENT '親ドラフトID（aps_plating_plan_drafts.id）',
+  plan_date DATE NOT NULL COMMENT '計画日（草稿主表 plan_date の冗長保持・日次検索用）',
+  draft_version_no INT NOT NULL DEFAULT 1 COMMENT '保存時草稿バージョン（主表 version_no のスナップショット）',
+  work_date DATE NULL COMMENT '作業日（NULL 時は plan_date 当日・draft_items と同規則）',
+  lap_work_date DATE NULL COMMENT '当該周目のカレンダー日（表示期間・週次スケジュール用）',
+  lap_start_time VARCHAR(5) NULL COMMENT '当該周目開始時刻（HH:mm）',
+  lap_end_time VARCHAR(5) NULL COMMENT '当該周目終了時刻（HH:mm）',
+  lap_no INT NOT NULL COMMENT '周目番号（ボード段番号・永続 lap_no）',
+  turn_seq INT NOT NULL COMMENT '週目内並び順（列への割当順）',
+  product_cd VARCHAR(64) NOT NULL COMMENT '製品コード',
+  product_name VARCHAR(255) NOT NULL COMMENT '製品名',
+  plating_machine VARCHAR(64) NOT NULL COMMENT 'メッキ治具（設備名）',
+  kake DECIMAL(10, 2) NOT NULL DEFAULT 0 COMMENT '掛け数（生産効率・1枠換算）',
+  qty INT NOT NULL DEFAULT 0 COMMENT '割当数量',
+  slots INT NOT NULL DEFAULT 0 COMMENT '枠数（治具本数換算）',
+  board_mark VARCHAR(16) NOT NULL DEFAULT 'standard' COMMENT 'ボードマーク（standard／manual／rush）',
+  stable_key VARCHAR(128) NULL COMMENT '安定キー（③明細・クライアント枠 id との紐付け）',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '作成日時',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新日時',
   PRIMARY KEY (id),
   KEY idx_aps_plating_board_draft_lap (draft_id, lap_no, turn_seq),
   KEY idx_aps_plating_board_draft_lap_date (draft_id, lap_work_date, lap_no, turn_seq),
@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS aps_plating_plan_board_cards (
   KEY idx_aps_plating_board_product (product_cd),
   CONSTRAINT fk_aps_plating_board_cards_draft
     FOREIGN KEY (draft_id) REFERENCES aps_plating_plan_drafts (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='メッキ投入スケジュールボード枠（1治具枠＝1行・周目 lap_no／順 turn_seq）';
 
 SET @col_exists := (
   SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
@@ -128,9 +129,9 @@ SET @col_exists := (
 SET @sql := IF(
   @col_exists = 0,
   'ALTER TABLE aps_plating_plan_board_cards
-     ADD COLUMN lap_work_date DATE NULL COMMENT ''当該周目の日历日'' AFTER work_date,
-     ADD COLUMN lap_start_time VARCHAR(5) NULL COMMENT ''当該周目開始 HH:mm'' AFTER lap_work_date,
-     ADD COLUMN lap_end_time VARCHAR(5) NULL COMMENT ''当該周目終了 HH:mm'' AFTER lap_start_time',
+     ADD COLUMN lap_work_date DATE NULL COMMENT ''当該周目のカレンダー日（表示期間・週次スケジュール用）'' AFTER work_date,
+     ADD COLUMN lap_start_time VARCHAR(5) NULL COMMENT ''当該周目開始時刻（HH:mm）'' AFTER lap_work_date,
+     ADD COLUMN lap_end_time VARCHAR(5) NULL COMMENT ''当該周目終了時刻（HH:mm）'' AFTER lap_start_time',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;

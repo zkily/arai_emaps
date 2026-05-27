@@ -23,9 +23,9 @@ SET @col_exists := (
 SET @sql := IF(
   @col_exists = 0,
   'ALTER TABLE aps_plating_plan_board_cards
-     ADD COLUMN lap_work_date DATE NULL COMMENT ''当該周目の日历日'' AFTER work_date,
-     ADD COLUMN lap_start_time VARCHAR(5) NULL COMMENT ''当該周目開始 HH:mm'' AFTER lap_work_date,
-     ADD COLUMN lap_end_time VARCHAR(5) NULL COMMENT ''当該周目終了 HH:mm'' AFTER lap_start_time',
+     ADD COLUMN lap_work_date DATE NULL COMMENT ''当該周目のカレンダー日（表示期間・週次スケジュール用）'' AFTER work_date,
+     ADD COLUMN lap_start_time VARCHAR(5) NULL COMMENT ''当該周目開始時刻（HH:mm）'' AFTER lap_work_date,
+     ADD COLUMN lap_end_time VARCHAR(5) NULL COMMENT ''当該周目終了時刻（HH:mm）'' AFTER lap_start_time',
   'SELECT 1'
 );
 PREPARE stmt FROM @sql;

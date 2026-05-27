@@ -203,6 +203,11 @@ class ApsPlatingPlanDraft(Base):
         back_populates="draft",
         cascade="all, delete-orphan",
     )
+    layouts = relationship(
+        "ApsPlatingPlanDraftLayout",
+        back_populates="draft",
+        cascade="all, delete-orphan",
+    )
 
 
 class ApsPlatingPlanDraftItem(Base):
@@ -228,31 +233,87 @@ class ApsPlatingPlanDraftItem(Base):
 
 
 class ApsPlatingPlanBoardCard(Base):
-    """メッキ計画 第④看板枠（周回 lap_no・順 turn_seq）"""
+    """メッキ投入スケジュールボード枠（aps_plating_plan_board_cards：周回 lap_no・順 turn_seq）"""
     __tablename__ = "aps_plating_plan_board_cards"
+    __table_args__ = {
+        "comment": "メッキ投入スケジュールボード枠（1治具枠＝1行・周目 lap_no／順 turn_seq）",
+    }
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    draft_id = Column(Integer, ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"), nullable=False)
-    plan_date = Column(Date, nullable=False, index=True)
-    draft_version_no = Column(Integer, nullable=False, default=1)
-    work_date = Column(Date, nullable=True)
-    lap_work_date = Column(Date, nullable=True)
-    lap_start_time = Column(String(5), nullable=True)
-    lap_end_time = Column(String(5), nullable=True)
-    lap_no = Column(Integer, nullable=False)
-    turn_seq = Column(Integer, nullable=False)
-    product_cd = Column(String(64), nullable=False)
-    product_name = Column(String(255), nullable=False)
-    plating_machine = Column(String(64), nullable=False)
-    kake = Column(Numeric(10, 2), nullable=False, default=0)
-    qty = Column(Integer, nullable=False, default=0)
-    slots = Column(Integer, nullable=False, default=0)
-    board_mark = Column(String(16), nullable=False, default="standard")
-    stable_key = Column(String(128), nullable=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主キー")
+    draft_id = Column(
+        Integer,
+        ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="親ドラフトID（aps_plating_plan_drafts.id）",
+    )
+    plan_date = Column(Date, nullable=False, index=True, comment="計画日（草稿主表 plan_date の冗長保持）")
+    draft_version_no = Column(
+        Integer, nullable=False, default=1, comment="保存時草稿バージョン（主表 version_no のスナップショット）"
+    )
+    work_date = Column(Date, nullable=True, comment="作業日（NULL 時は plan_date 当日）")
+    lap_work_date = Column(Date, nullable=True, comment="当該周目のカレンダー日")
+    lap_start_time = Column(String(5), nullable=True, comment="当該周目開始時刻（HH:mm）")
+    lap_end_time = Column(String(5), nullable=True, comment="当該周目終了時刻（HH:mm）")
+    lap_no = Column(Integer, nullable=False, comment="周目番号（ボード段番号・永続 lap_no）")
+    turn_seq = Column(Integer, nullable=False, comment="週目内並び順（列への割当順）")
+    product_cd = Column(String(64), nullable=False, comment="製品コード")
+    product_name = Column(String(255), nullable=False, comment="製品名")
+    plating_machine = Column(String(64), nullable=False, comment="メッキ治具（設備名）")
+    kake = Column(Numeric(10, 2), nullable=False, default=0, comment="掛け数（生産効率）")
+    qty = Column(Integer, nullable=False, default=0, comment="割当数量")
+    slots = Column(Integer, nullable=False, default=0, comment="枠数（治具本数換算）")
+    board_mark = Column(
+        String(16), nullable=False, default="standard", comment="ボードマーク（standard／manual／rush）"
+    )
+    stable_key = Column(String(128), nullable=True, comment="安定キー（③明細・クライアント枠 id との紐付け）")
+    created_at = Column(TIMESTAMP, server_default=func.now(), comment="作成日時")
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), comment="更新日時")
 
     draft = relationship("ApsPlatingPlanDraft", back_populates="board_cards")
+
+
+class ApsPlatingPlanDraftLayout(Base):
+    """メッキ計画 追加レイアウトブロック（カード未配置でも基本骨格を永続化）"""
+    __tablename__ = "aps_plating_plan_draft_layouts"
+    __table_args__ = {
+        "comment": "メッキ計画 追加レイアウトブロック（カード未配置でも基本骨格を永続化）",
+    }
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主キー")
+    draft_id = Column(
+        Integer,
+        ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="親ドラフトID（aps_plating_plan_drafts.id）",
+    )
+    block_seq = Column(
+        Integer, nullable=False, default=0, comment="ブロック並び順（追加レイアウト追加順・0 起点）"
+    )
+    plan_date = Column(
+        Date, nullable=False, index=True, comment="このブロックの計画日（lap_work_date のベース日付）"
+    )
+    start_time = Column(
+        String(5), nullable=False, default="08:00", comment="このブロックの開始時刻（HH:mm）"
+    )
+    minutes_per_lap = Column(
+        Integer, nullable=False, default=100, comment="1 周の所要分（メッキ周期）"
+    )
+    jigs_per_lap = Column(
+        Integer, nullable=False, default=100, comment="1 周の治具本数（ボード全体で揃える）"
+    )
+    lap_count = Column(Integer, nullable=False, default=1, comment="このブロックの周目数")
+    base_lap_no = Column(
+        Integer,
+        nullable=False,
+        default=1,
+        comment="グローバル周目番号の起点（このブロックの最初の周目）",
+    )
+    created_at = Column(TIMESTAMP, server_default=func.now(), comment="作成日時")
+    updated_at = Column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now(), comment="更新日時"
+    )
+
+    draft = relationship("ApsPlatingPlanDraft", back_populates="layouts")
 
 
 class ApsPlatingJigAvailability(Base):

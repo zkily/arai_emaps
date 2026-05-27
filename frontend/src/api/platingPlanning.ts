@@ -34,6 +34,17 @@ export interface PlatingBoardCardBody {
   stable_key?: string | null
 }
 
+/** 追加レイアウト 1 ブロック（POST/PUT 写入；カード未配置でも骨格を保存） */
+export interface PlatingDraftLayoutBody {
+  block_seq: number
+  plan_date: string
+  start_time: string
+  minutes_per_lap: number
+  jigs_per_lap: number
+  lap_count: number
+  base_lap_no: number
+}
+
 export interface PlatingDraftBody {
   plan_date: string
   daily_minutes: number
@@ -48,6 +59,8 @@ export interface PlatingDraftBody {
   remain_slots: number
   items: PlatingDraftItemBody[]
   board_cards?: PlatingBoardCardBody[] | null
+  /** 追加レイアウトブロック；None=不更新／配列=全置換 */
+  layout_blocks?: PlatingDraftLayoutBody[] | null
 }
 
 export interface PlatingDraftItemOut extends PlatingDraftItemBody {
@@ -62,7 +75,13 @@ export interface PlatingBoardCardOut extends PlatingBoardCardBody {
   draft_version_no: number
 }
 
-export interface PlatingDraftOut extends Omit<PlatingDraftBody, 'items' | 'board_cards'> {
+export interface PlatingDraftLayoutOut extends PlatingDraftLayoutBody {
+  id: number
+  draft_id: number
+}
+
+export interface PlatingDraftOut
+  extends Omit<PlatingDraftBody, 'items' | 'board_cards' | 'layout_blocks'> {
   id: number
   version_no: number
   status: string
@@ -72,6 +91,7 @@ export interface PlatingDraftOut extends Omit<PlatingDraftBody, 'items' | 'board
   updated_at?: string
   items: PlatingDraftItemOut[]
   board_cards: PlatingBoardCardOut[]
+  layout_blocks: PlatingDraftLayoutOut[]
 }
 
 export function createPlatingDraft(body: PlatingDraftBody): Promise<PlatingDraftOut> {
@@ -82,18 +102,38 @@ export function updatePlatingDraft(id: number, body: PlatingDraftBody): Promise<
   return request.put(`${BASE}/${id}`, body)
 }
 
+export interface PlatingDraftFetchOpts {
+  /** draft_items の work_date フィルタ（明細のみ） */
+  workDate?: string | null
+  /** board_cards の表示期間（SQL: coalesce(lap_work_date, work_date, plan_date)） */
+  boardFrom?: string | null
+  boardTo?: string | null
+}
+
+function platingDraftFetchParams(opts?: PlatingDraftFetchOpts | string | null): Record<string, string> {
+  const o: PlatingDraftFetchOpts =
+    typeof opts === 'string' ? { workDate: opts } : opts ?? {}
+  const params: Record<string, string> = {}
+  if (o.workDate) params.workDate = o.workDate
+  if (o.boardFrom) params.boardFrom = o.boardFrom
+  if (o.boardTo) params.boardTo = o.boardTo
+  return params
+}
+
 export function fetchLatestPlatingDraftByDate(
   planDate: string,
-  opts?: { workDate?: string | null },
+  opts?: PlatingDraftFetchOpts,
 ): Promise<PlatingDraftOut | null> {
-  const params: Record<string, string> = { planDate }
-  if (opts?.workDate) params.workDate = opts.workDate
+  const params: Record<string, string> = { planDate, ...platingDraftFetchParams(opts) }
   return request.get(`${BASE}/latest`, { params })
 }
 
-/** workDate を渡すと aps_plating_plan_draft_items をその作業日のみ SQL 条件で取得 */
-export function fetchPlatingDraftById(id: number, workDate?: string | null): Promise<PlatingDraftOut> {
-  return request.get(`${BASE}/${id}`, { params: workDate ? { workDate } : {} })
+/** workDate＝明細のみ。boardFrom/boardTo＝aps_plating_plan_board_cards を SQL で期間絞り込み */
+export function fetchPlatingDraftById(
+  id: number,
+  opts?: PlatingDraftFetchOpts | string | null,
+): Promise<PlatingDraftOut> {
+  return request.get(`${BASE}/${id}`, { params: platingDraftFetchParams(opts) })
 }
 
 export function deletePlatingDraft(id: number): Promise<{ success: boolean }> {
