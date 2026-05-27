@@ -303,6 +303,7 @@ function cellClasses(rawHours: number | undefined, d: string) {
     'is-zero': !h,
     'is-weekend': weekend,
   }
+  if (!h && !weekend) classes['is-weekday-empty'] = true
   if (h > 23) classes['is-high-hours'] = true
   else if (h >= 20 && h <= 22) classes['is-mid-hours'] = true
   return classes
@@ -435,6 +436,7 @@ async function handlePrint() {
         const rawHours = Number(row.dailyHours[d] || 0)
         const classes = ['num']
         if (isWeekend(d)) classes.push('is-weekend')
+        else if (!rawHours) classes.push('is-weekday-empty')
         if (rawHours > 23) {
           classes.push('is-high-hours')
         } else if (rawHours >= 20 && rawHours <= 22) {
@@ -465,6 +467,7 @@ async function handlePrint() {
       .num { text-align: right; }
       th.is-weekend { color: #dc2626; background-color: #ffecec; }
       td.is-weekend { background-color: #fff5f5; }
+      td.is-weekday-empty { background-color: #e5e7eb; }
       td.is-mid-hours { background-color: #fff7d6; }
       td.is-high-hours { background-color: #f4c98a; }
       thead { display: table-header-group; }
@@ -728,6 +731,9 @@ onMounted(async () => {
 .cell.is-weekend,
 .date-col.is-weekend {
   background: #fff5f5;
+}
+.cell.is-weekday-empty {
+  background: #e5e7eb !important;
 }
 .date-col.is-weekend .date-hd,
 .date-col.is-weekend .wd-hd {

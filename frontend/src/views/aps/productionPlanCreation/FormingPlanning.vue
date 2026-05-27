@@ -1267,7 +1267,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'FormingPlanning' })
-import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch, h } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, nextTick, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Delete, InfoFilled, Memo, Search, Setting } from '@element-plus/icons-vue'
 import Sortable from 'sortablejs'
@@ -1279,7 +1279,6 @@ import {
   updateSchedule,
   deleteSchedule,
   replanLineSequence,
-  formatReplanSequenceSuccessMessage,
   appendSchedulePlannedQty,
   fetchSchedulingGrid,
   fetchSchedulingHourlyGrid,
@@ -1303,6 +1302,12 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
+import {
+  buildSingleLineFormingReplanConfirmVNode,
+  formatReplanSequenceSuccessMessage,
+  FORMING_REPLAN_MESSAGE_BOX_CLASS,
+  runFormingLineReplanSequence,
+} from '@/views/aps/shared/formingLineReplan'
 import type { ProcessItem } from '@/types/master'
 import LineCapacity from '../LineCapacity.vue'
 import request from '@/shared/api/request'
@@ -2653,24 +2658,14 @@ async function loadSchedulesEditingPreserve(scheduleId: number) {
 function buildSingleLineReplanConfirmMessage() {
   const lineLabel = selectedLineDisplayName.value
   const ln = lines.value.find((l) => l.id === selectedLineId.value)
-  const code = ln?.line_code?.trim() || ''
-  const anchor = effectiveReplanAnchorDate()
-  const nameBlockChildren = [h('div', { class: 'forming-replan-confirm__name' }, lineLabel)]
-  if (code && code !== lineLabel) {
-    nameBlockChildren.push(h('div', { class: 'forming-replan-confirm__code' }, code))
-  }
-  return h('div', { class: 'forming-replan-confirm' }, [
-    h('p', { class: 'forming-replan-confirm__lead' }, '選択中の設備について、順位どおりに再計算します。'),
-    h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
-    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
-    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
-    h(
-      'p',
-      { class: 'forming-replan-confirm__lead' },
-      `設備に保存済みの再計算アンカー日があれば最優先。未設定時は基準月（${anchorDate.value || '—'}）と本日（${todayIso.value}）の遅い方（${anchor}）を使用します。`,
-    ),
-    h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
-  ])
+  return buildSingleLineFormingReplanConfirmVNode({
+    lineLabel,
+    lineCode: ln?.line_code?.trim() || '',
+    effectiveAnchorIso: effectiveReplanAnchorDate(),
+    anchorFallbackLabel: '基準月',
+    anchorFallbackIso: anchorDate.value || '—',
+    todayIso: todayIso.value,
+  })
 }
 
 async function replanAll() {
@@ -2681,7 +2676,7 @@ async function replanAll() {
       type: 'warning',
       confirmButtonText: '実行',
       cancelButtonText: 'キャンセル',
-      customClass: 'forming-replan-messagebox',
+      customClass: FORMING_REPLAN_MESSAGE_BOX_CLASS,
       center: false,
       showClose: true,
       closeOnClickModal: false,
@@ -2693,14 +2688,11 @@ async function replanAll() {
   replanning.value = true
   const includeDebug = import.meta.env.DEV
   try {
-    const t0 = performance.now()
-    const res = await replanLineSequence(
+    const { res, elapsedMs } = await runFormingLineReplanSequence(
       selectedLineId.value,
       effectiveReplanAnchorDate(),
-      true,
       includeDebug,
     )
-    const elapsedMs = Math.round(performance.now() - t0)
     await loadSchedules()
     ElMessage.success(formatReplanSequenceSuccessMessage(res, elapsedMs))
     if (includeDebug && res?.data) {

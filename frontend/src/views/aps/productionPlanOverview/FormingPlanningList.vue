@@ -751,14 +751,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Goods, OfficeBuilding, Printer, Switch } from '@element-plus/icons-vue'
 import {
   fetchLines,
   fetchSchedulingGrid,
   rebuildProductionPlanExcelAll,
-  replanLineSequence,
   updateScheduleDailyPlannedQty,
   type ScheduleGridRow,
   type SchedulingGridResponse,
@@ -771,6 +770,12 @@ import {
   formatYmdInJapan,
   ymFromIsoDate,
 } from '@/views/aps/shared/replanAnchor'
+import {
+  buildAllLinesFormingReplanConfirmVNode,
+  formatBulkFormingReplanSuccessMessage,
+  FORMING_REPLAN_MESSAGE_BOX_CLASS,
+  runFormingLineReplanSequence,
+} from '@/views/aps/shared/formingLineReplan'
 
 defineOptions({ name: 'FormingPlanningList' })
 
@@ -1519,24 +1524,13 @@ function selectedProcessNameOnly(): string {
 }
 
 function buildReplanConfirmMessage() {
-  const cd = (selectedProcessCd.value || '').trim()
-  const name = selectedProcessNameOnly()
-  const showCode = !!cd && name !== cd
-  const nameBlockChildren = [h('div', { class: 'forming-replan-confirm__name' }, name)]
-  if (showCode) nameBlockChildren.push(h('div', { class: 'forming-replan-confirm__code' }, cd))
-  return h('div', { class: 'forming-replan-confirm' }, [
-    h('p', { class: 'forming-replan-confirm__lead' }, '次の工程について、すべての有効設備をラインコード順に順次再計算します。'),
-    h('div', { class: 'forming-replan-confirm__name-block' }, nameBlockChildren),
-    h('p', { class: 'forming-replan-confirm__lead' }, '再計算時は、過去日（本日より前）の日別計画を固定します。さらに本日分は実績がある場合のみ固定し、実績がない場合は当日以降を設備稼働時間に合わせて再計算します。'),
-    h('p', { class: 'forming-replan-confirm__lead' }, '計画一覧で「開始日指定」が設定されている製品は、その指定日より前には開始せずに再計算されます。'),
-    h('p', { class: 'forming-replan-confirm__lead' }, 'アンカー日が未来の場合でも、再計算は明日以降を連続で再作成します（空白期間は作りません）。'),
-    h(
-      'p',
-      { class: 'forming-replan-confirm__lead' },
-      `設備ごとに保存済みの再計算アンカー日があれば最優先。未設定時は検索期間の月初（${replanAnchorDateIso.value}）と本日（${todayIso.value}）の遅い方（${effectiveReplanAnchorDate.value}）をフォールバックに使います。`,
-    ),
-    h('p', { class: 'forming-replan-confirm__q' }, '実行しますか？'),
-  ])
+  return buildAllLinesFormingReplanConfirmVNode({
+    processName: selectedProcessNameOnly(),
+    processCode: (selectedProcessCd.value || '').trim(),
+    effectiveAnchorIso: effectiveReplanAnchorDate.value,
+    anchorFallbackIso: replanAnchorDateIso.value,
+    todayIso: todayIso.value,
+  })
 }
 
 function buildUtilizationPrintHtml(): string {
@@ -2330,7 +2324,7 @@ async function replanAllLinesForProcess() {
       type: 'warning',
       confirmButtonText: '実行',
       cancelButtonText: 'キャンセル',
-      customClass: 'forming-replan-messagebox',
+      customClass: FORMING_REPLAN_MESSAGE_BOX_CLASS,
       center: false,
       showClose: true,
       closeOnClickModal: false,
@@ -2356,20 +2350,18 @@ async function replanAllLinesForProcess() {
     const includeDebug = import.meta.env.DEV
     const failed: string[] = []
     let skippedStep1Count = 0
+    let totalScheduleCount = 0
     const t0All = performance.now()
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const lineLabel = [line.line_code, line.line_name].filter(Boolean).join(' — ') || `ID ${line.id}`
       replanCurrentLineLabel.value = lineLabel
       try {
-        const t0Line = performance.now()
-        const res = await replanLineSequence(line.id, anchor, true, includeDebug)
+        const { res, elapsedMs } = await runFormingLineReplanSequence(line.id, anchor, includeDebug)
         if (res?.data?.skipped_step1) skippedStep1Count += 1
+        if (typeof res?.data?.count === 'number') totalScheduleCount += res.data.count
         if (includeDebug && res?.data) {
-          console.debug(
-            `[replan-sequence] ${lineLabel}`,
-            { ...res.data, elapsedMs: Math.round(performance.now() - t0Line) },
-          )
+          console.debug(`[replan-sequence] ${lineLabel}`, { ...res.data, elapsedMs })
         }
       } catch (e: unknown) {
         failed.push(`${lineLabel}: ${formatApiError(e) || '再計算に失敗しました'}`)
@@ -2392,12 +2384,14 @@ async function replanAllLinesForProcess() {
     }
     await loadSchedules()
     if (failed.length === 0 && !rebuildErr) {
-      const okParts = [`全 ${lines.length} 設備の順次再計算が完了しました`]
-      if (skippedStep1Count > 0) {
-        okParts.push(`実績経路（Step1省略）${skippedStep1Count} 台`)
-      }
-      okParts.push(`${totalElapsedMs}ms`)
-      ElMessage.success(okParts.join(' · '))
+      ElMessage.success(
+        formatBulkFormingReplanSuccessMessage({
+          lineCount: lines.length,
+          totalElapsedMs,
+          skippedStep1Count,
+          totalScheduleCount: totalScheduleCount > 0 ? totalScheduleCount : undefined,
+        }),
+      )
     } else {
       const parts = [`再計算完了（成功 ${okCount} / 失敗 ${failed.length}）`]
       if (rebuildErr) parts.push('再構築失敗 1')
@@ -2412,7 +2406,7 @@ async function replanAllLinesForProcess() {
         {
           type: 'warning',
           confirmButtonText: 'OK',
-          customClass: 'forming-replan-messagebox',
+          customClass: FORMING_REPLAN_MESSAGE_BOX_CLASS,
         },
       )
     }
