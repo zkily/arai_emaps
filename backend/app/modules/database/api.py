@@ -2033,6 +2033,33 @@ async def clear_production_summarys_molding_plan(
     }
 
 
+@router.post("/clear-welding-plan")
+async def clear_production_summarys_welding_plan(
+    body: ClearCalculatedFieldsBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """
+    startDate 必須。date >= startDate の全行について welding_plan と welding_actual_plan を 0 にクリアする（終了日の上限なし）。
+    """
+    if not (body.startDate and body.startDate.strip()):
+        raise HTTPException(status_code=400, detail="startDate は必須です（YYYY-MM-DD）")
+    try:
+        start_d = datetime.strptime(body.startDate.strip()[:10], "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="startDate は YYYY-MM-DD 形式で指定してください")
+
+    sql = text("UPDATE production_summarys SET welding_plan = 0, welding_actual_plan = 0 WHERE date >= :start_date")
+    res = await db.execute(sql, {"start_date": start_d})
+    await db.commit()
+    cleared = res.rowcount if hasattr(res, "rowcount") else 0
+    return {
+        "code": 200,
+        "data": {"cleared": cleared, "startDate": body.startDate[:10]},
+        "message": f"溶接計画（welding_plan / welding_actual_plan）をクリアしました（{cleared}件）",
+    }
+
+
 @router.post("/batch-update-lock/acquire")
 async def batch_update_lock_acquire(
     body: LockAcquireBody,

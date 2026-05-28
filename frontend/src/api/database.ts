@@ -376,6 +376,14 @@ export function clearProductionSummarysMoldingPlan(startDate: string) {
   )
 }
 
+/** 溶接計画：date >= startDate の行で welding_plan・welding_actual_plan を 0 にクリア（終了日なし） */
+export function clearProductionSummarysWeldingPlan(startDate: string) {
+  return request.post<{ message?: string; data?: { cleared?: number; startDate?: string } }>(
+    `${BASE}/clear-welding-plan`,
+    { startDate },
+  )
+}
+
 /** 計画データ更新：schedule_details.planned_qty を集計（× production_schedules × machines × processes）して各工程 *_plan（溶接は welding_plan）等と actual_plan を更新。startDate 指定時はその日～+5ヶ月のみ対象 */
 export function updateProductionSummarysPlan(startDate?: string) {
   return request.post<{

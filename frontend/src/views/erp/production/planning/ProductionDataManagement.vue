@@ -301,6 +301,10 @@
                 <el-icon><Printer /></el-icon>
                 <span>溶接推奨生産日（印刷）</span>
               </div>
+              <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-welding-plan')">
+                <el-icon><Printer /></el-icon>
+                <span>溶接計画推奨生産日（印刷）</span>
+              </div>
               <div class="others-drawer-item" @click="onOthersDrawerSelect('print-rec-molding')">
                 <el-icon><Printer /></el-icon>
                 <span>成型推奨生産日（印刷）</span>
@@ -309,6 +313,7 @@
                 <el-icon><Printer /></el-icon>
                 <span>成型計画推奨生産日（印刷）</span>
               </div>
+
             </div>
           </el-drawer>
         </template>
@@ -351,6 +356,7 @@
             <el-dropdown-menu>
               <el-dropdown-item command="print-rec-plating">メッキ推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-welding">溶接推奨生産日</el-dropdown-item>
+              <el-dropdown-item command="print-rec-welding-plan">溶接計画推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-molding">成型推奨生産日</el-dropdown-item>
               <el-dropdown-item command="print-rec-molding-plan">成型計画推奨生産日</el-dropdown-item>
             </el-dropdown-menu>
@@ -369,7 +375,7 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="molding-plan-create">成型計画作成</el-dropdown-item>
-              <el-dropdown-item command="welding-plan-create" disabled>溶接計画作成</el-dropdown-item>
+              <el-dropdown-item command="welding-plan-create">溶接計画作成</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -1441,6 +1447,359 @@
       </template>
     </el-dialog>
 
+    <!-- 溶接計画作成ダイアログ -->
+    <el-dialog
+      v-model="showWeldingPlanDialog"
+      width="1100px"
+      :close-on-click-modal="false"
+      destroy-on-close
+      class="molding-plan-dialog"
+      align-center
+    >
+      <template #header>
+        <div class="molding-plan-dlg-header">
+          <div class="molding-plan-dlg-header__mark" aria-hidden="true">
+            <el-icon><DocumentAdd /></el-icon>
+          </div>
+          <div class="molding-plan-dlg-header__meta">
+            <span class="molding-plan-dlg-header__title">溶接計画作成</span>
+            <span class="molding-plan-dlg-header__sub">条件入力・計画クリア・計算結果</span>
+          </div>
+        </div>
+      </template>
+      <div class="molding-plan-inner">
+        <div class="molding-plan-panel">
+          <div class="molding-plan-panel__title">条件</div>
+          <el-form
+            :inline="true"
+            label-position="right"
+            label-width="90px"
+            size="small"
+            class="molding-plan-form-grid molding-plan-form-grid--cond-row"
+          >
+            <el-form-item label="生産計画月">
+              <el-date-picker
+                v-model="weldingPlanMonth"
+                type="month"
+                format="YYYY-MM"
+                value-format="YYYY-MM"
+                placeholder="月選択"
+                class="molding-plan-field--month"
+                :style="moldingPlanMonthPickerStyle"
+                @change="onWeldingPlanMonthChange"
+              />
+            </el-form-item>
+            <el-form-item label="基準日">
+              <el-date-picker
+                v-model="weldingPlanBaseDate"
+                type="date"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                placeholder="翌月1日"
+                class="molding-plan-field--base"
+                :style="moldingPlanBaseDatePickerStyle"
+              />
+            </el-form-item>
+            <el-form-item label="稼働日">
+              <el-input-number
+                v-model="weldingPlanWorkingDays"
+                :min="1"
+                :max="31"
+                controls-position="right"
+                class="molding-plan-field molding-plan-field--num"
+              />
+            </el-form-item>
+            <el-form-item label="加工減耗係数">
+              <el-input-number
+                v-model="weldingPlanCoefficient"
+                :min="1"
+                :max="2"
+                :step="0.001"
+                :precision="3"
+                controls-position="right"
+                class="molding-plan-field molding-plan-field--coef"
+              />
+            </el-form-item>
+          </el-form>
+
+          <div class="molding-plan-actions">
+            <el-button class="molding-plan-btn molding-plan-btn--secondary" @click="openWeldingMachineConfigDialog">
+              <el-icon><Monitor /></el-icon>
+              <span>溶接機器設定</span>
+            </el-button>
+            <el-button class="molding-plan-btn molding-plan-btn--secondary" @click="openWeldingBomDialog">
+              <el-icon><Setting /></el-icon>
+              <span>製品工程BOM</span>
+            </el-button>
+            <el-button
+              class="molding-plan-btn molding-plan-btn--primary"
+              :loading="weldingPlanLoading"
+              @click="executeWeldingPlanCreate"
+            >
+              <el-icon><DocumentAdd /></el-icon>
+              <span>溶接計画作成</span>
+            </el-button>
+          </div>
+
+          <div class="molding-plan-clear-panel">
+            <div class="molding-plan-panel__title molding-plan-panel__title--sub">計画クリア</div>
+            <p class="molding-plan-clear-hint">指定日以降の生産サマリーで welding_plan / welding_actual_plan を 0 にクリアします。</p>
+            <div class="molding-plan-clear-row">
+              <el-form :inline="true" label-position="right" label-width="120px" size="small" class="molding-plan-form-grid molding-plan-form-grid--tight">
+                <el-form-item label="計画クリア開始日">
+                  <el-date-picker
+                    v-model="weldingPlanClearFromDate"
+                    type="date"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    placeholder="開始日を選択"
+                    class="molding-plan-field molding-plan-field--wide"
+                  />
+                </el-form-item>
+              </el-form>
+              <el-button
+                class="molding-plan-btn molding-plan-btn--warn"
+                :loading="weldingPlanClearLoading"
+                :disabled="!weldingPlanClearFromDate"
+                @click="executeWeldingPlanClear"
+              >
+                <el-icon><Delete /></el-icon>
+                <span>計画クリア実行</span>
+              </el-button>
+              <el-button
+                class="molding-plan-btn molding-plan-btn--sync"
+                :loading="weldingPlanInventoryTrendLoading"
+                :disabled="weldingPlanClearLoading || weldingPlanInventoryTrendLoading || updatingInventoryTrend"
+                @click="executeWeldingPlanInventoryTrend"
+              >
+                <el-icon><Refresh /></el-icon>
+                <span>在庫・推移更新</span>
+              </el-button>
+            </div>
+            <p class="molding-plan-clear-hint molding-plan-clear-hint--sub">
+              在庫・推移の開始日は「初期」ログ（数量&gt;0）の最新取引日（無ければ当月月初・JST）。メニュー「在庫・推移更新」と同じ。計画クリア開始日とは連動しません。
+            </p>
+          </div>
+        </div>
+
+        <div v-if="weldingPlanResult.length" class="molding-plan-result-panel">
+          <div class="molding-plan-result__head">
+            <div class="molding-plan-result__head-left">
+              <span class="molding-plan-result__title">計算結果</span>
+              <el-tag type="primary" size="small" effect="light" round class="molding-plan-result__tag">
+                {{ weldingPlanResult.length }} 件
+              </el-tag>
+            </div>
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              class="molding-plan-result__print"
+              @click="printWeldingPlanResult"
+            >
+              <el-icon><Printer /></el-icon>
+              印刷
+            </el-button>
+          </div>
+          <el-table
+            :data="weldingPlanResult"
+            border
+            stripe
+            size="small"
+            max-height="460"
+            class="molding-plan-table"
+            :default-sort="{ prop: 'welding_machine', order: 'ascending' }"
+            highlight-current-row
+          >
+            <el-table-column prop="lookup_date" label="対応日" width="112" align="center" sortable />
+            <el-table-column
+              prop="welding_machine"
+              label="溶接機"
+              min-width="120"
+              align="center"
+              sortable
+              show-overflow-tooltip
+            />
+            <el-table-column prop="product_name" label="製品名" min-width="168" show-overflow-tooltip />
+            <el-table-column prop="product_cd" label="製品CD" width="104" align="center" sortable />
+            <el-table-column prop="trend_raw" label="実計推移" width="100" align="right" sortable>
+              <template #default="{ row }">
+                <span :class="{ 'molding-plan-num--neg': row.trend_raw < 0 }">{{ row.trend_raw }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="必要数" width="104" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.required_qty) }}</template>
+            </el-table-column>
+            <el-table-column label="ロットサイズ" width="112" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.lot_size) }}</template>
+            </el-table-column>
+            <el-table-column prop="lot_count" label="ロット数" width="92" align="right" sortable />
+            <el-table-column label="計画数" width="108" align="right" sortable>
+              <template #default="{ row }">
+                <span class="molding-plan-batch">{{ formatMoldingPlanInt(row.batch_qty) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="efficiency_rate" label="能率" width="112" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanEfficiencyPerH(row.efficiency_rate) }}</template>
+            </el-table-column>
+            <el-table-column prop="process_hours" label="工時" width="100" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanProcessHours(row.process_hours) }}</template>
+            </el-table-column>
+            <el-table-column label="日当り" width="96" align="right" sortable>
+              <template #default="{ row }">{{ formatMoldingPlanInt(row.daily_qty) }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="molding-plan-footer">
+          <el-button class="molding-plan-btn molding-plan-btn--close" @click="showWeldingPlanDialog = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 溶接機器設定（product_machine_config：溶接機のみ） -->
+    <el-dialog
+      v-model="showWeldingMachineConfigDialog"
+      width="720px"
+      align-center
+      class="molding-machine-config-dialog"
+      destroy-on-close
+      :close-on-click-modal="false"
+    >
+      <template #header>
+        <div class="molding-machine-config-dlg-header">
+          <div class="molding-machine-config-dlg-header__mark" aria-hidden="true">
+            <el-icon><Monitor /></el-icon>
+          </div>
+          <div class="molding-machine-config-dlg-header__meta">
+            <span class="molding-machine-config-dlg-header__eyebrow">product_machine_config</span>
+            <span class="molding-machine-config-dlg-header__title">溶接機器設定</span>
+            <span class="molding-machine-config-dlg-header__sub">溶接機を変更すると自動保存されます</span>
+          </div>
+        </div>
+      </template>
+      <div v-loading="weldingMachineConfigLoading" class="molding-machine-config-body">
+        <el-table
+          :data="weldingMachineConfigRows"
+          border
+          stripe
+          size="small"
+          max-height="480"
+          class="molding-machine-config-table"
+          :default-sort="{ prop: 'product_name', order: 'ascending' }"
+          empty-text="データがありません"
+        >
+          <el-table-column prop="product_cd" label="製品CD" width="112" align="center" sortable />
+          <el-table-column prop="product_name" label="製品名" min-width="160" sortable show-overflow-tooltip />
+          <el-table-column label="溶接機" min-width="220" align="left">
+            <template #default="{ row }">
+              <el-select
+                :model-value="row.welding_machine ?? ''"
+                filterable
+                clearable
+                placeholder="溶接機を選択"
+                class="molding-machine-config-select"
+                :loading="weldingMachineConfigSavingId === row.id"
+                @update:model-value="(v) => onWeldingMachineConfigUpdate(row, v)"
+              >
+                <el-option
+                  v-for="opt in weldingMachineSelectOptionsWithLegacy"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button class="molding-plan-btn molding-plan-btn--close" @click="showWeldingMachineConfigDialog = false">
+          閉じる
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 溶接計画作成：製品工程BOM（簡易編集） -->
+    <el-dialog
+      v-model="showWeldingBomDialog"
+      width="680px"
+      align-center
+      class="molding-bom-compact-dialog"
+      destroy-on-close
+      :close-on-click-modal="false"
+      @closed="clearWeldingBomSaveTimers"
+    >
+      <template #header>
+        <div class="molding-bom-dlg-header">
+          <div class="molding-bom-dlg-header__mark" aria-hidden="true">
+            <el-icon><Setting /></el-icon>
+          </div>
+          <div class="molding-bom-dlg-header__meta">
+            <span class="molding-bom-dlg-header__eyebrow">product_process_bom</span>
+            <span class="molding-bom-dlg-header__title">製品工程BOM</span>
+            <span class="molding-bom-dlg-header__sub">安全在庫日数・溶接リードタイム</span>
+          </div>
+        </div>
+      </template>
+
+      <div v-loading="weldingBomLoading" class="molding-bom-dialog-body">
+        <div class="molding-bom-panel">
+          <p class="molding-bom-dialog-hint">セルを編集すると自動保存されます。</p>
+          <div class="molding-bom-table-wrap">
+            <el-table
+              :data="weldingBomList"
+              border
+              stripe
+              size="small"
+              max-height="400"
+              row-key="product_cd"
+              class="molding-bom-table"
+              highlight-current-row
+              :default-sort="{ prop: 'product_name', order: 'ascending' }"
+            >
+              <el-table-column prop="product_cd" label="製品CD" width="96" align="center" fixed />
+              <el-table-column prop="product_name" label="製品名" min-width="200" sortable show-overflow-tooltip />
+              <el-table-column label="安全在庫日数" width="132" align="center">
+                <template #default="{ row }">
+                  <el-input-number
+                    v-model="row.safety_stock_days"
+                    :min="0"
+                    :max="9999"
+                    :controls="false"
+                    size="small"
+                    class="molding-bom-input-num"
+                    @change="onWeldingBomFieldChange(row)"
+                  />
+                </template>
+              </el-table-column>
+              <el-table-column label="溶接LT" width="116" align="center">
+                <template #default="{ row }">
+                  <el-input-number
+                    v-model="row.welding_process_lt"
+                    :min="0"
+                    :max="9999"
+                    :controls="false"
+                    size="small"
+                    class="molding-bom-input-num"
+                    @change="onWeldingBomFieldChange(row)"
+                  />
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="molding-bom-footer">
+          <el-button type="primary" plain round @click="showWeldingBomDialog = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- データ生成・一括更新進度ダイアログ（在庫不足管理と同様のスタイル） -->
     <el-dialog
       v-model="showProgressDialog"
@@ -1727,6 +2086,7 @@ import {
   clearProductionSummarysCalculatedFields,
   clearProductionSummarysPlanFields,
   clearProductionSummarysMoldingPlan,
+  clearProductionSummarysWeldingPlan,
   updateProductionSummarysPlan,
   getInventoryTrendCalcStartDate,
   updateProductionSummarysInventory,
@@ -3200,6 +3560,14 @@ const handleDropdownCommand = (command: string) => {
         hidePreInventoryColumns: true,
       })
       break
+    case 'print-rec-welding-plan':
+      handleRecommendedProductionPrint('welding', {
+        trendKeyOverride: 'welding_actual_plan_trend',
+        titleOverride: '溶接計画推奨生産日リスト',
+        pickDateKeyOverride: 'welding_production_date',
+        hidePreInventoryColumns: true,
+      })
+      break
     default:
       break
   }
@@ -3214,6 +3582,13 @@ const handleRecommendedPrintCommand = (command: string) => {
       trendKeyOverride: 'molding_actual_plan_trend',
       titleOverride: '成型計画推奨生産日リスト',
       pickDateKeyOverride: 'molding_production_date',
+      hidePreInventoryColumns: true,
+    })
+  } else if (command === 'print-rec-welding-plan') {
+    handleRecommendedProductionPrint('welding', {
+      trendKeyOverride: 'welding_actual_plan_trend',
+      titleOverride: '溶接計画推奨生産日リスト',
+      pickDateKeyOverride: 'welding_production_date',
       hidePreInventoryColumns: true,
     })
   }
@@ -4611,6 +4986,7 @@ async function handleRecommendedProductionPrint(
 
 const handleProductionPlanCommand = (command: string) => {
   if (command === 'molding-plan-create') openMoldingPlanDialog()
+  else if (command === 'welding-plan-create') openWeldingPlanDialog()
 }
 
 const showMoldingPlanDialog = ref(false)
@@ -5426,6 +5802,527 @@ async function executeMoldingPlanCreate() {
   } finally {
     moldingPlanLoading.value = false
   }
+}
+
+// ---------- 生産計画印刷（溶接計画作成） ----------
+
+interface WeldingPlanRow {
+  lookup_date: string
+  welding_machine: string
+  product_cd: string
+  product_name: string
+  trend_raw: number
+  required_qty: number
+  lot_size: number
+  lot_count: number
+  batch_qty: number
+  daily_qty: number
+  /** equipment_efficiency（本/H）。未登録時は null */
+  efficiency_rate: number | null
+  /** 計画数÷能率（時間）。能率なしは 0 */
+  process_hours: number
+}
+
+const showWeldingPlanDialog = ref(false)
+const weldingPlanBaseDate = ref('')
+const weldingPlanMonth = ref('')
+const weldingPlanWorkingDays = ref(20)
+const weldingPlanCoefficient = ref(1.043)
+const weldingPlanLoading = ref(false)
+const weldingPlanClearFromDate = ref('')
+const weldingPlanClearLoading = ref(false)
+const weldingPlanInventoryTrendLoading = ref(false)
+const weldingPlanResult = ref<WeldingPlanRow[]>([])
+
+function onWeldingPlanMonthChange() {
+  if (weldingPlanMonth.value) {
+    weldingPlanBaseDate.value = baseDateFromPlanMonth(weldingPlanMonth.value)
+    weldingPlanWorkingDays.value = calcWorkingDays(weldingPlanMonth.value)
+    weldingPlanClearFromDate.value = weldingPlanBaseDate.value
+  }
+}
+
+function openWeldingPlanDialog() {
+  const { year, month } = getCurrentJSTInfo()
+  const mStr = `${year}-${String(month + 1).padStart(2, '0')}`
+  weldingPlanMonth.value = mStr
+  weldingPlanBaseDate.value = baseDateFromPlanMonth(mStr)
+  weldingPlanWorkingDays.value = calcWorkingDays(mStr)
+  weldingPlanCoefficient.value = 1.043
+  weldingPlanResult.value = []
+  weldingPlanClearFromDate.value = baseDateFromPlanMonth(mStr)
+  showWeldingPlanDialog.value = true
+}
+
+function printWeldingPlanResult() {
+  const rows = weldingPlanResult.value
+  if (!rows.length) {
+    ElMessage.warning('印刷するデータがありません')
+    return
+  }
+  const sorted = [...rows].sort((a, b) => {
+    const ma = (a.welding_machine || '\uffff').localeCompare(b.welding_machine || '\uffff', 'ja')
+    if (ma !== 0) return ma
+    const da = String(a.lookup_date || '').localeCompare(String(b.lookup_date || ''))
+    if (da !== 0) return da
+    return String(a.product_cd || '').localeCompare(String(b.product_cd || ''), 'ja')
+  })
+
+  const workDayNum = Number(weldingPlanWorkingDays.value)
+  const workDaysSafe = Number.isFinite(workDayNum) && workDayNum > 0 ? workDayNum : 0
+  const totalsByMachine = new Map<string, { plan: number; hours: number }>()
+
+  for (const r of sorted) {
+    const m = String(r.welding_machine || '').trim() || '（未設定）'
+    const t = totalsByMachine.get(m) ?? { plan: 0, hours: 0 }
+    const bq = Number(r.batch_qty)
+    t.plan += Number.isNaN(bq) ? 0 : bq
+    const ph = Number(r.process_hours)
+    t.hours += Number.isNaN(ph) ? 0 : ph
+    totalsByMachine.set(m, t)
+  }
+
+  const now = new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' })
+  const metaLine = [
+    `生産計画月：${weldingPlanMonth.value || '—'}`,
+    `基準日：${weldingPlanBaseDate.value || '—'}`,
+    `稼働日：${weldingPlanWorkingDays.value ?? '—'}`,
+    `加工減耗係数：${weldingPlanCoefficient.value ?? '—'}`,
+  ].join('　')
+
+  const totalPlanQty = sorted.reduce((sum, r) => {
+    const n = Number(r.batch_qty)
+    return Number.isNaN(n) ? sum : sum + n
+  }, 0)
+
+  let body = ''
+  let prevMachine = ''
+  for (const r of sorted) {
+    const machineName = String(r.welding_machine || '').trim() || '（未設定）'
+    if (machineName !== prevMachine) {
+      if (prevMachine) body += '</tbody></table></section>'
+      const agg = totalsByMachine.get(machineName) ?? { plan: 0, hours: 0 }
+      const avgDailyStr =
+        workDaysSafe > 0 && agg.hours > 0
+          ? `${(agg.hours / workDaysSafe).toFixed(2)}h/日`
+          : '—'
+      const sumHoursStr = agg.hours > 0 ? `${agg.hours.toFixed(2)}h` : '—'
+      body += `<section class="machine-group">
+<h2 class="machine-title">溶接機：${escapeHtmlRecommended(machineName)}　／　合計計画数：${escapeHtmlRecommended(formatMoldingPlanInt(agg.plan))}　／　合計工時：${escapeHtmlRecommended(sumHoursStr)}　／　平均日稼働：${escapeHtmlRecommended(avgDailyStr)}</h2>
+<table>
+<thead><tr><th>対応日</th><th>製品名</th><th>必要数</th><th>ロットサイズ</th><th>ロット数</th><th>計画数</th><th>能率</th><th>工時</th></tr></thead>
+<tbody>`
+      prevMachine = machineName
+    }
+    body += `<tr>
+      <td class="indent">${escapeHtmlRecommended(String(r.lookup_date || ''))}</td>
+      <td>${escapeHtmlRecommended(String(r.product_name || ''))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.required_qty)))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.lot_size)))}</td>
+      <td class="num">${escapeHtmlRecommended(String(r.lot_count ?? ''))}</td>
+      <td class="num batch">${escapeHtmlRecommended(formatMoldingPlanInt(Number(r.batch_qty)))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanEfficiencyPerH(r.efficiency_rate))}</td>
+      <td class="num">${escapeHtmlRecommended(formatMoldingPlanProcessHours(r.process_hours))}</td>
+    </tr>`
+  }
+  if (prevMachine) body += '</tbody></table></section>'
+
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"/><title>溶接計画計算結果</title>
+<style>
+@page { size: A4 portrait; margin: 10mm; }
+body{font-family:sans-serif;margin:0;padding:12px;font-size:9pt;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+h1{font-size:13pt;margin:0 0 6px;font-weight:700;}
+.meta{color:#475569;font-size:8.5pt;margin:0 0 8px;line-height:1.45;}
+.sub{font-size:8pt;color:#64748b;margin:0 0 10px;}
+table{border-collapse:collapse;width:100%;}
+th,td{border:1px solid #cbd5e1;padding:4px 6px;}
+th{background:#f1f5f9;font-weight:600;text-align:center;font-size:8pt;}
+td.num{text-align:right;font-variant-numeric:tabular-nums;}
+td.batch{font-weight:700;}
+.machine-group{margin-bottom:10px;break-inside:avoid-page;page-break-inside:avoid;}
+.machine-title{font-size:10pt;margin:0;padding:6px 8px;background:#e2e8f0;border:1px solid #cbd5e1;border-bottom:none;}
+td.indent{padding-left:16px;}
+</style></head><body>
+<h1>溶接計画作成 — 計算結果</h1>
+<p class="meta">${escapeHtmlRecommended(metaLine)}</p>
+<p class="sub">計画数合計：<strong>${escapeHtmlRecommended(formatMoldingPlanInt(totalPlanQty))}</strong>　／　出力：${escapeHtmlRecommended(now)}　／　${sorted.length} 件</p>
+${body || '<p class="sub">印刷対象データがありません。</p>'}
+</body></html>`
+
+  const win = openPrintPreviewThenDialog(html)
+  if (!win) {
+    ElMessage.warning('ポップアップがブロックされました。ブラウザでポップアップを許可してください。')
+    return
+  }
+  ElMessage.success('印刷プレビューを表示しました')
+}
+
+async function executeWeldingPlanClear() {
+  const d = weldingPlanClearFromDate.value
+  if (!d) {
+    ElMessage.warning('計画クリア開始日を選択してください')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `<p>この日付以降の<strong>溶接計画（welding_plan）</strong>および<strong>実績計画（welding_actual_plan）</strong>をすべて 0 にクリアします。</p><p>開始日：<strong>${d}</strong></p>
+<p style="margin-top:8px;color:#64748b;font-size:12px;">※ 他工程の計画列は変更しません。再集計が必要な場合は「計画データ更新」を実行してください。</p>`,
+      '計画クリアの確認',
+      {
+        confirmButtonText: '実行',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+        dangerouslyUseHTMLString: true,
+      },
+    )
+  } catch {
+    return
+  }
+  weldingPlanClearLoading.value = true
+  try {
+    const res: any = await clearProductionSummarysWeldingPlan(d)
+    const cleared = res?.data?.cleared
+    const msg = res?.message ?? `溶接計画をクリアしました（${cleared ?? 0}件）`
+    ElMessage.success(msg)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? 'クリアに失敗しました')
+  } finally {
+    weldingPlanClearLoading.value = false
+  }
+}
+
+async function executeWeldingPlanInventoryTrend() {
+  const startDate = await resolveInventoryTrendCalcStartDate()
+  try {
+    await ElMessageBox.confirm(
+      `<p>在庫取引「初期」かつ数量&gt;0の最新取引日（無ければ当月月初・JST）以降の在庫・推移・安全在庫をクリアしてから、在庫→推移→安全在庫の順で再計算します（在庫は開始日～+3ヶ月、推移は開始日～表末。安全在庫は製品マスタの安全在庫日数×将来30営業日の平均内示数）。各工程の plan 列および実計列の再集計は「計画データ更新」で当月月初～+5ヶ月の範囲が対象です。</p><p style="margin-top:10px">計算開始日：<strong>${startDate}</strong></p>`,
+      '在庫・推移更新の確認',
+      {
+        confirmButtonText: '更新',
+        cancelButtonText: 'キャンセル',
+        type: 'info',
+        dangerouslyUseHTMLString: true,
+      },
+    )
+  } catch {
+    return
+  }
+  weldingPlanInventoryTrendLoading.value = true
+  updatingInventoryTrend.value = true
+  try {
+    await runInventoryTrendUpdateSequence(startDate)
+  } catch (_e) {
+    /* runInventoryTrendUpdateSequence 内でメッセージ表示済み */
+  } finally {
+    weldingPlanInventoryTrendLoading.value = false
+    updatingInventoryTrend.value = false
+  }
+}
+
+async function executeWeldingPlanCreate() {
+  if (!weldingPlanBaseDate.value) {
+    ElMessage.warning('基準日を選択してください')
+    return
+  }
+  weldingPlanLoading.value = true
+  try {
+    const baseDate = weldingPlanBaseDate.value
+    const coeff = weldingPlanCoefficient.value
+    const workDays = weldingPlanWorkingDays.value
+
+    const bomRows = await fetchAllProductProcessBomRows()
+    if (!bomRows.length) {
+      ElMessage.info('製品工程BOMのデータがありません')
+      weldingPlanResult.value = []
+      return
+    }
+
+    /** 対応日 = 基準日 + welding_process_lt + safety_stock_days（営業日加算、土日除く） */
+    const lookups: { product_cd: string; product_name: string; lookup_date: string; biz_days: number }[] = []
+    for (const bom of bomRows) {
+      const cd = bom.product_cd != null ? String(bom.product_cd).trim() : ''
+      if (!cd) continue
+      const weldingLt = Number(bom.welding_process_lt ?? 0) || 0
+      const safety = Number(bom.safety_stock_days ?? 0) || 0
+      const bizDays = weldingLt + safety
+      const lookupDate = addBusinessDays(baseDate, bizDays)
+      lookups.push({
+        product_cd: cd,
+        product_name: (bom.product_name as string) ?? '',
+        lookup_date: lookupDate,
+        biz_days: bizDays,
+      })
+    }
+
+    const dates = [...new Set(lookups.map((l) => l.lookup_date))].filter(Boolean).sort()
+    if (!dates.length) {
+      weldingPlanResult.value = []
+      return
+    }
+    const minD = dates[0]!
+    const maxD = dates[dates.length - 1]!
+
+    const res = await getProductionSummarysList({
+      page: 1,
+      limit: 50000,
+      startDate: minD,
+      endDate: maxD,
+    })
+    const data = (res as any)?.data ?? res
+    const summaryRows: any[] = data?.list ?? []
+
+    const summaryByDateProduct = new Map<string, any>()
+    for (const row of summaryRows) {
+      const pcd = row.product_cd != null ? String(row.product_cd).trim() : ''
+      if (!pcd) continue
+      const ds = summaryRowDateStr(row)
+      if (!ds) continue
+      summaryByDateProduct.set(`${ds}|${pcd}`, row)
+    }
+
+    const lotSizeMap = new Map<string, number>()
+    const pageSize = 10000
+    let page = 1
+    let total = 0
+    do {
+      const prodRes: any = await request.get('/api/master/products', {
+        params: { page, pageSize },
+      })
+      const payload = prodRes?.data
+      const prodList: any[] = payload?.list ?? []
+      total = Number(payload?.total ?? 0) || prodList.length
+      for (const p of prodList) {
+        if (p.product_cd != null) lotSizeMap.set(String(p.product_cd).trim(), Number(p.lot_size) || 1)
+      }
+      if (prodList.length < pageSize) break
+      if (total > 0 && page * pageSize >= total) break
+      page += 1
+    } while (true)
+
+    const [effRes, machinesRes] = await Promise.all([fetchEquipmentEfficiencyList({ limit: 99999 }), fetchMachines()])
+    const effList = (effRes as any)?.data?.list ?? (effRes as any)?.list ?? []
+    const machineList = (machinesRes as any)?.data?.list ?? (machinesRes as any)?.list ?? []
+    const resolveEff = buildMoldingPlanEfficiencyResolver(effList, machineList)
+
+    const result: WeldingPlanRow[] = []
+    for (const L of lookups) {
+      const row = summaryByDateProduct.get(`${L.lookup_date}|${L.product_cd}`)
+      if (!row) continue
+      const trend = Number(row.welding_actual_plan_trend ?? 0)
+      if (trend >= 0) continue
+      const reqRaw = Math.abs(trend) * coeff
+      const requiredQty = Math.round(reqRaw)
+      const lotSize = lotSizeMap.get(L.product_cd) ?? 1
+      const lotCount = lotSize > 0 ? Math.ceil(requiredQty / lotSize) : requiredQty
+      const batchQty = lotCount * lotSize
+      const dailyQty = workDays > 0 ? Math.ceil(batchQty / workDays) : batchQty
+      const weldingName = String(row.welding_machine ?? '')
+      const effRate = resolveEff(L.product_cd, weldingName)
+      const processHours = effRate != null && effRate > 0 ? batchQty / effRate : 0
+
+      result.push({
+        lookup_date: L.lookup_date,
+        welding_machine: row.welding_machine ?? '',
+        product_cd: L.product_cd,
+        product_name: row.product_name || L.product_name || '',
+        trend_raw: trend,
+        required_qty: requiredQty,
+        lot_size: lotSize,
+        lot_count: lotCount,
+        batch_qty: batchQty,
+        daily_qty: dailyQty,
+        efficiency_rate: effRate,
+        process_hours: processHours,
+      })
+    }
+
+    /** 溶接機 昇順 → 対応日 → 製品名 */
+    result.sort((a, b) => {
+      const ma = (a.welding_machine || '\uffff').localeCompare(b.welding_machine || '\uffff', 'ja')
+      if (ma !== 0) return ma
+      const da = a.lookup_date.localeCompare(b.lookup_date)
+      if (da !== 0) return da
+      return (a.product_name || '').localeCompare(b.product_name || '', 'ja')
+    })
+
+    weldingPlanResult.value = result
+    if (!result.length) {
+      ElMessage.info(
+        '対象データがありません（対応日の production_summarys 行なし、または welding_actual_plan_trend が 0 以上）',
+      )
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '計算に失敗しました')
+  } finally {
+    weldingPlanLoading.value = false
+  }
+}
+
+// ---------- 溶接機器設定（product_machine_config：welding_machine） ----------
+const showWeldingMachineConfigDialog = ref(false)
+const weldingMachineConfigLoading = ref(false)
+const weldingMachineConfigRows = ref<ProductMachineConfig[]>([])
+const weldingMachineCdOptions = ref<Array<{ label: string; value: string }>>([])
+const weldingMachineConfigSavingId = ref<number | null>(null)
+
+const weldingMachineSelectOptionsWithLegacy = computed(() => {
+  const base = weldingMachineCdOptions.value
+  const seen = new Set(base.map((o) => o.value))
+  const extra: { label: string; value: string }[] = []
+  for (const r of weldingMachineConfigRows.value) {
+    const v = (r.welding_machine ?? '').trim()
+    if (v && !seen.has(v)) {
+      seen.add(v)
+      extra.push({ label: `${v}（マスタ外）`, value: v })
+    }
+  }
+  return [...base, ...extra]
+})
+
+async function loadWeldingMachineConfigDialogData() {
+  weldingMachineConfigLoading.value = true
+  try {
+    const [cfgRes, machRes] = await Promise.all([
+      fetchProductMachineConfigList({ limit: 99999 }),
+      fetchMachines(),
+    ])
+    const cfgList = extractProductMachineConfigListResponse(cfgRes)
+    cfgList.sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ja', { sensitivity: 'base' }))
+    weldingMachineConfigRows.value = cfgList
+    const machineList = extractMachinesListResponse(machRes)
+    weldingMachineCdOptions.value = machineList
+      .map((m: any) => ({
+        label: `${m.machine_name || ''} (${m.machine_cd || ''})`,
+        value: String(m.machine_cd || '').trim(),
+      }))
+      .filter((o: { value: string }) => o.value)
+  } catch (e: any) {
+    console.error(e)
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? 'データの取得に失敗しました')
+    weldingMachineConfigRows.value = []
+    weldingMachineCdOptions.value = []
+  } finally {
+    weldingMachineConfigLoading.value = false
+  }
+}
+
+async function openWeldingMachineConfigDialog() {
+  showWeldingMachineConfigDialog.value = true
+  await loadWeldingMachineConfigDialogData()
+}
+
+async function onWeldingMachineConfigUpdate(row: ProductMachineConfig, val: string | null | undefined) {
+  if (row.id == null) return
+  const prev = row.welding_machine ?? ''
+  const next = val == null || val === '' ? '' : String(val)
+  if (next === prev) return
+  row.welding_machine = next
+  weldingMachineConfigSavingId.value = row.id
+  try {
+    await updateProductMachineConfig(row.id, { welding_machine: next || undefined })
+    ElMessage.success('溶接機を保存しました')
+  } catch (e: any) {
+    row.welding_machine = prev
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '保存に失敗しました')
+  } finally {
+    weldingMachineConfigSavingId.value = null
+  }
+}
+
+// ---------- 溶接計画作成：製品工程BOM（簡易編集） ----------
+interface WeldingBomRow {
+  product_cd: number
+  product_name: string
+  safety_stock_days: number
+  welding_process_lt: number
+}
+
+const showWeldingBomDialog = ref(false)
+const weldingBomList = ref<WeldingBomRow[]>([])
+const weldingBomLoading = ref(false)
+const weldingBomSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+function clearWeldingBomSaveTimers() {
+  for (const t of weldingBomSaveTimers.values()) clearTimeout(t)
+  weldingBomSaveTimers.clear()
+}
+
+function filterWeldingBomRows(
+  rows: WeldingBomRow[],
+  productMap: Map<string, { product_type?: string; status?: string }>,
+): WeldingBomRow[] {
+  const out: WeldingBomRow[] = []
+  for (const r of rows) {
+    const cdStr = String(r.product_cd).trim()
+    if (!cdStr) continue
+    if (!cdStr.endsWith('1')) continue
+    const name = r.product_name ?? ''
+    if (name.includes('加工') || name.includes('アーチ')) continue
+    const p = productMap.get(cdStr)
+    if (!p) continue
+    if (String(p.product_type ?? '') !== '量産品') continue
+    if (String(p.status ?? '') !== 'active') continue
+    out.push(r)
+  }
+  out.sort((a, b) => (a.product_name || '').localeCompare(b.product_name || '', 'ja'))
+  return out
+}
+
+async function openWeldingBomDialog() {
+  showWeldingBomDialog.value = true
+  weldingBomLoading.value = true
+  weldingBomList.value = []
+  try {
+    const productMap = await fetchProductsTypeStatusMap()
+    const limit = 100
+    const rawRows: WeldingBomRow[] = []
+    let page = 1
+    while (true) {
+      const res = (await fetchProductProcessBOMList({
+        page,
+        limit,
+        sort_by: 'product_name',
+        sort_order: 'asc',
+      })) as any
+      const list = res?.data?.list ?? []
+      for (const r of list) {
+        rawRows.push({
+          product_cd: r.product_cd,
+          product_name: r.product_name != null ? String(r.product_name) : '',
+          safety_stock_days: Number(r.safety_stock_days ?? 0),
+          welding_process_lt: Number(r.welding_process_lt ?? 0),
+        })
+      }
+      if (!list.length || list.length < limit) break
+      page += 1
+    }
+    weldingBomList.value = filterWeldingBomRows(rawRows, productMap)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '読み込みに失敗しました')
+    showWeldingBomDialog.value = false
+  } finally {
+    weldingBomLoading.value = false
+  }
+}
+
+function onWeldingBomFieldChange(row: WeldingBomRow) {
+  const cd = row.product_cd
+  const prev = weldingBomSaveTimers.get(cd)
+  if (prev) clearTimeout(prev)
+  const t = setTimeout(async () => {
+    try {
+      await updateProductProcessBOM(cd, {
+        safety_stock_days: row.safety_stock_days,
+        welding_process_lt: row.welding_process_lt,
+      })
+      ElMessage.success({ message: '保存しました', duration: 1500, showClose: false })
+    } catch (e: any) {
+      ElMessage.error(e?.response?.data?.detail ?? e?.message ?? '保存に失敗しました')
+    } finally {
+      weldingBomSaveTimers.delete(cd)
+    }
+  }, 600)
+  weldingBomSaveTimers.set(cd, t)
 }
 
 const selectAllColumns = () => {
