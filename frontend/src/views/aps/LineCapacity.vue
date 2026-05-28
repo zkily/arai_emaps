@@ -444,19 +444,19 @@ const WELDING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
     key: '9h',
     label: '9H',
     btnType: 'success',
-    title: '稼働 08:00–12:00 / 13:00–18:00、休憩 10:00–10:10 / 15:00–15:10',
+    title: '稼働 08:00–12:00 / 13:00–18:00、休憩 10:00–10:10 / 15:00–15:10 / 17:00–17:10',
   },
   {
     key: '10h',
     label: '10H',
     btnType: 'primary',
-    title: '稼働 08:00–12:00 / 13:00–19:00、休憩 10:00–10:10 / 15:00–15:10',
+    title: '稼働 08:00–12:00 / 13:00–19:00、休憩 10:00–10:10 / 15:00–15:10 / 17:00–17:10',
   },
   {
     key: '12h',
     label: '12H',
     btnType: 'primary',
-    title: '稼働 08:00–12:00 / 13:00–21:00、休憩 10:00–10:10 / 15:00–15:10',
+    title: '稼働 08:00–12:00 / 13:00–21:00、休憩 10:00–10:10 / 15:00–15:10 / 17:00–17:10',
   },
   {
     key: '16h',
@@ -696,10 +696,16 @@ const SHIFT_8H_SLOTS: EditSlot[] = [
   { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
 ]
 
-/** 溶接：昼帯のみの休憩（8H・9H・10H・12H で共通） */
+/** 溶接 8H の休憩（9H/10H/12H は 17:00 休憩を追加） */
 const WELDING_DAY_BREAK_SLOTS: EditSlot[] = [
   { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
   { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
+]
+
+/** 溶接 9H/10H/12H の休憩（8H + 17:00） */
+const WELDING_EXTENDED_BREAK_SLOTS: EditSlot[] = [
+  ...WELDING_DAY_BREAK_SLOTS,
+  { start_time: '17:00:00', end_time: '17:10:00', is_rest: true },
 ]
 
 /** 溶接 9H：午後1時間延長 */
@@ -770,24 +776,24 @@ function apply8HShift(day: DayEdit) {
   collapseSlotsEditor(day)
 }
 
-function applyWeldingDayShift(day: DayEdit, workSlots: EditSlot[]) {
+function applyWeldingDayShift(day: DayEdit, workSlots: EditSlot[], breakSlots: EditSlot[]) {
   day.editSlots = [
     ...workSlots.map(s => ({ ...s })),
-    ...WELDING_DAY_BREAK_SLOTS.map(s => ({ ...s })),
+    ...breakSlots.map(s => ({ ...s })),
   ]
   collapseSlotsEditor(day)
 }
 
 function apply9HShift(day: DayEdit) {
-  applyWeldingDayShift(day, SHIFT_9H_WELDING_WORK_SLOTS)
+  applyWeldingDayShift(day, SHIFT_9H_WELDING_WORK_SLOTS, WELDING_EXTENDED_BREAK_SLOTS)
 }
 
 function apply10HShift(day: DayEdit) {
-  applyWeldingDayShift(day, SHIFT_10H_WELDING_WORK_SLOTS)
+  applyWeldingDayShift(day, SHIFT_10H_WELDING_WORK_SLOTS, WELDING_EXTENDED_BREAK_SLOTS)
 }
 
 function apply12HShift(day: DayEdit) {
-  applyWeldingDayShift(day, SHIFT_12H_WELDING_WORK_SLOTS)
+  applyWeldingDayShift(day, SHIFT_12H_WELDING_WORK_SLOTS, WELDING_EXTENDED_BREAK_SLOTS)
 }
 
 const SHIFT_PRESET_RUNNERS: Record<ShiftPresetKey, (d: DayEdit) => void> = {
