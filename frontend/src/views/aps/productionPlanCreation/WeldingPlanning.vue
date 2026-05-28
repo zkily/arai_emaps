@@ -880,6 +880,7 @@
         :key="`${selectedLineId}-${lineCapacitySingleDayRange[0]}`"
         :preset-line-id="selectedLineId"
         :preset-date-range="lineCapacitySingleDayRange"
+        preset-process-cd="KT07"
         @saved="onLineCapacityDaySlotsSaved"
       />
       <template #footer>
@@ -901,6 +902,7 @@
         embed
         :preset-line-id="selectedLineId"
         :preset-date-range="lineCapacityDateRange"
+        preset-process-cd="KT07"
         @saved="onLineCapacityDaySlotsSaved"
       />
     </el-dialog>

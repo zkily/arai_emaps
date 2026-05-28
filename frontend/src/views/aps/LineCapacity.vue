@@ -159,12 +159,18 @@
           </span>
         </div>
         <div class="bulk-apply-panel__actions">
-          <el-button type="info" size="small" plain @click="batchApplyPreset('4h')">4H</el-button>
-          <el-button type="success" size="small" plain @click="batchApplyPreset('8h')">8H</el-button>
-          <el-button type="primary" size="small" plain @click="batchApplyPreset('16h')">16H</el-button>
-          <el-button type="warning" size="small" plain @click="batchApplyPreset('20h')">20H</el-button>
-          <el-button plain class="lcap-preset--22h" size="small" @click="batchApplyPreset('22h')">22H</el-button>
-          <el-button plain class="lcap-preset--24h" size="small" @click="batchApplyPreset('24h')">24H</el-button>
+          <el-button
+            v-for="preset in shiftPresetButtons"
+            :key="preset.key"
+            :type="preset.btnType || undefined"
+            size="small"
+            plain
+            :class="preset.btnClass"
+            :title="preset.title"
+            @click="batchApplyPreset(preset.key)"
+          >
+            {{ preset.label }}
+          </el-button>
           <el-button
             type="danger"
             size="small"
@@ -242,58 +248,16 @@
             </div>
             <div class="day-card__actions">
               <el-button
-                type="info"
+                v-for="preset in shiftPresetButtons"
+                :key="preset.key"
+                :type="preset.btnType || undefined"
                 size="small"
                 plain
-                title="稼働 08:00–12:00、休憩 10:00–10:10"
-                @click="apply4HShift(day)"
+                :class="preset.btnClass"
+                :title="preset.title"
+                @click="applyShiftPreset(day, preset.key)"
               >
-                4H
-              </el-button>
-              <el-button
-                type="success"
-                size="small"
-                plain
-                title="稼働 08:00–12:00 / 13:00–17:00、休憩 10:00–10:10 / 15:00–15:10"
-                @click="apply8HShift(day)"
-              >
-                8H
-              </el-button>
-              <el-button
-                type="primary"
-                size="small"
-                plain
-                title="稼働 08:00–12:00 / 13:00–17:00 / 21:00–00:00 / 01:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10"
-                @click="applyStandardShift(day)"
-              >
-                16H
-              </el-button>
-              <el-button
-                type="warning"
-                size="small"
-                plain
-                title="稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10"
-                @click="apply20HShift(day)"
-              >
-                20H
-              </el-button>
-              <el-button
-                plain
-                class="lcap-preset--22h"
-                size="small"
-                title="稼働 08:00–12:00 / 13:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10"
-                @click="apply22HShift(day)"
-              >
-                22H
-              </el-button>
-              <el-button
-                plain
-                class="lcap-preset--24h"
-                size="small"
-                title="稼働 08:00–08:00（当日08:00〜翌08:00／保存時は 08:00–00:00 と 00:00–08:00 の2行）、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10"
-                @click="apply24HCalendarShift(day)"
-              >
-                24H
+                {{ preset.label }}
               </el-button>
               <el-button
                 type="danger"
@@ -395,11 +359,14 @@ const props = withDefaults(
     embed?: boolean
     presetLineId?: number | null
     presetDateRange?: [string, string] | null
+    /** embed 時の工程 CD（溶接 KT07 / 成型 KT04 等。ショートカット切替用） */
+    presetProcessCd?: string | null
   }>(),
   {
     embed: false,
     presetLineId: null,
     presetDateRange: null,
+    presetProcessCd: null,
   },
 )
 
@@ -413,10 +380,113 @@ const embed = computed(() => props.embed)
 /** 設備稼働設定で選べる工程のみ（切断・面取・成型・溶接）— `processes.process_cd` と一致 */
 const LINE_CAPACITY_PROCESS_ORDER = ['KT01', 'KT02', 'KT04', 'KT07'] as const
 const LINE_CAPACITY_PROCESS_SET = new Set<string>(LINE_CAPACITY_PROCESS_ORDER)
+const WELDING_PROCESS_CD = 'KT07'
+
+type ShiftPresetKey = '4h' | '8h' | '9h' | '10h' | '12h' | '16h' | '20h' | '22h' | '24h'
+
+interface ShiftPresetButton {
+  key: ShiftPresetKey
+  label: string
+  btnType: '' | 'info' | 'success' | 'primary' | 'warning'
+  btnClass?: string
+  title: string
+}
+
+const FORMING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
+  {
+    key: '4h',
+    label: '4H',
+    btnType: 'info',
+    title: '稼働 08:00–12:00、休憩 10:00–10:10',
+  },
+  {
+    key: '8h',
+    label: '8H',
+    btnType: 'success',
+    title: '稼働 08:00–12:00 / 13:00–17:00、休憩 10:00–10:10 / 15:00–15:10',
+  },
+  {
+    key: '16h',
+    label: '16H',
+    btnType: 'primary',
+    title: '稼働 08:00–12:00 / 13:00–17:00 / 21:00–00:00 / 01:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+  {
+    key: '20h',
+    label: '20H',
+    btnType: 'warning',
+    title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+  {
+    key: '22h',
+    label: '22H',
+    btnType: '',
+    btnClass: 'lcap-preset--22h',
+    title: '稼働 08:00–12:00 / 13:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+  {
+    key: '24h',
+    label: '24H',
+    btnType: '',
+    btnClass: 'lcap-preset--24h',
+    title: '稼働 08:00–08:00（当日08:00〜翌08:00／保存時は 08:00–00:00 と 00:00–08:00 の2行）、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+]
+
+const WELDING_SHIFT_PRESET_BUTTONS: ShiftPresetButton[] = [
+  {
+    key: '8h',
+    label: '8H',
+    btnType: 'success',
+    title: '稼働 08:00–12:00 / 13:00–17:00、休憩 10:00–10:10 / 15:00–15:10',
+  },
+  {
+    key: '9h',
+    label: '9H',
+    btnType: 'success',
+    title: '稼働 08:00–12:00 / 13:00–18:00、休憩 10:00–10:10 / 15:00–15:10',
+  },
+  {
+    key: '10h',
+    label: '10H',
+    btnType: 'primary',
+    title: '稼働 08:00–12:00 / 13:00–19:00、休憩 10:00–10:10 / 15:00–15:10',
+  },
+  {
+    key: '12h',
+    label: '12H',
+    btnType: 'primary',
+    title: '稼働 08:00–12:00 / 13:00–21:00、休憩 10:00–10:10 / 15:00–15:10',
+  },
+  {
+    key: '16h',
+    label: '16H',
+    btnType: 'primary',
+    title: '稼働 08:00–12:00 / 13:00–17:00 / 21:00–00:00 / 01:00–06:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+  {
+    key: '20h',
+    label: '20H',
+    btnType: 'warning',
+    title: '稼働 08:00–12:00 / 13:00–17:00 / 17:00–19:00 / 21:00–00:00 / 01:00–08:00、休憩 10:00–10:10 / 15:00–15:10 / 01:00–01:10 / 04:00–04:10',
+  },
+]
 
 const processOptions = ref<ProcessItem[]>([])
 /** 空＝全工程（fetchLines は processCd 無し） */
 const selectedProcessCd = ref<string | undefined>(undefined)
+
+const effectiveProcessCd = computed(() => {
+  const preset = (props.presetProcessCd || '').trim()
+  if (preset) return preset
+  return (selectedProcessCd.value || '').trim()
+})
+
+const isWeldingProcess = computed(() => effectiveProcessCd.value === WELDING_PROCESS_CD)
+
+const shiftPresetButtons = computed(() =>
+  isWeldingProcess.value ? WELDING_SHIFT_PRESET_BUTTONS : FORMING_SHIFT_PRESET_BUTTONS,
+)
 
 const lines = ref<ProductionLine[]>([])
 const selectedLineId = ref<number | null>(null)
@@ -626,6 +696,30 @@ const SHIFT_8H_SLOTS: EditSlot[] = [
   { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
 ]
 
+/** 溶接：昼帯のみの休憩（8H・9H・10H・12H で共通） */
+const WELDING_DAY_BREAK_SLOTS: EditSlot[] = [
+  { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
+  { start_time: '15:00:00', end_time: '15:10:00', is_rest: true },
+]
+
+/** 溶接 9H：午後1時間延長 */
+const SHIFT_9H_WELDING_WORK_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
+  { start_time: '13:00:00', end_time: '18:00:00', is_rest: false },
+]
+
+/** 溶接 10H */
+const SHIFT_10H_WELDING_WORK_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
+  { start_time: '13:00:00', end_time: '19:00:00', is_rest: false },
+]
+
+/** 溶接 12H */
+const SHIFT_12H_WELDING_WORK_SLOTS: EditSlot[] = [
+  { start_time: '08:00:00', end_time: '12:00:00', is_rest: false },
+  { start_time: '13:00:00', end_time: '21:00:00', is_rest: false },
+]
+
 /** 毎日固定の短い休憩（16H・20H・22H・24H のプリセットで使用） */
 const FIXED_DAILY_BREAK_SLOTS: EditSlot[] = [
   { start_time: '10:00:00', end_time: '10:10:00', is_rest: true },
@@ -676,6 +770,42 @@ function apply8HShift(day: DayEdit) {
   collapseSlotsEditor(day)
 }
 
+function applyWeldingDayShift(day: DayEdit, workSlots: EditSlot[]) {
+  day.editSlots = [
+    ...workSlots.map(s => ({ ...s })),
+    ...WELDING_DAY_BREAK_SLOTS.map(s => ({ ...s })),
+  ]
+  collapseSlotsEditor(day)
+}
+
+function apply9HShift(day: DayEdit) {
+  applyWeldingDayShift(day, SHIFT_9H_WELDING_WORK_SLOTS)
+}
+
+function apply10HShift(day: DayEdit) {
+  applyWeldingDayShift(day, SHIFT_10H_WELDING_WORK_SLOTS)
+}
+
+function apply12HShift(day: DayEdit) {
+  applyWeldingDayShift(day, SHIFT_12H_WELDING_WORK_SLOTS)
+}
+
+const SHIFT_PRESET_RUNNERS: Record<ShiftPresetKey, (d: DayEdit) => void> = {
+  '4h': apply4HShift,
+  '8h': apply8HShift,
+  '9h': apply9HShift,
+  '10h': apply10HShift,
+  '12h': apply12HShift,
+  '16h': applyStandardShift,
+  '20h': apply20HShift,
+  '22h': apply22HShift,
+  '24h': apply24HCalendarShift,
+}
+
+function applyShiftPreset(day: DayEdit, key: ShiftPresetKey) {
+  SHIFT_PRESET_RUNNERS[key](day)
+}
+
 function removeSlot(day: DayEdit, idx: number) {
   day.editSlots.splice(idx, 1)
 }
@@ -686,7 +816,7 @@ function clearAllSlots(day: DayEdit) {
 }
 
 /** 一覧グリッドと同じ「表示中日」（土日フィルター込み）へプリセット一括適用 */
-function batchApplyPreset(key: '4h' | '8h' | '16h' | '20h' | '22h' | '24h' | 'clear') {
+function batchApplyPreset(key: ShiftPresetKey | 'clear') {
   const days = displayDaySlots.value
   if (days.length === 0) {
     ElMessage.warning('表示中の日がありません')
@@ -699,15 +829,7 @@ function batchApplyPreset(key: '4h' | '8h' | '16h' | '20h' | '22h' | '24h' | 'cl
     ElMessage.success(`${days.length} 日の時間帯をクリアしました`)
     return
   }
-  const runners: Record<'4h' | '8h' | '16h' | '20h' | '22h' | '24h', (d: DayEdit) => void> = {
-    '4h': apply4HShift,
-    '8h': apply8HShift,
-    '16h': applyStandardShift,
-    '20h': apply20HShift,
-    '22h': apply22HShift,
-    '24h': apply24HCalendarShift,
-  }
-  const run = runners[key]
+  const run = SHIFT_PRESET_RUNNERS[key]
   for (const day of days) {
     run(day)
   }
