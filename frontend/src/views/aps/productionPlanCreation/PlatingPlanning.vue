@@ -125,9 +125,29 @@
               <div class="lap-board-row lap-board-row--head">
                 <div class="lap-rail-cell lap-rail-head">周</div>
                 <div class="lap-board-grid lap-board-head" :style="lapBoardColsGridStyle">
-                  <div v-for="h in lapColumnHeaders" :key="h.i" class="lap-col-head">
-                    <span class="lap-col-head-n">{{ h.i }}</span>
-                    <span class="lap-col-head-s">本</span>
+                  <div v-if="useCompactLapHeader" class="lap-col-head-range">
+                    <span
+                      v-for="mark in compactLapHeaderMarkItems"
+                      :key="`head-mark-${mark.value}`"
+                      class="lap-col-head-range-mark"
+                      :style="{ left: `${mark.leftPct}%` }"
+                    >{{ mark.value }}</span>
+                  </div>
+                  <div
+                    v-else
+                    v-for="h in lapColumnHeaders"
+                    :key="h.i"
+                    class="lap-col-head"
+                    :class="{ 'lap-col-head--truncated': h.truncated }"
+                    :title="h.truncated ? String(h.i) : undefined"
+                  >
+                    <span class="lap-col-head-digits">
+                      <span
+                        v-for="(d, di) in h.digits"
+                        :key="`${h.i}-${di}`"
+                        class="lap-col-head-digit"
+                      >{{ d }}</span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -173,7 +193,7 @@
                     :key="ms.key"
                     class="lap-merged-seg"
                     :class="[
-                      'sched-color-' + schedColorIndexForProductCd(ms.product_cd),
+                      'sched-color-' + schedColorIndexForPlatingMachine(ms.plating_machine),
                       ms.boardMark === 'manual' ? 'lap-merged-seg--manual' : ms.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
                       'lap-merged-seg--board-jig-block',
                       isJigProductCd(ms.product_cd) ? 'lap-merged-seg--board-draggable' : '',
@@ -212,7 +232,7 @@
                       :key="tc.id"
                       class="lap-merged-tail-item"
                       :class="[
-                        'sched-color-' + schedColorIndexForProductCd(tc.product_cd),
+                        'sched-color-' + schedColorIndexForPlatingMachine(tc.plating_machine),
                         tc.boardMark === 'manual' ? 'lap-merged-seg--manual' : tc.boardMark === 'rush' ? 'lap-merged-seg--rush' : '',
                       ]"
                       :data-card-id="tc.id"
@@ -240,7 +260,7 @@
                       :key="`${item.row.lap_no}-${ci}-${seg.key}`"
                       class="lap-segment lap-segment--cell"
                       :class="[
-                        'sched-color-' + schedColorIndexForProductCd(seg.product_cd),
+                        'sched-color-' + schedColorIndexForPlatingMachine(seg.plating_machine),
                         seg.boardMark === 'manual' ? 'lap-segment--manual' : seg.boardMark === 'rush' ? 'lap-segment--rush' : '',
                       ]"
                       :data-seg-key="seg.key"
@@ -3827,7 +3847,7 @@ function normalizeMachineKey(v: string): string {
   return String(v || '').trim().toLowerCase()
 }
 
-/** 同一品番は常に同じ sched-color-0..7（画面上で品番を識別しやすくする） */
+/** 同一品番は常に同じ sched-color（在庫/見込リスト等での識別用） */
 function schedColorIndexForProductCd(productCd: string): number {
   const s = String(productCd ?? '').trim()
   if (!s) return 0
@@ -3835,7 +3855,18 @@ function schedColorIndexForProductCd(productCd: string): number {
   for (let i = 0; i < s.length; i += 1) {
     h = (h * 31 + s.charCodeAt(i)) | 0
   }
-  return Math.abs(h) % 8
+  return Math.abs(h) % 24
+}
+
+/** ボード表示用：同一メッキ治具は常に同じ色（24色） */
+function schedColorIndexForPlatingMachine(machine: string): number {
+  const s = normalizeMachineKey(machine)
+  if (!s) return 0
+  let h = 0
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 33 + s.charCodeAt(i)) | 0
+  }
+  return Math.abs(h) % 24
 }
 
 const canUseLapCopy = computed(() => layoutBoardReady.value && layoutMaxLaps.value >= 2)
@@ -4035,11 +4066,17 @@ const lapBoardColCount = computed(() => {
   return Math.max(1, Math.min(300, j > 0 ? j : 1))
 })
 
-/** 列幅：空列・ヘッダー用の下限（ch）、製品名に応じて拡張（上限 MAX_LAP_COL_CH） */
-const MIN_LAP_COL_CH = 1.6
-const MAX_LAP_COL_CH = 28
+/** 列幅：空列・ヘッダー用の下限（ch）、内容に応じて拡張 */
+const MIN_LAP_COL_CH = 0.7
+/** 製品セル等の单列上限（ch） */
+const MAX_LAP_COL_CH = 22
+/** メッキ治具が占める单列上限（ch） */
+const MAX_LAP_JIG_COL_CH = 6
+/** メッキ治具ブロック全体の上限（標準 15 列分の 50%） */
+const MAX_LAP_JIG_BLOCK_TOTAL_CH = MAX_LAP_JIG_COL_CH * 7.5
 
 const lapLabelColWidth = '76px'
+const COMPACT_LAP_HEADER_THRESHOLD = 12
 
 /** ③ボード表示：「製品名 (本数)」例 5A54 (5) — 括弧内は当該表示ブロックのメッキ治具本数 */
 function formatPlatingBoardLabel(productName: string, jigUnits: number): string {
@@ -4048,9 +4085,66 @@ function formatPlatingBoardLabel(productName: string, jigUnits: number): string 
   return `${name} (${n})`
 }
 
-const lapColumnHeaders = computed(() =>
-  Array.from({ length: lapBoardColCount.value }, (_, i) => ({ i: i + 1 })),
+function splitColumnNumberDigits(value: number): string[] {
+  const n = Math.max(1, Math.floor(Number(value) || 1))
+  return String(n).split('')
+}
+
+const useCompactLapHeader = computed(() => lapBoardColCount.value >= COMPACT_LAP_HEADER_THRESHOLD)
+
+function buildCompactHeaderMarks(colCount: number): number[] {
+  const n = Math.max(1, Math.floor(Number(colCount) || 1))
+  const marks = new Set<number>([1])
+  for (let m = 30; m < n; m += 30) marks.add(m)
+  marks.add(n)
+  return Array.from(marks).sort((a, b) => a - b)
+}
+
+function compactHeaderMarkItems(colCount: number, widths: number[]): Array<{ value: number; leftPct: number }> {
+  const marks = buildCompactHeaderMarks(colCount)
+  const n = Math.max(1, Math.floor(Number(colCount) || 1))
+  const padded =
+    widths.length >= n
+      ? widths.slice(0, n)
+      : [...widths, ...Array.from({ length: n - widths.length }, (_, i) => lapColHeaderWidthCh(widths.length + i + 1))]
+  const total = padded.reduce((a, b) => a + b, 0) || 1
+  return marks.map((m) => {
+    const idx = Math.max(1, Math.min(n, m))
+    const before = padded.slice(0, idx - 1).reduce((a, b) => a + b, 0)
+    const center = before + (padded[idx - 1] ?? 0) / 2
+    return { value: m, leftPct: (center / total) * 100 }
+  })
+}
+
+const compactLapHeaderMarkItems = computed(() =>
+  compactHeaderMarkItems(lapBoardColCount.value, lapBoardColumnWidthsCh.value),
 )
+
+function buildCompactHeaderMarksHtml(colCount: number, widths: number[]): string {
+  return compactHeaderMarkItems(colCount, widths)
+    .map((m) => `<span class="lap-col-head-range-mark" style="left:${m.leftPct}%">${m.value}</span>`)
+    .join('')
+}
+
+/** 列幅（ch）に応じて表頭に縦表示できる桁数（狭い列は下位桁のみ） */
+function columnHeaderMaxVisibleDigits(widthCh: number): number {
+  return Math.max(1, Math.floor((widthCh + 0.18) / 0.62))
+}
+
+function visibleHeaderDigits(colNo: number, widthCh: number): string[] {
+  const all = splitColumnNumberDigits(colNo)
+  const maxVis = columnHeaderMaxVisibleDigits(widthCh)
+  return all.length <= maxVis ? all : all.slice(-maxVis)
+}
+
+function buildLapColumnHeadHtml(colNo: number, widthCh: number): string {
+  const digits = visibleHeaderDigits(colNo, widthCh)
+  const truncated = digits.length < splitColumnNumberDigits(colNo).length
+  const title = truncated ? ` title="${colNo}"` : ''
+  const inner = digits.map((d) => `<span class="lap-col-head-digit">${d}</span>`).join('')
+  const cls = truncated ? ' lap-col-head--truncated' : ''
+  return `<div class="lap-col-head${cls}"${title}><span class="lap-col-head-digits">${inner}</span></div>`
+}
 
 /** 1枚＝1セグメント（枠単位の削除・ドラッグ・枠色） */
 function cardsToDisplaySegments(cards: ScheduleCard[]): LapBarSegment[] {
@@ -4215,9 +4309,11 @@ function estimateTextWidthCh(text: string, fontScale = 1, padCh = 1.5): number {
   return Math.ceil(ch * fontScale) + padCh
 }
 
-/** 列ヘッダー「N本」用の最小幅 */
+/** 列ヘッダー数字（縦並び）用の最小幅 */
 function lapColHeaderWidthCh(colIndex: number): number {
-  return Math.max(MIN_LAP_COL_CH, estimateTextWidthCh(String(colIndex), 0.72, 0.8))
+  if (useCompactLapHeader.value) return MIN_LAP_COL_CH
+  const digitCount = splitColumnNumberDigits(colIndex).length
+  return Math.max(MIN_LAP_COL_CH, 0.62 + digitCount * 0.42)
 }
 
 function formatLapBoardGridColumns(widthsCh: number[]): string {
@@ -4233,31 +4329,46 @@ function formatLapBoardGridColumns(widthsCh: number[]): string {
 function computeLapBoardColumnWidthsCh(rows: LapGridRow[], colCount: number): number[] {
   const widths = Array.from({ length: colCount }, (_, i) => lapColHeaderWidthCh(i + 1))
 
-  const applySpanNeed = (startCol: number, span: number, needTotalCh: number) => {
+  const applySpanNeed = (
+    startCol: number,
+    span: number,
+    needTotalCh: number,
+    opts?: { maxTotalCh?: number; maxPerColCh?: number },
+  ) => {
     const start = Math.max(0, startCol - 1)
     const spanN = Math.max(1, Math.min(span, colCount - start))
     if (spanN <= 0) return
-    const need = Math.max(MIN_LAP_COL_CH, needTotalCh)
+    const perColCap = opts?.maxPerColCh ?? MAX_LAP_COL_CH
+    let need = Math.max(MIN_LAP_COL_CH, needTotalCh)
+    if (opts?.maxTotalCh != null) need = Math.min(need, opts.maxTotalCh)
     const current = widths.slice(start, start + spanN).reduce((a, b) => a + b, 0)
     if (need <= current) return
     const perCol = need / spanN
     for (let i = 0; i < spanN; i++) {
-      widths[start + i] = Math.min(MAX_LAP_COL_CH, Math.max(widths[start + i], perCol))
+      widths[start + i] = Math.min(perColCap, Math.max(widths[start + i], perCol))
     }
   }
 
   for (const row of rows) {
     if (row.mergedLeft) {
       for (const ms of row.mergedLeft) {
+        const jig = formatPlatingBoardLabel(ms.plating_machine, jigBlockFrameCount(ms, row.lap_no))
+        // 日文治具名在右上角小字号下容易被低估，这里提高估算并增加两侧余量
+        const jigNeedCh = estimateTextWidthCh(jig, 0.98, 1.6)
         const calc = formatJigBlockProductsCalc(ms, row.lap_no) ?? formatJigBlockProductCalc(ms, row.lap_no)
         let needCh: number
         if (calc) {
-          needCh = estimateTextWidthCh(calc, 1, 1.2)
+          // 预留 calc 左右 2px 内边距，同时保证右上角治具名也可单行完整显示
+          const calcNeedCh = estimateTextWidthCh(calc, 1, 1.4) + 0.8
+          needCh = Math.max(calcNeedCh, jigNeedCh)
+          applySpanNeed(ms.startCol, ms.span, needCh)
         } else {
-          const jig = formatPlatingBoardLabel(ms.plating_machine, jigBlockFrameCount(ms, row.lap_no))
-          needCh = estimateTextWidthCh(jig, 0.82, 0.8)
+          needCh = jigNeedCh
+          applySpanNeed(ms.startCol, ms.span, needCh, {
+            maxTotalCh: MAX_LAP_JIG_BLOCK_TOTAL_CH,
+            maxPerColCh: MAX_LAP_JIG_COL_CH,
+          })
         }
-        applySpanNeed(ms.startCol, ms.span, needCh)
       }
     }
     if (row.mergedTail) {
@@ -4277,12 +4388,32 @@ function computeLapBoardColumnWidthsCh(rows: LapGridRow[], colCount: number): nu
       })
     }
   }
+
+  for (let i = 0; i < colCount; i++) {
+    if (useCompactLapHeader.value) break
+    const no = i + 1
+    const vis = visibleHeaderDigits(no, widths[i])
+    const headerMin = Math.max(MIN_LAP_COL_CH, vis.length * 0.62 + 0.18)
+    widths[i] = Math.max(headerMin, widths[i])
+  }
   return widths
 }
 
 const lapBoardColumnWidthsCh = computed(() =>
   computeLapBoardColumnWidthsCh(lapGridRows.value, lapBoardColCount.value),
 )
+
+const lapColumnHeaders = computed(() => {
+  const widths = lapBoardColumnWidthsCh.value
+  const colCount = lapBoardColCount.value
+  return Array.from({ length: colCount }, (_, i) => {
+    const no = i + 1
+    const w = widths[i] ?? lapColHeaderWidthCh(no)
+    const digits = visibleHeaderDigits(no, w)
+    const fullLen = splitColumnNumberDigits(no).length
+    return { i: no, digits, truncated: digits.length < fullLen }
+  })
+})
 
 /** 右側本数列は横スクロール、周列は各行で sticky 固定（列幅は製品名で自動調整） */
 const lapBoardColsGridStyle = computed(() => ({
@@ -4294,13 +4425,24 @@ const lapBoardGridStyle = computed(() => ({
   gridTemplateColumns: `${lapLabelColWidth} ${formatLapBoardGridColumns(lapBoardColumnWidthsCh.value)}`,
 }))
 
-function lapBoardPrintGridColumns(colCount: number): string {
-  const widths = lapBoardColumnWidthsCh.value
-  const padded =
-    widths.length >= colCount
-      ? widths.slice(0, colCount)
-      : [...widths, ...Array.from({ length: colCount - widths.length }, (_, i) => lapColHeaderWidthCh(widths.length + i + 1))]
-  return formatLapBoardGridColumns(padded)
+/** 印刷：周列幅 + 本数列の合計 ch（A3 横向いっぱいに近づける） */
+const PRINT_RAIL_COL_W = '76px'
+const PRINT_BOARD_COLS_BUDGET_CH = 118
+
+/** 画面列幅の比率を保ちつつ印刷幅へスケール */
+function scaleWidthsToPrintBudget(screenWidths: number[], budgetCh: number): number[] {
+  if (screenWidths.length === 0) return []
+  const total = screenWidths.reduce((a, b) => a + b, 0) || 1
+  const factor = budgetCh / total
+  return screenWidths.map((w) => Math.max(0.28, w * factor))
+}
+
+function lapBoardPrintGridColumns(colCount: number, screenWidths?: number[]): string {
+  const src =
+    screenWidths && screenWidths.length >= colCount
+      ? screenWidths.slice(0, colCount)
+      : Array.from({ length: colCount }, (_, i) => lapColHeaderWidthCh(i + 1))
+  return formatLapBoardGridColumns(scaleWidthsToPrintBudget(src, PRINT_BOARD_COLS_BUDGET_CH))
 }
 
 /** 周目列：日付が変わる直前に日付区切り行を挿入 */
@@ -4565,6 +4707,61 @@ function escapeHtmlForPrint(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/** A3 横向（420×297mm）・内側余白 3mm */
+const PRINT_A3_PAGE_W_MM = 420
+const PRINT_A3_PAGE_H_MM = 297
+const PRINT_A3_PAD_MM = 3
+
+/** 印刷ページ内に収めて 1 ページ化（列幅比率は維持し、はみ出し時はフォント縮小→最後に transform） */
+function fitPrintBoardToOnePage(win: Window): void {
+  const doc = win.document
+  const page = doc.querySelector<HTMLElement>('.print-page')
+  const root = doc.querySelector<HTMLElement>('.print-fit-root')
+  if (!page || !root) return
+
+  const clearFit = () => {
+    root.style.transform = ''
+    root.style.width = ''
+    root.style.height = ''
+  }
+
+  const pageW = page.clientWidth
+  const pageH = page.clientHeight
+  if (pageW < 1 || pageH < 1) return
+
+  clearFit()
+  let fontMul = 1
+  root.style.setProperty('--print-font-mul', '1')
+
+  const measure = () => ({ w: root.scrollWidth, h: root.scrollHeight })
+  let { w: contentW, h: contentH } = measure()
+  if (contentW < 1 || contentH < 1) return
+
+  const minFontMul = 0.48
+  for (let i = 0; i < 28 && (contentW > pageW || contentH > pageH) && fontMul > minFontMul; i++) {
+    const ratio = Math.min(pageW / contentW, pageH / contentH) * 0.97
+    fontMul = Math.max(minFontMul, fontMul * ratio)
+    root.style.setProperty('--print-font-mul', String(fontMul))
+    clearFit()
+    ;({ w: contentW, h: contentH } = measure())
+  }
+
+  let scale = Math.min(pageW / contentW, pageH / contentH)
+  const scaleFillW = pageW / contentW
+  if (scaleFillW > scale && scaleFillW * contentH <= pageH * 0.995) {
+    scale = scaleFillW
+  }
+  const scaledW = contentW * scale
+  const scaledH = contentH * scale
+  const offsetX = Math.max(0, (pageW - scaledW) / 2)
+  const offsetY = Math.max(0, (pageH - scaledH) / 2)
+
+  root.style.transformOrigin = 'top left'
+  root.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`
+  root.style.width = `${contentW}px`
+  root.style.height = `${contentH}px`
+}
+
 
 function boardMarkSegClass(m: BoardMark, merged: boolean): string {
   if (m === 'manual') return merged ? 'lap-merged-seg--manual' : 'lap-segment--manual'
@@ -4572,28 +4769,11 @@ function boardMarkSegClass(m: BoardMark, merged: boolean): string {
   return ''
 }
 
-function buildLapDateRowPrintHtml(dateLabel: string, n: number): string {
-  const cols = lapBoardPrintGridColumns(n)
-  const gridStyle = `grid-template-columns:76px ${cols}`
-  return `<div class="lap-board-grid lap-board-date-row" style="${gridStyle}"><div class="lap-date-label">${escapeHtmlForPrint(
-    dateLabel,
-  )}</div><div class="lap-date-band"></div></div>`
-}
-
-/** 画面上の lap-board と同じ構造を印刷 HTML に組み立てる */
-function buildLapBoardRowPrintHtml(row: LapGridRow, n: number): string {
-  const cols = lapBoardPrintGridColumns(n)
-  const gridStyle = `grid-template-columns:76px ${cols}`
-  const innerGrid = `grid-template-columns:${cols}`
-  const timeLbl = lapTimeRangeLabel(row.lap_no)
-  const lapLabel = timeLbl
-    ? `第${row.lap_display_no}周目\n${timeLbl}`
-    : `第${row.lap_display_no}周目`
-
+function buildLapBoardRowGridPrintHtml(row: LapGridRow, n: number, gridCols: string): string {
   if (row.mergedLeft != null) {
     const leftSegs = row.mergedLeft
       .map((ms) => {
-        const ci = schedColorIndexForProductCd(ms.product_cd)
+        const ci = schedColorIndexForPlatingMachine(ms.plating_machine)
         const mk = boardMarkSegClass(ms.boardMark, true)
         const calc = formatJigBlockProductsCalc(ms, row.lap_no) ?? formatJigBlockProductCalc(ms, row.lap_no)
         const jigLbl = escapeHtmlForPrint(
@@ -4610,7 +4790,7 @@ function buildLapBoardRowPrintHtml(row: LapGridRow, n: number): string {
     if (tail != null && tail.length > 0) {
       const items = tail
         .map((tc) => {
-          const ci = schedColorIndexForProductCd(tc.product_cd)
+          const ci = schedColorIndexForPlatingMachine(tc.plating_machine)
           const mk = boardMarkSegClass(tc.boardMark, true)
           return `<div class="lap-merged-tail-item sched-color-${ci} ${mk}"><span class="lap-merged-text">${escapeHtmlForPrint(
             formatPlatingBoardLabel(tc.product_name, 1),
@@ -4619,16 +4799,14 @@ function buildLapBoardRowPrintHtml(row: LapGridRow, n: number): string {
         .join('')
       tailHtml = `<div class="lap-merged-tail" style="grid-column:${n} / span 1;grid-row:1">${items}</div>`
     }
-    return `<div class="lap-board-grid lap-board-body-row" style="${gridStyle}"><div class="lap-label">${escapeHtmlForPrint(
-      lapLabel,
-    )}</div><div class="lap-merged-host" style="${innerGrid}">${leftSegs}${tailHtml}</div></div>`
+    return `<div class="lap-merged-host" style="${gridCols}">${leftSegs}${tailHtml}</div>`
   }
 
   const cells = row.cells
     .map((cell) => {
       const segs = cell.segments
         .map((seg) => {
-          const ci = schedColorIndexForProductCd(seg.product_cd)
+          const ci = schedColorIndexForPlatingMachine(seg.plating_machine)
           const mk = boardMarkSegClass(seg.boardMark, false)
           return `<div class="lap-segment lap-segment--cell sched-color-${ci} ${mk}" style="flex:${seg.slotCount}"><span class="lap-segment-text">${escapeHtmlForPrint(
             formatPlatingBoardLabel(seg.product_name, 1),
@@ -4639,9 +4817,51 @@ function buildLapBoardRowPrintHtml(row: LapGridRow, n: number): string {
       return `<div class="lap-col${empty}"><div class="lap-track lap-track--grid">${segs}</div></div>`
     })
     .join('')
-  return `<div class="lap-board-grid lap-board-body-row" style="${gridStyle}"><div class="lap-label">${escapeHtmlForPrint(
-    lapLabel,
-  )}</div>${cells}</div>`
+  return cells
+}
+
+/** 画面と同じ lap-board-layout 構造で印刷 HTML を組み立てる */
+function buildPrintBoardLayoutHtml(displayRows: LapBoardDisplayItem[], n: number, colWidths: number[]): string {
+  const cols = formatLapBoardGridColumns(colWidths)
+  const gridCols = `grid-template-columns:${cols}`
+
+  const headCols = useCompactLapHeader.value
+    ? `<div class="lap-col-head-range">${buildCompactHeaderMarksHtml(n, colWidths)}</div>`
+    : Array.from({ length: n }, (_, i) => {
+        const no = i + 1
+        const w = colWidths[i] ?? lapColHeaderWidthCh(no)
+        return buildLapColumnHeadHtml(no, w)
+      }).join('')
+
+  const headRow = `<div class="lap-board-row lap-board-row--head">
+    <div class="lap-rail-cell lap-rail-head">周</div>
+    <div class="lap-board-grid lap-board-head" style="${gridCols}">${headCols}</div>
+  </div>`
+
+  const body = displayRows
+    .map((item) => {
+      if (item.kind === 'date') {
+        return `<div class="lap-board-row lap-board-row--date">
+          <div class="lap-rail-cell lap-rail-date">${escapeHtmlForPrint(item.dateLabel)}</div>
+          <div class="lap-board-grid lap-board-date-row lap-date-scroll-row" style="${gridCols}">
+            <div class="lap-date-band-scroll"></div>
+          </div>
+        </div>`
+      }
+      const row = item.row
+      const timeLbl = lapTimeRangeLabel(row.lap_no)
+      const lapNoHtml = `<span class="lap-label-no">第${row.lap_display_no}周目</span>`
+      const timeHtml = timeLbl ? `<span class="lap-label-time">${escapeHtmlForPrint(timeLbl)}</span>` : ''
+      return `<div class="lap-board-row lap-board-row--lap">
+        <div class="lap-rail-cell lap-rail-lap">${lapNoHtml}${timeHtml}</div>
+        <div class="lap-board-grid lap-board-body-row lap-board-body-row--lap" style="${gridCols}">
+          ${buildLapBoardRowGridPrintHtml(row, n, gridCols)}
+        </div>
+      </div>`
+    })
+    .join('')
+
+  return `<div class="lap-board-layout">${headRow}${body}</div>`
 }
 
 function printScheduleBoard() {
@@ -4654,7 +4874,6 @@ function printScheduleBoard() {
     ElMessage.warning('ボード表示がありません（追加レイアウトと割当を確認してください）')
     return
   }
-  const k = kpi.value
   const workDate = draftWorkDate.value || '—'
   const printedAt = dayjs().tz(TZ_JP).format('YYYY-MM-DD HH:mm:ss')
   const layoutDesc = layoutBoardReady.value
@@ -4662,20 +4881,11 @@ function printScheduleBoard() {
     : 'レイアウト：未確定（追加レイアウト未設定）'
 
   const n = lapBoardColCount.value
-  const headCols = Array.from({ length: n }, (_, i) => i + 1)
-    .map(
-      (i) =>
-        `<div class="lap-col-head"><span class="lap-col-head-n">${i}</span><span class="lap-col-head-s">本</span></div>`,
-    )
-    .join('')
-  const headGridStyle = `grid-template-columns:76px ${lapBoardPrintGridColumns(n)}`
-  const boardBody = displayRows
-    .map((item) =>
-      item.kind === 'date'
-        ? buildLapDateRowPrintHtml(item.dateLabel, n)
-        : buildLapBoardRowPrintHtml(item.row, n),
-    )
-    .join('')
+  const printColWidths = scaleWidthsToPrintBudget(lapBoardColumnWidthsCh.value.slice(0, n), PRINT_BOARD_COLS_BUDGET_CH)
+  const boardLayoutHtml = buildPrintBoardLayoutHtml(displayRows, n, printColWidths)
+
+  const innerW = PRINT_A3_PAGE_W_MM - PRINT_A3_PAD_MM * 2
+  const innerH = PRINT_A3_PAGE_H_MM - PRINT_A3_PAD_MM * 2
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
@@ -4684,88 +4894,143 @@ function printScheduleBoard() {
   <title>メッキ投入スケジュール ${escapeHtmlForPrint(workDate)}</title>
   <style>
     html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { font-family: 'Segoe UI', 'Hiragino Sans', Meiryo, sans-serif; margin: 12px; color: #303133; font-size: 11pt; background: #fff; }
-    .print-meta { margin-bottom: 8px; font-size: 10pt; color: #606266; line-height: 1.5; }
-    .print-meta span { display: inline-block; margin-right: 16px; }
-    .kpi-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    .kpi-chip {
-      display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
-      border: 1px solid #ebeef5; background: #fff;
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: ${PRINT_A3_PAGE_W_MM}mm; height: ${PRINT_A3_PAGE_H_MM}mm;
+      overflow: hidden; background: #fff;
     }
-    .kpi-chip-l { font-size: 11px; color: #909399; }
-    .kpi-chip-v { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: #303133; }
-    .lap-board { padding: 6px; border: 1px solid #ebeef5; border-radius: 8px; background: #fff; }
-    .lap-board-scroll { width: 100%; overflow: visible; border-radius: 6px; }
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', Meiryo, sans-serif;
+      color: #303133;
+      font-size: calc(8pt * var(--print-font-mul, 1));
+    }
+    .print-page {
+      width: ${innerW}mm; height: ${innerH}mm;
+      margin: ${PRINT_A3_PAD_MM}mm;
+      overflow: hidden;
+      position: relative;
+    }
+    .print-fit-root { display: block; width: max-content; max-width: none; }
+    .print-header-block { margin-bottom: 2mm; }
+    .print-title {
+      margin: 0 0 1mm; font-size: 11pt; font-weight: 700; color: #303133; line-height: 1.2;
+    }
+    .print-meta {
+      margin-bottom: 1mm; font-size: 7pt; color: #606266; line-height: 1.25;
+    }
+    .print-meta span { display: inline-block; margin-right: 8px; }
+    .lap-board { padding: 0; border: 1px solid #d9deea; border-radius: 6px; background: #fff; }
+    .lap-board-layout { display: flex; flex-direction: column; width: max-content; }
+    .lap-board-row {
+      display: grid; grid-template-columns: ${PRINT_RAIL_COL_W} max-content;
+      align-items: stretch; border-bottom: 1px solid #ebeef5;
+    }
+    .lap-board-row:last-child { border-bottom: none; }
+    .lap-rail-cell {
+      display: flex; flex-direction: column; align-items: flex-end; justify-content: center;
+      gap: 1px; padding: 2px 4px; border-right: 1px solid #ebeef5; background: #fff;
+    }
+    .lap-rail-head {
+      align-items: center; justify-content: center;
+      font-size: calc(9pt * var(--print-font-mul, 1)); font-weight: 700;
+      color: #606266; background: #f5f7fa;
+    }
+    .lap-rail-date {
+      font-size: calc(9pt * var(--print-font-mul, 1)); font-weight: 700; color: #1f5fd6;
+      background: color-mix(in oklab, #ecf5ff 90%, #fff);
+    }
+    .lap-rail-lap {
+      font-size: calc(8pt * var(--print-font-mul, 1)); font-weight: 600; color: #606266;
+    }
+    .lap-label-no { white-space: nowrap; }
+    .lap-label-time {
+      font-size: calc(7pt * var(--print-font-mul, 1)); font-weight: 700; color: #1f5fd6; white-space: nowrap;
+    }
     .lap-board-grid {
       display: grid; align-items: stretch; gap: 0; width: max-content; box-sizing: border-box;
     }
-    .lap-board-head {
-      margin-bottom: 0; border-radius: 6px 6px 0 0; overflow: hidden;
-      border: 1px solid #ebeef5; border-bottom: none; background: #fff;
+    .lap-board-head { background: #f5f7fa; min-height: calc(22px * var(--print-font-mul, 1)); }
+    .lap-board-body-row--lap { min-height: calc(24px * var(--print-font-mul, 1)); background: #fff; }
+    .lap-board-date-row,
+    .lap-date-scroll-row {
+      background: color-mix(in oklab, #ecf5ff 85%, #fff);
+      min-height: calc(20px * var(--print-font-mul, 1));
     }
-    .lap-board-body-row {
-      border: 1px solid #ebeef5; border-top: none; background: #fff;
-      break-inside: avoid; page-break-inside: avoid;
-    }
-    .lap-board-body-row:last-of-type { border-radius: 0 0 6px 6px; }
-    .lap-board-date-row {
-      border: 1px solid #ebeef5; border-top: none; background: #ecf5ff;
-      break-inside: avoid; page-break-inside: avoid;
-    }
-    .lap-date-label {
-      display: flex; align-items: center; justify-content: flex-end; padding: 4px 6px;
-      font-size: 11px; font-weight: 700; color: #409eff;
-      border-right: 1px solid #d9ecff; background: #ecf5ff;
-    }
-    .lap-date-band { grid-column: 2 / -1; min-height: 26px; background: #ecf5ff; }
-    .lap-corner {
-      display: flex; align-items: center; justify-content: center; padding: 5px 3px;
-      font-size: 10px; font-weight: 600; color: #909399;
-      border-right: 1px solid #ebeef5; background: #f5f7fa;
+    .lap-date-band-scroll {
+      grid-column: 1 / -1; min-height: calc(20px * var(--print-font-mul, 1));
+      background: color-mix(in oklab, #ecf5ff 55%, #fff);
     }
     .lap-col-head {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 1px; line-height: 1.15; padding: 5px 3px;
-      font-size: 10px; font-weight: 600; color: #909399;
+      gap: 0; line-height: 1.1; padding: 2px 1px;
+      font-size: calc(8pt * var(--print-font-mul, 1)); font-weight: 400; color: #909399;
       border-right: 1px solid #ebeef5; background: #f5f7fa;
     }
-    .lap-col-head-n { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: #409eff; }
-    .lap-col-head-s { font-size: 7px; font-weight: 500; opacity: 0.88; }
-    .lap-board-grid > *:last-child { border-right: none; }
-    .lap-board-body-row .lap-label {
-      display: flex; align-items: center; justify-content: flex-end; padding-right: 6px;
-      font-size: 11px; font-weight: 600; color: #909399;
-      border-right: 1px solid #ebeef5; background: #fff;
+    .lap-col-head-range {
+      grid-column: 1 / -1;
+      position: relative;
+      display: block;
+      font-size: calc(8pt * var(--print-font-mul, 1));
+      font-weight: 600;
+      color: #1f5fd6;
+      line-height: 1.05;
+      padding: 2px 4px;
+      border-right: none;
+      background: #f5f7fa;
+      min-height: calc(22px * var(--print-font-mul, 1));
+      border-top: 1px solid #cddfff;
     }
+    .lap-col-head-range-mark {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: inline-block;
+      min-width: 1ch;
+      text-align: center;
+      white-space: nowrap;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+    }
+    .lap-col-head-digits { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+    .lap-col-head-digit { font-size: calc(8pt * var(--print-font-mul, 1)); font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.06; color: #1f5fd6; }
+    .lap-board-grid > *:last-child { border-right: none; }
     .lap-merged-host {
-      grid-column: 2 / -1; display: grid; align-items: stretch; min-height: 38px;
-      box-sizing: border-box; border-right: none; overflow: hidden;
+      grid-column: 1 / -1; display: grid; align-items: stretch; min-height: calc(22px * var(--print-font-mul, 1));
+      box-sizing: border-box; overflow: hidden;
     }
     .lap-merged-seg {
       position: relative; min-width: 0; max-width: 100%;
-      padding: 3px 4px; margin: 2px 0; box-sizing: border-box;
-      border: 1px solid rgba(0,0,0,0.06); border-radius: 6px; overflow: hidden;
+      padding: 2px 3px; margin: 1px 0; box-sizing: border-box;
+      border: 0.5px solid rgba(48,67,96,0.2); border-radius: 5px; overflow: hidden;
+      box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.4);
     }
     .lap-merged-seg--manual { outline: 2px solid #fa8c16; outline-offset: -1px; z-index: 1; }
     .lap-merged-seg--rush { outline: 2px solid #cf1322; outline-offset: -1px; z-index: 1; }
     .lap-merged-label-stack {
-      position: absolute; top: 2px; right: 3px; left: 3px; bottom: 2px;
-      display: flex; flex-direction: column; align-items: stretch; gap: 2px; overflow: hidden;
+      position: absolute; top: 1px; right: 2px; left: 2px; bottom: 1px;
+      display: flex; flex-direction: column; align-items: stretch; gap: 1px; overflow: hidden;
+      pointer-events: none;
     }
-    .lap-merged-text { line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: #303133; }
-    .lap-merged-text--jig { align-self: flex-end; font-size: 9px; text-align: right; }
-    .lap-merged-text--calc { position: absolute; left: 0; right: 0; bottom: 0; top: auto; font-size: 11px; text-align: left; font-weight: 700; color: #409eff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lap-merged-text { line-height: 1.15; font-weight: 600; color: #303133; font-size: calc(5pt * var(--print-font-mul, 1)); }
+    .lap-merged-text--jig {
+      align-self: flex-end; font-size: calc(4pt * var(--print-font-mul, 1)); text-align: right; white-space: nowrap;
+      max-width: 100%; padding: 0 2px; box-sizing: border-box;
+    }
+    .lap-merged-text--calc {
+      align-self: flex-start; margin-top: auto;
+      font-size: calc(5pt * var(--print-font-mul, 1)); text-align: left; font-weight: 700;
+      color: #1f5fd6; white-space: nowrap; overflow: hidden; text-overflow: clip; padding: 0 2px; box-sizing: border-box;
+    }
     .lap-merged-tail {
-      display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 100%; padding: 2px;
+      display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 100%; padding: 1px;
       box-sizing: border-box; border-left: 1px solid #ebeef5; overflow: hidden;
     }
     .lap-merged-tail-item {
-      position: relative; flex: 0 0 auto; min-width: 0; max-width: 100%; min-height: 22px;
-      padding: 2px 3px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.06); box-sizing: border-box; overflow: hidden;
+      position: relative; flex: 0 0 auto; min-width: 0; max-width: 100%; min-height: 16px;
+      padding: 1px 2px; border-radius: 3px; border: 0.5px solid rgba(48,67,96,0.2); box-sizing: border-box; overflow: hidden;
     }
     .lap-merged-tail-item .lap-merged-text { display: block; width: 100%; box-sizing: border-box; }
     .lap-col {
-      min-width: 0; max-width: 100%; border-right: 1px solid #ebeef5; padding: 2px 1px;
+      min-width: 0; max-width: 100%; border-right: 1px solid #ebeef5; padding: 1px;
       display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
     }
     .lap-col--empty .lap-track--grid { opacity: 0.55; }
@@ -4777,51 +5042,70 @@ function printScheduleBoard() {
     .sched-color-5 { background: #e5d9b8; }
     .sched-color-6 { background: #cdd5e0; }
     .sched-color-7 { background: #e0cfcf; }
+    .sched-color-8 { background: #d7e7f8; }
+    .sched-color-9 { background: #d8f0e2; }
+    .sched-color-10 { background: #f8e3d4; }
+    .sched-color-11 { background: #e6dcf8; }
+    .sched-color-12 { background: #d6ecef; }
+    .sched-color-13 { background: #f2e6c9; }
+    .sched-color-14 { background: #d8dbe9; }
+    .sched-color-15 { background: #f0dadd; }
+    .sched-color-16 { background: #d4eaf0; }
+    .sched-color-17 { background: #e2edd4; }
+    .sched-color-18 { background: #f3dfcf; }
+    .sched-color-19 { background: #ddd5ee; }
+    .sched-color-20 { background: #cfe8e2; }
+    .sched-color-21 { background: #ece2bf; }
+    .sched-color-22 { background: #d3d9e6; }
+    .sched-color-23 { background: #ebd8d8; }
     .lap-track--grid {
-      flex: 1; display: flex; flex-direction: column; min-height: 36px; gap: 2px;
-      border-radius: 4px; overflow: hidden; background: #f5f7fa;
+      flex: 1; display: flex; flex-direction: column; min-height: 12px; gap: 1px;
+      border-radius: 3px; overflow: hidden; background: #f5f7fa;
     }
     .lap-segment--cell {
-      position: relative; min-width: 0; max-width: 100%; min-height: 20px; padding: 2px 4px; border-radius: 2px; overflow: hidden;
+      position: relative; min-width: 0; max-width: 100%; min-height: 16px; padding: 1px 2px; border-radius: 2px; overflow: hidden;
     }
     .lap-segment--manual { outline: 2px solid #fa8c16; outline-offset: -1px; z-index: 1; }
     .lap-segment--rush { outline: 2px solid #cf1322; outline-offset: -1px; z-index: 1; }
     .lap-segment-text {
-      display: block; position: absolute; top: 2px; right: 3px; left: 3px;
-      font-size: 9px; line-height: 1.2; text-align: right; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 6px); font-weight: 600; box-sizing: border-box;
+      display: block; font-size: calc(5pt * var(--print-font-mul, 1)); line-height: 1.15;
+      text-align: right; white-space: nowrap; overflow: hidden; text-overflow: clip;
+      font-weight: 600; box-sizing: border-box;
     }
     @media print {
-      @page { size: A3 landscape; margin: 8mm; }
-      html, body { margin: 0; padding: 0; }
+      @page { size: ${PRINT_A3_PAGE_W_MM}mm ${PRINT_A3_PAGE_H_MM}mm; margin: 0; }
+      @page { size: A3 landscape; margin: 0; }
+      html, body {
+        margin: 0 !important; padding: 0 !important;
+        width: ${PRINT_A3_PAGE_W_MM}mm !important; height: ${PRINT_A3_PAGE_H_MM}mm !important;
+        overflow: hidden !important;
+      }
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      .kpi-grid { break-inside: avoid; }
-      .lap-board { break-inside: avoid; }
+      .print-page {
+        width: ${innerW}mm !important; height: ${innerH}mm !important;
+        margin: ${PRINT_A3_PAD_MM}mm !important; overflow: hidden !important;
+        page-break-after: avoid; page-break-inside: avoid;
+      }
+      .print-fit-root, .print-board-target, .lap-board, .lap-board-layout, .lap-board-grid {
+        page-break-inside: avoid;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="print-meta">
-    <span>作業日：${escapeHtmlForPrint(workDate)}</span>
-    <span>印刷日時（JST）：${printedAt}</span>
-    <span>${escapeHtmlForPrint(layoutDesc)}</span>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi-chip"><span class="kpi-chip-l">総治具数</span><span class="kpi-chip-v">${k.totalSlots}</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">使用中</span><span class="kpi-chip-v">${k.usedSlots}</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">空き枠</span><span class="kpi-chip-v">${k.remainSlots}</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">充填率</span><span class="kpi-chip-v">${k.utilizationPct}%</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">見込み時間（分）</span><span class="kpi-chip-v">${k.estimatedMinutes}</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">割当枠数</span><span class="kpi-chip-v">${scheduleCards.value.length}</span></div>
-    <div class="kpi-chip"><span class="kpi-chip-l">生産数量合計</span><span class="kpi-chip-v">${k.totalProductQty}</span></div>
-  </div>
-  <div class="lap-board">
-    <div class="lap-board-scroll">
-      <div class="lap-board-grid lap-board-head" style="${headGridStyle}">
-        <div class="lap-corner">周</div>
-        ${headCols}
+  <div class="print-page">
+    <div class="print-fit-root">
+      <div class="print-header-block">
+        <h1 class="print-title">メッキ投入スケジュールボード</h1>
+        <div class="print-meta">
+          <span>作業日：${escapeHtmlForPrint(workDate)}</span>
+          <span>印刷日時（JST）：${printedAt}</span>
+          <span>${escapeHtmlForPrint(layoutDesc)}</span>
+        </div>
       </div>
-      ${boardBody}
+      <div class="print-board-target">
+        <div class="lap-board">${boardLayoutHtml}</div>
+      </div>
     </div>
   </div>
 </body>
@@ -4836,10 +5120,10 @@ function printScheduleBoard() {
   iframe.title = 'メッキ投入スケジュール印刷'
   iframe.style.cssText = [
     'position:fixed',
-    'left:-12000px',
+    'left:-20000px',
     'top:0',
-    'width:420mm',
-    'min-height:297mm',
+    `width:${PRINT_A3_PAGE_W_MM}mm`,
+    `height:${PRINT_A3_PAGE_H_MM}mm`,
     'border:0',
     'opacity:0',
     'pointer-events:none',
@@ -4869,6 +5153,7 @@ function printScheduleBoard() {
     if (printed) return
     printed = true
     try {
+      fitPrintBoardToOnePage(win)
       win.focus()
       win.print()
     } catch {
@@ -4880,7 +5165,9 @@ function printScheduleBoard() {
 
   const schedulePrint = () => {
     requestAnimationFrame(() => {
-      requestAnimationFrame(doPrint)
+      requestAnimationFrame(() => {
+        window.setTimeout(doPrint, 50)
+      })
     })
   }
 
@@ -6149,7 +6436,7 @@ onBeforeUnmount(() => {
 }
 
 .lap-board-outer {
-  --lap-board-head-h: 36px;
+  --lap-board-head-h: 40px;
   --lap-board-lap-row-h: 38px;
   --lap-board-visible-laps: 8;
   width: 100%;
@@ -6157,9 +6444,10 @@ onBeforeUnmount(() => {
   max-height: calc(var(--lap-board-head-h) + var(--lap-board-visible-laps) * var(--lap-board-lap-row-h));
   overflow: auto;
   scrollbar-gutter: stable;
-  border-radius: 6px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-bg-color);
+  border-radius: 8px;
+  border: 1px solid color-mix(in oklab, var(--el-border-color) 70%, var(--el-border-color-lighter));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--el-fill-color-light) 35%, var(--el-bg-color)) 0%, var(--el-bg-color) 20%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .lap-board-layout {
@@ -6173,7 +6461,7 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 76px max-content;
   align-items: stretch;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid color-mix(in oklab, var(--el-border-color-lighter) 75%, var(--el-border-color));
 }
 
 .lap-board-row:last-child {
@@ -6193,14 +6481,14 @@ onBeforeUnmount(() => {
   z-index: 2;
   border-right: 1px solid var(--el-border-color-lighter);
   background: var(--el-fill-color-blank);
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 2px 0 8px rgba(31, 50, 81, 0.08);
 }
 
 .lap-board-row--head {
   position: sticky;
   top: 0;
   z-index: 4;
-  background: var(--el-bg-color);
+  background: color-mix(in oklab, var(--el-fill-color-light) 68%, var(--el-bg-color));
 }
 
 .lap-board-row--head .lap-rail-cell,
@@ -6212,13 +6500,16 @@ onBeforeUnmount(() => {
   z-index: 5;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in oklab, var(--el-text-color-primary) 72%, var(--el-text-color-secondary));
   background: var(--el-fill-color-light);
 }
 
 .lap-board-row--head .lap-col-head {
+  align-self: stretch;
+  min-height: 100%;
   background: var(--el-fill-color-light);
 }
 
@@ -6287,31 +6578,66 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 3px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--el-text-color-secondary);
+  padding: 4px 3px;
+  font-size: 11px;
+  font-weight: 400;
+  color: color-mix(in oklab, var(--el-text-color-primary) 72%, var(--el-text-color-secondary));
   border-right: 1px solid var(--el-border-color-lighter);
   background: var(--el-fill-color-light);
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 
 .lap-col-head {
   flex-direction: column;
-  gap: 1px;
-  line-height: 1.15;
+  gap: 0;
+  line-height: 1.1;
 }
 
-.lap-col-head-n {
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--el-color-primary);
+.lap-col-head-range {
+  grid-column: 1 / -1;
+  position: relative;
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #1f5fd6;
+  line-height: 1.1;
+  padding: 3px 4px;
+  min-height: 24px;
+  border-top: 1px solid color-mix(in oklab, var(--el-color-primary-light-7) 45%, var(--el-border-color-lighter));
+  background: linear-gradient(180deg, color-mix(in oklab, var(--el-color-primary-light-9) 38%, var(--el-fill-color-light)) 0%, var(--el-fill-color-light) 95%);
 }
 
-.lap-col-head-s {
-  font-size: 7px;
+.lap-col-head-range-mark {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-block;
+  min-width: 1ch;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.lap-col-head-digits {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.lap-col-head-digit {
+  font-size: 10.5px;
   font-weight: 500;
-  opacity: 0.88;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.06;
+  color: #1f5fd6;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.lap-col-head--truncated .lap-col-head-digit {
+  opacity: 0.92;
 }
 
 .lap-board-grid > *:last-child {
@@ -6345,12 +6671,14 @@ onBeforeUnmount(() => {
   position: relative;
   min-width: 0;
   max-width: 100%;
+  max-inline-size: 100%;
   padding: 3px 4px;
   margin: 2px 0;
   box-sizing: border-box;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 0.5px solid rgba(48, 67, 96, 0.2);
   border-radius: 6px;
   overflow: hidden;
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.45);
 }
 
 .lap-merged-seg--manual {
@@ -6393,14 +6721,15 @@ onBeforeUnmount(() => {
   align-items: stretch;
   gap: 2px;
   pointer-events: none;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .lap-merged-text {
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-word;
   max-width: 100%;
   font-weight: 600;
   color: var(--el-text-color-primary);
@@ -6410,19 +6739,31 @@ onBeforeUnmount(() => {
   align-self: flex-end;
   font-size: 9px;
   text-align: right;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: normal;
+  padding: 0 2px;
+  box-sizing: border-box;
 }
 
 .lap-merged-text--calc {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: static;
+  left: auto;
+  right: auto;
+  bottom: auto;
   top: auto;
   transform: none;
   font-size: 11px;
   text-align: left;
   font-weight: 700;
   color: color-mix(in oklab, var(--el-color-primary) 75%, var(--el-text-color-primary));
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: normal;
+  padding: 0 2px;
+  box-sizing: border-box;
 }
 
 .lap-merged-seg--product-drop {
@@ -6454,7 +6795,7 @@ onBeforeUnmount(() => {
   min-height: 22px;
   padding: 2px 3px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  border: 0.5px solid rgba(48, 67, 96, 0.2);
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -6489,6 +6830,22 @@ onBeforeUnmount(() => {
 .sched-color-5 { background: #e5d9b8; }
 .sched-color-6 { background: #cdd5e0; }
 .sched-color-7 { background: #e0cfcf; }
+.sched-color-8 { background: #d7e7f8; }
+.sched-color-9 { background: #d8f0e2; }
+.sched-color-10 { background: #f8e3d4; }
+.sched-color-11 { background: #e6dcf8; }
+.sched-color-12 { background: #d6ecef; }
+.sched-color-13 { background: #f2e6c9; }
+.sched-color-14 { background: #d8dbe9; }
+.sched-color-15 { background: #f0dadd; }
+.sched-color-16 { background: #d4eaf0; }
+.sched-color-17 { background: #e2edd4; }
+.sched-color-18 { background: #f3dfcf; }
+.sched-color-19 { background: #ddd5ee; }
+.sched-color-20 { background: #cfe8e2; }
+.sched-color-21 { background: #ece2bf; }
+.sched-color-22 { background: #d3d9e6; }
+.sched-color-23 { background: #ebd8d8; }
 
 .lap-track--grid {
   flex: 1;
@@ -6499,7 +6856,7 @@ onBeforeUnmount(() => {
   gap: 2px;
   border-radius: 4px;
   overflow: hidden;
-  background: var(--el-fill-color);
+  background: color-mix(in oklab, var(--el-fill-color-light) 68%, var(--el-fill-color));
 }
 
 .lap-segment--cell {
@@ -6532,21 +6889,24 @@ onBeforeUnmount(() => {
 
 .lap-segment-text {
   display: block;
-  position: absolute;
-  top: 2px;
-  right: 3px;
-  left: 3px;
-  font-size: 9px;
-  line-height: 1.2;
+  position: static;
+  top: auto;
+  right: auto;
+  left: auto;
+  font-size: 9.5px;
+  line-height: 1.18;
   text-align: right;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: calc(100% - 6px);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  word-break: break-word;
   box-sizing: border-box;
   font-weight: 600;
   color: var(--el-text-color-primary);
   pointer-events: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 
 .board-empty {
