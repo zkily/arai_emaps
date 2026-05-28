@@ -485,6 +485,9 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchPlanBaselineComparison } from '@/api/planBaseline'
+import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
+/** ERP/MES 统一走 MES 计划数据接口（与成型页保持一致） */
+const planDataApiPath = computed(() => '/api/mes/forming-plan-data')
 
 /** API 响应类型（request 拦截器返回 response.data） */
 interface ApiResponse<T = unknown> {
@@ -495,7 +498,7 @@ interface ApiResponse<T = unknown> {
   records?: unknown[]
 }
 
-/** 日別チャート用（excel-monitor plan-data レコードの一部） */
+/** 日別チャート用（MES plan-data レコードの一部） */
 interface PlanQtyChartRecord {
   plan_date?: string
   product_name?: string
@@ -517,9 +520,11 @@ const planSelectedDate = computed<string>({
   set: (value) => {
     if (!value) {
       planSearchForm.dateRange = []
+      specifiedWorkingDays.value = null
       return
     }
     planSearchForm.dateRange = [value, value]
+    setSpecifiedWorkingDaysByMonth(value)
   },
 })
 
@@ -626,8 +631,30 @@ const updatingEfficiency = ref(false)
 const updateEfficiencyDialogVisible = ref(false)
 const printingSetupSchedule = ref(false)
 
-// 指定工作日天数（用于基准日平均生产数计算，null表示自动计算）
+// 指定工作日天数（用于基准日平均生产数计算，默认按“生産日所选月份”的工作日数）
 const specifiedWorkingDays = ref<number | null>(20)
+
+const countWorkingDaysInMonth = (dateStr: string): number => {
+  const [yearStr, monthStr] = (dateStr || '').split('-')
+  const year = Number(yearStr)
+  const month = Number(monthStr)
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return 20
+  }
+  const daysInMonth = new Date(year, month, 0).getDate()
+  let workingDays = 0
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const weekDay = new Date(year, month - 1, day).getDay()
+    if (weekDay !== 0 && weekDay !== 6) {
+      workingDays += 1
+    }
+  }
+  return Math.max(1, workingDays)
+}
+
+const setSpecifiedWorkingDaysByMonth = (baseDate: string) => {
+  specifiedWorkingDays.value = countWorkingDaysInMonth(baseDate)
+}
 
 const isApiSuccess = (res: any): boolean => {
   if (res && typeof res === 'object' && 'success' in res) {
@@ -691,6 +718,7 @@ const initializeSearchForm = () => {
   // 生産日を当日に設定（日本時区）
   const todayStr = JapanDateUtils.getTodayString()
   planSearchForm.dateRange = [todayStr, todayStr]
+  setSpecifiedWorkingDaysByMonth(todayStr)
 
   // 設備名は空（全設備を表示）
   planSearchForm.machineName = ''
@@ -716,6 +744,7 @@ const setDateRange = (daysOffset: number) => {
 
   const dateStr = JapanDateUtils.getDateString(targetDate)
   planSearchForm.dateRange = [dateStr, dateStr]
+  setSpecifiedWorkingDaysByMonth(dateStr)
 
   // 自動的に検索を実行
   searchPlans()
@@ -774,7 +803,9 @@ const loadPlanData = async () => {
     params.limit = 10000
 
     console.log('計画データクエリパラメータ:', params)
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse<{ records: any[] }>
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse<{
+      records: any[]
+    }>
     console.log('計画データAPI応答:', result)
 
     if (result.success && result.data) {
@@ -958,7 +989,9 @@ const calculatePlanStats = async () => {
     params.limit = 10000
 
     console.log('統計クエリパラメータ:', params)
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse<{ records: any[] }>
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse<{
+      records: any[]
+    }>
 
     if (result.success && result.data) {
       const records = result.data.records ?? []
@@ -1486,7 +1519,7 @@ const calculateSmartDateRange = async () => {
       } else {
         // 週末は生産計画データがあるかチェック
         try {
-          const result = (await request.get('/api/excel-monitor/plan-data', {
+          const result = (await request.get(planDataApiPath.value, {
             params: {
               startDate: dateStr,
               endDate: dateStr,
@@ -1511,7 +1544,7 @@ const calculateSmartDateRange = async () => {
             planData = result.data.records
           }
 
-          // 工程名が'成型'のデータをフィルタリング（溶接ページではこのフィルタリングは不要）
+          // 溶接ページでは工程名の追加フィルタリングは不要
           const filteredPlanData = planData
 
           // 生産計画数が0より大きいデータがあるかチェック
@@ -1590,7 +1623,7 @@ const getFullPlanDataForPrint = async () => {
     params.processName = '溶接'
 
     // 完全なデータを取得（ページングなし）
-    const result = (await request.get('/api/excel-monitor/plan-data', {
+    const result = (await request.get(planDataApiPath.value, {
       params: {
         ...params,
         page: 1,
@@ -2601,7 +2634,7 @@ const refreshPlanData = () => {
   loadWeldingPlanComparisonSummary({ silent: true, workingDays: specifiedWorkingDays.value })
 }
 
-// 日別計画・実績チャート（溶接・/api/excel-monitor/plan-data）
+// 日別計画・実績チャート（溶接・MES plan-data）
 const planQtyChartDates = computed(() => {
   if (!planQtyChartDateRange.value || planQtyChartDateRange.value.length !== 2) return [] as string[]
   const [start, end] = planQtyChartDateRange.value
@@ -2925,7 +2958,7 @@ const loadPlanQtyChartData = async () => {
       page: 1,
       limit: 10000,
     }
-    const result = (await request.get('/api/excel-monitor/plan-data', { params })) as ApiResponse<{
+    const result = (await request.get(planDataApiPath.value, { params })) as ApiResponse<{
       records?: unknown[]
     }>
     if (result.success && Array.isArray(result.data?.records)) {
@@ -3147,67 +3180,114 @@ type OperationVarianceRow = {
   operation_variance: number | null
 }
 
+const getOperationVarianceJudgment = (value: number | null | undefined): string => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  if (n > 10) return '大幅な先行'
+  if (n > 2) return '先行'
+  if (n < -10) return '大幅な遅れ'
+  if (n < -2) return '遅れ'
+  return '正常'
+}
+
+const formatOperationVarianceHours = (value: number | null | undefined): string => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  return Math.trunc(n).toLocaleString('ja-JP')
+}
+
+const getOperationVarianceJudgmentClass = (value: number | null | undefined): string => {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  if (n > 10) return 'variance-judge-very-ahead'
+  if (n > 2) return 'variance-judge-ahead'
+  if (n < -10) return 'variance-judge-very-delay'
+  if (n < -2) return 'variance-judge-delay'
+  return 'variance-judge-normal'
+}
+
 const getOperationVarianceRows = async (): Promise<OperationVarianceRow[]> => {
   try {
     const productionDate =
       (planSearchForm.dateRange && planSearchForm.dateRange[0]) || JapanDateUtils.getTodayString()
+    const toYmRange = (dateStr: string): [string, string] | null => {
+      const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-\d{2}$/)
+      if (!m) return null
+      const year = Number(m[1])
+      const month = Number(m[2])
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null
+      const start = `${year}-${String(month).padStart(2, '0')}-01`
+      const endDate = new Date(year, month, 0).getDate()
+      const end = `${year}-${String(month).padStart(2, '0')}-${String(endDate).padStart(2, '0')}`
+      return [start, end]
+    }
 
-    // 同时准备不带前导零和带前导零的月份，避免 1 / 01 差异导致的匹配问题
-    let monthNoPad = ''
-    let monthPadded = ''
-    if (productionDate) {
-      try {
-        const dateObj = new Date(productionDate + 'T00:00:00')
-        if (!isNaN(dateObj.getTime())) {
-          const monthNum = dateObj.getMonth() + 1
-          monthNoPad = String(monthNum)
-          monthPadded = String(monthNum).padStart(2, '0')
-        }
-      } catch (error) {
-        console.warn('生产日解析失败，无法提取月份用于操業度差異查询:', error)
+    const monthRange = toYmRange(productionDate)
+    if (!monthRange) return []
+    const [startDate, endDate] = monthRange
+    const processCd = 'KT07'
+
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(startDate, endDate, undefined, processCd),
+      fetchLines(processCd),
+    ])
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
+
+    const monthDates = Array.isArray(grid?.dates) ? grid.dates : []
+    if (monthDates.length === 0) return []
+
+    const flatRows: Array<ScheduleGridRow & { line_id: number; lineLabel: string }> = []
+    for (const block of (grid as SchedulingGridResponse).blocks || []) {
+      const label =
+        lineNameById.get(block.line_id) ||
+        String((block as { line_name?: string }).line_name || '').trim() ||
+        block.line_code ||
+        `ID ${block.line_id}`
+      for (const r of block.rows || []) {
+        flatRows.push({ ...r, line_id: block.line_id, lineLabel: label })
       }
     }
 
-    const fetchVariance = async (fileMonth?: string) => {
-      const params: Record<string, string> = {}
-      if (fileMonth) params.fileName = `${fileMonth}月`
-      return await request.get('/api/operation-rate', { params })
+    const lastActualByLine = new Map<number, string | null>()
+    for (const row of flatRows) lastActualByLine.set(row.line_id, null)
+    for (const d of monthDates) {
+      const daySum = new Map<number, number>()
+      for (const row of flatRows) {
+        daySum.set(row.line_id, (daySum.get(row.line_id) ?? 0) + Number(row.actual_daily?.[d] ?? 0))
+      }
+      for (const [lineId, v] of daySum) {
+        if (v > 0) lastActualByLine.set(lineId, d)
+      }
     }
 
-    const parseRows = (res: any): any[] => {
-      if (Array.isArray(res)) return res
-      if (Array.isArray(res?.data)) return res.data
-      if (Array.isArray(res?.data?.data)) return res.data.data
-      return []
+    const varianceMap = new Map<number, { machine_name: string; operation_variance: number }>()
+    for (const row of flatRows) {
+      const lineId = row.line_id
+      const endDay = lastActualByLine.get(lineId)
+      const diffDates = endDay ? monthDates.filter((d) => d <= endDay) : []
+      const diffQty = diffDates.reduce((sum, d) => {
+        const p = Number(row.daily?.[d] ?? 0)
+        const a = Number(row.actual_daily?.[d] ?? 0)
+        return sum + (a - p)
+      }, 0)
+      const rate = Number(row.efficiency_rate ?? 0)
+      const diffHours = rate > 0 ? diffQty / rate : 0
+      const current = varianceMap.get(lineId) ?? {
+        machine_name: (row as any).lineLabel || `ID ${lineId}`,
+        operation_variance: 0,
+      }
+      current.operation_variance += diffHours
+      varianceMap.set(lineId, current)
     }
 
-    // 第一次尝试：不带前导零的月份（如 1）
-    let res = await fetchVariance(monthNoPad || undefined)
-    let rowsData = parseRows(res)
-
-    // 如果没有数据，再用带前导零的月份（如 01）重试
-    if ((!rowsData || rowsData.length === 0) && monthPadded && monthPadded !== monthNoPad) {
-      console.log('操業度差異数据为空，使用前导零月份重试:', monthPadded)
-      res = await fetchVariance(monthPadded)
-      rowsData = parseRows(res)
-    }
-
-    console.log('操業度差異 raw response:', res)
-    console.log('操業度差異 rowsData length:', rowsData.length)
-
-    const rows = rowsData
-      .filter((item) => item && item.machine_name)
-      .map((item) => ({
-        machine_name: item.machine_name,
-        operation_variance:
-          item.operation_variance === null || item.operation_variance === undefined
-            ? null
-            : Number(item.operation_variance),
-      }))
-      .filter((row) => row.machine_name.includes('溶接'))
-      .sort((a, b) => a.machine_name.localeCompare(b.machine_name, 'ja'))
-    console.log('操業度差異 rows after filtering:', rows)
-    return rows
+    return Array.from(varianceMap.values()).sort((a, b) =>
+      a.machine_name.localeCompare(b.machine_name, 'ja'),
+    )
   } catch (error) {
     console.error('操業度データ取得失敗:', error)
     return []
@@ -3918,6 +3998,36 @@ const generateSetupScheduleContent = async (planData: any[]) => {
           text-align: center;
         }
 
+        .variance-negative {
+          color: #dc2626;
+          font-weight: 700;
+        }
+
+        .variance-judge-normal {
+          color: #065f46;
+          font-weight: 700;
+        }
+
+        .variance-judge-ahead {
+          color: #1d4ed8;
+          font-weight: 700;
+        }
+
+        .variance-judge-very-ahead {
+          color: #7e22ce;
+          font-weight: 700;
+        }
+
+        .variance-judge-delay {
+          color: #b45309;
+          font-weight: 700;
+        }
+
+        .variance-judge-very-delay {
+          color: #b91c1c;
+          font-weight: 700;
+        }
+
         .no-data-cell.small {
           font-size: 12px;
           height: 60px;
@@ -4146,27 +4256,15 @@ const generateSetupScheduleContent = async (planData: any[]) => {
         <div class="table-wrapper">
         <table class="main-table">
           <thead>
-              <tr>
-                <th
-                  colspan="3"
-                  style="width: 20%; border: 2px solid #000; border-bottom: none;"
-                >
-                  ${planComparisonSummaryForPrint.lastActualDate || currentDateTime.split(' ')[0]}まで実績(参考)
-                </th>
-                <th rowspan="2" style="width: 1%; border: none;"></th>
-                <th rowspan="2" style="width: 7%; border-left: 2px solid #000;">ライン</th>
-              <th rowspan="2" style="width: 10%;">生産品種</th>
-              <th rowspan="2" style="width: 6%;">能率</th>
-              <th rowspan="2" style="width: 7%;">当日計画数</th>
-              <th rowspan="2" style="width: 10%;">所要生産時間(h)</th>
-              <th rowspan="2" style="width: 10%;">次生産品種</th>
-              <th rowspan="2" style="width: 11%;">次生産品種計画数</th>
-              <th rowspan="2" style="width: 9%;">備考(参考)</th>
-            </tr>
             <tr>
-                <th style="width: 6%;">総計画数</th>
-                <th style="width: 5%;">実績</th>
-                <th style="width: 6%; border-right: 2px solid #000;">生産残数</th>
+              <th style="width: 10%;">ライン</th>
+              <th style="width: 16%;">生産品種</th>
+              <th style="width: 9%;">能率</th>
+              <th style="width: 12%;">当日計画数</th>
+              <th style="width: 13%;">所要生産時間(h)</th>
+              <th style="width: 16%;">次生産品種</th>
+              <th style="width: 12%;">次生産品種計画数</th>
+              <th style="width: 12%;">備考(参考)</th>
             </tr>
           </thead>
           <tbody>
@@ -4174,11 +4272,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
               .map((row) => {
                 return `
               <tr>
-                <td class="numeric-cell">${formatPrintableNumber(row.totalPlanQuantity)}</td>
-                <td class="numeric-cell">${formatPrintableNumber(row.actualProduction)}</td>
-                <td class="numeric-cell" style="border-right: 2px solid #000;">${formatPrintableNumber(row.remainingProduction)}</td>
-                <td style="border: none;"></td>
-                <td style="border-left: 2px solid #000;">${row.line}</td>
+                <td>${row.line}</td>
                 <td>${row.productName}</td>
                 <td class="numeric-cell">${row.efficiency || ''}</td>
                 <td class="numeric-cell">${formatPrintableNumber(row.planQuantity)}</td>
@@ -4202,6 +4296,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
                 <tr>
                   <th>設備名</th>
                   <th>操業度差異</th>
+                  <th>判定</th>
                 </tr>
               </thead>
               <tbody>
@@ -4209,7 +4304,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
                   operationVarianceRows.length === 0
                     ? `
                       <tr>
-                        <td colspan="2" class="no-data-cell small">データなし</td>
+                        <td colspan="3" class="no-data-cell small">データなし</td>
                       </tr>
                     `
                     : operationVarianceRows
@@ -4217,7 +4312,12 @@ const generateSetupScheduleContent = async (planData: any[]) => {
                           (row) => `
                       <tr>
                         <td>${row.machine_name || ''}</td>
-                        <td>${formatPrintableNumber(row.operation_variance ?? '')}</td>
+                        <td class="${
+                          Number.isFinite(Number(row.operation_variance)) && Number(row.operation_variance) < 0
+                            ? 'variance-negative'
+                            : ''
+                        }">${formatOperationVarianceHours(row.operation_variance)}</td>
+                        <td class="${getOperationVarianceJudgmentClass(row.operation_variance)}">${getOperationVarianceJudgment(row.operation_variance)}</td>
                       </tr>
                     `,
                         )

@@ -1174,8 +1174,8 @@ async def get_mes_forming_plan_data_from_schedule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    MES 成型指示用: production_schedules と schedule_details を結合し、
-    /api/excel-monitor/plan-data と同形の records を返す（設備は machine_type=成型）。
+    MES 指示用: production_schedules と schedule_details を結合し、
+    /api/excel-monitor/plan-data と同形の records を返す（設備は processName に応じた machine_type）。
     能率(efficiency_rate)は equipment_efficiency（machine_cd + product_cd）を優先。
     """
     if not startDate or not endDate:
@@ -1185,12 +1185,7 @@ async def get_mes_forming_plan_data_from_schedule(
             "message": "OK",
         }
     pn = (processName or "").strip()
-    if pn and pn != "成型":
-        return {
-            "success": True,
-            "data": {"records": [], "total": 0},
-            "message": "OK",
-        }
+    process_label = pn if pn in ("成型", "溶接") else "成型"
     kw = keyword.strip() if keyword else ""
     pne = (productNameExact or "").strip() or None
     offset = (page - 1) * limit
@@ -1198,6 +1193,7 @@ async def get_mes_forming_plan_data_from_schedule(
         "start_date": startDate,
         "end_date": endDate,
         "machine_name": (machineName or "").strip() or None,
+        "process_label": process_label,
         "pne": pne,
         "keyword": kw or None,
         "kw_like": f"%{kw}%" if kw else "%",
@@ -1206,7 +1202,7 @@ async def get_mes_forming_plan_data_from_schedule(
     }
     base_where = """
         sd.schedule_date BETWEEN :start_date AND :end_date
-        AND m.machine_type = '成型'
+        AND m.machine_type = :process_label
         AND (:machine_name IS NULL OR m.machine_name = :machine_name)
         AND (
             :pne IS NULL
@@ -1225,6 +1221,7 @@ async def get_mes_forming_plan_data_from_schedule(
         "start_date",
         "end_date",
         "machine_name",
+        "process_label",
         "pne",
         "keyword",
         "kw_like",
@@ -1243,7 +1240,7 @@ async def get_mes_forming_plan_data_from_schedule(
             ps.planned_output_qty AS planned_output_qty,
             m.machine_name AS machine_name,
             m.machine_cd AS machine_cd,
-            '成型' AS process_name,
+            :process_label AS process_name,
             ps.order_no AS operator,
             ps.item_name AS product_name,
             ps.product_cd AS product_cd,

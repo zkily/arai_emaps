@@ -205,7 +205,7 @@ INVENTORY_COLUMNS = [
 TREND_PREFIXES = ["cutting", "chamfering", "molding", "plating", "welding", "inspection"]
 
 # 計画データ更新：schedule_details.planned_qty を集計し、設備 machine_type → processes と突合した工程名ごとに _plan 列へ反映（6工程）
-# ※ welding_plan のデータソースは schedule_details.planned_qty のみ（溶接工程に振り分けた日別 SUM）。molding_plan 等からの転記は行わない。
+# ※ welding_plan は KT07（溶接工程）として集計した日別 planned_qty を使用（WeldingPlanning と同じ工程粒度）。
 PLAN_PROCESS_MAPPING = {
     "成型": "molding_plan",
     "溶接": "welding_plan",
@@ -3003,6 +3003,38 @@ async def update_production_summarys_plan(
             qty = 0
         field = PLAN_PROCESS_MAPPING[process_name]
         by_field[field].append((product_cd, dt, qty))
+
+    # 溶接（社内）は WeldingPlanning（KT07）と同じ工程粒度で上書き集計
+    # machine_type と processes を突合し、process_cd='KT07' に一致する日別 planned_qty のみを welding_plan に反映。
+    welding_sql_sd = text("""
+        SELECT sch.product_cd AS product_cd, sd.schedule_date AS dt,
+               SUM(COALESCE(sd.planned_qty, 0)) AS quantity
+        FROM schedule_details sd
+        INNER JOIN production_schedules sch ON sch.id = sd.schedule_id
+        INNER JOIN machines m ON m.id = sch.line_id
+        INNER JOIN processes pr ON m.machine_type IS NOT NULL
+          AND (TRIM(m.machine_type) = pr.process_name OR TRIM(m.machine_type) = pr.process_cd)
+        INNER JOIN production_summarys ps ON sch.product_cd = ps.product_cd AND sd.schedule_date = ps.date
+        WHERE sch.product_cd IS NOT NULL AND TRIM(COALESCE(sch.product_cd, '')) <> ''
+          AND pr.process_cd = 'KT07'
+          AND (:start_date IS NULL OR (sd.schedule_date >= :start_date AND sd.schedule_date <= :end_date))
+        GROUP BY sch.product_cd, sd.schedule_date
+    """)
+    result_welding = await db.execute(welding_sql_sd, params)
+    welding_rows = result_welding.fetchall()
+    welding_plan_rows = []
+    for row in welding_rows:
+        product_cd = (row[0] or "").strip() if row[0] is not None else ""
+        dt = row[1]
+        quantity = row[2]
+        if not product_cd or dt is None:
+            continue
+        try:
+            qty = int(float(quantity)) if quantity is not None else 0
+        except (TypeError, ValueError):
+            qty = 0
+        welding_plan_rows.append((product_cd, dt, qty))
+    by_field["welding_plan"] = welding_plan_rows
 
     total_plan_rows = sum(len(v) for v in by_field.values())
     updated_count = 0
