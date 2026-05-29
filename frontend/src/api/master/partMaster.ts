@@ -76,3 +76,17 @@ export function updatePart(id: number, data: Partial<PartMasterPayload>) {
 export function deletePart(id: number) {
   return request.delete(`/api/master/parts/${id}`) as Promise<{ success: boolean; message?: string }>
 }
+
+export interface ExportPartCsvResult {
+  success: boolean
+  message?: string
+  fileName?: string
+  csvFilePath?: string
+  rowCount?: number
+}
+
+export async function exportPartToCSV(
+  rows: Array<{ part_cd?: string; part_name?: string }>,
+): Promise<ExportPartCsvResult> {
+  return request.post('/api/master/parts/export-csv', rows) as Promise<ExportPartCsvResult>
+}

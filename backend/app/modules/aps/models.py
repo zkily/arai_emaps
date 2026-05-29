@@ -291,6 +291,9 @@ class ApsPlatingPlanBoardCard(Base):
         String(16), nullable=False, default="standard", comment="ボードマーク（standard／manual／rush）"
     )
     stable_key = Column(String(128), nullable=True, comment="安定キー（③明細・クライアント枠 id との紐付け）")
+    until_depleted = Column(
+        Boolean, nullable=False, default=False, comment="数量非表示（無くなり次第）；合計には実数を加算"
+    )
     created_at = Column(TIMESTAMP, server_default=func.now(), comment="作成日時")
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), comment="更新日時")
 

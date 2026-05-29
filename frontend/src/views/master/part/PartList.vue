@@ -69,6 +69,24 @@
           <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">
             {{ t('master.product.reset') }}
           </el-button>
+          <el-button
+            type="success"
+            @click="exportToCSV"
+            :icon="Download"
+            :disabled="total === 0"
+            class="export-csv-btn"
+          >
+            CSV出力
+          </el-button>
+          <el-button
+            type="warning"
+            @click="generateAndPrintQRCodes"
+            :icon="Printer"
+            :loading="qrPrinting"
+            class="qr-code-btn"
+          >
+            QRコード印刷
+          </el-button>
           <el-button type="primary" @click="openForm()" :icon="Plus" class="add-product-btn">
             {{ t('master.part.add') }}
           </el-button>
@@ -337,12 +355,13 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Plus, Search, Grid, Filter, Refresh, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, Search, Grid, Filter, Refresh, InfoFilled, Printer, Download } from '@element-plus/icons-vue'
 import {
   getPartList,
   createPart,
   updatePart,
   deletePart,
+  exportPartToCSV,
   PART_SETTLEMENT_TYPES,
   type PartMasterRow,
   type PartKind,
@@ -354,6 +373,7 @@ import type { Supplier } from '@/types/master'
 const { t } = useI18n()
 
 const loading = ref(false)
+const qrPrinting = ref(false)
 const rows = ref<PartMasterRow[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -621,6 +641,317 @@ async function remove(id: number) {
   }
 }
 
+const exportToCSV = async () => {
+  try {
+    loading.value = true
+
+    const st = filters.value.status
+    const allDataResponse = await getPartList({
+      keyword: filters.value.keyword || undefined,
+      status: st === 0 || st === 1 ? st : undefined,
+      page: 1,
+      pageSize: 10000,
+    })
+
+    const allPartsData = allDataResponse?.data?.list ?? []
+
+    if (allPartsData.length === 0) {
+      ElMessage.warning('出力する部品がありません')
+      return
+    }
+
+    const exportData = allPartsData.map((part) => ({
+      part_cd: part.part_cd || '',
+      part_name: part.part_name || '',
+    }))
+
+    const result = await exportPartToCSV(exportData)
+    if (result?.success) {
+      ElMessage.success(
+        `${exportData.length}件を${result.fileName || 'PartsMaster.csv'}として共有フォルダに保存しました`,
+      )
+    } else {
+      ElMessage.error(result?.message || 'CSVファイルの保存に失敗しました')
+    }
+  } catch (error) {
+    console.error('CSV出力エラー:', error)
+    ElMessage.error('CSVファイルの出力に失敗しました')
+  } finally {
+    loading.value = false
+  }
+}
+
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+async function fetchAllPartsForPrint(): Promise<PartMasterRow[]> {
+  const all: PartMasterRow[] = []
+  let currentPage = 1
+  const batchSize = 1000
+  let totalCount = 0
+  let first = true
+
+  while (first || all.length < totalCount) {
+    first = false
+    const res = await getPartList({ page: currentPage, pageSize: batchSize })
+    const list = res?.data?.list ?? []
+    totalCount = res?.data?.total ?? list.length
+    all.push(...list)
+    if (list.length < batchSize) break
+    currentPage += 1
+  }
+
+  return all
+}
+
+const generateAndPrintQRCodes = async () => {
+  qrPrinting.value = true
+  try {
+    const partsToUse = await fetchAllPartsForPrint()
+
+    if (partsToUse.length === 0) {
+      ElMessage.warning('印刷する部品がありません')
+      return
+    }
+
+    let QRCode: typeof import('qrcode')
+    try {
+      QRCode = await import('qrcode')
+    } catch {
+      ElMessage.error(
+        'QRコードライブラリが見つかりません。以下のコマンドでインストールしてください: npm install qrcode',
+      )
+      return
+    }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください')
+      return
+    }
+
+    const sortedParts = [...partsToUse].sort((a, b) => {
+      const nameA = a.part_name || ''
+      const nameB = b.part_name || ''
+      return nameA.localeCompare(nameB, 'ja')
+    })
+
+    const qrCodes: Array<{ dataUrl: string; part_cd: string; part_name: string }> = []
+    for (const part of sortedParts) {
+      if (!part.part_cd) continue
+      try {
+        const qrDataUrl = await QRCode.toDataURL(part.part_cd, {
+          width: 95,
+          margin: 2,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+        })
+        qrCodes.push({
+          dataUrl: qrDataUrl,
+          part_cd: part.part_cd,
+          part_name: part.part_name || '',
+        })
+      } catch (error) {
+        console.error(`QRコード生成エラー (${part.part_cd}):`, error)
+      }
+    }
+
+    if (qrCodes.length === 0) {
+      printWindow.close()
+      ElMessage.error('QRコードの生成に失敗しました')
+      return
+    }
+
+    const qrCodesPerRow = 5
+    const qrCodesPerPage = 40
+    const totalPages = qrCodes.length > 0 ? Math.ceil(qrCodes.length / qrCodesPerPage) : 0
+
+    let html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>部品QRコード印刷</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+          }
+          .page {
+            width: 210mm;
+            height: 297mm;
+            padding: 12mm;
+            margin: 0;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+          }
+          .page:not(:last-child) {
+            page-break-after: always;
+          }
+          .page:last-child {
+            page-break-after: avoid;
+          }
+          .page-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 8mm;
+            color: #333;
+            flex-shrink: 0;
+          }
+          .qr-grid {
+            display: grid;
+            grid-template-columns: repeat(${qrCodesPerRow}, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            gap: 1.2mm;
+            width: 100%;
+            height: 100%;
+            align-content: start;
+          }
+          .qr-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1mm;
+            border: 1px solid #ddd;
+            border-radius: 2px;
+            page-break-inside: avoid;
+            box-sizing: border-box;
+          }
+          .qr-code {
+            width: 70px;
+            height: 70px;
+            margin-bottom: 2px;
+            flex-shrink: 0;
+          }
+          .qr-part-name {
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+            color: #000;
+            word-break: break-all;
+            line-height: 1.3;
+            margin-top: 2px;
+            padding: 0 2px;
+          }
+          @media print {
+            body {
+              margin: 0;
+              padding: 0;
+            }
+            .page {
+              margin: 0;
+              padding: 12mm;
+            }
+          }
+        </style>
+      </head>
+      <body>
+    `
+
+    for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+      const startIndex = pageIndex * qrCodesPerPage
+      const endIndex = Math.min(startIndex + qrCodesPerPage, qrCodes.length)
+
+      if (startIndex >= qrCodes.length || endIndex <= startIndex) break
+
+      const pageQRCodes = qrCodes.slice(startIndex, endIndex)
+      if (pageQRCodes.length === 0) break
+
+      html += `<div class="page">`
+      html += `<div class="page-title">部品マスタQR</div>`
+      html += `<div class="qr-grid">`
+
+      for (let i = 0; i < pageQRCodes.length; i++) {
+        const { dataUrl, part_name } = pageQRCodes[i]
+        const col = i % qrCodesPerRow
+        const row = Math.floor(i / qrCodesPerRow)
+        const gridColumn = col + 1
+        const gridRow = row + 1
+
+        html += `
+          <div class="qr-item" style="grid-column: ${gridColumn}; grid-row: ${gridRow};">
+            <img src="${dataUrl}" alt="QRコード" class="qr-code" />
+            ${part_name ? `<div class="qr-part-name">${escapeHtml(part_name)}</div>` : ''}
+          </div>
+        `
+      }
+
+      html += `</div></div>`
+    }
+
+    html += `
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(html)
+    printWindow.document.close()
+
+    printWindow.onload = () => {
+      setTimeout(() => {
+        let isClosed = false
+        let fallbackTimeout: ReturnType<typeof setTimeout> | null = null
+
+        const closeWindow = () => {
+          if (!isClosed) {
+            isClosed = true
+            if (fallbackTimeout) {
+              clearTimeout(fallbackTimeout)
+              fallbackTimeout = null
+            }
+            setTimeout(() => {
+              try {
+                printWindow.close()
+              } catch (error) {
+                console.error('窗口关闭エラー:', error)
+              }
+            }, 100)
+          }
+        }
+
+        printWindow.addEventListener('afterprint', closeWindow)
+
+        let focusTimeout: ReturnType<typeof setTimeout> | null = null
+        printWindow.addEventListener('focus', () => {
+          if (focusTimeout) clearTimeout(focusTimeout)
+          focusTimeout = setTimeout(() => {
+            closeWindow()
+          }, 300)
+        })
+
+        fallbackTimeout = setTimeout(() => {
+          if (!isClosed) closeWindow()
+        }, 5000)
+
+        printWindow.print()
+      }, 250)
+    }
+
+    ElMessage.success(`${qrCodes.length}件のQRコードを生成しました`)
+  } catch (error) {
+    console.error('QRコード生成エラー:', error)
+    ElMessage.error('QRコードの生成に失敗しました')
+  } finally {
+    qrPrinting.value = false
+  }
+}
+
 onMounted(fetchList)
 </script>
 
@@ -779,6 +1110,30 @@ onMounted(fetchList)
   background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
 }
 
+.export-csv-btn {
+  border: none !important;
+  border-radius: 8px;
+  padding: 7px 12px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+  box-shadow: 0 2px 8px rgba(6, 182, 212, 0.25);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.export-csv-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(6, 182, 212, 0.35);
+}
+
+.export-csv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .add-product-btn {
   border: none !important;
   border-radius: 8px;
@@ -791,6 +1146,30 @@ onMounted(fetchList)
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+.qr-code-btn {
+  border: none !important;
+  border-radius: 8px;
+  padding: 7px 12px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  color: #fff !important;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.qr-code-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.qr-code-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .add-product-btn:hover {

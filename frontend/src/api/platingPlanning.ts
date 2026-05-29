@@ -31,6 +31,8 @@ export interface PlatingBoardCardBody {
   slots: number
   board_mark: string
   stable_key?: string | null
+  /** 数量非表示（無くなり次第）；生産数合計には実数を加算 */
+  until_depleted?: boolean
 }
 
 /** ボード日付行メモ（6/1（月）行など） */
@@ -106,6 +108,14 @@ export interface PlatingDraftOut
   board_date_memos: PlatingBoardDateMemoOut[]
 }
 
+/** 表示期間（lap_work_date）で board_cards を SQL 絞り込みした集約結果 */
+export interface PlatingBoardViewOut {
+  board_cards: PlatingBoardCardOut[]
+  layout_blocks: PlatingDraftLayoutOut[]
+  board_date_memos: PlatingBoardDateMemoOut[]
+  primary: PlatingDraftOut | null
+}
+
 export function createPlatingDraft(body: PlatingDraftBody): Promise<PlatingDraftOut> {
   return request.post(BASE, body)
 }
@@ -146,6 +156,24 @@ export function fetchPlatingDraftById(
   opts?: PlatingDraftFetchOpts | string | null,
 ): Promise<PlatingDraftOut> {
   return request.get(`${BASE}/${id}`, { params: platingDraftFetchParams(opts) })
+}
+
+export interface PlatingBoardViewFetchOpts {
+  boardFrom: string
+  boardTo: string
+  preferredDraftId?: number | null
+}
+
+/** 表示期間（lap_work_date）で aps_plating_plan_board_cards を SQL 絞り込み */
+export function fetchPlatingBoardView(opts: PlatingBoardViewFetchOpts): Promise<PlatingBoardViewOut> {
+  const params: Record<string, string | number> = {
+    boardFrom: opts.boardFrom,
+    boardTo: opts.boardTo,
+  }
+  if (opts.preferredDraftId != null && opts.preferredDraftId > 0) {
+    params.preferredDraftId = opts.preferredDraftId
+  }
+  return request.get(`${BASE}/board-view`, { params })
 }
 
 export function deletePlatingDraft(id: number): Promise<{ success: boolean }> {

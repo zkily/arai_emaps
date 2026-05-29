@@ -4,6 +4,10 @@
 総単価（円）= 単価×為替レート（>0 のとき）+ 部品材料単価（原通貨、加算のみ）。
 API の standard_price_jpy は上記の総単価（円）。total_unit_price は DB 計算列（単価+材料、原通貨）。
 """
+import csv
+import io
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
@@ -15,8 +19,11 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import PartMaster, Supplier
+from app.modules.master.routers.api import PRODUCT_CSV_OUTPUT_DIR
 
 router = APIRouter()
+
+PART_CSV_FILENAME = "PartsMaster.csv"
 
 KindLiteral = Literal["T", "N", "F"]
 SettlementTypeLiteral = Literal["有償支給", "無償支給", "自給", "その他"]
@@ -235,3 +242,46 @@ async def delete_part(
     await db.delete(row)
     await db.commit()
     return {"success": True, "message": "削除しました"}
+
+
+class ExportCsvItem(BaseModel):
+    part_cd: Optional[str] = None
+    part_name: Optional[str] = None
+
+
+@router.post("/export-csv")
+async def export_parts_csv(
+    body: list[ExportCsvItem],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """CSV出力（body: [{ part_cd, part_name }]）"""
+    output = io.StringIO()
+    output.write("\uFEFF")
+    writer = csv.writer(output)
+    writer.writerow(["part_cd", "part_name"])
+    for item in body:
+        writer.writerow([
+            item.part_cd or "",
+            item.part_name or "",
+        ])
+    csv_content = output.getvalue()
+
+    if not PRODUCT_CSV_OUTPUT_DIR:
+        raise HTTPException(status_code=500, detail="CSV出力先が未設定です")
+
+    try:
+        os.makedirs(PRODUCT_CSV_OUTPUT_DIR, exist_ok=True)
+        output_path = os.path.join(PRODUCT_CSV_OUTPUT_DIR, PART_CSV_FILENAME)
+        with open(output_path, "w", encoding="utf-8", newline="") as f:
+            f.write(csv_content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"CSV保存失敗: {str(e)}")
+
+    return {
+        "success": True,
+        "message": "PartsMaster.csv を共有フォルダに保存しました",
+        "fileName": PART_CSV_FILENAME,
+        "csvFilePath": output_path,
+        "rowCount": len(body),
+    }
