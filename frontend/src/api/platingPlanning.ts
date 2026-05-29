@@ -15,11 +15,10 @@ export interface PlatingDraftItemBody {
   source_row_key?: string | null
 }
 
-/** 第④看板 1 枠（POST/PUT 写入；plan_date / draft_version_no 由服务端填） */
+/** 第④看板 1 枠（POST/PUT 写入；draft_version_no 由服务端填） */
 export interface PlatingBoardCardBody {
-  work_date?: string | null
-  /** 当該周目的日历日（跨日计划） */
-  lap_work_date?: string | null
+  /** 当該周目のカレンダー日（表示期間・週次スケジュール） */
+  lap_work_date: string
   lap_start_time?: string | null
   lap_end_time?: string | null
   lap_no: number
@@ -32,6 +31,12 @@ export interface PlatingBoardCardBody {
   slots: number
   board_mark: string
   stable_key?: string | null
+}
+
+/** ボード日付行メモ（6/1（月）行など） */
+export interface PlatingBoardDateMemoBody {
+  lap_work_date: string
+  memo: string
 }
 
 /** 追加レイアウト 1 ブロック（POST/PUT 写入；カード未配置でも骨格を保存） */
@@ -61,6 +66,8 @@ export interface PlatingDraftBody {
   board_cards?: PlatingBoardCardBody[] | null
   /** 追加レイアウトブロック；None=不更新／配列=全置換 */
   layout_blocks?: PlatingDraftLayoutBody[] | null
+  /** 日付行メモ；None=不更新／配列=全置換（空文字は削除） */
+  board_date_memos?: PlatingBoardDateMemoBody[] | null
 }
 
 export interface PlatingDraftItemOut extends PlatingDraftItemBody {
@@ -71,7 +78,6 @@ export interface PlatingDraftItemOut extends PlatingDraftItemBody {
 export interface PlatingBoardCardOut extends PlatingBoardCardBody {
   id: number
   draft_id: number
-  plan_date: string
   draft_version_no: number
 }
 
@@ -80,8 +86,13 @@ export interface PlatingDraftLayoutOut extends PlatingDraftLayoutBody {
   draft_id: number
 }
 
+export interface PlatingBoardDateMemoOut extends PlatingBoardDateMemoBody {
+  id: number
+  draft_id: number
+}
+
 export interface PlatingDraftOut
-  extends Omit<PlatingDraftBody, 'items' | 'board_cards' | 'layout_blocks'> {
+  extends Omit<PlatingDraftBody, 'items' | 'board_cards' | 'layout_blocks' | 'board_date_memos'> {
   id: number
   version_no: number
   status: string
@@ -92,6 +103,7 @@ export interface PlatingDraftOut
   items: PlatingDraftItemOut[]
   board_cards: PlatingBoardCardOut[]
   layout_blocks: PlatingDraftLayoutOut[]
+  board_date_memos: PlatingBoardDateMemoOut[]
 }
 
 export function createPlatingDraft(body: PlatingDraftBody): Promise<PlatingDraftOut> {
@@ -105,7 +117,7 @@ export function updatePlatingDraft(id: number, body: PlatingDraftBody): Promise<
 export interface PlatingDraftFetchOpts {
   /** draft_items の work_date フィルタ（明細のみ） */
   workDate?: string | null
-  /** board_cards の表示期間（SQL: coalesce(lap_work_date, work_date, plan_date)） */
+  /** board_cards の表示期間（SQL: lap_work_date） */
   boardFrom?: string | null
   boardTo?: string | null
 }

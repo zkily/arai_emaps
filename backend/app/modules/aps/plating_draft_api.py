@@ -12,6 +12,7 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.modules.aps.models import (
     ApsPlatingPlanBoardCard,
+    ApsPlatingPlanBoardDateMemo,
     ApsPlatingPlanDraft,
     ApsPlatingPlanDraftItem,
     ApsPlatingPlanDraftLayout,
@@ -35,10 +36,9 @@ class PlatingDraftItemBody(BaseModel):
 
 
 class PlatingBoardCardBody(BaseModel):
-    """第④看板 1 枠；plan_date / draft_version_no 由服务端写入"""
+    """第④看板 1 枠；draft_version_no 由服务端写入"""
 
-    work_date: Optional[date] = None
-    lap_work_date: Optional[date] = None
+    lap_work_date: date
     lap_start_time: Optional[str] = None
     lap_end_time: Optional[str] = None
     lap_no: int = 0
@@ -51,6 +51,13 @@ class PlatingBoardCardBody(BaseModel):
     slots: int = 0
     board_mark: str = "standard"
     stable_key: Optional[str] = None
+
+
+class PlatingBoardDateMemoBody(BaseModel):
+    """ボード日付行メモ（lap_work_date ごと）"""
+
+    lap_work_date: date
+    memo: str = ""
 
 
 class PlatingDraftLayoutBody(BaseModel):
@@ -87,6 +94,10 @@ class PlatingDraftBody(BaseModel):
             "未配置でも骨格を保持する）。"
         ),
     )
+    board_date_memos: Optional[List[PlatingBoardDateMemoBody]] = Field(
+        default=None,
+        description="None 时不改日付行メモ；传列表则替换该 draft 下全部メモ（空文字は削除）",
+    )
 
 
 class PlatingDraftItemOut(PlatingDraftItemBody):
@@ -100,7 +111,6 @@ class PlatingDraftItemOut(PlatingDraftItemBody):
 class PlatingBoardCardOut(PlatingBoardCardBody):
     id: int
     draft_id: int
-    plan_date: date
     draft_version_no: int = 1
 
     class Config:
@@ -108,6 +118,14 @@ class PlatingBoardCardOut(PlatingBoardCardBody):
 
 
 class PlatingDraftLayoutOut(PlatingDraftLayoutBody):
+    id: int
+    draft_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class PlatingBoardDateMemoOut(PlatingBoardDateMemoBody):
     id: int
     draft_id: int
 
@@ -133,6 +151,7 @@ class PlatingDraftOut(BaseModel):
     items: List[PlatingDraftItemOut] = Field(default_factory=list)
     board_cards: List[PlatingBoardCardOut] = Field(default_factory=list)
     layout_blocks: List[PlatingDraftLayoutOut] = Field(default_factory=list)
+    board_date_memos: List[PlatingBoardDateMemoOut] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -179,19 +198,13 @@ async def _load_draft_items(
 
 
 def _board_card_effective_date_col():
-    """フロント boardCardLapWorkDate と整合：lap_work_date → work_date → plan_date"""
-    return func.coalesce(
-        ApsPlatingPlanBoardCard.lap_work_date,
-        ApsPlatingPlanBoardCard.work_date,
-        ApsPlatingPlanBoardCard.plan_date,
-    )
+    """表示期間の基準日：lap_work_date のみを使用"""
+    return ApsPlatingPlanBoardCard.lap_work_date
 
 
 async def _load_board_cards(
     db: AsyncSession,
     draft_id: int,
-    plan_d: date,
-    work_date_filter: Optional[date],
     board_from: Optional[date] = None,
     board_to: Optional[date] = None,
 ) -> List[ApsPlatingPlanBoardCard]:
@@ -200,8 +213,6 @@ async def _load_board_cards(
     if board_from is not None and board_to is not None:
         lo, hi = (board_from, board_to) if board_from <= board_to else (board_to, board_from)
         q = q.where(eff >= lo, eff <= hi)
-    elif work_date_filter is not None:
-        q = q.where(eff == work_date_filter)
     q = q.order_by(
         ApsPlatingPlanBoardCard.lap_work_date.asc(),
         ApsPlatingPlanBoardCard.lap_no.asc(),
@@ -211,12 +222,61 @@ async def _load_board_cards(
     return list((await db.execute(q)).scalars().all())
 
 
+async def _load_board_date_memos(
+    db: AsyncSession,
+    draft_id: int,
+    board_from: Optional[date] = None,
+    board_to: Optional[date] = None,
+) -> List[ApsPlatingPlanBoardDateMemo]:
+    q = select(ApsPlatingPlanBoardDateMemo).where(ApsPlatingPlanBoardDateMemo.draft_id == draft_id)
+    if board_from is not None and board_to is not None:
+        lo, hi = (board_from, board_to) if board_from <= board_to else (board_to, board_from)
+        q = q.where(
+            ApsPlatingPlanBoardDateMemo.lap_work_date >= lo,
+            ApsPlatingPlanBoardDateMemo.lap_work_date <= hi,
+        )
+    q = q.order_by(ApsPlatingPlanBoardDateMemo.lap_work_date.asc(), ApsPlatingPlanBoardDateMemo.id.asc())
+    return list((await db.execute(q)).scalars().all())
+
+
+def _board_date_memos_to_out(rows: List[ApsPlatingPlanBoardDateMemo]) -> List[PlatingBoardDateMemoOut]:
+    return [
+        PlatingBoardDateMemoOut(
+            id=int(r.id),
+            draft_id=int(r.draft_id),
+            lap_work_date=r.lap_work_date,
+            memo=r.memo if r.memo is not None else "",
+        )
+        for r in sorted(rows, key=lambda x: (x.lap_work_date, int(x.id or 0)))
+    ]
+
+
+async def _replace_board_date_memos(
+    db: AsyncSession,
+    draft_id: int,
+    memos: List[PlatingBoardDateMemoBody],
+) -> None:
+    await db.execute(
+        delete(ApsPlatingPlanBoardDateMemo).where(ApsPlatingPlanBoardDateMemo.draft_id == draft_id)
+    )
+    await db.flush()
+    for m in memos:
+        db.add(
+            ApsPlatingPlanBoardDateMemo(
+                draft_id=draft_id,
+                lap_work_date=m.lap_work_date,
+                memo=(m.memo or "").strip(),
+            )
+        )
+    await db.flush()
+
+
 def _board_cards_to_out(cards: List[ApsPlatingPlanBoardCard]) -> List[PlatingBoardCardOut]:
     out: List[PlatingBoardCardOut] = []
     for c in sorted(
         cards,
         key=lambda x: (
-            x.lap_work_date or x.work_date or x.plan_date,
+            x.lap_work_date,
             int(x.lap_no or 0),
             int(x.turn_seq or 0),
             int(x.id or 0),
@@ -226,9 +286,7 @@ def _board_cards_to_out(cards: List[ApsPlatingPlanBoardCard]) -> List[PlatingBoa
             PlatingBoardCardOut(
                 id=int(c.id),
                 draft_id=int(c.draft_id),
-                plan_date=c.plan_date,
                 draft_version_no=int(c.draft_version_no or 1),
-                work_date=c.work_date,
                 lap_work_date=c.lap_work_date,
                 lap_start_time=(c.lap_start_time or "").strip() or None,
                 lap_end_time=(c.lap_end_time or "").strip() or None,
@@ -314,10 +372,16 @@ def _to_out(
     row: ApsPlatingPlanDraft,
     board_cards_override: Optional[List[ApsPlatingPlanBoardCard]] = None,
     layouts_override: Optional[List[ApsPlatingPlanDraftLayout]] = None,
+    board_date_memos_override: Optional[List[ApsPlatingPlanBoardDateMemo]] = None,
 ) -> PlatingDraftOut:
     items = sorted(list(row.items or []), key=lambda x: (int(x.sort_order or 0), int(x.id or 0)))
     board_list = list(board_cards_override if board_cards_override is not None else (row.board_cards or []))
     layout_list = list(layouts_override if layouts_override is not None else (row.layouts or []))
+    memo_list = list(
+        board_date_memos_override
+        if board_date_memos_override is not None
+        else (row.board_date_memos or [])
+    )
     return PlatingDraftOut(
         id=int(row.id),
         plan_date=row.plan_date,
@@ -352,13 +416,13 @@ def _to_out(
         ],
         board_cards=_board_cards_to_out(board_list),
         layout_blocks=_layouts_to_out(layout_list),
+        board_date_memos=_board_date_memos_to_out(memo_list),
     )
 
 
 async def _replace_board_cards(
     db: AsyncSession,
     draft_id: int,
-    plan_d: date,
     draft_version_no: int,
     cards: List[PlatingBoardCardBody],
 ) -> None:
@@ -369,9 +433,7 @@ async def _replace_board_cards(
         db.add(
             ApsPlatingPlanBoardCard(
                 draft_id=draft_id,
-                plan_date=plan_d,
                 draft_version_no=int(draft_version_no or 1),
-                work_date=bc.work_date,
                 lap_work_date=bc.lap_work_date,
                 lap_start_time=(bc.lap_start_time or "").strip() or None,
                 lap_end_time=(bc.lap_end_time or "").strip() or None,
@@ -436,15 +498,18 @@ async def create_plating_draft(
     await db.flush()
     ver = int(row.version_no or 1)
     if body.board_cards is not None:
-        await _replace_board_cards(db, int(row.id), body.plan_date, ver, body.board_cards)
+        await _replace_board_cards(db, int(row.id), ver, body.board_cards)
     if body.layout_blocks is not None:
         await _replace_layouts(db, int(row.id), body.layout_blocks)
+    if body.board_date_memos is not None:
+        await _replace_board_date_memos(db, int(row.id), body.board_date_memos)
     q = (
         select(ApsPlatingPlanDraft)
         .options(
             selectinload(ApsPlatingPlanDraft.items),
             selectinload(ApsPlatingPlanDraft.board_cards),
             selectinload(ApsPlatingPlanDraft.layouts),
+            selectinload(ApsPlatingPlanDraft.board_date_memos),
         )
         .where(ApsPlatingPlanDraft.id == row.id)
     )
@@ -462,7 +527,7 @@ async def update_plating_draft(
     row = await db.get(ApsPlatingPlanDraft, draft_id)
     if row is None:
         raise HTTPException(404, "草稿不存在")
-    # plan_date は (plan_date, version_no) UK のため更新しない（ボードの計画日は lap_work_date で表現）
+    # 草稿ヘッダ plan_date は (plan_date, version_no) UK のため更新しない。ボード日付は lap_work_date のみ。
     plan_d = row.plan_date
     row.daily_minutes = body.daily_minutes
     row.jigs_per_lap = body.jigs_per_lap
@@ -494,15 +559,18 @@ async def update_plating_draft(
     await db.flush()
     ver = int(row.version_no or 1)
     if body.board_cards is not None:
-        await _replace_board_cards(db, draft_id, plan_d, ver, body.board_cards)
+        await _replace_board_cards(db, draft_id, ver, body.board_cards)
     if body.layout_blocks is not None:
         await _replace_layouts(db, draft_id, body.layout_blocks)
+    if body.board_date_memos is not None:
+        await _replace_board_date_memos(db, draft_id, body.board_date_memos)
     q = (
         select(ApsPlatingPlanDraft)
         .options(
             selectinload(ApsPlatingPlanDraft.items),
             selectinload(ApsPlatingPlanDraft.board_cards),
             selectinload(ApsPlatingPlanDraft.layouts),
+            selectinload(ApsPlatingPlanDraft.board_date_memos),
         )
         .where(ApsPlatingPlanDraft.id == draft_id)
     )
@@ -546,9 +614,10 @@ async def get_latest_plating_draft(
     if row is None:
         return None
     row.items = await _load_draft_items(db, int(row.id), row.plan_date, wd_filter)
-    bc = await _load_board_cards(db, int(row.id), row.plan_date, wd_filter, bf, bt)
+    bc = await _load_board_cards(db, int(row.id), bf, bt)
     lb = await _load_layouts(db, int(row.id))
-    return _to_out(row, board_cards_override=bc, layouts_override=lb)
+    bdm = await _load_board_date_memos(db, int(row.id), bf, bt)
+    return _to_out(row, board_cards_override=bc, layouts_override=lb, board_date_memos_override=bdm)
 
 
 @router.get("/plating/drafts/{draft_id}", response_model=PlatingDraftOut)
@@ -572,9 +641,10 @@ async def get_plating_draft_by_id(
     if row is None:
         raise HTTPException(404, "草稿不存在")
     row.items = await _load_draft_items(db, draft_id, row.plan_date, wd_filter)
-    bc = await _load_board_cards(db, draft_id, row.plan_date, wd_filter, bf, bt)
+    bc = await _load_board_cards(db, draft_id, bf, bt)
     lb = await _load_layouts(db, draft_id)
-    return _to_out(row, board_cards_override=bc, layouts_override=lb)
+    bdm = await _load_board_date_memos(db, draft_id, bf, bt)
+    return _to_out(row, board_cards_override=bc, layouts_override=lb, board_date_memos_override=bdm)
 
 
 @router.delete("/plating/drafts/{draft_id}")

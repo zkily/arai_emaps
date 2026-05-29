@@ -1,4 +1,5 @@
 -- aps_plating_plan_board_cards：テーブル・カラムに日本語コメントを付与（冪等・既存 COMMENT を上書き）
+-- ※ plan_date / work_date 列は 23 番マイグレーションで削除
 SET NAMES utf8mb4;
 
 ALTER TABLE aps_plating_plan_board_cards

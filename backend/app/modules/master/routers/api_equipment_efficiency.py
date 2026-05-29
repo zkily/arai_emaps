@@ -35,7 +35,15 @@ def _process_type_expr():
         (or_(mn.like("%面取%"), mn.like("%chamfer%"), mc.like("%chamfer%")), literal("chamfering")),
         (or_(mn.like("%成型%"), mn.like("%forming%"), mc.like("%forming%")), literal("forming")),
         (or_(mn.like("%溶接%"), mn.like("%welding%"), mc.like("%welding%")), literal("welding")),
-        (or_(mn.like("%メッキ%"), mn.like("%plating%"), mc.like("%plating%")), literal("plating")),
+        (
+            or_(
+                mn.like("%メッキ%"),
+                mn.like("%plating%"),
+                mc.like("%plating%"),
+                mc.like("%pl%"),
+            ),
+            literal("plating"),
+        ),
         (or_(mn.like("%検査%"), mn.like("%inspection%"), mc.like("%inspection%")), literal("inspection")),
         (or_(mn.like("%切断%"), mn.like("%cutting%"), mc.like("%cutting%")), literal("cutting")),
         else_=literal("other"),

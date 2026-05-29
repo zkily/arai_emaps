@@ -4,7 +4,7 @@ APS 排産スケジューリング SQLAlchemy モデル
 line_capacities / production_schedules / schedule_details
 """
 from sqlalchemy import (
-    Column, Integer, String, Date, Time, Numeric, Boolean, BigInteger,
+    Column, Integer, String, Text, Date, Time, Numeric, Boolean, BigInteger,
     SmallInteger, ForeignKey, TIMESTAMP, DateTime,
 )
 from sqlalchemy.sql import func
@@ -208,6 +208,33 @@ class ApsPlatingPlanDraft(Base):
         back_populates="draft",
         cascade="all, delete-orphan",
     )
+    board_date_memos = relationship(
+        "ApsPlatingPlanBoardDateMemo",
+        back_populates="draft",
+        cascade="all, delete-orphan",
+    )
+
+
+class ApsPlatingPlanBoardDateMemo(Base):
+    """メッキ投入ボード日付行メモ（日付区切り行の自由記述）"""
+    __tablename__ = "aps_plating_plan_board_date_memos"
+    __table_args__ = {
+        "comment": "メッキ投入ボード日付行メモ（lap_work_date ごと）",
+    }
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True, comment="主キー")
+    draft_id = Column(
+        Integer,
+        ForeignKey("aps_plating_plan_drafts.id", ondelete="CASCADE"),
+        nullable=False,
+        comment="親ドラフトID",
+    )
+    lap_work_date = Column(Date, nullable=False, comment="日付行のカレンダー日")
+    memo = Column(Text, nullable=False, default="", comment="日付行メモ本文")
+    created_at = Column(TIMESTAMP, server_default=func.now(), comment="作成日時")
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), comment="更新日時")
+
+    draft = relationship("ApsPlatingPlanDraft", back_populates="board_date_memos")
 
 
 class ApsPlatingPlanDraftItem(Base):
@@ -246,12 +273,10 @@ class ApsPlatingPlanBoardCard(Base):
         nullable=False,
         comment="親ドラフトID（aps_plating_plan_drafts.id）",
     )
-    plan_date = Column(Date, nullable=False, index=True, comment="計画日（草稿主表 plan_date の冗長保持）")
     draft_version_no = Column(
         Integer, nullable=False, default=1, comment="保存時草稿バージョン（主表 version_no のスナップショット）"
     )
-    work_date = Column(Date, nullable=True, comment="作業日（NULL 時は plan_date 当日）")
-    lap_work_date = Column(Date, nullable=True, comment="当該周目のカレンダー日")
+    lap_work_date = Column(Date, nullable=False, index=True, comment="当該周目のカレンダー日（表示期間・週次スケジュール用）")
     lap_start_time = Column(String(5), nullable=True, comment="当該周目開始時刻（HH:mm）")
     lap_end_time = Column(String(5), nullable=True, comment="当該周目終了時刻（HH:mm）")
     lap_no = Column(Integer, nullable=False, comment="周目番号（ボード段番号・永続 lap_no）")

@@ -94,10 +94,8 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 CREATE TABLE IF NOT EXISTS aps_plating_plan_board_cards (
   id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主キー',
   draft_id INT NOT NULL COMMENT '親ドラフトID（aps_plating_plan_drafts.id）',
-  plan_date DATE NOT NULL COMMENT '計画日（草稿主表 plan_date の冗長保持・日次検索用）',
   draft_version_no INT NOT NULL DEFAULT 1 COMMENT '保存時草稿バージョン（主表 version_no のスナップショット）',
-  work_date DATE NULL COMMENT '作業日（NULL 時は plan_date 当日・draft_items と同規則）',
-  lap_work_date DATE NULL COMMENT '当該周目のカレンダー日（表示期間・週次スケジュール用）',
+  lap_work_date DATE NOT NULL COMMENT '当該周目のカレンダー日（表示期間・週次スケジュール用）',
   lap_start_time VARCHAR(5) NULL COMMENT '当該周目開始時刻（HH:mm）',
   lap_end_time VARCHAR(5) NULL COMMENT '当該周目終了時刻（HH:mm）',
   lap_no INT NOT NULL COMMENT '周目番号（ボード段番号・永続 lap_no）',
@@ -115,7 +113,6 @@ CREATE TABLE IF NOT EXISTS aps_plating_plan_board_cards (
   PRIMARY KEY (id),
   KEY idx_aps_plating_board_draft_lap (draft_id, lap_no, turn_seq),
   KEY idx_aps_plating_board_draft_lap_date (draft_id, lap_work_date, lap_no, turn_seq),
-  KEY idx_aps_plating_board_plan_work (plan_date, work_date),
   KEY idx_aps_plating_board_product (product_cd),
   CONSTRAINT fk_aps_plating_board_cards_draft
     FOREIGN KEY (draft_id) REFERENCES aps_plating_plan_drafts (id) ON DELETE CASCADE

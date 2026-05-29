@@ -36,6 +36,16 @@
       </el-input>
       <div class="ee-toolbar-actions">
         <el-button @click="clearFilters" :icon="Refresh" class="ee-btn-clear">クリア</el-button>
+        <el-button
+          type="success"
+          plain
+          @click="handlePrint"
+          :icon="Printer"
+          :loading="printing"
+          class="ee-btn-print"
+        >
+          印刷
+        </el-button>
         <el-button type="primary" @click="openDialog()" :icon="Plus" class="ee-btn-add">
           <span class="btn-label">新規登録</span>
         </el-button>
@@ -240,7 +250,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Tools, Refresh, Plus, Search, Edit, Delete } from '@element-plus/icons-vue'
+import { Tools, Refresh, Plus, Search, Edit, Delete, Printer } from '@element-plus/icons-vue'
 import {
   fetchEquipmentEfficiencyList,
   createEquipmentEfficiency,
@@ -269,6 +279,7 @@ const isEdit = ref(false)
 const formRef = ref<FormInstance>()
 const activeProcessTab = ref('all')
 const statusUpdatingId = ref<number | null>(null)
+const printing = ref(false)
 
 const processTypes = [
   { label: '全て', value: 'all' },
@@ -320,6 +331,10 @@ const filters = ref({ keyword: '' })
 
 /** 検索キーワードに一致する総件数（タブラベル用・全タブ合計） */
 const tabCountsAll = computed(() => tabCounts.value.all ?? 0)
+
+const activeProcessLabel = computed(
+  () => processTypes.find((p) => p.value === activeProcessTab.value)?.label ?? '全て'
+)
 
 const getProcessCount = (processType: string): number => {
   const key = processType as keyof EquipmentEfficiencyTabCounts
@@ -525,6 +540,233 @@ const clearFilters = () => {
   }
 }
 
+function escHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const fetchFilteredListForPrint = async (): Promise<EquipmentEfficiency[]> => {
+  const kw = filters.value.keyword?.trim()
+  const fetchSize = Math.max(total.value, efficiencyList.value.length, 1)
+  const result = await fetchEquipmentEfficiencyList({
+    page: 1,
+    pageSize: Math.min(fetchSize, 99999),
+    processType: activeProcessTab.value,
+    ...(kw ? { keyword: kw } : {}),
+  })
+  const raw = result as Record<string, unknown>
+  const data = (raw.success && raw.data ? raw.data : raw) as { list?: EquipmentEfficiency[] }
+  return data.list || (raw.list as EquipmentEfficiency[]) || []
+}
+
+const formatEfficiencyRate = (row: EquipmentEfficiency): string => {
+  const rate = row.efficiency_rate
+  if (rate == null || Number.isNaN(Number(rate))) return '—'
+  const text = Number(rate).toFixed(1)
+  return row.unit ? `${text} ${row.unit}` : text
+}
+
+const formatStepTime = (row: EquipmentEfficiency): string => {
+  if (row.step_time == null) return '—'
+  return `${row.step_time}分`
+}
+
+const formatStatusLabel = (status?: number): string => (status === 1 ? '有効' : '無効')
+
+const compareJa = (a: string, b: string): number =>
+  a.localeCompare(b, 'ja', { numeric: true, sensitivity: 'base' })
+
+type PrintEquipmentGroup = {
+  machineCd: string
+  machinesName: string
+  rows: EquipmentEfficiency[]
+}
+
+const groupRowsForPrint = (rows: EquipmentEfficiency[]): PrintEquipmentGroup[] => {
+  const map = new Map<string, EquipmentEfficiency[]>()
+  for (const row of rows) {
+    const key = `${row.machine_cd || ''}\t${row.machines_name || ''}`
+    const group = map.get(key)
+    if (group) group.push(row)
+    else map.set(key, [row])
+  }
+
+  return [...map.entries()]
+    .sort(([, aRows], [, bRows]) =>
+      compareJa(aRows[0]?.machines_name || '', bRows[0]?.machines_name || '')
+    )
+    .map(([key, groupRows]) => {
+      const [machineCd = '', machinesName = ''] = key.split('\t')
+      return {
+        machineCd,
+        machinesName,
+        rows: [...groupRows].sort((a, b) => compareJa(a.product_name || '', b.product_name || '')),
+      }
+    })
+}
+
+const buildPrintHtml = (rows: EquipmentEfficiency[]): string => {
+  const title = '設備能率管理（絞込結果）'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const keyword = filters.value.keyword?.trim()
+  const keywordLine = keyword ? `キーワード：<strong>${escHtml(keyword)}</strong>　` : ''
+  const groups = groupRowsForPrint(rows)
+  let rowIndex = 0
+
+  const sectionsHtml = groups
+    .map((group) => {
+      const groupTitle = group.machinesName
+        ? `${group.machinesName}${group.machineCd ? `（${group.machineCd}）` : ''}`
+        : group.machineCd || '—'
+      const body = group.rows
+        .map((row) => {
+          rowIndex += 1
+          return `<tr>
+            <td class="cen">${escHtml(String(rowIndex))}</td>
+            <td class="cen">${escHtml(row.product_cd || '—')}</td>
+            <td class="left">${escHtml(row.product_name || '—')}</td>
+            <td class="num">${escHtml(formatEfficiencyRate(row))}</td>
+            <td class="cen">${escHtml(formatStepTime(row))}</td>
+            <td class="cen">${escHtml(formatStatusLabel(row.status))}</td>
+            <td class="left">${escHtml(row.remarks || '—')}</td>
+          </tr>`
+        })
+        .join('')
+
+      return `<section class="print-sec">
+        <div class="grp-title">${escHtml(groupTitle)}</div>
+        <table>
+          <thead>
+            <tr>
+              <th class="cen">#</th>
+              <th class="cen">製品CD</th>
+              <th class="left">製品名</th>
+              <th class="num">能率</th>
+              <th class="cen">段取</th>
+              <th class="cen">状態</th>
+              <th class="left">備考</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </section>`
+    })
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escHtml(title)}</title>
+  <style>
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body {
+      margin: 0;
+      padding: 10px 12px 14px;
+      color: #0f172a;
+      font: 9.5px/1.35 "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif;
+      background: #fff;
+    }
+    .hd {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid #dbe5f1;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f8fbff 0%, #eef5ff 100%);
+    }
+    .tt { font-size: 14px; font-weight: 800; color: #1e3a8a; }
+    .meta { margin-top: 4px; color: #475569; font-size: 8.5px; line-height: 1.55; }
+    .meta strong { color: #334155; font-weight: 700; }
+    .print-sec { margin-bottom: 12px; break-inside: avoid; page-break-inside: avoid; }
+    .grp-title {
+      font-size: 10px;
+      font-weight: 800;
+      color: #1e293b;
+      margin: 0 0 4px 2px;
+      padding: 3px 0;
+      border-bottom: 2px solid #94a3b8;
+    }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 3px 4px;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+    }
+    th {
+      background: linear-gradient(180deg, #eaf3ff 0%, #dceafe 100%);
+      font-weight: 800;
+      color: #334155;
+      font-size: 8.5px;
+    }
+    tbody tr:nth-child(odd) { background: #fcfdff; }
+    tbody tr:nth-child(even) { background: #f7fbff; }
+    .left { text-align: left; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .cen { text-align: center; }
+    @media print {
+      @page { size: A4 portrait; margin: 10mm; }
+      body { padding: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="tt">${escHtml(title)}</div>
+    <div class="meta">
+      ${keywordLine}工程：<strong>${escHtml(activeProcessLabel.value)}</strong>
+      　件数：<strong>${escHtml(String(rows.length))}</strong> 件
+      　印刷日時：${escHtml(printedAt)}
+    </div>
+  </div>
+  ${sectionsHtml}
+</body>
+</html>`
+}
+
+const handlePrint = async () => {
+  if (total.value === 0 && efficiencyList.value.length === 0) {
+    ElMessage.warning('印刷対象の行がありません（絞込みを確認してください）')
+    return
+  }
+
+  printing.value = true
+  try {
+    const rows = await fetchFilteredListForPrint()
+    if (rows.length === 0) {
+      ElMessage.warning('印刷対象の行がありません（絞込みを確認してください）')
+      return
+    }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      ElMessage.error('ポップアップがブロックされました')
+      return
+    }
+
+    printWindow.document.write(buildPrintHtml(rows))
+    printWindow.document.close()
+    printWindow.onload = () => {
+      printWindow.print()
+      setTimeout(() => printWindow.close(), 400)
+    }
+  } catch (error) {
+    console.error('印刷に失敗:', error)
+    ElMessage.error('印刷データの取得に失敗しました')
+  } finally {
+    printing.value = false
+  }
+}
+
 let listWatchReady = false
 watch([currentPage, pageSize], () => {
   if (!listWatchReady) return
@@ -676,6 +918,12 @@ onMounted(async () => {
 .ee-btn-clear {
   --el-button-hover-bg-color: #f3f4f6;
   border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 12px;
+  height: 32px;
+}
+
+.ee-btn-print {
   border-radius: 8px;
   font-size: 12px;
   height: 32px;
