@@ -693,7 +693,7 @@ import * as echarts from 'echarts'
 import type { EChartsOption } from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Download, QuestionFilled, Refresh } from '@element-plus/icons-vue'
-import * as XLSX from 'xlsx'
+import { downloadExcelFromAoa } from '@/utils/excelExport'
 import {
   getFormingDailyPlanProcessRunDays,
   getPrevCarryBreakdown,
@@ -2327,7 +2327,7 @@ function perDayIntegerByRowItem(itemName: string): number {
   return Math.round(total / wd)
 }
 
-function exportExcel() {
+async function exportExcel() {
   const dates = dateColumns.value
   const rows = matrixRows.value
   if (rows.length === 0 || dates.length === 0) {
@@ -2344,12 +2344,14 @@ function exportExcel() {
     line.push(Number(row.rowTotal ?? 0))
     aoa.push(line)
   }
-  const worksheet = XLSX.utils.aoa_to_sheet(aoa)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, '工程別計画試算')
   const [s, e] = periodRange.value ?? []
   const safe = [s, e].filter(Boolean).join('_').replace(/[^\d_-]/g, '') || 'export'
-  XLSX.writeFile(workbook, `工程別計画試算_${safe}.xlsx`)
+  try {
+    await downloadExcelFromAoa(aoa, '工程別計画試算', `工程別計画試算_${safe}.xlsx`)
+  } catch (e) {
+    console.error(e)
+    ElMessage.error('エクスポートに失敗しました')
+  }
 }
 
 function normalizePeriodRange(): [string, string] | null {

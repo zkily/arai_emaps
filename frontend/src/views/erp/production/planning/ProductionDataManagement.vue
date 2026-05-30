@@ -730,7 +730,7 @@
           <h3 class="confirm-title">計画データを更新しますか？</h3>
           <div class="confirm-details">
             <div class="detail-row">
-              <span class="detail-value">当月月初～+5ヶ月の plan 列をいったんクリアしたうえで、schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
+              <span class="detail-value">当月月初～+5ヶ月の plan 列をいったんクリアしたうえで、schedule_details の日次 planned_qty を設備の工程（machines.machine_type → processes）に応じて集計し、production_summarys の plan 列に反映して actual_plan を更新します。社内メッキ（KT05）の plating_plan は APS メッキ投入ボードの作業日・品番ごとの生産数量（qty×掛け）合計のみ反映し、ボードに無い日・品番は 0 のままです（成型計画での兜底はしません）。続けて、該当範囲の sw_plan・chamfering_plan・cutting_plan をいったんクリアし、ルートに切断工程(KT01)がある行のみ cutting_plan、面取工程(KT02)がある行のみ chamfering_plan、product_machine_config に sw_machine が設定されている製品のみ sw_plan を molding_actual_plan で更新します。</span>
             </div>
           </div>
         </div>

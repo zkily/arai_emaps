@@ -665,7 +665,7 @@
 import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit, Printer, Download } from '@element-plus/icons-vue'
-import * as XLSX from 'xlsx'
+import { downloadExcelFromJson } from '@/utils/excelExport'
 import { inventoryValueApi } from '@/api/inventoryValue'
 import { getProcessList } from '@/api/master/processMaster'
 import { getProductList } from '@/api/master/productMaster'
@@ -1182,7 +1182,7 @@ async function handlePartPrint() {
   }
 }
 
-function handleExportPartData() {
+async function handleExportPartData() {
   if (!partPrintRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -1232,11 +1232,8 @@ function handleExportPartData() {
       金額: totalAmt,
     })
 
-    const ws = XLSX.utils.json_to_sheet(exportRows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '部品棚卸')
     const d = partPrintAsOfLabel.value.replace(/[^\d-]/g, '') || 'export'
-    XLSX.writeFile(wb, `部品棚卸_${d}.xlsx`)
+    await downloadExcelFromJson(exportRows, '部品棚卸', `部品棚卸_${d}.xlsx`)
     ElMessage.success('エクスポートしました')
   } catch (e) {
     console.error(e)
@@ -1474,7 +1471,7 @@ async function handleMaterialPrint() {
 }
 
 /** ダイアログ内の表データ（編集後の数量・手入力束本数・計算金額）を Excel にエクスポート */
-function handleExportMaterialData() {
+async function handleExportMaterialData() {
   if (!materialPrintRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -1506,11 +1503,8 @@ function handleExportMaterialData() {
       金額: Math.round(totalAmt * 100) / 100,
     })
 
-    const ws = XLSX.utils.json_to_sheet(exportRows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '材料棚卸')
     const d = materialPrintAsOfLabel.value.replace(/[^\d-]/g, '') || 'export'
-    XLSX.writeFile(wb, `材料棚卸_${d}.xlsx`)
+    await downloadExcelFromJson(exportRows, '材料棚卸', `材料棚卸_${d}.xlsx`)
     ElMessage.success('エクスポートしました')
   } catch (e) {
     console.error(e)

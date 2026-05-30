@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div ref="platingPageRef" class="plating-planning-page">
     <header class="page-header">
       <h1 class="page-title">メッキ計画作成（作成中）</h1>
@@ -1352,9 +1352,9 @@ import {
   fetchEquipmentEfficiencyList,
   type EquipmentEfficiency,
 } from '@/api/master/equipmentEfficiencyMaster'
-import PlatingFloatingPanel from '@/views/aps/productionPlanCreation/PlatingFloatingPanel.vue'
-import PlatingLeftInventoryPane from '@/views/aps/productionPlanCreation/PlatingLeftInventoryPane.vue'
-import PlatingRightGenPane from '@/views/aps/productionPlanCreation/PlatingRightGenPane.vue'
+import PlatingFloatingPanel from '@/views/aps/productionPlanCreation/plating/PlatingFloatingPanel.vue'
+import PlatingLeftInventoryPane from '@/views/aps/productionPlanCreation/plating/PlatingLeftInventoryPane.vue'
+import PlatingRightGenPane from '@/views/aps/productionPlanCreation/plating/PlatingRightGenPane.vue'
 
 defineOptions({ name: 'PlatingPlanning' })
 
@@ -1726,15 +1726,7 @@ function buildLapScheduleRows(
 function buildGlobalLapSchedule(): LapScheduleSlot[] {
   if (!layoutBoardReady.value) return []
   const blocks = layoutBlocksInBoardView()
-  if (blocks.length === 0) {
-    if (!isYmdInBoardView(layoutPlanDate.value)) return []
-    return buildLapScheduleRows(
-      layoutPlanDate.value,
-      layoutStartTime.value,
-      layoutMinutesPerLap.value,
-      layoutMaxLaps.value,
-    ).filter((s) => isYmdInBoardView(s.work_date))
-  }
+  if (blocks.length === 0) return []
   const out: LapScheduleSlot[] = []
   for (const block of blocks) {
     const rows = buildLapScheduleRows(
@@ -1899,22 +1891,14 @@ function computeNextAppendLayoutDefaults(): {
   }
 }
 
-function syncLayoutBlocksFromDraftHeader() {
-  const ml = layoutMaxLaps.value
-  if (ml < 1 || !isYmdInBoardView(layoutPlanDate.value)) {
-    layoutBlocks.value = []
-    return
-  }
-  layoutBlocks.value = [
-    {
-      plan_date: layoutPlanDate.value,
-      start_time: layoutStartTime.value,
-      minutes_per_lap: layoutMinutesPerLap.value,
-      jigs_per_lap: layoutJigsPerLap.value,
-      lap_count: ml,
-      base_lap_no: 1,
-    },
-  ]
+/** layout_blocks 読込後：表示用の週目設定を先頭ブロックに合わせる */
+function applyLayoutHeaderFromFirstBlock() {
+  const first = [...layoutBlocks.value].sort((a, b) => a.base_lap_no - b.base_lap_no)[0]
+  if (!first) return
+  layoutPlanDate.value = first.plan_date
+  layoutStartTime.value = normalizeBoardStartTimeHm(first.start_time)
+  layoutMinutesPerLap.value = first.minutes_per_lap
+  layoutJigsPerLap.value = first.jigs_per_lap
 }
 
 function inferLayoutBlocksFromBoard(
@@ -2217,8 +2201,6 @@ const draftWorkDate = ref(todayYmdJapan())
 const syncingDraftWorkDateFromLoad = ref(false)
 const loadingDraft = ref(false)
 const currentDraftId = ref<number | null>(null)
-/** PUT 時の plan_date（草稿ヘッダー）。追加レイアウトの計画日とは別に固定 */
-const draftRecordPlanDate = ref('')
 const draggingSource = ref<DraftSourceItem | null>(null)
 const loadingJigAvailability = ref(false)
 let jigAvailabilityLoadPromise: Promise<void> | null = null
@@ -2619,14 +2601,20 @@ async function buildDraftPayload(items: PlatingDraftItemBody[]) {
   const board_cards = await mergePersistBoardCards()
   const layout_blocks = buildLayoutBlocksForPersist()
   const board_date_memos = await buildBoardDateMemosForPersist()
-  const planDate = draftRecordPlanDate.value || draftWorkDate.value || todayYmdJapan()
+  const firstLayout = layout_blocks[0]
+  const planDate =
+    (firstLayout?.plan_date || '').trim().slice(0, 10) ||
+    draftWorkDate.value ||
+    todayYmdJapan()
   return {
     plan_date: planDate,
     daily_minutes: PLATING_DAY_MINUTES,
     jigs_per_lap: layoutBoardReady.value ? layoutJigsPerLap.value : jigsPerLap.value,
     max_laps: layoutBoardReady.value ? layoutMaxLaps.value : 1,
     minutes_per_lap: layoutBoardReady.value ? layoutMinutesPerLap.value : minutesPerLap.value,
-    board_start_time: layoutBoardReady.value ? normalizeBoardStartTimeHm(layoutStartTime.value) : null,
+    board_start_time: firstLayout
+      ? normalizeBoardStartTimeHm(firstLayout.start_time)
+      : null,
     total_slots: kpi.value.totalSlots,
     used_slots: kpi.value.usedSlots,
     remain_slots: kpi.value.remainSlots,
@@ -2654,7 +2642,7 @@ function scheduleCardsToBoardBodies(): PlatingBoardCardBody[] {
   const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
   const fallbackYmd = draftWorkDate.value || todayYmdJapan()
   return [...scheduleCardsForCurrentDraft()]
-    .filter((c) => c.qty > 0)
+    .filter((c) => shouldPersistBoardCard(c))
     .sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap) || a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
     .map((c) => {
       const slot = scheduleByLap.get(c.lap_no)
@@ -2692,12 +2680,12 @@ function compareLapNoForBoardSort(
 
 /** 更新時に他作業日のボード行をマージし、PUT で aps_plating_plan_board_cards を誤削除しない */
 async function mergePersistBoardCards(): Promise<PlatingBoardCardBody[]> {
-  const wd = draftWorkDate.value || todayYmdJapan()
   const mine = scheduleCardsToBoardBodies()
   if (!currentDraftId.value) return mine
+  const datesInMine = new Set(mine.map((bc) => boardCardLapWorkDate(bc)).filter(Boolean))
   const existing = await fetchPlatingDraftById(currentDraftId.value)
   const kept = (existing.board_cards || [])
-    .filter((bc) => boardCardLapWorkDate(bc) !== wd)
+    .filter((bc) => !datesInMine.has(boardCardLapWorkDate(bc)))
     .map(apiBoardCardToBody)
   return [...kept, ...mine]
 }
@@ -2713,8 +2701,24 @@ function cancelBoardAutosaveTimer() {
 }
 
 function canPersistBoard(): boolean {
-  if (!draftWorkDate.value) return false
-  return layoutBoardReady.value
+  return layoutBoardReady.value && layoutBlocks.value.length > 0
+}
+
+/** 追加レイアウト（layout_blocks ＋ board_cards 空枠）を DB へ即時保存 */
+async function flushLayoutPersist(notify = false) {
+  cancelBoardAutosaveTimer()
+  if (isBoardHydratingFromApi.value || loadingDraft.value) return
+  if (!layoutBoardReady.value || layoutBlocks.value.length === 0) {
+    if (notify) ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
+    return
+  }
+  try {
+    await persistDraft(notify)
+  } catch (e) {
+    console.error(e)
+    if (notify) ElMessage.error('レイアウトの保存に失敗しました')
+    throw e
+  }
 }
 
 /** ドラッグ等の高頻度変更：デバウンス後に aps_plating_plan_board_cards へ書込（persistDraft の board_cards 経由） */
@@ -2743,10 +2747,15 @@ async function flushBoardPersist() {
 }
 
 async function persistDraft(notify = true) {
-  if (!draftWorkDate.value) {
-    if (notify) ElMessage.warning('作業日を指定してください')
+  const layout_blocks_preview = buildLayoutBlocksForPersist()
+  if (layout_blocks_preview.length === 0) {
+    if (notify) ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
     return
   }
+  if (!draftWorkDate.value) {
+    draftWorkDate.value = layout_blocks_preview[0]!.plan_date
+  }
+  ensureBoardCardSkeletonsForLayout()
   let items: PlatingDraftItemBody[]
   try {
     items = await mergePersistItems()
@@ -2761,7 +2770,6 @@ async function persistDraft(notify = true) {
   } else {
     const created = await createPlatingDraft(body)
     currentDraftId.value = created.id
-    draftRecordPlanDate.value = String(created.plan_date || body.plan_date).slice(0, 10)
   }
 }
 
@@ -2884,7 +2892,6 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
     } = await loadBoardAcrossViewRange()
     if (!primary) {
       currentDraftId.value = null
-      draftRecordPlanDate.value = ''
       scheduleCards.value = []
       standardPositions.value = new Map()
       layoutBoardReady.value = false
@@ -2919,7 +2926,6 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
     }
 
     currentDraftId.value = display.id
-    draftRecordPlanDate.value = planKey
 
     if (mergedBoard.length > 0) {
       const wdCounts = new Map<string, number>()
@@ -2939,44 +2945,33 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
       if (jp > 0) jigsPerLap.value = jp
       minutesPerLap.value = mp
       layoutMinutesPerLap.value = mp
-      layoutPlanDate.value = String(display.plan_date || planKey).slice(0, 10) || planKey
-      layoutStartTime.value = normalizeBoardStartTimeHm(display.board_start_time)
-      const maxLapsFromDraft = Math.max(1, Math.floor(Number(display.max_laps) || 0))
       const rawBoard = mergedBoard
       const persistedBlocks = normalizeLayoutBlocksForView(mergedLayoutBlocks || [])
-      const hasLayout =
-        persistedBlocks.length > 0 ||
-        (jp > 0 && (Boolean(display.board_start_time) || maxLapsFromDraft >= 1))
-      if (hasLayout) {
-        layoutBoardReady.value = true
-        layoutJigsPerLap.value = jp > 0 ? jp : layoutJigsPerLap.value
-        const maxFromCards = rawBoard.length > 0 ? Math.max(...rawBoard.map((b) => b.lap_no)) : 0
-        layoutMaxLaps.value = Math.max(maxLapsFromDraft, maxFromCards, 1)
-        let nextBlocks: BoardLayoutBlock[]
-        if (persistedBlocks.length > 0) {
-          // DB に保存された layout_blocks を優先（カード未配置でも骨格を保持）
-          nextBlocks = persistedBlocks
-        } else {
-          // 旧データ向け降級：board_cards から推測 → header から構築
-          const inferred = inferLayoutBlocksFromBoard(rawBoard, {
-            plan_date: layoutPlanDate.value,
-            board_start_time: layoutStartTime.value,
-            minutes_per_lap: layoutMinutesPerLap.value,
-            jigs_per_lap: layoutJigsPerLap.value,
-            max_laps: layoutMaxLaps.value,
-          })
-          if (inferred.length > 0) {
-            nextBlocks = inferred
-          } else {
-            syncLayoutBlocksFromDraftHeader()
-            nextBlocks = layoutBlocks.value
-          }
-        }
-        layoutBlocks.value = nextBlocks.filter((b) => isYmdInBoardView(b.plan_date))
+      let nextBlocks: BoardLayoutBlock[] = persistedBlocks
+      if (nextBlocks.length === 0 && rawBoard.length > 0) {
+        const legacyPlan =
+          boardCardLapWorkDate(rawBoard[0]!) ||
+          String(display.plan_date || planKey).slice(0, 10)
+        nextBlocks = inferLayoutBlocksFromBoard(rawBoard, {
+          plan_date: legacyPlan,
+          board_start_time: normalizeBoardStartTimeHm(display.board_start_time),
+          minutes_per_lap: mp,
+          jigs_per_lap: jp > 0 ? jp : layoutJigsPerLap.value,
+          max_laps: Math.max(1, Math.floor(Number(display.max_laps) || 0)),
+        })
+      }
+      layoutBlocks.value = nextBlocks.filter((b) => doesBlockOverlapBoardView(b))
+      layoutBoardReady.value = layoutBlocks.value.length > 0
+      if (layoutBoardReady.value) {
+        layoutJigsPerLap.value = layoutBlocks.value[0]!.jigs_per_lap
+        applyLayoutHeaderFromFirstBlock()
         recomputeLayoutMaxLapsFromSchedule()
+        const maxFromCards = rawBoard.length > 0 ? Math.max(...rawBoard.map((b) => b.lap_no)) : 0
+        if (maxFromCards > layoutMaxLaps.value) layoutMaxLaps.value = maxFromCards
       } else {
         layoutBlocks.value = []
       }
+      const hasLayout = layoutBoardReady.value
       if (rawBoard.length > 0) {
         const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
         scheduleCards.value = rawBoard
@@ -3017,21 +3012,9 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
         scheduleCards.value = []
         standardPositions.value = new Map()
         layoutBoardReady.value = false
-      } else if (!isYmdInBoardView(planKey) && rawBoard.length === 0) {
-        scheduleCards.value = []
-        standardPositions.value = new Map()
-        layoutBlocks.value = []
-        layoutBoardReady.value = false
       } else {
         scheduleCards.value = []
         standardPositions.value = new Map()
-        if (isYmdInBoardView(planKey)) {
-          syncLayoutBlocksFromDraftHeader()
-          layoutBlocks.value = layoutBlocks.value.filter((b) => isYmdInBoardView(b.plan_date))
-          recomputeLayoutMaxLapsFromSchedule()
-        } else {
-          layoutBlocks.value = []
-        }
       }
     } finally {
       void nextTick(() => {
@@ -3544,6 +3527,71 @@ function openJigDropDialog(
 
 function isJigProductCd(productCd: string): boolean {
   return String(productCd || '').startsWith('__jig__')
+}
+
+/** レイアウト空枠（board_cards に qty=0 で永続化） */
+function isEmptySlotProductCd(productCd: string): boolean {
+  return String(productCd || '').startsWith('__slot__')
+}
+
+function shouldPersistBoardCard(c: ScheduleCard): boolean {
+  return c.qty > 0 || isEmptySlotProductCd(c.product_cd)
+}
+
+function createEmptySlotScheduleCard(lapNo: number, turnSeq: number, slot?: LapScheduleSlot): ScheduleCard {
+  const persistLap = lapNo
+  return {
+    id: `slot-${persistLap}-${turnSeq}-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    product_cd: `__slot__${persistLap}-${turnSeq}`,
+    product_name: '空き',
+    plating_machine: '—',
+    kake: 1,
+    qty: 0,
+    slots: 0,
+    lap_no: lapNo,
+    persist_lap_no: persistLap,
+    turn_seq: turnSeq,
+    colorIdx: 0,
+    boardMark: 'standard',
+  }
+}
+
+/** レイアウト上の各周×列に board_cards 用の空枠行を揃える（追加レイアウト直後・保存前） */
+function ensureBoardCardSkeletonsForLayout() {
+  if (!layoutBoardReady.value || layoutBlocks.value.length === 0) return
+  const jigs = Math.max(1, Math.floor(layoutJigsPerLap.value || 1))
+  const schedule = currentLayoutLapSchedule()
+  if (schedule.length === 0) return
+  const newCards: ScheduleCard[] = []
+  for (const slot of schedule) {
+    const lapNo = slot.lap_no
+    for (let turn = 1; turn <= jigs; turn += 1) {
+      const hasOccupied = scheduleCards.value.some(
+        (c) => c.lap_no === lapNo && c.turn_seq === turn && c.qty > 0,
+      )
+      if (hasOccupied) continue
+      const hasSkeleton = scheduleCards.value.some(
+        (c) => c.lap_no === lapNo && c.turn_seq === turn && isEmptySlotProductCd(c.product_cd),
+      )
+      if (hasSkeleton) continue
+      newCards.push(createEmptySlotScheduleCard(lapNo, turn, slot))
+    }
+  }
+  if (newCards.length > 0) {
+    scheduleCards.value = [...scheduleCards.value, ...newCards]
+  }
+}
+
+function removeEmptySlotAt(lapNo: number, turnSeq: number) {
+  scheduleCards.value = scheduleCards.value.filter(
+    (c) =>
+      !(
+        c.lap_no === lapNo &&
+        c.turn_seq === turnSeq &&
+        isEmptySlotProductCd(c.product_cd) &&
+        c.qty <= 0
+      ),
+  )
 }
 
 function createJigScheduleCard(platingMachine: string, lapNo: number, turnSeq: number): ScheduleCard {
@@ -4703,9 +4751,10 @@ function confirmJigDropToBoard() {
     warnLayoutJigCapacityExceeded(targetLap, qty)
     return
   }
-  const newCards: ScheduleCard[] = slots.map((s) =>
-    createJigScheduleCard(pending.plating_machine, s.lap_no, s.turn_seq),
-  )
+  const newCards: ScheduleCard[] = slots.map((s) => {
+    removeEmptySlotAt(s.lap_no, s.turn_seq)
+    return createJigScheduleCard(pending.plating_machine, s.lap_no, s.turn_seq)
+  })
   scheduleCards.value = [...scheduleCards.value, ...newCards]
   jigDropDialogVisible.value = false
   ElMessage.success(`${pending.plating_machine} を ${newCards.length} 枠（本）に配置しました`)
@@ -5296,7 +5345,7 @@ function openAppendLayoutDialog() {
   templateDialogVisible.value = true
 }
 
-function confirmAppendLayout() {
+async function confirmAppendLayout() {
   const planDate = (tplFormPlanDate.value || '').trim()
   if (!planDate) {
     ElMessage.warning('計画日を指定してください')
@@ -5339,17 +5388,21 @@ function confirmAppendLayout() {
   minutesPerLap.value = cycle
   layoutBoardReady.value = true
   templateDialogVisible.value = false
+  ensureBoardCardSkeletonsForLayout()
   void nextTick(() => {
     if (!scheduleCards.value.some((c) => c.qty > 0)) initLapTrackSortables()
   })
   const preview = buildLapScheduleRows(planDate, startHm, cycle, laps)
   const last = preview[preview.length - 1]
-  ElMessage.success(
-    last
-      ? `${formatBoardDateLabel(planDate)}：第1〜${laps}周目を追加しました（${startHm}〜${last.end}）`
-      : `${formatBoardDateLabel(planDate)}：第1〜${laps}周目の空き枠を追加しました`,
-  )
-  void flushBoardPersist()
+  try {
+    await flushLayoutPersist(false)
+    const msg = last
+      ? `${formatBoardDateLabel(planDate)}：第1〜${laps}周目を追加し、レイアウト・ボード枠をデータベースに保存しました（${startHm}〜${last.end}）`
+      : `${formatBoardDateLabel(planDate)}：第1〜${laps}周目を追加し、レイアウト・ボード枠をデータベースに保存しました`
+    ElMessage.success(msg)
+  } catch {
+    ElMessage.error('レイアウトの保存に失敗しました。再度お試しください')
+  }
 }
 
 interface LapBarSegment {
@@ -6766,7 +6819,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
 
 /** 製品枠の生産数量（qty × 掛け数）。治具のみ枠は 0 */
 function cardProductProductionQty(c: ScheduleCard): number {
-  if (isJigProductCd(c.product_cd)) return 0
+  if (isJigProductCd(c.product_cd) || isEmptySlotProductCd(c.product_cd)) return 0
   const q = Math.max(0, Math.floor(num(c.qty)))
   const k = c.kake > 0 ? c.kake : 1
   return q * k

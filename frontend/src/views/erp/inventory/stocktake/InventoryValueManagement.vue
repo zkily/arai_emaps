@@ -769,7 +769,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import * as XLSX from 'xlsx'
+import { downloadExcelFromJson } from '@/utils/excelExport'
 import { useRouter } from 'vue-router'
 import {
   Operation,
@@ -2444,7 +2444,7 @@ async function printProductAmountData() {
   win.print()
 }
 
-function exportProductCountData() {
+async function exportProductCountData() {
   if (!displayProductCountRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -2460,11 +2460,8 @@ function exportProductCountData() {
       }
       return out
     })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '製品本数棚卸')
     const d = productCountAsOf.value.replace(/[^\d-]/g, '') || 'export'
-    XLSX.writeFile(wb, `製品本数棚卸_${d}.xlsx`)
+    await downloadExcelFromJson(rows, '製品本数棚卸', `製品本数棚卸_${d}.xlsx`)
     ElMessage.success('エクスポートしました')
   } catch (e) {
     console.error(e)
@@ -2472,7 +2469,7 @@ function exportProductCountData() {
   }
 }
 
-function exportProductAmountData() {
+async function exportProductAmountData() {
   if (!displayProductAmountRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -2485,11 +2482,8 @@ function exportProductAmountData() {
       }
       return out
     })
-    const ws = XLSX.utils.json_to_sheet(rows)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, '製品金額棚卸')
     const d = productAmountAsOf.value.replace(/[^\d-]/g, '') || 'export'
-    XLSX.writeFile(wb, `製品金額棚卸_${d}.xlsx`)
+    await downloadExcelFromJson(rows, '製品金額棚卸', `製品金額棚卸_${d}.xlsx`)
     ElMessage.success('エクスポートしました')
   } catch (e) {
     console.error(e)

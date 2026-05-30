@@ -639,7 +639,7 @@ import {
 import { getProductMasterOptions, getMaterialOptions, getRouteOptions } from '@/api/options'
 import ProductEditDialog from './ProductEditDialog.vue'
 import type { Product, OptionItem } from '@/types/master'
-import * as XLSX from 'xlsx'
+import { downloadExcelFromJson } from '@/utils/excelExport'
 
 const { t } = useI18n()
 
@@ -1309,7 +1309,7 @@ const doGenerateAndPrintQRCodes = async () => {
 }
 
 // 导出Excel
-const handleExport = () => {
+const handleExport = async () => {
   const exportData = productList.value.map((item) => {
     const data: any = {
       製品CD: item.product_cd,
@@ -1405,10 +1405,7 @@ const handleExport = () => {
     return data
   })
 
-  const worksheet = XLSX.utils.json_to_sheet(exportData)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, '製品マスタ')
-  XLSX.writeFile(workbook, '製品マスタ一覧.xlsx')
+  await downloadExcelFromJson(exportData, '製品マスタ', '製品マスタ一覧.xlsx')
 }
 
 // 导出CSV文件
