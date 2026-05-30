@@ -204,6 +204,7 @@ export default {
     ERP_PRODUCTION_BASELINE: 'Baseline kế hoạch',
     ERP_PRODUCTION_PLAN_SCHEDULES: '生産スケジュール',
     ERP_PRODUCTION_FORMING_DAILY_PLAN: 'Ước tính kế hoạch theo công đoạn',
+    ERP_PRODUCTION_PROCESS_MACHINE_PLAN: 'Kế hoạch theo công đoạn & thiết bị',
     ERP_PRODUCTION_INSTRUCTION: 'Chỉ thị sản xuất',
     ERP_PRODUCTION_INSTR_CUTTING: 'Chỉ thị cắt・mặt',
     ERP_PRODUCTION_INSTR_FORMING: 'Chỉ thị tạo hình',

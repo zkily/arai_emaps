@@ -76,6 +76,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_PLAN_SCHEDULES', name: '生産スケジュール', path: '/erp/production/plan-schedules', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 3 },
   { code: 'ERP_PRODUCTION_FORMING_DAILY_PLAN', name: '工程别计划试算', path: '/erp/production/forming-daily-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.5 },
+  { code: 'ERP_PRODUCTION_PROCESS_MACHINE_PLAN', name: '工程别设备别计划', path: '/erp/production/process-machine-plan', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 4.6 },
   { code: 'ERP_PRODUCTION_REQUIREMENTS', name: '生産需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION', sortOrder: 5.7 },
   { code: 'ERP_PRODUCTION_MAT_REQ', name: '材料需要量', path: '/erp/production-requirements/material', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_COMPONENT_REQ', name: '部品需要量', path: '/erp/production-requirements/component', parentCode: 'ERP_PRODUCTION_REQUIREMENTS', sortOrder: 2 },

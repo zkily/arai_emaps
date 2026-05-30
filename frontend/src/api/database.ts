@@ -591,3 +591,104 @@ export function putFormingDailyPlanProcessRunDays(body: {
     }
   }>(`${FORMING_DAILY_PLAN_BASE}/process-run-days`, body)
 }
+
+/* ===================== 工程別設備別計画（ProcessMachinePlanView） ===================== */
+
+/** 対象工程キー（production_summarys の *_machine / *_plan / *_actual に対応） */
+export type ProcessMachinePlanKey =
+  | 'cutting'
+  | 'chamfering'
+  | 'molding'
+  | 'plating'
+  | 'welding'
+  | 'inspection'
+  | 'outsourced_plating'
+  | 'outsourced_welding'
+
+export interface ProcessMachinePlanParams {
+  startDate: string
+  endDate: string
+  /** 対象工程キー（カンマ区切り）。未指定なら全工程 */
+  processes?: string
+  /** 製品CDで絞り込み（任意） */
+  productCd?: string
+}
+
+/** 工程 × 設備の集計指標 */
+export interface ProcessMachineMetrics {
+  plan: number
+  actual: number
+  actual_plan: number
+  defect: number
+  scrap: number
+  /** 実績 - 計画 */
+  diff: number
+  /** 達成率(%)。計画 0 のときは null */
+  achievement_rate: number | null
+  /** 不良率(%)。母数 0 のときは null */
+  defect_rate: number | null
+  /** 実績または計画のあった稼働日数 */
+  days: number
+}
+
+/** 工程 × 設備の 1 行（summary） */
+export interface ProcessMachinePlanRow extends ProcessMachineMetrics {
+  process_key: ProcessMachinePlanKey
+  process_label: string
+  machine: string
+  /** 日別内訳（日付 → {plan, actual, diff}） */
+  daily: Record<string, { plan: number; actual: number; diff: number }>
+}
+
+/** 工程合計（process_key → 指標） */
+export interface ProcessMachineProcessTotal extends ProcessMachineMetrics {
+  process_key: ProcessMachinePlanKey
+  process_label: string
+}
+
+export interface ProcessMachinePlanData {
+  startDate: string
+  endDate: string
+  dates: string[]
+  processes: { key: ProcessMachinePlanKey; label: string }[]
+  summary: ProcessMachinePlanRow[]
+  processTotals: Record<string, ProcessMachineProcessTotal>
+  grandTotal: ProcessMachineMetrics
+}
+
+/** 工程別設備別計画：期間集計（計画 vs 実績） */
+export function getProcessMachinePlan(params: ProcessMachinePlanParams) {
+  return request.get<{ data: ProcessMachinePlanData }>(
+    `${BASE}/process-machine-plan`,
+    { params },
+  )
+}
+
+/** ドリルダウン：工程×設備の製品別明細の 1 行 */
+export interface ProcessMachineProductRow extends ProcessMachineMetrics {
+  product_cd: string
+  product_name: string | null
+}
+
+export interface ProcessMachineProductsData {
+  startDate: string
+  endDate: string
+  process_key: ProcessMachinePlanKey
+  process_label: string
+  machine: string
+  products: ProcessMachineProductRow[]
+  total: ProcessMachineMetrics
+}
+
+/** 工程×設備 → 製品別の計画/実績明細（行ダブルクリックのドリルダウン用） */
+export function getProcessMachinePlanProducts(params: {
+  startDate: string
+  endDate: string
+  process: string
+  machine: string
+}) {
+  return request.get<{ data: ProcessMachineProductsData }>(
+    `${BASE}/process-machine-plan/products`,
+    { params },
+  )
+}

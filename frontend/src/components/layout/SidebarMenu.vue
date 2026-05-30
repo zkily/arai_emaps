@@ -246,6 +246,10 @@
                 <el-icon><Calendar /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_FORMING_DAILY_PLAN')">{{ t('menu.ERP_PRODUCTION_FORMING_DAILY_PLAN') }}</span></template>
               </el-menu-item>
+              <el-menu-item index="/erp/production/process-machine-plan">
+                <el-icon><TrendCharts /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_PROCESS_MACHINE_PLAN')">{{ t('menu.ERP_PRODUCTION_PROCESS_MACHINE_PLAN') }}</span></template>
+              </el-menu-item>
             </el-sub-menu>
             <el-sub-menu index="erp-production-requirements">
               <template #title>
