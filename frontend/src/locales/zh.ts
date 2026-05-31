@@ -274,6 +274,7 @@ export default {
     APS_WELDING_PLANNING: '焊接计划编制',
     APS_PLATING_PLANNING: '电镀计划编制',
     APS_SCHEDULING: '排程',
+    APS_EQUIPMENT_UTILIZATION_MANAGEMENT: '设备稼动管理',
     APS_CAPACITY: '设备稼动设定',
     APS_CAPACITY_MATRIX: '设备稼动时间表',
     APS_DAILY_REPORT: '日别设备计划表',

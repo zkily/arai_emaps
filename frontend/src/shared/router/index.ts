@@ -243,9 +243,9 @@ const routes: RouteRecordRaw[] = [
       { path: 'aps/planning-list', name: 'FormingPlanningList', component: () => import('@/views/aps/productionPlanOverview/FormingPlanningList.vue'), meta: { title: '成型計画一覧', requiresAuth: true } },
       { path: 'aps/welding-planning-list', name: 'WeldingPlanningList', component: () => import('@/views/aps/productionPlanOverview/WeldingPlanningList.vue'), meta: { title: '溶接計画一覧', requiresAuth: true } },
       { path: 'aps/scheduling', name: 'Scheduling', component: () => import('@/views/aps/Scheduling.vue'), meta: { title: 'スケジューリング', requiresAuth: true } },
-      { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
-      { path: 'aps/capacity-matrix', name: 'CapacityMatrix', component: () => import('@/views/aps/CapacityMatrix.vue'), meta: { title: '設備稼働時間表', requiresAuth: true } },
-      { path: 'aps/daily-report', name: 'DailyReport', component: () => import('@/views/aps/DailyReport.vue'), meta: { title: '日別設備計画表', requiresAuth: true } },
+      { path: 'aps/capacity', name: 'LineCapacity', component: () => import('@/views/aps/equipmentUtilizationManagement/LineCapacity.vue'), meta: { title: '設備稼働設定', requiresAuth: true } },
+      { path: 'aps/capacity-matrix', name: 'CapacityMatrix', component: () => import('@/views/aps/equipmentUtilizationManagement/CapacityMatrix.vue'), meta: { title: '設備稼働時間表', requiresAuth: true } },
+      { path: 'aps/daily-report', name: 'DailyReport', component: () => import('@/views/aps/equipmentUtilizationManagement/DailyReport.vue'), meta: { title: '日別設備計画表', requiresAuth: true } },
       { path: 'aps/batch-plans', name: 'ApsBatchPlans', component: () => import('@/views/aps/BatchPlans.vue'), meta: { title: 'APSロット計画', requiresAuth: true } },
 
       // ========== MES モジュール ==========

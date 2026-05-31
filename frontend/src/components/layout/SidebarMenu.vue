@@ -449,21 +449,27 @@
               <template #title><span :title="t('menu.APS_WELDING_PLAN_LIST')">{{ t('menu.APS_WELDING_PLAN_LIST') }}</span></template>
             </el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="aps-equipment-utilization-management">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span :title="t('menu.APS_EQUIPMENT_UTILIZATION_MANAGEMENT')">{{ t('menu.APS_EQUIPMENT_UTILIZATION_MANAGEMENT') }}</span>
+            </template>
+            <el-menu-item index="/aps/capacity">
+              <el-icon><Setting /></el-icon>
+              <template #title><span :title="t('menu.APS_CAPACITY')">{{ t('menu.APS_CAPACITY') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/aps/capacity-matrix">
+              <el-icon><Document /></el-icon>
+              <template #title><span :title="t('menu.APS_CAPACITY_MATRIX')">{{ t('menu.APS_CAPACITY_MATRIX') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/aps/daily-report">
+              <el-icon><Document /></el-icon>
+              <template #title><span :title="t('menu.APS_DAILY_REPORT')">{{ t('menu.APS_DAILY_REPORT') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
           <el-menu-item index="/aps/scheduling">
             <el-icon><Timer /></el-icon>
             <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>
-          </el-menu-item>
-          <el-menu-item index="/aps/capacity">
-            <el-icon><Setting /></el-icon>
-            <template #title><span :title="t('menu.APS_CAPACITY')">{{ t('menu.APS_CAPACITY') }}</span></template>
-          </el-menu-item>
-          <el-menu-item index="/aps/capacity-matrix">
-            <el-icon><Document /></el-icon>
-            <template #title><span :title="t('menu.APS_CAPACITY_MATRIX')">{{ t('menu.APS_CAPACITY_MATRIX') }}</span></template>
-          </el-menu-item>
-          <el-menu-item index="/aps/daily-report">
-            <el-icon><Document /></el-icon>
-            <template #title><span :title="t('menu.APS_DAILY_REPORT')">{{ t('menu.APS_DAILY_REPORT') }}</span></template>
           </el-menu-item>
           <el-menu-item index="/aps/batch-plans">
             <el-icon><Tickets /></el-icon>

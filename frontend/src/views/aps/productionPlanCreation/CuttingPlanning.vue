@@ -283,7 +283,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
-import LineCapacity from '../LineCapacity.vue'
+import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import {
   autoScheduleCuttingPlans,
   scheduleCuttingPlanSelected,

@@ -275,6 +275,7 @@ export default {
     APS_WELDING_PLANNING: 'Welding Planning',
     APS_PLATING_PLANNING: 'Plating Planning',
     APS_SCHEDULING: 'Scheduling',
+    APS_EQUIPMENT_UTILIZATION_MANAGEMENT: 'Equipment Utilization Management',
     APS_CAPACITY: 'Equipment Capacity',
     APS_CAPACITY_MATRIX: 'Equipment Runtime Matrix',
     APS_DAILY_REPORT: 'Daily Equipment Report',

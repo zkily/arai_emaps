@@ -1311,7 +1311,7 @@ import {
   runFormingLineReplanSequence,
 } from '@/views/aps/shared/formingLineReplan'
 import type { ProcessItem } from '@/types/master'
-import LineCapacity from '../LineCapacity.vue'
+import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import request from '@/shared/api/request'
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */

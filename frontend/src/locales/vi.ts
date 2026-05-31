@@ -274,6 +274,7 @@ export default {
     APS_WELDING_PLANNING: 'Lập kế hoạch hàn',
     APS_PLATING_PLANNING: 'Lập kế hoạch mạ',
     APS_SCHEDULING: 'Lập lịch',
+    APS_EQUIPMENT_UTILIZATION_MANAGEMENT: 'Quản lý vận hành thiết bị',
     APS_CAPACITY: 'Cài đặt thiết bị',
     APS_CAPACITY_MATRIX: 'Bảng thời gian vận hành thiết bị',
     APS_DAILY_REPORT: 'Báo cáo hàng ngày',

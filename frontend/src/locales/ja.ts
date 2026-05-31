@@ -275,6 +275,7 @@ export default {
     APS_WELDING_PLANNING: '溶接計画作成',
     APS_PLATING_PLANNING: 'メッキ計画作成',
     APS_SCHEDULING: 'スケジューリング',
+    APS_EQUIPMENT_UTILIZATION_MANAGEMENT: '設備稼働管理',
     APS_CAPACITY: '設備稼働設定',
     APS_CAPACITY_MATRIX: '設備稼働時間表',
     APS_DAILY_REPORT: '日別設備計画表',

@@ -1044,7 +1044,7 @@ import {
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
-import LineCapacity from '../LineCapacity.vue'
+import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import { getProductionSummarysList } from '@/api/database'
 import request from '@/shared/api/request'
 
