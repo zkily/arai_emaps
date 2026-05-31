@@ -8604,31 +8604,6 @@ CREATE TABLE IF NOT EXISTS `sales_contract_pricing` (
   KEY `idx_scp_valid` (`valid_from`, `valid_until`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='契約単価';
 
--- ---------------------------------------------------------------------------
--- 内示テーブル
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS `sales_forecast` (
-  `id` int NOT NULL AUTO_INCREMENT COMMENT '主キー',
-  `customer_code` varchar(50) NOT NULL COMMENT '顧客コード',
-  `customer_name` varchar(200) DEFAULT NULL COMMENT '顧客名',
-  `product_code` varchar(100) NOT NULL COMMENT '品番',
-  `product_name` varchar(300) DEFAULT NULL COMMENT '品名',
-  `forecast_month` char(7) NOT NULL COMMENT '内示月 (YYYY-MM)',
-  `forecast_quantity` int NOT NULL DEFAULT 0 COMMENT '内示数量',
-  `confirmed_quantity` int NOT NULL DEFAULT 0 COMMENT '確定数量',
-  `status` varchar(20) NOT NULL DEFAULT 'forecast' COMMENT 'forecast/confirmed/revised',
-  `remarks` text COMMENT '備考',
-  `created_by` varchar(100) DEFAULT NULL COMMENT '作成者',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_sf_cust_prod_month` (`customer_code`, `product_code`, `forecast_month`),
-  KEY `idx_sf_customer` (`customer_code`),
-  KEY `idx_sf_product` (`product_code`),
-  KEY `idx_sf_month` (`forecast_month`),
-  KEY `idx_sf_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='内示';
-
 -- >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 -- merged from 247_sales_recording.sql (original prefix 247)
 -- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

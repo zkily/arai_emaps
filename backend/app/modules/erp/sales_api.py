@@ -3,7 +3,7 @@
 """
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, cast, or_
+from sqlalchemy import select, func, and_, cast, or_, delete
 from sqlalchemy.exc import SQLAlchemyError
 from typing import List, Optional
 from datetime import date, datetime, timedelta
@@ -18,12 +18,12 @@ from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.models import User
 from app.core.database import get_db
-from app.modules.erp.models import OrderDaily
+from app.modules.erp.models import OrderDaily, OrderMonthly
 from app.modules.erp.sales_models import (
     SalesOrder, SalesOrderItem, SalesDelivery, SalesDeliveryItem,
     SalesQuotation, SalesQuotationItem,
     SalesInvoice, SalesInvoiceItem,
-    SalesCredit, SalesContractPricing, SalesForecast, SalesRecording,
+    SalesCredit, SalesContractPricing, SalesRecording,
     SalesReturn, SalesReturnItem,
 )
 from app.modules.master.models import Customer, Destination as MasterDestination, Product
@@ -2056,71 +2056,124 @@ async def delete_contract_pricing(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ========== 内示・フォーキャスト (Forecast) ==========
+# ========== 内示・フォーキャスト (order_monthly 参照) ==========
 
 
-def _forecast_to_dict(f: SalesForecast) -> dict:
-    status_names = {
-        "draft": "下書き",
-        "submitted": "提出済",
-        "confirmed": "確定",
-        "revised": "修正済",
-    }
+def _parse_forecast_year_month(data: dict) -> tuple[int, int]:
+    forecast_month = data.get("forecast_month")
+    if forecast_month:
+        parts = str(forecast_month).split("-")
+        if len(parts) >= 2:
+            return int(parts[0]), int(parts[1])
+    year = data.get("year")
+    month = data.get("month")
+    if year is not None and month is not None:
+        return int(year), int(month)
+    raise HTTPException(status_code=400, detail="対象年月は必須です")
+
+
+async def _order_monthly_confirmed_sum_map(
+    db: AsyncSession, rows: list[OrderMonthly]
+) -> dict[str, int]:
+    """月別受注ごとの確定本数（当該月 order_daily.confirmed_units 合計）"""
+    sum_map: dict[str, int] = {}
+    if not rows:
+        return sum_map
+    by_ym: dict[tuple[int, int], list[str]] = {}
+    for r in rows:
+        ym = (r.year, r.month)
+        by_ym.setdefault(ym, []).append(r.order_id)
+    od = OrderDaily
+    for (y, m), order_ids in by_ym.items():
+        first_day = date(y, m, 1)
+        last_day = date(y, m, calendar.monthrange(y, m)[1])
+        q = (
+            select(od.monthly_order_id, func.coalesce(func.sum(od.confirmed_units), 0).label("total"))
+            .where(od.monthly_order_id.in_(order_ids))
+            .where(od.date >= first_day)
+            .where(od.date <= last_day)
+            .group_by(od.monthly_order_id)
+        )
+        sub_r = await db.execute(q)
+        for s in sub_r.all():
+            sum_map[s.monthly_order_id] = int(s.total or 0)
+    return sum_map
+
+
+def _order_monthly_to_forecast_dict(row: OrderMonthly, confirmed_units: int = 0) -> dict:
+    forecast_units = int(row.forecast_units or 0)
+    confirmed_units = int(confirmed_units or 0)
     return {
-        "id": f.id,
-        "customer_code": f.customer_code,
-        "customer_name": f.customer_name,
-        "product_code": f.product_code,
-        "product_name": f.product_name,
-        "forecast_month": f.forecast_month,
-        "forecast_quantity": f.forecast_quantity,
-        "confirmed_quantity": f.confirmed_quantity,
-        "unit_price": float(f.unit_price or 0) if f.unit_price else None,
-        "forecast_amount": float(f.forecast_amount or 0),
-        "status": f.status,
-        "status_name": status_names.get(f.status, f.status),
-        "confirmed_at": f.confirmed_at.isoformat() if f.confirmed_at else None,
-        "confirmed_by": f.confirmed_by,
-        "remarks": f.remarks,
-        "created_by": f.created_by,
-        "created_at": f.created_at.isoformat() if f.created_at else None,
+        "id": row.id,
+        "order_id": row.order_id,
+        "destination_cd": row.destination_cd,
+        "destination_name": row.destination_name,
+        "product_cd": row.product_cd,
+        "product_name": row.product_name,
+        "product_type": row.product_type,
+        "year": row.year,
+        "month": row.month,
+        "forecast_month": f"{row.year}-{row.month:02d}",
+        "forecast_units": forecast_units,
+        "forecast_quantity": forecast_units,
+        "forecast_total_units": confirmed_units,
+        "confirmed_quantity": confirmed_units,
+        "forecast_diff": confirmed_units - forecast_units,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
 
 
 @router.get("/forecasts")
 async def get_forecast_list(
-    customer_code: Optional[str] = Query(None),
-    product_code: Optional[str] = Query(None),
-    month: Optional[str] = Query(None, description="対象年月 (YYYY-MM)"),
-    status: Optional[str] = Query(None),
+    customer_code: Optional[str] = Query(None, description="納入先CD（互換）"),
+    destination_cd: Optional[str] = Query(None),
+    product_cd: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, description="納入先名・製品CD・製品名"),
+    month: Optional[str] = Query(None, alias="forecast_month", description="対象年月 (YYYY-MM)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フォーキャスト一覧取得"""
-    query = select(SalesForecast)
+    """内示・フォーキャスト一覧（order_monthly）"""
+    om = OrderMonthly
+    query = select(om)
 
-    if customer_code:
-        query = query.where(SalesForecast.customer_code == customer_code)
-    if product_code:
-        query = query.where(SalesForecast.product_code == product_code)
+    dest_cd = destination_cd or customer_code
+    if dest_cd:
+        query = query.where(om.destination_cd == dest_cd)
+    if product_cd:
+        query = query.where(om.product_cd == product_cd)
+    if keyword:
+        k = f"%{keyword}%"
+        query = query.where(
+            or_(
+                om.destination_cd.like(k),
+                om.destination_name.like(k),
+                om.product_cd.like(k),
+                om.product_name.like(k),
+            )
+        )
     if month:
-        query = query.where(SalesForecast.forecast_month == month)
-    if status:
-        query = query.where(SalesForecast.status == status)
+        parts = str(month).split("-")
+        if len(parts) >= 2:
+            query = query.where(om.year == int(parts[0]), om.month == int(parts[1]))
 
     count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar()
+    total = (await db.execute(count_query)).scalar() or 0
 
-    query = query.order_by(SalesForecast.forecast_month.desc(), SalesForecast.created_at.desc())
+    query = query.order_by(om.year.desc(), om.month.desc(), om.id.desc())
     query = query.offset((page - 1) * page_size).limit(page_size)
-    result = await db.execute(query)
-    items = result.scalars().all()
+    rows = (await db.execute(query)).scalars().all()
+
+    sum_map = await _order_monthly_confirmed_sum_map(db, list(rows))
+    items = [
+        _order_monthly_to_forecast_dict(r, sum_map.get(r.order_id, 0)) for r in rows
+    ]
 
     return {
-        "items": [_forecast_to_dict(item) for item in items],
+        "items": items,
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -2133,61 +2186,55 @@ async def create_or_update_forecast(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フォーキャスト作成・更新"""
-    customer_code = data.get("customer_code")
-    product_code = data.get("product_code")
-    forecast_month = data.get("forecast_month")
-
-    if not all([customer_code, product_code, forecast_month]):
-        raise HTTPException(
-            status_code=400, detail="顧客コード、品番、対象年月は必須です"
-        )
+    """内示登録（order_monthly 作成または更新）"""
+    destination_cd = data.get("destination_cd") or data.get("customer_code")
+    product_cd = data.get("product_cd")
+    if not destination_cd or not product_cd:
+        raise HTTPException(status_code=400, detail="納入先CD、製品CDは必須です")
+    year, month = _parse_forecast_year_month(data)
+    product_type = data.get("product_type") or "量産品"
+    forecast_units = int(data.get("forecast_units", data.get("forecast_quantity", 0)) or 0)
 
     try:
         result = await db.execute(
-            select(SalesForecast).where(
+            select(OrderMonthly).where(
                 and_(
-                    SalesForecast.customer_code == customer_code,
-                    SalesForecast.product_code == product_code,
-                    SalesForecast.forecast_month == forecast_month,
+                    OrderMonthly.year == year,
+                    OrderMonthly.month == month,
+                    OrderMonthly.destination_cd == destination_cd,
+                    OrderMonthly.product_cd == product_cd,
+                    OrderMonthly.product_type == product_type,
                 )
             )
         )
-        forecast = result.scalar_one_or_none()
-
-        quantity = data.get("forecast_quantity", 0)
-        unit_price = data.get("unit_price", 0)
-        forecast_amount = quantity * unit_price if unit_price else 0
-
-        if forecast:
-            forecast.forecast_quantity = quantity
-            forecast.unit_price = unit_price
-            forecast.forecast_amount = forecast_amount
-            forecast.customer_name = data.get("customer_name", forecast.customer_name)
-            forecast.product_name = data.get("product_name", forecast.product_name)
-            forecast.remarks = data.get("remarks", forecast.remarks)
-            if forecast.status == "confirmed":
-                forecast.status = "revised"
-            msg = "フォーキャストを更新しました"
+        row = result.scalar_one_or_none()
+        if row:
+            row.forecast_units = forecast_units
+            row.destination_name = data.get("destination_name") or row.destination_name
+            row.product_name = data.get("product_name") or row.product_name
+            msg = "内示を更新しました"
         else:
-            forecast = SalesForecast(
-                customer_code=customer_code,
-                customer_name=data.get("customer_name"),
-                product_code=product_code,
-                product_name=data.get("product_name"),
-                forecast_month=forecast_month,
-                forecast_quantity=quantity,
-                unit_price=unit_price,
-                forecast_amount=forecast_amount,
-                status="draft",
-                remarks=data.get("remarks"),
-                created_by=current_user.username,
+            row = OrderMonthly(
+                destination_cd=destination_cd,
+                destination_name=data.get("destination_name") or destination_cd,
+                year=year,
+                month=month,
+                product_cd=product_cd,
+                product_name=data.get("product_name") or product_cd,
+                product_alias=data.get("product_alias"),
+                product_type=product_type,
+                forecast_units=forecast_units,
             )
-            db.add(forecast)
-            msg = "フォーキャストを作成しました"
-
+            db.add(row)
+            msg = "内示を登録しました"
         await db.commit()
-        return {"message": msg, "id": forecast.id}
+        await db.refresh(row)
+        sum_map = await _order_monthly_confirmed_sum_map(db, [row])
+        return {
+            "message": msg,
+            "id": row.id,
+            "item": _order_monthly_to_forecast_dict(row, sum_map.get(row.order_id, 0)),
+        }
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2200,24 +2247,38 @@ async def update_forecast(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フォーキャスト更新"""
-    result = await db.execute(
-        select(SalesForecast).where(SalesForecast.id == forecast_id)
-    )
-    forecast = result.scalar_one_or_none()
-    if not forecast:
-        raise HTTPException(status_code=404, detail="フォーキャストが見つかりません")
+    """内示更新（order_monthly）"""
+    result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="内示が見つかりません")
 
     try:
-        for key, value in data.items():
-            if hasattr(forecast, key):
-                setattr(forecast, key, value)
-        if "forecast_quantity" in data or "unit_price" in data:
-            qty = data.get("forecast_quantity", forecast.forecast_quantity)
-            price = data.get("unit_price", float(forecast.unit_price or 0))
-            forecast.forecast_amount = qty * price if price else 0
+        if "forecast_month" in data or ("year" in data and "month" in data):
+            year, month = _parse_forecast_year_month(data)
+            row.year = year
+            row.month = month
+        if "destination_cd" in data:
+            row.destination_cd = data["destination_cd"]
+        if "destination_name" in data:
+            row.destination_name = data["destination_name"]
+        if "product_cd" in data:
+            row.product_cd = data["product_cd"]
+        if "product_name" in data:
+            row.product_name = data["product_name"]
+        if "product_type" in data:
+            row.product_type = data["product_type"]
+        if "forecast_units" in data or "forecast_quantity" in data:
+            row.forecast_units = int(
+                data.get("forecast_units", data.get("forecast_quantity", row.forecast_units)) or 0
+            )
         await db.commit()
-        return {"message": "フォーキャストを更新しました"}
+        await db.refresh(row)
+        sum_map = await _order_monthly_confirmed_sum_map(db, [row])
+        return {
+            "message": "内示を更新しました",
+            "item": _order_monthly_to_forecast_dict(row, sum_map.get(row.order_id, 0)),
+        }
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -2226,35 +2287,21 @@ async def update_forecast(
 @router.post("/forecasts/{forecast_id}/confirm")
 async def confirm_forecast(
     forecast_id: int,
-    data: dict = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フォーキャスト確定"""
-    if data is None:
-        data = {}
-
-    result = await db.execute(
-        select(SalesForecast).where(SalesForecast.id == forecast_id)
-    )
-    forecast = result.scalar_one_or_none()
-    if not forecast:
-        raise HTTPException(status_code=404, detail="フォーキャストが見つかりません")
-    if forecast.status == "confirmed":
-        raise HTTPException(status_code=400, detail="既に確定済みです")
-
-    try:
-        forecast.status = "confirmed"
-        forecast.confirmed_quantity = data.get(
-            "confirmed_quantity", forecast.forecast_quantity
-        )
-        forecast.confirmed_at = now_jst()
-        forecast.confirmed_by = current_user.username
-        await db.commit()
-        return {"message": "フォーキャストを確定しました"}
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+    """確定本数は日別受注から集計されるため、再計算結果を返す"""
+    result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="内示が見つかりません")
+    sum_map = await _order_monthly_confirmed_sum_map(db, [row])
+    confirmed = sum_map.get(row.order_id, 0)
+    return {
+        "message": "確定本数は日別受注の合計です",
+        "confirmed_quantity": confirmed,
+        "forecast_total_units": confirmed,
+    }
 
 
 @router.delete("/forecasts/{forecast_id}")
@@ -2263,18 +2310,19 @@ async def delete_forecast(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """フォーキャスト削除"""
-    result = await db.execute(
-        select(SalesForecast).where(SalesForecast.id == forecast_id)
-    )
-    forecast = result.scalar_one_or_none()
-    if not forecast:
-        raise HTTPException(status_code=404, detail="フォーキャストが見つかりません")
+    """内示削除（order_monthly および紐づく日別受注）"""
+    result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="内示が見つかりません")
 
     try:
-        await db.delete(forecast)
+        await db.execute(
+            delete(OrderDaily).where(OrderDaily.monthly_order_id == row.order_id)
+        )
+        await db.delete(row)
         await db.commit()
-        return {"message": "フォーキャストを削除しました"}
+        return {"message": "内示を削除しました"}
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

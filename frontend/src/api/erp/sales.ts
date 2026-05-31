@@ -46,10 +46,10 @@ export interface ContractPricingQuery {
 }
 
 export interface ForecastQuery {
-  customer_code?: string
-  product_code?: string
+  destination_cd?: string
+  product_cd?: string
+  keyword?: string
   forecast_month?: string
-  status?: string
   page?: number
   page_size?: number
 }

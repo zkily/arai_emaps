@@ -415,36 +415,6 @@ class SalesContractPricing(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
 
 
-class SalesForecast(Base):
-    """内示テーブル"""
-    __tablename__ = "sales_forecast"
-    __table_args__ = (
-        Index('ix_sf_customer', 'customer_code'),
-        Index('ix_sf_product', 'product_code'),
-        Index('ix_sf_month', 'forecast_month'),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    customer_code = Column(String(50), nullable=False, comment="顧客コード")
-    customer_name = Column(String(200), comment="顧客名")
-
-    product_code = Column(String(100), nullable=False, comment="品番")
-    product_name = Column(String(300), comment="品名")
-
-    forecast_month = Column(String(7), nullable=False, comment="内示月 (YYYY-MM)")
-    forecast_quantity = Column(Integer, default=0, comment="内示数量")
-    confirmed_quantity = Column(Integer, default=0, comment="確定数量")
-
-    # ステータス: forecast, confirmed, revised
-    status = Column(String(20), default="forecast", comment="ステータス")
-
-    remarks = Column(Text, comment="備考")
-    created_by = Column(String(100), comment="作成者")
-
-    created_at = Column(DateTime, default=func.now(), nullable=False)
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), nullable=False)
-
-
 class SalesRecording(Base):
     """売上計上（出荷明細ベースの計上行の永続化）"""
     __tablename__ = "sales_recording"
