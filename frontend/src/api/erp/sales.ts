@@ -4,6 +4,8 @@ import request from '@/utils/request'
 export interface SalesOrderQuery {
   order_no?: string
   customer_code?: string
+  destination?: string
+  destination_cd?: string
   status?: string
   start_date?: string
   end_date?: string
@@ -106,6 +108,27 @@ export function approveSalesOrder(id: number) {
 
 export function cancelSalesOrder(id: number) {
   return request.post(`/api/erp/sales/orders/${id}/cancel`)
+}
+
+export interface SyncFromOrderDailyParams {
+  start_date: string
+  end_date: string
+  order_daily_ids?: number[]
+}
+
+export interface SyncFromOrderDailyResult {
+  message: string
+  scanned: number
+  created_orders: number
+  created_items: number
+  skipped_duplicate: number
+  skipped_invalid_qty: number
+  skipped_locked_order: number
+}
+
+/** POST /api/erp/sales/orders/sync-from-order-daily — order_daily → sales_order（確定箱数>0、重複除外） */
+export function syncSalesOrdersFromOrderDaily(data: SyncFromOrderDailyParams) {
+  return request.post<SyncFromOrderDailyResult>('/api/erp/sales/orders/sync-from-order-daily', data)
 }
 
 export function getSalesStats() {

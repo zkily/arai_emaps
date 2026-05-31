@@ -17,10 +17,12 @@ class SalesOrder(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    order_no = Column(String(50), unique=True, nullable=False, index=True, comment="受注番号")
+    order_no = Column(String(50), unique=True, nullable=False, index=True, comment="受注番号（納入先-受注日-納期）")
     
     customer_code = Column(String(50), nullable=False, index=True, comment="顧客コード")
     customer_name = Column(String(200), comment="顧客名")
+    destination_cd = Column(String(50), index=True, nullable=True, comment="納入先CD")
+    destination_name = Column(String(200), nullable=True, comment="納入先名")
     
     order_date = Column(Date, nullable=False, comment="受注日")
     expected_delivery_date = Column(Date, comment="出荷予定日")
@@ -50,6 +52,7 @@ class SalesOrder(Base):
     contact_phone = Column(String(20), comment="電話番号")
     
     remarks = Column(Text, comment="備考")
+    source_ref = Column(String(120), unique=True, nullable=True, index=True, comment="同期キー OD|納入先CD|受注日|納期")
     
     created_by = Column(String(100), comment="作成者")
     approved_by = Column(String(100), comment="承認者")
@@ -69,13 +72,15 @@ class SalesOrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("sales_order.id", ondelete="CASCADE"), nullable=False, index=True)
     line_no = Column(Integer, nullable=False, comment="行番号")
+    item_order_no = Column(String(100), nullable=True, index=True, comment="製品別受注番号（親受注番号-品番）")
     
     product_code = Column(String(100), nullable=False, comment="品番")
     product_name = Column(String(300), comment="品名")
     specification = Column(String(500), comment="仕様")
     unit = Column(String(20), default="個", comment="単位")
     
-    quantity = Column(Integer, nullable=False, comment="受注数量")
+    quantity = Column(Integer, nullable=False, comment="受注数量（本数）")
+    confirmed_boxes = Column(Integer, default=0, nullable=False, comment="確定箱数（order_daily.confirmed_boxes）")
     delivered_quantity = Column(Integer, default=0, comment="出荷済数量")
     
     unit_price = Column(Numeric(12, 2), nullable=False, comment="単価")
@@ -86,6 +91,7 @@ class SalesOrderItem(Base):
     warehouse_code = Column(String(50), comment="倉庫コード")
     expected_delivery_date = Column(Date, comment="出荷予定日")
     remarks = Column(Text, comment="備考")
+    source_order_daily_id = Column(Integer, unique=True, nullable=True, index=True, comment="元 order_daily.id")
     
     # リレーション
     order = relationship("SalesOrder", back_populates="items")

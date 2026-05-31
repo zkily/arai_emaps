@@ -339,6 +339,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Download } from '@element-plus/icons-vue'
@@ -355,6 +356,8 @@ import {
   type OrderDailyCreate,
   type OrderDailyFilters,
 } from '@/api/erp/orderDaily'
+
+const route = useRoute()
 
 // ========== 一覧用 ==========
 const loading = ref(false)
@@ -391,6 +394,16 @@ function getTodayRange(): [string, string] {
   return [`${y}-${m}-${day}`, `${y}-${m}-${day}`]
 }
 const dateRange = ref<[string, string] | null>(getTodayRange())
+
+/** 販売受注一覧などからの遷移用 query: start_date, end_date, keyword, destination_cd */
+function applyRouteQuery() {
+  const q = route.query
+  const start = typeof q.start_date === 'string' ? q.start_date : ''
+  const end = typeof q.end_date === 'string' ? q.end_date : ''
+  if (start && end) dateRange.value = [start, end]
+  if (typeof q.keyword === 'string' && q.keyword) filters.keyword = q.keyword
+  if (typeof q.destination_cd === 'string' && q.destination_cd) filters.destination_cd = q.destination_cd
+}
 
 /** フィルタ後の全件（KPI・CSV 用） */
 const fullList = ref<OrderDailyItem[]>([])
@@ -975,6 +988,7 @@ async function handleDelete(row: OrderDailyItem) {
 onMounted(() => {
   updateTableMaxHeight()
   window.addEventListener('resize', updateTableMaxHeight)
+  applyRouteQuery()
   loadOptions()
   loadList()
 })

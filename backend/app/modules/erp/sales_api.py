@@ -1,14 +1,16 @@
 """
 販売管理APIエンドポイント
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, cast
+from sqlalchemy import select, func, and_, cast, or_
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional
+from typing import List, Optional
 from datetime import date, datetime, timedelta
 import calendar
 import uuid
+
+from pydantic import BaseModel, Field
 
 from sqlalchemy.types import Numeric
 
@@ -24,9 +26,140 @@ from app.modules.erp.sales_models import (
     SalesCredit, SalesContractPricing, SalesForecast, SalesRecording,
     SalesReturn, SalesReturnItem,
 )
-from app.modules.master.models import Product
+from app.modules.master.models import Customer, Destination as MasterDestination, Product
 
 router = APIRouter(prefix="/sales", tags=["Sales"])
+
+
+class SyncFromOrderDailyBody(BaseModel):
+    """order_daily から sales_order へ取込（confirmed_boxes > 0 のみ）"""
+
+    start_date: str = Field(..., description="出荷日（開始）YYYY-MM-DD")
+    end_date: str = Field(..., description="出荷日（終了）YYYY-MM-DD")
+    order_daily_ids: Optional[List[int]] = Field(None, description="指定時は該当 ID のみ（他条件と併用）")
+
+
+def _coerce_date(value) -> date:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    return date.fromisoformat(str(value))
+
+
+def _sales_order_source_ref(destination_cd: str, order_date: date, delivery_date: date) -> str:
+    """同一納入先・受注日・納期で1ヘッダーにまとめる同期キー"""
+    return f"OD|{destination_cd}|{order_date.isoformat()}|{delivery_date.isoformat()}"
+
+
+def _sales_order_no(destination_cd: str, order_date: date, delivery_date: date) -> str:
+    """受注番号: {納入先CD}-{受注日YYYYMMDD}-{納期YYYYMMDD}"""
+    o = order_date.strftime("%Y%m%d")
+    d = delivery_date.strftime("%Y%m%d")
+    return f"{destination_cd}-{o}-{d}"
+
+
+def _sales_item_order_no(order_no: str, product_cd: str, line_no: int, product_seq: int) -> str:
+    """製品別受注番号: 親番号-品番（同一受注内で同品番が複数行の場合は行番号付与）"""
+    base = f"{order_no}-{product_cd}"
+    if product_seq <= 1:
+        return base
+    return f"{base}-L{line_no:02d}"
+
+
+async def _ensure_unique_order_no(db: AsyncSession, base_no: str) -> str:
+    """手動作成などで base が既存の場合に連番サフィックスを付与"""
+    candidate = base_no
+    seq = 1
+    while True:
+        r = await db.execute(select(SalesOrder.id).where(SalesOrder.order_no == candidate))
+        if r.scalar_one_or_none() is None:
+            return candidate
+        seq += 1
+        candidate = f"{base_no}-S{seq:02d}"
+
+
+async def _next_product_seq_on_order(db: AsyncSession, order_id: int, product_cd: str) -> int:
+    r = await db.execute(
+        select(func.count())
+        .select_from(SalesOrderItem)
+        .where(and_(SalesOrderItem.order_id == order_id, SalesOrderItem.product_code == product_cd))
+    )
+    return int(r.scalar() or 0) + 1
+
+
+def _daily_sales_quantity(daily: OrderDaily) -> int:
+    """販売明細数量：確定本数優先、無ければ 箱数×入数。"""
+    units = int(daily.confirmed_units or 0)
+    if units > 0:
+        return units
+    boxes = int(daily.confirmed_boxes or 0)
+    upb = int(daily.unit_per_box or 0)
+    if boxes > 0 and upb > 0:
+        return boxes * upb
+    return boxes
+
+
+async def _resolve_destination_name(
+    db: AsyncSession, destination_cd: str, destination_name: Optional[str]
+) -> str:
+    if destination_name and str(destination_name).strip():
+        return str(destination_name).strip()
+    dest_r = await db.execute(
+        select(MasterDestination).where(MasterDestination.destination_cd == destination_cd)
+    )
+    dest = dest_r.scalar_one_or_none()
+    if dest and dest.destination_name:
+        return dest.destination_name
+    return destination_cd
+
+
+async def _resolve_customer_for_destination(
+    db: AsyncSession, destination_cd: str, destination_name: Optional[str]
+) -> tuple[str, str, Optional[str], str]:
+    dest_r = await db.execute(
+        select(MasterDestination).where(MasterDestination.destination_cd == destination_cd)
+    )
+    dest = dest_r.scalar_one_or_none()
+    customer_cd = (dest.customer_cd if dest and dest.customer_cd else None) or destination_cd
+    dest_display_name = await _resolve_destination_name(db, destination_cd, destination_name)
+    address = dest.address if dest else None
+    return customer_cd, dest_display_name, address, dest_display_name
+
+
+async def _product_unit_price(db: AsyncSession, product_cd: str) -> float:
+    r = await db.execute(select(Product).where(Product.product_cd == product_cd))
+    product = r.scalar_one_or_none()
+    if not product or product.unit_price is None:
+        return 0.0
+    return float(product.unit_price)
+
+
+async def _recalc_sales_order_totals(db: AsyncSession, order: SalesOrder) -> None:
+    """明細 amount から受注ヘッダーの小計・税・合計を再計算（未 flush の明細を含める）"""
+    await db.flush()
+    items_r = await db.execute(select(SalesOrderItem).where(SalesOrderItem.order_id == order.id))
+    items = items_r.scalars().all()
+    subtotal = sum(float(i.amount or 0) for i in items)
+    tax_rate = float(order.tax_rate or 10)
+    tax_amount = subtotal * tax_rate / 100.0
+    order.subtotal = subtotal
+    order.tax_amount = tax_amount
+    order.total_amount = subtotal + tax_amount
+
+
+def _apply_line_totals_to_order_dict(order: SalesOrder, order_dict: dict, items: list) -> dict:
+    """ヘッダー合計が 0 だが明細に金額がある場合、明細合計で表示用金額を補正"""
+    line_subtotal = sum(float(i.amount or 0) for i in items)
+    header_total = float(order_dict.get("total_amount") or 0)
+    if line_subtotal <= 0 or header_total > 0:
+        return order_dict
+    tax_rate = float(order.tax_rate or 10)
+    tax_amount = line_subtotal * tax_rate / 100.0
+    order_dict["subtotal"] = line_subtotal
+    order_dict["tax_amount"] = tax_amount
+    order_dict["total_amount"] = line_subtotal + tax_amount
+    return order_dict
 
 
 def _mysql_errno_from_sqlalchemy(exc: BaseException) -> Optional[int]:
@@ -72,6 +205,8 @@ def _dashboard_order_daily_exclude_name_contains_kakou():
 async def get_sales_order_list(
     order_no: Optional[str] = Query(None),
     customer_code: Optional[str] = Query(None),
+    destination: Optional[str] = Query(None, description="納入先CD・納入先名（部分一致）"),
+    destination_cd: Optional[str] = Query(None, description="納入先CD（完全一致）"),
     status: Optional[str] = Query(None),
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
@@ -87,6 +222,17 @@ async def get_sales_order_list(
         query = query.where(SalesOrder.order_no.like(f"%{order_no}%"))
     if customer_code:
         query = query.where(SalesOrder.customer_code == customer_code)
+    if destination_cd:
+        query = query.where(SalesOrder.destination_cd == destination_cd.strip())
+    elif destination:
+        k = f"%{destination.strip()}%"
+        query = query.where(
+            or_(
+                SalesOrder.destination_cd.like(k),
+                SalesOrder.destination_name.like(k),
+                SalesOrder.customer_name.like(k),
+            )
+        )
     if status:
         query = query.where(SalesOrder.status == status)
     if start_date:
@@ -102,10 +248,35 @@ async def get_sales_order_list(
         query = query.order_by(SalesOrder.created_at.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
         result = await db.execute(query)
-        items = result.scalars().all()
+        orders = result.scalars().all()
+
+        order_ids = [o.id for o in orders]
+        sum_map: dict[int, float] = {}
+        if order_ids:
+            sums_r = await db.execute(
+                select(
+                    SalesOrderItem.order_id,
+                    func.coalesce(func.sum(SalesOrderItem.amount), 0),
+                )
+                .where(SalesOrderItem.order_id.in_(order_ids))
+                .group_by(SalesOrderItem.order_id)
+            )
+            sum_map = {int(row[0]): float(row[1] or 0) for row in sums_r.all()}
+
+        list_items = []
+        for order in orders:
+            d = _order_to_dict(order)
+            line_sub = sum_map.get(order.id, 0)
+            if line_sub > 0 and float(d.get("total_amount") or 0) == 0:
+                tax_rate = float(order.tax_rate or 10)
+                tax_amt = line_sub * tax_rate / 100.0
+                d["subtotal"] = line_sub
+                d["tax_amount"] = tax_amt
+                d["total_amount"] = line_sub + tax_amt
+            list_items.append(d)
 
         return {
-            "items": [_order_to_dict(item) for item in items],
+            "items": list_items,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -319,8 +490,14 @@ async def get_sales_order_by_id(
         items_result = await db.execute(items_query)
         items = items_result.scalars().all()
 
+        line_sub = sum(float(i.amount or 0) for i in items)
+        if line_sub > 0 and float(order.total_amount or 0) == 0:
+            await _recalc_sales_order_totals(db, order)
+            await db.commit()
+
         order_dict = _order_to_dict(order)
         order_dict["items"] = [_order_item_to_dict(item) for item in items]
+        order_dict = _apply_line_totals_to_order_dict(order, order_dict, items)
 
         return order_dict
     except SQLAlchemyError as e:
@@ -340,41 +517,57 @@ async def create_sales_order(
 ):
     """受注作成"""
     try:
-        # 受注番号生成
-        order_no = f"SO-{now_jst().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
-        
         items_data = data.pop("items", [])
-        
+        order_date = _coerce_date(data.get("order_date", date.today()))
+        delivery_date = _coerce_date(
+            data.get("expected_delivery_date") or data.get("order_date") or date.today()
+        )
+        dest_cd = (data.get("destination_cd") or data.get("customer_code") or "").strip()
+        dest_name = (data.get("destination_name") or data.get("customer_name") or dest_cd).strip()
+        base_no = _sales_order_no(dest_cd, order_date, delivery_date)
+        order_no = await _ensure_unique_order_no(db, base_no)
+
         order = SalesOrder(
             order_no=order_no,
-            customer_code=data["customer_code"],
-            customer_name=data.get("customer_name"),
-            order_date=data.get("order_date", date.today()),
-            expected_delivery_date=data.get("expected_delivery_date"),
+            customer_code=data.get("customer_code") or dest_cd,
+            customer_name=dest_name,
+            destination_cd=dest_cd or None,
+            destination_name=dest_name or None,
+            order_date=order_date,
+            expected_delivery_date=delivery_date,
             delivery_address=data.get("delivery_address"),
             status="draft",
             sales_person=data.get("sales_person"),
             remarks=data.get("remarks"),
-            created_by=current_user.username
+            created_by=current_user.username,
         )
         db.add(order)
         await db.flush()
-        
+
         # 明細追加
         subtotal = 0
+        product_seq_map: dict[str, int] = {}
         for idx, item_data in enumerate(items_data):
             amount = item_data["quantity"] * item_data["unit_price"]
             tax_amount = amount * item_data.get("tax_rate", 10) / 100
             subtotal += amount
-            
+            line_no = idx + 1
+            product_cd = item_data["product_code"]
+            product_seq_map[product_cd] = product_seq_map.get(product_cd, 0) + 1
+            item_order_no = _sales_item_order_no(
+                order_no, product_cd, line_no, product_seq_map[product_cd]
+            )
+
             item = SalesOrderItem(
                 order_id=order.id,
-                line_no=idx + 1,
-                product_code=item_data["product_code"],
+                line_no=line_no,
+                item_order_no=item_order_no,
+                product_code=product_cd,
                 product_name=item_data.get("product_name"),
                 specification=item_data.get("specification"),
                 unit=item_data.get("unit", "個"),
                 quantity=item_data["quantity"],
+                confirmed_boxes=int(item_data.get("confirmed_boxes") or 0),
                 unit_price=item_data["unit_price"],
                 tax_rate=item_data.get("tax_rate", 10),
                 tax_amount=tax_amount,
@@ -480,6 +673,152 @@ async def cancel_sales_order(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/orders/sync-from-order-daily")
+async def sync_sales_orders_from_order_daily(
+    body: SyncFromOrderDailyBody = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """order_daily（確定箱数>0）を sales_order / sales_order_item へ取込。重複は source_order_daily_id で防止。"""
+    try:
+        start_d = date.fromisoformat(body.start_date)
+        end_d = date.fromisoformat(body.end_date)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="start_date / end_date は YYYY-MM-DD 形式で指定してください")
+    if start_d > end_d:
+        raise HTTPException(status_code=400, detail="開始日は終了日以前にしてください")
+
+    query = select(OrderDaily).where(
+        and_(
+            OrderDaily.date >= start_d,
+            OrderDaily.date <= end_d,
+            OrderDaily.confirmed_boxes > 0,
+        )
+    )
+    if body.order_daily_ids:
+        query = query.where(OrderDaily.id.in_(body.order_daily_ids))
+
+    try:
+        daily_rows = (await db.execute(query.order_by(OrderDaily.date, OrderDaily.id))).scalars().all()
+
+        synced_r = await db.execute(
+            select(SalesOrderItem.source_order_daily_id).where(
+                SalesOrderItem.source_order_daily_id.isnot(None)
+            )
+        )
+        already_synced = {row[0] for row in synced_r.all() if row[0] is not None}
+
+        created_orders = 0
+        created_items = 0
+        skipped_duplicate = 0
+        skipped_invalid_qty = 0
+        skipped_locked_order = 0
+
+        for daily in daily_rows:
+            if daily.id in already_synced:
+                skipped_duplicate += 1
+                continue
+
+            qty = _daily_sales_quantity(daily)
+            if qty <= 0:
+                skipped_invalid_qty += 1
+                continue
+
+            order_date = daily.date
+            delivery_date = daily.delivery_date or daily.date
+            source_ref = _sales_order_source_ref(daily.destination_cd, order_date, delivery_date)
+            order_r = await db.execute(select(SalesOrder).where(SalesOrder.source_ref == source_ref))
+            order = order_r.scalar_one_or_none()
+
+            if order and order.status not in ("draft", "pending"):
+                skipped_locked_order += 1
+                continue
+
+            if not order:
+                customer_cd, dest_name, address, _ = await _resolve_customer_for_destination(
+                    db, daily.destination_cd, daily.destination_name
+                )
+                order_no = _sales_order_no(daily.destination_cd, order_date, delivery_date)
+                order_no = await _ensure_unique_order_no(db, order_no)
+                order = SalesOrder(
+                    order_no=order_no,
+                    customer_code=customer_cd,
+                    customer_name=dest_name,
+                    destination_cd=daily.destination_cd,
+                    destination_name=dest_name,
+                    order_date=order_date,
+                    expected_delivery_date=delivery_date,
+                    delivery_address=address,
+                    status="draft",
+                    remarks=f"order_daily 同期 ({source_ref})",
+                    source_ref=source_ref,
+                    created_by=current_user.username,
+                )
+                db.add(order)
+                await db.flush()
+                created_orders += 1
+
+            line_r = await db.execute(
+                select(func.coalesce(func.max(SalesOrderItem.line_no), 0)).where(
+                    SalesOrderItem.order_id == order.id
+                )
+            )
+            next_line = int(line_r.scalar() or 0) + 1
+            product_seq = await _next_product_seq_on_order(db, order.id, daily.product_cd)
+            item_order_no = _sales_item_order_no(order.order_no, daily.product_cd, next_line, product_seq)
+            unit_price = await _product_unit_price(db, daily.product_cd)
+            amount = qty * unit_price
+            tax_rate = 10.0
+            tax_amount = amount * tax_rate / 100.0
+
+            item = SalesOrderItem(
+                order_id=order.id,
+                line_no=next_line,
+                item_order_no=item_order_no,
+                product_code=daily.product_cd,
+                product_name=daily.product_name,
+                unit="個",
+                quantity=qty,
+                confirmed_boxes=int(daily.confirmed_boxes or 0),
+                unit_price=unit_price,
+                tax_rate=tax_rate,
+                tax_amount=tax_amount,
+                amount=amount,
+                expected_delivery_date=daily.delivery_date,
+                remarks=f"order_daily_id={daily.id}",
+                source_order_daily_id=daily.id,
+            )
+            db.add(item)
+            await _recalc_sales_order_totals(db, order)
+            already_synced.add(daily.id)
+            created_items += 1
+
+        await db.commit()
+        return {
+            "message": "取込が完了しました",
+            "scanned": len(daily_rows),
+            "created_orders": created_orders,
+            "created_items": created_items,
+            "skipped_duplicate": skipped_duplicate,
+            "skipped_invalid_qty": skipped_invalid_qty,
+            "skipped_locked_order": skipped_locked_order,
+        }
+    except SQLAlchemyError as e:
+        await db.rollback()
+        if _is_missing_table(e, "sales_order") or _is_missing_table(e, "order_daily"):
+            raise HTTPException(
+                status_code=503,
+                detail="sales_order または order_daily がありません。DB マイグレーションを適用してください。",
+            )
+        err_msg = str(e).lower()
+        if "source_ref" in err_msg or "source_order_daily_id" in err_msg:
+            raise HTTPException(
+                status_code=503,
+                detail="同期用カラムがありません。backend/database/migrations/28_sales_order_order_daily_sync.sql を適用してください。",
+            )
+        raise
 
 
 # ========== 出荷管理 ==========
@@ -638,6 +977,8 @@ def _order_to_dict(order: SalesOrder) -> dict:
         "order_no": order.order_no,
         "customer_code": order.customer_code,
         "customer_name": order.customer_name,
+        "destination_cd": getattr(order, "destination_cd", None),
+        "destination_name": getattr(order, "destination_name", None) or order.customer_name,
         "order_date": order.order_date.isoformat() if order.order_date else None,
         "expected_delivery_date": order.expected_delivery_date.isoformat() if order.expected_delivery_date else None,
         "delivery_address": order.delivery_address,
@@ -663,11 +1004,13 @@ def _order_item_to_dict(item: SalesOrderItem) -> dict:
     return {
         "id": item.id,
         "line_no": item.line_no,
+        "item_order_no": item.item_order_no,
         "product_code": item.product_code,
         "product_name": item.product_name,
         "specification": item.specification,
         "unit": item.unit,
         "quantity": item.quantity,
+        "confirmed_boxes": int(item.confirmed_boxes or 0),
         "delivered_quantity": item.delivered_quantity or 0,
         "unit_price": float(item.unit_price or 0),
         "tax_rate": float(item.tax_rate or 0),
@@ -972,13 +1315,18 @@ async def convert_quotation_to_order(
         )
         q_items = items_result.scalars().all()
 
-        order_no = f"SO-{now_jst().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+        order_date = date.today()
+        delivery_date = order_date
+        dest_key = quotation.customer_code
+        order_no = await _ensure_unique_order_no(
+            db, _sales_order_no(dest_key, order_date, delivery_date)
+        )
         order = SalesOrder(
             order_no=order_no,
             customer_code=quotation.customer_code,
             customer_name=quotation.customer_name,
-            order_date=date.today(),
-            expected_delivery_date=None,
+            order_date=order_date,
+            expected_delivery_date=delivery_date,
             delivery_address=quotation.delivery_address,
             status="draft",
             currency=quotation.currency,
@@ -996,10 +1344,15 @@ async def convert_quotation_to_order(
         db.add(order)
         await db.flush()
 
+        product_seq_map: dict[str, int] = {}
         for qi in q_items:
+            product_seq_map[qi.product_code] = product_seq_map.get(qi.product_code, 0) + 1
             oi = SalesOrderItem(
                 order_id=order.id,
                 line_no=qi.line_no,
+                item_order_no=_sales_item_order_no(
+                    order_no, qi.product_code, qi.line_no, product_seq_map[qi.product_code]
+                ),
                 product_code=qi.product_code,
                 product_name=qi.product_name,
                 specification=qi.specification,
