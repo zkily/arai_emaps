@@ -404,7 +404,7 @@
         </el-table>
         <div v-if="displayProductCountRows.length" class="product-count-summary-strip">
           <span>製品数 <strong>{{ formatNumber(displayProductCountRows.length, 0) }}</strong></span>
-          <span>製品合計 <strong>{{ formatNumber(productCountGrandTotal, 0) }}</strong></span>
+          <span>仕掛+製品合計 <strong>{{ formatNumber(productCountGrandTotal, 0) }}</strong></span>
         </div>
         <el-empty
           v-if="!displayProductCountRows.length && !productCountLoading && !shipmentLoading"
@@ -723,7 +723,7 @@
         </el-table>
         <div v-if="displayProductAmountRows.length" class="product-count-summary-strip">
           <span>製品数 <strong>{{ formatNumber(displayProductAmountRows.length, 0) }}</strong></span>
-          <span>製品合計 <strong>{{ formatNumber(productAmountGrandTotal, 0) }}</strong></span>
+          <span>仕掛+製品合計 <strong>{{ formatNumber(productAmountGrandTotal, 0) }}</strong></span>
         </div>
         <el-empty
           v-if="!displayProductAmountRows.length && !productAmountLoading && !shipmentAmountLoading"
@@ -979,6 +979,7 @@ function buildShipmentOnlyProductCountRows(shipMap: Record<string, number>, exis
     row.qty_WIP_TOTAL = 0
     row.qty_all = shipQty
     row.qty_PRODUCT_TOTAL = shipQty
+    syncProductCountWipProductTotal(row)
     extras.push(row)
   }
   extras.sort((a, b) =>
@@ -1001,6 +1002,7 @@ const displayProductCountRows = computed<ProductCountRow[]>(() => {
     newRow.qty_all = (Number(row.qty_all) || 0) + shipQty
     newRow.qty_PRODUCT_TOTAL =
       (Number(newRow.qty_KT09) || 0) + (Number(newRow.qty_all) || 0) + (Number(newRow.qty_KT10) || 0)
+    syncProductCountWipProductTotal(newRow)
     return newRow
   })
   const seenCds = new Set(merged.map((r) => String(r.product_cd ?? '').trim()).filter(Boolean))
@@ -1028,6 +1030,7 @@ const displayProductAmountRows = computed<ProductAmountRow[]>(() => {
     newRow.amt_all = (Number(row.amt_all) || 0) + extraAmt
     newRow.amt_PRODUCT_TOTAL =
       (Number(newRow.amt_KT09) || 0) + (Number(newRow.amt_all) || 0) + (Number(newRow.amt_KT10) || 0)
+    syncProductAmountWipProductTotal(newRow)
     return newRow
   })
   return applyZeroAmountFilter(merged)
@@ -1324,7 +1327,7 @@ const productCountColumnTotals = computed<Record<string, number>>(() => {
 
 const productCountGrandTotal = computed(() => {
   const totals = productCountColumnTotals.value
-  return (Number(totals.qty_WIP_TOTAL) || 0) + (Number(totals.qty_PRODUCT_TOTAL) || 0)
+  return Number(totals.qty_WIP_PRODUCT_TOTAL) || 0
 })
 
 const negativeProductCountCells = computed(() => {
@@ -1351,7 +1354,7 @@ const productAmountColumnTotals = computed<Record<string, number>>(() => {
 
 const productAmountGrandTotal = computed(() => {
   const totals = productAmountColumnTotals.value
-  return (Number(totals.amt_WIP_TOTAL) || 0) + (Number(totals.amt_PRODUCT_TOTAL) || 0)
+  return Number(totals.amt_WIP_PRODUCT_TOTAL) || 0
 })
 
 function productAmountSummaryMethod(param: { columns: Array<{ property?: string }>; data: ProductAmountRow[] }) {
@@ -1412,18 +1415,37 @@ const PRODUCT_COUNT_PROCESS_SPECS: ProductCountProcess[] = [
   { process_cd: 'all', process_name: '倉庫', source_codes: ['all'] },
   { process_cd: 'KT10', process_name: '外注倉庫', source_codes: ['KT10', 'KT15'] },
   { process_cd: 'PRODUCT_TOTAL', process_name: '製品合計', source_codes: [] },
+  { process_cd: 'WIP_PRODUCT_TOTAL', process_name: '仕掛+製品', source_codes: [] },
 ]
 
-/** 製品単価表：仕掛品合計・製品合計・倉庫を除く工程のみ */
+/** 製品単価表：仕掛品合計・製品合計・仕掛+製品・倉庫を除く工程のみ */
 const PRODUCT_UNIT_PRICE_PROCESS_SPECS: ProductCountProcess[] = PRODUCT_COUNT_PROCESS_SPECS.filter(
-  (p) => p.process_cd !== 'WIP_TOTAL' && p.process_cd !== 'PRODUCT_TOTAL' && p.process_cd !== 'all',
+  (p) =>
+    p.process_cd !== 'WIP_TOTAL'
+    && p.process_cd !== 'PRODUCT_TOTAL'
+    && p.process_cd !== 'WIP_PRODUCT_TOTAL'
+    && p.process_cd !== 'all',
 )
 
 const PRODUCT_COUNT_WIP_SOURCE_CODES = ['KT01', 'KT02', 'KT04', 'KT05', 'KT06', 'KT07', 'KT08', 'KT11'] as const
 
-/** 仕掛品合計・製品合計列の強調（表・印刷共通 class 名） */
+/** 製品本数：仕掛品合計 + 製品合計 */
+function syncProductCountWipProductTotal(row: ProductCountRow): void {
+  row.qty_WIP_PRODUCT_TOTAL =
+    (Number(row.qty_WIP_TOTAL) || 0) + (Number(row.qty_PRODUCT_TOTAL) || 0)
+}
+
+/** 製品金額：仕掛品合計 + 製品合計 */
+function syncProductAmountWipProductTotal(row: ProductAmountRow): void {
+  row.amt_WIP_PRODUCT_TOTAL =
+    (Number(row.amt_WIP_TOTAL) || 0) + (Number(row.amt_PRODUCT_TOTAL) || 0)
+}
+
+/** 仕掛品合計・製品合計・仕掛+製品列の強調（表・印刷共通 class 名） */
 function invTotalHighlightClass(processCd: string): string {
-  return processCd === 'WIP_TOTAL' || processCd === 'PRODUCT_TOTAL' ? 'inv-col-total-highlight' : ''
+  return processCd === 'WIP_TOTAL' || processCd === 'PRODUCT_TOTAL' || processCd === 'WIP_PRODUCT_TOTAL'
+    ? 'inv-col-total-highlight'
+    : ''
 }
 
 function escapeHtml(text: unknown): string {
@@ -1754,6 +1776,7 @@ async function openProductCountDialog() {
       )
       row.qty_PRODUCT_TOTAL =
         (Number(row.qty_KT09) || 0) + (Number(row.qty_all) || 0) + (Number(row.qty_KT10) || 0)
+      syncProductCountWipProductTotal(row)
     }
     baseProductCountRows.value = rows
     if (!displayProductCountRows.value.length) ElMessage.info('この条件ではデータがありません')
@@ -1861,6 +1884,7 @@ async function openProductAmountDialog() {
         (Number(row.amt_KT09) || 0) + (Number(row.amt_all) || 0) + (Number(row.amt_KT10) || 0)
       row.qty_PRODUCT_TOTAL =
         (Number(row.qty_KT09) || 0) + (Number(row.qty_all) || 0) + (Number(row.qty_KT10) || 0)
+      syncProductAmountWipProductTotal(row)
     }
     baseProductAmountRows.value = rows
     if (!displayProductAmountRows.value.length) ElMessage.info('この条件ではデータがありません')
@@ -2036,8 +2060,13 @@ function buildProductCountKindAggregateHtml(rows: ProductCountRow[]): string {
   return `<div class="kind-aggregate-block"><div class="kind-aggregate-title">分類別合計</div><table class="kind-aggregate-table"><thead><tr><th style="width:56px">分類</th><th style="width:72px">要件数</th>${procHeaders}</tr></thead><tbody>${body}${grandRow}</tbody></table></div>`
 }
 
+/** 製品金額棚卸印刷：仕掛+製品列は出さない（本数棚卸専用） */
+function productAmountPrintProcesses(): ProductCountProcess[] {
+  return productAmountProcesses.value.filter((p) => p.process_cd !== 'WIP_PRODUCT_TOTAL')
+}
+
 function buildProductAmountKindAggregateHtml(rows: ProductAmountRow[]): string {
-  const processes = productAmountProcesses.value
+  const processes = productAmountPrintProcesses()
   if (!rows.length || !processes.length) return ''
   const groups = groupRowsByKind(rows)
   const procHeaders = processes
@@ -2105,8 +2134,7 @@ function buildProductCountPrintHtml(): string {
     })
     .join('')
   const totalRow = `<tr class="total-row"><td class="total-label" colspan="2">合計</td>${totalCells}</tr>`
-  const finalGrandTotal = (Number(productCountColumnTotals.value.qty_WIP_TOTAL) || 0)
-    + (Number(productCountColumnTotals.value.qty_PRODUCT_TOTAL) || 0)
+  const finalGrandTotal = Number(productCountColumnTotals.value.qty_WIP_PRODUCT_TOTAL) || 0
   return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8" /><title>製品本数棚卸</title><style>
     @page { size: A4 landscape; margin: 8mm; }
     * { box-sizing: border-box; }
@@ -2131,6 +2159,9 @@ function buildProductCountPrintHtml(): string {
       background: linear-gradient(180deg, #eff6ff, #dbeafe) !important;
       color: #1e3a8a;
       font-weight: 800;
+    }
+    tbody tr:last-child td {
+      border-bottom: 2px solid #475569 !important;
     }
     td.total-label { text-align: left; }
     .kind-title { margin: 10px 0 6px; color: #334155; font-weight: 700; font-size: 12px; }
@@ -2184,11 +2215,12 @@ function buildProductCountPrintHtml(): string {
 
 function buildProductAmountPrintHtml(): string {
   const rows = displayProductAmountRows.value
+  const printProcesses = productAmountPrintProcesses()
   const asOf = escapeHtml(productAmountAsOf.value)
   const mergeLabel = shipmentAmountMergeEnabled.value && shipmentAmountDate.value && shipmentAmountDestCds.value.length
     ? `　※ 出荷数並入（${escapeHtml(shipmentAmountDate.value)} / ${escapeHtml(formatShipmentDestNames(shipmentAmountDestCds.value))}）`
     : ''
-  const headerCells = productAmountProcesses.value
+  const headerCells = printProcesses
     .map((p) => {
       const hc = invTotalHighlightClass(p.process_cd)
       return `<th${hc ? ` class="${hc}"` : ''}>${escapeHtml(p.process_name)}</th>`
@@ -2196,7 +2228,7 @@ function buildProductAmountPrintHtml(): string {
     .join('')
   const bodyRows = rows
     .map((row) => {
-      const amtCells = productAmountProcesses.value
+      const amtCells = printProcesses
         .map((p) => {
           const hc = invTotalHighlightClass(p.process_cd)
           return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(row[`amt_${p.process_cd}`])}</td>`
@@ -2206,7 +2238,7 @@ function buildProductAmountPrintHtml(): string {
       return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${amtCells}</tr>`
     })
     .join('')
-  const totalCells = productAmountProcesses.value
+  const totalCells = printProcesses
     .map((p) => {
       const hc = invTotalHighlightClass(p.process_cd)
       return `<td class="num total-cell${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(productAmountColumnTotals.value[`amt_${p.process_cd}`])}</td>`
@@ -2261,7 +2293,7 @@ function buildProductAmountPrintHtml(): string {
       ? groupRowsByKind(rows).map((grp) => {
           const grpBody = grp.rows
             .map((row) => {
-              const amtCells = productAmountProcesses.value
+              const amtCells = printProcesses
                 .map((p) => {
                   const hc = invTotalHighlightClass(p.process_cd)
                   return `<td class="num${hc ? ` ${hc}` : ''}">${formatProductAmountPrintZero(row[`amt_${p.process_cd}`])}</td>`
@@ -2271,7 +2303,7 @@ function buildProductAmountPrintHtml(): string {
               return `<tr><td>${escapeHtml(row.product_name)}</td><td class="center kind-cell">${kind}</td>${amtCells}</tr>`
             })
             .join('')
-          const grpTotals = productAmountProcesses.value
+          const grpTotals = printProcesses
             .map((p) => {
               const v = grp.rows.reduce(
                 (sum, row) => sum + (Number(row[`amt_${p.process_cd}`] ?? 0) || 0),

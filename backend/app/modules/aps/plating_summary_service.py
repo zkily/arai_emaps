@@ -104,7 +104,7 @@ def _kt05_route_exists():
     )
 
 
-async def _load_kt05_summary_rows(db: AsyncSession, work_date: date) -> List[dict]:
+async def _load_kt05_summary_rows_raw(db: AsyncSession, work_date: date) -> List[dict]:
     q = (
         select(ProductionSummary)
         .where(
@@ -114,9 +114,7 @@ async def _load_kt05_summary_rows(db: AsyncSession, work_date: date) -> List[dic
         .order_by(ProductionSummary.product_cd.asc())
     )
     rows = list((await db.execute(q)).scalars().all())
-    out = [_row_to_dict(r) for r in rows]
-    await _enrich_production_summary_rows_pre_plating_inventory(db, out)
-    return await _filter_out_inactive_products(db, out)
+    return [_row_to_dict(r) for r in rows]
 
 
 async def _load_efficiency_lookup(
@@ -270,17 +268,27 @@ async def load_plating_summary_pair(
     left_date: date,
     right_date: date,
 ) -> dict:
-    left_raw = await _load_kt05_summary_rows(db, left_date)
-    right_raw = await _load_kt05_summary_rows(db, right_date)
+    left_raw = await _load_kt05_summary_rows_raw(db, left_date)
+    right_raw = await _load_kt05_summary_rows_raw(db, right_date)
+    merged_raw = left_raw + right_raw
+    if merged_raw:
+        # 旧実装は left / right 各日で enrich + inactive filter を実行していたため重かった。
+        # ここで 1 回にまとめて CPU/DB 負荷を削減する。
+        await _enrich_production_summary_rows_pre_plating_inventory(db, merged_raw)
+        merged_raw = await _filter_out_inactive_products(db, merged_raw)
+    left_key = left_date.isoformat()
+    right_key = right_date.isoformat()
+    left_filtered = [r for r in merged_raw if str(r.get("date") or "")[:10] == left_key]
+    right_filtered = [r for r in merged_raw if str(r.get("date") or "")[:10] == right_key]
     product_cds = list(
         {
             str(r.get("product_cd") or "").strip()
-            for r in left_raw + right_raw
+            for r in left_filtered + right_filtered
             if str(r.get("product_cd") or "").strip()
         }
     )
     lookup = await _load_efficiency_lookup(db, product_cds)
     return {
-        "left_inventory": _build_left_rows(left_raw, lookup),
-        "right_gen": _build_right_rows(right_raw, lookup),
+        "left_inventory": _build_left_rows(left_filtered, lookup),
+        "right_gen": _build_right_rows(right_filtered, lookup),
     }

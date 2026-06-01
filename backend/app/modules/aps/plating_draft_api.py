@@ -413,6 +413,34 @@ async def _load_layouts_for_drafts(
     return list((await db.execute(q)).scalars().all())
 
 
+def _filter_layouts_for_board_cards(
+    layouts: List[ApsPlatingPlanDraftLayout],
+    cards: List[ApsPlatingPlanBoardCard],
+) -> List[ApsPlatingPlanDraftLayout]:
+    """表示期間内 board_cards の lap_no に紐づく layout のみ返す（plan_date では絞らない）"""
+    if not cards:
+        return []
+    lap_nos_by_draft: dict[int, set[int]] = {}
+    for c in cards:
+        did = int(c.draft_id)
+        ln = int(c.lap_no or 0)
+        if ln > 0:
+            lap_nos_by_draft.setdefault(did, set()).add(ln)
+    if not lap_nos_by_draft:
+        return []
+    out: List[ApsPlatingPlanDraftLayout] = []
+    for lb in layouts:
+        did = int(lb.draft_id)
+        lap_set = lap_nos_by_draft.get(did)
+        if not lap_set:
+            continue
+        start = max(1, int(lb.base_lap_no or 1))
+        end = start + max(1, int(lb.lap_count or 1)) - 1
+        if any(start <= ln <= end for ln in lap_set):
+            out.append(lb)
+    return out
+
+
 async def _load_board_date_memos_for_drafts(
     db: AsyncSession,
     draft_ids: List[int],
@@ -757,6 +785,7 @@ async def get_plating_board_view(
         load_draft_ids.append(primary_id)
 
     layout_rows = await _load_layouts_for_drafts(db, load_draft_ids)
+    layout_rows = _filter_layouts_for_board_cards(layout_rows, cards)
     memo_rows = await _load_board_date_memos_for_drafts(db, load_draft_ids, bf, bt)
 
     primary_out: Optional[PlatingDraftOut] = None
