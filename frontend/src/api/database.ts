@@ -598,12 +598,9 @@ export function putFormingDailyPlanProcessRunDays(body: {
 export type ProcessMachinePlanKey =
   | 'cutting'
   | 'chamfering'
+  | 'sw'
   | 'molding'
-  | 'plating'
   | 'welding'
-  | 'inspection'
-  | 'outsourced_plating'
-  | 'outsourced_welding'
 
 export interface ProcessMachinePlanParams {
   startDate: string

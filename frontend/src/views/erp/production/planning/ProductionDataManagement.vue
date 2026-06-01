@@ -467,7 +467,7 @@
         </div>
       </template>
 
-      <el-tabs v-model="activeTableTab" type="card" class="summary-table-tabs" :stretch="true" @tab-change="handleTableTabChange">
+      <el-tabs v-model="activeTableTab" type="card" class="summary-table-tabs" :stretch="true">
               <el-tab-pane v-for="tab in tableTabs" :key="tab.key" :name="tab.key">
                 <template #label>
                   <span class="tab-text">{{ tab.label }}</span>
@@ -2680,9 +2680,8 @@ function sumSafetyStockByLatestDatePerProduct(data: any[]): number {
 
 const getSummaries = (param: { columns: any[]; data: any[] }) => {
   const { columns, data } = param
-  const summaryData = activeTableTab.value === 'plan' && summaryAllData.value.length > 0
-    ? summaryAllData.value
-    : data
+  // 合計行は全ページ分（summaryAllData）。未取得時のみ当ページ data にフォールバック
+  const summaryData = summaryAllData.value.length > 0 ? summaryAllData.value : data
   const sums: string[] = []
   columns.forEach((column, index) => {
     if (index === 0) {
@@ -3814,6 +3813,7 @@ const fetchAllRowsForSummary = async (baseParams: any, totalCount: number) => {
 }
 const fetchData = async () => {
   loading.value = true
+  summaryAllData.value = []
   try {
     const params = buildListParams()
     const response: any = await getProductionSummarysList(params)
@@ -3822,13 +3822,11 @@ const fetchData = async () => {
     if (response?.data?.list) {
       tableData.value = response.data.list
       total.value = response.data.pagination?.total ?? 0
-      if (activeTableTab.value === 'plan') {
-        if (total.value <= tableData.value.length) {
-          summaryAllData.value = [...tableData.value]
-        } else {
-          const allRows = await fetchAllRowsForSummary(params, total.value)
-          summaryAllData.value = allRows.length > 0 ? allRows : [...tableData.value]
-        }
+      if (total.value <= tableData.value.length) {
+        summaryAllData.value = [...tableData.value]
+      } else if (total.value > 0) {
+        const allRows = await fetchAllRowsForSummary(params, total.value)
+        summaryAllData.value = allRows.length > 0 ? allRows : [...tableData.value]
       } else {
         summaryAllData.value = []
       }
@@ -4250,9 +4248,6 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string | null 
 }
 const handlePageChange = () => fetchData()
 const handleRefresh = () => fetchData()
-const handleTableTabChange = () => {
-  if (activeTableTab.value === 'plan') fetchData()
-}
 
 const handleFilterProductFromStagnation = (productCd: string) => {
   if (!productCd) return

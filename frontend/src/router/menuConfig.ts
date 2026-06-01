@@ -92,6 +92,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_RESULT', name: '生産実績', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION', sortOrder: 8 },
   { code: 'ERP_PRODUCTION_ACTUAL', name: '生産実績管理', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_CONSUME', name: '材料消費実績', path: '/erp/production/consumption', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 2 },
+  { code: 'ERP_PRODUCTION_PROCESS_ACTUAL', name: '工程別実績', path: '/erp/production/process-actual', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 3 },
 
   // ===== 5. 原価・財務連携 (Costing & Finance) =====
   { code: 'ERP_COSTING', name: '原価・財務連携', path: '/erp/costing', icon: 'Coin', parentCode: 'ERP', sortOrder: 7 },

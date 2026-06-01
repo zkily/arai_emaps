@@ -1,7 +1,7 @@
 """
 工程別設備別計画 API（ProcessMachinePlanView 向け）
 
-production_summarys を期間で集計し、工程（成型・切断・面取・メッキ・溶接・検査・外注メッキ・外注溶接）
+production_summarys を期間で集計し、工程（切断・面取・SW・成型・溶接）
 × 設備（*_machine 列）ごとに「計画 / 実績」を対比できるデータを返す。
 
 - GET /production-summarys/process-machine-plan
@@ -50,6 +50,16 @@ PROCESS_DEFS: list[dict[str, str]] = [
         "scrap": "chamfering_scrap",
     },
     {
+        "key": "sw",
+        "label": "SW",
+        "machine": "sw_machine",
+        "plan": "sw_plan",
+        "actual": None,
+        "actual_plan": None,
+        "defect": None,
+        "scrap": None,
+    },
+    {
         "key": "molding",
         "label": "成型",
         "machine": "molding_machine",
@@ -60,16 +70,6 @@ PROCESS_DEFS: list[dict[str, str]] = [
         "scrap": "molding_scrap",
     },
     {
-        "key": "plating",
-        "label": "メッキ",
-        "machine": "plating_machine",
-        "plan": "plating_plan",
-        "actual": "plating_actual",
-        "actual_plan": "plating_actual_plan",
-        "defect": "plating_defect",
-        "scrap": "plating_scrap",
-    },
-    {
         "key": "welding",
         "label": "溶接",
         "machine": "welding_machine",
@@ -78,36 +78,6 @@ PROCESS_DEFS: list[dict[str, str]] = [
         "actual_plan": "welding_actual_plan",
         "defect": "welding_defect",
         "scrap": "welding_scrap",
-    },
-    {
-        "key": "inspection",
-        "label": "検査",
-        "machine": "inspector_machine",
-        "plan": "inspection_plan",
-        "actual": "inspection_actual",
-        "actual_plan": "inspection_actual_plan",
-        "defect": "inspection_defect",
-        "scrap": "inspection_scrap",
-    },
-    {
-        "key": "outsourced_plating",
-        "label": "外注メッキ",
-        "machine": "outsourced_plating_machine",
-        "plan": "outsourced_plating_plan",
-        "actual": "outsourced_plating_actual",
-        "actual_plan": "outsourced_plating_actual_plan",
-        "defect": "outsourced_plating_defect",
-        "scrap": "outsourced_plating_scrap",
-    },
-    {
-        "key": "outsourced_welding",
-        "label": "外注溶接",
-        "machine": "outsourced_welding_machine",
-        "plan": "outsourced_welding_plan",
-        "actual": "outsourced_welding_actual",
-        "actual_plan": "outsourced_welding_actual_plan",
-        "defect": "outsourced_welding_defect",
-        "scrap": "outsourced_welding_scrap",
     },
 ]
 
@@ -157,6 +127,13 @@ def _defect_rate(actual: int, defect: int, scrap: int) -> Optional[float]:
     if base <= 0:
         return None
     return _round1((defect + scrap) / base * 100.0)
+
+
+def _sum_expr(col: Optional[str]) -> str:
+    """集計対象列。None のときは 0（SW など実績列未整備の工程）。"""
+    if col:
+        return f"SUM(COALESCE(`{col}`, 0))"
+    return "0"
 
 
 def _empty_acc() -> dict:
@@ -227,11 +204,11 @@ async def get_process_machine_plan(
                 '{d['key']}' AS process_key,
                 COALESCE(NULLIF(TRIM(`{d['machine']}`), ''), '__UNSET__') AS machine,
                 `date` AS d,
-                SUM(COALESCE(`{d['plan']}`, 0)) AS plan_qty,
-                SUM(COALESCE(`{d['actual']}`, 0)) AS actual_qty,
-                SUM(COALESCE(`{d['actual_plan']}`, 0)) AS actual_plan_qty,
-                SUM(COALESCE(`{d['defect']}`, 0)) AS defect_qty,
-                SUM(COALESCE(`{d['scrap']}`, 0)) AS scrap_qty
+                {_sum_expr(d['plan'])} AS plan_qty,
+                {_sum_expr(d['actual'])} AS actual_qty,
+                {_sum_expr(d['actual_plan'])} AS actual_plan_qty,
+                {_sum_expr(d['defect'])} AS defect_qty,
+                {_sum_expr(d['scrap'])} AS scrap_qty
             FROM production_summarys
             WHERE `date` >= :start AND `date` <= :end{product_clause}
             GROUP BY machine, `date`
@@ -372,11 +349,11 @@ async def get_process_machine_plan_products(
         SELECT
             product_cd,
             MAX(product_name) AS product_name,
-            SUM(COALESCE(`{d['plan']}`, 0)) AS plan_qty,
-            SUM(COALESCE(`{d['actual']}`, 0)) AS actual_qty,
-            SUM(COALESCE(`{d['actual_plan']}`, 0)) AS actual_plan_qty,
-            SUM(COALESCE(`{d['defect']}`, 0)) AS defect_qty,
-            SUM(COALESCE(`{d['scrap']}`, 0)) AS scrap_qty
+            {_sum_expr(d['plan'])} AS plan_qty,
+            {_sum_expr(d['actual'])} AS actual_qty,
+            {_sum_expr(d['actual_plan'])} AS actual_plan_qty,
+            {_sum_expr(d['defect'])} AS defect_qty,
+            {_sum_expr(d['scrap'])} AS scrap_qty
         FROM production_summarys
         WHERE `date` >= :start AND `date` <= :end AND {machine_clause}
         GROUP BY product_cd

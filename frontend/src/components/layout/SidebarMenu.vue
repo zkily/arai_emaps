@@ -318,6 +318,10 @@
                 <el-icon><DataLine /></el-icon>
                 <template #title><span :title="t('menu.ERP_PRODUCTION_CONSUME')">{{ t('menu.ERP_PRODUCTION_CONSUME') }}</span></template>
               </el-menu-item>
+              <el-menu-item index="/erp/production/process-actual">
+                <el-icon><DataAnalysis /></el-icon>
+                <template #title><span :title="t('menu.ERP_PRODUCTION_PROCESS_ACTUAL')">{{ t('menu.ERP_PRODUCTION_PROCESS_ACTUAL') }}</span></template>
+              </el-menu-item>
             </el-sub-menu>
           </el-sub-menu>
           

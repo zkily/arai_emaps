@@ -271,11 +271,11 @@
                   >
                     <span class="lap-label-no">第{{ item.row.lap_display_no }}周目</span>
                     <span
-                      v-if="lapTimeRangeLabel(item.row.lap_no)"
                       class="lap-label-time lap-label-time--editable"
+                      :class="{ 'lap-label-time--empty': !lapTimeRangeLabel(item.row.lap_no) }"
                       title="ダブルクリックで開始時刻を編集"
                       @dblclick.stop="openLapStartTimeEdit(item.row.lap_no)"
-                    >{{ lapTimeRangeLabel(item.row.lap_no) }}</span>
+                    >{{ lapTimeRangeLabel(item.row.lap_no) || '—' }}</span>
                   </div>
                   <div
                     class="lap-board-grid lap-board-body-row lap-board-body-row--lap"
@@ -1512,6 +1512,16 @@ const scheduleCards = ref<ScheduleCard[]>([])
 const standardPositions = ref(new Map<string, { lap_no: number; turn_seq: number }>())
 /** API から③ボードを復元する／読込でボードを空にするとき、deep watch による不要な自動保存を抑止 */
 const isBoardHydratingFromApi = ref(false)
+/** 空枠補完・一括同期中は watch による自動保存・Sortable 再初期化を抑止 */
+let suppressScheduleSideEffects = 0
+function withSuppressedScheduleSideEffects<T>(fn: () => T): T {
+  suppressScheduleSideEffects += 1
+  try {
+    return fn()
+  } finally {
+    suppressScheduleSideEffects -= 1
+  }
+}
 
 const TABLE_H = 340
 const FLOAT_TABLE_H = 300
@@ -1676,6 +1686,18 @@ function boardLapNosInViewFromScheduleCards(): Set<number> {
   return set
 }
 
+/** 表示期間内に board_cards（qty>0）が存在する周目のみ */
+function boardLapNosWithBoardDataInView(): Set<number> {
+  const set = new Set<number>()
+  for (const c of scheduleCards.value) {
+    if (c.qty <= 0) continue
+    const wd = (c.lap_work_date || '').slice(0, 10)
+    if (!wd || !isYmdInBoardView(wd)) continue
+    set.add(c.lap_no)
+  }
+  return set
+}
+
 function layoutBlockCoversAnyLap(block: { base_lap_no: number; lap_count: number }, lapNos: Set<number>): boolean {
   const start = Math.max(1, Math.floor(Number(block.base_lap_no) || 1))
   const end = start + Math.max(1, Math.floor(Number(block.lap_count) || 1)) - 1
@@ -1689,7 +1711,24 @@ function buildBoardLapWorkDateMap(): Map<number, string> {
   const map = new Map<number, string>()
   for (const c of scheduleCards.value) {
     const wd = (c.lap_work_date || '').slice(0, 10)
-    if (wd) map.set(c.lap_no, wd)
+    if (!wd || !isYmdInBoardView(wd)) continue
+    map.set(c.lap_no, wd)
+  }
+  return map
+}
+
+/** board_cards の lap_start_time / lap_end_time（周目ラベル表示用） */
+function buildBoardLapTimesMap(): Map<number, { start: string; end: string }> {
+  const map = new Map<number, { start: string; end: string }>()
+  for (const c of scheduleCards.value) {
+    if (map.has(c.lap_no)) continue
+    const st = String(c.lap_start_time ?? '').trim()
+    const en = String(c.lap_end_time ?? '').trim()
+    if (!st && !en) continue
+    map.set(c.lap_no, {
+      start: st ? normalizeBoardStartTimeHm(st) : '',
+      end: en ? normalizeBoardStartTimeHm(en) : '',
+    })
   }
   return map
 }
@@ -1699,12 +1738,14 @@ function lapScheduleMetaForCard(lapNo: number): {
   lap_start_time?: string | null
   lap_end_time?: string | null
 } {
+  const times = buildBoardLapTimesMap().get(lapNo)
   const slot = currentLayoutLapSchedule().find((s) => s.lap_no === lapNo)
-  if (!slot) return {}
+  const card = scheduleCards.value.find((c) => c.lap_no === lapNo)
+  const wd = (card?.lap_work_date || slot?.work_date || '').slice(0, 10)
   return {
-    lap_work_date: slot.work_date,
-    lap_start_time: slot.start,
-    lap_end_time: slot.end,
+    lap_work_date: wd || undefined,
+    lap_start_time: times?.start || slot?.start || card?.lap_start_time || null,
+    lap_end_time: times?.end || slot?.end || card?.lap_end_time || null,
   }
 }
 
@@ -1725,7 +1766,7 @@ function layoutBlocksInBoardView(): BoardLayoutBlock[] {
 }
 
 function recomputeLayoutMaxLapsFromSchedule() {
-  const sched = buildGlobalLapSchedule()
+  const sched = globalLapSchedule.value
   if (sched.length > 0) {
     layoutMaxLaps.value = Math.max(...sched.map((s) => s.lap_no))
   }
@@ -1817,12 +1858,15 @@ function buildLapScheduleRows(
   })
 }
 
-function buildGlobalLapSchedule(): LapScheduleSlot[] {
+function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
   if (!layoutBoardReady.value) return []
-  const blocks = layoutBlocksInBoardView()
-  if (blocks.length === 0) return []
-  const out: LapScheduleSlot[] = []
-  for (const block of blocks) {
+  const lapNosWithData = boardLapNosWithBoardDataInView()
+  if (lapNosWithData.size === 0) return []
+
+  const lapDateMap = buildBoardLapWorkDateMap()
+  const lapTimesMap = buildBoardLapTimesMap()
+  const layoutSlotByLap = new Map<number, LapScheduleSlot>()
+  for (const block of layoutBlocksInBoardView()) {
     const rows = buildLapScheduleRows(
       block.plan_date,
       block.start_time,
@@ -1830,32 +1874,49 @@ function buildGlobalLapSchedule(): LapScheduleSlot[] {
       block.lap_count,
     )
     for (const r of rows) {
-      out.push({ ...r, lap_no: block.base_lap_no + r.lap_no - 1 })
+      const lapNo = block.base_lap_no + r.lap_no - 1
+      if (!lapNosWithData.has(lapNo)) continue
+      layoutSlotByLap.set(lapNo, { ...r, lap_no: lapNo })
     }
   }
-  const lapDateMap = buildBoardLapWorkDateMap()
-  return out
-    .map((s) => {
-      const wd = lapDateMap.get(s.lap_no) ?? s.work_date
-      return {
-        ...s,
-        work_date: wd,
-        work_date_label: formatBoardDateLabel(wd),
-      }
+
+  const result: LapScheduleSlot[] = []
+  for (const ln of [...lapNosWithData].sort((a, b) => a - b)) {
+    const wd = (lapDateMap.get(ln) || '').slice(0, 10)
+    if (!wd || !isYmdInBoardView(wd)) continue
+    const times = lapTimesMap.get(ln)
+    const layout = layoutSlotByLap.get(ln)
+    const start =
+      times?.start ||
+      layout?.start ||
+      normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_start_time)
+    const end =
+      times?.end ||
+      layout?.end ||
+      normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_end_time)
+    result.push({
+      lap_no: ln,
+      work_date: wd,
+      work_date_label: formatBoardDateLabel(wd),
+      start: start || '08:00',
+      end: end || start || '09:00',
     })
-    .sort((a, b) => a.lap_no - b.lap_no)
-    .filter((s) => isYmdInBoardView(s.work_date))
+  }
+  return result
 }
 
+/** 周次スケジュール（layout + board_cards）— 同一 tick 内の重複計算を抑止 */
+const globalLapSchedule = computed(() => buildGlobalLapScheduleInner())
+
 function currentLayoutLapSchedule(): LapScheduleSlot[] {
-  return buildGlobalLapSchedule()
+  return globalLapSchedule.value
 }
 
 /** 計画日（lap_work_date）ごとに 1 から振り直した表示用周番号 */
 const lapDisplayNoMap = computed(() => {
   const map = new Map<number, number>()
   const byDate = new Map<string, number[]>()
-  for (const s of buildGlobalLapSchedule()) {
+  for (const s of globalLapSchedule.value) {
     const list = byDate.get(s.work_date) ?? []
     list.push(s.lap_no)
     byDate.set(s.work_date, list)
@@ -2065,8 +2126,12 @@ function inferLayoutBlocksFromBoard(
 }
 
 function lapTimeRangeLabel(lapNo: number): string {
+  const times = buildBoardLapTimesMap().get(lapNo)
+  if (times?.start && times?.end) return `${times.start}–${times.end}`
+  if (times?.start) return `${times.start}–`
+  if (times?.end) return `–${times.end}`
   const row = currentLayoutLapSchedule().find((r) => r.lap_no === lapNo)
-  return row ? `${row.start}–${row.end}` : ''
+  return row?.start && row?.end ? `${row.start}–${row.end}` : ''
 }
 
 function applyLapStartTimeAndCascade(lapNo: number, newStartHm: string): boolean {
@@ -2167,7 +2232,25 @@ function applyLapStartTimeAndCascade(lapNo: number, newStartHm: string): boolean
     layoutStartTime.value = normalizeBoardStartTimeHm(first.start_time)
   }
   recomputeLayoutMaxLapsFromSchedule()
+  syncScheduleCardLapTimesFromLayout()
   return true
+}
+
+/** layout 再計算後、board_cards 行の lap_work_date / 時刻を同期 */
+function syncScheduleCardLapTimesFromLayout() {
+  const byLap = new Map(globalLapSchedule.value.map((s) => [s.lap_no, s]))
+  withSuppressedScheduleSideEffects(() => {
+    scheduleCards.value = scheduleCards.value.map((c) => {
+      const s = byLap.get(c.lap_no)
+      if (!s) return c
+      return {
+        ...c,
+        lap_work_date: s.work_date,
+        lap_start_time: s.start,
+        lap_end_time: s.end,
+      }
+    })
+  })
 }
 
 function openLapStartTimeEdit(lapNo: number) {
@@ -2729,22 +2812,16 @@ function applyBoardDateMemosFromDraft(memos: PlatingBoardDateMemoOut[], merge = 
   boardDateMemosByYmd.value = next
 }
 
-async function buildBoardDateMemosForPersist(): Promise<PlatingBoardDateMemoBody[]> {
-  const local = { ...boardDateMemosByYmd.value }
+function buildBoardDateMemosForPersistFromSnapshot(
+  snapshot: PlatingDraftOut | null,
+): PlatingBoardDateMemoBody[] {
   const merged = new Map<string, string>()
-  if (currentDraftId.value) {
-    try {
-      const existing = await fetchPlatingDraftById(currentDraftId.value)
-      for (const row of existing.board_date_memos || []) {
-        const d = String(row.lap_work_date ?? '').slice(0, 10)
-        if (!d) continue
-        merged.set(d, String(row.memo ?? ''))
-      }
-    } catch (e) {
-      console.warn('buildBoardDateMemosForPersist:', e)
-    }
+  for (const row of snapshot?.board_date_memos || []) {
+    const d = String(row.lap_work_date ?? '').slice(0, 10)
+    if (!d) continue
+    merged.set(d, String(row.memo ?? ''))
   }
-  for (const [ymd, memo] of Object.entries(local)) {
+  for (const [ymd, memo] of Object.entries(boardDateMemosByYmd.value)) {
     if (!ymd) continue
     merged.set(ymd, String(memo ?? '').trim())
   }
@@ -2777,10 +2854,17 @@ async function confirmBoardDateMemoEdit() {
   ElMessage.success('日付メモを保存しました')
 }
 
-async function buildDraftPayload(items: PlatingDraftItemBody[]) {
-  const board_cards = await mergePersistBoardCards()
+async function buildDraftPayload(
+  items: PlatingDraftItemBody[],
+  snapshot: PlatingDraftOut | null,
+  persistOpts?: PersistDraftOpts,
+) {
+  const board_cards = mergePersistBoardCardsFromSnapshot(
+    snapshot,
+    scheduleCardsToBoardBodies(!!persistOpts?.syncSkeletons),
+  )
   const layout_blocks = buildLayoutBlocksForPersist()
-  const board_date_memos = await buildBoardDateMemosForPersist()
+  const board_date_memos = buildBoardDateMemosForPersistFromSnapshot(snapshot)
   const firstLayout = layout_blocks[0]
   const planDate =
     (firstLayout?.plan_date || '').trim().slice(0, 10) ||
@@ -2806,31 +2890,41 @@ async function buildDraftPayload(items: PlatingDraftItemBody[]) {
 }
 
 /** 更新時に他作業日の明細行を残し、当該作業日分はボードのみで管理する */
-async function mergePersistItems(): Promise<PlatingDraftItemBody[]> {
-  if (!currentDraftId.value) return []
+function mergePersistItemsFromSnapshot(snapshot: PlatingDraftOut | null): PlatingDraftItemBody[] {
+  if (!snapshot) return []
   const wd = draftWorkDate.value || todayYmdJapan()
-  const existing = await fetchPlatingDraftById(currentDraftId.value, { workDate: wd })
-  const plan = String(existing.plan_date || '').slice(0, 10) || wd
-  return existing.items
+  const plan = String(snapshot.plan_date || '').slice(0, 10) || wd
+  return (snapshot.items || [])
     .filter((it) => effectiveItemWorkDate(it, plan) !== wd)
     .sort(comparePlatingApiDraftItemBySequence)
     .map(apiItemToBody)
     .map((x, i) => ({ ...x, sort_order: i + 1 }))
 }
 
-function scheduleCardsToBoardBodies(): PlatingBoardCardBody[] {
+function scheduleCardsToBoardBodies(includeEmptySlots = false): PlatingBoardCardBody[] {
   const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
   const fallbackYmd = draftWorkDate.value || todayYmdJapan()
   return [...scheduleCardsForCurrentDraft()]
-    .filter((c) => shouldPersistBoardCard(c))
+    .filter((c) => shouldPersistBoardCard(c) && (includeEmptySlots || c.qty > 0))
     .sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap) || a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
     .map((c) => {
       const slot = scheduleByLap.get(c.lap_no)
+      const times = buildBoardLapTimesMap().get(c.lap_no)
       const lapYmd = (c.lap_work_date || '').slice(0, 10) || slot?.work_date || fallbackYmd
+      const lapStart =
+        times?.start ||
+        (c.lap_start_time ? normalizeBoardStartTimeHm(c.lap_start_time) : null) ||
+        slot?.start ||
+        null
+      const lapEnd =
+        times?.end ||
+        (c.lap_end_time ? normalizeBoardStartTimeHm(c.lap_end_time) : null) ||
+        slot?.end ||
+        null
       return {
         lap_work_date: lapYmd,
-        lap_start_time: slot?.start ?? null,
-        lap_end_time: slot?.end ?? null,
+        lap_start_time: lapStart,
+        lap_end_time: lapEnd,
         lap_no: c.persist_lap_no ?? c.lap_no,
         turn_seq: c.turn_seq,
         product_cd: c.product_cd,
@@ -2862,19 +2956,23 @@ function compareLapNoForBoardSort(
 }
 
 /** 更新時に他作業日のボード行をマージし、PUT で aps_plating_plan_board_cards を誤削除しない */
-async function mergePersistBoardCards(): Promise<PlatingBoardCardBody[]> {
-  const mine = scheduleCardsToBoardBodies()
-  if (!currentDraftId.value) return mine
+function mergePersistBoardCardsFromSnapshot(
+  snapshot: PlatingDraftOut | null,
+  mine: PlatingBoardCardBody[],
+): PlatingBoardCardBody[] {
+  if (!snapshot) return mine
   const datesInMine = new Set(mine.map((bc) => boardCardLapWorkDate(bc)).filter(Boolean))
-  const existing = await fetchPlatingDraftById(currentDraftId.value)
-  const kept = (existing.board_cards || [])
+  const kept = (snapshot.board_cards || [])
     .filter((bc) => !datesInMine.has(boardCardLapWorkDate(bc)))
     .map(apiBoardCardToBody)
   return [...kept, ...mine]
 }
 
 let boardAutosaveTimer: ReturnType<typeof setTimeout> | null = null
-const BOARD_AUTOSAVE_MS = 600
+/** ドラッグ連続操作時の PUT 間隔（ms） */
+const BOARD_AUTOSAVE_MS = 1400
+let persistDraftInFlight: Promise<void> | null = null
+type PersistDraftOpts = { syncSkeletons?: boolean }
 
 function cancelBoardAutosaveTimer() {
   if (boardAutosaveTimer != null) {
@@ -2896,7 +2994,7 @@ async function flushLayoutPersist(notify = false) {
     return
   }
   try {
-    await persistDraft(notify)
+    await persistDraft(notify, { syncSkeletons: true })
   } catch (e) {
     console.error(e)
     if (notify) ElMessage.error('レイアウトの保存に失敗しました')
@@ -2906,6 +3004,7 @@ async function flushLayoutPersist(notify = false) {
 
 /** ドラッグ等の高頻度変更：デバウンス後に aps_plating_plan_board_cards へ書込（persistDraft の board_cards 経由） */
 function scheduleBoardAutosave() {
+  if (suppressScheduleSideEffects > 0) return
   if (isBoardHydratingFromApi.value) return
   if (loadingDraft.value) return
   if (!canPersistBoard()) return
@@ -2917,43 +3016,55 @@ function scheduleBoardAutosave() {
 }
 
 /** 再割当・緊急挿し込み・クリア等：デバウンスを解除して直ちに DB へ反映 */
-async function flushBoardPersist() {
+async function flushBoardPersist(opts?: PersistDraftOpts) {
   cancelBoardAutosaveTimer()
   if (isBoardHydratingFromApi.value) return
   if (loadingDraft.value) return
   if (!canPersistBoard()) return
   try {
-    await persistDraft(false)
+    await persistDraft(false, opts)
   } catch (e) {
     console.error(e)
   }
 }
 
-async function persistDraft(notify = true) {
-  const layout_blocks_preview = buildLayoutBlocksForPersist()
-  if (layout_blocks_preview.length === 0) {
-    if (notify) ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
-    return
-  }
-  if (!draftWorkDate.value) {
-    draftWorkDate.value = layout_blocks_preview[0]!.plan_date
-  }
-  ensureBoardCardSkeletonsForLayout()
-  let items: PlatingDraftItemBody[]
-  try {
-    items = await mergePersistItems()
-  } catch (e) {
-    console.error(e)
-    if (notify) ElMessage.error('計画データの取得に失敗しました')
-    return
-  }
-  const body = await buildDraftPayload(items)
-  if (currentDraftId.value) {
-    await updatePlatingDraft(currentDraftId.value, body)
-  } else {
-    const created = await createPlatingDraft(body)
-    currentDraftId.value = created.id
-  }
+async function persistDraft(notify = true, opts?: PersistDraftOpts) {
+  if (persistDraftInFlight) return persistDraftInFlight
+  persistDraftInFlight = (async () => {
+    const layout_blocks_preview = buildLayoutBlocksForPersist()
+    if (layout_blocks_preview.length === 0) {
+      if (notify) ElMessage.warning('先に「追加レイアウト」で周目を追加してください')
+      return
+    }
+    if (!draftWorkDate.value) {
+      draftWorkDate.value = layout_blocks_preview[0]!.plan_date
+    }
+    if (opts?.syncSkeletons) {
+      withSuppressedScheduleSideEffects(() => ensureBoardCardSkeletonsForLayout())
+    }
+    let snapshot: PlatingDraftOut | null = null
+    if (currentDraftId.value) {
+      try {
+        const wd = draftWorkDate.value || todayYmdJapan()
+        snapshot = await fetchPlatingDraftById(currentDraftId.value, { workDate: wd })
+      } catch (e) {
+        console.error(e)
+        if (notify) ElMessage.error('計画データの取得に失敗しました')
+        return
+      }
+    }
+    const items = mergePersistItemsFromSnapshot(snapshot)
+    const body = await buildDraftPayload(items, snapshot, opts)
+    if (currentDraftId.value) {
+      await updatePlatingDraft(currentDraftId.value, body)
+    } else {
+      const created = await createPlatingDraft(body)
+      currentDraftId.value = created.id
+    }
+  })().finally(() => {
+    persistDraftInFlight = null
+  })
+  return persistDraftInFlight
 }
 
 type LoadLatestDraftOpts = { autoMode?: boolean; autoSyncWorkDate?: boolean }
@@ -3195,7 +3306,11 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
             .filter((c) => c.boardMark === 'standard')
             .map((c) => [c.id, { lap_no: c.lap_no, turn_seq: c.turn_seq }]),
         )
-        boardStaleSlotsPruned = pruneStaleEmptySlots()
+        withSuppressedScheduleSideEffects(() => {
+          boardStaleSlotsPruned = pruneStaleEmptySlots()
+          ensureBoardCardSkeletonsForLayout()
+          syncScheduleCardLapTimesFromLayout()
+        })
       } else if (!hasLayout) {
         scheduleCards.value = []
         standardPositions.value = new Map()
@@ -3757,9 +3872,11 @@ function pruneStaleEmptySlots(): boolean {
     if (c.qty > 0) occupied.add(`${c.lap_no}:${c.turn_seq}`)
   }
   const before = scheduleCards.value.length
-  scheduleCards.value = scheduleCards.value.filter((c) => {
-    if (!isEmptySlotProductCd(c.product_cd) || c.qty > 0) return true
-    return !occupied.has(`${c.lap_no}:${c.turn_seq}`)
+  withSuppressedScheduleSideEffects(() => {
+    scheduleCards.value = scheduleCards.value.filter((c) => {
+      if (!isEmptySlotProductCd(c.product_cd) || c.qty > 0) return true
+      return !occupied.has(`${c.lap_no}:${c.turn_seq}`)
+    })
   })
   return scheduleCards.value.length !== before
 }
@@ -3786,7 +3903,9 @@ function ensureBoardCardSkeletonsForLayout() {
     }
   }
   if (newCards.length > 0) {
-    scheduleCards.value = [...scheduleCards.value, ...newCards]
+    withSuppressedScheduleSideEffects(() => {
+      scheduleCards.value = [...scheduleCards.value, ...newCards]
+    })
   }
 }
 
@@ -5382,7 +5501,7 @@ function schedColorIndexForPlatingMachine(machine: string): number {
 const canUseLapCopy = computed(() => layoutBoardReady.value && layoutMaxLaps.value >= 2)
 
 const lapCopyLapOptions = computed(() => {
-  const scheduleByLap = new Map(buildGlobalLapSchedule().map((s) => [s.lap_no, s]))
+  const scheduleByLap = new Map(globalLapSchedule.value.map((s) => [s.lap_no, s]))
   return lapGridRows.value.map((r) => {
     const wd = scheduleByLap.get(r.lap_no)?.work_date
     const prefix = wd ? `${formatBoardDateLabel(wd)} ` : ''
@@ -5669,7 +5788,7 @@ async function confirmAppendLayout() {
   minutesPerLap.value = cycle
   layoutBoardReady.value = true
   templateDialogVisible.value = false
-  ensureBoardCardSkeletonsForLayout()
+  withSuppressedScheduleSideEffects(() => ensureBoardCardSkeletonsForLayout())
   void nextTick(() => {
     if (!scheduleCards.value.some((c) => c.qty > 0)) initLapTrackSortables()
   })
@@ -5922,24 +6041,24 @@ const lapGridRows = computed<LapGridRow[]>(() => {
   const schedule = currentLayoutLapSchedule()
   const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
 
+  const lapNosWithData = boardLapNosWithBoardDataInView()
   let lapNumbers: number[]
   if (layoutBoardReady.value) {
     if (schedule.length > 0) {
-      lapNumbers = schedule.map((s) => s.lap_no)
+      lapNumbers = schedule.map((s) => s.lap_no).filter((ln) => lapNosWithData.has(ln))
     } else {
-      lapNumbers = Array.from(byLap.keys()).filter((ln) => isLapNoInBoardView(ln, scheduleByLap))
+      lapNumbers = [...lapNosWithData]
       if (lapNumbers.length === 0) return []
     }
   } else {
-    lapNumbers = Array.from(byLap.keys()).sort((a, b) => a - b)
+    lapNumbers = [...lapNosWithData].sort((a, b) => a - b)
     if (lapNumbers.length === 0) return []
-    lapNumbers = lapNumbers.filter((ln) => isLapNoInBoardView(ln, scheduleByLap))
   }
 
+  lapNumbers = lapNumbers.filter((ln) => (byLap.get(ln)?.length ?? 0) > 0)
   if (scheduleByLap.size > 0) {
     lapNumbers.sort((a, b) => compareLapNoForBoardSort(a, b, scheduleByLap))
   }
-  lapNumbers = lapNumbers.filter((lapNo) => isLapNoInBoardView(lapNo, scheduleByLap))
   if (lapNumbers.length === 0) return []
 
   return lapNumbers.map((lapNo) => {
@@ -6326,12 +6445,13 @@ function initBoardLapSortables() {
 }
 
 function scheduleInitBoardLapSortables() {
+  if (suppressScheduleSideEffects > 0) return
   if (isBoardHydratingFromApi.value || loadingDraft.value) return
   if (lapSortableInitTimer != null) clearTimeout(lapSortableInitTimer)
   lapSortableInitTimer = setTimeout(() => {
     lapSortableInitTimer = null
     initBoardLapSortables()
-  }, 60)
+  }, 160)
 }
 
 function cancelLapSortableInitTimer() {
@@ -7274,6 +7394,7 @@ const kpi = computed(() => {
 watch(
   scheduleCards,
   () => {
+    if (suppressScheduleSideEffects > 0) return
     if (isBoardHydratingFromApi.value || loadingDraft.value) return
     scheduleInitBoardLapSortables()
     scheduleBoardAutosave()
@@ -9439,6 +9560,12 @@ onBeforeUnmount(() => {
   cursor: pointer;
   text-decoration: underline dotted color-mix(in oklab, var(--el-color-primary) 55%, transparent);
   text-underline-offset: 2px;
+}
+
+.lap-label-time--empty {
+  color: var(--el-text-color-placeholder);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .lap-row-op-btn {

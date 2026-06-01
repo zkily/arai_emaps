@@ -213,6 +213,7 @@ export default {
     ERP_PRODUCTION_RESULT: 'Thực tế sản xuất',
     ERP_PRODUCTION_ACTUAL: 'Quản lý thực tế sản xuất',
     ERP_PRODUCTION_CONSUME: 'Tiêu thụ NVL',
+    ERP_PRODUCTION_PROCESS_ACTUAL: 'Thực tích theo công đoạn',
     ERP_PRODUCTION_REQUIREMENTS: 'Nhu cầu sản xuất',
     ERP_PRODUCTION_MAT_REQ: 'Nhu cầu vật tư',
     ERP_PRODUCTION_COMPONENT_REQ: 'Nhu cầu linh kiện',

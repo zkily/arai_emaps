@@ -214,6 +214,7 @@ export default {
     ERP_PRODUCTION_RESULT: 'Production Actual',
     ERP_PRODUCTION_ACTUAL: 'Production Actual Management',
     ERP_PRODUCTION_CONSUME: 'Material Consumption',
+    ERP_PRODUCTION_PROCESS_ACTUAL: 'Process Actual',
     ERP_PRODUCTION_REQUIREMENTS: 'Production requirements',
     ERP_PRODUCTION_MAT_REQ: 'Material requirements',
     ERP_PRODUCTION_COMPONENT_REQ: 'Component requirements',

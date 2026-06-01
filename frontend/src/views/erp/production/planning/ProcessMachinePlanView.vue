@@ -153,72 +153,168 @@
     </section>
 
     <!-- 対比集計 -->
-    <section v-show="viewMode === 'summary'" class="pmp-panel">
+    <section v-show="viewMode === 'summary'" class="pmp-panel pmp-panel--summary">
       <div class="pmp-panel__head">
         <span class="pmp-panel__title">対比集計</span>
         <span class="pmp-panel__hint">設備行ダブルクリック → 製品別明細</span>
       </div>
-      <div v-loading="loading" class="pmp-panel__body">
+      <div v-loading="loading" class="pmp-panel__body pmp-panel__body--summary">
+        <div ref="summaryTableHostRef" class="pmp-table-host">
       <el-table
         :data="summaryTableData"
         border
-        size="small"
-        class="pmp-table"
+        stripe
+        size="default"
+        class="pmp-table pmp-table--summary"
         empty-text="データがありません"
         :row-class-name="summaryRowClass"
         :span-method="summarySpanMethod"
-        height="100%"
+        :height="tableLayoutHeight"
+        :style="summaryTableStyle"
         @row-dblclick="onRowDblclick"
       >
-        <el-table-column prop="process_label" label="工程" width="72" align="center" fixed="left" />
-        <el-table-column prop="machine" label="設備" width="120" align="center" fixed="left" show-overflow-tooltip>
+        <el-table-column
+          prop="process_label"
+          label="工程"
+          width="90"
+          align="center"
+          fixed="left"
+          class-name="pmp-summary-col pmp-summary-col--process"
+          label-class-name="pmp-summary-col pmp-summary-col--process pmp-summary-col--head"
+        >
           <template #default="{ row }">
-            <span :class="{ 'pmp-subtotal-label': row.__type !== 'machine' }">{{ row.machine }}</span>
+            <span
+              class="pmp-summary-process"
+              :class="{ 'pmp-summary-process--sub': row.__type !== 'machine' }"
+            >{{ row.process_label }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="plan" label="計画" width="76" align="center">
-          <template #default="{ row }"><span class="pmp-num">{{ fmt(row.plan) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="actual" label="実績" width="76" align="center">
-          <template #default="{ row }"><span class="pmp-num">{{ fmt(row.actual) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="diff" label="差異" width="76" align="center">
+        <el-table-column
+          prop="machine"
+          label="設備"
+          width="132"
+          align="center"
+          fixed="left"
+          show-overflow-tooltip
+          class-name="pmp-summary-col pmp-summary-col--machine"
+          label-class-name="pmp-summary-col pmp-summary-col--machine pmp-summary-col--head"
+        >
           <template #default="{ row }">
-            <span class="pmp-num" :class="diffClass(row.diff)">{{ signed(row.diff) }}</span>
+            <span class="pmp-summary-cell" :class="{ 'pmp-subtotal-label': row.__type !== 'machine' }">
+              {{ row.machine }}
+            </span>
           </template>
         </el-table-column>
-        <el-table-column prop="achievement_rate" label="達成率" width="72" align="center">
+        <el-table-column
+          prop="plan"
+          label="計画"
+          width="92"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--group-start"
+          label-class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--group-start pmp-summary-col--head"
+        >
           <template #default="{ row }">
-            <span class="pmp-rate" :class="achievementClass(row.achievement_rate)">
+            <span class="pmp-summary-cell pmp-num">{{ fmt(row.plan) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="actual"
+          label="実績"
+          width="92"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--kpi"
+          label-class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span class="pmp-summary-cell pmp-num">{{ fmt(row.actual) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="diff"
+          label="差異"
+          width="110"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--kpi"
+          label-class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span class="pmp-summary-cell pmp-num" :class="diffClass(row.diff)">{{ signed(row.diff) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="achievement_rate"
+          label="達成率"
+          width="88"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--rate"
+          label-class-name="pmp-summary-col pmp-summary-col--kpi pmp-summary-col--rate pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span class="pmp-summary-cell pmp-rate" :class="achievementClass(row.achievement_rate)">
               {{ rateText(row.achievement_rate) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="actual_plan" label="実計" width="72" align="center">
-          <template #default="{ row }"><span class="pmp-num pmp-num--muted">{{ fmt(row.actual_plan) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="defect" label="不良" width="64" align="center">
-          <template #default="{ row }"><span class="pmp-num pmp-num--muted">{{ fmt(row.defect) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="scrap" label="廃棄" width="64" align="center">
-          <template #default="{ row }"><span class="pmp-num pmp-num--muted">{{ fmt(row.scrap) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="defect_rate" label="不良率" width="72" align="center">
+        <el-table-column
+          prop="actual_plan"
+          label="実計"
+          width="88"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--sub pmp-summary-col--group-start"
+          label-class-name="pmp-summary-col pmp-summary-col--sub pmp-summary-col--group-start pmp-summary-col--head"
+        >
           <template #default="{ row }">
-            <span class="pmp-rate" :class="{ 'pmp-rate--warn': (row.defect_rate ?? 0) >= 3 }">
+            <span class="pmp-summary-cell pmp-num pmp-num--muted">{{ fmt(row.actual_plan) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="defect"
+          label="不良"
+          width="80"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--quality pmp-summary-col--group-start"
+          label-class-name="pmp-summary-col pmp-summary-col--quality pmp-summary-col--group-start pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span class="pmp-summary-cell pmp-num pmp-num--muted">{{ fmt(row.defect) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="scrap"
+          label="廃棄"
+          width="80"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--quality"
+          label-class-name="pmp-summary-col pmp-summary-col--quality pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span class="pmp-summary-cell pmp-num pmp-num--muted">{{ fmt(row.scrap) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="defect_rate"
+          label="不良率"
+          width="88"
+          align="center"
+          class-name="pmp-summary-col pmp-summary-col--quality pmp-summary-col--rate"
+          label-class-name="pmp-summary-col pmp-summary-col--quality pmp-summary-col--rate pmp-summary-col--head"
+        >
+          <template #default="{ row }">
+            <span
+              class="pmp-summary-cell pmp-rate"
+              :class="{ 'pmp-rate--warn': (row.defect_rate ?? 0) >= 3 }"
+            >
               {{ rateText(row.defect_rate) }}
             </span>
           </template>
         </el-table-column>
-        <el-table-column prop="days" label="稼働日" width="60" align="center">
-          <template #default="{ row }"><span class="pmp-num pmp-num--muted">{{ row.days || 0 }}</span></template>
-        </el-table-column>
       </el-table>
+        </div>
       </div>
     </section>
 
     <!-- 日別明細 -->
-    <section v-show="viewMode === 'daily'" class="pmp-panel">
+    <section v-show="viewMode === 'daily'" class="pmp-panel pmp-panel--daily">
       <div class="pmp-panel__head">
         <span class="pmp-panel__title">日別明細</span>
         <span class="pmp-panel__label">指標</span>
@@ -229,50 +325,92 @@
         </el-radio-group>
         <span class="pmp-panel__hint">0 は「—」表示・設備行ダブルクリックで明細</span>
       </div>
-      <div v-loading="loading" class="pmp-panel__body">
-      <el-table
-        :data="dailyTableData"
-        border
-        size="small"
-        class="pmp-table pmp-table--daily"
-        empty-text="データがありません"
-        :row-class-name="summaryRowClass"
-        :span-method="summarySpanMethod"
-        height="100%"
-        @row-dblclick="onRowDblclick"
-      >
-        <el-table-column prop="process_label" label="工程" width="68" align="center" fixed="left" />
-        <el-table-column prop="machine" label="設備" width="108" align="center" fixed="left" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span :class="{ 'pmp-subtotal-label': row.__type !== 'machine' }">{{ row.machine }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          v-for="d in dates"
-          :key="d"
-          :label="formatDateHeaderDate(d)"
-          align="center"
-          header-align="center"
-          class-name="pmp-daycol-group"
-        >
-          <el-table-column
-            :label="formatDateHeaderWeek(d)"
-            :class-name="dailyWeekHeaderClass(d)"
-            width="44"
-            align="center"
-            header-align="center"
+      <div v-loading="loading" class="pmp-panel__body pmp-panel__body--daily">
+        <div ref="dailyTableHostRef" class="pmp-table-host">
+          <el-table
+            :data="dailyTableData"
+            border
+            stripe
+            size="default"
+            class="pmp-table pmp-table--daily"
+            empty-text="データがありません"
+            :row-class-name="summaryRowClass"
+            :span-method="summarySpanMethod"
+            :style="dailyTableStyle"
+            :height="tableLayoutHeight"
+            @row-dblclick="onRowDblclick"
           >
-            <template #default="{ row }">
-              <span class="pmp-num" :class="dailyCellClass(row, d)">{{ dailyCellText(row, d) }}</span>
-            </template>
-          </el-table-column>
-        </el-table-column>
-        <el-table-column prop="__rowTotal" label="合計" width="64" align="center" header-align="center" fixed="right">
-          <template #default="{ row }">
-            <span class="pmp-num pmp-num--total">{{ signedIfDiff(row.__rowTotal) }}</span>
-          </template>
-        </el-table-column>
-      </el-table>
+            <el-table-column
+              prop="process_label"
+              label="工程"
+              width="80"
+              align="center"
+              fixed="left"
+              class-name="pmp-daily-col pmp-daily-col--process"
+              label-class-name="pmp-daily-col pmp-daily-col--process pmp-daily-col--head"
+            >
+              <template #default="{ row }">
+                <span
+                  class="pmp-daily-process"
+                  :class="{ 'pmp-daily-process--sub': row.__type !== 'machine' }"
+                >{{ row.process_label }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              prop="machine"
+              label="設備"
+              width="124"
+              align="center"
+              fixed="left"
+              show-overflow-tooltip
+              class-name="pmp-daily-col pmp-daily-col--machine"
+              label-class-name="pmp-daily-col pmp-daily-col--machine pmp-daily-col--head"
+            >
+              <template #default="{ row }">
+                <span class="pmp-daily-cell" :class="{ 'pmp-subtotal-label': row.__type !== 'machine' }">
+                  {{ row.machine }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column
+              v-for="d in dates"
+              :key="d"
+              :label="formatDateHeaderDate(d)"
+              align="center"
+              header-align="center"
+              class-name="pmp-daycol-group"
+            >
+              <el-table-column
+                :label="formatDateHeaderWeek(d)"
+                :class-name="`${dailyWeekHeaderClass(d)} pmp-daily-col pmp-daily-col--day`"
+                :width="dailyDayColWidth"
+                align="center"
+                header-align="center"
+                label-class-name="pmp-daily-col pmp-daily-col--day pmp-daily-col--head"
+              >
+                <template #default="{ row }">
+                  <span class="pmp-daily-cell pmp-num" :class="dailyCellClass(row, d)">
+                    {{ dailyCellText(row, d) }}
+                  </span>
+                </template>
+              </el-table-column>
+            </el-table-column>
+            <el-table-column
+              prop="__rowTotal"
+              label="合計"
+              width="76"
+              align="center"
+              header-align="center"
+              fixed="right"
+              class-name="pmp-daily-col pmp-daily-col--total"
+              label-class-name="pmp-daily-col pmp-daily-col--total pmp-daily-col--head"
+            >
+              <template #default="{ row }">
+                <span class="pmp-daily-cell pmp-num pmp-num--total">{{ signedIfDiff(row.__rowTotal) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
       </div>
     </section>
 
@@ -487,6 +625,10 @@ type TrendGroup = 'all' | 'process'
 
 interface TableRow extends Partial<ProcessMachinePlanRow> {
   __type: 'machine' | 'subtotal' | 'grand'
+  /** 工程キー（印刷ページ分割・行識別用） */
+  process_key?: ProcessMachinePlanKey
+  /** 工程ブロック先頭行（対比集計の余白区切り用） */
+  __processStart?: boolean
   __key: string
   process_label: string
   machine: string
@@ -498,7 +640,6 @@ interface TableRow extends Partial<ProcessMachinePlanRow> {
   diff: number
   achievement_rate: number | null
   defect_rate: number | null
-  days: number
   /** 日別マトリクス用：日付 → 指標値 */
   __daily?: Record<string, number>
   __rowTotal?: number
@@ -507,14 +648,19 @@ interface TableRow extends Partial<ProcessMachinePlanRow> {
 const ALL_PROCESSES: { key: ProcessMachinePlanKey; label: string }[] = [
   { key: 'cutting', label: '切断' },
   { key: 'chamfering', label: '面取' },
+  { key: 'sw', label: 'SW' },
   { key: 'molding', label: '成型' },
-  { key: 'plating', label: 'メッキ' },
   { key: 'welding', label: '溶接' },
-  { key: 'inspection', label: '検査' },
-  { key: 'outsourced_plating', label: '外注メッキ' },
-  { key: 'outsourced_welding', label: '外注溶接' },
 ]
 const allProcessOptions = ALL_PROCESSES
+
+/** 対比集計の印刷：工程グループごとに改ページ */
+const SUMMARY_PRINT_PAGE_GROUPS: { title: string; keys: ProcessMachinePlanKey[] }[] = [
+  { title: '切断', keys: ['cutting'] },
+  { title: '面取・SW', keys: ['chamfering', 'sw'] },
+  { title: '成型', keys: ['molding'] },
+  { title: '溶接', keys: ['welding'] },
+]
 
 function monthStartEnd(ym: string): { startDate: string; endDate: string } {
   const [yearStr, monthStr] = ym.split('-')
@@ -554,6 +700,73 @@ let trendChart: echarts.ECharts | null = null
 
 const planData = ref<ProcessMachinePlanData | null>(null)
 const dates = computed(() => planData.value?.dates ?? [])
+
+/** 表スクロール領域（対比集計・日別明細） */
+const summaryTableHostRef = ref<HTMLElement | null>(null)
+const dailyTableHostRef = ref<HTMLElement | null>(null)
+const tableHostWidth = ref(0)
+const tableHostHeight = ref(0)
+let tableHostResizeObserver: ResizeObserver | null = null
+
+const SUMMARY_TABLE_MIN_WIDTH = 860
+const DAILY_FIXED_COL_WIDTH = 80 + 124 + 76
+const DAILY_DAY_COL_MIN = 34
+const DAILY_DAY_COL_MAX = 52
+
+const summaryTableMinWidth = computed(() => SUMMARY_TABLE_MIN_WIDTH)
+
+/** 日別：表示幅に応じて日付列幅を伸縮（内容が枠より広いときは最小幅で横スクロール） */
+const dailyDayColWidth = computed(() => {
+  const n = dates.value.length
+  if (!n) return 44
+  const hostW = tableHostWidth.value
+  const contentMin = DAILY_FIXED_COL_WIDTH + n * DAILY_DAY_COL_MIN
+  if (hostW <= 0) return 44
+  if (contentMin > hostW) return DAILY_DAY_COL_MIN
+  const available = hostW - DAILY_FIXED_COL_WIDTH - 12
+  const ideal = Math.floor(available / n)
+  return Math.min(DAILY_DAY_COL_MAX, Math.max(DAILY_DAY_COL_MIN, ideal))
+})
+
+const dailyTableMinWidth = computed(
+  () => DAILY_FIXED_COL_WIDTH + dates.value.length * dailyDayColWidth.value,
+)
+
+/** 表幅：内容が枠より広いときは内容幅で横スクロール、そうでなければホスト幅いっぱい */
+function buildTableScrollStyle(minWidth: number): { width: string; minWidth: string } {
+  const host = tableHostWidth.value
+  const w = host > 0 ? Math.max(minWidth, host) : minWidth
+  return { width: `${w}px`, minWidth: `${minWidth}px` }
+}
+
+const summaryTableStyle = computed(() => buildTableScrollStyle(summaryTableMinWidth.value))
+const dailyTableStyle = computed(() => buildTableScrollStyle(dailyTableMinWidth.value))
+
+const tableLayoutHeight = computed(() => {
+  const h = tableHostHeight.value
+  return h > 120 ? h : 320
+})
+
+function syncTableHostSize() {
+  const el =
+    viewMode.value === 'summary'
+      ? summaryTableHostRef.value
+      : viewMode.value === 'daily'
+        ? dailyTableHostRef.value
+        : null
+  if (!el || el.clientWidth <= 0 || el.clientHeight <= 0) return
+  tableHostWidth.value = el.clientWidth
+  tableHostHeight.value = el.clientHeight
+}
+
+function setupTableHostResizeObserver() {
+  tableHostResizeObserver?.disconnect()
+  if (typeof ResizeObserver === 'undefined') return
+  tableHostResizeObserver = new ResizeObserver(() => syncTableHostSize())
+  for (const el of [summaryTableHostRef.value, dailyTableHostRef.value]) {
+    if (el) tableHostResizeObserver.observe(el)
+  }
+}
 
 const emptyMetrics: ProcessMachineMetrics = {
   plan: 0,
@@ -686,6 +899,7 @@ function weekdayCellClass(iso: string): string {
 const TREND_PROCESS_COLORS = [
   '#3b82f6',
   '#22c55e',
+  '#14b8a6',
   '#8b5cf6',
   '#f59e0b',
   '#ef4444',
@@ -817,9 +1031,22 @@ function achievementClass(v: number | null): string {
 
 /** subtotal / grand 行のスタイル付け */
 function summaryRowClass({ row }: { row: TableRow }): string {
-  if (row.__type === 'grand') return 'pmp-row-grand'
-  if (row.__type === 'subtotal') return 'pmp-row-subtotal'
-  return 'pmp-row-machine'
+  const parts: string[] = []
+  if (row.__type === 'grand') {
+    parts.push('pmp-row-grand')
+    if (viewMode.value === 'summary') parts.push('pmp-row-grand--summary')
+  } else if (row.__type === 'subtotal') {
+    parts.push('pmp-row-subtotal')
+    if (viewMode.value === 'summary') parts.push('pmp-row-subtotal--summary')
+    else if (viewMode.value === 'daily') parts.push('pmp-row-subtotal--daily')
+  }
+  else {
+    parts.push('pmp-row-machine')
+    if (viewMode.value === 'summary') parts.push('pmp-row-machine--summary')
+    else if (viewMode.value === 'daily') parts.push('pmp-row-machine--daily')
+    if (row.__processStart) parts.push('pmp-row-process-start')
+  }
+  return parts.join(' ')
 }
 
 /** subtotal / grand 行は「工程」「設備」列をまとめる */
@@ -845,9 +1072,12 @@ const summaryTableData = computed<TableRow[]>(() => {
   for (const proc of data.processes) {
     const machineRows = filteredSummary.value.filter((r) => r.process_key === proc.key)
     if (machineRows.length === 0) continue
+    let firstInProcess = true
     for (const r of machineRows) {
       rows.push({
         __type: 'machine',
+        __processStart: firstInProcess,
+        process_key: proc.key,
         __key: `${proc.key}__${r.machine}`,
         process_label: r.process_label,
         machine: r.machine,
@@ -859,8 +1089,8 @@ const summaryTableData = computed<TableRow[]>(() => {
         diff: r.diff,
         achievement_rate: r.achievement_rate,
         defect_rate: r.defect_rate,
-        days: r.days,
       })
+      firstInProcess = false
     }
     rows.push(buildSubtotal(proc.key, proc.label, machineRows))
   }
@@ -868,22 +1098,20 @@ const summaryTableData = computed<TableRow[]>(() => {
   return rows
 })
 
-function aggregate(rows: ProcessMachinePlanRow[]): ProcessMachineMetrics {
+function aggregate(rows: ProcessMachinePlanRow[]): Omit<ProcessMachineMetrics, 'days'> {
   const acc = { plan: 0, actual: 0, actual_plan: 0, defect: 0, scrap: 0 }
-  let days = 0
   for (const r of rows) {
     acc.plan += r.plan
     acc.actual += r.actual
     acc.actual_plan += r.actual_plan
     acc.defect += r.defect
     acc.scrap += r.scrap
-    days = Math.max(days, r.days)
   }
   const diff = acc.actual - acc.plan
   const achievement_rate = acc.plan > 0 ? round1((acc.actual / acc.plan) * 100) : null
   const defectBase = acc.actual + acc.defect + acc.scrap
   const defect_rate = defectBase > 0 ? round1(((acc.defect + acc.scrap) / defectBase) * 100) : null
-  return { ...acc, diff, achievement_rate, defect_rate, days }
+  return { ...acc, diff, achievement_rate, defect_rate }
 }
 function round1(v: number): number {
   return Math.round(v * 10) / 10
@@ -897,6 +1125,7 @@ function buildSubtotal(
   const m = aggregate(rows)
   return {
     __type: 'subtotal',
+    process_key: key,
     __key: `${key}__subtotal`,
     process_label: label,
     machine: '小計',
@@ -932,6 +1161,7 @@ const dailyTableData = computed<TableRow[]>(() => {
     if (machineRows.length === 0) continue
     const subDaily: Record<string, number> = {}
     let subTotal = 0
+    let firstInProcess = true
     for (const r of machineRows) {
       const daily: Record<string, number> = {}
       let rowTotal = 0
@@ -944,6 +1174,7 @@ const dailyTableData = computed<TableRow[]>(() => {
       subTotal += rowTotal
       rows.push({
         __type: 'machine',
+        __processStart: firstInProcess,
         __key: `${proc.key}__${r.machine}__daily`,
         process_label: r.process_label,
         machine: r.machine,
@@ -955,10 +1186,10 @@ const dailyTableData = computed<TableRow[]>(() => {
         diff: r.diff,
         achievement_rate: r.achievement_rate,
         defect_rate: r.defect_rate,
-        days: r.days,
         __daily: daily,
         __rowTotal: rowTotal,
       })
+      firstInProcess = false
     }
     rows.push({
       __type: 'subtotal',
@@ -1342,6 +1573,7 @@ function syncTrendChart() {
 }
 
 function onWindowResize() {
+  syncTableHostSize()
   trendChart?.resize()
 }
 
@@ -1404,7 +1636,8 @@ const PRINT_DOCUMENT_STYLES = `
   .print-table th,
   .print-table td {
     border: 1px solid #cbd5e1;
-    padding: 1px 3px;
+    padding: 3px 4px;
+    line-height: 1.72;
     text-align: center;
   }
   .print-table th {
@@ -1421,6 +1654,19 @@ const PRINT_DOCUMENT_STYLES = `
     width: 100%;
     max-height: 140mm;
     object-fit: contain;
+    margin-top: 3mm;
+    page-break-inside: avoid;
+  }
+  .print-page {
+    page-break-inside: avoid;
+  }
+  .print-page--break {
+    page-break-before: always;
+  }
+  .print-page .print-view-label {
+    margin-top: 0;
+  }
+  .print-grand-block {
     margin-top: 3mm;
     page-break-inside: avoid;
   }
@@ -1470,40 +1716,85 @@ function printRowClass(row: TableRow): string {
   return ''
 }
 
+const PRINT_SUMMARY_COLUMNS = [
+  '工程',
+  '設備',
+  '計画',
+  '実績',
+  '差異',
+  '達成率',
+  '実計',
+  '不良',
+  '廃棄',
+  '不良率',
+] as const
+
+function buildPrintSummaryTableHeadHtml(): string {
+  return `<thead><tr>${PRINT_SUMMARY_COLUMNS.map((c) => `<th>${escHtml(c)}</th>`).join('')}</tr></thead>`
+}
+
+function buildPrintSummaryTableRowHtml(row: TableRow): string {
+  return `<tr class="${printRowClass(row)}">
+    <td>${escHtml(row.process_label)}</td>
+    <td>${escHtml(row.machine)}</td>
+    <td class="num">${escHtml(fmt(row.plan))}</td>
+    <td class="num">${escHtml(fmt(row.actual))}</td>
+    <td class="num">${escHtml(signed(row.diff))}</td>
+    <td class="num">${escHtml(rateText(row.achievement_rate))}</td>
+    <td class="num">${escHtml(fmt(row.actual_plan))}</td>
+    <td class="num">${escHtml(fmt(row.defect))}</td>
+    <td class="num">${escHtml(fmt(row.scrap))}</td>
+    <td class="num">${escHtml(rateText(row.defect_rate))}</td>
+  </tr>`
+}
+
+function buildPrintSummaryPageHtml(
+  title: string,
+  rows: TableRow[],
+  pageBreakBefore: boolean,
+  extraGrandRow?: TableRow,
+): string {
+  const breakClass = pageBreakBefore ? ' print-page--break' : ''
+  let tbody = rows.map((row) => buildPrintSummaryTableRowHtml(row)).join('')
+  let grandBlock = ''
+  if (extraGrandRow) {
+    grandBlock = `<div class="print-grand-block">
+      <div class="print-view-label">合計</div>
+      <table class="print-table">${buildPrintSummaryTableHeadHtml()}<tbody>${buildPrintSummaryTableRowHtml(extraGrandRow)}</tbody></table>
+    </div>`
+  }
+  return `<div class="print-page${breakClass}">
+    <div class="print-view-label">対比集計 — ${escHtml(title)}</div>
+    <table class="print-table">${buildPrintSummaryTableHeadHtml()}<tbody>${tbody}</tbody></table>
+    ${grandBlock}
+  </div>`
+}
+
 function buildPrintSummaryTableHtml(): string {
-  const cols = [
-    '工程',
-    '設備',
-    '計画',
-    '実績',
-    '差異',
-    '達成率',
-    '実計',
-    '不良',
-    '廃棄',
-    '不良率',
-    '稼働日',
-  ]
-  const head = cols.map((c) => `<th>${escHtml(c)}</th>`).join('')
-  const body = summaryTableData.value
-    .map(
-      (row) => `<tr class="${printRowClass(row)}">
-        <td>${escHtml(row.process_label)}</td>
-        <td>${escHtml(row.machine)}</td>
-        <td class="num">${escHtml(fmt(row.plan))}</td>
-        <td class="num">${escHtml(fmt(row.actual))}</td>
-        <td class="num">${escHtml(signed(row.diff))}</td>
-        <td class="num">${escHtml(rateText(row.achievement_rate))}</td>
-        <td class="num">${escHtml(fmt(row.actual_plan))}</td>
-        <td class="num">${escHtml(fmt(row.defect))}</td>
-        <td class="num">${escHtml(fmt(row.scrap))}</td>
-        <td class="num">${escHtml(rateText(row.defect_rate))}</td>
-        <td class="num">${escHtml(String(row.days || 0))}</td>
-      </tr>`,
+  const allRows = summaryTableData.value
+  const grandRow = allRows.find((r) => r.__type === 'grand')
+  const bodyRows = allRows.filter((r) => r.__type !== 'grand')
+
+  const pages: { title: string; rows: TableRow[]; grand?: TableRow }[] = []
+  for (const group of SUMMARY_PRINT_PAGE_GROUPS) {
+    const groupRows = bodyRows.filter(
+      (r) => r.process_key != null && group.keys.includes(r.process_key),
     )
+    if (groupRows.length > 0) pages.push({ title: group.title, rows: groupRows })
+  }
+
+  if (grandRow) {
+    if (pages.length > 0) pages[pages.length - 1]!.grand = grandRow
+    else pages.push({ title: '合計', rows: [], grand: grandRow })
+  }
+
+  if (pages.length === 0) {
+    return '<div class="print-view-label">対比集計</div><p>印刷対象のデータがありません</p>'
+  }
+
+  return pages
+    .map((p, i) => buildPrintSummaryPageHtml(p.title, p.rows, i > 0, p.grand))
     .join('')
-  return `<div class="print-view-label">対比集計</div>
-    <table class="print-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
 }
 
 function buildPrintDailyTableHtml(): string {
@@ -1648,6 +1939,7 @@ async function loadData() {
     planData.value = null
   } finally {
     loading.value = false
+    nextTick(() => syncTableHostSize())
   }
 }
 
@@ -1658,7 +1950,7 @@ async function exportExcel() {
   const [s, e] = periodRange.value ?? []
   try {
     if (viewMode.value === 'summary') {
-      const header = ['工程', '設備', '計画', '実績', '差異', '達成率(%)', '実計', '不良', '廃棄', '不良率(%)', '稼働日']
+      const header = ['工程', '設備', '計画', '実績', '差異', '達成率(%)', '実計', '不良', '廃棄', '不良率(%)']
       const aoa: (string | number)[][] = [header]
       for (const row of summaryTableData.value) {
         aoa.push([
@@ -1672,7 +1964,6 @@ async function exportExcel() {
           row.defect,
           row.scrap,
           row.defect_rate ?? '',
-          row.days,
         ])
       }
       await downloadExcelFromAoa(aoa, '対比集計', `工程別設備別計画_対比_${s}_${e}.xlsx`)
@@ -1704,13 +1995,27 @@ watch(selectedProcesses, () => {
   void loadData()
 })
 
+watch(viewMode, () => {
+  nextTick(() => syncTableHostSize())
+})
+
+watch(dates, () => {
+  nextTick(() => syncTableHostSize())
+})
+
 onMounted(() => {
   window.addEventListener('resize', onWindowResize)
+  nextTick(() => {
+    setupTableHostResizeObserver()
+    syncTableHostSize()
+  })
   void loadData()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onWindowResize)
+  tableHostResizeObserver?.disconnect()
+  tableHostResizeObserver = null
   trendChart?.dispose()
   trendChart = null
 })
@@ -1747,6 +2052,7 @@ onBeforeUnmount(() => {
 .pmp-main {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2022,6 +2328,106 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+/* ── 対比集計パネル・表（余白・列グループ） ── */
+.pmp-panel--summary {
+  flex: 1;
+  min-height: 0;
+}
+.pmp-panel--summary .pmp-panel__head {
+  padding: 8px 14px;
+}
+.pmp-panel__body--summary {
+  padding: 12px 14px 14px;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.pmp-table--summary {
+  border-radius: 10px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.8),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+.pmp-summary-cell {
+  display: inline-block;
+  padding: 2px 6px;
+  line-height: 1.45;
+}
+.pmp-summary-process {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.04em;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.pmp-summary-process--sub {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: inherit;
+}
+
+/* ── 日別明細パネル・固定スクロール領域 ── */
+.pmp-panel--daily {
+  flex: 1;
+  min-height: 0;
+}
+.pmp-panel--daily .pmp-panel__head {
+  padding: 8px 14px;
+}
+.pmp-panel__body--daily {
+  padding: 10px 12px 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* 対比集計・日別明細：レスポンシブスクロール枠 */
+.pmp-table-host {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: min(280px, 40vh);
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #d4dce8;
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.85),
+    0 2px 8px rgba(15, 23, 42, 0.06);
+}
+.pmp-daily-cell {
+  display: inline-block;
+  padding: 1px 4px;
+  line-height: 1.4;
+}
+.pmp-daily-process {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #334155;
+  letter-spacing: 0.03em;
+  background: linear-gradient(180deg, #fff 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+}
+.pmp-daily-process--sub {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  border: none;
+  color: inherit;
+}
+
 /* ── トレンド内ブロック ── */
 .pmp-trend-kpis {
   display: grid;
@@ -2252,36 +2658,109 @@ onBeforeUnmount(() => {
   background-color: #e2e8f0;
 }
 
-/* 日別明細：居中・コンパクト */
+/* 日別明細・対比集計：縦横スクロール（表幅は style で指定、100% にしない） */
+:deep(.pmp-table-host .pmp-table--summary),
+:deep(.pmp-table-host .pmp-table--daily) {
+  height: 100% !important;
+  max-width: none;
+}
+:deep(.pmp-table-host .el-table__inner-wrapper) {
+  height: 100% !important;
+}
+:deep(.pmp-table-host .el-table__body-wrapper) {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+:deep(.pmp-table-host .el-scrollbar__wrap) {
+  overflow-x: auto !important;
+}
+:deep(.pmp-table-host .el-scrollbar__bar.is-horizontal) {
+  height: 8px;
+}
+:deep(.pmp-table-host .el-scrollbar__bar.is-vertical) {
+  width: 8px;
+}
+:deep(.pmp-table-host .el-scrollbar__thumb) {
+  border-radius: 4px;
+  background-color: rgba(100, 116, 139, 0.45);
+}
 :deep(.pmp-table--daily .el-table__cell) {
-  padding: 1px 0;
+  padding: 9px 0;
 }
 :deep(.pmp-table--daily .cell) {
-  padding: 0 1px;
+  padding: 0 8px;
   text-align: center;
   justify-content: center;
+  line-height: 1.68;
 }
-:deep(.pmp-table--daily .pmp-daycol .cell) {
-  padding: 0 1px;
+:deep(.pmp-table--daily th.el-table__cell) {
+  padding: 11px 0;
+  background: linear-gradient(180deg, #f8fafc 0%, #e8eef5 100%);
+}
+:deep(.pmp-table--daily th.pmp-daily-col--head .cell) {
+  font-weight: 800;
+  font-size: 11px;
+  color: #334155;
+  letter-spacing: 0.04em;
+}
+:deep(.pmp-table--daily .pmp-daily-col--total) {
+  border-left: 2px solid #cbd5e1;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+:deep(.pmp-table--daily .pmp-daily-col--process .cell) {
+  padding-left: 10px;
+  padding-right: 6px;
+}
+:deep(.pmp-table--daily .pmp-daily-col--machine .cell) {
+  padding-left: 8px;
+  padding-right: 10px;
+}
+:deep(.pmp-table--daily .pmp-daily-col--day .cell) {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+/* 日付列データ：本文フォントを 1 段小さく（14px → 13px） */
+:deep(.pmp-table--daily td.pmp-daily-col--day .cell),
+:deep(.pmp-table--daily td.pmp-daily-col--day .pmp-daily-cell) {
+  font-size: 10px;
+}
+:deep(.pmp-table--daily .el-table__row--striped td.el-table__cell) {
+  background: #fafbfd;
 }
 :deep(.pmp-table--daily .pmp-num--zero) {
   color: #cbd5e1;
   font-weight: 400;
+}
+:deep(.pmp-table--daily .pmp-row-process-start td.el-table__cell) {
+  border-top: 10px solid #f1f5f9;
+  box-sizing: content-box;
+}
+:deep(.pmp-table--daily .pmp-row-process-start:first-child td.el-table__cell) {
+  border-top-width: 0;
+}
+:deep(.pmp-table--daily .pmp-row-subtotal--daily td.el-table__cell) {
+  padding-top: 11px;
+  padding-bottom: 11px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  border-top: 1px solid #dbe3ee;
+}
+:deep(.pmp-table--daily .pmp-row-machine--daily:hover td.el-table__cell) {
+  background: #eff6ff !important;
 }
 /* 2段表頭（日付 / 曜日） */
 :deep(.pmp-table--daily .pmp-daycol-group > .cell) {
   font-weight: 700;
   font-size: 11px;
   color: #334155;
-  padding: 2px 0 0;
-  line-height: 1.15;
+  padding: 4px 2px 2px;
+  line-height: 1.2;
 }
 :deep(.pmp-table--daily th.pmp-daycol > .cell) {
   font-size: 10px;
   font-weight: 600;
   color: #64748b;
-  padding: 0 0 2px;
-  line-height: 1.15;
+  padding: 2px 2px 4px;
+  line-height: 1.2;
 }
 :deep(.pmp-table--daily th.pmp-daycol--sat > .cell) {
   color: #1d4ed8;
@@ -2307,6 +2786,71 @@ onBeforeUnmount(() => {
 }
 :deep(.pmp-row-machine:hover) td.el-table__cell {
   background: #f0f9ff !important;
+}
+
+/* 対比集計専用：行高・余白・列区切り */
+:deep(.pmp-table--summary .el-table__cell) {
+  padding: 13px 0;
+}
+:deep(.pmp-table--summary .cell) {
+  padding: 0 14px;
+  line-height: 1.98;
+}
+:deep(.pmp-table--summary th.el-table__cell) {
+  padding: 16px 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+}
+:deep(.pmp-table--summary th.pmp-summary-col--head .cell) {
+  font-weight: 800;
+  color: #334155;
+}
+:deep(.pmp-table--summary .pmp-summary-col--group-start) {
+  border-left: 2px solid #d8e2ec;
+}
+:deep(.pmp-table--summary .pmp-summary-col--kpi.pmp-summary-col--group-start) {
+  border-left-color: #94a3b8;
+}
+:deep(.pmp-table--summary .el-table__row--striped td.el-table__cell) {
+  background: #fafbfd;
+}
+:deep(.pmp-table--summary .pmp-row-process-start td.el-table__cell) {
+  border-top: 13px solid #f1f5f9;
+  box-sizing: content-box;
+}
+:deep(.pmp-table--summary .pmp-row-process-start:first-child td.el-table__cell) {
+  border-top-width: 0;
+}
+:deep(.pmp-table--summary .pmp-row-subtotal--summary td.el-table__cell) {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+  border-top: 1px solid #dbe3ee;
+  border-bottom: 1px solid #dbe3ee;
+}
+:deep(.pmp-table--summary .pmp-row-grand--summary td.el-table__cell) {
+  padding-top: 18px;
+  padding-bottom: 18px;
+  border-top: 16px solid #f1f5f9;
+  box-sizing: content-box;
+}
+:deep(.pmp-table--summary .pmp-row-machine--summary:hover td.el-table__cell) {
+  background: #eff6ff !important;
+}
+:deep(.pmp-table--summary .pmp-summary-col--process .cell) {
+  padding-left: 16px;
+  padding-right: 10px;
+}
+:deep(.pmp-table--summary .pmp-summary-col--machine .cell) {
+  padding-left: 12px;
+  padding-right: 16px;
+}
+:deep(.pmp-table--summary .pmp-summary-col--kpi .cell),
+:deep(.pmp-table--summary .pmp-summary-col--sub .cell),
+:deep(.pmp-table--summary .pmp-summary-col--quality .cell) {
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 /* パネル内セグメント（日別指標・トレンド集計） */
@@ -2423,5 +2967,75 @@ onBeforeUnmount(() => {
   padding: 10px 16px 12px;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-top: 1px solid var(--pmp-line);
+}
+
+/* ── レスポンシブ ── */
+@media (max-width: 1280px) {
+  .pmp-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .pmp-trend-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .pmp-toolbar {
+    flex-wrap: wrap;
+  }
+  .pmp-toolbar__body {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .pmp-toolbar__strip--filter {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+  .pmp-toolbar__range {
+    width: 100%;
+    max-width: 100%;
+  }
+  .pmp-toolbar__process,
+  .pmp-toolbar__machine {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 120px;
+  }
+  .pmp-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pmp-panel__hint {
+    margin-left: 0;
+    width: 100%;
+    text-align: center;
+  }
+  :deep(.pmp-table--summary .cell) {
+    padding: 0 8px;
+  }
+  :deep(.pmp-table--summary .el-table__cell) {
+    padding: 10px 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .pmp-page {
+    padding: 6px;
+  }
+  .pmp-cards {
+    grid-template-columns: 1fr;
+  }
+  .pmp-trend-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pmp-toolbar__title {
+    font-size: 14px;
+  }
+  .pmp-table-host {
+    min-height: min(240px, 35vh);
+  }
+  :deep(.pmp-table--daily td.pmp-daily-col--day .cell),
+  :deep(.pmp-table--daily td.pmp-daily-col--day .pmp-daily-cell) {
+    font-size: 12px;
+  }
 }
 </style>
