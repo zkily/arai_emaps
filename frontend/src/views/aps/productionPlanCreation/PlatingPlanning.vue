@@ -319,8 +319,9 @@
                           <span v-if="pIdx > 0" class="lap-merged-product-sep"> / </span>
                           <span
                             :class="{
-                              'lap-merged-product-label--alt': pIdx >= 1 && !part.untilDepleted,
+                              'lap-merged-product-label--alt': pIdx >= 1 && !part.untilDepleted && !part.forceRedText,
                               'lap-merged-product-label--depleted': part.untilDepleted,
+                              'lap-merged-product-label--force-red': part.forceRedText && !part.untilDepleted,
                             }"
                           >{{ part.displayText }}</span>
                         </template>
@@ -660,8 +661,8 @@
     <el-dialog
       v-model="boardJigEditDialogVisible"
       title="ボード上の治具本数"
-      width="420px"
-      class="jig-drop-dialog"
+      width="460px"
+      class="jig-drop-dialog board-jig-edit-dialog"
       destroy-on-close
       @closed="resetBoardJigEditDialog"
     >
@@ -672,7 +673,7 @@
           <span class="jig-meta-pill">当該周 使用可能 {{ getJigAvailMaxFromMaster(boardJigEditPending.plating_machine) }} 本</span>
           <span class="jig-meta-pill">変更後最大 {{ boardJigEditQtyMax }} 本</span>
         </div>
-        <el-form-item label="本数" class="jig-drop-qty-item">
+        <el-form-item label="治具总本数" class="jig-drop-qty-item">
           <el-input-number
             v-model="boardJigEditQty"
             :min="1"
@@ -682,34 +683,71 @@
             class="pp-input-num"
           />
         </el-form-item>
-        <div v-if="boardJigEditProducts.length > 0" class="jig-edit-products">
-          <div class="jig-edit-products__title">加工製品（{{ boardJigEditProducts.length }} 種）</div>
+        <div v-if="boardJigEditProductFrames.length > 0" class="jig-edit-products">
+          <div class="jig-edit-products__head">
+            <span class="jig-edit-products__title">製品別使用本数（{{ boardJigEditProductFrames.length }} 種）</span>
+            <span
+              class="jig-edit-products__sum"
+              :class="{ 'jig-edit-products__sum--warn': !canConfirmBoardJigEdit }"
+            >
+              合計 {{ boardJigEditProductFramesSum }} / {{ boardJigEditQty }}
+              <template v-if="boardJigEditUnassignedFrames > 0"> · 未割当 {{ boardJigEditUnassignedFrames }}</template>
+            </span>
+          </div>
           <div
-            v-for="p in boardJigEditProducts"
+            v-for="p in boardJigEditProductFrames"
             :key="p.product_cd"
             class="jig-edit-product-row"
           >
-            <div class="jig-edit-product-info">
-              <span class="jig-edit-product-name" :title="p.product_name">{{ p.product_name }}</span>
-              <span
-                class="jig-edit-product-qty"
-                :class="{ 'jig-edit-product-qty--depleted': p.untilDepleted }"
-              >
-                {{ p.untilDepleted ? '無くなり次第' : formatQtyDisplay(p.productionQty) }}
-              </span>
-            </div>
-            <el-switch
-              :model-value="p.untilDepleted"
+            <span class="jig-edit-product-name" :title="p.product_name">{{ p.product_name }}</span>
+            <el-input-number
+              v-model="p.frames"
+              :min="0"
+              :max="boardJigEditProductFramesMax(p.product_cd)"
+              :step="1"
               size="small"
-              inline-prompt
-              active-text="無"
-              inactive-text="数"
-              title="ON: 無くなり次第（数量を隠す。合計には実数を加算）"
-              @update:model-value="(v) => toggleBoardJigProductUntilDepleted(p.product_cd, !!v)"
+              controls-position="right"
+              class="pp-input-num jig-edit-product-frames"
             />
+            <span class="jig-edit-product-unit">本</span>
+            <span
+              class="jig-edit-product-qty"
+              :class="{ 'jig-edit-product-qty--depleted': p.untilDepleted, 'jig-edit-product-qty--force-red': p.forceRedText && !p.untilDepleted }"
+              :title="p.untilDepleted ? '無くなり次第' : p.forceRedText ? '赤字強調' : `生産 ${formatQtyDisplay(p.frames * (p.kake > 0 ? p.kake : 1))}`"
+            >
+              {{ p.untilDepleted ? '無くなり次第' : formatQtyDisplay(p.frames * (p.kake > 0 ? p.kake : 1)) }}
+            </span>
+            <div class="jig-edit-product-switches">
+              <el-switch
+                v-model="p.untilDepleted"
+                size="small"
+                inline-prompt
+                active-text="無"
+                inactive-text="数"
+                title="ON: 無くなり次第（数量を隠す。合計には実数を加算）"
+              />
+              <el-switch
+                v-model="p.forceRedText"
+                size="small"
+                inline-prompt
+                active-text="赤"
+                inactive-text="通"
+                title="ON: ボード上の製品名・数量を赤文字で強調表示"
+              />
+            </div>
           </div>
+          <el-form-item
+            v-if="showBoardJigEditProductOrder"
+            label="左からの順序（前→後）"
+            class="jig-edit-product-order-item"
+          >
+            <el-radio-group v-model="boardJigEditProductOrder" size="small">
+              <el-radio-button value="normal">{{ boardJigEditProductOrderNormalLabel }}</el-radio-button>
+              <el-radio-button value="reversed">{{ boardJigEditProductOrderReversedLabel }}</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
           <p class="jig-edit-products__hint">
-            「無くなり次第」を ON にすると数量を隠して表示しますが、生産数合計には実数を加算します。
+            各製品の使用メッキ治具数を変更できます。未割当分は空き治具枠として残ります。「無」=無くなり次第、「赤」=赤字強調（数量は表示したまま）。
           </p>
         </div>
       </template>
@@ -717,7 +755,7 @@
         <el-button size="small" @click="boardJigEditDialogVisible = false">キャンセル</el-button>
         <el-button size="small" type="primary" plain @click="openBoardProductPickFromEditDialog">製品を選択</el-button>
         <el-button size="small" type="danger" plain @click="confirmDeleteBoardJigBlock">削除</el-button>
-        <el-button size="small" type="primary" :disabled="boardJigEditQtyMax < 1" @click="confirmBoardJigQtyEdit">
+        <el-button size="small" type="primary" :disabled="!canConfirmBoardJigEdit" @click="confirmBoardJigQtyEdit">
           確定
         </el-button>
       </template>
@@ -1337,6 +1375,7 @@ import {
   fetchPlatingDraftById,
   fetchLatestPlatingDraftByDate,
   fetchPlatingBoardView,
+  fetchPlatingSummaryPair,
   updatePlatingDraft,
   type PlatingBoardCardBody,
   type PlatingBoardCardOut,
@@ -1431,6 +1470,8 @@ function apiBoardCardToBody(bc: PlatingBoardCardOut): PlatingBoardCardBody {
     slots: bc.slots,
     board_mark: bc.board_mark,
     stable_key: bc.stable_key ?? null,
+    until_depleted: bc.until_depleted ?? false,
+    text_red: bc.text_red ?? false,
   }
 }
 
@@ -1455,6 +1496,8 @@ interface ScheduleCard {
   boardMark: BoardMark
   /** 数量非表示（無くなり次第）；表示は「無くなり次第」とし合計には実数を加算 */
   untilDepleted?: boolean
+  /** ボード上の製品名・数量を赤字で強調表示 */
+  forceRedText?: boolean
 }
 
 const scheduleCards = ref<ScheduleCard[]>([])
@@ -2266,59 +2309,134 @@ const boardJigEditPending = ref<{
 const boardJigEditQty = ref(1)
 const boardJigEditQtyMax = ref(1)
 
-interface BoardJigEditProduct {
+interface BoardJigEditProductFrame {
   product_cd: string
   product_name: string
-  productionQty: number
   frames: number
+  kake: number
   untilDepleted: boolean
+  forceRedText: boolean
 }
 
-/** 編集ダイアログ対象ブロック内の加工製品（出現順・品番ごとに集計） */
-const boardJigEditProducts = computed<BoardJigEditProduct[]>(() => {
-  const pending = boardJigEditPending.value
-  if (!pending) return []
+const boardJigEditProductFrames = ref<BoardJigEditProductFrame[]>([])
+const boardJigEditProductFramesInitial = ref<BoardJigEditProductFrame[]>([])
+const boardJigEditProductOrder = ref<'normal' | 'reversed'>('normal')
+const boardJigEditInitialQty = ref(1)
+
+const boardJigEditProductFramesSum = computed(() =>
+  boardJigEditProductFrames.value.reduce(
+    (s, p) => s + Math.max(0, Math.floor(Number(p.frames) || 0)),
+    0,
+  ),
+)
+
+const boardJigEditUnassignedFrames = computed(() =>
+  Math.max(
+    0,
+    Math.floor(Number(boardJigEditQty.value) || 0) - boardJigEditProductFramesSum.value,
+  ),
+)
+
+const canConfirmBoardJigEdit = computed(() => {
+  if (boardJigEditQtyMax.value < 1) return false
+  const total = Math.floor(Number(boardJigEditQty.value) || 0)
+  return boardJigEditProductFramesSum.value <= total
+})
+
+const showBoardJigEditProductOrder = computed(() => {
+  const active = boardJigEditProductFrames.value.filter((p) => Math.floor(Number(p.frames) || 0) > 0)
+  return active.length >= 2
+})
+
+const boardJigEditProductOrderNormalLabel = computed(() => {
+  const names = boardJigEditProductFrames.value
+    .filter((p) => Math.floor(Number(p.frames) || 0) > 0)
+    .map((p) => p.product_name)
+  if (names.length < 2) return '現在の順'
+  return names.join(' → ')
+})
+
+const boardJigEditProductOrderReversedLabel = computed(() => {
+  const names = boardJigEditProductFrames.value
+    .filter((p) => Math.floor(Number(p.frames) || 0) > 0)
+    .map((p) => p.product_name)
+  if (names.length < 2) return '逆順'
+  return [...names].reverse().join(' → ')
+})
+
+function boardJigEditProductFramesMax(productCd: string): number {
+  const total = Math.max(0, Math.floor(Number(boardJigEditQty.value) || 0))
+  const others = boardJigEditProductFrames.value
+    .filter((p) => p.product_cd !== productCd)
+    .reduce((s, p) => s + Math.max(0, Math.floor(Number(p.frames) || 0)), 0)
+  return Math.max(0, total - others)
+}
+
+function initBoardJigEditProductFrames(pending: NonNullable<typeof boardJigEditPending.value>) {
   const idSet = new Set(pending.cardIds)
-  const cards = scheduleCards.value.filter(
-    (c) =>
-      idSet.has(c.id) &&
-      c.qty > 0 &&
-      c.lap_no === pending.lap_no &&
-      !isJigProductCd(c.product_cd),
-  )
+  const cards = scheduleCards.value
+    .filter(
+      (c) =>
+        idSet.has(c.id) &&
+        c.qty > 0 &&
+        c.lap_no === pending.lap_no &&
+        !isJigProductCd(c.product_cd),
+    )
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
   const order: string[] = []
-  const map = new Map<string, BoardJigEditProduct>()
+  const map = new Map<string, BoardJigEditProductFrame>()
   for (const c of cards) {
     let e = map.get(c.product_cd)
     if (!e) {
       e = {
         product_cd: c.product_cd,
         product_name: String(c.product_name || c.product_cd || '').trim(),
-        productionQty: 0,
         frames: 0,
+        kake: c.kake > 0 ? c.kake : 1,
         untilDepleted: true,
+        forceRedText: false,
       }
       map.set(c.product_cd, e)
       order.push(c.product_cd)
     }
-    e.productionQty += cardProductProductionQty(c)
     e.frames += 1
     if (!c.untilDepleted) e.untilDepleted = false
+    if (c.forceRedText) e.forceRedText = true
   }
-  return order.map((cd) => map.get(cd)!)
-})
+  const frames = order.map((cd) => ({ ...map.get(cd)! }))
+  boardJigEditProductFrames.value = frames
+  boardJigEditProductFramesInitial.value = frames.map((p) => ({ ...p }))
+  boardJigEditProductOrder.value = 'normal'
+}
 
-/** 製品の「無くなり次第」切替：ブロック内の当該品番カード全てに反映（合計は実数を維持） */
-function toggleBoardJigProductUntilDepleted(productCd: string, value: boolean) {
-  const pending = boardJigEditPending.value
-  if (!pending) return
-  const idSet = new Set(pending.cardIds)
-  scheduleCards.value = scheduleCards.value.map((c) =>
-    idSet.has(c.id) && c.lap_no === pending.lap_no && c.product_cd === productCd && !isJigProductCd(c.product_cd)
-      ? { ...c, untilDepleted: value }
-      : c,
-  )
-  void flushBoardPersist()
+function isBoardJigProductFramesReassignDirty(): boolean {
+  if (boardJigEditProductOrder.value !== 'normal') return true
+  const qty = Math.floor(Number(boardJigEditQty.value) || 0)
+  if (qty !== boardJigEditInitialQty.value) return true
+  for (const cur of boardJigEditProductFrames.value) {
+    const init = boardJigEditProductFramesInitial.value.find((p) => p.product_cd === cur.product_cd)
+    if (!init) return true
+    if (Math.floor(Number(cur.frames) || 0) !== Math.floor(Number(init.frames) || 0)) return true
+  }
+  return false
+}
+
+function isBoardJigDisplayFlagsDirty(): boolean {
+  for (const cur of boardJigEditProductFrames.value) {
+    const init = boardJigEditProductFramesInitial.value.find((p) => p.product_cd === cur.product_cd)
+    if (!init) return true
+    if (!!cur.untilDepleted !== !!init.untilDepleted) return true
+    if (!!cur.forceRedText !== !!init.forceRedText) return true
+  }
+  return false
+}
+
+function isBoardJigProductAllocationDirty(): boolean {
+  return isBoardJigProductFramesReassignDirty() || isBoardJigDisplayFlagsDirty()
+}
+
+function productFramesEditDirty(): boolean {
+  return isBoardJigProductAllocationDirty()
 }
 const boardProductPickDialogVisible = ref(false)
 const boardProductPickPending = ref<{
@@ -2662,6 +2780,7 @@ function scheduleCardsToBoardBodies(): PlatingBoardCardBody[] {
         board_mark: c.boardMark,
         stable_key: (c.id || '').slice(0, 128) || null,
         until_depleted: !!c.untilDepleted,
+        text_red: !!c.forceRedText,
       }
     })
 }
@@ -3001,6 +3120,7 @@ async function loadLatestDraft(opts?: boolean | LoadLatestDraftOpts) {
               colorIdx: idx,
               boardMark: mk,
               untilDepleted: !!bc.until_depleted,
+              forceRedText: !!bc.text_red,
             }
           })
         standardPositions.value = new Map(
@@ -3659,6 +3779,7 @@ interface JigBlockProductCalcPart {
   qtyLabel: string
   displayText: string
   untilDepleted: boolean
+  forceRedText: boolean
 }
 
 /** 治具ブロック内の製品表示（出現順・品番ごとに集計） */
@@ -3678,24 +3799,28 @@ function buildJigBlockProductCalcParts(ms: LapMergedSegment, lapNo: number): Jig
   const nameByCd = new Map<string, string>()
   const qtyByCd = new Map<string, number>()
   const depletedByCd = new Map<string, boolean>()
+  const redByCd = new Map<string, boolean>()
   for (const c of blockCards) {
     if (!nameByCd.has(c.product_cd)) {
       order.push(c.product_cd)
       nameByCd.set(c.product_cd, String(c.product_name || c.product_cd || '').trim())
       depletedByCd.set(c.product_cd, true)
+      redByCd.set(c.product_cd, true)
     }
     qtyByCd.set(c.product_cd, (qtyByCd.get(c.product_cd) ?? 0) + cardProductProductionQty(c))
     if (!c.untilDepleted) depletedByCd.set(c.product_cd, false)
+    if (!c.forceRedText) redByCd.set(c.product_cd, false)
   }
   const parts: JigBlockProductCalcPart[] = order
     .map((cd) => {
       const name = nameByCd.get(cd)
       if (!name) return null
       const untilDepleted = !!depletedByCd.get(cd)
+      const forceRedText = !!redByCd.get(cd)
       const qtyLabel = untilDepleted ? '無くなり次第' : formatQtyDisplay(qtyByCd.get(cd) ?? 0)
       const displayText = untilDepleted ? `${name} (${qtyLabel})` : formatProductNameWithProductionQty(name, qtyByCd.get(cd) ?? 0)
       if (!displayText) return null
-      return { productName: name, qtyLabel, displayText, untilDepleted }
+      return { productName: name, qtyLabel, displayText, untilDepleted, forceRedText }
     })
     .filter((p): p is JigBlockProductCalcPart => p != null)
   return parts.length > 0 ? parts : null
@@ -3727,8 +3852,20 @@ function buildJigBlockPrintStackHtml(ms: LapMergedSegment, lapNo: number): strin
       ? parts
           .map((part, idx) => {
             const sep = idx > 0 ? '<span class="lap-print-prod-sep"> / </span>' : ''
+            const extra =
+              part.untilDepleted
+                ? 'lap-print-prod--depleted'
+                : part.forceRedText
+                  ? 'lap-print-prod--force-red'
+                  : idx >= 1
+                    ? 'lap-print-prod--alt'
+                    : ''
             const cls =
-              idx >= 1 ? 'lap-print-prod lap-print-prod--alt' : 'lap-print-prod lap-print-prod--name'
+              idx >= 1 && !part.forceRedText && !part.untilDepleted
+                ? 'lap-print-prod lap-print-prod--alt'
+                : extra
+                  ? `lap-print-prod lap-print-prod--name ${extra}`
+                  : 'lap-print-prod lap-print-prod--name'
             return `${sep}<span class="${cls}">${escapeHtmlForPrint(part.productName)}</span>`
           })
           .join('')
@@ -3740,9 +3877,11 @@ function buildJigBlockPrintStackHtml(ms: LapMergedSegment, lapNo: number): strin
             const sep = idx > 0 ? '<span class="lap-print-prod-sep"> / </span>' : ''
             const extra = part.untilDepleted
               ? 'lap-print-prod--depleted'
-              : idx >= 1
-                ? 'lap-print-prod--alt'
-                : ''
+              : part.forceRedText
+                ? 'lap-print-prod--force-red'
+                : idx >= 1
+                  ? 'lap-print-prod--alt'
+                  : ''
             const cls = `lap-print-prod lap-print-prod--qty${extra ? ` ${extra}` : ''}`
             return `${sep}<span class="${cls}">${escapeHtmlForPrint(part.qtyLabel)}</span>`
           })
@@ -4043,6 +4182,11 @@ async function openBoardProductPickDialog(ms: LapMergedSegment, lapNo: number) {
 }
 
 function onBoardJigBlockContextMenu(ms: LapMergedSegment, lapNo: number) {
+  const parts = buildJigBlockProductCalcParts(ms, lapNo)
+  if (parts?.length) {
+    onBoardMergedSegDblClick(ms, lapNo)
+    return
+  }
   openBoardProductPickDialog(ms, lapNo)
 }
 
@@ -4170,6 +4314,7 @@ function confirmBoardProductPick() {
     boardProductPickReplaceAll.value ? p.blockFrames : boardProductPickSlots.value,
     boardProductPickReplaceAll.value,
   )
+  nextTick(() => refreshBoardJigEditDialogFromBoard())
 }
 
 function boardMergedSegTitle(ms: LapMergedSegment, lapNo: number): string {
@@ -4525,6 +4670,112 @@ function resetBoardJigEditDialog() {
   boardJigEditPending.value = null
   boardJigEditQty.value = 1
   boardJigEditQtyMax.value = 1
+  boardJigEditInitialQty.value = 1
+  boardJigEditProductFrames.value = []
+  boardJigEditProductFramesInitial.value = []
+  boardJigEditProductOrder.value = 'normal'
+}
+
+function resetCardToEmptyJig(c: ScheduleCard, platingMachine: string): ScheduleCard {
+  const mKey = normalizeMachineKey(platingMachine)
+  const productCd = `__jig__${mKey}`
+  return {
+    ...c,
+    product_cd: productCd,
+    product_name: platingMachine,
+    plating_machine: platingMachine,
+    kake: 1,
+    qty: 1,
+    slots: 1,
+    boardMark: 'manual',
+    colorIdx: schedColorIndexForProductCd(productCd),
+    untilDepleted: undefined,
+    forceRedText: undefined,
+  }
+}
+
+/** 治具ブロック内の製品割当を左から順に再配置（未割当枠は空き治具） */
+function reassignJigBlockProducts(
+  lapNo: number,
+  cardIds: string[],
+  segments: Array<{ src: DraftSourceItem; slots: number }>,
+  platingMachine: string,
+) {
+  const blockCards = scheduleCards.value
+    .filter((c) => cardIds.includes(c.id))
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  const ids = new Set(cardIds)
+  let cardIdx = 0
+  const updates = new Map<string, ScheduleCard>()
+  for (const seg of segments) {
+    const n = Math.max(0, Math.floor(Number(seg.slots) || 0))
+    for (let i = 0; i < n && cardIdx < blockCards.length; i += 1) {
+      const card = blockCards[cardIdx]
+      cardIdx += 1
+      updates.set(card.id, cardUpdateFromDraftSource(card, seg.src, platingMachine))
+    }
+  }
+  while (cardIdx < blockCards.length) {
+    const card = blockCards[cardIdx]
+    cardIdx += 1
+    updates.set(card.id, resetCardToEmptyJig(card, platingMachine))
+  }
+  scheduleCards.value = scheduleCards.value.map((c) => {
+    if (!ids.has(c.id) || c.qty <= 0 || c.lap_no !== lapNo) return c
+    return updates.get(c.id) ?? c
+  })
+  refreshMarksAgainstStandardPositions()
+}
+
+function reassignJigBlockProductsFromEdit(
+  pending: NonNullable<typeof boardJigEditPending.value>,
+  totalQty: number,
+) {
+  const anchorId = pending.cardIds[0]
+  if (!anchorId) return
+  const cardIds = findJigBlockCardIds(anchorId, pending.lap_no).slice(0, totalQty)
+  if (cardIds.length === 0) return
+  const platingMachine = pending.plating_machine
+  const blockCards = scheduleCards.value
+    .filter((c) => cardIds.includes(c.id))
+    .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  let ordered = boardJigEditProductFrames.value
+    .filter((p) => Math.floor(Number(p.frames) || 0) > 0)
+    .map((p) => ({ ...p, frames: Math.floor(Number(p.frames) || 0) }))
+  if (boardJigEditProductOrder.value === 'reversed') {
+    ordered = [...ordered].reverse()
+  }
+  const segments: Array<{ src: DraftSourceItem; slots: number }> = []
+  for (const p of ordered) {
+    const srcCard = blockCards.find((c) => c.product_cd === p.product_cd && !isJigProductCd(c.product_cd))
+    if (!srcCard) continue
+    segments.push({ src: scheduleCardToDraftSource(srcCard), slots: p.frames })
+  }
+  reassignJigBlockProducts(pending.lap_no, cardIds, segments, platingMachine)
+  const idSet = new Set(cardIds)
+  scheduleCards.value = scheduleCards.value.map((c) => {
+    if (!idSet.has(c.id) || c.lap_no !== pending.lap_no || isJigProductCd(c.product_cd)) return c
+    const pe = boardJigEditProductFrames.value.find((x) => x.product_cd === c.product_cd)
+    if (!pe) return c
+    return { ...c, untilDepleted: pe.untilDepleted, forceRedText: pe.forceRedText }
+  })
+  boardJigEditPending.value = { ...pending, cardIds: [...cardIds] }
+}
+
+function applyBoardJigBlockDisplayFlags(pending: NonNullable<typeof boardJigEditPending.value>) {
+  const anchorId = pending.cardIds[0]
+  if (!anchorId) return
+  const cardIds = findJigBlockCardIds(anchorId, pending.lap_no)
+  const idSet = new Set(cardIds)
+  scheduleCards.value = scheduleCards.value.map((c) => {
+    if (!idSet.has(c.id) || c.lap_no !== pending.lap_no || isJigProductCd(c.product_cd)) return c
+    const pe = boardJigEditProductFrames.value.find((x) => x.product_cd === c.product_cd)
+    return {
+      ...c,
+      untilDepleted: pe ? pe.untilDepleted : c.untilDepleted,
+      forceRedText: pe ? pe.forceRedText : c.forceRedText,
+    }
+  })
 }
 
 interface BoardJigBlockRef {
@@ -4669,17 +4920,34 @@ async function confirmDeleteBoardJigBlock() {
   void flushBoardPersist()
 }
 
+function refreshBoardJigEditDialogFromBoard() {
+  const pending = boardJigEditPending.value
+  if (!pending || !boardJigEditDialogVisible.value) return
+  const anchorId = pending.cardIds[0]
+  if (!anchorId) return
+  const refreshed = findJigBlockCardIds(anchorId, pending.lap_no)
+  if (refreshed.length === 0) return
+  const nextPending = { ...pending, cardIds: [...refreshed] }
+  boardJigEditPending.value = nextPending
+  boardJigEditQty.value = refreshed.length
+  boardJigEditInitialQty.value = refreshed.length
+  initBoardJigEditProductFrames(nextPending)
+}
+
 function openBoardJigQtyEditFromBlock(block: BoardJigBlockRef) {
   const maxQty = getJigEditQtyMax(block.plating_machine, block.lap_no, block.cardIds.length)
-  boardJigEditPending.value = {
+  const pending = {
     lap_no: block.lap_no,
     plating_machine: block.plating_machine,
     product_cd: block.product_cd,
     product_name: block.product_name,
     cardIds: [...block.cardIds],
   }
+  boardJigEditPending.value = pending
   boardJigEditQtyMax.value = maxQty
   boardJigEditQty.value = block.cardIds.length
+  boardJigEditInitialQty.value = block.cardIds.length
+  initBoardJigEditProductFrames(pending)
   boardJigEditDialogVisible.value = true
 }
 
@@ -4704,9 +4972,14 @@ function onBoardScheduleCardDblClick(card: ScheduleCard) {
 function confirmBoardJigQtyEdit() {
   const pending = boardJigEditPending.value
   if (!pending) return
+  if (!canConfirmBoardJigEdit.value) {
+    ElMessage.warning('製品別使用本数の合計が治具总本数を超えています')
+    return
+  }
   const qty = Math.max(1, Math.min(boardJigEditQtyMax.value, Math.floor(Number(boardJigEditQty.value) || 0)))
   const prev = pending.cardIds.length
-  if (qty === prev) {
+  const hasProducts = boardJigEditProductFrames.value.length > 0
+  if (qty === prev && !productFramesEditDirty()) {
     boardJigEditDialogVisible.value = false
     return
   }
@@ -4714,19 +4987,44 @@ function confirmBoardJigQtyEdit() {
     .filter((c) => pending.cardIds.includes(c.id))
     .sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
   const expandSrc = qty > prev ? pickProductSourceForJigBlockExpand(blockBefore) : null
-  if (!resizeJigBlockOnLap(pending.lap_no, pending.cardIds, qty)) {
-    ElMessage.warning('治具本数の変更に失敗しました')
-    return
+  if (qty !== prev) {
+    if (!resizeJigBlockOnLap(pending.lap_no, pending.cardIds, qty)) {
+      ElMessage.warning('治具本数の変更に失敗しました')
+      return
+    }
+    const anchorId = pending.cardIds[0]
+    if (anchorId) {
+      const refreshed = findJigBlockCardIds(anchorId, pending.lap_no)
+      boardJigEditPending.value = { ...pending, cardIds: [...refreshed] }
+    }
+  }
+  if (hasProducts) {
+    if (isBoardJigProductFramesReassignDirty()) {
+      reassignJigBlockProductsFromEdit(boardJigEditPending.value!, qty)
+    } else if (isBoardJigDisplayFlagsDirty()) {
+      applyBoardJigBlockDisplayFlags(boardJigEditPending.value!)
+    }
   }
   boardJigEditDialogVisible.value = false
   const diff = qty - prev
-  ElMessage.success(
-    diff > 0
-      ? expandSrc
-        ? `${pending.plating_machine} を ${diff} 本増やし、${expandSrc.product_name} を追加分に割当（計 ${qty} 本・生産数は枠数×掛け数で再計算）`
-        : `${pending.plating_machine} を ${diff} 本増やしました（計 ${qty} 本）`
-      : `${pending.plating_machine} を ${-diff} 本減らしました（計 ${qty} 本）`,
-  )
+  const allocationChanged = isBoardJigProductAllocationDirty()
+  let msg: string
+  if (hasProducts && allocationChanged) {
+    const parts = boardJigEditProductFrames.value
+      .filter((p) => Math.floor(Number(p.frames) || 0) > 0)
+      .map((p) => `${p.product_name} ${Math.floor(Number(p.frames) || 0)}本`)
+    msg = `${pending.plating_machine} の製品割当を更新（${parts.join('・')}）`
+  } else if (diff !== 0) {
+    msg =
+      diff > 0
+        ? expandSrc
+          ? `${pending.plating_machine} を ${diff} 本増やし、${expandSrc.product_name} を追加分に割当（計 ${qty} 本）`
+          : `${pending.plating_machine} を ${diff} 本増やしました（計 ${qty} 本）`
+        : `${pending.plating_machine} を ${-diff} 本減らしました（計 ${qty} 本）`
+  } else {
+    msg = `${pending.plating_machine} を更新しました`
+  }
+  ElMessage.success(msg)
   void flushBoardPersist()
 }
 
@@ -4921,72 +5219,7 @@ async function fetchEquipmentEfficiencyBundle(): Promise<EquipmentEfficiencyBund
   return equipmentEfficiencyBundlePromise
 }
 
-/**
- * メッキ直前工程の翌日「生成」数量と参照した列名。
- */
-function pickPrevProcessGen(row: Record<string, unknown>, prevKey: string | null): { qty: number; col: string } {
-  if (!prevKey) return { qty: 0, col: '' }
-  for (const suf of GEN_SUFFIX_TRY) {
-    const col = `${prevKey}${suf}`
-    if (Object.prototype.hasOwnProperty.call(row, col) && row[col] != null) {
-      return { qty: num(row[col]), col }
-    }
-  }
-  return { qty: 0, col: '' }
-}
-
-async function fetchDay(dateStr: string): Promise<Record<string, unknown>[]> {
-  const params: Record<string, unknown> = {
-    page: 1,
-    limit: 50000,
-    startDate: dateStr,
-    endDate: dateStr,
-    sortBy: 'product_cd',
-    sortOrder: 'ASC',
-  }
-  const res = await getProductionSummarysList(params)
-  return parseList(res)
-}
-
-function buildLeftRow(row: Record<string, unknown>, equipEff: EquipmentEfficiencyLookup): LeftPaneRow {
-  const prev = (row.pre_kt05_plating_prev_process as string) || null
-  const jig = row.plating_machine != null ? String(row.plating_machine).trim() : ''
-  const productCd = String(row.product_cd ?? '')
-  const productName = String(row.product_name ?? '')
-  const jigDisp = jig || '—'
-  return {
-    product_cd: productCd,
-    product_name: productName,
-    plating_machine: jigDisp,
-    plating_efficiency: lookupPlatingEfficiency(equipEff, productCd, productName, jig),
-    pre_plating_prev_label: labelForPrevKey(prev),
-    pre_plating_inventory: num(row.pre_kt05_plating_inventory),
-  }
-}
-
-function buildRightRow(
-  row: Record<string, unknown>,
-  prevKeyFromBase: string | null,
-  equipEff: EquipmentEfficiencyLookup,
-): RightPaneRow {
-  const prev =
-    (row.pre_kt05_plating_prev_process as string) || prevKeyFromBase
-  const { qty, col } = pickPrevProcessGen(row, prev)
-  const jig = row.plating_machine != null ? String(row.plating_machine).trim() : ''
-  const productCd = String(row.product_cd ?? '')
-  const productName = String(row.product_name ?? '')
-  return {
-    product_cd: productCd,
-    product_name: productName,
-    plating_machine: jig || '—',
-    plating_efficiency: lookupPlatingEfficiency(equipEff, productCd, productName, jig),
-    pre_plating_prev_label: labelForPrevKey(prev),
-    gen_qty: col ? qty : '—',
-    gen_source_col: col || '—',
-  }
-}
-
-/** 左＝メッキ前在庫の基準日、右＝見込数量の参照日（それぞれ別日付で production_summarys を取得） */
+/** 左＝メッキ前在庫の基準日、右＝見込数量の参照日（専用 API・KT05 絞り込み） */
 async function loadSummaryPair() {
   if (!leftInventoryDate.value || !rightGenDate.value) {
     return
@@ -4997,66 +5230,15 @@ async function loadSummaryPair() {
   leftRows.value = []
   rightRows.value = []
   try {
-    const [list0, list1, equipBundle] = await Promise.all([
-      fetchDay(d0),
-      fetchDay(d1),
-      fetchEquipmentEfficiencyBundle(),
-    ])
-    const equipEff = equipBundle.lookup
-    type Pair = { row: Record<string, unknown>; left: LeftPaneRow; prevKey: string | null }
-    const pairs: Pair[] = []
-
-    for (const row of list0) {
-      const cd = String(row.product_cd ?? '').trim()
-      if (!cd) continue
-      const prevBase = (row.pre_kt05_plating_prev_process as string) || null
-      const invRaw = row.pre_kt05_plating_inventory
-      if (invRaw === null || invRaw === undefined) continue
-      const invNum = num(invRaw)
-      if (invNum <= 0) continue
-      pairs.push({ row, left: buildLeftRow(row, equipEff), prevKey: prevBase })
-    }
-
-    pairs.sort((a, b) => {
-      const jm = String(a.left.plating_machine).localeCompare(String(b.left.plating_machine))
-      if (jm !== 0) return jm
-      const rk = processOrderRank(a.prevKey) - processOrderRank(b.prevKey)
-      if (rk !== 0) return rk
-      return a.left.product_cd.localeCompare(b.left.product_cd)
-    })
-
-    const left: LeftPaneRow[] = pairs.map((p) => p.left)
-
-    const prevKeyByProductCd = new Map<string, string | null>()
-    for (const row of list1) {
-      const cd = String(row.product_cd ?? '').trim()
-      if (!cd) continue
-      prevKeyByProductCd.set(cd, (row.pre_kt05_plating_prev_process as string) || null)
-    }
-
-    const right: RightPaneRow[] = []
-    for (const row of list1) {
-      const prev = (row.pre_kt05_plating_prev_process as string) || null
-      const r = buildRightRow(row, prev, equipEff)
-      const q = Number(r.gen_qty)
-      if (!Number.isFinite(q) || q <= 0) continue
-      right.push(r)
-    }
-    right.sort((a, b) => {
-      const jm = String(a.plating_machine).localeCompare(String(b.plating_machine))
-      if (jm !== 0) return jm
-      const ak = prevKeyByProductCd.get(a.product_cd) ?? null
-      const bk = prevKeyByProductCd.get(b.product_cd) ?? null
-      const rk = processOrderRank(ak) - processOrderRank(bk)
-      if (rk !== 0) return rk
-      return String(a.product_name).localeCompare(String(b.product_name))
-    })
-
-    leftRows.value = left
-    rightRows.value = right
-    const catalog = equipBundle.catalogByMachine
-    enrichJigCatalogFromPaneRows(catalog, left, right)
-    jigProductCatalogByMachine.value = catalog
+    const data = await fetchPlatingSummaryPair(d0, d1)
+    leftRows.value = data.left_inventory.map((r) => ({ ...r }))
+    rightRows.value = data.right_gen.map((r) => ({
+      ...r,
+      gen_qty: r.gen_qty as number | string,
+    }))
+    const merged = new Map(jigProductCatalogByMachine.value)
+    enrichJigCatalogFromPaneRows(merged, leftRows.value, rightRows.value)
+    jigProductCatalogByMachine.value = merged
   } catch (e) {
     console.error(e)
     ElMessage.error('生産サマリ（production_summarys）の取得に失敗しました')
@@ -6634,6 +6816,10 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
       color: #cf1322 !important;
       font-weight: 600 !important;
     }
+    .lap-print-prod--force-red {
+      color: #cf1322 !important;
+      font-weight: 700 !important;
+    }
     .lap-print-prod-sep {
       color: #303133;
       font-weight: 400;
@@ -7006,17 +7192,23 @@ watch(rightGenFloating, () => { nextTick(() => bindRightGenTableDrag()) })
 watch(
   [leftInventoryDate, rightGenDate],
   () => {
-    void loadSummaryPair()
-    void loadJigAvailability()
+    void loadDeferredSummaryPanels()
   },
 )
 
+/** 在庫／見込ペイン：ボード読込後に遅延取得（ms） */
+const SUMMARY_PANEL_DEFER_MS = 300
+
+async function loadDeferredSummaryPanels() {
+  void loadSummaryPair()
+  void loadJigAvailability()
+}
+
 async function loadPageInitialData() {
-  await Promise.all([
-    loadLatestDraft({ autoMode: true, autoSyncWorkDate: true }),
-    loadSummaryPair(),
-    loadJigAvailability(),
-  ])
+  await loadLatestDraft({ autoMode: true, autoSyncWorkDate: true })
+  window.setTimeout(() => {
+    void loadDeferredSummaryPanels()
+  }, SUMMARY_PANEL_DEFER_MS)
 }
 
 watch(
@@ -7953,18 +8145,36 @@ onBeforeUnmount(() => {
   border-top: 1px dashed var(--el-border-color);
 }
 
+.jig-edit-products__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .jig-edit-products__title {
   font-size: 12px;
   font-weight: 600;
   color: var(--el-text-color-secondary);
-  margin-bottom: 8px;
+}
+
+.jig-edit-products__sum {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.jig-edit-products__sum--warn {
+  color: var(--el-color-danger);
+  font-weight: 600;
 }
 
 .jig-edit-product-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 16px auto minmax(88px, auto);
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 6px;
   padding: 6px 10px;
   margin-bottom: 6px;
   border: 1px solid var(--el-border-color-lighter);
@@ -7973,11 +8183,12 @@ onBeforeUnmount(() => {
   box-shadow: inset 0 1px 0 #fff, 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
-.jig-edit-product-info {
+.jig-edit-product-switches {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-wrap: nowrap;
 }
 
 .jig-edit-product-name {
@@ -7987,18 +8198,43 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  min-width: 0;
+}
+
+.jig-edit-product-frames {
+  width: 88px;
+}
+
+.jig-edit-product-unit {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 
 .jig-edit-product-qty {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--el-text-color-regular);
   white-space: nowrap;
+  min-width: 52px;
+  text-align: right;
 }
 
 .jig-edit-product-qty--depleted {
   color: var(--el-color-danger);
   font-weight: 600;
+}
+
+.jig-edit-product-qty--force-red {
+  color: var(--el-color-danger);
+  font-weight: 700;
+}
+
+.jig-edit-product-order-item {
+  margin: 8px 0 0;
+}
+
+.jig-edit-product-order-item :deep(.el-form-item__label) {
+  font-size: 12px;
+  padding-bottom: 4px;
 }
 
 .jig-edit-products__hint {
@@ -9253,6 +9489,11 @@ onBeforeUnmount(() => {
 }
 
 .lap-merged-product-label--depleted {
+  color: var(--el-color-danger);
+  font-weight: 700;
+}
+
+.lap-merged-product-label--force-red {
   color: var(--el-color-danger);
   font-weight: 700;
 }

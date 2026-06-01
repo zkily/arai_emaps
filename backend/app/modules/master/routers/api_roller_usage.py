@@ -157,11 +157,19 @@ def _calc_next_exec_date(
     # --- 月ルール ---
     if last_exec_date:
         months = None
-        t = (exec_type or "").strip()
-        if "清掃" in t and cleaning_freq_month:
-            months = cleaning_freq_month
-        elif exchange_freq_month:
-            months = exchange_freq_month
+        # 要件:
+        # - 交換頻度本数（exchange_freq_qty）が 0 の場合は、次回日付の基準を「交換月」を優先する
+        # - 交換月が未設定（または 0）なら「清掃月」にフォールバックする
+        if exchange_freq_qty == 0:
+            months = exchange_freq_month or None
+            if not months:
+                months = cleaning_freq_month or None
+        else:
+            t = (exec_type or "").strip()
+            if "清掃" in t and cleaning_freq_month:
+                months = cleaning_freq_month
+            elif exchange_freq_month:
+                months = exchange_freq_month
         if months:
             candidates.append(last_exec_date + relativedelta(months=months))
 

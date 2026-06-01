@@ -33,6 +33,8 @@ export interface PlatingBoardCardBody {
   stable_key?: string | null
   /** 数量非表示（無くなり次第）；生産数合計には実数を加算 */
   until_depleted?: boolean
+  /** ボード上の製品名・数量を赤字で強調表示 */
+  text_red?: boolean
 }
 
 /** ボード日付行メモ（6/1（月）行など） */
@@ -114,6 +116,37 @@ export interface PlatingBoardViewOut {
   layout_blocks: PlatingDraftLayoutOut[]
   board_date_memos: PlatingBoardDateMemoOut[]
   primary: PlatingDraftOut | null
+}
+
+export interface PlatingSummaryLeftRow {
+  product_cd: string
+  product_name: string
+  plating_machine: string
+  plating_efficiency: string
+  pre_plating_prev_label: string
+  pre_plating_inventory: number
+}
+
+export interface PlatingSummaryRightRow {
+  product_cd: string
+  product_name: string
+  plating_machine: string
+  plating_efficiency: string
+  pre_plating_prev_label: string
+  gen_qty: number
+  gen_source_col: string
+}
+
+export interface PlatingSummaryPairOut {
+  left_inventory: PlatingSummaryLeftRow[]
+  right_gen: PlatingSummaryRightRow[]
+}
+
+export function fetchPlatingSummaryPair(
+  leftDate: string,
+  rightDate: string,
+): Promise<PlatingSummaryPairOut> {
+  return request.get(`${BASE}/summary-pair`, { params: { leftDate, rightDate } })
 }
 
 export function createPlatingDraft(body: PlatingDraftBody): Promise<PlatingDraftOut> {

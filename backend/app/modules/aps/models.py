@@ -294,6 +294,9 @@ class ApsPlatingPlanBoardCard(Base):
     until_depleted = Column(
         Boolean, nullable=False, default=False, comment="数量非表示（無くなり次第）；合計には実数を加算"
     )
+    text_red = Column(
+        Boolean, nullable=False, default=False, comment="ボード上の製品名・数量を赤字で強調表示"
+    )
     created_at = Column(TIMESTAMP, server_default=func.now(), comment="作成日時")
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now(), comment="更新日時")
 

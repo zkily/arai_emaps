@@ -6,7 +6,7 @@
         <div class="ea-title-row">
           <el-icon class="ea-title-icon" :size="20"><Setting /></el-icon>
           <div>
-            <h1 class="ea-title">ローラー使用管理</h1>
+            <h1 class="ea-title">ローラー交換・点検管理</h1>
             <p class="ea-subtitle">ローラーの使用状況・交換予測・実施登録を管理します</p>
           </div>
         </div>
@@ -1001,33 +1001,65 @@ const printMainListReport = async () => {
     const rowsHtml =
       sorted.length > 0
         ? (() => {
-            let currentMonth = ''
-            return sorted
-              .map((row) => {
-                const rawDate = String(row.next_exec_date ?? '').trim()
-                const monthKey = rawDate ? rawDate.slice(0, 7) : '未設定'
-                const monthLabel = monthKey === '未設定' ? '実施日未設定' : `${monthKey} 月`
+            const buckets: Array<{ monthKey: string; monthLabel: string; rows: RollerUsageStatusRow[] }> = []
+            let currentMonthKey = ''
+            for (const row of sorted) {
+              const rawDate = String(row.next_exec_date ?? '').trim()
+              const monthKey = rawDate ? rawDate.slice(0, 7) : '未設定'
+              const monthLabel = monthKey === '未設定' ? '実施日未設定' : `${monthKey} 月`
+              if (monthKey !== currentMonthKey) {
+                buckets.push({ monthKey, monthLabel, rows: [] })
+                currentMonthKey = monthKey
+              }
+              buckets[buckets.length - 1].rows.push(row)
+            }
 
-                const category = _escHtml(
-                  String(rollerCategoryMap.value[String(row.roller_cd ?? '').trim()] || '').trim() || '—',
+            const preferredPairs = [
+              { preferred: '164BFR_5(交換)', suppressed: '164BFR_5(点検・清掃)' },
+              { preferred: '400BFR_4(交換)', suppressed: '400BFR_4(点検・清掃)' },
+              { preferred: 'TTAFR_19(交換)', suppressed: 'TTAFR_19(点検・清掃)' },
+            ]
+
+            const applyMonthFilter = (monthRows: RollerUsageStatusRow[]) => {
+              let filtered = [...monthRows]
+              for (const { preferred, suppressed } of preferredPairs) {
+                const hasPreferred = filtered.some(
+                  (r) => String(r.roller_type ?? '').trim() === preferred,
                 )
-                const rt = _escHtml(String(row.roller_type ?? '').trim() || '—')
-                const mn = _escHtml(String(row.machine_name ?? '').trim() || '—')
-                const pqNum = prevMonthRemaining(row)
-                const pq =
-                  pqNum == null
-                    ? '—'
-                    : _escHtml(Number(pqNum).toLocaleString('ja-JP'))
-                const ld = _escHtml(rawDate || '—')
-                const pp = _escHtml(String(row.planned_product_cd ?? '').trim() || '—')
+                if (hasPreferred) {
+                  filtered = filtered.filter((r) => String(r.roller_type ?? '').trim() !== suppressed)
+                }
+              }
+              return filtered
+            }
 
-                const monthRow =
-                  monthKey !== currentMonth
-                    ? `<tr class="month-group"><td colspan="9">${_escHtml(monthLabel)}</td></tr>`
+            return buckets
+              .map(({ monthKey, monthLabel, rows: monthRows }) => {
+                const filteredRows = applyMonthFilter(monthRows)
+                const monthRow = `<tr class="month-group"><td colspan="9">${_escHtml(monthLabel)}</td></tr>`
+                const detailRows =
+                  filteredRows.length > 0
+                    ? filteredRows
+                        .map((row) => {
+                          const rawDate = String(row.next_exec_date ?? '').trim()
+                          const category = _escHtml(
+                            String(rollerCategoryMap.value[String(row.roller_cd ?? '').trim()] || '').trim() || '—',
+                          )
+                          const rt = _escHtml(String(row.roller_type ?? '').trim() || '—')
+                          const mn = _escHtml(String(row.machine_name ?? '').trim() || '—')
+                          const pqNum = prevMonthRemaining(row)
+                          const pq =
+                            pqNum == null ? '—' : _escHtml(Number(pqNum).toLocaleString('ja-JP'))
+                          const ld = _escHtml(rawDate || '—')
+                          const pp = _escHtml(String(row.planned_product_cd ?? '').trim() || '—')
+
+                          return `<tr><td>${category}</td><td>${rt}</td><td>${mn}</td><td class="num">${pq}</td><td>${pp}</td><td>${ld}</td><td></td><td></td><td></td></tr>`
+                        })
+                        .join('')
                     : ''
-                currentMonth = monthKey
 
-                return `${monthRow}<tr><td>${category}</td><td>${rt}</td><td>${mn}</td><td class="num">${pq}</td><td>${pp}</td><td>${ld}</td><td></td><td></td><td></td></tr>`
+                // monthKey が未設定等でも、月ヘッダーだけは出す
+                return `${monthRow}${detailRows}`
               })
               .join('')
           })()
@@ -1049,7 +1081,7 @@ const printMainListReport = async () => {
         ? `${sorted.length}件表示（全${total}件中・上限5000件）`
         : `${sorted.length}件`
 
-    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ローラー使用管理一覧</title>
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ローラー交換・点検管理表</title>
 <style>
   @page { size: A4 portrait; margin: 10mm; }
   body { font-family: 'Noto Sans JP','Hiragino Kaku Gothic ProN','Meiryo',sans-serif; padding: 0; font-size: 9pt; color: #111; }
@@ -1064,7 +1096,7 @@ const printMainListReport = async () => {
   .month-group td { background: #f5f8fc; font-weight: 700; text-align: left; }
 </style></head><body>
   <div class="title-row">
-    <h1>ローラー使用管理 一覧</h1>
+    <h1>ローラー交換・点検管理表</h1>
     <div class="title-right">並び：実施日昇順（次回実施日）　／　${countNote}</div>
   </div>
   <table><thead><tr>
@@ -1073,7 +1105,7 @@ const printMainListReport = async () => {
     <th style="width:8%">設備名</th>
     <th style="width:10%">前月末残数</th>
     <th style="width:15%">予定生産品種</th>
-    <th style="width:11%">実施日</th>
+    <th style="width:11%">予定実施日</th>
     <th style="width:6%">実施日</th>
     <th style="width:6%">実施者</th>
     <th style="width:6%">確認者</th>

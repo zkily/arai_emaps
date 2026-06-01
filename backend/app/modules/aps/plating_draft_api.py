@@ -19,6 +19,8 @@ from app.modules.aps.models import (
     ApsPlatingJigAvailability,
 )
 
+from app.modules.aps.plating_summary_service import load_plating_summary_pair
+
 router = APIRouter()
 
 
@@ -52,6 +54,7 @@ class PlatingBoardCardBody(BaseModel):
     board_mark: str = "standard"
     stable_key: Optional[str] = None
     until_depleted: bool = False
+    text_red: bool = False
 
 
 class PlatingBoardDateMemoBody(BaseModel):
@@ -165,6 +168,30 @@ class PlatingBoardViewOut(BaseModel):
     layout_blocks: List[PlatingDraftLayoutOut] = Field(default_factory=list)
     board_date_memos: List[PlatingBoardDateMemoOut] = Field(default_factory=list)
     primary: Optional[PlatingDraftOut] = None
+
+
+class PlatingSummaryLeftRowOut(BaseModel):
+    product_cd: str
+    product_name: str
+    plating_machine: str
+    plating_efficiency: str = "—"
+    pre_plating_prev_label: str = "—"
+    pre_plating_inventory: int = 0
+
+
+class PlatingSummaryRightRowOut(BaseModel):
+    product_cd: str
+    product_name: str
+    plating_machine: str
+    plating_efficiency: str = "—"
+    pre_plating_prev_label: str = "—"
+    gen_qty: float = 0
+    gen_source_col: str = "—"
+
+
+class PlatingSummaryPairOut(BaseModel):
+    left_inventory: List[PlatingSummaryLeftRowOut] = Field(default_factory=list)
+    right_gen: List[PlatingSummaryRightRowOut] = Field(default_factory=list)
 
 
 class PlatingJigAvailabilityItem(BaseModel):
@@ -345,6 +372,7 @@ def _board_cards_to_out(cards: List[ApsPlatingPlanBoardCard]) -> List[PlatingBoa
                 board_mark=(c.board_mark or "standard").strip() or "standard",
                 stable_key=c.stable_key,
                 until_depleted=bool(c.until_depleted),
+                text_red=bool(c.text_red),
             )
         )
     return out
@@ -537,6 +565,7 @@ async def _replace_board_cards(
                 board_mark=(bc.board_mark or "standard").strip() or "standard",
                 stable_key=sk,
                 until_depleted=bool(bc.until_depleted),
+                text_red=bool(bc.text_red),
             )
         )
     await db.flush()
@@ -675,6 +704,21 @@ def _parse_optional_ymd(value: Optional[str], field_name: str) -> Optional[date]
         return date.fromisoformat(str(value).strip()[:10])
     except ValueError:
         raise HTTPException(400, f"{field_name} 格式错误，应为 YYYY-MM-DD")
+
+
+@router.get("/plating/drafts/summary-pair", response_model=PlatingSummaryPairOut)
+async def get_plating_summary_pair(
+    leftDate: str = Query(..., description="メッキ前在庫の基準日 YYYY-MM-DD"),
+    rightDate: str = Query(..., description="見込数量の参照日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    left_d = _parse_optional_ymd(leftDate, "leftDate")
+    right_d = _parse_optional_ymd(rightDate, "rightDate")
+    if left_d is None or right_d is None:
+        raise HTTPException(400, "leftDate / rightDate は YYYY-MM-DD で指定してください")
+    data = await load_plating_summary_pair(db, left_d, right_d)
+    return PlatingSummaryPairOut(**data)
 
 
 @router.get("/plating/drafts/board-view", response_model=PlatingBoardViewOut)
