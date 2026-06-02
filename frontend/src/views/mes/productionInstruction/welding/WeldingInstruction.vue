@@ -3844,8 +3844,11 @@ const generateSetupScheduleContent = async (planData: any[]) => {
     }
 
     const requiredProductionTime =
-      !isProductionStop && efficiencyRateNum && efficiencyRateNum > 0 && currentQuantity > 0
-        ? (currentQuantity / efficiencyRateNum).toFixed(1)
+      !isProductionStop &&
+      efficiencyRateNum &&
+      efficiencyRateNum > 0 &&
+      aggregatedCurrentDayPlanQuantity > 0
+        ? (aggregatedCurrentDayPlanQuantity / efficiencyRateNum).toFixed(1)
         : ''
 
     let requiredStaffCount = 0
