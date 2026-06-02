@@ -399,8 +399,8 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
     }
   }
 
-  const result: LapScheduleSlot[] = []
-  for (const ln of [...targetLapNos].sort((a, b) => a - b)) {
+  const sortMap = new Map<number, LapScheduleSlot>()
+  for (const ln of targetLapNos) {
     const layout = layoutSlotByLap.get(ln)
     const wd = (lapDateMap.get(ln) || layout?.work_date || '').slice(0, 10)
     if (!wd || !isYmdInBoardView(wd)) continue
@@ -413,13 +413,18 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
       times?.end ||
       layout?.end ||
       normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_end_time)
-    result.push({
+    sortMap.set(ln, {
       lap_no: ln,
       work_date: wd,
       work_date_label: formatBoardDateLabel(wd),
       start: start || '08:00',
       end: end || start || '09:00',
     })
+  }
+  const result: LapScheduleSlot[] = []
+  for (const ln of [...sortMap.keys()].sort((a, b) => compareLapNoForBoardSort(a, b, sortMap))) {
+    const slot = sortMap.get(ln)
+    if (slot) result.push(slot)
   }
   return result
 }
@@ -434,14 +439,16 @@ function currentLayoutLapSchedule(): LapScheduleSlot[] {
 /** 計画日（lap_work_date）ごとに 1 から振り直した表示用周番号 */
 const lapDisplayNoMap = computed(() => {
   const map = new Map<number, number>()
+  const schedule = globalLapSchedule.value
+  const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
   const byDate = new Map<string, number[]>()
-  for (const s of globalLapSchedule.value) {
+  for (const s of schedule) {
     const list = byDate.get(s.work_date) ?? []
     list.push(s.lap_no)
     byDate.set(s.work_date, list)
   }
   for (const laps of byDate.values()) {
-    const sorted = [...laps].sort((a, b) => a - b)
+    const sorted = [...laps].sort((a, b) => compareLapNoForBoardSort(a, b, scheduleByLap))
     sorted.forEach((lapNo, idx) => map.set(lapNo, idx + 1))
   }
   return map
@@ -639,6 +646,13 @@ function applyBoardDateMemosFromDraft(memos: PlatingBoardDateMemoOut[], merge = 
   boardDateMemosByYmd.value = next
 }
 
+function lapScheduleStartHmForSort(lapNo: number, scheduleByLap: Map<number, LapScheduleSlot>): string {
+  const slot = scheduleByLap.get(lapNo)
+  const card = scheduleCards.value.find((c) => c.lap_no === lapNo)
+  return normalizeBoardStartTimeHm(card?.lap_start_time || slot?.start || '99:99')
+}
+
+/** ボード表示：作業日 → 開始時刻 → 周目番号 */
 function compareLapNoForBoardSort(
   lapA: number,
   lapB: number,
@@ -649,6 +663,9 @@ function compareLapNoForBoardSort(
   const da = cardWd(lapA) || (scheduleByLap.get(lapA)?.work_date ?? '')
   const db = cardWd(lapB) || (scheduleByLap.get(lapB)?.work_date ?? '')
   if (da !== db) return da.localeCompare(db)
+  const ta = lapScheduleStartHmForSort(lapA, scheduleByLap)
+  const tb = lapScheduleStartHmForSort(lapB, scheduleByLap)
+  if (ta !== tb) return ta.localeCompare(tb)
   return lapA - lapB
 }
 

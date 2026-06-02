@@ -5160,6 +5160,17 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       finalSetupPredictedTime = ''
     }
 
+    // 「当日計画数」表示用：同一設備・同一日・同一品種は順位が違っても合算する
+    const normalizedCurrentProductName = (currentProductName || '').toString().trim()
+    const aggregatedCurrentDayPlanQuantity =
+      !isProductionStop && normalizedCurrentProductName
+        ? currentProducts.reduce((sum, item: any) => {
+            const itemProductName = (item?.product_name || '').toString().trim()
+            if (itemProductName !== normalizedCurrentProductName) return sum
+            return sum + (parseInt(item?.quantity) || 0)
+          }, 0)
+        : 0
+
     // 総計画数、実績、生産残数の取得
     // production_plan_schedules 表から取得（machine_name + product_name + production_order で連接）
     // 条件：生産品種对应的順位（operator转换为数字）= production_order
@@ -5260,7 +5271,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       actualProduction: isProductionStop ? '' : actualProduction,
       remainingProduction: isProductionStop ? '' : remainingProduction,
       efficiency: isProductionStop ? '' : efficiency,
-      planQuantity: isProductionStop ? '' : currentQuantity,
+      planQuantity: isProductionStop ? '' : aggregatedCurrentDayPlanQuantity,
       setupAfterHours: finalSetupAfterHours,
       setupPredictedTime: finalSetupPredictedTime,
       nextProductName: finalNextProductName,

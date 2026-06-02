@@ -3627,6 +3627,16 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       !(currentProduct as any).product_name
 
     const currentProductName = isProductionStop ? '' : (currentProduct as any).product_name || ''
+    // 「当日計画数」表示用：同一設備・同一日・同一品種は順位が違っても合算する
+    const normalizedCurrentProductName = (currentProductName || '').toString().trim()
+    const aggregatedCurrentDayPlanQuantity =
+      !isProductionStop && normalizedCurrentProductName
+        ? currentProducts.reduce((sum, item: any) => {
+            const itemProductName = (item?.product_name || '').toString().trim()
+            if (itemProductName !== normalizedCurrentProductName) return sum
+            return sum + (parseInt(item?.quantity) || 0)
+          }, 0)
+        : 0
     let efficiency = ''
     let efficiencyRateNum: number | null = null
 
@@ -3873,7 +3883,7 @@ const generateSetupScheduleContent = async (planData: any[]) => {
       actualProduction: isProductionStop ? '' : actualProduction,
       remainingProduction: isProductionStop ? '' : remainingProduction,
       efficiency: isProductionStop ? '' : efficiency,
-      planQuantity: isProductionStop ? '' : currentQuantity,
+      planQuantity: isProductionStop ? '' : aggregatedCurrentDayPlanQuantity,
       requiredProductionTime,
       requiredStaffCount,
       nextProductName: finalNextProductName,

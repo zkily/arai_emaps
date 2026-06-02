@@ -179,7 +179,7 @@
             </div>
           </div>
           <div class="toolbar-inline board-head-toolbar">
-            <el-button type="primary" size="small" class="board-act-btn board-act-btn--primary" @click="openAppendLayoutDialog">
+            <el-button type="primary" size="small" class="board-act-btn board-act-btn--primary" @click="() => openAppendLayoutDialog()">
               追加レイアウト
             </el-button>
             <el-button
@@ -441,6 +441,16 @@
               </template>
                   </div>
                   <div class="lap-op-cell lap-op-lap">
+                    <el-tooltip content="この周目の後に週を挿入" placement="top">
+                      <el-button
+                        size="small"
+                        type="primary"
+                        text
+                        class="lap-row-op-btn"
+                        :icon="Plus"
+                        @click.stop="openAppendLayoutDialog(item.row.lap_no)"
+                      />
+                    </el-tooltip>
                     <el-tooltip content="次行へコピー" placement="top">
                       <el-button
                         size="small"
@@ -1221,10 +1231,37 @@
           class="al-context"
         >
           <span class="al-tag">表示中 {{ layoutMaxLaps }} 周</span>
-          <span class="al-tag al-tag--info">末尾へ追加 · 割当は保持</span>
-          <span v-if="tplAppendSuggestedLabel" class="al-tag al-tag--suggest">次の開始：{{ tplAppendSuggestedLabel }}</span>
+          <span class="al-tag al-tag--info">
+            {{ tplFormInsertMode === 'insert' ? '指定周の後へ挿入 · 時刻順に再整列' : '末尾へ追加 · 割当は保持' }}
+          </span>
+          <span v-if="tplAppendSuggestedLabel && tplFormInsertMode === 'append'" class="al-tag al-tag--suggest">次の開始：{{ tplAppendSuggestedLabel }}</span>
         </div>
         <el-form label-position="top" size="small" class="al-form" @submit.prevent>
+          <el-form-item v-if="layoutBoardReady && layoutMaxLaps > 0" label="追加方法" class="al-field al-field--full">
+            <el-radio-group v-model="tplFormInsertMode" class="al-insert-mode">
+              <el-radio value="append">末尾に追加</el-radio>
+              <el-radio value="insert">指定周目の後に挿入</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item
+            v-if="tplFormInsertMode === 'insert' && layoutBoardReady"
+            label="挿入位置（この周目の直後）"
+            class="al-field al-field--full"
+          >
+            <el-select
+              v-model="tplFormInsertAfterLapNo"
+              filterable
+              class="al-control al-select-full"
+              placeholder="周目を選択"
+            >
+              <el-option
+                v-for="opt in tplInsertAnchorOptions"
+                :key="opt.lap_no"
+                :label="opt.label"
+                :value="opt.lap_no"
+              />
+            </el-select>
+          </el-form-item>
           <el-form-item label="計画日" class="al-field al-field--full">
             <el-date-picker
               v-model="tplFormPlanDate"
@@ -1418,6 +1455,7 @@ import {
   Delete,
   DocumentCopy,
   EditPen,
+  Plus,
   Printer,
 } from '@element-plus/icons-vue'
 import {
@@ -1872,6 +1910,9 @@ const tplFormStartTime = ref('08:00')
 const tplFormMinutesPerLap = ref(100)
 const tplFormJigsPerLap = ref(DEFAULT_JIGS_PER_LAP)
 const tplFormMaxLaps = ref(1)
+/** 末尾追加 | 指定周目の後に挿入 */
+const tplFormInsertMode = ref<'append' | 'insert'>('append')
+const tplFormInsertAfterLapNo = ref(1)
 const layoutBoardReady = ref(false)
 const layoutBlocks = ref<BoardLayoutBlock[]>([])
 const layoutPlanDate = ref(todayYmdJapan())
@@ -1961,8 +2002,8 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
     }
   }
 
-  const result: LapScheduleSlot[] = []
-  for (const ln of [...targetLapNos].sort((a, b) => a - b)) {
+  const sortMap = new Map<number, LapScheduleSlot>()
+  for (const ln of targetLapNos) {
     const layout = layoutSlotByLap.get(ln)
     const wd = (lapDateMap.get(ln) || layout?.work_date || '').slice(0, 10)
     if (!wd || !isYmdInBoardView(wd)) continue
@@ -1975,13 +2016,18 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
       times?.end ||
       layout?.end ||
       normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_end_time)
-    result.push({
+    sortMap.set(ln, {
       lap_no: ln,
       work_date: wd,
       work_date_label: formatBoardDateLabel(wd),
       start: start || '08:00',
       end: end || start || '09:00',
     })
+  }
+  const result: LapScheduleSlot[] = []
+  for (const ln of [...sortMap.keys()].sort((a, b) => compareLapNoForBoardSort(a, b, sortMap))) {
+    const slot = sortMap.get(ln)
+    if (slot) result.push(slot)
   }
   return result
 }
@@ -1993,17 +2039,19 @@ function currentLayoutLapSchedule(): LapScheduleSlot[] {
   return globalLapSchedule.value
 }
 
-/** 計画日（lap_work_date）ごとに 1 から振り直した表示用周番号 */
+/** 計画日（lap_work_date）ごとに 1 から振り直した表示用周番号（同一日内は開始時刻順） */
 const lapDisplayNoMap = computed(() => {
   const map = new Map<number, number>()
+  const schedule = globalLapSchedule.value
+  const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
   const byDate = new Map<string, number[]>()
-  for (const s of globalLapSchedule.value) {
+  for (const s of schedule) {
     const list = byDate.get(s.work_date) ?? []
     list.push(s.lap_no)
     byDate.set(s.work_date, list)
   }
   for (const laps of byDate.values()) {
-    const sorted = [...laps].sort((a, b) => a - b)
+    const sorted = [...laps].sort((a, b) => compareLapNoForBoardSort(a, b, scheduleByLap))
     sorted.forEach((lapNo, idx) => map.set(lapNo, idx + 1))
   }
   return map
@@ -2079,9 +2127,22 @@ function findDuplicateLayoutBlock(planDate: string, startTime: string): BoardLay
 }
 
 const tplAppendLayoutDuplicate = computed(() => {
+  if (tplFormInsertMode.value === 'insert') return false
   const planDate = (tplFormPlanDate.value || '').trim()
   if (!planDate) return false
   return findDuplicateLayoutBlock(planDate, tplFormStartTime.value) != null
+})
+
+const tplInsertAnchorOptions = computed(() => {
+  if (!layoutBoardReady.value) return []
+  const schedule = currentLayoutLapSchedule()
+  const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
+  return [...schedule]
+    .sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap))
+    .map((s) => ({
+      lap_no: s.lap_no,
+      label: `第${lapDisplayNoMap.value.get(s.lap_no) ?? s.lap_no}周目 ${s.work_date_label} ${s.start}–${s.end}`,
+    }))
 })
 
 const tplAppendSuggestedLabel = ref('')
@@ -3021,7 +3082,13 @@ function scheduleCardsToBoardBodies(includeEmptySlots = false): PlatingBoardCard
     })
 }
 
-/** ボード表示・保存：日历日 → 周目番号 */
+function lapScheduleStartHmForSort(lapNo: number, scheduleByLap: Map<number, LapScheduleSlot>): string {
+  const slot = scheduleByLap.get(lapNo)
+  const card = scheduleCards.value.find((c) => c.lap_no === lapNo)
+  return normalizeBoardStartTimeHm(card?.lap_start_time || slot?.start || '99:99')
+}
+
+/** ボード表示・保存：作業日 → 開始時刻 → 周目番号 */
 function compareLapNoForBoardSort(
   lapA: number,
   lapB: number,
@@ -3032,6 +3099,9 @@ function compareLapNoForBoardSort(
   const da = cardWd(lapA) || (scheduleByLap.get(lapA)?.work_date ?? '')
   const db = cardWd(lapB) || (scheduleByLap.get(lapB)?.work_date ?? '')
   if (da !== db) return da.localeCompare(db)
+  const ta = lapScheduleStartHmForSort(lapA, scheduleByLap)
+  const tb = lapScheduleStartHmForSort(lapB, scheduleByLap)
+  if (ta !== tb) return ta.localeCompare(tb)
   return lapA - lapB
 }
 
@@ -5948,18 +6018,265 @@ function confirmCopyLapSchedule() {
   void flushBoardPersist()
 }
 
-function openAppendLayoutDialog() {
-  const next = computeNextAppendLayoutDefaults()
-  tplFormPlanDate.value = next.planDate
-  tplFormStartTime.value = next.startTime
-  tplFormMinutesPerLap.value = next.minutesPerLap
-  tplFormJigsPerLap.value = next.jigsPerLap
-  tplFormMaxLaps.value = next.maxLaps
-  tplAppendSuggestedLabel.value = next.suggestedLabel
+interface TimedLapSlot {
+  lap_no: number
+  work_date: string
+  work_date_label: string
+  start: string
+  end: string
+  minutes_per_lap: number
+  jigs_per_lap: number
+  src_lap_no: number
+}
+
+function buildCycleJigsMapsFromLayout(): { cycleByLap: Map<number, number>; jigsByLap: Map<number, number> } {
+  const cycleByLap = new Map<number, number>()
+  const jigsByLap = new Map<number, number>()
+  for (const b of [...layoutBlocks.value].sort((a, b) => a.base_lap_no - b.base_lap_no)) {
+    const laps = Math.max(1, Math.floor(Number(b.lap_count) || 1))
+    const cycle = Math.max(1, Math.floor(Number(b.minutes_per_lap) || 1))
+    const jigs = Math.max(1, Math.floor(Number(b.jigs_per_lap) || 1))
+    for (let i = 0; i < laps; i += 1) {
+      const ln = b.base_lap_no + i
+      cycleByLap.set(ln, cycle)
+      jigsByLap.set(ln, jigs)
+    }
+  }
+  return { cycleByLap, jigsByLap }
+}
+
+function layoutBlocksFromTimedSlots(slots: TimedLapSlot[]): BoardLayoutBlock[] {
+  const rebuilt: BoardLayoutBlock[] = []
+  for (const s of slots) {
+    const startDt = dayjs.tz(`${s.work_date} ${s.start}`, 'YYYY-MM-DD HH:mm', TZ_JP)
+    if (!startDt.isValid()) continue
+    const cycle = Math.max(1, Math.floor(Number(s.minutes_per_lap) || 1))
+    const jigs = Math.max(1, Math.floor(Number(s.jigs_per_lap) || 1))
+    const prev = rebuilt[rebuilt.length - 1]
+    if (prev) {
+      const prevStart = dayjs.tz(
+        `${prev.plan_date} ${normalizeBoardStartTimeHm(prev.start_time)}`,
+        'YYYY-MM-DD HH:mm',
+        TZ_JP,
+      )
+      const prevEnd = prevStart.add(prev.minutes_per_lap * prev.lap_count, 'minute')
+      if (prev.minutes_per_lap === cycle && prev.jigs_per_lap === jigs && startDt.isSame(prevEnd)) {
+        prev.lap_count += 1
+        continue
+      }
+    }
+    rebuilt.push({
+      plan_date: s.work_date,
+      start_time: normalizeBoardStartTimeHm(s.start),
+      minutes_per_lap: cycle,
+      jigs_per_lap: jigs,
+      lap_count: 1,
+      base_lap_no: s.lap_no,
+    })
+  }
+  return rebuilt
+}
+
+function compareTimedLapSlots(a: TimedLapSlot, b: TimedLapSlot): number {
+  const ka = `${a.work_date}|${normalizeBoardStartTimeHm(a.start)}`
+  const kb = `${b.work_date}|${normalizeBoardStartTimeHm(b.start)}`
+  if (ka !== kb) return ka.localeCompare(kb)
+  return a.src_lap_no - b.src_lap_no
+}
+
+/** 時刻順に並べ替え → 周目番号 1..N 再採番 → layout / cards を同期 */
+function applyBoardScheduleRenumber(timedSlots: TimedLapSlot[]): Map<number, number> {
+  const sorted = [...timedSlots].sort(compareTimedLapSlots)
+  const oldToNew = new Map<number, number>()
+  sorted.forEach((s, i) => {
+    const newLap = i + 1
+    oldToNew.set(s.src_lap_no, newLap)
+    s.lap_no = newLap
+  })
+
+  layoutBlocks.value = layoutBlocksFromTimedSlots(sorted)
+  layoutBoardReady.value = layoutBlocks.value.length > 0
+  layoutMaxLaps.value = sorted.length
+  const first = layoutBlocks.value[0]
+  if (first) {
+    layoutPlanDate.value = first.plan_date
+    layoutStartTime.value = normalizeBoardStartTimeHm(first.start_time)
+    layoutMinutesPerLap.value = first.minutes_per_lap
+    layoutJigsPerLap.value = first.jigs_per_lap
+    jigsPerLap.value = first.jigs_per_lap
+    minutesPerLap.value = first.minutes_per_lap
+  }
+
+  const slotByLap = new Map(sorted.map((s) => [s.lap_no, s]))
+  const remapped: ScheduleCard[] = []
+  for (const c of scheduleCards.value) {
+    const newLap = oldToNew.get(c.lap_no)
+    if (!newLap) continue
+    const slot = slotByLap.get(newLap)
+    remapped.push({
+      ...c,
+      lap_no: newLap,
+      persist_lap_no: newLap,
+      lap_work_date: slot?.work_date ?? c.lap_work_date,
+      lap_start_time: slot?.start ?? c.lap_start_time,
+      lap_end_time: slot?.end ?? c.lap_end_time,
+    })
+  }
+  const byLap = new Map<number, ScheduleCard[]>()
+  for (const c of remapped) {
+    const arr = byLap.get(c.lap_no) ?? []
+    arr.push(c)
+    byLap.set(c.lap_no, arr)
+  }
+  const scheduleByLap = new Map(sorted.map((s) => [s.lap_no, s] as [number, LapScheduleSlot]))
+  const renumberedCards: ScheduleCard[] = []
+  for (const lap of [...byLap.keys()].sort((a, b) => compareLapNoForBoardSort(a, b, scheduleByLap))) {
+    const rows = (byLap.get(lap) ?? []).sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+    rows.forEach((c, i) => {
+      renumberedCards.push({ ...c, turn_seq: i + 1 })
+    })
+  }
+  scheduleCards.value = renumberedCards
+
+  const nextStd = new Map<string, { lap_no: number; turn_seq: number }>()
+  for (const [id, pos] of standardPositions.value.entries()) {
+    const newLap = oldToNew.get(pos.lap_no)
+    if (!newLap) continue
+    nextStd.set(id, { lap_no: newLap, turn_seq: pos.turn_seq })
+  }
+  standardPositions.value = nextStd
+
+  recomputeLayoutMaxLapsFromSchedule()
+  syncScheduleCardLapTimesFromLayout()
+  return oldToNew
+}
+
+function applyInsertDefaultsAfterAnchor(anchorLapNo: number) {
+  const schedule = currentLayoutLapSchedule()
+  const anchor = schedule.find((s) => s.lap_no === anchorLapNo)
+  if (!anchor) return
+  const endDt = dayjs.tz(`${anchor.work_date} ${anchor.end}`, 'YYYY-MM-DD HH:mm', TZ_JP)
+  if (endDt.isValid()) {
+    tplFormPlanDate.value = endDt.format('YYYY-MM-DD')
+    tplFormStartTime.value = endDt.format('HH:mm')
+  } else {
+    tplFormPlanDate.value = anchor.work_date
+    tplFormStartTime.value = normalizeBoardStartTimeHm(anchor.start)
+  }
+  const { cycleByLap, jigsByLap } = buildCycleJigsMapsFromLayout()
+  tplFormMinutesPerLap.value = cycleByLap.get(anchorLapNo) ?? layoutMinutesPerLap.value
+  tplFormJigsPerLap.value = jigsByLap.get(anchorLapNo) ?? layoutJigsPerLap.value
+}
+
+function openAppendLayoutDialog(insertAfterLapNo?: number) {
+  if (insertAfterLapNo != null && insertAfterLapNo > 0) {
+    tplFormInsertMode.value = 'insert'
+    tplFormInsertAfterLapNo.value = insertAfterLapNo
+    tplFormMaxLaps.value = 1
+    applyInsertDefaultsAfterAnchor(insertAfterLapNo)
+    tplAppendSuggestedLabel.value = ''
+  } else {
+    tplFormInsertMode.value = 'append'
+    const next = computeNextAppendLayoutDefaults()
+    tplFormPlanDate.value = next.planDate
+    tplFormStartTime.value = next.startTime
+    tplFormMinutesPerLap.value = next.minutesPerLap
+    tplFormJigsPerLap.value = next.jigsPerLap
+    tplFormMaxLaps.value = next.maxLaps
+    tplAppendSuggestedLabel.value = next.suggestedLabel
+  }
   templateDialogVisible.value = true
 }
 
+watch([tplFormInsertMode, tplFormInsertAfterLapNo], () => {
+  if (tplFormInsertMode.value !== 'insert' || !layoutBoardReady.value) return
+  applyInsertDefaultsAfterAnchor(tplFormInsertAfterLapNo.value)
+})
+
+async function confirmInsertLayoutAfterAnchor() {
+  const anchorLap = Math.max(1, Math.floor(Number(tplFormInsertAfterLapNo.value) || 0))
+  const planDate = (tplFormPlanDate.value || '').trim()
+  if (!planDate) {
+    ElMessage.warning('計画日を指定してください')
+    return
+  }
+  const startHm = normalizeBoardStartTimeHm(tplFormStartTime.value)
+  const j = Math.max(1, Math.min(300, Math.floor(Number(tplFormJigsPerLap.value) || 1)))
+  const laps = Math.max(1, Math.min(500, Math.floor(Number(tplFormMaxLaps.value) || 1)))
+  const cycle = Math.max(1, Math.min(600, Math.floor(Number(tplFormMinutesPerLap.value) || 1)))
+  const preview = buildLapScheduleRows(planDate, startHm, cycle, laps)
+  if (preview.length === 0) {
+    ElMessage.warning('開始時刻・段数を確認してください')
+    return
+  }
+
+  const schedule = currentLayoutLapSchedule()
+  const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
+  const sorted = [...schedule].sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap))
+  const anchorIdx = sorted.findIndex((s) => s.lap_no === anchorLap)
+  if (anchorIdx < 0) {
+    ElMessage.warning('挿入位置の周目が見つかりません')
+    return
+  }
+
+  if (layoutJigsPerLap.value !== j) {
+    ElMessage.warning(`1周の本数を ${layoutJigsPerLap.value} から ${j} に変更します（挿入する週のみ ${j} 本）`)
+  }
+
+  const { cycleByLap, jigsByLap } = buildCycleJigsMapsFromLayout()
+  let tempSrc = -1
+  const existing: TimedLapSlot[] = sorted.map((s) => ({
+    lap_no: s.lap_no,
+    work_date: s.work_date,
+    work_date_label: s.work_date_label,
+    start: s.start,
+    end: s.end,
+    minutes_per_lap: cycleByLap.get(s.lap_no) ?? layoutMinutesPerLap.value,
+    jigs_per_lap: jigsByLap.get(s.lap_no) ?? layoutJigsPerLap.value,
+    src_lap_no: s.lap_no,
+  }))
+  const inserted: TimedLapSlot[] = preview.map((r) => {
+    const src = tempSrc
+    tempSrc -= 1
+    return {
+      lap_no: src,
+      work_date: r.work_date,
+      work_date_label: r.work_date_label,
+      start: r.start,
+      end: r.end,
+      minutes_per_lap: cycle,
+      jigs_per_lap: j,
+      src_lap_no: src,
+    }
+  })
+  const merged = [...existing.slice(0, anchorIdx + 1), ...inserted, ...existing.slice(anchorIdx + 1)]
+
+  templateDialogVisible.value = false
+  withSuppressedScheduleSideEffects(() => {
+    applyBoardScheduleRenumber(merged)
+    ensureBoardCardSkeletonsForLayout()
+  })
+  void nextTick(() => {
+    if (!scheduleCards.value.some((c) => c.qty > 0)) initLapTrackSortables()
+  })
+
+  const last = preview[preview.length - 1]
+  try {
+    await flushLayoutPersist(false)
+    const msg = last
+      ? `第${lapDisplayNo(anchorLap)}周目の後に ${laps} 段を挿入し、時刻順に整列しました（${startHm}〜${last.end}）`
+      : `第${lapDisplayNo(anchorLap)}周目の後に ${laps} 段を挿入し、時刻順に整列しました`
+    ElMessage.success(msg)
+  } catch {
+    ElMessage.error('レイアウトの保存に失敗しました。再度お試しください')
+  }
+}
+
 async function confirmAppendLayout() {
+  if (tplFormInsertMode.value === 'insert') {
+    await confirmInsertLayoutAfterAnchor()
+    return
+  }
   const planDate = (tplFormPlanDate.value || '').trim()
   if (!planDate) {
     ElMessage.warning('計画日を指定してください')
