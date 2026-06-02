@@ -2,6 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { getUserInfo } from '@/modules/auth/api'
+import { finRoutes } from './finRoutes'
+import { finCostingRoutes } from './finCostingRoutes'
+import { mesInstructionRoutes } from './mesInstructionRoutes'
 
 const routes: RouteRecordRaw[] = [
   // ベースページ（layouts/pages で管理）
@@ -194,10 +197,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/plan-schedules', name: 'ProductionPlanScheduleView', component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'), meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/forming-daily-plan', name: 'FormingDailyPlanSummary', component: () => import('@/views/erp/production/planning/FormingDailyPlanSummary.vue'), meta: { title: '工程別計画試算', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/process-machine-plan', name: 'ProcessMachinePlanView', component: () => import('@/views/erp/production/planning/ProcessMachinePlanView.vue'), meta: { title: '工程別設備別計画', group: '生産管理 > 生産計画', requiresAuth: true } },
-      { path: 'erp/production/instruction/cutting', name: 'CuttingInstruction', component: () => import('@/views/erp/production/instruction/cutting/CuttingInstruction.vue'), meta: { title: '切断・面取指示', group: '生産管理 > 生産指示', requiresAuth: true } },
-      { path: 'erp/production/instruction/forming', name: 'FormingInstruction', component: () => import('@/views/erp/production/instruction/forming/FormingInstruction.vue'), meta: { title: '成型指示', group: '生産管理 > 生産指示', requiresAuth: true } },
-      { path: 'erp/production/instruction/welding', name: 'WeldingInstruction', component: () => import('@/views/erp/production/instruction/welding/WeldingInstruction.vue'), meta: { title: '溶接指示', group: '生産管理 > 生産指示', requiresAuth: true } },
-      { path: 'erp/production/instruction/plating', name: 'PlatingInstruction', component: () => import('@/views/erp/production/instruction/plating/PlatingInstruction.vue'), meta: { title: 'メッキ指示', group: '生産管理 > 生産指示', requiresAuth: true } },
+      // 生産指示は MES（views/mes/productionInstruction）。旧パスは mesInstructionRoutes でリダイレクト。
       { path: 'erp/production/actual-management', name: 'ProductionActualManagement', component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'), meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/consumption', name: 'MaterialConsumption', component: () => import('@/views/erp/production/actual/MaterialConsumption.vue'), meta: { title: '材料消費実績', group: '生産管理 > 生産実績', requiresAuth: true } },
       { path: 'erp/production/process-actual', name: 'ProcessActual', component: () => import('@/views/erp/production/actual/ProcessActual.vue'), meta: { title: '工程別実績', group: '生産管理 > 生産実績', requiresAuth: true } },
@@ -207,13 +207,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/metrics/utilization-rate', name: 'ProductionUtilizationRate', component: () => import('@/views/erp/production/production-metrics/UtilizationRate.vue'), meta: { title: '稼働率', group: '生産管理 > 生産指標', requiresAuth: true } },
       { path: 'erp/production/metrics/defect-rate', name: 'ProductionDefectRate', component: () => import('@/views/erp/production/production-metrics/DefectRate.vue'), meta: { title: '不良率', group: '生産管理 > 生産指標', requiresAuth: true } },
 
-      // ========== ERP - 原価・会計連携 (Costing & Finance) ==========
-      { path: 'erp/costing', name: 'Costing', component: () => import('@/views/erp/Costing.vue'), meta: { title: '原価・会計', group: '原価・会計', requiresAuth: true } },
-      { path: 'erp/costing/standard', name: 'StandardCosting', component: () => import('@/views/erp/costing/cost/StandardCosting.vue'), meta: { title: '標準原価計算', group: '原価管理', requiresAuth: true } },
-      { path: 'erp/costing/actual', name: 'ActualCosting', component: () => import('@/views/erp/costing/cost/ActualCosting.vue'), meta: { title: '実際原価計算', group: '原価管理', requiresAuth: true } },
-      { path: 'erp/costing/variance', name: 'VarianceAnalysis', component: () => import('@/views/erp/costing/cost/VarianceAnalysis.vue'), meta: { title: '原価差異分析', group: '原価管理', requiresAuth: true } },
-      { path: 'erp/costing/billing', name: 'Billing', component: () => import('@/views/erp/costing/finance/Billing.vue'), meta: { title: '請求管理(AR)', group: '債権債務', requiresAuth: true } },
-      { path: 'erp/costing/payment', name: 'Payment', component: () => import('@/views/erp/costing/finance/Payment.vue'), meta: { title: '支払管理(AP)', group: '債権債務', requiresAuth: true } },
+      // 原価管理は FIN（経理・原価・人事）へ移管。旧 /erp/costing/* は finCostingRoutes でリダイレクト。
 
       // ========== ERP - 出荷管理 (Shipping Management) ==========
       { path: 'erp/shipping', name: 'ShippingHome', component: () => import('@/views/erp/shipping/ShippingHome.vue'), meta: { title: '出荷管理', group: '出荷管理', requiresAuth: true } },
@@ -256,6 +250,7 @@ const routes: RouteRecordRaw[] = [
         redirect: { name: 'FormingInstruction' },
         meta: { title: '成型指示', group: 'MES > 生産実績集計', requiresAuth: true },
       },
+      ...mesInstructionRoutes,
       { path: 'mes/actualDataCollection/monitor', name: 'MesProductionMonitor', component: () => import('@/views/mes/actualDataCollection/monitor/ProductionMonitorDashboard.vue'), meta: { title: '生産モニター', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/cutting', name: 'MesActualDataCollectionCutting', component: () => import('@/views/mes/actualDataCollection/cutting/CuttingActualDataCollection.vue'), meta: { title: '切断実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/chamfering', name: 'MesActualDataCollectionChamfering', component: () => import('@/views/mes/actualDataCollection/chamfering/ChamferingActualDataCollection.vue'), meta: { title: '面取実績収集', group: 'MES > 実績収集', requiresAuth: true } },
@@ -304,6 +299,10 @@ const routes: RouteRecordRaw[] = [
       { path: 'system/menus', name: 'MenuManagement', component: () => import('@/views/system/settings/MenuManagement.vue'), meta: { title: 'メニュー管理', requiresAuth: true } },
       { path: 'system/file-watcher', name: 'FileWatcherSetting', component: () => import('@/views/system/settings/FileWatcherSetting.vue'), meta: { title: 'ファイル監視設定', requiresAuth: true } },
       { path: 'system/database/order/daily', name: 'SystemDbOrderDaily', component: () => import('@/views/system/database/order/OrderDailyBrowse.vue'), meta: { title: 'order_daily（DB）', requiresAuth: true } },
+
+      // ========== FIN（経理・原価・人事） ==========
+      ...finRoutes,
+      ...finCostingRoutes,
     ],
   },
 ]

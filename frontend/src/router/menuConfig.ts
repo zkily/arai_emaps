@@ -2,6 +2,8 @@
  * メニュー定義（単一ソース）
  * 新規ルート追加時はここに1件追加し、管理画面で「ルート定義から取り込み」を実行すると menus テーブルに反映される
  */
+import { finMenuConfig } from './finMenuConfig'
+
 export interface MenuConfigItem {
   code: string
   name: string
@@ -84,32 +86,12 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_PRODUCTION_SCRAP_RATE', name: '廃棄率', path: '/erp/production/metrics/scrap-rate', parentCode: 'ERP_PRODUCTION_METRICS', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_UTILIZATION_RATE', name: '稼働率', path: '/erp/production/metrics/utilization-rate', parentCode: 'ERP_PRODUCTION_METRICS', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_DEFECT_RATE', name: '不良率', path: '/erp/production/metrics/defect-rate', parentCode: 'ERP_PRODUCTION_METRICS', sortOrder: 3 },
-  { code: 'ERP_PRODUCTION_INSTRUCTION', name: '生産指示', path: '/erp/production/instruction', parentCode: 'ERP_PRODUCTION', sortOrder: 6 },
-  { code: 'ERP_PRODUCTION_INSTR_CUTTING', name: '切断・面取指示', path: '/erp/production/instruction/cutting', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 1 },
-  { code: 'ERP_PRODUCTION_INSTR_FORMING', name: '成型指示', path: '/erp/production/instruction/forming', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 3 },
-  { code: 'ERP_PRODUCTION_INSTR_WELDING', name: '溶接指示', path: '/erp/production/instruction/welding', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 4 },
-  { code: 'ERP_PRODUCTION_INSTR_PLATING', name: 'メッキ指示', path: '/erp/production/instruction/plating', parentCode: 'ERP_PRODUCTION_INSTRUCTION', sortOrder: 5 },
   { code: 'ERP_PRODUCTION_RESULT', name: '生産実績', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION', sortOrder: 8 },
   { code: 'ERP_PRODUCTION_ACTUAL', name: '生産実績管理', path: '/erp/production/actual-management', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_CONSUME', name: '材料消費実績', path: '/erp/production/consumption', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 2 },
   { code: 'ERP_PRODUCTION_PROCESS_ACTUAL', name: '工程別実績', path: '/erp/production/process-actual', parentCode: 'ERP_PRODUCTION_RESULT', sortOrder: 3 },
 
-  // ===== 5. 原価・財務連携 (Costing & Finance) =====
-  { code: 'ERP_COSTING', name: '原価・財務連携', path: '/erp/costing', icon: 'Coin', parentCode: 'ERP', sortOrder: 7 },
-  { code: 'ERP_COSTING_HOME', name: '原価・会計ホーム', path: '/erp/costing', parentCode: 'ERP_COSTING', sortOrder: 0 },
-  { code: 'ERP_COSTING_STANDARD', name: '標準原価計算', path: '/erp/costing/standard', parentCode: 'ERP_COSTING', sortOrder: 1 },
-  { code: 'ERP_COSTING_ACTUAL', name: '実際原価計算', path: '/erp/costing/actual', parentCode: 'ERP_COSTING', sortOrder: 2 },
-  { code: 'ERP_COSTING_VARIANCE', name: '原価差異分析', path: '/erp/costing/variance', parentCode: 'ERP_COSTING', sortOrder: 3 },
-  { code: 'ERP_COSTING_ALLOCATION', name: '配賦計算', path: '/erp/costing/allocation', parentCode: 'ERP_COSTING', sortOrder: 4 },
-  { code: 'ERP_COSTING_WIP', name: '仕掛品(WIP)評価', path: '/erp/costing/wip', parentCode: 'ERP_COSTING', sortOrder: 5 },
-  { code: 'ERP_COSTING_EQUIPMENT', name: '設備台帳', path: '/erp/costing/equipment', parentCode: 'ERP_COSTING', sortOrder: 6 },
-  { code: 'ERP_COSTING_DEPRECIATION', name: '減価償却計算', path: '/erp/costing/depreciation', parentCode: 'ERP_COSTING', sortOrder: 7 },
-  { code: 'ERP_COSTING_JOURNAL', name: '自動仕訳生成', path: '/erp/costing/journal', parentCode: 'ERP_COSTING', sortOrder: 8 },
-  { code: 'ERP_COSTING_ACCT_EXPORT', name: '会計ソフト出力', path: '/erp/costing/accounting-export', parentCode: 'ERP_COSTING', sortOrder: 9 },
-  { code: 'ERP_COSTING_BILLING', name: '請求管理(AR)', path: '/erp/costing/billing', parentCode: 'ERP_COSTING', sortOrder: 10 },
-  { code: 'ERP_COSTING_PAYMENT', name: '支払管理(AP)', path: '/erp/costing/payment', parentCode: 'ERP_COSTING', sortOrder: 11 },
-
-  // ===== 6. 出荷管理 (Shipping Management) =====
+  // ===== 5. 出荷管理 (Shipping Management) =====
   { code: 'ERP_SHIPPING', name: '出荷管理', path: '/erp/shipping', icon: 'Van', parentCode: 'ERP', sortOrder: 8 },
   { code: 'ERP_SHIPPING_HOME', name: '出荷ホーム', path: '/erp/shipping', parentCode: 'ERP_SHIPPING', sortOrder: 0 },
   { code: 'ERP_SHIPPING_LIST', name: '出荷構成表管理', path: '/erp/shipping/list', parentCode: 'ERP_SHIPPING', sortOrder: 1 },
@@ -147,6 +129,11 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 4 },
   { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
   { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
+  { code: 'MES_PRODUCTION_INSTRUCTION', name: '生産指示', parentCode: 'MES', sortOrder: 0 },
+  { code: 'MES_PRODUCTION_INSTR_CUTTING', name: '切断・面取指示', path: '/mes/productionInstruction/cutting', parentCode: 'MES_PRODUCTION_INSTRUCTION', sortOrder: 1 },
+  { code: 'MES_PRODUCTION_INSTR_FORMING', name: '成型指示', path: '/mes/productionInstruction/forming', parentCode: 'MES_PRODUCTION_INSTRUCTION', sortOrder: 2 },
+  { code: 'MES_PRODUCTION_INSTR_WELDING', name: '溶接指示', path: '/mes/productionInstruction/welding', parentCode: 'MES_PRODUCTION_INSTRUCTION', sortOrder: 3 },
+  { code: 'MES_PRODUCTION_INSTR_PLATING', name: 'メッキ指示', path: '/mes/productionInstruction/plating', parentCode: 'MES_PRODUCTION_INSTRUCTION', sortOrder: 4 },
   { code: 'MES_ACTUAL_DATA_COLLECTION', name: '実績収集', parentCode: 'MES', sortOrder: 1 },
   { code: 'MES_PRODUCTION_MONITOR', name: '生産モニター', path: '/mes/actualDataCollection/monitor', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 0 },
   { code: 'MES_ACTUAL_CUTTING', name: '切断実績収集', path: '/mes/actualDataCollection/cutting', parentCode: 'MES_ACTUAL_DATA_COLLECTION', sortOrder: 1 },
@@ -248,4 +235,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'SYSTEM_FILE_WATCHER', name: 'ファイル監視設定', path: '/system/file-watcher', parentCode: 'SYSTEM_SETTINGS', sortOrder: 7 },
   { code: 'SYSTEM_DATABASE', name: 'データベース', icon: 'Coin', parentCode: 'SYSTEM', sortOrder: 3 },
   { code: 'SYSTEM_DB_ORDER_DAILY', name: 'order_daily', path: '/system/database/order/daily', parentCode: 'SYSTEM_DATABASE', sortOrder: 1 },
+
+  // ===== FIN（経理・原価・人事）— finMenuConfig（原価管理含む） =====
+  ...finMenuConfig,
 ]

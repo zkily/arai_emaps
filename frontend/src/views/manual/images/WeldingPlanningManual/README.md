@@ -12,7 +12,7 @@
 | `02_menu_order_monthly.png` | メニュー：ERP管理メニュー → 受注管理 → 月受注管理 |
 | `03_menu_data_management.png` | メニュー：ERP管理メニュー → 生産管理 → 生産計画 → 生産データ管理 |
 | `04_menu_welding_planning.png` | メニュー：APS管理メニュー → 生産計画作成 → 溶接計画作成 |
-| `05_menu_welding_instruction.png` | メニュー：ERP管理メニュー → 生産管理 → 生産指示 → 溶接指示 |
+| `05_menu_welding_instruction.png` | メニュー：MES管理メニュー → 生産指示 → 溶接指示（3 段シェブロン） |
 | `06_menu_mes_welding_actual.png` | メニュー：MES管理メニュー → 実績収集 → 溶接実績収集 |
 
 ## 画面キャプチャ（要追加）

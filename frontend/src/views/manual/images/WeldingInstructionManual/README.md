@@ -11,7 +11,7 @@
 | ファイル名 | 内容 |
 |------------|------|
 | `01_workflow_overview.png` | 全体フロー（任意・参考用。本文は A〜J の HTML 図式を使用） |
-| `02_menu_welding_instruction.png` | メニュー：ERP管理メニュー → 生産管理 → 生産指示 → 溶接指示 |
+| `02_menu_welding_instruction.png` | メニュー：MES管理メニュー → 生産指示 → 溶接指示（3 段シェブロン） |
 | `03_welding_instruction_overview.png` | 溶接指示書発行管理 画面全体 |
 | `04_welding_date_nextday.png` | 生産日を「翌日」に設定した検索バー |
 | `05_instruction_issue_button.png` | 「指示書発行」ボタン（緑色）を強調 |

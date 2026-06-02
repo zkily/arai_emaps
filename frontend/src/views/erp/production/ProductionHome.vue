@@ -80,21 +80,6 @@
       </router-link>
     </div>
 
-    <!-- 4. 生産指示（instruction 配下の各工程） -->
-    <div class="section-title">生産指示</div>
-    <div class="module-grid">
-      <router-link v-for="m in instructionModules" :key="m.path" :to="m.path" class="module-card modern-card">
-        <div class="module-icon" :style="{ background: m.gradient }">
-          <el-icon :size="32"><component :is="m.icon" /></el-icon>
-        </div>
-        <div class="module-info">
-          <h3 class="module-title">{{ m.title }}</h3>
-          <p class="module-desc">{{ m.description }}</p>
-        </div>
-        <el-icon class="module-arrow"><ArrowRight /></el-icon>
-      </router-link>
-    </div>
-
     <!-- 5. 生産実績 -->
     <div class="section-title">生産実績</div>
     <div class="module-grid">
@@ -148,13 +133,6 @@ const metricsModules = ref<ModuleItem[]>([
   { path: '/erp/production/metrics/scrap-rate', title: '廃棄率', description: '工程・製品別の廃棄数量とロス傾向を分析', icon: markRaw(Delete), gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)' },
   { path: '/erp/production/metrics/utilization-rate', title: '稼働率', description: '設備・工程別の計画時間に対する稼働状況を確認', icon: markRaw(Monitor), gradient: 'linear-gradient(135deg, #409eff, #36cfc9)' },
   { path: '/erp/production/metrics/defect-rate', title: '不良率', description: '工程・製品別の不良発生傾向を可視化', icon: markRaw(Warning), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
-])
-
-const instructionModules = ref<ModuleItem[]>([
-  { path: '/erp/production/instruction/cutting', title: '切断・面取指示', description: '切断・面取工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #409eff, #66b1ff)' },
-  { path: '/erp/production/instruction/forming', title: '成型指示', description: '成型工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #e6a23c, #f7ba2a)' },
-  { path: '/erp/production/instruction/welding', title: '溶接指示', description: '溶接工程の指示・実績', icon: markRaw(Connection), gradient: 'linear-gradient(135deg, #f56c6c, #ff7875)' },
-  { path: '/erp/production/instruction/plating', title: 'メッキ指示', description: 'メッキ工程の指示・実績', icon: markRaw(Operation), gradient: 'linear-gradient(135deg, #909399, #b1b3b8)' },
 ])
 
 const resultModules = ref<ModuleItem[]>([

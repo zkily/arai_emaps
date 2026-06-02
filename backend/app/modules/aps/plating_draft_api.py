@@ -441,6 +441,56 @@ def _filter_layouts_for_board_cards(
     return out
 
 
+def _layout_block_overlaps_board_dates(
+    lb: ApsPlatingPlanDraftLayout,
+    lo: date,
+    hi: date,
+) -> bool:
+    """layout ブロック内のいずれかの周目が表示期間（lap_work_date 相当）と重なるか"""
+    from datetime import datetime, timedelta
+
+    pd = lb.plan_date
+    if pd is None:
+        return False
+    start_raw = (lb.start_time or "08:00").strip() or "08:00"
+    try:
+        h, m = start_raw.split(":", 1)
+        base = datetime(pd.year, pd.month, pd.day, int(h), int(m))
+    except (ValueError, TypeError):
+        base = datetime(pd.year, pd.month, pd.day, 8, 0)
+    cycle = max(1, int(lb.minutes_per_lap or 1))
+    laps = max(1, int(lb.lap_count or 1))
+    for i in range(laps):
+        dt = base + timedelta(minutes=i * cycle)
+        wd = dt.date()
+        if lo <= wd <= hi:
+            return True
+    return False
+
+
+def _filter_layouts_for_board_view(
+    layouts: List[ApsPlatingPlanDraftLayout],
+    cards: List[ApsPlatingPlanBoardCard],
+    board_from: date,
+    board_to: date,
+) -> List[ApsPlatingPlanDraftLayout]:
+    """cards の lap_no に紐づく layout と、表示期間とカレンダー上重なる layout を併せて返す"""
+    by_cards = _filter_layouts_for_board_cards(layouts, cards)
+    lo, hi = _normalize_board_date_range(board_from, board_to) or (board_from, board_to)
+    by_date = [lb for lb in layouts if _layout_block_overlaps_board_dates(lb, lo, hi)]
+    if not by_cards and not by_date:
+        return []
+    seen: set[int] = set()
+    out: List[ApsPlatingPlanDraftLayout] = []
+    for lb in by_cards + by_date:
+        lid = int(lb.id or 0)
+        if lid in seen:
+            continue
+        seen.add(lid)
+        out.append(lb)
+    return out
+
+
 async def _load_board_date_memos_for_drafts(
     db: AsyncSession,
     draft_ids: List[int],
@@ -785,7 +835,7 @@ async def get_plating_board_view(
         load_draft_ids.append(primary_id)
 
     layout_rows = await _load_layouts_for_drafts(db, load_draft_ids)
-    layout_rows = _filter_layouts_for_board_cards(layout_rows, cards)
+    layout_rows = _filter_layouts_for_board_view(layout_rows, cards, bf, bt)
     memo_rows = await _load_board_date_memos_for_drafts(db, load_draft_ids, bf, bt)
 
     primary_out: Optional[PlatingDraftOut] = None

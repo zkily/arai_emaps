@@ -12,7 +12,7 @@
 | `02_menu_order_monthly.png` | メニュー：ERP管理メニュー → 受注管理 → 月受注管理 |
 | `03_menu_data_management.png` | メニュー：ERP管理メニュー → 生産管理 → 生産計画 → 生産データ管理 |
 | `04_menu_forming_planning.png` | メニュー：APS管理メニュー → 生産計画作成 → 成型計画作成 |
-| `05_menu_forming_instruction.png` | メニュー：ERP管理メニュー → 生産管理 → 生産指示 → 成型指示 |
+| `05_menu_forming_instruction.png` | メニュー：MES管理メニュー → 生産指示 → 成型指示（3 段シェブロン） |
 | `06_menu_mes_forming_actual.png` | メニュー：MES管理メニュー → 実績収集 → 成型実績収集 |
 | `20_cycle_inventory_replan.png` | 日次サイクル（在庫→計画見直し→指示→実績→繰り返し） |
 

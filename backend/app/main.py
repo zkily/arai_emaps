@@ -38,6 +38,7 @@ from app.modules import (
     part,
     part_data_generation,
     part_order,
+    fin,
 )
 
 
@@ -310,6 +311,10 @@ app.include_router(excel_monitor.router, prefix="/api/excel-monitor", tags=["Exc
 app.include_router(machine_work_time_config.router, prefix="/api/machine-work-time-config", tags=["設備運行時間設定"])
 app.include_router(production_schedule.router, prefix="/api", tags=["生産状況・スケジュール"])
 app.include_router(plan_baseline.router, prefix="/api/plan-baseline", tags=["生産計画ベースライン"])
+app.include_router(fin.router, prefix="/api/fin", tags=["FIN 経理・原価・人事"])
+from app.modules.fin.services_api import router as fin_services_router  # noqa: E402
+
+app.include_router(fin_services_router, prefix="/api/fin", tags=["FIN 中核処理"])
 
 # WebSocketエンドポイント
 @app.websocket("/ws")

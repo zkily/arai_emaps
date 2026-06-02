@@ -1,0 +1,658 @@
+# =============================================================================
+# FIN（経理・原価・人事）ドメイン定義 — 単一ソース
+# scripts/fin/fin_codegen.py がこのファイルを読み、DB / backend / frontend /
+# menu / router / locales / sidebar を生成する。
+#
+# 列タイプ: str(len) / text / int / bigint / dec(p,s) / date / datetime / bool
+# 監査列 (id, created_by, updated_by, created_at, updated_at) は自動付与。
+# =============================================================================
+version: 1
+module: fin
+api_prefix: /api/fin          # main.py 注册前缀（既存モジュールと同様 /api/<module>）
+route_prefix: /fin            # フロントルート前缀
+menu_root: FIN
+menu_sort_order: 3.5          # MES(3) と MASTER(4) の間
+
+# -----------------------------------------------------------------------------
+# ドメイン & エンティティ（DB テーブル + Model + Schema + 汎用 CRUD API）
+# -----------------------------------------------------------------------------
+domains:
+  - id: accounting
+    label: 会計
+    label_zh: 会计
+    entities:
+      - name: FiscalYear
+        table: fin_fiscal_year
+        columns:
+          - {name: code, type: str, len: 20, nullable: false, unique: true, comment: 会計年度コード}
+          - {name: name, type: str, len: 50, nullable: false, comment: 名称}
+          - {name: start_date, type: date, nullable: false, comment: 期首}
+          - {name: end_date, type: date, nullable: false, comment: 期末}
+          - {name: status, type: str, len: 20, default: open, comment: open/closed}
+      - name: AccountingPeriod
+        table: fin_accounting_period
+        columns:
+          - {name: fiscal_year_id, type: bigint, fk: fin_fiscal_year.id, on_delete: CASCADE, comment: 会計年度}
+          - {name: year_month, type: str, len: 7, nullable: false, index: true, comment: YYYY-MM}
+          - {name: status, type: str, len: 20, default: open, comment: open/closing/closed}
+          - {name: closed_at, type: datetime, comment: 締め日時}
+      - name: JournalEntry
+        table: fin_journal_entry
+        order_by: entry_date desc
+        columns:
+          - {name: journal_no, type: str, len: 40, index: true, comment: 仕訳番号}
+          - {name: entry_date, type: date, nullable: false, index: true, comment: 仕訳日}
+          - {name: period_ym, type: str, len: 7, index: true, comment: 計上年月}
+          - {name: entry_type, type: str, len: 30, default: manual, comment: manual/sales/purchase/transfer/manufacturing/depreciation/payroll}
+          - {name: description, type: str, len: 255, comment: 摘要}
+          - {name: total_debit, type: dec, p: 18, s: 2, default: 0, comment: 借方合計}
+          - {name: total_credit, type: dec, p: 18, s: 2, default: 0, comment: 貸方合計}
+          - {name: status, type: str, len: 20, default: draft, index: true, comment: draft/posted/canceled}
+          - {name: source_id, type: bigint, comment: fin_journal_source.id}
+        children:
+          - name: JournalLine
+            table: fin_journal_line
+            parent_fk: entry_id
+            columns:
+              - {name: line_no, type: int, default: 1, comment: 行番号}
+              - {name: account_code, type: str, len: 50, index: true, comment: 勘定科目}
+              - {name: account_name, type: str, len: 100, comment: 科目名}
+              - {name: debit, type: dec, p: 18, s: 2, default: 0, comment: 借方}
+              - {name: credit, type: dec, p: 18, s: 2, default: 0, comment: 貸方}
+              - {name: tax_code, type: str, len: 20, comment: 税区分}
+              - {name: tax_amount, type: dec, p: 18, s: 2, default: 0, comment: 消費税額}
+              - {name: department_code, type: str, len: 50, comment: 部門}
+              - {name: partner_id, type: int, comment: 取引先}
+              - {name: remarks, type: str, len: 255, comment: 備考}
+      - name: JournalSource
+        table: fin_journal_source
+        order_by: created_at desc
+        columns:
+          - {name: source_type, type: str, len: 40, nullable: false, index: true, comment: SALES_POSTED 等}
+          - {name: source_module, type: str, len: 30, comment: erp/expense/payroll}
+          - {name: source_ref, type: str, len: 100, index: true, comment: 元伝票番号/ID}
+          - {name: event_date, type: date, comment: 事象日}
+          - {name: amount, type: dec, p: 18, s: 2, default: 0, comment: 金額}
+          - {name: payload_json, type: text, comment: 連携ペイロード}
+          - {name: status, type: str, len: 20, default: pending, index: true, comment: pending/generated/skipped}
+          - {name: journal_entry_id, type: bigint, comment: 生成された仕訳}
+
+  - id: receivables
+    label: 売上・請求
+    label_zh: 销售·应收
+    entities:
+      - name: ArInvoice
+        table: fin_ar_invoice
+        order_by: invoice_date desc
+        columns:
+          - {name: invoice_no, type: str, len: 40, index: true, comment: 請求番号}
+          - {name: partner_id, type: int, index: true, comment: 取引先}
+          - {name: partner_name, type: str, len: 200, comment: 取引先名}
+          - {name: invoice_date, type: date, nullable: false, comment: 請求日}
+          - {name: due_date, type: date, comment: 支払期限}
+          - {name: subtotal, type: dec, p: 18, s: 2, default: 0, comment: 税抜}
+          - {name: tax_amount, type: dec, p: 18, s: 2, default: 0, comment: 消費税}
+          - {name: total_amount, type: dec, p: 18, s: 2, default: 0, comment: 税込合計}
+          - {name: paid_amount, type: dec, p: 18, s: 2, default: 0, comment: 入金済}
+          - {name: status, type: str, len: 20, default: draft, index: true, comment: draft/issued/paid/overdue}
+          - {name: source_invoice_id, type: int, comment: ERP 請求書連携}
+        children:
+          - name: ArInvoiceLine
+            table: fin_ar_invoice_line
+            parent_fk: invoice_id
+            columns:
+              - {name: line_no, type: int, default: 1}
+              - {name: item_name, type: str, len: 200, comment: 品目}
+              - {name: quantity, type: dec, p: 18, s: 4, default: 0}
+              - {name: unit_price, type: dec, p: 18, s: 4, default: 0}
+              - {name: tax_code, type: str, len: 20}
+              - {name: amount, type: dec, p: 18, s: 2, default: 0}
+              - {name: account_code, type: str, len: 50, comment: 売上科目}
+      - name: ArReceipt
+        table: fin_ar_receipt
+        order_by: receipt_date desc
+        columns:
+          - {name: receipt_no, type: str, len: 40, index: true, comment: 入金番号}
+          - {name: partner_id, type: int, index: true}
+          - {name: receipt_date, type: date, nullable: false, comment: 入金日}
+          - {name: amount, type: dec, p: 18, s: 2, default: 0, comment: 入金額}
+          - {name: method, type: str, len: 30, comment: 振込/手形/現金}
+          - {name: bank_account_id, type: int, comment: 入金口座}
+          - {name: status, type: str, len: 20, default: unmatched, index: true, comment: unmatched/matched}
+        children:
+          - name: ArReceiptAllocation
+            table: fin_ar_receipt_allocation
+            parent_fk: receipt_id
+            columns:
+              - {name: invoice_id, type: bigint, index: true, comment: 消込対象請求}
+              - {name: allocated_amount, type: dec, p: 18, s: 2, default: 0, comment: 充当額}
+
+  - id: payables
+    label: 仕入・支払
+    label_zh: 采购·应付
+    entities:
+      - name: ApBill
+        table: fin_ap_bill
+        order_by: bill_date desc
+        columns:
+          - {name: bill_no, type: str, len: 40, index: true, comment: 仕入請求番号}
+          - {name: partner_id, type: int, index: true, comment: 仕入先}
+          - {name: partner_name, type: str, len: 200}
+          - {name: bill_date, type: date, nullable: false, comment: 請求日}
+          - {name: due_date, type: date, comment: 支払期限}
+          - {name: subtotal, type: dec, p: 18, s: 2, default: 0}
+          - {name: tax_amount, type: dec, p: 18, s: 2, default: 0}
+          - {name: total_amount, type: dec, p: 18, s: 2, default: 0}
+          - {name: paid_amount, type: dec, p: 18, s: 2, default: 0}
+          - {name: status, type: str, len: 20, default: draft, index: true, comment: draft/confirmed/paid}
+        children:
+          - name: ApBillLine
+            table: fin_ap_bill_line
+            parent_fk: bill_id
+            columns:
+              - {name: line_no, type: int, default: 1}
+              - {name: item_name, type: str, len: 200}
+              - {name: quantity, type: dec, p: 18, s: 4, default: 0}
+              - {name: unit_price, type: dec, p: 18, s: 4, default: 0}
+              - {name: tax_code, type: str, len: 20}
+              - {name: amount, type: dec, p: 18, s: 2, default: 0}
+              - {name: account_code, type: str, len: 50, comment: 費用/仕入科目}
+      - name: ApPayment
+        table: fin_ap_payment
+        order_by: payment_date desc
+        columns:
+          - {name: payment_no, type: str, len: 40, index: true, comment: 支払番号}
+          - {name: partner_id, type: int, index: true}
+          - {name: payment_date, type: date, nullable: false, comment: 支払日}
+          - {name: amount, type: dec, p: 18, s: 2, default: 0}
+          - {name: method, type: str, len: 30, comment: 振込/手形}
+          - {name: bank_account_id, type: int, comment: 出金口座}
+          - {name: status, type: str, len: 20, default: scheduled, index: true, comment: scheduled/paid}
+        children:
+          - name: ApPaymentAllocation
+            table: fin_ap_payment_allocation
+            parent_fk: payment_id
+            columns:
+              - {name: bill_id, type: bigint, index: true, comment: 消込対象仕入請求}
+              - {name: allocated_amount, type: dec, p: 18, s: 2, default: 0}
+
+  - id: expense
+    label: 経費精算
+    label_zh: 费用报销
+    entities:
+      - name: ExpenseCategory
+        table: fin_expense_category
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: 経費区分コード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: account_code, type: str, len: 50, comment: 対応勘定科目}
+          - {name: tax_code, type: str, len: 20}
+          - {name: is_active, type: bool, default: true}
+      - name: ExpensePolicyRule
+        table: fin_expense_policy_rule
+        columns:
+          - {name: category_code, type: str, len: 30, index: true, comment: 経費区分}
+          - {name: name, type: str, len: 100, comment: ルール名}
+          - {name: max_amount, type: dec, p: 18, s: 2, comment: 上限金額}
+          - {name: requires_receipt, type: bool, default: true, comment: 領収書必須}
+          - {name: remarks, type: str, len: 255}
+      - name: ExpenseApplication
+        table: fin_expense_application
+        order_by: applied_date desc
+        columns:
+          - {name: application_no, type: str, len: 40, index: true, comment: 申請番号}
+          - {name: employee_id, type: int, index: true, comment: 申請者}
+          - {name: employee_name, type: str, len: 100}
+          - {name: applied_date, type: date, nullable: false, comment: 申請日}
+          - {name: title, type: str, len: 200, comment: 件名}
+          - {name: total_amount, type: dec, p: 18, s: 2, default: 0}
+          - {name: status, type: str, len: 20, default: draft, index: true, comment: draft/submitted/approved/rejected/paid}
+          - {name: approver_id, type: int, comment: 承認者}
+          - {name: approved_at, type: datetime}
+        children:
+          - name: ExpenseLine
+            table: fin_expense_line
+            parent_fk: application_id
+            columns:
+              - {name: line_no, type: int, default: 1}
+              - {name: expense_date, type: date, comment: 利用日}
+              - {name: category_code, type: str, len: 30, comment: 経費区分}
+              - {name: description, type: str, len: 255}
+              - {name: amount, type: dec, p: 18, s: 2, default: 0}
+              - {name: tax_code, type: str, len: 20}
+              - {name: has_receipt, type: bool, default: false}
+
+  - id: attendance
+    label: 勤怠
+    label_zh: 考勤
+    entities:
+      - name: WorkCalendar
+        table: fin_work_calendar
+        columns:
+          - {name: calendar_date, type: date, nullable: false, index: true, comment: 日付}
+          - {name: day_type, type: str, len: 20, default: workday, comment: workday/holiday/company_holiday}
+          - {name: name, type: str, len: 100, comment: 祝日名等}
+      - name: ShiftPattern
+        table: fin_shift_pattern
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: シフトコード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: start_time, type: str, len: 5, comment: HH:MM}
+          - {name: end_time, type: str, len: 5, comment: HH:MM}
+          - {name: break_minutes, type: int, default: 60, comment: 休憩分}
+          - {name: is_active, type: bool, default: true}
+      - name: EmployeeShift
+        table: fin_employee_shift
+        order_by: shift_date desc
+        columns:
+          - {name: employee_id, type: int, index: true}
+          - {name: shift_date, type: date, nullable: false, index: true}
+          - {name: shift_code, type: str, len: 30, comment: シフト}
+      - name: AttendanceRecord
+        table: fin_attendance_record
+        order_by: work_date desc
+        columns:
+          - {name: employee_id, type: int, index: true, comment: 社員}
+          - {name: employee_name, type: str, len: 100}
+          - {name: work_date, type: date, nullable: false, index: true, comment: 勤務日}
+          - {name: clock_in, type: datetime, comment: 出勤}
+          - {name: clock_out, type: datetime, comment: 退勤}
+          - {name: break_minutes, type: int, default: 0, comment: 休憩分}
+          - {name: work_minutes, type: int, default: 0, comment: 実働分}
+          - {name: overtime_minutes, type: int, default: 0, comment: 残業分}
+          - {name: status, type: str, len: 20, default: normal, comment: normal/late/absent/leave}
+      - name: LeaveType
+        table: fin_leave_type
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: 休暇コード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: is_paid, type: bool, default: true, comment: 有給}
+          - {name: is_active, type: bool, default: true}
+      - name: LeaveRequest
+        table: fin_leave_request
+        order_by: start_date desc
+        columns:
+          - {name: employee_id, type: int, index: true}
+          - {name: employee_name, type: str, len: 100}
+          - {name: leave_code, type: str, len: 30, comment: 休暇区分}
+          - {name: start_date, type: date, nullable: false}
+          - {name: end_date, type: date, nullable: false}
+          - {name: days, type: dec, p: 6, s: 2, default: 0, comment: 日数}
+          - {name: reason, type: str, len: 255}
+          - {name: status, type: str, len: 20, default: submitted, index: true, comment: submitted/approved/rejected}
+
+  - id: payroll
+    label: 給与
+    label_zh: 薪资
+    entities:
+      - name: PayItem
+        table: fin_pay_item
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: 支給控除項目コード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: item_type, type: str, len: 20, default: earning, comment: earning/deduction}
+          - {name: is_taxable, type: bool, default: true, comment: 課税対象}
+          - {name: account_code, type: str, len: 50, comment: 仕訳科目}
+          - {name: is_active, type: bool, default: true}
+      - name: EmployeePayItem
+        table: fin_employee_pay_item
+        columns:
+          - {name: employee_id, type: int, index: true}
+          - {name: pay_item_code, type: str, len: 30}
+          - {name: amount, type: dec, p: 18, s: 2, default: 0, comment: 固定額}
+      - name: SocialInsuranceProfile
+        table: fin_social_insurance_profile
+        columns:
+          - {name: employee_id, type: int, index: true, unique: true}
+          - {name: health_insurance_grade, type: int, comment: 健康保険等級}
+          - {name: pension_grade, type: int, comment: 厚生年金等級}
+          - {name: standard_monthly, type: dec, p: 18, s: 2, default: 0, comment: 標準報酬月額}
+          - {name: dependents, type: int, default: 0, comment: 扶養人数}
+      - name: WithholdingTaxTable
+        table: fin_withholding_tax_table
+        columns:
+          - {name: version, type: str, len: 20, index: true, comment: 税表バージョン}
+          - {name: min_amount, type: dec, p: 18, s: 2, default: 0, comment: 下限}
+          - {name: max_amount, type: dec, p: 18, s: 2, comment: 上限}
+          - {name: dependents, type: int, default: 0}
+          - {name: tax_amount, type: dec, p: 18, s: 2, default: 0, comment: 源泉税額}
+      - name: PayrollRun
+        table: fin_payroll_run
+        order_by: target_month desc
+        columns:
+          - {name: run_no, type: str, len: 40, index: true, comment: 給与計算番号}
+          - {name: target_month, type: str, len: 7, nullable: false, index: true, comment: 対象年月}
+          - {name: pay_date, type: date, comment: 支給日}
+          - {name: status, type: str, len: 20, default: draft, index: true, comment: draft/calculated/confirmed/paid}
+          - {name: total_gross, type: dec, p: 18, s: 2, default: 0, comment: 総支給}
+          - {name: total_deduction, type: dec, p: 18, s: 2, default: 0, comment: 総控除}
+          - {name: total_net, type: dec, p: 18, s: 2, default: 0, comment: 差引支給}
+        children:
+          - name: PayrollRunLine
+            table: fin_payroll_run_line
+            parent_fk: run_id
+            columns:
+              - {name: employee_id, type: int, index: true}
+              - {name: employee_name, type: str, len: 100}
+              - {name: gross_amount, type: dec, p: 18, s: 2, default: 0, comment: 総支給}
+              - {name: deduction_amount, type: dec, p: 18, s: 2, default: 0, comment: 控除合計}
+              - {name: net_amount, type: dec, p: 18, s: 2, default: 0, comment: 差引支給}
+              - {name: detail_json, type: text, comment: 項目別明細}
+
+  - id: hr
+    label: 人事
+    label_zh: 人事
+    entities:
+      - name: Employee
+        table: fin_employee
+        order_by: employee_no
+        columns:
+          - {name: employee_no, type: str, len: 30, nullable: false, unique: true, comment: 社員番号}
+          - {name: name, type: str, len: 100, nullable: false, comment: 氏名}
+          - {name: name_kana, type: str, len: 100, comment: カナ}
+          - {name: user_id, type: int, comment: users.id 連携}
+          - {name: department_code, type: str, len: 50, comment: 部門}
+          - {name: email, type: str, len: 200}
+          - {name: hire_date, type: date, comment: 入社日}
+          - {name: leave_date, type: date, comment: 退社日}
+          - {name: employment_type, type: str, len: 20, default: regular, comment: regular/contract/part_time}
+          - {name: status, type: str, len: 20, default: active, index: true, comment: active/retired}
+      - name: EmploymentContract
+        table: fin_employment_contract
+        order_by: start_date desc
+        columns:
+          - {name: employee_id, type: int, index: true}
+          - {name: contract_type, type: str, len: 30, comment: 契約種別}
+          - {name: start_date, type: date, nullable: false}
+          - {name: end_date, type: date}
+          - {name: base_salary, type: dec, p: 18, s: 2, default: 0, comment: 基本給}
+          - {name: remarks, type: str, len: 255}
+      - name: YearEndAdjustment
+        table: fin_year_end_adjustment
+        order_by: target_year desc
+        columns:
+          - {name: employee_id, type: int, index: true}
+          - {name: target_year, type: int, nullable: false, index: true, comment: 対象年}
+          - {name: total_income, type: dec, p: 18, s: 2, default: 0, comment: 給与収入}
+          - {name: deduction_total, type: dec, p: 18, s: 2, default: 0, comment: 所得控除合計}
+          - {name: tax_settled, type: dec, p: 18, s: 2, default: 0, comment: 年調後税額}
+          - {name: refund_amount, type: dec, p: 18, s: 2, default: 0, comment: 還付/追徴}
+          - {name: status, type: str, len: 20, default: draft, comment: draft/confirmed}
+
+  - id: master
+    label: 経理マスタ
+    label_zh: 财务主数据
+    entities:
+      - name: Account
+        table: fin_account
+        order_by: code
+        columns:
+          - {name: code, type: str, len: 50, nullable: false, unique: true, comment: 勘定科目コード}
+          - {name: name, type: str, len: 100, nullable: false, comment: 科目名}
+          - {name: account_type, type: str, len: 20, nullable: false, index: true, comment: asset/liability/equity/revenue/expense}
+          - {name: parent_code, type: str, len: 50, comment: 親科目}
+          - {name: default_tax_code, type: str, len: 20, comment: 既定税区分}
+          - {name: is_active, type: bool, default: true}
+          - {name: sort_order, type: int, default: 0}
+      - name: TaxCode
+        table: fin_tax_code
+        order_by: code
+        columns:
+          - {name: code, type: str, len: 20, nullable: false, unique: true, comment: 税区分コード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: rate, type: dec, p: 6, s: 3, default: 0, comment: 税率(%)}
+          - {name: kind, type: str, len: 20, default: taxable, comment: taxable/exempt/non_taxable}
+          - {name: is_active, type: bool, default: true}
+      - name: Partner
+        table: fin_partner
+        order_by: code
+        columns:
+          - {name: code, type: str, len: 50, nullable: false, unique: true, comment: 取引先コード}
+          - {name: name, type: str, len: 200, nullable: false}
+          - {name: partner_type, type: str, len: 20, default: customer, index: true, comment: customer/supplier/both}
+          - {name: customer_id, type: int, comment: ERP customer.id 連携}
+          - {name: supplier_id, type: int, comment: ERP supplier.id 連携}
+          - {name: closing_day, type: int, comment: 締め日}
+          - {name: payment_terms, type: str, len: 100, comment: 支払条件}
+          - {name: is_active, type: bool, default: true}
+      - name: BankAccount
+        table: fin_bank_account
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: 口座コード}
+          - {name: bank_name, type: str, len: 100, comment: 銀行名}
+          - {name: branch_name, type: str, len: 100, comment: 支店名}
+          - {name: account_type, type: str, len: 20, default: ordinary, comment: ordinary/checking}
+          - {name: account_number, type: str, len: 30}
+          - {name: account_holder, type: str, len: 100}
+          - {name: gl_account_code, type: str, len: 50, comment: 対応勘定科目}
+          - {name: is_active, type: bool, default: true}
+
+  - id: settings
+    label: 設定
+    label_zh: 设置
+    entities:
+      - name: CompanySettings
+        table: fin_company_settings
+        singleton: true
+        columns:
+          - {name: company_name, type: str, len: 200, comment: 会社名}
+          - {name: fiscal_start_month, type: int, default: 4, comment: 期首月}
+          - {name: tax_method, type: str, len: 20, default: invoice, comment: 税方式 invoice/standard}
+          - {name: rounding, type: str, len: 20, default: round, comment: 端数処理 round/floor/ceil}
+          - {name: base_currency, type: str, len: 10, default: JPY}
+      - name: ApprovalFlow
+        table: fin_approval_flow
+        columns:
+          - {name: code, type: str, len: 30, nullable: false, unique: true, comment: フローコード}
+          - {name: name, type: str, len: 100, nullable: false}
+          - {name: target_type, type: str, len: 30, comment: expense/leave/payroll}
+          - {name: steps_json, type: text, comment: 承認ステップ定義}
+          - {name: is_active, type: bool, default: true}
+      - name: ApprovalInstance
+        table: fin_approval_instance
+        order_by: created_at desc
+        columns:
+          - {name: flow_code, type: str, len: 30, index: true}
+          - {name: target_type, type: str, len: 30}
+          - {name: target_id, type: bigint, index: true}
+          - {name: current_step, type: int, default: 0}
+          - {name: status, type: str, len: 20, default: pending, comment: pending/approved/rejected}
+
+  - id: integration
+    label: 連携
+    label_zh: 集成
+    entities:
+      - name: IntegrationExportLog
+        table: fin_integration_export_log
+        order_by: created_at desc
+        columns:
+          - {name: export_type, type: str, len: 30, index: true, comment: freee/yayoi/csv}
+          - {name: target_period, type: str, len: 7, comment: 対象年月}
+          - {name: record_count, type: int, default: 0}
+          - {name: file_name, type: str, len: 255}
+          - {name: status, type: str, len: 20, default: success, comment: success/failed}
+          - {name: message, type: str, len: 500}
+
+  - id: common
+    label: 共通
+    label_zh: 公共
+    entities:
+      - name: Attachment
+        table: fin_attachment
+        order_by: created_at desc
+        columns:
+          - {name: ref_type, type: str, len: 40, index: true, comment: 関連種別}
+          - {name: ref_id, type: bigint, index: true, comment: 関連ID}
+          - {name: file_name, type: str, len: 255}
+          - {name: file_path, type: str, len: 500}
+          - {name: content_type, type: str, len: 100}
+          - {name: file_size, type: bigint, default: 0}
+
+# -----------------------------------------------------------------------------
+# メニュー（侧栏 + ルート + 画面生成のソース）
+# leaf の view: home|list|form|report|workflow|batch
+#   list/form/workflow/batch -> entity(api) を CRUD
+#   report -> entity を読み取り専用表示
+#   home -> KPI + カードのダッシュボード
+# -----------------------------------------------------------------------------
+menus:
+  - code: FIN
+    name: 経理・原価・人事
+    name_zh: 财务·成本·人事
+    name_en: Finance, Costing & HR
+    icon: Money
+    children:
+      - {code: FIN_HOME, name: ホーム, subtitle: 経理・原価・人事のトップメニュー, name_zh: 首页, name_en: Home, icon: HomeFilled, path: /fin, view: home, home: fin_root}
+
+      - code: FIN_COSTING
+        name: 原価管理
+        desc: 標準・実際原価・配賦・WIP
+        name_zh: 成本管理
+        name_en: Costing
+        icon: Coin
+        children:
+          - {code: FIN_COSTING_HOME, name: 原価ホーム, path: /fin/costing, icon: HomeFilled}
+          - {code: FIN_COSTING_STANDARD, name: 標準原価計算, path: /fin/costing/standard, icon: Coin}
+          - {code: FIN_COSTING_ACTUAL, name: 実際原価計算, path: /fin/costing/actual, icon: DataLine}
+          - {code: FIN_COSTING_VARIANCE, name: 原価差異分析, path: /fin/costing/variance, icon: TrendCharts}
+          - {code: FIN_COSTING_ALLOCATION, name: 配賦計算, path: /fin/costing/allocation, icon: DataAnalysis}
+          - {code: FIN_COSTING_WIP, name: 仕掛品(WIP)評価, path: /fin/costing/wip, icon: Box}
+          - {code: FIN_COSTING_EQUIPMENT, name: 設備台帳, path: /fin/costing/equipment, icon: Setting}
+          - {code: FIN_COSTING_DEPRECIATION, name: 減価償却計算, path: /fin/costing/depreciation, icon: Calendar}
+
+      - code: FIN_ACCOUNTING
+        name: 会計
+        desc: 仕訳・元帳・試算表・決算
+        name_zh: 会计
+        name_en: Accounting
+        icon: Notebook
+        children:
+          - {code: FIN_ACCT_HOME, name: 会計ホーム, subtitle: 会計業務メニュー, name_zh: 会计首页, name_en: Accounting Home, icon: HomeFilled, path: /fin/accounting, view: home, home: accounting}
+          - {code: FIN_ACCT_JOURNAL, name: 仕訳帳, desc: 仕訳の登録・照会・転記, name_zh: 记账凭证, name_en: Journals, icon: Tickets, path: /fin/accounting/journals, view: list, domain: accounting, entity: JournalEntry}
+          - {code: FIN_ACCT_LEDGER, name: 総勘定元帳, desc: 勘定科目別の取引明細, name_zh: 总账, name_en: General Ledger, icon: Notebook, path: /fin/accounting/ledger, view: report, domain: accounting, entity: JournalLine}
+          - {code: FIN_ACCT_TRIAL, name: 試算表, desc: 借方・貸方残高の一覧, name_zh: 试算表, name_en: Trial Balance, icon: DataAnalysis, path: /fin/accounting/trial-balance, view: report, domain: accounting, entity: JournalLine}
+          - {code: FIN_ACCT_STATEMENTS, name: 貸借対照表・PL, desc: 財務諸表（BS・PL）, name_zh: 资产负债·损益, name_en: BS / PL, icon: Histogram, path: /fin/accounting/statements, view: report, domain: accounting, entity: JournalLine}
+          - {code: FIN_ACCT_CLOSING, name: 月次・年次決算, desc: 期間締め・決算処理, name_zh: 月度·年度结算, name_en: Closing, icon: Lock, path: /fin/accounting/closing, view: batch, domain: accounting, entity: AccountingPeriod}
+          - {code: FIN_ACCT_IMPORT, name: 仕訳取込・連携, desc: ERP等からの自動仕訳, name_zh: 凭证导入·集成, name_en: Import / Integration, icon: Upload, path: /fin/accounting/import, view: batch, domain: accounting, entity: JournalSource}
+
+      - code: FIN_AR
+        name: 売上・請求
+        desc: 請求書・入金・売掛管理
+        name_zh: 销售·应收
+        name_en: Receivables
+        icon: Wallet
+        children:
+          - {code: FIN_AR_INVOICES, name: 請求書, name_zh: 应收发票, name_en: Invoices, icon: Document, path: /fin/receivables/invoices, view: list, domain: receivables, entity: ArInvoice}
+          - {code: FIN_AR_RECEIPTS, name: 入金・消込, name_zh: 收款·核销, name_en: Receipts, icon: Money, path: /fin/receivables/receipts, view: list, domain: receivables, entity: ArReceipt}
+          - {code: FIN_AR_AGING, name: 売掛年齢表, name_zh: 应收账龄, name_en: AR Aging, icon: DataAnalysis, path: /fin/receivables/aging, view: report, domain: receivables, entity: ArInvoice}
+
+      - code: FIN_AP
+        name: 仕入・支払
+        desc: 仕入請求・支払・買掛管理
+        name_zh: 采购·应付
+        name_en: Payables
+        icon: CreditCard
+        children:
+          - {code: FIN_AP_BILLS, name: 仕入請求, name_zh: 采购账单, name_en: Bills, icon: Document, path: /fin/payables/bills, view: list, domain: payables, entity: ApBill}
+          - {code: FIN_AP_PAYMENTS, name: 支払, name_zh: 付款, name_en: Payments, icon: Money, path: /fin/payables/payments, view: list, domain: payables, entity: ApPayment}
+          - {code: FIN_AP_AGING, name: 買掛年齢表, name_zh: 应付账龄, name_en: AP Aging, icon: DataAnalysis, path: /fin/payables/aging, view: report, domain: payables, entity: ApBill}
+
+      - code: FIN_EXPENSE
+        name: 経費精算
+        desc: 経費申請・承認
+        name_zh: 费用报销
+        name_en: Expense
+        icon: Coin
+        children:
+          - {code: FIN_EXP_APPLY, name: 経費申請, name_zh: 费用申请, name_en: Applications, icon: EditPen, path: /fin/expense/applications, view: list, domain: expense, entity: ExpenseApplication}
+          - {code: FIN_EXP_APPROVE, name: 承認, name_zh: 审批, name_en: Approvals, icon: CircleCheck, path: /fin/expense/approvals, view: workflow, domain: expense, entity: ExpenseApplication}
+          - {code: FIN_EXP_RULES, name: 経費区分・規程, name_zh: 费用类别·规则, name_en: Rules, icon: Setting, path: /fin/expense/rules, view: list, domain: expense, entity: ExpensePolicyRule}
+
+      - code: FIN_ATTENDANCE
+        name: 勤怠
+        desc: 出退勤・休暇・シフト
+        name_zh: 考勤
+        name_en: Attendance
+        icon: Timer
+        children:
+          - {code: FIN_ATT_CLOCK, name: 勤怠記録, name_zh: 考勤记录, name_en: Time Records, icon: Timer, path: /fin/attendance/clock, view: list, domain: attendance, entity: AttendanceRecord}
+          - {code: FIN_ATT_LEAVE, name: 休暇申請, name_zh: 休假申请, name_en: Leave, icon: Calendar, path: /fin/attendance/leave, view: workflow, domain: attendance, entity: LeaveRequest}
+          - {code: FIN_ATT_SHIFT, name: シフト, name_zh: 排班, name_en: Shifts, icon: Grid, path: /fin/attendance/shifts, view: list, domain: attendance, entity: EmployeeShift}
+          - {code: FIN_ATT_CALENDAR, name: 勤務カレンダー, name_zh: 工作日历, name_en: Calendar, icon: Calendar, path: /fin/attendance/calendar, view: list, domain: attendance, entity: WorkCalendar}
+
+      - code: FIN_PAYROLL
+        name: 給与
+        desc: 給与計算・明細・振込
+        name_zh: 薪资
+        name_en: Payroll
+        icon: Money
+        children:
+          - {code: FIN_PAY_RUN, name: 給与計算, name_zh: 薪资计算, name_en: Payroll Runs, icon: Cpu, path: /fin/payroll/runs, view: batch, domain: payroll, entity: PayrollRun}
+          - {code: FIN_PAY_SLIPS, name: 給与明細, name_zh: 工资条, name_en: Pay Slips, icon: Document, path: /fin/payroll/slips, view: report, domain: payroll, entity: PayrollRunLine}
+          - {code: FIN_PAY_TRANSFER, name: 振込データ, name_zh: 转账数据, name_en: Bank Transfer, icon: CreditCard, path: /fin/payroll/bank-transfer, view: batch, domain: payroll, entity: PayrollRun}
+          - {code: FIN_PAY_ITEMS, name: 支給控除項目, name_zh: 薪资项目, name_en: Pay Items, icon: List, path: /fin/payroll/pay-items, view: list, domain: payroll, entity: PayItem}
+
+      - code: FIN_HR
+        name: 人事
+        desc: 社員・契約・年末調整
+        name_zh: 人事
+        name_en: HR
+        icon: User
+        children:
+          - {code: FIN_HR_EMPLOYEES, name: 社員, name_zh: 员工, name_en: Employees, icon: User, path: /fin/hr/employees, view: list, domain: hr, entity: Employee}
+          - {code: FIN_HR_CONTRACTS, name: 雇用契約, name_zh: 雇佣合同, name_en: Contracts, icon: Document, path: /fin/hr/contracts, view: list, domain: hr, entity: EmploymentContract}
+          - {code: FIN_HR_YEAREND, name: 年末調整, name_zh: 年终调整, name_en: Year-end, icon: EditPen, path: /fin/hr/year-end, view: list, domain: hr, entity: YearEndAdjustment}
+
+      - code: FIN_MASTER
+        name: 経理マスタ
+        desc: 勘定科目・税区分・取引先
+        name_zh: 财务主数据
+        name_en: Masters
+        icon: Collection
+        children:
+          - {code: FIN_MST_ACCOUNTS, name: 勘定科目, name_zh: 会计科目, name_en: Accounts, icon: Notebook, path: /fin/master/accounts, view: list, domain: master, entity: Account}
+          - {code: FIN_MST_TAX, name: 税区分, name_zh: 税种, name_en: Tax Codes, icon: Tickets, path: /fin/master/tax-codes, view: list, domain: master, entity: TaxCode}
+          - {code: FIN_MST_PARTNERS, name: 取引先, name_zh: 往来单位, name_en: Partners, icon: OfficeBuilding, path: /fin/master/partners, view: list, domain: master, entity: Partner}
+          - {code: FIN_MST_BANK, name: 銀行口座, name_zh: 银行账户, name_en: Bank Accounts, icon: CreditCard, path: /fin/master/bank-accounts, view: list, domain: master, entity: BankAccount}
+
+      - code: FIN_SELF
+        name: 従業員ポータル
+        desc: 経費・休暇・給与明細（自己サービス）
+        name_zh: 员工门户
+        name_en: Self Service
+        icon: Avatar
+        children:
+          - {code: FIN_SELF_HOME, name: マイページ, subtitle: 従業員向けポータル, name_zh: 我的, name_en: My Page, icon: Avatar, path: /fin/self, view: home, home: self_service}
+
+      - code: FIN_SETTINGS
+        name: 設定
+        desc: 会計設定・承認フロー
+        name_zh: 设置
+        name_en: Settings
+        icon: Setting
+        children:
+          - {code: FIN_SET_COMPANY, name: 会計設定, name_zh: 会计设置, name_en: Company Settings, icon: Tools, path: /fin/settings, view: form, domain: settings, entity: CompanySettings}
+          - {code: FIN_SET_APPROVAL, name: 承認フロー, name_zh: 审批流, name_en: Approval Flows, icon: Connection, path: /fin/settings/approval-flows, view: list, domain: settings, entity: ApprovalFlow}
+
+# -----------------------------------------------------------------------------
+# ERP -> FIN 集成事件（fin_journal_source へ起票）
+# -----------------------------------------------------------------------------
+integrations:
+  - {event: SALES_POSTED,        source_module: erp,     description: 売上計上,       debit: 売掛金,   credit: 売上高}
+  - {event: INVOICE_ISSUED,      source_module: erp,     description: 請求書発行,     debit: 売掛金,   credit: 売上高}
+  - {event: PURCHASE_RECEIVED,   source_module: erp,     description: 材料・部品受入, debit: 仕入高,   credit: 買掛金}
+  - {event: OUTSOURCING_RECEIVED,source_module: erp,     description: 外注受入,       debit: 外注加工費, credit: 買掛金}
+  - {event: INVENTORY_ADJUST,    source_module: erp,     description: 棚卸差異,       debit: 棚卸資産,  credit: 棚卸差額}
+  - {event: COSTING_CLOSE,       source_module: erp,     description: 原価締め,       debit: 製品,     credit: 仕掛品}
+  - {event: DEPRECIATION,        source_module: erp,     description: 減価償却,       debit: 減価償却費, credit: 減価償却累計額}
+  - {event: PAYROLL_POSTED,      source_module: payroll, description: 給与確定,       debit: 給与手当,  credit: 未払費用}
+  - {event: EXPENSE_APPROVED,    source_module: expense, description: 経費承認,       debit: 経費,     credit: 未払金}
+
+# -----------------------------------------------------------------------------
+# 旧 ERP 原価ページ -> FIN リダイレクト
+# -----------------------------------------------------------------------------
+redirects:
+  - {from: /erp/costing/journal,            to: /fin/accounting/journals}
+  - {from: /erp/costing/accounting-export,  to: /fin/accounting/import}
+  - {from: /erp/costing/billing,            to: /fin/receivables/invoices}
+  - {from: /erp/costing/payment,            to: /fin/payables/payments}

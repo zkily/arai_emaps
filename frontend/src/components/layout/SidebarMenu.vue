@@ -283,28 +283,6 @@
                 <template #title><span :title="t('menu.ERP_PRODUCTION_DEFECT_RATE')">{{ t('menu.ERP_PRODUCTION_DEFECT_RATE') }}</span></template>
               </el-menu-item>
             </el-sub-menu>
-            <el-sub-menu index="erp-production-instruction">
-              <template #title>
-                <el-icon><Memo /></el-icon>
-                <span :title="t('menu.ERP_PRODUCTION_INSTRUCTION')">{{ t('menu.ERP_PRODUCTION_INSTRUCTION') }}</span>
-              </template>
-              <el-menu-item index="/erp/production/instruction/cutting">
-                <el-icon><Operation /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_CUTTING')">{{ t('menu.ERP_PRODUCTION_INSTR_CUTTING') }}</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/production/instruction/forming">
-                <el-icon><Operation /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_FORMING')">{{ t('menu.ERP_PRODUCTION_INSTR_FORMING') }}</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/production/instruction/welding">
-                <el-icon><Connection /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_WELDING')">{{ t('menu.ERP_PRODUCTION_INSTR_WELDING') }}</span></template>
-              </el-menu-item>
-              <el-menu-item index="/erp/production/instruction/plating">
-                <el-icon><Operation /></el-icon>
-                <template #title><span :title="t('menu.ERP_PRODUCTION_INSTR_PLATING')">{{ t('menu.ERP_PRODUCTION_INSTR_PLATING') }}</span></template>
-              </el-menu-item>
-            </el-sub-menu>
             <el-sub-menu index="erp-production-result">
               <template #title>
                 <el-icon><DataLine /></el-icon>
@@ -392,26 +370,8 @@
             </el-sub-menu>
           </el-sub-menu>
 
-          <el-sub-menu index="erp-costing">
-            <template #title>
-              <el-icon><Coin /></el-icon>
-              <span :title="t('menu.ERP_COSTING')">{{ t('menu.ERP_COSTING') }}</span>
-            </template>
-            <el-menu-item index="/erp/costing" class="menu-item-home"><el-icon><HomeFilled /></el-icon><template #title><span :title="t('menu.ERP_COSTING_HOME')">{{ t('menu.ERP_COSTING_HOME') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/standard"><el-icon><Coin /></el-icon><template #title><span :title="t('menu.ERP_COSTING_STANDARD')">{{ t('menu.ERP_COSTING_STANDARD') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/actual"><el-icon><DataLine /></el-icon><template #title><span :title="t('menu.ERP_COSTING_ACTUAL')">{{ t('menu.ERP_COSTING_ACTUAL') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/variance"><el-icon><TrendCharts /></el-icon><template #title><span :title="t('menu.ERP_COSTING_VARIANCE')">{{ t('menu.ERP_COSTING_VARIANCE') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/allocation"><el-icon><DataAnalysis /></el-icon><template #title><span :title="t('menu.ERP_COSTING_ALLOCATION')">{{ t('menu.ERP_COSTING_ALLOCATION') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/wip"><el-icon><Box /></el-icon><template #title><span :title="t('menu.ERP_COSTING_WIP')">{{ t('menu.ERP_COSTING_WIP') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/equipment"><el-icon><Setting /></el-icon><template #title><span :title="t('menu.ERP_COSTING_EQUIPMENT')">{{ t('menu.ERP_COSTING_EQUIPMENT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/depreciation"><el-icon><Calendar /></el-icon><template #title><span :title="t('menu.ERP_COSTING_DEPRECIATION')">{{ t('menu.ERP_COSTING_DEPRECIATION') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/journal"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_COSTING_JOURNAL')">{{ t('menu.ERP_COSTING_JOURNAL') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/accounting-export"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_COSTING_ACCT_EXPORT')">{{ t('menu.ERP_COSTING_ACCT_EXPORT') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/billing"><el-icon><Document /></el-icon><template #title><span :title="t('menu.ERP_COSTING_BILLING')">{{ t('menu.ERP_COSTING_BILLING') }}</span></template></el-menu-item>
-            <el-menu-item index="/erp/costing/payment"><el-icon><Coin /></el-icon><template #title><span :title="t('menu.ERP_COSTING_PAYMENT')">{{ t('menu.ERP_COSTING_PAYMENT') }}</span></template></el-menu-item>
-          </el-sub-menu>
         </el-sub-menu>
-        
+
         <el-sub-menu index="aps">
           <template #title>
             <el-icon><DataAnalysis /></el-icon>
@@ -486,6 +446,28 @@
             <el-icon><Monitor /></el-icon>
             <span :title="t('menu.MES')">{{ t('menu.MES') }}</span>
           </template>
+          <el-sub-menu index="mes-production-instruction">
+            <template #title>
+              <el-icon><Memo /></el-icon>
+              <span :title="t('menu.MES_PRODUCTION_INSTRUCTION')">{{ t('menu.MES_PRODUCTION_INSTRUCTION') }}</span>
+            </template>
+            <el-menu-item index="/mes/productionInstruction/cutting">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.MES_PRODUCTION_INSTR_CUTTING')">{{ t('menu.MES_PRODUCTION_INSTR_CUTTING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/productionInstruction/forming">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.MES_PRODUCTION_INSTR_FORMING')">{{ t('menu.MES_PRODUCTION_INSTR_FORMING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/productionInstruction/welding">
+              <el-icon><Connection /></el-icon>
+              <template #title><span :title="t('menu.MES_PRODUCTION_INSTR_WELDING')">{{ t('menu.MES_PRODUCTION_INSTR_WELDING') }}</span></template>
+            </el-menu-item>
+            <el-menu-item index="/mes/productionInstruction/plating">
+              <el-icon><Operation /></el-icon>
+              <template #title><span :title="t('menu.MES_PRODUCTION_INSTR_PLATING')">{{ t('menu.MES_PRODUCTION_INSTR_PLATING') }}</span></template>
+            </el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="mes-actualDataCollection">
             <template #title>
               <el-icon><DataLine /></el-icon>
@@ -521,7 +503,10 @@
             </el-menu-item>
           </el-sub-menu>
         </el-sub-menu>
-        
+
+        <!-- FIN（経理・原価・人事）: menuConfig から再帰描画（MES の下・マスタの上） -->
+        <MenuTreeItem v-if="finMenu" :node="finMenu" />
+
         <el-sub-menu index="master">
           <template #title>
             <el-icon><Collection /></el-icon>
@@ -627,6 +612,8 @@ import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { useMenuTree } from '@/composables/useMenuTree'
+import MenuTreeItem from '@/components/layout/MenuTreeItem.vue'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document, Money,
   User, DataAnalysis, Monitor, Setting, Tools, Grid, Files,
@@ -636,6 +623,8 @@ import {
 } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
+
+const finMenu = useMenuTree('FIN')
 
 const props = defineProps<{
   isCollapsed: boolean
