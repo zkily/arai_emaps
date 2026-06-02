@@ -59,43 +59,21 @@
           class="jig-card-list-wrap"
         >
           <div class="jig-card-list">
-            <el-tooltip
+            <div
               v-for="row in jigAvailabilityRowsDisplay"
               :key="row.plating_machine"
-              placement="top"
-              :show-after="350"
-              popper-class="jig-pick-card-tooltip-popper"
+              class="jig-pick-card"
+              :class="{
+                'jig-pick-card--filter-match': jigFilterProductCdActive && jigRowMatchesProductFilter(row),
+                'jig-pick-card--filter-dim': jigFilterProductCdActive && !jigRowMatchesProductFilter(row),
+              }"
+              draggable="true"
+              @dragstart="onJigCardDragStart($event, row)"
+              @dragend="onJigCardDragEnd"
+              @dblclick.stop="openJigCardProductsDialog(row)"
             >
-              <template #content>
-                <div class="jig-pick-card-tooltip">
-                  <div class="jig-pick-card-tooltip__head">
-                    {{ row.plating_machine }} · 使用可能 {{ Math.max(0, Math.floor(Number(row.available_qty) || 0)) }} 本
-                  </div>
-                  <div class="jig-pick-card-tooltip__section">生産品種</div>
-                  <ul v-if="jigCardProductRows(row.plating_machine).length" class="jig-pick-card-tooltip__list">
-                    <li
-                      v-for="prod in jigCardProductRows(row.plating_machine)"
-                      :key="prod.product_cd"
-                    >
-                      {{ prod.product_name }}（{{ prod.product_cd }}）
-                    </li>
-                  </ul>
-                  <div v-else class="jig-pick-card-tooltip__empty">登録なし</div>
-                </div>
-              </template>
-              <div
-                class="jig-pick-card"
-                :class="{
-                  'jig-pick-card--filter-match': jigFilterProductCdActive && jigRowMatchesProductFilter(row),
-                  'jig-pick-card--filter-dim': jigFilterProductCdActive && !jigRowMatchesProductFilter(row),
-                }"
-                draggable="true"
-                @dragstart="onJigCardDragStart($event, row)"
-                @dragend="onJigCardDragEnd"
-              >
-                <span class="jig-pick-card__label">{{ formatJigPickLabel(row) }}</span>
-              </div>
-            </el-tooltip>
+              <span class="jig-pick-card__label">{{ formatJigPickLabel(row) }}</span>
+            </div>
           </div>
           <p v-if="!loadingJigAvailability && jigAvailabilityRows.length === 0" class="jig-card-list-empty">
             データがありません
@@ -125,6 +103,37 @@
         </div>
       </div>
     </el-card>
+    <el-dialog
+      v-model="jigCardProductsDialogVisible"
+      width="460px"
+      class="jig-drop-dialog"
+      align-center
+      destroy-on-close
+    >
+      <template #header>
+        <h4 class="al-header-title">治具可生产品种</h4>
+      </template>
+      <div class="jig-pick-card-tooltip">
+        <div class="jig-pick-card-tooltip__head">
+          {{ jigCardProductsDialogMachine }} · 使用可能 {{ jigCardProductsDialogAvailableQty }} 本
+        </div>
+        <div class="jig-pick-card-tooltip__section">生産品種</div>
+        <ul v-if="jigCardProductsDialogRows.length" class="jig-pick-card-tooltip__list">
+          <li
+            v-for="prod in jigCardProductsDialogRows"
+            :key="prod.product_cd"
+          >
+            {{ prod.product_name }}（{{ prod.product_cd }}）
+          </li>
+        </ul>
+        <div v-else class="jig-pick-card-tooltip__empty">登録なし</div>
+      </div>
+      <template #footer>
+        <div class="jd-footer">
+          <el-button type="primary" @click="jigCardProductsDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
 
     <el-card shadow="never" class="pp-card pp-card--board">
       <template #header>
@@ -357,7 +366,7 @@
                     :style="{ gridColumn: `${ms.startCol} / span ${ms.span}`, gridRow: '1' }"
                     :data-block-ids="ms.cardIds.join(',')"
                     :data-lap-no="String(item.row.lap_no)"
-                    @dragover.prevent.stop="onProductToJigBlockDragOver($event, ms)"
+                    @dragover.prevent.stop="onProductToJigBlockDragOver($event, ms, item.row.lap_no)"
                     @dragleave.stop="onProductToJigBlockDragLeave"
                     @drop.prevent.stop="onProductToJigBlockDrop($event, ms, item.row.lap_no)"
                     @contextmenu.prevent.stop="onBoardJigBlockContextMenu(ms, item.row.lap_no)"
@@ -1843,6 +1852,43 @@ function buildBoardLapTimesMap(): Map<number, { start: string; end: string }> {
   return map
 }
 
+const lapCardMetaByLap = computed(() => {
+  const map = new Map<number, { work_date: string; start: string; end: string }>()
+  for (const c of scheduleCards.value) {
+    if (map.has(c.lap_no)) continue
+    map.set(c.lap_no, {
+      work_date: String(c.lap_work_date || '').slice(0, 10),
+      start: normalizeBoardStartTimeHm(c.lap_start_time),
+      end: normalizeBoardStartTimeHm(c.lap_end_time),
+    })
+  }
+  return map
+})
+
+const boardOccupancyIndex = computed(() => {
+  const occupiedTurnsByLap = new Map<number, Set<number>>()
+  const occupiedQtyByLap = new Map<number, number>()
+  const maxTurnByLap = new Map<number, number>()
+  const skeletonKeySet = new Set<string>()
+  for (const c of scheduleCards.value) {
+    const lap = Math.max(1, Math.floor(Number(c.lap_no) || 0))
+    const turn = Math.max(1, Math.floor(Number(c.turn_seq) || 0))
+    const isOccupied = c.qty > 0
+    if (isOccupied) {
+      const turnSet = occupiedTurnsByLap.get(lap) ?? new Set<number>()
+      turnSet.add(turn)
+      occupiedTurnsByLap.set(lap, turnSet)
+      occupiedQtyByLap.set(lap, (occupiedQtyByLap.get(lap) ?? 0) + 1)
+      maxTurnByLap.set(lap, Math.max(maxTurnByLap.get(lap) ?? 0, turn))
+      continue
+    }
+    if (isEmptySlotProductCd(c.product_cd)) {
+      skeletonKeySet.add(`${lap}:${turn}`)
+    }
+  }
+  return { occupiedTurnsByLap, occupiedQtyByLap, maxTurnByLap, skeletonKeySet }
+})
+
 function lapScheduleMetaForCard(lapNo: number): {
   lap_work_date?: string
   lap_start_time?: string | null
@@ -1850,17 +1896,17 @@ function lapScheduleMetaForCard(lapNo: number): {
 } {
   const times = buildBoardLapTimesMap().get(lapNo)
   const slot = currentLayoutLapSchedule().find((s) => s.lap_no === lapNo)
-  const card = scheduleCards.value.find((c) => c.lap_no === lapNo)
-  const wd = (card?.lap_work_date || slot?.work_date || '').slice(0, 10)
+  const cardMeta = lapCardMetaByLap.value.get(lapNo)
+  const wd = (cardMeta?.work_date || slot?.work_date || '').slice(0, 10)
   return {
     lap_work_date: wd || undefined,
-    lap_start_time: times?.start || slot?.start || card?.lap_start_time || null,
-    lap_end_time: times?.end || slot?.end || card?.lap_end_time || null,
+    lap_start_time: times?.start || slot?.start || cardMeta?.start || null,
+    lap_end_time: times?.end || slot?.end || cardMeta?.end || null,
   }
 }
 
 function isLapNoInBoardView(lapNo: number, scheduleByLap?: Map<number, LapScheduleSlot>): boolean {
-  const fromCard = scheduleCards.value.find((c) => c.lap_no === lapNo)?.lap_work_date
+  const fromCard = lapCardMetaByLap.value.get(lapNo)?.work_date
   const wd = (fromCard || scheduleByLap?.get(lapNo)?.work_date || '').slice(0, 10)
   if (!wd) {
     if (layoutBoardReady.value) return false
@@ -1987,6 +2033,7 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
 
   const lapDateMap = buildBoardLapWorkDateMap()
   const lapTimesMap = buildBoardLapTimesMap()
+  const lapCardMeta = lapCardMetaByLap.value
   const layoutSlotByLap = new Map<number, LapScheduleSlot>()
   for (const block of layoutBlocksInBoardView()) {
     const rows = buildLapScheduleRows(
@@ -2011,11 +2058,11 @@ function buildGlobalLapScheduleInner(): LapScheduleSlot[] {
     const start =
       times?.start ||
       layout?.start ||
-      normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_start_time)
+      lapCardMeta.get(ln)?.start
     const end =
       times?.end ||
       layout?.end ||
-      normalizeBoardStartTimeHm(scheduleCards.value.find((c) => c.lap_no === ln)?.lap_end_time)
+      lapCardMeta.get(ln)?.end
     sortMap.set(ln, {
       lap_no: ln,
       work_date: wd,
@@ -2566,6 +2613,9 @@ const jigDropQtyMax = ref(1)
 const jigDropPreferLap = ref<number | null>(null)
 const jigBoardDragActive = ref(false)
 const jigDropHoverLap = ref<number | null>(null)
+const jigCardProductsDialogVisible = ref(false)
+const jigCardProductsDialogMachine = ref('')
+const jigCardProductsDialogAvailableQty = ref(0)
 const draggingJigToBoard = ref<{
   machine_id: number | null
   plating_machine: string
@@ -3044,13 +3094,14 @@ function mergePersistItemsFromSnapshot(snapshot: PlatingDraftOut | null): Platin
 
 function scheduleCardsToBoardBodies(includeEmptySlots = false): PlatingBoardCardBody[] {
   const scheduleByLap = new Map(currentLayoutLapSchedule().map((s) => [s.lap_no, s]))
+  const lapTimesMap = buildBoardLapTimesMap()
   const fallbackYmd = draftWorkDate.value || todayYmdJapan()
   return [...scheduleCardsForCurrentDraft()]
     .filter((c) => shouldPersistBoardCard(c) && (includeEmptySlots || c.qty > 0))
     .sort((a, b) => compareLapNoForBoardSort(a.lap_no, b.lap_no, scheduleByLap) || a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
     .map((c) => {
       const slot = scheduleByLap.get(c.lap_no)
-      const times = buildBoardLapTimesMap().get(c.lap_no)
+      const times = lapTimesMap.get(c.lap_no)
       const lapYmd = (c.lap_work_date || '').slice(0, 10) || slot?.work_date || fallbackYmd
       const lapStart =
         times?.start ||
@@ -3084,8 +3135,8 @@ function scheduleCardsToBoardBodies(includeEmptySlots = false): PlatingBoardCard
 
 function lapScheduleStartHmForSort(lapNo: number, scheduleByLap: Map<number, LapScheduleSlot>): string {
   const slot = scheduleByLap.get(lapNo)
-  const card = scheduleCards.value.find((c) => c.lap_no === lapNo)
-  return normalizeBoardStartTimeHm(card?.lap_start_time || slot?.start || '99:99')
+  const cardStart = lapCardMetaByLap.value.get(lapNo)?.start
+  return normalizeBoardStartTimeHm(cardStart || slot?.start || '99:99')
 }
 
 /** ボード表示・保存：作業日 → 開始時刻 → 周目番号 */
@@ -3094,8 +3145,7 @@ function compareLapNoForBoardSort(
   lapB: number,
   scheduleByLap: Map<number, LapScheduleSlot>,
 ): number {
-  const cardWd = (lapNo: number) =>
-    scheduleCards.value.find((c) => c.lap_no === lapNo)?.lap_work_date?.slice(0, 10) ?? ''
+  const cardWd = (lapNo: number) => lapCardMetaByLap.value.get(lapNo)?.work_date ?? ''
   const da = cardWd(lapA) || (scheduleByLap.get(lapA)?.work_date ?? '')
   const db = cardWd(lapB) || (scheduleByLap.get(lapB)?.work_date ?? '')
   if (da !== db) return da.localeCompare(db)
@@ -3943,19 +3993,26 @@ function findNextSequentialBoardSlots(
       ? [preferLap]
       : Array.from({ length: maxLaps }, (_, i) => i + 1)
   const out: { lap_no: number; turn_seq: number }[] = []
+  const pickedCountByLap = new Map<number, number>()
+  const pickedTurnsByLap = new Map<number, Set<number>>()
+  const { occupiedTurnsByLap, maxTurnByLap } = boardOccupancyIndex.value
   for (const lap of lapOrder) {
     const { remainOnLap } = layoutJigCapacityOnLap(lap)
     if (remainOnLap <= 0) continue
-    const lapCards = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lap)
-    const maxTurn = lapCards.reduce((m, c) => Math.max(m, Math.floor(Number(c.turn_seq) || 0)), 0)
+    const maxTurn = maxTurnByLap.get(lap) ?? 0
+    const occupiedTurns = occupiedTurnsByLap.get(lap) ?? new Set<number>()
+    const pickedTurns = pickedTurnsByLap.get(lap) ?? new Set<number>()
+    pickedTurnsByLap.set(lap, pickedTurns)
     /** 当該周へドロップ時は末尾から turn_seq を採番（列 123〜129 など右端配置） */
     let nextTurn =
       preferLap != null && preferLap === lap && maxTurn > 0 ? maxTurn + 1 : 1
-    while (out.length < count && out.filter((s) => s.lap_no === lap).length < remainOnLap) {
-      const occupied = scheduleCards.value.some(
-        (c) => c.qty > 0 && c.lap_no === lap && c.turn_seq === nextTurn,
-      )
-      if (!occupied) out.push({ lap_no: lap, turn_seq: nextTurn })
+    while (out.length < count && (pickedCountByLap.get(lap) ?? 0) < remainOnLap) {
+      const occupied = occupiedTurns.has(nextTurn) || pickedTurns.has(nextTurn)
+      if (!occupied) {
+        out.push({ lap_no: lap, turn_seq: nextTurn })
+        pickedTurns.add(nextTurn)
+        pickedCountByLap.set(lap, (pickedCountByLap.get(lap) ?? 0) + 1)
+      }
       nextTurn += 1
       if (nextTurn > 5000) break
     }
@@ -4073,18 +4130,14 @@ function ensureBoardCardSkeletonsForLayout() {
   const jigs = Math.max(1, Math.floor(layoutJigsPerLap.value || 1))
   const schedule = currentLayoutLapSchedule()
   if (schedule.length === 0) return
+  const { occupiedTurnsByLap, skeletonKeySet } = boardOccupancyIndex.value
   const newCards: ScheduleCard[] = []
   for (const slot of schedule) {
     const lapNo = slot.lap_no
+    const occupiedTurns = occupiedTurnsByLap.get(lapNo) ?? new Set<number>()
     for (let turn = 1; turn <= jigs; turn += 1) {
-      const hasOccupied = scheduleCards.value.some(
-        (c) => c.lap_no === lapNo && c.turn_seq === turn && c.qty > 0,
-      )
-      if (hasOccupied) continue
-      const hasSkeleton = scheduleCards.value.some(
-        (c) => c.lap_no === lapNo && c.turn_seq === turn && isEmptySlotProductCd(c.product_cd),
-      )
-      if (hasSkeleton) continue
+      if (occupiedTurns.has(turn)) continue
+      if (skeletonKeySet.has(`${lapNo}:${turn}`)) continue
       newCards.push(createEmptySlotScheduleCard(lapNo, turn, slot))
     }
   }
@@ -4931,7 +4984,12 @@ function assignProductToJigBlock(ms: LapMergedSegment, lapNo: number, src: Draft
   void flushBoardPersist()
 }
 
-function onProductToJigBlockDragOver(e: DragEvent, ms?: LapMergedSegment) {
+function onProductToJigBlockDragOver(e: DragEvent, ms?: LapMergedSegment, lapNo?: number) {
+  // 治具カードのドラッグ中は、製品割当ではなくボード投入ドロップとして扱う
+  if (draggingJigToBoard.value || e.dataTransfer?.types?.includes?.('application/x-plating-jig')) {
+    onJigToBoardDragOver(e, lapNo)
+    return
+  }
   if (!draggingInventoryRow.value && !draggingSource.value) return
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
@@ -4946,6 +5004,11 @@ function onProductToJigBlockDragLeave(e: DragEvent) {
 }
 
 function onProductToJigBlockDrop(e: DragEvent, ms: LapMergedSegment, lapNo: number) {
+  // 治具カードのドロップは投入ダイアログへフォールバックする
+  if (draggingJigToBoard.value || e.dataTransfer?.types?.includes?.('application/x-plating-jig')) {
+    onJigToBoardDrop(e, lapNo)
+    return
+  }
   e.preventDefault()
   e.stopPropagation()
   productDropHoverBlockKey.value = null
@@ -5483,15 +5546,15 @@ function onJigToBoardDragOver(e: DragEvent, lapNo?: number) {
   if (!draggingJigToBoard.value && !types?.includes?.('application/x-plating-jig')) return
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
-  jigBoardDragActive.value = true
-  if (lapNo != null) jigDropHoverLap.value = lapNo
+  if (!jigBoardDragActive.value) jigBoardDragActive.value = true
+  if (lapNo != null && jigDropHoverLap.value !== lapNo) jigDropHoverLap.value = lapNo
 }
 
 function onJigToBoardDragLeave(e: DragEvent) {
   const rel = e.relatedTarget as Node | null
   const board = (e.currentTarget as HTMLElement | null)
   if (board && rel && board.contains(rel)) return
-  jigDropHoverLap.value = null
+  if (jigDropHoverLap.value !== null) jigDropHoverLap.value = null
 }
 
 function onJigToBoardDrop(e: DragEvent, lapNo?: number) {
@@ -5527,6 +5590,14 @@ function jigCardProductRows(platingMachine: string): JigProductCatalogRow[] {
       a.product_name.localeCompare(b.product_name, 'ja') ||
       a.product_cd.localeCompare(b.product_cd, 'ja'),
   )
+}
+
+const jigCardProductsDialogRows = computed(() => jigCardProductRows(jigCardProductsDialogMachine.value))
+
+function openJigCardProductsDialog(row: { plating_machine: string; available_qty: number }) {
+  jigCardProductsDialogMachine.value = String(row.plating_machine || '').trim()
+  jigCardProductsDialogAvailableQty.value = Math.max(0, Math.floor(Number(row.available_qty) || 0))
+  jigCardProductsDialogVisible.value = true
 }
 
 interface JigProductFilterOption {
@@ -6561,7 +6632,7 @@ function buildMergedLeftSegments(cards: ScheduleCard[], lapNo: number, n: number
 
 function lapNoWorkDateInBoard(lapNo: number, scheduleByLap: Map<number, LapScheduleSlot>): string {
   const fromSchedule = scheduleByLap.get(lapNo)?.work_date
-  const fromCard = scheduleCards.value.find((c) => c.lap_no === lapNo)?.lap_work_date
+  const fromCard = lapCardMetaByLap.value.get(lapNo)?.work_date
   return (fromSchedule || fromCard || '').slice(0, 10)
 }
 
@@ -6616,7 +6687,12 @@ const lapGridRows = computed<LapGridRow[]>(() => {
       segments: cardsToDisplaySegments(bin),
     }))
     const mergedLeft = cards.length > 0 ? buildMergedLeftSegments(cards, lapNo, n) : null
-    const idsInMerged = new Set((mergedLeft ?? []).flatMap((s) => s.cardIds))
+    const idsInMerged = new Set<string>()
+    if (mergedLeft) {
+      for (const seg of mergedLeft) {
+        for (const id of seg.cardIds) idsInMerged.add(id)
+      }
+    }
     const mergedTail =
       cards.length > 0 ? cards.filter((c) => !idsInMerged.has(c.id)) : null
     const tailOnly = mergedTail != null && mergedTail.length > 0 ? mergedTail : null
