@@ -1,4 +1,4 @@
-﻿import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Printer } from '@element-plus/icons-vue'
@@ -103,16 +103,10 @@ function withSuppressedScheduleSideEffects<T>(fn: () => T): T {
   }
 }
 
-/** ①ボード既定表示：本日〜本日+3 日（JST） */
-const BOARD_VIEW_DATE_OFFSET_MIN = 0
-const BOARD_VIEW_DATE_OFFSET_MAX = 3
-
+/** ①ボード既定表示：本日のみ（JST） */
 function defaultBoardFilterRange(): { from: string; to: string } {
   const today = todayYmdJapan()
-  return {
-    from: addDaysYmdJapan(today, BOARD_VIEW_DATE_OFFSET_MIN),
-    to: addDaysYmdJapan(today, BOARD_VIEW_DATE_OFFSET_MAX),
-  }
+  return { from: today, to: today }
 }
 
 const boardFilterFrom = ref(defaultBoardFilterRange().from)
@@ -1144,6 +1138,30 @@ function formatJigBlockProductsCalc(ms: LapMergedSegment, lapNo: number): string
   return parts.map((p) => p.displayText).join(' / ')
 }
 
+/** 治具ブロック表示幅（治具名・画面1行・印刷の製品名／数量行を個別に評価） */
+function estimateJigBlockLayoutNeedCh(ms: LapMergedSegment, lapNo: number): number {
+  const jig = formatPlatingBoardLabel(ms.plating_machine, jigBlockFrameCount(ms, lapNo))
+  const jigNeedCh = estimateTextWidthCh(jig, 0.98, 1.6)
+  const parts = buildJigBlockProductCalcParts(ms, lapNo)
+  if (!parts || parts.length === 0) return jigNeedCh
+
+  const sep = ' / '
+  const prodNamesLine = parts.map((p) => p.productName).join(sep)
+  const prodQtyLine = parts.map((p) => p.qtyLabel).join(sep)
+  const displayLine =
+    parts.length === 1 ? parts[0].displayText : parts.map((p) => p.displayText).join(sep)
+
+  const screenLineCh = estimateTextWidthCh(displayLine, 1, 1.6)
+  const printNameCh = estimateTextWidthCh(prodNamesLine, 0.92, 1.8)
+  const printQtyCh = estimateTextWidthCh(prodQtyLine, 0.88, 1.5)
+  const longestNameCh = Math.max(
+    MIN_LAP_COL_CH,
+    ...parts.map((p) => estimateTextWidthCh(p.productName, 1, 1.2)),
+  )
+
+  return Math.max(jigNeedCh, screenLineCh, printNameCh, printQtyCh, longestNameCh) + 0.4
+}
+
 /** 印刷用：治具ブロック 4 層（治具名・治具数・製品名・製品数） */
 function buildJigBlockPrintStackHtml(ms: LapMergedSegment, lapNo: number): string {
   const jigName = escapeHtmlForPrint(String(ms.plating_machine || '').trim() || '—')
@@ -1615,32 +1633,40 @@ function computeLapBoardColumnWidthsCh(rows: LapGridRow[], colCount: number): nu
     const start = Math.max(0, startCol - 1)
     const spanN = Math.max(1, Math.min(span, colCount - start))
     if (spanN <= 0) return
-    const perColCap = opts?.maxPerColCh ?? MAX_LAP_COL_CH
     let need = Math.max(MIN_LAP_COL_CH, needTotalCh)
     if (opts?.maxTotalCh != null) need = Math.min(need, opts.maxTotalCh)
     const current = widths.slice(start, start + spanN).reduce((a, b) => a + b, 0)
-    if (need <= current) return
-    const perCol = need / spanN
+    if (need <= current + 0.02) return
+
+    let perColCap = opts?.maxPerColCh ?? MAX_LAP_COL_CH
+    const minPerCol = need / spanN
+    if (opts?.maxTotalCh == null && minPerCol > perColCap) {
+      perColCap = minPerCol
+    }
+
+    const targetPerCol = need / spanN
     for (let i = 0; i < spanN; i++) {
-      widths[start + i] = Math.min(perColCap, Math.max(widths[start + i], perCol))
+      widths[start + i] = Math.min(perColCap, Math.max(widths[start + i], targetPerCol))
+    }
+    if (opts?.maxTotalCh == null) {
+      let sum = widths.slice(start, start + spanN).reduce((a, b) => a + b, 0)
+      if (sum < need - 0.02) {
+        const bump = (need - sum) / spanN
+        for (let i = 0; i < spanN; i++) {
+          widths[start + i] += bump
+        }
+      }
     }
   }
 
   for (const row of rows) {
     if (row.mergedLeft) {
       for (const ms of row.mergedLeft) {
-        const jig = formatPlatingBoardLabel(ms.plating_machine, jigBlockFrameCount(ms, row.lap_no))
-        // 日文治具名在右上角小字号下容易被低估，这里提高估算并增加两侧余量
-        const jigNeedCh = estimateTextWidthCh(jig, 0.98, 1.6)
-        const calc = formatJigBlockProductsCalc(ms, row.lap_no) ?? formatJigBlockProductCalc(ms, row.lap_no)
-        let needCh: number
-        if (calc) {
-          // calc 左右の 2px 余白を確保しつつ、右上の治具名も 1 行で表示できるようにする
-          const calcNeedCh = estimateTextWidthCh(calc, 1, 1.4) + 0.8
-          needCh = Math.max(calcNeedCh, jigNeedCh)
+        const needCh = estimateJigBlockLayoutNeedCh(ms, row.lap_no)
+        const hasProducts = (buildJigBlockProductCalcParts(ms, row.lap_no)?.length ?? 0) > 0
+        if (hasProducts) {
           applySpanNeed(ms.startCol, ms.span, needCh)
         } else {
-          needCh = jigNeedCh
           applySpanNeed(ms.startCol, ms.span, needCh, {
             maxTotalCh: MAX_LAP_JIG_BLOCK_TOTAL_CH,
             maxPerColCh: MAX_LAP_JIG_COL_CH,
@@ -1698,7 +1724,8 @@ const lapBoardColsGridStyle = computed(() => ({
 }))
 
 /** 印刷：周列幅 + 本数列の合計 ch（A3 横向いっぱいに近づける） */
-const PRINT_RAIL_COL_W = '76px'
+/** 画面周列 76px の 90% */
+const PRINT_RAIL_COL_W = 'calc(76px * 0.9)'
 const PRINT_BOARD_COLS_BUDGET_CH = 118
 
 /** 画面列幅の比率を保ちつつ印刷幅へスケール */
@@ -1946,8 +1973,12 @@ function escapeHtmlForPrint(s: string): string {
 /** A3 横向（420×297mm）・印刷余白（上下 1cm、左右 0.7cm） */
 const PRINT_A3_PAGE_W_MM = 420
 const PRINT_A3_PAGE_H_MM = 297
-const PRINT_A3_PAD_X_MM = 7
-const PRINT_A3_PAD_Y_MM = 10
+/** 印刷余白：左右 4mm、上 0.3cm（3mm）、下 0 */
+const PRINT_A3_PAD_X_MM = 4
+const PRINT_A3_PAD_TOP_MM = 3
+const PRINT_A3_PAD_BOTTOM_MM = 0
+/** 印刷ボード行高（基準比：97% × 95% × 97% ≈ 89.4%） */
+const PRINT_ROW_HEIGHT_MUL = 0.97 * 0.95 * 0.97
 
 /** 印刷ページ内に収めて 1 ページ化（上揃え・列幅比率は維持、はみ出し時はフォント縮小→transform） */
 function fitPrintBoardToOnePage(win: Window): void {
@@ -2104,7 +2135,6 @@ function formatPrintScheduleRangeLabel(range: PrintScheduleRange): string {
 function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: PrintScheduleRange) {
   const workDate = draftWorkDate.value || '—'
   const printedAt = dayjs().tz(TZ_JP).format('YYYY-MM-DD HH:mm:ss')
-  const rangeLabel = formatPrintScheduleRangeLabel(range)
   const productionTotalLabel = `生産数合計：${formatQtyDisplay(totalProductionQtyForPrintRange(range))}`
 
   const n = lapBoardColCount.value
@@ -2112,7 +2142,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
   const boardLayoutHtml = buildPrintBoardLayoutHtml(displayRows, n, printColWidths)
 
   const innerW = PRINT_A3_PAGE_W_MM - PRINT_A3_PAD_X_MM * 2
-  const innerH = PRINT_A3_PAGE_H_MM - PRINT_A3_PAD_Y_MM * 2
+  const innerH = PRINT_A3_PAGE_H_MM - PRINT_A3_PAD_TOP_MM - PRINT_A3_PAD_BOTTOM_MM
 
   const html = `<!DOCTYPE html>
 <html lang="ja">
@@ -2120,7 +2150,10 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
   <meta charset="utf-8"/>
   <title>メッキ投入スケジュール ${escapeHtmlForPrint(workDate)}</title>
   <style>
-    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html {
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      --print-row-mul: ${PRINT_ROW_HEIGHT_MUL};
+    }
     * { box-sizing: border-box; }
     html, body {
       margin: 0; padding: 0; width: ${PRINT_A3_PAGE_W_MM}mm; height: ${PRINT_A3_PAGE_H_MM}mm;
@@ -2133,7 +2166,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
     }
     .print-page {
       width: ${innerW}mm; height: ${innerH}mm;
-      margin: ${PRINT_A3_PAD_Y_MM}mm ${PRINT_A3_PAD_X_MM}mm;
+      margin: ${PRINT_A3_PAD_TOP_MM}mm ${PRINT_A3_PAD_X_MM}mm ${PRINT_A3_PAD_BOTTOM_MM}mm;
       overflow: hidden;
       position: relative;
       display: flex;
@@ -2142,14 +2175,25 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
       justify-content: flex-start;
     }
     .print-fit-root { display: block; width: max-content; max-width: none; flex-shrink: 0; }
-    .print-header-block { margin-bottom: 2mm; }
+    .print-header-block {
+      margin-bottom: 2mm;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 4px 10px;
+      width: 100%;
+    }
     .print-title {
-      margin: 0 0 1mm; font-size: 11pt; font-weight: 700; color: #303133; line-height: 1.2;
+      margin: 0; font-size: 11pt; font-weight: 700; color: #303133; line-height: 1.2;
+      flex-shrink: 0;
     }
     .print-meta {
-      margin-bottom: 1mm; font-size: 7pt; color: #606266; line-height: 1.25;
+      margin: 0; font-size: 7pt; color: #606266; line-height: 1.25;
+      display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline;
+      gap: 0 10px; flex: 1 1 auto; text-align: right;
     }
-    .print-meta span { display: inline-block; margin-right: 8px; }
+    .print-meta span { display: inline-block; white-space: nowrap; }
     .lap-board { padding: 0; border: 1px solid #d9deea; border-radius: 6px; background: #fff; }
     .lap-board,
     .lap-board * {
@@ -2167,7 +2211,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
     }
     .lap-rail-head {
       align-items: center; justify-content: center;
-      font-size: calc(9pt * var(--print-font-mul, 1)); font-weight: 400;
+      font-size: calc(7pt * var(--print-font-mul, 1)); font-weight: 400;
       color: #606266; background: #f5f7fa;
     }
     .lap-rail-date {
@@ -2184,35 +2228,35 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
     .lap-board-grid {
       display: grid; align-items: stretch; gap: 0; width: max-content; box-sizing: border-box;
     }
-    .lap-board-head { background: #f5f7fa; min-height: calc(22px * var(--print-font-mul, 1)); }
-    .lap-board-body-row--lap { min-height: calc(24px * var(--print-font-mul, 1)); background: #fff; }
+    .lap-board-head { background: #f5f7fa; min-height: calc(18px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894)); }
+    .lap-board-body-row--lap { min-height: calc(24px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894)); background: #fff; }
     .lap-board-date-row,
     .lap-date-scroll-row {
       background: color-mix(in oklab, #ecf5ff 85%, #fff);
-      min-height: calc(20px * var(--print-font-mul, 1));
+      min-height: calc(20px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894));
     }
     .lap-date-band-scroll {
-      grid-column: 1 / -1; min-height: calc(20px * var(--print-font-mul, 1));
+      grid-column: 1 / -1; min-height: calc(20px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894));
       background: color-mix(in oklab, #ecf5ff 55%, #fff);
     }
     .lap-col-head {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 0; line-height: 1.1; padding: 2px 1px;
-      font-size: calc(8pt * var(--print-font-mul, 1)); font-weight: 400; color: #909399;
+      gap: 0; line-height: 1; padding: 1px 1px;
+      font-size: calc(6pt * var(--print-font-mul, 1)); font-weight: 400; color: #909399;
       border-right: 1px solid #ebeef5; background: #f5f7fa;
     }
     .lap-col-head-range {
       grid-column: 1 / -1;
       position: relative;
       display: block;
-      font-size: calc(8pt * var(--print-font-mul, 1));
+      font-size: calc(6pt * var(--print-font-mul, 1));
       font-weight: 400;
       color: #1f5fd6;
-      line-height: 1.05;
-      padding: 2px 4px;
+      line-height: 1;
+      padding: 1px 3px;
       border-right: none;
       background: #f5f7fa;
-      min-height: calc(22px * var(--print-font-mul, 1));
+      min-height: calc(18px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894));
       border-top: 1px solid #cddfff;
     }
     .lap-col-head-range-mark {
@@ -2226,10 +2270,10 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
       text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
     }
     .lap-col-head-digits { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
-    .lap-col-head-digit { font-size: calc(8pt * var(--print-font-mul, 1)); font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1.06; color: #1f5fd6; }
+    .lap-col-head-digit { font-size: calc(6pt * var(--print-font-mul, 1)); font-weight: 400; font-variant-numeric: tabular-nums; line-height: 1; color: #1f5fd6; }
     .lap-board-grid > *:last-child { border-right: none; }
     .lap-merged-host {
-      grid-column: 1 / -1; display: grid; align-items: stretch; min-height: calc(30px * var(--print-font-mul, 1));
+      grid-column: 1 / -1; display: grid; align-items: stretch; min-height: calc(30px * var(--print-font-mul, 1) * var(--print-row-mul, 0.894));
       box-sizing: border-box; overflow: hidden;
     }
     .lap-merged-seg,
@@ -2288,9 +2332,11 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
     .lap-print-layer--jig-qty {
       font-size: calc(4pt * var(--print-font-mul, 1));
     }
-    .lap-print-layer--prod-name,
-    .lap-print-layer--prod-qty {
+    .lap-print-layer--prod-name {
       font-size: calc(5pt * var(--print-font-mul, 1));
+    }
+    .lap-print-layer--prod-qty {
+      font-size: calc(4pt * var(--print-font-mul, 1));
     }
     .lap-print-prod--alt {
       color: #cf1322 !important;
@@ -2362,7 +2408,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
       font-weight: 400; box-sizing: border-box;
     }
     @media print {
-      @page { size: A3 landscape; margin: ${PRINT_A3_PAD_Y_MM}mm ${PRINT_A3_PAD_X_MM}mm; }
+      @page { size: A3 landscape; margin: ${PRINT_A3_PAD_TOP_MM}mm ${PRINT_A3_PAD_X_MM}mm ${PRINT_A3_PAD_BOTTOM_MM}mm; }
       html, body {
         margin: 0 !important; padding: 0 !important;
         width: ${PRINT_A3_PAGE_W_MM}mm !important; height: ${PRINT_A3_PAGE_H_MM}mm !important;
@@ -2371,7 +2417,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .print-page {
         width: ${innerW}mm !important; height: ${innerH}mm !important;
-        margin: ${PRINT_A3_PAD_Y_MM}mm ${PRINT_A3_PAD_X_MM}mm !important; overflow: hidden !important;
+        margin: ${PRINT_A3_PAD_TOP_MM}mm ${PRINT_A3_PAD_X_MM}mm ${PRINT_A3_PAD_BOTTOM_MM}mm !important; overflow: hidden !important;
         page-break-after: avoid; page-break-inside: avoid;
       }
       .print-fit-root, .print-board-target, .lap-board, .lap-board-layout, .lap-board-grid {
@@ -2398,8 +2444,7 @@ function executePrintScheduleBoard(displayRows: LapBoardDisplayItem[], range: Pr
         <h1 class="print-title">メッキ投入ボード</h1>
         <div class="print-meta">
           <span>作業日：${escapeHtmlForPrint(workDate)}</span>
-          <span>印刷範囲：${escapeHtmlForPrint(rangeLabel)}</span>
-          <span>印刷日時：${printedAt}</span>
+          <span>印刷日時：${escapeHtmlForPrint(printedAt)}</span>
           <span>${escapeHtmlForPrint(productionTotalLabel)}</span>
         </div>
       </div>

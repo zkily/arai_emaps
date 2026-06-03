@@ -218,7 +218,7 @@
           <el-pagination
             v-model:current-page="planPagination.currentPage"
             v-model:page-size="planPagination.pageSize"
-            :page-sizes="[10, 20, 50]"
+            :page-sizes="[10, 20, 50, 100]"
             :total="planListFiltered.length"
             size="small"
             layout="total, sizes, prev, pager, next"
@@ -329,13 +329,13 @@
               </div>
               <div
                 class="cutting-mgmt-tbody-drop-zone"
-                :class="{ 'drop-zone-active': dragOverZone === 'cuttingManagement' }"
-                @drop="onDropCuttingManagement"
-                @dragover="onDragOver($event, 'cuttingManagement')"
-                @dragenter="onDragEnter('cuttingManagement')"
-                @dragleave="onDragLeave('cuttingManagement')"
+                :class="{ 'drop-zone-active': dragOverZone === 'cuttingManagementToday' }"
+                @drop="onDropCuttingManagement($event, 'today')"
+                @dragover="onDragOver($event, 'cuttingManagementToday')"
+                @dragenter="onDragEnter('cuttingManagementToday')"
+                @dragleave="onDragLeave('cuttingManagementToday')"
               >
-                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでロットを切断指示へ移行</div>
+                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagementToday'">ここにドロップでロットを切断指示へ移行</div>
                 <div class="cutting-mgmt-tbody">
                 <div
                   class="cutting-mgmt-drop-edge"
@@ -471,13 +471,13 @@
               </div>
               <div
                 class="cutting-mgmt-tbody-drop-zone"
-                :class="{ 'drop-zone-active': dragOverZone === 'cuttingManagement' }"
-                @drop="onDropCuttingManagement"
-                @dragover="onDragOver($event, 'cuttingManagement')"
-                @dragenter="onDragEnter('cuttingManagement')"
-                @dragleave="onDragLeave('cuttingManagement')"
+                :class="{ 'drop-zone-active': dragOverZone === 'cuttingManagementTomorrow' }"
+                @drop="onDropCuttingManagement($event, 'tomorrow')"
+                @dragover="onDragOver($event, 'cuttingManagementTomorrow')"
+                @dragenter="onDragEnter('cuttingManagementTomorrow')"
+                @dragleave="onDragLeave('cuttingManagementTomorrow')"
               >
-                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagement'">ここにドロップでロットを切断指示へ移行</div>
+                <div class="cutting-mgmt-drop-hint" v-if="dragOverZone === 'cuttingManagementTomorrow'">ここにドロップでロットを切断指示へ移行</div>
                 <div class="cutting-mgmt-tbody">
                 <div
                   class="cutting-mgmt-drop-edge"
@@ -552,7 +552,7 @@
       </div>
 
       <!-- 材料別使用数汇总行（切断指示-今日/翌日の下・独立日付筛选） -->
-      <div class="instruction-row instruction-two-cols instruction-cols-6-4 usage-summary-row">
+      <div ref="usageSummarySectionRef" class="instruction-row instruction-two-cols instruction-cols-6-4 usage-summary-row">
         <!-- 今日：材料別使用数汇总表（独立日付筛选） -->
         <div class="instruction-col usage-summary-col">
           <div class="usage-summary-wrap">
@@ -687,7 +687,7 @@
       </div>
 
       <!-- 面取ロット一覧（面取指示の上）：レイアウト・幅は生産ロット一覧と同様、右に製品情報・設備能率 -->
-      <div class="plan-row chamfering-plan-row">
+      <div ref="chamferingSectionRef" class="plan-row chamfering-plan-row">
         <div class="plan-section plan-section-left">
           <div class="chamfering-batch-section-card">
             <div class="cutting-mgmt-header">
@@ -867,13 +867,13 @@
           <div
             v-loading="chamferingManagementLoading"
             class="cutting-mgmt-table-wrap chamfering-mgmt-drop-wrap"
-            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagement' }"
-            @drop="onDropChamferingManagement"
-            @dragover="onDragOverChamfering($event, 'chamferingManagement')"
-            @dragenter="onDragEnterChamfering('chamferingManagement')"
-            @dragleave="onDragLeaveChamfering('chamferingManagement')"
+            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagementToday' }"
+            @drop="onDropChamferingManagement($event, 'today')"
+            @dragover="onDragOverChamfering($event, 'chamferingManagementToday')"
+            @dragenter="onDragEnterChamfering('chamferingManagementToday')"
+            @dragleave="onDragLeaveChamfering('chamferingManagementToday')"
           >
-            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
+            <div v-if="dragOverZone === 'chamferingManagementToday'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
             <div class="cutting-mgmt-table-inner">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -1018,13 +1018,13 @@
           <div
             v-loading="chamferingManagementLoading"
             class="cutting-mgmt-table-wrap chamfering-mgmt-drop-wrap"
-            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagement' }"
-            @drop="onDropChamferingManagement"
-            @dragover="onDragOverChamfering($event, 'chamferingManagement')"
-            @dragenter="onDragEnterChamfering('chamferingManagement')"
-            @dragleave="onDragLeaveChamfering('chamferingManagement')"
+            :class="{ 'drop-zone-active': dragOverZone === 'chamferingManagementTomorrow' }"
+            @drop="onDropChamferingManagement($event, 'tomorrow')"
+            @dragover="onDragOverChamfering($event, 'chamferingManagementTomorrow')"
+            @dragenter="onDragEnterChamfering('chamferingManagementTomorrow')"
+            @dragleave="onDragLeaveChamfering('chamferingManagementTomorrow')"
           >
-            <div v-if="dragOverZone === 'chamferingManagement'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
+            <div v-if="dragOverZone === 'chamferingManagementTomorrow'" class="cutting-mgmt-drop-hint">ここにドロップで面取ロットを面取指示へ移行</div>
             <div class="cutting-mgmt-table-inner cutting-mgmt-table-inner--tomorrow cutting-mgmt-table-inner--chamfering-tomorrow">
               <div class="cutting-mgmt-thead">
                 <div class="cutting-mgmt-tr">
@@ -1108,7 +1108,7 @@
       </div>
       <!-- 第3行：カンバン発行 -->
       <div class="instruction-row instruction-two-cols">
-        <div class="instruction-col kanban-issuance-section instruction-col-full">
+        <div ref="kanbanSectionRef" class="instruction-col kanban-issuance-section instruction-col-full">
           <div class="cutting-mgmt-header">
             <span class="cutting-mgmt-title">カンバン発行</span>
             <div class="cutting-mgmt-date-wrap">
@@ -3135,7 +3135,7 @@
 
     <el-dialog
       v-model="specifiedDateDialogVisible"
-      title="指定日 — 所需材料数"
+      title="指定日 — 使用材料数"
       width="520px"
       class="specified-date-dialog"
       :close-on-click-modal="false"
@@ -3165,7 +3165,7 @@
         </div>
         <div v-if="specifiedDateLoading" class="usage-dialog-loading">集計中...</div>
         <template v-else-if="specifiedDate">
-          <div class="usage-preview-desc">{{ specifiedDate }} の使用材料数（材料別）</div>
+          <div class="usage-preview-desc">{{ specifiedDate }} の使用材料数（材料別・未反映のみ）</div>
           <el-table
             :data="specifiedDateUsageSummarySorted.byMaterial"
             size="small"
@@ -3194,7 +3194,7 @@
             </el-table-column>
             <el-table-column prop="usageCount" label="使用数（管理コード数）" width="160" align="center" />
           </el-table>
-          <div v-if="!specifiedDateUsageSummarySorted.byMaterial.length" class="usage-preview-empty">データなし</div>
+          <div v-if="!specifiedDateUsageSummarySorted.byMaterial.length" class="usage-preview-empty">未反映のデータがありません</div>
           <div v-if="specifiedDateUsageSummarySorted.byMaterial.length" class="specified-date-total">
             合計：{{ specifiedDateUsageSummarySorted.totalCount }} 束
           </div>
@@ -3204,7 +3204,7 @@
         <div class="specified-date-dialog-footer">
           <el-button size="small" @click="specifiedDateDialogVisible = false">閉じる</el-button>
           <el-button type="primary" size="small" :disabled="!specifiedDateUsageSummarySorted.byMaterial.length" @click="printSpecifiedDateUsage">
-            打印
+            印刷
           </el-button>
         </div>
       </template>
@@ -3219,6 +3219,14 @@ import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import {
+  escapeHtml,
+  formatStockDisplay,
+  openPrintWindow,
+  PRINT_POPUP_BLOCKED_MSG,
+} from '@/utils/printWindow'
+import { createRequestGuard } from '@/utils/requestGuard'
+import { useLazySectionLoader } from '@/composables/useLazySectionLoader'
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
 interface CuttingPlanRow {
@@ -3280,7 +3288,7 @@ const planSearchForm = reactive({
 
 const planPagination = reactive({
   currentPage: 1,
-  pageSize: 50,
+  pageSize: 100,
 })
 
 const plans = ref<CuttingPlanRow[]>([])
@@ -3538,6 +3546,14 @@ function isUsageRowReflected(row: CuttingManagementRow): boolean {
   return code !== '' && reflectedManagementCodesSet.value.has(code)
 }
 
+/** 使用数反映対象（サブ在庫以外）かつ未反映の行のみ */
+function filterNotReflectedUsageRows(rows: CuttingManagementRow[]): CuttingManagementRow[] {
+  return rows.filter((row) => {
+    if ((row as { use_material_stock_sub?: number }).use_material_stock_sub === 1) return false
+    return !isUsageRowReflected(row)
+  })
+}
+
 /** 使用材料数（材料別）- 今日：反映対象（use_material_stock_sub=0）のみで合计・反映済・未反映。サブ行は除外 */
 const usageSummaryTodayCounts = computed(() => {
   const list = usageSummaryCuttingList.value
@@ -3550,17 +3566,22 @@ const usageSummaryTodayCounts = computed(() => {
 async function loadUsageSummaryCuttingList() {
   const dayStr = normalizeDateStr(usageSummaryDateToday.value)
   if (!dayStr) return
+  const reqId = usageSummaryTodayLoadGuard.start()
   usageSummaryCuttingLoading.value = true
   try {
     await loadReflectedManagementCodes()
+    if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
       '/api/plan/cutting-management/list',
       { params: { production_day: dayStr, limit: 2000 } }
     )
+    if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     usageSummaryCuttingList.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
   } catch {
+    if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     usageSummaryCuttingList.value = []
   } finally {
+    if (usageSummaryTodayLoadGuard.isStale(reqId)) return
     usageSummaryCuttingLoading.value = false
     fetchUsageReflectedStatus()
   }
@@ -3571,7 +3592,7 @@ function shiftUsageSummaryDateToday(delta: number) {
   loadUsageSummaryCuttingList()
 }
 
-watch(usageSummaryDateToday, loadUsageSummaryCuttingList, { immediate: true })
+watch(usageSummaryDateToday, loadUsageSummaryCuttingList)
 
 // ─────────────────────────────────────────────
 // 使用材料数（材料別）- 翌日：独立した日付筛选
@@ -3583,17 +3604,22 @@ const usageSummaryCuttingLoadingTomorrow = ref(false)
 async function loadUsageSummaryCuttingListTomorrow() {
   const dayStr = normalizeDateStr(usageSummaryDateTomorrow.value)
   if (!dayStr) return
+  const reqId = usageSummaryTomorrowLoadGuard.start()
   usageSummaryCuttingLoadingTomorrow.value = true
   try {
     await loadReflectedManagementCodes()
+    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
     const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
       '/api/plan/cutting-management/list',
       { params: { production_day: dayStr, limit: 2000 } }
     )
+    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
     usageSummaryCuttingListTomorrow.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
   } catch {
+    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
     usageSummaryCuttingListTomorrow.value = []
   } finally {
+    if (usageSummaryTomorrowLoadGuard.isStale(reqId)) return
     usageSummaryCuttingLoadingTomorrow.value = false
     fetchUsageReflectedStatus()
   }
@@ -3604,7 +3630,7 @@ function shiftUsageSummaryDateTomorrow(delta: number) {
   loadUsageSummaryCuttingListTomorrow()
 }
 
-watch(usageSummaryDateTomorrow, loadUsageSummaryCuttingListTomorrow, { immediate: true })
+watch(usageSummaryDateTomorrow, loadUsageSummaryCuttingListTomorrow)
 
 /** 使用材料数（材料別）一覧の在庫区分スイッチ変更時：cutting_management.use_material_stock_sub を更新 */
 async function onChangeUsageSummaryStock(row: CuttingManagementRow, val: number | boolean | string) {
@@ -3744,7 +3770,7 @@ const specifiedDateLoading = ref(false)
 const specifiedDateRows = ref<CuttingManagementRow[]>([])
 
 const specifiedDateUsageSummary = computed<UsageSummary>(() =>
-  buildUsageSummaryByMaterial(specifiedDateRows.value)
+  buildUsageSummaryByMaterial(filterNotReflectedUsageRows(specifiedDateRows.value))
 )
 
 /** 指定日材料数：原材料で昇順ソートした表示用（ダイアログ・印刷共通） */
@@ -3786,7 +3812,7 @@ function printSpecifiedDateUsage() {
     )
     .join('')
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>指定日 — 所需材料数</title><style>
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>指定日 — 使用材料数</title><style>
     body { font-family: sans-serif; padding: 10px; margin: 0; }
     h2 { margin: 0 0 4px; font-size: 17px; }
     .print-date { color: #666; margin-bottom: 6px; font-size: 13px; }
@@ -3795,8 +3821,8 @@ function printSpecifiedDateUsage() {
     td { font-size: 13px; }
     .print-total { margin-top: 6px; font-weight: 700; text-align: center; font-size: 13px; }
   </style></head><body>
-    <h2>指定日 — 所需材料数</h2>
-    <div class="print-date">${escapeHtml(dateStr)} の使用材料数（材料別）</div>
+    <h2>指定日 — 使用材料数</h2>
+    <div class="print-date">${escapeHtml(dateStr)} の使用材料数（材料別・未反映のみ）</div>
     <table>
       <thead><tr><th>原材料</th><th>使用数（管理コード数）</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
@@ -3804,33 +3830,30 @@ function printSpecifiedDateUsage() {
     <div class="print-total">合計：${total} 束</div>
   </body></html>`
 
-  const w = window.open('', '_blank')
-  if (!w) {
-    ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
-    return
+  if (!openPrintWindow(html, { delayMs: 250 })) {
+    ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
   }
-  w.document.write(html)
-  w.document.close()
-  w.focus()
-  setTimeout(() => {
-    w.print()
-    w.close()
-  }, 250)
 }
 
 async function loadSpecifiedDateUsage() {
   if (!specifiedDate.value) return
+  const reqId = specifiedDateUsageLoadGuard.start()
   specifiedDateLoading.value = true
   try {
+    await loadReflectedManagementCodes()
+    if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     const res = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
       '/api/plan/cutting-management/list',
       { params: { production_day: specifiedDate.value, limit: 2000 } }
     )
+    if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     specifiedDateRows.value = (res as any)?.success ? ((res as any).data ?? []) as CuttingManagementRow[] : []
   } catch (e) {
+    if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     specifiedDateRows.value = []
     ElMessage.error('指定日データの取得に失敗しました')
   } finally {
+    if (specifiedDateUsageLoadGuard.isStale(reqId)) return
     specifiedDateLoading.value = false
   }
 }
@@ -4348,10 +4371,68 @@ async function createDataManagementRecord() {
 /** 編集中セル: { rowId, prop } */
 const dataManagementEditingCell = ref<{ rowId: number; prop: string } | null>(null)
 const dataManagementSavingCell = ref(false)
-/** 拖拽放置区：ロット一覧（左）、切断指示、面取ロット一覧、面取指示 */
-const dragOverZone = ref<'batchList' | 'cuttingManagement' | 'chamferingBatchList' | 'chamferingManagement' | null>(null)
+/** 拖拽放置区：ロット一覧（左）、切断指示（今日/翌日）、面取ロット一覧、面取指示（今日/翌日） */
+type CuttingManagementDropZone = 'cuttingManagementToday' | 'cuttingManagementTomorrow'
+type ChamferingManagementDropZone = 'chamferingManagementToday' | 'chamferingManagementTomorrow'
+type DragOverZoneType =
+  | 'batchList'
+  | CuttingManagementDropZone
+  | 'chamferingBatchList'
+  | ChamferingManagementDropZone
+  | null
+const dragOverZone = ref<DragOverZoneType>(null)
 /** 当前拖拽来源：仅用于控制是否显示放置提示 */
 const dragSourceRef = ref<'batchList' | 'cuttingManagement' | 'chamferingBatch' | 'chamferingManagement' | null>(null)
+
+const cuttingManagementLoadGuard = createRequestGuard()
+const chamferingManagementLoadGuard = createRequestGuard()
+const usageSummaryTodayLoadGuard = createRequestGuard()
+const usageSummaryTomorrowLoadGuard = createRequestGuard()
+const specifiedDateUsageLoadGuard = createRequestGuard()
+
+/** 画面下部セクション：ビューポート進入時に初回データ取得 */
+const usageSummarySectionRef = ref<HTMLElement | null>(null)
+const chamferingSectionRef = ref<HTMLElement | null>(null)
+const kanbanSectionRef = ref<HTMLElement | null>(null)
+let usageSummarySectionActivated = false
+let chamferingSectionActivated = false
+let kanbanSectionActivated = false
+
+function activateUsageSummarySection() {
+  if (usageSummarySectionActivated) return
+  usageSummarySectionActivated = true
+  loadUsageSummaryCuttingList()
+  loadUsageSummaryCuttingListTomorrow()
+}
+
+function activateChamferingSection() {
+  if (chamferingSectionActivated) return
+  chamferingSectionActivated = true
+  loadChamferingMachineOptions()
+  loadChamferingBatchList()
+  loadChamferingManagement()
+}
+
+function activateKanbanSection() {
+  if (kanbanSectionActivated) return
+  kanbanSectionActivated = true
+  loadKanbanProductNames()
+  loadKanbanIssuance()
+}
+
+useLazySectionLoader([
+  { target: usageSummarySectionRef, onEnter: activateUsageSummarySection },
+  { target: chamferingSectionRef, onEnter: activateChamferingSection },
+  { target: kanbanSectionRef, onEnter: activateKanbanSection },
+])
+
+function isCuttingManagementDropZone(zone: string): zone is CuttingManagementDropZone {
+  return zone === 'cuttingManagementToday' || zone === 'cuttingManagementTomorrow'
+}
+
+function isChamferingManagementDropZone(zone: string): zone is ChamferingManagementDropZone {
+  return zone === 'chamferingManagementToday' || zone === 'chamferingManagementTomorrow'
+}
 
 /** 面取指示（chamfering_management） */
 interface ChamferingManagementRow {
@@ -5376,39 +5457,39 @@ function onPlanCardDragEnd() {
   dragOverZone.value = null
 }
 
-function onDragOver(e: DragEvent, zone?: 'batchList' | 'cuttingManagement') {
+function onDragOver(e: DragEvent, zone?: 'batchList' | CuttingManagementDropZone) {
   e.preventDefault()
   if (e.dataTransfer) {
     e.dataTransfer.dropEffect = zone === 'batchList' ? 'move' : 'copy'
   }
 }
 
-function onDragEnter(zone: 'batchList' | 'cuttingManagement') {
+function onDragEnter(zone: 'batchList' | CuttingManagementDropZone) {
   dragEnterCount.value += 1
   // 切断指示内拖拽排序时不显示「ロットを切断指示へ移行」提示；仅从ロット拖入时显示
-  if (zone === 'cuttingManagement' && dragSourceRef.value === 'cuttingManagement') return
+  if (isCuttingManagementDropZone(zone) && dragSourceRef.value === 'cuttingManagement') return
   if (zone === 'batchList' && dragSourceRef.value === 'batchList') return
   dragOverZone.value = zone
 }
 
-function onDragLeave(_zone: 'batchList' | 'cuttingManagement') {
+function onDragLeave(_zone: 'batchList' | CuttingManagementDropZone) {
   dragEnterCount.value = Math.max(0, dragEnterCount.value - 1)
   if (dragEnterCount.value === 0) dragOverZone.value = null
 }
 
-function onDragOverChamfering(e: DragEvent, _zone: 'chamferingBatchList' | 'chamferingManagement') {
+function onDragOverChamfering(e: DragEvent, _zone: 'chamferingBatchList' | ChamferingManagementDropZone) {
   e.preventDefault()
   e.stopPropagation()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
 
-function onDragEnterChamfering(zone: 'chamferingBatchList' | 'chamferingManagement') {
+function onDragEnterChamfering(zone: 'chamferingBatchList' | ChamferingManagementDropZone) {
   dragEnterCount.value += 1
   if (zone === 'chamferingBatchList' && dragSourceRef.value === 'chamferingManagement') dragOverZone.value = zone
-  else if (zone === 'chamferingManagement' && dragSourceRef.value === 'chamferingBatch') dragOverZone.value = zone
+  else if (isChamferingManagementDropZone(zone) && dragSourceRef.value === 'chamferingBatch') dragOverZone.value = zone
 }
 
-function onDragLeaveChamfering(_zone: 'chamferingBatchList' | 'chamferingManagement') {
+function onDragLeaveChamfering(_zone: 'chamferingBatchList' | ChamferingManagementDropZone) {
   dragEnterCount.value = Math.max(0, dragEnterCount.value - 1)
   if (dragEnterCount.value === 0) dragOverZone.value = null
 }
@@ -5539,7 +5620,7 @@ async function onDropChamferingRowToEdge(
   }
 }
 
-async function onDropChamferingManagement(e: DragEvent) {
+async function onDropChamferingManagement(e: DragEvent, context: 'today' | 'tomorrow') {
   e.preventDefault()
   e.stopPropagation()
   dragEnterCount.value = 0
@@ -5554,7 +5635,9 @@ async function onDropChamferingManagement(e: DragEvent) {
   }
   if (payload.source !== 'chamferingBatch' || !payload.row?.id) return
   const row = payload.row
-  moveToChamferingForm.production_day = (selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : '') || getTodayString()
+  moveToChamferingForm.production_day = context === 'today'
+    ? ((selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : '') || getTodayString())
+    : ((selectedChamferingDateTomorrow.value ? String(selectedChamferingDateTomorrow.value).slice(0, 10) : '') || getTomorrowString())
   const opts = chamferingMachineOptions.value
   const selectedInToday = (selectedChamferingMachineFilter.value || '').trim()
   const defaultMachine = opts.some((m) => m.machine_name === selectedInToday) ? selectedInToday : (opts[0]?.machine_name ?? '')
@@ -5695,7 +5778,7 @@ async function onDropBatchList(e: DragEvent) {
   }
 }
 
-async function onDropCuttingManagement(e: DragEvent) {
+async function onDropCuttingManagement(e: DragEvent, context: 'today' | 'tomorrow') {
   e.preventDefault()
   dragEnterCount.value = 0
   dragOverZone.value = null
@@ -5721,7 +5804,9 @@ async function onDropCuttingManagement(e: DragEvent) {
     ElMessage.warning('生産月が不正です')
     return
   }
-  moveToCuttingForm.production_day = (selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : '') || getTodayString()
+  moveToCuttingForm.production_day = context === 'today'
+    ? ((selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : '') || getTodayString())
+    : ((selectedDateTomorrow.value ? String(selectedDateTomorrow.value).slice(0, 10) : '') || getTomorrowString())
   const selectedInToday = (cuttingMachineFilter.value || '').trim()
   const opts = cuttingMachineOptionsFiltered.value
   const defaultMachine = opts.some((m) => m.machine_name === selectedInToday)
@@ -6643,6 +6728,7 @@ async function duplicateChamferingRow(row: ChamferingManagementRow) {
 }
 
 async function loadChamferingManagement() {
+  const reqId = chamferingManagementLoadGuard.start()
   chamferingManagementLoading.value = true
   const baseParams: Record<string, string> = {}
   const todayParam = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
@@ -6659,15 +6745,18 @@ async function loadChamferingManagement() {
         { params: { ...baseParams, limit: 2000, ...(tomorrowParam ? { production_day: tomorrowParam } : {}), ...(chamferingMachineParam ? { chamfering_machine: chamferingMachineParam } : {}) } }
       ),
     ])
+    if (chamferingManagementLoadGuard.isStale(reqId)) return
     chamferingManagementListToday.value = (resToday as any)?.success ? ((resToday as any).data ?? []) : []
     chamferingManagementListTomorrow.value = (resTomorrow as any)?.success ? ((resTomorrow as any).data ?? []) : []
     chamferingManagementList.value = [...chamferingManagementListToday.value, ...chamferingManagementListTomorrow.value]
   } catch (e) {
+    if (chamferingManagementLoadGuard.isStale(reqId)) return
     console.error('面取指示一覧の取得に失敗:', e)
     chamferingManagementListToday.value = []
     chamferingManagementListTomorrow.value = []
     chamferingManagementList.value = []
   } finally {
+    if (chamferingManagementLoadGuard.isStale(reqId)) return
     chamferingManagementLoading.value = false
   }
 }
@@ -7370,6 +7459,7 @@ async function saveKanbanEdit() {
 }
 
 async function loadCuttingManagement() {
+  const reqId = cuttingManagementLoadGuard.start()
   cuttingManagementLoading.value = true
   const baseParams: Record<string, string> = {}
   if (cuttingMachineFilter.value) baseParams.cutting_machine = cuttingMachineFilter.value
@@ -7386,9 +7476,11 @@ async function loadCuttingManagement() {
         { params: { ...baseParams, limit: 2000, ...(tomorrowParam ? { production_day: tomorrowParam } : {}) } }
       ),
     ])
+    if (cuttingManagementLoadGuard.isStale(reqId)) return
     cuttingManagementList.value = (resToday as any)?.success ? ((resToday as any).data ?? []) as CuttingManagementRow[] : []
     cuttingManagementListTomorrow.value = (resTomorrow as any)?.success ? ((resTomorrow as any).data ?? []) as CuttingManagementRow[] : []
   } catch (e) {
+    if (cuttingManagementLoadGuard.isStale(reqId)) return
     console.error('切断指示一覧の取得に失敗:', e)
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
       ?? (e as { message?: string })?.message
@@ -7397,6 +7489,7 @@ async function loadCuttingManagement() {
     cuttingManagementList.value = []
     cuttingManagementListTomorrow.value = []
   } finally {
+    if (cuttingManagementLoadGuard.isStale(reqId)) return
     cuttingManagementLoading.value = false
     fetchUsageReflectedStatus()
   }
@@ -7489,14 +7582,17 @@ async function printCuttingPlanList() {
     }
     const stockSubListRaw: StockSubPrintRow[] = []
     const subPageSize = 500
+    let subTotal = Number.POSITIVE_INFINITY
     for (let subPage = 1; subPage < 200; subPage += 1) {
       const stockSubRes = await request.get<{ success?: boolean; data?: { list?: StockSubPrintRow[]; total?: number } }>(
         '/api/material/stock/sub',
-        { params: { page: subPage, pageSize: subPageSize } }
+        { params: { target_date: day, page: subPage, pageSize: subPageSize } }
       )
       const chunk = (stockSubRes as any)?.success ? ((stockSubRes as any).data?.list ?? []) as StockSubPrintRow[] : []
+      const total = (stockSubRes as any)?.data?.total
+      if (typeof total === 'number') subTotal = total
       stockSubListRaw.push(...chunk)
-      if (chunk.length < subPageSize) break
+      if (chunk.length < subPageSize || stockSubListRaw.length >= subTotal) break
     }
     const rows = (cuttingRes as any)?.success ? ((cuttingRes as any).data ?? []) as CuttingManagementRow[] : []
     const stockListRaw = (stockRes as any)?.success ? ((stockRes as any).data?.list ?? []) : []
@@ -7525,6 +7621,10 @@ async function printCuttingPlanList() {
       list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
     }
     const machineNames = Array.from(byMachine.keys()).sort()
+    if (machineNames.length === 0) {
+      ElMessage.warning('該当日のデータがありません')
+      return
+    }
 
     const dayDisplay = day.replace(/-/g, '/')
     const leftBlocks: string[] = []
@@ -7549,14 +7649,12 @@ async function printCuttingPlanList() {
         </div>`)
     }
 
-    const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) => {
-      const stock = r.current_stock
-      const stockDisplay = stock == null || Number(stock) === 0 ? '' : stock
-      return `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${stockDisplay}</td></tr>`
-    }).join('')
+    const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
+      `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${formatStockDisplay(r.current_stock)}</td></tr>`
+    ).join('')
     const stockSubRows = stockSubList.map(
       (r: { supplier_name?: string; material_name?: string; order_bundle_quantity?: number }) =>
-        `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.order_bundle_quantity ?? ''}</td></tr>`
+        `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${formatStockDisplay(r.order_bundle_quantity)}</td></tr>`
     ).join('')
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断計画リスト</title><style>
@@ -7607,15 +7705,10 @@ async function printCuttingPlanList() {
       </div>
     </body></html>`
 
-    const w = window.open('', '_blank')
-    if (!w) {
-      ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print(); w.close() }, 300)
     ElMessage.success('印刷用ウィンドウを開きました')
   } catch (e) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -7732,15 +7825,10 @@ async function issueCuttingInstructionSheet() {
         .instruction-sheet-page { overflow: hidden; }
       }
     </style></head><body>${pages.join('')}</body></html>`
-    const w = window.open('', '_blank')
-    if (!w) {
-      ElMessage.warning('ポップアップがブロックされています。印刷用ウィンドウを許可してください。')
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print(); w.close() }, 300)
     ElMessage.success('指示書を印刷ウィンドウで開きました')
   } catch (e) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -7827,15 +7915,10 @@ async function printChamferingPlanList() {
       <div class="print-chamfer-header"><span class="print-title">面取計画リスト</span><span class="print-date">生産日 ${escapeHtml(dayDisplay)}</span></div>
       <div class="print-chamfer-body">${blocks.join('')}</div>
     </body></html>`
-    const w = window.open('', '_blank')
-    if (!w) {
-      ElMessage.warning('弹窗被拦截，请允许弹窗后重试')
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print(); w.close() }, 300)
     ElMessage.success('印刷用ウィンドウを開きました')
   } catch (e) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -7951,15 +8034,10 @@ async function issueChamferingInstructionSheet() {
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
       @media print { .instruction-sheet-page { overflow: hidden; } }
     </style></head><body>${pages.join('')}</body></html>`
-    const w = window.open('', '_blank')
-    if (!w) {
-      ElMessage.warning('ポップアップがブロックされています。印刷用ウィンドウを許可してください。')
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
-    w.document.write(html)
-    w.document.close()
-    w.focus()
-    setTimeout(() => { w.print(); w.close() }, 300)
     ElMessage.success('指示書を印刷ウィンドウで開きました')
   } catch (e) {
     const msg = (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail
@@ -7969,12 +8047,6 @@ async function issueChamferingInstructionSheet() {
   } finally {
     issueChamferingInstructionSheetLoading.value = false
   }
-}
-
-function escapeHtml(s: string): string {
-  const div = document.createElement('div')
-  div.textContent = s
-  return div.innerHTML
 }
 
 function onProductionDayEditorKeydown(e: KeyboardEvent) {
@@ -7988,16 +8060,12 @@ function onProductionDayEditorKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  // 首屏可见区域：生産ロット + 切断指示 + ヘッダメモ
   loadMachineOptions()
   loadCuttingMachineOptions()
-  loadChamferingMachineOptions()
   loadScheduleMonths()
   loadPlans()
   loadCuttingManagement()
-  loadChamferingManagement()
-  loadChamferingBatchList()
-  loadKanbanProductNames()
-  loadKanbanIssuance()
   loadCuttingInstructionNotes()
   window.addEventListener('keydown', onProductionDayEditorKeydown)
 })

@@ -64,7 +64,9 @@
     >
       <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
       <el-table-column prop="plating_machine" label="メッキ治具" width="120" show-overflow-tooltip />
-      <el-table-column prop="plating_efficiency" label="掛け数" width="88" align="right" show-overflow-tooltip />
+      <el-table-column prop="plating_efficiency" label="掛け数" width="88" align="right" show-overflow-tooltip>
+        <template #default="{ row }">{{ formatKakeCell(row.plating_efficiency) }}</template>
+      </el-table-column>
       <el-table-column prop="pre_plating_inventory" label="直前工程在庫" width="120" align="right" />
       <el-table-column label="必要治具本数" width="100" align="right">
         <template #default="{ row }">
@@ -108,6 +110,14 @@ const emit = defineEmits<{
 }>()
 
 const tableRef = ref<TableInstance | null>(null)
+
+function formatKakeCell(raw: string): string {
+  if (!raw || raw === '—') return '—'
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  return String(Math.round(n))
+}
+
 defineExpose({ tableRef })
 </script>
 

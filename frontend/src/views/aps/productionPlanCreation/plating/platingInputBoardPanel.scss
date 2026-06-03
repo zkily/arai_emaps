@@ -1,4 +1,4 @@
-﻿.section-head-row {
+.section-head-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -258,9 +258,9 @@
     box-shadow 120ms ease;
 }
 .lap-board-outer {
-  --lap-board-head-h: 40px;
+  --lap-board-head-h: 34px;
   --lap-board-lap-row-h: 38px;
-  --lap-board-visible-laps: 8;
+  --lap-board-visible-laps: 11;
   --lap-board-op-col-w: 88px;
   width: 100%;
   max-width: 100%;
@@ -325,7 +325,7 @@
   z-index: 5;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: color-mix(in oklab, var(--el-text-color-primary) 72%, var(--el-text-color-secondary));
@@ -435,8 +435,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 3px;
-  font-size: 11px;
+  padding: 3px 2px;
+  font-size: 9px;
   font-weight: 400;
   color: color-mix(in oklab, var(--el-text-color-primary) 72%, var(--el-text-color-secondary));
   border-right: 1px solid var(--el-border-color-lighter);
@@ -449,19 +449,19 @@
 .lap-col-head {
   flex-direction: column;
   gap: 0;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 .lap-col-head-range {
   grid-column: 1 / -1;
   position: relative;
   display: block;
-  font-size: 10.5px;
+  font-size: 8.5px;
   font-weight: 600;
   color: #1f5fd6;
-  line-height: 1.1;
-  padding: 3px 4px;
-  min-height: 24px;
+  line-height: 1.05;
+  padding: 2px 3px;
+  min-height: 20px;
   border-top: 1px solid color-mix(in oklab, var(--el-color-primary-light-7) 45%, var(--el-border-color-lighter));
   background: linear-gradient(180deg, color-mix(in oklab, var(--el-color-primary-light-9) 38%, var(--el-fill-color-light)) 0%, var(--el-fill-color-light) 95%);
 }
@@ -488,10 +488,10 @@
 }
 
 .lap-col-head-digit {
-  font-size: 10.5px;
+  font-size: 8.5px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  line-height: 1.06;
+  line-height: 1;
   color: #1f5fd6;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }

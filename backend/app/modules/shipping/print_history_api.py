@@ -19,6 +19,18 @@ from app.core.database import get_db
 
 router = APIRouter()
 
+# DB の status が ENUM('成功','失败','取消') の環境では「失敗」が拒否される
+_PRINT_STATUS_ALIASES = {
+    "失敗": "失败",
+}
+
+
+def _normalize_print_status(status: Optional[str]) -> str:
+    if not status or not str(status).strip():
+        return "成功"
+    s = str(status).strip()
+    return _PRINT_STATUS_ALIASES.get(s, s)
+
 
 class RecordPrintHistoryBody(BaseModel):
     report_type: str
@@ -179,7 +191,7 @@ async def record_print_history(
         "user_name": user_name,
         "filters": filters_json,
         "record_count": body.record_count,
-        "status": body.status or "成功",
+        "status": _normalize_print_status(body.status),
         "error_message": body.error_message,
     })
     await db.commit()

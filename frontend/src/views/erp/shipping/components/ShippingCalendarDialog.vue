@@ -1235,7 +1235,7 @@ async function recordPrintFailure(errorMessage) {
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
-      status: '失敗',
+      status: '失败',
       error_message: errorMessage,
     })
 
@@ -1244,7 +1244,7 @@ async function recordPrintFailure(errorMessage) {
       report_title: reportTitle,
       filters: printFilters.value,
       record_count: printData.value?.length || 0,
-      status: '失敗',
+      status: '失败',
       error_message: errorMessage,
     })
 
@@ -1309,7 +1309,7 @@ async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
-      status: '失敗',
+      status: '失败',
       error_message: errorMessage,
     })
 
@@ -1318,7 +1318,7 @@ async function recordDirectPrintFailure(errorMessage, dateStr, groupIndex) {
       report_title: reportTitle,
       filters: filters,
       record_count: directPrintData.value?.length || 0,
-      status: '失敗',
+      status: '失败',
       error_message: errorMessage,
     })
 

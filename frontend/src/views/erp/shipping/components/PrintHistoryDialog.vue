@@ -143,7 +143,7 @@
                   <el-tag :type="getStatusTagType(row.status)" size="small">
                     <el-icon>
                       <Check v-if="row.status === '成功'" />
-                      <Close v-else-if="row.status === '失败'" />
+                      <Close v-else-if="row.status === '失败' || row.status === '失敗'" />
                       <Warning v-else />
                     </el-icon>
                     {{ getStatusName(row.status) }}
@@ -528,6 +528,7 @@ const getStatusName = (status) => {
   const statusMap = {
     成功: '成功',
     失败: '失敗',
+    失敗: '失敗',
     取消: 'キャンセル',
   }
   return statusMap[status] || status
@@ -537,6 +538,7 @@ const getStatusTagType = (status) => {
   const statusMap = {
     成功: 'success',
     失败: 'danger',
+    失敗: 'danger',
     取消: 'warning',
   }
   return statusMap[status] || 'default'
