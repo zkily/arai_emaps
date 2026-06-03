@@ -1869,6 +1869,8 @@ const boardOccupancyIndex = computed(() => {
   const occupiedTurnsByLap = new Map<number, Set<number>>()
   const occupiedQtyByLap = new Map<number, number>()
   const maxTurnByLap = new Map<number, number>()
+  const machineQtyByLap = new Map<number, Map<string, number>>()
+  const cardsByLapQty = new Map<number, ScheduleCard[]>()
   const skeletonKeySet = new Set<string>()
   for (const c of scheduleCards.value) {
     const lap = Math.max(1, Math.floor(Number(c.lap_no) || 0))
@@ -1880,14 +1882,39 @@ const boardOccupancyIndex = computed(() => {
       occupiedTurnsByLap.set(lap, turnSet)
       occupiedQtyByLap.set(lap, (occupiedQtyByLap.get(lap) ?? 0) + 1)
       maxTurnByLap.set(lap, Math.max(maxTurnByLap.get(lap) ?? 0, turn))
+      const mKey = normalizeMachineKey(c.plating_machine)
+      const mMap = machineQtyByLap.get(lap) ?? new Map<string, number>()
+      mMap.set(mKey, (mMap.get(mKey) ?? 0) + 1)
+      machineQtyByLap.set(lap, mMap)
+      const lapCards = cardsByLapQty.get(lap) ?? []
+      lapCards.push(c)
+      cardsByLapQty.set(lap, lapCards)
       continue
     }
     if (isEmptySlotProductCd(c.product_cd)) {
       skeletonKeySet.add(`${lap}:${turn}`)
     }
   }
-  return { occupiedTurnsByLap, occupiedQtyByLap, maxTurnByLap, skeletonKeySet }
+  for (const lapCards of cardsByLapQty.values()) {
+    lapCards.sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
+  }
+  return {
+    occupiedTurnsByLap,
+    occupiedQtyByLap,
+    maxTurnByLap,
+    machineQtyByLap,
+    cardsByLapQty,
+    skeletonKeySet,
+  }
 })
+
+function occupiedQtyOnLap(lapNo: number): number {
+  return boardOccupancyIndex.value.occupiedQtyByLap.get(lapNo) ?? 0
+}
+
+function lapCardsWithQty(lapNo: number): ScheduleCard[] {
+  return boardOccupancyIndex.value.cardsByLapQty.get(lapNo) ?? []
+}
 
 function lapScheduleMetaForCard(lapNo: number): {
   lap_work_date?: string
@@ -2579,6 +2606,9 @@ const draggingSource = ref<DraftSourceItem | null>(null)
 const loadingJigAvailability = ref(false)
 let jigAvailabilityLoadPromise: Promise<void> | null = null
 let lapSortableInitTimer: ReturnType<typeof setTimeout> | null = null
+/** scheduleCards 変更に伴う Sortable 再初期化＋自動保存をまとめてデバウンス */
+let boardReactiveEffectsTimer: ReturnType<typeof setTimeout> | null = null
+const BOARD_REACTIVE_EFFECTS_MS = 220
 const PLATING_MACHINE_TYPE = 'メッキ'
 const platingJigMasterDialogVisible = ref(false)
 const pjmLoading = ref(false)
@@ -3731,12 +3761,7 @@ async function deletePlatingJigMaster(row: MachineItem) {
 /** 当該周目に既に配置されている治具本数（他周目は含めない） */
 function countBoardSlotsForMachine(platingMachine: string, lapNo: number): number {
   const key = normalizeMachineKey(platingMachine)
-  return scheduleCards.value.filter(
-    (c) =>
-      c.qty > 0 &&
-      c.lap_no === lapNo &&
-      normalizeMachineKey(c.plating_machine) === key,
-  ).length
+  return boardOccupancyIndex.value.machineQtyByLap.get(lapNo)?.get(key) ?? 0
 }
 
 function getJigAvailMaxFromMaster(platingMachine: string): number {
@@ -3755,14 +3780,13 @@ function resolveJigDropTargetLap(preferLap: number | null): number {
 /** 当該周目のボード空き枠数（列数ベース） */
 function countBoardSlotsRemainingOnLap(lapNo: number): number {
   if (!layoutBoardReady.value) return 0
-  const usedOnLap = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo).length
-  return Math.max(0, lapBoardColCount.value - usedOnLap)
+  return Math.max(0, lapBoardColCount.value - occupiedQtyOnLap(lapNo))
 }
 
 /** レイアウト 1 周あたりの治具本数上限と当該周の使用状況 */
 function layoutJigCapacityOnLap(lapNo: number): { layoutMax: number; usedOnLap: number; remainOnLap: number } {
   const layoutMax = lapBoardColCount.value
-  const usedOnLap = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo).length
+  const usedOnLap = occupiedQtyOnLap(lapNo)
   return {
     layoutMax,
     usedOnLap,
@@ -5283,7 +5307,7 @@ function removeJigBlockCards(lapNo: number, cardIds: string[]) {
 }
 
 async function confirmClearBoardLapRow(lapNo: number) {
-  const lapCards = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo)
+  const lapCards = lapCardsWithQty(lapNo)
   if (lapCards.length === 0) {
     ElMessage.info(`第${lapDisplayNo(lapNo)}周目には削除対象がありません`)
     return
@@ -5342,7 +5366,7 @@ async function copyBoardLapRowToNext(lapNo: number) {
   const ts = Date.now()
   const targetLapMeta = lapScheduleMetaForCard(nextLap)
   const dstIds = new Set(
-    scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === nextLap).map((c) => c.id),
+    lapCardsWithQty(nextLap).map((c) => c.id),
   )
   for (const id of dstIds) {
     standardPositions.value.delete(id)
@@ -5865,7 +5889,7 @@ const lapCopyLapOptions = computed(() => {
 })
 
 const lapCopySourceCount = computed(
-  () => scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapCopyFrom.value).length,
+  () => lapCardsWithQty(lapCopyFrom.value).length,
 )
 
 const deletableStartDates = computed(() => {
@@ -6660,15 +6684,49 @@ function collectLapNumbersForBoardGrid(scheduleByLap: Map<number, LapScheduleSlo
   return lapNumbers.filter((ln) => (lapNosWithData.has(ln)))
 }
 
+/** lapGridRows：周目ごとの表示行キャッシュ（変更のない周目は再計算をスキップ） */
+let lapGridRowCache = new Map<number, { key: string; row: LapGridRow }>()
+
+function buildLapGridRowCacheKey(lapNo: number, cards: ScheduleCard[], colCount: number): string {
+  let key = `${lapNo}|${colCount}|${cards.length}`
+  for (const c of cards) {
+    key += `;${c.id}:${c.turn_seq}:${c.qty}:${c.product_cd}:${c.plating_machine}:${c.boardMark}`
+  }
+  return key
+}
+
+function buildLapGridRowFromCards(
+  lapNo: number,
+  cards: ScheduleCard[],
+  colCount: number,
+  lapDisplayNoValue: number,
+): LapGridRow {
+  const bins = binCardsIntoColumns(cards, colCount)
+  const cells: LapGridCell[] = bins.map((bin) => ({
+    segments: cardsToDisplaySegments(bin),
+  }))
+  const mergedLeft = cards.length > 0 ? buildMergedLeftSegments(cards, lapNo, colCount) : null
+  const idsInMerged = new Set<string>()
+  if (mergedLeft) {
+    for (const seg of mergedLeft) {
+      for (const id of seg.cardIds) idsInMerged.add(id)
+    }
+  }
+  const mergedTail = cards.length > 0 ? cards.filter((c) => !idsInMerged.has(c.id)) : null
+  const tailOnly = mergedTail != null && mergedTail.length > 0 ? mergedTail : null
+  return {
+    lap_no: lapNo,
+    lap_display_no: lapDisplayNoValue,
+    cells,
+    mergedLeft,
+    mergedTail: tailOnly,
+  }
+}
+
 const lapGridRows = computed<LapGridRow[]>(() => {
   const n = lapBoardColCount.value
-  const byLap = new Map<number, ScheduleCard[]>()
-  for (const c of scheduleCards.value) {
-    if (c.qty <= 0) continue
-    const arr = byLap.get(c.lap_no) ?? []
-    arr.push(c)
-    byLap.set(c.lap_no, arr)
-  }
+  const cardsByLap = boardOccupancyIndex.value.cardsByLapQty
+  const displayNoMap = lapDisplayNoMap.value
 
   const schedule = currentLayoutLapSchedule()
   const scheduleByLap = new Map(schedule.map((s) => [s.lap_no, s]))
@@ -6676,34 +6734,31 @@ const lapGridRows = computed<LapGridRow[]>(() => {
   let lapNumbers = collectLapNumbersForBoardGrid(scheduleByLap)
 
   if (!layoutBoardReady.value) {
-    lapNumbers = lapNumbers.filter((ln) => (byLap.get(ln)?.length ?? 0) > 0)
+    lapNumbers = lapNumbers.filter((ln) => (cardsByLap.get(ln)?.length ?? 0) > 0)
   }
-  if (lapNumbers.length === 0) return []
+  if (lapNumbers.length === 0) {
+    lapGridRowCache = new Map()
+    return []
+  }
 
-  return lapNumbers.map((lapNo) => {
-    const cards = (byLap.get(lapNo) ?? []).sort((a, b) => a.turn_seq - b.turn_seq || a.id.localeCompare(b.id))
-    const bins = binCardsIntoColumns(cards, n)
-    const cells: LapGridCell[] = bins.map((bin) => ({
-      segments: cardsToDisplaySegments(bin),
-    }))
-    const mergedLeft = cards.length > 0 ? buildMergedLeftSegments(cards, lapNo, n) : null
-    const idsInMerged = new Set<string>()
-    if (mergedLeft) {
-      for (const seg of mergedLeft) {
-        for (const id of seg.cardIds) idsInMerged.add(id)
-      }
+  const nextCache = new Map<number, { key: string; row: LapGridRow }>()
+  const rows: LapGridRow[] = []
+  for (const lapNo of lapNumbers) {
+    const cards = cardsByLap.get(lapNo) ?? []
+    const cacheKey = buildLapGridRowCacheKey(lapNo, cards, n)
+    const cached = lapGridRowCache.get(lapNo)
+    if (cached?.key === cacheKey) {
+      nextCache.set(lapNo, cached)
+      rows.push(cached.row)
+      continue
     }
-    const mergedTail =
-      cards.length > 0 ? cards.filter((c) => !idsInMerged.has(c.id)) : null
-    const tailOnly = mergedTail != null && mergedTail.length > 0 ? mergedTail : null
-    return {
-      lap_no: lapNo,
-      lap_display_no: lapDisplayNo(lapNo),
-      cells,
-      mergedLeft,
-      mergedTail: tailOnly,
-    }
-  })
+    const row = buildLapGridRowFromCards(lapNo, cards, n, displayNoMap.get(lapNo) ?? lapNo)
+    const entry = { key: cacheKey, row }
+    nextCache.set(lapNo, entry)
+    rows.push(row)
+  }
+  lapGridRowCache = nextCache
+  return rows
 })
 
 /** 表示文字列のおおよその幅（ch）。CJK は 1 字 ≒ 1ch、ASCII は狭め */
@@ -6946,7 +7001,7 @@ function syncJigBlockOrderOnLap(lapEl: HTMLElement, lapNo: number) {
   const host = lapEl.querySelector('.lap-merged-host')
   if (!host) return
 
-  const lapCards = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo)
+  const lapCards = lapCardsWithQty(lapNo)
   const turnById = new Map<string, number>()
   let colCursor = 1
   const n = lapBoardColCount.value
@@ -7082,6 +7137,24 @@ function cancelLapSortableInitTimer() {
   if (lapSortableInitTimer != null) {
     clearTimeout(lapSortableInitTimer)
     lapSortableInitTimer = null
+  }
+}
+
+function scheduleBoardReactiveSideEffects() {
+  if (suppressScheduleSideEffects > 0) return
+  if (isBoardHydratingFromApi.value || loadingDraft.value) return
+  if (boardReactiveEffectsTimer != null) clearTimeout(boardReactiveEffectsTimer)
+  boardReactiveEffectsTimer = setTimeout(() => {
+    boardReactiveEffectsTimer = null
+    scheduleInitBoardLapSortables()
+    scheduleBoardAutosave()
+  }, BOARD_REACTIVE_EFFECTS_MS)
+}
+
+function cancelBoardReactiveEffectsTimer() {
+  if (boardReactiveEffectsTimer != null) {
+    clearTimeout(boardReactiveEffectsTimer)
+    boardReactiveEffectsTimer = null
   }
 }
 
@@ -7944,7 +8017,7 @@ function buildProductionListByLap(): ProductionListLapGroup[] {
         rows.push(...collectProductionRowsFromJigBlock(lapNo, lapTime, ms))
       }
     } else {
-      const lapCards = scheduleCards.value.filter((c) => c.qty > 0 && c.lap_no === lapNo)
+      const lapCards = lapCardsWithQty(lapNo)
       rows.push(...collectProductionRowsFromLooseCards(lapNo, lapTime, lapCards))
     }
     if (lapRow.mergedTail) {
@@ -8017,17 +8090,10 @@ const kpi = computed(() => {
 watch(
   scheduleCards,
   () => {
-    if (suppressScheduleSideEffects > 0) return
-    if (isBoardHydratingFromApi.value || loadingDraft.value) return
-    scheduleInitBoardLapSortables()
-    scheduleBoardAutosave()
+    scheduleBoardReactiveSideEffects()
   },
   { deep: true },
 )
-
-watch(lapGridRows, () => {
-  scheduleInitBoardLapSortables()
-})
 watch(leftRows, () => { nextTick(() => bindLeftInventoryTableDrag()) })
 watch(leftInventoryFloating, () => { nextTick(() => bindLeftInventoryTableDrag()) })
 watch(rightRows, () => { nextTick(() => bindRightGenTableDrag()) })
@@ -8093,9 +8159,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   cancelBoardAutosaveTimer()
   cancelBoardViewRangeReload()
+  cancelBoardReactiveEffectsTimer()
   cancelLapSortableInitTimer()
   destroyLapTrackSortables()
   destroyLapMergedSortables()
+  lapGridRowCache = new Map()
 })
 </script>
 

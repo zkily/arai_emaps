@@ -7537,7 +7537,6 @@ async function printCuttingPlanList() {
           <td>${escapeHtml(String(r.material_name ?? ''))}</td>
           <td>${r.production_sequence ?? ''}</td>
           <td>${r.actual_production_quantity ?? ''}</td>
-          <td>${r.production_time ?? ''}</td>
           <td>${escapeHtml(String(r.production_line ?? ''))}</td>
           <td>${escapeHtml(String(r.remarks ?? ''))}</td>
         </tr>`).join('')
@@ -7545,14 +7544,16 @@ async function printCuttingPlanList() {
         <div class="print-cut-block">
           <div class="print-cut-block-title">${escapeHtml(machineName)}</div>
           <table class="print-cut-table"><thead><tr>
-            <th>コード</th><th>製品名</th><th>原材料</th><th>順位</th><th>生産数</th><th>時間</th><th>ライン</th><th>備考</th>
+            <th>コード</th><th>製品名</th><th>原材料</th><th>順位</th><th>生産数</th><th>ライン</th><th>備考</th>
           </tr></thead><tbody>${trs}</tbody></table>
         </div>`)
     }
 
-    const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) =>
-      `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.current_stock ?? ''}</td></tr>`
-    ).join('')
+    const stockRows = stockList.map((r: { supplier_name?: string; material_name?: string; current_stock?: number }) => {
+      const stock = r.current_stock
+      const stockDisplay = stock == null || Number(stock) === 0 ? '' : stock
+      return `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${stockDisplay}</td></tr>`
+    }).join('')
     const stockSubRows = stockSubList.map(
       (r: { supplier_name?: string; material_name?: string; order_bundle_quantity?: number }) =>
         `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${r.order_bundle_quantity ?? ''}</td></tr>`
@@ -7573,18 +7574,17 @@ async function printCuttingPlanList() {
       .print-cut-table th, .print-cut-table td { border: 1px solid #333; padding: 4px 2px; text-align: center; font-size: 11px; line-height: 1.2; }
       .print-cut-table th { background: #f0f0f0; }
       .print-cut-table th:nth-child(1), .print-cut-table td:nth-child(1) { width: 8%; }
-      .print-cut-table th:nth-child(2), .print-cut-table td:nth-child(2) { width: 18%; }
-      .print-cut-table th:nth-child(3), .print-cut-table td:nth-child(3) { width: 19%; }
+      .print-cut-table th:nth-child(2), .print-cut-table td:nth-child(2) { width: 17%; }
+      .print-cut-table th:nth-child(3), .print-cut-table td:nth-child(3) { width: 20%; }
       .print-cut-table th:nth-child(4), .print-cut-table td:nth-child(4) { width: 6%; }
       .print-cut-table th:nth-child(5), .print-cut-table td:nth-child(5) { width: 8%; }
-      .print-cut-table th:nth-child(6), .print-cut-table td:nth-child(6) { width: 6%; }
-      .print-cut-table th:nth-child(7), .print-cut-table td:nth-child(7) { width: 8%; }
-      .print-cut-table th:nth-child(8), .print-cut-table td:nth-child(8) { width: 12%; }
-      .print-cut-table td:nth-child(2), .print-cut-table td:nth-child(3), .print-cut-table td:nth-child(8) { text-align: left; }
+      .print-cut-table th:nth-child(6), .print-cut-table td:nth-child(6) { width: 8%; }
+      .print-cut-table th:nth-child(7), .print-cut-table td:nth-child(7) { width: 20%; }
+      .print-cut-table td:nth-child(2), .print-cut-table td:nth-child(3), .print-cut-table td:nth-child(7) { text-align: left; }
       .print-stock-section { break-inside: avoid; }
       .print-stock-section h3 { margin: 0 0 6px; font-size: 11px; }
       .print-stock-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
-      .print-stock-table th, .print-stock-table td { border: 1px solid #333; padding: 2.5px 4px; line-height: 1.44; }
+      .print-stock-table th, .print-stock-table td { border: 1px solid #333; padding: 2.25px 4px; line-height: 1.296; }
       .print-stock-table th { background: #f0f0f0; }
       .print-stock-table th:nth-child(1), .print-stock-table td:nth-child(1) { width: 40%; }
       .print-stock-table th:nth-child(2), .print-stock-table td:nth-child(2) { width: 46%; text-align: center;}
