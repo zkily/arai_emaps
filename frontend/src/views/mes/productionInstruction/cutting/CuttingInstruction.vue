@@ -4520,6 +4520,19 @@ function getFormingStartDateDisplay(managementCode?: string | null): string {
   return raw ? formatDateOnly(raw) || '-' : '-'
 }
 
+/** 面取生産指示書印刷：成型予定日の色分け（当日=赤、翌日=浅赤、それ以外=黒） */
+function getFormingStartDatePrintClass(managementCode?: string | null): string {
+  const code = String(managementCode ?? '').trim()
+  if (!code) return ''
+  const raw = cuttingFormingStartDateByMgmtCode.value.get(code)
+  const formingDay = raw ? formatDateOnly(raw) : ''
+  if (!formingDay) return ''
+  const today = getTodayString()
+  if (formingDay === today) return 'forming-date-red'
+  if (formingDay === shiftDate(today, 1)) return 'forming-date-light-red'
+  return ''
+}
+
 function getCuttingProductionDayDisplay(managementCode?: string | null): string {
   const code = String(managementCode ?? '').trim()
   if (!code) return '-'
@@ -8082,10 +8095,11 @@ async function issueChamferingInstructionSheet() {
         totalQty += qty
         const noCountDisplay = r.no_count ? 'あり' : '--'
         const formingStartDisplay = getFormingStartDateDisplay(r.management_code)
+        const formingDateClass = getFormingStartDatePrintClass(r.management_code)
         return `<tr>
           <td>${escapeHtml(r.cd ?? r.management_code ?? '')}</td>
           <td>${escapeHtml(r.production_line ?? '')}</td>
-          <td>${escapeHtml(formingStartDisplay === '-' ? '' : formingStartDisplay)}</td>
+          <td class="${formingDateClass}">${escapeHtml(formingStartDisplay === '-' ? '' : formingStartDisplay)}</td>
           <td>${escapeHtml(r.product_name ?? '')}</td>
           <td>${r.production_sequence ?? ''}</td>
           <td>${r.actual_production_quantity ?? ''}</td>
@@ -8107,7 +8121,7 @@ async function issueChamferingInstructionSheet() {
           <div class="instruction-sheet-table-wrap">
             <table class="instruction-sheet-table chamfering-sheet-table">
               <thead><tr>
-                <th>CD</th><th>ライン</th><th>成型生産予定日</th><th>製品名</th><th>順位</th><th>計画</th><th>実績</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
+                <th>CD</th><th>ライン</th><th>成型予定日</th><th>製品名</th><th>順位</th><th>計画</th><th>実績</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
               </tr></thead>
               <tbody>${trs}</tbody>
             </table>
@@ -8135,7 +8149,7 @@ async function issueChamferingInstructionSheet() {
       .instruction-sheet-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       .chamfering-sheet-table th:nth-child(1), .chamfering-sheet-table td:nth-child(1) { width: 6%; }
       .chamfering-sheet-table th:nth-child(2), .chamfering-sheet-table td:nth-child(2) { width: 7%; }
-      .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 10%; }
+      .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 12%; }
       .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 12%; }
       .chamfering-sheet-table th:nth-child(5), .chamfering-sheet-table td:nth-child(5) { width: 5%; }
       .chamfering-sheet-table th:nth-child(6), .chamfering-sheet-table td:nth-child(6) { width: 6%; }
@@ -8143,12 +8157,14 @@ async function issueChamferingInstructionSheet() {
       .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 5%; }
       .chamfering-sheet-table th:nth-child(9), .chamfering-sheet-table td:nth-child(9) { width: 8%; }
       .chamfering-sheet-table th:nth-child(10), .chamfering-sheet-table td:nth-child(10) { width: 8%; }
-      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 7%; }
-      .chamfering-sheet-table th:nth-child(12), .chamfering-sheet-table td:nth-child(12) { width: 7%; }
+      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 5%; }
+      .chamfering-sheet-table th:nth-child(12), .chamfering-sheet-table td:nth-child(12) { width: 5%; }
       .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
       .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 11px; }
       .instruction-sheet-table td { font-size: 14px; }
       .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(4) { font-size: 14px; text-align: left; }
+      .forming-date-red { color: #990000; }
+      .forming-date-light-red { color: #cc0000; }
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
       @media print { .instruction-sheet-page { overflow: hidden; } }
     </style></head><body>${pages.join('')}
