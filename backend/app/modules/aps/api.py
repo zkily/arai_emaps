@@ -3943,6 +3943,37 @@ async def _sync_actual_from_stock_logs(
             continue
         prior_defect_by_date[d0] = int(q0 or 0)
 
+    # 同一ライン・同一製品・同日で「後順位」に計画がある日を集める。
+    # 当該日が含まれる場合、自順位は当日計画数で頭打ちし、溢出（計画超過分）を後順位へ回す。
+    # 含まれない（後順位に同製品の計画が無い）場合は最終順位として溢出も取り込む。
+    if ps_order is None:
+        later_cond = and_(
+            ProductionSchedule.order_no.is_(None), ProductionSchedule.id > ps.id
+        )
+    else:
+        later_cond = or_(
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no > ps_order,
+            and_(ProductionSchedule.order_no == ps_order, ProductionSchedule.id > ps.id),
+        )
+    later_planned_res = await db.execute(
+        select(ScheduleDetail.schedule_date)
+        .join(ProductionSchedule, ProductionSchedule.id == ScheduleDetail.schedule_id)
+        .where(
+            ProductionSchedule.line_id == ps.line_id,
+            sa_func.trim(sa_func.coalesce(ProductionSchedule.product_cd, "")) == product_cd_norm,
+            ProductionSchedule.status.in_(["PLANNING", "IN_PROGRESS"]),
+            ScheduleDetail.schedule_date <= max_d,
+            ScheduleDetail.schedule_id != ps.id,
+            ScheduleDetail.planned_qty > 0,
+            later_cond,
+        )
+        .group_by(ScheduleDetail.schedule_date)
+    )
+    later_planned_dates: set[date] = {
+        d0 for (d0,) in later_planned_res.all() if d0 is not None
+    }
+
     details_to_drop: list[ScheduleDetail] = []
     for det in details:
         dte = det.schedule_date
@@ -3956,18 +3987,36 @@ async def _sync_actual_from_stock_logs(
         already_defect = prior_defect_by_date.get(dte, 0)
         actual = max(0, raw_actual - already_assigned)
         defect = max(0, raw_defect - already_defect)
+        planned_today = int(det.planned_qty or 0)
 
         owner_id = await _schedule_id_owning_actual_on_date(db, ps.line_id, product_cd_norm, dte)
+
+        if planned_today > 0:
+            # 同一ライン・同一製品・同日で順位（order_no）順に良品実績を瀑布配分する。
+            # 前順位が既に取り込んだ分（already_assigned）を控除した残りを当順位へ。
+            # 後順位に同製品の計画があれば自順位の計画数で頭打ちし、溢出を後順位へ回す。
+            # 後順位に計画が無ければ最終順位として溢出（計画超過分）も取り込む。
+            if dte in later_planned_dates:
+                actual = min(actual, planned_today)
+        else:
+            # 当該日に自工単の計画が無い場合は、従来どおり最小順位の計画工単（owner）へ寄せる。
+            if owner_id is not None and int(owner_id) != int(ps.id):
+                actual = 0
+
+        # 不良は従来どおり最小順位の計画工単（owner）へ集約する。
         if owner_id is not None and int(owner_id) != int(ps.id):
-            actual = 0
             defect = 0
 
         det.actual_qty = actual
         det.defect_qty = defect
-        det.remaining_qty = int(det.planned_qty or 0) - int(actual) - int(defect)
+        det.remaining_qty = planned_today - int(actual) - int(defect)
 
     for det in details_to_drop:
         await db.delete(det)
+
+    # 後続工単（後順位）の sync が前順位の確定済み actual を控除（already_assigned）できるよう、
+    # 当工単の配分結果をここで flush する。呼び出し側は順位昇順に sync する前提。
+    await db.flush()
 
 
 async def _schedule_has_actual(db: AsyncSession, schedule_id: int) -> bool:
