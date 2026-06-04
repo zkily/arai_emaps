@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-right">
+        <el-button type="default" size="small" class="done-list-btn done-list-btn--molding-wip" @click="openMoldingPreInventoryDialog">成型前在庫・時間換算</el-button>
         <el-button type="primary" size="small" class="done-list-btn done-list-btn--cutting" @click="openCuttingDoneDialog">切断済リスト</el-button>
         <el-button type="success" size="small" class="done-list-btn done-list-btn--chamfering" @click="openChamferingDoneDialog">面取済リスト</el-button>
       </div>
@@ -2763,6 +2764,264 @@
       </div>
     </el-dialog>
 
+    <el-dialog
+      v-model="moldingPreInventoryDialogVisible"
+      width="min(98vw, 1420px)"
+      destroy-on-close
+      align-center
+      class="mpi-dialog"
+      :show-close="true"
+      @open="loadMoldingPreInventoryList"
+    >
+      <template #header>
+        <div class="mpi-dialog-header">
+          <div class="mpi-dialog-header__icon" aria-hidden="true">
+            <el-icon :size="18"><TrendCharts /></el-icon>
+          </div>
+          <div class="mpi-dialog-header__text">
+            <h3 class="mpi-dialog-header__title">成型前在庫・時間換算</h3>
+            <span class="mpi-dialog-header__meta">
+              {{ moldingPreInventoryDate || '—' }}
+              · {{ moldingPreInventoryGrandTotal.machine_count }}設備
+              · {{ moldingPreInventoryGrandTotal.row_count }}品番
+              · 前在庫 <strong>{{ formatMoldingPreInventoryQty(moldingPreInventoryGrandTotal.total_inventory) }}</strong>
+            </span>
+          </div>
+        </div>
+      </template>
+
+      <div class="mpi-shell">
+        <div class="mpi-toolbar">
+          <label class="mpi-field mpi-field--inline">
+            <span class="mpi-field__label">参照日</span>
+            <el-date-picker
+              v-model="moldingPreInventoryDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="参照日"
+              size="small"
+              class="mpi-date-picker"
+              @change="loadMoldingPreInventoryList"
+            />
+          </label>
+          <label class="mpi-field mpi-field--inline mpi-field--search">
+            <span class="mpi-field__label">製品</span>
+            <el-input
+              v-model="moldingPreInventoryFilter.product_name"
+              placeholder="検索"
+              clearable
+              size="small"
+              :prefix-icon="Search"
+            />
+          </label>
+          <div class="mpi-toolbar__actions">
+            <el-button
+              size="small"
+              :icon="Printer"
+              :loading="printMoldingPreInventoryLoading"
+              :disabled="moldingPreInventoryGroups.length === 0"
+              @click="printMoldingPreInventoryList"
+            >
+              印刷
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
+              :loading="moldingPreInventoryLoading"
+              :icon="RefreshRight"
+              @click="loadMoldingPreInventoryList"
+            >
+              再読込
+            </el-button>
+          </div>
+        </div>
+
+        <div v-loading="moldingPreInventoryLoading" class="mpi-split">
+          <section class="mpi-panel mpi-panel--left">
+            <header class="mpi-panel__head mpi-panel__head--purple">
+              <span class="mpi-panel__title">在庫明細</span>
+            </header>
+            <div class="mpi-panel__body">
+              <el-empty
+                v-if="!moldingPreInventoryLoading && moldingPreInventoryGroups.length === 0"
+                description="表示対象なし"
+                :image-size="40"
+                class="mpi-empty"
+              />
+              <div v-else class="mpi-scroll mpi-scroll--inventory">
+                <div class="mpi-group-list">
+                <section
+                  v-for="group in moldingPreInventoryGroups"
+                  :key="group.molding_machine"
+                  class="mpi-group"
+                >
+                  <header class="mpi-group__head">
+                    <span class="mpi-group__machine" :title="group.molding_machine">{{ group.molding_machine }}</span>
+                    <span class="mpi-group__badge">{{ group.row_count }}品番</span>
+                  </header>
+                    <table class="mpi-grid-table mpi-grid-table--dense mpi-grid-table--inventory">
+                      <thead>
+                        <tr>
+                          <th class="mpi-col-cd">CD</th>
+                          <th class="mpi-col-name">製品名</th>
+                          <th class="mpi-col-proc">直前</th>
+                          <th class="mpi-col-num">前在庫</th>
+                          <th class="mpi-col-num">能率</th>
+                          <th class="mpi-col-num">時間(H)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="row in group.rows" :key="row.row_key">
+                          <td class="mpi-col-cd" :title="row.product_cd">{{ row.product_cd }}</td>
+                          <td class="mpi-col-name" :title="row.product_name">{{ row.product_name }}</td>
+                          <td class="mpi-col-proc">{{ row.prev_process_label }}</td>
+                          <td class="mpi-col-num">{{ formatMoldingPreInventoryQty(row.pre_molding_inventory) }}</td>
+                          <td class="mpi-col-num">{{ row.efficiency_rate != null ? Number(row.efficiency_rate) : '—' }}</td>
+                          <td class="mpi-col-num mpi-col-hours">{{ formatMoldingAlgorithmHours(row) }}</td>
+                        </tr>
+                      </tbody>
+                      <tfoot>
+                        <tr class="mpi-row-sub">
+                          <td colspan="3" class="mpi-col-sub">小計</td>
+                          <td class="mpi-col-num">{{ formatMoldingPreInventoryQty(group.total_inventory) }}</td>
+                          <td class="mpi-col-num">—</td>
+                          <td class="mpi-col-num mpi-col-hours">{{ group.total_production_hours }}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                </section>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="mpi-panel mpi-panel--center">
+            <header class="mpi-panel__head mpi-panel__head--purple">
+              <span class="mpi-panel__title">設備集計</span>
+            </header>
+            <div class="mpi-panel__body">
+              <div v-if="moldingPreInventoryGroups.length === 0" class="mpi-panel__empty">—</div>
+              <div v-else class="mpi-scroll mpi-scroll--center">
+                <table class="mpi-grid-table mpi-grid-table--dense mpi-grid-table--summary">
+                  <thead>
+                    <tr>
+                      <th class="mpi-col-machine">成型設備</th>
+                      <th class="mpi-col-num">在庫(H)</th>
+                      <th class="mpi-col-num">参照後(H)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="group in moldingPreInventoryGroups"
+                      :key="'sum-' + group.molding_machine"
+                    >
+                      <td class="mpi-col-machine" :title="group.molding_machine">{{ group.molding_machine }}</td>
+                      <td
+                        class="mpi-col-num"
+                        :class="{ 'mpi-col-warn': group.total_production_hours < 35 }"
+                      >{{ group.total_production_hours }}</td>
+                      <td
+                        class="mpi-col-num mpi-col-post"
+                        :class="{ 'mpi-col-warn': group.total_post_ref_cutting_hours > 0 && group.total_post_ref_cutting_hours < 35 }"
+                      >{{ formatMoldingPostRefCuttingHours(group.total_post_ref_cutting_hours) }}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr class="mpi-row-sub">
+                      <td class="mpi-col-sub">合計</td>
+                      <td class="mpi-col-num">{{ moldingPreInventoryGrandTotal.total_production_hours }}</td>
+                      <td class="mpi-col-num mpi-col-post">{{ formatMoldingPostRefCuttingHours(moldingPreInventoryGrandTotal.total_post_ref_cutting_hours) }}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="mpi-panel mpi-panel--right">
+            <header class="mpi-panel__head mpi-panel__head--purple">
+              <span class="mpi-panel__title">参照後明細</span>
+              <span
+                v-if="moldingPostRefDetailListFiltered.length"
+                class="mpi-panel__count"
+              >{{ moldingPostRefDetailLineGroups.length }}ライン · {{ moldingPostRefDetailListFiltered.length }}件</span>
+            </header>
+            <div class="mpi-panel__body">
+              <div v-if="!moldingPreInventoryLoading && moldingPostRefDetailListFiltered.length === 0" class="mpi-panel__empty">—</div>
+              <div v-else class="mpi-scroll mpi-scroll--inventory">
+                <div class="mpi-group-list">
+                  <section
+                    v-for="lineGroup in moldingPostRefDetailLineGroups"
+                    :key="lineGroup.production_line"
+                    class="mpi-group"
+                  >
+                    <header class="mpi-group__head">
+                      <span class="mpi-group__machine" :title="lineGroup.production_line">{{ lineGroup.production_line }}</span>
+                      <span class="mpi-group__badge">{{ lineGroup.row_count }}件</span>
+                    </header>
+                    <table class="mpi-grid-table mpi-grid-table--dense mpi-grid-table--inventory mpi-grid-table--postref">
+                      <thead>
+                        <tr>
+                          <th class="mpi-col-date">生産日</th>
+                          <th class="mpi-col-cd">CD</th>
+                          <th class="mpi-col-name">製品名</th>
+                          <th class="mpi-col-num">生産数</th>
+                          <th class="mpi-col-num">能率</th>
+                          <th class="mpi-col-num">時間(H)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="(d, idx) in lineGroup.rows"
+                          :key="d.row_key ?? `${lineGroup.production_line}-${idx}`"
+                        >
+                          <td class="mpi-col-date">{{ d.production_day }}</td>
+                          <td class="mpi-col-cd" :title="d.product_cd">{{ d.product_cd }}</td>
+                          <td class="mpi-col-name" :title="d.product_name">{{ d.product_name }}</td>
+                          <td class="mpi-col-num">{{ d.actual_production_quantity }}</td>
+                          <td class="mpi-col-num">{{ d.efficiency_rate != null ? Number(d.efficiency_rate) : '—' }}</td>
+                          <td
+                            class="mpi-col-num mpi-col-hours"
+                            :class="{ 'mpi-col-warn': d.hours > 0 && d.hours < 35 }"
+                          >{{ d.hours > 0 ? d.hours : '—' }}</td>
+                        </tr>
+                      </tbody>
+                      <tfoot>
+                        <tr class="mpi-row-sub">
+                          <td colspan="3" class="mpi-col-sub">小計</td>
+                          <td class="mpi-col-num">{{ lineGroup.total_quantity }}</td>
+                          <td class="mpi-col-num">—</td>
+                          <td
+                            class="mpi-col-num mpi-col-hours"
+                            :class="{ 'mpi-col-warn': lineGroup.total_hours > 0 && lineGroup.total_hours < 35 }"
+                          >{{ lineGroup.total_hours }}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </section>
+                  <section class="mpi-group">
+                    <table class="mpi-grid-table mpi-grid-table--dense mpi-grid-table--inventory mpi-grid-table--postref">
+                      <tfoot>
+                        <tr class="mpi-row-sub">
+                          <td colspan="3" class="mpi-col-sub">合計</td>
+                          <td class="mpi-col-num">{{ moldingPostRefDetailQtyTotal }}</td>
+                          <td class="mpi-col-num">—</td>
+                          <td
+                            class="mpi-col-num mpi-col-hours"
+                            :class="{ 'mpi-col-warn': moldingPostRefDetailHoursTotal > 0 && moldingPostRefDetailHoursTotal < 35 }"
+                          >{{ moldingPostRefDetailHoursTotal }}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </section>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 新規追加ダイアログ（新規＝量産品 / 試作＝試作品） -->
     <el-dialog
       v-model="newRecordDialogVisible"
@@ -3224,7 +3483,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
   escapeHtml,
@@ -3234,6 +3493,7 @@ import {
 } from '@/utils/printWindow'
 import { createRequestGuard } from '@/utils/requestGuard'
 import { useLazySectionLoader } from '@/composables/useLazySectionLoader'
+import { getProductionSummarysList } from '@/api/database'
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
 interface CuttingPlanRow {
@@ -4144,6 +4404,594 @@ const paginatedDataManagementList = computed(() => {
   return filteredDataManagementList.value.slice(start, start + dataManagementPagination.pageSize)
 })
 
+/** 成型前在庫・時間換算一覧（production_summarys + product_machine_config + equipment_efficiency） */
+const MOLDING_PREV_PROCESS_LABEL: Record<string, string> = {
+  cutting: '切断',
+  chamfering: '面取',
+  molding: '成型',
+  plating: 'メッキ',
+  welding: '溶接',
+  inspection: '検査',
+  warehouse: '倉庫',
+  outsourced_warehouse: '外注倉庫',
+  outsourced_plating: '外注メッキ',
+  outsourced_welding: '外注溶接',
+  pre_welding_inspection: '溶接前検査',
+  pre_inspection: '外注支給前',
+  pre_outsourcing: '外注検査前',
+}
+interface MoldingPreInventoryTableRow {
+  row_key: string
+  product_cd: string
+  product_name: string
+  prev_process_label: string
+  pre_molding_inventory: number | null
+  molding_machine: string
+  efficiency_rate: number | null
+}
+const moldingPreInventoryDialogVisible = ref(false)
+const moldingPreInventoryLoading = ref(false)
+const printMoldingPreInventoryLoading = ref(false)
+const moldingPreInventoryDate = ref(getTodayString())
+const moldingPreInventoryRawList = ref<MoldingPreInventoryTableRow[]>([])
+const moldingPreInventoryFilter = reactive({ product_name: '' })
+interface MoldingPostRefDetailRow {
+  row_key: string
+  production_day: string
+  production_line: string
+  product_cd: string
+  product_name: string
+  actual_production_quantity: number
+  efficiency_rate: number | null
+  hours: number
+  molding_machine: string
+}
+const moldingPostRefDetailList = ref<MoldingPostRefDetailRow[]>([])
+
+const moldingPostRefDetailListFiltered = computed(() => {
+  const q = (moldingPreInventoryFilter.product_name || '').trim().toLowerCase()
+  const list = moldingPostRefDetailList.value
+  if (!q) return list
+  return list.filter((d) => {
+    const name = (d.product_name || '').toLowerCase()
+    const cd = (d.product_cd || '').toLowerCase()
+    return name.includes(q) || cd.includes(q)
+  })
+})
+
+const moldingPostRefDetailHoursTotal = computed(() =>
+  moldingPostRefDetailListFiltered.value.reduce((s, d) => s + (d.hours > 0 ? d.hours : 0), 0),
+)
+
+const moldingPostRefDetailQtyTotal = computed(() =>
+  moldingPostRefDetailListFiltered.value.reduce(
+    (s, d) => s + (Number(d.actual_production_quantity) || 0),
+    0,
+  ),
+)
+
+interface MoldingPostRefDetailLineGroup {
+  production_line: string
+  rows: MoldingPostRefDetailRow[]
+  row_count: number
+  total_quantity: number
+  total_hours: number
+}
+
+/** 参照後明細をライン別にグループ化（小計・合計用） */
+function buildMoldingPostRefDetailLineGroups(
+  details: MoldingPostRefDetailRow[],
+): MoldingPostRefDetailLineGroup[] {
+  const byLine = new Map<string, MoldingPostRefDetailRow[]>()
+  for (const d of details) {
+    const line = String(d.production_line ?? '').trim() || '（未設定）'
+    const list = byLine.get(line)
+    if (list) list.push(d)
+    else byLine.set(line, [d])
+  }
+  const lines = [...byLine.keys()].sort((a, b) => a.localeCompare(b, 'ja', { numeric: true }))
+  return lines.map((production_line) => {
+    const rows = [...(byLine.get(production_line) ?? [])].sort((a, b) => {
+      const dd = a.production_day.localeCompare(b.production_day)
+      if (dd !== 0) return dd
+      return (a.product_name || a.product_cd).localeCompare(b.product_name || b.product_cd, 'ja', {
+        numeric: true,
+      })
+    })
+    let total_quantity = 0
+    let total_hours = 0
+    for (const r of rows) {
+      total_quantity += Number(r.actual_production_quantity) || 0
+      total_hours += r.hours > 0 ? r.hours : 0
+    }
+    return {
+      production_line,
+      rows,
+      row_count: rows.length,
+      total_quantity,
+      total_hours,
+    }
+  })
+}
+
+const moldingPostRefDetailLineGroups = computed(() =>
+  buildMoldingPostRefDetailLineGroups(moldingPostRefDetailListFiltered.value),
+)
+
+/** 明細：ライン別に時間(H)合算 → 各行の成型設備へ配分した設備別参照後時間 */
+const moldingPostRefHoursByMoldingMachine = computed(() =>
+  buildMoldingPostRefHoursByMachineFromDetails(moldingPostRefDetailListFiltered.value),
+)
+
+interface MoldingPreInventoryGroup {
+  molding_machine: string
+  rows: MoldingPreInventoryTableRow[]
+  row_count: number
+  total_inventory: number
+  total_production_hours: number
+  /** 参照後明細をライン合算後、成型設備別に集計した時間(H) */
+  total_post_ref_cutting_hours: number
+}
+
+function labelMoldingPrevProcess(key: string | null | undefined): string {
+  if (!key) return '—'
+  return MOLDING_PREV_PROCESS_LABEL[key] ?? key
+}
+
+function formatMoldingPreInventoryQty(v: number | null | undefined): string {
+  if (v == null) return '—'
+  const n = Number(v)
+  return Number.isFinite(n) ? String(Math.round(n)) : '—'
+}
+
+/** 成型前在庫が 1 以上の行のみ一覧に含める */
+function isMoldingPreInventoryPositive(v: number | null | undefined): boolean {
+  if (v == null) return false
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0
+}
+
+/** 成型設備昇順 → 製品名 */
+function compareMoldingPreInventoryRows(a: MoldingPreInventoryTableRow, b: MoldingPreInventoryTableRow): number {
+  const ma = (a.molding_machine || '').localeCompare(b.molding_machine || '', 'ja', { numeric: true })
+  if (ma !== 0) return ma
+  return (a.product_name || a.product_cd).localeCompare(b.product_name || b.product_cd, 'ja', { numeric: true })
+}
+
+/** product_machine_config.molding_machine（機器CD）→ machines.machine_name */
+function buildMoldingMachineNameResolver(
+  machines: Array<{ machine_cd?: string; machine_name?: string }>,
+): (machineCdOrName: string | null | undefined) => string {
+  const cdToName = new Map<string, string>()
+  const knownNames = new Set<string>()
+  for (const m of machines) {
+    const cd = String(m.machine_cd ?? '').trim()
+    const name = String(m.machine_name ?? '').trim()
+    if (cd && name) cdToName.set(cd, name)
+    if (name) knownNames.add(name)
+  }
+  return (raw) => {
+    const v = String(raw ?? '').trim()
+    if (!v) return '（未設定）'
+    return cdToName.get(v) ?? (knownNames.has(v) ? v : v)
+  }
+}
+
+/** equipment_efficiency：製品×成型設備（product_machine_config 由来の設備名） */
+function buildMoldingEfficiencyResolver(
+  effRows: EquipmentEfficiencyRow[],
+  machines: Array<{ machine_cd?: string; machine_name?: string }>,
+): (productCd: string, moldingMachine: string) => number | null {
+  const nameToCd = new Map<string, string>()
+  for (const m of machines) {
+    const n = String(m.machine_name ?? '').trim()
+    const c = String(m.machine_cd ?? '').trim()
+    if (n && c) nameToCd.set(n, c)
+  }
+  const byProdName = new Map<string, number>()
+  const byProdCd = new Map<string, number>()
+  for (const e of effRows) {
+    if (e.status === 0) continue
+    const p = String(e.product_cd ?? '').trim()
+    if (!p) continue
+    const rate = Number(e.efficiency_rate)
+    if (!Number.isFinite(rate) || rate <= 0) continue
+    const mn = String(e.machines_name ?? '').trim()
+    const mc = String(e.machine_cd ?? '').trim()
+    if (mn) byProdName.set(`${p}|${mn}`, rate)
+    if (mc) byProdCd.set(`${p}|${mc}`, rate)
+  }
+  return (productCd: string, moldingMachine: string) => {
+    const p = String(productCd ?? '').trim()
+    const mm = String(moldingMachine ?? '').trim()
+    if (!p || !mm || mm === '（未設定）') return null
+    let r = byProdName.get(`${p}|${mm}`)
+    if (r != null && r > 0) return r
+    const mc = nameToCd.get(mm)
+    if (mc) {
+      r = byProdCd.get(`${p}|${mc}`)
+      if (r != null && r > 0) return r
+    }
+    r = byProdCd.get(`${p}|${mm}`)
+    if (r != null && r > 0) return r
+    return null
+  }
+}
+
+/** 在庫生産時間(H) = 成型前在庫 ÷ 能率(本/H)、整数（小数なし） */
+function getMoldingProductionHoursValue(row: MoldingPreInventoryTableRow): number {
+  const inv = row.pre_molding_inventory
+  const rate = row.efficiency_rate
+  if (!isMoldingPreInventoryPositive(inv) || rate == null || !Number.isFinite(rate) || rate <= 0) return 0
+  return Math.round(Number(inv) / rate)
+}
+
+function formatMoldingAlgorithmHours(row: MoldingPreInventoryTableRow): string {
+  const h = getMoldingProductionHoursValue(row)
+  return h > 0 ? String(h) : '—'
+}
+
+/**
+ * 参照日より後の cutting_management：明細行＋ production_line 別時間合計
+ */
+function buildMoldingPostRefDetailAndLineTotals(
+  rows: CuttingManagementRow[],
+  refDate: string,
+  resolveEff: (productCd: string, moldingMachine: string) => number | null,
+  resolveMachineName: (machineCdOrName: string | null | undefined) => string,
+  moldingMachineByProduct: Map<string, string>,
+): { details: MoldingPostRefDetailRow[]; byLine: Map<string, number> } {
+  const ref = refDate.trim().slice(0, 10)
+  const byLine = new Map<string, number>()
+  const details: MoldingPostRefDetailRow[] = []
+  if (!ref) return { details, byLine }
+  for (const row of rows) {
+    const day = String(row.production_day ?? '').trim().slice(0, 10)
+    if (!day || day <= ref) continue
+    const cd = String(row.product_cd ?? '').trim()
+    if (!cd) continue
+    const qty = Number(row.actual_production_quantity)
+    if (!Number.isFinite(qty) || qty <= 0) continue
+    const moldingMachine = resolveMachineName(moldingMachineByProduct.get(cd) ?? '')
+    const rate = resolveEff(cd, moldingMachine)
+    if (rate == null || rate <= 0) continue
+    const hours = Math.round(qty / rate)
+    const line = String(row.production_line ?? '').trim() || '（未設定）'
+    const productName = String(row.product_name ?? '').trim() || cd
+    byLine.set(line, (byLine.get(line) ?? 0) + hours)
+    details.push({
+      row_key: `${row.id ?? ''}|${day}|${line}|${cd}`,
+      production_day: day,
+      production_line: line,
+      product_cd: cd,
+      product_name: productName,
+      actual_production_quantity: Math.round(qty),
+      efficiency_rate: rate,
+      hours,
+      molding_machine: moldingMachine,
+    })
+  }
+  details.sort((a, b) => {
+    const dd = a.production_day.localeCompare(b.production_day)
+    if (dd !== 0) return dd
+    const dl = a.production_line.localeCompare(b.production_line, 'ja', { numeric: true })
+    if (dl !== 0) return dl
+    return a.product_name.localeCompare(b.product_name, 'ja', { numeric: true })
+  })
+  return { details, byLine }
+}
+
+/**
+ * 参照後明細の時間(H)を production_line ごとに合算し、
+ * 明細行の molding_machine へ配分して設備別合計を返す（中欄設備別集計用）
+ */
+function buildMoldingPostRefHoursByMachineFromDetails(
+  details: MoldingPostRefDetailRow[],
+): Map<string, number> {
+  const hoursByLineAndMachine = new Map<string, Map<string, number>>()
+  for (const d of details) {
+    const h = d.hours > 0 ? d.hours : 0
+    if (h <= 0) continue
+    const line = String(d.production_line ?? '').trim() || '（未設定）'
+    const machine = String(d.molding_machine ?? '').trim() || '（未設定）'
+    let perMachine = hoursByLineAndMachine.get(line)
+    if (!perMachine) {
+      perMachine = new Map()
+      hoursByLineAndMachine.set(line, perMachine)
+    }
+    perMachine.set(machine, (perMachine.get(machine) ?? 0) + h)
+  }
+  const byMachine = new Map<string, number>()
+  for (const perMachine of hoursByLineAndMachine.values()) {
+    for (const [machine, lineMachineHours] of perMachine) {
+      byMachine.set(machine, (byMachine.get(machine) ?? 0) + lineMachineHours)
+    }
+  }
+  return byMachine
+}
+
+function formatMoldingPostRefCuttingHours(hours: number): string {
+  return hours > 0 ? String(hours) : '—'
+}
+
+const moldingPreInventoryListFiltered = computed(() => {
+  const base = moldingPreInventoryRawList.value.filter((row) =>
+    isMoldingPreInventoryPositive(row.pre_molding_inventory),
+  )
+  const q = (moldingPreInventoryFilter.product_name || '').trim().toLowerCase()
+  const filtered = !q
+    ? base
+    : base.filter((row) => {
+        const name = (row.product_name || '').toLowerCase()
+        const cd = (row.product_cd || '').toLowerCase()
+        return name.includes(q) || cd.includes(q)
+      })
+  return [...filtered].sort(compareMoldingPreInventoryRows)
+})
+
+const moldingPreInventoryGroups = computed((): MoldingPreInventoryGroup[] => {
+  const byMachine = new Map<string, MoldingPreInventoryTableRow[]>()
+  for (const row of moldingPreInventoryListFiltered.value) {
+    const machine = (row.molding_machine || '—').trim() || '—'
+    const list = byMachine.get(machine)
+    if (list) list.push(row)
+    else byMachine.set(machine, [row])
+  }
+  const machines = [...byMachine.keys()].sort((a, b) => a.localeCompare(b, 'ja', { numeric: true }))
+  return machines.map((molding_machine) => {
+    const rows = [...(byMachine.get(molding_machine) ?? [])].sort((a, b) =>
+      (a.product_name || a.product_cd).localeCompare(b.product_name || b.product_cd, 'ja', { numeric: true }),
+    )
+    let total_inventory = 0
+    let total_production_hours = 0
+    for (const row of rows) {
+      total_inventory += Number(row.pre_molding_inventory) || 0
+      total_production_hours += getMoldingProductionHoursValue(row)
+    }
+    const total_post_ref_cutting_hours =
+      moldingPostRefHoursByMoldingMachine.value.get(molding_machine) ?? 0
+    return {
+      molding_machine,
+      rows,
+      row_count: rows.length,
+      total_inventory,
+      total_production_hours,
+      total_post_ref_cutting_hours,
+    }
+  })
+})
+
+const moldingPreInventoryGrandTotal = computed(() => {
+  const groups = moldingPreInventoryGroups.value
+  return {
+    machine_count: groups.length,
+    row_count: groups.reduce((s, g) => s + g.row_count, 0),
+    total_inventory: groups.reduce((s, g) => s + g.total_inventory, 0),
+    total_production_hours: groups.reduce((s, g) => s + g.total_production_hours, 0),
+    total_post_ref_cutting_hours: groups.reduce((s, g) => s + g.total_post_ref_cutting_hours, 0),
+  }
+})
+
+function openMoldingPreInventoryDialog() {
+  moldingPreInventoryFilter.product_name = ''
+  if (!moldingPreInventoryDate.value) moldingPreInventoryDate.value = getTodayString()
+  moldingPreInventoryDialogVisible.value = true
+}
+
+function buildMoldingPreInventoryPrintHtml(): string {
+  const dateStr = escapeHtml((moldingPreInventoryDate.value || '').slice(0, 10))
+  const groups = moldingPreInventoryGroups.value
+  const grand = moldingPreInventoryGrandTotal.value
+
+  const summaryRows = groups
+    .map((g) => {
+      const postH = g.total_post_ref_cutting_hours
+      const postLow = postH > 0 && postH < 35 ? ' low-h' : ''
+      const invLow = g.total_production_hours < 35 ? ' low-h' : ''
+      return `<tr>
+        <td class="col-machine">${escapeHtml(g.molding_machine)}</td>
+        <td class="col-num${invLow}">${g.total_production_hours}</td>
+        <td class="col-num col-post${postLow}">${escapeHtml(formatMoldingPostRefCuttingHours(postH))}</td>
+      </tr>`
+    })
+    .join('')
+
+  const metaLine = `参照日 ${dateStr} · ${grand.machine_count}設備 · 在庫(H)合計 ${grand.total_production_hours} · 参照後(H)合計 ${escapeHtml(formatMoldingPostRefCuttingHours(grand.total_post_ref_cutting_hours))}`
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>設備集計</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:"Segoe UI","Yu Gothic UI",Meiryo,sans-serif;font-size:11px;color:#1e293b;margin:12px}
+  .head{display:flex;align-items:baseline;flex-wrap:wrap;gap:8px 12px;margin-bottom:10px}
+  .head h1{font-size:14px;margin:0;color:#5b21b6;white-space:nowrap}
+  .head .meta{font-size:10px;color:#64748b;margin:0;white-space:nowrap}
+  .summary{max-width:520px;border:1px solid #ddd6fe;border-radius:6px;overflow:hidden}
+  .summary h2{font-size:11px;margin:0;padding:6px 10px;background:#ede9fe;color:#5b21b6;font-weight:700}
+  table{border-collapse:collapse;width:100%}
+  th,td{border:1px solid #e2e8f0;padding:4px 8px;vertical-align:middle}
+  th{font-size:10px;background:#f8fafc;font-weight:700;text-align:left}
+  .col-machine{font-weight:600;color:#5b21b6}
+  .col-num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;color:#5b21b6}
+  .col-post{color:#0f766e}
+  .col-num.low-h{color:#dc2626}
+  tfoot td{background:#ede9fe;font-weight:800}
+  tfoot .col-sub{text-align:right;color:#7c3aed}
+  @media print{body{margin:8px}}
+</style></head><body>
+  <div class="head">
+    <h1>成型前在庫・時間換算 — 設備集計</h1>
+    <span class="meta">${metaLine}</span>
+  </div>
+  <div class="summary">
+    <h2>設備集計</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>成型設備</th>
+          <th class="col-num">在庫(H)</th>
+          <th class="col-num">参照後(H)</th>
+        </tr>
+      </thead>
+      <tbody>${summaryRows}</tbody>
+      <tfoot>
+        <tr>
+          <td class="col-sub">合計</td>
+          <td class="col-num">${grand.total_production_hours}</td>
+          <td class="col-num col-post">${escapeHtml(formatMoldingPostRefCuttingHours(grand.total_post_ref_cutting_hours))}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</body></html>`
+}
+
+function printMoldingPreInventoryList() {
+  if (moldingPreInventoryGroups.value.length === 0) {
+    ElMessage.warning('印刷するデータがありません')
+    return
+  }
+  printMoldingPreInventoryLoading.value = true
+  try {
+    const html = buildMoldingPreInventoryPrintHtml()
+    if (!openPrintWindow(html)) {
+      ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
+    }
+  } catch (e) {
+    console.error('成型前在庫・時間換算の印刷に失敗:', e)
+    ElMessage.error('印刷の準備に失敗しました')
+  } finally {
+    printMoldingPreInventoryLoading.value = false
+  }
+}
+
+async function loadMoldingPreInventoryList() {
+  const dateStr = (moldingPreInventoryDate.value || getTodayString()).trim().slice(0, 10)
+  if (!dateStr) {
+    ElMessage.warning('在庫参照日を選択してください')
+    return
+  }
+  moldingPreInventoryLoading.value = true
+  try {
+    const [summaryRes, pmcRes, effRes, machinesRes, cuttingRes] = await Promise.all([
+      getProductionSummarysList({
+        page: 1,
+        limit: 50000,
+        startDate: dateStr,
+        endDate: dateStr,
+        excludeInactiveProducts: true,
+      }),
+      request.get<{
+        success?: boolean
+        data?: { list?: Array<{ product_cd?: string; molding_machine?: string | null }> }
+        list?: Array<{ product_cd?: string; molding_machine?: string | null }>
+      }>('/api/master/product-machine-config', { params: { limit: 99999 } }),
+      request.get<{
+        success?: boolean
+        data?: { list?: EquipmentEfficiencyRow[] }
+        list?: EquipmentEfficiencyRow[]
+      }>('/api/master/equipment-efficiency', {
+        params: { processType: 'forming', limit: 99999 },
+      }),
+      request.get<{
+        success?: boolean
+        data?: { list?: Array<{ machine_cd?: string; machine_name?: string }> }
+        list?: Array<{ machine_cd?: string; machine_name?: string }>
+      }>('/api/master/machines', { params: { pageSize: 9999 } }),
+      request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+        '/api/plan/cutting-management/list',
+        { params: { limit: 10000 } },
+      ),
+    ])
+    const summaryRaw = summaryRes as { data?: { list?: unknown[] }; list?: unknown[] }
+    const summaryList = (summaryRaw?.data?.list ?? summaryRaw?.list ?? []) as Array<{
+      product_cd?: string
+      product_name?: string | null
+      pre_molding_inventory?: number | null
+      pre_molding_prev_process?: string | null
+    }>
+    const invByProduct = new Map<
+      string,
+      { product_name: string; pre_molding_inventory: number | null; prev_process_label: string }
+    >()
+    for (const row of summaryList) {
+      const cd = String(row.product_cd ?? '').trim()
+      if (!cd) continue
+      invByProduct.set(cd, {
+        product_name: String(row.product_name ?? '').trim() || cd,
+        pre_molding_inventory:
+          row.pre_molding_inventory != null && Number.isFinite(Number(row.pre_molding_inventory))
+            ? Math.round(Number(row.pre_molding_inventory))
+            : null,
+        prev_process_label: labelMoldingPrevProcess(row.pre_molding_prev_process),
+      })
+    }
+
+    const pmcList =
+      (pmcRes as { data?: { list?: unknown[] } })?.data?.list ??
+      (pmcRes as { list?: unknown[] })?.list ??
+      []
+    const moldingMachineByProduct = new Map<string, string>()
+    for (const row of pmcList as Array<{ product_cd?: string; molding_machine?: string | null }>) {
+      const cd = String(row.product_cd ?? '').trim()
+      if (!cd) continue
+      moldingMachineByProduct.set(cd, String(row.molding_machine ?? '').trim())
+    }
+
+    const machineList =
+      (machinesRes as { data?: { list?: unknown[] } })?.data?.list ??
+      (machinesRes as { list?: unknown[] })?.list ??
+      []
+    const resolveMachineName = buildMoldingMachineNameResolver(
+      machineList as Array<{ machine_cd?: string; machine_name?: string }>,
+    )
+    const effList = (
+      ((effRes as { data?: { list?: EquipmentEfficiencyRow[] } })?.data?.list ??
+        (effRes as { list?: EquipmentEfficiencyRow[] })?.list ??
+        []) as EquipmentEfficiencyRow[]
+    ).filter((r) => r.status !== 0)
+    const resolveEff = buildMoldingEfficiencyResolver(
+      effList,
+      machineList as Array<{ machine_cd?: string; machine_name?: string }>,
+    )
+    const cuttingRaw = cuttingRes as unknown as { success?: boolean; data?: CuttingManagementRow[] }
+    const cuttingList: CuttingManagementRow[] = cuttingRaw?.success ? (cuttingRaw.data ?? []) : []
+    const postRefBuilt = buildMoldingPostRefDetailAndLineTotals(
+      cuttingList,
+      dateStr,
+      resolveEff,
+      resolveMachineName,
+      moldingMachineByProduct,
+    )
+    moldingPostRefDetailList.value = postRefBuilt.details
+
+    const rows: MoldingPreInventoryTableRow[] = []
+    for (const [cd, inv] of invByProduct) {
+      if (!isMoldingPreInventoryPositive(inv.pre_molding_inventory)) continue
+      const moldRaw = moldingMachineByProduct.get(cd) ?? ''
+      const machine = resolveMachineName(moldRaw)
+      const rate = resolveEff(cd, machine)
+      rows.push({
+        row_key: `${cd}|${machine}`,
+        product_cd: cd,
+        product_name: inv.product_name,
+        prev_process_label: inv.prev_process_label,
+        pre_molding_inventory: inv.pre_molding_inventory,
+        molding_machine: machine,
+        efficiency_rate: rate,
+      })
+    }
+    rows.sort(compareMoldingPreInventoryRows)
+    moldingPreInventoryRawList.value = rows
+  } catch (e) {
+    console.error('成型前在庫・時間換算一覧の取得に失敗:', e)
+    ElMessage.error('成型前在庫・時間換算一覧の取得に失敗しました')
+    moldingPreInventoryRawList.value = []
+    moldingPostRefDetailList.value = []
+  } finally {
+    moldingPreInventoryLoading.value = false
+  }
+}
+
 /** 切断済リスト（cutting_management） */
 const cuttingDoneDialogVisible = ref(false)
 const cuttingDoneLoading = ref(false)
@@ -4733,9 +5581,12 @@ const materialPiecesPerBundleForTarget = computed(() => productDetail.value?.pie
 
 /** 右侧下：設備能率（equipment_efficiency 表） */
 interface EquipmentEfficiencyRow {
+  machine_cd?: string | null
   machines_name?: string | null
   efficiency_rate?: number | null
   product_cd?: string | null
+  product_name?: string | null
+  status?: number | null
 }
 const equipmentEfficiencyList = ref<EquipmentEfficiencyRow[]>([])
 const equipmentEfficiencyLoading = ref(false)
@@ -8313,6 +9164,16 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #10b981 0%, #059669 55%, #047857 100%);
   box-shadow: 0 8px 18px -8px rgba(5, 150, 105, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
+.header-right .done-list-btn--molding-wip {
+  border-color: #c4b5fd;
+  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
+  color: #5b21b6;
+}
+.header-right .done-list-btn--molding-wip:hover {
+  border-color: #a78bfa;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+  color: #4c1d95;
+}
 .header-right .done-list-btn--chamfering:hover {
   box-shadow: 0 12px 22px -10px rgba(5, 150, 105, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
@@ -10140,6 +11001,529 @@ onUnmounted(() => {
   font-weight: 600;
   color: #334155;
   padding-right: 6px;
+}
+/* 成型前在庫・時間換算ダイアログ */
+.mpi-dialog :deep(.el-dialog) {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #ddd6fe;
+  box-shadow: 0 12px 32px rgba(91, 33, 182, 0.12);
+  background: #fff;
+}
+.mpi-dialog :deep(.el-dialog__header) {
+  margin: 0;
+  padding: 6px 10px 5px;
+  border-bottom: 1px solid #ede9fe;
+  background: linear-gradient(135deg, #fff 0%, #f5f3ff 100%);
+}
+.mpi-dialog :deep(.el-dialog__headerbtn) {
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+}
+.mpi-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+.mpi-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 24px;
+}
+.mpi-dialog-header__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(145deg, #7c3aed 0%, #5b21b6 100%);
+  color: #fff;
+  flex-shrink: 0;
+}
+.mpi-dialog-header__text {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+.mpi-dialog-header__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #3b0764;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.mpi-dialog-header__meta {
+  font-size: 10px;
+  color: #64748b;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mpi-dialog-header__meta strong,
+.mpi-dialog-header__meta :deep(strong) {
+  color: #5b21b6;
+  font-weight: 700;
+}
+.mpi-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: min(78vh, 720px);
+}
+.mpi-toolbar {
+  --mpi-toolbar-control-h: 29px; /* el-small 24px × 1.2 */
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px 12px;
+  min-height: calc(var(--mpi-toolbar-control-h) + 16px);
+  margin: 6px 8px 5px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #c4b5fd;
+  background: linear-gradient(180deg, #ffffff 0%, #faf5ff 48%, #ede9fe 100%);
+  box-shadow:
+    0 4px 10px rgba(91, 33, 182, 0.14),
+    0 1px 3px rgba(91, 33, 182, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -2px 0 rgba(196, 181, 253, 0.28);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+/* 参照日ツールバー右端の縦スクロール矢印を非表示 */
+.mpi-toolbar::-webkit-scrollbar {
+  height: 6px;
+  width: 0;
+}
+.mpi-toolbar::-webkit-scrollbar-button,
+.mpi-toolbar::-webkit-scrollbar-button:vertical:start:decrement,
+.mpi-toolbar::-webkit-scrollbar-button:vertical:end:increment {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.mpi-toolbar :deep(.el-button--small) {
+  min-height: var(--mpi-toolbar-control-h);
+  padding: 5px 12px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.mpi-toolbar :deep(.el-button--small:not(.el-button--primary)) {
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
+  border: 1px solid #c4b5fd;
+  color: #5b21b6;
+  box-shadow:
+    0 2px 5px rgba(91, 33, 182, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.mpi-toolbar :deep(.el-button--small:not(.el-button--primary):hover) {
+  border-color: #a78bfa;
+  background: linear-gradient(180deg, #ffffff 0%, #ede9fe 100%);
+  box-shadow:
+    0 3px 7px rgba(91, 33, 182, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 1);
+}
+.mpi-toolbar :deep(.el-button--primary) {
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 42%, #5b21b6 100%);
+  border: 1px solid #5b21b6;
+  box-shadow:
+    0 4px 8px rgba(91, 33, 182, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -1px 0 rgba(59, 7, 100, 0.35);
+}
+.mpi-toolbar :deep(.el-button--primary:hover) {
+  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 45%, #6d28d9 100%);
+  box-shadow:
+    0 5px 10px rgba(91, 33, 182, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+.mpi-toolbar :deep(.el-button--small:active) {
+  transform: translateY(1px);
+}
+.mpi-toolbar :deep(.el-button--small:not(.el-button--primary):active) {
+  box-shadow:
+    0 1px 2px rgba(91, 33, 182, 0.12),
+    inset 0 2px 4px rgba(91, 33, 182, 0.08);
+}
+.mpi-toolbar :deep(.el-button--primary:active) {
+  box-shadow:
+    0 2px 4px rgba(91, 33, 182, 0.3),
+    inset 0 2px 5px rgba(59, 7, 100, 0.35);
+}
+.mpi-toolbar :deep(.el-input__wrapper),
+.mpi-toolbar :deep(.el-date-editor.el-input) {
+  min-height: var(--mpi-toolbar-control-h);
+  background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
+  border: 1px solid #ddd6fe;
+  box-shadow:
+    inset 0 1px 3px rgba(91, 33, 182, 0.07),
+    0 1px 3px rgba(91, 33, 182, 0.1);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mpi-toolbar :deep(.el-input__wrapper:hover),
+.mpi-toolbar :deep(.el-date-editor.el-input:hover .el-input__wrapper) {
+  border-color: #c4b5fd;
+  box-shadow:
+    inset 0 1px 2px rgba(91, 33, 182, 0.05),
+    0 2px 6px rgba(91, 33, 182, 0.14);
+}
+.mpi-toolbar :deep(.el-input__wrapper.is-focus),
+.mpi-toolbar :deep(.el-date-editor.el-input.is-active .el-input__wrapper) {
+  border-color: #8b5cf6;
+  box-shadow:
+    inset 0 1px 2px rgba(91, 33, 182, 0.06),
+    0 0 0 2px rgba(139, 92, 246, 0.18),
+    0 2px 6px rgba(91, 33, 182, 0.16);
+}
+.mpi-toolbar :deep(.el-input__inner) {
+  height: var(--mpi-toolbar-control-h);
+  line-height: var(--mpi-toolbar-control-h);
+}
+.mpi-field--inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.mpi-field--search {
+  flex: 1;
+  min-width: 72px;
+  max-width: 120px;
+}
+.mpi-field__label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #6d28d9;
+  white-space: nowrap;
+}
+.mpi-toolbar .mpi-field__label {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: var(--mpi-toolbar-control-h, 29px);
+  color: #6d28d9;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.mpi-date-picker {
+  width: 118px;
+}
+.mpi-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding-left: 12px;
+  flex-shrink: 0;
+  border-left: 1px solid rgba(196, 181, 253, 0.65);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.75);
+}
+.mpi-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 320px) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+}
+.mpi-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid #e9d5ff;
+  background: #fff;
+}
+.mpi-panel--center {
+  min-width: 280px;
+  background: #faf5ff;
+}
+.mpi-panel--right {
+  border-right: none;
+  background: #fff;
+}
+.mpi-panel__head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 3px 8px;
+  border-bottom: 1px solid #e9d5ff;
+  white-space: nowrap;
+}
+.mpi-panel__head--purple {
+  background: #ede9fe;
+}
+.mpi-panel__head--slate {
+  background: #e2e8f0;
+  border-bottom-color: #cbd5e1;
+}
+.mpi-panel__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b21b6;
+  white-space: nowrap;
+}
+.mpi-panel__count {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+.mpi-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 3px 4px;
+}
+.mpi-panel--left .mpi-panel__body,
+.mpi-panel--right .mpi-panel__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 3px;
+}
+.mpi-scroll--inventory {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b5fd #f5f3ff;
+}
+/* スクロールバー上下矢印を非表示（右欄・左欄共通） */
+.mpi-dialog .mpi-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button,
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button:single-button,
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button:vertical:start:decrement,
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button:vertical:end:increment,
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button:horizontal:start:decrement,
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-button:horizontal:end:increment {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-track {
+  background: #f5f3ff;
+}
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-thumb {
+  background: #c4b5fd;
+  border-radius: 4px;
+}
+.mpi-dialog .mpi-scroll::-webkit-scrollbar-thumb:hover {
+  background: #a78bfa;
+}
+.mpi-panel__empty {
+  padding: 8px 4px;
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  white-space: nowrap;
+}
+.mpi-scroll {
+  overflow: auto;
+  max-height: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+.mpi-scroll--fit {
+  overflow-x: hidden;
+}
+.mpi-scroll--center {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c4b5fd #f5f3ff;
+}
+.mpi-grid-table--dense {
+  font-size: 11px;
+}
+.mpi-grid-table--dense th,
+.mpi-grid-table--dense td {
+  padding: 2px 5px;
+  line-height: 1.25;
+}
+.mpi-grid-table--dense thead th {
+  font-size: 10px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.mpi-grid-table--summary {
+  width: 100%;
+  min-width: 268px;
+}
+.mpi-grid-table--summary .mpi-col-machine {
+  min-width: 108px;
+}
+.mpi-grid-table--summary .mpi-col-num {
+  min-width: 72px;
+}
+.mpi-grid-table--inventory .mpi-col-cd {
+  min-width: 72px;
+}
+.mpi-grid-table--inventory .mpi-col-name {
+  min-width: 88px;
+}
+.mpi-grid-table--inventory .mpi-col-proc {
+  min-width: 44px;
+}
+.mpi-grid-table--inventory .mpi-col-num {
+  min-width: 52px;
+}
+.mpi-grid-table--postref .mpi-col-date {
+  min-width: 76px;
+}
+.mpi-grid-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: auto;
+}
+.mpi-grid-table th,
+.mpi-grid-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  line-height: 1.25;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.mpi-grid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-size: 10px;
+  font-weight: 700;
+  color: #475569;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 0 #e2e8f0;
+}
+.mpi-panel--center .mpi-grid-table thead th {
+  background: #ede9fe;
+  border-bottom-color: #ddd6fe;
+  color: #5b21b6;
+}
+.mpi-grid-table tbody tr:hover td {
+  background: #faf5ff;
+}
+.mpi-col-cd {
+  min-width: 72px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+.mpi-col-name {
+  min-width: 88px;
+  max-width: none;
+  font-weight: 500;
+  color: #1e293b;
+}
+.mpi-col-proc {
+  min-width: 44px;
+  text-align: center;
+}
+.mpi-col-num {
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mpi-col-hours {
+  font-weight: 700;
+  color: #6d28d9;
+}
+.mpi-col-post {
+  color: #0f766e;
+  font-weight: 700;
+}
+.mpi-col-machine {
+  min-width: 96px;
+  font-weight: 600;
+  color: #5b21b6;
+}
+.mpi-col-date {
+  min-width: 76px;
+}
+.mpi-col-line {
+  min-width: 56px;
+  font-weight: 600;
+  color: #475569;
+}
+.mpi-col-sub {
+  text-align: right;
+  font-weight: 700;
+  color: #7c3aed;
+  font-size: 10px;
+}
+.mpi-col-warn {
+  color: #dc2626 !important;
+}
+.mpi-row-sub td {
+  border-bottom: none;
+  background: #f5f3ff;
+  font-weight: 700;
+  color: #5b21b6;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.mpi-panel--center .mpi-row-sub td {
+  background: #ede9fe;
+}
+.mpi-empty {
+  padding: 12px 0;
+}
+.mpi-empty :deep(.el-empty__description) {
+  margin-top: 4px;
+  font-size: 11px;
+}
+.mpi-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mpi-group {
+  border-radius: 4px;
+  border: 1px solid #e9d5ff;
+  background: #fff;
+  overflow: hidden;
+}
+.mpi-group__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  background: #f5f3ff;
+  border-bottom: 1px solid #ede9fe;
+  white-space: nowrap;
+}
+.mpi-group__machine {
+  font-size: 11px;
+  font-weight: 700;
+  color: #5b21b6;
+  white-space: nowrap;
+}
+.mpi-group__badge {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #ede9fe;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.mpi-panel--left .mpi-group-list,
+.mpi-panel--right .mpi-group-list {
+  gap: 3px;
 }
 .cutting-done-toolbar .filter-form :deep(.el-input__wrapper),
 .cutting-done-toolbar .filter-form :deep(.el-select__wrapper),
