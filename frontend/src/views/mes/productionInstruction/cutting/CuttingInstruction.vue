@@ -5388,14 +5388,16 @@ function getCuttingProductionDayDisplay(managementCode?: string | null): string 
   return raw ? formatDateOnly(raw) || '-' : '-'
 }
 
-/** 面取ロット一覧：切断生産日が当日以前（当日含む）なら true */
+/** 面取ロット一覧：切断生産日が当日以前（当日含む）または当日+1平日以前なら true */
 function isCuttingProductionDayDueOrOverdue(managementCode?: string | null): boolean {
   const code = String(managementCode ?? '').trim()
   if (!code) return false
   const raw = cuttingProductionDayByMgmtCode.value.get(code)
   const day = raw ? formatDateOnly(raw) : ''
   if (!day || day === '-') return false
-  return day <= getTodayString()
+  const today = getTodayString()
+  const throughNextWeekday = nextWeekdayFrom(today)
+  return day <= throughNextWeekday
 }
 
 async function loadCuttingFormingStartDateMap() {
@@ -9164,15 +9166,35 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #10b981 0%, #059669 55%, #047857 100%);
   box-shadow: 0 8px 18px -8px rgba(5, 150, 105, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.26);
 }
-.header-right .done-list-btn--molding-wip {
-  border-color: #c4b5fd;
-  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
-  color: #5b21b6;
-}
-.header-right .done-list-btn--molding-wip:hover {
-  border-color: #a78bfa;
-  background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
+.header-right .done-list-btn--molding-wip.el-button {
+  --el-button-text-color: #4c1d95;
+  --el-button-hover-text-color: #3b0764;
+  --el-button-active-text-color: #3b0764;
+  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #faf5ff 0%, #ddd6fe 38%, #c4b5fd 72%, #a78bfa 100%);
   color: #4c1d95;
+  box-shadow:
+    0 8px 18px -8px rgba(124, 58, 237, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(109, 40, 217, 0.18);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+.header-right .done-list-btn--molding-wip.el-button:hover {
+  border-color: #7c3aed;
+  background: linear-gradient(135deg, #ffffff 0%, #ede9fe 35%, #c4b5fd 70%, #a78bfa 100%);
+  color: #3b0764;
+  box-shadow:
+    0 12px 22px -10px rgba(124, 58, 237, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+.header-right .done-list-btn--molding-wip.el-button:active {
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 50%, #a78bfa 100%);
+  box-shadow:
+    0 4px 10px -6px rgba(124, 58, 237, 0.45),
+    inset 0 2px 5px rgba(91, 33, 182, 0.14);
+}
+.header-right .done-list-btn--molding-wip.el-button:focus-visible {
+  outline-color: rgba(124, 58, 237, 0.5);
 }
 .header-right .done-list-btn--chamfering:hover {
   box-shadow: 0 12px 22px -10px rgba(5, 150, 105, 0.78), inset 0 1px 0 rgba(255, 255, 255, 0.3);
