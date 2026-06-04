@@ -712,6 +712,8 @@
                     <div class="plan-batch-th">CD</div>
                     <div class="plan-batch-th">生産月</div>
                     <div class="plan-batch-th">ライン</div>
+                    <div class="plan-batch-th plan-batch-th-cutting-day">切断生産日</div>
+                    <div class="plan-batch-th plan-batch-th-forming-day">成型予定日</div>
                     <div class="plan-batch-th">製品名</div>
                     <div class="plan-batch-th">原材料</div>
                     <div class="plan-batch-th">生産数</div>
@@ -734,8 +736,13 @@
                     @dragend="onChamferingDragEnd"
                   >
                     <div class="plan-batch-td">{{ (row.cd ?? (row.management_code ? String(row.management_code).slice(-5) : '')) || '-' }}</div>
-                    <div class="plan-batch-td">{{ formatDateOnly(String(row.production_month ?? '')) || '-' }}</div>
+                    <div class="plan-batch-td">{{ formatProductionMonth(row.production_month) || '-' }}</div>
                     <div class="plan-batch-td">{{ row.production_line ?? '-' }}</div>
+                    <div
+                      class="plan-batch-td plan-batch-td-cutting-day"
+                      :class="{ 'plan-batch-td-cutting-day--due': isCuttingProductionDayDueOrOverdue(row.management_code) }"
+                    >{{ getCuttingProductionDayDisplay(row.management_code) }}</div>
+                    <div class="plan-batch-td plan-batch-td-forming-day">{{ getFormingStartDateDisplay(row.management_code) }}</div>
                     <div class="plan-batch-td">{{ row.product_name || row.product_cd || '-' }}</div>
                     <div class="plan-batch-td">{{ row.material_name ?? '-' }}</div>
                     <div class="plan-batch-td">{{ row.actual_production_quantity ?? '-' }}</div>
@@ -879,6 +886,7 @@
                 <div class="cutting-mgmt-tr">
                   <div class="cutting-mgmt-th">CD</div>
                   <div class="cutting-mgmt-th">ライン</div>
+                  <div class="cutting-mgmt-th cutting-mgmt-th-forming-day">成型予定日</div>
                   <div class="cutting-mgmt-th">生産日</div>
                   <div class="cutting-mgmt-th">面取機</div>
                   <div class="cutting-mgmt-th">製品名</div>
@@ -911,6 +919,7 @@
                 >
                   <div class="cutting-mgmt-td">{{ row.cd ?? row.management_code ?? '-' }}</div>
                   <div class="cutting-mgmt-td">{{ row.production_line ?? '-' }}</div>
+                  <div class="cutting-mgmt-td cutting-mgmt-td-forming-day">{{ getFormingStartDateDisplay(row.management_code) }}</div>
                   <div
                     class="cutting-mgmt-td cutting-mgmt-td-production-day"
                     :class="{ 'is-editing-production-day': editingChamferingProductionDayId === row.id }"
@@ -3273,6 +3282,13 @@ const formatDateOnly = (v: string | null | undefined) => {
   return s.slice(0, 10)
 }
 
+/** 生産月を YYYY-MM で表示 */
+const formatProductionMonth = (v: string | null | undefined) => {
+  if (v == null || v === '') return ''
+  const s = String(v).trim()
+  return s.length >= 7 ? s.slice(0, 7) : s
+}
+
 /** 生産ロット一覧：順位ごとの浅色背景クラス（順位数字で区別） */
 function getPlanBatchPriorityClass(order: number | null | undefined): string {
   if (order == null || order === undefined) return 'plan-batch-priority-none'
@@ -4495,6 +4511,63 @@ interface ChamferingBatchRow {
 }
 const chamferingBatchList = ref<ChamferingBatchRow[]>([])
 const chamferingBatchLoading = ref(false)
+/** cutting_management.management_code → start_date / production_day */
+const cuttingFormingStartDateByMgmtCode = ref<Map<string, string>>(new Map())
+const cuttingProductionDayByMgmtCode = ref<Map<string, string>>(new Map())
+
+function getFormingStartDateDisplay(managementCode?: string | null): string {
+  const code = String(managementCode ?? '').trim()
+  if (!code) return '-'
+  const raw = cuttingFormingStartDateByMgmtCode.value.get(code)
+  return raw ? formatDateOnly(raw) || '-' : '-'
+}
+
+function getCuttingProductionDayDisplay(managementCode?: string | null): string {
+  const code = String(managementCode ?? '').trim()
+  if (!code) return '-'
+  const raw = cuttingProductionDayByMgmtCode.value.get(code)
+  return raw ? formatDateOnly(raw) || '-' : '-'
+}
+
+/** 面取ロット一覧：切断生産日が当日以前（当日含む）なら true */
+function isCuttingProductionDayDueOrOverdue(managementCode?: string | null): boolean {
+  const code = String(managementCode ?? '').trim()
+  if (!code) return false
+  const raw = cuttingProductionDayByMgmtCode.value.get(code)
+  const day = raw ? formatDateOnly(raw) : ''
+  if (!day || day === '-') return false
+  return day <= getTodayString()
+}
+
+async function loadCuttingFormingStartDateMap() {
+  try {
+    const result = await request.get<{ success?: boolean; data?: CuttingManagementRow[] }>(
+      '/api/plan/cutting-management/list',
+      { params: { limit: 5000 } }
+    )
+    const rows = (result as any)?.success ? ((result as any).data ?? []) as CuttingManagementRow[] : []
+    const startDateMap = new Map<string, string>()
+    const productionDayMap = new Map<string, string>()
+    for (const cm of rows) {
+      const code = String(cm.management_code ?? '').trim()
+      if (!code) continue
+      if (!startDateMap.has(code)) {
+        const sd = cm.start_date ? String(cm.start_date).slice(0, 10) : ''
+        if (sd) startDateMap.set(code, sd)
+      }
+      if (!productionDayMap.has(code)) {
+        const pd = cm.production_day ? String(cm.production_day).slice(0, 10) : ''
+        if (pd) productionDayMap.set(code, pd)
+      }
+    }
+    cuttingFormingStartDateByMgmtCode.value = startDateMap
+    cuttingProductionDayByMgmtCode.value = productionDayMap
+  } catch (e) {
+    console.error('切断指示参照（成型予定日・切断生産日）の取得に失敗:', e)
+    cuttingFormingStartDateByMgmtCode.value = new Map()
+    cuttingProductionDayByMgmtCode.value = new Map()
+  }
+}
 const chamferingBatchActionLoading = ref<number | null>(null)
 const chamferingSwLoading = ref<number | null>(null)
 
@@ -6744,6 +6817,7 @@ async function loadChamferingManagement() {
         '/api/plan/chamfering-management/list',
         { params: { ...baseParams, limit: 2000, ...(tomorrowParam ? { production_day: tomorrowParam } : {}), ...(chamferingMachineParam ? { chamfering_machine: chamferingMachineParam } : {}) } }
       ),
+      loadCuttingFormingStartDateMap(),
     ])
     if (chamferingManagementLoadGuard.isStale(reqId)) return
     chamferingManagementListToday.value = (resToday as any)?.success ? ((resToday as any).data ?? []) : []
@@ -6766,10 +6840,13 @@ async function loadChamferingBatchList() {
   try {
     const params: Record<string, string | number> = {}
     params.limit = 50000
-    const result = await request.get<{ success?: boolean; data?: ChamferingBatchRow[] }>(
-      '/api/plan/chamfering-plans/list',
-      { params }
-    )
+    const [result] = await Promise.all([
+      request.get<{ success?: boolean; data?: ChamferingBatchRow[] }>(
+        '/api/plan/chamfering-plans/list',
+        { params }
+      ),
+      loadCuttingFormingStartDateMap(),
+    ])
     chamferingBatchList.value = (result as any)?.success ? ((result as any).data ?? []) : []
   } catch (e) {
     console.error('面取ロット一覧の取得に失敗:', e)
@@ -7176,8 +7253,9 @@ function printKanbanTicket(row: KanbanIssuanceRow, kanbanNo: string) {
   </div>
   <script>window.onload=()=>{setTimeout(()=>{window.print();window.onafterprint=()=>window.close();}, 400);}<\/script>
   </body></html>`
-  const w = window.open('', '_blank', 'width=620,height=900')
-  if (w) { w.document.write(html); w.document.close() }
+  if (!openPrintWindow(html, { autoPrint: false })) {
+    ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
+  }
 }
 
 /** 一括：複数枚を1つの印刷ウィンドウで連続印刷（選択したデータを循环打印） */
@@ -7277,8 +7355,9 @@ function printKanbanTicketsBatch(items: { row: KanbanIssuanceRow; kanbanNo: stri
 ${pagesHtml}
   <script>window.onload=()=>{setTimeout(()=>{window.print();window.onafterprint=()=>window.close();}, 400);}<\/script>
   </body></html>`
-  const w = window.open('', '_blank', 'width=620,height=900')
-  if (w) { w.document.write(html); w.document.close() }
+  if (!openPrintWindow(html, { autoPrint: false })) {
+    ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
+  }
 }
 
 /** 待発行カンバンを手動で発行 */
@@ -7577,19 +7656,28 @@ async function printCuttingPlanList() {
       supplier_name?: string
       material_name?: string
       current_stock?: number
+      order_quantity?: number
       order_bundle_quantity?: number
       planned_usage?: number
     }
+    // 半端材料（material_stock_sub）は材料注文画面と同様、日付で絞らず全件取得する
     const stockSubListRaw: StockSubPrintRow[] = []
     const subPageSize = 500
     let subTotal = Number.POSITIVE_INFINITY
     for (let subPage = 1; subPage < 200; subPage += 1) {
       const stockSubRes = await request.get<{ success?: boolean; data?: { list?: StockSubPrintRow[]; total?: number } }>(
         '/api/material/stock/sub',
-        { params: { target_date: day, page: subPage, pageSize: subPageSize } }
+        { params: { page: subPage, pageSize: subPageSize } }
       )
-      const chunk = (stockSubRes as any)?.success ? ((stockSubRes as any).data?.list ?? []) as StockSubPrintRow[] : []
-      const total = (stockSubRes as any)?.data?.total
+      const resAny = stockSubRes as {
+        success?: boolean
+        data?: { list?: StockSubPrintRow[]; total?: number }
+        list?: StockSubPrintRow[]
+        total?: number
+      }
+      if (resAny?.success === false) break
+      const chunk = (resAny?.data?.list ?? resAny?.list ?? []) as StockSubPrintRow[]
+      const total = resAny?.data?.total ?? resAny?.total
       if (typeof total === 'number') subTotal = total
       stockSubListRaw.push(...chunk)
       if (chunk.length < subPageSize || stockSubListRaw.length >= subTotal) break
@@ -7605,10 +7693,16 @@ async function printCuttingPlanList() {
     // order_bundle_quantity>0 かつ「計画使用数が正でない」行。planned_usage は DB 上ほぼ 0〜正のため、<0 だけだと一致ゼロになりがち → <=0（未設定は 0 扱い）
     const stockSubList = stockSubListRaw.filter((r: StockSubPrintRow) => {
       const ob = Number(r.order_bundle_quantity) || 0
-      if (ob <= 0) return false
+      const oq = Number(r.order_quantity) || 0
+      if (ob <= 0 && oq <= 0) return false
       const pu = r.planned_usage == null ? 0 : Number(r.planned_usage)
       if (Number.isNaN(pu)) return false
       return pu <= 0
+    }).sort((a, b) => {
+      const sa = String(a.supplier_name ?? '')
+      const sb = String(b.supplier_name ?? '')
+      if (sa !== sb) return sa.localeCompare(sb)
+      return String(a.material_name ?? '').localeCompare(String(b.material_name ?? ''))
     })
 
     const byMachine = new Map<string, CuttingManagementRow[]>()
@@ -7633,18 +7727,18 @@ async function printCuttingPlanList() {
       const trs = list.map((r) => `
         <tr>
           <td>${escapeHtml(String(r.cd ?? ''))}</td>
+          <td>${escapeHtml(String(r.production_line ?? ''))}</td>
           <td>${escapeHtml(String(r.product_name ?? ''))}</td>
           <td>${escapeHtml(String(r.material_name ?? ''))}</td>
           <td>${r.production_sequence ?? ''}</td>
           <td>${r.actual_production_quantity ?? ''}</td>
-          <td>${escapeHtml(String(r.production_line ?? ''))}</td>
           <td>${escapeHtml(String(r.remarks ?? ''))}</td>
         </tr>`).join('')
       leftBlocks.push(`
         <div class="print-cut-block">
           <div class="print-cut-block-title">${escapeHtml(machineName)}</div>
           <table class="print-cut-table"><thead><tr>
-            <th>コード</th><th>製品名</th><th>原材料</th><th>順位</th><th>生産数</th><th>ライン</th><th>備考</th>
+            <th>コード</th><th>ライン</th><th>製品名</th><th>原材料</th><th>順位</th><th>生産数</th><th>備考</th>
           </tr></thead><tbody>${trs}</tbody></table>
         </div>`)
     }
@@ -7653,8 +7747,10 @@ async function printCuttingPlanList() {
       `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${formatStockDisplay(r.current_stock)}</td></tr>`
     ).join('')
     const stockSubRows = stockSubList.map(
-      (r: { supplier_name?: string; material_name?: string; order_bundle_quantity?: number }) =>
-        `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${formatStockDisplay(r.order_bundle_quantity)}</td></tr>`
+      (r: StockSubPrintRow) => {
+        const qty = Number(r.order_bundle_quantity) || Number(r.order_quantity) || 0
+        return `<tr><td>${escapeHtml(String(r.supplier_name ?? ''))}</td><td>${escapeHtml(String(r.material_name ?? ''))}</td><td>${formatStockDisplay(qty)}</td></tr>`
+      }
     ).join('')
 
     const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>切断計画リスト</title><style>
@@ -7672,13 +7768,13 @@ async function printCuttingPlanList() {
       .print-cut-table th, .print-cut-table td { border: 1px solid #333; padding: 4px 2px; text-align: center; font-size: 11px; line-height: 1.2; }
       .print-cut-table th { background: #f0f0f0; }
       .print-cut-table th:nth-child(1), .print-cut-table td:nth-child(1) { width: 8%; }
-      .print-cut-table th:nth-child(2), .print-cut-table td:nth-child(2) { width: 17%; }
-      .print-cut-table th:nth-child(3), .print-cut-table td:nth-child(3) { width: 20%; }
-      .print-cut-table th:nth-child(4), .print-cut-table td:nth-child(4) { width: 6%; }
-      .print-cut-table th:nth-child(5), .print-cut-table td:nth-child(5) { width: 8%; }
+      .print-cut-table th:nth-child(2), .print-cut-table td:nth-child(2) { width: 8%; }
+      .print-cut-table th:nth-child(3), .print-cut-table td:nth-child(3) { width: 17%; }
+      .print-cut-table th:nth-child(4), .print-cut-table td:nth-child(4) { width: 20%; }
+      .print-cut-table th:nth-child(5), .print-cut-table td:nth-child(5) { width: 6%; }
       .print-cut-table th:nth-child(6), .print-cut-table td:nth-child(6) { width: 8%; }
       .print-cut-table th:nth-child(7), .print-cut-table td:nth-child(7) { width: 20%; }
-      .print-cut-table td:nth-child(2), .print-cut-table td:nth-child(3), .print-cut-table td:nth-child(7) { text-align: left; }
+      .print-cut-table td:nth-child(3), .print-cut-table td:nth-child(4), .print-cut-table td:nth-child(7) { text-align: left; }
       .print-stock-section { break-inside: avoid; }
       .print-stock-section h3 { margin: 0 0 6px; font-size: 11px; }
       .print-stock-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }
@@ -7824,8 +7920,10 @@ async function issueCuttingInstructionSheet() {
       @media print {
         .instruction-sheet-page { overflow: hidden; }
       }
-    </style></head><body>${pages.join('')}</body></html>`
-    if (!openPrintWindow(html)) {
+    </style></head><body>${pages.join('')}
+  <script>window.onload=function(){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},400);};<\/script>
+  </body></html>`
+    if (!openPrintWindow(html, { autoPrint: false })) {
       ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
@@ -7840,7 +7938,7 @@ async function issueCuttingInstructionSheet() {
   }
 }
 
-/** 面取計画リスト印刷：指定日の各面取機データ（A4縦・余白小・样式参考切断計画） */
+/** 面取計画リスト印刷：指定日の全面取機データ（データなし機も「該当日のデータがありません」を表示） */
 const printChamferingPlanLoading = ref(false)
 async function printChamferingPlanList() {
   const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
@@ -7850,6 +7948,9 @@ async function printChamferingPlanList() {
   }
   printChamferingPlanLoading.value = true
   try {
+    if (!chamferingMachineOptions.value.length) {
+      await loadChamferingMachineOptions()
+    }
     const res = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
       '/api/plan/chamfering-management/list',
       { params: { production_day: day, limit: 2000 } }
@@ -7864,14 +7965,25 @@ async function printChamferingPlanList() {
     for (const [, list] of byMachine) {
       list.sort((a, b) => (a.production_sequence ?? 0) - (b.production_sequence ?? 0))
     }
-    const machineNames = Array.from(byMachine.keys()).sort()
+    const machineNameSet = new Set<string>(
+      chamferingMachineOptions.value.map((m) => m.machine_name).filter(Boolean)
+    )
+    for (const key of byMachine.keys()) {
+      machineNameSet.add(key)
+    }
+    const machineNames = Array.from(machineNameSet).sort((a, b) => a.localeCompare(b, 'ja'))
+    if (machineNames.length === 0) {
+      ElMessage.warning('面取機が登録されていません')
+      return
+    }
     const dayDisplay = day.replace(/-/g, '/')
     const blocks: string[] = []
     for (const machineName of machineNames) {
-      const list = byMachine.get(machineName)!
-      const trs = list.map((r) => {
-        const noCountDisplay = r.no_count ? 'Yes' : 'No'
-        return `
+      const list = byMachine.get(machineName) ?? []
+      const trs = list.length
+        ? list.map((r) => {
+          const noCountDisplay = r.no_count ? 'Yes' : 'No'
+          return `
         <tr>
           <td>${escapeHtml(String(r.cd ?? r.management_code ?? ''))}</td>
           <td>${escapeHtml(String(r.product_name ?? ''))}</td>
@@ -7881,7 +7993,8 @@ async function printChamferingPlanList() {
           <td>${r.production_time ?? ''}</td>
           <td>${escapeHtml(String(r.production_line ?? ''))}</td>
         </tr>`
-      }).join('')
+        }).join('')
+        : '<tr><td colspan="7" class="print-chamfer-empty">該当日のデータがありません</td></tr>'
       blocks.push(`
         <div class="print-chamfer-block">
           <div class="print-chamfer-block-title">${escapeHtml(machineName)}</div>
@@ -7910,6 +8023,7 @@ async function printChamferingPlanList() {
       .print-chamfer-table th:nth-child(7), .print-chamfer-table td:nth-child(7) { width: 16%;text-align: center; }
       .print-chamfer-table td:nth-child(2) { text-align: left; }
       .print-chamfer-table td:nth-child(7) { text-align: left; }
+      .print-chamfer-empty { color: #666; padding: 8px 4px !important; }
       @media print { .print-chamfer-block { break-inside: avoid; } }
     </style></head><body>
       <div class="print-chamfer-header"><span class="print-title">面取計画リスト</span><span class="print-date">生産日 ${escapeHtml(dayDisplay)}</span></div>
@@ -7942,10 +8056,13 @@ async function issueChamferingInstructionSheet() {
   try {
     // 指示書発行は選択日の全面取機を対象とする（当前面取機筛选に依存しない）
     const params: Record<string, string> = { production_day: day, limit: '2000' }
-    const res = await request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
-      '/api/plan/chamfering-management/list',
-      { params }
-    )
+    const [res] = await Promise.all([
+      request.get<{ success?: boolean; data?: ChamferingManagementRow[] }>(
+        '/api/plan/chamfering-management/list',
+        { params }
+      ),
+      loadCuttingFormingStartDateMap(),
+    ])
     const rows = (res as any)?.success ? ((res as any).data ?? []) as ChamferingManagementRow[] : []
     const byMachine = new Map<string, ChamferingManagementRow[]>()
     for (const r of rows) {
@@ -7966,9 +8083,11 @@ async function issueChamferingInstructionSheet() {
         const qty = r.actual_production_quantity ?? 0
         totalQty += qty
         const noCountDisplay = r.no_count ? 'あり' : '--'
+        const formingStartDisplay = getFormingStartDateDisplay(r.management_code)
         return `<tr>
           <td>${escapeHtml(r.cd ?? r.management_code ?? '')}</td>
           <td>${escapeHtml(r.production_line ?? '')}</td>
+          <td>${escapeHtml(formingStartDisplay === '-' ? '' : formingStartDisplay)}</td>
           <td>${escapeHtml(r.product_name ?? '')}</td>
           <td>${r.production_sequence ?? ''}</td>
           <td>${r.actual_production_quantity ?? ''}</td>
@@ -7990,7 +8109,7 @@ async function issueChamferingInstructionSheet() {
           <div class="instruction-sheet-table-wrap">
             <table class="instruction-sheet-table chamfering-sheet-table">
               <thead><tr>
-                <th>CD</th><th>ライン</th><th>製品名</th><th>順位</th><th>計画数</th><th>実績数</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
+                <th>CD</th><th>ライン</th><th>成型生産予定日</th><th>製品名</th><th>順位</th><th>計画</th><th>実績</th><th>カ無</th><th>運転時間</th><th>停止時間</th><th>1直</th><th>2直</th>
               </tr></thead>
               <tbody>${trs}</tbody>
             </table>
@@ -8018,23 +8137,26 @@ async function issueChamferingInstructionSheet() {
       .instruction-sheet-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       .chamfering-sheet-table th:nth-child(1), .chamfering-sheet-table td:nth-child(1) { width: 6%; }
       .chamfering-sheet-table th:nth-child(2), .chamfering-sheet-table td:nth-child(2) { width: 7%; }
-      .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 18%; }
-      .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 5%; }
-      .chamfering-sheet-table th:nth-child(5), .chamfering-sheet-table td:nth-child(5) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(3), .chamfering-sheet-table td:nth-child(3) { width: 10%; }
+      .chamfering-sheet-table th:nth-child(4), .chamfering-sheet-table td:nth-child(4) { width: 12%; }
+      .chamfering-sheet-table th:nth-child(5), .chamfering-sheet-table td:nth-child(5) { width: 5%; }
       .chamfering-sheet-table th:nth-child(6), .chamfering-sheet-table td:nth-child(6) { width: 6%; }
-      .chamfering-sheet-table th:nth-child(7), .chamfering-sheet-table td:nth-child(7) { width: 5%; }
-      .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 8%; }
+      .chamfering-sheet-table th:nth-child(7), .chamfering-sheet-table td:nth-child(7) { width: 6%; }
+      .chamfering-sheet-table th:nth-child(8), .chamfering-sheet-table td:nth-child(8) { width: 5%; }
       .chamfering-sheet-table th:nth-child(9), .chamfering-sheet-table td:nth-child(9) { width: 8%; }
       .chamfering-sheet-table th:nth-child(10), .chamfering-sheet-table td:nth-child(10) { width: 8%; }
-      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 8%; }
+      .chamfering-sheet-table th:nth-child(11), .chamfering-sheet-table td:nth-child(11) { width: 7%; }
+      .chamfering-sheet-table th:nth-child(12), .chamfering-sheet-table td:nth-child(12) { width: 7%; }
       .instruction-sheet-table th, .instruction-sheet-table td { border: 1px solid #999; padding: 3px 7px; text-align: center; line-height: 1.8; }
       .instruction-sheet-table th { background: #fff; font-weight: bold; font-size: 11px; }
       .instruction-sheet-table td { font-size: 14px; }
-      .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(3) { font-size: 14px; text-align: left; }
+      .chamfering-sheet-table td:nth-child(1), .chamfering-sheet-table td:nth-child(2), .chamfering-sheet-table td:nth-child(4) { font-size: 14px; text-align: left; }
       .instruction-sheet-footer { margin-top: 12px; padding-top: 8px; display: flex; justify-content: flex-end; gap: 24px; font-weight: bold; }
       @media print { .instruction-sheet-page { overflow: hidden; } }
-    </style></head><body>${pages.join('')}</body></html>`
-    if (!openPrintWindow(html)) {
+    </style></head><body>${pages.join('')}
+  <script>window.onload=function(){setTimeout(function(){window.print();window.onafterprint=function(){window.close();};},400);};<\/script>
+  </body></html>`
+    if (!openPrintWindow(html, { autoPrint: false })) {
       ElMessage.warning(PRINT_POPUP_BLOCKED_MSG)
       return
     }
@@ -9061,9 +9183,9 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 面取指示-今日：13列（CD, ライン, 生産日, 面取機, 製品名, 原材料, 生産数, 不良, 完了, カ無, 生産順, 生産時間, 操作） */
+/* 面取指示-今日：14列（CD, ライン, 成型生産予定日, 生産日, 面取機, 製品名, 原材料, 生産数, 不良, 完了, カ無, 生産順, 生産時間, 操作） */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-tr {
-  min-width: 772px;
+  min-width: 844px;
 }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(1),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(1) { flex: 0 0 44px; }
@@ -9071,26 +9193,38 @@ onUnmounted(() => {
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(2) { flex: 0 0 48px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(3),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(3) { flex: 0 0 72px; }
+.chamfering-management-section .cutting-mgmt-th-forming-day {
+  background: #d1fae5;
+  color: #047857;
+  font-weight: 600;
+}
+.chamfering-management-section .cutting-mgmt-td-forming-day {
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 500;
+}
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(4),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(4) { flex: 0 0 72px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(5),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 1 1 0; min-width: 60px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(5) { flex: 0 0 52px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(6),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 0 0 100px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(6) { flex: 1 1 0; min-width: 60px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 52px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7) { flex: 0 0 100px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8) { flex: 0 0 52px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 42px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9) { flex: 0 0 44px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10) { flex: 0 0 42px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 44px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11) { flex: 0 0 42px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12) { flex: 0 0 44px; }
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) { flex: 0 0 110px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) { flex: 0 0 56px; }
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(14),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(14) { flex: 0 0 110px; }
 
 /* 面取指示-翌日：8列（CD, 生産日, 面取機, 製品名, 生産数, 不良, 生産順, 生産時間） */
 .chamfering-management-section .cutting-mgmt-table-inner--chamfering-tomorrow .cutting-mgmt-tr {
@@ -9124,21 +9258,21 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 面取指示-今日：生産数(7)、不良(8)、完了(9)、カ無(10)、生産順(11)、生産時間(12)、操作(13) 居中 */
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(7),
+/* 面取指示-今日：生産数(8)、不良(9)、完了(10)、カ無(11)、生産順(12)、生産時間(13)、操作(14) 居中 */
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(11),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(12),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(13),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(7),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-th:nth-child(14),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(8),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(9),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(10),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(11),
 .chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(12),
-.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13) {
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(13),
+.chamfering-management-section .cutting-mgmt-table-inner:not(.cutting-mgmt-table-inner--tomorrow) .cutting-mgmt-td:nth-child(14) {
   justify-content: center;
   text-align: center;
 }
@@ -10442,9 +10576,9 @@ onUnmounted(() => {
   max-height: 288px;
 }
 
-/* 面取ロット一覧：10列（CD, 生産月, ライン, 製品名, 原材料, 生産数, ロット数, ロットNo, SW, 操作） */
+/* 面取ロット一覧：12列（CD, 生産月, ライン, 切断生産日, 成型生産予定日, 製品名, 原材料, 生産数, ロット数, ロットNo, SW, 操作） */
 .chamfering-batch-table-wrap .plan-batch-tr {
-  min-width: 620px;
+  min-width: 752px;
 }
 
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(1),
@@ -10453,23 +10587,63 @@ onUnmounted(() => {
 .chamfering-batch-table-wrap .plan-batch-td:nth-child(2) { flex: 0 0 72px; }
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(3),
 .chamfering-batch-table-wrap .plan-batch-td:nth-child(3) { flex: 0 0 52px; }
+/* 切断生産日・成型予定日：生産ロット一覧の nth-child(4) min-width:110px を上書き */
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(4),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(4) { flex: 1 1 0; min-width: 110px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(4),
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(5),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(5) { flex: 0 0 110px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(5),
+.chamfering-batch-table-wrap .plan-batch-th-cutting-day,
+.chamfering-batch-table-wrap .plan-batch-td-cutting-day,
+.chamfering-batch-table-wrap .plan-batch-th-forming-day,
+.chamfering-batch-table-wrap .plan-batch-td-forming-day {
+  flex: 0 0 76px;
+  min-width: 76px;
+  max-width: 76px;
+  justify-content: center;
+  text-align: center;
+}
+.chamfering-batch-table-wrap .plan-batch-th-cutting-day {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 600;
+}
+.chamfering-batch-table-wrap .plan-batch-td-cutting-day {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 500;
+}
+.chamfering-batch-table-wrap .plan-batch-td-cutting-day--due {
+  background: #fef2f2;
+  color: #dc2626;
+  font-weight: 600;
+}
+.chamfering-batch-table-wrap .plan-batch-th-forming-day {
+  background: #d1fae5;
+  color: #047857;
+  font-weight: 600;
+}
+.chamfering-batch-table-wrap .plan-batch-td-forming-day {
+  background: #ecfdf5;
+  color: #059669;
+  font-weight: 500;
+}
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(6),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(6) { flex: 0 0 55px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(6) { flex: 1 1 0; min-width: 110px; }
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(7),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(7) { flex: 0 0 55px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(7) { flex: 0 0 110px; }
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(8),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(8) { flex: 0 0 48px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(8) { flex: 0 0 55px; }
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(9),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(9) { flex: 0 0 36px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(9) { flex: 0 0 55px; }
 .chamfering-batch-table-wrap .plan-batch-th:nth-child(10),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(10) { flex: 0 0 90px; }
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(10) { flex: 0 0 48px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(11),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(11) { flex: 0 0 36px; }
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(12),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(12) { flex: 0 0 90px; }
 
-.chamfering-batch-table-wrap .plan-batch-th:nth-child(4),
-.chamfering-batch-table-wrap .plan-batch-td:nth-child(4) {
+.chamfering-batch-table-wrap .plan-batch-th:nth-child(6),
+.chamfering-batch-table-wrap .plan-batch-td:nth-child(6) {
   justify-content: flex-start;
   text-align: left;
 }

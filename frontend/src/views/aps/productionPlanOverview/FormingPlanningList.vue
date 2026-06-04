@@ -218,9 +218,9 @@
               全 {{ tableRows.length }} 件中
             </span>
           </div>
-          <!-- <p class="table-range-note">
-            当工程の<strong>全設備・全製造指示</strong>を表示します。実績・不良・残の日次合計は検索期間ではなく、システム上の広い明細取得範囲で集計します（{{ tableGridRangeNote }}）。
-          </p> -->
+          <p v-if="tableRows.length > 0" class="table-range-note">
+            計画・実績・不良・前工程不良・残・進捗は<strong>検索期間（{{ displayRangeText }}）</strong>内の日別合計です。
+          </p>
 
           <div v-if="tableRows.length > 0" class="table-filter-toolbar-card">
             <div class="table-tab-filter-bar">
@@ -351,32 +351,50 @@
                     <span class="date-cell">{{ effectiveScheduleDateSpan(row).end || '—' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'計画'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別計画合計">計画</span>
+                  </template>
                   <template #default="{ row }">
-                    <span class="qty-cell">{{ formatNum(row.planned_process_qty) }}</span>
+                    <span class="qty-cell">{{ formatNum(tablePlanned(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'実績'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別実績合計">実績</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--actual">{{ formatNum(tableActual(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'不良'" width="88" align="right">
+                <el-table-column width="88" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別不良合計">不良</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--defect">{{ formatNum(tableDefect(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'前工程不良'" width="100" align="right">
+                <el-table-column width="100" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別前工程不良合計">前工程不良</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--upstream">{{ formatNum(tableUpstreamDefect(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'残'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別残合計">残</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell">{{ formatNum(tableRemaining(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'進捗'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内：実績÷計画">進捗</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell">{{ tableProgress(row) }}</span>
                   </template>
@@ -842,7 +860,7 @@ const loadingUtilizationMonth = ref(false)
 const selectedProcessCd = ref<string>('')
 const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
-/** 一覧（表）用：工程内の全設備の全指示（日次集計は tableGanttDates の広い範囲） */
+/** 一覧（表）用：検索期間に重なる製造指示（ガントと同一データソース） */
 const tableRows = ref<GanttListRow[]>([])
 /** ページ全体（ガント/一覧）共通：製品絞込 */
 const globalFilterProductKey = ref<string>('')
@@ -854,8 +872,6 @@ const tableFilterProductKey = ref<string>('')
 const tableShowStatusDone = ref(false)
 /** 一覧（表）のみ：状態「準備中」行を表示（既定 ON） */
 const tableShowStatusPending = ref(true)
-/** 一覧（表）の実績・不良・残など日次マップの合計に使う日付列（検索期間より広い取得結果） */
-const tableGanttDates = ref<string[]>([])
 const loading = ref(false)
 const searched = ref(false)
 const activeResultTab = ref<'gantt' | 'table' | 'utilization' | 'utilizationDaily'>('gantt')
@@ -864,11 +880,6 @@ const ganttRows = ref<GanttListRow[]>([])
 const lineCalendarHoursMap = ref<Record<number, Record<string, number>>>({})
 const lineDefaultHoursMap = ref<Record<number, number>>({})
 
-/** 一覧用 grid の明細取得範囲（サーバ負荷のため過大にしない） */
-const TABLE_GRID_PAST_YEARS = 10
-const TABLE_GRID_FUTURE_YEARS = 5
-
-const tableGridRangeNote = ref('—')
 const dailyPlanEditVisible = ref(false)
 const savingDailyPlanEdit = ref(false)
 const dailyPlanEditQty = ref<number>(0)
@@ -878,13 +889,6 @@ const dailyPlanEditTarget = ref<{
   itemName: string
   lineLabel: string
 } | null>(null)
-
-function ymdFromLocalDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 /** YYYY-MM から暦月の [月初, 月末] ISO 日付 */
 function monthRangeFromYm(ym: string): [string, string] | null {
@@ -912,15 +916,6 @@ const utilizationDailyDateRange = ref<[string, string]>(initialUtilizationDailyD
 const utilizationDailyDates = ref<string[]>([])
 const utilizationDailyRows = ref<GanttListRow[]>([])
 const loadingUtilizationDaily = ref(false)
-
-/** 一覧（表）の日次明細を検索期間外まで含めて集計するための grid 用期間 */
-function buildTableGridRange(): [string, string] {
-  const n = new Date()
-  n.setHours(0, 0, 0, 0)
-  const start = new Date(n.getFullYear() - TABLE_GRID_PAST_YEARS, n.getMonth(), n.getDate())
-  const end = new Date(n.getFullYear() + TABLE_GRID_FUTURE_YEARS, n.getMonth(), n.getDate())
-  return [ymdFromLocalDate(start), ymdFromLocalDate(end)]
-}
 
 function flattenGridToRows(grid: SchedulingGridResponse, lineNameById: Map<number, string>): GanttListRow[] {
   const flat: GanttListRow[] = []
@@ -1438,6 +1433,9 @@ async function loadProcessOptions() {
     ElMessage.error('工程一覧の取得に失敗しました')
   } finally {
     loadingProcesses.value = false
+    if (canSearch.value) {
+      void loadSchedules()
+    }
   }
 }
 
@@ -1857,7 +1855,7 @@ function buildTableListPrintHtml(): string {
             <td class="left name">${escHtml(row.item_name || '—')}</td>
             <td class="cen">${escHtml(span.start || '—')}</td>
             <td class="cen">${escHtml(span.end || '—')}</td>
-            <td class="num">${escHtml(formatNum(row.planned_process_qty))}</td>
+            <td class="num">${escHtml(formatNum(tablePlanned(row)))}</td>
             <td class="num">${escHtml(formatNum(tableActual(row)))}</td>
             <td class="num">${escHtml(formatNum(tableDefect(row)))}</td>
             <td class="num">${escHtml(formatNum(tableUpstreamDefect(row)))}</td>
@@ -1876,12 +1874,12 @@ function buildTableListPrintHtml(): string {
               <th class="left name">製品名</th>
               <th class="cen">開始</th>
               <th class="cen">終了</th>
-              <th class="num">計画</th>
-              <th class="num">実績</th>
-              <th class="num">不良</th>
-              <th class="num">前工程不良</th>
-              <th class="num">残</th>
-              <th class="num">進捗</th>
+              <th class="num" title="検索期間内合計">計画</th>
+              <th class="num" title="検索期間内合計">実績</th>
+              <th class="num" title="検索期間内合計">不良</th>
+              <th class="num" title="検索期間内合計">前工程不良</th>
+              <th class="num" title="検索期間内合計">残</th>
+              <th class="num" title="検索期間内：実績÷計画">進捗</th>
               <th class="cen">状態</th>
             </tr>
           </thead>
@@ -1955,7 +1953,7 @@ function buildTableListPrintHtml(): string {
   <div class="hd">
     <div class="tt">${escHtml(title)}</div>
     <div class="meta">
-      期間：<strong>${escHtml(displayRangeText.value)}</strong>
+      期間：<strong>${escHtml(displayRangeText.value)}</strong>（数量列は当該期間内の日別合計）
       　工程：<strong>${escHtml(selectedProcessLabel())}</strong>
      
       絞込：<strong>設備 ${escHtml(lineLabel)}</strong> ／ <strong>製品 ${escHtml(productLabel)}</strong>
@@ -2136,34 +2134,53 @@ function effectiveScheduleDateSpan(row: GanttListRow): { start: string | null; e
   return { start: dates[0] ?? null, end: dates[dates.length - 1] ?? null }
 }
 
+/** 検索期間 [periodStart, periodEnd] と製造指示の期日が重なるか */
+function rowOverlapsSearchPeriod(row: GanttListRow, periodStart: string, periodEnd: string): boolean {
+  const activeInPeriod = isoDatesWithGridActivity(row).some((d) => d >= periodStart && d <= periodEnd)
+  if (activeInPeriod) return true
+
+  const span = effectiveScheduleDateSpan(row)
+  const rs = (span.start || row.start_date || '').trim().slice(0, 10)
+  const re = (span.end || row.end_date || '').trim().slice(0, 10)
+  if (!rs && !re) return false
+  const start = rs || re
+  const end = re || rs
+  return start <= periodEnd && end >= periodStart
+}
+
+function filterRowsInSearchPeriod(rows: GanttListRow[], periodStart: string, periodEnd: string): GanttListRow[] {
+  return rows.filter((row) => rowOverlapsSearchPeriod(row, periodStart, periodEnd))
+}
+
 function tableActual(row: GanttListRow): number {
-  return periodActualForRow(row, tableGanttDates.value)
+  return periodActualForRow(row)
 }
 
-/** 不良：schedule_details.defect_qty の期間合計（API の defect_qty_sum） */
+/** 一覧：検索期間内の日別計画合計 */
+function tablePlanned(row: GanttListRow): number {
+  return periodPlannedForRow(row)
+}
+
+/** 一覧：検索期間内の日別不良合計 */
 function tableDefect(row: GanttListRow): number {
-  const v = row.defect_qty_sum
-  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  return periodDefectForRow(row, tableGanttDates.value)
+  return periodDefectForRow(row)
 }
 
-/** 前工程不良：FormingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
+/** 一覧：検索期間内の日別前工程不良合計 */
 function tableUpstreamDefect(row: GanttListRow): number {
-  const v = row.upstream_defect_qty_total
-  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  return periodUpstreamDefectForRow(row, tableGanttDates.value)
+  return periodUpstreamDefectForRow(row)
 }
 
 function tableRemaining(row: GanttListRow): number {
-  const remainByDaily = periodRemainingForRow(row, tableGanttDates.value)
-  if (remainByDaily > 0) return remainByDaily
-  const planned = Number(row.planned_process_qty ?? 0)
-  const remain = planned - tableActual(row)
+  const remainByDaily = periodRemainingForRow(row)
+  if (remainByDaily !== 0) return remainByDaily
+  const planned = tablePlanned(row)
+  const remain = planned - tableActual(row) - tableDefect(row) - tableUpstreamDefect(row)
   return remain > 0 ? remain : 0
 }
 
 function tableProgress(row: GanttListRow): string {
-  const planned = Number(row.planned_process_qty ?? 0)
+  const planned = tablePlanned(row)
   if (planned <= 0) return '0%'
   const pct = (tableActual(row) / planned) * 100
   return `${Math.round(Math.max(0, Math.min(999, pct)))}%`
@@ -2249,7 +2266,6 @@ async function loadSchedules() {
   ganttDates.value = []
   ganttRows.value = []
   tableRows.value = []
-  tableGanttDates.value = []
   lineCalendarHoursMap.value = {}
   lineDefaultHoursMap.value = {}
   try {
@@ -2276,31 +2292,20 @@ async function loadSchedules() {
 
     const flat = flattenGridToRows(grid, lineNameById)
     flat.sort(compareByLineThenOrder)
-    ganttRows.value = flat
+    const inPeriod = filterRowsInSearchPeriod(flat, sd, ed)
+    ganttRows.value = inPeriod
+    tableRows.value = [...inPeriod]
 
-    const [wideStart, wideEnd] = buildTableGridRange()
-    tableGridRangeNote.value = `${wideStart} 〜 ${wideEnd}`
-    try {
-      const wideGrid = await fetchSchedulingGrid(wideStart, wideEnd, undefined, pc)
-      tableGanttDates.value = Array.isArray(wideGrid.dates) ? wideGrid.dates : []
-      const wideFlat = flattenGridToRows(wideGrid, lineNameById)
-      wideFlat.sort(compareByLineThenOrder)
-      tableRows.value = wideFlat
-    } catch {
-      tableGanttDates.value = [...ganttDates.value]
-      tableRows.value = [...flat]
-    }
     if (
       globalFilterProductKey.value &&
       !globalProductFilterOptions.value.some((x) => x.value === globalFilterProductKey.value)
     ) {
       globalFilterProductKey.value = ''
     }
-    await loadUtilizationMonthGrid()
-    await loadUtilizationDailyGrid()
+    void loadUtilizationMonthGrid()
+    void loadUtilizationDailyGrid()
   } catch (e: unknown) {
     tableRows.value = []
-    tableGanttDates.value = []
     ganttDates.value = []
     ganttRows.value = []
     lineCalendarHoursMap.value = {}
@@ -2571,11 +2576,13 @@ function applyLocalDailyPlannedEdit(
       const daily = { ...(row.daily || {}) }
       const actual = { ...(row.actual_daily || {}) }
       const defect = { ...(row.defect_daily || {}) }
+      const upstream = { ...(row.upstream_defect_daily || {}) }
       const remaining = { ...(row.remaining_daily || {}) }
       daily[scheduleDate] = plannedQty
       const a = ganttDayQty(actual[scheduleDate])
       const df = ganttDayQty(defect[scheduleDate])
-      remaining[scheduleDate] = plannedQty - a - df
+      const up = ganttDayQty(upstream[scheduleDate])
+      remaining[scheduleDate] = plannedQty - a - df - up
       const next: GanttListRow = {
         ...row,
         daily,
@@ -2590,6 +2597,18 @@ function applyLocalDailyPlannedEdit(
   ganttRows.value = patchRows(ganttRows.value)
   tableRows.value = patchRows(tableRows.value)
   utilizationMonthRows.value = patchRows(utilizationMonthRows.value)
+  utilizationDailyRows.value = patchRows(utilizationDailyRows.value)
+}
+
+function periodPlannedForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
+  const m = row.daily || {}
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
 function periodActualForRow(row: ScheduleGridRow, datesOverride?: string[]): number {

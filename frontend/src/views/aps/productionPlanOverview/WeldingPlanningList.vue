@@ -181,9 +181,13 @@
                     v-for="d in ganttDates"
                     :key="d"
                     class="gantt-cell"
-                    :class="{ 'gantt-cell--tone': ganttCellHasSoftTone(row, d) }"
-                    :title="ganttCellTitle(row, d)"
+                    :class="{
+                      'gantt-cell--tone': ganttCellHasSoftTone(row, d),
+                      'gantt-cell--editable': canEditGanttPlanDate(d),
+                    }"
+                    :title="ganttEditableCellTitle(row, d)"
                     :aria-label="ganttCellHasAnyMarker(row, d) ? ganttCellTitle(row, d) : undefined"
+                    @dblclick.stop="openGanttDailyPlanEdit(row, d)"
                   >
                     <div v-if="ganttCellHasAnyMarker(row, d)" class="gantt-cell-markers">
                       <span v-if="ganttDayQty(row.daily?.[d]) !== 0" class="gantt-seg gantt-seg--plan">
@@ -214,9 +218,9 @@
               全 {{ tableRows.length }} 件中
             </span>
           </div>
-          <!-- <p class="table-range-note">
-            当工程の<strong>全設備・全製造指示</strong>を表示します。実績・不良・残の日次合計は検索期間ではなく、システム上の広い明細取得範囲で集計します（{{ tableGridRangeNote }}）。
-          </p> -->
+          <p v-if="tableRows.length > 0" class="table-range-note">
+            計画・実績・不良・前工程不良・残・進捗は<strong>検索期間（{{ displayRangeText }}）</strong>内の日別合計です。
+          </p>
 
           <div v-if="tableRows.length > 0" class="table-filter-toolbar-card">
             <div class="table-tab-filter-bar">
@@ -347,32 +351,50 @@
                     <span class="date-cell">{{ effectiveScheduleDateSpan(row).end || '—' }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'計画'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別計画合計">計画</span>
+                  </template>
                   <template #default="{ row }">
-                    <span class="qty-cell">{{ formatNum(row.planned_process_qty) }}</span>
+                    <span class="qty-cell">{{ formatNum(tablePlanned(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'実績'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別実績合計">実績</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--actual">{{ formatNum(tableActual(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'不良'" width="88" align="right">
+                <el-table-column width="88" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別不良合計">不良</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--defect">{{ formatNum(tableDefect(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'前工程不良'" width="100" align="right">
+                <el-table-column width="100" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別前工程不良合計">前工程不良</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell qty-cell--upstream">{{ formatNum(tableUpstreamDefect(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'残'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内の日別残合計">残</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell">{{ formatNum(tableRemaining(row)) }}</span>
                   </template>
                 </el-table-column>
-                <el-table-column :label="'進捗'" width="92" align="right">
+                <el-table-column width="92" align="right">
+                  <template #header>
+                    <span title="検索期間内：実績÷計画">進捗</span>
+                  </template>
                   <template #default="{ row }">
                     <span class="qty-cell">{{ tableProgress(row) }}</span>
                   </template>
@@ -509,8 +531,190 @@
             </el-table>
           </div>
         </el-tab-pane>
+
+        <el-tab-pane label="設備操業度（日）" name="utilizationDaily">
+          <div class="plan-sec-hd plan-sec-hd--inner util-sec-hd">
+            <span>設備別・操業度差異（日次）</span>
+            <span class="plan-sec-badge">{{ utilizationDailyMatrixRows.length }}</span>
+            <div
+              class="util-month-surface util-daily-range-surface"
+              :class="{
+                'util-month-surface--disabled':
+                  !(selectedProcessCd || '').trim() || loadingUtilizationDaily || utilizationDailyRangeInvalid,
+              }"
+            >
+              <el-icon class="util-month-surface__icon"><Calendar /></el-icon>
+              <div class="util-month-surface__main util-month-surface__main--row">
+                <span class="util-month-surface__kicker">表示期間</span>
+                <el-date-picker
+                  v-model="utilizationDailyDateRange"
+                  type="daterange"
+                  unlink-panels
+                  range-separator="~"
+                  start-placeholder="開始"
+                  end-placeholder="終了"
+                  value-format="YYYY-MM-DD"
+                  format="YYYY-MM-DD"
+                  class="util-daily-range-picker"
+                  :disabled="!(selectedProcessCd || '').trim() || loadingUtilizationDaily"
+                  :clearable="false"
+                  teleported
+                />
+              </div>
+            </div>
+            <span class="util-hd-spacer" />
+            <el-button
+              size="small"
+              type="warning"
+              plain
+              class="util-print-btn"
+              :disabled="
+                loadingUtilizationDaily ||
+                utilizationDailyMatrixRows.length === 0 ||
+                utilizationDailyDates.length === 0
+              "
+              @click="handleUtilizationDailyPrint"
+            >
+              印刷
+            </el-button>
+          </div>
+          <div class="util-note">
+            <span class="util-note-chip">表示中：{{ utilizationDailyRangeDisplayText }}</span>
+            <span class="util-note-chip util-note-chip--formula">既定＝日本時間の当月1日〜月末（上部の検索期間とは独立）</span>
+            <span class="util-note-chip util-note-chip--formula">セル＝当該日の Σ((実績−計画)/能率)（設備内の全指示）</span>
+            <span class="util-note-chip util-note-chip--formula">実績が一度も無い設備は「—」。最終実績日以降は空白</span>
+          </div>
+
+          <el-empty
+            v-if="!(selectedProcessCd || '').trim()"
+            description="先に上部で工程を選択してください"
+            class="schedule-empty"
+          />
+          <el-empty
+            v-else-if="utilizationDailyRangeInvalid"
+            description="表示期間の開始日は終了日以前にしてください"
+            class="schedule-empty"
+          />
+          <el-empty
+            v-else-if="!loadingUtilizationDaily && utilizationDailyDates.length === 0"
+            description="表示対象の日付がありません（データ未取得、または該当なし）"
+            class="schedule-empty"
+          />
+          <el-empty
+            v-else-if="!loadingUtilizationDaily && utilizationDailyMatrixRows.length === 0"
+            description="設備行がありません（上部の製品絞込の結果、または該当指示なし）"
+            class="schedule-empty"
+          />
+          <div v-else v-loading="loadingUtilizationDaily" class="util-diff-daily-wrap">
+            <div class="gantt-scroll util-diff-daily-scroll">
+              <table class="gantt-table util-diff-daily-table">
+                <thead>
+                  <tr>
+                    <th class="gantt-sticky gantt-sticky-line util-diff-daily-sticky util-diff-daily-line-col">
+                      設備
+                    </th>
+                    <th class="gantt-sticky util-diff-daily-sticky-total util-diff-daily-total-col">合計(H)</th>
+                    <th
+                      v-for="d in utilizationDailyDates"
+                      :key="`ud-h-${d}`"
+                      class="gantt-date-col util-diff-daily-date-col"
+                      :class="{ 'is-weekend': isWeekend(d), 'is-today': isToday(d) }"
+                    >
+                      <div class="gantt-date-text">{{ d.slice(5) }}</div>
+                      <div class="gantt-wd-text">{{ getWeekday(d) }}</div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(r, idx) in utilizationDailyMatrixRows"
+                    :key="r.lineId"
+                    :class="['util-diff-daily-row', idx % 2 === 1 ? 'util-diff-daily-row--alt' : '']"
+                  >
+                    <td
+                      class="gantt-sticky gantt-sticky-line util-diff-daily-sticky util-diff-daily-line-col"
+                      :title="r.lineLabel"
+                    >
+                      {{ r.lineLabel }}
+                    </td>
+                    <td class="gantt-sticky util-diff-daily-sticky-total util-diff-daily-total-col util-diff-daily-cell">
+                      <span v-if="utilizationDailyHoursIsBlank(r.rowTotal)" class="util-diff-daily-empty"></span>
+                      <span
+                        v-else
+                        class="util-diff-daily-num"
+                        :class="{ 'util-diff-daily-num--neg': utilizationDailyHoursIsNegative(r.rowTotal) }"
+                      >{{ formatUtilizationDailyHours(r.rowTotal) }}</span>
+                    </td>
+                    <td
+                      v-for="d in utilizationDailyDates"
+                      :key="`ud-${r.lineId}-${d}`"
+                      class="util-diff-daily-cell"
+                      :class="{
+                        'is-weekend': isWeekend(d),
+                        'is-today': isToday(d),
+                        'util-diff-daily-cell--muted': r.byDate[d] === null,
+                      }"
+                    >
+                      <span
+                        v-if="r.byDate[d] === null"
+                        class="util-diff-daily-dash"
+                      >—</span>
+                      <span v-else-if="utilizationDailyHoursIsBlank(r.byDate[d])" class="util-diff-daily-empty"></span>
+                      <span
+                        v-else
+                        class="util-diff-daily-num"
+                        :class="{ 'util-diff-daily-num--neg': utilizationDailyHoursIsNegative(r.byDate[d]) }"
+                      >{{ formatUtilizationDailyHours(r.byDate[d]) }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </el-tab-pane>
       </el-tabs>
     </div>
+
+    <el-dialog
+      v-model="dailyPlanEditVisible"
+      title="計画数（日別）編集"
+      width="460px"
+      append-to-body
+      :close-on-click-modal="false"
+    >
+      <div class="daily-plan-edit-body">
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">設備</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.lineLabel || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">品名</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.itemName || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">日付</span>
+          <span class="daily-plan-edit-value">{{ dailyPlanEditTarget?.date || '—' }}</span>
+        </div>
+        <div class="daily-plan-edit-row">
+          <span class="daily-plan-edit-label">計画数</span>
+          <el-input-number
+            v-model="dailyPlanEditQty"
+            :min="0"
+            :precision="0"
+            :step="1"
+            step-strictly
+            controls-position="right"
+            style="width: 180px"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button :disabled="savingDailyPlanEdit" @click="dailyPlanEditVisible = false">キャンセル</el-button>
+          <el-button type="primary" :loading="savingDailyPlanEdit" @click="submitGanttDailyPlanEdit">保存</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -523,6 +727,7 @@ import {
   fetchSchedulingGrid,
   rebuildProductionPlanExcelAll,
   replanLineSequence,
+  updateScheduleDailyPlannedQty,
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
@@ -600,7 +805,7 @@ const loadingUtilizationMonth = ref(false)
 const selectedProcessCd = ref<string>('')
 const processOptions = ref<ProcessItem[]>([])
 const loadingProcesses = ref(false)
-/** 一覧（表）用：工程内の全設備の全指示（日次集計は tableGanttDates の広い範囲） */
+/** 一覧（表）用：検索期間に重なる製造指示（ガントと同一データソース） */
 const tableRows = ref<GanttListRow[]>([])
 /** ページ全体（ガント/一覧）共通：製品絞込 */
 const globalFilterProductKey = ref<string>('')
@@ -612,28 +817,23 @@ const tableFilterProductKey = ref<string>('')
 const tableShowStatusDone = ref(false)
 /** 一覧（表）のみ：状態「準備中」行を表示（既定 ON） */
 const tableShowStatusPending = ref(true)
-/** 一覧（表）の実績・不良・残など日次マップの合計に使う日付列（検索期間より広い取得結果） */
-const tableGanttDates = ref<string[]>([])
 const loading = ref(false)
 const searched = ref(false)
-const activeResultTab = ref<'gantt' | 'table' | 'utilization'>('gantt')
+const activeResultTab = ref<'gantt' | 'table' | 'utilization' | 'utilizationDaily'>('gantt')
 const ganttDates = ref<string[]>([])
 const ganttRows = ref<GanttListRow[]>([])
 const lineCalendarHoursMap = ref<Record<number, Record<string, number>>>({})
 const lineDefaultHoursMap = ref<Record<number, number>>({})
 
-/** 一覧用 grid の明細取得範囲（サーバ負荷のため過大にしない） */
-const TABLE_GRID_PAST_YEARS = 10
-const TABLE_GRID_FUTURE_YEARS = 5
-
-const tableGridRangeNote = ref('—')
-
-function ymdFromLocalDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+const dailyPlanEditVisible = ref(false)
+const savingDailyPlanEdit = ref(false)
+const dailyPlanEditQty = ref<number>(0)
+const dailyPlanEditTarget = ref<{
+  scheduleId: number
+  date: string
+  itemName: string
+  lineLabel: string
+} | null>(null)
 
 /** YYYY-MM から暦月の [月初, 月末] ISO 日付 */
 function monthRangeFromYm(ym: string): [string, string] | null {
@@ -649,14 +849,18 @@ function monthRangeFromYm(ym: string): [string, string] | null {
   return [sd, ed]
 }
 
-/** 一覧（表）の日次明細を検索期間外まで含めて集計するための grid 用期間 */
-function buildTableGridRange(): [string, string] {
-  const n = new Date()
-  n.setHours(0, 0, 0, 0)
-  const start = new Date(n.getFullYear() - TABLE_GRID_PAST_YEARS, n.getMonth(), n.getDate())
-  const end = new Date(n.getFullYear() + TABLE_GRID_FUTURE_YEARS, n.getMonth(), n.getDate())
-  return [ymdFromLocalDate(start), ymdFromLocalDate(end)]
+/** 設備操業度（日）タブ：表示期間の既定値＝日本時間の当月1日〜月末 */
+function initialUtilizationDailyDateRange(): [string, string] {
+  const r = monthRangeFromYm(formatYmInJapan())
+  if (r) return r
+  return [offsetDateIso(0), offsetDateIso(0)]
 }
+
+const utilizationDailyDateRange = ref<[string, string]>(initialUtilizationDailyDateRange())
+/** 日次操業度タブ専用：fetchSchedulingGrid の dates / rows（上部の検索期間とは独立） */
+const utilizationDailyDates = ref<string[]>([])
+const utilizationDailyRows = ref<GanttListRow[]>([])
+const loadingUtilizationDaily = ref(false)
 
 function flattenGridToRows(grid: SchedulingGridResponse, lineNameById: Map<number, string>): GanttListRow[] {
   const flat: GanttListRow[] = []
@@ -726,6 +930,45 @@ async function loadUtilizationMonthGrid() {
   }
 }
 
+/** 設備操業度（日）：表示期間に応じてグリッド取得（工程必須） */
+async function loadUtilizationDailyGrid() {
+  const pc = (selectedProcessCd.value || '').trim()
+  const dr = utilizationDailyDateRange.value
+  if (!pc || !Array.isArray(dr) || !dr[0] || !dr[1]) {
+    utilizationDailyDates.value = []
+    utilizationDailyRows.value = []
+    return
+  }
+  const [sd, ed] = dr
+  if (sd > ed) {
+    utilizationDailyDates.value = []
+    utilizationDailyRows.value = []
+    return
+  }
+  loadingUtilizationDaily.value = true
+  try {
+    const [grid, lines] = await Promise.all([
+      fetchSchedulingGrid(sd, ed, undefined, pc),
+      fetchLines(pc),
+    ])
+    utilizationDailyDates.value = Array.isArray(grid.dates) ? grid.dates : []
+    const lineNameById = new Map<number, string>()
+    for (const line of lines || []) {
+      const name = String(line.line_name || '').trim()
+      const code = String(line.line_code || '').trim()
+      lineNameById.set(line.id, name || code || `ID ${line.id}`)
+    }
+    const flat = flattenGridToRows(grid, lineNameById)
+    flat.sort(compareByLineThenOrder)
+    utilizationDailyRows.value = flat
+  } catch {
+    utilizationDailyDates.value = []
+    utilizationDailyRows.value = []
+  } finally {
+    loadingUtilizationDaily.value = false
+  }
+}
+
 const canSearch = computed(
   () =>
     !!(
@@ -740,6 +983,18 @@ const displayRangeText = computed(() => {
   const [startDate, endDate] = dateRange.value || []
   if (!startDate || !endDate) return '—'
   return `${startDate} 〜 ${endDate}`
+})
+
+const utilizationDailyRangeDisplayText = computed(() => {
+  const dr = utilizationDailyDateRange.value
+  if (!Array.isArray(dr) || !dr[0] || !dr[1]) return '—'
+  return `${dr[0]} 〜 ${dr[1]}`
+})
+
+const utilizationDailyRangeInvalid = computed(() => {
+  const dr = utilizationDailyDateRange.value
+  if (!Array.isArray(dr) || !dr[0] || !dr[1]) return false
+  return dr[0] > dr[1]
 })
 
 function tableProductRowKey(row: GanttListRow): string {
@@ -790,6 +1045,12 @@ const filteredGanttRows = computed(() => {
   const prodKey = (globalFilterProductKey.value || '').trim()
   if (!prodKey) return ganttRows.value
   return ganttRows.value.filter((row) => tableProductRowKey(row) === prodKey)
+})
+
+const filteredUtilizationDailyRows = computed(() => {
+  const prodKey = (globalFilterProductKey.value || '').trim()
+  if (!prodKey) return utilizationDailyRows.value
+  return utilizationDailyRows.value.filter((row) => tableProductRowKey(row) === prodKey)
 })
 
 const filteredTableRows = computed(() => {
@@ -983,6 +1244,84 @@ const utilizationRows = computed<LineUtilizationRow[]>(() => {
   return result
 })
 
+/** 設備操業度（日）：行＝設備、列＝当タブの表示期間の暦日、セル＝その日の差異工時(H) */
+interface UtilizationDailyMatrixLineRow {
+  lineId: number
+  lineLabel: string
+  /** null＝集計対象外（最終実績日より後、または期間内に実績なし） */
+  byDate: Record<string, number | null>
+  rowTotal: number
+}
+
+const utilizationDailyMatrixRows = computed<UtilizationDailyMatrixLineRow[]>(() => {
+  const dates = utilizationDailyDates.value
+  if (dates.length === 0) return []
+
+  const rows = filteredUtilizationDailyRows.value
+  const lastActualByLine = lineLastActualDayInMonth(dates, rows)
+
+  const lineOrder: number[] = []
+  const seen = new Set<number>()
+  for (const r of rows) {
+    if (!seen.has(r.line_id)) {
+      seen.add(r.line_id)
+      lineOrder.push(r.line_id)
+    }
+  }
+
+  const labelByLine = new Map<number, string>()
+  for (const r of rows) {
+    if (!labelByLine.has(r.line_id)) {
+      labelByLine.set(r.line_id, (r.lineLabel || '').trim() || `ID ${r.line_id}`)
+    }
+  }
+
+  const out: UtilizationDailyMatrixLineRow[] = []
+  for (const lineId of lineOrder) {
+    const endDay = lastActualByLine.get(lineId)
+    const byDate: Record<string, number | null> = {}
+    let rowTotal = 0
+
+    if (endDay == null || endDay === '') {
+      for (const d of dates) {
+        byDate[d] = null
+      }
+      out.push({
+        lineId,
+        lineLabel: labelByLine.get(lineId) || `ID ${lineId}`,
+        byDate,
+        rowTotal: 0,
+      })
+      continue
+    }
+
+    for (const d of dates) {
+      if (d > endDay) {
+        byDate[d] = null
+        continue
+      }
+      let sum = 0
+      for (const row of rows) {
+        if (row.line_id !== lineId) continue
+        const rate = Number(row.efficiency_rate ?? 0)
+        const p = Number(row.daily?.[d] ?? 0)
+        const a = Number(row.actual_daily?.[d] ?? 0)
+        if (rate > 0) sum += (a - p) / rate
+      }
+      byDate[d] = sum
+      rowTotal += sum
+    }
+
+    out.push({
+      lineId,
+      lineLabel: labelByLine.get(lineId) || `ID ${lineId}`,
+      byDate,
+      rowTotal,
+    })
+  }
+  return out
+})
+
 onMounted(() => {
   void loadProcessOptions()
 })
@@ -990,6 +1329,14 @@ onMounted(() => {
 watch([utilizationMonth, selectedProcessCd], () => {
   void loadUtilizationMonthGrid()
 })
+
+watch(
+  [utilizationDailyDateRange, selectedProcessCd],
+  () => {
+    void loadUtilizationDailyGrid()
+  },
+  { deep: true },
+)
 
 async function loadProcessOptions() {
   loadingProcesses.value = true
@@ -1008,6 +1355,9 @@ async function loadProcessOptions() {
     ElMessage.error('工程一覧の取得に失敗しました')
   } finally {
     loadingProcesses.value = false
+    if (canSearch.value) {
+      void loadSchedules()
+    }
   }
 }
 
@@ -1039,6 +1389,27 @@ function formatNum(v: number | null | undefined): string {
 function formatHours(v: number | null | undefined): string {
   const n = Number(v ?? 0)
   return Number.isFinite(n) ? n.toFixed(1) : '0.0'
+}
+
+/** 設備操業度（日）セル表示：整数(H) */
+function formatUtilizationDailyHours(v: number | null | undefined): string {
+  const n = Number(v ?? 0)
+  if (!Number.isFinite(n)) return '0'
+  return String(Math.round(n))
+}
+
+/** 設備操業度（日）：四捨五入整数が 0 のときは空欄（null は日セルで「—」を別表示） */
+function utilizationDailyHoursIsBlank(v: number | null | undefined): boolean {
+  if (v === null || v === undefined) return false
+  const n = Number(v)
+  if (!Number.isFinite(n)) return false
+  return Math.round(n) === 0
+}
+
+function utilizationDailyHoursIsNegative(v: number | null | undefined): boolean {
+  if (v === null || v === undefined) return false
+  const n = Number(v)
+  return Number.isFinite(n) && n < 0
 }
 
 function formatPercent(v: number | null | undefined): string {
@@ -1337,7 +1708,7 @@ function buildTableListPrintHtml(): string {
             <td class="left name">${escHtml(row.item_name || '—')}</td>
             <td class="cen">${escHtml(span.start || '—')}</td>
             <td class="cen">${escHtml(span.end || '—')}</td>
-            <td class="num">${escHtml(formatNum(row.planned_process_qty))}</td>
+            <td class="num">${escHtml(formatNum(tablePlanned(row)))}</td>
             <td class="num">${escHtml(formatNum(tableActual(row)))}</td>
             <td class="num">${escHtml(formatNum(tableDefect(row)))}</td>
             <td class="num">${escHtml(formatNum(tableUpstreamDefect(row)))}</td>
@@ -1356,12 +1727,12 @@ function buildTableListPrintHtml(): string {
               <th class="left name">製品名</th>
               <th class="cen">開始</th>
               <th class="cen">終了</th>
-              <th class="num">計画</th>
-              <th class="num">実績</th>
-              <th class="num">不良</th>
-              <th class="num">前工程不良</th>
-              <th class="num">残</th>
-              <th class="num">進捗</th>
+              <th class="num" title="検索期間内合計">計画</th>
+              <th class="num" title="検索期間内合計">実績</th>
+              <th class="num" title="検索期間内合計">不良</th>
+              <th class="num" title="検索期間内合計">前工程不良</th>
+              <th class="num" title="検索期間内合計">残</th>
+              <th class="num" title="検索期間内：実績÷計画">進捗</th>
               <th class="cen">状態</th>
             </tr>
           </thead>
@@ -1435,7 +1806,7 @@ function buildTableListPrintHtml(): string {
   <div class="hd">
     <div class="tt">${escHtml(title)}</div>
     <div class="meta">
-      期間：<strong>${escHtml(displayRangeText.value)}</strong>
+      期間：<strong>${escHtml(displayRangeText.value)}</strong>（数量列は当該期間内の日別合計）
       　工程：<strong>${escHtml(selectedProcessLabel())}</strong>
      
       絞込：<strong>設備 ${escHtml(lineLabel)}</strong> ／ <strong>製品 ${escHtml(productLabel)}</strong>
@@ -1485,6 +1856,104 @@ function handleUtilizationPrint() {
   }
 }
 
+function buildUtilizationDailyPrintHtml(): string {
+  const title = '設備操業度差異（日次）'
+  const printedAt = new Date().toLocaleString('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  const dates = utilizationDailyDates.value
+  const headDates = dates
+    .map((d) => `<th class="cen">${escHtml(d.slice(5))}</th>`)
+    .join('')
+  const body = utilizationDailyMatrixRows.value
+    .map((r) => {
+      const cells = dates
+        .map((d) => {
+          const v = r.byDate[d]
+          if (v === null) return '<td class="cen muted">—</td>'
+          if (utilizationDailyHoursIsBlank(v)) return '<td class="cen"></td>'
+          const neg = utilizationDailyHoursIsNegative(v) ? 'neg' : 'val'
+          return `<td class="cen ${neg}">${escHtml(formatUtilizationDailyHours(v))}</td>`
+        })
+        .join('')
+      const totalTd = utilizationDailyHoursIsBlank(r.rowTotal)
+        ? '<td class="cen"></td>'
+        : `<td class="cen ${utilizationDailyHoursIsNegative(r.rowTotal) ? 'neg' : 'val'}">${escHtml(formatUtilizationDailyHours(r.rowTotal))}</td>`
+      return `<tr>
+        <td class="cen">${escHtml(r.lineLabel)}</td>
+        ${totalTd}
+        ${cells}
+      </tr>`
+    })
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>${escHtml(title)}</title>
+  <style>
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 10px; color: #0f172a; font: 10px/1.35 "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif; }
+    .hd { margin-bottom: 8px; }
+    .tt { font-size: 15px; font-weight: 700; }
+    .meta { margin-top: 4px; color: #475569; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: calc(4px * 1.3 * 1.1) calc(6px * 1.3 * 1.1);
+      line-height: calc(1.35 * 1.3 * 1.1);
+    }
+    th { background: #eff6ff; font-weight: 700; }
+    .cen { text-align: center; font-variant-numeric: tabular-nums; }
+    .muted { color: #94a3b8; }
+    .val { color: #000000; font-weight: 600; }
+    .neg { color: #ff0000; font-weight: 700; }
+    tbody tr:nth-child(odd) { background: #f8fafc; }
+    @media print { @page { size: A3 landscape; margin: 8mm; } }
+  </style>
+</head>
+<body>
+  <div class="hd">
+    <div class="tt">${escHtml(title)}</div>
+    <div class="meta">表示期間：<strong>${escHtml(utilizationDailyRangeDisplayText.value)}</strong>　工程：${escHtml(selectedProcessLabel())}　印刷日時：${escHtml(printedAt)}</div>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th class="cen">設備</th>
+        <th class="cen">合計(H)</th>
+        ${headDates}
+      </tr>
+    </thead>
+    <tbody>${body}</tbody>
+  </table>
+</body>
+</html>`
+}
+
+function handleUtilizationDailyPrint() {
+  if (utilizationDailyMatrixRows.value.length === 0 || utilizationDailyDates.value.length === 0) {
+    ElMessage.warning('印刷対象データがありません')
+    return
+  }
+  const w = window.open('', '_blank')
+  if (!w) {
+    ElMessage.error('ポップアップがブロックされました')
+    return
+  }
+  w.document.write(buildUtilizationDailyPrintHtml())
+  w.document.close()
+  w.onload = () => {
+    w.print()
+    setTimeout(() => w.close(), 400)
+  }
+}
+
 /** 日次グリッド行からセルに値がある暦日（スライスと明細の表示根拠と揃える） */
 function isoDatesWithGridActivity(gr: ScheduleGridRow): string[] {
   const keys = new Set<string>()
@@ -1516,34 +1985,53 @@ function effectiveScheduleDateSpan(row: GanttListRow): { start: string | null; e
   return { start: dates[0] ?? null, end: dates[dates.length - 1] ?? null }
 }
 
+/** 検索期間 [periodStart, periodEnd] と製造指示の期日が重なるか */
+function rowOverlapsSearchPeriod(row: GanttListRow, periodStart: string, periodEnd: string): boolean {
+  const activeInPeriod = isoDatesWithGridActivity(row).some((d) => d >= periodStart && d <= periodEnd)
+  if (activeInPeriod) return true
+
+  const span = effectiveScheduleDateSpan(row)
+  const rs = (span.start || row.start_date || '').trim().slice(0, 10)
+  const re = (span.end || row.end_date || '').trim().slice(0, 10)
+  if (!rs && !re) return false
+  const start = rs || re
+  const end = re || rs
+  return start <= periodEnd && end >= periodStart
+}
+
+function filterRowsInSearchPeriod(rows: GanttListRow[], periodStart: string, periodEnd: string): GanttListRow[] {
+  return rows.filter((row) => rowOverlapsSearchPeriod(row, periodStart, periodEnd))
+}
+
 function tableActual(row: GanttListRow): number {
-  return periodActualForRow(row, tableGanttDates.value)
+  return periodActualForRow(row)
 }
 
-/** 不良：schedule_details.defect_qty の期間合計（API の defect_qty_sum） */
+/** 一覧：検索期間内の日別計画合計 */
+function tablePlanned(row: GanttListRow): number {
+  return periodPlannedForRow(row)
+}
+
+/** 一覧：検索期間内の日別不良合計 */
 function tableDefect(row: GanttListRow): number {
-  const v = row.defect_qty_sum
-  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  return periodDefectForRow(row, tableGanttDates.value)
+  return periodDefectForRow(row)
 }
 
-/** 前工程不良：WeldingPlanning と同様 aps_batch_plans.upstream_defect_qty の当指示合計 */
+/** 一覧：検索期間内の日別前工程不良合計 */
 function tableUpstreamDefect(row: GanttListRow): number {
-  const v = row.upstream_defect_qty_total
-  if (v != null && Number.isFinite(Number(v))) return Math.max(0, Number(v))
-  return periodUpstreamDefectForRow(row, tableGanttDates.value)
+  return periodUpstreamDefectForRow(row)
 }
 
 function tableRemaining(row: GanttListRow): number {
-  const remainByDaily = periodRemainingForRow(row, tableGanttDates.value)
-  if (remainByDaily > 0) return remainByDaily
-  const planned = Number(row.planned_process_qty ?? 0)
-  const remain = planned - tableActual(row)
+  const remainByDaily = periodRemainingForRow(row)
+  if (remainByDaily !== 0) return remainByDaily
+  const planned = tablePlanned(row)
+  const remain = planned - tableActual(row) - tableDefect(row) - tableUpstreamDefect(row)
   return remain > 0 ? remain : 0
 }
 
 function tableProgress(row: GanttListRow): string {
-  const planned = Number(row.planned_process_qty ?? 0)
+  const planned = tablePlanned(row)
   if (planned <= 0) return '0%'
   const pct = (tableActual(row) / planned) * 100
   return `${Math.round(Math.max(0, Math.min(999, pct)))}%`
@@ -1629,7 +2117,6 @@ async function loadSchedules() {
   ganttDates.value = []
   ganttRows.value = []
   tableRows.value = []
-  tableGanttDates.value = []
   lineCalendarHoursMap.value = {}
   lineDefaultHoursMap.value = {}
   try {
@@ -1656,30 +2143,20 @@ async function loadSchedules() {
 
     const flat = flattenGridToRows(grid, lineNameById)
     flat.sort(compareByLineThenOrder)
-    ganttRows.value = flat
+    const inPeriod = filterRowsInSearchPeriod(flat, sd, ed)
+    ganttRows.value = inPeriod
+    tableRows.value = [...inPeriod]
 
-    const [wideStart, wideEnd] = buildTableGridRange()
-    tableGridRangeNote.value = `${wideStart} 〜 ${wideEnd}`
-    try {
-      const wideGrid = await fetchSchedulingGrid(wideStart, wideEnd, undefined, pc)
-      tableGanttDates.value = Array.isArray(wideGrid.dates) ? wideGrid.dates : []
-      const wideFlat = flattenGridToRows(wideGrid, lineNameById)
-      wideFlat.sort(compareByLineThenOrder)
-      tableRows.value = wideFlat
-    } catch {
-      tableGanttDates.value = [...ganttDates.value]
-      tableRows.value = [...flat]
-    }
     if (
       globalFilterProductKey.value &&
       !globalProductFilterOptions.value.some((x) => x.value === globalFilterProductKey.value)
     ) {
       globalFilterProductKey.value = ''
     }
-    await loadUtilizationMonthGrid()
+    void loadUtilizationMonthGrid()
+    void loadUtilizationDailyGrid()
   } catch (e: unknown) {
     tableRows.value = []
-    tableGanttDates.value = []
     ganttDates.value = []
     ganttRows.value = []
     lineCalendarHoursMap.value = {}
@@ -1806,6 +2283,10 @@ function isToday(d: string): boolean {
   return d === todayIso.value
 }
 
+function canEditGanttPlanDate(d: string): boolean {
+  return d <= todayIso.value
+}
+
 function getWeekday(d: string): string {
   const wd = ['日', '月', '火', '水', '木', '金', '土']
   return wd[new Date(d).getDay()]
@@ -1854,6 +2335,114 @@ function ganttCellTitle(row: ScheduleGridRow, d: string): string {
   if (shouldShowGanttRemain(row, d)) parts.push(`残 ${remain}`)
   if (parts.length === 0) return ''
   return `${row.item_name}: ${parts.join(' / ')}`
+}
+
+function ganttEditableCellTitle(row: ScheduleGridRow, d: string): string {
+  const base = ganttCellTitle(row, d)
+  if (canEditGanttPlanDate(d)) {
+    return base ? `${base}\nダブルクリックで計画数を編集` : 'ダブルクリックで計画数を編集'
+  }
+  return base
+}
+
+function openGanttDailyPlanEdit(row: GanttListRow, d: string) {
+  if (!canEditGanttPlanDate(d)) {
+    ElMessage.warning('日別計画数は当日以前のみ編集できます')
+    return
+  }
+  dailyPlanEditTarget.value = {
+    scheduleId: row.id,
+    date: d,
+    itemName: row.item_name || '',
+    lineLabel: row.lineLabel || `ID ${row.line_id}`,
+  }
+  dailyPlanEditQty.value = Math.max(0, Math.trunc(ganttDayQty(row.daily?.[d])))
+  dailyPlanEditVisible.value = true
+}
+
+async function submitGanttDailyPlanEdit() {
+  const target = dailyPlanEditTarget.value
+  if (!target) return
+  const qty = Number(dailyPlanEditQty.value)
+  if (!Number.isFinite(qty) || qty < 0 || !Number.isInteger(qty)) {
+    ElMessage.warning('計画数は 0 以上の整数を入力してください')
+    return
+  }
+  savingDailyPlanEdit.value = true
+  try {
+    const res = await updateScheduleDailyPlannedQty(target.scheduleId, {
+      schedule_date: target.date,
+      planned_qty: qty,
+    })
+    applyLocalDailyPlannedEdit(
+      target.scheduleId,
+      target.date,
+      qty,
+      extractPlannedProcessQtyFromDailyPlanResponse(res),
+    )
+    dailyPlanEditVisible.value = false
+    ElMessage.success('日別計画数を更新しました')
+  } catch (e: unknown) {
+    ElMessage.error(formatApiError(e))
+  } finally {
+    savingDailyPlanEdit.value = false
+  }
+}
+
+function extractPlannedProcessQtyFromDailyPlanResponse(res: unknown): number | null {
+  const src = res as
+    | { planned_process_qty?: unknown; data?: { planned_process_qty?: unknown } }
+    | undefined
+  const raw = src?.planned_process_qty ?? src?.data?.planned_process_qty
+  const n = Number(raw)
+  return Number.isFinite(n) ? Math.trunc(n) : null
+}
+
+function applyLocalDailyPlannedEdit(
+  scheduleId: number,
+  scheduleDate: string,
+  plannedQty: number,
+  plannedProcessQty: number | null,
+) {
+  const patchRows = (rows: GanttListRow[]) =>
+    rows.map((row) => {
+      if (row.id !== scheduleId) return row
+      const daily = { ...(row.daily || {}) }
+      const actual = { ...(row.actual_daily || {}) }
+      const defect = { ...(row.defect_daily || {}) }
+      const upstream = { ...(row.upstream_defect_daily || {}) }
+      const remaining = { ...(row.remaining_daily || {}) }
+      daily[scheduleDate] = plannedQty
+      const a = ganttDayQty(actual[scheduleDate])
+      const df = ganttDayQty(defect[scheduleDate])
+      const up = ganttDayQty(upstream[scheduleDate])
+      remaining[scheduleDate] = plannedQty - a - df - up
+      const next: GanttListRow = {
+        ...row,
+        daily,
+        remaining_daily: remaining,
+      }
+      if (plannedProcessQty != null) {
+        next.planned_process_qty = plannedProcessQty
+      }
+      return next
+    })
+
+  ganttRows.value = patchRows(ganttRows.value)
+  tableRows.value = patchRows(tableRows.value)
+  utilizationMonthRows.value = patchRows(utilizationMonthRows.value)
+  utilizationDailyRows.value = patchRows(utilizationDailyRows.value)
+}
+
+function periodPlannedForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
+  const m = row.daily || {}
+  const dates1 =
+    datesOverride && datesOverride.length > 0
+      ? datesOverride
+      : ganttDates.value.length > 0
+        ? ganttDates.value
+        : Object.keys(m)
+  return dates1.reduce((sum, d) => sum + Number(m[d] || 0), 0)
 }
 
 function periodActualForRow(row: ScheduleGridRow, datesOverride?: string[]): number {
@@ -2629,6 +3218,200 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   background: linear-gradient(180deg, #eef4ff 0%, #e0ebff 100%);
   border-color: #c7d8ff;
 }
+
+.util-daily-range-surface {
+  max-width: 100%;
+}
+.util-daily-range-picker {
+  width: min(300px, 72vw);
+}
+.util-daily-range-picker :deep(.el-range-input) {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 設備操業度（日）：和紙・墨調の簡素な表 */
+.util-diff-daily-wrap {
+  --ud-ink: #3a3835;
+  --ud-ink-muted: #6e6a63;
+  --ud-line: #e5e1da;
+  --ud-bg: #faf8f4;
+  --ud-bg-head: #f1ede6;
+  --ud-bg-alt: #f4f1eb;
+  --ud-bg-week: #f3eff5;
+  --ud-accent: #5a6d7a;
+  --ud-total-bg: #ebe6df;
+  --ud-total-bg-head: #e3ddd4;
+  position: relative;
+  border-radius: 4px;
+  border: 1px solid var(--ud-line);
+  background: var(--ud-bg);
+  box-shadow: 0 1px 2px rgba(58, 56, 53, 0.04);
+  overflow: hidden;
+}
+.util-diff-daily-scroll {
+  overflow: auto;
+  max-height: min(78vh, 920px);
+}
+.util-diff-daily-table {
+  --util-diff-daily-line-w: 108px;
+  --util-diff-daily-total-w: 80px;
+  min-width: max(100%, 720px);
+  width: max-content;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-family: 'Yu Gothic UI', 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+  color: var(--ud-ink);
+}
+.util-diff-daily-table th,
+.util-diff-daily-table td {
+  border: 1px solid var(--ud-line);
+  padding: 9px 6px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+.util-diff-daily-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--ud-bg-head);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ud-ink-muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--ud-line) 70%, var(--ud-ink-muted));
+}
+.util-diff-daily-table .util-diff-daily-sticky.util-diff-daily-line-col {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  width: var(--util-diff-daily-line-w);
+  min-width: var(--util-diff-daily-line-w);
+  max-width: var(--util-diff-daily-line-w);
+  text-align: center;
+  vertical-align: middle;
+  background: #f6f4f0;
+  font-weight: 600;
+  color: var(--ud-accent);
+  box-shadow: 1px 0 0 rgba(58, 56, 53, 0.06);
+}
+.util-diff-daily-table thead .util-diff-daily-sticky.util-diff-daily-line-col {
+  z-index: 5;
+  background: var(--ud-bg-head);
+  color: var(--ud-ink-muted);
+}
+.util-diff-daily-table .util-diff-daily-sticky-total {
+  position: sticky;
+  left: var(--util-diff-daily-line-w);
+  z-index: 2;
+  width: var(--util-diff-daily-total-w);
+  min-width: var(--util-diff-daily-total-w);
+  text-align: center;
+  vertical-align: middle;
+  background: var(--ud-total-bg);
+  font-weight: 600;
+  color: var(--ud-ink-muted);
+  box-shadow: 1px 0 0 rgba(58, 56, 53, 0.06);
+}
+.util-diff-daily-table thead .util-diff-daily-sticky-total {
+  z-index: 5;
+  background: var(--ud-total-bg-head);
+}
+.util-diff-daily-date-col {
+  min-width: 58px;
+  text-align: center;
+  font-weight: 500;
+}
+.util-diff-daily-date-col .gantt-date-text {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ud-ink);
+  letter-spacing: 0.02em;
+}
+.util-diff-daily-date-col .gantt-wd-text {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--ud-ink-muted);
+  margin-top: 2px;
+  opacity: 0.92;
+}
+.util-diff-daily-table thead .util-diff-daily-date-col.is-weekend {
+  background: var(--ud-bg-week);
+  color: var(--ud-ink-muted);
+}
+.util-diff-daily-table thead .util-diff-daily-date-col.is-today {
+  background: color-mix(in srgb, var(--ud-bg-head) 82%, #c4705a 18%);
+  color: var(--ud-ink);
+}
+.util-diff-daily-table thead .util-diff-daily-date-col.is-today .gantt-date-text {
+  font-weight: 700;
+}
+.util-diff-daily-table tbody td.is-weekend:not(.util-diff-daily-sticky):not(.util-diff-daily-sticky-total) {
+  background: color-mix(in srgb, var(--ud-bg) 88%, var(--ud-bg-week) 12%);
+}
+.util-diff-daily-table tbody td.is-today:not(.util-diff-daily-sticky):not(.util-diff-daily-sticky-total) {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #c4705a 55%, transparent);
+}
+.util-diff-daily-row--alt td {
+  background: var(--ud-bg-alt);
+}
+.util-diff-daily-row--alt td.util-diff-daily-sticky.util-diff-daily-line-col {
+  background: #ebe8e2;
+}
+.util-diff-daily-row--alt td.util-diff-daily-sticky-total {
+  background: color-mix(in srgb, var(--ud-total-bg) 88%, var(--ud-line) 12%);
+}
+.util-diff-daily-row:hover td {
+  background: #e8e4dc !important;
+  transition: background 0.15s ease;
+}
+.util-diff-daily-row:hover td.util-diff-daily-sticky.util-diff-daily-line-col {
+  background: #e4e0d8 !important;
+}
+.util-diff-daily-row:hover td.util-diff-daily-sticky-total {
+  background: #ddd8cf !important;
+}
+.util-diff-daily-cell {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  vertical-align: middle;
+  background: var(--ud-bg);
+}
+.util-diff-daily-row--alt .util-diff-daily-cell:not(.util-diff-daily-sticky-total) {
+  background: var(--ud-bg-alt);
+}
+.util-diff-daily-cell--muted {
+  background: color-mix(in srgb, var(--ud-bg) 65%, var(--ud-line) 35%) !important;
+  color: var(--ud-ink-muted);
+}
+.util-diff-daily-dash {
+  color: color-mix(in srgb, var(--ud-ink-muted) 45%, transparent);
+  font-weight: 500;
+}
+.util-diff-daily-empty {
+  display: inline-block;
+  min-width: 0.5ch;
+}
+.util-diff-daily-num {
+  font-family: 'Yu Gothic UI', 'Segoe UI', system-ui, sans-serif;
+  font-weight: 600;
+  font-feature-settings: 'tnum' 1;
+  color: #000000;
+}
+.util-diff-daily-table .util-diff-daily-num.util-diff-daily-num--neg {
+  color: #ff0000;
+  font-weight: 700;
+}
+.util-diff-daily-row td.util-diff-daily-total-col {
+  background: var(--ud-total-bg);
+}
+.util-diff-daily-row--alt td.util-diff-daily-total-col {
+  background: color-mix(in srgb, var(--ud-total-bg) 90%, var(--ud-line) 10%);
+}
+
 .util-table-wrap {
   position: relative;
   border-radius: 16px;
@@ -3063,6 +3846,35 @@ function periodRemainingForRow(row: ScheduleGridRow, datesOverride?: string[]): 
   text-align: left;
   padding: 2px 4px;
   vertical-align: middle;
+}
+
+.gantt-cell--editable {
+  cursor: pointer;
+}
+
+.daily-plan-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.daily-plan-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.daily-plan-edit-label {
+  width: 62px;
+  color: var(--c-text-s);
+  font-size: var(--fs-s);
+  flex: 0 0 auto;
+}
+
+.daily-plan-edit-value {
+  color: var(--c-text-h);
+  font-size: var(--fs-base);
+  font-weight: 600;
 }
 
 .gantt-cell-markers {
