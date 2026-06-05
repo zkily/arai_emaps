@@ -111,21 +111,39 @@ _APS_FORMING_PROCESS_CD = "KT04"
 _APS_WELDING_PROCESS_CD = "KT07"
 
 
-async def _load_equipment_efficiency_rows_for_machine(
-    db: AsyncSession,
-    machine: Machine,
-) -> List[EquipmentEfficiency]:
-    """選択設備に紐づく equipment_efficiency 行（/equipment-efficiency-products と同趣旨のマッチ）"""
+def _equipment_efficiency_matches_machine(row: EquipmentEfficiency, machine: Machine) -> bool:
     m_cd = (machine.machine_cd or "").strip()
     m_name = (machine.machine_name or "").strip()
+    r_cd = (row.machine_cd or "").strip()
+    r_name = (row.machines_name or "").strip()
+    if m_cd and (r_cd == m_cd or r_name == m_cd):
+        return True
+    if m_name and r_name == m_name:
+        return True
+    return False
+
+
+async def _load_equipment_efficiency_rows_for_machines(
+    db: AsyncSession,
+    machines: Sequence[Machine],
+) -> Dict[int, List[EquipmentEfficiency]]:
+    """複数設備の equipment_efficiency 行を一括取得し、設備 id ごとに振り分ける。"""
+    out: Dict[int, List[EquipmentEfficiency]] = {int(m.id): [] for m in machines}
+    if not machines:
+        return out
+
     match_conds = []
-    if m_cd:
-        match_conds.append(EquipmentEfficiency.machine_cd == m_cd)
-        match_conds.append(EquipmentEfficiency.machines_name == m_cd)
-    if m_name:
-        match_conds.append(EquipmentEfficiency.machines_name == m_name)
+    for machine in machines:
+        m_cd = (machine.machine_cd or "").strip()
+        m_name = (machine.machine_name or "").strip()
+        if m_cd:
+            match_conds.append(EquipmentEfficiency.machine_cd == m_cd)
+            match_conds.append(EquipmentEfficiency.machines_name == m_cd)
+        if m_name:
+            match_conds.append(EquipmentEfficiency.machines_name == m_name)
     if not match_conds:
-        return []
+        return out
+
     q = (
         select(EquipmentEfficiency)
         .where(or_(*match_conds))
@@ -133,7 +151,19 @@ async def _load_equipment_efficiency_rows_for_machine(
         .order_by(EquipmentEfficiency.product_name, EquipmentEfficiency.product_cd, EquipmentEfficiency.id)
     )
     result = await db.execute(q)
-    return list(result.scalars().all())
+    all_rows = list(result.scalars().all())
+    for machine in machines:
+        out[int(machine.id)] = [row for row in all_rows if _equipment_efficiency_matches_machine(row, machine)]
+    return out
+
+
+async def _load_equipment_efficiency_rows_for_machine(
+    db: AsyncSession,
+    machine: Machine,
+) -> List[EquipmentEfficiency]:
+    """選択設備に紐づく equipment_efficiency 行（/equipment-efficiency-products と同趣旨のマッチ）"""
+    rows_by_machine = await _load_equipment_efficiency_rows_for_machines(db, [machine])
+    return rows_by_machine.get(int(machine.id), [])
 
 
 def _resolve_efficiency_rate_pieces_per_hour(
@@ -1662,134 +1692,155 @@ async def get_scheduling_grid(
     line_q = line_q.order_by(Machine.machine_cd)
     lines_result = await db.execute(line_q)
     lines = lines_result.scalars().all()
+    if not lines:
+        return SchedulingGridResponse(dates=dates_list, blocks=[])
+
+    line_ids = [int(line.id) for line in lines]
+
+    # ── 全設備分を一括先読み（P0: 線体ループ内 DB 往復を排除） ──
+    cal_result = await db.execute(
+        select(LineCapacity).where(
+            LineCapacity.line_id.in_(line_ids),
+            LineCapacity.work_date >= sd,
+            LineCapacity.work_date <= ed,
+        )
+    )
+    calendar_by_line: dict[int, dict[str, float]] = defaultdict(dict)
+    for row in cal_result.scalars().all():
+        calendar_by_line[int(row.line_id)][row.work_date.isoformat()] = _dec(row.available_hours)
+
+    sched_result = await db.execute(
+        select(ProductionSchedule)
+        .where(ProductionSchedule.line_id.in_(line_ids))
+        .order_by(
+            ProductionSchedule.line_id,
+            ProductionSchedule.order_no.is_(None),
+            ProductionSchedule.order_no.asc(),
+            ProductionSchedule.id,
+        )
+    )
+    all_schedules = sched_result.scalars().all()
+    schedules_by_line: dict[int, list[ProductionSchedule]] = defaultdict(list)
+    sid_to_line_id: dict[int, int] = {}
+    all_schedule_ids: list[int] = []
+    for ps in all_schedules:
+        lid = int(ps.line_id)
+        schedules_by_line[lid].append(ps)
+        sid = int(ps.id)
+        sid_to_line_id[sid] = lid
+        all_schedule_ids.append(sid)
+
+    ee_by_line = await _load_equipment_efficiency_rows_for_machines(db, lines)
+
+    detail_planned_rows: dict[int, dict[str, int]] = defaultdict(dict)
+    detail_actual_rows: dict[int, dict[str, int]] = defaultdict(dict)
+    detail_defect_rows: dict[int, dict[str, int]] = defaultdict(dict)
+    upstream_defect_total_rows: dict[int, int] = defaultdict(int)
+    slice_rows: dict[int, dict[str, int]] = defaultdict(dict)
+    slice_bounds: dict[int, tuple[Optional[date], Optional[date]]] = {}
+    slices_by_sched: dict[int, list] = defaultdict(list)
+    line_slice_dates_by_line: dict[int, set[str]] = defaultdict(set)
+
+    if all_schedule_ids:
+        detail_agg_result = await db.execute(
+            select(
+                ScheduleDetail.schedule_id,
+                ScheduleDetail.schedule_date,
+                func.coalesce(func.sum(ScheduleDetail.planned_qty), 0),
+                func.coalesce(func.sum(ScheduleDetail.actual_qty), 0),
+                func.coalesce(func.sum(ScheduleDetail.defect_qty), 0),
+            )
+            .where(
+                ScheduleDetail.schedule_id.in_(all_schedule_ids),
+                ScheduleDetail.schedule_date >= sd,
+                ScheduleDetail.schedule_date <= ed,
+            )
+            .group_by(ScheduleDetail.schedule_id, ScheduleDetail.schedule_date)
+        )
+        for sid, d0, p_sum, a_sum, df_sum in detail_agg_result.all():
+            if sid is None or d0 is None:
+                continue
+            dk = d0.isoformat()
+            detail_planned_rows[int(sid)][dk] = int(p_sum or 0)
+            detail_actual_rows[int(sid)][dk] = int(a_sum or 0)
+            detail_defect_rows[int(sid)][dk] = int(df_sum or 0)
+
+        upstream_agg_result = await db.execute(
+            select(
+                ApsBatchPlan.aps_schedule_id,
+                func.coalesce(func.sum(ApsBatchPlan.upstream_defect_qty), 0),
+            )
+            .where(ApsBatchPlan.aps_schedule_id.in_(all_schedule_ids))
+            .group_by(ApsBatchPlan.aps_schedule_id)
+        )
+        for sid, u_sum in upstream_agg_result.all():
+            if sid is None:
+                continue
+            upstream_defect_total_rows[int(sid)] = int(u_sum or 0)
+
+        slice_agg_result = await db.execute(
+            select(
+                ScheduleSliceAllocation.schedule_id,
+                ScheduleSliceAllocation.work_date,
+                func.coalesce(func.sum(ScheduleSliceAllocation.planned_qty), 0),
+            )
+            .where(
+                ScheduleSliceAllocation.schedule_id.in_(all_schedule_ids),
+                ScheduleSliceAllocation.work_date >= sd,
+                ScheduleSliceAllocation.work_date <= ed,
+            )
+            .group_by(
+                ScheduleSliceAllocation.schedule_id,
+                ScheduleSliceAllocation.work_date,
+            )
+        )
+        for sid, wd, s_sum in slice_agg_result.all():
+            if sid is None or wd is None:
+                continue
+            wdk = wd.isoformat()
+            sid_i = int(sid)
+            slice_rows[sid_i][wdk] = int(s_sum or 0)
+            lid = sid_to_line_id.get(sid_i)
+            if lid is not None:
+                line_slice_dates_by_line[lid].add(wdk)
+
+        slice_bounds_result = await db.execute(
+            select(
+                ScheduleSliceAllocation.schedule_id,
+                func.min(ScheduleSliceAllocation.work_date),
+                func.max(ScheduleSliceAllocation.work_date),
+            )
+            .where(ScheduleSliceAllocation.schedule_id.in_(all_schedule_ids))
+            .group_by(ScheduleSliceAllocation.schedule_id)
+        )
+        for sid, min_d, max_d in slice_bounds_result.all():
+            if sid is None:
+                continue
+            slice_bounds[int(sid)] = (min_d, max_d)
+
+        slice_detail_result = await db.execute(
+            select(ScheduleSliceAllocation)
+            .where(ScheduleSliceAllocation.schedule_id.in_(all_schedule_ids))
+            .order_by(
+                ScheduleSliceAllocation.schedule_id,
+                ScheduleSliceAllocation.work_date,
+                ScheduleSliceAllocation.period_start,
+                ScheduleSliceAllocation.sort_order,
+                ScheduleSliceAllocation.id,
+            )
+        )
+        for sl in slice_detail_result.scalars().all():
+            slices_by_sched[int(sl.schedule_id)].append(sl)
+
+    batch_by_sid, lot_upstream_state = await _schedule_batch_upstream_context(db, all_schedule_ids)
 
     blocks: list[LineGridBlock] = []
 
     for line in lines:
-        # カレンダー
-        cal_result = await db.execute(
-            select(LineCapacity).where(
-                LineCapacity.line_id == line.id,
-                LineCapacity.work_date >= sd,
-                LineCapacity.work_date <= ed,
-            )
-        )
-        calendar_map = {
-            row.work_date.isoformat(): _dec(row.available_hours)
-            for row in cal_result.scalars().all()
-        }
-
-        # 工単取得
-        sched_result = await db.execute(
-            select(ProductionSchedule)
-            .where(ProductionSchedule.line_id == line.id)
-            .order_by(
-                ProductionSchedule.order_no.is_(None),
-                ProductionSchedule.order_no.asc(),
-                ProductionSchedule.id,
-            )
-        )
-        schedules = sched_result.scalars().all()
-        ee_rows = await _load_equipment_efficiency_rows_for_machine(db, line)
-        schedule_ids = [int(ps.id) for ps in schedules]
-
-        # 日別表示用データを線体単位で先読み（N+1 回避）
-        detail_planned_rows: dict[int, dict[str, int]] = defaultdict(dict)
-        detail_actual_rows: dict[int, dict[str, int]] = defaultdict(dict)
-        detail_defect_rows: dict[int, dict[str, int]] = defaultdict(dict)
-        upstream_defect_total_rows: dict[int, int] = defaultdict(int)
-        slice_rows: dict[int, dict[str, int]] = defaultdict(dict)
-        slice_bounds: dict[int, tuple[Optional[date], Optional[date]]] = {}
-        slices_by_sched: dict[int, list] = defaultdict(list)
-
-        line_slice_dates: set[str] = set()
-        if schedule_ids:
-            detail_agg_result = await db.execute(
-                select(
-                    ScheduleDetail.schedule_id,
-                    ScheduleDetail.schedule_date,
-                    func.coalesce(func.sum(ScheduleDetail.planned_qty), 0),
-                    func.coalesce(func.sum(ScheduleDetail.actual_qty), 0),
-                    func.coalesce(func.sum(ScheduleDetail.defect_qty), 0),
-                )
-                .where(
-                    ScheduleDetail.schedule_id.in_(schedule_ids),
-                    ScheduleDetail.schedule_date >= sd,
-                    ScheduleDetail.schedule_date <= ed,
-                )
-                .group_by(ScheduleDetail.schedule_id, ScheduleDetail.schedule_date)
-            )
-            for sid, d0, p_sum, a_sum, df_sum in detail_agg_result.all():
-                if sid is None or d0 is None:
-                    continue
-                dk = d0.isoformat()
-                detail_planned_rows[int(sid)][dk] = int(p_sum or 0)
-                detail_actual_rows[int(sid)][dk] = int(a_sum or 0)
-                detail_defect_rows[int(sid)][dk] = int(df_sum or 0)
-
-            upstream_agg_result = await db.execute(
-                select(
-                    ApsBatchPlan.aps_schedule_id,
-                    func.coalesce(func.sum(ApsBatchPlan.upstream_defect_qty), 0),
-                )
-                .where(ApsBatchPlan.aps_schedule_id.in_(schedule_ids))
-                .group_by(ApsBatchPlan.aps_schedule_id)
-            )
-            for sid, u_sum in upstream_agg_result.all():
-                if sid is None:
-                    continue
-                upstream_defect_total_rows[int(sid)] = int(u_sum or 0)
-
-            slice_agg_result = await db.execute(
-                select(
-                    ScheduleSliceAllocation.schedule_id,
-                    ScheduleSliceAllocation.work_date,
-                    func.coalesce(func.sum(ScheduleSliceAllocation.planned_qty), 0),
-                )
-                .where(
-                    ScheduleSliceAllocation.schedule_id.in_(schedule_ids),
-                    ScheduleSliceAllocation.work_date >= sd,
-                    ScheduleSliceAllocation.work_date <= ed,
-                )
-                .group_by(
-                    ScheduleSliceAllocation.schedule_id,
-                    ScheduleSliceAllocation.work_date,
-                )
-            )
-            for sid, wd, s_sum in slice_agg_result.all():
-                if sid is None or wd is None:
-                    continue
-                wdk = wd.isoformat()
-                slice_rows[int(sid)][wdk] = int(s_sum or 0)
-                line_slice_dates.add(wdk)
-
-            slice_bounds_result = await db.execute(
-                select(
-                    ScheduleSliceAllocation.schedule_id,
-                    func.min(ScheduleSliceAllocation.work_date),
-                    func.max(ScheduleSliceAllocation.work_date),
-                )
-                .where(ScheduleSliceAllocation.schedule_id.in_(schedule_ids))
-                .group_by(ScheduleSliceAllocation.schedule_id)
-            )
-            for sid, min_d, max_d in slice_bounds_result.all():
-                if sid is None:
-                    continue
-                slice_bounds[int(sid)] = (min_d, max_d)
-
-            slice_detail_result = await db.execute(
-                select(ScheduleSliceAllocation)
-                .where(ScheduleSliceAllocation.schedule_id.in_(schedule_ids))
-                .order_by(
-                    ScheduleSliceAllocation.schedule_id,
-                    ScheduleSliceAllocation.work_date,
-                    ScheduleSliceAllocation.period_start,
-                    ScheduleSliceAllocation.sort_order,
-                    ScheduleSliceAllocation.id,
-                )
-            )
-            for sl in slice_detail_result.scalars().all():
-                slices_by_sched[int(sl.schedule_id)].append(sl)
+        schedules = schedules_by_line.get(int(line.id), [])
+        ee_rows = ee_by_line.get(int(line.id), [])
+        calendar_map = dict(calendar_by_line.get(int(line.id), {}))
+        line_slice_dates = line_slice_dates_by_line.get(int(line.id), set())
 
         # 计算每个工单的“下一个工单起点边界”（优先使用 next 的最早 slice 日）
         next_boundary_by_sid: dict[int, Optional[date]] = {}
@@ -1802,8 +1853,6 @@ async def get_scheduling_grid(
                     next_boundary = bnd
                     break
             next_boundary_by_sid[int(ps.id)] = next_boundary
-
-        batch_by_sid, lot_upstream_state = await _schedule_batch_upstream_context(db, schedule_ids)
 
         rows: list[ScheduleGridRow] = []
         daily_totals: dict[str, int] = defaultdict(int)

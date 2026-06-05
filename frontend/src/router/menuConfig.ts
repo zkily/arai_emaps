@@ -127,7 +127,8 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'APS_CAPACITY_MATRIX', name: '設備稼働時間表', path: '/aps/capacity-matrix', parentCode: 'APS_EQUIPMENT_UTILIZATION_MANAGEMENT', sortOrder: 2 },
   { code: 'APS_DAILY_REPORT', name: '日別設備計画表', path: '/aps/daily-report', parentCode: 'APS_EQUIPMENT_UTILIZATION_MANAGEMENT', sortOrder: 3 },
   { code: 'APS_SCHEDULING', name: 'スケジューリング', path: '/aps/scheduling', parentCode: 'APS', sortOrder: 4 },
-  { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
+  // 非表示（Sidebar から除外）：ロット一覧は成型計画「生産進捗」で代替。ルート /aps/batch-plans は残す。
+  // { code: 'APS_BATCH_PLANS', name: 'APSロット計画', path: '/aps/batch-plans', parentCode: 'APS', sortOrder: 5 },
   { code: 'MES', name: 'MES管理メニュー', icon: 'Monitor', sortOrder: 3 },
   { code: 'MES_PRODUCTION_INSTRUCTION', name: '生産指示', parentCode: 'MES', sortOrder: 0 },
   { code: 'MES_PRODUCTION_INSTR_CUTTING', name: '切断・面取指示', path: '/mes/productionInstruction/cutting', parentCode: 'MES_PRODUCTION_INSTRUCTION', sortOrder: 1 },

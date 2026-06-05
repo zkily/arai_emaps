@@ -435,10 +435,6 @@
             <el-icon><Timer /></el-icon>
             <template #title><span :title="t('menu.APS_SCHEDULING')">{{ t('menu.APS_SCHEDULING') }}</span></template>
           </el-menu-item>
-          <el-menu-item index="/aps/batch-plans">
-            <el-icon><Tickets /></el-icon>
-            <template #title><span :title="t('menu.APS_BATCH_PLANS')">{{ t('menu.APS_BATCH_PLANS') }}</span></template>
-          </el-menu-item>
         </el-sub-menu>
         
         <el-sub-menu index="mes">
