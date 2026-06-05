@@ -274,23 +274,55 @@ export function flushRunningSlice(sess: PlanSessionLike, now = Date.now()): void
   }
 }
 
-/** 一時停止累計の表示用（セッションを変更しない） */
-export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+/** 净稼働時間（表示用・セッションを変更しない）。一時停止中は activeAccumMs のみで表示が止まる */
+export function readNetProductionMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) return 0
+  let ms = sess.activeAccumMs ?? 0
+  if (sess.runningSliceStart != null && sess.wallEnd == null) {
+    ms += Math.max(0, at - sess.runningSliceStart)
+  }
+  return Math.max(0, ms)
+}
 
+/**
+ * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止累計」で補正し、净稼働と running スライスを整合。
+ */
+export function correctNetProductionFromWallClock(
+  sess: PlanSessionLike,
+  wallStartMs: number,
+  now = Date.now(),
+): void {
+  const wallMs = Math.max(0, now - wallStartMs)
+  const pauseMs = sess.pausedAccumMs ?? 0
+  sess.activeAccumMs = Math.max(0, wallMs - pauseMs)
+  sess.runningSliceStart = now
+  sess.pauseSliceStart = null
+}
+
+/** 明示的一時停止のみ（ボタン操作分。セッションを変更しない） */
+export function readExplicitPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  if (sess.wallStart == null) return 0
   let ms = sess.pausedAccumMs ?? 0
   if (sess.pauseSliceStart != null) {
     ms += Math.max(0, at - sess.pauseSliceStart)
   }
+  return Math.max(0, ms)
+}
 
-  const wallEnd = sess.wallEnd ?? at
-  const wallSpan = Math.max(0, wallEnd - sess.wallStart)
-  let netMs = sess.activeAccumMs ?? 0
-  if (sess.runningSliceStart != null && sess.wallEnd == null) {
-    netMs += Math.max(0, at - sess.runningSliceStart)
+/**
+ * 一時停止累計の表示用（セッションを変更しない）。
+ * 稼働中は明示停止分のみ。生産終了後（wallEnd あり）は壁時計−净稼働の補正も参照。
+ */
+export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  const explicit = readExplicitPausedAccumMs(sess, at)
+  if (sess.wallStart == null || sess.wallEnd == null) {
+    return explicit
   }
+
+  const wallSpan = Math.max(0, sess.wallEnd - sess.wallStart)
+  let netMs = sess.activeAccumMs ?? 0
   const derived = Math.max(0, wallSpan - Math.min(Math.max(0, netMs), wallSpan))
-  return Math.max(0, Math.max(ms, derived))
+  return Math.max(explicit, derived)
 }
 
 /**
@@ -335,6 +367,8 @@ export function reconcileInProgressTimer(sess: PlanSessionLike, now = Date.now()
     return
   }
 
+  // 在産中だが running/pause スライスが無い → 稼働中とみなし復帰（暗黙の一時停止累計を防ぐ）
+  sess.runningSliceStart = now
   const maxNet = Math.max(0, now - sess.wallStart)
   if (sess.activeAccumMs > maxNet) sess.activeAccumMs = maxNet
 }

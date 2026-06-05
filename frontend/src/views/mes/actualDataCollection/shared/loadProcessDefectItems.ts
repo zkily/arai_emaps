@@ -52,6 +52,59 @@ export interface MesDefectItemOption {
   attributableProcessName?: string
 }
 
+export interface MesDefectItemGroup {
+  processCd: string
+  processName: string
+  items: MesDefectItemOption[]
+}
+
+/** 帰属工程の表示順（生産ルート順：成型 KT04 は メッキ KT05 より上） */
+const ATTRIBUTABLE_PROCESS_DISPLAY_ORDER = [
+  'KT01',
+  'KT02',
+  'KT04',
+  'KT07',
+  'KT05',
+  'KT09',
+] as const
+
+function attributableProcessSortIndex(processCd: string): number {
+  const cd = (processCd ?? '').trim().toUpperCase()
+  const i = ATTRIBUTABLE_PROCESS_DISPLAY_ORDER.indexOf(
+    cd as (typeof ATTRIBUTABLE_PROCESS_DISPLAY_ORDER)[number],
+  )
+  return i === -1 ? ATTRIBUTABLE_PROCESS_DISPLAY_ORDER.length : i
+}
+
+/** 帰属工程ごとに不良項目をグループ化し、生産ルート順で並べる */
+export function groupMesDefectItemsByAttributableProcess(
+  items: MesDefectItemOption[],
+): MesDefectItemGroup[] {
+  const groups: MesDefectItemGroup[] = []
+  const byCd = new Map<string, MesDefectItemGroup>()
+  for (const item of items) {
+    const cd = (item.attributableProcessCd ?? '').trim() || '—'
+    let group = byCd.get(cd)
+    if (!group) {
+      const name = (item.attributableProcessName ?? '').trim()
+      group = {
+        processCd: cd,
+        processName: name || (cd !== '—' ? cd : ''),
+        items: [],
+      }
+      byCd.set(cd, group)
+      groups.push(group)
+    }
+    group.items.push(item)
+  }
+  return groups.sort((a, b) => {
+    const ia = attributableProcessSortIndex(a.processCd)
+    const ib = attributableProcessSortIndex(b.processCd)
+    if (ia !== ib) return ia - ib
+    return a.processCd.localeCompare(b.processCd)
+  })
+}
+
 export async function loadMesDefectItemsForProcess(
   detectionProcessCd: string,
   attributableProcessCd?: string

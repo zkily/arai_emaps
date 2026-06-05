@@ -9,7 +9,7 @@
             />
           </svg>
         </span>
-        APS 生産スケジューリングボード
+        生産スケジューリングボード
       </h2>
       <p class="plan-hd-sub">工程・設備・期間を指定して対象期間の生産計画を可視化し、ライン別の進捗をすばやく把握できます。</p>
     </div>
@@ -76,20 +76,28 @@
       </el-form>
     </div>
 
-    <div class="stat-grid compact-grid">
-      <div class="stat-card">
+    <div class="stat-grid">
+      <div class="stat-card stat-card--lines">
+        <span class="stat-card__glow" aria-hidden="true" />
+        <span class="stat-card__shine" aria-hidden="true" />
         <span class="stat-label">ライン数</span>
         <span class="stat-value">{{ lineCount }}</span>
       </div>
-      <div class="stat-card">
+      <div class="stat-card stat-card--plan">
+        <span class="stat-card__glow" aria-hidden="true" />
+        <span class="stat-card__shine" aria-hidden="true" />
         <span class="stat-label">生産計画合計</span>
         <span class="stat-value">{{ formatQty(overallPlannedOutputTotal) }}</span>
       </div>
-      <div class="stat-card">
+      <div class="stat-card stat-card--efficiency">
+        <span class="stat-card__glow" aria-hidden="true" />
+        <span class="stat-card__shine" aria-hidden="true" />
         <span class="stat-label">能率(本/H)平均</span>
         <span class="stat-value">{{ formatEfficiency(avgEfficiencyRate) }}</span>
       </div>
-      <div class="stat-card">
+      <div class="stat-card stat-card--hours">
+        <span class="stat-card__glow" aria-hidden="true" />
+        <span class="stat-card__shine" aria-hidden="true" />
         <span class="stat-label">所要生産時間</span>
         <span class="stat-value">{{ formatHours(requiredProductionHours) }}</span>
       </div>
@@ -1126,69 +1134,164 @@ watch(
 }
 
 .stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(140px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
   margin-bottom: 10px;
-}
-
-.compact-grid {
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
 }
 
 .stat-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgba(191, 219, 254, 0.75);
-  border-radius: 14px;
-  padding: 10px 12px;
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 16px;
+  padding: 12px 14px 13px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 5px;
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  border: 1px solid rgba(255, 255, 255, 0.52);
   background:
-    radial-gradient(circle at 100% 0%, rgba(99, 102, 241, 0.12), transparent 44%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.96) 0%, rgba(243, 248, 255, 0.95) 100%);
+    linear-gradient(155deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.28) 55%, rgba(255, 255, 255, 0.14) 100%);
   box-shadow:
-    0 10px 24px rgba(37, 99, 235, 0.09),
-    0 2px 6px rgba(15, 23, 42, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72);
-  transition: transform 0.18s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.04) inset,
+    0 12px 28px rgba(15, 23, 42, 0.1),
+    0 4px 10px rgba(15, 23, 42, 0.06);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 
-.stat-card::after {
+.stat-card::before {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
+  right: 0;
   height: 3px;
-  background: linear-gradient(90deg, #3b82f6 0%, #8b5cf6 100%);
-  opacity: 0.95;
+  border-radius: 16px 16px 0 0;
+  opacity: 0.92;
+}
+
+.stat-card__glow {
+  position: absolute;
+  top: -28px;
+  right: -18px;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  filter: blur(22px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.stat-card__shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 55%;
+  height: 100%;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.08) 45%, transparent 70%);
+  pointer-events: none;
 }
 
 .stat-card:hover {
-  transform: translateY(-1px);
-  border-color: rgba(147, 197, 253, 0.95);
+  transform: translateY(-3px) scale(1.01);
+  border-color: rgba(255, 255, 255, 0.72);
   box-shadow:
-    0 14px 28px rgba(37, 99, 235, 0.13),
-    0 4px 10px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    0 1px 0 rgba(255, 255, 255, 0.82) inset,
+    0 -1px 0 rgba(15, 23, 42, 0.05) inset,
+    0 18px 36px rgba(15, 23, 42, 0.14),
+    0 6px 14px rgba(15, 23, 42, 0.08);
+}
+
+.stat-card--lines {
+  --stat-accent: #2563eb;
+  --stat-accent-soft: rgba(37, 99, 235, 0.18);
+  --stat-value-color: #1e3a8a;
+  --stat-label-color: #3b5f9a;
+}
+
+.stat-card--lines::before {
+  background: linear-gradient(90deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
+}
+
+.stat-card--lines .stat-card__glow {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.75) 0%, transparent 70%);
+}
+
+.stat-card--plan {
+  --stat-accent: #059669;
+  --stat-accent-soft: rgba(5, 150, 105, 0.18);
+  --stat-value-color: #065f46;
+  --stat-label-color: #2f6f5c;
+}
+
+.stat-card--plan::before {
+  background: linear-gradient(90deg, #34d399 0%, #059669 55%, #047857 100%);
+}
+
+.stat-card--plan .stat-card__glow {
+  background: radial-gradient(circle, rgba(16, 185, 129, 0.72) 0%, transparent 70%);
+}
+
+.stat-card--efficiency {
+  --stat-accent: #d97706;
+  --stat-accent-soft: rgba(217, 119, 6, 0.2);
+  --stat-value-color: #92400e;
+  --stat-label-color: #9a5f1a;
+}
+
+.stat-card--efficiency::before {
+  background: linear-gradient(90deg, #fbbf24 0%, #d97706 55%, #b45309 100%);
+}
+
+.stat-card--efficiency .stat-card__glow {
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.75) 0%, transparent 70%);
+}
+
+.stat-card--hours {
+  --stat-accent: #7c3aed;
+  --stat-accent-soft: rgba(124, 58, 237, 0.2);
+  --stat-value-color: #5b21b6;
+  --stat-label-color: #6d4a9e;
+}
+
+.stat-card--hours::before {
+  background: linear-gradient(90deg, #a78bfa 0%, #7c3aed 55%, #6d28d9 100%);
+}
+
+.stat-card--hours .stat-card__glow {
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.75) 0%, transparent 70%);
 }
 
 .stat-label {
+  position: relative;
+  z-index: 1;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  color: #5b6b82;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  color: var(--stat-label-color, #5b6b82);
 }
 
 .stat-value {
-  font-size: 20px;
+  position: relative;
+  z-index: 1;
+  font-size: clamp(16px, 1.6vw, 22px);
   font-weight: 800;
-  color: #0b1220;
+  color: var(--stat-value-color, #0b1220);
   line-height: 1.1;
   letter-spacing: 0.2px;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.65),
+    0 2px 8px var(--stat-accent-soft, rgba(15, 23, 42, 0.08));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .stat-value--warn {
@@ -1611,9 +1714,31 @@ watch(
   z-index: 4;
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 540px) {
   .stat-grid {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+    flex-wrap: wrap;
+  }
+
+  .stat-card {
+    flex: 1 1 calc(50% - 6px);
+    min-width: calc(50% - 6px);
+  }
+}
+
+@media (max-width: 540px) {
+  .stat-grid {
+    gap: 10px;
+  }
+
+  .stat-card {
+    flex: 1 1 100%;
+    min-width: 100%;
+    padding: 11px 13px 12px;
+  }
+
+  .stat-value {
+    font-size: 20px;
+    white-space: normal;
   }
 }
 </style>

@@ -378,6 +378,68 @@ def _reject_inspection_mes_client_lock_conflict(
     )
 
 
+def _inspection_mes_inspector_user_id_from_user(current_user: User) -> int:
+    uid = getattr(current_user, "id", None)
+    if uid is None:
+        raise HTTPException(status_code=401, detail="認証が必要です")
+    return int(uid)
+
+
+def _reject_inspection_mes_inspector_not_current_user(
+    current_user: User,
+    inspector_user_id: Optional[int],
+) -> None:
+    if inspector_user_id is None:
+        return
+    try:
+        iid = int(inspector_user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="mes_inspector_user_id が不正です")
+    if iid <= 0:
+        return
+    if iid != _inspection_mes_inspector_user_id_from_user(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="検査員はログイン中のユーザーと一致する必要があります。",
+        )
+
+
+async def _fetch_inspection_row_mes_inspector(
+    db: AsyncSession,
+    inspection_id: int,
+    im_cols: set[str],
+) -> Optional[int]:
+    if "mes_inspector_user_id" not in im_cols:
+        return None
+    result = await db.execute(
+        text("SELECT mes_inspector_user_id FROM inspection_management WHERE id = :iid LIMIT 1"),
+        {"iid": inspection_id},
+    )
+    val = result.scalar()
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _inspection_mes_row_mutation_requested(body: "UpdateInspectionManagementBody") -> bool:
+    return (
+        body.mes_production_started_at is not None
+        or body.mes_production_ended_at is not None
+        or body.mes_net_production_sec is not None
+        or body.mes_paused_accum_sec is not None
+        or body.mes_production_is_paused is not None
+        or body.mes_defect_by_item is not None
+        or body.mes_inspector_user_id is not None
+        or body.mes_claim_client_lock
+        or body.production_completed_check is not None
+        or body.actual_production_quantity is not None
+        or body.defect_qty is not None
+    )
+
+
 def _inspection_mes_conflict_label(
     oid: int,
     pseq: Any,
@@ -6438,7 +6500,12 @@ async def create_inspection_management(
         {"pday": d},
     )
     seq = int(seq_row.scalar() or 1)
+    login_uid = _inspection_mes_inspector_user_id_from_user(current_user)
     inspector_id = body.mes_inspector_user_id
+    if inspector_id is not None and int(inspector_id) > 0:
+        _reject_inspection_mes_inspector_not_current_user(current_user, inspector_id)
+    else:
+        inspector_id = login_uid
     params: dict[str, Any] = {
         "production_month": prod_month,
         "production_day": d,
@@ -6513,6 +6580,18 @@ async def update_inspection_management(
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    if _inspection_mes_row_mutation_requested(body):
+        row_insp = await _fetch_inspection_row_mes_inspector(db, inspection_id, im_cols)
+        if body.mes_inspector_user_id is not None:
+            _reject_inspection_mes_inspector_not_current_user(current_user, body.mes_inspector_user_id)
+            try:
+                clear_insp = int(body.mes_inspector_user_id)
+            except (TypeError, ValueError):
+                clear_insp = -1
+            if clear_insp <= 0 and row_insp is not None:
+                _reject_inspection_mes_inspector_not_current_user(current_user, row_insp)
+        elif row_insp is not None:
+            _reject_inspection_mes_inspector_not_current_user(current_user, row_insp)
     row_mes = await _fetch_inspection_row_mes_state(db, inspection_id, im_cols)
     in_progress = _inspection_row_mes_in_progress(
         row_mes.get("mes_production_started_at"),

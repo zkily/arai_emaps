@@ -9,8 +9,15 @@ import {
   type PatchInspectionManagementBody,
 } from '@/api/inspectionManagement'
 import { getProducts, type ProductItem } from '@/api/erp/optionsData'
-import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
-import { formatDateTimeJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
+import { getUsers, type PaginatedUserResponse } from '@/api/system'
+import { useUserStore } from '@/modules/auth/stores/user'
+import { formatDateTimeJST, formatDateToYmdJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
+import {
+  bindScreenWakeLockVisibilityRecovery,
+  releaseScreenWakeLock,
+  syncScreenWakeLock,
+  unbindScreenWakeLockVisibilityRecovery,
+} from '@/utils/screenWakeLock'
 import { INSPECTION_DEFECT_DETECTION_PROCESS_CD } from './inspectionActualConfig'
 import {
   applyPersistedSessionsForScope,
@@ -19,6 +26,9 @@ import {
   flushRunningSlice,
   formatDurationMs,
   freezePausedAccumMs,
+  correctNetProductionFromWallClock,
+  readNetProductionMs,
+  readExplicitPausedAccumMs,
   readPausedAccumMs,
   hydratePlanSessionFromRow,
   loadInspectionActualPersist,
@@ -31,6 +41,7 @@ import {
 import {
   emptyDefectCountsFromItems,
   loadMesDefectItemsForProcess,
+  groupMesDefectItemsByAttributableProcess,
   resolveMesDefectItemLabel,
   totalDefectCountFromItems,
   type MesDefectItemOption,
@@ -69,13 +80,32 @@ function filterInspectionProductOptions(list: ProductItem[]): ProductItem[] {
 
 export function useInspectionMesCollection() {
   const { t, te } = useI18n()
+  const userStore = useUserStore()
+
+  const loggedInUserId = computed(() => {
+    const id = userStore.user?.id
+    return id != null && Number.isFinite(Number(id)) ? Number(id) : null
+  })
+
+  const loggedInInspectorLabel = computed(() => {
+    const u = userStore.user
+    if (!u) return '—'
+    return (u.full_name || u.username || '').trim() || String(u.id)
+  })
+
+  interface InspectorOption {
+    id: number
+    username: string
+    full_name?: string
+  }
 
   const productionDay = ref(getJSTToday())
   const inspectorUserId = ref<number | null>(null)
   const selectedProductCode = ref<string | null>(null)
   const activePlanId = ref<number | null>(null)
   const products = ref<ProductItem[]>([])
-  const inspectors = ref<UserListItem[]>([])
+  const inspectors = ref<InspectorOption[]>([])
+  const inspectorDisplayNames = ref<Map<number, string>>(new Map())
   const managementRows = ref<InspectionMgmtRow[]>([])
   const sessions = reactive<Record<number, PlanSession>>({})
 
@@ -93,6 +123,7 @@ export function useInspectionMesCollection() {
   let mesSyncTimer: ReturnType<typeof setInterval> | null = null
   let mesSyncInFlight = false
   let mesSyncVisibilityHandler: (() => void) | null = null
+  let stopScreenWakeLockWatch: (() => void) | null = null
   let runningPersistTimer: ReturnType<typeof setInterval> | null = null
 
   const localMesEchoUntil = new Map<number, number>()
@@ -103,6 +134,13 @@ export function useInspectionMesCollection() {
   /** 検査生産中ストリップ・他端末在産の同期（一覧 GET、セッション hydrate は本端末のみ） */
   const MES_SYNC_INTERVAL_MS = 5000
   const MES_SYNC_INTERVAL_HIDDEN_MS = 15000
+  /** 一時停止中：再開ボタン強調（30秒ごと） */
+  const PAUSE_RESUME_PULSE_INTERVAL_MS = 30_000
+  const PAUSE_RESUME_PULSE_DURATION_MS = 4500
+
+  const resumePulseActive = ref(false)
+  let resumePulseIntervalTimer: ReturnType<typeof setInterval> | null = null
+  let resumePulseOffTimer: ReturnType<typeof setTimeout> | null = null
 
   const endDialogVisible = ref(false)
   const endDialogQty = ref('')
@@ -308,6 +346,48 @@ export function useInspectionMesCollection() {
     return row != null && isRowMesProductionActive(row)
   }
 
+  function clearResumePulseTimers(): void {
+    if (resumePulseIntervalTimer) {
+      clearInterval(resumePulseIntervalTimer)
+      resumePulseIntervalTimer = null
+    }
+    if (resumePulseOffTimer) {
+      clearTimeout(resumePulseOffTimer)
+      resumePulseOffTimer = null
+    }
+    resumePulseActive.value = false
+  }
+
+  function triggerResumePulse(): void {
+    resumePulseActive.value = true
+    if (resumePulseOffTimer) clearTimeout(resumePulseOffTimer)
+    resumePulseOffTimer = setTimeout(() => {
+      resumePulseActive.value = false
+      resumePulseOffTimer = null
+    }, PAUSE_RESUME_PULSE_DURATION_MS)
+  }
+
+  function startResumePulseSchedule(): void {
+    clearResumePulseTimers()
+    resumePulseIntervalTimer = setInterval(() => {
+      const s = session.value
+      if (!canOperateActivePlan.value || s == null || !isTimerPaused(s)) {
+        clearResumePulseTimers()
+        return
+      }
+      triggerResumePulse()
+    }, PAUSE_RESUME_PULSE_INTERVAL_MS)
+  }
+
+  function syncResumePulseSchedule(): void {
+    const s = session.value
+    if (canOperateActivePlan.value && s != null && isTimerPaused(s)) {
+      if (resumePulseIntervalTimer == null) startResumePulseSchedule()
+      return
+    }
+    clearResumePulseTimers()
+  }
+
   function schedulePersist(): void {
     if (persistTimer) clearTimeout(persistTimer)
     persistTimer = setTimeout(flushPersistToStorage, 350)
@@ -325,15 +405,12 @@ export function useInspectionMesCollection() {
     return sess.wallStart != null && sess.wallEnd == null
   }
 
-  function netProductionSeconds(sess: PlanSession): number {
-    const now = Date.now()
-    let ms = sess.activeAccumMs
-    if (sess.runningSliceStart != null) ms += Math.max(0, now - sess.runningSliceStart)
-    return Math.max(0, Math.round(ms / 1000))
+  function netProductionSeconds(sess: PlanSession, at = Date.now()): number {
+    return Math.max(0, Math.round(readNetProductionMs(sess, at) / 1000))
   }
 
   function pausedAccumSeconds(sess: PlanSession, at = Date.now()): number {
-    return Math.max(0, Math.round(readPausedAccumMs(sess, at) / 1000))
+    return Math.max(0, Math.round(readExplicitPausedAccumMs(sess, at) / 1000))
   }
 
   function markLocalMesEcho(planId: number): void {
@@ -403,10 +480,49 @@ export function useInspectionMesCollection() {
     return Number(v)
   }
 
+  /** 生産開始日時（JST）から生産日 YYYY-MM-DD を導出 */
+  function productionDayFromWallStart(start: Date | number | string | null | undefined): string | null {
+    if (start == null) return null
+    const d =
+      start instanceof Date
+        ? start
+        : new Date(typeof start === 'number' ? start : String(start).trim())
+    if (isNaN(d.getTime())) return null
+    const ymd = formatDateToYmdJST(d)
+    return /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? ymd : null
+  }
+
+  function rowProductionDayYmd(row: InspectionMgmtRow): string {
+    const stored = String(row.production_day ?? '').trim().slice(0, 10)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(stored)) return stored
+    return productionDayFromWallStart(row.mes_production_started_at) ?? ''
+  }
+
   function inspectorNameById(userId: number | null | undefined): string {
     if (userId == null) return ''
-    const u = inspectors.value.find((x) => x.id === userId)
-    return (u?.full_name || u?.username || '').trim()
+    if (userId === loggedInUserId.value) return loggedInInspectorLabel.value
+    return inspectorDisplayNames.value.get(userId) ?? ''
+  }
+
+  function syncInspectorToLoggedInUser(): void {
+    const uid = loggedInUserId.value
+    if (uid == null) {
+      inspectorUserId.value = null
+      return
+    }
+    if (inspectorUserId.value === uid) return
+    suppressInspectorUserWatch = true
+    inspectorUserId.value = uid
+    void nextTick(() => {
+      suppressInspectorUserWatch = false
+    })
+  }
+
+  function canEditConfirmedHistoryRow(row: InspectionMgmtRow): boolean {
+    const uid = loggedInUserId.value
+    if (uid == null) return false
+    const ri = rowInspectorId(row)
+    return ri == null || ri === uid
   }
 
   /** 同一検査員が別製品を同時に生産中か（検査員ごとに1件まで） */
@@ -434,6 +550,18 @@ export function useInspectionMesCollection() {
 
   function isRowProductionCompleted(row: InspectionMgmtRow): boolean {
     return Number(row.production_completed_check ?? 0) === 1
+  }
+
+  /** 確定実績一覧：ログインユーザー × ツールバー生産日のみ */
+  function rowMatchesCompletedHistoryScope(row: InspectionMgmtRow): boolean {
+    if (!isRowProductionCompleted(row)) return false
+    const uid = loggedInUserId.value
+    if (uid == null) return false
+    if (rowInspectorId(row) !== uid) return false
+    const scopeDay = (productionDay.value ?? '').trim().slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(scopeDay)) return false
+    const rowDay = rowProductionDayYmd(row)
+    return rowDay === scopeDay
   }
 
   /** 当該検査員の未確定オープン行（同一製品でも検査員ごとに別行） */
@@ -502,9 +630,11 @@ export function useInspectionMesCollection() {
     target.mes_client_instance_id = fresh.mes_client_instance_id
   }
 
-  /** 他端末行は一覧のみ更新；本端末操作行だけタイマー session をサーバーと同期 */
+  /** 他端末行は一覧のみ更新；本端末で計測中はローカル session を正としサーバー hydrate で上書きしない */
   function shouldHydrateSessionFromServer(planId: number): boolean {
-    if (isPlanLocallyOperated(planId)) return true
+    const sess = sessions[planId]
+    const inProgress = sess?.wallStart != null && sess.wallEnd == null
+    if (inProgress && isPlanLocallyOperated(planId)) return false
     if (activePlanId.value === planId) return true
     const row = managementRows.value.find((r) => r.id === planId)
     return row != null && rowMesLockOwner(row) === 'mine'
@@ -676,6 +806,10 @@ export function useInspectionMesCollection() {
       ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
       return
     }
+    if (ri !== loggedInUserId.value) {
+      ElMessage.warning(t('mesInspectionActual.inspectorMustMatchLogin'))
+      return
+    }
     if (row.id == null || !isRowMesProductionActive(row)) return
     if (rowMesLockOwner(row) === 'other') {
       ElMessage.warning(t('mesInspectionActual.sessionLockedByOtherTerminal'))
@@ -728,6 +862,14 @@ export function useInspectionMesCollection() {
     managementRows.value.filter((r) => isRowMesProductionActive(r) && !isRowProductionCompleted(r)),
   )
 
+  /** 検査生産中は画面消灯を抑止（Wake Lock） */
+  const keepScreenAwake = computed(() => {
+    for (const s of Object.values(sessions)) {
+      if (s.wallStart != null && s.wallEnd == null) return true
+    }
+    return false
+  })
+
   /** 他端末でロック中の検査員は選択不可 */
   function isInspectorOptionDisabled(inspectorId: number): boolean {
     const busyRow = findInProgressRowForInspector(inspectorId)
@@ -737,14 +879,14 @@ export function useInspectionMesCollection() {
     return true
   }
 
-  function inspectorOptionLabel(u: UserListItem): string {
+  function inspectorOptionLabel(u: InspectorOption): string {
     const base = (u.full_name || u.username || '').trim() || String(u.id)
     if (!isInspectorOptionDisabled(u.id)) return base
     return `${base} (${t('mesInspectionActual.inspectorInProgress')})`
   }
 
   const completedRows = computed(() =>
-    managementRows.value.filter((r) => isRowProductionCompleted(r)),
+    managementRows.value.filter((r) => rowMatchesCompletedHistoryScope(r)),
   )
 
   /** 検査員・製品が選ばれていれば生産カードを表示（同一製品の再実績も可） */
@@ -763,7 +905,7 @@ export function useInspectionMesCollection() {
   const pausedDisplay = computed(() => {
     const sess = session.value
     if (!sess) return '0:00:00'
-    return formatElapsed(readPausedAccumMs(sess, tickNow.value))
+    return formatElapsed(readExplicitPausedAccumMs(sess, tickNow.value))
   })
 
   const defectTotal = computed(() => {
@@ -771,6 +913,10 @@ export function useInspectionMesCollection() {
     if (!sess) return 0
     return totalDefectCountFromItems(defectItems.value, sess.defects)
   })
+
+  const defectItemGroups = computed(() =>
+    groupMesDefectItemsByAttributableProcess(defectItems.value),
+  )
 
   const canOperateActivePlan = computed(() => {
     const planId = activePlanId.value
@@ -800,9 +946,16 @@ export function useInspectionMesCollection() {
     const sess = session.value
     return canOperateActivePlan.value && sess != null && isTimerPaused(sess)
   })
-  const canEnd = computed(
+  const productSelectionLocked = computed(
     () => canOperateActivePlan.value && activePlanSessionInProgress(),
   )
+
+  const canEnd = computed(() => {
+    if (!productSelectionLocked.value) return false
+    const sess = session.value
+    if (sess != null && isTimerPaused(sess)) return false
+    return true
+  })
 
   const timerStatusKey = computed(() => {
     const sess = session.value
@@ -810,7 +963,7 @@ export function useInspectionMesCollection() {
     if (sess.wallEnd != null) return 'ended'
     if (isTimerPaused(sess)) return 'paused'
     if (isTimerRunning(sess)) return 'running'
-    if (sess.wallStart != null) return 'paused'
+    if (sess.wallStart != null) return 'running'
     return 'idle'
   })
 
@@ -823,7 +976,7 @@ export function useInspectionMesCollection() {
     () => canOperateActivePlan.value && activePlanSessionInProgress(),
   )
 
-  const canScanProduct = computed(() => !canEnd.value)
+  const canScanProduct = computed(() => !productSelectionLocked.value)
 
   const showSessionRecoveryAlert = computed(() => {
     const id = activePlanId.value
@@ -912,15 +1065,12 @@ export function useInspectionMesCollection() {
     return Number.isNaN(ws) ? null : ws
   }
 
-  /** 稼働時間表示：現在時刻 − 開始時刻（壁時計。一時停止中も経過は進む） */
+  /** 稼働時間表示：净稼働（一時停止中は増えない）。終了後は確定净稼働 */
   function operationDisplayMs(sess: PlanSession, now = tickNow.value): number {
-    const planId = activePlanId.value
-    const row =
-      planId != null ? managementRows.value.find((r) => r.id === planId) ?? activeRow.value : activeRow.value
-    const ws = resolveSessionWallStartMs(sess, row)
-    if (ws == null) return 0
-    if (sess.wallEnd != null) return Math.max(0, sess.wallEnd - ws)
-    return Math.max(0, now - ws)
+    if (sess.wallEnd != null) {
+      return readNetProductionMs(sess, sess.wallEnd)
+    }
+    return readNetProductionMs(sess, now)
   }
 
   /** 確定実績表：一時停止累計（DB 優先、無ければ壁時計−净稼働） */
@@ -1012,6 +1162,12 @@ export function useInspectionMesCollection() {
   }
 
   async function onStartProduction(): Promise<void> {
+    const uid = loggedInUserId.value
+    if (uid == null) {
+      ElMessage.warning(t('mesInspectionActual.loginRequiredForInspector'))
+      return
+    }
+    syncInspectorToLoggedInUser()
     if (inspectorUserId.value == null) {
       ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
       return
@@ -1040,6 +1196,7 @@ export function useInspectionMesCollection() {
     markLocalMesEcho(planId)
     try {
       const ok = await patchWithOfflineSync(planId, {
+        production_day: productionDayFromWallStart(now) ?? getJSTToday(),
         mes_production_started_at: new Date(now).toISOString(),
         mes_production_is_paused: 0,
         mes_inspector_user_id: inspectorUserId.value,
@@ -1061,6 +1218,7 @@ export function useInspectionMesCollection() {
     s.pausedAccumMs = 0
     s.pauseSliceStart = null
     s.runningSliceStart = now
+    void syncScreenWakeLock(true)
     schedulePersist()
     ElMessage.success(t('mesInspectionActual.started'))
   }
@@ -1074,6 +1232,7 @@ export function useInspectionMesCollection() {
     flushRunningSlice(s, now)
     s.pauseSliceStart = now
     markLocalMesEcho(id)
+    startResumePulseSchedule()
     void persistMesTimerCheckpoints(id)
     schedulePersist()
   }
@@ -1084,9 +1243,16 @@ export function useInspectionMesCollection() {
     const s = session.value
     if (id == null || !s || !isTimerPaused(s)) return
     const now = Date.now()
+    const ws = resolveSessionWallStartMs(s, activeRow.value)
     flushPauseSlice(s, now)
-    s.runningSliceStart = now
+    if (ws != null) {
+      correctNetProductionFromWallClock(s, ws, now)
+    } else {
+      s.runningSliceStart = now
+      s.pauseSliceStart = null
+    }
     markLocalMesEcho(id)
+    clearResumePulseTimers()
     void persistMesTimerCheckpoints(id)
     schedulePersist()
   }
@@ -1111,25 +1277,19 @@ export function useInspectionMesCollection() {
     if (!row || !s) return null
     const now = tickNow.value
     const ws = resolveSessionWallStartMs(s, row)
-    const activeMs = ws != null ? Math.max(0, now - ws) : 0
     return {
       productName: row.product_name,
       inspectorName: inspectorLabel.value || t('mesInspectionActual.inspectorMissing'),
       wallStart: ws,
       wallEnd: now,
-      activeMs,
-      pausedMs: readPausedAccumMs(s, now),
+      activeMs: readNetProductionMs(s, now),
+      pausedMs: readExplicitPausedAccumMs(s, now),
       defects: { ...s.defects },
       defectTotal: totalDefectCountFromItems(defectItems.value, s.defects),
     }
   })
 
-  const inspectorLabel = computed(() => {
-    const id = inspectorUserId.value
-    if (id == null) return ''
-    const u = inspectors.value.find((x) => x.id === id)
-    return (u?.full_name || u?.username || '').trim()
-  })
+  const inspectorLabel = computed(() => loggedInInspectorLabel.value)
 
   async function submitProductionEnd(): Promise<void> {
     const id = activePlanId.value
@@ -1151,8 +1311,11 @@ export function useInspectionMesCollection() {
     s.wallEnd = now
     freezePausedAccumMs(s, now)
     endDialogSubmitting.value = true
+    const productionDayFromStart =
+      productionDayFromWallStart(s.wallStart) ?? productionDayFromWallStart(now) ?? getJSTToday()
     try {
       const ok = await patchWithOfflineSync(id, {
+        production_day: productionDayFromStart,
         mes_production_ended_at: new Date(now).toISOString(),
         mes_net_production_sec: netProductionSeconds(s),
         mes_paused_accum_sec: Math.max(0, Math.round((s.pausedAccumMs ?? 0) / 1000)),
@@ -1204,14 +1367,26 @@ export function useInspectionMesCollection() {
 
   function restorePageFilters(): void {
     const blob = loadInspectionActualPersist()
-    if (!blob) return
-    if (blob.productionDay && /^\d{4}-\d{2}-\d{2}$/.test(blob.productionDay)) {
-      productionDay.value = blob.productionDay
+    if (blob) {
+      if (blob.productionDay && /^\d{4}-\d{2}-\d{2}$/.test(blob.productionDay)) {
+        productionDay.value = blob.productionDay
+      }
+      if (blob.selectedProductCode) selectedProductCode.value = blob.selectedProductCode
+      if (blob.activePlanId != null) activePlanId.value = blob.activePlanId
     }
-    if (blob.inspectorUserId != null) inspectorUserId.value = blob.inspectorUserId
-    if (blob.selectedProductCode) selectedProductCode.value = blob.selectedProductCode
-    if (blob.activePlanId != null) activePlanId.value = blob.activePlanId
+    syncInspectorToLoggedInUser()
   }
+
+  watch(
+    () => {
+      const s = session.value
+      return Boolean(canOperateActivePlan.value && s != null && isTimerPaused(s))
+    },
+    () => {
+      syncResumePulseSchedule()
+    },
+    { immediate: true },
+  )
 
   watch(productionDay, () => {
     schedulePersist()
@@ -1234,7 +1409,14 @@ export function useInspectionMesCollection() {
   })
 
   watch(inspectorUserId, (newId, oldId) => {
+    const uid = loggedInUserId.value
+    if (uid != null && newId != null && newId !== uid) {
+      syncInspectorToLoggedInUser()
+      ElMessage.warning(t('mesInspectionActual.inspectorMustMatchLogin'))
+      return
+    }
     if (newId == null) {
+      syncInspectorToLoggedInUser()
       schedulePersist()
       return
     }
@@ -1321,13 +1503,46 @@ export function useInspectionMesCollection() {
     }
   }
 
+  watch(loggedInUserId, () => {
+    syncInspectorToLoggedInUser()
+  })
+
   async function loadInspectors(): Promise<void> {
     loadingInspectors.value = true
     try {
-      const res = (await getUsers({ page: 1, page_size: 500, status: 'active' })) as unknown as PaginatedUserResponse
-      inspectors.value = res?.items ?? []
-    } catch {
-      ElMessage.error(t('mesInspectionActual.loadInspectorsFailed'))
+      const u = userStore.user
+      const uid = loggedInUserId.value
+      if (uid == null || !u) {
+        inspectors.value = []
+        inspectorUserId.value = null
+        inspectorDisplayNames.value = new Map()
+        return
+      }
+      inspectors.value = [
+        {
+          id: uid,
+          username: u.username,
+          full_name: u.full_name,
+        },
+      ]
+      syncInspectorToLoggedInUser()
+      try {
+        const res = (await getUsers({
+          page: 1,
+          page_size: 500,
+          status: 'active',
+        })) as unknown as PaginatedUserResponse
+        const names = new Map<number, string>()
+        for (const item of res?.items ?? []) {
+          names.set(
+            item.id,
+            (item.full_name || item.username || '').trim() || String(item.id),
+          )
+        }
+        inspectorDisplayNames.value = names
+      } catch {
+        inspectorDisplayNames.value = new Map([[uid, loggedInInspectorLabel.value]])
+      }
     } finally {
       loadingInspectors.value = false
     }
@@ -1337,7 +1552,7 @@ export function useInspectionMesCollection() {
     restorePageFilters()
     tickTimer = setInterval(() => {
       tickNow.value = Date.now()
-    }, 1000)
+    }, 250)
     window.addEventListener('online', () => {
       isBrowserOffline.value = false
       void tryFlushOfflineQueue({ reloadAfter: true })
@@ -1361,6 +1576,14 @@ export function useInspectionMesCollection() {
       if (document.visibilityState === 'visible') void syncMesStateFromServer()
     }
     document.addEventListener('visibilitychange', mesSyncVisibilityHandler)
+    bindScreenWakeLockVisibilityRecovery()
+    stopScreenWakeLockWatch = watch(
+      keepScreenAwake,
+      (active) => {
+        void syncScreenWakeLock(active)
+      },
+      { immediate: true },
+    )
     void syncMesStateFromServer()
   }
 
@@ -1414,6 +1637,12 @@ export function useInspectionMesCollection() {
     return formatElapsed(Math.max(0, we - ws - pauseMs))
   })
 
+  const confirmedEditProductionDay = computed(() => {
+    const draft = confirmedEditForm.value
+    if (!draft?.wallStart) return '—'
+    return productionDayFromWallStart(draft.wallStart) ?? '—'
+  })
+
   function applyConfirmedEditToSession(planId: number, draft: ConfirmedHistoryEditDraft): void {
     const sess = ensureSession(planId)
     const ws = draft.wallStart?.getTime()
@@ -1452,13 +1681,22 @@ export function useInspectionMesCollection() {
   function openConfirmedHistoryEdit(row: InspectionMgmtRow): void {
     const id = row.id
     if (id == null || !isRowProductionCompleted(row)) return
+    if (!canEditConfirmedHistoryRow(row)) {
+      ElMessage.warning(t('mesInspectionActual.cannotEditOthersRecord'))
+      return
+    }
+    const uid = loggedInUserId.value
+    if (uid == null) {
+      ElMessage.warning(t('mesInspectionActual.loginRequiredForInspector'))
+      return
+    }
     const sess = ensureSession(id)
     hydratePlanSessionFromRow(sess, row)
     normalizeSessionDefects(sess)
     confirmedEditRow.value = row
     confirmedEditPlanId.value = id
     confirmedEditForm.value = {
-      inspectorUserId: rowInspectorId(row),
+      inspectorUserId: uid,
       actualQty:
         row.actual_production_quantity != null && Number.isFinite(Number(row.actual_production_quantity))
           ? Math.round(Number(row.actual_production_quantity))
@@ -1510,6 +1748,10 @@ export function useInspectionMesCollection() {
       ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
       return
     }
+    if (draft.inspectorUserId !== loggedInUserId.value) {
+      ElMessage.warning(t('mesInspectionActual.inspectorMustMatchLogin'))
+      return
+    }
     if (draft.actualQty != null && (!Number.isFinite(draft.actualQty) || draft.actualQty < 0)) {
       ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
       return
@@ -1518,6 +1760,11 @@ export function useInspectionMesCollection() {
     const we = draft.wallEnd?.getTime()
     if (ws == null || !Number.isFinite(ws) || we == null || !Number.isFinite(we)) {
       ElMessage.warning(t('mesInspectionActual.editTimeRequired'))
+      return
+    }
+    const dayStr = productionDayFromWallStart(draft.wallStart)
+    if (!dayStr) {
+      ElMessage.warning(t('mesInspectionActual.invalidProductionDay'))
       return
     }
     if (we < ws) {
@@ -1534,6 +1781,7 @@ export function useInspectionMesCollection() {
     applyConfirmedEditToSession(planId, draft)
     const defects = mergeSessionDefects(draft.defects)
     const body: PatchInspectionManagementBody = {
+      production_day: dayStr,
       mes_production_started_at: new Date(ws).toISOString(),
       mes_production_ended_at: new Date(we).toISOString(),
       mes_paused_accum_sec: pauseSec,
@@ -1567,6 +1815,10 @@ export function useInspectionMesCollection() {
     const row = confirmedEditRow.value
     const planId = confirmedEditPlanId.value
     if (!row || planId == null) return
+    if (!canEditConfirmedHistoryRow(row)) {
+      ElMessage.warning(t('mesInspectionActual.cannotEditOthersRecord'))
+      return
+    }
     if (!navigator.onLine) {
       ElMessage.warning(t('mesInspectionActual.needOnlineForEdit'))
       return
@@ -1603,6 +1855,7 @@ export function useInspectionMesCollection() {
   }
 
   function teardownLifecycle(): void {
+    clearResumePulseTimers()
     if (tickTimer) clearInterval(tickTimer)
     if (persistTimer) clearTimeout(persistTimer)
     if (runningPersistTimer) clearInterval(runningPersistTimer)
@@ -1611,6 +1864,12 @@ export function useInspectionMesCollection() {
       document.removeEventListener('visibilitychange', mesSyncVisibilityHandler)
       mesSyncVisibilityHandler = null
     }
+    if (stopScreenWakeLockWatch) {
+      stopScreenWakeLockWatch()
+      stopScreenWakeLockWatch = null
+    }
+    unbindScreenWakeLockVisibilityRecovery()
+    void releaseScreenWakeLock()
     flushPersistToStorage()
     window.removeEventListener('beforeunload', flushPersistToStorage)
   }
@@ -1625,12 +1884,16 @@ export function useInspectionMesCollection() {
 
   return {
     defectItems,
+    defectItemGroups,
     loadingDefectItems,
     productScanDialogVisible,
     canScanProduct,
     openProductScanDialog,
     onProductBarcodeScanned,
     productionDay,
+    loggedInUserId,
+    loggedInInspectorLabel,
+    canEditConfirmedHistoryRow,
     inspectorUserId,
     selectedProductCode,
     activePlanId,
@@ -1663,6 +1926,8 @@ export function useInspectionMesCollection() {
     canPause,
     canResume,
     canEnd,
+    resumePulseActive,
+    productSelectionLocked,
     canEditDefects,
     timerStatusLabel,
     showOfflineAlert,
@@ -1699,6 +1964,7 @@ export function useInspectionMesCollection() {
     confirmedEditSaving,
     confirmedEditClearing,
     confirmedEditElapsedPreview,
+    confirmedEditProductionDay,
     openConfirmedHistoryEdit,
     closeConfirmedHistoryEdit,
     submitConfirmedHistoryEdit,

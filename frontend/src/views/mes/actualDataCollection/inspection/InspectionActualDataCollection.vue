@@ -22,7 +22,7 @@ import {
   QuestionFilled,
 } from '@element-plus/icons-vue'
 import { setLocale, type LocaleType } from '@/i18n'
-import { formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
+import { formatDateTimeJST, formatDateToYmdJST, localeForIntl } from '@/utils/dateFormat'
 import { formatDurationMs, parseDefectsFromRow } from './inspectionActualPersist'
 import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useInspectionMesCollection, type InspectionMgmtRow } from './useInspectionMesCollection'
@@ -33,8 +33,11 @@ const { t, locale } = useI18n()
 const mes = useInspectionMesCollection()
 const {
   defectItems,
+  defectItemGroups,
   loadingDefectItems,
   productionDay,
+  loggedInInspectorLabel,
+  canEditConfirmedHistoryRow,
   inspectorUserId,
   selectedProductCode,
   activePlanId,
@@ -47,14 +50,10 @@ const {
   isPlanLocallyOperated,
   showSessionRecoveryAlert,
   inspectorNameById,
-  isInspectorOptionDisabled,
-  inspectorOptionLabel,
   products,
-  inspectors,
   completedRows,
   showPlanProductionCard,
   loadingProducts,
-  loadingInspectors,
   loadingPlans,
   endDialogVisible,
   endDialogQty,
@@ -64,6 +63,8 @@ const {
   canPause,
   canResume,
   canEnd,
+  resumePulseActive,
+  productSelectionLocked,
   canEditDefects,
   showOfflineAlert,
   offlineAlertText,
@@ -102,6 +103,7 @@ const {
   confirmedEditSaving,
   confirmedEditClearing,
   confirmedEditElapsedPreview,
+  confirmedEditProductionDay,
   openConfirmedHistoryEdit,
   closeConfirmedHistoryEdit,
   submitConfirmedHistoryEdit,
@@ -152,6 +154,13 @@ const displayProductName = computed(
 
 const currentSession = computed(() => workSession())
 
+const completedHistoryProductionQtyTotal = computed(() =>
+  completedRows.value.reduce((sum, row) => {
+    const qty = Number(row.actual_production_quantity ?? 0)
+    return sum + (Number.isFinite(qty) ? Math.max(0, Math.round(qty)) : 0)
+  }, 0),
+)
+
 function formatRecordTime(val: string | number | null | undefined): string {
   if (val == null) return '-'
   return formatDateTimeJST(typeof val === 'number' ? new Date(val) : val, intlLocale.value, {
@@ -162,10 +171,19 @@ function formatRecordTime(val: string | number | null | undefined): string {
   })
 }
 
+function formatHistoryProductionDay(row: InspectionMgmtRow): string {
+  const d = String(row.production_day ?? '').trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  if (row.mes_production_started_at) {
+    const fromStart = formatDateToYmdJST(new Date(row.mes_production_started_at))
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fromStart)) return fromStart
+  }
+  return '—'
+}
+
 function inspectorNameForUserId(userId: number | null | undefined): string {
   if (userId == null) return '-'
-  const u = inspectors.value.find((x) => x.id === userId)
-  return (u?.full_name || u?.username || '').trim() || '-'
+  return inspectorNameById(userId) || '-'
 }
 
 function formatDurationSec(sec: number | null | undefined): string {
@@ -241,6 +259,7 @@ function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
   const rowCountLabel = t('mesInspectionActual.printRowCount', { n: rows.length })
 
   const headers = [
+    t('mesInspectionActual.productionDay'),
     t('mesInspectionActual.inspector'),
     t('mesInspectionActual.productName'),
     t('mesInspectionActual.productionQty'),
@@ -254,10 +273,11 @@ function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
   ]
 
   const th = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')
-  const numericColIndexes = new Set([2, 3, 4, 5, 8, 9])
+  const numericColIndexes = new Set([3, 4, 5, 6, 9, 10])
   const body = rows
     .map((row) => {
       const cells = [
+        formatHistoryProductionDay(row),
         inspectorNameForUserId(row.mes_inspector_user_id),
         row.product_name || '—',
         String(row.actual_production_quantity ?? 0),
@@ -297,7 +317,7 @@ function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
     h1 { margin: 0 0 4px; font-size: 16px; }
     .meta { margin: 0 0 12px; color: #444; font-size: 11px; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 5px 6px; text-align: left; vertical-align: top; }
+    th, td { border: 1px solid #333; padding: 3px 4px; text-align: left; vertical-align: top; font-size: 10px; }
     th { background: #e8f5f3; font-weight: 700; }
     td.num { text-align: right; }
     @media print { body { margin: 8mm; } }
@@ -500,24 +520,12 @@ onUnmounted(() => {
             <el-icon><User /></el-icon>
           </span>
           <span class="toolbar-field-row__label">{{ t('mesInspectionActual.inspector') }}</span>
-          <el-select
-            v-model="inspectorUserId"
-            :filterable="touchSelectFilterable"
-            clearable
-            teleported
+          <el-input
+            :model-value="loggedInInspectorLabel"
+            disabled
             class="toolbar-control toolbar-inspector-select"
             :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
-            :loading="loadingInspectors"
-            @visible-change="onMesSelectVisibleChange"
-          >
-            <el-option
-              v-for="u in inspectors"
-              :key="u.id"
-              :label="inspectorOptionLabel(u)"
-              :value="u.id"
-              :disabled="isInspectorOptionDisabled(u.id)"
-            />
-          </el-select>
+          />
         </div>
 
         <div class="toolbar-field-row toolbar-field-row--product">
@@ -534,7 +542,7 @@ onUnmounted(() => {
               class="toolbar-control product-select-toolbar"
               :placeholder="t('mesInspectionActual.productPlaceholder')"
               :loading="loadingProducts"
-              :disabled="canEnd"
+              :disabled="productSelectionLocked"
               @visible-change="onMesSelectVisibleChange"
             >
               <el-option
@@ -573,27 +581,28 @@ onUnmounted(() => {
           class="in-progress-chip-wrap"
           :class="{ 'in-progress-chip-wrap--active': row.id === activePlanId }"
         >
-          <button type="button" class="in-progress-chip" @click="focusInProgressRow(row)">
-            <span class="in-progress-chip__product">{{
-              row.product_name || row.product_cd || '—'
-            }}</span>
+          <div class="in-progress-chip" role="button" tabindex="0" @click="focusInProgressRow(row)" @keyup.enter="focusInProgressRow(row)">
+            <div class="in-progress-chip__top">
+              <span class="in-progress-chip__product">{{
+                row.product_name || row.product_cd || '—'
+              }}</span>
+              <el-button
+                v-if="canResumeSession(row)"
+                size="small"
+                type="primary"
+                plain
+                class="in-progress-chip__resume-btn"
+                @click.stop="resumeInProgressSession(row)"
+              >
+                {{ t('mesInspectionActual.btnResume') }}
+              </el-button>
+            </div>
             <span class="in-progress-chip__inspector">{{
               inspectorNameById(row.mes_inspector_user_id) || t('mesInspectionActual.inspectorMissing')
             }}</span>
             <span v-if="rowMesLockOwner(row) === 'other'" class="in-progress-chip__lock-hint">
               {{ t('mesInspectionActual.sessionLockedByOtherTerminalShort') }}
             </span>
-          </button>
-          <div class="in-progress-chip__actions">
-            <el-button
-              v-if="canResumeSession(row)"
-              size="small"
-              type="primary"
-              plain
-              @click.stop="resumeInProgressSession(row)"
-            >
-              {{ t('mesInspectionActual.btnResumeSession') }}
-            </el-button>
           </div>
         </div>
       </div>
@@ -664,25 +673,12 @@ onUnmounted(() => {
                 <el-icon class="plan-meta-field__icon" aria-hidden="true"><User /></el-icon>
                 {{ t('mesInspectionActual.inspector') }}
               </span>
-              <el-select
-                v-model="inspectorUserId"
-                :filterable="touchSelectFilterable"
-                clearable
-                teleported
-                :disabled="canEnd"
-                :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
-                :loading="loadingInspectors"
+              <el-input
+                :model-value="loggedInInspectorLabel"
+                disabled
                 class="plan-field__control plan-field__control--operator"
-                @visible-change="onMesSelectVisibleChange"
-              >
-                <el-option
-                  v-for="u in inspectors"
-                  :key="u.id"
-                  :label="inspectorOptionLabel(u)"
-                  :value="u.id"
-                  :disabled="isInspectorOptionDisabled(u.id)"
-                />
-              </el-select>
+                :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
+              />
               </div>
             </div>
           </div>
@@ -742,6 +738,12 @@ onUnmounted(() => {
               <el-button
                 v-else-if="canResume"
                 class="plan-act-btn plan-act-btn--resume"
+                :class="{ 'plan-act-btn--resume-pulse': resumePulseActive }"
+                :aria-label="
+                  resumePulseActive
+                    ? t('mesInspectionActual.btnResumePulseAria')
+                    : t('mesInspectionActual.btnResume')
+                "
                 @click="onResumeProduction"
               >
                 <el-icon><VideoPlay /></el-icon>
@@ -754,6 +756,7 @@ onUnmounted(() => {
               <el-button
                 class="plan-act-btn plan-act-btn--end"
                 :disabled="!canEnd"
+                :title="canResume ? t('mesInspectionActual.endBlockedWhilePaused') : undefined"
                 @click="openEndDialog"
               >
                 <el-icon><CircleCheck /></el-icon>
@@ -767,36 +770,52 @@ onUnmounted(() => {
               <h3 class="defect-panel__title">{{ t('mesInspectionActual.defectByItem') }}</h3>
               <p class="defect-panel__hint">{{ t('mesInspectionActual.defectHint') }}</p>
             </div>
-            <div v-loading="loadingDefectItems" class="defect-grid">
+            <div v-loading="loadingDefectItems" class="defect-grid-by-process">
               <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
                 {{ t('mesInspectionActual.defectItemsEmpty') }}
               </p>
-              <div
-                v-for="item in defectItems"
-                :key="item.id"
-                class="defect-cell"
-                :class="{ 'defect-cell--active': defectCount(item.id) > 0 }"
+              <section
+                v-for="group in defectItemGroups"
+                :key="group.processCd"
+                class="defect-process-group"
               >
-                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
-                <div class="defect-stepper">
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    :icon="Minus"
-                    :disabled="defectCount(item.id) <= 0 || !canEditDefects"
-                    @click="bumpDefect(item.id, -1)"
-                  />
-                  <span class="defect-stepper__val">{{ defectCount(item.id) }}</span>
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    type="primary"
-                    :icon="Plus"
-                    :disabled="!canEditDefects"
-                    @click="bumpDefect(item.id, 1)"
-                  />
+                <header class="defect-process-group__head">
+                  <span class="defect-process-group__label">{{
+                    t('mesInspectionActual.attributableProcess')
+                  }}</span>
+                  <span class="defect-process-group__name">{{
+                    group.processName || group.processCd || '—'
+                  }}</span>
+                </header>
+                <div class="defect-grid">
+                  <div
+                    v-for="item in group.items"
+                    :key="item.id"
+                    class="defect-cell"
+                    :class="{ 'defect-cell--active': defectCount(item.id) > 0 }"
+                  >
+                    <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
+                    <div class="defect-stepper">
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        :icon="Minus"
+                        :disabled="defectCount(item.id) <= 0 || !canEditDefects"
+                        @click="bumpDefect(item.id, -1)"
+                      />
+                      <span class="defect-stepper__val">{{ defectCount(item.id) }}</span>
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        type="primary"
+                        :icon="Plus"
+                        :disabled="!canEditDefects"
+                        @click="bumpDefect(item.id, 1)"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </div>
@@ -809,11 +828,19 @@ onUnmounted(() => {
           <header class="inspection-history-table-card__head">
             <div class="inspection-history-table-card__title-row">
               <span class="inspection-history-table-card__icon" aria-hidden="true">
-                <el-icon :size="18"><CircleCheck /></el-icon>
+                <el-icon :size="16"><CircleCheck /></el-icon>
               </span>
               <h2 class="inspection-history-table-card__title">
                 {{ t('mesInspectionActual.historyTitle') }}
               </h2>
+              <span class="inspection-history-table-card__qty-total">
+                <span class="inspection-history-table-card__qty-total-label">{{
+                  t('mesInspectionActual.historyProductionQtyTotal')
+                }}</span>
+                <span class="inspection-history-table-card__qty-total-value">{{
+                  completedHistoryProductionQtyTotal.toLocaleString()
+                }}</span>
+              </span>
             </div>
             <div class="inspection-history-table-card__actions">
               <span class="inspection-history-table-card__count">{{ completedRows.length }}</span>
@@ -827,25 +854,34 @@ onUnmounted(() => {
               :data="completedRows"
               stripe
               size="small"
-              class="inspection-history-table"
+              class="inspection-history-table inspection-history-table--compact"
               row-key="id"
+              table-layout="fixed"
             >
               <el-table-column
-                :label="t('mesInspectionActual.inspector')"
-                width="120"
+                :label="t('mesInspectionActual.productionDay')"
+                width="92"
                 fixed="left"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
+                  <span class="hist-cell-day">{{ formatHistoryProductionDay(row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesInspectionActual.inspector')"
+                width="88"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
                   <span class="hist-cell-inspector">
-                    <el-icon class="hist-cell-inspector__icon" aria-hidden="true"><User /></el-icon>
                     {{ inspectorNameForUserId(row.mes_inspector_user_id) }}
                   </span>
                 </template>
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productName')"
-                width="120"
+                min-width="96"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -854,7 +890,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionQty')"
-                width="92"
+                width="68"
                 align="right"
               >
                 <template #default="{ row }">
@@ -865,7 +901,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.defectQty')"
-                width="80"
+                width="56"
                 align="right"
               >
                 <template #default="{ row }">
@@ -882,7 +918,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.defectRate')"
-                width="88"
+                width="68"
                 align="right"
               >
                 <template #default="{ row }">
@@ -891,7 +927,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.efficiencyRate')"
-                width="80"
+                width="56"
                 align="right"
               >
                 <template #default="{ row }">
@@ -900,7 +936,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionStart')"
-                width="150"
+                width="112"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_started_at) }}</span>
@@ -908,7 +944,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionEnd')"
-                width="150"
+                width="112"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_ended_at) }}</span>
@@ -916,7 +952,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.elapsedMinutes')"
-                width="110"
+                width="72"
                 align="right"
               >
                 <template #default="{ row }">
@@ -927,7 +963,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.pausedAccumMinutes')"
-                width="110"
+                width="72"
                 align="right"
               >
                 <template #default="{ row }">
@@ -941,21 +977,29 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.historyActions')"
-                width="88"
+                width="52"
                 fixed="right"
                 align="center"
               >
                 <template #default="{ row }">
-                  <el-button
-                    link
-                    type="primary"
-                    size="small"
-                    class="hist-cell-action-btn"
-                    @click="openConfirmedHistoryEdit(row)"
+                  <el-tooltip
+                    v-if="canEditConfirmedHistoryRow(row)"
+                    :content="t('mesInspectionActual.btnEditConfirmed')"
+                    placement="top"
+                    :show-after="300"
                   >
-                    <el-icon><Edit /></el-icon>
-                    {{ t('mesInspectionActual.btnEditConfirmed') }}
-                  </el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      class="hist-cell-action-btn"
+                      :aria-label="t('mesInspectionActual.btnEditConfirmed')"
+                      @click="openConfirmedHistoryEdit(row)"
+                    >
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <span v-else class="hist-cell-empty">—</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -1128,69 +1172,77 @@ onUnmounted(() => {
               <el-icon :size="14"><User /></el-icon>
               {{ t('mesInspectionActual.inspector') }} / {{ t('mesInspectionActual.productionQty') }}
             </h4>
-            <el-form-item :label="t('mesInspectionActual.inspector')" class="confirmed-edit-form-item">
-              <el-select
-                v-model="confirmedEditForm.inspectorUserId"
-                filterable
-                size="small"
-                :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
-                :loading="loadingInspectors"
-                class="confirmed-edit-full"
-              >
-                <el-option
-                  v-for="u in inspectors"
-                  :key="u.id"
-                  :label="inspectorOptionLabel(u)"
-                  :value="u.id"
-                  :disabled="isInspectorOptionDisabled(u.id)"
+            <div class="confirmed-edit-form-row">
+              <el-form-item :label="t('mesInspectionActual.inspector')" class="confirmed-edit-form-item">
+                <el-input
+                  :model-value="loggedInInspectorLabel"
+                  disabled
+                  size="small"
+                  class="confirmed-edit-full"
                 />
-              </el-select>
-            </el-form-item>
-            <el-form-item :label="t('mesInspectionActual.productionQty')" class="confirmed-edit-form-item">
-              <el-input-number
-                v-model="confirmedEditForm.actualQty"
-                size="small"
-                :min="0"
-                :step="1"
-                :precision="0"
-                controls-position="right"
-                class="confirmed-edit-full"
-              />
-            </el-form-item>
+              </el-form-item>
+              <el-form-item :label="t('mesInspectionActual.productionQty')" class="confirmed-edit-form-item">
+                <el-input-number
+                  v-model="confirmedEditForm.actualQty"
+                  size="small"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  class="confirmed-edit-full"
+                />
+              </el-form-item>
+            </div>
           </section>
           <section class="confirmed-edit-section confirmed-edit-section--defects">
             <h4 class="confirmed-edit-section__title">
               {{ t('mesInspectionActual.defectByItem') }}
             </h4>
-            <div v-loading="loadingDefectItems" class="confirmed-edit-defect-grid">
+            <div v-loading="loadingDefectItems" class="confirmed-edit-defect-groups">
               <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
                 {{ t('mesInspectionActual.defectItemsEmpty') }}
               </p>
-              <div
-                v-for="item in defectItems"
-                :key="item.id"
-                class="defect-cell defect-cell--compact"
-                :class="{ 'defect-cell--active': confirmedEditDefectCount(item.id) > 0 }"
+              <section
+                v-for="group in defectItemGroups"
+                :key="group.processCd"
+                class="defect-process-group defect-process-group--edit"
               >
-                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
-                <div class="defect-stepper">
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    :icon="Minus"
-                    :disabled="confirmedEditDefectCount(item.id) <= 0"
-                    @click="bumpConfirmedEditDefect(item.id, -1)"
-                  />
-                  <span class="defect-stepper__val">{{ confirmedEditDefectCount(item.id) }}</span>
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    type="primary"
-                    :icon="Plus"
-                    @click="bumpConfirmedEditDefect(item.id, 1)"
-                  />
+                <header class="defect-process-group__head">
+                  <span class="defect-process-group__label">{{
+                    t('mesInspectionActual.attributableProcess')
+                  }}</span>
+                  <span class="defect-process-group__name">{{
+                    group.processName || group.processCd || '—'
+                  }}</span>
+                </header>
+                <div class="confirmed-edit-defect-grid">
+                  <div
+                    v-for="item in group.items"
+                    :key="item.id"
+                    class="defect-cell defect-cell--compact"
+                    :class="{ 'defect-cell--active': confirmedEditDefectCount(item.id) > 0 }"
+                  >
+                    <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
+                    <div class="defect-stepper">
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        :icon="Minus"
+                        :disabled="confirmedEditDefectCount(item.id) <= 0"
+                        @click="bumpConfirmedEditDefect(item.id, -1)"
+                      />
+                      <span class="defect-stepper__val">{{ confirmedEditDefectCount(item.id) }}</span>
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        type="primary"
+                        :icon="Plus"
+                        @click="bumpConfirmedEditDefect(item.id, 1)"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </div>
           </section>
           <section class="confirmed-edit-section confirmed-edit-section--time">
@@ -1210,6 +1262,16 @@ onUnmounted(() => {
                   class="confirmed-edit-full"
                 />
               </el-form-item>
+              <el-form-item :label="t('mesInspectionActual.productionDay')" class="confirmed-edit-form-item">
+                <el-input
+                  :model-value="confirmedEditProductionDay"
+                  disabled
+                  size="small"
+                  class="confirmed-edit-full confirmed-edit-production-day"
+                />
+              </el-form-item>
+            </div>
+            <div class="confirmed-edit-form-row">
               <el-form-item :label="t('mesInspectionActual.productionEnd')" class="confirmed-edit-form-item">
                 <el-date-picker
                   v-model="confirmedEditForm.wallEnd"
@@ -1463,7 +1525,6 @@ onUnmounted(() => {
 .in-progress-chip-wrap {
   display: inline-flex;
   flex-direction: column;
-  gap: 4px;
   padding: 4px;
   border-radius: 8px;
   border: 1px solid var(--el-color-success-light-3);
@@ -1478,27 +1539,48 @@ onUnmounted(() => {
 .in-progress-chip {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 2px 6px;
-  border: none;
-  background: transparent;
+  align-items: stretch;
+  gap: 2px;
+  padding: 2px 4px;
+  min-width: 0;
   cursor: pointer;
   font: inherit;
   text-align: left;
+  outline: none;
 }
 
-.in-progress-chip__actions {
+.in-progress-chip:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-5);
+}
+
+.in-progress-chip__top {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 0 2px 2px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
-.in-progress-chip__actions .el-button {
-  margin: 0;
-  padding: 4px 8px;
-  height: 26px;
+.in-progress-chip__resume-btn {
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 2px 8px !important;
+  height: 24px !important;
+  font-size: 0.72rem;
+}
+
+.in-progress-chip__product {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-recovery-alert {
@@ -1513,13 +1595,6 @@ onUnmounted(() => {
 
 .session-recovery-alert__btn {
   margin-top: 2px;
-}
-
-.in-progress-chip__product {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  line-height: 1.2;
 }
 
 .in-progress-chip__inspector {
@@ -2714,6 +2789,42 @@ onUnmounted(() => {
   color: #fff;
 }
 
+.plan-act-btn--resume.plan-act-btn--resume-pulse:not(.is-disabled) {
+  animation: mes-inspection-resume-pulse 0.85s ease-in-out infinite;
+  transform-origin: center;
+  z-index: 2;
+  position: relative;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  --el-button-border-color: var(--el-color-danger);
+  border: 2px solid var(--el-color-danger) !important;
+}
+
+@keyframes mes-inspection-resume-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.55);
+    border-color: var(--el-color-danger);
+  }
+  50% {
+    transform: scale(1.14);
+    box-shadow:
+      0 0 0 10px rgba(245, 108, 108, 0),
+      0 0 0 3px rgba(245, 108, 108, 0.9);
+    border-color: #ff4d4f;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-act-btn--resume.plan-act-btn--resume-pulse:not(.is-disabled) {
+    animation: none;
+    transform: scale(1.08);
+    border: 2px solid var(--el-color-danger) !important;
+    box-shadow: 0 0 0 3px rgba(245, 108, 108, 0.55);
+  }
+}
+
 .plan-act-btn--end:not(.is-disabled) {
   --el-button-bg-color: var(--el-color-danger);
   --el-button-border-color: var(--el-color-danger);
@@ -3269,7 +3380,7 @@ onUnmounted(() => {
 .end-dialog-qty__label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--el-text-color-regular);
+  color: var(--el-color-danger);
 }
 
 .end-dialog-qty__input {
@@ -3280,19 +3391,27 @@ onUnmounted(() => {
   min-height: 38px;
   padding: 0 10px;
   border-radius: 7px;
-  box-shadow: 0 0 0 1px var(--el-border-color-lighter);
+  background: rgba(245, 108, 108, 0.06);
+  box-shadow: 0 0 0 1px var(--el-color-danger-light-5);
 }
 
 .end-dialog-qty__input :deep(.el-input__wrapper.is-focus) {
   box-shadow:
-    0 0 0 1px var(--el-color-success-light-5),
-    0 0 0 3px var(--el-color-success-light-9);
+    0 0 0 1px var(--el-color-danger),
+    0 0 0 3px var(--el-color-danger-light-8);
 }
 
 .end-dialog-qty__input :deep(.el-input__inner) {
   font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: var(--el-color-danger);
+  -webkit-text-fill-color: var(--el-color-danger);
+}
+
+.end-dialog-qty__input :deep(.el-input__inner::placeholder) {
+  color: var(--el-color-danger-light-3);
+  -webkit-text-fill-color: var(--el-color-danger-light-3);
 }
 
 .end-dialog-footer {
@@ -3556,10 +3675,6 @@ onUnmounted(() => {
   margin-bottom: 6px;
 }
 
-.hist-cell-action-btn {
-  padding: 0 4px;
-}
-
 .confirmed-edit-form :deep(.confirmed-edit-form-item) {
   margin-bottom: 6px;
 }
@@ -3701,6 +3816,45 @@ onUnmounted(() => {
   text-align: center;
   padding: 6px 0;
 }
+.defect-grid-by-process {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: min(100%, calc(7 * 118px + 6 * 4px));
+}
+.confirmed-edit-defect-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.defect-process-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.defect-process-group__head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 0 1px;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+}
+.defect-process-group__label {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+.defect-process-group__name {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #0f766e;
+  line-height: 1.2;
+}
+.defect-process-group--edit .defect-process-group__head {
+  margin-bottom: 2px;
+}
 .defect-grid {
   display: grid;
   grid-template-columns: repeat(7, 118px);
@@ -3819,7 +3973,7 @@ onUnmounted(() => {
 .inspection-history-section {
   --hist-accent: #0d9488;
   --hist-accent-soft: #ccfbf1;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .inspection-history-print-frame {
@@ -3853,8 +4007,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding: 10px 14px;
+  gap: 6px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--el-color-success-light-7);
   background: linear-gradient(
     135deg,
@@ -3867,7 +4021,7 @@ onUnmounted(() => {
 .inspection-history-table-card__title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3875,10 +4029,10 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: 7px;
   color: var(--hist-accent);
   background: var(--hist-accent-soft);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -3886,49 +4040,80 @@ onUnmounted(() => {
 
 .inspection-history-table-card__title {
   margin: 0;
-  font-size: clamp(0.92rem, 2.2vw, 1.02rem);
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--el-text-color-primary);
-  line-height: 1.35;
+  line-height: 1.25;
+}
+
+.inspection-history-table-card__qty-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  background: var(--el-color-success-light-9);
+  border: 1px solid var(--el-color-success-light-5);
+}
+
+.inspection-history-table-card__qty-total-label {
+  color: var(--el-text-color-secondary);
+  font-weight: 600;
+}
+
+.inspection-history-table-card__qty-total-value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-success-dark-2);
 }
 
 .inspection-history-table-card__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .inspection-history-table-card__count {
   flex-shrink: 0;
-  min-width: 1.85rem;
-  padding: 3px 10px;
+  min-width: 1.5rem;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   text-align: center;
   color: var(--el-color-success-dark-2);
   background: var(--el-color-success-light-9);
   border: 1px solid var(--el-color-success-light-5);
-  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.12);
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.1);
 }
 
 .inspection-history-table-wrap {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0 2px;
+  padding: 0;
 }
 
 .inspection-history-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   --el-table-border-color: var(--el-border-color-extra-light);
   --el-table-header-bg-color: transparent;
   --el-table-row-hover-bg-color: #f0fdfa;
   --el-table-tr-bg-color: var(--el-fill-color-blank);
   --el-table-striped-bg-color: #f8fafc;
+}
+
+.inspection-history-table--compact :deep(.el-table__cell .cell) {
+  padding-left: 4px;
+  padding-right: 4px;
+  line-height: 1.25;
 }
 
 .inspection-history-table :deep(.el-table__inner-wrapper::before) {
@@ -3942,18 +4127,19 @@ onUnmounted(() => {
 }
 
 .inspection-history-table :deep(.el-table__header th.el-table__cell) {
-  padding: 10px 8px;
-  font-size: 0.72rem;
+  padding: 4px 2px;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
+  line-height: 1.2;
   color: #115e59;
   background: linear-gradient(180deg, #ecfdf5 0%, #f0fdfa 100%) !important;
-  border-bottom: 2px solid var(--el-color-success-light-5) !important;
+  border-bottom: 1px solid var(--el-color-success-light-5) !important;
 }
 
 .inspection-history-table :deep(.el-table__body td.el-table__cell) {
-  padding: 11px 8px;
-  font-size: 0.8rem;
+  padding: 4px 2px;
+  font-size: 0.74rem;
   border-bottom: 1px solid var(--el-border-color-extra-light);
   vertical-align: middle;
 }
@@ -3983,32 +4169,42 @@ onUnmounted(() => {
   border: 1px solid #99f6e4;
 }
 
+.hist-cell-day {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  white-space: nowrap;
+}
+
 .hist-cell-name {
   font-weight: 600;
+  font-size: 0.74rem;
   color: var(--el-text-color-primary);
-  line-height: 1.35;
+  line-height: 1.2;
 }
 
 .hist-cell-inspector {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-block;
   max-width: 100%;
+  font-size: 0.72rem;
   color: var(--el-text-color-regular);
-}
-
-.hist-cell-inspector__icon {
-  flex-shrink: 0;
-  font-size: 14px;
-  color: #7c3aed;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .hist-cell-qty {
   display: inline-block;
-  min-width: 2.5em;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.88rem;
+  min-width: 1.8em;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.76rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--el-color-success-dark-2);
@@ -4017,21 +4213,21 @@ onUnmounted(() => {
 
 .hist-cell-rate {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #b45309;
 }
 
 .hist-cell-efficiency {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #0369a1;
 }
 
 .hist-cell-defect-qty {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #b45309;
   cursor: default;
@@ -4039,14 +4235,14 @@ onUnmounted(() => {
 
 .hist-cell-time {
   font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
 }
 
 .hist-cell-duration {
   font-variant-numeric: tabular-nums;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--el-text-color-regular);
 }
@@ -4081,17 +4277,23 @@ onUnmounted(() => {
 
 .hist-cell-empty {
   color: var(--el-text-color-placeholder);
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+}
+
+.hist-cell-action-btn {
+  padding: 0;
+  min-height: 22px;
+  height: 22px;
 }
 
 @media (max-width: 640px) {
   .inspection-history-table-card__head {
-    padding: 8px 10px;
+    padding: 5px 8px;
   }
 
   .inspection-history-table :deep(.el-table__header th.el-table__cell),
   .inspection-history-table :deep(.el-table__body td.el-table__cell) {
-    padding: 9px 6px;
+    padding: 3px 1px;
   }
 }
 </style>
