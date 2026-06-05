@@ -9,9 +9,11 @@
             />
           </svg>
         </span>
-        生産スケジューリングボード
+        <span class="plan-hd-text-wrap">
+          <span class="plan-hd-title-text">生産スケジューリングボード</span>
+          <span class="plan-hd-sub">工程・ライン・期間で絞り込み、日別の計画と実績をマトリクスで確認。</span>
+        </span>
       </h2>
-      <p class="plan-hd-sub">工程・設備・期間を指定して対象期間の生産計画を可視化し、ライン別の進捗をすばやく把握できます。</p>
     </div>
 
     <div class="plan-card filter-card">
@@ -146,35 +148,40 @@
         </div>
         <div class="result-head-actions">
           <div class="sc-range-selection-ui result-note sc-range-hint">
-            範囲合計：日付列を1回目で開始・2回目で終了（{{ rangeSelectionHint }}）
+            範囲合計：マウスでドラッグして日付セルを選択（{{ rangeSelectionHint }}）
             <template v-if="rangeSelectionSummary">
               <span class="sc-range-sep">｜</span>
-              <span class="sc-range-sum">合計 {{ formatQty(rangeSelectionSummary.itemSum) }}</span>
-              <span class="sc-range-meta">（品目行 {{ rangeSelectionSummary.itemCells }} セル）</span>
+              <span class="sc-range-sum-line">
+                <span class="sc-range-sum">合計 {{ formatQty(rangeSelectionSummary.itemSum) }}</span>
+                <button type="button" class="sc-range-clear-btn" @click.stop="clearMatrixRangeSelection">解除</button>
+              </span>
             </template>
-            <template v-else-if="matrixRangeAnchor">
+            <template v-else-if="matrixRangeDragging">
               <span class="sc-range-sep">｜</span>
-              <span class="sc-range-wait">終了セルをクリック</span>
+              <span class="sc-range-wait">選択中…</span>
             </template>
-            <el-button
-              v-if="matrixRangeAnchor"
-              class="sc-range-clear-btn"
-              link
-              type="primary"
-              size="small"
-              @click.stop="clearMatrixRangeSelection"
-            >
-              解除
-            </el-button>
           </div>
-          <div class="result-note">期間：{{ displayDateRangeText }}</div>
-          <el-button class="print-btn" size="small" @click="handlePrint">印刷</el-button>
+          <div class="result-note result-note--chip">期間：{{ displayDateRangeText }}</div>
+          <el-button class="print-btn" size="small" @click="handlePrint">
+            <span class="print-btn__content">
+              <svg class="print-btn__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path
+                  d="M7 2a2 2 0 0 0-2 2v3h14V4a2 2 0 0 0-2-2H7Zm12 7H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-2 9H7v-5h10v5Z"
+                />
+              </svg>
+              <span>印刷</span>
+            </span>
+          </el-button>
         </div>
       </div>
 
       <el-empty v-if="!loading && gridDates.length === 0" description="期間を指定して検索してください" />
 
-      <div v-else class="matrix-table-wrapper modern-scroll">
+      <div
+        v-else
+        class="matrix-table-wrapper modern-scroll"
+        :class="{ 'is-range-dragging': matrixRangeDragging }"
+      >
         <table class="matrix-table">
           <thead>
             <tr>
@@ -184,14 +191,14 @@
               <th class="sc-sticky-col sc-eff-col numeric-cell">能率(本/H)</th>
               <th class="sc-sticky-col sc-total-col numeric-cell">生産計画</th>
               <th
-                v-for="date in gridDates"
-                :key="date"
+                v-for="col in dateColumnMeta"
+                :key="col.date"
                 class="date-col"
-                :class="{ 'is-weekend': isWeekend(date), 'is-today': isToday(date) }"
+                :class="{ 'is-weekend': col.isWeekend, 'is-today': col.isToday }"
               >
                 <div class="date-header">
-                  <div class="date-text">{{ formatMatrixDate(date) }}</div>
-                  <div class="weekday-text">{{ getWeekdayLabel(date) }}</div>
+                  <div class="date-text">{{ col.dateText }}</div>
+                  <div class="weekday-text">{{ col.weekday }}</div>
                 </div>
               </th>
             </tr>
@@ -229,15 +236,16 @@
                 v-for="date in gridDates"
                 :key="`${row.key}-${date}`"
                 class="numeric-cell data-cell sc-selectable-cell"
-                :class="getCellClass(row, date)"
-                :style="getCellUpstreamStyle(row, date)"
-                :title="getCellTitle(row, date)"
+                :class="getMatrixCellClasses(row, date)"
+                :style="getMatrixCellStyle(row, date)"
+                :title="getMatrixCellTitle(row, date)"
                 role="button"
                 tabindex="0"
-                @click.stop="onMatrixDateCellClick(row, date)"
+                @mousedown.prevent="onMatrixDateCellMouseDown(row, date, $event)"
+                @mouseenter="onMatrixDateCellMouseEnter(row, date)"
               >
-                <span v-if="row.type === 'item' && getCellDisplayValue(row, date)">
-                  {{ formatQty(getCellDisplayValue(row, date)) }}
+                <span v-if="row.type === 'item' && getMatrixCellDisplayValue(row, date)">
+                  {{ getMatrixCellDisplayText(row, date) }}
                 </span>
               </td>
             </tr>
@@ -262,7 +270,7 @@
 
 <script setup lang="ts">
 import dayjs from 'dayjs'
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import {
@@ -317,7 +325,7 @@ type MatrixRow = MatrixGroupRow | MatrixItemRow
 
 const processOptions = ref<ProcessItem[]>([])
 const lines = ref<ProductionLine[]>([])
-const grid = ref<SchedulingGridResponse | null>(null)
+const grid = shallowRef<SchedulingGridResponse | null>(null)
 const loading = ref(false)
 const printRootRef = ref<HTMLElement | null>(null)
 /** false=標準（当日以前実績）、true=拡張（5日前以前実績・それ以降計画） */
@@ -336,6 +344,25 @@ const searchForm = reactive<{
 })
 
 const gridDates = computed(() => grid.value?.dates ?? [])
+
+const lineNameById = computed(() => {
+  const m = new Map<number, string>()
+  for (const line of lines.value) {
+    m.set(line.id, String(line.line_name || '').trim() || line.line_code)
+  }
+  return m
+})
+
+const dateColumnMeta = computed(() =>
+  gridDates.value.map((date) => ({
+    date,
+    dateText: formatMatrixDate(date),
+    weekday: getWeekdayLabel(date),
+    isWeekend: isWeekend(date),
+    isToday: isToday(date),
+  })),
+)
+
 const visibleBlocks = computed(() => (grid.value?.blocks ?? []).filter((b) => !isIgnoredLine(resolveLineName(b.line_id, b.line_code))))
 
 /** 当前网格中的品名（忽略已隐藏ライン），供製品下拉使用 */
@@ -419,9 +446,69 @@ const matrixRowIndexByKey = computed(() => {
   return m
 })
 
+type MatrixCellRenderEntry = {
+  displayValue: number
+  displayText: string
+  toneClass: string
+  upstreamStyle?: Record<string, string>
+  title: string
+}
+
+/** 日付セルの表示情報を一括計算（再レンダリング時の重複計算を削減） */
+const matrixCellRenderCache = computed(() => {
+  void matrixPlanExtendMode.value
+  const cache = new Map<string, MatrixCellRenderEntry>()
+  const dates = gridDates.value
+  const rows = matrixRows.value
+  for (const row of rows) {
+    for (const date of dates) {
+      const displayValue = getCellDisplayValue(row, date)
+      cache.set(`${row.key}-${date}`, {
+        displayValue,
+        displayText: displayValue ? formatQty(displayValue) : '',
+        toneClass: getCellToneClass(row, date, displayValue),
+        upstreamStyle: getCellUpstreamStyle(row, date),
+        title: getCellTitle(row, date, displayValue),
+      })
+    }
+  }
+  return cache
+})
+
+function getMatrixCellEntry(row: MatrixRow, date: string): MatrixCellRenderEntry | undefined {
+  return matrixCellRenderCache.value.get(`${row.key}-${date}`)
+}
+
+function getMatrixCellDisplayValue(row: MatrixRow, date: string): number {
+  return getMatrixCellEntry(row, date)?.displayValue ?? 0
+}
+
+function getMatrixCellDisplayText(row: MatrixRow, date: string): string {
+  return getMatrixCellEntry(row, date)?.displayText ?? ''
+}
+
+function getMatrixCellStyle(row: MatrixRow, date: string): Record<string, string> | undefined {
+  return getMatrixCellEntry(row, date)?.upstreamStyle
+}
+
+function getMatrixCellTitle(row: MatrixRow, date: string): string {
+  return getMatrixCellEntry(row, date)?.title ?? ''
+}
+
+function getMatrixCellClasses(row: MatrixRow, date: string): string | string[] {
+  const tone = getMatrixCellEntry(row, date)?.toneClass ?? ''
+  const extra: string[] = []
+  if (isMatrixCellInRangeSelection(row, date)) extra.push('sc-range-selected')
+  if (isMatrixRangeAnchorCell(row, date)) extra.push('sc-range-anchor')
+  if (!extra.length) return tone
+  if (!tone) return extra
+  return [tone, ...extra]
+}
+
 type MatrixRangeCell = { rowKey: string; date: string }
 const matrixRangeStart = ref<MatrixRangeCell | null>(null)
 const matrixRangeEnd = ref<MatrixRangeCell | null>(null)
+const matrixRangeDragging = ref(false)
 
 const matrixRangeAnchor = computed(() => matrixRangeStart.value)
 
@@ -464,7 +551,7 @@ const rangeSelectionSummary = computed(() => {
       const date = dates[di]
       if (!date) continue
       itemCells += 1
-      itemSum += Number(getCellDisplayValue(row, date) ?? 0)
+      itemSum += getMatrixCellDisplayValue(row, date)
     }
   }
   return { itemSum, itemCells }
@@ -473,16 +560,24 @@ const rangeSelectionSummary = computed(() => {
 function clearMatrixRangeSelection() {
   matrixRangeStart.value = null
   matrixRangeEnd.value = null
+  matrixRangeDragging.value = false
 }
 
-function onMatrixDateCellClick(row: MatrixRow, date: string) {
+function onMatrixDateCellMouseDown(row: MatrixRow, date: string, ev: MouseEvent) {
+  if (ev.button !== 0) return
   const pos: MatrixRangeCell = { rowKey: row.key, date }
-  if (!matrixRangeStart.value || matrixRangeEnd.value) {
-    matrixRangeStart.value = pos
-    matrixRangeEnd.value = null
-    return
-  }
+  matrixRangeStart.value = pos
   matrixRangeEnd.value = pos
+  matrixRangeDragging.value = true
+}
+
+function onMatrixDateCellMouseEnter(row: MatrixRow, date: string) {
+  if (!matrixRangeDragging.value) return
+  matrixRangeEnd.value = { rowKey: row.key, date }
+}
+
+function onMatrixRangeMouseUp() {
+  matrixRangeDragging.value = false
 }
 
 function isMatrixCellInRangeSelection(row: MatrixRow, date: string): boolean {
@@ -664,22 +759,26 @@ function cellShowsActualDisplay(row: MatrixRow, date: string): boolean {
   return matrixCellDisplayMode(date, actual) === 'actual'
 }
 
+function rowHasPeriodData(r: ScheduleGridRow, dates: string[]): boolean {
+  const daily = r.daily ?? {}
+  const actual = r.actual_daily ?? {}
+  for (const date of dates) {
+    if (Number(daily[date] ?? 0) > 0 || Number(actual[date] ?? 0) > 0) return true
+  }
+  return false
+}
+
 function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
   const rows: MatrixRow[] = []
+  const dates = gridDates.value
   blocks.forEach((block: LineGridBlock, blockIndex) => {
-    const periodRows = (block.rows ?? []).filter((r) =>
-      gridDates.value.some((date) => {
-        const p = Number((r.daily ?? {})[date] ?? 0)
-        const a = Number((r.actual_daily ?? {})[date] ?? 0)
-        return p > 0 || a > 0
-      }),
-    )
+    const periodRows = (block.rows ?? []).filter((r) => rowHasPeriodData(r, dates))
     if (!periodRows.length) return
 
     const groupDisplayTotals: Record<string, number> = {}
-    for (const d of gridDates.value) groupDisplayTotals[d] = 0
+    for (const d of dates) groupDisplayTotals[d] = 0
     for (const r of periodRows) {
-      for (const d of gridDates.value) {
+      for (const d of dates) {
         groupDisplayTotals[d] += matrixCellDisplayQty(
           (r.daily ?? {}) as Record<string, number>,
           (r.actual_daily ?? {}) as Record<string, number>,
@@ -760,10 +859,7 @@ function buildMatrixRows(blocks: LineGridBlock[]): MatrixRow[] {
 }
 
 function resolveLineName(lineId: number, fallbackCode: string) {
-  const line = lines.value.find((x) => x.id === lineId)
-  const name = String(line?.line_name || '').trim()
-  if (name) return name
-  return fallbackCode
+  return lineNameById.value.get(lineId) || fallbackCode
 }
 
 function isIgnoredLine(lineName: string) {
@@ -810,8 +906,8 @@ function getCellUpstreamStyle(row: MatrixRow, date: string): Record<string, stri
   }
 }
 
-function getCellTitle(row: MatrixRow, date: string): string {
-  const disp = getCellDisplayValue(row, date) || 0
+function getCellTitle(row: MatrixRow, date: string, displayValue?: number): string {
+  const disp = (displayValue ?? getCellDisplayValue(row, date)) || 0
   if (row.type === 'group') {
     if (!disp) return `${date}: ライン合計なし`
     return `${date}: ライン合計 ${disp}`
@@ -831,39 +927,29 @@ function getCellTitle(row: MatrixRow, date: string): string {
   return `${date}: ${row.item_name} / ${disp}（${modeLabel}・計${planned}/実${actual}）${cutHint}`
 }
 
-function getCellClass(row: MatrixRow, date: string): string | string[] {
-  const v = getCellDisplayValue(row, date) || 0
+function getCellToneClass(row: MatrixRow, date: string, displayValue?: number): string {
+  const v = (displayValue ?? getCellDisplayValue(row, date)) || 0
   const dueMatch = row.type === 'item' && row.due_date ? row.due_date === date : false
   const upstreamBg = cellUsesUpstreamTintBackground(row, date)
 
-  const tone = (() => {
-    if (row.type === 'group') return ''
-    if (row.type === 'item' && row.material_shortage) {
-      if (!v) return dueMatch ? 'cell-due' : ''
-      return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
-    }
-    if (row.type === 'item' && cellShowsActualDisplay(row, date) && !upstreamBg) {
-      return dueMatch ? 'sc-cell-actual cell-due' : 'sc-cell-actual'
-    }
+  if (row.type === 'group') return ''
+  if (row.type === 'item' && row.material_shortage) {
     if (!v) return dueMatch ? 'cell-due' : ''
-    if (upstreamBg) return dueMatch ? 'cell-due' : ''
+    return dueMatch ? 'tone-shortage cell-due' : 'tone-shortage'
+  }
+  if (row.type === 'item' && cellShowsActualDisplay(row, date) && !upstreamBg) {
+    return dueMatch ? 'sc-cell-actual cell-due' : 'sc-cell-actual'
+  }
+  if (!v) return dueMatch ? 'cell-due' : ''
+  if (upstreamBg) return dueMatch ? 'cell-due' : ''
 
-    const rate = row.completion_rate
-    if (rate != null && Number.isFinite(rate)) {
-      if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
-      if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
-      return dueMatch ? 'tone-low cell-due' : 'tone-low'
-    }
-    return dueMatch ? 'tone-active cell-due' : 'tone-active'
-  })()
-
-  const extra: string[] = []
-  if (isMatrixCellInRangeSelection(row, date)) extra.push('sc-range-selected')
-  if (isMatrixRangeAnchorCell(row, date)) extra.push('sc-range-anchor')
-
-  if (!extra.length) return tone
-  if (!tone) return extra
-  return [tone, ...extra]
+  const rate = row.completion_rate
+  if (rate != null && Number.isFinite(rate)) {
+    if (rate >= 80) return dueMatch ? 'tone-high cell-due' : 'tone-high'
+    if (rate >= 50) return dueMatch ? 'tone-mid cell-due' : 'tone-mid'
+    return dueMatch ? 'tone-low cell-due' : 'tone-low'
+  }
+  return dueMatch ? 'tone-active cell-due' : 'tone-active'
 }
 
 function handlePrint() {
@@ -914,7 +1000,7 @@ function handlePrint() {
 
 async function loadProcessOptions() {
   try {
-    const res = await fetchProcesses({ page: 1, pageSize: 5000 })
+    const res = await fetchProcesses({ page: 1, pageSize: 500 })
     const data = (res?.data ?? res) as { list?: ProcessItem[] }
     processOptions.value = Array.isArray(data.list) ? data.list : []
     const hasDefault = processOptions.value.some((p) => (p.process_cd || '').trim() === 'KT04')
@@ -945,14 +1031,14 @@ async function loadGrid() {
       searchForm.lineId ?? undefined,
       (searchForm.processCd || '').trim() || undefined,
     )
+    clearMatrixRangeSelection()
   } finally {
     loading.value = false
   }
 }
 
 async function handleProcessChange() {
-  await loadLines()
-  await loadGrid()
+  await Promise.all([loadLines(), loadGrid()])
 }
 
 let autoLoadTimer: ReturnType<typeof setTimeout> | null = null
@@ -965,13 +1051,14 @@ function scheduleAutoLoad() {
 
 onMounted(async () => {
   window.addEventListener('keydown', onMatrixRangeEscape)
+  window.addEventListener('mouseup', onMatrixRangeMouseUp)
   await loadProcessOptions()
-  await loadLines()
-  await loadGrid()
+  await Promise.all([loadLines(), loadGrid()])
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onMatrixRangeEscape)
+  window.removeEventListener('mouseup', onMatrixRangeMouseUp)
 })
 
 watch(
@@ -1024,6 +1111,7 @@ watch(
   margin: 0;
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 18px;
   font-weight: 800;
@@ -1031,6 +1119,18 @@ watch(
   letter-spacing: 0.2px;
   line-height: 1.1;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.plan-hd-text-wrap {
+  display: inline-flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.plan-hd-title-text {
+  flex-shrink: 0;
+  line-height: 1.1;
 }
 
 .plan-hd-icon {
@@ -1053,10 +1153,10 @@ watch(
 }
 
 .plan-hd-sub {
-  margin: 5px 0 0 34px;
+  font-weight: 400;
   color: #5f6f86;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.1;
 }
 
 .plan-card {
@@ -1307,6 +1407,7 @@ watch(
 }
 
 .result-head-actions {
+  --result-chip-h: 22px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -1333,15 +1434,16 @@ watch(
   font-weight: 400;
 }
 
+.sc-range-sum-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .sc-range-sum {
   font-weight: 800;
   color: #1e40af;
-}
-
-.sc-range-meta {
-  font-size: 10px;
-  color: #64748b;
-  font-weight: 500;
 }
 
 .sc-range-wait {
@@ -1350,13 +1452,32 @@ watch(
 }
 
 .sc-range-clear-btn {
-  margin-left: 2px;
-  padding: 0 4px !important;
-  vertical-align: baseline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 800;
+  color: #dc2626;
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.sc-range-clear-btn:hover {
+  color: #b91c1c;
+}
+
+.matrix-table-wrapper.is-range-dragging {
+  user-select: none;
+  cursor: cell;
+}
+
+.matrix-table-wrapper.is-range-dragging .sc-selectable-cell {
+  cursor: cell;
 }
 
 .sc-selectable-cell {
-  cursor: pointer;
+  cursor: cell;
 }
 
 .sc-selectable-cell:focus-visible {
@@ -1375,48 +1496,104 @@ watch(
   z-index: 1;
 }
 
-.print-btn {
-  border: none;
-  color: #fff;
-  font-weight: 700;
+.print-btn.el-button {
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.62) !important;
+  border-radius: 999px !important;
+  padding: 0 11px !important;
+  height: var(--result-chip-h) !important;
+  min-height: var(--result-chip-h) !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  color: #1e3a8a !important;
+  font-weight: 800;
   letter-spacing: 0.2px;
-  border-radius: 999px;
-  padding: 7px 14px;
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78) 0%, rgba(224, 242, 254, 0.52) 48%, rgba(199, 210, 254, 0.42) 100%) !important;
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
   box-shadow:
-    0 8px 18px rgba(37, 99, 235, 0.28),
-    0 2px 4px rgba(124, 58, 237, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 -1px 0 rgba(37, 99, 235, 0.08) inset,
+    0 10px 24px rgba(37, 99, 235, 0.18),
+    0 4px 10px rgba(15, 23, 42, 0.08);
   transition:
-    transform 0.16s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.22s ease,
-    filter 0.22s ease;
+    border-color 0.22s ease,
+    background 0.22s ease;
 }
 
-.print-btn:hover {
+.print-btn.el-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #60a5fa 0%, #6366f1 55%, #8b5cf6 100%);
+  opacity: 0.95;
+  pointer-events: none;
+}
+
+.print-btn.el-button::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 58%;
+  height: 100%;
+  background: linear-gradient(105deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.1) 45%, transparent 72%);
+  pointer-events: none;
+}
+
+.print-btn__content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  line-height: 1;
+}
+
+.print-btn__icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.55));
+}
+
+.print-btn.el-button:hover {
   transform: translateY(-1px);
-  filter: brightness(1.03);
+  border-color: rgba(255, 255, 255, 0.82) !important;
+  color: #1d4ed8 !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.88) 0%, rgba(219, 234, 254, 0.62) 48%, rgba(199, 210, 254, 0.5) 100%) !important;
   box-shadow:
-    0 12px 22px rgba(37, 99, 235, 0.33),
-    0 4px 8px rgba(124, 58, 237, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 -1px 0 rgba(37, 99, 235, 0.1) inset,
+    0 16px 32px rgba(37, 99, 235, 0.24),
+    0 6px 14px rgba(15, 23, 42, 0.1);
 }
 
-.print-btn:active {
-  transform: translateY(0);
+.print-btn.el-button:active {
+  transform: translateY(0) scale(0.98);
   box-shadow:
-    0 5px 12px rgba(37, 99, 235, 0.25),
-    0 1px 3px rgba(124, 58, 237, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    0 1px 0 rgba(255, 255, 255, 0.72) inset,
+    0 2px 8px rgba(37, 99, 235, 0.16),
+    0 1px 4px rgba(15, 23, 42, 0.08);
 }
 
-.print-btn.is-disabled,
-.print-btn.is-disabled:hover,
-.print-btn.is-disabled:active {
+.print-btn.el-button.is-disabled,
+.print-btn.el-button.is-disabled:hover,
+.print-btn.el-button.is-disabled:active {
   transform: none;
-  filter: none;
-  opacity: 0.62;
+  opacity: 0.55;
   box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .result-title {
@@ -1515,6 +1692,15 @@ watch(
   border: 1px solid #e2e8f0;
   padding: 2px 8px;
   border-radius: 999px;
+}
+
+.result-note--chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--result-chip-h);
+  padding: 0 10px;
+  line-height: 1;
+  box-sizing: border-box;
 }
 
 .matrix-table-wrapper {
