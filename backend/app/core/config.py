@@ -50,10 +50,10 @@ class Settings(BaseSettings):
     # 開発環境ではすべてのオリジンを許可（ネットワークアクセス対応）
     # 本番環境では特定のオリジンのみ許可することを推奨
     CORS_ORIGINS: List[str] = [
-        "http://localhost:5000",
+        "http://localhost:5001",
+        "http://127.0.0.1:5001",
         "http://localhost:3000",
         "http://localhost:3005",
-        "http://127.0.0.1:5000",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3005",
         "http://192.168.1.59:3005",
@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     # 開発環境でネットワークアクセスを許可する場合
     # 環境変数 CORS_ALLOW_ALL=true で有効化
     CORS_ALLOW_ALL: bool = False
+
+    # start.py 用 LAN 表示 IP（バナー・証明書 SAN）。未設定時は start.py が自動検出
+    DEV_LAN_IP: Optional[str] = None
 
     # HTTPS（uvicorn 直接起動時。証明書パスはプロジェクトルートまたは絶対パス）
     HTTPS_ENABLED: bool = False

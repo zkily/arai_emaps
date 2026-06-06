@@ -348,6 +348,14 @@ def _inspection_row_mes_in_progress(started: Any, ended: Any) -> bool:
     return False
 
 
+def _inspection_row_mes_completed(started: Any, ended: Any) -> bool:
+    if started is None or not str(started).strip():
+        return False
+    if ended is None or not str(ended).strip():
+        return False
+    return True
+
+
 async def _fetch_inspection_row_mes_state(
     db: AsyncSession,
     inspection_id: int,
@@ -6593,10 +6601,10 @@ async def update_inspection_management(
         elif row_insp is not None:
             _reject_inspection_mes_inspector_not_current_user(current_user, row_insp)
     row_mes = await _fetch_inspection_row_mes_state(db, inspection_id, im_cols)
-    in_progress = _inspection_row_mes_in_progress(
-        row_mes.get("mes_production_started_at"),
-        row_mes.get("mes_production_ended_at"),
-    )
+    row_started = row_mes.get("mes_production_started_at")
+    row_ended = row_mes.get("mes_production_ended_at")
+    in_progress = _inspection_row_mes_in_progress(row_started, row_ended)
+    row_already_completed = _inspection_row_mes_completed(row_started, row_ended)
     client_id = _normalize_mes_client_instance_id(body.mes_client_instance_id)
     force_release = bool(body.mes_force_release)
     existing_lock = _normalize_mes_client_instance_id(row_mes.get("mes_client_instance_id"))
@@ -6663,30 +6671,31 @@ async def update_inspection_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
-                start_inspector: Optional[int] = None
-                if body.mes_inspector_user_id is not None:
-                    try:
-                        parsed_inspector = int(body.mes_inspector_user_id)
-                        if parsed_inspector > 0:
-                            start_inspector = parsed_inspector
-                    except (TypeError, ValueError):
-                        start_inspector = None
-                await _reject_concurrent_mes_production_on_inspection_start(
-                    db,
-                    inspection_id,
-                    im_cols,
-                    inspector_user_id=start_inspector,
-                )
-                if has_client_col:
-                    if not client_id:
-                        raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
-                    _reject_inspection_mes_client_lock_conflict(
-                        existing_lock,
-                        client_id,
-                        force_release=force_release,
+                if not row_already_completed:
+                    start_inspector: Optional[int] = None
+                    if body.mes_inspector_user_id is not None:
+                        try:
+                            parsed_inspector = int(body.mes_inspector_user_id)
+                            if parsed_inspector > 0:
+                                start_inspector = parsed_inspector
+                        except (TypeError, ValueError):
+                            start_inspector = None
+                    await _reject_concurrent_mes_production_on_inspection_start(
+                        db,
+                        inspection_id,
+                        im_cols,
+                        inspector_user_id=start_inspector,
                     )
-                    params["mes_client_instance_id"] = client_id
-                    updates.append("mes_client_instance_id = :mes_client_instance_id")
+                    if has_client_col:
+                        if not client_id:
+                            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+                        _reject_inspection_mes_client_lock_conflict(
+                            existing_lock,
+                            client_id,
+                            force_release=force_release,
+                        )
+                        params["mes_client_instance_id"] = client_id
+                        updates.append("mes_client_instance_id = :mes_client_instance_id")
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
     if body.mes_production_ended_at is not None:

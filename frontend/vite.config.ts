@@ -98,8 +98,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: '0.0.0.0', // すべてのネットワークインターフェースでリッスン
-      port: 5000,
-      // VITE_DEV_HTTPS=true で https://localhost:5000（証明書は VITE_SSL_* または Vite 自己署名）
+      port: 5001,
+      // start.py: HTTP :5001 / HTTPS :5000 を同時起動。単体 npm run dev は :5001（HTTP）
+      // VITE_DEV_HTTPS=true で https（証明書は VITE_SSL_* または Vite 自己署名）
       https: resolveDevHttps(env),
       proxy: {
         '/api': {

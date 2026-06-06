@@ -29,7 +29,13 @@ DEFAULT_SSL_META = CERTS_DIR / "dev-lan.meta.json"
 
 processes: List[subprocess.Popen] = []
 should_exit = False
-PROCESS_NAMES = ("バックエンド", "フロントエンド（開発）", "ファイル監視")
+file_watcher_process_index: Optional[int] = None
+PROCESS_NAMES = (
+    "バックエンド",
+    "フロントエンド（開発・HTTPS）",
+    "フロントエンド（開発・HTTP）",
+    "ファイル監視",
+)
 production_httpds: List[Any] = []  # 本番 dist サーバー（複数ポート時は複数。signal で shutdown）
 production_httpds_lock = threading.Lock()
 _prod_static_ssl_ctx: Optional[Any] = None  # main で設定。dist HTTPS 用 SSLContext
@@ -37,7 +43,9 @@ _prod_static_ssl_ctx: Optional[Any] = None  # main で設定。dist HTTPS 用 SS
 # 設定
 CONFIG = {
     "backend_port": 8005,
-    "frontend_dev_port": 5000,
+    # 開発: HTTPS :5000 + HTTP :5001（同一 TCP ポートに HTTP/HTTPS 併用不可のため分離）
+    "frontend_dev_https_port": 5000,
+    "frontend_dev_http_port": 5001,
     "frontend_prod_https_port": 5005,
     # HTTPS 有効時: 5005=TLS、3005=プレーン HTTP（同一 TCP ポートに HTTP/HTTPS 併用不可）
     "frontend_prod_http_port": 3005,
@@ -150,10 +158,7 @@ def ensure_ssl_certificate_files(network_ip: str) -> bool:
             Colors.YELLOW,
         )
 
-    san_hosts = ["localhost", "127.0.0.1"]
-    nip = (network_ip or "").strip()
-    if nip and nip not in san_hosts:
-        san_hosts.append(nip)
+    san_hosts = ssl_san_hosts(network_ip)
 
     need_gen = True
     if DEFAULT_SSL_CERT.is_file() and DEFAULT_SSL_KEY.is_file() and DEFAULT_SSL_META.is_file():
@@ -201,7 +206,7 @@ def ensure_prod_dist_available(network_ip: str) -> bool:
     if index.is_file():
         return True
 
-    dev_port = CONFIG["frontend_dev_port"]
+    dev_port = CONFIG["frontend_dev_https_port"]
     print_color(
         f"⚠️  frontend/dist がありません。:5005 用に開発サーバー ({dev_port}) へ誘導する最小ページを配置します。",
         Colors.YELLOW,
@@ -299,6 +304,24 @@ def get_local_ip() -> str:
         return ip
     except Exception:
         return '127.0.0.1'
+
+
+def resolve_network_ip() -> str:
+    """LAN 表示用 IP。DEV_LAN_IP 未設定時は本机 IP を自動検出（HTTP 開発は :5001）。"""
+    override = os.environ.get("DEV_LAN_IP", "").strip()
+    if override:
+        return override
+    return get_local_ip()
+
+
+def ssl_san_hosts(network_ip: str) -> List[str]:
+    """証明書 SAN 用ホスト一覧（localhost / 127.0.0.1 / 設定・検出 LAN IP）"""
+    hosts = ["localhost", "127.0.0.1"]
+    for raw in (network_ip, get_local_ip()):
+        ip = (raw or "").strip()
+        if ip and ip not in hosts:
+            hosts.append(ip)
+    return hosts
 
 
 def _win_encoding():
@@ -507,12 +530,22 @@ def start_backend(output_buffer: List[str], ssl_args: Optional[List[str]] = None
     return process
 
 
-def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
-    """フロントエンド開発サーバーを起動（バックエンド HTTPS 時は Vite のプロキシ先も https に合わせる）"""
-    npm_cmd = ["npm", "run", "dev"]
+def _build_frontend_dev_env(use_https: bool) -> dict:
+    """Vite 開発サーバー用環境変数（API プロキシはバックエンド TLS に追従）"""
     env = os.environ.copy()
+    be_port = CONFIG["backend_port"]
     if CONFIG.get("backend_use_https"):
         env["VITE_API_HTTPS"] = "true"
+        api_target = f"https://127.0.0.1:{be_port}"
+        ws_target = f"wss://127.0.0.1:{be_port}"
+    else:
+        env["VITE_API_HTTPS"] = "false"
+        api_target = f"http://127.0.0.1:{be_port}"
+        ws_target = f"ws://127.0.0.1:{be_port}"
+    env["VITE_API_PROXY_TARGET"] = api_target
+    env["VITE_WS_PROXY_TARGET"] = ws_target
+
+    if use_https:
         env["VITE_DEV_HTTPS"] = "true"
         cert = os.environ.get("SSL_CERTFILE", "").strip()
         key = os.environ.get("SSL_KEYFILE", "").strip()
@@ -524,6 +557,32 @@ def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
             kp = _resolve_ssl_path(key)
             if kp.is_file():
                 env["VITE_SSL_KEYFILE"] = str(kp.resolve())
+    else:
+        env["VITE_DEV_HTTPS"] = "false"
+        env.pop("VITE_SSL_CERTFILE", None)
+        env.pop("VITE_SSL_KEYFILE", None)
+    return env
+
+
+def start_frontend_dev(
+    output_buffer: List[str],
+    *,
+    port: int,
+    use_https: bool,
+    tag: str = "frontend",
+) -> subprocess.Popen:
+    """フロントエンド開発サーバーを起動（HTTP/HTTPS を別ポートで同時起動可）"""
+    npm_cmd = [
+        "npm",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        str(port),
+        "--host",
+        "0.0.0.0",
+    ]
+    env = _build_frontend_dev_env(use_https)
 
     if sys.platform == "win32":
         process = subprocess.Popen(
@@ -558,6 +617,8 @@ def start_frontend_dev(output_buffer: List[str]) -> subprocess.Popen:
                         break
                     line = line.rstrip()
                     output_buffer.append(line)
+                    if line:
+                        print(f"[{tag}] {line}")
         except Exception:
             pass
     
@@ -969,12 +1030,13 @@ def _print_url_lines(
 def print_success_banner(network_ip: str):
     """起動成功バナーを表示（全ホスト × HTTP、証明書あり時は HTTPS も併記）"""
     backend_port = CONFIG["backend_port"]
-    dev_port = CONFIG["frontend_dev_port"]
+    dev_https_port = CONFIG["frontend_dev_https_port"]
+    dev_http_port = CONFIG["frontend_dev_http_port"]
     prod_https_port = CONFIG["frontend_prod_https_port"]
     prod_http_port = CONFIG["frontend_prod_http_port"]
     be_tls = CONFIG.get("backend_use_https", False)
     dist_tls = CONFIG.get("frontend_prod_https", False)
-    dev_https = CONFIG.get("frontend_dev_https", False)
+    dev_dual = CONFIG.get("frontend_dev_dual", False)
     certs_ok = CONFIG.get("ssl_certs_configured", False)
     hosts = banner_hosts(network_ip)
 
@@ -984,19 +1046,15 @@ def print_success_banner(network_ip: str):
     print("=" * 65)
     print()
 
-    print("📱 フロントエンド【開発モード】 (Vite :5000):")
-    if dev_https:
-        print("   【HTTPS — 現在リッスン中】")
-        _print_url_lines(hosts, "https", dev_port)
-        if certs_ok:
-            print("   【HTTP — 同一ポートでは利用不可・参考】")
-            _print_url_lines(hosts, "http", dev_port)
+    print("📱 フロントエンド【開発モード】:")
+    if dev_dual:
+        print(f"   【HTTPS — ポート {dev_https_port}】")
+        _print_url_lines(hosts, "https", dev_https_port)
+        print(f"   【HTTP — ポート {dev_http_port}】")
+        _print_url_lines(hosts, "http", dev_http_port)
     else:
-        print("   【HTTP — 現在リッスン中】")
-        _print_url_lines(hosts, "http", dev_port)
-        if certs_ok:
-            print("   【HTTPS — VITE_DEV_HTTPS=true + 証明書で利用（スマホカメラ等）】")
-            _print_url_lines(hosts, "https", dev_port)
+        print(f"   【HTTP — ポート {dev_http_port}】")
+        _print_url_lines(hosts, "http", dev_http_port)
     print()
 
     print("🌐 フロントエンド【本番モード】 (dist):")
@@ -1058,14 +1116,15 @@ def main():
 
     try:
         print("\n🚀 Smart-EMAP 開発・本番サーバーを起動中...\n")
-        network_ip = get_local_ip()
-        CONFIG["production_ip"] = network_ip
 
         try:
             from dotenv import load_dotenv
             load_dotenv(BACKEND_DIR / ".env", encoding="utf-8")
         except Exception:
             pass
+
+        network_ip = resolve_network_ip()
+        CONFIG["production_ip"] = network_ip
 
         # start.py: LAN スマホ向け HTTPS（.env で HTTPS_ENABLED=false の場合は無効）
         if not _env_truthy("START_DISABLE_AUTO_HTTPS"):
@@ -1088,6 +1147,7 @@ def main():
         _prod_static_ssl_ctx = build_prod_static_ssl_context()
         CONFIG["frontend_prod_https"] = bool(_prod_static_ssl_ctx)
         CONFIG["frontend_dev_https"] = bool(uvicorn_ssl)
+        CONFIG["frontend_dev_dual"] = bool(uvicorn_ssl)
 
         if uvicorn_ssl:
             print_color("🔒 バックエンド API: HTTPS（uvicorn TLS）", Colors.GREEN)
@@ -1110,14 +1170,19 @@ def main():
         if not (DIST_DIR / "index.html").is_file():
             print_color(
                 f"⚠️  frontend/dist 未ビルド: :{CONFIG['frontend_prod_https_port']} は誘導ページのみ。"
-                f" 実アプリは https://{network_ip}:{CONFIG['frontend_dev_port']}/（開発）を使用",
+                f" 実アプリは https://{network_ip}:{CONFIG['frontend_dev_https_port']}/（開発）を使用",
                 Colors.YELLOW,
             )
 
         # ポートチェック
         if not check_port(CONFIG["backend_port"], "バックエンド"):
             sys.exit(1)
-        if not check_port(CONFIG["frontend_dev_port"], "フロントエンド開発"):
+        if CONFIG["frontend_dev_dual"]:
+            if not check_port(CONFIG["frontend_dev_https_port"], "フロントエンド開発(HTTPS)"):
+                sys.exit(1)
+            if not check_port(CONFIG["frontend_dev_http_port"], "フロントエンド開発(HTTP)"):
+                sys.exit(1)
+        elif not check_port(CONFIG["frontend_dev_http_port"], "フロントエンド開発(HTTP)"):
             sys.exit(1)
         if CONFIG["frontend_prod_https"]:
             if not check_port(CONFIG["frontend_prod_http_port"], "フロントエンド本番(HTTP)"):
@@ -1132,27 +1197,55 @@ def main():
         
         # 出力バッファ
         backend_output = []
-        frontend_output = []
+        frontend_https_output: List[str] = []
+        frontend_http_output: List[str] = []
         
         # バックエンド起動
         print("> dev:backend")
         backend_proc = start_backend(backend_output, uvicorn_ssl if uvicorn_ssl else None)
         processes.append(backend_proc)
         
-        # フロントエンド開発サーバー起動
-        print()
-        print("> dev:frontend")
-        frontend_proc = start_frontend_dev(frontend_output)
-        processes.append(frontend_proc)
+        # フロントエンド開発サーバー起動（HTTPS :5000 + HTTP :5001）
+        if CONFIG["frontend_dev_dual"]:
+            print()
+            print("> dev:frontend (HTTPS)")
+            frontend_https_proc = start_frontend_dev(
+                frontend_https_output,
+                port=CONFIG["frontend_dev_https_port"],
+                use_https=True,
+                tag="frontend-https",
+            )
+            processes.append(frontend_https_proc)
+            print()
+            print("> dev:frontend (HTTP)")
+            frontend_http_proc = start_frontend_dev(
+                frontend_http_output,
+                port=CONFIG["frontend_dev_http_port"],
+                use_https=False,
+                tag="frontend-http",
+            )
+            processes.append(frontend_http_proc)
+        else:
+            print()
+            print("> dev:frontend (HTTP)")
+            frontend_http_proc = start_frontend_dev(
+                frontend_http_output,
+                port=CONFIG["frontend_dev_http_port"],
+                use_https=False,
+                tag="frontend-http",
+            )
+            processes.append(frontend_http_proc)
         
         # バックエンド ファイル監視（BT-data受信CSV）。.env の FILE_WATCH_BASE_PATH が空でない場合のみ起動
         watch_path = os.environ.get("FILE_WATCH_BASE_PATH", "").strip()
         file_watcher_output = []
+        global file_watcher_process_index
         if watch_path:
             print()
             print("> file-watcher")
             file_watcher_proc = start_file_watcher(file_watcher_output)
             processes.append(file_watcher_proc)
+            file_watcher_process_index = len(processes) - 1
         
         # 本番フロント（dist）をスレッドで起動
         print()
@@ -1164,7 +1257,13 @@ def main():
         print("サーバー起動を待機中...")
         
         backend_ready = wait_for_port(CONFIG["backend_port"], timeout=30)
-        dev_ready = wait_for_port(CONFIG["frontend_dev_port"], timeout=60)
+        if CONFIG["frontend_dev_dual"]:
+            dev_ready = (
+                wait_for_port(CONFIG["frontend_dev_https_port"], timeout=60)
+                and wait_for_port(CONFIG["frontend_dev_http_port"], timeout=60)
+            )
+        else:
+            dev_ready = wait_for_port(CONFIG["frontend_dev_http_port"], timeout=60)
         if CONFIG["frontend_prod_https"]:
             prod_ready = wait_for_port(CONFIG["frontend_prod_https_port"], timeout=10) and wait_for_port(
                 CONFIG["frontend_prod_http_port"], timeout=10
@@ -1183,10 +1282,14 @@ def main():
         
         if not dev_ready:
             print_color("❌ フロントエンド開発サーバーの起動に失敗しました", Colors.RED)
-            if frontend_output:
-                print("   最後の出力:")
-                for line in frontend_output[-10:]:
-                    print(f"   {line}")
+            for label, buf in (
+                ("HTTPS", frontend_https_output),
+                ("HTTP", frontend_http_output),
+            ):
+                if buf:
+                    print(f"   {label} 最後の出力:")
+                    for line in buf[-10:]:
+                        print(f"   {line}")
             signal_handler(None, None)
             sys.exit(1)
         
@@ -1204,11 +1307,20 @@ def main():
                 if process.poll() is not None:
                     name = PROCESS_NAMES[i] if i < len(PROCESS_NAMES) else f"プロセス{i}"
                     # ファイル監視が code 0 で終了＝監視パス未設定またはパスが存在しない（正常扱いでアプリは継続）
-                    if i == 2 and process.returncode == 0:
+                    if (
+                        file_watcher_process_index is not None
+                        and i == file_watcher_process_index
+                        and process.returncode == 0
+                    ):
                         print_color("⚠️  ファイル監視が終了しました（監視パスが未設定か、指定パスが存在しません）", Colors.YELLOW)
                         processes[i] = None
                         continue
-                    if i == 2 and process.returncode != 0 and file_watcher_output:
+                    if (
+                        file_watcher_process_index is not None
+                        and i == file_watcher_process_index
+                        and process.returncode != 0
+                        and file_watcher_output
+                    ):
                         print_color("   ファイル監視のエラー出力:", Colors.YELLOW)
                         for line in file_watcher_output[-25:]:
                             print(f"   {line}")
