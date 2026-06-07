@@ -28,7 +28,7 @@ class AccountingPeriod(Base):
     __tablename__ = "fin_accounting_period"
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    fiscal_year_id = Column(Integer, ForeignKey("fin_fiscal_year.id", ondelete="CASCADE"))
+    fiscal_year_id = Column(BigInteger, ForeignKey("fin_fiscal_year.id", ondelete="CASCADE"))
     year_month = Column(String(7), nullable=False, index=True)
     status = Column(String(20), default="open")
     closed_at = Column(DateTime)

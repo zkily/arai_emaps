@@ -22,16 +22,14 @@
         active-text-color="#ffffff"
         @select="handleMenuSelect"
       >
-        <el-menu-item index="/dashboard" class="menu-item-home">
+        <el-menu-item index="/dashboard" class="menu-item-home menu-item-top">
           <SidebarCollapsedEntry
             code="DASHBOARD"
             :label="t('menu.DASHBOARD')"
             :is-collapsed="isCollapsed"
-            :show-title="false"
           >
             <el-icon><HomeFilled /></el-icon>
           </SidebarCollapsedEntry>
-          <template #title><span :title="t('menu.DASHBOARD')">{{ t('menu.DASHBOARD') }}</span></template>
         </el-menu-item>
         
         <el-sub-menu index="erp">
@@ -761,17 +759,42 @@ const toggleCollapse = () => {
 }
 
 /* ========== 各层级菜单用颜色区分 ========== */
-/* 顶级菜单项(Dashboard/ERP/APS/MES/Master/System) - 纯白，左对齐统一 */
-:deep(.sidebar-el-menu > .el-menu-item) {
+/* 顶级菜单项（Dashboard）— 与下方 ERP/APS 等父菜单标题左对齐 */
+:deep(.sidebar-el-menu > .el-menu-item.menu-item-top) {
   height: 42px;
   line-height: 42px;
   margin: 8px 6px 8px 0;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 700;
-  padding-left: 10px !important;
+  padding-left: 6px !important; /* 4px 边框 + 6px，与 el-sub-menu__title 一致 */
   color: #ffffff !important;
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.12) 0%, rgba(102, 126, 234, 0.06) 100%) !important;
+  border-left: 4px solid rgba(102, 126, 234, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   justify-content: flex-start !important;
+}
+
+:deep(.sidebar-el-menu > .el-menu-item.menu-item-top .el-menu-tooltip__trigger) {
+  display: flex !important;
+  align-items: center !important;
+  width: 100%;
+  padding: 0 !important;
+}
+
+:deep(.sidebar-el-menu > .el-menu-item.menu-item-top .sidebar-collapsed-entry) {
+  flex: 1;
+  min-width: 0;
+}
+
+:deep(.sidebar-el-menu > .el-menu-item.menu-item-top .sidebar-collapsed-entry .el-icon) {
+  margin-right: 0 !important;
+}
+
+:deep(.sidebar-el-menu > .el-menu-item.menu-item-top:hover) {
+  background: linear-gradient(90deg, rgba(102, 126, 234, 0.22) 0%, rgba(102, 126, 234, 0.12) 100%) !important;
+  border-left-color: #667eea;
+  box-shadow: 0 3px 12px rgba(102, 126, 234, 0.2);
 }
 
 /* 带「ホーム」的菜单项 - 橘黄色（含选中态）；需覆盖各层级叶子的白色，故提高特异性 */
@@ -1122,6 +1145,7 @@ const toggleCollapse = () => {
   align-items: center !important;
   flex-direction: row !important;
 }
+:deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item.menu-item-top),
 :deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu > .el-sub-menu__title),
 :deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
   padding: 0 !important;
@@ -1131,6 +1155,7 @@ const toggleCollapse = () => {
   background: transparent !important;
   border-radius: 8px !important;
   width: 100% !important;
+  box-shadow: none !important;
 }
 /* 覆盖 Element Plus 折叠态 tooltip 触发器（默认 absolute + height:100% 会裁切下方文字） */
 :deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item) {

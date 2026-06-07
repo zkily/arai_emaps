@@ -9,6 +9,8 @@ export function collapsedSidebarLabel(code: string, label: string): string {
       return 'APS'
     case 'MES':
       return 'MES'
+    case 'FIN':
+      return 'ACR'
     case 'MASTER':
       return 'マスタ'
     case 'SYSTEM':

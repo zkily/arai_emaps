@@ -38,4 +38,8 @@ export const finRoutes: RouteRecordRaw[] = [
   { path: 'fin/self', name: 'FinSelfHome', component: () => import('@/views/fin/home/FinSelfHome.vue'), meta: { title: 'マイページ', group: 'FIN', requiresAuth: true } },
   { path: 'fin/settings', name: 'FinSetCompany', component: () => import('@/views/fin/settings/FinSetCompany.vue'), meta: { title: '会計設定', group: 'FIN', requiresAuth: true } },
   { path: 'fin/settings/approval-flows', name: 'FinSetApproval', component: () => import('@/views/fin/settings/FinSetApproval.vue'), meta: { title: '承認フロー', group: 'FIN', requiresAuth: true } },
+  { path: 'erp/costing/journal', redirect: '/fin/accounting/journals' },
+  { path: 'erp/costing/accounting-export', redirect: '/fin/accounting/import' },
+  { path: 'erp/costing/billing', redirect: '/fin/receivables/invoices' },
+  { path: 'erp/costing/payment', redirect: '/fin/payables/payments' },
 ]
