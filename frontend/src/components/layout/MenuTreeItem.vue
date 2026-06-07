@@ -7,10 +7,26 @@
 <template>
   <el-sub-menu v-if="node.children && node.children.length" :index="node.code">
     <template #title>
-      <el-icon><component :is="node.icon || 'Menu'" /></el-icon>
-      <span :title="label">{{ label }}</span>
+      <SidebarCollapsedEntry
+        v-if="depth === 0"
+        :code="node.code"
+        :label="label"
+        :is-collapsed="isCollapsed"
+      >
+        <el-icon><component :is="node.icon || 'Menu'" /></el-icon>
+      </SidebarCollapsedEntry>
+      <template v-else>
+        <el-icon><component :is="node.icon || 'Menu'" /></el-icon>
+        <span :title="label">{{ label }}</span>
+      </template>
     </template>
-    <MenuTreeItem v-for="child in node.children" :key="child.code" :node="child" />
+    <MenuTreeItem
+      v-for="child in node.children"
+      :key="child.code"
+      :node="child"
+      :depth="depth + 1"
+      :is-collapsed="isCollapsed"
+    />
   </el-sub-menu>
 
   <el-menu-item v-else-if="node.path" :index="node.path">
@@ -23,8 +39,17 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { MenuTreeNode } from '@/composables/useMenuTree'
+import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 
-const props = defineProps<{ node: MenuTreeNode }>()
+const props = withDefaults(
+  defineProps<{
+    node: MenuTreeNode
+    isCollapsed?: boolean
+    depth?: number
+  }>(),
+  { isCollapsed: false, depth: 0 },
+)
+
 const { t } = useI18n()
 
 const label = computed(() => {

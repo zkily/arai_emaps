@@ -164,7 +164,7 @@ async def get_product_list(
     total_res = await db.execute(count_q)
     total = total_res.scalar() or 0
 
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(Product.product_name.asc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     rows = result.scalars().all()
 

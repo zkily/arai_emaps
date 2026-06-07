@@ -147,7 +147,7 @@ watch(
 }
 
 .layout-sidebar.is-collapsed {
-  width: 64px;
+  width: 80px;
 }
 
 .layout-main {

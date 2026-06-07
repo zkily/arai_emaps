@@ -23,14 +23,22 @@
         @select="handleMenuSelect"
       >
         <el-menu-item index="/dashboard" class="menu-item-home">
-          <el-icon><HomeFilled /></el-icon>
+          <SidebarCollapsedEntry
+            code="DASHBOARD"
+            :label="t('menu.DASHBOARD')"
+            :is-collapsed="isCollapsed"
+            :show-title="false"
+          >
+            <el-icon><HomeFilled /></el-icon>
+          </SidebarCollapsedEntry>
           <template #title><span :title="t('menu.DASHBOARD')">{{ t('menu.DASHBOARD') }}</span></template>
         </el-menu-item>
         
         <el-sub-menu index="erp">
           <template #title>
-            <el-icon><Management /></el-icon>
-            <span :title="t('menu.ERP')">{{ t('menu.ERP') }}</span>
+            <SidebarCollapsedEntry code="ERP" :label="t('menu.ERP')" :is-collapsed="isCollapsed">
+              <el-icon><Management /></el-icon>
+            </SidebarCollapsedEntry>
           </template>
           
           <el-sub-menu index="erp-sales">
@@ -374,8 +382,9 @@
 
         <el-sub-menu index="aps">
           <template #title>
-            <el-icon><DataAnalysis /></el-icon>
-            <span :title="t('menu.APS')">{{ t('menu.APS') }}</span>
+            <SidebarCollapsedEntry code="APS" :label="t('menu.APS')" :is-collapsed="isCollapsed">
+              <el-icon><DataAnalysis /></el-icon>
+            </SidebarCollapsedEntry>
           </template>
           <el-sub-menu index="aps-production-plan-create">
             <template #title>
@@ -439,8 +448,9 @@
         
         <el-sub-menu index="mes">
           <template #title>
-            <el-icon><Monitor /></el-icon>
-            <span :title="t('menu.MES')">{{ t('menu.MES') }}</span>
+            <SidebarCollapsedEntry code="MES" :label="t('menu.MES')" :is-collapsed="isCollapsed">
+              <el-icon><Monitor /></el-icon>
+            </SidebarCollapsedEntry>
           </template>
           <el-sub-menu index="mes-production-instruction">
             <template #title>
@@ -501,12 +511,13 @@
         </el-sub-menu>
 
         <!-- FIN（経理・原価・人事）: menuConfig から再帰描画（MES の下・マスタの上） -->
-        <MenuTreeItem v-if="finMenu" :node="finMenu" />
+        <MenuTreeItem v-if="finMenu" :node="finMenu" :is-collapsed="isCollapsed" />
 
         <el-sub-menu index="master">
           <template #title>
-            <el-icon><Collection /></el-icon>
-            <span :title="t('menu.MASTER')">{{ t('menu.MASTER') }}</span>
+            <SidebarCollapsedEntry code="MASTER" :label="t('menu.MASTER')" :is-collapsed="isCollapsed">
+              <el-icon><Collection /></el-icon>
+            </SidebarCollapsedEntry>
           </template>
           <el-sub-menu index="master-list">
             <template #title>
@@ -548,8 +559,9 @@
 
         <el-sub-menu v-if="userStore.hasPermission('all')" index="system">
           <template #title>
-            <el-icon><Setting /></el-icon>
-            <span :title="t('menu.SYSTEM')">{{ t('menu.SYSTEM') }}</span>
+            <SidebarCollapsedEntry code="SYSTEM" :label="t('menu.SYSTEM')" :is-collapsed="isCollapsed">
+              <el-icon><Setting /></el-icon>
+            </SidebarCollapsedEntry>
           </template>
           
           <el-sub-menu index="system-user">
@@ -610,6 +622,7 @@ import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { useMenuTree } from '@/composables/useMenuTree'
 import MenuTreeItem from '@/components/layout/MenuTreeItem.vue'
+import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 import {
   HomeFilled, Management, Sell, ShoppingCart, Box, Coin, Document, Money,
   User, DataAnalysis, Monitor, Setting, Tools, Grid, Files,
@@ -1058,10 +1071,10 @@ const toggleCollapse = () => {
   width: 100%;
 }
 
-/* Collapsed state：隐藏下拉箭头，所有图标在折叠宽度内居中 */
+/* Collapsed state：图标在上、短标签在下（与 Android SidebarMenu 一致） */
 :deep(.sidebar-el-menu.el-menu--collapse) {
   width: 100% !important;
-  padding: 4px 6px !important;
+  padding: 4px 4px !important;
   box-sizing: border-box;
   --el-menu-base-level-padding: 0 !important;
   --el-menu-level-padding: 0 !important;
@@ -1078,9 +1091,25 @@ const toggleCollapse = () => {
   max-width: none !important;
 }
 
-/* 折叠时所有行：图标在行总宽度内居中 */
-:deep(.sidebar-el-menu.el-menu--collapse .el-menu-item),
-:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu__title) {
+/* 折叠时顶级行：为图标+短标签留出高度 */
+:deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item),
+:deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu > .el-sub-menu__title) {
+  margin: 4px 0 !important;
+  padding: 6px 2px !important;
+  justify-content: center !important;
+  align-items: center !important;
+  min-height: 52px;
+  height: auto !important;
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: none !important;
+  display: flex !important;
+  overflow: visible !important;
+}
+
+/* 折叠时嵌套子菜单（非侧栏可见项）保持横向布局 */
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu > .el-sub-menu__title),
+:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-menu-item) {
   margin: 2px 0 !important;
   padding: 0 !important;
   justify-content: center !important;
@@ -1091,8 +1120,9 @@ const toggleCollapse = () => {
   max-width: none !important;
   display: flex !important;
   align-items: center !important;
+  flex-direction: row !important;
 }
-:deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu > .el-sub-menu__title),
+:deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu > .el-sub-menu__title),
 :deep(.sidebar-el-menu.el-menu--collapse .el-sub-menu .el-sub-menu > .el-sub-menu__title) {
   padding: 0 !important;
   padding-left: 0 !important;
@@ -1100,37 +1130,55 @@ const toggleCollapse = () => {
   border-left: none !important;
   background: transparent !important;
   border-radius: 8px !important;
-  justify-content: center !important;
   width: 100% !important;
 }
-
-/* 折叠时ダッシュボード图标也居中 */
+/* 覆盖 Element Plus 折叠态 tooltip 触发器（默认 absolute + height:100% 会裁切下方文字） */
 :deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item) {
-  padding: 0 !important;
-  justify-content: center !important;
-  display: flex !important;
-  align-items: center !important;
+  position: relative !important;
+  white-space: normal !important;
 }
+
 :deep(.sidebar-el-menu.el-menu--collapse > .el-menu-item .el-menu-tooltip__trigger) {
+  position: relative !important;
+  left: auto !important;
+  top: auto !important;
   justify-content: center !important;
+  align-items: center !important;
   padding: 0 !important;
   flex: none !important;
   width: 100% !important;
   min-width: 0 !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+:deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu > .el-sub-menu__title) {
+  line-height: normal !important;
+  white-space: normal !important;
+}
+
+:deep(.sidebar-el-menu.el-menu--collapse .sidebar-collapsed-entry__label) {
+  height: auto !important;
+  width: auto !important;
+  max-width: 100% !important;
+  overflow: visible !important;
+  visibility: visible !important;
+  display: block !important;
 }
 
 :deep(.el-menu--collapse .el-sub-menu__icon-arrow) {
   display: none !important;
 }
 
-:deep(.el-menu--collapse .el-sub-menu__title > span) {
-  display: none !important;
-}
-
+:deep(.sidebar-el-menu.el-menu--collapse .sidebar-collapsed-entry.is-collapsed .el-icon),
 :deep(.el-menu--collapse .el-menu-item .el-icon),
 :deep(.el-menu--collapse .el-sub-menu__title .el-icon) {
   margin-right: 0 !important;
   margin-left: 0 !important;
+}
+
+:deep(.sidebar-el-menu.el-menu--collapse > .el-sub-menu > .el-sub-menu__title .sidebar-collapsed-entry) {
+  width: 100%;
 }
 
 /* 折叠时子菜单标题整行占满并居中图标（覆盖 Element 可能的内联/变量缩进） */
