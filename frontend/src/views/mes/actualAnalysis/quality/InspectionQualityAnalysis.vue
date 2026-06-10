@@ -623,7 +623,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
-@import '../shared/inspectionAnalysisIpa.scss';
+@use '../shared/inspectionAnalysisIpa.scss';
 
 .iqa-hero__icon {
   background: linear-gradient(135deg, #fb923c, #ef4444) !important;
