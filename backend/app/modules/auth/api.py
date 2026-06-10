@@ -52,11 +52,22 @@ class UserCreate(UserBase):
     password: str
 
 
+class OperationPermissionPayload(BaseModel):
+    module: str
+    can_create: bool = False
+    can_edit: bool = False
+    can_delete: bool = False
+    can_export: bool = False
+    can_approve: bool = False
+
+
 class UserResponse(UserBase):
     id: int
     full_name: Optional[str] = None
     is_active: bool = True
     permissions: list[str] = []
+    menu_codes: list[str] = []
+    operation_permissions: list[OperationPermissionPayload] = []
     department_id: Optional[int] = None
     department_name: Optional[str] = None
 
@@ -192,6 +203,128 @@ def get_user_permissions(role: str) -> list[str]:
     return ["read", "write"]
 
 
+async def get_user_menu_codes(db: AsyncSession, user: User) -> list[str]:
+    """ユーザーがアクセス可能なメニューコード一覧（user_roles → role_menu_permissions から集約）"""
+    from app.modules.system.models import Menu, RoleMenuPermission, UserRole
+
+    role = user.role if user.role else "user"
+
+    if role == "admin":
+        result = await db.execute(
+            select(Menu.code)
+            .where(Menu.is_active == True)
+            .order_by(Menu.sort_order, Menu.id)
+        )
+        return list(result.scalars().all())
+
+    result = await db.execute(
+        select(Menu.code)
+        .distinct()
+        .join(RoleMenuPermission, RoleMenuPermission.menu_id == Menu.id)
+        .join(UserRole, UserRole.role_id == RoleMenuPermission.role_id)
+        .where(UserRole.user_id == user.id, Menu.is_active == True)
+        .order_by(Menu.code)
+    )
+    return list(result.scalars().all())
+
+
+def _empty_operation_permission(module: str) -> dict:
+    return {
+        "module": module,
+        "can_create": False,
+        "can_edit": False,
+        "can_delete": False,
+        "can_export": False,
+        "can_approve": False,
+    }
+
+
+def _full_operation_permission(module: str) -> dict:
+    return {
+        "module": module,
+        "can_create": True,
+        "can_edit": True,
+        "can_delete": True,
+        "can_export": True,
+        "can_approve": True,
+    }
+
+
+def _fallback_operation_permissions(role: str) -> list[dict]:
+    """role_operation_permissions 未設定時: users.role の read/write にフォールバック"""
+    from app.modules.system.operation_modules import OPERATION_MODULES
+
+    perms = get_user_permissions(role)
+    can_write = "all" in perms or "write" in perms
+    can_read = can_write or "read" in perms
+    return [
+        {
+            "module": module,
+            "can_create": can_write,
+            "can_edit": can_write,
+            "can_delete": can_write,
+            "can_export": can_read,
+            "can_approve": can_write,
+        }
+        for module in OPERATION_MODULES
+    ]
+
+
+async def get_user_operation_permissions(db: AsyncSession, user: User) -> list[dict]:
+    """user_roles → role_operation_permissions をモジュール単位で OR 集約"""
+    from app.modules.system.models import RoleOperationPermission, UserRole
+    from app.modules.system.operation_modules import OPERATION_MODULES
+
+    role = user.role if user.role else "user"
+    if role == "admin":
+        return [_full_operation_permission(module) for module in OPERATION_MODULES]
+
+    result = await db.execute(
+        select(RoleOperationPermission)
+        .join(UserRole, UserRole.role_id == RoleOperationPermission.role_id)
+        .where(UserRole.user_id == user.id)
+    )
+    rows = list(result.scalars().all())
+    if not rows:
+        return _fallback_operation_permissions(role)
+
+    merged: dict[str, dict] = {}
+    for row in rows:
+        module = row.module
+        if module not in merged:
+            merged[module] = _empty_operation_permission(module)
+        entry = merged[module]
+        entry["can_create"] = entry["can_create"] or bool(row.can_create)
+        entry["can_edit"] = entry["can_edit"] or bool(row.can_edit)
+        entry["can_delete"] = entry["can_delete"] or bool(row.can_delete)
+        entry["can_export"] = entry["can_export"] or bool(row.can_export)
+        entry["can_approve"] = entry["can_approve"] or bool(row.can_approve)
+
+    return [
+        merged.get(module, _empty_operation_permission(module))
+        for module in OPERATION_MODULES
+    ]
+
+
+async def build_user_auth_payload(db: AsyncSession, user: User) -> dict:
+    """ログイン /me 共通のユーザー情報ペイロード"""
+    role = user.role if user.role is not None else "user"
+    dept_id = getattr(user, "department_id", None)
+    return {
+        "id": user.id,
+        "username": user.username or "",
+        "email": user.email or "",
+        "full_name": user.full_name,
+        "role": role,
+        "is_active": bool(user.is_active) if user.is_active is not None else True,
+        "permissions": get_user_permissions(role),
+        "menu_codes": await get_user_menu_codes(db, user),
+        "operation_permissions": await get_user_operation_permissions(db, user),
+        "department_id": dept_id,
+        "department_name": await _resolve_department_name(db, dept_id),
+    }
+
+
 @router.post("/login", response_model=Token)
 async def login(
     login_data: LoginRequest,
@@ -268,25 +401,18 @@ async def login(
         logger.warning("操作ログ記録に失敗しました（ログインは成功）: %s", e)
         await db.rollback()
     
-    # ユーザー権限を取得
-    permissions = get_user_permissions(user.role)
-    dept_id = getattr(user, "department_id", None)
-    dept_name = await _resolve_department_name(db, dept_id)
+    user_payload = await build_user_auth_payload(db, user)
+    role = user.role if user.role else "user"
+    if role != "admin" and not user_payload.get("menu_codes"):
+        logger.warning(
+            "[MENU_ACCESS] user=%s has no menu_codes — assign user_roles and role menu permissions",
+            user.username,
+        )
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
-            "role": user.role,
-            "is_active": user.is_active,
-            "permissions": permissions,
-            "department_id": dept_id,
-            "department_name": dept_name,
-        }
+        "user": user_payload,
     }
 
 
@@ -329,22 +455,7 @@ async def get_current_user(
     """現在のユーザー情報取得"""
     try:
         db, current_user = db_and_user
-        # UserResponse は username/email/role を必須とするため、None の場合は空文字/デフォルトで返す
-        role = current_user.role if current_user.role is not None else "user"
-        permissions = get_user_permissions(role)
-        dept_id = getattr(current_user, "department_id", None)
-        dept_name = await _resolve_department_name(db, dept_id)
-        return {
-            "id": current_user.id,
-            "username": current_user.username or "",
-            "email": current_user.email or "",
-            "full_name": current_user.full_name,
-            "role": role,
-            "is_active": bool(current_user.is_active) if current_user.is_active is not None else True,
-            "permissions": permissions,
-            "department_id": dept_id,
-            "department_name": dept_name,
-        }
+        return await build_user_auth_payload(db, current_user)
     except Exception as e:
         logger.exception("GET /me でエラー: %s", e)
         raise HTTPException(

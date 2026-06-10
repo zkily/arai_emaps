@@ -162,13 +162,14 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ユーザー名またはメールアドレスが既に使用されています")
     
-    role_code = "user"
-    if user_data.role_id:
-        role_result = await db.execute(select(Role).where(Role.id == user_data.role_id))
-        role_obj = role_result.scalar_one_or_none()
-        if role_obj:
-            role_code = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
-    
+    role_result = await db.execute(select(Role).where(Role.id == user_data.role_id))
+    role_obj = role_result.scalar_one_or_none()
+    if not role_obj:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定されたロールが見つかりません")
+    if not role_obj.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無効なロールは割り当てできません")
+    role_code = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
+
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         username=user_data.username,
@@ -185,9 +186,8 @@ async def create_user(
     await db.commit()
     await db.refresh(new_user)
     
-    if user_data.role_id:
-        db.add(UserRole(user_id=new_user.id, role_id=user_data.role_id))
-        await db.commit()
+    db.add(UserRole(user_id=new_user.id, role_id=user_data.role_id))
+    await db.commit()
     
     logger.info(f"User created: {new_user.username} by {current_user.username}")
     
@@ -240,17 +240,20 @@ async def update_user(
     if "role_id" in update_data:
         rid_raw = update_data.pop("role_id")
         rid = int(rid_raw) if rid_raw is not None and rid_raw != "" else None
+        if not rid or rid <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="ロールの指定が必須です。管理者にロールを割り当ててください。",
+            )
+        role_result = await db.execute(select(Role).where(Role.id == rid))
+        role_obj = role_result.scalar_one_or_none()
+        if not role_obj:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="指定されたロールが見つかりません")
+        if not role_obj.is_active:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="無効なロールは割り当てできません")
         await db.execute(delete(UserRole).where(UserRole.user_id == user.id))
-        if rid and rid > 0:
-            role_result = await db.execute(select(Role).where(Role.id == rid))
-            role_obj = role_result.scalar_one_or_none()
-            if role_obj:
-                user.role = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
-            else:
-                user.role = "user"
-            db.add(UserRole(user_id=user.id, role_id=rid))
-        else:
-            user.role = "user"
+        user.role = ROLE_NAME_TO_CODE.get(role_obj.name, "user")
+        db.add(UserRole(user_id=user.id, role_id=rid))
     
     for field, value in update_data.items():
         if hasattr(user, field):

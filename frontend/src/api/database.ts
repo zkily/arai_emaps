@@ -557,41 +557,6 @@ export function getReorderPointList(params: { as_of_date?: string; product_cd?: 
   )
 }
 
-/** 工程別計画試算（FormingDailyPlanSummary）：期間×工程の運行日 */
-const FORMING_DAILY_PLAN_BASE = '/api/database/forming-daily-plan'
-
-/** 工程別運行日：process_key ごとのチェックされた日历日 */
-export interface ProcessRunCalendarItemDTO {
-  process_key: string
-  dates: string[]
-}
-
-export function getFormingDailyPlanProcessRunDays(params: { startDate: string; endDate: string }) {
-  return request.get<{
-    data: {
-      configured: boolean
-      startDate: string
-      endDate: string
-      items: ProcessRunCalendarItemDTO[]
-    }
-  }>(`${FORMING_DAILY_PLAN_BASE}/process-run-days`, { params })
-}
-
-export function putFormingDailyPlanProcessRunDays(body: {
-  startDate: string
-  endDate: string
-  items: ProcessRunCalendarItemDTO[]
-}) {
-  return request.put<{
-    data: {
-      configured: boolean
-      startDate: string
-      endDate: string
-      items: ProcessRunCalendarItemDTO[]
-    }
-  }>(`${FORMING_DAILY_PLAN_BASE}/process-run-days`, body)
-}
-
 /* ===================== 工程別設備別計画（ProcessMachinePlanView） ===================== */
 
 /** 対象工程キー（production_summarys の *_machine / *_plan / *_actual に対応） */

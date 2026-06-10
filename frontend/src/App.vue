@@ -28,7 +28,6 @@ watch(locale, (val) => {
   const dayjsLocale = dayjsLocaleMap[val as LocaleType]
   if (dayjsLocale) dayjs.locale(dayjsLocale)
 }, { immediate: true })
-import { getUserInfo } from '@/modules/auth/api'
 import { ElMessage } from 'element-plus'
 import { connectWebSocket, disconnectWebSocket } from '@/modules/websocket/utils'
 import { startInactivityCheck, stopInactivityCheck } from '@/utils/inactivity'
@@ -54,7 +53,7 @@ onMounted(async () => {
     // ページ読み込み時にすぐチェック
     try {
       console.log('[SINGLE_DEVICE] Checking token validity on page load...')
-      await getUserInfo()
+      await userStore.refreshUser()
       console.log('[SINGLE_DEVICE] Token is valid')
       // 2 小时无操作自动登出，有操作则重置计时
       startInactivityCheck()
@@ -102,7 +101,7 @@ onMounted(async () => {
         
         try {
           // /api/auth/me を呼び出してトークンの有効性をチェック
-          await getUserInfo()
+          await userStore.refreshUser()
         } catch (error: any) {
           // 他のデバイスでログインされた場合（WebSocketが失敗した場合のフォールバック）
           if (error?.response?.status === 401) {

@@ -331,6 +331,74 @@ def _inspection_mes_column_migration_hint(column: str) -> str:
     )
 
 
+def _parse_inspection_datetime(value: Any) -> Optional[datetime]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _inspection_row_net_production_sec(item: dict[str, Any]) -> int:
+    net = item.get("mes_net_production_sec")
+    if isinstance(net, (int, float)) and net >= 0:
+        return int(net)
+    started = _parse_inspection_datetime(item.get("mes_production_started_at"))
+    ended = _parse_inspection_datetime(item.get("mes_production_ended_at"))
+    if started and ended:
+        return max(0, int((ended - started).total_seconds()))
+    return 0
+
+
+def _inspection_efficiency_per_hour(actual_qty: Any, net_sec: int) -> Optional[int]:
+    actual = int(actual_qty or 0)
+    if actual <= 0 or net_sec <= 0:
+        return None
+    hours = net_sec / 3600.0
+    if hours <= 0:
+        return None
+    return round(actual / hours)
+
+
+def _inspection_defect_rate_percent(actual_qty: Any, defect_qty: Any) -> Optional[float]:
+    actual = int(actual_qty or 0)
+    if actual <= 0:
+        return None
+    defect = int(defect_qty or 0)
+    return round(defect / actual * 1000) / 10.0
+
+
+def _merge_inspection_productivity_bucket(
+    bucket: dict[str, Any],
+    *,
+    actual_qty: int,
+    defect_qty: int,
+    net_sec: int,
+    session_count: int = 1,
+    completed_count: int = 0,
+) -> None:
+    bucket["session_count"] = int(bucket.get("session_count") or 0) + session_count
+    bucket["completed_session_count"] = int(bucket.get("completed_session_count") or 0) + completed_count
+    bucket["sum_actual_qty"] = int(bucket.get("sum_actual_qty") or 0) + actual_qty
+    bucket["sum_defect_qty"] = int(bucket.get("sum_defect_qty") or 0) + defect_qty
+    bucket["sum_net_production_sec"] = int(bucket.get("sum_net_production_sec") or 0) + net_sec
+
+
+def _finalize_inspection_productivity_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
+    actual = int(bucket.get("sum_actual_qty") or 0)
+    defect = int(bucket.get("sum_defect_qty") or 0)
+    net_sec = int(bucket.get("sum_net_production_sec") or 0)
+    bucket["defect_rate_percent"] = _inspection_defect_rate_percent(actual, defect)
+    bucket["efficiency_per_hour"] = _inspection_efficiency_per_hour(actual, net_sec)
+    return bucket
+
+
 def _normalize_mes_client_instance_id(raw: Optional[str]) -> Optional[str]:
     if raw is None:
         return None
@@ -6470,6 +6538,329 @@ async def get_inspection_management_list(
                 item[k] = v.isoformat()
         out.append(item)
     return {"success": True, "data": out}
+
+
+@router.get("/plan/inspection-management/productivity-analysis")
+async def get_inspection_productivity_analysis(
+    start_date: str = Query(..., description="集計開始日 YYYY-MM-DD"),
+    end_date: str = Query(..., description="集計終了日 YYYY-MM-DD"),
+    mes_inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
+    product_cd: Optional[str] = Query(None, description="製品 CD"),
+    include_incomplete: bool = Query(False, description="未確定セッションを含める"),
+    limit: int = Query(5000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査工程生産性分析（inspection_management 集計）。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+        )
+    start_d = _parse_date_ymd(start_date)
+    end_d = _parse_date_ymd(end_date)
+    if start_d is None or end_d is None:
+        raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+    if start_d > end_d:
+        raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+
+    mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
+    join_inspector = "mes_inspector_user_id" in im_cols
+    inspector_select = (
+        "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
+        if join_inspector
+        else "NULL AS mes_inspector_name,\n               NULL AS mes_inspector_username,"
+    )
+    inspector_join = "LEFT JOIN users ON users.id = inspection_management.mes_inspector_user_id" if join_inspector else ""
+
+    where_parts: list[str] = [
+        "inspection_management.production_day >= :start_date",
+        "inspection_management.production_day <= :end_date",
+    ]
+    params: dict[str, Any] = {"start_date": start_d, "end_date": end_d, "lim": limit}
+    if mes_inspector_user_id is not None and join_inspector:
+        where_parts.append("inspection_management.mes_inspector_user_id = :mes_inspector_user_id")
+        params["mes_inspector_user_id"] = int(mes_inspector_user_id)
+    product_cd_norm = (product_cd or "").strip()
+    if product_cd_norm:
+        where_parts.append("inspection_management.product_cd = :product_cd")
+        params["product_cd"] = product_cd_norm
+    if not include_incomplete:
+        where_parts.append("inspection_management.production_completed_check = 1")
+
+    where_sql = " AND ".join(where_parts)
+    sql = f"""
+        SELECT inspection_management.id,
+               inspection_management.production_month,
+               inspection_management.production_day,
+               inspection_management.production_sequence,
+               inspection_management.product_cd,
+               inspection_management.product_name,
+               inspection_management.actual_production_quantity,
+               inspection_management.defect_qty,
+               inspection_management.mes_defect_by_item,
+               inspection_management.production_completed_check,
+               {mes_frag}
+               {inspector_select}
+               inspection_management.remarks,
+               inspection_management.created_at,
+               inspection_management.updated_at
+        FROM inspection_management
+        {inspector_join}
+        WHERE {where_sql}
+        ORDER BY inspection_management.production_day ASC,
+                 inspection_management.production_sequence ASC,
+                 inspection_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        msg = str(e).lower()
+        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            ) from e
+        for col in _INSPECTION_MGMT_MES_COLUMNS:
+            if col in msg:
+                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    sessions: list[dict[str, Any]] = []
+    summary_bucket: dict[str, Any] = {
+        "session_count": 0,
+        "completed_session_count": 0,
+        "sum_actual_qty": 0,
+        "sum_defect_qty": 0,
+        "sum_net_production_sec": 0,
+        "sum_paused_sec": 0,
+    }
+    daily_map: dict[str, dict[str, Any]] = {}
+    inspector_map: dict[str, dict[str, Any]] = {}
+    product_map: dict[str, dict[str, Any]] = {}
+    product_inspector_map: dict[str, dict[str, Any]] = {}
+    defect_item_map: dict[str, int] = {}
+
+    for row in rows:
+        item = dict(row)
+        raw_def = item.get("mes_defect_by_item")
+        defect_by_item: Optional[dict[str, int]] = None
+        if raw_def is not None and not isinstance(raw_def, dict):
+            try:
+                defect_by_item = json.loads(raw_def) if str(raw_def).strip() else None
+            except json.JSONDecodeError:
+                defect_by_item = None
+        elif isinstance(raw_def, dict):
+            defect_by_item = raw_def
+        item["mes_defect_by_item"] = defect_by_item
+
+        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+            v = item.get(k)
+            if isinstance(v, datetime):
+                item[k] = v.isoformat()
+        for k in ("production_month", "production_day"):
+            v = item.get(k)
+            if isinstance(v, date):
+                item[k] = v.isoformat()
+
+        actual_qty = int(item.get("actual_production_quantity") or 0)
+        defect_qty = int(item.get("defect_qty") or 0)
+        net_sec = _inspection_row_net_production_sec(item)
+        paused_sec = int(item.get("mes_paused_accum_sec") or 0)
+        is_completed = int(item.get("production_completed_check") or 0) == 1
+        day_key = str(item.get("production_day") or "")[:10]
+        inspector_id = item.get("mes_inspector_user_id")
+        inspector_key = str(inspector_id) if inspector_id is not None else "none"
+        inspector_name = (item.get("mes_inspector_name") or item.get("mes_inspector_username") or "").strip()
+        product_key = (item.get("product_cd") or "").strip() or "unknown"
+        product_name = (item.get("product_name") or "").strip()
+
+        session_row = {
+            **item,
+            "net_production_sec": net_sec,
+            "paused_sec": paused_sec,
+            "net_production_min": round(net_sec / 60) if net_sec > 0 else 0,
+            "paused_min": round(paused_sec / 60) if paused_sec > 0 else 0,
+            "efficiency_per_hour": _inspection_efficiency_per_hour(actual_qty, net_sec),
+            "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
+            "is_completed": is_completed,
+            "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+        }
+        sessions.append(session_row)
+
+        completed_inc = 1 if is_completed else 0
+        _merge_inspection_productivity_bucket(
+            summary_bucket,
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            net_sec=net_sec,
+            completed_count=completed_inc,
+        )
+        summary_bucket["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0) + paused_sec
+
+        if day_key:
+            if day_key not in daily_map:
+                daily_map[day_key] = {
+                    "day": day_key,
+                    "session_count": 0,
+                    "completed_session_count": 0,
+                    "sum_actual_qty": 0,
+                    "sum_defect_qty": 0,
+                    "sum_net_production_sec": 0,
+                }
+            _merge_inspection_productivity_bucket(
+                daily_map[day_key],
+                actual_qty=actual_qty,
+                defect_qty=defect_qty,
+                net_sec=net_sec,
+                completed_count=completed_inc,
+            )
+
+        if inspector_key not in inspector_map:
+            inspector_map[inspector_key] = {
+                "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
+                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_actual_qty": 0,
+                "sum_defect_qty": 0,
+                "sum_net_production_sec": 0,
+            }
+        _merge_inspection_productivity_bucket(
+            inspector_map[inspector_key],
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            net_sec=net_sec,
+            completed_count=completed_inc,
+        )
+
+        if product_key not in product_map:
+            product_map[product_key] = {
+                "product_cd": product_key,
+                "product_name": product_name or product_key,
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_actual_qty": 0,
+                "sum_defect_qty": 0,
+                "sum_net_production_sec": 0,
+            }
+        _merge_inspection_productivity_bucket(
+            product_map[product_key],
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            net_sec=net_sec,
+            completed_count=completed_inc,
+        )
+
+        if product_key not in product_inspector_map:
+            product_inspector_map[product_key] = {
+                "product_cd": product_key,
+                "product_name": product_name or product_key,
+                "inspectors": {},
+            }
+        pi_bucket = product_inspector_map[product_key]["inspectors"]
+        if inspector_key not in pi_bucket:
+            pi_bucket[inspector_key] = {
+                "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
+                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_actual_qty": 0,
+                "sum_defect_qty": 0,
+                "sum_net_production_sec": 0,
+            }
+        _merge_inspection_productivity_bucket(
+            pi_bucket[inspector_key],
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            net_sec=net_sec,
+            completed_count=completed_inc,
+        )
+
+        if defect_by_item:
+            for defect_cd, qty_raw in defect_by_item.items():
+                cd = str(defect_cd or "").strip()
+                if not cd:
+                    continue
+                qty = int(qty_raw or 0)
+                if qty <= 0:
+                    continue
+                defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty
+
+    summary = _finalize_inspection_productivity_bucket(summary_bucket)
+    summary["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0)
+    summary["sum_paused_min"] = round(summary["sum_paused_sec"] / 60) if summary["sum_paused_sec"] > 0 else 0
+    summary["sum_net_production_min"] = (
+        round(summary["sum_net_production_sec"] / 60) if summary["sum_net_production_sec"] > 0 else 0
+    )
+
+    daily = [_finalize_inspection_productivity_bucket(v) for v in sorted(daily_map.values(), key=lambda x: x["day"])]
+    by_inspector = sorted(
+        [_finalize_inspection_productivity_bucket(v) for v in inspector_map.values()],
+        key=lambda x: (-int(x.get("sum_actual_qty") or 0), str(x.get("inspector_name") or "")),
+    )
+    by_product = sorted(
+        [_finalize_inspection_productivity_bucket(v) for v in product_map.values()],
+        key=lambda x: (-int(x.get("sum_actual_qty") or 0), str(x.get("product_cd") or "")),
+    )
+    defect_by_item = sorted(
+        [{"defect_cd": cd, "qty": qty} for cd, qty in defect_item_map.items()],
+        key=lambda x: (-x["qty"], x["defect_cd"]),
+    )
+
+    by_product_inspector_ranking: list[dict[str, Any]] = []
+    for prod_key, prod_entry in product_inspector_map.items():
+        inspectors_raw = list(prod_entry.get("inspectors", {}).values())
+        inspectors_final: list[dict[str, Any]] = []
+        for inv in inspectors_raw:
+            fin = _finalize_inspection_productivity_bucket(dict(inv))
+            if fin.get("efficiency_per_hour") is not None:
+                inspectors_final.append(fin)
+        inspectors_final.sort(
+            key=lambda x: (
+                -(x.get("efficiency_per_hour") or 0),
+                -(x.get("sum_actual_qty") or 0),
+                str(x.get("inspector_name") or ""),
+            )
+        )
+        for rank_idx, inv in enumerate(inspectors_final, start=1):
+            inv["rank"] = rank_idx
+        prod_summary = product_map.get(prod_key) or {}
+        by_product_inspector_ranking.append(
+            {
+                "product_cd": prod_entry.get("product_cd") or prod_key,
+                "product_name": prod_entry.get("product_name") or prod_key,
+                "sum_actual_qty": int(prod_summary.get("sum_actual_qty") or 0),
+                "session_count": int(prod_summary.get("session_count") or 0),
+                "inspector_count": len(inspectors_raw),
+                "ranked_inspector_count": len(inspectors_final),
+                "inspectors": inspectors_final,
+                "top_inspector_name": inspectors_final[0]["inspector_name"] if inspectors_final else None,
+                "top_efficiency_per_hour": inspectors_final[0]["efficiency_per_hour"] if inspectors_final else None,
+            }
+        )
+    by_product_inspector_ranking.sort(
+        key=lambda x: (-int(x.get("sum_actual_qty") or 0), str(x.get("product_cd") or ""))
+    )
+
+    return {
+        "success": True,
+        "data": {
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+            "include_incomplete": include_incomplete,
+            "summary": summary,
+            "daily": daily,
+            "by_inspector": by_inspector,
+            "by_product": by_product,
+            "by_product_inspector_ranking": by_product_inspector_ranking,
+            "defect_by_item": defect_by_item,
+            "sessions": sessions,
+        },
+    }
 
 
 class CreateInspectionManagementBody(BaseModel):

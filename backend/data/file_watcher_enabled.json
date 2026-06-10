@@ -13,5 +13,9 @@
   "Material_Maruiti.csv": true,
   "Material_Nagoya.csv": true,
   "Material_JFE.csv": true,
-  "Material_Okajima.csv": true
+  "Material_Okajima.csv": true,
+  "PickingLog.csv": true,
+  "Partslog.csv": true,
+  "materialCutting.csv": true,
+  "excel_watcher_enabled": false
 }

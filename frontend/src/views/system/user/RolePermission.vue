@@ -121,12 +121,13 @@
               </template>
               <div class="tab-content">
                 <el-tree
-                  :key="selectedRole.id"
+                  :key="`menu-tree-${selectedRole.id}-${menuTreeRenderKey}`"
                   v-loading="menuTreeLoading"
                   :data="menuTree"
                   show-checkbox
+                  check-strictly
                   node-key="id"
-                  :default-checked-keys="selectedRole.menu_permissions"
+                  :default-checked-keys="menuTreeCheckedKeys"
                   :props="{ children: 'children', label: 'label' }"
                   ref="menuTreeRef"
                   class="permission-tree"
@@ -287,7 +288,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Key, List, Edit, Delete, Setting, Check, Menu, Operation, DataAnalysis, InfoFilled, Select, User, OfficeBuilding, HomeFilled, Grid } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
-import type { Role, RoleListItem, MenuTreeNode, OperationPermission } from '@/api/system'
+import type { Role, RoleListItem, OperationPermission } from '@/api/system'
+import {
+  buildPermissionMenuTree,
+  collectPermissionTreeIds,
+  menuIdsToTreeCheckedKeys,
+  type PermissionMenuTreeNode,
+} from '@/composables/usePermissionMenuTree'
 
 const { t } = useI18n()
 
@@ -343,7 +350,13 @@ const roleFormRef = ref<FormInstance>()
 
 const roleList = ref<RoleListItem[]>([])
 const selectedRole = ref<Role | null>(null)
-const menuTree = ref<MenuTreeNode[]>([])
+const menuTree = ref<PermissionMenuTreeNode[]>([])
+const menuTreeRenderKey = ref(0)
+
+const menuTreeCheckedKeys = computed(() => {
+  if (!selectedRole.value || menuTree.value.length === 0) return []
+  return menuIdsToTreeCheckedKeys(selectedRole.value.menu_permissions, menuTree.value)
+})
 const departmentOptions = ref<{ id: number; name: string }[]>([])
 const operationPermissions = ref<OperationPermission[]>([])
 
@@ -367,8 +380,10 @@ async function fetchRoles() {
 async function fetchMenuTree() {
   menuTreeLoading.value = true
   try {
-    const res = (await systemApi.getMenuTree()) as unknown as MenuTreeNode[]
-    menuTree.value = Array.isArray(res) ? res : []
+    const res = (await systemApi.getMenus()) as unknown as { id: number; code: string }[]
+    const list = Array.isArray(res) ? res : []
+    const codeToId = new Map(list.map((m) => [m.code, m.id]))
+    menuTree.value = buildPermissionMenuTree(codeToId)
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgMenuError'))
   } finally {
@@ -409,6 +424,7 @@ async function handleRoleSelect(row: RoleListItem | null) {
     dataScope.value = role.data_scope
     customDepartments.value = role.custom_departments || []
     operationPermissions.value = buildOperationPermissionsFromRole(role)
+    menuTreeRenderKey.value += 1
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgRoleDetailError'))
     selectedRole.value = null
@@ -469,9 +485,9 @@ const handleDeleteRole = async (row: RoleListItem) => {
 
 const handleSavePermission = async () => {
   if (!selectedRole.value) return
-  const checkedKeys = menuTreeRef.value?.getCheckedKeys() ?? []
-  const halfCheckedKeys = menuTreeRef.value?.getHalfCheckedKeys() ?? []
-  const menu_permissions = [...checkedKeys, ...halfCheckedKeys]
+  const checkedKeys = (menuTreeRef.value?.getCheckedKeys(false) ?? []) as number[]
+  const validIds = collectPermissionTreeIds(menuTree.value)
+  const menu_permissions = checkedKeys.filter((id) => validIds.has(id))
   saveLoading.value = true
   try {
     await systemApi.updateRole(selectedRole.value.id, {
@@ -484,6 +500,7 @@ const handleSavePermission = async () => {
     const role = (await systemApi.getRole(selectedRole.value.id)) as unknown as Role
     selectedRole.value = role
     operationPermissions.value = buildOperationPermissionsFromRole(role)
+    menuTreeRenderKey.value += 1
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.detail || t('systemUser.role.msgSaveFailed'))
   } finally {

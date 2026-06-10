@@ -3,6 +3,15 @@ import { ref, computed } from 'vue'
 import { disconnectWebSocket } from '@/modules/websocket/utils'
 import * as authApi from '@/modules/auth/api'
 
+export interface OperationPermission {
+  module: string
+  can_create: boolean
+  can_edit: boolean
+  can_delete: boolean
+  can_export: boolean
+  can_approve: boolean
+}
+
 export interface User {
   id: number
   username: string
@@ -10,6 +19,8 @@ export interface User {
   full_name?: string
   role: string
   permissions: string[]
+  menu_codes?: string[]
+  operation_permissions?: OperationPermission[]
   is_active?: boolean
   department_id?: number | null
   department_name?: string | null
@@ -122,6 +133,13 @@ export const useUserStore = defineStore(
       return user.value?.permissions.includes(permission) ?? false
     }
 
+    const refreshUser = async () => {
+      const data = await authApi.getUserInfo()
+      const rememberMe = localStorage.getItem(REMEMBER_ME_KEY) === 'true'
+      setUser(data, rememberMe)
+      return data
+    }
+
     // 初期化
     initFromStorage()
 
@@ -134,6 +152,7 @@ export const useUserStore = defineStore(
       logout,
       clearLocalSession,
       hasPermission,
+      refreshUser,
       initFromStorage,
     }
   }

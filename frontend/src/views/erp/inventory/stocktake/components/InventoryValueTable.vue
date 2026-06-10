@@ -669,7 +669,8 @@ import { downloadExcelFromJson } from '@/utils/excelExport'
 import { inventoryValueApi } from '@/api/inventoryValue'
 import { getProcessList } from '@/api/master/processMaster'
 import { getProductList } from '@/api/master/productMaster'
-import { useUserStore } from '@/modules/auth/stores/user'
+import { useOperationPermission } from '@/composables/useOperationPermission'
+import { OPERATION_MODULE_INVENTORY } from '@/constants/operationModules'
 
 // NOTE: inventoryValueApi は暫定プレースホルダ実装のため、厳密型を避ける。
 type TableRow = any
@@ -707,11 +708,9 @@ interface Emits {
 
 const emit = defineEmits<Emits>()
 
-// 用户权限
-const userStore = useUserStore()
-const hasEditPermission = computed(() => {
-  return userStore.hasPermission('inventory_value_edit')
-})
+// 在庫管理モジュールの操作権限
+const { canEdit: canEditInventory } = useOperationPermission(OPERATION_MODULE_INVENTORY)
+const hasEditPermission = canEditInventory
 
 const isProductTab = computed(() => props.itemType === '製品')
 

@@ -97,3 +97,100 @@ export function patchInspectionManagement(
     message?: string
   }>
 }
+
+export interface InspectionProductivityBucket {
+  session_count?: number
+  completed_session_count?: number
+  sum_actual_qty?: number
+  sum_defect_qty?: number
+  sum_net_production_sec?: number
+  sum_net_production_min?: number
+  sum_paused_sec?: number
+  sum_paused_min?: number
+  defect_rate_percent?: number | null
+  efficiency_per_hour?: number | null
+}
+
+export interface InspectionProductivityDailyRow extends InspectionProductivityBucket {
+  day: string
+}
+
+export interface InspectionProductivityInspectorRow extends InspectionProductivityBucket {
+  inspector_user_id?: number | null
+  inspector_name?: string
+  rank?: number
+}
+
+export interface InspectionProductivityProductInspectorRanking {
+  product_cd: string
+  product_name?: string
+  sum_actual_qty?: number
+  session_count?: number
+  inspector_count?: number
+  ranked_inspector_count?: number
+  top_inspector_name?: string | null
+  top_efficiency_per_hour?: number | null
+  inspectors: InspectionProductivityInspectorRow[]
+}
+
+export interface InspectionProductivityProductRow extends InspectionProductivityBucket {
+  product_cd?: string
+  product_name?: string
+}
+
+export interface InspectionProductivityDefectRow {
+  defect_cd: string
+  qty: number
+}
+
+export interface InspectionProductivitySessionRow extends InspectionManagementListRow {
+  net_production_sec?: number
+  paused_sec?: number
+  net_production_min?: number
+  paused_min?: number
+  efficiency_per_hour?: number | null
+  defect_rate_percent?: number | null
+  is_completed?: boolean
+  inspector_display_name?: string
+  mes_inspector_name?: string | null
+  mes_inspector_username?: string | null
+}
+
+export interface InspectionProductivityAnalysisData {
+  start_date: string
+  end_date: string
+  include_incomplete: boolean
+  summary: InspectionProductivityBucket
+  daily: InspectionProductivityDailyRow[]
+  by_inspector: InspectionProductivityInspectorRow[]
+  by_product: InspectionProductivityProductRow[]
+  by_product_inspector_ranking: InspectionProductivityProductInspectorRanking[]
+  defect_by_item: InspectionProductivityDefectRow[]
+  sessions: InspectionProductivitySessionRow[]
+}
+
+export interface InspectionProductivityAnalysisResponse {
+  success?: boolean
+  data?: InspectionProductivityAnalysisData
+  message?: string
+}
+
+export function fetchInspectionProductivityAnalysis(params: {
+  start_date: string
+  end_date: string
+  mes_inspector_user_id?: number | null
+  product_cd?: string | null
+  include_incomplete?: boolean
+  limit?: number
+}): Promise<InspectionProductivityAnalysisResponse> {
+  return request.get('/api/plan/inspection-management/productivity-analysis', {
+    params: {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      product_cd: params.product_cd || undefined,
+      include_incomplete: params.include_incomplete ? true : undefined,
+      limit: params.limit,
+    },
+  }) as Promise<InspectionProductivityAnalysisResponse>
+}

@@ -1,10 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/modules/auth/stores/user'
-import { getUserInfo } from '@/modules/auth/api'
+import { canAccessPath } from '@/utils/menuPermissions'
 import { finRoutes } from './finRoutes'
 import { finCostingRoutes } from './finCostingRoutes'
 import { mesInstructionRoutes } from './mesInstructionRoutes'
+import { mesActualAnalysisRoutes } from './mesActualAnalysisRoutes'
 
 const routes: RouteRecordRaw[] = [
   // ベースページ（layouts/pages で管理）
@@ -58,6 +59,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Dashboard',
         component: () => import('@/layouts/pages/DashboardHome.vue'),
         meta: { title: 'ダッシュボード', requiresAuth: true },
+      },
+      {
+        path: 'access-denied',
+        name: 'AccessDenied',
+        component: () => import('@/layouts/pages/AccessDenied.vue'),
+        meta: { title: 'アクセス拒否', requiresAuth: true },
       },
       {
         path: 'account/profile',
@@ -195,7 +202,6 @@ const routes: RouteRecordRaw[] = [
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-schedules', name: 'ProductionPlanScheduleView', component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'), meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true } },
-      { path: 'erp/production/forming-daily-plan', name: 'FormingDailyPlanSummary', component: () => import('@/views/erp/production/planning/FormingDailyPlanSummary.vue'), meta: { title: '工程別計画試算', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/process-machine-plan', name: 'ProcessMachinePlanView', component: () => import('@/views/erp/production/planning/ProcessMachinePlanView.vue'), meta: { title: '工程別設備別計画', group: '生産管理 > 生産計画', requiresAuth: true } },
       // 生産指示は MES（views/mes/productionInstruction）。旧パスは mesInstructionRoutes でリダイレクト。
       { path: 'erp/production/actual-management', name: 'ProductionActualManagement', component: () => import('@/views/erp/production/actual/ProductionActualManagement.vue'), meta: { title: '生産実績管理', group: '生産管理 > 生産実績', requiresAuth: true } },
@@ -258,6 +264,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'mes/actualDataCollection/plating', name: 'MesActualDataCollectionPlating', component: () => import('@/views/mes/actualDataCollection/plating/PlatingActualDataCollection.vue'), meta: { title: 'メッキ実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/welding', name: 'MesActualDataCollectionWelding', component: () => import('@/views/mes/actualDataCollection/welding/WeldingActualDataCollection.vue'), meta: { title: '溶接実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/inspection', name: 'MesActualDataCollectionInspection', component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollection.vue'), meta: { title: '検査実績収集', group: 'MES > 実績収集', requiresAuth: true } },
+      ...mesActualAnalysisRoutes,
       // ========== マスタ管理 ==========
       { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },
       { path: 'master/product', name: 'ProductList', component: () => import('@/views/master/product/ProductList.vue'), meta: { title: '製品マスタ', requiresAuth: true } },
@@ -332,8 +339,11 @@ router.beforeEach(async (to, from, next) => {
     } else {
       // 認証済みの場合、トークンの有効性を確認（単一デバイスログイン対応）
       try {
-        await getUserInfo()
-        // トークンが有効な場合、続行
+        await userStore.refreshUser()
+        if (!canAccessPath(userStore.user, to.path)) {
+          next('/access-denied')
+          return
+        }
         next()
       } catch (error: any) {
         // 他のデバイスでログインされた場合

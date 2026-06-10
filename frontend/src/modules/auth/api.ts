@@ -16,6 +16,8 @@ export interface LoginResponse {
     full_name?: string
     role: string
     permissions: string[]
+    menu_codes?: string[]
+    operation_permissions?: import('@/modules/auth/stores/user').OperationPermission[]
     is_active?: boolean
     department_id?: number | null
     department_name?: string | null

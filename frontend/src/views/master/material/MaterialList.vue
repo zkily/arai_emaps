@@ -45,10 +45,17 @@
           <el-button text @click="showColumnSettings" :icon="Setting" class="column-settings-btn">
             {{ t('master.material.columnSettings') }}
           </el-button>
-          <el-button text @click="showPrintSettings" :icon="Printer" class="print-btn">
+          <el-button
+            v-if="canExport"
+            text
+            @click="showPrintSettings"
+            :icon="Printer"
+            class="print-btn"
+          >
             {{ t('master.material.print') }}
           </el-button>
           <el-button
+            v-if="canExport"
             type="warning"
             @click="generateAndPrintQRCodes"
             :icon="Printer"
@@ -57,6 +64,7 @@
             {{ t('master.material.qrPrint') }}
           </el-button>
           <el-button
+            v-if="canExport"
             type="success"
             @click="exportToCSV"
             :icon="Download"
@@ -66,6 +74,7 @@
             {{ t('master.material.csvExport') }}
           </el-button>
           <el-button
+            v-if="canEdit"
             type="primary"
             @click="calcSinglePrice"
             :icon="Operation"
@@ -75,7 +84,13 @@
           >
             単価計算
           </el-button>
-          <el-button type="primary" @click="openForm()" :icon="Plus" class="add-material-btn">
+          <el-button
+            v-if="canCreate"
+            type="primary"
+            @click="openForm()"
+            :icon="Plus"
+            class="add-material-btn"
+          >
             {{ t('master.material.addMaterial') }}
           </el-button>
         </div>
@@ -400,6 +415,7 @@
               v-model="row.status"
               :active-value="1"
               :inactive-value="0"
+              :disabled="!canEdit"
               @change="toggleStatus(row)"
               :loading="row.statusLoading"
               inline-prompt
@@ -561,11 +577,25 @@
             {{ formatDateTime(row.updated_at) }}
           </template>
         </el-table-column>
-        <el-table-column v-if="showActions" label="操作" fixed="right" width="110" align="center">
+        <el-table-column
+          v-if="showActions && (canEdit || canDelete)"
+          label="操作"
+          fixed="right"
+          width="110"
+          align="center"
+        >
           <template #default="{ row }">
             <div class="action-buttons-table">
-              <el-button size="small" type="primary" link @click="openForm(row)">編集</el-button>
-              <el-button size="small" type="danger" link @click="deleteMaterial(row.id)">
+              <el-button v-if="canEdit" size="small" type="primary" link @click="openForm(row)">
+                編集
+              </el-button>
+              <el-button
+                v-if="canDelete"
+                size="small"
+                type="danger"
+                link
+                @click="deleteMaterial(row.id)"
+              >
                 削除
               </el-button>
             </div>
@@ -796,8 +826,11 @@ import {
   exportMaterialToCSV,
 } from '@/api/master/materialMaster'
 import type { Material as MaterialOrigin } from '@/types/master'
+import { useOperationPermission } from '@/composables/useOperationPermission'
+import { OPERATION_MODULE_INVENTORY } from '@/constants/operationModules'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete, canExport } = useOperationPermission(OPERATION_MODULE_INVENTORY)
 
 // Material タイプを拡張し、statusLoading フィールドを追加
 interface Material extends MaterialOrigin {
@@ -1355,11 +1388,14 @@ function fetchList() {
 }
 
 function openForm(row: Material | null = null) {
+  if (row && !canEdit.value) return
+  if (!row && !canCreate.value) return
   editId.value = row && row.id != null ? row.id : null
   formVisible.value = true
 }
 
 async function deleteMaterial(id: number) {
+  if (!canDelete.value) return
   try {
     await ElMessageBox.confirm('この材料を削除しますか？', '確認', {
       type: 'warning',
@@ -1375,6 +1411,7 @@ async function deleteMaterial(id: number) {
 }
 
 async function toggleStatus(row: Material) {
+  if (!canEdit.value) return
   row.statusLoading = true
   try {
     await updateMaterial({ ...row })

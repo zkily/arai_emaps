@@ -151,6 +151,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, description="パスワード")
+    role_id: int = Field(..., description="ロールID（必須）")
 
 
 class UserUpdate(BaseModel):

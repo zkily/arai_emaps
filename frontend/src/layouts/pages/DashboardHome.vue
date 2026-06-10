@@ -1,5 +1,15 @@
 <template>
   <div class="dashboard-home">
+    <el-alert
+      v-if="showMenuAccessWarning"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="menu-access-alert"
+      title="メニュー権限が未設定です"
+      description="管理者にロールとメニュー権限の割り当てを依頼してください。現在はダッシュボードのみ利用できます。"
+    />
+
     <!-- Welcome Banner -->
     <div class="welcome-banner">
       <div class="welcome-banner__mesh" aria-hidden="true" />
@@ -70,7 +80,7 @@
       </div>
       <div class="quick-grid">
         <router-link
-          v-for="item in quickAccessItems"
+          v-for="item in visibleQuickAccessItems"
           :key="item.path"
           :to="item.path"
           class="quick-card"
@@ -105,6 +115,7 @@ import { getInventoryStats } from '@/api/erp/inventory'
 import { getActiveProductCount } from '@/api/master/productMaster'
 import type { LocaleType } from '@/i18n'
 import { formatInteger } from '@/utils/formatInteger'
+import { canAccessPath, isAdminUser } from '@/utils/menuPermissions'
 import type { InventoryStats } from '@/types/erp/inventory'
 import {
   UserFilled, Sell, Box, Document, Clock, List, Grid,
@@ -113,6 +124,11 @@ import {
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
+
+const showMenuAccessWarning = computed(() => {
+  const user = userStore.user
+  return !!user && !isAdminUser(user) && (user.menu_codes?.length ?? 0) === 0
+})
 
 const currentDateTime = ref(dayjs().format('YYYY/MM/DD HH:mm'))
 let timer: number | null = null
@@ -149,6 +165,10 @@ const quickAccessItems = ref([
   { path: '/mes/productionInstruction/forming', titleKey: 'formingInstruction', descKey: 'formingInstructionDesc', icon: markRaw(Box), bg: 'linear-gradient(135deg, #06b6d4, #0891b2)' },
   { path: '/mes/productionInstruction/welding', titleKey: 'weldingInstruction', descKey: 'weldingInstructionDesc', icon: markRaw(Grid), bg: 'linear-gradient(135deg, #6366f1, #4f46e5)' },
 ])
+
+const visibleQuickAccessItems = computed(() =>
+  quickAccessItems.value.filter((item) => canAccessPath(userStore.user, item.path)),
+)
 
 const dailyOrderRaw = ref<DailyConfirmedSeries | null>(null)
 const dailyOrderChartEl = ref<HTMLDivElement | null>(null)
@@ -398,6 +418,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.menu-access-alert {
+  margin-bottom: 12px;
+}
+
 .dashboard-home {
   padding: 16px;
   background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);

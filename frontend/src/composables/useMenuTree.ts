@@ -44,3 +44,5 @@ function buildTree(rootCode: string): MenuTreeNode | null {
 export function useMenuTree(rootCode: string): MenuTreeNode | null {
   return buildTree(rootCode)
 }
+
+export { buildTree }

@@ -18,6 +18,7 @@ export interface LoginResponse {
     full_name?: string
     role: string
     permissions: string[]
+    menu_codes?: string[]
     is_active?: boolean
     department_id?: number | null
   }

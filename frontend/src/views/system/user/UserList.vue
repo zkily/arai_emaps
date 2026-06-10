@@ -68,10 +68,16 @@
         </div>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" :icon="Plus" @click="handleAdd" class="btn-add">
+        <el-button
+          v-if="canCreate"
+          type="primary"
+          :icon="Plus"
+          @click="handleAdd"
+          class="btn-add"
+        >
           <span>{{ t('systemUser.user.addUser') }}</span>
         </el-button>
-        <el-button :icon="Printer" @click="handlePrint" class="btn-print">
+        <el-button v-if="canExport" :icon="Printer" @click="handlePrint" class="btn-print">
           {{ t('systemUser.user.print') }}
         </el-button>
       </div>
@@ -191,7 +197,7 @@
         >
           <template #default="{ row }">
             <div class="action-cell">
-              <el-tooltip :content="t('systemUser.user.edit')" placement="top">
+              <el-tooltip v-if="canEdit" :content="t('systemUser.user.edit')" placement="top">
                 <el-button
                   size="small"
                   type="primary"
@@ -201,6 +207,7 @@
                 />
               </el-tooltip>
               <el-tooltip
+                v-if="canEdit"
                 :content="
                   row.status === 'locked' ? t('systemUser.user.unlock') : t('systemUser.user.lock')
                 "
@@ -216,7 +223,7 @@
                 />
                 <el-button v-else size="small" circle :icon="Lock" disabled class="btn-disabled" />
               </el-tooltip>
-              <el-tooltip :content="t('systemUser.user.resetPwd')" placement="top">
+              <el-tooltip v-if="canEdit" :content="t('systemUser.user.resetPwd')" placement="top">
                 <el-button
                   size="small"
                   type="info"
@@ -250,88 +257,168 @@
       </div>
     </div>
 
-    <!-- Modern Dialog -->
+    <!-- User form dialog -->
     <el-dialog
       v-model="dialogVisible"
-      :title="dialogTitle"
-      width="520px"
+      width="500px"
       destroy-on-close
-      class="modern-dialog"
+      class="user-form-dialog"
       :close-on-click-modal="false"
+      align-center
     >
-      <el-form
-        :model="userForm"
-        :rules="formRules"
-        ref="formRef"
-        label-width="100px"
-        label-position="left"
-      >
-        <el-form-item :label="t('systemUser.user.formUsername')" prop="username">
-          <el-input
-            v-model="userForm.username"
-            :placeholder="t('systemUser.user.formUsernamePlaceholder')"
-            :disabled="isEdit"
-          />
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.formFullName')" prop="full_name">
-          <el-input
-            v-model="userForm.full_name"
-            :placeholder="t('systemUser.user.formFullNamePlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.formEmail')" prop="email">
-          <el-input
-            v-model="userForm.email"
-            type="email"
-            :placeholder="t('systemUser.user.formEmailPlaceholder')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.formDept')" prop="department_id">
-          <el-select
-            v-model="userForm.department_id"
-            :placeholder="t('systemUser.user.formDeptPlaceholder')"
-            clearable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="org in departmentOptions"
-              :key="org.id"
-              :label="org.name"
-              :value="org.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.formRole')" prop="role_id">
-          <el-select
-            v-model="userForm.role_id"
-            :placeholder="t('systemUser.user.formRolePlaceholder')"
-            style="width: 100%"
-          >
-            <el-option v-for="r in roleOptions" :key="r.id" :label="r.name" :value="r.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.form2FA')">
-          <el-switch
-            v-model="userForm.two_factor_enabled"
-            :active-text="t('systemUser.user.form2FAOn')"
-            :inactive-text="t('systemUser.user.form2FAOff')"
-          />
-        </el-form-item>
-        <el-form-item :label="t('systemUser.user.formPassword')" prop="password" v-if="!isEdit">
-          <el-input
-            v-model="userForm.password"
-            type="password"
-            show-password
-            :placeholder="t('systemUser.user.formPasswordPlaceholder')"
-          />
-        </el-form-item>
-      </el-form>
+      <template #header>
+        <div class="ufd-header">
+          <div class="ufd-header-glow" />
+          <div class="ufd-header-body">
+            <div class="ufd-header-icon">
+              <el-icon :size="22"><User /></el-icon>
+            </div>
+            <div>
+              <h3 class="ufd-title">{{ dialogTitle }}</h3>
+              <p class="ufd-subtitle">
+                {{
+                  isEdit
+                    ? t('systemUser.user.formEditSubtitle')
+                    : t('systemUser.user.formAddSubtitle')
+                }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div class="ufd-body">
+        <el-form
+          :model="userForm"
+          :rules="formRules"
+          ref="formRef"
+          label-position="top"
+          class="ufd-form"
+        >
+          <div class="ufd-section ufd-section--basic">
+            <div class="ufd-section-head">
+              <el-icon><User /></el-icon>
+              <span>{{ t('systemUser.user.formSectionBasic') }}</span>
+            </div>
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item :label="t('systemUser.user.formUsername')" prop="username">
+                  <el-input
+                    v-model="userForm.username"
+                    :placeholder="t('systemUser.user.formUsernamePlaceholder')"
+                    :disabled="isEdit"
+                    :prefix-icon="User"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="t('systemUser.user.formFullName')" prop="full_name">
+                  <el-input
+                    v-model="userForm.full_name"
+                    :placeholder="t('systemUser.user.formFullNamePlaceholder')"
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item :label="t('systemUser.user.formEmail')" prop="email">
+              <el-input
+                v-model="userForm.email"
+                type="email"
+                :placeholder="t('systemUser.user.formEmailPlaceholder')"
+              />
+            </el-form-item>
+          </div>
+
+          <div class="ufd-section ufd-section--access">
+            <div class="ufd-section-head">
+              <el-icon><Key /></el-icon>
+              <span>{{ t('systemUser.user.formSectionAccess') }}</span>
+            </div>
+            <el-row :gutter="10">
+              <el-col :span="12">
+                <el-form-item :label="t('systemUser.user.formDept')" prop="department_id">
+                  <el-select
+                    v-model="userForm.department_id"
+                    :placeholder="t('systemUser.user.formDeptPlaceholder')"
+                    clearable
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="org in departmentOptions"
+                      :key="org.id"
+                      :label="org.name"
+                      :value="org.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item :label="t('systemUser.user.formRole')" prop="role_id">
+                  <el-select
+                    v-model="userForm.role_id"
+                    :placeholder="t('systemUser.user.formRolePlaceholder')"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="r in roleOptions"
+                      :key="r.id"
+                      :label="r.name"
+                      :value="r.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </div>
+
+          <div class="ufd-section ufd-section--security">
+            <div class="ufd-section-head">
+              <el-icon><Lock /></el-icon>
+              <span>{{ t('systemUser.user.formSectionSecurity') }}</span>
+            </div>
+            <div class="ufd-2fa-row">
+              <div class="ufd-2fa-text">
+                <span class="ufd-2fa-label">{{ t('systemUser.user.form2FA') }}</span>
+                <span class="ufd-2fa-hint">{{ t('systemUser.user.form2FAHint') }}</span>
+              </div>
+              <el-switch
+                v-model="userForm.two_factor_enabled"
+                :active-text="t('systemUser.user.form2FAOn')"
+                :inactive-text="t('systemUser.user.form2FAOff')"
+                inline-prompt
+              />
+            </div>
+            <el-form-item
+              v-if="!isEdit"
+              :label="t('systemUser.user.formPassword')"
+              prop="password"
+              class="ufd-password-item"
+            >
+              <el-input
+                v-model="userForm.password"
+                type="password"
+                show-password
+                :placeholder="t('systemUser.user.formPasswordPlaceholder')"
+                :prefix-icon="Lock"
+              />
+            </el-form-item>
+          </div>
+        </el-form>
+      </div>
+
       <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="dialogVisible = false">{{ t('systemUser.user.cancel') }}</el-button>
-          <el-button type="primary" @click="handleSubmit" :loading="submitting">
+        <div class="ufd-footer">
+          <el-button class="ufd-btn-cancel" @click="dialogVisible = false">
+            {{ t('systemUser.user.cancel') }}
+          </el-button>
+          <el-button
+            type="primary"
+            class="ufd-btn-submit"
+            @click="handleSubmit"
+            :loading="submitting"
+          >
             <el-icon v-if="!submitting"><Check /></el-icon>
-            {{ t('systemUser.user.save') }}
+            {{ isEdit ? t('systemUser.user.update') : t('systemUser.user.formRegister') }}
           </el-button>
         </div>
       </template>
@@ -409,9 +496,12 @@ import type { FormInstance, FormRules } from 'element-plus'
 import * as systemApi from '@/api/system'
 import type { UserListItem, PaginatedUserResponse } from '@/api/system'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { useOperationPermission } from '@/composables/useOperationPermission'
+import { OPERATION_MODULE_SYSTEM } from '@/constants/operationModules'
 
 const { t } = useI18n()
 const userStore = useUserStore()
+const { canCreate, canEdit, canExport } = useOperationPermission(OPERATION_MODULE_SYSTEM)
 
 // Computed stats for header
 const activeUserCount = computed(() => userList.value.filter((u) => u.status === 'active').length)
@@ -1236,49 +1326,274 @@ onMounted(() => {
   color: #1e293b;
 }
 
-/* Dialog Styles */
-.modern-dialog :deep(.el-dialog) {
-  border-radius: 16px;
+/* User form dialog */
+.user-form-dialog :deep(.el-dialog) {
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow:
+    0 20px 50px rgba(102, 126, 234, 0.22),
+    0 8px 24px rgba(15, 23, 42, 0.12);
+  animation: ufd-dialog-in 0.32s cubic-bezier(0.34, 1.4, 0.64, 1);
 }
 
-.modern-dialog :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 16px 20px;
+@keyframes ufd-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.user-form-dialog :deep(.el-dialog__header) {
+  padding: 0;
   margin: 0;
 }
 
-.modern-dialog :deep(.el-dialog__title) {
-  color: white;
+.user-form-dialog :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
+.user-form-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: #fff;
+  font-size: 16px;
+}
+
+.user-form-dialog :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.user-form-dialog :deep(.el-dialog__footer) {
+  padding: 0;
+}
+
+.ufd-header {
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  overflow: hidden;
+}
+
+.ufd-header-glow {
+  position: absolute;
+  top: -40px;
+  right: -20px;
+  width: 140px;
+  height: 140px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.28) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.ufd-header-body {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.ufd-header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.ufd-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.ufd-subtitle {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ufd-body {
+  padding: 10px 12px 6px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.ufd-form :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.ufd-form :deep(.el-form-item__label) {
+  font-size: 11px;
   font-weight: 600;
+  color: #475569;
+  padding-bottom: 2px;
+  line-height: 1.2;
 }
 
-.modern-dialog :deep(.el-dialog__headerbtn .el-dialog__close) {
-  color: white;
+.ufd-form :deep(.el-input__wrapper),
+.ufd-form :deep(.el-select__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
-.modern-dialog :deep(.el-dialog__body) {
-  padding: 24px;
+.ufd-form :deep(.el-input__wrapper:hover),
+.ufd-form :deep(.el-select__wrapper:hover) {
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.14);
 }
 
-.modern-dialog :deep(.el-form-item) {
-  margin-bottom: 16px;
+.ufd-form :deep(.el-input__wrapper.is-focus),
+.ufd-form :deep(.el-select__wrapper.is-focused) {
+  box-shadow:
+    0 0 0 2px rgba(102, 126, 234, 0.2),
+    0 4px 12px rgba(102, 126, 234, 0.15);
 }
 
-.modern-dialog :deep(.el-form-item__label) {
-  font-weight: 500;
+.ufd-section {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 12px 4px;
+  margin-bottom: 8px;
+  border: 1px solid #e8edf5;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  transition:
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+  animation: ufd-section-in 0.35s ease backwards;
+}
+
+.ufd-section--basic {
+  animation-delay: 0.04s;
+  border-left: 3px solid #667eea;
+}
+
+.ufd-section--access {
+  animation-delay: 0.1s;
+  border-left: 3px solid #0ea5e9;
+}
+
+.ufd-section--security {
+  animation-delay: 0.16s;
+  border-left: 3px solid #f59e0b;
+  margin-bottom: 4px;
+}
+
+@keyframes ufd-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ufd-section:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+.ufd-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ufd-section--basic .ufd-section-head {
+  color: #667eea;
+}
+
+.ufd-section--access .ufd-section-head {
+  color: #0ea5e9;
+}
+
+.ufd-section--security .ufd-section-head {
+  color: #d97706;
+}
+
+.ufd-2fa-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  background: #fffbeb;
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+}
+
+.ufd-2fa-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ufd-2fa-label {
+  font-size: 12px;
+  font-weight: 600;
   color: #334155;
 }
 
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+.ufd-2fa-hint {
+  font-size: 10px;
+  color: #94a3b8;
 }
 
-.dialog-footer :deep(.el-button) {
+.ufd-password-item {
+  margin-bottom: 4px !important;
+}
+
+.ufd-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fff;
+  border-top: 1px solid #e8edf5;
+}
+
+.ufd-btn-cancel {
   border-radius: 8px;
-  padding: 10px 20px;
+  padding: 8px 16px;
+  transition: all 0.2s ease;
+}
+
+.ufd-btn-cancel:hover {
+  transform: translateY(-1px);
+}
+
+.ufd-btn-submit {
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.35);
+  transition: all 0.22s ease;
+}
+
+.ufd-btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(102, 126, 234, 0.45);
 }
 
 /* Responsive Design */
