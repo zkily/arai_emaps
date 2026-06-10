@@ -15,13 +15,15 @@
     </aside>
 
     <!-- 右侧内容区 -->
-    <div class="layout-main">
+    <div ref="layoutMainRef" class="layout-main">
       <!-- 顶部区域：头部 + 标签页 -->
       <header class="layout-header">
         <HeaderBar
           :is-mobile="isMobile"
           :sidebar-open="!isCollapsed"
+          :ai-panel-open="aiPanelVisible"
           @toggle-sidebar="isCollapsed = !isCollapsed"
+          @toggle-ai="toggleAiPanel"
         />
         <TabsNav />
       </header>
@@ -36,6 +38,13 @@
           </transition>
         </router-view>
       </main>
+
+      <AiAssistantPanel
+        v-model:visible="aiPanelVisible"
+        :boundary="layoutMainRef"
+        :initial-x="aiPanelX"
+        :initial-y="aiPanelY"
+      />
     </div>
   </div>
 </template>
@@ -47,6 +56,7 @@ import { useTabsStore } from '@/stores/tabs'
 import SidebarMenu from '@/components/layout/SidebarMenu.vue'
 import HeaderBar from '@/components/layout/HeaderBar.vue'
 import TabsNav from '@/components/layout/TabsNav.vue'
+import AiAssistantPanel from '@/components/ai/AiAssistantPanel.vue'
 
 const MOBILE_BREAKPOINT = 768
 /** 平板幅（与项目内 1024px 断点一致）；触控大屏上限 */
@@ -60,6 +70,14 @@ const tabsStore = useTabsStore()
 const isCollapsed = ref(false)
 const isMobile = ref(false)
 const isTablet = ref(false)
+const layoutMainRef = ref<HTMLElement | null>(null)
+const aiPanelVisible = ref(false)
+const aiPanelX = ref(24)
+const aiPanelY = ref(96)
+
+function toggleAiPanel() {
+  aiPanelVisible.value = !aiPanelVisible.value
+}
 
 let tabletTouchMq: MediaQueryList | null = null
 
@@ -156,6 +174,7 @@ watch(
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
+  position: relative;
 }
 
 .layout-header {

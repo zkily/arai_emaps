@@ -87,6 +87,14 @@ class Settings(BaseSettings):
     # フロント「api-config.js」の window.__API_BASE__（空＝相対パスで同一オリジンの /api を利用）
     PUBLIC_API_BASE: str = ""
 
+    # AI / Ollama（ローカル LLM）
+    AI_ENABLED: bool = True
+    OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
+    OLLAMA_MODEL: str = "qwen2.5:7b"
+    OLLAMA_TIMEOUT_SECONDS: int = 120
+    AI_MAX_TOOL_ROUNDS: int = 8
+    AI_QUERY_MAX_LIMIT: int = 100
+
     # ログ設定
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "logs/app.log"

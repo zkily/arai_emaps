@@ -135,6 +135,22 @@
           </span>
         </div>
 
+        <div
+          class="header-action header-action--ai"
+          :class="{ 'header-action--ai-active': aiPanelOpen }"
+          role="button"
+          tabindex="0"
+          :title="t('aiAssistant.openTitle')"
+          :aria-label="t('aiAssistant.openTitle')"
+          @click="$emit('toggle-ai')"
+          @keydown.enter.prevent="$emit('toggle-ai')"
+        >
+          <span class="header-ai-core" aria-hidden="true">
+            <el-icon class="header-ai-icon" :size="16"><MagicStick /></el-icon>
+          </span>
+          <span class="header-ai-label">AI</span>
+        </div>
+
         <div class="header-divider" aria-hidden="true" />
 
         <el-dropdown @command="handleCommand" trigger="click" popper-class="header-dropdown-popper">
@@ -197,7 +213,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
   FullScreen, Aim, User, SwitchButton, ArrowDown, Clock,
-  Menu, Close, Promotion, Star, Bell, Warning, Reading
+  Menu, Close, Promotion, Star, Bell, Warning, Reading, MagicStick
 } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -217,10 +233,12 @@ function handleLocaleChange(newLocale: LocaleType) {
 defineProps<{
   isMobile: boolean
   sidebarOpen: boolean
+  aiPanelOpen?: boolean
 }>()
 
 defineEmits<{
   (e: 'toggle-sidebar'): void
+  (e: 'toggle-ai'): void
 }>()
 
 const router = useRouter()
@@ -429,7 +447,10 @@ const handleCommand = async (command: string) => {
   align-items: stretch;
   min-height: 48px;
   padding: 0;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: linear-gradient(
     122deg,
@@ -443,6 +464,10 @@ const handleCommand = async (command: string) => {
     var(--hdr-inset),
     0 10px 36px -10px rgba(15, 23, 42, 0.55);
   -webkit-font-smoothing: antialiased;
+}
+
+.header-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .header-bar__mesh {
@@ -809,6 +834,89 @@ const handleCommand = async (command: string) => {
   }
 }
 
+.header-action--ai {
+  position: relative;
+  flex-shrink: 0;
+  gap: 6px;
+  min-width: auto;
+  height: 36px;
+  padding: 0 12px 0 8px;
+  background: linear-gradient(
+    152deg,
+    rgba(255, 251, 235, 0.2) 0%,
+    rgba(251, 191, 36, 0.35) 55%,
+    rgba(245, 158, 11, 0.42) 100%
+  );
+  border: 1px solid rgba(253, 224, 71, 0.55);
+  box-shadow:
+    var(--hdr-inset),
+    0 2px 12px rgba(245, 158, 11, 0.28);
+}
+
+.header-action--ai:hover,
+.header-action--ai-active {
+  background: linear-gradient(
+    152deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(251, 191, 36, 0.48) 55%,
+    rgba(217, 119, 6, 0.52) 100%
+  );
+  border-color: rgba(254, 240, 138, 0.75);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow:
+    var(--hdr-inset),
+    0 4px 16px rgba(245, 158, 11, 0.35);
+}
+
+.header-action--ai:focus-visible {
+  outline: 2px solid rgba(165, 180, 252, 0.9);
+  outline-offset: 2px;
+}
+
+.header-ai-core {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: radial-gradient(
+    125% 125% at 28% 18%,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(254, 240, 138, 0.45) 50%,
+    rgba(245, 158, 11, 0.28) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 2px 8px rgba(180, 83, 9, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.header-ai-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #fffbeb;
+  text-shadow: 0 1px 2px rgba(120, 53, 15, 0.45);
+}
+
+.header-action--ai:hover .header-ai-core,
+.header-action--ai-active .header-ai-core {
+  transform: scale(1.06);
+}
+
+.header-ai-icon {
+  color: #78350f;
+  filter: drop-shadow(0 1px 1px rgba(255, 255, 255, 0.35));
+}
+
+.header-action--ai:hover .header-ai-icon,
+.header-action--ai-active .header-ai-icon {
+  color: #451a03;
+  filter: drop-shadow(0 0 6px rgba(254, 240, 138, 0.65));
+}
+
 .header-notif-badge {
   position: absolute;
   top: -4px;
@@ -1002,6 +1110,15 @@ const handleCommand = async (command: string) => {
   }
   .lang-label {
     display: none;
+  }
+  .header-ai-label {
+    display: none;
+  }
+  .header-action--ai {
+    min-width: 36px;
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
   .dropdown-arrow {
     display: none;
