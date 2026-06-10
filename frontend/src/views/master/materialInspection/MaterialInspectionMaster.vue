@@ -1,6 +1,6 @@
 <template>
   <div class="inspection-master-container">
-    <!-- 页面头部（与 ProductList 同构） -->
+    <!-- 页面头部 -->
     <div class="page-header">
       <div class="header-content">
         <div class="title-section">
@@ -10,7 +10,7 @@
             </el-icon>
             材料検品マスタ
           </h1>
-          <p class="subtitle">仕入先の材料マスタを管理します</p>
+          <p class="subtitle">仕入先材料の検品基準を登録・管理します</p>
         </div>
         <div class="header-stats">
           <div class="stat-card">
@@ -25,128 +25,96 @@
       </div>
     </div>
 
-    <!-- 筛选与操作 -->
-    <div class="action-section">
-      <div class="filter-header">
-        <div class="filter-title">
-          <el-icon class="filter-icon">
-            <Filter />
-          </el-icon>
-          <span>検索・フィルター</span>
-          <div class="filter-inline-summary" v-if="tableData.length || hasActiveFilters">
-            <div class="summary-text">
-              <el-icon class="summary-icon">
-                <InfoFilled />
-              </el-icon>
-              <span>表示 {{ filteredCount || 0 }} 件</span>
-            </div>
-            <div class="active-filters" v-if="hasActiveFilters">
-              <el-tag
-                v-if="filters.keyword"
-                closable
-                @close="handleClearFilter('keyword')"
-                type="primary"
-                size="small"
-              >
-                キーワード: {{ filters.keyword }}
-              </el-tag>
-            </div>
-          </div>
-        </div>
-        <div class="filter-actions">
-          <el-button text @click="clearFilters" :icon="Refresh" class="clear-btn">クリア</el-button>
-          <el-button type="primary" @click="showCreateDialog" :icon="Plus" class="add-product-btn">
-            新規追加
-          </el-button>
-          <el-button
-            type="danger"
-            :disabled="selectedRows.length === 0"
-            :icon="Delete"
-            class="batch-delete-btn"
-            @click="handleBatchDelete"
-          >
-            一括削除
-          </el-button>
-        </div>
+    <!-- 操作栏 -->
+    <div class="toolbar-section">
+      <div class="toolbar-left">
+        <el-icon class="toolbar-icon"><Tickets /></el-icon>
+        <span class="toolbar-title">検品基準一覧</span>
+        <span class="toolbar-count">全 {{ totalCount }} 件</span>
       </div>
-
-      <div class="filters-grid">
-        <el-row :gutter="16">
-          <el-col :lg="10" :md="14" :sm="24">
-            <el-form-item label="🔍 キーワード">
-              <el-input
-                v-model="filters.keyword"
-                placeholder="検品CD・検品規格"
-                clearable
-                style="width: 100%"
-                @input="handleSearch"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
+      <div class="toolbar-actions">
+        <el-button type="primary" @click="showCreateDialog" :icon="Plus" class="add-btn">
+          新規追加
+        </el-button>
       </div>
     </div>
 
     <!-- 数据表格 -->
-    <el-table
-      :data="tableData || []"
-      v-loading="loading"
-      stripe
-      border
-      highlight-current-row
-      :style="{ width: '100%' }"
-      height="600"
-      :header-cell-style="{ background: '#f5f7fa', fontWeight: 'bold' }"
-      :cell-style="{ padding: '4px 8px' }"
-      :scrollbar-always-on="true"
-      @selection-change="handleSelectionChange"
-      @row-click="showDetail"
-    >
-      <el-table-column type="selection" width="55" align="center" />
-      <el-table-column prop="inspection_cd" label="検品CD" width="150" align="center" />
-      <el-table-column
-        prop="inspection_standard"
-        label="検品規格"
-        min-width="300"
-        show-overflow-tooltip
-      />
-      <el-table-column prop="created_at" label="作成日時" width="180" align="center">
-        <template #default="{ row }">
-          {{ formatDateTime(row.created_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="updated_at" label="更新日時" width="180" align="center">
-        <template #default="{ row }">
-          {{ formatDateTime(row.updated_at) }}
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" fixed="right" width="150" align="center">
-        <template #default="{ row }">
-          <el-button size="small" type="primary" link @click.stop="editItem(row)">編集</el-button>
-          <el-button size="small" type="danger" link @click.stop="deleteItem(row.id)">削除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <el-card class="table-card" shadow="never">
+      <el-table
+        :data="tableData || []"
+        v-loading="loading"
+        stripe
+        highlight-current-row
+        class="modern-table"
+        :style="{ width: '100%' }"
+        :header-cell-style="{ background: '#f8fafc', fontWeight: '600', color: '#334155' }"
+        @row-click="showDetail"
+      >
+        <el-table-column prop="inspection_cd" label="検品CD" width="140" align="center">
+          <template #default="{ row }">
+            <div class="code-cell">
+              <el-icon class="code-icon"><Tickets /></el-icon>
+              <span>{{ row.inspection_cd }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="inspection_standard"
+          label="検品規格"
+          min-width="280"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">
+            <span class="standard-cell">{{ row.inspection_standard }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="作成日時" width="170" align="center">
+          <template #default="{ row }">
+            <span class="datetime-cell">{{ formatDateTime(row.created_at) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updated_at" label="更新日時" width="170" align="center">
+          <template #default="{ row }">
+            <span class="datetime-cell">{{ formatDateTime(row.updated_at) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" fixed="right" width="150" align="center">
+          <template #default="{ row }">
+            <div class="action-buttons">
+              <el-button size="small" type="primary" link :icon="Edit" @click.stop="editItem(row)">
+                編集
+              </el-button>
+              <el-button size="small" type="danger" link :icon="Delete" @click.stop="deleteItem(row.id)">
+                削除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
 
-    <el-pagination
-      v-model:current-page="pagination.page"
-      v-model:page-size="pagination.pageSize"
-      :page-sizes="[10, 20, 50, 100]"
-      :total="totalCount || 0"
-      layout="total, sizes, prev, pager, next, jumper"
-      class="pagination"
-      @size-change="handlePageSizeChange"
-      @current-change="handlePageChange"
-    />
+    <div class="pagination-section">
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :page-sizes="[10, 20, 50, 100]"
+        :total="totalCount || 0"
+        layout="total, sizes, prev, pager, next, jumper"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
+      />
+    </div>
 
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '材料検品マスタ編集' : '材料検品マスタ新規追加'"
-      width="600px"
+      width="560px"
       destroy-on-close
       :close-on-click-modal="false"
+      class="form-dialog"
     >
-      <el-form ref="formRef" :model="formData" :rules="formRules" label-width="120px">
+      <el-form ref="formRef" :model="formData" :rules="formRules" label-width="120px" class="form-body">
         <el-form-item label="材料検品CD" prop="inspection_cd">
           <el-input
             v-model="formData.inspection_cd"
@@ -168,7 +136,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">キャンセル</el-button>
-        <el-button type="primary" @click="handleSubmit" :loading="submitLoading">
+        <el-button type="primary" @click="handleSubmit" :loading="submitLoading" class="submit-btn">
           {{ isEdit ? '更新' : '作成' }}
         </el-button>
       </template>
@@ -177,13 +145,14 @@
     <el-dialog
       v-model="detailVisible"
       title="材料検品マスタ詳細"
-      width="600px"
+      width="560px"
       :close-on-click-modal="false"
+      class="detail-dialog"
     >
       <div v-if="selectedItem" class="detail-content">
         <div class="detail-row">
           <label>検品CD</label>
-          <span>{{ selectedItem.inspection_cd }}</span>
+          <span class="detail-code">{{ selectedItem.inspection_cd }}</span>
         </div>
         <div class="detail-row detail-row--block">
           <label>検品規格</label>
@@ -208,13 +177,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import { CircleCheck, Filter, Refresh, Plus, Delete, InfoFilled } from '@element-plus/icons-vue'
+import { CircleCheck, Plus, Delete, Edit, Tickets } from '@element-plus/icons-vue'
 import {
   getMaterialInspectionList,
   createMaterialInspection,
   updateMaterialInspection,
   deleteMaterialInspection,
-  batchDeleteMaterialInspections,
 } from '@/api/material'
 import type { MaterialInspectionMaster } from '@/types/material'
 
@@ -222,17 +190,10 @@ const loading = ref(false)
 const submitLoading = ref(false)
 const tableData = ref<MaterialInspectionMaster[]>([])
 const totalCount = ref(0)
-const selectedRows = ref<MaterialInspectionMaster[]>([])
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const isEdit = ref(false)
 const selectedItem = ref<MaterialInspectionMaster | null>(null)
-
-const filters = ref({
-  keyword: '',
-  page: 1,
-  pageSize: 20,
-})
 
 const pagination = ref({
   page: 1,
@@ -247,11 +208,11 @@ const formData = reactive({
 const formRules: FormRules = {
   inspection_cd: [
     { required: true, message: '検品CDを入力してください', trigger: 'blur' },
-    { min: 1, max: 50, message: '検品CDは1〜3文字で入力してください', trigger: 'blur' },
+    { min: 1, max: 50, message: '検品CDは1〜50文字で入力してください', trigger: 'blur' },
   ],
   inspection_standard: [
     { required: true, message: '検品規格を入力してください', trigger: 'blur' },
-    { min: 1, max: 500, message: '検品規格は1〜50文字で入力してください', trigger: 'blur' },
+    { min: 1, max: 500, message: '検品規格は1〜500文字で入力してください', trigger: 'blur' },
   ],
 }
 
@@ -259,19 +220,10 @@ const formRef = ref<FormInstance>()
 
 const filteredCount = computed(() => tableData.value?.length || 0)
 
-const hasActiveFilters = computed(() => Boolean(filters.value.keyword?.trim()))
-
-const handleClearFilter = (key: 'keyword') => {
-  if (key === 'keyword') filters.value.keyword = ''
-  pagination.value.page = 1
-  fetchData()
-}
-
 const fetchData = async () => {
   loading.value = true
   try {
     const params = {
-      keyword: filters.value.keyword,
       page: pagination.value.page,
       pageSize: pagination.value.pageSize,
     }
@@ -289,21 +241,6 @@ const fetchData = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const handleSearch = () => {
-  pagination.value.page = 1
-  fetchData()
-}
-
-const clearFilters = () => {
-  filters.value = { keyword: '', page: 1, pageSize: 20 }
-  pagination.value.page = 1
-  fetchData()
-}
-
-const handleSelectionChange = (selection: MaterialInspectionMaster[]) => {
-  selectedRows.value = selection
 }
 
 const showCreateDialog = () => {
@@ -370,35 +307,6 @@ const deleteItem = async (id: number) => {
   }
 }
 
-const handleBatchDelete = async () => {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('削除するレコードを選択してください')
-    return
-  }
-
-  try {
-    await ElMessageBox.confirm(
-      `選択した ${selectedRows.value.length} 件の検品CDを削除しますか？`,
-      '一括削除確認',
-      {
-        type: 'warning',
-        confirmButtonText: 'はい',
-        cancelButtonText: 'キャンセル',
-      },
-    )
-
-    const ids = selectedRows.value.map((row) => row.id)
-    await batchDeleteMaterialInspections(ids)
-    ElMessage.success(`${ids.length} 件のレコードを削除しました`)
-    fetchData()
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      console.error('一括削除に失敗しました:', error)
-      ElMessage.error(`一括削除に失敗しました: ${error.message}`)
-    }
-  }
-}
-
 const handlePageChange = (page: number) => {
   pagination.value.page = page
   fetchData()
@@ -430,7 +338,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* 与 ProductList.vue 对齐的页面骨架与配色 */
 .inspection-master-container {
   padding: 6px;
   background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
@@ -438,11 +345,11 @@ onMounted(() => {
 }
 
 .page-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
-  padding: 10px 16px;
-  margin-bottom: 6px;
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.25);
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+  border-radius: 14px;
+  padding: 12px 18px;
+  margin-bottom: 8px;
+  box-shadow: 0 6px 24px rgba(71, 85, 105, 0.28);
 }
 
 .header-content {
@@ -457,24 +364,25 @@ onMounted(() => {
 }
 
 .main-title {
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   font-weight: 700;
-  margin: 0 0 2px;
+  margin: 0 0 3px;
   color: #fff;
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: 0.02em;
 }
 
 .title-icon {
-  font-size: 1.3rem;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 1.35rem;
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .subtitle {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.78);
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
 }
 
 .header-stats {
@@ -483,24 +391,24 @@ onMounted(() => {
 }
 
 .stat-card {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(10px);
   color: white;
-  padding: 6px 12px;
-  border-radius: 10px;
+  padding: 7px 14px;
+  border-radius: 12px;
   text-align: center;
-  min-width: 70px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  min-width: 76px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   transition: all 0.2s ease;
 }
 
 .stat-card:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.24);
   transform: translateY(-1px);
 }
 
 .stat-number {
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 700;
   line-height: 1;
 }
@@ -508,215 +416,170 @@ onMounted(() => {
 .stat-label {
   font-size: 0.7rem;
   opacity: 0.9;
-  margin-top: 2px;
+  margin-top: 3px;
   white-space: nowrap;
 }
 
-.action-section {
-  background: white;
-  border-radius: 10px;
-  padding: 0;
-  margin-bottom: 6px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
-}
-
-.filter-header {
+.toolbar-section {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-  border-bottom: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  margin-bottom: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
 }
 
-.filter-title {
+.toolbar-left {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.toolbar-icon {
+  font-size: 1.1rem;
+  color: #64748b;
+}
+
+.toolbar-title {
   font-size: 0.95rem;
   font-weight: 600;
   color: #334155;
-  flex-wrap: wrap;
 }
 
-.filter-icon {
-  font-size: 1rem;
-  color: #667eea;
+.toolbar-count {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  padding-left: 8px;
+  border-left: 1px solid #e2e8f0;
 }
 
-.filter-actions {
+.toolbar-actions {
   display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.clear-btn {
-  color: #64748b;
-  transition: all 0.2s ease;
-  padding: 6px 10px !important;
-  font-size: 12px !important;
-}
-
-.clear-btn:hover {
-  color: #667eea;
-}
-
-.add-product-btn {
-  border: none;
-  border-radius: 8px;
-  padding: 7px 12px !important;
-  font-weight: 600;
-  font-size: 12px !important;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    filter 0.2s ease;
-}
-
-.add-product-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
-}
-
-.batch-delete-btn {
+.add-btn {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
   border: none !important;
-  border-radius: 8px;
-  padding: 7px 12px !important;
+  border-radius: 10px !important;
+  padding: 8px 16px !important;
   font-weight: 600;
-  font-size: 12px !important;
-  background: linear-gradient(135deg, #f87171 0%, #dc2626 100%) !important;
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.25);
-  color: #fff !important;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  font-size: 13px !important;
+  box-shadow: 0 3px 10px rgba(71, 85, 105, 0.3);
+  transition: all 0.2s ease;
 }
 
-.batch-delete-btn:hover:not(:disabled) {
+.add-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
-  background: linear-gradient(135deg, #fb7185 0%, #ef4444 100%) !important;
+  box-shadow: 0 5px 14px rgba(71, 85, 105, 0.38);
 }
 
-.batch-delete-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.filters-grid {
-  padding: 10px 14px;
-  background: white;
-}
-
-.filters-grid :deep(.el-form-item) {
+.table-card {
+  border-radius: 12px;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
   margin-bottom: 8px;
+  overflow: hidden;
 }
 
-.filters-grid :deep(.el-form-item__label) {
+.table-card :deep(.el-card__body) {
+  padding: 0;
+}
+
+.code-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 12px;
   font-weight: 600;
   color: #475569;
-  padding-bottom: 2px;
-}
-
-.filters-grid :deep(.el-input__wrapper) {
+  background: #f1f5f9;
+  padding: 3px 8px;
   border-radius: 6px;
-  box-shadow: 0 0 0 1px #e2e8f0;
 }
 
-.filters-grid :deep(.el-input__wrapper:hover) {
-  box-shadow: 0 0 0 1px #667eea;
-}
-
-.summary-text {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-bottom: 0;
-  font-size: 0.8rem;
+.code-icon {
   color: #64748b;
-  font-weight: 500;
+  font-size: 13px;
 }
 
-.summary-icon {
-  color: #667eea;
-  font-size: 14px;
+.standard-cell {
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.active-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.active-filters :deep(.el-tag) {
-  border-radius: 4px;
+.datetime-cell {
   font-size: 11px;
-  padding: 0 6px;
-  height: 22px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
 }
 
-:deep(.el-table) {
-  border-radius: 8px;
-  overflow: hidden;
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+:deep(.modern-table) {
   font-size: 12px;
 }
 
-:deep(.el-table .el-table__header th) {
+:deep(.modern-table .el-table__header th) {
   background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
   font-weight: 600;
   color: #334155;
   font-size: 12px;
-  padding: 6px 8px !important;
+  padding: 10px 8px !important;
+  border-bottom: 2px solid #e2e8f0 !important;
 }
 
-:deep(.el-table .el-table__cell) {
-  padding: 4px 6px !important;
+:deep(.modern-table .el-table__row) {
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-:deep(.el-table .cell) {
-  line-height: 1.5;
+:deep(.modern-table .el-table__row:hover > td) {
+  background: #f8fafc !important;
 }
 
-:deep(.el-table .el-button--small) {
+:deep(.modern-table .el-table__cell) {
+  padding: 8px 6px !important;
+}
+
+:deep(.modern-table .el-button--small) {
   padding: 4px 8px;
   font-size: 11px;
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
-.filter-inline-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-left: 12px;
-  border-left: 1px solid #e2e8f0;
-  flex-wrap: wrap;
-}
-
-.filter-inline-summary .summary-text {
-  margin-bottom: 0;
-}
-
-.pagination {
-  margin-top: 8px;
+.pagination-section {
+  background: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
   text-align: center;
 }
 
-.pagination :deep(.el-pager li) {
-  border-radius: 6px;
-  font-size: 12px;
-  min-width: 28px;
-  height: 28px;
-  line-height: 28px;
+:deep(.el-pagination) {
+  justify-content: center;
 }
 
-.pagination :deep(.el-pager li.is-active) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+:deep(.el-pager li) {
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 30px;
+  height: 30px;
+  line-height: 30px;
+}
+
+:deep(.el-pager li.is-active) {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%);
 }
 
 .detail-content {
@@ -728,11 +591,11 @@ onMounted(() => {
 .detail-row {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 12px;
+  padding: 12px 14px;
   background: #f8fafc;
-  border-radius: 8px;
-  border-left: 3px solid #667eea;
+  border-radius: 10px;
+  border-left: 3px solid #64748b;
 }
 
 .detail-row--block {
@@ -742,16 +605,38 @@ onMounted(() => {
 
 .detail-row label {
   font-weight: 600;
-  color: #4a5568;
+  color: #64748b;
   min-width: 90px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .detail-row span {
-  color: #2d3748;
+  color: #1e293b;
   flex: 1;
   word-break: break-word;
   font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.detail-code {
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-weight: 600;
+  color: #475569 !important;
+}
+
+:deep(.form-dialog .el-dialog__header) {
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 14px;
+}
+
+:deep(.form-dialog .el-dialog__title) {
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.submit-btn {
+  background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+  border: none !important;
 }
 
 @media (max-width: 1200px) {
@@ -774,37 +659,39 @@ onMounted(() => {
   }
 
   .page-header {
-    padding: 8px 12px;
-    border-radius: 10px;
+    padding: 10px 14px;
+    border-radius: 12px;
   }
 
   .main-title {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
   }
 
-  .filter-header {
+  .toolbar-section {
     flex-direction: column;
     gap: 10px;
     align-items: stretch;
     padding: 10px 12px;
   }
 
-  .filter-actions {
-    justify-content: flex-start;
+  .toolbar-actions {
+    justify-content: flex-end;
   }
 
   .stat-card {
-    min-width: 60px;
-    padding: 5px 8px;
+    min-width: 64px;
+    padding: 6px 10px;
   }
 
   .stat-number {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
   }
 }
 
 .page-header,
-.action-section {
+.toolbar-section,
+.table-card,
+.pagination-section {
   animation: fadeIn 0.4s ease-out;
 }
 

@@ -198,7 +198,7 @@
 
     <el-dialog
       v-model="dlgVisible"
-      width="560px"
+      width="392px"
       destroy-on-close
       align-center
       class="part-dlg"

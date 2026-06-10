@@ -1,51 +1,54 @@
 <template>
   <div class="customer-master-container">
-    <div class="page-header">
-      <div class="header-content">
-        <div class="title-row">
-          <span class="title-icon">👤</span>
-          <h1 class="main-title">{{ t('master.customer.title') }}</h1>
-          <div class="stat-badges">
-            <div class="stat-badge">
-              <span class="stat-number">{{ customerList.length }}</span>
-              <span class="stat-label">{{ t('master.common.items') }}</span>
-            </div>
-            <div class="stat-badge stat-active">
-              <span class="stat-number">{{ activeCount }}</span>
-              <span class="stat-label">{{ t('master.common.active') }}</span>
-            </div>
+    <div class="page-shell">
+      <!-- 紧凑页头：标题 + 统计 + 新增 -->
+      <header class="page-header">
+        <div class="header-left">
+          <div class="title-icon-wrap">
+            <el-icon><User /></el-icon>
+          </div>
+          <div class="title-block">
+            <h1 class="main-title">{{ t('master.customer.title') }}</h1>
+            <p class="subtitle">顧客情報の登録・編集・管理</p>
+          </div>
+          <div class="stat-pills">
+            <span class="stat-pill">
+              <strong>{{ customerList.length }}</strong>
+              <em>{{ t('master.common.items') }}</em>
+            </span>
+            <span class="stat-pill stat-pill--active">
+              <strong>{{ activeCount }}</strong>
+              <em>{{ t('master.common.active') }}</em>
+            </span>
           </div>
         </div>
-        <el-button type="primary" @click="openForm()" class="add-btn" size="small">
-          ➕ {{ t('master.customer.addCustomer') }}
+        <el-button type="primary" :icon="Plus" class="add-btn" @click="openForm()">
+          {{ t('master.customer.addCustomer') }}
         </el-button>
-      </div>
-    </div>
+      </header>
 
-    <div class="search-section">
-      <div class="search-row">
-        <div class="search-group">
+      <!-- 单行筛选工具栏 -->
+      <section class="toolbar-card">
+        <div class="toolbar-row">
           <el-input
             v-model="filters.keyword"
             :placeholder="t('master.customer.searchPlaceholder')"
             clearable
-            @input="handleFilter"
-            class="search-input"
             size="small"
+            class="filter-keyword"
+            @input="handleFilter"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <el-icon class="input-prefix-icon"><Search /></el-icon>
             </template>
           </el-input>
-        </div>
-        <div class="filter-group">
           <el-select
             v-model="filters.status"
             :placeholder="t('master.common.status')"
             clearable
-            @change="handleFilter"
             size="small"
             class="filter-select"
+            @change="handleFilter"
           >
             <el-option :label="t('master.common.active')" :value="1" />
             <el-option :label="t('master.common.inactive')" :value="0" />
@@ -54,128 +57,176 @@
             v-model="filters.customer_type"
             :placeholder="t('master.customer.type')"
             clearable
-            @change="handleFilter"
             size="small"
             class="filter-select"
+            @change="handleFilter"
           >
             <el-option :label="t('master.customer.typeCorp')" value="法人" />
             <el-option :label="t('master.customer.typePerson')" value="個人" />
             <el-option :label="t('master.customer.typeAgency')" value="代理店" />
           </el-select>
-          <el-button text @click="clearFilters" size="small" class="clear-btn">
-            🔄 {{ t('master.common.clear') }}
+          <el-button text size="small" :icon="Refresh" class="clear-btn" @click="clearFilters">
+            {{ t('master.common.clear') }}
           </el-button>
         </div>
-      </div>
-    </div>
+        <div v-if="hasActiveFilters" class="active-filters">
+          <el-tag
+            v-if="filters.keyword"
+            closable
+            size="small"
+            type="primary"
+            @close="clearFilterField('keyword')"
+          >
+            {{ filters.keyword }}
+          </el-tag>
+          <el-tag
+            v-if="filters.status !== ''"
+            closable
+            size="small"
+            type="warning"
+            @close="clearFilterField('status')"
+          >
+            {{ filters.status === 1 ? t('master.common.active') : t('master.common.inactive') }}
+          </el-tag>
+          <el-tag
+            v-if="filters.customer_type"
+            closable
+            size="small"
+            type="info"
+            @close="clearFilterField('customer_type')"
+          >
+            {{ filters.customer_type }}
+          </el-tag>
+        </div>
+      </section>
 
-    <div class="table-section">
-      <el-table
-        :data="filteredList"
-        stripe
-        highlight-current-row
-        v-loading="loading"
-        class="modern-table"
-        :header-cell-style="{
-          background: 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
-          color: '#fff',
-          fontWeight: '600',
-          fontSize: '12px',
-          padding: '6px 10px',
-        }"
-        :cell-style="{ padding: '5px 8px', fontSize: '12px' }"
-      >
-        <el-table-column
-          prop="customer_cd"
-          :label="t('master.customer.customerCD')"
-          width="100"
-          align="center"
+      <!-- 数据表格 -->
+      <section class="table-section">
+        <el-table
+          :data="filteredList"
+          stripe
+          highlight-current-row
+          v-loading="loading"
+          class="modern-table"
+          :height="tableHeight"
+          :header-cell-style="tableHeaderStyle"
+          :cell-style="tableCellStyle"
         >
-          <template #default="{ row }">
-            <span class="code-cell">{{ row.customer_cd }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="customer_name"
-          :label="t('master.customer.customerName')"
-          min-width="140"
-          show-overflow-tooltip
-        >
-          <template #default="{ row }">
-            <span class="name-cell">{{ row.customer_name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column
-          prop="phone"
-          :label="t('master.customer.phone')"
-          width="130"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="address"
-          :label="t('master.customer.address')"
-          min-width="180"
-          show-overflow-tooltip
-        />
-        <el-table-column
-          prop="customer_type"
-          :label="t('master.customer.type')"
-          width="80"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-tag :type="getCustomerTypeTagType(row.customer_type)" size="small" effect="plain">
-              {{ row.customer_type || '—' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" :label="t('master.common.status')" width="80" align="center">
-          <template #default="{ row }">
-            <el-switch
-              :model-value="row.status === 1"
-              @update:model-value="(v: string | number | boolean) => toggleStatus(row, v === true)"
-              :loading="row.statusLoading"
-              :active-text="t('master.common.active')"
-              :inactive-text="t('master.common.inactive')"
-              size="small"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column
-          :label="t('master.common.actions')"
-          fixed="right"
-          width="110"
-          align="center"
-        >
-          <template #default="{ row }">
-            <div class="action-buttons">
-              <el-button
+          <el-table-column
+            prop="customer_cd"
+            :label="t('master.customer.customerCD')"
+            width="100"
+            align="center"
+            fixed
+          >
+            <template #default="{ row }">
+              <span class="code-cell">{{ row.customer_cd }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="customer_name"
+            :label="t('master.customer.customerName')"
+            min-width="130"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <span class="name-cell">{{ row.customer_name }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="phone"
+            :label="t('master.customer.phone')"
+            width="120"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <span class="muted-cell">{{ row.phone || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="address"
+            :label="t('master.customer.address')"
+            min-width="150"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <span class="muted-cell">{{ row.address || '—' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="customer_type"
+            :label="t('master.customer.type')"
+            width="76"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-tag
+                :type="getCustomerTypeTagType(row.customer_type)"
                 size="small"
-                type="primary"
-                plain
-                @click="openForm(row)"
-                class="action-btn"
+                effect="light"
+                round
               >
-                ✏️
-              </el-button>
-              <el-button
+                {{ row.customer_type || '—' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column
+            prop="status"
+            :label="t('master.common.status')"
+            width="84"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.status === 1"
+                @update:model-value="(v: string | number | boolean) => toggleStatus(row, v === true)"
+                :loading="row.statusLoading"
                 size="small"
-                type="danger"
-                plain
-                @click="deleteCustomer(row.id)"
-                class="action-btn"
-              >
-                🗑️
-              </el-button>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+                inline-prompt
+                :active-text="t('master.common.active')"
+                :inactive-text="t('master.common.inactive')"
+              />
+            </template>
+          </el-table-column>
+          <el-table-column
+            :label="t('master.common.actions')"
+            fixed="right"
+            width="88"
+            align="center"
+          >
+            <template #default="{ row }">
+              <div class="action-buttons">
+                <el-tooltip :content="t('master.supplier.edit')" placement="top">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    circle
+                    :icon="Edit"
+                    class="action-btn"
+                    @click="openForm(row)"
+                  />
+                </el-tooltip>
+                <el-tooltip :content="t('master.supplier.delete')" placement="top">
+                  <el-button
+                    size="small"
+                    type="danger"
+                    plain
+                    circle
+                    :icon="Delete"
+                    class="action-btn"
+                    @click="deleteCustomer(row.id)"
+                  />
+                </el-tooltip>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
 
-    <div class="footer-section">
-      <div class="result-info">
-        <el-icon><DataAnalysis /></el-icon>
+      <!-- 底部统计 -->
+      <footer class="footer-bar">
+        <el-icon class="footer-icon"><DataAnalysis /></el-icon>
         <span>
           {{
             t('master.common.displayCount', {
@@ -184,7 +235,7 @@
             })
           }}
         </span>
-      </div>
+      </footer>
     </div>
 
     <CustomerForm v-model:visible="formVisible" :data="editData" @refresh="fetchList" />
@@ -195,7 +246,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, DataAnalysis } from '@element-plus/icons-vue'
+import { User, Search, Refresh, Plus, Edit, Delete, DataAnalysis } from '@element-plus/icons-vue'
 import CustomerForm from './CustomerForm.vue'
 import {
   getCustomerList,
@@ -212,7 +263,28 @@ const loading = ref(false)
 const customerList = ref<RowEx[]>([])
 const filters = ref({ keyword: '', status: '' as '' | number, customer_type: '' })
 
+const tableHeight = 'calc(100vh - 196px)'
+const tableHeaderStyle = {
+  background: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)',
+  color: '#fff',
+  fontWeight: '600',
+  fontSize: '12px',
+  padding: '6px 4px',
+}
+const tableCellStyle = { padding: '4px 6px', fontSize: '12px' }
+
 const handleFilter = () => {}
+
+const hasActiveFilters = computed(
+  () => !!filters.value.keyword || filters.value.status !== '' || !!filters.value.customer_type,
+)
+
+function clearFilterField(field: 'keyword' | 'status' | 'customer_type') {
+  if (field === 'keyword') filters.value.keyword = ''
+  else if (field === 'status') filters.value.status = ''
+  else filters.value.customer_type = ''
+}
+
 const clearFilters = () => {
   filters.value = { keyword: '', status: '', customer_type: '' }
   fetchList()
@@ -309,211 +381,328 @@ onMounted(fetchList)
 
 <style scoped>
 .customer-master-container {
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  min-height: 100vh;
+  padding: 8px 10px;
+  background: linear-gradient(160deg, #f0f9ff 0%, #e8f4fc 50%, #f1f5f9 100%);
+  min-height: 100%;
 }
 
-.page-header {
-  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-  border-radius: 12px;
-  padding: 12px 18px;
-  margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(14, 165, 233, 0.3);
+.page-shell {
+  max-width: 1320px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.header-content {
+
+/* ── 页头 ── */
+.page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
+  gap: 12px;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+  border-radius: 10px;
+  padding: 8px 14px;
+  box-shadow: 0 3px 14px rgba(14, 165, 233, 0.28);
 }
-.title-row {
+
+.header-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
-.title-icon {
-  font-size: 1.4rem;
-}
-.main-title {
-  font-size: 1.3rem;
-  font-weight: 700;
-  margin: 0;
-  color: #fff;
-}
-.stat-badges {
-  display: flex;
-  gap: 8px;
-  margin-left: 10px;
-}
-.stat-badge {
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(10px);
-  border-radius: 14px;
-  padding: 3px 10px;
+
+.title-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  color: #fff;
+  font-size: 17px;
+  flex-shrink: 0;
 }
-.stat-active {
-  background: rgba(16, 185, 129, 0.3);
+
+.title-block {
+  min-width: 0;
 }
-.stat-number {
+
+.main-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 1px 0 0;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.2;
+}
+
+.stat-pills {
+  display: flex;
+  gap: 6px;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.stat-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 2px 10px;
+  color: #fff;
+}
+
+.stat-pill--active {
+  background: rgba(16, 185, 129, 0.28);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.stat-pill strong {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #fff;
-}
-.stat-label {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.9);
-}
-.add-btn {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  font-weight: 600;
-  color: #fff;
-}
-.add-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
+  line-height: 1;
 }
 
-.search-section {
+.stat-pill em {
+  font-size: 0.65rem;
+  font-style: normal;
+  opacity: 0.88;
+}
+
+.add-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.18) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+  font-weight: 600;
+  font-size: 12px !important;
+  padding: 6px 14px !important;
+  height: 32px;
+  transition: background 0.15s;
+}
+
+.add-btn:hover {
+  background: rgba(255, 255, 255, 0.28) !important;
+}
+
+/* ── 筛选工具栏 ── */
+.toolbar-card {
   background: #fff;
-  border-radius: 10px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.04);
 }
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.search-group {
-  flex: 1;
-  min-width: 200px;
-}
-.search-input {
-  width: 100%;
-}
-.filter-group {
+
+.toolbar-row {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.filter-select {
-  width: 100px;
-}
-.clear-btn {
-  color: #64748b;
+
+.filter-keyword {
+  flex: 1;
+  min-width: 160px;
+  max-width: 360px;
 }
 
+.filter-select {
+  width: 108px;
+}
+
+.input-prefix-icon {
+  color: #94a3b8;
+}
+
+.clear-btn {
+  color: #64748b;
+  font-size: 12px;
+  padding: 4px 6px !important;
+}
+
+.clear-btn:hover {
+  color: #0ea5e9;
+}
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+/* ── 表格 ── */
 .table-section {
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.05);
   overflow: hidden;
-  margin-bottom: 12px;
 }
-.modern-table {
-  width: 100%;
-}
+
 .code-cell {
-  font-family: 'Consolas', monospace;
-  font-weight: 600;
-  color: #0ea5e9;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  padding: 2px 6px;
-  border-radius: 4px;
+  display: inline-block;
+  font-family: 'Consolas', 'Monaco', monospace;
   font-size: 11px;
+  font-weight: 600;
+  color: #0284c7;
+  background: linear-gradient(135deg, #f0f9ff, #e0f2fe);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
+
 .name-cell {
   font-weight: 500;
   color: #1e293b;
+  font-size: 12px;
 }
+
+.muted-cell {
+  color: #64748b;
+  font-size: 11px;
+}
+
 .action-buttons {
   display: flex;
   gap: 4px;
   justify-content: center;
 }
+
 .action-btn {
-  padding: 3px 8px;
-  font-size: 11px;
-  border-radius: 6px;
-  min-width: 32px;
+  width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
 }
 
-.footer-section {
-  background: #fff;
+:deep(.modern-table) {
+  --el-table-border-color: #e8edf2;
+  --el-table-row-hover-bg-color: #f0f9ff;
+  font-size: 12px;
+}
+
+:deep(.modern-table .el-table__header-wrapper th) {
+  border-bottom: none !important;
+}
+
+:deep(.modern-table .el-table__header .cell) {
+  line-height: 1.3;
+  padding: 0 4px;
+}
+
+:deep(.modern-table .el-table__body .cell) {
+  line-height: 1.35;
+  padding: 0 4px;
+}
+
+:deep(.modern-table.el-table--striped .el-table__body tr.el-table__row--striped td) {
+  background: #fafbfc;
+}
+
+:deep(.modern-table .el-tag) {
   border-radius: 10px;
-  padding: 8px 16px;
-  display: flex;
-  align-items: center;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-}
-.result-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #64748b;
-  font-size: 0.85rem;
-}
-.result-info strong {
-  color: #0ea5e9;
-  font-weight: 700;
+  font-size: 10px;
+  padding: 0 6px;
+  height: 20px;
+  line-height: 18px;
 }
 
-@media (max-width: 768px) {
-  .customer-master-container {
-    padding: 8px;
-  }
+:deep(.modern-table .el-switch) {
+  --el-switch-on-color: #10b981;
+}
+
+/* ── 底部 ── */
+.footer-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff;
+  border-radius: 8px;
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.footer-icon {
+  color: #0ea5e9;
+  font-size: 14px;
+}
+
+/* ── 响应式 ── */
+@media (max-width: 900px) {
   .page-header {
-    padding: 10px 12px;
-  }
-  .header-content {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-  .title-row {
     flex-wrap: wrap;
-    justify-content: center;
+    padding: 8px 10px;
   }
+
+  .header-left {
+    flex-wrap: wrap;
+  }
+
+  .stat-pills {
+    margin-left: 0;
+  }
+
   .add-btn {
     width: 100%;
   }
-  .search-row {
-    flex-direction: column;
-  }
-  .search-group {
+
+  .filter-keyword {
+    max-width: none;
     width: 100%;
   }
-  .filter-group {
-    width: 100%;
-    justify-content: center;
-  }
+
   .filter-select {
     flex: 1;
-    min-width: 80px;
-  }
-  .main-title {
-    font-size: 1.1rem;
+    min-width: 90px;
   }
 }
 
-:deep(.el-table) {
-  --el-table-border-color: #e2e8f0;
-  --el-table-row-hover-bg-color: #f0f9ff;
+@media (max-width: 600px) {
+  .customer-master-container {
+    padding: 4px 6px;
+  }
+
+  .subtitle {
+    display: none;
+  }
+
+  .stat-pill em {
+    display: none;
+  }
 }
-:deep(.el-table--striped .el-table__body tr.el-table__row--striped td) {
-  background-color: #fafbfc;
+
+.page-header,
+.toolbar-card,
+.table-section,
+.footer-bar {
+  animation: fadeIn 0.3s ease-out;
 }
-:deep(.el-tag) {
-  border-radius: 10px;
-  font-weight: 500;
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
