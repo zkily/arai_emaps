@@ -194,3 +194,223 @@ export function fetchInspectionProductivityAnalysis(params: {
     },
   }) as Promise<InspectionProductivityAnalysisResponse>
 }
+
+export interface InspectionUtilizationInspectorRow {
+  inspector_user_id?: number
+  inspector_name?: string
+  session_count?: number
+  completed_session_count?: number
+  work_day_count?: number
+  scheduled_work_day_count?: number
+  sum_net_production_sec?: number
+  sum_gross_sec?: number
+  sum_regular_sec?: number
+  sum_overtime_sec?: number
+  sum_net_production_min?: number
+  sum_gross_min?: number
+  regular_min?: number
+  overtime_min?: number
+  standard_sec_on_worked_days?: number
+  standard_sec_calendar?: number
+  utilization_percent?: number | null
+  calendar_utilization_percent?: number | null
+  overtime_ratio_percent?: number | null
+}
+
+export interface InspectionUtilizationDailyInspectorRow {
+  day: string
+  inspector_user_id?: number
+  inspector_name?: string
+  is_scheduled_workday?: boolean
+  is_weekend?: boolean
+  is_extra_workday?: boolean
+  session_count?: number
+  completed_session_count?: number
+  sum_net_production_sec?: number
+  sum_gross_sec?: number
+  sum_regular_sec?: number
+  sum_overtime_sec?: number
+  standard_sec?: number
+  sum_net_production_min?: number
+  sum_gross_min?: number
+  regular_min?: number
+  overtime_min?: number
+  utilization_percent?: number | null
+  load_percent?: number | null
+}
+
+export interface InspectionUtilizationDailyRow {
+  day: string
+  is_scheduled_workday?: boolean
+  session_count?: number
+  inspector_count?: number
+  sum_net_production_sec?: number
+  sum_regular_sec?: number
+  sum_overtime_sec?: number
+  sum_net_production_min?: number
+  utilization_percent?: number | null
+}
+
+export interface InspectionUtilizationSummary {
+  inspector_count?: number
+  session_count?: number
+  completed_session_count?: number
+  calendar_workdays_in_range?: number
+  sum_net_production_sec?: number
+  sum_regular_sec?: number
+  sum_overtime_sec?: number
+  sum_net_production_min?: number
+  regular_min?: number
+  overtime_min?: number
+  utilization_percent?: number | null
+  calendar_utilization_percent?: number | null
+  unassigned_session_count?: number
+  sessions_without_time_count?: number
+}
+
+export interface InspectionUtilizationAnalysisData {
+  start_date: string
+  end_date: string
+  include_incomplete: boolean
+  standard_workday_hours: number
+  standard_workday_sec: number
+  extra_workdays: string[]
+  extra_holidays: string[]
+  company_calendar_applied?: boolean
+  company_calendar_extra_workdays?: string[]
+  company_calendar_holidays?: string[]
+  calendar_workdays_in_range: number
+  summary: InspectionUtilizationSummary
+  by_inspector: InspectionUtilizationInspectorRow[]
+  daily_by_inspector: InspectionUtilizationDailyInspectorRow[]
+  daily: InspectionUtilizationDailyRow[]
+  data_gaps: string[]
+}
+
+export interface InspectionUtilizationAnalysisResponse {
+  success?: boolean
+  data?: InspectionUtilizationAnalysisData
+  message?: string
+}
+
+export function fetchInspectionUtilizationAnalysis(params: {
+  start_date: string
+  end_date: string
+  mes_inspector_user_id?: number | null
+  include_incomplete?: boolean
+  extra_workdays?: string
+  extra_holidays?: string
+  use_company_calendar?: boolean
+  limit?: number
+}): Promise<InspectionUtilizationAnalysisResponse> {
+  return request.get('/api/plan/inspection-management/utilization-analysis', {
+    params: {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      include_incomplete: params.include_incomplete ? true : undefined,
+      extra_workdays: params.extra_workdays || undefined,
+      extra_holidays: params.extra_holidays || undefined,
+      use_company_calendar: params.use_company_calendar !== false ? true : undefined,
+      limit: params.limit,
+    },
+  }) as Promise<InspectionUtilizationAnalysisResponse>
+}
+
+export interface InspectionQualityBucket {
+  session_count?: number
+  completed_session_count?: number
+  sum_actual_qty?: number
+  sum_defect_qty?: number
+  defect_rate_percent?: number | null
+  sessions_with_defect_count?: number
+  defect_item_kinds_count?: number
+}
+
+export interface InspectionQualityDailyRow extends InspectionQualityBucket {
+  day: string
+}
+
+export interface InspectionQualityInspectorRow extends InspectionQualityBucket {
+  inspector_user_id?: number | null
+  inspector_name?: string
+}
+
+export interface InspectionQualityProductRow extends InspectionQualityBucket {
+  product_cd?: string
+  product_name?: string
+  top_defect_cd?: string | null
+  top_defect_qty?: number | null
+  top_defect_name?: string | null
+}
+
+export interface InspectionQualityDefectRow {
+  defect_cd: string
+  defect_name?: string
+  qty: number
+  share_percent?: number | null
+  rate_per_actual_percent?: number | null
+}
+
+export interface InspectionQualityProductDefectRow {
+  product_cd: string
+  product_name?: string
+  defect_cd: string
+  defect_name?: string
+  qty: number
+}
+
+export interface InspectionQualityDefectBreakdownRow {
+  defect_cd: string
+  defect_name?: string
+  qty: number
+}
+
+export interface InspectionQualitySessionRow extends InspectionManagementListRow {
+  defect_rate_percent?: number | null
+  is_completed?: boolean
+  has_defect?: boolean
+  inspector_display_name?: string
+  mes_inspector_name?: string | null
+  mes_inspector_username?: string | null
+  defect_breakdown?: InspectionQualityDefectBreakdownRow[]
+}
+
+export interface InspectionQualityAnalysisData {
+  start_date: string
+  end_date: string
+  include_incomplete: boolean
+  summary: InspectionQualityBucket
+  daily: InspectionQualityDailyRow[]
+  by_inspector: InspectionQualityInspectorRow[]
+  by_product: InspectionQualityProductRow[]
+  defect_by_item: InspectionQualityDefectRow[]
+  by_product_defect: InspectionQualityProductDefectRow[]
+  sessions: InspectionQualitySessionRow[]
+}
+
+export interface InspectionQualityAnalysisResponse {
+  success?: boolean
+  data?: InspectionQualityAnalysisData
+  message?: string
+}
+
+export function fetchInspectionQualityAnalysis(params: {
+  start_date: string
+  end_date: string
+  mes_inspector_user_id?: number | null
+  product_cd?: string | null
+  include_incomplete?: boolean
+  limit?: number
+}): Promise<InspectionQualityAnalysisResponse> {
+  return request.get('/api/plan/inspection-management/quality-analysis', {
+    params: {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      product_cd: params.product_cd || undefined,
+      include_incomplete: params.include_incomplete ? true : undefined,
+      limit: params.limit,
+    },
+  }) as Promise<InspectionQualityAnalysisResponse>
+}

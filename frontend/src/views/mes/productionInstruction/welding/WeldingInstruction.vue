@@ -484,6 +484,7 @@ import {
   Delete,
 } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
+import { fetchScheduledWorkdaysForDateIso } from '@/api/master/companyWorkCalendar'
 import { fetchPlanBaselineComparison } from '@/api/planBaseline'
 import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
 /** ERP/MES 统一走 MES 计划数据接口（与成型页保持一致） */
@@ -634,26 +635,8 @@ const printingSetupSchedule = ref(false)
 // 指定工作日天数（用于基准日平均生产数计算，默认按“生産日所选月份”的工作日数）
 const specifiedWorkingDays = ref<number | null>(20)
 
-const countWorkingDaysInMonth = (dateStr: string): number => {
-  const [yearStr, monthStr] = (dateStr || '').split('-')
-  const year = Number(yearStr)
-  const month = Number(monthStr)
-  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
-    return 20
-  }
-  const daysInMonth = new Date(year, month, 0).getDate()
-  let workingDays = 0
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    const weekDay = new Date(year, month - 1, day).getDay()
-    if (weekDay !== 0 && weekDay !== 6) {
-      workingDays += 1
-    }
-  }
-  return Math.max(1, workingDays)
-}
-
-const setSpecifiedWorkingDaysByMonth = (baseDate: string) => {
-  specifiedWorkingDays.value = countWorkingDaysInMonth(baseDate)
+const setSpecifiedWorkingDaysByMonth = async (baseDate: string) => {
+  specifiedWorkingDays.value = await fetchScheduledWorkdaysForDateIso(baseDate)
 }
 
 const isApiSuccess = (res: any): boolean => {

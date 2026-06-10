@@ -98,7 +98,7 @@ export const mesActualAnalysisRoutes: RouteRecordRaw[] = [
     path: 'mes/actualAnalysis/productivity/welding',
     name: 'MesWeldingProductivityAnalysis',
     component: () => import('@/views/mes/actualAnalysis/productivity/WeldingProductivityAnalysis.vue'),
-    meta: { title: '溶接工程 — 生産性分析', group: productivityGroup, requiresAuth: true },
+    meta: { title: '溶接生産性', group: productivityGroup, requiresAuth: true },
   },
   {
     path: 'mes/actualAnalysis/productivity/inspection',

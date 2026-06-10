@@ -2104,6 +2104,7 @@ import {
 } from '@/api/master/productMachineConfigMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMaster'
+import { fetchScheduledWorkdaysForMonth, calcWeekdayFallbackForMonth } from '@/api/master/companyWorkCalendar'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import InventoryStagnationDrawer from './components/InventoryStagnationDrawer.vue'
 
@@ -5394,14 +5395,17 @@ async function fetchAllProductProcessBomRows(): Promise<any[]> {
 }
 
 function calcWorkingDays(yearMonth: string): number {
-  const [y, m] = yearMonth.split('-').map(Number)
-  const daysInMonth = new Date(y, m, 0).getDate()
-  let count = 0
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dow = new Date(y, m - 1, d).getDay()
-    if (dow !== 0 && dow !== 6) count++
-  }
-  return count
+  return calcWeekdayFallbackForMonth(yearMonth)
+}
+
+async function refreshMoldingPlanWorkingDays(ym: string) {
+  if (!ym) return
+  moldingPlanWorkingDays.value = await fetchScheduledWorkdaysForMonth(ym)
+}
+
+async function refreshWeldingPlanWorkingDays(ym: string) {
+  if (!ym) return
+  weldingPlanWorkingDays.value = await fetchScheduledWorkdaysForMonth(ym)
 }
 
 /** 生産計画月の「月末＋1日」＝翌月1日（例: 2026-04 → 2026-05-01） */
@@ -5420,6 +5424,7 @@ function onMoldingPlanMonthChange() {
     moldingPlanBaseDate.value = baseDateFromPlanMonth(moldingPlanMonth.value)
     moldingPlanWorkingDays.value = calcWorkingDays(moldingPlanMonth.value)
     moldingPlanClearFromDate.value = moldingPlanBaseDate.value
+    void refreshMoldingPlanWorkingDays(moldingPlanMonth.value)
   }
 }
 
@@ -5433,6 +5438,7 @@ function openMoldingPlanDialog() {
     moldingPlanResult.value = []
   moldingPlanClearFromDate.value = baseDateFromPlanMonth(mStr)
   showMoldingPlanDialog.value = true
+  void refreshMoldingPlanWorkingDays(mStr)
 }
 
 function formatMoldingPlanInt(n: number): string {
@@ -5834,6 +5840,7 @@ function onWeldingPlanMonthChange() {
     weldingPlanBaseDate.value = baseDateFromPlanMonth(weldingPlanMonth.value)
     weldingPlanWorkingDays.value = calcWorkingDays(weldingPlanMonth.value)
     weldingPlanClearFromDate.value = weldingPlanBaseDate.value
+    void refreshWeldingPlanWorkingDays(weldingPlanMonth.value)
   }
 }
 
@@ -5847,6 +5854,7 @@ function openWeldingPlanDialog() {
   weldingPlanResult.value = []
   weldingPlanClearFromDate.value = baseDateFromPlanMonth(mStr)
   showWeldingPlanDialog.value = true
+  void refreshWeldingPlanWorkingDays(mStr)
 }
 
 function printWeldingPlanResult() {

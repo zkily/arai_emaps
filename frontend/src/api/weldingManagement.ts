@@ -99,3 +99,101 @@ export function patchWeldingManagement(
     message?: string
   }>
 }
+
+export interface WeldingProductivityBucket {
+  session_count?: number
+  completed_session_count?: number
+  sum_actual_qty?: number
+  sum_defect_qty?: number
+  sum_net_production_sec?: number
+  sum_net_production_min?: number
+  sum_paused_sec?: number
+  sum_paused_min?: number
+  defect_rate_percent?: number | null
+  efficiency_per_hour?: number | null
+}
+
+export interface WeldingProductivityDailyRow extends WeldingProductivityBucket {
+  day: string
+}
+
+export interface WeldingProductivityOperatorRow extends WeldingProductivityBucket {
+  operator_user_id?: number | null
+  operator_name?: string
+  rank?: number
+}
+
+export interface WeldingProductivityProductOperatorRanking {
+  product_cd: string
+  product_name?: string
+  sum_actual_qty?: number
+  session_count?: number
+  operator_count?: number
+  ranked_operator_count?: number
+  top_operator_name?: string | null
+  top_efficiency_per_hour?: number | null
+  operators: WeldingProductivityOperatorRow[]
+}
+
+export interface WeldingProductivityProductRow extends WeldingProductivityBucket {
+  product_cd?: string
+  product_name?: string
+}
+
+export interface WeldingProductivityDefectRow {
+  defect_cd: string
+  qty: number
+}
+
+export interface WeldingProductivitySessionRow extends WeldingManagementListRow {
+  net_production_sec?: number
+  paused_sec?: number
+  net_production_min?: number
+  paused_min?: number
+  efficiency_per_hour?: number | null
+  defect_rate_percent?: number | null
+  is_completed?: boolean
+  operator_display_name?: string
+  mes_operator_name?: string | null
+  mes_operator_username?: string | null
+}
+
+export interface WeldingProductivityAnalysisData {
+  start_date: string
+  end_date: string
+  include_incomplete: boolean
+  summary: WeldingProductivityBucket
+  daily: WeldingProductivityDailyRow[]
+  by_operator: WeldingProductivityOperatorRow[]
+  by_product: WeldingProductivityProductRow[]
+  by_product_operator_ranking: WeldingProductivityProductOperatorRanking[]
+  defect_by_item: WeldingProductivityDefectRow[]
+  sessions: WeldingProductivitySessionRow[]
+}
+
+export interface WeldingProductivityAnalysisResponse {
+  success?: boolean
+  data?: WeldingProductivityAnalysisData
+  message?: string
+}
+
+export function fetchWeldingProductivityAnalysis(params: {
+  start_date: string
+  end_date: string
+  mes_operator_user_id?: number | null
+  product_cd?: string | null
+  include_incomplete?: boolean
+  limit?: number
+}): Promise<WeldingProductivityAnalysisResponse> {
+  return request.get('/api/plan/welding-management/productivity-analysis', {
+    params: {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      mes_operator_user_id: params.mes_operator_user_id ?? undefined,
+      product_cd: params.product_cd || undefined,
+      include_incomplete: params.include_incomplete ? true : undefined,
+      limit: params.limit,
+    },
+  }) as Promise<WeldingProductivityAnalysisResponse>
+}
+

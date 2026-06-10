@@ -197,6 +197,20 @@ class DestinationWorkday(Base):
     created_at = Column(DateTime, default=func.now())
 
 
+class CompanyWorkCalendar(Base):
+    """会社共通稼働カレンダー（company_work_calendar）"""
+    __tablename__ = "company_work_calendar"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    calendar_date = Column(Date, nullable=False, unique=True, index=True)
+    day_type = Column(String(30), nullable=False, default="company_holiday")
+    is_scheduled = Column(Boolean, nullable=False, default=False)
+    name = Column(String(100))
+    note = Column(String(255))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class Customer(Base):
     """顧客マスタ（customers）"""
     __tablename__ = "customers"

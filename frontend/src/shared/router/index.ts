@@ -281,6 +281,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/machine', name: 'MachineList', component: () => import('@/views/master/machine/MachineList.vue'), meta: { title: '設備マスタ', requiresAuth: true } },
       { path: 'master/destination', name: 'DestinationList', component: () => import('@/views/master/destination/DestinationList.vue'), meta: { title: '納入先マスタ', requiresAuth: true } },
       { path: 'master/destination/holiday', name: 'DestinationHoliday', component: () => import('@/views/master/destination/DestinationHoliday.vue'), meta: { title: '納入先休日設定', requiresAuth: true } },
+      { path: 'master/company-work-calendar', name: 'CompanyWorkCalendar', component: () => import('@/views/master/calendar/CompanyWorkCalendar.vue'), meta: { title: '会社稼働カレンダー', requiresAuth: true } },
       { path: 'master/bom', name: 'BomHome', component: () => import('@/views/master/BomList.vue'), meta: { title: 'BOMホーム', requiresAuth: true } },
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },

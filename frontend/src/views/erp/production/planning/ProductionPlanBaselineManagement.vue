@@ -844,6 +844,7 @@ import {
   type SchedulingGridResponse,
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
+import { fetchScheduledWorkdaysForMonth } from '@/api/master/companyWorkCalendar'
 import type { ProcessItem } from '@/types/master'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
@@ -1893,13 +1894,13 @@ async function buildProcessPdf(
   const headers = ['日付', '基準計画', '現行計画', '計画差異', '現行実績合計', '計画対実績差']
 
   const baselinePlanTotal = items.reduce((sum, row) => sum + Number(row.baseline_plan ?? 0), 0)
-  // 稼働日数＝当該工程・当月比較表のデータ行数（工程ごとに行数が異なる）
-  const workingDays = items.length
+  const ym = dayjs(baselineMonth).format('YYYY-MM')
+  const workingDays = await fetchScheduledWorkdaysForMonth(ym)
   const avgDailyBaseline =
     workingDays > 0 ? Math.round(baselinePlanTotal / workingDays) : 0
   const statsText =
     workingDays > 0
-      ? `稼働日数: ${workingDays}日（${processName}・当月データ件数）　平均日当たり基準計画: ${formatNumber(avgDailyBaseline)}`
+      ? `稼働日数: ${workingDays}日（会社稼働カレンダー）　平均日当たり基準計画: ${formatNumber(avgDailyBaseline)}`
       : ''
 
   const numCell = (value: number | string | null | undefined) => {

@@ -148,7 +148,12 @@ const pathToMenuCode = computed(() => {
 })
 const tabTitle = (tab: TabItem) => {
   const code = pathToMenuCode.value[tab.path]
-  return code ? t('menu.' + code) : tab.title
+  if (code) {
+    const key = 'menu.' + code
+    const translated = t(key)
+    if (translated !== key) return translated
+  }
+  return tab.title || tab.path
 }
 
 const contextMenu = reactive({
