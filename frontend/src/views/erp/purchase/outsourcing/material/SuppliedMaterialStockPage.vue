@@ -219,11 +219,6 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
-import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
-
   Search,
   Refresh,
   Download,
@@ -233,6 +228,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOper
   Upload,
   View,
 } from '@element-plus/icons-vue'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 interface MaterialStock {
   materialCode: string

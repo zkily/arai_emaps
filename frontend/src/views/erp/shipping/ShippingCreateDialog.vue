@@ -1586,11 +1586,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 /** request 拦截器返回 response.data，此处为 API 返回的 body */
 type ApiRes = { success?: boolean; data?: any; list?: any[]; box_type?: string; total?: number }
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   Refresh,
   Delete,
   Right,
@@ -1622,6 +1617,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   ArrowUp,
   ArrowDown,
 } from '@element-plus/icons-vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 扩展 Document 接口以支持全屏 API
 declare global {

@@ -203,16 +203,16 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import {
-import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
-import { guardApsOperation } from '@/utils/apsOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
-
   fetchMaterialRequirementsSummary,
   type MaterialRequirementsSummaryItem,
   type MaterialRequirementsSummaryMeta,
   type MaterialRequirementsDailyMatrixRow,
 } from '@/api/productionSchedule'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 /** 汇总表表体最大高度（px），超出出现纵向滚动条 */
 const SUMMARY_TABLE_MAX_H = 320

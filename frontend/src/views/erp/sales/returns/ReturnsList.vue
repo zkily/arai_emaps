@@ -296,17 +296,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { RefreshLeft, Search, Plus, Delete } from '@element-plus/icons-vue'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   getReturns,
   getReturnById,
   createReturn,
   approveReturn,
   receiveReturn,
 } from '@/api/erp/sales'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 interface ReturnItem {
   product_code: string

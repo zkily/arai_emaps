@@ -110,15 +110,15 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import {
+  getInventoryStagnation,
+  type InventoryStagnationResponse,
+  type InventoryStagnationRow,
+} from '@/api/database'
 import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
 import { guardApsOperation } from '@/utils/apsOperationGuard'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
 
-  getInventoryStagnation,
-  type InventoryStagnationResponse,
-  type InventoryStagnationRow,
-} from '@/api/database'
 
 interface Props {
   modelValue: boolean

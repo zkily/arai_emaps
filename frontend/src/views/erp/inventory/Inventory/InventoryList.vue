@@ -230,11 +230,6 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { List, Download, Refresh, Loading } from '@element-plus/icons-vue'
 import {
-import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
-import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
-
   getProductionSummarysList,
   getProductionSummarysProducts,
   acquireBatchUpdateLock,
@@ -252,6 +247,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOpe
   type ProductionSummaryInventoryRow,
   type ProductionSummaryProduct
 } from '@/api/database'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 const loading = ref(false)
 const list = ref<ProductionSummaryInventoryRow[]>([])

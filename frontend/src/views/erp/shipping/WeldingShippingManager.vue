@@ -223,11 +223,6 @@ import { ElMessage } from 'element-plus'
 import type { TableColumnCtx } from 'element-plus'
 import { Search, Refresh, Printer, Calendar, Box, DataLine, Loading } from '@element-plus/icons-vue'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   getWeldingProducts,
   getWeldingShippingData,
   exportWeldingShippingReport,
@@ -235,6 +230,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   type WeldingShippingData,
   type WeldingShippingRecord,
 } from '@/api/shipping/weldingShipping'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 

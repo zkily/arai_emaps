@@ -247,16 +247,16 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import {
-import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
-import { guardApsOperation } from '@/utils/apsOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
-
   fetchComponentRequirementsBundle,
   type ComponentRequirementsSummaryItem,
   type ComponentRequirementsDailyMatrixRow,
   type ComponentRequirementsSummaryMeta,
 } from '@/api/productionSchedule'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 const { t, locale } = useI18n()
 

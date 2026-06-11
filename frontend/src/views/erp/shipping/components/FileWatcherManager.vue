@@ -614,11 +614,6 @@ import {
   Connection,
 } from '@element-plus/icons-vue'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   getFileWatcherStatus,
   startFileWatcher,
   stopFileWatcher,
@@ -634,6 +629,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   type FileWatcherStatus,
   type ShippingLogRecord,
 } from '@/api/shipping/fileWatcher'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 错误处理接口
 interface ApiError {

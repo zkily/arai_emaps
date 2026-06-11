@@ -212,11 +212,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Document, Search, Plus, Delete } from '@element-plus/icons-vue'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   getQuotations,
   createQuotation,
   updateQuotation,
@@ -224,6 +219,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   deleteQuotation,
   convertQuotationToOrder,
 } from '@/api/erp/sales'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 interface QuotationItem {
   product_code: string

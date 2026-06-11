@@ -246,17 +246,17 @@ import {
   Operation,
 } from '@element-plus/icons-vue'
 import {
-import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
-import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
-
   getPlatingStock,
   getWeldingStock,
   getOutsourcingStockHistory,
   getSuppliers,
   type OutsourcingSupplier,
 } from '@/api/outsourcing'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 /** API 响应体（request 拦截器已返回 response.data） */
 type SupplierListRes = { success?: boolean; data?: OutsourcingSupplier[] }

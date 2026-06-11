@@ -406,11 +406,6 @@ import type { ElTagType } from '@/types/elementPlus'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
-import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
-
   Search,
   Refresh,
   Plus,
@@ -421,6 +416,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOper
   Box,
   Printer,
 } from '@element-plus/icons-vue'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 interface IssueItem {
   id: number

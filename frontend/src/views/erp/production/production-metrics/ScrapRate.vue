@@ -361,15 +361,15 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
+  getProductionSummarysProducts,
+  getQualityRateByProcess,
+  getQualityRateByProduct,
+} from '@/api/database'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
 
-  getProductionSummarysProducts,
-  getQualityRateByProcess,
-  getQualityRateByProduct,
-} from '@/api/database'
 
 const iconHero = markRaw(DataAnalysis)
 const gradient = 'linear-gradient(135deg, #f56c6c, #ff7875)'

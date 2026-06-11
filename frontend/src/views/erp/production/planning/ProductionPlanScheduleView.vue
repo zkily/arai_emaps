@@ -313,16 +313,16 @@ import { Printer, Refresh } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchPlanOperationRate } from '@/api/planBaseline'
 import {
-import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
-import { guardApsOperation } from '@/utils/apsOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
-
   fetchLines,
   fetchSchedulingGrid,
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 /** 一覧（FormingPlanningList）と同じ APS 工程コード */
 const PROCESS_CD_FORMING = 'KT04'

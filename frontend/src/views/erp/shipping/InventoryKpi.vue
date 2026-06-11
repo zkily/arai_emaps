@@ -451,11 +451,6 @@ import { DataAnalysis, Printer } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { getJSTToday } from '@/utils/dateFormat'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   getInventoryTurnover,
   getAvgInventoryDays,
   getShortageAlerts,
@@ -467,6 +462,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   type OverstockAlertRow,
   type ReorderPointRow,
 } from '@/api/database'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 

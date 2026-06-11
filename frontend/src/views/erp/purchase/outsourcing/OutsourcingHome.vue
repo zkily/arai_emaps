@@ -278,15 +278,15 @@ import {
   Box,
 } from '@element-plus/icons-vue'
 import {
+  getOutsourcingDashboard,
+  getUpcomingDeliveries,
+  getSupplierSummary,
+} from '@/api/outsourcing'
 import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
 import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
 
 const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
 
-  getOutsourcingDashboard,
-  getUpcomingDeliveries,
-  getSupplierSummary,
-} from '@/api/outsourcing'
 
 // 状态
 const loading = ref(false)

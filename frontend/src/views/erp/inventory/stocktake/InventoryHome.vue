@@ -64,11 +64,6 @@
 <script setup lang="ts">
 import { computed, markRaw } from 'vue'
 import {
-import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
-import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
-
   Box,
   ArrowRight,
   Warning,
@@ -82,6 +77,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOpe
   Coin,
   Tools,
 } from '@element-plus/icons-vue'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 const modules = [
   {

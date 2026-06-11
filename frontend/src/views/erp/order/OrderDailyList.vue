@@ -346,11 +346,6 @@ import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Downl
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
 import {
-import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
-import { guardSalesOperation } from '@/utils/salesOperationGuard'
-
-const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
-
   fetchOrderDailyList,
   updateOrderDaily,
   deleteOrderDaily,
@@ -361,6 +356,11 @@ const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperati
   type OrderDailyCreate,
   type OrderDailyFilters,
 } from '@/api/erp/orderDaily'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const route = useRoute()
 
