@@ -84,11 +84,12 @@ export default defineConfig(({ mode }) => {
       AutoImport({
         resolvers: [ElementPlusResolver()],
         imports: ['vue', 'vue-router', 'pinia'],
-        dts: 'src/auto-imports.d.ts',
+        // 生产构建不写 d.ts，避免 Windows 下文件被 IDE/TS 占用导致 UNKNOWN 错误
+        dts: mode !== 'production' ? 'src/auto-imports.d.ts' : false,
       }),
       Components({
         resolvers: [ElementPlusResolver()],
-        dts: 'src/components.d.ts',
+        dts: mode !== 'production' ? 'src/components.d.ts' : false,
       }),
     ],
     resolve: {
