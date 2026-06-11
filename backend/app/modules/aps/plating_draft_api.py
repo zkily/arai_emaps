@@ -9,6 +9,7 @@ from sqlalchemy.orm import noload, selectinload
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation
 from app.modules.auth.models import User
 from app.modules.aps.models import (
     ApsPlatingPlanBoardCard,
@@ -653,7 +654,7 @@ async def _replace_board_cards(
 async def create_plating_draft(
     body: PlatingDraftBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     max_ver_res = await db.execute(
         select(func.max(ApsPlatingPlanDraft.version_no)).where(ApsPlatingPlanDraft.plan_date == body.plan_date)
@@ -719,7 +720,7 @@ async def update_plating_draft(
     draft_id: int,
     body: PlatingDraftBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     row = await db.get(ApsPlatingPlanDraft, draft_id)
     if row is None:
@@ -936,7 +937,7 @@ async def get_plating_draft_by_id(
 async def delete_plating_draft(
     draft_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     row = await db.get(ApsPlatingPlanDraft, draft_id)
     if row is None:
@@ -978,7 +979,7 @@ async def get_plating_jig_availability(
 async def put_plating_jig_availability(
     body: PlatingJigAvailabilityBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     await db.execute(delete(ApsPlatingJigAvailability).where(ApsPlatingJigAvailability.work_date == body.work_date))
     await db.flush()

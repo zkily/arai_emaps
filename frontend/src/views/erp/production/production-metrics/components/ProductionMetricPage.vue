@@ -81,6 +81,11 @@ import { ref } from 'vue'
 import { Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { ProductionMetricConfig } from '../types'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
 
 defineProps<{
   config: ProductionMetricConfig

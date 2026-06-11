@@ -19,6 +19,7 @@ from app.core.company_work_calendar import (
 )
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.modules.master.models import CompanyWorkCalendar
 
@@ -146,7 +147,7 @@ async def resolve_workdays(
 async def create_company_work_calendar_entry(
     body: CompanyWorkCalendarCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     cal_date = _parse_ymd(body.calendar_date)
     q = select(CompanyWorkCalendar).where(CompanyWorkCalendar.calendar_date == cal_date)
@@ -181,7 +182,7 @@ async def create_company_work_calendar_entry(
 async def batch_create_company_work_calendar(
     body: CompanyWorkCalendarBatchCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     day_type = (body.day_type or "").strip()
     if day_type not in VALID_DAY_TYPES:
@@ -219,7 +220,7 @@ async def update_company_work_calendar_entry(
     entry_id: int,
     body: CompanyWorkCalendarUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     q = select(CompanyWorkCalendar).where(CompanyWorkCalendar.id == entry_id)
     row = (await db.execute(q)).scalar_one_or_none()
@@ -248,7 +249,7 @@ async def update_company_work_calendar_entry(
 async def delete_company_work_calendar_entry(
     entry_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     q = select(CompanyWorkCalendar).where(CompanyWorkCalendar.id == entry_id)
     row = (await db.execute(q)).scalar_one_or_none()

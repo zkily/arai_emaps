@@ -8,6 +8,7 @@ from typing import Optional, Any
 from datetime import date, datetime
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.outsourcing.models import PlatingOrder, PlatingReceiving, PlatingStock, OutsourcingSupplier
@@ -287,7 +288,7 @@ async def get_plating_orders_by_order_no(
 async def create_plating_order(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """メッキ注文新規登録（order_no 自動採番）"""
     try:
@@ -371,7 +372,7 @@ async def update_plating_order(
     order_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """メッキ注文更新。注文・受入を更新し、トリガーで stock_transaction_logs は「直接更新数量」で反映する（編集時は削除しない）。"""
     q = select(PlatingOrder).where(PlatingOrder.id == order_id)
@@ -435,7 +436,7 @@ async def update_plating_order(
 async def delete_plating_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """メッキ注文削除。outsourcing_plating_orders の該当行の order_no を元に、
     1) outsourcing_plating_receivings の order_no が同じ行を削除、
@@ -466,7 +467,7 @@ async def delete_plating_order(
 async def batch_order_plating(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """注文書発行：対象 id のうち status='pending' の注文のみ status を 'ordered' に更新し、
     該当注文ごとに outsourcing_plating_receivings に 1 件の受入レコード（待受入）を自動作成する。"""
@@ -560,7 +561,7 @@ async def get_plating_stock(
     productCode: Optional[str] = Query(None, alias="productCode"),
     stockStatus: Optional[str] = Query(None, alias="stockStatus"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """外注メッキ在庫一覧（outsourcing_plating_stock + 外注先名は outsourcing_suppliers と JOIN）"""
     q = (
@@ -625,7 +626,7 @@ async def get_plating_receivings(
     productName: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """メッキ受入一覧（ページネーション・日付・条件絞り）"""
     q = select(PlatingReceiving)
@@ -685,7 +686,7 @@ async def get_plating_receivings(
 async def create_plating_receiving(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """メッキ受入新規登録（receiving_no 未指定時は PR-YYYYMMDD-NN 形式を自動作成）"""
     order_id = body.get("order_id") or body.get("orderId")
@@ -751,7 +752,7 @@ async def update_plating_receiving(
     receiving_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """メッキ受入更新"""
     q = select(PlatingReceiving).where(PlatingReceiving.id == receiving_id)
@@ -793,7 +794,7 @@ async def update_plating_receiving(
 async def delete_plating_receiving(
     receiving_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """メッキ受入削除"""
     q = select(PlatingReceiving).where(PlatingReceiving.id == receiving_id)
@@ -829,7 +830,7 @@ async def delete_plating_receiving(
 @router.get("/receivings/products")
 async def get_plating_receiving_products(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """メッキ注文・受入で使用されている品名一覧（重複排除）"""
     q = select(distinct(PlatingOrder.product_name)).where(

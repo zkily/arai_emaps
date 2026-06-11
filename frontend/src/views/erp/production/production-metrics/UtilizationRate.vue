@@ -7,6 +7,11 @@ import { markRaw } from 'vue'
 import { Monitor } from '@element-plus/icons-vue'
 import ProductionMetricPage from './components/ProductionMetricPage.vue'
 import type { ProductionMetricConfig } from './types'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
 
 const config: ProductionMetricConfig = {
   title: '稼働率',

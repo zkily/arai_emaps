@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Process
@@ -117,7 +118,7 @@ async def get_process_by_id(
 async def create_process(
     body: ProcessCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """工程新規登録"""
     q = select(Process).where(Process.process_cd == body.process_cd)
@@ -146,7 +147,7 @@ async def update_process(
     process_id: int,
     body: ProcessUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """工程更新"""
     q = select(Process).where(Process.id == process_id)
@@ -181,7 +182,7 @@ async def update_process(
 async def delete_process(
     process_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """工程削除"""
     q = select(Process).where(Process.id == process_id)

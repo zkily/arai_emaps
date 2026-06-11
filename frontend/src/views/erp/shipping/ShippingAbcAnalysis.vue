@@ -179,6 +179,11 @@ import { DataAnalysis, Download } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import request from '@/utils/request'
 import { getProductList } from '@/api/master/productMaster'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const chartRef = ref<HTMLElement | null>(null)
@@ -306,6 +311,8 @@ async function fetchShippingItems(): Promise<any[]> {
 }
 
 function runAnalysis() {
+  if (!guardSalesOperation(canEdit)) return
+
   loading.value = true
   tableData.value = []
   chartData.labels = []
@@ -434,6 +441,8 @@ function runAnalysis() {
 }
 
 function updateChart() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!chartRef.value || chartData.labels.length === 0) return
   if (!chartInstance) {
     chartInstance = echarts.init(chartRef.value)
@@ -501,6 +510,8 @@ watch(
 )
 
 function handleExport() {
+  if (!guardSalesOperation(canExport)) return
+
   if (tableData.value.length === 0) {
     ElMessage.warning('エクスポートするデータがありません')
     return

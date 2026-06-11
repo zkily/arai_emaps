@@ -247,6 +247,11 @@ import { ref, computed, watch } from 'vue'
 import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Van, List, Edit, Check, Close } from '@element-plus/icons-vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const props = defineProps({
   shippingItem: {
@@ -399,18 +404,24 @@ async function fetchShippingDetails(shippingNo: string) {
 }
 
 function enableBatchEdit() {
+  if (!guardSalesOperation(canCreate)) return
+
   batchEditMode.value = true
   // 保存当前数据用于取消时恢复
   originalShippingItems.value = JSON.parse(JSON.stringify(shippingItems.value))
 }
 
 function cancelBatchEdit() {
+  if (!guardSalesOperation(canCreate)) return
+
   batchEditMode.value = false
   // 恢复原始数据
   shippingItems.value = JSON.parse(JSON.stringify(originalShippingItems.value))
 }
 
 async function saveBatchEdit() {
+  if (!guardSalesOperation(canCreate)) return
+
   // 验证数据
   const invalidItems = shippingItems.value.filter(
     (item) => !item.confirmed_units || item.confirmed_units <= 0,
@@ -492,12 +503,16 @@ async function saveBatchEdit() {
 }
 
 function startEditShippingNo() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!isEditable.value) return
   editingShippingNo.value = true
   editableShippingNoSuffix.value = parseInt(shippingNoSuffix.value) || 1
 }
 
 async function saveShippingNoChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!editingShippingNo.value) return
 
   try {
@@ -623,6 +638,8 @@ async function saveShippingNoChange() {
 }
 
 function handleClose() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (batchEditMode.value || editingShippingNo.value) {
     ElMessageBox.confirm('編集中のデータがあります。保存せずに閉じますか？', '確認', {
       confirmButtonText: '閉じる',

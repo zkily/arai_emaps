@@ -346,6 +346,11 @@ import { Calendar, Plus, Document, Box, InfoFilled, Close, Check, Refresh, Downl
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   fetchOrderDailyList,
   updateOrderDaily,
   deleteOrderDaily,
@@ -397,6 +402,8 @@ const dateRange = ref<[string, string] | null>(getTodayRange())
 
 /** 販売受注一覧などからの遷移用 query: start_date, end_date, keyword, destination_cd */
 function applyRouteQuery() {
+  if (!guardSalesOperation(canEdit)) return
+
   const q = route.query
   const start = typeof q.start_date === 'string' ? q.start_date : ''
   const end = typeof q.end_date === 'string' ? q.end_date : ''
@@ -456,6 +463,8 @@ function formatYmdFromDate(d: Date): string {
 
 /** 今日・今週・今月・先月（getJapanDate 基準） */
 function applyQuickRange(kind: 'today' | 'week' | 'month' | 'lastMonth') {
+  if (!guardSalesOperation(canEdit)) return
+
   const d = getJapanDate()
   if (kind === 'today') {
     dateRange.value = getTodayRange()
@@ -500,6 +509,8 @@ function escapeCsvCell(v: unknown): string {
 }
 
 function exportCsv() {
+  if (!guardSalesOperation(canExport)) return
+
   const rows = fullList.value
   if (!rows.length) {
     ElMessage.warning('出力するデータがありません')
@@ -555,6 +566,8 @@ function exportCsv() {
 
 const tableMaxHeight = ref(480)
 function updateTableMaxHeight() {
+  if (!guardSalesOperation(canEdit)) return
+
   /* ヘッダー・KPI・余白を差し引き、一覧を縦に最大化 */
   tableMaxHeight.value = Math.max(240, window.innerHeight - 296)
 }
@@ -613,6 +626,8 @@ async function loadOptions() {
 }
 
 function applyPagination() {
+  if (!guardSalesOperation(canEdit)) return
+
   const allData = fullList.value
   pagination.total = allData.length
   const maxPage = Math.max(1, Math.ceil(allData.length / pagination.pageSize) || 1)
@@ -652,11 +667,15 @@ async function refreshAll() {
 }
 
 function handlePageChange(page: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.page = page
   applyPagination()
 }
 
 function handleSizeChange(size: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.pageSize = size
   pagination.page = 1
   applyPagination()
@@ -776,6 +795,8 @@ const confirmedUnitsDisplay = computed(() => {
 })
 
 function calculateConfirmedUnits() {
+  if (!guardSalesOperation(canApprove)) return
+
   form.confirmed_units = (form.unit_per_box || 0) * (form.confirmed_boxes || 0)
 }
 
@@ -834,6 +855,8 @@ function resetForm() {
 
 // ========== 保存ロジック（handleSave） ==========
 async function submitForm() {
+  if (!guardSalesOperation(canEdit)) return
+
   // ① Element Plus Form 校验
   try {
     await formRef.value?.validate()
@@ -974,6 +997,8 @@ async function submitForm() {
 
 // ========== 削除 ==========
 async function handleDelete(row: OrderDailyItem) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(`日別受注 ID「${row.id}」を削除しますか？`, '確認', { type: 'warning' })
     await deleteOrderDaily(row.id)

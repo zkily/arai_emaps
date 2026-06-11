@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Destination, Product
@@ -480,7 +481,7 @@ async def _roll_warehouse_stock_from_last_positive_carryover(db: AsyncSession) -
 @router.post("/sync-from-order-daily")
 async def sync_from_order_daily(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     1) order_daily を product_cd + destination_cd + date で集約し、
@@ -541,7 +542,7 @@ async def sync_from_order_daily(
 @router.post("/generate-data")
 async def generate_warehouse_daily_data(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     当月月初から「+3ヶ月後の月」の末日まで、products 全件 × 全日付の行を

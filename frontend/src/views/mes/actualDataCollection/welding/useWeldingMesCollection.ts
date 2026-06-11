@@ -47,6 +47,8 @@ import {
   isNetworkOrServerDownError,
 } from './weldingActualOfflineSync'
 import { getMesClientInstanceId } from './mesClientInstance'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 type MesLockOwner = 'mine' | 'other' | 'unclaimed'
 
@@ -56,6 +58,7 @@ interface PlanSession extends PlanSessionLike {}
 
 export function useWeldingMesCollection() {
   const { t, te } = useI18n()
+  const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
   const productionDay = ref(getJSTToday())
   const selectedWeldingMachineId = ref<number | null>(null)
@@ -479,6 +482,7 @@ export function useWeldingMesCollection() {
   }
 
   async function ensurePlanForProduct(code: string, name: string): Promise<number | null> {
+    if (!guardMesOperation(canCreate)) return null
     const inspId = operatorUserId.value
     if (inspId == null) return null
     const machine = selectedWeldingMachineName.value
@@ -734,6 +738,7 @@ export function useWeldingMesCollection() {
   }
 
   async function resumeInProgressSession(row: WeldingMgmtRow): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const ri = rowOperatorId(row)
     if (ri == null) {
       ElMessage.warning(t('mesWeldingActual.inspectorRequired'))
@@ -840,6 +845,7 @@ export function useWeldingMesCollection() {
   })
 
   const canOperateActivePlan = computed(() => {
+    if (!canEdit.value) return false
     const planId = activePlanId.value
     if (planId == null) return false
     const row = managementRows.value.find((r) => r.id === planId)
@@ -848,6 +854,7 @@ export function useWeldingMesCollection() {
   })
 
   const canStart = computed(() => {
+    if (!canEdit.value) return false
     if (
       selectedWeldingMachineId.value == null ||
       operatorUserId.value == null ||
@@ -1071,6 +1078,7 @@ export function useWeldingMesCollection() {
   }
 
   function bumpDefect(itemId: string, delta: number): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     const sess = session.value
     if (id == null || !sess || !isPlanLocallyOperated(id)) return
@@ -1080,6 +1088,7 @@ export function useWeldingMesCollection() {
   }
 
   async function onStartProduction(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     if (selectedWeldingMachineId.value == null) {
       ElMessage.warning(t('mesWeldingActual.machineRequired'))
       return
@@ -1138,6 +1147,7 @@ export function useWeldingMesCollection() {
   }
 
   function onPauseProduction(): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     if (id == null || !isPlanLocallyOperated(id)) return
     const s = session.value
@@ -1151,6 +1161,7 @@ export function useWeldingMesCollection() {
   }
 
   function onResumeProduction(): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     if (id == null || !isPlanLocallyOperated(id)) return
     const s = session.value
@@ -1204,6 +1215,7 @@ export function useWeldingMesCollection() {
   })
 
   async function submitProductionEnd(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     const s = session.value
     const preview = endDialogPreview.value
@@ -1565,6 +1577,7 @@ export function useWeldingMesCollection() {
   }
 
   function openConfirmedHistoryEdit(row: WeldingMgmtRow): void {
+    if (!guardMesOperation(canEdit)) return
     const id = row.id
     if (id == null || !isRowProductionCompleted(row)) return
     const sess = ensureSession(id)
@@ -1613,6 +1626,7 @@ export function useWeldingMesCollection() {
   }
 
   async function submitConfirmedHistoryEdit(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const row = confirmedEditRow.value
     const planId = confirmedEditPlanId.value
     const draft = confirmedEditForm.value
@@ -1679,6 +1693,7 @@ export function useWeldingMesCollection() {
   }
 
   async function clearConfirmedHistoryMesAndSave(): Promise<void> {
+    if (!guardMesOperation(canDelete)) return
     const row = confirmedEditRow.value
     const planId = confirmedEditPlanId.value
     if (!row || planId == null) return
@@ -1828,5 +1843,9 @@ export function useWeldingMesCollection() {
     bumpConfirmedEditDefect,
     init,
     teardownLifecycle,
+    canCreate,
+    canEdit,
+    canDelete,
+    canExport,
   }
 }

@@ -2107,6 +2107,11 @@ import { fetchEquipmentEfficiencyList } from '@/api/master/equipmentEfficiencyMa
 import { fetchScheduledWorkdaysForMonth, calcWeekdayFallbackForMonth } from '@/api/master/companyWorkCalendar'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import InventoryStagnationDrawer from './components/InventoryStagnationDrawer.vue'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 const STOCK_LOGS_BASE = '/api/erp/stock-transaction-logs'
 const INVENTORY_BASE = '/api/erp/inventory'
@@ -2730,6 +2735,8 @@ const handleGenerateData = () => {
 }
 
 const handleUpdateFromOrderDaily = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     updatingFromOrderDaily.value = true
     const res = await updateProductionSummarysFromOrderDaily({
@@ -2751,6 +2758,8 @@ const handleUpdateFromOrderDaily = async () => {
 }
 
 const handleUpdateCarryOver = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('繰越データを更新します。', '繰越データ更新確認', {
       confirmButtonText: '実行',
@@ -2861,6 +2870,8 @@ const handleUpdateCarryOver = async () => {
  * outsourced_warehouse_actual
  */
 const handleUpdateActual = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('実績データを更新します。', '実績データ更新確認', {
       confirmButtonText: '実行',
@@ -2910,6 +2921,8 @@ const handleUpdateActual = async () => {
 }
 
 const handleUpdateDefect = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('不良データを更新します。', '不良データ更新確認', {
       confirmButtonText: '実行',
@@ -2957,6 +2970,8 @@ const handleUpdateDefect = async () => {
 }
 
 const handleUpdateScrap = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('廃棄データを更新します。', '廃棄データ更新確認', {
       confirmButtonText: '実行',
@@ -3004,6 +3019,8 @@ const handleUpdateScrap = async () => {
 }
 
 const handleUpdateOnHold = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('保留データを更新します。', '保留データ更新確認', {
       confirmButtonText: '実行',
@@ -3051,6 +3068,8 @@ const handleUpdateOnHold = async () => {
 }
 
 const handleUpdateProductionDates = async () => {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('各工程の生産計画日を営業日換算で更新します。', '生産計画日更新確認', {
       confirmButtonText: '実行',
@@ -3234,6 +3253,8 @@ async function resolveInventoryTrendCalcStartDate(): Promise<string> {
 
 /** 在庫→推移→安全在庫（計算フィールドクリア後）。メニュー「在庫・推移更新」と同一処理 */
 async function runInventoryTrendUpdateSequence(startDate: string) {
+  if (!guardApsOperation(canEdit)) return
+
   try {
     await clearProductionSummarysCalculatedFields(startDate)
   } catch (_e) {
@@ -3292,6 +3313,8 @@ const handleUpdatePlan = () => {
 }
 
 const confirmUpdatePlan = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   showPlanConfirmDialog.value = false
   updatingPlan.value = true
   const startDate = getFirstDayOfCurrentMonth()
@@ -3346,6 +3369,8 @@ const handleInventoryTrendUpdate = () => {
 }
 
 const confirmInventoryTrendUpdate = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   showInventoryTrendUpdateConfirmDialog.value = false
   updatingInventoryTrend.value = true
   const startDate = await resolveInventoryTrendCalcStartDate()
@@ -3370,6 +3395,8 @@ const handleUpdateProductMaster = () => {
 }
 
 const confirmUpdateProductMaster = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   if (!productMasterDateRange.value || productMasterDateRange.value.length !== 2) {
     ElMessage.warning('更新期間を選択してください')
     return
@@ -3435,6 +3462,8 @@ const handleUpdateMachine = () => {
 }
 
 const confirmUpdateMachine = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   if (!machineDateRange.value || machineDateRange.value.length !== 2) {
     ElMessage.warning('更新期間を選択してください')
     return
@@ -3622,6 +3651,8 @@ function getRandomUUID(): string {
 }
 
 const confirmAllUpdate = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   showAllUpdateConfirmDialog.value = false
   const lockValue = getRandomUUID()
   try {
@@ -3734,6 +3765,8 @@ const confirmAllUpdate = async () => {
 }
 
 const confirmGenerateData = async () => {
+  if (!guardApsOperation(canApprove)) return
+
   const startDateStr = generateDateRange.value.start
   const endDateStr = generateDateRange.value.end
   if (!startDateStr || !endDateStr) {
@@ -3860,6 +3893,8 @@ const fetchProductList = async () => {
 
 // ---------- 実績一括登録 ----------
 function getEmptyBatchActualRow() {
+  if (!guardApsOperation(canCreate)) return
+
   return {
     product_cd: '',
     product_name: '',
@@ -3870,6 +3905,8 @@ function getEmptyBatchActualRow() {
   }
 }
 function handleResetBatchActual() {
+  if (!guardApsOperation(canCreate)) return
+
   batchActualTableData.value = [
     { ...getEmptyBatchActualRow() },
     { ...getEmptyBatchActualRow() },
@@ -3879,6 +3916,8 @@ function handleResetBatchActual() {
   }
 }
 function handleOpenBatchActualDialog() {
+  if (!guardApsOperation(canCreate)) return
+
   if (!batchActualDate.value) {
     batchActualDate.value = createDefaultDateRange()[0]
   }
@@ -3886,14 +3925,20 @@ function handleOpenBatchActualDialog() {
   showBatchActualDialog.value = true
 }
 function handleBatchActualDateChange() {
+  if (!guardApsOperation(canCreate)) return
+
   const d = batchActualDate.value || ''
   batchActualTableData.value.forEach((r) => { r.date = d })
 }
 function handleBatchActualProductChange(row: { product_cd: string; product_name: string }, productCd: string) {
+  if (!guardApsOperation(canCreate)) return
+
   const p = productList.value.find((x) => x.product_cd === productCd)
   row.product_name = p?.product_name ?? ''
 }
 async function handleSubmitBatchActual() {
+  if (!guardApsOperation(canCreate)) return
+
   if (!batchActualDate.value) {
     ElMessage.warning('日付を選択してください')
     return
@@ -4002,6 +4047,8 @@ function handleCellDoubleClick(
   _cell: HTMLElement,
   _event: MouseEvent
 ) {
+  if (!guardApsOperation(canEdit)) return
+
   const prop = column?.property
   if (!prop || basicColumns.has(prop)) return
   if (
@@ -4079,6 +4126,8 @@ function getTransactionTime(dateStr: string): string {
 }
 
 async function handleSubmitTransaction() {
+  if (!guardApsOperation(canEdit)) return
+
   const info = transactionInputInfo.value
   const form = transactionForm.value
   const processCd = info.processCd
@@ -4407,6 +4456,8 @@ const handlePrint = () => {
 
 // ---------- 工程別計画確認印刷 ----------
 function handleProcessPrint() {
+  if (!guardApsOperation(canExport)) return
+
   printTargetDate.value = new Date().toISOString().split('T')[0]
   showPrintDateDialog.value = true
 }
@@ -4591,6 +4642,8 @@ ${tablesHtml}
 }
 
 async function fetchPrintData(targetDate: string) {
+  if (!guardApsOperation(canExport)) return
+
   const startDate = addDays(targetDate, -90)
   const endDate = addDays(targetDate, 90)
   const res = await getProductionSummarysList({ page: 1, limit: 50000, startDate, endDate })
@@ -4600,6 +4653,8 @@ async function fetchPrintData(targetDate: string) {
 }
 
 async function handleConfirmPrintDate() {
+  if (!guardApsOperation(canExport)) return
+
   if (!printTargetDate.value) {
     ElMessage.warning('日付を選択してください')
     return
@@ -4934,6 +4989,8 @@ async function handleRecommendedProductionPrint(
     hidePreInventoryColumns?: boolean
   },
 ) {
+  if (!guardApsOperation(canExport)) return
+
   const { start: monthStart, end: rangeEnd } = getGenerateDateRange()
   const prevTitle = progressDialogTitle.value
   showProgressDialog.value = true
@@ -5068,6 +5125,8 @@ async function openMoldingMachineConfigDialog() {
 }
 
 async function onMoldingMachineConfigUpdate(row: ProductMachineConfig, val: string | null | undefined) {
+  if (!guardApsOperation(canEdit)) return
+
   if (row.id == null) return
   const prev = row.molding_machine ?? ''
   const next = val == null || val === '' ? '' : String(val)
@@ -5134,6 +5193,8 @@ const moldingBomBulkLoading = ref(false)
 const moldingBomSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
 function clearMoldingBomSaveTimers() {
+  if (!guardApsOperation(canEdit)) return
+
   for (const t of moldingBomSaveTimers.values()) clearTimeout(t)
   moldingBomSaveTimers.clear()
 }
@@ -5234,6 +5295,8 @@ function clampMoldingBomNum(n: number): number {
 }
 
 async function saveMoldingBomRowImmediate(row: MoldingBomRow) {
+  if (!guardApsOperation(canEdit)) return
+
   const cd = row.product_cd
   const prev = moldingBomSaveTimers.get(cd)
   if (prev) clearTimeout(prev)
@@ -5245,6 +5308,8 @@ async function saveMoldingBomRowImmediate(row: MoldingBomRow) {
 }
 
 async function applyMoldingBomBulkDelta(delta: 1 | -1) {
+  if (!guardApsOperation(canEdit)) return
+
   const table = moldingBomTableRef.value
   const selected = (table?.getSelectionRows?.() ?? []) as MoldingBomRow[]
   if (!selected.length) {
@@ -5462,6 +5527,8 @@ function formatMoldingPlanProcessHours(h: number | null | undefined): string {
 
 /** 計算結果テーブルを印刷（画面のデフォルト並び：成型機昇順に合わせる） */
 function printMoldingPlanResult() {
+  if (!guardApsOperation(canExport)) return
+
   const rows = moldingPlanResult.value
   if (!rows.length) {
     ElMessage.warning('印刷するデータがありません')
@@ -5558,6 +5625,8 @@ ${body || '<p class="sub">印刷対象データがありません。</p>'}
 }
 
 async function executeMoldingPlanClear() {
+  if (!guardApsOperation(canEdit)) return
+
   const d = moldingPlanClearFromDate.value
   if (!d) {
     ElMessage.warning('計画クリア開始日を選択してください')
@@ -5592,6 +5661,8 @@ async function executeMoldingPlanClear() {
 }
 
 async function executeMoldingPlanInventoryTrend() {
+  if (!guardApsOperation(canEdit)) return
+
   const startDate = await resolveInventoryTrendCalcStartDate()
   try {
     await ElMessageBox.confirm(
@@ -5667,6 +5738,8 @@ function buildMoldingPlanEfficiencyResolver(
 }
 
 async function executeMoldingPlanCreate() {
+  if (!guardApsOperation(canCreate)) return
+
   if (!moldingPlanBaseDate.value) {
     ElMessage.warning('基準日を選択してください')
     return
@@ -5858,6 +5931,8 @@ function openWeldingPlanDialog() {
 }
 
 function printWeldingPlanResult() {
+  if (!guardApsOperation(canExport)) return
+
   const rows = weldingPlanResult.value
   if (!rows.length) {
     ElMessage.warning('印刷するデータがありません')
@@ -5961,6 +6036,8 @@ ${body || '<p class="sub">印刷対象データがありません。</p>'}
 }
 
 async function executeWeldingPlanClear() {
+  if (!guardApsOperation(canEdit)) return
+
   const d = weldingPlanClearFromDate.value
   if (!d) {
     ElMessage.warning('計画クリア開始日を選択してください')
@@ -5995,6 +6072,8 @@ async function executeWeldingPlanClear() {
 }
 
 async function executeWeldingPlanInventoryTrend() {
+  if (!guardApsOperation(canEdit)) return
+
   const startDate = await resolveInventoryTrendCalcStartDate()
   try {
     await ElMessageBox.confirm(
@@ -6023,6 +6102,8 @@ async function executeWeldingPlanInventoryTrend() {
 }
 
 async function executeWeldingPlanCreate() {
+  if (!guardApsOperation(canCreate)) return
+
   if (!weldingPlanBaseDate.value) {
     ElMessage.warning('基準日を選択してください')
     return
@@ -6215,6 +6296,8 @@ async function openWeldingMachineConfigDialog() {
 }
 
 async function onWeldingMachineConfigUpdate(row: ProductMachineConfig, val: string | null | undefined) {
+  if (!guardApsOperation(canEdit)) return
+
   if (row.id == null) return
   const prev = row.welding_machine ?? ''
   const next = val == null || val === '' ? '' : String(val)
@@ -6246,6 +6329,8 @@ const weldingBomLoading = ref(false)
 const weldingBomSaveTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
 function clearWeldingBomSaveTimers() {
+  if (!guardApsOperation(canEdit)) return
+
   for (const t of weldingBomSaveTimers.values()) clearTimeout(t)
   weldingBomSaveTimers.clear()
 }
@@ -6349,12 +6434,16 @@ const saveColumnSettings = () => {
 
 // ---------- 初期在庫一括登録 ----------
 function setBatchQtyInputRef(index: number, el: any) {
+  if (!guardApsOperation(canCreate)) return
+
   if (el != null) {
     batchQtyInputRefs.value[index] = el
   }
 }
 
 function focusBatchInitialRow(targetIndex: number) {
+  if (!guardApsOperation(canCreate)) return
+
   const len = batchInitialStockData.value.length
   if (len === 0) return
   const idx = Math.max(0, Math.min(targetIndex, len - 1))
@@ -6366,6 +6455,8 @@ function focusBatchInitialRow(targetIndex: number) {
 }
 
 function openBatchInitialStockDialog() {
+  if (!guardApsOperation(canCreate)) return
+
   const { year, month } = getCurrentJSTInfo()
   batchInitialStockMonth.value = getJSTDateString(year, month, 1).slice(0, 7)
   batchInitialStockProcessCd.value = ''
@@ -6396,6 +6487,8 @@ function filterProductsForInitial(products: Array<{ product_cd: string; product_
 }
 
 async function handleBatchInitialStockSearch() {
+  if (!guardApsOperation(canCreate)) return
+
   const month = (batchInitialStockMonth.value || '').trim()
   const processCd = (batchInitialStockProcessCd.value || '').trim()
   if (!month || !processCd) {
@@ -6471,11 +6564,15 @@ async function handleBatchInitialStockSearch() {
 }
 
 function batchInitialStockSummaryMethod({ data }: { data: Array<{ editQuantity?: number | null }> }) {
+  if (!guardApsOperation(canCreate)) return
+
   const total = data.reduce((s, row) => s + (Number(row.editQuantity) || 0), 0)
   return ['', '', `合計: ${total.toLocaleString()}`]
 }
 
 async function handleSaveBatchInitialStock() {
+  if (!guardApsOperation(canCreate)) return
+
   const month = (batchInitialStockMonth.value || '').trim()
   const processCd = (batchInitialStockProcessCd.value || '').trim()
   if (!month || !processCd) {

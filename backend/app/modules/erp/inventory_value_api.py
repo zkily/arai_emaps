@@ -16,6 +16,7 @@ from datetime import date, datetime
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import (
@@ -566,7 +567,7 @@ async def _resolve_step_no(db: AsyncSession, product_cd: str, route_cd: str, pro
 async def calculate_inventory_value(
     body: CalcRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """棚卸金額計算バッチ実行"""
     calc_date = date.today()
@@ -786,7 +787,7 @@ async def get_stock_panel(
     sort_by: str = Query("product_name"),
     sort_order: str = Query("asc"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """
     棚卸金額管理画面用：実在庫テーブルから月末日の行を返す。
@@ -1184,7 +1185,7 @@ async def get_value_summary(
     end_date: Optional[str] = Query(None),
     process_cd: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """最新計算結果のサマリー"""
     q = select(InventoryValueCalcRun).order_by(InventoryValueCalcRun.id.desc())
@@ -1259,7 +1260,7 @@ async def get_value_details(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """計算明細一覧"""
     if not run_id:
@@ -1350,7 +1351,7 @@ async def get_calc_runs(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """計算バッチ履歴"""
     q = select(InventoryValueCalcRun).order_by(InventoryValueCalcRun.id.desc())
@@ -1386,7 +1387,7 @@ async def get_calc_runs(
 async def get_errors(
     run_id: Optional[int] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """エラー一覧（未定価・ルート未設定等）"""
     if not run_id:
@@ -1475,7 +1476,7 @@ async def get_shipment_units(
         None, description="納入先コード（複数はカンマ区切り CD1,CD2）"
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """指定日(複数可)・納入先(複数可)の出荷確定本数を製品別に集計して返す"""
     date_inputs: List[str] = []
@@ -1530,7 +1531,7 @@ async def get_shipment_units(
 @router.get("/destinations")
 async def get_destinations(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """納入先一覧（ドロップダウン用）"""
     q = (
@@ -1619,7 +1620,7 @@ async def get_monthly_inventory_report(
     shipment_date: Optional[str] = Query(None, description="出荷日 YYYY-MM-DD"),
     destination_cds: Optional[str] = Query(None, description="納入先コード（カンマ区切り）"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """
     棚卸金額報告書（月次）: 全データを一括聚合して返す。

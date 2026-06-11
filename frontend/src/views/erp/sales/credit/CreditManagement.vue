@@ -206,6 +206,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { CreditCard, Search, Plus, Edit, View } from '@element-plus/icons-vue'
 import { getCredits, createOrUpdateCredit, checkCredit } from '@/api/erp/sales'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -305,6 +310,8 @@ function openDialog(row?: any) {
 }
 
 async function handleSave() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!formRef.value) return
   await formRef.value.validate()
   saving.value = true
@@ -321,6 +328,8 @@ async function handleSave() {
 }
 
 async function handleCreditCheck(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   try {
     const res: any = await checkCredit(row.customer_code)
     const data = res?.data ?? res

@@ -37,6 +37,7 @@
       <div class="ee-toolbar-actions">
         <el-button @click="clearFilters" :icon="Refresh" class="ee-btn-clear">クリア</el-button>
         <el-button
+          v-if="canExport"
           type="success"
           plain
           @click="handlePrint"
@@ -46,7 +47,7 @@
         >
           印刷
         </el-button>
-        <el-button type="primary" @click="openDialog()" :icon="Plus" class="ee-btn-add">
+        <el-button v-if="canCreate" type="primary" @click="openDialog()" :icon="Plus" class="ee-btn-add">
           <span class="btn-label">新規登録</span>
         </el-button>
       </div>
@@ -100,6 +101,7 @@
                     v-model="row.status"
                     :active-value="1"
                     :inactive-value="0"
+                    :disabled="!canEdit"
                     :loading="statusUpdatingId === row.id"
                     @change="(value) => handleStatusChange(row, value)"
                     size="small"
@@ -111,11 +113,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="remarks" label="備考" min-width="120" show-overflow-tooltip />
-            <el-table-column label="操作" fixed="right" width="110" align="center">
+            <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="110" align="center">
               <template #default="{ row }">
                 <div class="ee-row-actions">
-                  <el-button size="small" type="primary" link @click="openDialog(row)" :icon="Edit">編集</el-button>
-                  <el-button size="small" type="danger" link @click="handleDelete(row.id)" :icon="Delete">削除</el-button>
+                  <el-button v-if="canEdit" size="small" type="primary" link @click="openDialog(row)" :icon="Edit">編集</el-button>
+                  <el-button v-if="canDelete" size="small" type="danger" link @click="handleDelete(row.id)" :icon="Delete">削除</el-button>
                 </div>
               </template>
             </el-table-column>
@@ -262,6 +264,10 @@ import {
 import { fetchMachines } from '@/api/master/machineMaster'
 import { getProductList } from '@/api/master/productMaster'
 import type { FormInstance, FormRules } from 'element-plus'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
 defineOptions({ name: 'EquipmentEfficiencyManagement' })
 
@@ -371,6 +377,7 @@ const handlePageSizeChange = () => {
 const getRowClassName = () => 'ee-row'
 
 const handleStatusChange = async (row: EquipmentEfficiency, value: number | string | boolean) => {
+  if (!guardMasterOperation(canEdit)) return
   if (!row.id) return
   const previousStatus = row.status
   const newStatus = typeof value === 'number' ? value : Number(value)
@@ -465,6 +472,7 @@ const handleProductChange = (value: string) => {
 }
 
 const openDialog = (row?: EquipmentEfficiency) => {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   isEdit.value = !!row
   if (row) {
     formData.value = { ...row }
@@ -485,6 +493,7 @@ const openDialog = (row?: EquipmentEfficiency) => {
 }
 
 const handleSubmit = async () => {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
     if (!valid) return
@@ -509,6 +518,7 @@ const handleSubmit = async () => {
 }
 
 const handleDelete = async (id?: number) => {
+  if (!guardMasterOperation(canDelete)) return
   if (!id) return
   try {
     await ElMessageBox.confirm('この能率設定を削除しますか？', '確認', {
@@ -734,6 +744,7 @@ const buildPrintHtml = (rows: EquipmentEfficiency[]): string => {
 }
 
 const handlePrint = async () => {
+  if (!guardMasterOperation(canExport)) return
   if (total.value === 0 && efficiencyList.value.length === 0) {
     ElMessage.warning('印刷対象の行がありません（絞込みを確認してください）')
     return

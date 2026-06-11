@@ -12,7 +12,7 @@
       </div>
 
       <div class="rm-header-actions">
-        <el-button type="primary" :icon="Plus" size="small" class="rm-add-btn" @click="openDialog()">
+        <el-button v-if="canCreate" type="primary" :icon="Plus" size="small" class="rm-add-btn" @click="openDialog()">
           新規登録
         </el-button>
       </div>
@@ -111,12 +111,12 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="140" align="center" fixed="right">
+        <el-table-column v-if="canEdit || canDelete" label="操作" width="140" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" :icon="Edit" @click="openDialog(row)">
+            <el-button v-if="canEdit" type="primary" link size="small" :icon="Edit" @click="openDialog(row)">
               編集
             </el-button>
-            <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">
+            <el-button v-if="canDelete" type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">
               削除
             </el-button>
           </template>
@@ -229,8 +229,12 @@ import {
 } from '@/api/master/rollerMaster'
 
 import { fetchMachines } from '@/api/master/machineMaster'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 defineOptions({ name: 'RollerMasterManagement' })
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -407,6 +411,7 @@ const resetForm = () => {
 
 const openDialog = async (row?: RollerMasterRow) => {
   if (row?.id) {
+    if (!guardMasterOperation(canEdit)) return
     isEdit.value = true
     editingId.value = row.id
     form.value = {
@@ -421,6 +426,7 @@ const openDialog = async (row?: RollerMasterRow) => {
     }
     dialogVisible.value = true
   } else {
+    if (!guardMasterOperation(canCreate)) return
     isEdit.value = false
     editingId.value = null
     resetForm()
@@ -438,6 +444,7 @@ const openDialog = async (row?: RollerMasterRow) => {
 }
 
 const submitForm = async () => {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   try {
     await formRef.value?.validate()
   } catch {
@@ -477,6 +484,7 @@ const submitForm = async () => {
 }
 
 const handleDelete = async (row: RollerMasterRow) => {
+  if (!guardMasterOperation(canDelete)) return
   if (!row.id) return
   try {
     await ElMessageBox.confirm(`ローラーCD ${row.roller_cd} を削除しますか？`, '確認', { type: 'warning' })

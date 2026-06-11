@@ -212,6 +212,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Document, Search, Plus, Delete } from '@element-plus/icons-vue'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   getQuotations,
   createQuotation,
   updateQuotation,
@@ -299,8 +304,12 @@ function statusType(s: string) { return (STATUS_MAP[s]?.type ?? 'info') as any }
 function calcAmount(row: QuotationItem) {
   row.amount = (row.quantity || 0) * (row.unit_price || 0)
 }
-function addItem() { form.items.push(emptyItem()) }
-function removeItem(idx: number) { form.items.splice(idx, 1) }
+function addItem() {
+  if (!guardSalesOperation(canCreate)) return
+ form.items.push(emptyItem()) }
+function removeItem(idx: number) {
+  if (!guardSalesOperation(canDelete)) return
+ form.items.splice(idx, 1) }
 
 function resetForm() {
   Object.assign(form, {
@@ -360,6 +369,8 @@ async function fetchData() {
 }
 
 async function handleSave() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!formRef.value) return
   await formRef.value.validate()
   saving.value = true
@@ -382,6 +393,8 @@ async function handleSave() {
 }
 
 async function handleSend(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   await ElMessageBox.confirm(`見積 ${row.quotation_no} を送付しますか？`, '確認', { type: 'warning' })
   try {
     await sendQuotation(row.id)
@@ -393,6 +406,8 @@ async function handleSend(row: any) {
 }
 
 async function handleConvert(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   await ElMessageBox.confirm(`見積 ${row.quotation_no} を受注に変換しますか？`, '確認', { type: 'info' })
   try {
     await convertQuotationToOrder(row.id)
@@ -404,6 +419,8 @@ async function handleConvert(row: any) {
 }
 
 async function handleDelete(row: any) {
+  if (!guardSalesOperation(canDelete)) return
+
   await ElMessageBox.confirm(`見積 ${row.quotation_no} を削除しますか？`, '確認', { type: 'error' })
   try {
     await deleteQuotation(row.id)

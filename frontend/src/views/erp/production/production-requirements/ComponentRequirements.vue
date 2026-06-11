@@ -247,6 +247,11 @@ import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { ElMessage } from 'element-plus'
 import {
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
   fetchComponentRequirementsBundle,
   type ComponentRequirementsSummaryItem,
   type ComponentRequirementsDailyMatrixRow,
@@ -286,6 +291,8 @@ function initDefaultRange() {
 }
 
 function applyQuickMonth(offsetMonths: -1 | 0 | 1) {
+  if (!guardApsOperation(canEdit)) return
+
   const base = dayjs().add(offsetMonths, 'month')
   dateRange.value = [base.startOf('month').format('YYYY-MM-DD'), base.endOf('month').format('YYYY-MM-DD')]
 }
@@ -391,6 +398,8 @@ function escapeHtml(text: string | null | undefined): string {
 
 /** A4 横向・部品別日次矩阵を印刷（部品名・所要量合計・日別列） */
 function printDailyMatrix() {
+  if (!guardApsOperation(canExport)) return
+
   if (!dailyDates.value.length) {
     ElMessage.warning(t('productionRequirements.printEmpty'))
     return
@@ -546,6 +555,8 @@ function printDailyMatrix() {
 }
 
 async function runSummary() {
+  if (!guardApsOperation(canEdit)) return
+
   const range = dateRange.value
   if (!range || !range[0] || !range[1]) {
     ElMessage.warning(t('productionRequirements.selectPeriod'))

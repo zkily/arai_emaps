@@ -110,6 +110,11 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import jaLocale from 'element-plus/es/locale/lang/ja'
 import {
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
   getInventoryStagnation,
   type InventoryStagnationResponse,
   type InventoryStagnationRow,
@@ -175,6 +180,8 @@ function sortByProductAndInventoryColumn(rows: InventoryStagnationRow[]) {
 }
 
 function handlePrint() {
+  if (!guardApsOperation(canExport)) return
+
   if (!list.value.length) {
     ElMessage.warning('印刷対象データがありません')
     return
@@ -272,6 +279,8 @@ async function fetchList() {
 }
 
 function handleOpen() {
+  if (!guardApsOperation(canEdit)) return
+
   if (!asOfDate.value) asOfDate.value = todayJst()
   fetchList()
 }

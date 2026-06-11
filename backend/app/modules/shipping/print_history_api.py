@@ -14,6 +14,7 @@ from typing import Optional, List, Any
 from datetime import datetime
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 
@@ -174,7 +175,7 @@ async def get_print_history_stats(
 async def record_print_history(
     body: RecordPrintHistoryBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ):
     """印刷履歴を1件登録（テーブル: printed_at, report_title 等）"""
     import json
@@ -202,7 +203,7 @@ async def record_print_history(
 async def delete_print_history(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """印刷履歴1件削除"""
     r = await db.execute(text("DELETE FROM print_history WHERE id = :id"), {"id": item_id})
@@ -216,7 +217,7 @@ async def delete_print_history(
 async def delete_print_history_batch(
     ids: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """印刷履歴一括削除（カンマ区切りID）"""
     id_list = [int(x.strip()) for x in ids.split(",") if x.strip()]

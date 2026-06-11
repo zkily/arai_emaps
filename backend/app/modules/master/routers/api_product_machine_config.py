@@ -7,6 +7,7 @@ from sqlalchemy import select, or_
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProductMachineConfig, Product
@@ -93,7 +94,7 @@ async def get_product_machine_config_by_id(
 async def create_product_machine_config(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """新規登録"""
     product_cd = body.get("product_cd")
@@ -129,7 +130,7 @@ async def update_product_machine_config(
     config_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """更新"""
     result = await db.execute(select(ProductMachineConfig).where(ProductMachineConfig.id == config_id))
@@ -153,7 +154,7 @@ async def update_product_machine_config(
 async def delete_product_machine_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """削除"""
     result = await db.execute(select(ProductMachineConfig).where(ProductMachineConfig.id == config_id))
@@ -168,7 +169,7 @@ async def delete_product_machine_config(
 @router.post("/sync")
 async def sync_products(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品マスタから未登録製品を追加"""
     products_result = await db.execute(

@@ -20,6 +20,7 @@ from sqlalchemy import select, func, or_, delete
 from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_quality_operation
 from app.modules.auth.models import User
 from app.modules.material.models import MaterialCuttingLog
 
@@ -142,7 +143,7 @@ async def import_cutting_csv(
         description="この日数より古い log_date を先に削除。0 でスキップ。full_replace 時は無視",
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("export")),
 ):
     """共有フォルダから materialCutting.csv を読み込み material_cutting_logs へ書き込む。
 
@@ -309,7 +310,7 @@ async def list_cutting_logs(
     startDate: Optional[str] = Query(None),
     endDate: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("export")),
 ):
     """取込済み切断ログ一覧"""
     q = select(MaterialCuttingLog)

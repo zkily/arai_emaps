@@ -35,7 +35,7 @@
         <el-option v-for="t in dayTypes" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
       <el-input v-model="newName" placeholder="名称" size="small" class="cwc-name" clearable />
-      <el-button type="primary" size="small" :loading="saving" :disabled="!newDates.length" @click="addEntries">追加</el-button>
+      <el-button v-if="canCreate" type="primary" size="small" :loading="saving" :disabled="!newDates.length" @click="addEntries">追加</el-button>
     </div>
 
     <div v-loading="loading" class="cwc-main">
@@ -86,7 +86,7 @@
           </el-table-column>
           <el-table-column prop="name" label="名称" min-width="88" show-overflow-tooltip />
           <el-table-column prop="note" label="備考" min-width="72" show-overflow-tooltip />
-          <el-table-column label="" width="48" align="center" fixed="right">
+          <el-table-column v-if="canDelete" label="" width="48" align="center" fixed="right">
             <template #default="{ row }">
               <el-button link type="danger" size="small" :loading="row._deleting" @click="removeEntry(row)">
                 <el-icon><Delete /></el-icon>
@@ -118,8 +118,12 @@ import {
   fetchCompanyWorkCalendarDayTypes,
   type CompanyWorkCalendarItem,
 } from '@/api/master/companyWorkCalendar'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 defineOptions({ name: 'MasterCompanyWorkCalendar' })
+
+const { canCreate, canDelete } = useMasterOperationPermission()
 
 type RowEx = CompanyWorkCalendarItem & { _deleting?: boolean }
 
@@ -263,6 +267,7 @@ async function loadMonth() {
 }
 
 async function addEntries() {
+  if (!guardMasterOperation(canCreate)) return
   if (!newDates.value.length) return
   saving.value = true
   try {
@@ -283,6 +288,7 @@ async function addEntries() {
 }
 
 async function removeEntry(row: RowEx) {
+  if (!guardMasterOperation(canDelete)) return
   row._deleting = true
   try {
     await deleteCompanyWorkCalendarEntry(row.id)

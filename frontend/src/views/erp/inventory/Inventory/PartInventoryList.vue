@@ -194,6 +194,11 @@ import { ElMessage } from 'element-plus'
 import { Files, Download } from '@element-plus/icons-vue'
 import { getPartStockList, getPartStockSupplierNames } from '@/api/part'
 import { getPartList } from '@/api/master/partMaster'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 export interface PartStockInquiryRow {
   id?: number
@@ -412,6 +417,8 @@ async function fetchSuppliers() {
 }
 
 function exportCsv() {
+  if (!guardInventoryOperation(canExport)) return
+
   const headers = [
     '部品CD',
     '部品名',

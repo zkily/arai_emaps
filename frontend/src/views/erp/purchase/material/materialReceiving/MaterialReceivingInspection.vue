@@ -463,6 +463,11 @@ import { ElMessage } from 'element-plus'
 import { View, Document, Setting, Printer } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { getMaterialLogs, getSupplierList } from '@/api/material'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 接口类型定义
 

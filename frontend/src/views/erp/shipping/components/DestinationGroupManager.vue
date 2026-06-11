@@ -144,6 +144,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Collection, Box, Plus, Edit, Delete, Close, Check, Star } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import type { Ref } from 'vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 类型定义
 interface Destination {
@@ -256,6 +261,8 @@ interface ApiResponse {
 
 // 方法
 async function loadDestinations() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     loading.value = true
     const response: ApiResponse | DestinationApiItem[] = await request.get('/api/master/destinations/options')
@@ -289,6 +296,8 @@ async function loadDestinations() {
 
 // 加载带有issue_type的纳入先数据
 async function loadDestinationsWithIssueType() {
+  if (!guardSalesOperation(canExport)) return
+
   try {
     const response: ApiResponse | DestinationApiItem[] = await request.get('/api/master/destinations/options-with-issue-type')
 
@@ -348,12 +357,16 @@ async function loadGroups() {
 
 // 显示创建分组对话框
 function showCreateGroupDialog() {
+  if (!guardSalesOperation(canCreate)) return
+
   newGroupForm.groupName = ''
   createGroupDialogVisible.value = true
 }
 
 // 创建新分组
 async function createGroup() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = await request.post('/api/shipping/destination-groups', {
       pageKey: props.pageKey,
@@ -378,6 +391,8 @@ async function createGroup() {
 
 // 编辑分组名
 function editGroupName(group: Group) {
+  if (!guardSalesOperation(canEdit)) return
+
   group.editing = true
   nextTick(() => {
     if (groupNameInput.value && groupNameInput.value.length > 0) {
@@ -388,6 +403,8 @@ function editGroupName(group: Group) {
 
 // 保存分组名
 async function saveGroupName(group: Group) {
+  if (!guardSalesOperation(canEdit)) return
+
   group.editing = false
   if (!group.groupName.trim()) {
     ElMessage.error('グループ名は必須です')
@@ -417,6 +434,8 @@ async function saveGroupName(group: Group) {
 // 删除分组
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function deleteGroup(group: Group, _index: number) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(`グループ「${group.groupName}」を削除しますか？`, '確認', {
       confirmButtonText: '削除',
@@ -447,6 +466,8 @@ function clearGroup(index: number) {
 
 // 按issue_type自动分配
 async function autoAssignByIssueType() {
+  if (!guardSalesOperation(canExport)) return
+
   try {
     autoAssignLoading.value = true
 
@@ -526,6 +547,8 @@ async function autoAssignByIssueType() {
 
 // 保存所有分组
 async function saveAllGroups() {
+  if (!guardSalesOperation(canEdit)) return
+
   try {
     saveLoading.value = true
 
@@ -559,6 +582,8 @@ async function saveAllGroups() {
 
 // 将納入先加入指定分组（同一納入先可存在于多个グループ，不再从其他组移除）
 function addDestinationToGroup(groupIndex: number, destination: Destination) {
+  if (!guardSalesOperation(canCreate)) return
+
   if (groupIndex < 0 || groupIndex >= groups.value.length) return
   const group = groups.value[groupIndex]
   const isAlreadyInGroup = group.destinations.some((dest) => dest.value === destination.value)
@@ -569,6 +594,8 @@ function addDestinationToGroup(groupIndex: number, destination: Destination) {
 
 // 拖拽开始
 function handleDragStart(event: DragEvent) {
+  if (!guardSalesOperation(canEdit)) return
+
   const target = event.target as HTMLElement
   const destinationData = target.dataset.destination
   if (event.dataTransfer && destinationData) {
@@ -579,6 +606,8 @@ function handleDragStart(event: DragEvent) {
 
 // 拖拽悬停
 function handleDragOver(event: DragEvent) {
+  if (!guardSalesOperation(canEdit)) return
+
   event.preventDefault()
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'move'
@@ -587,6 +616,8 @@ function handleDragOver(event: DragEvent) {
 
 // 拖拽进入
 function handleDragEnter(event: DragEvent) {
+  if (!guardSalesOperation(canEdit)) return
+
   event.preventDefault()
   const target = event.currentTarget as HTMLElement
   target.classList.add('drag-over')
@@ -594,12 +625,16 @@ function handleDragEnter(event: DragEvent) {
 
 // 拖拽离开
 function handleDragLeave(event: DragEvent) {
+  if (!guardSalesOperation(canEdit)) return
+
   const target = event.currentTarget as HTMLElement
   target.classList.remove('drag-over')
 }
 
 // 拖拽放下
 function handleDrop(event: DragEvent, groupIndex: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   event.preventDefault()
   const target = event.currentTarget as HTMLElement
   target.classList.remove('drag-over')
@@ -621,6 +656,8 @@ function clearTouchDragOver() {
 
 // 触摸：长按开始拖拽
 function handleTouchStart(event: TouchEvent, destination: Destination) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (event.touches.length !== 1) return
   const touch = event.touches[0]
   const startX = touch.clientX
@@ -680,6 +717,8 @@ function handleTouchStart(event: TouchEvent, destination: Destination) {
 }
 
 function removeTouchListeners() {
+  if (!guardSalesOperation(canDelete)) return
+
   if (touchMoveHandler) {
     document.removeEventListener('touchmove', touchMoveHandler)
     touchMoveHandler = null
@@ -695,6 +734,8 @@ function removeTouchListeners() {
 }
 
 function handleTouchCancel() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (longPressTimer.value) {
     clearTimeout(longPressTimer.value)
     longPressTimer.value = null
@@ -709,6 +750,8 @@ function handleTouchCancel() {
 
 // 从分组中移除纳入先
 function removeFromGroup(groupIndex: number, destination: Destination) {
+  if (!guardSalesOperation(canDelete)) return
+
   groups.value[groupIndex].destinations = groups.value[groupIndex].destinations.filter(
     (dest) => dest.value !== destination.value,
   )
@@ -722,11 +765,15 @@ function getGroupTagType(groupIndex: number): 'success' | 'warning' | 'danger' |
 
 // 关闭弹窗
 function handleClose() {
+  if (!guardSalesOperation(canEdit)) return
+
   visible.value = false
 }
 
 // 保存并关闭
 async function saveAndClose() {
+  if (!guardSalesOperation(canEdit)) return
+
   await saveAllGroups()
   handleClose()
 }

@@ -11,6 +11,7 @@ import uuid
 
 from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.database.models import ProductionSummary
@@ -284,7 +285,7 @@ async def get_inventory_by_id(
 async def create_inbound_transaction(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_inventory_operation("create"))
 ):
     """入庫処理"""
     try:
@@ -346,7 +347,7 @@ async def create_inbound_transaction(
 async def create_outbound_transaction(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_inventory_operation("create"))
 ):
     """出庫処理"""
     try:

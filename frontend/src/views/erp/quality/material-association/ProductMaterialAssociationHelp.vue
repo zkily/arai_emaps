@@ -210,6 +210,11 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { Back, Printer, Reading } from '@element-plus/icons-vue'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 const router = useRouter()
 
@@ -218,6 +223,8 @@ function goBack() {
 }
 
 function doPrint() {
+  if (!guardQualityOperation(canExport)) return
+
   window.print()
 }
 </script>

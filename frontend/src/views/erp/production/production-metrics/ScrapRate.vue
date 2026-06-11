@@ -361,6 +361,11 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
   getProductionSummarysProducts,
   getQualityRateByProcess,
   getQualityRateByProduct,
@@ -933,6 +938,8 @@ function scheduleChartResize() {
 }
 
 function syncScrapCharts() {
+  if (!guardMesOperation(canCreate)) return
+
   nextTick(() => {
     const rEl = processRateChartRef.value
     const vEl = processVolumeChartRef.value
@@ -974,6 +981,8 @@ function applyQualityProcessPayload(d: {
   summary?: Summary
   all_processes_defect_scrap_total?: number
 } | null) {
+  if (!guardMesOperation(canEdit)) return
+
   if (!d) {
     rows.value = []
     summary.value = emptySummary()
@@ -1001,6 +1010,8 @@ function applyQualityProcessPayload(d: {
 }
 
 function mergeProcessAmountColumnsFromPayload(d: { processes?: typeof rows.value } | null) {
+  if (!guardMesOperation(canEdit)) return
+
   const procs = d?.processes
   if (!procs?.length) return
   const byKey = new Map(procs.map((p) => [p.key, p]))
@@ -1408,6 +1419,8 @@ function buildProductPrintHtml(rows: ProductMatrixRow[], total: number): string 
 }
 
 async function printProductTable() {
+  if (!guardMesOperation(canExport)) return
+
   const dr = dateRange.value
   if (!dr?.[0] || !dr?.[1]) {
     ElMessage.warning('期間を選択してください')

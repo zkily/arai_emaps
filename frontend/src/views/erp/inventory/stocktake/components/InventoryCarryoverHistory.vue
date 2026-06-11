@@ -359,6 +359,11 @@ import {
 } from '@/api/inventoryCarryover'
 import { fetchProcesses } from '@/api/master/processMaster'
 import InventoryCarryoverEditDialog from './InventoryCarryoverEditDialog.vue'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 // 定义 Emits
 const emit = defineEmits(['refresh'])
@@ -574,6 +579,8 @@ const handleEdit = (row: any) => {
 
 // 处理删除
 const handleDelete = async (row: any) => {
+  if (!guardInventoryOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(
       `製品コード「${row.target_cd}」の繰越記録を削除しますか？`,
@@ -605,6 +612,8 @@ const handleDelete = async (row: any) => {
 
 // 处理保存记录
 const handleSaveRecord = async (data: any) => {
+  if (!guardInventoryOperation(canEdit)) return
+
   try {
     const response = currentEditData.value
       ? await updateCarryoverRecord(currentEditData.value.id, data)
@@ -627,6 +636,8 @@ const handleSaveRecord = async (data: any) => {
 
 // 处理导出
 const handleExport = async () => {
+  if (!guardInventoryOperation(canExport)) return
+
   exportLoading.value = true
   try {
     const params = {

@@ -185,6 +185,11 @@ import { Grid, Download } from '@element-plus/icons-vue'
 import { getMaterialStockList, getMaterialStockSupplierNames } from '@/api/material'
 import { getMaterialList } from '@/api/master/materialMaster'
 import type { Material } from '@/types/master'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 export interface MaterialStockInquiryRow {
   id?: number
@@ -399,6 +404,8 @@ async function fetchSuppliers() {
 }
 
 function exportCsv() {
+  if (!guardInventoryOperation(canExport)) return
+
   const headers = [
     '材料CD',
     '材料名',

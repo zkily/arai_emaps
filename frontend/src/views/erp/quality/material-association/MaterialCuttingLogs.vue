@@ -113,6 +113,11 @@ import {
   type MaterialCuttingLogItem,
 } from '@/api/material'
 import { toPlainCodeDisplay } from '@/utils/plainCodeDisplay'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 /** マウント時に csv-status の path で更新 */
 const csvPathHint = ref('…')
@@ -170,6 +175,8 @@ const onSizeChange = () => {
 }
 
 const onImport = async () => {
+  if (!guardQualityOperation(canExport)) return
+
   try {
     await ElMessageBox.confirm(
       '共有フォルダの CSV を取り込みます。よろしいですか？',

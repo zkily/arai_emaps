@@ -406,6 +406,11 @@ import type { ElTagType } from '@/types/elementPlus'
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   Search,
   Refresh,
   Plus,
@@ -614,6 +619,8 @@ const getStatusLabel = (status: string | undefined) => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -677,6 +684,8 @@ const viewDetail = (row: IssueItem) => {
 }
 
 const submitForm = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   const valid = await formRef.value?.validate()
   if (!valid) return
   submitLoading.value = true
@@ -693,12 +702,16 @@ const submitForm = async () => {
 }
 
 const issueItem = async (row: IssueItem) => {
+  if (!guardPurchaseOperation(canExport)) return
+
   await ElMessageBox.confirm(`${row.issueNo} を出庫しますか？`, '確認', { type: 'info' })
   row.status = 'issued'
   ElMessage.success('出庫完了しました')
 }
 
 const deleteIssue = async (row: IssueItem) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   await ElMessageBox.confirm('この支給を削除しますか？', '確認', { type: 'warning' })
   ElMessage.success('削除しました')
   handleSearch()

@@ -65,6 +65,7 @@
               検索
             </el-button>
             <el-button
+              v-if="canEdit"
               type="success"
               size="small"
               plain
@@ -440,10 +441,10 @@
             </el-table-column>
 
             <!-- 操作列（アイコンのみ） -->
-            <el-table-column label="操作" width="96" align="center" fixed="right">
+            <el-table-column v-if="canEdit || canDelete" label="操作" width="96" align="center" fixed="right">
               <template #default="{ row }">
                 <div class="action-buttons ppb-op-cell">
-                  <el-tooltip content="編集" placement="top">
+                  <el-tooltip v-if="canEdit" content="編集" placement="top">
                     <el-button
                       size="small"
                       type="primary"
@@ -453,7 +454,7 @@
                       @click="handleEdit(row)"
                     />
                   </el-tooltip>
-                  <el-tooltip content="削除" placement="top">
+                  <el-tooltip v-if="canDelete" content="削除" placement="top">
                     <el-button
                       size="small"
                       type="danger"
@@ -774,6 +775,10 @@ import {
   syncProductInfo,
   type ProductProcessBOM,
 } from '@/api/master/productProcessBomMaster'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canEdit, canDelete } = useMasterOperationPermission()
 
 // 数据状态
 const bomList = ref<ProductProcessBOM[]>([])
@@ -1021,6 +1026,7 @@ const loadData = async () => {
 
 // 单元格变化处理（带防抖自动保存，优化性能）
 const handleCellChange = (row: ProductProcessBOM) => {
+  if (!guardMasterOperation(canEdit)) return
   if (!row?.product_cd) return
 
   // 清除之前的定时器
@@ -1045,6 +1051,7 @@ const handleCellChange = (row: ProductProcessBOM) => {
 
 // 同步产品信息
 const handleSync = async () => {
+  if (!guardMasterOperation(canEdit)) return
   syncing.value = true
   try {
     const result = await syncProductInfo()
@@ -1116,6 +1123,7 @@ const handleSortChange = ({ prop, order }: { prop: string; order: string }) => {
 
 // 编辑处理
 const handleEdit = async (row: ProductProcessBOM) => {
+  if (!guardMasterOperation(canEdit)) return
   try {
     // 获取完整数据
     const result = await fetchProductProcessBOMById(row.product_cd)
@@ -1132,6 +1140,7 @@ const handleEdit = async (row: ProductProcessBOM) => {
 
 // 删除处理
 const handleDelete = async (row: ProductProcessBOM) => {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await ElMessageBox.confirm(
       `製品CD: ${row.product_cd} の製品工程BOMを削除しますか？`,
@@ -1157,6 +1166,7 @@ const handleDelete = async (row: ProductProcessBOM) => {
 
 // 提交表单
 const handleSubmit = async () => {
+  if (!guardMasterOperation(canEdit)) return
   if (!formData.value.product_cd) {
     ElMessage.error('製品CDがありません')
     return

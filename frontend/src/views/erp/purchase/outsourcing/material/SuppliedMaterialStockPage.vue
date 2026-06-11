@@ -219,6 +219,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   Search,
   Refresh,
   Download,
@@ -433,6 +438,8 @@ const getStockStatusLabel = (row: MaterialStock) => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     await new Promise((resolve) => setTimeout(resolve, 500))

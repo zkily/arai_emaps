@@ -207,6 +207,11 @@ import request from '@/utils/request'
 import ShippingOverviewPrint from './components/ShippingOverviewPrint.vue'
 import ShippingCalendarDialog from './components/ShippingCalendarDialog.vue'
 import DestinationGroupManager from './components/DestinationGroupManager.vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 型定義
 interface DestinationOption {
@@ -393,6 +398,8 @@ function resetFilters() {
 
 // 日付変更処理
 function handleDateChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.dateRange && filters.dateRange.length === 2) {
     fetchOverviewData()
   }
@@ -429,6 +436,8 @@ function goToToday() {
 
 // 納入先変更処理
 function handleDestinationChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   fetchOverviewData()
 }
 
@@ -479,6 +488,8 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Tabl
 
 // 印刷処理
 function handlePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   // 直接印刷を実行
   nextTick(() => {
     executeFrontendPrint(printContent.value)
@@ -487,6 +498,8 @@ function handlePrint() {
 
 // フロントエンド印刷を実行
 function executeFrontendPrint(contentRef: HTMLElement | null) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML) {
     ElMessage.error('印刷内容の取得に失敗しました。')
     return
@@ -528,6 +541,8 @@ function executeFrontendPrint(contentRef: HTMLElement | null) {
 
 // グループデータを読み込み
 async function loadDestinationGroups() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = await request.get('/api/shipping/destination-groups/shipping_overview')
     const body = (response as { data?: unknown })?.data ?? response
@@ -554,6 +569,8 @@ async function loadDestinationGroups() {
 
 // グループ更新処理
 function handleGroupsUpdated(groups: DestinationGroup[]) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (Array.isArray(groups)) {
     destinationGroups.value = groups
     // 現在選択されているグループが空になった場合、全てにリセット
@@ -566,6 +583,8 @@ function handleGroupsUpdated(groups: DestinationGroup[]) {
 
 // グループ選択変更処理
 function handleGroupChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.selectedGroup === -1) {
     // 全てを選択、フィルター条件をクリア
     filters.destinationCds = []

@@ -38,7 +38,7 @@
         <div class="card-body">
           <div class="add-row">
             <el-date-picker v-model="newHolidayDates" type="dates" placeholder="休日を選択" value-format="YYYY-MM-DD" :disabled="!filters.destination_cd" class="date-picker" size="small" />
-            <el-button type="primary" @click="addHoliday" :disabled="!filters.destination_cd || !newHolidayDates.length" :loading="actionLoading" size="small" class="add-btn">➕ 追加</el-button>
+            <el-button v-if="canCreate" type="primary" @click="addHoliday" :disabled="!filters.destination_cd || !newHolidayDates.length" :loading="actionLoading" size="small" class="add-btn">➕ 追加</el-button>
           </div>
           <el-table :data="holidayList" border stripe empty-text="休日なし" class="compact-table" v-loading="loading" :header-cell-style="tableHeaderStyle" :cell-style="tableCellStyle">
             <el-table-column label="日付" align="center" min-width="120">
@@ -49,7 +49,7 @@
             </el-table-column>
             <el-table-column label="" width="60" align="center">
               <template #default="{ row }">
-                <el-button type="danger" size="small" link @click="deleteHoliday(row)" :loading="(row as HolidayEx).deleting">🗑️</el-button>
+                <el-button v-if="canDelete" type="danger" size="small" link @click="deleteHoliday(row)" :loading="(row as HolidayEx).deleting">🗑️</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -66,7 +66,7 @@
           <div class="add-row">
             <el-date-picker v-model="newWorkdayDate" type="date" placeholder="出勤日" value-format="YYYY-MM-DD" :disabled="!filters.destination_cd" class="date-picker-single" size="small" />
             <el-input v-model="newWorkdayReason" placeholder="理由" :disabled="!filters.destination_cd" class="reason-input" size="small" clearable />
-            <el-button type="primary" @click="addWorkday" :disabled="!filters.destination_cd || !newWorkdayDate" :loading="workdayActionLoading" size="small" class="add-btn">➕</el-button>
+            <el-button v-if="canCreate" type="primary" @click="addWorkday" :disabled="!filters.destination_cd || !newWorkdayDate" :loading="workdayActionLoading" size="small" class="add-btn">➕</el-button>
           </div>
           <el-table :data="workdayList" border stripe empty-text="臨時出勤日なし" class="compact-table" v-loading="workdayLoading" :header-cell-style="tableHeaderStyle" :cell-style="tableCellStyle">
             <el-table-column label="日付" align="center" width="120">
@@ -80,7 +80,7 @@
             </el-table-column>
             <el-table-column label="" width="50" align="center">
               <template #default="{ row }">
-                <el-button type="danger" size="small" link @click="deleteWorkday(row)" :loading="(row as WorkdayEx).deleting">🗑️</el-button>
+                <el-button v-if="canDelete" type="danger" size="small" link @click="deleteWorkday(row)" :loading="(row as WorkdayEx).deleting">🗑️</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -96,6 +96,10 @@ import { ElMessage } from 'element-plus'
 import { getHolidaysByDest, addHolidayDate, deleteHolidayDate, getWorkdaysByDest, addWorkdayDate, deleteWorkdayDate } from '@/api/master/destinationMaster'
 import { getDestinationMasterOptions } from '@/api/options'
 import type { DestinationHolidayItem, DestinationWorkdayItem, OptionItem } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canDelete } = useMasterOperationPermission()
 
 type HolidayEx = DestinationHolidayItem & { deleting?: boolean }
 type WorkdayEx = DestinationWorkdayItem & { deleting?: boolean }
@@ -137,6 +141,7 @@ async function fetchLists() {
 }
 
 async function addHoliday() {
+  if (!guardMasterOperation(canCreate)) return
   if (!filters.destination_cd || !newHolidayDates.value.length) return
   actionLoading.value = true
   try { await Promise.all(newHolidayDates.value.map((d) => addHolidayDate(filters.destination_cd, d))); ElMessage.success('休日追加'); newHolidayDates.value = []; fetchLists() }
@@ -144,11 +149,13 @@ async function addHoliday() {
 }
 
 async function deleteHoliday(row: HolidayEx) {
+  if (!guardMasterOperation(canDelete)) return
   if (row.id == null) return; row.deleting = true
   try { await deleteHolidayDate(row.id); ElMessage.success('削除'); fetchLists() } catch { ElMessage.error('削除失敗') } finally { row.deleting = false }
 }
 
 async function addWorkday() {
+  if (!guardMasterOperation(canCreate)) return
   if (!filters.destination_cd || !newWorkdayDate.value) return
   workdayActionLoading.value = true
   try { await addWorkdayDate(filters.destination_cd, newWorkdayDate.value, newWorkdayReason.value || undefined); ElMessage.success('臨時出勤日追加'); newWorkdayDate.value = ''; newWorkdayReason.value = ''; fetchLists() }
@@ -156,6 +163,7 @@ async function addWorkday() {
 }
 
 async function deleteWorkday(row: WorkdayEx) {
+  if (!guardMasterOperation(canDelete)) return
   if (row.id == null) return; row.deleting = true
   try { await deleteWorkdayDate(row.id); ElMessage.success('削除'); fetchLists() } catch { ElMessage.error('削除失敗') } finally { row.deleting = false }
 }

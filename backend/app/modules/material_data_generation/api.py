@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.master.models import Material, Supplier
 from app.modules.material.models import MaterialStock
@@ -46,7 +47,7 @@ def _parse_date_str(value: str) -> date_type:
 async def generate_material_stock_data(
   body: MaterialDataGenerationRequest,
   db: AsyncSession = Depends(get_db),
-  current_user: User = Depends(verify_token_and_get_user),
+  current_user: User = Depends(require_purchase_operation("create")),
 ):
   """
   材料在庫データ生成:

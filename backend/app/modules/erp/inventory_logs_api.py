@@ -21,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
 
 
@@ -558,7 +559,7 @@ async def get_recent_inventory_logs(
 async def create_inventory_log(
     payload: InventoryLogCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("create")),
 ):
     process_cd = payload.process_cd
     if not process_cd.startswith("KT"):
@@ -609,7 +610,7 @@ async def create_inventory_log(
 async def delete_inventory_log(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("delete")),
 ):
     try:
         res = await db.execute(text("DELETE FROM inventory_logs WHERE id = :id"), {"id": id})
@@ -629,7 +630,7 @@ async def delete_inventory_log(
 @router.post("/import")
 async def import_inventory_logs_from_csv(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("export")),
 ):
     # DDL はユーザー指定通り、常に DROP/CREATE する
     await drop_and_recreate_table(db)

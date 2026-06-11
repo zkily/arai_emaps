@@ -11,10 +11,10 @@
           </div>
         </div>
         <div class="header-buttons">
-          <el-button type="warning" @click="generateAndPrintQRCodes" :icon="Printer" class="qr-btn" size="small">
+          <el-button v-if="canExport" type="warning" @click="generateAndPrintQRCodes" :icon="Printer" class="qr-btn" size="small">
             🏷️ {{ t('master.process.qrPrint') }}
           </el-button>
-          <el-button type="primary" @click="openAddDialog" class="add-btn" size="small">
+          <el-button v-if="canCreate" type="primary" @click="openAddDialog" class="add-btn" size="small">
             ➕ {{ t('master.process.addProcess') }}
           </el-button>
         </div>
@@ -55,11 +55,11 @@
         </el-table-column>
         <el-table-column :label="t('master.process.unit')" prop="capacity_unit" width="55" align="center" />
         <el-table-column :label="t('master.process.remark')" prop="remark" min-width="100" show-overflow-tooltip />
-        <el-table-column :label="t('master.common.actions')" width="130" fixed="right" align="center">
+        <el-table-column v-if="canEdit || canDelete" :label="t('master.common.actions')" width="130" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-buttons">
-              <el-button size="small" type="primary" plain @click="openEditDialog(row)" class="action-btn">✏️</el-button>
-              <el-button size="small" type="danger" plain @click="handleDelete(row.id)" class="action-btn">🗑️</el-button>
+              <el-button v-if="canEdit" size="small" type="primary" plain @click="openEditDialog(row)" class="action-btn">✏️</el-button>
+              <el-button v-if="canDelete" size="small" type="danger" plain @click="handleDelete(row.id)" class="action-btn">🗑️</el-button>
             </div>
           </template>
         </el-table-column>
@@ -82,8 +82,11 @@ import { Printer } from '@element-plus/icons-vue'
 import { fetchProcesses, deleteProcess } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
 import ProcessEditDialog from './ProcessEditDialog.vue'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
 const tableData = ref<ProcessItem[]>([])
 const loading = ref(false)
@@ -109,10 +112,17 @@ const fetchList = async () => {
   finally { loading.value = false }
 }
 
-const openAddDialog = () => { dialogMode.value = 'add'; editTarget.value = null; dialogVisible.value = true }
-const openEditDialog = (row: ProcessItem) => { dialogMode.value = 'edit'; editTarget.value = { ...row }; dialogVisible.value = true }
+const openAddDialog = () => {
+  if (!guardMasterOperation(canCreate)) return
+  dialogMode.value = 'add'; editTarget.value = null; dialogVisible.value = true
+}
+const openEditDialog = (row: ProcessItem) => {
+  if (!guardMasterOperation(canEdit)) return
+  dialogMode.value = 'edit'; editTarget.value = { ...row }; dialogVisible.value = true
+}
 
 const handleDelete = async (id: number | undefined) => {
+  if (!guardMasterOperation(canDelete)) return
   if (id == null) return
   try {
     await ElMessageBox.confirm(t('master.process.confirmDelete'), t('common.confirm'), { confirmButtonText: t('master.common.delete'), cancelButtonText: t('master.common.cancel'), type: 'warning' })
@@ -123,6 +133,7 @@ const handleDelete = async (id: number | undefined) => {
 }
 
 const generateAndPrintQRCodes = async () => {
+  if (!guardMasterOperation(canExport)) return
   if (tableData.value.length === 0) {
     ElMessage.warning(t('master.process.noProcessToPrint'))
     return

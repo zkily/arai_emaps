@@ -1,42 +1,59 @@
 /**
  * 権限・ロール管理のメニューツリー構築。
- * サイドバーと同じ menuConfig 階層を使い、menus テーブルの code→id で DB 権限と紐付ける。
+ * SidebarMenu と同じ menuConfig 階層・ルート順を使い、menus テーブルの code→id で DB 権限と紐付ける。
  */
 import { menuConfig, type MenuConfigItem } from '@/router/menuConfig'
+import { SIDEBAR_ROOT_MENU_CODES } from '@/config/sidebarMenu'
 import { buildTree, type MenuTreeNode as ConfigMenuNode } from '@/composables/useMenuTree'
 
 export interface PermissionMenuTreeNode {
   id: number
   code: string
   label: string
+  icon?: string
+  /** menus テーブルに未登録（ルート定義から取り込みが必要） */
+  syncMissing?: boolean
+  disabled?: boolean
   children: PermissionMenuTreeNode[]
 }
-
-/** SidebarMenu.vue と同じルート（DASHBOARD は別扱い） */
-const ROOT_MENU_CODES = ['ERP', 'APS', 'MES', 'FIN', 'MASTER', 'SYSTEM'] as const
 
 function attachPermissionIds(
   node: ConfigMenuNode,
   codeToId: Map<string, number>,
-): PermissionMenuTreeNode[] {
+): PermissionMenuTreeNode {
   const id = codeToId.get(node.code)
-  const children = node.children.flatMap((c) => attachPermissionIds(c, codeToId))
-  if (id == null && children.length === 0) return []
-  if (id == null) return children
-  return [{ id, code: node.code, label: node.name, children }]
+  const syncMissing = id == null
+  return {
+    id: id ?? 0,
+    code: node.code,
+    label: node.name,
+    icon: node.icon,
+    syncMissing,
+    disabled: syncMissing,
+    children: node.children.map((c) => attachPermissionIds(c, codeToId)),
+  }
 }
 
-/** menuConfig + code→id から権限設定用ツリーを構築（DB の孤立・重複ノードは含めない） */
+/** menuConfig + code→id から権限設定用ツリーを構築（SidebarMenu と同じ構造を常に保持） */
 export function buildPermissionMenuTree(codeToId: Map<string, number>): PermissionMenuTreeNode[] {
   const result: PermissionMenuTreeNode[] = []
-  const dashId = codeToId.get('DASHBOARD')
   const dashItem = (menuConfig as MenuConfigItem[]).find((m) => m.code === 'DASHBOARD')
-  if (dashId != null && dashItem) {
-    result.push({ id: dashId, code: 'DASHBOARD', label: dashItem.name, children: [] })
+  const dashId = codeToId.get('DASHBOARD')
+  if (dashItem) {
+    const syncMissing = dashId == null
+    result.push({
+      id: dashId ?? 0,
+      code: 'DASHBOARD',
+      label: dashItem.name,
+      icon: dashItem.icon,
+      syncMissing,
+      disabled: syncMissing,
+      children: [],
+    })
   }
-  for (const code of ROOT_MENU_CODES) {
+  for (const code of SIDEBAR_ROOT_MENU_CODES) {
     const root = buildTree(code)
-    if (root) result.push(...attachPermissionIds(root, codeToId))
+    if (root) result.push(attachPermissionIds(root, codeToId))
   }
   return result
 }
@@ -49,6 +66,35 @@ function collectDescendantCodes(node: PermissionMenuTreeNode): Set<string> {
   }
   walk(node)
   return codes
+}
+
+/** 親メニューが選択されている場合、配下の選択可能な子 code も含める（保存用） */
+export function expandCheckedCodesWithDescendants(
+  tree: PermissionMenuTreeNode[],
+  codes: Iterable<string>,
+): string[] {
+  const codeSet = new Set(codes)
+  const nodeByCode = new Map<string, PermissionMenuTreeNode>()
+  const walk = (nodes: PermissionMenuTreeNode[]) => {
+    for (const n of nodes) {
+      nodeByCode.set(n.code, n)
+      walk(n.children)
+    }
+  }
+  walk(tree)
+
+  const addCheckableDescendants = (node: PermissionMenuTreeNode) => {
+    for (const child of node.children) {
+      if (!child.disabled) codeSet.add(child.code)
+      addCheckableDescendants(child)
+    }
+  }
+
+  for (const code of [...codeSet]) {
+    const node = nodeByCode.get(code)
+    if (node?.children.length) addCheckableDescendants(node)
+  }
+  return [...codeSet]
 }
 
 /** 子が全て揃っていない親 code は UI 表示から除外 */
@@ -69,29 +115,27 @@ export function pruneParentCodesUnlessFullySelected(
   return result
 }
 
-export function collectPermissionTreeIds(tree: PermissionMenuTreeNode[]): Set<number> {
-  const ids = new Set<number>()
+export function collectPermissionTreeCodeToId(tree: PermissionMenuTreeNode[]): Map<string, number> {
+  const map = new Map<string, number>()
   const walk = (nodes: PermissionMenuTreeNode[]) => {
     for (const n of nodes) {
-      ids.add(n.id)
+      if (n.id > 0) map.set(n.code, n.id)
       walk(n.children)
     }
   }
   walk(tree)
-  return ids
+  return map
 }
 
-/** DB の menu_permissions をツリー上の default-checked-keys 用に正規化 */
+/** DB の menu_permissions をツリー上の default-checked-keys（code）用に正規化 */
 export function menuIdsToTreeCheckedKeys(
   menuIds: number[],
   tree: PermissionMenuTreeNode[],
-): number[] {
+): string[] {
   const idToCode = new Map<number, string>()
-  const codeToId = new Map<string, number>()
   const walk = (nodes: PermissionMenuTreeNode[]) => {
     for (const n of nodes) {
-      idToCode.set(n.id, n.code)
-      codeToId.set(n.code, n.id)
+      if (n.id > 0) idToCode.set(n.id, n.code)
       walk(n.children)
     }
   }
@@ -99,6 +143,5 @@ export function menuIdsToTreeCheckedKeys(
   const codes = new Set(
     menuIds.map((id) => idToCode.get(id)).filter((c): c is string => c != null),
   )
-  const pruned = pruneParentCodesUnlessFullySelected(tree, codes)
-  return [...pruned].map((code) => codeToId.get(code)!).filter((id) => id != null)
+  return [...pruneParentCodesUnlessFullySelected(tree, codes)]
 }

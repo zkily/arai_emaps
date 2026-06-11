@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.services.file_watcher.sync_services import PickingLogService, execute_full_picking_log_matched_refresh_sync
 
@@ -305,7 +306,7 @@ async def list_shipping_items_for_picking_display(
 # ---------- POST /items/refresh-picking-log-matched ----------
 @router.post("/refresh-picking-log-matched")
 async def refresh_picking_log_matched(
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """監視フォルダのピッキングログ CSV を shipping_log に強制取込後、picking_log_matched を全件再計算する。"""
     csv_path, csv_name = _resolve_picking_csv_for_shipping_log()
@@ -381,7 +382,7 @@ def _run_refresh_picking_log_matched_task(task_id: str, csv_path: str, csv_name:
 
 @router.post("/refresh-picking-log-matched/async")
 async def start_refresh_picking_log_matched_task(
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """非同期ジョブを起動し task_id を返す。進捗は GET /refresh-picking-log-matched/tasks/{task_id} で取得。"""
     csv_path, csv_name = _resolve_picking_csv_for_shipping_log()
@@ -411,7 +412,7 @@ async def start_refresh_picking_log_matched_task(
 @router.get("/refresh-picking-log-matched/tasks/{task_id}")
 async def get_refresh_picking_log_matched_task(
     task_id: str,
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     task = _get_picking_sync_task(task_id)
     if not task:
@@ -424,7 +425,7 @@ async def get_refresh_picking_log_matched_task(
 async def bulk_create_shipping_items(
     body: List[ShippingItemBulkRow],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """
     パレット割当て案から送られた配列を shipping_items に一括 INSERT。
@@ -555,7 +556,7 @@ async def bulk_create_shipping_items(
 async def cancel_shipping_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     削除前に shipping_items.shipping_no_p で関連を処理してから物理削除する。
@@ -623,7 +624,7 @@ async def cancel_shipping_item(
 async def issue_shipping(
     shipping_no: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ):
     """出荷番号を発行：該当 shipping_no の全 shipping_items の status を「発行済」に更新"""
     try:

@@ -532,6 +532,11 @@ import {
 } from '@/api/outsourcing'
 import { getSuppliers } from '@/api/outsourcing'
 import request from '@/utils/request'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 interface ReceivingItem {
   id: number
@@ -975,6 +980,8 @@ const tableRowClassName = ({ row }: { row: ReceivingItem }) => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     const params: any = {
@@ -1094,6 +1101,8 @@ const handleQtyChange = (val: number | undefined) => {
 }
 
 const editReceiving = async (row: ReceivingItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   isEdit.value = true
   const remainQty = row.remainQty || row.orderQty - row.receivingQty
 
@@ -1183,6 +1192,8 @@ const viewOrder = async (row: ReceivingItem) => {
 }
 
 const submitForm = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   const valid = await formRef.value?.validate()
   if (!valid) return
 

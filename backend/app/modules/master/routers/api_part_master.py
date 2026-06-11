@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import PartMaster, Supplier
@@ -160,7 +161,7 @@ async def get_part(
 async def create_part(
     body: PartIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     dup = await db.execute(select(PartMaster).where(PartMaster.part_cd == body.part_cd.strip()))
     if dup.scalar_one_or_none():
@@ -193,7 +194,7 @@ async def update_part(
     part_id: int,
     body: PartPatch,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     row = await db.get(PartMaster, part_id)
     if not row:
@@ -234,7 +235,7 @@ async def update_part(
 async def delete_part(
     part_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     row = await db.get(PartMaster, part_id)
     if not row:
@@ -253,7 +254,7 @@ class ExportCsvItem(BaseModel):
 async def export_parts_csv(
     body: list[ExportCsvItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("export")),
 ):
     """CSV出力（body: [{ part_cd, part_name }]）"""
     output = io.StringIO()

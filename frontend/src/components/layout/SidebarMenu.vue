@@ -63,18 +63,17 @@ import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { buildTree, type MenuTreeNode } from '@/composables/useMenuTree'
 import { useMenuPermissions } from '@/composables/useMenuPermissions'
+import { SIDEBAR_ROOT_MENU_CODES } from '@/config/sidebarMenu'
 import MenuTreeItem from '@/components/layout/MenuTreeItem.vue'
 import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 import { HomeFilled, Expand, Fold } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 
-const ROOT_MENU_CODES = ['ERP', 'APS', 'MES', 'FIN', 'MASTER', 'SYSTEM'] as const
-
 const { canAccessMenuCode, filterMenuTree } = useMenuPermissions()
 
 const visibleRootMenus = computed(() =>
-  ROOT_MENU_CODES
+  SIDEBAR_ROOT_MENU_CODES
     .map((code) => filterMenuTree(buildTree(code)))
     .filter((node): node is MenuTreeNode => node != null),
 )

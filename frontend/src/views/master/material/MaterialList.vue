@@ -826,11 +826,11 @@ import {
   exportMaterialToCSV,
 } from '@/api/master/materialMaster'
 import type { Material as MaterialOrigin } from '@/types/master'
-import { useOperationPermission } from '@/composables/useOperationPermission'
-import { OPERATION_MODULE_INVENTORY } from '@/constants/operationModules'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
-const { canCreate, canEdit, canDelete, canExport } = useOperationPermission(OPERATION_MODULE_INVENTORY)
+const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
 // Material タイプを拡張し、statusLoading フィールドを追加
 interface Material extends MaterialOrigin {
@@ -1388,14 +1388,14 @@ function fetchList() {
 }
 
 function openForm(row: Material | null = null) {
-  if (row && !canEdit.value) return
-  if (!row && !canCreate.value) return
+  if (row && !guardMasterOperation(canEdit)) return
+  if (!row && !guardMasterOperation(canCreate)) return
   editId.value = row && row.id != null ? row.id : null
   formVisible.value = true
 }
 
 async function deleteMaterial(id: number) {
-  if (!canDelete.value) return
+  if (!guardMasterOperation(canDelete)) return
   try {
     await ElMessageBox.confirm('この材料を削除しますか？', '確認', {
       type: 'warning',
@@ -1411,7 +1411,7 @@ async function deleteMaterial(id: number) {
 }
 
 async function toggleStatus(row: Material) {
-  if (!canEdit.value) return
+  if (!guardMasterOperation(canEdit)) return
   row.statusLoading = true
   try {
     await updateMaterial({ ...row })

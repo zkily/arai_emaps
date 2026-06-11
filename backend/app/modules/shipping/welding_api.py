@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 from typing import List, Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Product
@@ -64,7 +65,7 @@ async def get_welding_products(
 async def get_welding_shipping_data(
     body: WeldingDataRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """
     溶接出荷データ。
@@ -321,7 +322,7 @@ def _escape(s: str) -> str:
 @router.post("/export")
 async def export_welding_shipping_report(
     body: WeldingExportRequest,
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ) -> dict:
     """印刷用レポート HTML。table_data から表を生成する。"""
     if not body.table_data or not isinstance(body.table_data, dict):

@@ -9,6 +9,7 @@ from typing import Optional, Any
 from pydantic import BaseModel
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.outsourcing.models import OutsourcingProcessProduct
@@ -207,7 +208,7 @@ class ProcessProductCreate(BaseModel):
 async def create_process_product(
     body: ProcessProductCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """外注工程製品を新規登録"""
     existing = await db.execute(
@@ -263,7 +264,7 @@ async def update_process_product(
     id: int,
     body: ProcessProductUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """外注工程製品を更新"""
     result = await db.execute(select(OutsourcingProcessProduct).where(OutsourcingProcessProduct.id == id))
@@ -284,7 +285,7 @@ async def update_process_product(
 async def toggle_process_product_status(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """有効フラグを反転"""
     result = await db.execute(select(OutsourcingProcessProduct).where(OutsourcingProcessProduct.id == id))
@@ -303,7 +304,7 @@ async def toggle_process_product_status(
 async def delete_process_product(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """外注工程製品を削除"""
     result = await db.execute(select(OutsourcingProcessProduct).where(OutsourcingProcessProduct.id == id))

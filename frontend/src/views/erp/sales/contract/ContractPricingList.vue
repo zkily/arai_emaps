@@ -115,6 +115,11 @@ import { ref, computed, onMounted } from 'vue'
 import { PriceTag, Search, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -152,12 +157,16 @@ async function fetchData() {
 }
 
 function openEdit(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   editId.value = row.id
   form.value = { ...row }
   showForm.value = true
 }
 
 async function handleSave() {
+  if (!guardSalesOperation(canEdit)) return
+
   saving.value = true
   try {
     if (editId.value) {
@@ -173,6 +182,8 @@ async function handleSave() {
 }
 
 async function handleDelete(row: any) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm('この契約単価を削除しますか？', '確認', { type: 'danger' })
     await request.delete(`/api/erp/sales/contract-pricing/${row.id}`)

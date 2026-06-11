@@ -1676,6 +1676,11 @@ import { generateMaterialStockData } from '@/api/materialDataGeneration'
 import { updateMaterialQuantities, updateMaterialRemarks } from '@/api/materialStockUpdate'
 import type { MaterialQuantityUpdate } from '@/api/materialStockUpdate'
 import { getProductList } from '@/api/master/productMaster'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 定义类型接口
 interface MaterialOrderItem {
@@ -2517,6 +2522,8 @@ const handleUsageStatusSearch = () => {
 
 // 处理使用数编辑（材料一覧用 main stock / 半端材料用 sub）
 const handleUsageQuantityChange = async (row: any) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('更新使用数:', row.id, row.usage_quantity)
 
@@ -2547,6 +2554,8 @@ const handleUsageQuantityChange = async (row: any) => {
 
 // 備考編集処理（材料注文＝main / 半端材料＝sub）
 const handleRemarksChange = async (row: any) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('備考更新:', row.id, row.remarks)
 
@@ -2569,6 +2578,8 @@ const handleRemarksChange = async (row: any) => {
 
 // ラベル色変更（半端材料のみ）
 const handleLabelColorChange = async (row: any) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     const body = { label_color: row.label_color ?? null }
     const response = await updateMaterialStockSub(row.id, body)
@@ -2592,6 +2603,8 @@ const openTransferDialog = (row: MaterialOrderItem) => {
 
 // 转移到半端：确认提交
 const confirmTransfer = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   const row = transferRow.value
   if (!row || !row.id) return
   const qty = transferQuantity.value
@@ -2633,6 +2646,8 @@ const confirmTransfer = async () => {
 
 // 初期在庫変化処理
 const handleInitialStockChange = async (row: InitialStockItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('初期在庫更新:', row.material_cd, row.initial_stock)
 
@@ -2666,6 +2681,8 @@ const handleInitialStockChange = async (row: InitialStockItem) => {
 
 // 調整数変更処理
 const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('更新調整数:', row.material_cd, row.adjustment_quantity)
 
@@ -2699,6 +2716,8 @@ const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
 
 // 删除半端材料记录
 const handleDeleteSubItem = async (row: any) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   try {
     console.log('删除半端材料记录:', row.id, row.material_name)
 
@@ -2837,6 +2856,8 @@ const handleTabChange = (tabName: string | number) => {
 }
 
 const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   // 计算受注捆数和捆重量
   if (row.order_quantity > 0 && row.pieces_per_bundle && row.long_weight) {
     row.order_bundle_quantity = row.order_quantity * row.pieces_per_bundle
@@ -2854,6 +2875,8 @@ const handleOrderQuantityChange = async (row: MaterialOrderItem) => {
 }
 
 const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   // 根据注文本数计算重量和注文金額
   if (row.order_bundle_quantity > 0 && row.long_weight) {
     row.bundle_weight = row.order_bundle_quantity * row.long_weight
@@ -2870,6 +2893,8 @@ const handleOrderBundleQuantityChange = async (row: MaterialOrderItem) => {
 
 // 保存数量到数据库
 const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('开始保存数量到数据库:', {
       material_cd: row.material_cd,
@@ -2907,6 +2932,8 @@ const saveQuantityToDatabase = async (row: MaterialOrderItem) => {
 }
 
 const _saveRemarksToDatabase = async (row: MaterialOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('开始保存備考到数据库:', {
       material_cd: row.material_cd,
@@ -2936,6 +2963,8 @@ const _saveRemarksToDatabase = async (row: MaterialOrderItem) => {
 }
 
 const _handleClearAll = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   // 批量更新所有行的数量为0
   const updatePromises = tableData.value.map(async (row) => {
     row.order_quantity = 0
@@ -2956,6 +2985,8 @@ const _handleClearAll = async () => {
 }
 
 const handleConfirmOrder = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   if (selectedOrderItems.value.length === 0) {
     ElMessage.warning('受注数量を入力してください')
     return
@@ -3009,6 +3040,8 @@ const _handleRefresh = () => {
 
 // 材料マスタ更新（materials → material_stock）
 const handleSyncMaterialMaster = async () => {
+  if (!guardPurchaseOperation(canCreate)) return
+
   try {
     if (!searchForm.dateRange || searchForm.dateRange.length !== 2) {
       ElMessage.error('まず日付（期間）を選択してください')
@@ -3049,6 +3082,8 @@ const handleSyncMaterialMaster = async () => {
 }
 
 const handleStockCalculation = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('在庫計算を実行しますか？', '在庫計算確認', {
       confirmButtonText: '実行',
@@ -3131,6 +3166,8 @@ const getMergedOrderData = async () => {
 }
 
 const handlePrintOrder = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   // 检查是否有选择日期
   if (!searchForm.dateRange || searchForm.dateRange.length === 0) {
     ElMessage.warning('请先选择日期范围')
@@ -3151,6 +3188,8 @@ const handlePrintOrder = async () => {
 
 // 确认打印
 const confirmPrint = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   try {
     const mergedOrderItems = await getMergedOrderData()
 
@@ -3390,6 +3429,8 @@ const generateOrderSheetImagePdfBlob = (mergedOrderItems: MaterialOrderItem[]): 
     }
 
     const runCapture = async () => {
+      if (!guardPurchaseOperation(canEdit)) return
+
       try {
         const target = doc.querySelector('.order-sheet') as HTMLElement | null
         if (!target) {
@@ -3443,6 +3484,8 @@ const generateOrderSheetImagePdfBlob = (mergedOrderItems: MaterialOrderItem[]): 
 
 // データ生成処理
 const handleDataGeneration = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   // 重置日期
   dataGenerationStartDate.value = ''
   dataGenerationEndDate.value = ''
@@ -3452,6 +3495,8 @@ const handleDataGeneration = async () => {
 
 // データ生成確認
 const confirmDataGeneration = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   try {
     // 验证日期选择
     if (!dataGenerationStartDate.value) {
@@ -3555,6 +3600,8 @@ const confirmDataGeneration = async () => {
 
 // 手入力材料注文まわり
 const handleAddManualOrder = async () => {
+  if (!guardPurchaseOperation(canCreate)) return
+
   console.log('手入力材料注文ダイアログを開く')
 
   // 重置表单
@@ -3740,6 +3787,8 @@ const handleManualOrderBundleQuantityChange = () => {
 }
 
 const handleConfirmManualOrder = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   if (!manualOrderFormRef.value) return
 
   try {
@@ -3952,6 +4001,8 @@ const unmarkReceivingLogCuttingUsedManual = async (row: { id?: number }) => {
 
 // 材料詳細：material_logs を材料名で取得
 const handleMaterialNameDoubleClick = async (row: MaterialOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   selectedMaterialDetail.value = row
   materialDetailLogFilter.value = 'all'
   materialDetailDialogVisible.value = true

@@ -174,6 +174,11 @@ import request from '@/utils/request'
 import ShippingListReport from './components/ShippingListReport.vue'
 import DestinationGroupManager from './components/DestinationGroupManager.vue'
 import ShippingCalendarDialog from './components/ShippingCalendarDialog.vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 interface DestinationOption {
   value: string
@@ -340,6 +345,8 @@ async function fetchListData() {
 }
 
 function handleDateChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.dateRange && filters.dateRange.length === 2) fetchListData()
 }
 
@@ -365,6 +372,8 @@ function goToToday() {
 }
 
 function handleDestinationChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   fetchListData()
 }
 
@@ -407,6 +416,8 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Tabl
 }
 
 function handleReport() {
+  if (!guardSalesOperation(canEdit)) return
+
   nextTick(() => {
     if (!printContent.value?.innerHTML) {
       ElMessage.error('印刷内容の取得に失敗しました。')
@@ -432,6 +443,8 @@ function handleReport() {
 }
 
 async function loadDestinationGroups() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = await request.get('/api/shipping/destination-groups/shipping_list')
     const body = (response as { data?: unknown })?.data ?? response
@@ -453,6 +466,8 @@ async function loadDestinationGroups() {
 }
 
 function handleGroupsUpdated(groups: DestinationGroup[]) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (Array.isArray(groups)) {
     destinationGroups.value = groups
     if (filters.selectedGroup >= 0 && groups[filters.selectedGroup]?.destinations?.length === 0) {
@@ -463,6 +478,8 @@ function handleGroupsUpdated(groups: DestinationGroup[]) {
 }
 
 function handleGroupChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.selectedGroup === -1) {
     filters.destinationCds = []
   } else {

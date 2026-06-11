@@ -132,6 +132,11 @@ import { ref, computed, onMounted } from 'vue'
 import { Money, Search, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/utils/request'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -172,6 +177,8 @@ async function fetchData() {
 }
 
 async function handleCreate() {
+  if (!guardSalesOperation(canCreate)) return
+
   saving.value = true
   try {
     await request.post('/api/erp/sales/invoices', form.value)
@@ -183,6 +190,8 @@ async function handleCreate() {
 }
 
 async function issueInv(row: any) {
+  if (!guardSalesOperation(canExport)) return
+
   try {
     await ElMessageBox.confirm('この請求書を発行しますか？', '確認')
     await request.post(`/api/erp/sales/invoices/${row.id}/issue`)
@@ -194,6 +203,8 @@ async function issueInv(row: any) {
 function openPayment(row: any) { selectedInvoice.value = row; paymentAmount.value = (row.total_amount || 0) - (row.paid_amount || 0); showPayment.value = true }
 
 async function handlePayment() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!selectedInvoice.value) return
   try {
     await request.post(`/api/erp/sales/invoices/${selectedInvoice.value.id}/mark-paid`, { amount: paymentAmount.value, payment_method: paymentMethod.value })
@@ -204,6 +215,8 @@ async function handlePayment() {
 }
 
 async function deleteInv(row: any) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm('この請求書を削除しますか？', '確認', { type: 'danger' })
     await request.delete(`/api/erp/sales/invoices/${row.id}`)

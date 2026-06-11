@@ -101,6 +101,11 @@ import {
 import request from '@/utils/request'
 import { getJSTToday } from '@/utils/dateFormat'
 import { getProductionSummarysList } from '@/api/database'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 

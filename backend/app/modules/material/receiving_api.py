@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.master.models import Material
 from app.modules.material.models import MaterialCuttingLog, MaterialLog
@@ -269,7 +270,7 @@ async def get_receiving_log(
 async def create_receiving_log(
     body: MaterialLogCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """受入ログ新規登録"""
     row = MaterialLog(**body.model_dump())
@@ -380,7 +381,7 @@ async def update_receiving_log(
     item_id: int,
     body: MaterialLogUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """受入ログ更新"""
     result = await db.execute(select(MaterialLog).where(MaterialLog.id == item_id))
@@ -421,7 +422,7 @@ async def update_receiving_log(
 async def delete_receiving_log(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """受入ログ削除"""
     result = await db.execute(select(MaterialLog).where(MaterialLog.id == item_id))
@@ -437,7 +438,7 @@ async def delete_receiving_log(
 async def import_csv_logs(
     rows: List[MaterialLogCreate],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """CSV 一括インポート。body が空のときは .env（MATERIAL_RECEIVING_CSV_PATHS 等）で解決した材料 CSV を読み取り DB へ同期。"""
     if not rows:

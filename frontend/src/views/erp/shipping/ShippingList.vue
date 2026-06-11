@@ -849,6 +849,11 @@ import {
 import QRCode from 'qrcode'
 import { exportPickingCSV } from '@/api/shipping/pickingExport'
 import { recordPrintHistory } from '@/api/shipping/printHistory'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 定义接口
 interface ShippingItem {
@@ -1001,6 +1006,8 @@ const sortedDestinationOptions = computed(() => {
 
 // 分组更新后的处理
 function handleGroupsUpdated(updatedGroups: any[]) {
+  if (!guardSalesOperation(canEdit)) return
+
   availableGroups.value = updatedGroups.map((group) => ({
     ...group,
     groupName: group.group_name,
@@ -1177,6 +1184,8 @@ const totalSelectedCount = computed(() => {
 
 // 页面加载动画
 const handlePageLoad = async () => {
+  if (!guardSalesOperation(canEdit)) return
+
   pageLoading.value = true
   await nextTick()
   setTimeout(() => {
@@ -2588,6 +2597,8 @@ function updateProgressMessage(message: string): void {
 
 // 加载分组
 async function loadDestinationGroups() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = await request.get('/api/shipping/destination-groups/destination_groups_list')
     if (Array.isArray(response)) {

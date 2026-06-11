@@ -178,6 +178,11 @@ import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { ElMessage } from 'element-plus'
 import { Check, Close, Calendar, Edit } from '@element-plus/icons-vue'
 import type { OrderDailyItem } from '@/api/erp/orderDaily'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 
@@ -208,12 +213,16 @@ const confirmedBoxesInputs = ref<(HTMLInputElement | undefined)[]>([])
 const confirmedUnitsInputs = ref<(HTMLInputElement | undefined)[]>([])
 
 function setConfirmedBoxesRef(el: any, index: number) {
+  if (!guardSalesOperation(canApprove)) return
+
   if (el && '$el' in el) {
     const input = (el as { $el: HTMLElement }).$el?.querySelector?.('input') as HTMLInputElement | undefined
     confirmedBoxesInputs.value[index] = input
   }
 }
 function setConfirmedUnitsRef(el: any, index: number) {
+  if (!guardSalesOperation(canApprove)) return
+
   if (el && '$el' in el) {
     const input = (el as { $el: HTMLElement }).$el?.querySelector?.('input') as HTMLInputElement | undefined
     confirmedUnitsInputs.value[index] = input
@@ -269,6 +278,8 @@ function shortcutDestinationCd(label: string): string {
 }
 
 function applyShortcut(label: string) {
+  if (!guardSalesOperation(canEdit)) return
+
   const cd = shortcutDestinationCd(label)
   destinationCd.value = cd || ''
 }
@@ -324,6 +335,8 @@ function markDailyRowChanged(row: OrderDailyItem) {
 }
 
 function handleDailyConfirmedBoxesChange(row: OrderDailyItem, val: string | number) {
+  if (!guardSalesOperation(canApprove)) return
+
   const boxes = val === '' ? 0 : Number(val)
   row.confirmed_boxes = boxes
   const unitPerBox = row.unit_per_box ?? 0
@@ -332,6 +345,8 @@ function handleDailyConfirmedBoxesChange(row: OrderDailyItem, val: string | numb
 }
 
 function handleDailyConfirmedUnitsChange(row: OrderDailyItem, val: string | number) {
+  if (!guardSalesOperation(canApprove)) return
+
   row.confirmed_units = val === '' ? 0 : Number(val)
   markDailyRowChanged(row)
 }
@@ -346,6 +361,8 @@ async function focusDailyNextInput(currentIndex: number) {
 }
 
 async function focusDailyNextConfirmedUnitsInput(currentIndex: number) {
+  if (!guardSalesOperation(canApprove)) return
+
   await nextTick()
   const nextInput = confirmedUnitsInputs.value[currentIndex + 1]
   if (nextInput) {
@@ -380,6 +397,8 @@ function getDailySummaries({ columns, data }: SummaryProps): string[] {
 }
 
 async function handleBatchSave() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (dailyChangedRows.value.size === 0) {
     ElMessage.warning(t('orderDailyManage.msgNoChangedData'))
     return
@@ -410,6 +429,8 @@ async function handleBatchSave() {
 }
 
 function handleClose() {
+  if (!guardSalesOperation(canEdit)) return
+
   emit('update:visible', false)
 }
 

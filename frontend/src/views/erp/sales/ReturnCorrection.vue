@@ -130,6 +130,11 @@
 import { ref } from 'vue'
 import { Search, RefreshLeft, Document } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const showCreateDialog = ref(false)
@@ -154,14 +159,20 @@ const form = ref({ original_no: '', type: 'credit' as 'credit' | 'debit', custom
 const tableHeaderStyle = { background: 'linear-gradient(135deg, #f97316, #ea580c)', color: '#fff', fontWeight: '600', fontSize: '12px', padding: '6px 10px' }
 const tableCellStyle = { padding: '5px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.85)', borderColor: 'rgba(255,255,255,0.06)' }
 
-function handleSearch() {}
+function handleSearch() {
+  if (!guardSalesOperation(canEdit)) return
+}
 
 function createCorrection() {
+  if (!guardSalesOperation(canCreate)) return
+
   ElMessage.info('赤黒訂正機能は準備中です')
   showCreateDialog.value = false
 }
 
 function approveCorrection(_row: Correction) {
+  if (!guardSalesOperation(canApprove)) return
+
   ElMessageBox.confirm('この訂正を承認しますか？', '確認', { type: 'warning' }).then(() => {
     ElMessage.info('承認機能は準備中です')
   }).catch(() => {})
@@ -174,6 +185,8 @@ function postCorrection(_row: Correction) {
 }
 
 function deleteCorrection(_row: Correction) {
+  if (!guardSalesOperation(canDelete)) return
+
   ElMessageBox.confirm('この訂正を削除しますか？', '確認', { type: 'danger' }).then(() => {
     ElMessage.info('削除機能は準備中です')
   }).catch(() => {})

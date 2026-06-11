@@ -849,6 +849,11 @@ import type { ProcessItem } from '@/types/master'
 import { jsPDF } from 'jspdf'
 import html2canvas from 'html2canvas'
 import * as echarts from 'echarts'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 const goHelpPage = () => {
   // 新标签页打开：不替换当前页面；同时避免当前 SPA 热更新导致路由表未刷新。
@@ -1580,6 +1585,8 @@ const loadAdjustmentRecords = async () => {
 }
 
 const handleUpdatePlanQuantity = async (row: PlanBaselineAdjustmentItem) => {
+  if (!guardApsOperation(canEdit)) return
+
   const planQuantity = Number(row.tempPlanQuantity)
   if (Number.isNaN(planQuantity)) {
     ElMessage.warning('数値を入力してください')
@@ -1607,6 +1614,8 @@ const handleUpdatePlanQuantity = async (row: PlanBaselineAdjustmentItem) => {
 }
 
 const handleDeleteBaselineRecord = async (row: PlanBaselineAdjustmentItem) => {
+  if (!guardApsOperation(canDelete)) return
+
   if (!adjustmentForm.baselineMonth) {
     ElMessage.warning('基準月を選択してください')
     return
@@ -1651,6 +1660,8 @@ const handleDeleteBaselineRecord = async (row: PlanBaselineAdjustmentItem) => {
 }
 
 const handleBatchSave = async () => {
+  if (!guardApsOperation(canCreate)) return
+
   if (adjustmentItems.value.length === 0) {
     ElMessage.warning('修正対象のデータがありません')
     return
@@ -1744,6 +1755,8 @@ const loadComparison = async () => {
 }
 
 const runGeneratePlanBaseline = async (payload: Parameters<typeof generatePlanBaseline>[0]) => {
+  if (!guardApsOperation(canCreate)) return
+
   generating.value = true
   try {
     await generatePlanBaseline(payload)
@@ -1757,6 +1770,8 @@ const runGeneratePlanBaseline = async (payload: Parameters<typeof generatePlanBa
 }
 
 const submitFixedBaselineGenerate = async () => {
+  if (!guardApsOperation(canCreate)) return
+
   const w = fixedBaselineForm.weekdayBaseline
   if (w == null || Number(w) <= 0) {
     ElMessage.warning('平日の基準計画数を入力してください（1以上の数）')
@@ -1780,6 +1795,8 @@ const submitFixedBaselineGenerate = async () => {
 }
 
 const handleGenerate = async () => {
+  if (!guardApsOperation(canCreate)) return
+
   if (!queryForm.baselineMonth) {
     ElMessage.warning('対象月を選択してください')
     return
@@ -1812,6 +1829,8 @@ const handleGenerate = async () => {
 }
 
 const handleDeleteBaseline = async () => {
+  if (!guardApsOperation(canDelete)) return
+
   if (!queryForm.baselineMonth) {
     ElMessage.warning('対象月を選択してください')
     return
@@ -1855,6 +1874,8 @@ async function runWithConcurrency<T, R>(
   let next = 0
   const limit = Math.max(1, Math.min(concurrency, items.length))
   const runWorker = async () => {
+    if (!guardApsOperation(canEdit)) return
+
     while (true) {
       const i = next++
       if (i >= items.length) return
@@ -2318,6 +2339,8 @@ async function buildOperationRateCombinedPdf(baselineMonth: string): Promise<Blo
 }
 
 const handleExportPdfToFolder = async () => {
+  if (!guardApsOperation(canExport)) return
+
   if (!comparisonResult.value?.baselineMonth || pdfExportTargetTabs.value.length === 0) {
     ElMessage.warning(
       '切断・面取・成型・メッキ・溶接・検査・外注メッキ・外注溶接のいずれにも比較データがありません。条件を確認し、先に検索を実行してください。',
@@ -2409,6 +2432,8 @@ watch([() => planRateFilter.baselineMonth, () => planRateFilter.processCd], () =
 
 /** 印刷用 HTML を隠し iframe で開き、ブラウザの印刷ダイアログのみ出す */
 function printWithIframeDoc(html: string, iframeTitle: string) {
+  if (!guardApsOperation(canExport)) return
+
   const iframe = document.createElement('iframe')
   iframe.setAttribute('title', iframeTitle)
   iframe.setAttribute('aria-hidden', 'true')
@@ -2446,6 +2471,8 @@ function printWithIframeDoc(html: string, iframeTitle: string) {
 
 /** 現アクティブタブの比較テーブル行だけを印刷（ページ全体ではない） */
 function handlePrintBaselineComparison() {
+  if (!guardApsOperation(canExport)) return
+
   const tab =
     processTabs.value.find((t) => t.name === activeTab.value) ?? processTabs.value[0]
   if (!tab?.items?.length) {
@@ -2576,6 +2603,8 @@ ${actualDiffTotalCell}
 
 /** 操業度：現在一覧（設備操業度と同一集計）を印刷 */
 function handlePrintOperationRate() {
+  if (!guardApsOperation(canExport)) return
+
   const rows = planUtilizationRows.value
   if (rows.length === 0) return
 

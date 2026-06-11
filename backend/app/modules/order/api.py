@@ -16,6 +16,7 @@ from datetime import date
 from calendar import monthrange
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Product, ProductRouteStep, Destination
@@ -124,7 +125,7 @@ async def check_monthly_order_exists(
 async def add_monthly_order(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """
     月次注文を作成する（日次追加時の自動作成用）。
@@ -174,7 +175,7 @@ async def check_combination_exists(
     year: int = Query(..., description="年"),
     month: int = Query(..., ge=1, le=12, description="月"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """
     order_monthly に同一 destination_name, product_name, year, month が存在するか。
@@ -209,7 +210,7 @@ async def get_monthly_summary(
     destination_cd: Optional[str] = Query(None, description="納入先CD"),
     keyword: Optional[str] = Query(None, description="製品・納入先検索"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """
     月別受注の合計（リストと同じ条件で集計）。
@@ -303,7 +304,7 @@ class BatchCreateMonthlyBody(BaseModel):
 async def batch_create_monthly(
     body: BatchCreateMonthlyBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """
     月別受注を一括登録。
@@ -377,7 +378,7 @@ class GenerateDailyBody(BaseModel):
 async def generate_daily_orders(
     body: GenerateDailyBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     日受注リスト生成。year, month 必須。productType は '量産品' のみ対象。
@@ -419,7 +420,7 @@ class UpdateOrderFieldsBody(BaseModel):
 async def update_order_fields(
     body: UpdateOrderFieldsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     開始日以降の月受注・日受注の製品情報を主データに合わせて一括更新。
@@ -523,7 +524,7 @@ class UpdateShippingNoItem(BaseModel):
 async def update_daily_shipping_no(
     body: List[UpdateShippingNoItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     前端 updatePayload に従い、「产品 + 納入先 + 出荷日」で order_daily を特定し、

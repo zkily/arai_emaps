@@ -25,6 +25,7 @@
               class="lcap-btn-save"
               :icon="CircleCheck"
               :loading="saving"
+              :disabled="!canEdit"
               @click="saveAll"
             >
               一括保存
@@ -50,6 +51,7 @@
               class="lcap-btn-save"
               :icon="CircleCheck"
               :loading="saving"
+              :disabled="!canEdit"
               @click="saveAll"
             >
               一括保存
@@ -342,6 +344,10 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canEdit } = useApsOperationPermission()
 
 interface EditSlot {
   start_time: string
@@ -921,6 +927,7 @@ function calcProductiveHours(day: DayEdit): number {
 }
 
 async function saveAll() {
+  if (!guardApsOperation(canEdit)) return
   if (!selectedLineId.value) return
   saving.value = true
   try {

@@ -392,6 +392,11 @@ import { getJSTToday } from '@/utils/dateFormat'
 import request from '@/utils/request'
 import { getWarehouseDailyShortagePrint } from '@/api/shipping/warehouseDailyStock'
 import type { InventoryShortagePrintRow } from '@/api/database'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 
@@ -708,6 +713,8 @@ function formatPrintDate(dateStr: string): string {
 }
 
 function executeShortagePrint(contentRef: HTMLElement | null) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML) {
     ElMessage.error('印刷内容の取得に失敗しました。')
     return
@@ -741,6 +748,8 @@ function executeShortagePrint(contentRef: HTMLElement | null) {
 }
 
 async function handleShortageIssuePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   const r = queryDateRange.value
   if (!r || r.length !== 2 || !r[0] || !r[1]) {
     ElMessage.warning(t('shipping.periodNotSelected'))
@@ -782,6 +791,8 @@ watch(
 )
 
 async function handleSyncFromOrderDaily() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     await ElMessageBox.confirm(
       t('shipping.warehouseDaily.syncFromOrderDailyConfirm'),
@@ -827,6 +838,8 @@ async function handleSyncFromOrderDaily() {
 }
 
 async function handleGenerateData() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     await ElMessageBox.confirm(
       t('shipping.warehouseDaily.generateConfirm'),

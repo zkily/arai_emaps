@@ -10,6 +10,7 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProcessDefectItem, Process
@@ -196,7 +197,7 @@ async def get_process_defect_item(
 async def create_process_defect_item(
     body: DefectItemIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     det = body.detection_process_cd.strip()
     att = body.attributable_process_cd.strip()
@@ -232,7 +233,7 @@ async def update_process_defect_item(
     item_id: int,
     body: DefectItemIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     row = await db.get(ProcessDefectItem, item_id)
     if not row:
@@ -268,7 +269,7 @@ async def update_process_defect_item(
 async def delete_process_defect_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     row = await db.get(ProcessDefectItem, item_id)
     if not row:

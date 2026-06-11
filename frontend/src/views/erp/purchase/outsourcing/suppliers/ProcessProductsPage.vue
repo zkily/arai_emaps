@@ -638,6 +638,11 @@ import {
   type OutsourcingProcessProduct,
 } from '@/api/outsourcing'
 import { getProductOptions } from '@/api/options'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 状态
 const loading = ref(false)
@@ -900,6 +905,8 @@ const handleEdit = (row: OutsourcingProcessProduct) => {
 }
 
 const handleToggleStatus = async (row: OutsourcingProcessProduct) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   if (row.id == null) return
   const action = row.is_active ? '無効化' : '有効化'
   try {
@@ -920,6 +927,8 @@ const handleToggleStatus = async (row: OutsourcingProcessProduct) => {
 }
 
 const handleDelete = async (row: OutsourcingProcessProduct) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   if (row.id == null) return
   try {
     await ElMessageBox.confirm(
@@ -939,6 +948,8 @@ const handleDelete = async (row: OutsourcingProcessProduct) => {
 }
 
 const handleSubmit = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {

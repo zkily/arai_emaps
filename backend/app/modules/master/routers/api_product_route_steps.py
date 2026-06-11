@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List, Any
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import (
@@ -192,7 +193,7 @@ class StepItem(BaseModel):
 async def save_product_route_steps_bulk(
     body: List[StepItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品別工程ステップ一括保存（ステップ＋設備）"""
     if not body:
@@ -256,7 +257,7 @@ class MachineCreate(BaseModel):
 async def create_product_route_step_machine(
     body: MachineCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """製品別工程ステップに設備1件追加"""
     row = ProductRouteStepMachine(
@@ -282,7 +283,7 @@ async def update_product_route_step_machine(
     machine_id: int,
     body: MachineCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品別工程ステップ設備1件更新"""
     q = select(ProductRouteStepMachine).where(ProductRouteStepMachine.id == machine_id)
@@ -305,7 +306,7 @@ async def update_product_route_step_machine(
 async def delete_product_route_step_machine(
     machine_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """製品別工程ステップ設備1件削除"""
     q = select(ProductRouteStepMachine).where(ProductRouteStepMachine.id == machine_id)

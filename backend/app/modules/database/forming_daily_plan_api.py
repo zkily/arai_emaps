@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation
 from app.modules.auth.models import User
 
 router = APIRouter(tags=["forming-daily-plan"])
@@ -116,7 +117,7 @@ async def get_process_run_days(
 async def put_process_run_days(
     body: ProcessRunCalendarPutBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     ps = _parse_iso_date("startDate", body.startDate)
     pe = _parse_iso_date("endDate", body.endDate)

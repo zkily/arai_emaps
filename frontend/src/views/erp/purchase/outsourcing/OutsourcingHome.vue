@@ -278,6 +278,11 @@ import {
   Box,
 } from '@element-plus/icons-vue'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   getOutsourcingDashboard,
   getUpcomingDeliveries,
   getSupplierSummary,

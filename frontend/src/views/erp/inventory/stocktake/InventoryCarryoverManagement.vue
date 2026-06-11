@@ -351,6 +351,11 @@ import {
 import { getCarryoverData, executeCarryover } from '@/api/inventoryCarryover'
 import { fetchProcesses } from '@/api/master/processMaster'
 import InventoryCarryoverHistory from './components/InventoryCarryoverHistory.vue'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 // 响应式数据
 const activeTab = ref('carryover')
@@ -560,6 +565,8 @@ const handleCarryoverPageChange = (page: number) => {
 
 // 执行搜索
 const handleSearch = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+
   if (!filterParams.month || !filterParams.process_cd) {
     ElMessage.warning('月と工程を選択してください')
     return
@@ -617,6 +624,8 @@ const handleSelectionChange = (selection: any[]) => {
 
 // 执行繰越
 const handleCarryover = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+
   if (selectedData.value.length === 0) {
     ElMessage.warning('繰越するデータを選択してください')
     return

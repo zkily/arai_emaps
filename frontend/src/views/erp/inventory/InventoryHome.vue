@@ -137,6 +137,11 @@ import type { StockAlert } from '@/types/erp/inventory'
 import { getProductionSummarysList, type ProductionSummaryInventoryRow } from '@/api/database'
 import { getMaterialStockList } from '@/api/material'
 import { getPartStockList } from '@/api/part'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 const loading = ref(false)
 const summaryList = ref<ProductionSummaryInventoryRow[]>([])

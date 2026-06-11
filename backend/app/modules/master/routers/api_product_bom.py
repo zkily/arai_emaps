@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from datetime import date
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Product, ProductBomHeader, ProductBomLine
@@ -173,7 +174,7 @@ async def get_bom_header(
 async def create_bom_header(
     body: BomHeaderIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """BOMヘッダ作成（行も一括保存可）"""
     h = ProductBomHeader(
@@ -224,7 +225,7 @@ async def update_bom_header(
     header_id: int,
     body: BomHeaderIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """BOMヘッダ更新（行は差し替え）"""
     h = await db.get(ProductBomHeader, header_id)
@@ -269,7 +270,7 @@ async def update_bom_header(
 async def delete_bom_header(
     header_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """BOMヘッダ削除（行もCASCADE）"""
     h = await db.get(ProductBomHeader, header_id)

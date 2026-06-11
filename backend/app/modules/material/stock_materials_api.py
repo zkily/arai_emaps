@@ -16,6 +16,7 @@ from datetime import date
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.material.models import StockMaterial
 from app.modules.material.schemas import (
@@ -152,7 +153,7 @@ async def get_stock_material(
 async def create_stock_material(
     body: StockMaterialCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """在庫材料新規登録"""
     row = StockMaterial(**body.model_dump())
@@ -167,7 +168,7 @@ async def update_stock_material(
     item_id: int,
     body: StockMaterialUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """在庫材料更新"""
     result = await db.execute(select(StockMaterial).where(StockMaterial.id == item_id))
@@ -185,7 +186,7 @@ async def update_stock_material(
 async def toggle_used_status(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """使用/未使用切替"""
     result = await db.execute(select(StockMaterial).where(StockMaterial.id == item_id))
@@ -202,7 +203,7 @@ async def toggle_used_status(
 async def delete_stock_material(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """在庫材料削除"""
     result = await db.execute(select(StockMaterial).where(StockMaterial.id == item_id))

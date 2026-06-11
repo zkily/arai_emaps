@@ -37,6 +37,7 @@
             クリア
           </el-button>
           <el-button
+            v-if="canEdit"
             type="success"
             @click="handleSync"
             :icon="Refresh"
@@ -45,7 +46,7 @@
           >
             製品情報同期
           </el-button>
-          <el-button type="primary" @click="openDialog()" :icon="Plus" class="add-btn">
+          <el-button v-if="canCreate" type="primary" @click="openDialog()" :icon="Plus" class="add-btn">
             新規登録
           </el-button>
         </div>
@@ -118,10 +119,11 @@
             width="140"
             align="center"
           />
-          <el-table-column label="操作" fixed="right" width="140" align="center">
+          <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="140" align="center">
             <template #default="{ row }">
               <div class="action-buttons-table">
                 <el-button
+                  v-if="canEdit"
                   size="small"
                   type="primary"
                   link
@@ -131,6 +133,7 @@
                   編集
                 </el-button>
                 <el-button
+                  v-if="canDelete"
                   size="small"
                   type="danger"
                   link
@@ -398,6 +401,10 @@ import {
 } from '@/api/master/productMachineConfigMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
 import type { FormInstance, FormRules } from 'element-plus'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 // 数据状态
 const configList = ref<ProductMachineConfig[]>([])
@@ -535,6 +542,7 @@ const loadMachineOptions = async () => {
 
 // 打开对话框
 const openDialog = (row?: ProductMachineConfig) => {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   isEdit.value = !!row
   if (row) {
     formData.value = { ...row }
@@ -558,6 +566,7 @@ const openDialog = (row?: ProductMachineConfig) => {
 
 // 提交表单
 const handleSubmit = async () => {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   if (!formRef.value) return
 
   await formRef.value.validate(async (valid) => {
@@ -587,6 +596,7 @@ const handleSubmit = async () => {
 
 // 删除处理
 const handleDelete = async (id?: number) => {
+  if (!guardMasterOperation(canDelete)) return
   if (!id) return
 
   try {
@@ -608,6 +618,7 @@ const handleDelete = async (id?: number) => {
 
 // 同步产品数据
 const handleSync = async () => {
+  if (!guardMasterOperation(canEdit)) return
   syncing.value = true
   try {
     const result = (await syncProducts()) as any

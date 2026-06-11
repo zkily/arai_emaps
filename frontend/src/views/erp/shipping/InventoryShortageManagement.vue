@@ -378,6 +378,11 @@ import {
   updateProductionSummarysSafetyStock,
 } from '@/api/database'
 import type { ProductionSummaryProduct, InventoryShortagePrintRow } from '@/api/database'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 interface SummaryRow {
   product_cd?: string
@@ -607,6 +612,8 @@ async function fetchList() {
 }
 
 function handleDateChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.page = 1
   if (filters.dateRange && filters.dateRange.length === 2) fetchList()
 }
@@ -630,6 +637,8 @@ function goToToday() {
 }
 
 function handleProductChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.page = 1
   fetchList()
 }
@@ -682,6 +691,8 @@ function getSummaries(param: { columns: Array<{ property?: string }>; data: Summ
 }
 
 async function handlePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   if (!filters.dateRange || filters.dateRange.length !== 2) {
     ElMessage.warning('期間を選択してください')
     return
@@ -713,6 +724,8 @@ async function handlePrint() {
 }
 
 function executeFrontendPrint(contentRef: HTMLElement | null) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML) {
     ElMessage.error('印刷内容の取得に失敗しました。')
     return
@@ -753,6 +766,8 @@ function getFirstDayOfCurrentMonth(): string {
 }
 
 function handleAllUpdate() {
+  if (!guardSalesOperation(canEdit)) return
+
   showAllUpdateConfirmDialog.value = true
 }
 
@@ -774,6 +789,8 @@ function getRandomUUID(): string {
 }
 
 async function confirmAllUpdate() {
+  if (!guardSalesOperation(canApprove)) return
+
   showAllUpdateConfirmDialog.value = false
   const lockValue = getRandomUUID()
   try {
@@ -903,6 +920,8 @@ function formatChartLabel(value: number): string {
 }
 
 function updateChart() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!chartInstance) return
   const data = chartDataForProduct.value
   const dates = data.map((r) => r.date || '').filter(Boolean)
@@ -1026,6 +1045,8 @@ function disposeChart() {
 }
 
 function handlePrintChart() {
+  if (!guardSalesOperation(canExport)) return
+
   if (!chartInstance) return
   const url = chartInstance.getDataURL({
     type: 'png',

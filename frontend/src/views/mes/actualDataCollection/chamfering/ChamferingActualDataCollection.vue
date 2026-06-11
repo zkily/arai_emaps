@@ -71,10 +71,13 @@ import {
   isNetworkOrServerDownError,
   enqueueOfflinePatch,
 } from './chamferingActualOfflineSync'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 defineOptions({ name: 'ChamferingActualDataCollection' })
 
 const { t, locale } = useI18n()
+const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
 /** 計画1件ごとの画面状態（MES 実績の一部は chamfering_management に同期） */
 interface PlanSession {
@@ -423,6 +426,7 @@ function destroyPlanSortables(): void {
 }
 
 function canInitPlanSortable(grp: { dayKey: string; rows: ChamferingMgmtRow[] }): boolean {
+  if (!canEdit.value) return false
   if (planReorderSaving.value || loadingPlans.value) return false
   if (selectedMachineId.value == null || !selectedMachineName.value) return false
   if (grp.rows.length <= 1 || grp.dayKey === '—') return false
@@ -461,6 +465,7 @@ function applyLocalProductionSequence(orderedRows: ChamferingMgmtRow[]): void {
 }
 
 async function onPlanCardSortEnd(dayKey: string, evt: SortableEvent): Promise<void> {
+  if (!guardMesOperation(canEdit)) return
   if (evt.oldIndex == null || evt.newIndex == null || evt.oldIndex === evt.newIndex) return
   const grp = visibleRowsByDay.value.find((g) => g.dayKey === dayKey)
   if (!grp) return
@@ -597,6 +602,7 @@ function barcodeScanProductLabel(row: ChamferingMgmtRow | null): string {
 }
 
 async function onBarcodeScanned(code: string): Promise<void> {
+  if (!guardMesOperation(canEdit)) return
   const row = barcodeScanTargetRow.value
   if (row?.id == null) return
   const trimmed = code.trim().slice(0, 512)
@@ -723,6 +729,7 @@ function clearConfirmedEditState(): void {
 }
 
 function openConfirmedEditDialog(row: ChamferingMgmtRow): void {
+  if (!guardMesOperation(canEdit)) return
   const id = row.id
   if (id == null || !isChamferingRowConfirmed(row)) return
   const sess = ensureSession(id)
@@ -756,6 +763,7 @@ function closeConfirmedEditDialog(): void {
 }
 
 async function submitConfirmedEdit(): Promise<void> {
+  if (!guardMesOperation(canEdit)) return
   const row = confirmedEditRow.value
   const planId = confirmedEditPlanId.value
   const draft = confirmedEditForm.value
@@ -834,6 +842,7 @@ async function submitConfirmedEdit(): Promise<void> {
 }
 
 async function clearConfirmedMesAndSave(): Promise<void> {
+  if (!guardMesOperation(canDelete)) return
   const row = confirmedEditRow.value
   const planId = confirmedEditPlanId.value
   if (!row || planId == null) return
@@ -1084,6 +1093,7 @@ function rowProductionShortLabel(row: ChamferingMgmtRow): string {
 }
 
 async function onStart(planId: number) {
+  if (!guardMesOperation(canEdit)) return
   const s = ensureSession(planId)
   if (s.wallEnd != null) return
   const now = Date.now()
@@ -1142,6 +1152,7 @@ async function onStart(planId: number) {
 }
 
 function onPause(planId: number | undefined | null) {
+  if (!guardMesOperation(canEdit)) return
   if (planId == null || !Number.isFinite(planId)) return
   const s = ensureSession(planId)
   if (s.wallEnd != null || s.runningSliceStart == null) return
@@ -1154,6 +1165,7 @@ function onPause(planId: number | undefined | null) {
 }
 
 function onResume(planId: number | undefined | null) {
+  if (!guardMesOperation(canEdit)) return
   if (planId == null || !Number.isFinite(planId)) return
   const s = ensureSession(planId)
   if (s.wallEnd != null || s.wallStart == null || s.runningSliceStart != null) return
@@ -1179,17 +1191,20 @@ function isTimerPaused(sess: PlanSession): boolean {
 }
 
 function canStartTimer(sess: PlanSession, planId: number): boolean {
+  if (!canEdit.value) return false
   if (sess.wallEnd != null || sess.wallStart != null) return false
   return findOtherActiveProductionRow(planId) == null
 }
 
 /** 稼働計測中のみ生産終了可（一時停止中は不可） */
 function canEndProduction(sess: PlanSession): boolean {
+  if (!canEdit.value) return false
   return isTimerRunning(sess)
 }
 
 /** 未開始のみ面取機変更可（生産中・終了済・実績確定済は不可） */
 function canChangeMachine(row: ChamferingMgmtRow): boolean {
+  if (!canEdit.value) return false
   if (row.id == null) return false
   if (isChamferingRowConfirmedForDisplay(row)) return false
   if (isRowMesProductionActive(row)) return false
@@ -1261,10 +1276,12 @@ async function reorderAfterMachineMove(params: {
 }
 
 function canPauseTimer(sess: PlanSession): boolean {
+  if (!canEdit.value) return false
   return isTimerRunning(sess)
 }
 
 function canResumeTimer(sess: PlanSession): boolean {
+  if (!canEdit.value) return false
   return isTimerPaused(sess)
 }
 
@@ -1366,6 +1383,7 @@ function closeChangeMachineDialog(): void {
 }
 
 async function submitChangeMachine(): Promise<void> {
+  if (!guardMesOperation(canEdit)) return
   const row = changeMachineRow.value
   if (!row || row.id == null) return
   if (!canChangeMachine(row)) {
@@ -1609,6 +1627,7 @@ async function reorderAfterProductionDefer(
 }
 
 async function submitProductionEndFullBaseline() {
+  if (!guardMesOperation(canEdit)) return
   const row = endDialogRow.value
   const planId = endDialogPlanId.value
   if (!row || planId == null) return
@@ -1647,6 +1666,7 @@ async function submitProductionEndFullBaseline() {
 }
 
 async function submitProductionEndDefer() {
+  if (!guardMesOperation(canEdit)) return
   const row = endDialogRow.value
   const planId = endDialogPlanId.value
   if (!row || planId == null) return
@@ -1727,6 +1747,7 @@ async function submitProductionEndDefer() {
 }
 
 async function submitProductionEndZeroBaseline() {
+  if (!guardMesOperation(canEdit)) return
   const row = endDialogRow.value
   const planId = endDialogPlanId.value
   if (!row || planId == null) return
@@ -2270,7 +2291,7 @@ onUnmounted(() => {
                 >{{ rowRemarksText(row) }}</span>
               </div>
               <el-button
-                v-if="isChamferingRowConfirmed(row)"
+                v-if="isChamferingRowConfirmed(row) && canEdit"
                 link
                 type="primary"
                 size="small"

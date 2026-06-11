@@ -1104,6 +1104,11 @@ import {
 import { getPrintHistory, recordPrintHistory } from '@/api/shipping/printHistory'
 import { getSuppliers } from '@/api/outsourcing'
 import request from '@/utils/request'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 类型定义
 interface OrderItem {
@@ -1521,6 +1526,8 @@ const loadPrintedOrderNos = async () => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     const params: any = {
@@ -1920,6 +1927,8 @@ const handleBatchQuantityChange = (row: any, index: number) => {
 
 // 一括注文：提交表单
 const submitBatchForm = async () => {
+  if (!guardPurchaseOperation(canCreate)) return
+
   if (
     !batchFormData.supplierCd ||
     !batchFormData.productCd ||
@@ -1999,6 +2008,8 @@ const submitBatchForm = async () => {
 const currentEditId = ref<number | undefined>(undefined)
 
 const editOrder = async (row: OrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     loading.value = true
     // 通过注文番号查找所属的数据
@@ -2209,6 +2220,8 @@ const handleQuantityChange = (row: ProductListItem, index: number) => {
 }
 
 const submitForm = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   if (!formData.supplierCd || !formData.orderDate) {
     ElMessage.warning('外注先と注文日を入力してください')
     return
@@ -2282,6 +2295,8 @@ const submitForm = async () => {
 }
 
 const deleteOrder = async (row: OrderItem) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm('この注文を削除しますか？', '確認', { type: 'warning' })
 
@@ -2299,6 +2314,8 @@ const deleteOrder = async (row: OrderItem) => {
 
 // 提交编辑表单
 const submitEditForm = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   if (!editFormData.orderDate || !editFormData.supplierCd || !editFormData.productCode) {
     ElMessage.warning('必須項目を入力してください')
     return
@@ -2342,6 +2359,8 @@ const submitEditForm = async () => {
 
 // 操作列中的打印按钮处理（单个订单）
 const printOrder = async (row: OrderItem) => {
+  if (!guardPurchaseOperation(canExport)) return
+
   try {
     // 通过注文番号查找所属的数据
     const res = await getPlatingOrdersByOrderNo(row.orderNo)
@@ -2402,6 +2421,8 @@ const printOrder = async (row: OrderItem) => {
 
 // 注文書発行处理（批量打印）
 const handlePrintOrder = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   // 检查外注先下拉框里有没有数据
   if (!supplierOptions.value || supplierOptions.value.length === 0) {
     ElMessage.warning('外注先データがありません。先に外注先データを読み込んでください。')
@@ -2451,6 +2472,8 @@ const handlePrintOrder = async () => {
 
 // 确认打印
 const confirmPrint = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   try {
     // 获取注文数据（优先使用 currentPrintOrderItems，否则使用筛选后的列表）
     const orderItems =

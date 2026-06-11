@@ -618,6 +618,11 @@ import {
   type ProcessMachineProductsData,
 } from '@/api/database'
 import { downloadExcelFromAoa } from '@/utils/excelExport'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 type ViewMode = 'summary' | 'daily' | 'trend'
 type DailyMetric = 'plan' | 'actual' | 'diff'
@@ -748,6 +753,8 @@ const tableLayoutHeight = computed(() => {
 })
 
 function syncTableHostSize() {
+  if (!guardApsOperation(canCreate)) return
+
   const el =
     viewMode.value === 'summary'
       ? summaryTableHostRef.value
@@ -1246,6 +1253,8 @@ async function onRowDblclick(row: TableRow) {
 }
 
 async function exportDrillExcel() {
+  if (!guardApsOperation(canExport)) return
+
   const d = drillData.value
   if (!d || d.products.length === 0) return
   const header = ['製品CD', '製品名', '計画', '実績', '差異', '達成率(%)', '実計', '不良', '廃棄', '不良率(%)']
@@ -1562,6 +1571,8 @@ function buildTrendOption(): EChartsOption {
 }
 
 function syncTrendChart() {
+  if (!guardApsOperation(canCreate)) return
+
   if (viewMode.value !== 'trend') return
   nextTick(() => {
     const el = trendChartRef.value
@@ -1876,6 +1887,8 @@ function buildPrintHtml(): string {
 }
 
 function openPrintDocument(html: string, landscape = false) {
+  if (!guardApsOperation(canExport)) return
+
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
     ElMessage.error('ポップアップがブロックされました。ブラウザの設定を確認してください')
@@ -1900,6 +1913,8 @@ function openPrintDocument(html: string, landscape = false) {
 }
 
 function handlePrint() {
+  if (!guardApsOperation(canExport)) return
+
   if (printDisabled.value) {
     ElMessage.warning('印刷するデータがありません')
     return
@@ -1920,6 +1935,8 @@ function handlePrint() {
 
 /* ============ データ取得 ============ */
 async function loadData() {
+  if (!guardApsOperation(canCreate)) return
+
   const [startDate, endDate] = periodRange.value ?? []
   if (!startDate || !endDate) {
     ElMessage.warning('期間を選択してください')
@@ -1945,6 +1962,8 @@ async function loadData() {
 
 /* ============ Excel 出力 ============ */
 async function exportExcel() {
+  if (!guardApsOperation(canExport)) return
+
   const data = planData.value
   if (!data) return
   const [s, e] = periodRange.value ?? []

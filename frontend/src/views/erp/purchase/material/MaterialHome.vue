@@ -86,6 +86,11 @@
 import { ref, markRaw } from 'vue'
 import type { Component } from 'vue'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   Box, ArrowRight, DataLine, Download, CircleCheck,
   Tickets, TrendCharts, ShoppingCart,
 } from '@element-plus/icons-vue'

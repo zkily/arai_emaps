@@ -13,6 +13,7 @@ import csv
 import os
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Product, Material, Supplier, ProductRouteStep, Process
@@ -217,7 +218,7 @@ def _material_stock_length_from_name(material_name: Optional[str]) -> Optional[D
 @router.post("/recalculate-scrap-length")
 async def recalculate_all_scrap_length(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """
     全製品の端材長（scrap_length）を一括再計算して DB に保存する。
@@ -374,7 +375,7 @@ async def get_max_product_cd(
 async def create_product(
     body: ProductCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """製品新規登録"""
     q = select(Product).where(Product.product_cd == body.product_cd)
@@ -393,7 +394,7 @@ async def update_product(
     product_id: int,
     body: ProductUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品更新"""
     q = select(Product).where(Product.id == product_id)
@@ -413,7 +414,7 @@ async def update_product(
 async def delete_product(
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """製品削除"""
     q = select(Product).where(Product.id == product_id)
@@ -436,7 +437,7 @@ class ExportCsvItem(BaseModel):
 async def export_products_csv(
     body: list[ExportCsvItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("export")),
 ):
     """CSV出力（body: [{ product_cd, product_name, unit_per_box }]）"""
     output = io.StringIO()

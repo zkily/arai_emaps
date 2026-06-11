@@ -53,6 +53,8 @@ import {
   isNetworkOrServerDownError,
 } from './inspectionActualOfflineSync'
 import { getMesClientInstanceId } from './mesClientInstance'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 type MesLockOwner = 'mine' | 'other' | 'unclaimed'
 
@@ -81,6 +83,7 @@ function filterInspectionProductOptions(list: ProductItem[]): ProductItem[] {
 export function useInspectionMesCollection() {
   const { t, te } = useI18n()
   const userStore = useUserStore()
+  const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
   const loggedInUserId = computed(() => {
     const id = userStore.user?.id
@@ -519,6 +522,7 @@ export function useInspectionMesCollection() {
   }
 
   function canEditConfirmedHistoryRow(row: InspectionMgmtRow): boolean {
+    if (!canEdit.value) return false
     const uid = loggedInUserId.value
     if (uid == null) return false
     const ri = rowInspectorId(row)
@@ -579,6 +583,7 @@ export function useInspectionMesCollection() {
   }
 
   async function ensurePlanForProduct(code: string, name: string): Promise<number | null> {
+    if (!guardMesOperation(canCreate)) return null
     const inspId = inspectorUserId.value
     if (inspId == null) return null
     const existing = findOpenRowForInspectorProduct(code, inspId)
@@ -801,6 +806,7 @@ export function useInspectionMesCollection() {
   }
 
   async function resumeInProgressSession(row: InspectionMgmtRow): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const ri = rowInspectorId(row)
     if (ri == null) {
       ElMessage.warning(t('mesInspectionActual.inspectorRequired'))
@@ -919,6 +925,7 @@ export function useInspectionMesCollection() {
   )
 
   const canOperateActivePlan = computed(() => {
+    if (!canEdit.value) return false
     const planId = activePlanId.value
     if (planId == null) return false
     const row = managementRows.value.find((r) => r.id === planId)
@@ -927,6 +934,7 @@ export function useInspectionMesCollection() {
   })
 
   const canStart = computed(() => {
+    if (!canEdit.value) return false
     if (inspectorUserId.value == null || !selectedProductCode.value) return false
     const planId = activePlanId.value
     const row = activeRow.value
@@ -1153,6 +1161,7 @@ export function useInspectionMesCollection() {
   }
 
   function bumpDefect(itemId: string, delta: number): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     const sess = session.value
     if (id == null || !sess || !isPlanLocallyOperated(id)) return
@@ -1162,6 +1171,7 @@ export function useInspectionMesCollection() {
   }
 
   async function onStartProduction(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const uid = loggedInUserId.value
     if (uid == null) {
       ElMessage.warning(t('mesInspectionActual.loginRequiredForInspector'))
@@ -1224,6 +1234,7 @@ export function useInspectionMesCollection() {
   }
 
   function onPauseProduction(): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     if (id == null || !isPlanLocallyOperated(id)) return
     const s = session.value
@@ -1238,6 +1249,7 @@ export function useInspectionMesCollection() {
   }
 
   function onResumeProduction(): void {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     if (id == null || !isPlanLocallyOperated(id)) return
     const s = session.value
@@ -1292,6 +1304,7 @@ export function useInspectionMesCollection() {
   const inspectorLabel = computed(() => loggedInInspectorLabel.value)
 
   async function submitProductionEnd(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const id = activePlanId.value
     const s = session.value
     const preview = endDialogPreview.value
@@ -1679,6 +1692,7 @@ export function useInspectionMesCollection() {
   }
 
   function openConfirmedHistoryEdit(row: InspectionMgmtRow): void {
+    if (!guardMesOperation(canEdit)) return
     const id = row.id
     if (id == null || !isRowProductionCompleted(row)) return
     if (!canEditConfirmedHistoryRow(row)) {
@@ -1736,6 +1750,7 @@ export function useInspectionMesCollection() {
   }
 
   async function submitConfirmedHistoryEdit(): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
     const row = confirmedEditRow.value
     const planId = confirmedEditPlanId.value
     const draft = confirmedEditForm.value
@@ -1812,6 +1827,7 @@ export function useInspectionMesCollection() {
   }
 
   async function clearConfirmedHistoryMesAndSave(): Promise<void> {
+    if (!guardMesOperation(canDelete)) return
     const row = confirmedEditRow.value
     const planId = confirmedEditPlanId.value
     if (!row || planId == null) return
@@ -1973,5 +1989,9 @@ export function useInspectionMesCollection() {
     bumpConfirmedEditDefect,
     init,
     teardownLifecycle,
+    canCreate,
+    canEdit,
+    canDelete,
+    canExport,
   }
 }

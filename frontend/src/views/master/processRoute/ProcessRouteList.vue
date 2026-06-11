@@ -15,7 +15,7 @@
             </div>
             <p class="subtitle">{{ t('master.processRoute.subtitle') }}</p>
           </div>
-          <el-button type="primary" icon="Plus" @click="openAddDialog" class="add-btn">
+          <el-button v-if="canCreate" type="primary" icon="Plus" @click="openAddDialog" class="add-btn">
             <span class="btn-icon">➕</span> {{ t('master.processRoute.addRoute') }}
           </el-button>
         </div>
@@ -74,16 +74,16 @@
               <span v-else class="empty-default">-</span>
             </template>
           </el-table-column>
-          <el-table-column :label="t('master.common.actions')" width="240" align="center" fixed="right">
+          <el-table-column v-if="canEdit || canDelete" :label="t('master.common.actions')" width="240" align="center" fixed="right">
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-button size="small" type="primary" plain @click="goToSteps(row)" class="action-btn">
+                <el-button v-if="canEdit" size="small" type="primary" plain @click="goToSteps(row)" class="action-btn">
                   📋 {{ t('master.processRoute.steps') }}
                 </el-button>
-                <el-button size="small" type="warning" plain @click="openEditDialog(row)" class="action-btn">
+                <el-button v-if="canEdit" size="small" type="warning" plain @click="openEditDialog(row)" class="action-btn">
                   ✏️ {{ t('master.common.edit') }}
                 </el-button>
-                <el-button size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">
+                <el-button v-if="canDelete" size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">
                   🗑️
                 </el-button>
               </div>
@@ -125,8 +125,11 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import { fetchRoutes, deleteRoute } from '@/api/master/processRouterMaster'
 import type { RouteItem } from '@/types/master'
 import RouteEditDialog from './ProcessRouteEditDialog.vue'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 const router = useRouter()
 
 /** ステップ編集へ（直接 ProcessRouteStepEditor へ遷移。製品は遷移先で選択） */
@@ -168,18 +171,21 @@ const fetchList = async () => {
 }
 
 const openAddDialog = () => {
+  if (!guardMasterOperation(canCreate)) return
   dialogMode.value = 'add'
   editData.value = null
   showDialog.value = true
 }
 
 const openEditDialog = (row: RouteItem) => {
+  if (!guardMasterOperation(canEdit)) return
   dialogMode.value = 'edit'
   editData.value = { ...row }
   showDialog.value = true
 }
 
 const handleDelete = async (row: RouteItem) => {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await ElMessageBox.confirm(t('master.processRoute.confirmDelete'), t('common.confirm'), { type: 'warning' })
     if (row.id == null) return

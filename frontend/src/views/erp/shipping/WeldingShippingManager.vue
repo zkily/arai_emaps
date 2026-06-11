@@ -223,6 +223,11 @@ import { ElMessage } from 'element-plus'
 import type { TableColumnCtx } from 'element-plus'
 import { Search, Refresh, Printer, Calendar, Box, DataLine, Loading } from '@element-plus/icons-vue'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   getWeldingProducts,
   getWeldingShippingData,
   exportWeldingShippingReport,
@@ -413,6 +418,8 @@ const onDateRangeChange = (dates: [string, string] | null) => {
 
 // 搜索处理
 const handleSearch = async () => {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!searchForm.startDate || !searchForm.endDate) {
     ElMessage.warning('期間を選択してください')
     return
@@ -453,6 +460,8 @@ const handleReset = () => {
 
 // 导出处理
 const handleExport = async () => {
+  if (!guardSalesOperation(canExport)) return
+
   if (!tableData.value) {
     ElMessage.warning('エクスポートするデータがありません')
     return

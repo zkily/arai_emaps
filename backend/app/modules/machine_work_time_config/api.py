@@ -10,6 +10,7 @@ from typing import Any, List
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_mes_operation
 from app.modules.auth.models import User
 from app.modules.master.models import Machine, MachineWorkTimeConfig
 
@@ -58,7 +59,7 @@ async def get_work_time_config(
 async def save_work_time_config(
     body: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """一括保存。configs の machine_cd で upsert。"""
     configs: List[dict] = body.get("configs") or []
@@ -99,7 +100,7 @@ async def save_work_time_config(
 async def save_single_work_time_config(
     body: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """1件保存。machine_cd で upsert。"""
     machine_cd = (body.get("machine_cd") or "").strip()
@@ -135,7 +136,7 @@ async def save_single_work_time_config(
 async def delete_work_time_config(
     config_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     """1件削除。"""
     q = select(MachineWorkTimeConfig).where(MachineWorkTimeConfig.id == config_id)

@@ -8,6 +8,7 @@ from typing import Optional, List
 from datetime import date
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Destination, DestinationHoliday, DestinationWorkday
@@ -150,7 +151,7 @@ async def add_holiday(
     destination_cd: str = Query(..., alias="destinationCd"),
     holiday_date: date = Query(..., alias="holidayDate"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """休日追加"""
     q = select(DestinationHoliday).where(
@@ -171,7 +172,7 @@ async def add_holiday(
 async def delete_holiday(
     holiday_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """休日削除"""
     q = select(DestinationHoliday).where(DestinationHoliday.id == holiday_id)
@@ -209,7 +210,7 @@ async def add_workday(
     work_date: date = Query(..., alias="workDate"),
     reason: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """臨時出勤日追加"""
     q = select(DestinationWorkday).where(
@@ -230,7 +231,7 @@ async def add_workday(
 async def delete_workday(
     workday_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """臨時出勤日削除"""
     q = select(DestinationWorkday).where(DestinationWorkday.id == workday_id)
@@ -262,7 +263,7 @@ async def get_destination_by_id(
 async def create_destination(
     body: DestinationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """納入先新規登録"""
     q = select(Destination).where(Destination.destination_cd == body.destination_cd)
@@ -291,7 +292,7 @@ async def update_destination(
     destination_id: int,
     body: DestinationUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """納入先更新"""
     q = select(Destination).where(Destination.id == destination_id)
@@ -327,7 +328,7 @@ async def update_destination_status(
     destination_id: int,
     status: int = Query(..., ge=0, le=1),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """納入先状態更新"""
     q = select(Destination).where(Destination.id == destination_id)
@@ -345,7 +346,7 @@ async def update_destination_status(
 async def delete_destination(
     destination_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """納入先削除"""
     q = select(Destination).where(Destination.id == destination_id)

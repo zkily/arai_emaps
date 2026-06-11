@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal, get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.modules.master.models import (
     Product,
@@ -286,7 +287,7 @@ def _normalize_row(row: dict[str, Any]) -> dict[str, Any]:
 async def save_snapshot(
     body: SaveSnapshotIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """現在のマスタ・BOM・工程単価を使って 1 製品×ルートのスナップショットを保存"""
     result = await compute_cumulative_rows(
@@ -469,7 +470,7 @@ async def _resolve_job_items(
 async def start_recalc_job(
     body: RecalcStartIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """非同期一括再計算を起動。返却は `job_id`（完了状態は /recalc/{job_id} で確認）"""
     items = await _resolve_job_items(db, body)

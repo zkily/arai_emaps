@@ -275,6 +275,11 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
 import { OfficeBuilding, Plus, Search, Edit, Check, Warning } from '@element-plus/icons-vue'
 import { getSuppliers, createSupplier, updateSupplier, deleteSupplier } from '@/api/outsourcing'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 状态
 const loading = ref(false)
@@ -379,6 +384,8 @@ watch(
 )
 
 const handleToggleStatus = async (row: any, newVal: boolean) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   const prev = row.is_active
   row._statusLoading = true
   try {
@@ -434,6 +441,8 @@ const checkSupplierCode = async () => {
 }
 
 const handleDelete = async (row: any) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(`「${row.supplier_name}」を削除しますか？削除後は元に戻せません。`, '削除確認', {
       type: 'warning',
@@ -449,6 +458,8 @@ const handleDelete = async (row: any) => {
 }
 
 const handleSubmit = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   if (!formRef.value) return
   if (duplicateCodeError.value && !isEdit.value) {
     ElMessage.warning(duplicateCodeError.value)

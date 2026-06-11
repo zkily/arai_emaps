@@ -395,6 +395,11 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import * as echarts from 'echarts'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 /** new-progress API 响应体（request 拦截器已返回 response.data） */
 interface NewProgressResponse {

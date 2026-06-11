@@ -267,6 +267,11 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Van, Search, RefreshLeft, Plus, Refresh, Delete } from '@element-plus/icons-vue'
 import { getDeliveries, createDelivery, confirmDelivery } from '@/api/erp/sales'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const creating = ref(false)
@@ -373,6 +378,8 @@ function resetFilters() {
 }
 
 async function handleConfirm(row: any) {
+  if (!guardSalesOperation(canApprove)) return
+
   try {
     await ElMessageBox.confirm('この出荷指示を確定しますか？', '確認', { type: 'warning' })
     row._confirming = true
@@ -389,21 +396,29 @@ async function handleConfirm(row: any) {
 }
 
 function handleDetail(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   detailData.value = row
   showDetailDialog.value = true
 }
 
 function addItem() {
+  if (!guardSalesOperation(canCreate)) return
+
   createForm.items.push({ product_code: '', product_name: '', quantity: 1 })
 }
 
 function removeItem(index: number) {
+  if (!guardSalesOperation(canDelete)) return
+
   if (createForm.items.length > 1) {
     createForm.items.splice(index, 1)
   }
 }
 
 async function handleCreate() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (!createForm.delivery_date) {
     ElMessage.warning('出荷日を選択してください')
     return

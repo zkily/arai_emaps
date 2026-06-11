@@ -20,6 +20,7 @@ from datetime import time as dt_time
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation, require_inventory_operation, require_mes_operation
 from app.core.datetime_utils import now_jst, JST
 from app.modules.auth.models import User
 from app.core.database import get_db
@@ -1590,7 +1591,7 @@ async def get_stocktake_carryover_preview(
 async def execute_stocktake_carryover(
     body: StocktakeCarryoverExecuteBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """
     選択行を stock_transaction_logs に INSERT。
@@ -1683,7 +1684,7 @@ async def get_inventory_shortage_print(
     endDate: Optional[str] = Query(None, description="終了日 YYYY-MM-DD"),
     productCd: Optional[str] = Query(None, description="製品CD"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """
     在庫不足一覧印刷用。production_summarys の倉庫在庫マイナス行を、
@@ -1784,7 +1785,7 @@ class GenerateBody(BaseModel):
 async def generate_production_summarys(
     body: GenerateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     指定期間で production_summarys を生成。既存の (date, product_cd) はスキップ。
@@ -1932,7 +1933,7 @@ async def _resolve_inventory_trend_calc_start_date(db: AsyncSession) -> tuple[da
 @router.get("/inventory-trend-calc-start-date")
 async def get_inventory_trend_calc_start_date(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """フロントの在庫・推移更新で使用する計算開始日（初期在庫ログ基準、無ければ当月月初JST）。"""
     start_d, source = await _resolve_inventory_trend_calc_start_date(db)
@@ -1947,7 +1948,7 @@ async def get_inventory_trend_calc_start_date(
 async def clear_production_summarys_calculated_fields(
     body: ClearCalculatedFieldsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     startDate 必須。date >= startDate かつ date <= startDate+3ヶ月 の行について、
@@ -1978,7 +1979,7 @@ async def clear_production_summarys_calculated_fields(
 async def clear_production_summarys_plan_fields(
     body: ClearCalculatedFieldsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     startDate 必須。date >= startDate かつ date <= startDate+5ヶ月 の行について、
@@ -2009,7 +2010,7 @@ async def clear_production_summarys_plan_fields(
 async def clear_production_summarys_molding_plan(
     body: ClearCalculatedFieldsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     startDate 必須。date >= startDate の全行について molding_plan と molding_actual_plan を 0 にクリアする（終了日の上限なし）。
@@ -2037,7 +2038,7 @@ async def clear_production_summarys_molding_plan(
 async def clear_production_summarys_welding_plan(
     body: ClearCalculatedFieldsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     startDate 必須。date >= startDate の全行について welding_plan と welding_actual_plan を 0 にクリアする（終了日の上限なし）。
@@ -2064,7 +2065,7 @@ async def clear_production_summarys_welding_plan(
 async def batch_update_lock_acquire(
     body: LockAcquireBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     一括更新用の分散ロックを取得する。
@@ -2109,7 +2110,7 @@ async def batch_update_lock_acquire(
 async def batch_update_lock_release(
     body: LockReleaseBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """取得した分散ロックを解放する（lock_value が一致する場合のみ削除）。"""
     lock_key = BATCH_UPDATE_LOCK_KEY
@@ -2128,7 +2129,7 @@ async def batch_update_lock_release(
 async def update_production_summarys_from_order_daily(
     body: UpdateFromOrderDailyBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     order_daily の受注データから production_summarys の
@@ -2252,7 +2253,7 @@ async def update_production_summarys_from_order_daily(
 @router.post("/clear-carry-over")
 async def clear_production_summarys_carry_over(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """production_summarys の全工程繰越フィールドを一括で 0 にクリア"""
     values = {col: 0 for col in CARRY_OVER_COLUMNS}
@@ -2270,7 +2271,7 @@ async def clear_production_summarys_carry_over(
 @router.post("/update-carry-over")
 async def update_production_summarys_carry_over(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     stock_transaction_logs の transaction_type='初期' を集計し、
@@ -2378,7 +2379,7 @@ async def _clear_production_summary_columns_jst_month(
 @router.post("/update-actual")
 async def update_production_summarys_actual(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     stock_transaction_logs の実績・不良・入出庫から production_summarys の各 actual 列を再計算して反映する。
@@ -2542,7 +2543,7 @@ async def update_production_summarys_actual(
 @router.post("/update-defect")
 async def update_production_summarys_defect(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     stock_transaction_logs の transaction_type='不良' を集計し、
@@ -2639,7 +2640,7 @@ async def update_production_summarys_defect(
 @router.post("/update-scrap")
 async def update_production_summarys_scrap(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     stock_transaction_logs の transaction_type='廃棄' を集計し、
@@ -2736,7 +2737,7 @@ async def update_production_summarys_scrap(
 @router.post("/update-on-hold")
 async def update_production_summarys_on_hold(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     stock_transaction_logs の transaction_type='保留' を集計し、
@@ -2851,7 +2852,7 @@ def _subtract_business_days(date_str: str, days: int) -> str:
 @router.post("/update-production-dates")
 async def update_production_summarys_production_dates(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     按 product_process_bom の各工程リードタイム（営業日）と production_summarys.date から、
@@ -3064,7 +3065,7 @@ async def _sync_plating_plan_from_aps_board(
 async def update_production_summarys_plan(
     body: OptionalStartDateBody = Body(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     schedule_details.planned_qty（当日計画数量）のみを集計源とする。production_schedules（product_cd）× 設備
@@ -3973,7 +3974,7 @@ async def _resolve_date_range_and_rows(db: AsyncSession, body, start_time: float
 async def update_production_summarys_inventory(
     body: Optional[OptionalStartDateBody] = Body(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """在庫更新（CASE WHEN 一括最適化版）"""
     start_time = time.perf_counter()
@@ -4097,7 +4098,7 @@ async def update_production_summarys_inventory(
 async def update_production_summarys_trend(
     body: Optional[OptionalStartDateBody] = Body(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """推移更新（CASE WHEN 一括最適化版）"""
     start_time = time.perf_counter()
@@ -4210,7 +4211,7 @@ def _next_n_workdays(from_date: date, n: int = 30):
 async def update_production_summarys_safety_stock(
     body: Optional[OptionalStartDateBody] = Body(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     安全在庫更新：製品マスタの safety_days > 0 の製品について、
@@ -4363,7 +4364,7 @@ class UpdateProductMasterBody(BaseModel):
 async def update_production_summarys_product_master(
     body: UpdateProductMasterBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     製品マスタ更新：products の route_cd, product_name を production_summarys に同期。
@@ -4413,7 +4414,7 @@ class UpdateMachineBody(BaseModel):
 async def update_production_summarys_machine(
     body: UpdateMachineBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     設備フィールド更新：product_machine_config と machines から

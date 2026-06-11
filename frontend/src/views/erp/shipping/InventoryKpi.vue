@@ -451,6 +451,11 @@ import { DataAnalysis, Printer } from '@element-plus/icons-vue'
 import { useI18n } from 'vue-i18n'
 import { getJSTToday } from '@/utils/dateFormat'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   getInventoryTurnover,
   getAvgInventoryDays,
   getShortageAlerts,
@@ -474,6 +479,8 @@ function detectTouch() {
   )
 }
 function applyTouchNoKeyboard(container: HTMLElement | null) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!container || !isTouchDevice.value) return
   container.querySelectorAll<HTMLInputElement>('.el-select .el-input__inner, .el-select input').forEach((el) => {
     el.setAttribute('readonly', 'readonly')
@@ -570,6 +577,8 @@ const printDateLabel = computed(() => {
 })
 
 function handlePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   if (!printListLength.value) {
     ElMessage.warning(t('shipping.inventoryKpi.noDataToPrint') || '印刷するデータがありません')
     return
@@ -578,6 +587,8 @@ function handlePrint() {
 }
 
 function executeFrontendPrint(contentRef: HTMLElement | null) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML.trim()) {
     ElMessage.error(t('shipping.inventoryKpi.printContentFailed') || '印刷内容の取得に失敗しました。')
     return
@@ -690,6 +701,8 @@ async function fetchOverstock() {
 }
 
 async function fetchReorder() {
+  if (!guardSalesOperation(canEdit)) return
+
   loading.reorder = true
   try {
     const res = await getReorderPointList({
@@ -759,6 +772,8 @@ function setOverstockAsOf(offset: number) {
 }
 
 function setReorderAsOf(offset: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   reorderAsOf.value = offset === 0 ? getJSTToday() : getJSTDateOffset(offset)
   fetchReorder()
 }

@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional, Set, Tuple
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation
 from app.modules.auth.models import User
 
 logger = logging.getLogger(__name__)
@@ -228,7 +229,7 @@ async def _generate_fixed_weekday_baseline(
 async def generate_plan_baseline(
     body: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """対象月を集計し production_plan_baselines に登録（上書き）。成型・溶接は production_summarys の molding_plan / welding_plan のみ。他は ppu を優先し不足をサマリで補完。"""
     baseline_month = body.get("baselineMonth")
@@ -344,7 +345,7 @@ async def delete_plan_baseline(
     baselineMonth: str = Query(..., description="基準月 YYYY-MM-DD（月初）"),
     processName: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     """指定月（および工程）のベースラインを削除"""
     month_start = _date_str(baselineMonth) or baselineMonth[:10]
@@ -399,7 +400,7 @@ async def get_plan_baseline_comparison(
     baselineMonth: str = Query(..., description="基準月 YYYY-MM-DD（月初）"),
     processName: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     """基準月ベースラインと現行計画・実績の比較を返す"""
     month_start = _date_str(baselineMonth) or (baselineMonth[:10] if baselineMonth else "")
@@ -567,7 +568,7 @@ async def get_plan_baseline_records(
     baselineMonth: str = Query(...),
     processName: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     """修正用：ベースラインのレコード一覧（日付×工程の plan_quantity を編集するため）"""
     month_start = _date_str(baselineMonth) or baselineMonth[:10]
@@ -599,7 +600,7 @@ async def get_plan_baseline_records(
 async def update_plan_baseline_plan_quantity(
     body: dict[str, Any] = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """ベースラインの計画数量を 1 件更新（日付×工程で一意）"""
     baseline_month = body.get("baselineMonth")
@@ -639,7 +640,7 @@ async def delete_plan_baseline_record(
     planDate: str = Query(..., description="計画日 YYYY-MM-DD"),
     processName: str = Query("", description="工程名（未指定は空文字で一致）"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     """ベースライン 1 件削除（baseline_month + plan_date + process_name で一意）"""
     month_start = _date_str(baselineMonth) or baselineMonth[:10]
@@ -700,7 +701,7 @@ async def list_plan_operation_rate(
     processName: Optional[str] = Query(None, description="成型 / 溶接 / 省略で両方"),
     limit: int = Query(5000, ge=1, le=50000),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     """production_plan_rate を取得。加工→成型・溶接→溶接として表示用フィールドを付与。月はファイル名の（N月）／(N月) から判定。"""
     where_parts = ["(file_name LIKE '%加工%' OR file_name LIKE '%溶接%')"]
@@ -765,7 +766,7 @@ BASELINE_PDF_SAVE_DIR = Path(r"\\192.168.1.200\社内共有\02_生産管理部\D
 async def export_pdf_to_folder(
     baselineMonth: str = Form(..., description="基準月 YYYY-MM-DD"),
     files: list[UploadFile] = File(..., description="工程別PDF（ファイル名が工程名.pdf）"),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("export")),
 ):
     """工程別PDFを指定フォルダに保存する。files は各工程のPDF（ファイル名例: 切断.pdf）"""
     if not baselineMonth or len(baselineMonth) < 7:

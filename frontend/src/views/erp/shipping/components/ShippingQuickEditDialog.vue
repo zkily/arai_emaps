@@ -90,6 +90,11 @@ import { ref, watch, computed } from 'vue'
 import request from '@/utils/request'
 import { ElMessage } from 'element-plus'
 import { Document, Box, Loading, Check } from '@element-plus/icons-vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 出荷アイテムのインターフェース定義
 interface ShippingItem {
@@ -139,6 +144,8 @@ const handleClose = () => {
 }
 
 const handleSave = async () => {
+  if (!guardSalesOperation(canEdit)) return
+
   loading.value = true
   try {
     const payload: Record<string, unknown> = {

@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import time as dt_time
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Carrier
@@ -122,7 +123,7 @@ async def get_carrier_by_id(
 async def create_carrier(
     body: CarrierCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """運送便新規登録"""
     q = select(Carrier).where(Carrier.carrier_cd == body.carrier_cd)
@@ -150,7 +151,7 @@ async def update_carrier(
     carrier_id: int,
     body: CarrierUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """運送便更新"""
     q = select(Carrier).where(Carrier.id == carrier_id)
@@ -184,7 +185,7 @@ async def update_carrier_status(
     carrier_id: int,
     status: int = Query(..., ge=0, le=1),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """運送便状態更新"""
     q = select(Carrier).where(Carrier.id == carrier_id)
@@ -202,7 +203,7 @@ async def update_carrier_status(
 async def delete_carrier(
     carrier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """運送便削除"""
     q = select(Carrier).where(Carrier.id == carrier_id)

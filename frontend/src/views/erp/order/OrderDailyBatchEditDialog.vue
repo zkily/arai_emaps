@@ -263,6 +263,11 @@ import { fetchDailyOrdersByMonthlyOrderId, batchUpdateDailyOrders } from '@/api/
 import { ElMessage } from 'element-plus'
 import { Edit, Close, List, Check, InfoFilled, Refresh, Printer } from '@element-plus/icons-vue'
 import type { OrderDaily } from '@/types/order'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 
@@ -312,6 +317,8 @@ const focusNextInput = async (currentIndex: number) => {
 
 // Enterキーで次の入力欄に移動（確定本数）
 const focusNextConfirmedUnitsInput = async (currentIndex: number) => {
+  if (!guardSalesOperation(canApprove)) return
+
   await nextTick()
   const nextInput = confirmedUnitsInputs.value[currentIndex + 1]
   if (nextInput) {
@@ -332,21 +339,29 @@ const focusNextForecastUnitsInput = async (currentIndex: number) => {
 
 // キーボード矢印キーで移動（確定箱数）
 const handleKeyNavigationBoxes = async (event: KeyboardEvent, rowIndex: number) => {
+  if (!guardSalesOperation(canEdit)) return
+
   await handleKeyNavigation(event, rowIndex, 0)
 }
 
 // キーボード矢印キーで移動（確定本数）
 const handleKeyNavigationUnits = async (event: KeyboardEvent, rowIndex: number) => {
+  if (!guardSalesOperation(canEdit)) return
+
   await handleKeyNavigation(event, rowIndex, 1)
 }
 
 // キーボード矢印キーで移動（内示本数）
 const handleKeyNavigationForecast = async (event: KeyboardEvent, rowIndex: number) => {
+  if (!guardSalesOperation(canEdit)) return
+
   await handleKeyNavigation(event, rowIndex, 2)
 }
 
 // 共通のキーボードナビゲーション処理
 const handleKeyNavigation = async (event: KeyboardEvent, rowIndex: number, colIndex: number) => {
+  if (!guardSalesOperation(canEdit)) return
+
   const totalRows = orderDailyList.value.length
   let targetRowIndex = rowIndex
   let targetColIndex = colIndex
@@ -495,6 +510,8 @@ const handleConfirmedBoxesChange = (row: OrderDaily) => {
 }
 
 const handleBatchSave = async () => {
+  if (!guardSalesOperation(canCreate)) return
+
   if (saving.value) return
   if (changedRows.value.size === 0) {
     ElMessage.warning(t('orderDailyBatchEdit.msgNoChangedData'))

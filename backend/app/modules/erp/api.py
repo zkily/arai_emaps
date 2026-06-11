@@ -16,6 +16,7 @@ import traceback
 logger = logging.getLogger(__name__)
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.erp import models, schemas
@@ -66,7 +67,7 @@ async def get_customers(
 async def create_customer(
     customer: schemas.CustomerCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """顧客作成"""
     db_customer = models.Customer(**customer.dict())
@@ -82,7 +83,7 @@ async def create_customer(
 async def get_destinations(
     customer_code: Optional[str] = Query(None, description="顧客コード"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """納入先一覧取得（テーブル未作成・エラー時は空リストを返す）"""
     try:
@@ -99,7 +100,7 @@ async def get_destinations(
 async def create_destination(
     destination: schemas.DestinationCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """納入先作成"""
     db_destination = models.Destination(**destination.dict())
@@ -114,7 +115,7 @@ async def create_destination(
 @router.get("/products", response_model=List[schemas.Product])
 async def get_products(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """製品一覧取得（product テーブル優先、無い場合は products テーブルから取得）"""
     try:
@@ -156,7 +157,7 @@ async def get_products(
 async def create_product(
     product: schemas.ProductCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """製品作成"""
     db_product = models.Product(**product.dict())
@@ -176,7 +177,7 @@ async def list_order_monthly(
     product_cd: Optional[str] = Query(None, description="製品CD"),
     keyword: Optional[str] = Query(None, description="納入先名・製品名検索"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """月別受注一覧。確定本数は order_daily.confirmed_units の合計（当該月・期間内）で返す。"""
     od = models.OrderDaily
@@ -247,7 +248,7 @@ def _order_monthly_type_suffix(product_type: str) -> str:
 async def create_order_monthly(
     body: schemas.OrderMonthlyCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """月別受注登録。同一（年・月・納入先・製品・種別）が既にあれば更新（重複不可）"""
     product_type = body.product_type or "量産品"
@@ -303,7 +304,7 @@ async def create_order_monthly(
 async def get_order_monthly_by_order_id(
     order_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """order_id で月別受注取得"""
     result = await db.execute(
@@ -319,7 +320,7 @@ async def get_order_monthly_by_order_id(
 async def get_order_monthly_by_id(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """id で月別受注取得"""
     result = await db.execute(
@@ -336,7 +337,7 @@ async def update_order_monthly(
     id: int,
     body: schemas.OrderMonthlyUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """月別受注更新"""
     result = await db.execute(select(models.OrderMonthly).where(models.OrderMonthly.id == id))
@@ -355,7 +356,7 @@ async def update_order_monthly(
 async def delete_order_monthly(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """月別受注削除。紐づく日別受注も同時に削除する（カスケード削除）。"""
     result = await db.execute(select(models.OrderMonthly).where(models.OrderMonthly.id == id))
@@ -394,7 +395,7 @@ async def list_order_daily(
     destination_cd: Optional[str] = Query(None, description="納入先CD"),
     keyword: Optional[str] = Query(None, description="製品CD・製品名検索"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """日別受注一覧"""
     try:
@@ -440,7 +441,7 @@ async def list_order_daily(
 async def create_order_daily(
     body: schemas.OrderDailyCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """日別受注登録"""
     row = models.OrderDaily(
@@ -480,7 +481,7 @@ async def create_order_daily(
 async def get_order_daily_by_id(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """id で日別受注取得"""
     result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))
@@ -495,7 +496,7 @@ async def update_order_daily(
     id: int,
     body: schemas.OrderDailyUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """日別受注更新"""
     result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))
@@ -514,7 +515,7 @@ async def update_order_daily(
 async def batch_update_order_daily(
     body: schemas.BatchUpdateDailyRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """日別受注一括更新（1トランザクションで複数件更新、内示本数更新で利用）"""
     if not body.list:
@@ -537,7 +538,7 @@ async def batch_update_order_daily(
 async def delete_order_daily(
     id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """日別受注削除"""
     result = await db.execute(select(models.OrderDaily).where(models.OrderDaily.id == id))

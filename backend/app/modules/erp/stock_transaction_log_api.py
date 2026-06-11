@@ -10,6 +10,7 @@ from datetime import datetime
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
 from app.modules.erp.stock_transaction_log_models import StockTransactionLog
 from app.modules.master.models import Process, Product
@@ -182,7 +183,7 @@ async def get_stock_transaction_logs(
 async def create_stock_transaction_log(
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("create")),
 ):
     """在庫取引履歴1件登録（初期在庫一括登録など）"""
     transaction_type = (body.get("transaction_type") or "").strip()
@@ -247,7 +248,7 @@ async def create_stock_transaction_log(
 async def batch_actual_stock_transaction_logs(
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """
     実績一括登録。transactions を逐条 INSERT（stock_type=仕掛品, location_cd=工程中間在庫, transaction_type=実績）。
@@ -320,7 +321,7 @@ async def batch_actual_stock_transaction_logs(
 async def get_stock_transaction_log(
     log_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """在庫取引履歴1件取得"""
     q = (
@@ -343,7 +344,7 @@ async def update_stock_transaction_log(
     log_id: int,
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("edit")),
 ):
     """在庫取引履歴更新"""
     result = await db.execute(select(StockTransactionLog).where(StockTransactionLog.id == log_id))
@@ -371,7 +372,7 @@ async def update_stock_transaction_log(
 async def delete_stock_transaction_log(
     log_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("delete")),
 ):
     """在庫取引履歴削除"""
     result = await db.execute(select(StockTransactionLog).where(StockTransactionLog.id == log_id))
@@ -386,7 +387,7 @@ async def delete_stock_transaction_log(
 async def batch_delete_stock_transaction_logs(
     body: dict = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_inventory_operation("delete")),
 ):
     """在庫取引履歴一括削除"""
     ids = body.get("ids") or []

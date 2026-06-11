@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.outsourcing.models import OutsourcingSupplier, PlatingOrder, WeldingOrder
@@ -110,7 +111,7 @@ async def get_supplier_by_id(
 async def create_supplier(
     body: OutsourcingSupplierCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """外注先新規登録"""
     q = select(OutsourcingSupplier).where(OutsourcingSupplier.supplier_cd == body.supplier_cd)
@@ -132,7 +133,7 @@ async def update_supplier(
     supplier_id: int,
     body: OutsourcingSupplierUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """外注先更新"""
     q = select(OutsourcingSupplier).where(OutsourcingSupplier.id == supplier_id)
@@ -156,7 +157,7 @@ async def update_supplier(
 async def delete_supplier(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """外注先削除"""
     q = select(OutsourcingSupplier).where(OutsourcingSupplier.id == supplier_id)

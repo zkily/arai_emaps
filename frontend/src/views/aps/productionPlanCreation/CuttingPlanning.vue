@@ -283,6 +283,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import Sortable from 'sortablejs'
 import type { SortableEvent } from 'sortablejs'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
 import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import {
   autoScheduleCuttingPlans,
@@ -305,6 +307,8 @@ import {
   type CuttingPlanningReportItem,
   type CuttingPlanningSummary,
 } from '@/api/cuttingPlanning'
+
+const { canEdit, canExport } = useApsOperationPermission()
 
 function currentMonth(): string {
   const now = new Date()
@@ -507,6 +511,7 @@ function handleTabChange() {
 }
 
 async function runSyncFromInstructions() {
+  if (!guardApsOperation(canEdit)) return
   syncingInstructions.value = true
   try {
     await syncCuttingPlanFromInstructions({ production_month: productionMonth.value })
@@ -520,6 +525,7 @@ async function runSyncFromInstructions() {
 }
 
 async function runScheduleSelected() {
+  if (!guardApsOperation(canEdit)) return
   if (!runId.value || selectedRows.value.length === 0) return
   schedulingSelected.value = true
   try {
@@ -542,6 +548,7 @@ async function runScheduleSelected() {
 }
 
 async function runFullAutoSchedule() {
+  if (!guardApsOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(
       '既存明細を削除し、instruction_plans から全件を再計算して上書きします（下発・ロックは保持設定に依存）。よろしいですか？',
@@ -570,6 +577,7 @@ async function runFullAutoSchedule() {
 }
 
 async function publishSelected() {
+  if (!guardApsOperation(canExport)) return
   if (!runId.value || selectedRows.value.length === 0) return
   publishing.value = true
   try {
@@ -589,6 +597,7 @@ async function publishSelected() {
 }
 
 async function publishAll() {
+  if (!guardApsOperation(canExport)) return
   if (!runId.value) return
   try {
     await ElMessageBox.confirm('未下発の切断計画をすべて cutting_management に下発します。よろしいですか？', '確認', {
@@ -641,6 +650,7 @@ async function openReportDialog() {
 }
 
 function printReport() {
+  if (!guardApsOperation(canExport)) return
   const rows = reportItems.value
     .map(item => `
       <tr>
@@ -694,6 +704,7 @@ function initSortable() {
 }
 
 async function persistOrder() {
+  if (!guardApsOperation(canEdit)) return
   if (!runId.value || !selectedMachineId.value) return
   const orderedIds = listData.value.items
     .map(item => Number(item.id))
@@ -715,6 +726,7 @@ async function persistOrder() {
 }
 
 async function toggleLock(row: CuttingPlanningItem, value: string | number | boolean) {
+  if (!guardApsOperation(canEdit)) return
   if (!runId.value || !row.id) return
   try {
     await lockCuttingPlanningItem({

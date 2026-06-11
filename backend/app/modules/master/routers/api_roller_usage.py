@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_quality_operation
 from app.modules.auth.models import User
 from app.modules.database.models import ProductionSummary
 from app.modules.master.models import Machine, RollerBom, RollerMaster, RollerUsageLog, RollerUsageStatus
@@ -291,7 +292,7 @@ async def update_roller_usage_status(
     item_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("edit")),
 ):
     """ローラー使用状況の手動修正"""
     row = (await db.execute(
@@ -373,7 +374,7 @@ async def list_roller_usage_log(
 async def create_roller_usage_log(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("create")),
 ):
     """使用ログ新規登録（主表の last_exec_date / exec_type も更新）"""
     roller_cd = (body.get("roller_cd") or "").strip()
@@ -416,7 +417,7 @@ async def create_roller_usage_log(
 async def delete_roller_usage_log(
     log_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("delete")),
 ):
     """使用ログ削除"""
     row = (await db.execute(
@@ -437,7 +438,7 @@ async def delete_roller_usage_log(
 @action_router.post("/sync-from-master")
 async def sync_from_roller_master(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("edit")),
 ):
     """roller_master から roller_usage_status へ差分同期
     - 新しい roller_cd は INSERT
@@ -498,7 +499,7 @@ async def sync_from_roller_master(
 async def recalculate_predictions(
     body: dict = {},
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_quality_operation("edit")),
 ):
     """次回実施日・交換残数の全件（または指定 roller_cd）再計算"""
     roller_cds: Optional[List[str]] = body.get("roller_cds")  # type: ignore[assignment]

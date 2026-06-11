@@ -7,6 +7,7 @@ from sqlalchemy import select, func, or_
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Supplier
@@ -91,7 +92,7 @@ async def get_supplier_by_id(
 async def create_supplier(
     body: SupplierCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """仕入先新規登録"""
     q = select(Supplier).where(Supplier.supplier_cd == body.supplier_cd)
@@ -110,7 +111,7 @@ async def update_supplier(
     supplier_id: int,
     body: SupplierUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """仕入先更新"""
     q = select(Supplier).where(Supplier.id == supplier_id)
@@ -130,7 +131,7 @@ async def update_supplier(
 async def delete_supplier(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """仕入先削除"""
     q = select(Supplier).where(Supplier.id == supplier_id)

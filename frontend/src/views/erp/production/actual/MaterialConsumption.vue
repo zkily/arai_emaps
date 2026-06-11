@@ -178,6 +178,11 @@ import {
 } from '@/api/material'
 import { getMaterialList } from '@/api/master/materialMaster'
 import type { Material } from '@/types/master'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
 
 const chartAxisMuted = '#94a3b8'
 const chartPrimary = '#3b82f6'

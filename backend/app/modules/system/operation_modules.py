@@ -1,13 +1,3 @@
-"""操作権限モジュール名（RolePermission.vue / login payload と同期）"""
+"""操作権限モジュール名（後方互換 re-export → app.core.operation_modules）"""
 
-OPERATION_MODULES: tuple[str, ...] = (
-    "販売管理",
-    "購買管理",
-    "在庫管理",
-    "原価・会計",
-    "経理・原価・人事",
-    "生産計画",
-    "製造実行",
-    "品質管理",
-    "システム管理",
-)
+from app.core.operation_modules import *  # noqa: F403

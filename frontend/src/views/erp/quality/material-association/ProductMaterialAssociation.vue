@@ -138,6 +138,11 @@ import {
 } from '@/api/material'
 import type { ProductMaterialAssociationItem } from '@/types/material'
 import { toPlainCodeDisplay } from '@/utils/plainCodeDisplay'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 /**
  * 打印表格宽度怎么改（製品材料照会）：
@@ -336,6 +341,8 @@ function generatePrintHtml(data: ProductMaterialAssociationItem[]): string {
 }
 
 const handlePrint = async () => {
+  if (!guardQualityOperation(canExport)) return
+
   if (!total.value) {
     ElMessage.warning('印刷するデータがありません')
     return

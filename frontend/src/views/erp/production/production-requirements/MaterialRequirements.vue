@@ -203,6 +203,11 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 import {
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
   fetchMaterialRequirementsSummary,
   type MaterialRequirementsSummaryItem,
   type MaterialRequirementsSummaryMeta,
@@ -232,6 +237,8 @@ function initDefaultRange() {
 
 /** 将集计期间设为相对当月的整月：-1 前月、0 今月、1 翌月 */
 function applyQuickMonth(offsetMonths: -1 | 0 | 1) {
+  if (!guardApsOperation(canEdit)) return
+
   const base = dayjs().add(offsetMonths, 'month')
   const start = base.startOf('month').format('YYYY-MM-DD')
   const end = base.endOf('month').format('YYYY-MM-DD')
@@ -272,6 +279,8 @@ function escapeHtml(text: string | null | undefined): string {
 
 /** A4 横向・メーカーごとに改ページ・材料名昇順で印刷 */
 function printDailyMatrix() {
+  if (!guardApsOperation(canExport)) return
+
   if (!dailyDates.value.length) {
     ElMessage.warning(t('productionRequirements.printEmpty'))
     return
@@ -452,6 +461,8 @@ function printDailyMatrix() {
 }
 
 async function runSummary() {
+  if (!guardApsOperation(canEdit)) return
+
   const range = dateRange.value
   if (!range || range.length !== 2 || !range[0] || !range[1]) {
     ElMessage.warning(t('productionRequirements.selectPeriod'))

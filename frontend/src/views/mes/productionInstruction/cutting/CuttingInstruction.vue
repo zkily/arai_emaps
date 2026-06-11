@@ -3494,6 +3494,10 @@ import {
 import { createRequestGuard } from '@/utils/requestGuard'
 import { useLazySectionLoader } from '@/composables/useLazySectionLoader'
 import { getProductionSummarysList } from '@/api/database'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
 /** instruction_plans 一行の型（API 返却・テーブル表示と一致） */
 interface CuttingPlanRow {
@@ -3982,6 +3986,7 @@ function openCuttingInstructionNotesDialog() {
 }
 
 async function addCuttingInstructionNote() {
+  if (!guardMesOperation(canCreate)) return
   const content = cuttingInstructionNotesNewContent.value.trim()
   if (!content) {
     ElMessage.warning('内容を入力してください')
@@ -4002,6 +4007,7 @@ async function addCuttingInstructionNote() {
 }
 
 async function toggleCuttingInstructionNoteDone(note: CuttingInstructionNote, checked: unknown) {
+  if (!guardMesOperation(canEdit)) return
   if (!note.id) return
   const is_done = checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
   try {
@@ -4018,6 +4024,7 @@ async function toggleCuttingInstructionNoteDone(note: CuttingInstructionNote, ch
 }
 
 async function deleteCuttingInstructionNote(note: CuttingInstructionNote) {
+  if (!guardMesOperation(canDelete)) return
   if (!note.id) return
   try {
     await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
@@ -4074,6 +4081,7 @@ function setSpecifiedDateToday() {
 
 /** 指定日材料数窗体を印刷 */
 function printSpecifiedDateUsage() {
+  if (!guardMesOperation(canExport)) return
   const dateStr = specifiedDate.value || ''
   const summary = specifiedDateUsageSummarySorted.value
   const rows = summary.byMaterial || []
@@ -4846,6 +4854,7 @@ function buildMoldingPreInventoryPrintHtml(): string {
 }
 
 function printMoldingPreInventoryList() {
+  if (!guardMesOperation(canExport)) return
   if (moldingPreInventoryGroups.value.length === 0) {
     ElMessage.warning('印刷するデータがありません')
     return
@@ -5174,6 +5183,7 @@ async function onNewRecordProductChange(productCd: string) {
 }
 
 function openNewRecordDialog(trialMode: boolean = false) {
+  if (!guardMesOperation(canCreate)) return
   newRecordIsTrialMode.value = trialMode
   Object.assign(newRecordForm, newRecordFormDefault())
   loadNewRecordLineOptions()
@@ -5182,6 +5192,7 @@ function openNewRecordDialog(trialMode: boolean = false) {
 }
 
 async function createDataManagementRecord() {
+  if (!guardMesOperation(canCreate)) return
   const month = (newRecordForm.production_month ?? '').toString().trim()
   const productCd = (newRecordForm.product_cd ?? '').toString().trim()
   const productName = (newRecordForm.product_name ?? '').toString().trim()
@@ -6219,6 +6230,7 @@ async function copyPlanBatch(row: CuttingPlanRow) {
 
 /** 生産ロット1件を削除（確認ダイアログ後） */
 async function deletePlanBatch(row: CuttingPlanRow) {
+  if (!guardMesOperation(canDelete)) return
   const id = row.id
   if (id == null) return
   try {
@@ -6888,6 +6900,7 @@ function openChamferingPlanEditDialog(row: ChamferingBatchRow) {
 }
 
 async function savePlanEdit() {
+  if (!guardMesOperation(canEdit)) return
   const chamferingId = editingChamferingPlanId.value
   if (chamferingId != null) {
     planEditSubmitting.value = true
@@ -7076,6 +7089,7 @@ async function onDropCuttingRowToEdge(
 
 /** 完了切替：切换后自动 PATCH 更新 */
 async function toggleCuttingCompleted(row: CuttingManagementRow) {
+  if (!guardMesOperation(canEdit)) return
   const id = row.id
   if (id == null) return
   const next = !row.production_completed_check
@@ -7096,6 +7110,7 @@ async function toggleCuttingCompleted(row: CuttingManagementRow) {
 
 /** 面取指示 完了切替 */
 async function toggleChamferingCompleted(row: ChamferingManagementRow) {
+  if (!guardMesOperation(canEdit)) return
   const id = row.id
   if (id == null) return
   const next = !row.production_completed_check
@@ -7157,6 +7172,7 @@ function appendCuttingRemark(label: string) {
 }
 
 async function saveCuttingEdit() {
+  if (!guardMesOperation(canEdit)) return
   const id = editingCuttingId.value
   if (id == null) return
   cuttingEditSubmitting.value = true
@@ -7215,6 +7231,7 @@ function onChamferingEditProductionQuantityInput() {
 }
 
 async function saveChamferingEdit() {
+  if (!guardMesOperation(canEdit)) return
   const id = editingChamferingId.value
   if (id == null) return
   chamferingEditSubmitting.value = true
@@ -7553,6 +7570,7 @@ async function duplicateCuttingRow(row: CuttingManagementRow) {
 
 /** 削除：確認後で当行を削除 */
 async function deleteCuttingRow(row: CuttingManagementRow) {
+  if (!guardMesOperation(canDelete)) return
   const id = row.id
   if (id == null) return
   try {
@@ -7580,6 +7598,7 @@ async function deleteCuttingRow(row: CuttingManagementRow) {
 
 /** 面取指示1件を削除（確認後） */
 async function deleteChamferingRow(row: ChamferingManagementRow) {
+  if (!guardMesOperation(canDelete)) return
   const id = row.id
   if (id == null) return
   try {
@@ -7756,6 +7775,7 @@ async function copyChamferingPlan(row: ChamferingBatchRow) {
 }
 
 async function deleteChamferingPlan(row: ChamferingBatchRow) {
+  if (!guardMesOperation(canDelete)) return
   const id = row.id
   if (id == null) return
   try {
@@ -8226,6 +8246,7 @@ ${pagesHtml}
 
 /** 待発行カンバンを手動で発行 */
 async function issuePendingKanban(kanbanId: number) {
+  if (!guardMesOperation(canEdit)) return
   const row = kanbanIssuanceList.value.find((r) => r.id === kanbanId)
   kanbanIssuePendingLoading.value = kanbanId
   try {
@@ -8318,6 +8339,7 @@ async function batchIssueKanban() {
 
 /** カンバン発行の生産日を cutting_management / chamfering_management から同期する */
 async function syncKanbanProductionDay() {
+  if (!guardMesOperation(canEdit)) return
   kanbanSyncProductionDayLoading.value = true
   try {
     const res = await request.post<{ success?: boolean; message?: string; updated?: number }>(
@@ -8361,6 +8383,7 @@ function openKanbanEdit(row: KanbanIssuanceRow) {
 
 /** カンバン発行：保存编辑 */
 async function saveKanbanEdit() {
+  if (!guardMesOperation(canEdit)) return
   const id = kanbanEditRow.value?.id
   if (!id) return
   kanbanEditSubmitting.value = true
@@ -8499,6 +8522,7 @@ const issueCuttingInstructionSheetLoading = ref(false)
 const printCuttingPlanLoading = ref(false)
 /** 切断計画リスト印刷：指定日の各切断機データ＋材料在庫・材料バラ在庫（A4縦・余白小） */
 async function printCuttingPlanList() {
+  if (!guardMesOperation(canExport)) return
   const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
   if (!day) {
     ElMessage.warning('生産日を選択してください')
@@ -8681,6 +8705,7 @@ async function printCuttingPlanList() {
 }
 
 async function issueCuttingInstructionSheet() {
+  if (!guardMesOperation(canExport)) return
   const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
   if (!day) {
     ElMessage.warning('生産日を選択してください')
@@ -8805,6 +8830,7 @@ async function issueCuttingInstructionSheet() {
 /** 面取計画リスト印刷：指定日の全面取機データ（データなし機も「該当日のデータがありません」を表示） */
 const printChamferingPlanLoading = ref(false)
 async function printChamferingPlanList() {
+  if (!guardMesOperation(canExport)) return
   const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
   if (!day) {
     ElMessage.warning('生産日を選択してください')
@@ -8911,6 +8937,7 @@ async function printChamferingPlanList() {
 /** 面取指示書発行：指定日の今日分を面取機ごとに1ページずつ A5 横向で印刷 */
 const issueChamferingInstructionSheetLoading = ref(false)
 async function issueChamferingInstructionSheet() {
+  if (!guardMesOperation(canExport)) return
   const day = selectedChamferingDateToday.value ? String(selectedChamferingDateToday.value).slice(0, 10) : ''
   if (!day) {
     ElMessage.warning('生産日を選択してください')

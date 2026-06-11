@@ -287,6 +287,11 @@ import { ElMessage } from 'element-plus'
 import { Calendar, List, OfficeBuilding, Printer, Search, TrendCharts, Box } from '@element-plus/icons-vue'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { fetchOrderDailyList } from '@/api/erp/orderDaily'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 type DestinationOption = { cd: string; name: string }
 
@@ -407,6 +412,8 @@ function escapeHtml(s: string) {
 }
 
 function formatPrintTime() {
+  if (!guardSalesOperation(canExport)) return
+
   const d = new Date()
   return d.toLocaleString('ja-JP', {
     timeZone: 'Asia/Tokyo',
@@ -475,6 +482,8 @@ function build2DTableHtml(list: DestinationOrderHistoryItem[]) {
 }
 
 async function handlePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   const listToPrint = filteredOrderList.value
   if (listToPrint.length === 0) {
     ElMessage.warning('印刷するデータがありません')

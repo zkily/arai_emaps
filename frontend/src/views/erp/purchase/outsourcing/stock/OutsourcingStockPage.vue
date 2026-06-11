@@ -246,6 +246,11 @@ import {
   Operation,
 } from '@element-plus/icons-vue'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   getPlatingStock,
   getWeldingStock,
   getOutsourcingStockHistory,
@@ -413,6 +418,8 @@ const loadSuppliers = async () => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     const params: any = {

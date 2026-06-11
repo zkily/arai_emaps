@@ -44,6 +44,11 @@ import { renderHelpMarkdown } from '@/utils/markdownHelpRender'
 import { Document, Printer, QuestionFilled } from '@element-plus/icons-vue'
 import html2canvas from 'html2canvas'
 import { jsPDF } from 'jspdf'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
 
 const loading = ref(true)
 const renderedHtml = ref('')
@@ -79,10 +84,14 @@ onMounted(async () => {
 })
 
 function handlePrint() {
+  if (!guardApsOperation(canExport)) return
+
   window.print()
 }
 
 async function handlePdfSave() {
+  if (!guardApsOperation(canEdit)) return
+
   if (loading.value) {
     ElMessage.warning('内容正在加载中…')
     return

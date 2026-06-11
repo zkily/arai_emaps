@@ -16,7 +16,7 @@
             </div>
           </div>
         </div>
-        <el-button type="primary" @click="openForm()" class="add-btn" size="small">
+        <el-button v-if="canCreate" type="primary" @click="openForm()" class="add-btn" size="small">
           ➕ {{ t('master.destination.addDestination') }}
         </el-button>
       </div>
@@ -156,6 +156,7 @@
             <el-switch
               :model-value="row.status === 1"
               @update:model-value="(v: string | number | boolean) => toggleStatus(row, v === true)"
+              :disabled="!canEdit"
               :loading="row.statusLoading"
               :active-text="t('master.common.active')"
               :inactive-text="t('master.common.inactive')"
@@ -164,6 +165,7 @@
           </template>
         </el-table-column>
         <el-table-column
+          v-if="canEdit || canDelete"
           :label="t('master.common.actions')"
           fixed="right"
           width="110"
@@ -172,6 +174,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button
+                v-if="canEdit"
                 size="small"
                 type="primary"
                 plain
@@ -181,6 +184,7 @@
                 ✏️
               </el-button>
               <el-button
+                v-if="canDelete"
                 size="small"
                 type="danger"
                 plain
@@ -224,8 +228,11 @@ import {
   updateDestinationStatus,
 } from '@/api/master/destinationMaster'
 import type { DestinationItem } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 type RowEx = DestinationItem & { statusLoading?: boolean }
 
@@ -266,11 +273,13 @@ const filteredList = computed(() => {
 const formVisible = ref(false)
 const editData = ref<RowEx | null>(null)
 function openForm(row: RowEx | null = null) {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   editData.value = row
   formVisible.value = true
 }
 
 async function deleteDestination(id: number | undefined) {
+  if (!guardMasterOperation(canDelete)) return
   if (id == null) return
   try {
     await ElMessageBox.confirm(t('master.destination.confirmDelete'), t('common.confirm'), {
@@ -285,6 +294,7 @@ async function deleteDestination(id: number | undefined) {
 }
 
 async function toggleStatus(row: RowEx, on: boolean) {
+  if (!guardMasterOperation(canEdit)) return
   const next = on ? 1 : 0
   row.statusLoading = true
   try {

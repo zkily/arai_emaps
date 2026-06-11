@@ -315,6 +315,11 @@ import {
 import * as echarts from 'echarts'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { getStockActualLogs, type StockActualLogRecord } from '@/api/productionActualStockLogs'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
 
 const PALETTE = [
   '#3b82f6', '#6366f1', '#10b981', '#f59e0b', '#ef4444',

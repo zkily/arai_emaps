@@ -14,6 +14,7 @@ import io
 import os
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 
@@ -40,7 +41,7 @@ def _escape_csv_cell(value) -> str:
 @router.post("/export-picking-csv")
 async def export_picking_csv(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ):
     """
     出荷日が当日以上かつ当日+15日未満の shipping_items を picking_list に UPSERT 同期し、

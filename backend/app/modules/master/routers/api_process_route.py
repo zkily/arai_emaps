@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProcessRoute, ProcessRouteStep
@@ -114,7 +115,7 @@ async def get_route_by_id(
 async def create_route(
     body: ProcessRouteCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """工程ルート新規登録"""
     q = select(ProcessRoute).where(ProcessRoute.route_cd == body.route_cd)
@@ -139,7 +140,7 @@ async def update_route(
     route_id: int,
     body: ProcessRouteUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """工程ルート更新"""
     q = select(ProcessRoute).where(ProcessRoute.id == route_id)
@@ -165,7 +166,7 @@ async def update_route(
 async def delete_route(
     route_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """工程ルート削除（ステップはCASCADEで削除）"""
     q = select(ProcessRoute).where(ProcessRoute.id == route_id)
@@ -208,7 +209,7 @@ async def update_step_order(
     route_cd: str,
     body: List[StepOrderItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """ステップ順序一括更新"""
     for item in body:
@@ -229,7 +230,7 @@ async def create_route_step(
     route_cd: str,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """ステップ追加"""
     step = ProcessRouteStep(
@@ -251,7 +252,7 @@ async def update_route_step(
     step_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """ステップ更新"""
     q = select(ProcessRouteStep).where(ProcessRouteStep.id == step_id)
@@ -279,7 +280,7 @@ async def delete_route_step(
     route_cd: str,
     step_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """ステップ削除"""
     q = select(ProcessRouteStep).where(

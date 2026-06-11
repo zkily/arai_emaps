@@ -7,6 +7,7 @@ from sqlalchemy import select, func
 from typing import List, Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_inventory_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.erp.inventory_models import Warehouse
@@ -91,7 +92,7 @@ async def get_warehouse_by_id(
 async def create_warehouse(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_inventory_operation("create"))
 ):
     """倉庫作成"""
     try:
@@ -110,7 +111,7 @@ async def update_warehouse(
     warehouse_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_inventory_operation("edit"))
 ):
     """倉庫更新"""
     query = select(Warehouse).where(Warehouse.id == warehouse_id)
@@ -137,7 +138,7 @@ async def update_warehouse(
 async def delete_warehouse(
     warehouse_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_inventory_operation("delete"))
 ):
     """倉庫削除"""
     query = select(Warehouse).where(Warehouse.id == warehouse_id)

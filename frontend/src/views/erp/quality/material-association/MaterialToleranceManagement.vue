@@ -115,6 +115,11 @@ import { ElMessage } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { getMaterialList, updateMaterial } from '@/api/master/materialMaster'
 import type { Material } from '@/types/master'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -159,6 +164,8 @@ const openEdit = (row: Material) => {
 }
 
 const saveTolerance = async () => {
+  if (!guardQualityOperation(canEdit)) return
+
   if (!form.value.id) {
     ElMessage.error('IDが不正です')
     return

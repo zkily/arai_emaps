@@ -245,6 +245,11 @@ import {
 import PickingListGenerator from './components/PickingListGenerator.vue'
 import PickingProgress from './components/PickingProgress.vue'
 import PickingHistory from './components/PickingHistory.vue'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 更新接口数据结构
 interface TodayOverview {
@@ -288,6 +293,8 @@ const syncProgress = ref(0)
 let syncProgressTimer: ReturnType<typeof setInterval> | null = null
 
 function clearSyncProgressTimer() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (syncProgressTimer !== null) {
     clearInterval(syncProgressTimer)
     syncProgressTimer = null
@@ -295,6 +302,8 @@ function clearSyncProgressTimer() {
 }
 
 function tickSyncProgress() {
+  if (!guardSalesOperation(canCreate)) return
+
   const v = syncProgress.value
   if (v >= 90) return
   const step = v < 35 ? 8 : v < 65 ? 5 : 3
@@ -405,6 +414,8 @@ function syncErrorMessage(error: any): string {
 }
 
 async function handleSyncData() {
+  if (!guardSalesOperation(canCreate)) return
+
   syncLoading.value = true
   syncProgress.value = 8
   clearSyncProgressTimer()
@@ -467,6 +478,8 @@ async function handleSyncData() {
 }
 
 function handleTabChange(tabName: string | number) {
+  if (!guardSalesOperation(canEdit)) return
+
   console.log('切换到标签页:', tabName)
 }
 

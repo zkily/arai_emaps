@@ -340,6 +340,11 @@ import {
   ArrowRight,
 } from '@element-plus/icons-vue'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   getForecastList,
   getForecastSummary,
   getForecastStats,
@@ -658,6 +663,8 @@ const refreshData = () => {
 
 // 打印功能
 const handlePrint = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   try {
     // 检查是否有年月筛选条件
     if (!searchForm.year || !searchForm.month) {

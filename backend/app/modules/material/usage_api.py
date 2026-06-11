@@ -23,6 +23,7 @@ from datetime import date as date_type
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.material.schemas import (
     MaterialUsagePreviewItem,
@@ -363,7 +364,7 @@ async def preview_material_usage(
 async def commit_material_usage(
     body: MaterialUsageCommitRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     使用数反映 API（3ステップ処理）。
@@ -555,7 +556,7 @@ async def commit_material_usage(
 async def debug_cutting_rows(
     date: str = Query(..., description="対象日 YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     指定日の cutting_management 生データを返す診断用エンドポイント。
@@ -618,7 +619,7 @@ async def get_reflected_status(
     date: str = Query(..., description="対象日 YYYY-MM-DD"),
     source: str = Query("cutting_management", description="来源区分"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     指定日の material_usage_record に reflected=1 のレコードが存在するか確認。
@@ -651,7 +652,7 @@ async def get_reflected_status(
 async def get_reflected_management_codes(
     source: str = Query("cutting_management", description="来源区分"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     material_usage_record で reflected=1 のレコードに含まれる management_code の一覧を返す。
@@ -729,7 +730,7 @@ async def usage_records_chart_summary(
     reflected: Optional[bool] = Query(None),
     material_top_n: int = Query(15, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """一覧と同一条件で、日別・材料別の使用数合計（チャート用）"""
     where, params = _usage_record_filter_conditions(
@@ -797,7 +798,7 @@ async def list_usage_records(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """材料使用済レコード一覧"""
     where, params = _usage_record_filter_conditions(

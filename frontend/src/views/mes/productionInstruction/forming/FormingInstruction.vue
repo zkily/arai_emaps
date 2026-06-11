@@ -693,6 +693,10 @@ import {
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
 
 const props = defineProps<{
   /** MES ルートでは設備運行時間設定 UI を非表示にします */
@@ -1241,6 +1245,7 @@ const handleRemarksInput = (row: any) => {
 
 // 保存備考（remarks）
 const saveRemarks = async (row: any, showSuccessMessage = true) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     // 清除该行的防抖定时器
     const rowKey = getRowKey(row)
@@ -1340,6 +1345,7 @@ const resetSearch = () => {
 
 // 作成ダイアログを表示
 const showCreateDialog = () => {
+  if (!guardMesOperation(canCreate)) return
   isEdit.value = false
   resetForm()
   generateInstructionNo()
@@ -1382,6 +1388,7 @@ const generateInstructionNo = () => {
 // フォームを送信
 const submitForm = async () => {
   if (!formRef.value) return
+  if (isEdit.value ? !guardMesOperation(canEdit) : !guardMesOperation(canCreate)) return
 
   try {
     await formRef.value.validate()
@@ -1414,6 +1421,7 @@ const handleViewDetail = (instruction: any) => {
 
 // 指示を編集
 const editInstruction = (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   isEdit.value = true
   Object.assign(form, instruction)
   dialogVisible.value = true
@@ -1421,6 +1429,7 @@ const editInstruction = (instruction: any) => {
 
 // 指示を開始
 const startInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を開始しますか？`, '確認', {
       confirmButtonText: '開始',
@@ -1438,6 +1447,7 @@ const startInstruction = async (instruction: any) => {
 
 // 指示を完了
 const completeInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を完了しますか？`, '確認', {
       confirmButtonText: '完了',
@@ -1455,6 +1465,7 @@ const completeInstruction = async (instruction: any) => {
 
 // 指示を削除
 const deleteInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canDelete)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を削除しますか？`, '確認', {
       confirmButtonText: '削除',
@@ -1503,6 +1514,7 @@ const handleCurrentChange = (page: number) => {
 
 // データをエクスポート
 const exportData = () => {
+  if (!guardMesOperation(canExport)) return
   ElMessage.info('データをエクスポートしています...')
 }
 
@@ -1513,6 +1525,7 @@ const refreshData = () => {
 
 // 指示書を印刷
 const printInstructions = async () => {
+  if (!guardMesOperation(canExport)) return
   try {
     // 获取要生成指示書的设备列表（每台设备都生成一页）
     const machineList = await getFormingMachineNamesForPrint()
@@ -1974,6 +1987,7 @@ const getFullPlanDataForPrint = async () => {
 
 // 指示書印刷プレビューを表示
 const showPrintPreview = async () => {
+  if (!guardMesOperation(canExport)) return
   try {
     // 获取要生成指示書的设备列表（每台设备都生成一页）
     const machineList = await getFormingMachineNamesForPrint()
@@ -2782,6 +2796,7 @@ const getEfficiencyRate = (machineName: string, productName: string): number | n
  * 生産計画データを取得し、段取予定表を生成して印刷する
  */
 const printSetupSchedule = async () => {
+  if (!guardMesOperation(canExport)) return
   printingSetupSchedule.value = true
   try {
     // 能率データを事前にロード
@@ -5766,6 +5781,7 @@ const handleTimeSlotChange = (row: any, slot: string) => {
 
 // 保存設備運行時間設定（批量保存）
 const saveWorkTimeConfig = async () => {
+  if (!guardMesOperation(canEdit)) return
   try {
     savingWorkTimeConfig.value = true
 
@@ -5805,6 +5821,7 @@ const saveWorkTimeConfig = async () => {
 
 // 打开添加設備運行時間設定弹窗
 const openAddWorkTimeConfigDialog = async () => {
+  if (!guardMesOperation(canCreate)) return
   workTimeConfigForm.id = null
   workTimeConfigForm.machine_cd = ''
   workTimeConfigForm.machine_name = ''
@@ -5819,6 +5836,7 @@ const openAddWorkTimeConfigDialog = async () => {
 // 打开编辑設備運行時間設定弹窗
 // 保存設備運行時間設定表单（单个添加或更新）
 const saveWorkTimeConfigForm = async () => {
+  if (!guardMesOperation(canCreate)) return
   if (!workTimeConfigFormRef.value) return
 
   try {
@@ -5863,6 +5881,7 @@ const saveWorkTimeConfigForm = async () => {
 
 // 删除設備運行時間設定
 const deleteWorkTimeConfig = async (row: any) => {
+  if (!guardMesOperation(canDelete)) return
   if (!row.id) {
     ElMessage.warning('削除できません：このレコードにIDがありません')
     return
@@ -6365,6 +6384,7 @@ function openFormingInstructionNotesDialog() {
 }
 
 async function addFormingInstructionNote() {
+  if (!guardMesOperation(canCreate)) return
   const content = formingInstructionNotesNewContent.value.trim()
   if (!content) {
     ElMessage.warning('内容を入力してください')
@@ -6385,6 +6405,7 @@ async function addFormingInstructionNote() {
 }
 
 async function toggleFormingInstructionNoteDone(note: FormingInstructionNote, checked: unknown) {
+  if (!guardMesOperation(canEdit)) return
   if (!note.id) return
   const is_done =
     checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
@@ -6402,6 +6423,7 @@ async function toggleFormingInstructionNoteDone(note: FormingInstructionNote, ch
 }
 
 async function deleteFormingInstructionNote(note: FormingInstructionNote) {
+  if (!guardMesOperation(canDelete)) return
   if (!note.id) return
   try {
     await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })

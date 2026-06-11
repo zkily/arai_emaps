@@ -73,7 +73,7 @@
           <el-form-item class="pdi-toolbar__btns">
             <el-button type="primary" size="small" :icon="Search" @click="loadList">検索</el-button>
             <el-button size="small" @click="resetFilter">クリア</el-button>
-            <el-button type="primary" size="small" :icon="Plus" plain @click="openCreate">新規</el-button>
+            <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" plain @click="openCreate">新規</el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -123,10 +123,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="remarks" label="備考" min-width="100" show-overflow-tooltip />
-        <el-table-column label="操作" width="128" fixed="right" align="center">
+        <el-table-column v-if="canEdit || canDelete" label="操作" width="128" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button size="small" type="primary" link @click="openEdit(row)">編集</el-button>
-            <el-popconfirm title="削除しますか？" width="200" @confirm="handleDelete(row.id!)">
+            <el-button v-if="canEdit" size="small" type="primary" link @click="openEdit(row)">編集</el-button>
+            <el-popconfirm v-if="canDelete" title="削除しますか？" width="200" @confirm="handleDelete(row.id!)">
               <template #reference>
                 <el-button size="small" type="danger" link>削除</el-button>
               </template>
@@ -271,8 +271,12 @@ import {
   deleteProcessDefectItem,
   type ProcessDefectItem,
 } from '@/api/master/processDefectItemMaster'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 defineOptions({ name: 'ProcessDefectItemManagement' })
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -371,6 +375,7 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!guardMasterOperation(canCreate)) return
   isEdit.value = false
   editId.value = null
   resetForm()
@@ -382,6 +387,7 @@ function openCreate() {
 }
 
 function openEdit(row: ProcessDefectItem) {
+  if (!guardMasterOperation(canEdit)) return
   isEdit.value = true
   editId.value = row.id ?? null
   Object.assign(form, {
@@ -397,6 +403,7 @@ function openEdit(row: ProcessDefectItem) {
 }
 
 async function handleSubmit() {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
   submitLoading.value = true
@@ -420,6 +427,7 @@ async function handleSubmit() {
 }
 
 async function handleDelete(id: number) {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await deleteProcessDefectItem(id)
     ElMessage.success('削除しました')

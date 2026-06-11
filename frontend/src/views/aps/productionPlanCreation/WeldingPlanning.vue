@@ -1043,10 +1043,14 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
 import { computeEffectiveReplanAnchorDate } from '@/views/aps/shared/replanAnchor'
 import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import { getProductionSummarysList } from '@/api/database'
 import request from '@/shared/api/request'
+
+const { canCreate, canEdit, canDelete, canExport } = useApsOperationPermission()
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
 function formatYmdInJapan(d: Date): string {
@@ -1639,6 +1643,7 @@ function openWeldingPlanningNotesDialog() {
 }
 
 async function addWeldingPlanningNote() {
+  if (!guardApsOperation(canCreate)) return
   const content = weldingPlanningNotesNewContent.value.trim()
   if (!content) {
     ElMessage.warning('内容を入力してください')
@@ -1659,6 +1664,7 @@ async function addWeldingPlanningNote() {
 }
 
 async function toggleWeldingPlanningNoteDone(note: WeldingPlanningNote, checked: unknown) {
+  if (!guardApsOperation(canEdit)) return
   if (!note.id) return
   const is_done =
     checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
@@ -1676,6 +1682,7 @@ async function toggleWeldingPlanningNoteDone(note: WeldingPlanningNote, checked:
 }
 
 async function deleteWeldingPlanningNote(note: WeldingPlanningNote) {
+  if (!guardApsOperation(canDelete)) return
   if (!note.id) return
   try {
     await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
@@ -1812,6 +1819,7 @@ async function loadSchedules() {
 }
 
 async function addSchedule() {
+  if (!guardApsOperation(canCreate)) return
   if (!(selectedProcessCd.value || '').trim()) {
     ElMessage.warning('工程を選択してください')
     return
@@ -1947,6 +1955,7 @@ async function addSchedule() {
 }
 
 async function removeSchedule(id: number) {
+  if (!guardApsOperation(canDelete)) return
   try {
     await ElMessageBox.confirm('この計画を削除しますか？', '確認', {
       type: 'warning',
@@ -2038,6 +2047,7 @@ function onSetupTimeBlur(row: ScheduleOut) {
 }
 
 async function saveSetupTime(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleSetupId.value !== row.id) return
   const draft = setupTimeDrafts.value[row.id] ?? ''
   const raw = draft.trim().replace(/[,，]/g, '')
@@ -2116,6 +2126,7 @@ function onForcedStartDateBlur(row: ScheduleOut) {
 }
 
 async function saveForcedStartDate(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleForcedStartId.value !== row.id) return
   const draft = String(forcedStartDateDrafts.value[row.id] ?? '').trim()
   const normalized = draft.replace(/[./]/g, '-')
@@ -2147,6 +2158,7 @@ async function saveForcedStartDate(row: ScheduleOut) {
 
 /** 合計(本) を planned_process_qty として保存（排産は本数が唯一の真理） */
 async function saveTotalPlannedQty(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleTotalId.value !== row.id) return
   const draft = plannedQtyDrafts.value[row.id] ?? ''
   const raw = draft.trim().replace(/[,，]/g, '')
@@ -2238,6 +2250,7 @@ function buildSingleLineReplanConfirmMessage() {
 }
 
 async function replanAll() {
+  if (!guardApsOperation(canEdit)) return
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
   try {
     await ElMessageBox.confirm(buildSingleLineReplanConfirmMessage(), {
@@ -2484,6 +2497,7 @@ function openDailyPlanEdit(row: ScheduleGridRow, d: string) {
 }
 
 async function saveDailyPlanEdit() {
+  if (!guardApsOperation(canEdit)) return
   const sid = dailyPlanEditScheduleId.value
   const d = (dailyPlanEditDate.value || '').trim()
   const qty = Math.floor(Number(dailyPlanEditQty.value || 0))
@@ -2555,6 +2569,7 @@ async function onLineReplanAnchorDialogOpen() {
 }
 
 async function saveLineReplanAnchorsFromDialog() {
+  if (!guardApsOperation(canEdit)) return
   savingLineReplanAnchors.value = true
   try {
     await saveLineReplanAnchors(

@@ -230,6 +230,11 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { List, Download, Refresh, Loading } from '@element-plus/icons-vue'
 import {
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
   getProductionSummarysList,
   getProductionSummarysProducts,
   acquireBatchUpdateLock,
@@ -363,10 +368,14 @@ function getRandomUUID(): string {
 }
 
 function handleAllUpdate() {
+  if (!guardInventoryOperation(canEdit)) return
+
   showAllUpdateConfirmDialog.value = true
 }
 
 async function confirmAllUpdate() {
+  if (!guardInventoryOperation(canApprove)) return
+
   showAllUpdateConfirmDialog.value = false
   const lockValue = getRandomUUID()
   try {
@@ -561,6 +570,8 @@ async function fetchProducts() {
 }
 
 function exportCsv() {
+  if (!guardInventoryOperation(canExport)) return
+
   const headers = [
     '品番', '品名', '日付', '曜日',
     '切断在庫', '面取在庫', '成型在庫', 'メッキ在庫', '溶接在庫', '検査在庫',

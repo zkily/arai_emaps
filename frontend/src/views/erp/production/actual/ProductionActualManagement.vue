@@ -418,6 +418,11 @@ import {
   type StockActualTypeSummary,
 } from '@/api/productionActualStockLogs'
 import * as echarts from 'echarts'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useMesOperationPermission()
+
 
 const loading = ref(false)
 const tableData = ref<StockActualLogRecord[]>([])
@@ -1686,6 +1691,8 @@ const handleEdit = (row: StockActualLogRecord) => {
 
 // 保存編集
 const handleSaveEdit = async () => {
+  if (!guardMesOperation(canEdit)) return
+
   if (!editFormRef.value) return
   await editFormRef.value.validate(async (valid) => {
     if (valid) {
@@ -1717,6 +1724,8 @@ const handleSaveEdit = async () => {
 
 // 削除処理
 const handleDelete = async (row: StockActualLogRecord) => {
+  if (!guardMesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(`取引ログ（ID: ${row.id}）を削除しますか？`, '削除確認', {
       confirmButtonText: '削除',
@@ -1787,6 +1796,8 @@ const handleResize = () => {
 
 // チャート印刷処理
 const handlePrintCharts = async () => {
+  if (!guardMesOperation(canExport)) return
+
   try {
     // すべてのチャートが初期化されているか確認
     if (!dailyTrendChart || !processChart || !typeChart || !productChart) {
@@ -1951,6 +1962,8 @@ const handlePrintCharts = async () => {
 
 // テーブル印刷処理
 const handlePrintTable = async () => {
+  if (!guardMesOperation(canExport)) return
+
   try {
     if (tableData.value.length === 0) {
       ElMessage.warning('印刷するデータがありません')
@@ -2198,6 +2211,8 @@ const handlePrintTable = async () => {
 
 /** 取引ログ一覧を「工程・設備・製品 × 日付」の二次元表で印刷（A3 横） */
 const handlePrintMatrixTable = async () => {
+  if (!guardMesOperation(canExport)) return
+
   try {
     if (tableData.value.length === 0) {
       ElMessage.warning('印刷するデータがありません')

@@ -317,6 +317,11 @@ import {
 } from '@element-plus/icons-vue'
 import { fetchMonthlySummary, type OrderMonthlySummary } from '@/api/erp/orderMonthly'
 import { fetchOrderDailyList, type OrderDailyItem } from '@/api/erp/orderDaily'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t, locale } = useI18n()
 
@@ -955,6 +960,8 @@ function renderDailyChart(rows: DailyAggRow[]) {
 }
 
 async function loadDailyChartData() {
+  if (!guardSalesOperation(canCreate)) return
+
   dailyLoading.value = true
   try {
     const d = getJapanDate()

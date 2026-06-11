@@ -32,7 +32,7 @@
           <el-button text @click="clearFilter" :icon="Refresh" class="clear-btn">
             {{ t('master.supplier.clear') }}
           </el-button>
-          <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-supplier-btn">
+          <el-button v-if="canCreate" type="primary" @click="handleAdd" :icon="Plus" class="add-supplier-btn">
             {{ t('master.supplier.addSupplier') }}
           </el-button>
         </div>
@@ -103,6 +103,7 @@
           show-overflow-tooltip
         />
         <el-table-column
+          v-if="canEdit || canDelete"
           :label="t('master.common.actions')"
           width="140"
           fixed="right"
@@ -110,10 +111,10 @@
         >
           <template #default="{ row }">
             <div class="action-buttons-table">
-              <el-button size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">
+              <el-button v-if="canEdit" size="small" type="primary" link @click="handleEdit(row)" :icon="Edit">
                 {{ t('master.supplier.edit') }}
               </el-button>
-              <el-button size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">
+              <el-button v-if="canDelete" size="small" type="danger" link @click="handleDelete(row)" :icon="Delete">
                 {{ t('master.supplier.delete') }}
               </el-button>
             </div>
@@ -159,8 +160,11 @@ import {
 import { getSupplierList, deleteSupplier } from '@/api/master/supplierMaster'
 import type { Supplier } from '@/types/master'
 import SupplierEditDialog from './SupplierEditDialog.vue'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 const filters = reactive({ keyword: '' })
 const dataList = ref<Supplier[]>([])
 const pagination = reactive({ currentPage: 1, pageSize: 20, total: 0 })
@@ -189,16 +193,19 @@ const handlePageSizeChange = () => {
 }
 
 const handleAdd = () => {
+  if (!guardMasterOperation(canCreate)) return
   editData.value = null
   dialogVisible.value = true
 }
 
 const handleEdit = (row: Supplier) => {
+  if (!guardMasterOperation(canEdit)) return
   editData.value = row
   dialogVisible.value = true
 }
 
 const handleDelete = async (row: Supplier) => {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await ElMessageBox.confirm(t('master.supplier.confirmDelete'), t('common.confirm'), {
       type: 'warning',

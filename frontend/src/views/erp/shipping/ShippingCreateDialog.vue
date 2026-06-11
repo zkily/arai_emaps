@@ -1586,6 +1586,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 /** request 拦截器返回 response.data，此处为 API 返回的 body */
 type ApiRes = { success?: boolean; data?: any; list?: any[]; box_type?: string; total?: number }
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   Refresh,
   Delete,
   Right,
@@ -2168,6 +2173,8 @@ function getQuickDestButtonType(
 }
 
 function toggleDestination(code: string) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (selectedDestinations.value === code) {
     selectedDestinations.value = ''
   } else {
@@ -2187,6 +2194,8 @@ function selectAllDestinations() {
 }
 
 function confirmDestinationSelection() {
+  if (!guardSalesOperation(canApprove)) return
+
   // 更新筛选条件
   filters.value.destinationCd = selectedDestinations.value || ''
 
@@ -2251,6 +2260,8 @@ function onFilterChange() {
 
 // 全屏切换方法
 function toggleFullscreen() {
+  if (!guardSalesOperation(canEdit)) return
+
   // 获取对话框元素
   const dialog = document.querySelector('.shipping-dialog')
   if (dialog) {
@@ -2493,6 +2504,8 @@ function decrementSerial(row: Pallet, index: number): void {
 
 // 获取已创建的出货项目
 async function fetchShippedItems() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!filters.value.dateRange || !filters.value.dateRange[0]) return
 
   // 确保在开始时是一个有效的 Set
@@ -3132,6 +3145,8 @@ async function addToSelectedItems(items: DailyOrder[]): Promise<void> {
 
 // 添加已选择的项目
 function addSelectedItems() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (!selectedRows.value || selectedRows.value.length === 0) {
     ElMessage.warning('項目を選択してください。')
     return
@@ -3169,6 +3184,8 @@ function addSelectedItems() {
 
 // 移除已选择的项目
 function removeSelectedItem(item: { id: number }) {
+  if (!guardSalesOperation(canDelete)) return
+
   const index = selectedItems.value.findIndex((i) => i.id === item.id)
   if (index !== -1) {
     selectedItems.value.splice(index, 1)
@@ -3185,6 +3202,8 @@ function removeSelectedItem(item: { id: number }) {
 
 // 清除所有已选择的项目
 function clearAllSelectedItems() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (selectedItems.value.length === 0) return
 
   ElMessageBox.confirm('すべての選択項目を削除しますか？', '確認', {
@@ -3218,6 +3237,8 @@ function itemBoxesChanged(item: { confirmed_boxes: number; confirmed_units: numb
 
 // 重新计算托盘分配
 function recalculatePallets() {
+  if (!guardSalesOperation(canEdit)) return
+
   // 保存当前的パレット容量設定
   saveBoxSettings()
 
@@ -3666,6 +3687,8 @@ function recalculatePallets() {
 
 // 重新计算托盘分配并展开混載製品显示
 function recalculatePalletsWithExpandedDisplay() {
+  if (!guardSalesOperation(canEdit)) return
+
   // 先执行正常的托盘分配
   recalculatePallets()
 
@@ -4286,6 +4309,8 @@ function fillRemainingSpaceOptimized(
 
 // 优化版保存托盘函数
 function savePalletOptimized(currentPallet: any, boxType: any, pallets: any[]) {
+  if (!guardSalesOperation(canEdit)) return
+
   const palletItems = currentPallet.items.map(
     (item: {
       product_cd: any
@@ -4339,6 +4364,8 @@ function savePalletOptimized(currentPallet: any, boxType: any, pallets: any[]) {
 
 // 出荷Noを保存：パレット割当て案 → shippingItemsPayload → POST /api/shipping/items/bulk
 async function submitShipping() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (submitDisabled.value) {
     ElMessage.warning('データが完全で、パレット割り当てが正しいことを確認してください')
     return
@@ -4666,6 +4693,8 @@ function showPalletDetail(pallet: Pallet): void {
 
 // 更新托盘编号
 function updatePalletNumber(pallet: any, increment: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   const currentSerial = pallet.shipping_no_serial
   const currentNum = parseInt(currentSerial) || 1
   const newNum = Math.max(1, Math.min(99, currentNum + increment))
@@ -5441,6 +5470,8 @@ function groupProductsByDestinationAndDate(products: any[]) {
 
 // 生成基于目的地的解决方案
 function generateDestinationBasedSolution(products: any[], maxBoxesPerPallet: number) {
+  if (!guardSalesOperation(canCreate)) return
+
   // 按目的地分组
   const destGroups: { [key: string]: any[] } = {}
   products.forEach((product) => {
@@ -5465,6 +5496,8 @@ function generateDestinationBasedSolution(products: any[], maxBoxesPerPallet: nu
 
 // 生成基于日期的解决方案
 function generateDateBasedSolution(products: any[], maxBoxesPerPallet: number) {
+  if (!guardSalesOperation(canCreate)) return
+
   // 按日期分组
   const dateGroups: { [key: string]: any[] } = {}
   products.forEach((product) => {
@@ -5489,6 +5522,8 @@ function generateDateBasedSolution(products: any[], maxBoxesPerPallet: number) {
 
 // 生成基于产品的解决方案
 function generateProductBasedSolution(products: any[], maxBoxesPerPallet: number) {
+  if (!guardSalesOperation(canCreate)) return
+
   // 按产品ID分组
   const productGroups: { [key: string]: any } = {}
   products.forEach((product) => {
@@ -5583,6 +5618,8 @@ function bestFitDecreasing(products: any[], maxBoxesPerPallet: number): any[] {
 
 // 生成随机解决方案
 function generateRandomSolution(products: any[], maxBoxesPerPallet: number) {
+  if (!guardSalesOperation(canCreate)) return
+
   // 深拷贝产品列表
   const productsCopy = JSON.parse(JSON.stringify(products))
 
@@ -6514,6 +6551,8 @@ function formatSerialForDisplay(serial: number | string | null | undefined) {
 
 // 批量检查重复项目
 function findDuplicatesInBatch(items: any[]) {
+  if (!guardSalesOperation(canCreate)) return
+
   const seen = new Map()
   const duplicates: { item: any; index: any; originalIndex: any; key: string }[] = []
 
@@ -6621,6 +6660,8 @@ function getDuplicateStats(items: DailyOrder[]) {
 
 // 条件分解アルゴリズム - 分解のみ、組み合わせなし
 function allocatePalletsDecomposeOnly(items: any[], boxCapacitySettings: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   const allPallets: any[] = []
 
   // 各項目を個別に処理（組み合わせは一切行わない）
@@ -6638,6 +6679,8 @@ function allocatePalletsDecomposeOnly(items: any[], boxCapacitySettings: any) {
 
 // 単一製品用のパレット作成（組み合わせなし、パレット番号なし）
 function createSingleProductPallets(item: any, maxBoxesPerPallet: number, boxType: string) {
+  if (!guardSalesOperation(canCreate)) return
+
   const pallets: {
     product_cd: any
     product_name: any
@@ -6848,6 +6891,8 @@ function duplicatePallet(row: Pallet, index: number): void {
 
 // 删除托盘
 function deletePallet(index: number) {
+  if (!guardSalesOperation(canDelete)) return
+
   if (pallets.value.length <= 1) {
     ElMessage.warning('最低1つのパレットが必要です')
     return
@@ -7231,6 +7276,8 @@ function applyPalletChanges(): void {
 
 // 应用变更并关闭对话框
 function applyChangesAndClose() {
+  if (!guardSalesOperation(canEdit)) return
+
   // 重新计算相关数据
   try {
     // 更新托盘的前缀（如果日期或目的地发生变化）

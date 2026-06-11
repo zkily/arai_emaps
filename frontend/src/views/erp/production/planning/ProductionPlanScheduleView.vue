@@ -313,6 +313,11 @@ import { Printer, Refresh } from '@element-plus/icons-vue'
 import request from '@/shared/api/request'
 import { fetchPlanOperationRate } from '@/api/planBaseline'
 import {
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useApsOperationPermission()
+
   fetchLines,
   fetchSchedulingGrid,
   type ScheduleGridRow,
@@ -886,6 +891,8 @@ function buildPrintHtml(): string {
 }
 
 function handlePrint() {
+  if (!guardApsOperation(canExport)) return
+
   if (displayRows.value.length === 0) {
     ElMessage.warning(t('productionPlanSchedule.empty'))
     return
@@ -1233,6 +1240,8 @@ function planUpdateCellKey(x: unknown): string {
 }
 
 function buildPlanUpdatesMergeSpans(rows: PlanUpdateRecord[]) {
+  if (!guardApsOperation(canEdit)) return
+
   const n = rows.length
   const process = new Array<number>(n).fill(0)
   const machine = new Array<number>(n).fill(0)
@@ -1339,6 +1348,8 @@ function formatRequiredTime(qty: unknown, efficiencyRate: unknown): string {
 }
 
 async function openPlanUpdatesDialog(row: EnrichedRow) {
+  if (!guardApsOperation(canEdit)) return
+
   const name = (row.item_name ?? '').trim()
   if (!name) {
     ElMessage.warning(t('productionPlanSchedule.planUpdatesNoProduct'))

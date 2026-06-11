@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from datetime import date
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProcessProcessingFee, Process
@@ -119,7 +120,7 @@ async def get_process_processing_fee(
 async def create_process_processing_fee(
     body: FeeIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     dup_res = await db.execute(
         select(ProcessProcessingFee).where(
@@ -156,7 +157,7 @@ async def update_process_processing_fee(
     fee_id: int,
     body: FeeIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     row = await db.get(ProcessProcessingFee, fee_id)
     if not row:
@@ -179,7 +180,7 @@ async def update_process_processing_fee(
 async def delete_process_processing_fee(
     fee_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     row = await db.get(ProcessProcessingFee, fee_id)
     if not row:

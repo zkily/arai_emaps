@@ -26,6 +26,7 @@ import { formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
 import { formatDurationMs, parseDefectsFromRow } from './weldingActualPersist'
 import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useWeldingMesCollection, type WeldingMgmtRow } from './useWeldingMesCollection'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 defineOptions({ name: 'WeldingActualDataCollection' })
 
@@ -68,6 +69,10 @@ const {
   canResume,
   canEnd,
   canEditDefects,
+  canCreate,
+  canEdit,
+  canDelete,
+  canExport,
   showOfflineAlert,
   offlineAlertText,
   endDialogPreview,
@@ -333,6 +338,7 @@ function runPrintOnWindow(win: Window): void {
 }
 
 function printCompletedHistoryTable(): void {
+  if (!guardMesOperation(canExport)) return
   const rows = completedRows.value
   if (!rows.length) return
 
@@ -811,7 +817,7 @@ onUnmounted(() => {
             </div>
             <div class="inspection-history-table-card__actions">
               <span class="inspection-history-table-card__count">{{ completedRows.length }}</span>
-              <el-button size="small" :icon="Printer" @click="printCompletedHistoryTable">
+              <el-button v-if="canExport" size="small" :icon="Printer" @click="printCompletedHistoryTable">
                 {{ t('mesWeldingActual.btnPrintHistory') }}
               </el-button>
             </div>
@@ -941,6 +947,7 @@ onUnmounted(() => {
               >
                 <template #default="{ row }">
                   <el-button
+                    v-if="canEdit"
                     link
                     type="primary"
                     size="small"
@@ -1095,7 +1102,7 @@ onUnmounted(() => {
             </span>
           </div>
           <el-button
-            v-if="confirmedEditRow"
+            v-if="confirmedEditRow && canDelete"
             class="confirmed-edit-header__clear"
             size="small"
             :loading="confirmedEditClearing"

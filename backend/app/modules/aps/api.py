@@ -20,6 +20,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation
 from app.modules.auth.models import User
 
 from app.modules.master.models import (
@@ -691,7 +692,7 @@ async def get_line_replan_anchors(
 async def put_line_replan_anchors(
     body: LineReplanAnchorsBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """設備別アンカー日を一括保存。anchor_date が空なら当該設備の行を削除（クエリ引数フォールバックに戻す）。"""
     for it in body.items:
@@ -721,7 +722,7 @@ async def create_line(
     line_code: str,
     default_work_hours: float = 0.0,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     cd = line_code.strip()
     dup = await db.execute(select(Machine).where(Machine.machine_cd == cd))
@@ -859,7 +860,7 @@ async def get_line_capacities(
 async def batch_upsert_line_capacities(
     body: LineCapacityBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     count = 0
     for item in body.items:
@@ -962,7 +963,7 @@ async def get_line_capacity_slots(
 async def batch_upsert_line_capacity_slots(
     body: DaySlotsBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     line = await db.get(Machine, body.line_id)
     if line is None:
@@ -1046,7 +1047,7 @@ async def get_line_product_standards(
 async def create_line_product_standard(
     body: LineProductStandardBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     row = LineProductStandard(
         line_id=body.line_id,
@@ -1073,7 +1074,7 @@ async def update_line_product_standard(
     standard_id: int,
     body: LineProductStandardBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     row = await db.get(LineProductStandard, standard_id)
     if row is None:
@@ -1098,7 +1099,7 @@ async def update_line_product_standard(
 async def delete_line_product_standard(
     standard_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     row = await db.get(LineProductStandard, standard_id)
     if row is None:
@@ -1249,7 +1250,7 @@ async def list_schedules(
 async def create_schedule(
     body: ScheduleCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     machine = await db.get(Machine, body.line_id)
     if machine is None:
@@ -1396,7 +1397,7 @@ async def update_schedule(
     schedule_id: int,
     body: ScheduleUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     ps = await db.get(ProductionSchedule, schedule_id)
     if ps is None:
@@ -1465,7 +1466,7 @@ async def append_schedule_planned_qty(
     schedule_id: int,
     body: ScheduleAppendPlannedBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     合計(本)増加時：既存日別計画の末尾に追記し、後続順位のみ必要なら再串接。
@@ -1551,7 +1552,7 @@ async def update_schedule_daily_planned_qty(
     schedule_id: int,
     body: ScheduleDailyPlanUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     ps = await db.get(ProductionSchedule, schedule_id)
     if ps is None:
@@ -1601,7 +1602,7 @@ async def update_schedule_daily_planned_qty(
 async def delete_schedule(
     schedule_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     ps = await db.get(ProductionSchedule, schedule_id)
     if ps is None:
@@ -1635,7 +1636,7 @@ async def delete_schedule(
 async def run_schedule(
     schedule_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     ps = await db.get(ProductionSchedule, schedule_id)
     if ps is None:
@@ -2169,7 +2170,7 @@ async def get_aps_batch_plans(
 async def patch_upstream_aps_batch_plan_links(
     body: UpstreamApsBatchPlanLinksBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     cutting_management / instruction_plans の aps_batch_plan_id を一括設定またはクリア。
@@ -2236,7 +2237,7 @@ async def patch_upstream_aps_batch_plan_links(
 async def reassign_cutting_management_lot(
     body: ReassignCuttingManagementLotBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     誤って aps_batch_plan_id だけで紐づいた cutting_management を、
@@ -2350,7 +2351,7 @@ async def reassign_cutting_management_lot(
 @router.post("/production-plan-excel/rebuild")
 async def rebuild_production_plan_excel(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("export")),
 ):
     """
     production_plan_excel を schedule_details から全量再構築し、
@@ -2409,7 +2410,7 @@ async def replan_sequence(
         description="false のとき instruction_plans を更新・INSERT せず、スケジュール・aps_batch_plans のみ（溶接計画作成等）",
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """
     ライン順で再計算（実績考慮を統合）。
@@ -2749,7 +2750,7 @@ async def run_all_schedules(
     lineId: Optional[int] = Query(None),
     sequential: bool = Query(False),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     if sequential and lineId is not None:
         updated = await replan_line_sequential(db, lineId)

@@ -15,6 +15,7 @@ from typing import List, Any, Optional
 import json
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 
@@ -110,7 +111,7 @@ async def _list_by_page_key(db: AsyncSession, page_key: str) -> List[dict]:
 async def create_destination_group(
     body: GroupCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """納入先分组を新規作成"""
     dest_json = _serialize_destinations(body.destinations)
@@ -137,7 +138,7 @@ async def save_page_groups(
     page_key: str,
     body: PageGroupsSave,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """指定 page_key の分组を一括更新"""
     for g in body.groups:
@@ -162,7 +163,7 @@ async def update_destination_group(
     group_id: int,
     body: GroupUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """納入先分组を更新"""
     dest_json = _serialize_destinations(body.destinations)
@@ -186,7 +187,7 @@ async def update_destination_group(
 async def delete_destination_group(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """納入先分组を削除"""
     q = text("DELETE FROM destination_groups WHERE id = :id")

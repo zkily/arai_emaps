@@ -9,6 +9,7 @@ from typing import Optional
 from pydantic import BaseModel
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 
@@ -30,7 +31,7 @@ class QuickUpdateBody(BaseModel):
 async def quick_update_shipping_item(
     body: QuickUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """
     出荷明細のクイック編集。

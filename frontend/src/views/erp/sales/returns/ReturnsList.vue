@@ -296,6 +296,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { RefreshLeft, Search, Plus, Delete } from '@element-plus/icons-vue'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   getReturns,
   getReturnById,
   createReturn,
@@ -403,10 +408,16 @@ function calcItemAmount(row: ReturnItem) {
   row.amount = (row.quantity || 0) * (row.unit_price || 0)
 }
 
-function addCreateItem() { createForm.items.push(emptyItem()) }
-function removeCreateItem(idx: number) { createForm.items.splice(idx, 1) }
+function addCreateItem() {
+  if (!guardSalesOperation(canCreate)) return
+ createForm.items.push(emptyItem()) }
+function removeCreateItem(idx: number) {
+  if (!guardSalesOperation(canDelete)) return
+ createForm.items.splice(idx, 1) }
 
 function resetCreateForm() {
+  if (!guardSalesOperation(canCreate)) return
+
   Object.assign(createForm, {
     order_no: '',
     customer_code: '',
@@ -419,6 +430,8 @@ function resetCreateForm() {
 }
 
 function openCreateDialog() {
+  if (!guardSalesOperation(canCreate)) return
+
   resetCreateForm()
   createDialogVisible.value = true
 }
@@ -460,6 +473,8 @@ async function fetchData() {
 }
 
 async function handleCreate() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (!createFormRef.value) return
   await createFormRef.value.validate()
   saving.value = true
@@ -481,6 +496,8 @@ async function handleCreate() {
 }
 
 async function handleApprove(row: any) {
+  if (!guardSalesOperation(canApprove)) return
+
   await ElMessageBox.confirm(`返品 ${row.return_no} を承認しますか？`, '確認', { type: 'warning' })
   try {
     await approveReturn(row.id)
@@ -492,6 +509,8 @@ async function handleApprove(row: any) {
 }
 
 async function handleReceive(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   await ElMessageBox.confirm(`返品 ${row.return_no} を受入しますか？`, '確認', { type: 'info' })
   try {
     await receiveReturn(row.id)

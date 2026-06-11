@@ -487,6 +487,11 @@ import request from '@/shared/api/request'
 import { fetchScheduledWorkdaysForDateIso } from '@/api/master/companyWorkCalendar'
 import { fetchPlanBaselineComparison } from '@/api/planBaseline'
 import { fetchLines, fetchSchedulingGrid, type ScheduleGridRow, type SchedulingGridResponse } from '@/api/aps'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport } = useMesOperationPermission()
+
 /** ERP/MES 统一走 MES 计划数据接口（与成型页保持一致） */
 const planDataApiPath = computed(() => '/api/mes/forming-plan-data')
 
@@ -1226,6 +1231,7 @@ const resetSearch = () => {
 
 // 作成ダイアログを表示
 const showCreateDialog = () => {
+  if (!guardMesOperation(canCreate)) return
   isEdit.value = false
   resetForm()
   generateInstructionNo()
@@ -1267,6 +1273,7 @@ const generateInstructionNo = () => {
 // フォームを送信
 const submitForm = async () => {
   if (!formRef.value) return
+  if (isEdit.value ? !guardMesOperation(canEdit) : !guardMesOperation(canCreate)) return
 
   try {
     await formRef.value.validate()
@@ -1299,6 +1306,7 @@ const handleViewDetail = (instruction: any) => {
 
 // 指示を編集
 const editInstruction = (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   isEdit.value = true
   Object.assign(form, instruction)
   dialogVisible.value = true
@@ -1306,6 +1314,7 @@ const editInstruction = (instruction: any) => {
 
 // 指示を開始
 const startInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を開始しますか？`, '確認', {
       confirmButtonText: '開始',
@@ -1323,6 +1332,7 @@ const startInstruction = async (instruction: any) => {
 
 // 指示を完了
 const completeInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を完了しますか？`, '確認', {
       confirmButtonText: '完了',
@@ -1340,6 +1350,7 @@ const completeInstruction = async (instruction: any) => {
 
 // 指示を削除
 const deleteInstruction = async (instruction: any) => {
+  if (!guardMesOperation(canDelete)) return
   try {
     await ElMessageBox.confirm(`指示 ${instruction.instructionNo} を削除しますか？`, '確認', {
       confirmButtonText: '削除',
@@ -1381,6 +1392,7 @@ const handleCurrentChange = (page: number) => {
 
 // データをエクスポート
 const exportData = () => {
+  if (!guardMesOperation(canExport)) return
   ElMessage.info('データをエクスポートしています...')
 }
 
@@ -1392,6 +1404,7 @@ const refreshData = () => {
 
 // 指示書を印刷（全設備を印刷し、計画データがない設備は「生産計画停止」と表示）
 const printInstructions = async () => {
+  if (!guardMesOperation(canExport)) return
   try {
     // 印刷対象の全溶接設備を取得
     const allMachineNames = await getPrintMachineNames()
@@ -1653,6 +1666,7 @@ const getFullPlanDataForPrint = async () => {
 
 // 指示書印刷プレビューを表示
 const showPrintPreview = async () => {
+  if (!guardMesOperation(canExport)) return
   try {
     // プレビュー対象の全溶接設備を取得
     const allMachineNames = await getPrintMachineNames()
@@ -2432,6 +2446,7 @@ const handleRemarksInput = (row: any) => {
 
 // 保存備考（remarks）
 const saveRemarks = async (row: any, showSuccessMessage = true) => {
+  if (!guardMesOperation(canEdit)) return
   try {
     // 清除该行的防抖定时器
     const rowKey = getRowKey(row)
@@ -2536,6 +2551,7 @@ const updateEfficiencyAndSetupTime = async () => {
 
 // 段取予定表印刷
 const printSetupSchedule = async () => {
+  if (!guardMesOperation(canExport)) return
   printingSetupSchedule.value = true
   try {
     await loadEfficiencyData()
@@ -3021,6 +3037,7 @@ function openWeldingInstructionNotesDialog() {
 }
 
 async function addWeldingInstructionNote() {
+  if (!guardMesOperation(canCreate)) return
   const content = weldingInstructionNotesNewContent.value.trim()
   if (!content) {
     ElMessage.warning('内容を入力してください')
@@ -3041,6 +3058,7 @@ async function addWeldingInstructionNote() {
 }
 
 async function toggleWeldingInstructionNoteDone(note: WeldingInstructionNote, checked: unknown) {
+  if (!guardMesOperation(canEdit)) return
   if (!note.id) return
   const is_done =
     checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
@@ -3058,6 +3076,7 @@ async function toggleWeldingInstructionNoteDone(note: WeldingInstructionNote, ch
 }
 
 async function deleteWeldingInstructionNote(note: WeldingInstructionNote) {
+  if (!guardMesOperation(canDelete)) return
   if (!note.id) return
   try {
     await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })

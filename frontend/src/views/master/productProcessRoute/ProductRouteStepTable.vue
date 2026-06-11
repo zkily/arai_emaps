@@ -9,13 +9,14 @@
           <span class="route-head__text">製品別工程ステップ</span>
         </div>
         <div class="route-head__actions">
-          <el-button type="success" size="small" :icon="Plus" :disabled="loading" @click="dialogVisible = true">
+          <el-button v-if="canCreate" type="success" size="small" :icon="Plus" :disabled="loading" @click="openAddStepDialog">
             工程追加
           </el-button>
           <el-button type="info" size="small" :icon="RefreshRight" plain :disabled="loading" @click="resetData">
             リセット
           </el-button>
           <el-button
+            v-if="canEdit"
             type="primary"
             size="small"
             :icon="CircleCheck"
@@ -39,7 +40,7 @@
       <div class="state-msg state-msg--empty">
         <el-icon :size="36" class="state-msg__ico"><DocumentRemove /></el-icon>
         <p class="state-msg__p">工程ルート未設定、またはステップがありません</p>
-        <el-button type="primary" size="small" :icon="Plus" @click="dialogVisible = true">工程を追加</el-button>
+        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" @click="openAddStepDialog">工程を追加</el-button>
       </div>
     </template>
 
@@ -73,7 +74,7 @@
                     <el-tag v-if="step.id" type="success" size="small" effect="plain">保存済み</el-tag>
                     <el-tag v-else type="warning" size="small" effect="plain">未保存</el-tag>
                   </div>
-                  <el-button type="danger" size="small" :icon="Delete" plain @click="removeStep(stepIndex)" :disabled="loading">
+                  <el-button v-if="canDelete" type="danger" size="small" :icon="Delete" plain @click="removeStep(stepIndex)" :disabled="loading">
                     削除
                   </el-button>
                 </div>
@@ -88,7 +89,7 @@
                       {{ step.machines.length }}台
                     </el-tag>
                   </div>
-                  <el-button type="primary" size="small" :icon="Plus" link @click="addMachine(step)" :disabled="loading">
+                  <el-button v-if="canEdit" type="primary" size="small" :icon="Plus" link @click="addMachine(step)" :disabled="loading">
                     設備追加
                   </el-button>
                 </div>
@@ -96,7 +97,7 @@
                 <div v-if="!step.machines || step.machines.length === 0" class="no-machines">
                   <el-icon :size="28"><Tools /></el-icon>
                   <p>設備が未設定です</p>
-                  <el-button type="primary" size="small" :icon="Plus" @click="addMachine(step)">設備を追加</el-button>
+                  <el-button v-if="canEdit" type="primary" size="small" :icon="Plus" @click="addMachine(step)">設備を追加</el-button>
                 </div>
 
                 <div v-else class="machines-grid">
@@ -183,7 +184,7 @@
                       </div>
                       <div class="machine-form__actions">
                         <el-button
-                          v-if="machine.machine_cd"
+                          v-if="canEdit && machine.machine_cd"
                           type="success"
                           size="small"
                           :icon="CircleCheck"
@@ -193,6 +194,7 @@
                           {{ machine.id ? '更新' : '保存' }}
                         </el-button>
                         <el-button
+                          v-if="canDelete"
                           type="danger"
                           size="small"
                           :icon="Delete"
@@ -234,6 +236,10 @@ import {
 } from '@element-plus/icons-vue'
 import ProcessSelectDialog from './ProcessSelectDialog.vue'
 import draggable from 'vuedraggable'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const props = defineProps<{ productCd: string }>()
 
@@ -356,7 +362,13 @@ const loadData = async () => {
 
 watch(() => props.productCd, loadData, { immediate: true })
 
+const openAddStepDialog = () => {
+  if (!guardMasterOperation(canCreate)) return
+  dialogVisible.value = true
+}
+
 const addProcess = async (process: { process_cd: string; process_name: string }) => {
+  if (!guardMasterOperation(canCreate)) return
   let routeCd = steps.value[0]?.route_cd
   if (!routeCd) {
     try {
@@ -386,6 +398,7 @@ const addProcess = async (process: { process_cd: string; process_name: string })
 }
 
 const addMachine = (step: ProductRouteStep) => {
+  if (!guardMasterOperation(canEdit)) return
   if (!step.machines) step.machines = []
   step.machines.push({
     machine_cd: '',
@@ -405,6 +418,7 @@ const onMachineChange = (_step: ProductRouteStep, idx: number, machineCd: string
 }
 
 const removeStep = async (index: number) => {
+  if (!guardMasterOperation(canDelete)) return
   if (steps.value.length <= index) return
   const removedStep = steps.value[index]
   if (removedStep.id) {
@@ -430,6 +444,7 @@ const removeStep = async (index: number) => {
 }
 
 const saveSteps = async () => {
+  if (!guardMasterOperation(canEdit)) return
   if (!dataLoaded.value) {
     ElMessage.warning('データの読み込みが完了していません')
     return
@@ -470,6 +485,7 @@ const resetData = async () => {
 }
 
 const updateMachine = async (step: ProductRouteStep, machineIndex: number) => {
+  if (!guardMasterOperation(canEdit)) return
   const machine = step.machines?.[machineIndex]
   if (!machine || !machine.machine_cd) {
     ElMessage.warning('先に設備を選択してください')
@@ -503,6 +519,7 @@ const updateMachine = async (step: ProductRouteStep, machineIndex: number) => {
 }
 
 const removeMachine = async (step: ProductRouteStep, machineIndex: number) => {
+  if (!guardMasterOperation(canDelete)) return
   const machine = step.machines?.[machineIndex]
   if (!machine) return
   try {

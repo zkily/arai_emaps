@@ -62,6 +62,7 @@
         <el-button :icon="Refresh" class="rb-btn-ghost" @click="loadData">更新</el-button>
         <el-button :icon="RefreshLeft" class="rb-btn-ghost" @click="clearFilters">クリア</el-button>
         <el-button
+          v-if="canDelete"
           type="danger"
           plain
           :disabled="!selectedIds.length"
@@ -71,7 +72,7 @@
         >
           一括削除 ({{ selectedIds.length }})
         </el-button>
-        <el-button type="primary" :icon="Plus" class="rb-btn-add" @click="openDialog()">
+        <el-button v-if="canCreate" type="primary" :icon="Plus" class="rb-btn-add" @click="openDialog()">
           新規登録
         </el-button>
       </div>
@@ -113,10 +114,10 @@
             {{ formatDt(row.updated_at || row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" align="center" fixed="right">
+        <el-table-column v-if="canEdit || canDelete" label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" :icon="Edit" @click="openDialog(row)">編集</el-button>
-            <el-button type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">削除</el-button>
+            <el-button v-if="canEdit" type="primary" link size="small" :icon="Edit" @click="openDialog(row)">編集</el-button>
+            <el-button v-if="canDelete" type="danger" link size="small" :icon="Delete" @click="handleDelete(row)">削除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -248,8 +249,12 @@ import {
 import { fetchRollerMasterList, type RollerMasterRow } from '@/api/master/rollerMaster'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { getProductList } from '@/api/master/productMaster'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 defineOptions({ name: 'RollerBomManagement' })
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -496,6 +501,7 @@ const rules: FormRules = {
 
 const openDialog = (row?: RollerBomRow) => {
   if (row?.id) {
+    if (!guardMasterOperation(canEdit)) return
     isEdit.value = true
     editingId.value = row.id
     form.value = {
@@ -505,6 +511,7 @@ const openDialog = (row?: RollerBomRow) => {
       machine_cd: row.machine_cd || '',
     }
   } else {
+    if (!guardMasterOperation(canCreate)) return
     isEdit.value = false
     editingId.value = null
     form.value = { roller_cd: '', roller_type: '', product_cd: '', machine_cd: '' }
@@ -513,6 +520,7 @@ const openDialog = (row?: RollerBomRow) => {
 }
 
 const submitForm = async () => {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   try {
     await formRef.value?.validate()
   } catch {
@@ -546,6 +554,7 @@ const submitForm = async () => {
 }
 
 const handleDelete = async (row: RollerBomRow) => {
+  if (!guardMasterOperation(canDelete)) return
   if (!row.id) return
   try {
     await ElMessageBox.confirm('この行を削除しますか？', '確認', { type: 'warning' })
@@ -563,6 +572,7 @@ const handleDelete = async (row: RollerBomRow) => {
 }
 
 const handleBatchDelete = async () => {
+  if (!guardMasterOperation(canDelete)) return
   if (!selectedIds.value.length) return
   try {
     await ElMessageBox.confirm(`選択した ${selectedIds.value.length} 件を削除しますか？`, '確認', {

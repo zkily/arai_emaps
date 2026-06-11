@@ -669,8 +669,12 @@ import { downloadExcelFromJson } from '@/utils/excelExport'
 import { inventoryValueApi } from '@/api/inventoryValue'
 import { getProcessList } from '@/api/master/processMaster'
 import { getProductList } from '@/api/master/productMaster'
-import { useOperationPermission } from '@/composables/useOperationPermission'
-import { OPERATION_MODULE_INVENTORY } from '@/constants/operationModules'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+const hasEditPermission = canEdit
+
 
 // NOTE: inventoryValueApi は暫定プレースホルダ実装のため、厳密型を避ける。
 type TableRow = any
@@ -709,8 +713,6 @@ interface Emits {
 const emit = defineEmits<Emits>()
 
 // 在庫管理モジュールの操作権限
-const { canEdit: canEditInventory } = useOperationPermission(OPERATION_MODULE_INVENTORY)
-const hasEditPermission = canEditInventory
 
 const isProductTab = computed(() => props.itemType === '製品')
 
@@ -1087,6 +1089,8 @@ function buildPartPrintDocumentHtml(): string {
 }
 
 async function openPartPrintDialog() {
+  if (!guardInventoryOperation(canExport)) return
+
   if (props.itemType !== '部品') {
     ElMessage.warning('部品タブでご利用ください')
     return
@@ -1138,11 +1142,15 @@ async function openPartPrintDialog() {
 }
 
 function onPartPrintDialogClosed() {
+  if (!guardInventoryOperation(canExport)) return
+
   partPrintRows.value = []
   partPrintAsOfLabel.value = ''
 }
 
 async function handlePartPrint() {
+  if (!guardInventoryOperation(canExport)) return
+
   if (!partPrintRows.value.length) return
   const html = buildPartPrintDocumentHtml()
   const iframe = document.createElement('iframe')
@@ -1182,6 +1190,8 @@ async function handlePartPrint() {
 }
 
 async function handleExportPartData() {
+  if (!guardInventoryOperation(canExport)) return
+
   if (!partPrintRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -1373,6 +1383,8 @@ function buildMaterialPrintDocumentHtml(): string {
 }
 
 async function openMaterialPrintDialog() {
+  if (!guardInventoryOperation(canExport)) return
+
   const endDate = props.dateRange?.[1]
   if (!endDate) {
     ElMessage.warning('対象月（月末日）を選択してください')
@@ -1425,12 +1437,16 @@ async function openMaterialPrintDialog() {
 }
 
 function onMaterialPrintDialogClosed() {
+  if (!guardInventoryOperation(canExport)) return
+
   materialPrintRows.value = []
   materialPrintAsOfLabel.value = ''
 }
 
 /** 親ページではなく、表データのみを iframe 内で印刷 */
 async function handleMaterialPrint() {
+  if (!guardInventoryOperation(canExport)) return
+
   if (!materialPrintRows.value.length) return
   const html = buildMaterialPrintDocumentHtml()
   const iframe = document.createElement('iframe')
@@ -1471,6 +1487,8 @@ async function handleMaterialPrint() {
 
 /** ダイアログ内の表データ（編集後の数量・手入力束本数・計算金額）を Excel にエクスポート */
 async function handleExportMaterialData() {
+  if (!guardInventoryOperation(canExport)) return
+
   if (!materialPrintRows.value.length) {
     ElMessage.warning('エクスポートするデータがありません')
     return
@@ -1881,6 +1899,8 @@ const editPrice = (row: any) => {
 
 // 保存单价
 const savePrice = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+
   try {
     const valid = await editFormRef.value.validate()
     if (!valid) return

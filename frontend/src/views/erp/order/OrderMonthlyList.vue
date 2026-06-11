@@ -710,6 +710,11 @@ import {
 import { fetchOrderDailyList } from '@/api/erp/orderDaily'
 import { batchUpdateDailyOrders } from '@/api/order/order'
 import type { OrderDailyItem } from '@/api/erp/orderDaily'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { t } = useI18n()
 
@@ -815,11 +820,15 @@ async function loadList() {
 }
 
 function handlePageChange(page: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.page = page
   loadList()
 }
 
 function handleSizeChange(size: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.pageSize = size
   pagination.page = 1
   loadList()
@@ -956,6 +965,8 @@ function resetForm() {
 }
 
 async function submitForm() {
+  if (!guardSalesOperation(canEdit)) return
+
   try {
     await formRef.value?.validate()
   } catch {
@@ -994,6 +1005,8 @@ async function submitForm() {
 }
 
 async function handleDelete(row: OrderMonthlyItem) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(t('orderMonthly.confirmDelete', { id: String(row.order_id) }), t('orderMonthly.confirm'), { type: 'warning' })
     await deleteOrderMonthly(row.id)
@@ -1055,6 +1068,8 @@ function startPolling() {
 }
 
 function openGenerateDailyConfirmDialog() {
+  if (!guardSalesOperation(canApprove)) return
+
   const year = filters.year
   const month = filters.month
   if (year == null || month == null) {
@@ -1073,11 +1088,15 @@ function openGenerateDailyConfirmDialog() {
 }
 
 function confirmGenerateDailyOrders() {
+  if (!guardSalesOperation(canApprove)) return
+
   generateDailyConfirmVisible.value = false
   handleGenerateDailyOrders()
 }
 
 async function handleGenerateDailyOrders() {
+  if (!guardSalesOperation(canCreate)) return
+
   const year = filters.year
   const month = filters.month
   if (year == null || month == null) {
@@ -1144,12 +1163,16 @@ function normDate(s: string | null | undefined): string {
 }
 
 function confirmForecastUpdate() {
+  if (!guardSalesOperation(canApprove)) return
+
   forecastUpdateConfirmVisible.value = false
   runUpdateForecastUnits()
 }
 
 /** 内示本数更新：四段ルールで日订单を一括更新（GET daily + POST batch-update）。取得 end_date は Step1・Step3 の将来90日分に合わせ今日+90日 */
 async function runUpdateForecastUnits() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (updatingForecast.value) return
   updatingForecast.value = true
   progressVisible.value = true
@@ -1331,17 +1354,23 @@ async function runUpdateForecastUnits() {
 }
 
 function openUpdateFieldsDialog() {
+  if (!guardSalesOperation(canEdit)) return
+
   resetUpdateFieldsForm()
   updateFieldsDialogVisible.value = true
 }
 
 function resetUpdateFieldsForm() {
+  if (!guardSalesOperation(canEdit)) return
+
   updateFieldsForm.startDate = ''
   updateFieldsForm.updateProductInfo = true
   updateFieldsFormRef.value?.clearValidate()
 }
 
 async function submitUpdateFields() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!updateFieldsFormRef.value) return
   await updateFieldsFormRef.value.validate().catch(() => {})
   if (!updateFieldsForm.startDate) {
@@ -1421,6 +1450,8 @@ const isBatchCurrentMonth = computed(() => {
 })
 
 function openBatchDialog() {
+  if (!guardSalesOperation(canCreate)) return
+
   batchDialogVisible.value = true
   batchDestinationOptions.value = destinationOptions.value
   const now = getJapanDate()
@@ -1438,6 +1469,8 @@ watch(
 )
 
 function resetBatchForm() {
+  if (!guardSalesOperation(canCreate)) return
+
   batchForm.year = getJapanDate().getFullYear()
   batchForm.month = getJapanDate().getMonth() + 1
   batchForm.destination_cd = ''
@@ -1445,6 +1478,8 @@ function resetBatchForm() {
 }
 
 function handleBatchPrevMonth() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (batchForm.month <= 1) {
     batchForm.month = 12
     batchForm.year = batchForm.year - 1
@@ -1454,12 +1489,16 @@ function handleBatchPrevMonth() {
 }
 
 function handleBatchCurrentMonth() {
+  if (!guardSalesOperation(canCreate)) return
+
   const now = getJapanDate()
   batchForm.year = now.getFullYear()
   batchForm.month = now.getMonth() + 1
 }
 
 function handleBatchNextMonth() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (batchForm.month >= 12) {
     batchForm.month = 1
     batchForm.year = batchForm.year + 1
@@ -1562,6 +1601,8 @@ function getProductTypeTagType(type: string): 'success' | 'warning' | 'info' | '
 }
 
 function handleQuantityEnter(index: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   const nextIndex = index + 1
   if (nextIndex < batchProducts.value.length) {
     const nextInput = document.getElementById(`quantity-input-${nextIndex}`)
@@ -1573,11 +1614,15 @@ function handleQuantityEnter(index: number) {
 }
 
 function handleFocus(event: FocusEvent) {
+  if (!guardSalesOperation(canEdit)) return
+
   const input = event.target as HTMLInputElement
   input.select()
 }
 
 function handleQuantityChange(row: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   // Ensure numeric value
   const value = row.quantity
   if (value && !/^\d*$/.test(value)) {
@@ -1592,6 +1637,8 @@ function hasQuantity(v: any): boolean {
 }
 
 async function handleBatchRegister() {
+  if (!guardSalesOperation(canCreate)) return
+
   // 新規：不存在且非補給品且数量有效
   const itemsToCreate = batchProducts.value.filter(
     (p) => !p.exists && p.product_type !== '補給品' && hasQuantity(p.quantity)

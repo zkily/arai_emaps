@@ -733,6 +733,8 @@ import {
 } from '@/api/aps'
 import { fetchProcesses } from '@/api/master/processMaster'
 import type { ProcessItem } from '@/types/master'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
 import {
   computeEffectiveReplanAnchorDate,
   firstDayOfMonthIso,
@@ -741,6 +743,8 @@ import {
 } from '@/views/aps/shared/replanAnchor'
 
 defineOptions({ name: 'WeldingPlanningList' })
+
+const { canCreate, canEdit, canDelete, canExport } = useApsOperationPermission()
 
 type GanttListRow = ScheduleGridRow & {
   lineLabel: string
@@ -2168,6 +2172,7 @@ async function loadSchedules() {
 }
 
 async function replanAllLinesForProcess() {
+  if (!guardApsOperation(canEdit)) return
   if (!canSearch.value) {
     ElMessage.warning('期間と工程を選択してください')
     return
@@ -2284,7 +2289,7 @@ function isToday(d: string): boolean {
 }
 
 function canEditGanttPlanDate(d: string): boolean {
-  return d <= todayIso.value
+  return canEdit.value && d <= todayIso.value
 }
 
 function getWeekday(d: string): string {
@@ -2361,6 +2366,7 @@ function openGanttDailyPlanEdit(row: GanttListRow, d: string) {
 }
 
 async function submitGanttDailyPlanEdit() {
+  if (!guardApsOperation(canEdit)) return
   const target = dailyPlanEditTarget.value
   if (!target) return
   const qty = Number(dailyPlanEditQty.value)

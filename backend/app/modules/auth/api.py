@@ -252,7 +252,7 @@ def _full_operation_permission(module: str) -> dict:
 
 def _fallback_operation_permissions(role: str) -> list[dict]:
     """role_operation_permissions 未設定時: users.role の read/write にフォールバック"""
-    from app.modules.system.operation_modules import OPERATION_MODULES
+    from app.core.operation_modules import OPERATION_MODULES
 
     perms = get_user_permissions(role)
     can_write = "all" in perms or "write" in perms
@@ -273,7 +273,7 @@ def _fallback_operation_permissions(role: str) -> list[dict]:
 async def get_user_operation_permissions(db: AsyncSession, user: User) -> list[dict]:
     """user_roles → role_operation_permissions をモジュール単位で OR 集約"""
     from app.modules.system.models import RoleOperationPermission, UserRole
-    from app.modules.system.operation_modules import OPERATION_MODULES
+    from app.core.operation_modules import OPERATION_MODULES
 
     role = user.role if user.role else "user"
     if role == "admin":

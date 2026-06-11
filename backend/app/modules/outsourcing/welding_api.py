@@ -8,6 +8,7 @@ from typing import Optional, Any
 from datetime import date, datetime
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.outsourcing.models import WeldingOrder, WeldingReceiving, WeldingStock, OutsourcingSupplier
@@ -279,7 +280,7 @@ def _parse_date(v: Any) -> Optional[date]:
 async def create_welding_order(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """溶接注文新規登録（order_no は自動採番: 外注先コード+注文日+2桁連番）"""
     try:
@@ -364,7 +365,7 @@ async def update_welding_order(
     order_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """溶接注文更新"""
     q = select(WeldingOrder).where(WeldingOrder.id == order_id)
@@ -427,7 +428,7 @@ async def update_welding_order(
 async def create_welding_orders_batch(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """溶接注文一括新規登録（order_no: 外注先コード+注文日+2桁連番、同一外注先・同一注文日で連番）"""
     orders_payload = body.get("orders") or body.get("Orders") or []
@@ -518,7 +519,7 @@ async def create_welding_orders_batch(
 async def delete_welding_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """溶接注文削除。該当注文の stock_transaction_logs も同時に削除する。"""
     q = select(WeldingOrder).where(WeldingOrder.id == order_id)
@@ -545,7 +546,7 @@ async def delete_welding_order(
 async def batch_order_welding(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """注文書発行：対象 id のうち status='pending' の注文のみ status を 'ordered' に更新し、
     該当注文ごとに outsourcing_welding_receivings に 1 件の受入レコード（待受入）を自動作成する。"""
@@ -623,7 +624,7 @@ async def batch_order_welding(
 @router.get("/receivings/products")
 async def get_welding_receiving_products(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """溶接注文・受入で使用されている品名一覧（重複排除）"""
     # 注文テーブルから product_name の distinct
@@ -654,7 +655,7 @@ async def get_welding_stock(
     productCode: Optional[str] = Query(None, alias="productCode"),
     stockStatus: Optional[str] = Query(None, alias="stockStatus"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """外注溶接在庫一覧（outsourcing_welding_stock + 外注先名は outsourcing_suppliers と JOIN）"""
     q = (
@@ -718,7 +719,7 @@ async def get_welding_receivings(
     productName: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """溶接受入一覧（ページネーション・日付・条件絞り）"""
     q = select(WeldingReceiving)
@@ -780,7 +781,7 @@ async def get_welding_receivings(
 async def create_welding_receiving(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """溶接受入新規登録（receiving_no 未指定時は WR-YYYYMMDD-NN 形式を自動作成）"""
     order_id = body.get("order_id") or body.get("orderId")
@@ -850,7 +851,7 @@ async def update_welding_receiving(
     receiving_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """溶接受入更新"""
     q = select(WeldingReceiving).where(WeldingReceiving.id == receiving_id)
@@ -892,7 +893,7 @@ async def update_welding_receiving(
 async def delete_welding_receiving(
     receiving_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """溶接受入削除。削除後に該当注文の received_qty を再計算して更新する。"""
     q = select(WeldingReceiving).where(WeldingReceiving.id == receiving_id)

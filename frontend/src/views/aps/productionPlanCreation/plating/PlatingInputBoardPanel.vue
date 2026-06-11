@@ -53,12 +53,13 @@
         </div>
         <div class="toolbar-inline board-head-toolbar">
             <el-button
+              v-if="canExport"
               size="small"
               type="default"
               class="board-act-btn board-act-btn--print instr-btn instr-btn--print"
               :icon="Printer"
               :disabled="!layoutBoardReady"
-              @click="openPrintScheduleDialog"
+              @click="onOpenPrintScheduleDialog"
             >
               印刷
             </el-button>
@@ -341,7 +342,7 @@
       </div>
       <template #footer>
         <el-button size="small" @click="printScheduleDialogVisible = false">キャンセル</el-button>
-        <el-button size="small" type="primary" :icon="Printer" @click="confirmPrintSchedule">印刷</el-button>
+        <el-button size="small" type="primary" :icon="Printer" @click="onConfirmPrintSchedule">印刷</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -351,14 +352,17 @@
 <script setup lang="ts">
 import { Refresh } from '@element-plus/icons-vue'
 import { usePlatingInputBoard, type PlatingInputBoardMode } from './usePlatingInputBoard'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 defineOptions({ name: 'PlatingInputBoardPanel' })
 
 const props = withDefaults(
   defineProps<{
     mode?: PlatingInputBoardMode
+    canExport?: boolean
+    canEdit?: boolean
   }>(),
-  { mode: 'instruction' },
+  { mode: 'instruction', canExport: true, canEdit: true },
 )
 
 const board = usePlatingInputBoard(props.mode)
@@ -403,6 +407,16 @@ const {
   confirmPrintSchedule,
   reloadBoardView,
 } = board
+
+function onOpenPrintScheduleDialog(): void {
+  if (!guardMesOperation(props.canExport)) return
+  openPrintScheduleDialog()
+}
+
+function onConfirmPrintSchedule(): void {
+  if (!guardMesOperation(props.canExport)) return
+  confirmPrintSchedule()
+}
 </script>
 
 <style scoped src="./platingInputBoardPanel.scss"></style>

@@ -195,6 +195,11 @@ import DestinationGroupManager from './components/DestinationGroupManager.vue'
 import PrintHistoryDialog from './components/PrintHistoryDialog.vue'
 import ShippingCalendarDialog from './components/ShippingCalendarDialog.vue'
 import { recordPrintHistory } from '@/api/shipping/printHistory'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 接口定义
 interface DestinationOption {
@@ -385,6 +390,8 @@ async function fetchOverviewData() {
 
 // 日期变化处理
 function handleDateChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.dateRange && filters.dateRange.length === 2) {
     fetchOverviewData()
   }
@@ -411,6 +418,8 @@ function goToToday() {
 
 // 納入先变化处理
 function handleDestinationChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   fetchOverviewData()
 }
 
@@ -468,6 +477,8 @@ function getSummaries(param: SummaryParam): string[] {
 // 報告書印刷：直接生成并执行打印（不经过预览弹窗）
 // 注意：移动端/平板需在「用户手势」内同步打开窗口，故先 open 再 await
 async function handleReport() {
+  if (!guardSalesOperation(canEdit)) return
+
   // 在用户点击的同一同步调用栈内先打开窗口，避免移动端弹窗被拦截
   const printWindow = window.open('', '_blank')
   if (!printWindow) {
@@ -482,6 +493,8 @@ async function handleReport() {
 
 // 执行前端打印（新窗口）
 async function executeFrontendPrint(contentRef: HTMLElement | null, printWindow: Window) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML) {
     printWindow.close()
     ElMessage.error('印刷内容の取得に失敗しました。')
@@ -515,6 +528,8 @@ async function executeFrontendPrint(contentRef: HTMLElement | null, printWindow:
   // 等待文档与样式就绪后再打印，避免手机/平板上预览空白
   let printed = false
   function doPrint() {
+    if (!guardSalesOperation(canExport)) return
+
     if (printed || printWindow.closed) return
     printed = true
     try {
@@ -546,6 +561,8 @@ async function executeFrontendPrint(contentRef: HTMLElement | null, printWindow:
 
 // 弹窗被拦截时：在当前窗口内显示打印内容并调用 window.print()
 async function executeFrontendPrintFallback(contentRef: HTMLElement | null) {
+  if (!guardSalesOperation(canExport)) return
+
   if (!contentRef || !contentRef.innerHTML) {
     ElMessage.error('印刷内容の取得に失敗しました。')
     await recordPrintFailure('印刷内容の取得に失敗しました。')
@@ -591,6 +608,8 @@ async function executeFrontendPrintFallback(contentRef: HTMLElement | null) {
 
 // 加载保存的分组
 async function loadDestinationGroups() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = await request.get('/api/shipping/destination-groups/destination_groups_report')
     if (Array.isArray(response)) {
@@ -610,6 +629,8 @@ async function loadDestinationGroups() {
 
 // 分组更新处理
 function handleGroupsUpdated(groups: DestinationGroup[]) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (Array.isArray(groups)) {
     destinationGroups.value = groups
     // 如果当前选中的分组被清空了，重置为全部
@@ -622,6 +643,8 @@ function handleGroupsUpdated(groups: DestinationGroup[]) {
 
 // 分组选择变化处理
 function handleGroupChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (filters.selectedGroup === -1) {
     // 选择全部，清空筛选条件
     filters.destinationCds = []
@@ -643,6 +666,8 @@ function handleGroupChange() {
 
 // 记录打印成功
 async function recordPrintSuccess() {
+  if (!guardSalesOperation(canExport)) return
+
   try {
     await recordPrintHistory({
       report_type: 'shipping_report',
@@ -663,6 +688,8 @@ async function recordPrintSuccess() {
 
 // 记录打印失败
 async function recordPrintFailure(errorMessage: string) {
+  if (!guardSalesOperation(canExport)) return
+
   try {
     await recordPrintHistory({
       report_type: 'shipping_report',

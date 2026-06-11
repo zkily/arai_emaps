@@ -11,8 +11,8 @@
           </div>
         </div>
         <div class="header-buttons">
-          <el-button type="primary" icon="Plus" @click="handleAddStep" class="add-btn" size="small">➕ ステップ追加</el-button>
-          <el-button type="success" :loading="saving" @click="handleSaveOrder" class="save-btn" :disabled="!stepList.length" size="small">💾 順序保存</el-button>
+          <el-button v-if="canCreate" type="primary" icon="Plus" @click="handleAddStep" class="add-btn" size="small">➕ ステップ追加</el-button>
+          <el-button v-if="canEdit" type="success" :loading="saving" @click="handleSaveOrder" class="save-btn" :disabled="!stepList.length" size="small">💾 順序保存</el-button>
         </div>
       </div>
     </div>
@@ -35,11 +35,11 @@
           <template #default="{ row }"><span class="number-cell">{{ row.cycle_sec }}</span></template>
         </el-table-column>
         <el-table-column label="備考" prop="remarks" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" width="150" align="center" fixed="right">
+        <el-table-column v-if="canEdit || canDelete" label="操作" width="150" align="center" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
-              <el-button size="small" type="primary" plain @click="handleEdit(row)" class="action-btn">✏️ 編集</el-button>
-              <el-button size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">🗑️</el-button>
+              <el-button v-if="canEdit" size="small" type="primary" plain @click="handleEdit(row)" class="action-btn">✏️ 編集</el-button>
+              <el-button v-if="canDelete" size="small" type="danger" plain @click="handleDelete(row)" class="action-btn">🗑️</el-button>
             </div>
           </template>
         </el-table-column>
@@ -62,6 +62,10 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import { getRouteInfo, getRouteSteps, deleteRouteStep, updateStepOrder } from '@/api/master/processRouterMaster'
 import type { RouteStepItem, RouteItem } from '@/types/master'
 import RouteStepDialog from './ProcessRouteStepDialog.vue'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const route = useRoute()
 const router = useRouter()
@@ -79,15 +83,23 @@ const fetchData = async () => {
   catch (e: unknown) { ElMessage.error((e && typeof e === 'object' && 'message' in e) ? String((e as { message: string }).message) : 'データ取得失敗') }
 }
 
-const handleAddStep = () => { stepDialogMode.value = 'add'; stepInitialData.value = undefined; showStepDialog.value = true }
-const handleEdit = (row: RouteStepItem) => { stepDialogMode.value = 'edit'; stepInitialData.value = { ...row }; showStepDialog.value = true }
+const handleAddStep = () => {
+  if (!guardMasterOperation(canCreate)) return
+  stepDialogMode.value = 'add'; stepInitialData.value = undefined; showStepDialog.value = true
+}
+const handleEdit = (row: RouteStepItem) => {
+  if (!guardMasterOperation(canEdit)) return
+  stepDialogMode.value = 'edit'; stepInitialData.value = { ...row }; showStepDialog.value = true
+}
 
 const handleDelete = async (row: RouteStepItem) => {
+  if (!guardMasterOperation(canDelete)) return
   try { await ElMessageBox.confirm('ステップを削除しますか？', '確認', { type: 'warning' }); if (row.id == null) return; await deleteRouteStep(routeCd, row.id); ElMessage.success('削除成功'); fetchData() }
   catch { /* cancelled */ }
 }
 
 const handleSaveOrder = async () => {
+  if (!guardMasterOperation(canEdit)) return
   if (!stepList.value.length) return; saving.value = true
   try { await updateStepOrder(routeCd, stepList.value.map(s => ({ id: s.id!, step_no: s.step_no }))); ElMessage.success('順序を保存'); fetchData() }
   catch (e: unknown) { ElMessage.error((e && typeof e === 'object' && 'message' in e) ? String((e as { message: string }).message) : '保存失敗') }

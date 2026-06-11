@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Any, Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 
 router = APIRouter()
@@ -26,7 +27,7 @@ class PartOrderCreateBody(BaseModel):
 @router.post("/create")
 async def create_part_order(
     body: PartOrderCreateBody,
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     _ = current_user
     return {"success": True, "message": "部品注文作成は記録のみ（詳細連携は今後拡張）", "data": body.model_dump()}

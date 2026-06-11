@@ -1765,6 +1765,11 @@ import PlatingLeftInventoryPane from '@/views/aps/productionPlanCreation/plating
 import PlatingRightGenPane from '@/views/aps/productionPlanCreation/plating/PlatingRightGenPane.vue'
 
 defineOptions({ name: 'PlatingPlanning' })
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport } = useApsOperationPermission()
+
 
 /** メッキ計画画面の暦日は日本（JST）基準（他拠点ブラウザでも同日付が揃う） */
 const TZ_JP = 'Asia/Tokyo'
@@ -3866,6 +3871,7 @@ function printHtmlViaHiddenIframe(html: string, iframeTitle: string) {
 }
 
 function printSummaryPairTables() {
+  if (!guardApsOperation(canExport)) return
   if (!hasSummaryPairPrintData.value) {
     ElMessage.warning('印刷するデータがありません')
     return
@@ -4193,6 +4199,7 @@ function scheduleBoardAutosave() {
 
 /** 再割当・緊急挿し込み・クリア等：デバウンスを解除して直ちに DB へ反映 */
 async function flushBoardPersist(opts?: PersistDraftOpts) {
+  if (!guardApsOperation(canEdit)) return
   cancelBoardAutosaveTimer()
   if (isBoardHydratingFromApi.value) return
   if (loadingDraft.value) return
@@ -4205,6 +4212,7 @@ async function flushBoardPersist(opts?: PersistDraftOpts) {
 }
 
 async function persistDraft(notify = true, opts?: PersistDraftOpts) {
+  if (!guardApsOperation(canEdit)) return
   if (persistDraftInFlight) return persistDraftInFlight
   persistDraftInFlight = (async () => {
     const layout_blocks_preview = buildLayoutBlocksForPersist()
@@ -8299,6 +8307,7 @@ function totalProductionQtyForPrintRange(range: PrintScheduleRange): number {
 }
 
 function confirmPrintSchedule() {
+  if (!guardApsOperation(canExport)) return
   if (!printStartDate.value || !printEndDate.value) {
     ElMessage.warning('開始日と終了日を指定してください')
     return

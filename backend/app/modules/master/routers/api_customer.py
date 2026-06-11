@@ -7,6 +7,7 @@ from sqlalchemy import select, func, or_
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Customer
@@ -99,7 +100,7 @@ async def get_customer_by_id(
 async def create_customer(
     body: CustomerCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """顧客新規登録"""
     q = select(Customer).where(Customer.customer_cd == body.customer_cd)
@@ -125,7 +126,7 @@ async def update_customer(
     customer_id: int,
     body: CustomerUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """顧客更新"""
     q = select(Customer).where(Customer.id == customer_id)
@@ -155,7 +156,7 @@ async def update_customer_status(
     customer_id: int,
     status: int = Query(..., ge=0, le=1),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """顧客状態更新"""
     q = select(Customer).where(Customer.id == customer_id)
@@ -173,7 +174,7 @@ async def update_customer_status(
 async def delete_customer(
     customer_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """顧客削除"""
     q = select(Customer).where(Customer.id == customer_id)

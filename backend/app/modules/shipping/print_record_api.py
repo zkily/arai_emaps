@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import List
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 
@@ -23,7 +24,7 @@ class PrintRecordBody(BaseModel):
 async def save_print_record(
     body: PrintRecordBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ):
     """出荷番号の印刷記録を shipping_records に保存し、該当 shipping_items の status を「発行済」に更新"""
     if not body.shipping_numbers:

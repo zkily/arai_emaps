@@ -26,6 +26,7 @@ import { formatDateTimeJST, formatDateToYmdJST, localeForIntl } from '@/utils/da
 import { formatDurationMs, parseDefectsFromRow } from './inspectionActualPersist'
 import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useInspectionMesCollection, type InspectionMgmtRow } from './useInspectionMesCollection'
+import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 defineOptions({ name: 'InspectionActualDataCollection' })
 
@@ -66,6 +67,10 @@ const {
   resumePulseActive,
   productSelectionLocked,
   canEditDefects,
+  canCreate,
+  canEdit,
+  canDelete,
+  canExport,
   showOfflineAlert,
   offlineAlertText,
   endDialogPreview,
@@ -354,6 +359,7 @@ function runPrintOnWindow(win: Window): void {
 }
 
 function printCompletedHistoryTable(): void {
+  if (!guardMesOperation(canExport)) return
   const rows = completedRows.value
   if (!rows.length) return
 
@@ -844,7 +850,7 @@ onUnmounted(() => {
             </div>
             <div class="inspection-history-table-card__actions">
               <span class="inspection-history-table-card__count">{{ completedRows.length }}</span>
-              <el-button size="small" :icon="Printer" @click="printCompletedHistoryTable">
+              <el-button v-if="canExport" size="small" :icon="Printer" @click="printCompletedHistoryTable">
                 {{ t('mesInspectionActual.btnPrintHistory') }}
               </el-button>
             </div>
@@ -1145,7 +1151,7 @@ onUnmounted(() => {
             </span>
           </div>
           <el-button
-            v-if="confirmedEditRow"
+            v-if="confirmedEditRow && canDelete"
             class="confirmed-edit-header__clear"
             size="small"
             :loading="confirmedEditClearing"

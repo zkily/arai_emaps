@@ -13,6 +13,7 @@ from typing import Optional, List, Any
 from datetime import date, timedelta
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.shipping.shipping_items_api import _shipping_item_to_picking_display_dict
@@ -412,7 +413,7 @@ async def get_shipping_logs(
 @router.post("/cleanup-logs")
 async def cleanup_shipping_logs(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """30日以前の shipping_log を削除し、shipping_items.picking_log_matched を再計算"""
     result = await db.execute(text(
@@ -430,7 +431,7 @@ async def cleanup_shipping_logs(
 @router.get("/duplicate-stats")
 async def get_duplicate_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ) -> dict:
     """shipping_log の重複データを集計"""
     q = text("""
@@ -458,7 +459,7 @@ async def get_duplicate_stats(
 @router.post("/deduplicate")
 async def perform_deduplicate(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ) -> dict:
     """shipping_log の重複を削除（同じ picking_no, product_code, date で最新IDのみ残す）"""
     result = await db.execute(text("""
@@ -485,7 +486,7 @@ async def perform_deduplicate(
 @router.get("/sync-status")
 async def get_sync_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ) -> dict:
     """shipping_items と shipping_log の突合せ状態（picking_log_matched）を返す。"""
 
@@ -539,7 +540,7 @@ async def get_sync_status(
 @router.get("/sync-debug")
 async def get_sync_debug_info(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ) -> dict:
     """デバッグ用に各テーブルの件数と最新レコードを返す"""
     info: dict = {}

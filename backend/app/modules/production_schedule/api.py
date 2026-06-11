@@ -29,6 +29,7 @@ from app.core.company_work_calendar import (
 )
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation, require_mes_operation
 from app.modules.auth.models import User
 from app.modules.master.models import ProcessDefectItem
 router = APIRouter()
@@ -2188,7 +2189,7 @@ def _parse_datetime_plan(s: Optional[str]):
 async def create_instruction_plan(
     body: CreatePlanBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """instruction_plans に1件新規追加。management_code はトリガーで自動設定。"""
     production_month = _parse_date_ymd(body.production_month)
@@ -2633,7 +2634,7 @@ async def confirm_cutting_actual(
     production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
     cutting_machine: Optional[str] = Query(None, description="切断機（省略時は全機）"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     切断指示-今日の「実績確定」: production_completed_check=1 の cutting_management を
@@ -2753,7 +2754,7 @@ class MoveBatchToCuttingBody(BaseModel):
 async def move_batch_to_cutting_management(
     body: MoveBatchToCuttingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """
     生産ロット（instruction_plans）1件を切断指示（cutting_management）へ移行する。
@@ -3025,7 +3026,7 @@ class MoveCuttingToBatchBody(BaseModel):
 async def move_cutting_to_batch(
     body: MoveCuttingToBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """
     切断指示1件を生産ロットへ戻す。
@@ -3404,7 +3405,7 @@ class ReorderCuttingBody(BaseModel):
 async def reorder_cutting_management(
     body: ReorderCuttingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     切断指示の生産順（production_sequence）を、同一切断機内で指定した ID 順に更新する。
@@ -3462,7 +3463,7 @@ async def update_cutting_management(
     cutting_id: int,
     body: UpdateCuttingManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """切断指示1件を更新（切断機・生産数・生産順・完了・備考）。"""
     cm_cols = await _get_cutting_mgmt_columns(db)
@@ -3707,7 +3708,7 @@ async def split_cutting_to_next_day(
     cutting_id: int,
     body: SplitToNextDayBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """
     切断指示1件の生産数を「当日分」と「翌日分」に分割する。
@@ -3845,7 +3846,7 @@ async def split_cutting_to_next_day(
 async def duplicate_cutting_management(
     cutting_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """切断指示1件を複製し、同一切断機内で直下に挿入する。"""
     sel = text("""
@@ -3917,7 +3918,7 @@ async def duplicate_cutting_management(
 async def delete_cutting_management(
     cutting_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     """切断指示1件を削除する（紐づく面取・面取ロット・カンバン発行も削除）。"""
     try:
@@ -4063,7 +4064,7 @@ class CreateChamferingPlanBody(BaseModel):
 async def create_chamfering_plan(
     body: CreateChamferingPlanBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取ロット一覧に新規1件追加（cutting_management_id は NULL）。management_code / cd はトリガーで自動設定。"""
     production_month_date = _parse_date_ymd(body.production_month)
@@ -4128,7 +4129,7 @@ class MoveChamferingPlanToChamferingBody(BaseModel):
 async def move_chamfering_plan_to_chamfering(
     body: MoveChamferingPlanToChamferingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取ロット1件を面取指示（chamfering_management）へ移行し、chamfering_plans から削除。production_line_2 指定時は2件登録。"""
     res = await db.execute(
@@ -4264,7 +4265,7 @@ async def update_chamfering_plan_sw(
     plan_id: int,
     body: UpdateChamferingPlanSwBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """面取ロット1件のhas_sw_processを更新。"""
     try:
@@ -4283,7 +4284,7 @@ async def update_chamfering_plan_sw(
 async def delete_chamfering_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     """面取ロット1件を削除。"""
     res = await db.execute(
@@ -4306,7 +4307,7 @@ async def update_chamfering_plan_content(
     plan_id: int,
     body: UpdateChamferingPlanContentBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """面取ロット1件の内容を更新（ロット内容編集と同様の項目）。"""
     res = await db.execute(
@@ -4382,7 +4383,7 @@ async def update_chamfering_plan_content(
 async def copy_chamfering_plan(
     plan_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取ロット1件を複製（同内容で新規1件追加）。"""
     res = await db.execute(
@@ -4462,7 +4463,7 @@ class MoveChamferingManagementToBatchBody(BaseModel):
 async def move_chamfering_management_to_batch(
     body: MoveChamferingManagementToBatchBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """面取指示1件を面取ロット一覧（chamfering_plans）へ戻し、chamfering_management から削除。"""
     res = await db.execute(
@@ -4695,7 +4696,7 @@ async def confirm_chamfering_actual(
     production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
     chamfering_machine: Optional[str] = Query(None, description="面取機（省略時は全機）"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
     面取指示-今日の「実績確定」: production_completed_check=1 かつ no_count=0 の chamfering_management を
@@ -4800,7 +4801,7 @@ async def confirm_chamfering_actual(
 async def delete_chamfering_management(
     chamfering_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     """面取指示1件を削除。関連するカンバン発行も削除。"""
     res = await db.execute(
@@ -4840,7 +4841,7 @@ class CreateChamferingManagementBody(BaseModel):
 async def create_chamfering_management(
     body: CreateChamferingManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取指示を1件新規追加。production_month は production_day の年月の初日に設定。"""
     production_day_s = (body.production_day or "").strip()[:10]
@@ -4942,7 +4943,7 @@ async def update_chamfering_management(
     chamfering_id: int,
     body: UpdateChamferingManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """面取指示1件を更新（面取機・生産数・生産順・完了・備考・MES 実績等）。"""
     cm_cols = await _get_chamfering_mgmt_columns(db)
@@ -5108,7 +5109,7 @@ async def split_chamfering_to_next_day(
     chamfering_id: int,
     body: SplitToNextDayChamferingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取指示1件の生産数を当日分と翌日分に分割。当日行は完了にし、翌日行を新規追加。"""
     if body.today_quantity < 0:
@@ -5234,7 +5235,7 @@ async def split_chamfering_to_next_day(
 async def duplicate_chamfering_management(
     chamfering_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """面取指示1件を複製し、同一面取機・同一生産日内で直下に挿入。"""
     sel = text("""
@@ -5326,7 +5327,7 @@ class ReorderChamferingBody(BaseModel):
 async def reorder_chamfering_management(
     body: ReorderChamferingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """面取指示の生産順（production_sequence）を、同一面取機・同一生産日内で指定した ID 順に更新する。"""
     chamfering_machine = (body.chamfering_machine or "").strip()
@@ -5375,7 +5376,7 @@ class GenerateChamferingFromCuttingBody(BaseModel):
 async def generate_chamfering_from_cutting(
     body: GenerateChamferingFromCuttingBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """切断指示1件から面取指示を1件生成する。cutting_management を読んで chamfering_management に挿入。"""
     sel = text("""
@@ -5602,7 +5603,7 @@ async def update_kanban_issuance(
     kanban_id: int,
     body: UpdateKanbanIssuanceBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """カンバン発行1件のデータを更新する。"""
     res = await db.execute(text("SELECT id FROM kanban_issuance WHERE id = :kid"), {"kid": kanban_id})
@@ -5637,7 +5638,7 @@ async def update_kanban_issuance(
 async def issue_kanban(
     body: IssueKanbanBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("export")),
 ):
     """カンバン発行を1件登録。kanban_no は自動採番（process_type + source_id + 日時等）でよいが、ここでは簡易で source_id ベース。"""
     pt = (body.process_type or "").strip()
@@ -5670,7 +5671,7 @@ async def issue_kanban(
 async def issue_pending_kanban(
     kanban_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("export")),
 ):
     """待発行（pending）のカンバンを発行する。kanban_no と issue_date を設定し status を issued に更新。"""
     sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
@@ -5698,7 +5699,7 @@ async def issue_pending_kanban(
 async def reissue_kanban(
     kanban_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("export")),
 ):
     """発行済のカンバンを再発行する（現場で紛失した場合など）。新しい kanban_no と issue_date で更新。"""
     sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
@@ -5729,7 +5730,7 @@ async def reissue_kanban(
 @router.post("/plan/kanban-issuance/sync-production-day")
 async def sync_kanban_production_day(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """kanban_issuance の production_day を source_id で cutting_management / chamfering_management から取得して更新する。"""
     # process_type='cutting' → source_id = cutting_management.id
@@ -5761,7 +5762,7 @@ async def sync_kanban_production_day(
 async def batch_issue_pending_kanban(
     body: BatchIssueKanbanBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("export")),
 ):
     """待発行（pending）・発行済（issued）のカンバンを一括発行する。発行済は再発行扱いで新 kanban_no を付与。"""
     if not body.kanban_ids:
@@ -6397,7 +6398,7 @@ async def list_cutting_instruction_notes(
 async def create_cutting_instruction_note(
     body: CuttingInstructionNoteCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     content = (body.content or "").strip()
     if not content:
@@ -6417,7 +6418,7 @@ async def update_cutting_instruction_note(
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_CUTTING, note_id, body, current_user)
 
@@ -6426,7 +6427,7 @@ async def update_cutting_instruction_note(
 async def delete_cutting_instruction_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_CUTTING, note_id)
 
@@ -6444,7 +6445,7 @@ async def list_forming_instruction_notes(
 async def create_forming_instruction_note(
     body: CuttingInstructionNoteCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     content = (body.content or "").strip()
     if not content:
@@ -6464,7 +6465,7 @@ async def update_forming_instruction_note(
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING, note_id, body, current_user)
 
@@ -6473,7 +6474,7 @@ async def update_forming_instruction_note(
 async def delete_forming_instruction_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING, note_id)
 
@@ -6491,7 +6492,7 @@ async def list_forming_planning_notes(
 async def create_forming_planning_note(
     body: CuttingInstructionNoteCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     content = (body.content or "").strip()
     if not content:
@@ -6511,7 +6512,7 @@ async def update_forming_planning_note(
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     return await _update_instruction_note(
         db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, note_id, body, current_user
@@ -6522,7 +6523,7 @@ async def update_forming_planning_note(
 async def delete_forming_planning_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING, note_id)
 
@@ -6540,7 +6541,7 @@ async def list_welding_planning_notes(
 async def create_welding_planning_note(
     body: CuttingInstructionNoteCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("create")),
 ):
     content = (body.content or "").strip()
     if not content:
@@ -6560,7 +6561,7 @@ async def update_welding_planning_note(
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     return await _update_instruction_note(
         db, INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING, note_id, body, current_user
@@ -6571,7 +6572,7 @@ async def update_welding_planning_note(
 async def delete_welding_planning_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("delete")),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING, note_id)
 
@@ -6589,7 +6590,7 @@ async def list_welding_instruction_notes(
 async def create_welding_instruction_note(
     body: CuttingInstructionNoteCreateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     content = (body.content or "").strip()
     if not content:
@@ -6609,7 +6610,7 @@ async def update_welding_instruction_note(
     note_id: int,
     body: CuttingInstructionNoteUpdateBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     return await _update_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id, body, current_user)
 
@@ -6618,7 +6619,7 @@ async def update_welding_instruction_note(
 async def delete_welding_instruction_note(
     note_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("delete")),
 ):
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id)
 
@@ -7661,7 +7662,7 @@ class CreateInspectionManagementBody(BaseModel):
 async def create_inspection_management(
     body: CreateInspectionManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """検査指示1件を新規作成（MESで製品選択後・生産開始前）。"""
     im_cols = await _get_inspection_mgmt_columns(db)
@@ -7759,7 +7760,7 @@ async def update_inspection_management(
     inspection_id: int,
     body: UpdateInspectionManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """検査指示1件を更新（MES 実績・不良内訳・検査員等）。"""
     im_cols = await _get_inspection_mgmt_columns(db)
@@ -8097,7 +8098,7 @@ class CreateWeldingManagementBody(BaseModel):
 async def create_welding_management(
     body: CreateWeldingManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("create")),
 ):
     """溶接指示1件を新規作成（MESで製品選択後・生産開始前）。"""
     wm_cols = await _get_welding_mgmt_columns(db)
@@ -8196,7 +8197,7 @@ async def update_welding_management(
     welding_id: int,
     body: UpdateWeldingManagementBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_mes_operation("edit")),
 ):
     """溶接指示1件を更新（MES 実績・不良内訳・溶接員等）。"""
     wm_cols = await _get_welding_mgmt_columns(db)

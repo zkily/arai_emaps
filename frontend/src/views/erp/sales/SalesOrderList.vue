@@ -441,6 +441,11 @@ import {
 } from '@/api/erp/sales'
 import { fetchOrderDailyList, type OrderDailyItem } from '@/api/erp/orderDaily'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 interface OrderItem {
   product_code: string
@@ -556,6 +561,8 @@ function escapePrintHtml(raw: string): string {
 }
 
 function printOrderItems() {
+  if (!guardSalesOperation(canExport)) return
+
   if (!form.items.length) {
     ElMessage.warning('印刷する明細がありません')
     return
@@ -696,8 +703,12 @@ function paymentType(s: string) { return (PAYMENT_MAP[s]?.type ?? 'info') as any
 function calcAmount(row: OrderItem) {
   row.amount = (row.quantity || 0) * (row.unit_price || 0)
 }
-function addItem() { form.items.push(emptyItem()) }
-function removeItem(idx: number) { form.items.splice(idx, 1) }
+function addItem() {
+  if (!guardSalesOperation(canCreate)) return
+ form.items.push(emptyItem()) }
+function removeItem(idx: number) {
+  if (!guardSalesOperation(canDelete)) return
+ form.items.splice(idx, 1) }
 
 function resetForm() {
   Object.assign(form, {
@@ -717,6 +728,8 @@ function resetForm() {
 }
 
 function applyOrderToForm(order: Record<string, unknown>) {
+  if (!guardSalesOperation(canEdit)) return
+
   const items = order.items as OrderItem[] | undefined
   Object.assign(form, {
     customer_code: (order.customer_code as string) ?? '',
@@ -806,6 +819,8 @@ async function openDialog(row?: Record<string, unknown>) {
 }
 
 async function handleSyncFromOrderDaily() {
+  if (!guardSalesOperation(canCreate)) return
+
   if (!query.dateRange?.[0] || !query.dateRange?.[1]) {
     ElMessage.warning('取込期間を指定してください（開始日〜終了日）')
     return
@@ -840,6 +855,8 @@ async function handleSyncFromOrderDaily() {
 }
 
 async function loadDestinationOptions() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     destinationOptions.value = await getDestinationOptions()
   } catch {
@@ -873,6 +890,8 @@ async function fetchData() {
 }
 
 async function handleSave() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!formRef.value) return
   await formRef.value.validate()
   saving.value = true
@@ -898,6 +917,8 @@ async function handleSave() {
 }
 
 async function handleApprove(row: any) {
+  if (!guardSalesOperation(canApprove)) return
+
   await ElMessageBox.confirm(`受注 ${row.order_no} を承認しますか？`, '確認', { type: 'info' })
   try {
     await approveSalesOrder(row.id)

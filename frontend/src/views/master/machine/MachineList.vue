@@ -16,7 +16,7 @@
             </div>
           </div>
         </div>
-        <el-button type="primary" @click="openForm()" class="add-btn" size="small">
+        <el-button v-if="canCreate" type="primary" @click="openForm()" class="add-btn" size="small">
           ➕ {{ t('master.machine.addMachine') }}
         </el-button>
       </div>
@@ -157,6 +157,7 @@
           show-overflow-tooltip
         />
         <el-table-column
+          v-if="canEdit || canDelete"
           :label="t('master.common.actions')"
           fixed="right"
           width="110"
@@ -165,6 +166,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button
+                v-if="canEdit"
                 size="small"
                 type="primary"
                 plain
@@ -174,6 +176,7 @@
                 ✏️
               </el-button>
               <el-button
+                v-if="canDelete"
                 size="small"
                 type="danger"
                 plain
@@ -214,8 +217,11 @@ import { Search, DataAnalysis } from '@element-plus/icons-vue'
 import MachineForm from './MachineForm.vue'
 import { getMachineList, deleteMachineById } from '@/api/master/machineMaster'
 import type { MachineItem } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const machineTypeKeys: Record<string, string> = {
   切断: 'typeCutting',
@@ -292,11 +298,13 @@ const filteredList = computed(() => {
 const formVisible = ref(false)
 const editData = ref<MachineItem | null>(null)
 function openForm(row: MachineItem | null = null) {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   editData.value = row
   formVisible.value = true
 }
 
 async function deleteMachine(id: number | undefined) {
+  if (!guardMasterOperation(canDelete)) return
   if (id == null) return
   try {
     await ElMessageBox.confirm(t('master.machine.confirmDelete'), t('common.confirm'), {

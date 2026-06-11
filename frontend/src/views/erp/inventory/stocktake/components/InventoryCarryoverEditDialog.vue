@@ -137,6 +137,11 @@ import { getProductList } from '@/api/master/productMaster'
 import { fetchProcesses } from '@/api/master/processMaster'
 import { getMaterialList } from '@/api/master/materialMaster'
 import { getComponentList } from '@/api/master/componentMaster'
+import { useInventoryOperationPermission } from '@/composables/useInventoryOperationPermission'
+import { guardInventoryOperation } from '@/utils/inventoryOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useInventoryOperationPermission()
+
 
 // 定义 Props
 interface Props {
@@ -470,6 +475,8 @@ const handleClose = () => {
 
 // 保存数据
 const handleSave = async () => {
+  if (!guardInventoryOperation(canEdit)) return
+
   if (!formRef.value) return
 
   try {

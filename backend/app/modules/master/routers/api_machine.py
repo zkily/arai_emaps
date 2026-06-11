@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import time as dt_time
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Machine
@@ -139,7 +140,7 @@ async def get_machine_by_id(
 async def create_machine(
     body: MachineCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """設備新規登録"""
     q = select(Machine).where(Machine.machine_cd == body.machine_cd)
@@ -169,7 +170,7 @@ async def update_machine(
     machine_id: int,
     body: MachineUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """設備更新"""
     q = select(Machine).where(Machine.id == machine_id)
@@ -206,7 +207,7 @@ async def update_machine(
 async def delete_machine(
     machine_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """設備削除"""
     q = select(Machine).where(Machine.id == machine_id)

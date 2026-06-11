@@ -59,6 +59,11 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDateJST, formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const { locale } = useI18n()
 

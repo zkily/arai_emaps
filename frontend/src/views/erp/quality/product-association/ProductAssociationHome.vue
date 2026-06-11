@@ -4,7 +4,12 @@
   </div>
 </template>
 
-<script setup lang="ts">
+<script setup lang="ts">import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
+
 </script>
 
 <style scoped>

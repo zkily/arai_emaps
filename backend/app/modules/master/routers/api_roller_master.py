@@ -11,6 +11,7 @@ from sqlalchemy import select, or_, func, delete, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import RollerMaster
@@ -167,7 +168,7 @@ async def get_roller_master_by_id(
 async def create_roller_master(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """新規登録"""
     roller_cd = (body.get("roller_cd") or "").strip()
@@ -199,7 +200,7 @@ async def update_roller_master(
     item_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """更新"""
     result = await db.execute(select(RollerMaster).where(RollerMaster.id == item_id))
@@ -246,7 +247,7 @@ async def update_roller_master(
 async def delete_roller_master(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """削除"""
     result = await db.execute(select(RollerMaster).where(RollerMaster.id == item_id))
@@ -262,7 +263,7 @@ async def delete_roller_master(
 async def batch_delete_roller_master(
     body: IdsPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """複数IDを一括削除"""
     ids = [i for i in body.ids if isinstance(i, int) and i > 0]

@@ -1311,8 +1311,12 @@ import {
   runFormingLineReplanSequence,
 } from '@/views/aps/shared/formingLineReplan'
 import type { ProcessItem } from '@/types/master'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
 import LineCapacity from '../equipmentUtilizationManagement/LineCapacity.vue'
 import request from '@/shared/api/request'
+
+const { canCreate, canEdit, canDelete, canExport } = useApsOperationPermission()
 
 /** 日本（Asia/Tokyo）の暦日 YYYY-MM-DD */
 function formatYmdInJapan(d: Date): string {
@@ -1892,6 +1896,7 @@ function initScheduleSortable() {
 }
 
 async function persistScheduleOrderAfterDrag(oldIndex: number, newIndex: number) {
+  if (!guardApsOperation(canEdit)) return
   if (!selectedLineId.value || reordering.value) return
   if (showCompletedSchedules.value) return
   scheduleSortable?.option('disabled', true)
@@ -2027,6 +2032,7 @@ function openFormingPlanningNotesDialog() {
 }
 
 async function addFormingPlanningNote() {
+  if (!guardApsOperation(canCreate)) return
   const content = formingPlanningNotesNewContent.value.trim()
   if (!content) {
     ElMessage.warning('内容を入力してください')
@@ -2047,6 +2053,7 @@ async function addFormingPlanningNote() {
 }
 
 async function toggleFormingPlanningNoteDone(note: FormingPlanningNote, checked: unknown) {
+  if (!guardApsOperation(canEdit)) return
   if (!note.id) return
   const is_done =
     checked === true || checked === 1 || checked === '1' || checked === 'true' ? 1 : 0
@@ -2064,6 +2071,7 @@ async function toggleFormingPlanningNoteDone(note: FormingPlanningNote, checked:
 }
 
 async function deleteFormingPlanningNote(note: FormingPlanningNote) {
+  if (!guardApsOperation(canDelete)) return
   if (!note.id) return
   try {
     await ElMessageBox.confirm('このメモを削除しますか？', '削除確認', { type: 'warning' })
@@ -2200,6 +2208,7 @@ async function loadSchedules() {
 }
 
 async function addSchedule() {
+  if (!guardApsOperation(canCreate)) return
   if (!(selectedProcessCd.value || '').trim()) {
     ElMessage.warning('工程を選択してください')
     return
@@ -2339,6 +2348,7 @@ async function addSchedule() {
 }
 
 async function removeSchedule(id: number) {
+  if (!guardApsOperation(canDelete)) return
   try {
     await ElMessageBox.confirm('この計画を削除しますか？', '確認', {
       type: 'warning',
@@ -2430,6 +2440,7 @@ function onSetupTimeBlur(row: ScheduleOut) {
 }
 
 async function saveSetupTime(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleSetupId.value !== row.id) return
   const draft = setupTimeDrafts.value[row.id] ?? ''
   const raw = draft.trim().replace(/[,，]/g, '')
@@ -2525,6 +2536,7 @@ function openDailyPlanEdit(row: ScheduleGridRow, d: string) {
 }
 
 async function saveDailyPlanEdit() {
+  if (!guardApsOperation(canEdit)) return
   const sid = dailyPlanEditScheduleId.value
   const d = (dailyPlanEditDate.value || '').trim()
   const qty = Math.floor(Number(dailyPlanEditQty.value || 0))
@@ -2554,6 +2566,7 @@ async function saveDailyPlanEdit() {
 }
 
 async function saveForcedStartDate(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleForcedStartId.value !== row.id) return
   const draft = String(forcedStartDateDrafts.value[row.id] ?? '').trim()
   const normalized = draft.replace(/[./]/g, '-')
@@ -2585,6 +2598,7 @@ async function saveForcedStartDate(row: ScheduleOut) {
 
 /** 合計(本) を planned_process_qty として保存（排産は本数が唯一の真理） */
 async function saveTotalPlannedQty(row: ScheduleOut) {
+  if (!guardApsOperation(canEdit)) return
   if (editingScheduleTotalId.value !== row.id) return
   const draft = plannedQtyDrafts.value[row.id] ?? ''
   const raw = draft.trim().replace(/[,，]/g, '')
@@ -2671,6 +2685,7 @@ function buildSingleLineReplanConfirmMessage() {
 }
 
 async function replanAll() {
+  if (!guardApsOperation(canEdit)) return
   if (!(selectedProcessCd.value || '').trim() || !selectedLineId.value) return
   try {
     await ElMessageBox.confirm(buildSingleLineReplanConfirmMessage(), {
@@ -2768,6 +2783,7 @@ async function onLineReplanAnchorDialogOpen() {
 }
 
 async function saveLineReplanAnchorsFromDialog() {
+  if (!guardApsOperation(canEdit)) return
   savingLineReplanAnchors.value = true
   try {
     await saveLineReplanAnchors(
@@ -3025,6 +3041,7 @@ function onManagementCodeTraceSelectionChange(rows: ProgressLotItem[]) {
 }
 
 async function applyTraceReassignLot() {
+  if (!guardApsOperation(canEdit)) return
   const src = traceReassignSource.value
   const cuttingId = src?.cutting_management_row_id ?? src?.cutting_batch_link_mismatch_id
   const targetId = traceReassignTargetBatchPlanId.value
@@ -3074,6 +3091,7 @@ async function applyTraceReassignLot() {
 }
 
 async function applyTraceBatchPlanLink(clear: boolean) {
+  if (!guardApsOperation(canEdit)) return
   const sel = managementCodeTraceSelection.value
   if (sel.length === 0) {
     ElMessage.warning('行を選択してください')

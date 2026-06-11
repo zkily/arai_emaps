@@ -485,6 +485,11 @@ import {
 } from '@/api/erp/quality/rollerUsageLog'
 import { fetchMachines } from '@/api/master/machineMaster'
 import { fetchRollerMasterList, type RollerMasterRow } from '@/api/master/rollerMaster'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 defineOptions({ name: 'EquipmentAssociationHome' })
 const router = useRouter()
@@ -640,6 +645,8 @@ const clearFilters = () => {
 // Sync / Recalculate
 // ---------------------------------------------------------------------------
 const handleSync = async () => {
+  if (!guardQualityOperation(canCreate)) return
+
   syncing.value = true
   try {
     const res = await syncFromRollerMaster()
@@ -654,6 +661,8 @@ const handleSync = async () => {
 }
 
 const handleRecalculate = async () => {
+  if (!guardQualityOperation(canEdit)) return
+
   recalculating.value = true
   try {
     const res = await recalculatePredictions()
@@ -700,6 +709,8 @@ const openEditDialog = (row: RollerUsageStatusRow) => {
 }
 
 const submitEdit = async () => {
+  if (!guardQualityOperation(canEdit)) return
+
   if (!editingId.value) return
   editSubmitting.value = true
   try {
@@ -747,6 +758,8 @@ const openLogDialog = (row: RollerUsageStatusRow) => {
 }
 
 const submitLog = async () => {
+  if (!guardQualityOperation(canEdit)) return
+
   try { await logFormRef.value?.validate() } catch { return }
   logSubmitting.value = true
   try {
@@ -843,6 +856,8 @@ watch(
 )
 
 const submitLogManageCreate = async () => {
+  if (!guardQualityOperation(canCreate)) return
+
   try { await logManageFormRef.value?.validate() } catch { return }
   logManageSubmitting.value = true
   try {
@@ -859,6 +874,8 @@ const submitLogManageCreate = async () => {
 }
 
 const deleteLogManage = async (row: RollerUsageLogRow) => {
+  if (!guardQualityOperation(canDelete)) return
+
   if (!row.id) return
   try {
     await ElMessageBox.confirm('この実施ログを削除しますか？', '確認', { type: 'warning' })
@@ -977,6 +994,8 @@ const printHistory = () => {
 
 /** 現在のフィルタで一覧を取得し、実施日（次回実施日）昇順で A4 縦印刷 */
 const printMainListReport = async () => {
+  if (!guardQualityOperation(canExport)) return
+
   printingList.value = true
   try {
     const res = await fetchRollerUsageStatusList({

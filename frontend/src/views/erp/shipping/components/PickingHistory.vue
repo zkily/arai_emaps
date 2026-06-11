@@ -571,6 +571,11 @@ import request from '@/utils/request'
 import DestinationGroupManager from './DestinationGroupManager.vue'
 import ChartWrapper from '@/components/ChartWrapper.vue'
 import { registerChartJS, type ChartData, type ChartOptions } from '@/utils/chartRegistration'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 // 确保Chart.js组件在生产环境中正确注册
 registerChartJS()
@@ -1441,6 +1446,8 @@ async function fetchTrendData() {
 }
 
 function handleDateRangeChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (dateRange.value && dateRange.value.length === 2) {
     refreshData()
   }
@@ -1458,6 +1465,8 @@ function changeGranularity(granularity: 'daily' | 'monthly') {
 
 // 图表错误处理方法
 function handleChartError(error: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   console.error('Chart error:', error)
   chartError.value = 'チャートの表示中にエラーが発生しました。再試行してください。'
 }
@@ -1806,20 +1815,28 @@ function _processPerformerData(data: any[]) {
 }
 
 function _handlePerformerChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   fetchPerformerAnalysisData()
 }
 
 function handleGroupChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   fetchPerformerAnalysisData()
 }
 
 function handlePerformerDateChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (performerDateRange.value && performerDateRange.value.length === 2) {
     fetchPerformerAnalysisData()
   }
 }
 
 function togglePerformerExpansion(performerId: string) {
+  if (!guardSalesOperation(canEdit)) return
+
   const index = expandedPerformers.value.indexOf(performerId)
   if (index > -1) {
     expandedPerformers.value.splice(index, 1)
@@ -1877,6 +1894,8 @@ function showDestinationGroupManager() {
 }
 
 function handleGroupsUpdated() {
+  if (!guardSalesOperation(canEdit)) return
+
   // グループが更新された時の処理
   // 必要に応じてデータを再取得
   refreshData()

@@ -1114,6 +1114,11 @@ import { calculatePartStock } from '@/api/partStockCalculation'
 import { generatePartStockData } from '@/api/partDataGeneration'
 import { updatePartQuantities } from '@/api/partStockUpdate'
 import type { PartQuantityUpdate } from '@/api/partStockUpdate'
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
 
 // 定义类型接口
 interface PartOrderItem {
@@ -1661,6 +1666,8 @@ const handleSupplierSearch = () => {
 
 // 備考編集処理（部品在庫メイン）
 const handleRemarksChange = async (row: any) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('備考更新:', row.id, row.remarks)
 
@@ -1680,6 +1687,8 @@ const handleRemarksChange = async (row: any) => {
 
 // 初期在庫変化処理
 const handleInitialStockChange = async (row: InitialStockItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('初期在庫更新:', row.part_cd, row.initial_stock)
 
@@ -1713,6 +1722,8 @@ const handleInitialStockChange = async (row: InitialStockItem) => {
 
 // 調整数変更処理
 const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('更新調整数:', row.part_cd, row.adjustment_quantity)
 
@@ -1813,6 +1824,8 @@ const handleTabChange = (tabName: string | number) => {
 }
 
 const handleOrderQuantityChange = async (row: PartOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   const ppb = Number(row.pieces_per_bundle) || 1
   if (row.order_quantity > 0) {
     row.order_bundle_quantity = row.order_quantity * ppb
@@ -1828,6 +1841,8 @@ const handleOrderQuantityChange = async (row: PartOrderItem) => {
 
 // 保存数量到数据库
 const saveQuantityToDatabase = async (row: PartOrderItem) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     console.log('开始保存数量到数据库:', {
       part_cd: row.part_cd,
@@ -1863,6 +1878,8 @@ const saveQuantityToDatabase = async (row: PartOrderItem) => {
 }
 
 const handleConfirmOrder = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   if (selectedOrderItems.value.length === 0) {
     ElMessage.warning('受注数量を入力してください')
     return
@@ -1912,6 +1929,8 @@ const handleConfirmOrder = async () => {
 
 // 部品マスタ更新: parts（status=1）→ 既存 part_stock 行のマスタ項目を上書き（期間で絞り可）
 const handleSyncPartMaster = async () => {
+  if (!guardPurchaseOperation(canCreate)) return
+
   try {
     if (!searchForm.dateRange || searchForm.dateRange.length !== 2) {
       ElMessage.error('まず日付（期間）を選択してください')
@@ -1952,6 +1971,8 @@ const handleSyncPartMaster = async () => {
 }
 
 const handleStockCalculation = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm('在庫計算を実行しますか？', '在庫計算確認', {
       confirmButtonText: '実行',
@@ -2014,6 +2035,8 @@ const getMergedOrderData = async () => {
 }
 
 const handlePrintOrder = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   // 检查是否有选择日期
   if (!searchForm.dateRange || searchForm.dateRange.length === 0) {
     ElMessage.warning('请先选择日期范围')
@@ -2034,6 +2057,8 @@ const handlePrintOrder = async () => {
 
 // 确认打印
 const confirmPrint = async () => {
+  if (!guardPurchaseOperation(canExport)) return
+
   try {
     const mergedOrderItems = await getMergedOrderData()
 
@@ -2257,6 +2282,8 @@ const generateOrderSheetImagePdfBlob = (mergedOrderItems: PartOrderItem[]): Prom
     }
 
     const runCapture = async () => {
+      if (!guardPurchaseOperation(canEdit)) return
+
       try {
         const target = doc.querySelector('.order-sheet') as HTMLElement | null
         if (!target) {
@@ -2310,6 +2337,8 @@ const generateOrderSheetImagePdfBlob = (mergedOrderItems: PartOrderItem[]): Prom
 
 // データ生成処理
 const handleDataGeneration = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   // 重置日期
   dataGenerationStartDate.value = ''
   dataGenerationEndDate.value = ''
@@ -2319,6 +2348,8 @@ const handleDataGeneration = async () => {
 
 // データ生成確認
 const confirmDataGeneration = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   try {
     // 验证日期选择
     if (!dataGenerationStartDate.value) {
@@ -2422,6 +2453,8 @@ const confirmDataGeneration = async () => {
 
 // 手入力部品注文まわり
 const handleAddManualOrder = async () => {
+  if (!guardPurchaseOperation(canCreate)) return
+
   console.log('手入力部品注文ダイアログを開く')
 
   // 重置表单
@@ -2578,6 +2611,8 @@ const fillPartData = (part: PartMasterOption) => {
 }
 
 const handleConfirmManualOrder = async () => {
+  if (!guardPurchaseOperation(canApprove)) return
+
   if (!manualOrderFormRef.value) return
 
   try {

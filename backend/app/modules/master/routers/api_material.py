@@ -11,6 +11,7 @@ import io
 import csv
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import Material, Supplier
@@ -161,7 +162,7 @@ async def get_material_by_id(
 async def create_material(
     body: MaterialCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """材料新規登録"""
     q = select(Material).where(Material.material_cd == body.material_cd)
@@ -187,7 +188,7 @@ async def update_material(
     material_id: int,
     body: MaterialUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """材料更新"""
     q = select(Material).where(Material.id == material_id)
@@ -214,7 +215,7 @@ async def update_material(
 async def delete_material(
     material_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """材料削除"""
     q = select(Material).where(Material.id == material_id)
@@ -236,7 +237,7 @@ class ExportCsvItem(BaseModel):
 async def export_materials_csv(
     body: list[ExportCsvItem],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("export")),
 ):
     """CSV出力"""
     output = io.StringIO()

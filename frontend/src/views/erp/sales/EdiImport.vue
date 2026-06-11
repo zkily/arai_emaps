@@ -125,6 +125,11 @@
 import { ref } from 'vue'
 import { Upload } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const importType = ref('order')
 const duplicateAction = ref('skip')
@@ -139,10 +144,14 @@ const tableHeaderStyle = { background: 'linear-gradient(135deg, #3b82f6, #6366f1
 const tableCellStyle = { padding: '5px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.85)', borderColor: 'rgba(255,255,255,0.06)' }
 
 function handleFileChange(file: any) {
+  if (!guardSalesOperation(canEdit)) return
+
   selectedFile.value = file.raw
 }
 
 async function handleImport() {
+  if (!guardSalesOperation(canExport)) return
+
   if (!selectedFile.value) return
   importing.value = true
   try {

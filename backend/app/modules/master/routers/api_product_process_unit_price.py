@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProductProcessUnitPrice
@@ -111,7 +112,7 @@ async def list_unit_prices(
 async def create_unit_price(
     body: UnitPriceIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     _validate_line_type(body.line_type)
     row = ProductProcessUnitPrice(
@@ -140,7 +141,7 @@ async def create_unit_price(
 async def batch_save_unit_prices(
     body: UnitPriceBatchIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """一括保存（既存行は上書き、新規行は追加）"""
     results = []
@@ -194,7 +195,7 @@ async def update_unit_price(
     price_id: int,
     body: UnitPriceIn,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     _validate_line_type(body.line_type)
     row = await db.get(ProductProcessUnitPrice, price_id)
@@ -221,7 +222,7 @@ async def update_unit_price(
 async def delete_unit_price(
     price_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     row = await db.get(ProductProcessUnitPrice, price_id)
     if not row:

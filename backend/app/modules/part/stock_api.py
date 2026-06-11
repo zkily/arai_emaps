@@ -37,6 +37,7 @@ def _safe_date_iso(v: Any) -> Optional[str]:
         return v.isoformat()
     return str(v)
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.master.models import PartMaster, Supplier
 from app.modules.part.models import PartStock
@@ -248,7 +249,7 @@ async def get_latest_part_stocks(
 async def calculate_part_stock(
     body: PartStockCalculateRequest | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     在庫計算:
@@ -538,7 +539,7 @@ async def calculate_part_stock(
 @router.get("/summary")
 async def get_part_stock_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """在庫サマリー（総部品数・在庫マイナス行数・合計在庫金額）"""
     try:
@@ -574,7 +575,7 @@ async def get_part_stock_summary(
 @router.get("/supplier-names")
 async def list_distinct_part_stock_supplier_names(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """仕入先名一覧：part_stock.supplier_name を重複除去（NULL・空文字除く、名称昇順）"""
     q = (
@@ -601,7 +602,7 @@ async def list_distinct_part_stock_supplier_names(
 async def sync_part_master_to_stock(
     body: dict | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     部品マスタ同期:
@@ -710,7 +711,7 @@ async def sync_part_master_to_stock(
 async def create_part_stock(
     body: PartStockCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """部品在庫登録"""
     row = PartStock(**body.model_dump())
@@ -725,7 +726,7 @@ async def update_part_stock(
     item_id: int,
     body: PartStockUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """部品在庫更新"""
     result = await db.execute(select(PartStock).where(PartStock.id == item_id))
@@ -743,7 +744,7 @@ async def update_part_stock(
 async def delete_part_stock(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """部品在庫削除"""
     result = await db.execute(select(PartStock).where(PartStock.id == item_id))
@@ -782,7 +783,7 @@ def _validate_maruichi_order_pdf_filename(name: str) -> str:
 @router.post("/maruichi-order-pdf")
 async def save_maruichi_part_order_pdf(
     file: UploadFile = File(...),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """丸一注文書PDFを共有フォルダへ保存する。同名ファイルは上書き。"""
     _ = current_user

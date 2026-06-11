@@ -7,6 +7,7 @@ from sqlalchemy import select, func, or_
 from typing import Optional
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import ProductProcessBOM, Product
@@ -144,7 +145,7 @@ async def update_product_process_bom(
     product_cd: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品工程BOMを更新（部分更新可）"""
     result = await db.execute(select(ProductProcessBOM).where(ProductProcessBOM.product_cd == product_cd))
@@ -178,7 +179,7 @@ async def update_product_process_bom(
 async def delete_product_process_bom(
     product_cd: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """製品工程BOMを削除"""
     result = await db.execute(select(ProductProcessBOM).where(ProductProcessBOM.product_cd == product_cd))
@@ -193,7 +194,7 @@ async def delete_product_process_bom(
 @router.post("/sync")
 async def sync_product_info(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """製品マスタから product_process_bom を同期（未登録は新規、既存は製品名のみ更新）"""
     products_result = await db.execute(

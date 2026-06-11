@@ -353,6 +353,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+import { usePurchaseOperationPermission } from '@/composables/usePurchaseOperationPermission'
+import { guardPurchaseOperation } from '@/utils/purchaseOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = usePurchaseOperationPermission()
+
   Search, Refresh, Plus, Download, Edit, Delete, DataAnalysis, Document, Box, TrendCharts
 } from '@element-plus/icons-vue'
 
@@ -464,6 +469,8 @@ const getYieldClass = (rate: number | undefined) => {
 }
 
 const handleSearch = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   loading.value = true
   try {
     await new Promise(resolve => setTimeout(resolve, 500))
@@ -520,6 +527,8 @@ const viewDetail = (row: UsageItem) => {
 }
 
 const submitForm = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+
   const valid = await formRef.value?.validate()
   if (!valid) return
   submitLoading.value = true
@@ -536,6 +545,8 @@ const submitForm = async () => {
 }
 
 const deleteUsage = async (row: UsageItem) => {
+  if (!guardPurchaseOperation(canDelete)) return
+
   await ElMessageBox.confirm('この使用報告を削除しますか？', '確認', { type: 'warning' })
   ElMessage.success('削除しました')
   handleSearch()

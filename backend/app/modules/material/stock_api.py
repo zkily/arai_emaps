@@ -38,6 +38,7 @@ def _safe_date_iso(v: Any) -> Optional[str]:
         return v.isoformat()
     return str(v)
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.master.models import Material, Supplier
 from app.modules.material.models import MaterialStock, MaterialStockSub
@@ -203,7 +204,7 @@ async def get_latest_stocks(
 @router.post("/calculate")
 async def calculate_material_stock(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     在庫計算: material_stock の current_stock を再計算する。
@@ -267,7 +268,7 @@ async def calculate_material_stock(
 @router.get("/summary")
 async def get_stock_summary(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """在庫サマリー（総材料数・安全在庫以下・合計在庫金額）"""
     total_materials = (await db.execute(select(func.count(distinct(MaterialStock.material_cd))))).scalar() or 0
@@ -293,7 +294,7 @@ async def get_stock_summary(
 @router.get("/supplier-names")
 async def list_distinct_material_stock_supplier_names(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """仕入先名一覧：material_stock.supplier_name を重複除去（NULL・空文字除く、名称昇順）"""
     q = (
@@ -312,7 +313,7 @@ async def list_distinct_material_stock_supplier_names(
 async def sync_material_master_to_stock(
     body: dict | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """
     材料マスタ同期:
@@ -441,7 +442,7 @@ async def sync_material_master_to_stock(
 async def create_material_stock(
     body: MaterialStockCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """材料在庫登録"""
     row = MaterialStock(**body.model_dump())
@@ -455,7 +456,7 @@ async def create_material_stock(
 async def transfer_to_sub(
     body: TransferToSubBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """主表在庫を半端（material_stock_sub）へ転送。主表 current_stock を減算し、sub に新規行を作成。"""
     if body.quantity < 1:
@@ -509,7 +510,7 @@ async def update_material_stock(
     item_id: int,
     body: MaterialStockUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """材料在庫更新"""
     result = await db.execute(select(MaterialStock).where(MaterialStock.id == item_id))
@@ -527,7 +528,7 @@ async def update_material_stock(
 async def delete_material_stock(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """材料在庫削除"""
     result = await db.execute(select(MaterialStock).where(MaterialStock.id == item_id))
@@ -580,7 +581,7 @@ async def list_stock_sub(
     suppliers: Optional[str] = Query(None, description="仕入先名称のカンマ区切り。指定時は supplier_name で IN 検索"),
     target_date: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """サブ在庫一覧（materials.status=0 の材料は除外）"""
     join_cond = MaterialStockSub.material_cd.collate("utf8mb4_unicode_ci") == Material.material_cd.collate("utf8mb4_unicode_ci")
@@ -615,7 +616,7 @@ async def list_stock_sub(
 async def create_stock_sub(
     body: MaterialStockSubCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """サブ在庫登録"""
     row = MaterialStockSub(**body.model_dump())
@@ -630,7 +631,7 @@ async def update_stock_sub(
     item_id: int,
     body: MaterialStockSubUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """サブ在庫更新"""
     result = await db.execute(select(MaterialStockSub).where(MaterialStockSub.id == item_id))
@@ -648,7 +649,7 @@ async def update_stock_sub(
 async def delete_stock_sub(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """サブ在庫削除"""
     result = await db.execute(select(MaterialStockSub).where(MaterialStockSub.id == item_id))
@@ -687,7 +688,7 @@ def _validate_maruichi_order_pdf_filename(name: str) -> str:
 @router.post("/maruichi-order-pdf")
 async def save_maruichi_order_pdf(
     file: UploadFile = File(...),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """丸一注文書PDFを共有フォルダへ保存する。同名ファイルは上書き。"""
     _ = current_user

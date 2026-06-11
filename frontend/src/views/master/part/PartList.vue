@@ -70,6 +70,7 @@
             {{ t('master.product.reset') }}
           </el-button>
           <el-button
+            v-if="canExport"
             type="success"
             @click="exportToCSV"
             :icon="Download"
@@ -79,6 +80,7 @@
             CSV出力
           </el-button>
           <el-button
+            v-if="canExport"
             type="warning"
             @click="generateAndPrintQRCodes"
             :icon="Printer"
@@ -87,7 +89,7 @@
           >
             QRコード印刷
           </el-button>
-          <el-button type="primary" @click="openForm()" :icon="Plus" class="add-product-btn">
+          <el-button v-if="canCreate" type="primary" @click="openForm()" :icon="Plus" class="add-product-btn">
             {{ t('master.part.add') }}
           </el-button>
         </div>
@@ -174,10 +176,10 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('master.common.actions')" width="120" fixed="right" align="center">
+        <el-table-column v-if="canEdit || canDelete" :label="t('master.common.actions')" width="120" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click="openForm(row)">{{ t('master.common.edit') }}</el-button>
-            <el-popconfirm :title="t('master.part.confirmDelete')" @confirm="remove(row.id)">
+            <el-button v-if="canEdit" type="primary" link size="small" @click="openForm(row)">{{ t('master.common.edit') }}</el-button>
+            <el-popconfirm v-if="canDelete" :title="t('master.part.confirmDelete')" @confirm="remove(row.id)">
               <template #reference>
                 <el-button type="danger" link size="small">{{ t('master.common.delete') }}</el-button>
               </template>
@@ -369,8 +371,11 @@ import {
 } from '@/api/master/partMaster'
 import { getSupplierList } from '@/api/master/supplierMaster'
 import type { Supplier } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
 const loading = ref(false)
 const qrPrinting = ref(false)
@@ -547,6 +552,7 @@ function resetForm() {
 }
 
 async function openForm(row?: PartMasterRow) {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   supplierExtra.value = null
   await loadSuppliers()
   if (row) {
@@ -580,6 +586,7 @@ async function openForm(row?: PartMasterRow) {
 }
 
 async function submit() {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   try {
     await formRef.value?.validate()
   } catch {
@@ -632,6 +639,7 @@ async function submit() {
 }
 
 async function remove(id: number) {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await deletePart(id)
     ElMessage.success(t('master.common.deleteSuccess'))
@@ -642,6 +650,7 @@ async function remove(id: number) {
 }
 
 const exportToCSV = async () => {
+  if (!guardMasterOperation(canExport)) return
   try {
     loading.value = true
 
@@ -711,6 +720,7 @@ async function fetchAllPartsForPrint(): Promise<PartMasterRow[]> {
 }
 
 const generateAndPrintQRCodes = async () => {
+  if (!guardMasterOperation(canExport)) return
   qrPrinting.value = true
   try {
     const partsToUse = await fetchAllPartsForPrint()

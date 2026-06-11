@@ -84,10 +84,17 @@
           >
             {{ t('master.product.columnSettings') }}
           </el-button>
-          <el-button type="success" @click="handleExport" :icon="Download" class="export-btn">
+          <el-button
+            v-if="canExport"
+            type="success"
+            @click="handleExport"
+            :icon="Download"
+            class="export-btn"
+          >
             {{ t('master.product.export') }}
           </el-button>
           <el-button
+            v-if="canExport"
             type="success"
             @click="exportToCSV"
             :icon="Download"
@@ -97,6 +104,7 @@
             CSV出力
           </el-button>
           <el-button
+            v-if="canExport"
             type="warning"
             @click="generateAndPrintQRCodes"
             :icon="Printer"
@@ -105,6 +113,7 @@
             QRコード印刷
           </el-button>
           <el-button
+            v-if="canExport"
             type="warning"
             @click="printCuttingLengthReport"
             :icon="Printer"
@@ -114,6 +123,7 @@
             切断長印刷
           </el-button>
           <el-button
+            v-if="canEdit"
             type="primary"
             @click="handleRecalculateScrapLength"
             :loading="scrapLengthRecalculating"
@@ -122,7 +132,7 @@
           >
             端材長計算
           </el-button>
-          <el-button type="primary" @click="handleAdd" :icon="Plus" class="add-product-btn">
+          <el-button v-if="canCreate" type="primary" @click="handleAdd" :icon="Plus" class="add-product-btn">
             製品追加
           </el-button>
         </div>
@@ -516,15 +526,15 @@
           {{ row.updated_at ? formatDateTime(row.updated_at) : '—' }}
         </template>
       </el-table-column>
-      <el-table-column fixed="right" label="操作" width="180" align="center">
+      <el-table-column v-if="canEdit || canDelete" fixed="right" label="操作" width="180" align="center">
         <template #default="{ row }">
-          <el-button size="small" type="primary" @click="handleEdit(row)">
+          <el-button v-if="canEdit" size="small" type="primary" @click="handleEdit(row)">
             <el-icon>
               <Edit />
             </el-icon>
             編集
           </el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)">
+          <el-button v-if="canDelete" size="small" type="danger" @click="handleDelete(row)">
             <el-icon>
               <Delete />
             </el-icon>
@@ -640,8 +650,11 @@ import { getProductMasterOptions, getMaterialOptions, getRouteOptions } from '@/
 import ProductEditDialog from './ProductEditDialog.vue'
 import type { Product, OptionItem } from '@/types/master'
 import { downloadExcelFromJson } from '@/utils/excelExport'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete, canExport } = useMasterOperationPermission()
 
 // 筛选条件
 const filters = reactive({
@@ -848,12 +861,14 @@ watch(
 
 // 新增
 const handleAdd = () => {
+  if (!guardMasterOperation(canCreate)) return
   selectedRow.value = null
   dialogVisible.value = true
 }
 
 // 编辑
 const handleEdit = (row: Product) => {
+  if (!guardMasterOperation(canEdit)) return
   selectedRow.value = { ...row }
   dialogVisible.value = true
 }
@@ -867,6 +882,7 @@ const handleSaved = () => {
 
 // 端材長：材料名末尾4桁を材料長とし scrap_length = 材料長 - (cut_length + 2.5) * take_count で全件更新
 const handleRecalculateScrapLength = async () => {
+  if (!guardMasterOperation(canEdit)) return
   const confirmed = await ElMessageBox.confirm(
     '全製品の端材長（scrap_length）を一括再計算し、データベースに保存します。よろしいですか？',
     '端材長計算',
@@ -955,6 +971,7 @@ const formatDateTime = (dateString: string) => {
 
 // 削除
 const handleDelete = async (row: Product) => {
+  if (!guardMasterOperation(canDelete)) return
   const confirmed = await ElMessageBox.confirm(
     `本当に製品「${row.product_name}」を削除しますか？`,
     '削除確認',
@@ -1003,6 +1020,7 @@ const saveColumnSettings = () => {
 
 // 打开製品種別选择弹窗
 const generateAndPrintQRCodes = () => {
+  if (!guardMasterOperation(canExport)) return
   // 获取所有产品的製品CD（优先使用 allProducts，如果没有则使用 productList）
   const productsToUse = allProducts.value.length > 0 ? allProducts.value : productList.value
 
@@ -1310,6 +1328,7 @@ const doGenerateAndPrintQRCodes = async () => {
 
 // 导出Excel
 const handleExport = async () => {
+  if (!guardMasterOperation(canExport)) return
   const exportData = productList.value.map((item) => {
     const data: any = {
       製品CD: item.product_cd,
@@ -1410,6 +1429,7 @@ const handleExport = async () => {
 
 // 导出CSV文件
 const exportToCSV = async () => {
+  if (!guardMasterOperation(canExport)) return
   try {
     loading.value = true
 
@@ -1475,6 +1495,7 @@ const formatLengthValue = (value: number | undefined): string => {
 }
 
 const printCuttingLengthReport = async () => {
+  if (!guardMasterOperation(canExport)) return
   try {
     loading.value = true
 

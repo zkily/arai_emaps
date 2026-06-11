@@ -22,7 +22,7 @@
             </span>
           </div>
         </div>
-        <el-button type="primary" :icon="Plus" class="add-btn" @click="openForm()">
+        <el-button v-if="canCreate" type="primary" :icon="Plus" class="add-btn" @click="openForm()">
           {{ t('master.customer.addCustomer') }}
         </el-button>
       </header>
@@ -180,6 +180,7 @@
               <el-switch
                 :model-value="row.status === 1"
                 @update:model-value="(v: string | number | boolean) => toggleStatus(row, v === true)"
+                :disabled="!canEdit"
                 :loading="row.statusLoading"
                 size="small"
                 inline-prompt
@@ -189,6 +190,7 @@
             </template>
           </el-table-column>
           <el-table-column
+            v-if="canEdit || canDelete"
             :label="t('master.common.actions')"
             fixed="right"
             width="88"
@@ -196,7 +198,7 @@
           >
             <template #default="{ row }">
               <div class="action-buttons">
-                <el-tooltip :content="t('master.supplier.edit')" placement="top">
+                <el-tooltip v-if="canEdit" :content="t('master.supplier.edit')" placement="top">
                   <el-button
                     size="small"
                     type="primary"
@@ -207,7 +209,7 @@
                     @click="openForm(row)"
                   />
                 </el-tooltip>
-                <el-tooltip :content="t('master.supplier.delete')" placement="top">
+                <el-tooltip v-if="canDelete" :content="t('master.supplier.delete')" placement="top">
                   <el-button
                     size="small"
                     type="danger"
@@ -254,8 +256,11 @@ import {
   updateCustomerStatus,
 } from '@/api/master/customerMaster'
 import type { CustomerItem } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
 
 const { t } = useI18n()
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 type RowEx = CustomerItem & { statusLoading?: boolean }
 
@@ -323,11 +328,13 @@ const filteredList = computed(() => {
 const formVisible = ref(false)
 const editData = ref<RowEx | null>(null)
 function openForm(row: RowEx | null = null) {
+  if (row ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   editData.value = row
   formVisible.value = true
 }
 
 async function deleteCustomer(id: number | undefined) {
+  if (!guardMasterOperation(canDelete)) return
   if (id == null) return
   try {
     await ElMessageBox.confirm(t('master.customer.confirmDelete'), t('common.confirm'), {
@@ -342,6 +349,7 @@ async function deleteCustomer(id: number | undefined) {
 }
 
 async function toggleStatus(row: RowEx, on: boolean) {
+  if (!guardMasterOperation(canEdit)) return
   const next = on ? 1 : 0
   row.statusLoading = true
   try {

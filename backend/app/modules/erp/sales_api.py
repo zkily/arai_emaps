@@ -16,6 +16,7 @@ from sqlalchemy.types import Numeric
 
 from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_sales_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.erp.models import OrderDaily, OrderMonthly
@@ -513,7 +514,7 @@ async def get_sales_order_by_id(
 async def create_sales_order(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """受注作成"""
     try:
@@ -596,7 +597,7 @@ async def update_sales_order(
     order_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("edit"))
 ):
     """受注更新"""
     query = select(SalesOrder).where(SalesOrder.id == order_id)
@@ -625,7 +626,7 @@ async def update_sales_order(
 async def approve_sales_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("approve"))
 ):
     """受注承認"""
     query = select(SalesOrder).where(SalesOrder.id == order_id)
@@ -653,7 +654,7 @@ async def approve_sales_order(
 async def cancel_sales_order(
     order_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("edit"))
 ):
     """受注キャンセル"""
     query = select(SalesOrder).where(SalesOrder.id == order_id)
@@ -679,7 +680,7 @@ async def cancel_sales_order(
 async def sync_sales_orders_from_order_daily(
     body: SyncFromOrderDailyBody = Body(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """order_daily（確定箱数>0）を sales_order / sales_order_item へ取込。重複は source_order_daily_id で防止。"""
     try:
@@ -833,7 +834,7 @@ async def get_sales_delivery_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("edit"))
 ):
     """出荷一覧取得"""
     query = select(SalesDelivery)
@@ -875,7 +876,7 @@ async def get_sales_delivery_list(
 async def create_sales_delivery(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("create"))
 ):
     """出荷作成"""
     try:
@@ -932,7 +933,7 @@ async def create_sales_delivery(
 async def confirm_sales_delivery(
     delivery_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user)
+    current_user: User = Depends(require_sales_operation("approve"))
 ):
     """出荷確定"""
     query = select(SalesDelivery).where(SalesDelivery.id == delivery_id)
@@ -1117,7 +1118,7 @@ async def get_quotation_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("approve")),
 ):
     """見積一覧取得"""
     query = select(SalesQuotation)
@@ -1152,7 +1153,7 @@ async def get_quotation_list(
 async def get_quotation_by_id(
     quotation_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("approve")),
 ):
     """見積詳細取得"""
     result = await db.execute(
@@ -1176,7 +1177,7 @@ async def get_quotation_by_id(
 async def create_quotation(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """見積作成"""
     try:
@@ -1244,7 +1245,7 @@ async def update_quotation(
     quotation_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """見積更新"""
     result = await db.execute(
@@ -1271,7 +1272,7 @@ async def update_quotation(
 async def send_quotation(
     quotation_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """見積送付"""
     result = await db.execute(
@@ -1297,7 +1298,7 @@ async def send_quotation(
 async def convert_quotation_to_order(
     quotation_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """見積から受注へ変換"""
     result = await db.execute(
@@ -1383,7 +1384,7 @@ async def convert_quotation_to_order(
 async def delete_quotation(
     quotation_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """見積削除（下書きのみ）"""
     result = await db.execute(
@@ -1470,7 +1471,7 @@ async def get_invoice_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """請求書一覧取得"""
     query = select(SalesInvoice)
@@ -1505,7 +1506,7 @@ async def get_invoice_list(
 async def get_invoice_by_id(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """請求書詳細取得"""
     result = await db.execute(
@@ -1529,7 +1530,7 @@ async def get_invoice_by_id(
 async def create_invoice(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """請求書作成"""
     try:
@@ -1593,7 +1594,7 @@ async def create_invoice(
 async def issue_invoice(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("export")),
 ):
     """請求書発行"""
     result = await db.execute(
@@ -1621,7 +1622,7 @@ async def mark_invoice_paid(
     invoice_id: int,
     data: dict = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("approve")),
 ):
     """請求書入金記録"""
     if data is None:
@@ -1652,7 +1653,7 @@ async def mark_invoice_paid(
 async def delete_invoice(
     invoice_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """請求書削除（下書きのみ）"""
     result = await db.execute(
@@ -1709,7 +1710,7 @@ async def get_credit_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """与信一覧取得"""
     query = select(SalesCredit)
@@ -1741,7 +1742,7 @@ async def check_customer_credit(
     customer_code: str,
     order_amount: float = Query(0, description="確認する注文金額"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """与信チェック（注文可否確認）"""
     result = await db.execute(
@@ -1770,7 +1771,7 @@ async def check_customer_credit(
 async def get_customer_credit(
     customer_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """顧客与信詳細取得"""
     result = await db.execute(
@@ -1786,7 +1787,7 @@ async def get_customer_credit(
 async def create_or_update_credit(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """与信作成・更新"""
     customer_code = data.get("customer_code")
@@ -1835,7 +1836,7 @@ async def update_credit_limit(
     customer_code: str,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """与信限度額更新"""
     result = await db.execute(
@@ -1897,7 +1898,7 @@ async def get_contract_pricing_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """契約単価一覧取得"""
     query = select(SalesContractPricing)
@@ -1932,7 +1933,7 @@ async def lookup_contract_price(
     product_code: str = Query(..., description="品番"),
     quantity: int = Query(1, ge=1, description="数量"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """契約単価ルックアップ（顧客＋品番で有効な単価を検索）"""
     today = date.today()
@@ -1981,7 +1982,7 @@ async def lookup_contract_price(
 async def create_contract_pricing(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """契約単価作成"""
     try:
@@ -2012,7 +2013,7 @@ async def update_contract_pricing(
     pricing_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """契約単価更新"""
     result = await db.execute(
@@ -2037,7 +2038,7 @@ async def update_contract_pricing(
 async def delete_contract_pricing(
     pricing_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """契約単価削除"""
     result = await db.execute(
@@ -2134,7 +2135,7 @@ async def get_forecast_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """内示・フォーキャスト一覧（order_monthly）"""
     om = OrderMonthly
@@ -2184,7 +2185,7 @@ async def get_forecast_list(
 async def create_or_update_forecast(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """内示登録（order_monthly 作成または更新）"""
     destination_cd = data.get("destination_cd") or data.get("customer_code")
@@ -2245,7 +2246,7 @@ async def update_forecast(
     forecast_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """内示更新（order_monthly）"""
     result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
@@ -2288,7 +2289,7 @@ async def update_forecast(
 async def confirm_forecast(
     forecast_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("approve")),
 ):
     """確定本数は日別受注から集計されるため、再計算結果を返す"""
     result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
@@ -2308,7 +2309,7 @@ async def confirm_forecast(
 async def delete_forecast(
     forecast_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """内示削除（order_monthly および紐づく日別受注）"""
     result = await db.execute(select(OrderMonthly).where(OrderMonthly.id == forecast_id))
@@ -2364,7 +2365,7 @@ async def get_recording_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("delete")),
 ):
     """売上計上一覧取得"""
     query = select(SalesRecording)
@@ -2399,7 +2400,7 @@ async def get_recording_list(
 async def calculate_monthly_recordings(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """月次売上計上（確定出荷から自動計上）"""
     target_month = data.get("target_month")
@@ -2479,7 +2480,7 @@ async def calculate_monthly_recordings(
 async def get_recording_summary(
     recording_month: Optional[str] = Query(None, description="計上年月 (YYYY-MM)"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """月次売上サマリー"""
     if not recording_month:
@@ -2584,7 +2585,7 @@ async def get_return_list(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """返品一覧取得"""
     query = select(SalesReturn)
@@ -2619,7 +2620,7 @@ async def get_return_list(
 async def get_return_by_id(
     return_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """返品詳細取得"""
     result = await db.execute(
@@ -2643,7 +2644,7 @@ async def get_return_by_id(
 async def create_return(
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("create")),
 ):
     """返品作成"""
     try:
@@ -2708,7 +2709,7 @@ async def update_return(
     return_id: int,
     data: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """返品更新"""
     result = await db.execute(
@@ -2735,7 +2736,7 @@ async def update_return(
 async def approve_return(
     return_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("approve")),
 ):
     """返品承認"""
     result = await db.execute(
@@ -2763,7 +2764,7 @@ async def receive_return(
     return_id: int,
     data: dict = None,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """返品受入"""
     if data is None:

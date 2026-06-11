@@ -119,19 +119,60 @@
                   <span>{{ t('systemUser.role.menuPermission') }}</span>
                 </div>
               </template>
-              <div class="tab-content">
-                <el-tree
-                  :key="`menu-tree-${selectedRole.id}-${menuTreeRenderKey}`"
-                  v-loading="menuTreeLoading"
-                  :data="menuTree"
-                  show-checkbox
-                  check-strictly
-                  node-key="id"
-                  :default-checked-keys="menuTreeCheckedKeys"
-                  :props="{ children: 'children', label: 'label' }"
-                  ref="menuTreeRef"
-                  class="permission-tree"
-                />
+              <div class="tab-content menu-permission-content">
+                <div class="menu-permission-toolbar">
+                  <div class="menu-permission-hint">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>{{ t('systemUser.role.menuPermissionHint') }}</span>
+                  </div>
+                  <div class="menu-permission-actions">
+                    <el-button size="small" text type="primary" @click="expandAllMenuNodes">
+                      {{ t('systemUser.role.menuExpandAll') }}
+                    </el-button>
+                    <el-button size="small" text type="primary" @click="collapseAllMenuNodes">
+                      {{ t('systemUser.role.menuCollapseAll') }}
+                    </el-button>
+                  </div>
+                </div>
+                <div class="menu-tree-wrap" v-loading="menuTreeLoading">
+                  <el-tree
+                    :key="`menu-tree-${selectedRole.id}-${menuTreeRenderKey}`"
+                    :data="menuTree"
+                    show-checkbox
+                    node-key="code"
+                    :default-checked-keys="menuTreeCheckedKeys"
+                    :default-expanded-keys="menuTreeExpandedKeys"
+                    :props="{ children: 'children', label: 'label', disabled: 'disabled' }"
+                    ref="menuTreeRef"
+                    class="permission-tree"
+                  >
+                    <template #default="{ node, data }">
+                      <div
+                        class="permission-tree-node"
+                        :class="{
+                          'is-root': node.level === 1,
+                          'is-missing': data.syncMissing,
+                        }"
+                      >
+                        <el-icon class="node-icon">
+                          <component :is="data.icon || 'Menu'" />
+                        </el-icon>
+                        <span class="node-label" :title="resolveMenuNodeLabel(data)">
+                          {{ resolveMenuNodeLabel(data) }}
+                        </span>
+                        <el-tag
+                          v-if="data.syncMissing"
+                          size="small"
+                          type="warning"
+                          effect="plain"
+                          class="sync-tag"
+                        >
+                          {{ t('systemUser.role.menuSyncMissing') }}
+                        </el-tag>
+                      </div>
+                    </template>
+                  </el-tree>
+                </div>
               </div>
             </el-tab-pane>
 
@@ -291,25 +332,17 @@ import * as systemApi from '@/api/system'
 import type { Role, RoleListItem, OperationPermission } from '@/api/system'
 import {
   buildPermissionMenuTree,
-  collectPermissionTreeIds,
+  collectPermissionTreeCodeToId,
+  expandCheckedCodesWithDescendants,
   menuIdsToTreeCheckedKeys,
   type PermissionMenuTreeNode,
 } from '@/composables/usePermissionMenuTree'
+import { resolveMenuLabel } from '@/utils/menuLabel'
+import type ElTree from 'element-plus/es/components/tree/src/tree.vue'
 
 const { t } = useI18n()
 
-/** 操作権限で設定可能なモジュール一覧（API 互換のためキーは固定） */
-const OPERATION_MODULES = [
-  '販売管理',
-  '購買管理',
-  '在庫管理',
-  '原価・会計',
-  '経理・原価・人事',
-  '生産計画',
-  '製造実行',
-  '品質管理',
-  'システム管理',
-] as const
+import { OPERATION_MODULES } from '@/constants/operationModules'
 
 /** データ範囲オプション（ラベルは i18n） */
 const scopeOptions = computed(() => [
@@ -338,7 +371,7 @@ const roleRowClassName = ({ row }: { row: RoleListItem }) => {
 const activeTab = ref('menu')
 const dataScope = ref<'self' | 'department' | 'department_below' | 'all' | 'custom'>('department')
 const customDepartments = ref<string[]>([])
-const menuTreeRef = ref<{ getCheckedKeys: () => number[]; getHalfCheckedKeys: () => number[] } | null>(null)
+const menuTreeRef = ref<InstanceType<typeof ElTree> | null>(null)
 
 const rolesLoading = ref(false)
 const menuTreeLoading = ref(false)
@@ -357,6 +390,24 @@ const menuTreeCheckedKeys = computed(() => {
   if (!selectedRole.value || menuTree.value.length === 0) return []
   return menuIdsToTreeCheckedKeys(selectedRole.value.menu_permissions, menuTree.value)
 })
+
+const menuTreeExpandedKeys = computed(() => menuTree.value.map((node) => node.code))
+
+function resolveMenuNodeLabel(data: PermissionMenuTreeNode) {
+  return resolveMenuLabel(data.code, data.label, t)
+}
+
+function expandAllMenuNodes() {
+  const store = menuTreeRef.value?.store
+  if (!store) return
+  Object.values(store.nodesMap).forEach((node) => node.expand())
+}
+
+function collapseAllMenuNodes() {
+  const store = menuTreeRef.value?.store
+  if (!store) return
+  Object.values(store.nodesMap).forEach((node) => node.collapse())
+}
 const departmentOptions = ref<{ id: number; name: string }[]>([])
 const operationPermissions = ref<OperationPermission[]>([])
 
@@ -485,9 +536,14 @@ const handleDeleteRole = async (row: RoleListItem) => {
 
 const handleSavePermission = async () => {
   if (!selectedRole.value) return
-  const checkedKeys = (menuTreeRef.value?.getCheckedKeys(false) ?? []) as number[]
-  const validIds = collectPermissionTreeIds(menuTree.value)
-  const menu_permissions = checkedKeys.filter((id) => validIds.has(id))
+  const checkedCodes = expandCheckedCodesWithDescendants(
+    menuTree.value,
+    (menuTreeRef.value?.getCheckedKeys(false) ?? []) as string[],
+  )
+  const codeToId = collectPermissionTreeCodeToId(menuTree.value)
+  const menu_permissions = checkedCodes
+    .map((code) => codeToId.get(code))
+    .filter((id): id is number => id != null && id > 0)
   saveLoading.value = true
   try {
     await systemApi.updateRole(selectedRole.value.id, {
@@ -809,15 +865,121 @@ onMounted(async () => {
   padding: 16px;
 }
 
-/* Permission Tree */
+/* Menu Permission */
+.menu-permission-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding-bottom: 8px;
+}
+
+.menu-permission-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.menu-permission-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.menu-permission-hint .el-icon {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.menu-permission-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.menu-tree-wrap {
+  flex: 1;
+  min-height: 280px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: auto;
+}
+
 .permission-tree {
   --el-tree-node-hover-bg-color: #f1f5f9;
+  background: transparent;
 }
 
 .permission-tree :deep(.el-tree-node__content) {
-  height: 32px;
-  border-radius: 6px;
+  height: 36px;
+  border-radius: 8px;
   margin: 2px 0;
+  padding-right: 8px;
+}
+
+.permission-tree :deep(.el-tree-node__expand-icon) {
+  color: #94a3b8;
+}
+
+.permission-tree :deep(.el-tree > .el-tree-node > .el-tree-node__content) {
+  background: linear-gradient(90deg, #f8fafc 0%, #fff 100%);
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.permission-tree :deep(.el-tree > .el-tree-node > .el-tree-node__content:hover) {
+  background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+}
+
+.permission-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.permission-tree-node.is-root .node-label {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.permission-tree-node.is-missing {
+  opacity: 0.72;
+}
+
+.permission-tree-node .node-icon {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.permission-tree-node.is-root .node-icon {
+  color: #764ba2;
+}
+
+.permission-tree-node .node-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+  font-size: 13px;
+}
+
+.permission-tree-node .sync-tag {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* Operation Permissions */

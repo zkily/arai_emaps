@@ -209,6 +209,10 @@ import {
   type ProductionLine,
   type DailyEquipmentReportRow,
 } from '@/api/aps'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canExport } = useApsOperationPermission()
 
 interface LineBlock {
   line_code: string
@@ -547,6 +551,7 @@ function isWeekendDate(d: string): boolean {
 }
 
 async function printReport() {
+  if (!guardApsOperation(canExport)) return
   if (!dateRange.value?.[0] || !dateRange.value?.[1]) {
     ElMessage.warning('期間を選択してください')
     return

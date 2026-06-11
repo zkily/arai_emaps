@@ -505,6 +505,11 @@ import {
 } from '@element-plus/icons-vue'
 import { getMaterialLogs, importMaterialLogsFromCSV, getSupplierList } from '@/api/material'
 import type { MaterialLog, MaterialLogSearchParams } from '@/types/material'
+import { useQualityOperationPermission } from '@/composables/useQualityOperationPermission'
+import { guardQualityOperation } from '@/utils/qualityOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useQualityOperationPermission()
+
 
 // 响应式数据
 const loading = ref(false)
@@ -651,6 +656,8 @@ const handleSortChange = () => {
 }
 
 const importCSVData = async () => {
+  if (!guardQualityOperation(canExport)) return
+
   try {
     await ElMessageBox.confirm('CSVファイルから材料ログデータを読み込みますか？', '確認', {
       type: 'info',
@@ -741,6 +748,8 @@ const getItemType = (item: string) => {
 
 // 印刷機能（現在のフィルター条件に合致する全件を印刷）
 const handlePrint = async () => {
+  if (!guardQualityOperation(canExport)) return
+
   if (!totalCount.value) {
     ElMessage.warning('印刷するデータがありません')
     return

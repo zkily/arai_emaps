@@ -33,7 +33,7 @@
         <span class="toolbar-count">全 {{ totalCount }} 件</span>
       </div>
       <div class="toolbar-actions">
-        <el-button type="primary" @click="showCreateDialog" :icon="Plus" class="add-btn">
+        <el-button v-if="canCreate" type="primary" @click="showCreateDialog" :icon="Plus" class="add-btn">
           新規追加
         </el-button>
       </div>
@@ -79,13 +79,13 @@
             <span class="datetime-cell">{{ formatDateTime(row.updated_at) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" width="150" align="center">
+        <el-table-column v-if="canEdit || canDelete" label="操作" fixed="right" width="150" align="center">
           <template #default="{ row }">
             <div class="action-buttons">
-              <el-button size="small" type="primary" link :icon="Edit" @click.stop="editItem(row)">
+              <el-button v-if="canEdit" size="small" type="primary" link :icon="Edit" @click.stop="editItem(row)">
                 編集
               </el-button>
-              <el-button size="small" type="danger" link :icon="Delete" @click.stop="deleteItem(row.id)">
+              <el-button v-if="canDelete" size="small" type="danger" link :icon="Delete" @click.stop="deleteItem(row.id)">
                 削除
               </el-button>
             </div>
@@ -185,6 +185,10 @@ import {
   deleteMaterialInspection,
 } from '@/api/material'
 import type { MaterialInspectionMaster } from '@/types/material'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -244,6 +248,7 @@ const fetchData = async () => {
 }
 
 const showCreateDialog = () => {
+  if (!guardMasterOperation(canCreate)) return
   isEdit.value = false
   formData.inspection_cd = ''
   formData.inspection_standard = ''
@@ -251,6 +256,7 @@ const showCreateDialog = () => {
 }
 
 const editItem = (row: MaterialInspectionMaster) => {
+  if (!guardMasterOperation(canEdit)) return
   isEdit.value = true
   formData.inspection_cd = row.inspection_cd
   formData.inspection_standard = row.inspection_standard
@@ -264,6 +270,7 @@ const showDetail = (row: MaterialInspectionMaster) => {
 }
 
 const handleSubmit = async () => {
+  if (isEdit.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   if (!formRef.value) return
 
   try {
@@ -289,6 +296,7 @@ const handleSubmit = async () => {
 }
 
 const deleteItem = async (id: number) => {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await ElMessageBox.confirm('この検品CDを削除しますか？', '削除確認', {
       type: 'warning',

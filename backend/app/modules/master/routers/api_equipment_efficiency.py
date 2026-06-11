@@ -8,6 +8,7 @@ from typing import Optional, Any, Dict
 from decimal import Decimal
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import EquipmentEfficiency
@@ -197,7 +198,7 @@ async def get_equipment_efficiency_by_id(
 async def create_equipment_efficiency(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     """新規登録"""
     machine_cd = body.get("machine_cd") or ""
@@ -240,7 +241,7 @@ async def update_equipment_efficiency(
     item_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     """更新"""
     result = await db.execute(select(EquipmentEfficiency).where(EquipmentEfficiency.id == item_id))
@@ -282,7 +283,7 @@ async def update_equipment_efficiency(
 async def delete_equipment_efficiency(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """削除"""
     result = await db.execute(select(EquipmentEfficiency).where(EquipmentEfficiency.id == item_id))

@@ -256,6 +256,11 @@ import {
 } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import { getProductList } from '@/api/master/productMaster'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 /** API 响应体（request 拦截器已返回 response.data） */
 interface ApiResponseBody {
@@ -627,6 +632,8 @@ function extractProductsFromData() {
 
 // 打印功能
 function handlePrint() {
+  if (!guardSalesOperation(canExport)) return
+
   if (filteredPalletGroups.value.length === 0) {
     ElMessage.warning('印刷するデータがありません')
     return

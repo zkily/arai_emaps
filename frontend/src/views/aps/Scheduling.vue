@@ -282,6 +282,10 @@ import {
   type ScheduleGridRow,
   type SchedulingGridResponse,
 } from '@/api/aps'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canExport } = useApsOperationPermission()
 
 type MatrixGroupRow = {
   key: string
@@ -953,6 +957,7 @@ function getCellToneClass(row: MatrixRow, date: string, displayValue?: number): 
 }
 
 function handlePrint() {
+  if (!guardApsOperation(canExport)) return
   const root = printRootRef.value
   if (!root) return
 

@@ -11,6 +11,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_aps_operation
 from app.modules.auth.models import User
 from app.modules.cutting_planning.engine import (
     as_float,
@@ -309,7 +310,7 @@ async def get_cutting_planning_list(
 async def sync_cutting_plan_from_instructions(
     body: CuttingPlannerSyncFromInstructionsBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """instruction_plans を cutting_plan_items に取り込み（INSERT/UPDATE）。排産時刻は上書きしない。"""
     production_month = parse_month_or_400(body.production_month)
@@ -333,7 +334,7 @@ async def sync_cutting_plan_from_instructions(
 async def schedule_selected_cutting_plans(
     body: CuttingPlannerScheduleSelectedBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     """選択した cutting_plan_items のみ切断スケジュールを計算し、該当行のみ UPDATE（全削除しない）。"""
     production_month = parse_month_or_400(body.production_month)
@@ -411,7 +412,7 @@ async def schedule_selected_cutting_plans(
 async def auto_schedule_cutting_plans(
     body: CuttingPlannerAutoScheduleBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     production_month = parse_month_or_400(body.production_month)
     try:
@@ -464,7 +465,7 @@ async def auto_schedule_cutting_plans(
 async def lock_cutting_plan_item(
     body: CuttingPlannerLockBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     try:
         run_res = await db.execute(
@@ -499,7 +500,7 @@ async def lock_cutting_plan_item(
 async def reorder_cutting_plans(
     body: CuttingPlannerReorderBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("edit")),
 ):
     try:
         run_res = await db.execute(
@@ -571,7 +572,7 @@ async def fetch_instruction_plan_detail(db: AsyncSession, instruction_plan_id: i
 async def publish_cutting_plans(
     body: CuttingPlannerPublishBody,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_aps_operation("export")),
 ):
     run_res = await db.execute(
         text("SELECT production_month FROM cutting_plan_runs WHERE id = :run_id"),

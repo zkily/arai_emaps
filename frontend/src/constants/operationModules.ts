@@ -8,6 +8,7 @@ export const OPERATION_MODULES = [
   '生産計画',
   '製造実行',
   '品質管理',
+  'マスタ管理',
   'システム管理',
 ] as const
 
@@ -21,6 +22,7 @@ export const OPERATION_MODULE_FINANCE = '経理・原価・人事' as const
 export const OPERATION_MODULE_PRODUCTION_PLAN = '生産計画' as const
 export const OPERATION_MODULE_MES = '製造実行' as const
 export const OPERATION_MODULE_QUALITY = '品質管理' as const
+export const OPERATION_MODULE_MASTER = 'マスタ管理' as const
 export const OPERATION_MODULE_SYSTEM = 'システム管理' as const
 
 export type OperationAction = 'create' | 'edit' | 'delete' | 'export' | 'approve'

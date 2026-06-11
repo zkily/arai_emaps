@@ -285,6 +285,11 @@ import {
   type OrderMonthlyItem,
 } from '@/api/erp/orderMonthly'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const saving = ref(false)
@@ -361,6 +366,8 @@ function getProgressColor(rate: number) {
 }
 
 function applyPagination() {
+  if (!guardSalesOperation(canEdit)) return
+
   total.value = allData.value.length
   const start = (page.value - 1) * pageSize.value
   dataList.value = allData.value.slice(start, start + pageSize.value).map(mapMonthlyRow)
@@ -405,6 +412,8 @@ function onDestinationChange(cd: string) {
 }
 
 async function loadDestinationOptions() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const res = await getDestinationOptions()
     const list = (res as { data?: { cd: string; name: string }[] })?.data ?? res
@@ -441,6 +450,8 @@ async function fetchData() {
 }
 
 function handleSearch() {
+  if (!guardSalesOperation(canEdit)) return
+
   page.value = 1
   fetchData()
 }
@@ -457,6 +468,8 @@ function onPageChange(p: number) {
 }
 
 function openEdit(row: OrderMonthlyItem & { forecast_month?: string }) {
+  if (!guardSalesOperation(canEdit)) return
+
   editId.value = row.id
   form.value = {
     ...emptyForm(),
@@ -472,6 +485,8 @@ function openEdit(row: OrderMonthlyItem & { forecast_month?: string }) {
 }
 
 function openCreate() {
+  if (!guardSalesOperation(canCreate)) return
+
   editId.value = null
   form.value = emptyForm()
   if (filters.value.month) form.value.forecast_month = filters.value.month
@@ -488,6 +503,8 @@ function parseYearMonth(ym: string) {
 }
 
 async function handleSave() {
+  if (!guardSalesOperation(canEdit)) return
+
   if (!form.value.destination_cd || !form.value.product_cd || !form.value.forecast_month) {
     ElMessage.warning('納入先、製品CD、対象月は必須です')
     return
@@ -526,6 +543,8 @@ async function handleSave() {
 }
 
 async function handleDelete(row: OrderMonthlyItem) {
+  if (!guardSalesOperation(canDelete)) return
+
   try {
     await ElMessageBox.confirm(
       `「${row.destination_name} / ${row.product_cd}」の内示を削除します。紐づく日別受注も削除されます。`,

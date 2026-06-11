@@ -9,6 +9,7 @@ from sqlalchemy import select, or_, and_, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_master_operation
 from app.modules.auth.models import User
 from app.core.database import get_db
 from app.modules.master.models import RollerBom
@@ -123,7 +124,7 @@ async def list_roller_bom(
 async def batch_delete_roller_bom(
     body: IdsPayload,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     """複数IDを一括削除"""
     ids = [i for i in body.ids if isinstance(i, int) and i > 0]
@@ -151,7 +152,7 @@ async def get_roller_bom_by_id(
 async def create_roller_bom(
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("create")),
 ):
     roller_cd = (body.get("roller_cd") or "").strip()
     product_cd = (body.get("product_cd") or "").strip()
@@ -188,7 +189,7 @@ async def update_roller_bom(
     item_id: int,
     body: dict,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("edit")),
 ):
     result = await db.execute(select(RollerBom).where(RollerBom.id == item_id))
     row = result.scalar_one_or_none()
@@ -231,7 +232,7 @@ async def update_roller_bom(
 async def delete_roller_bom(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_master_operation("delete")),
 ):
     result = await db.execute(select(RollerBom).where(RollerBom.id == item_id))
     row = result.scalar_one_or_none()

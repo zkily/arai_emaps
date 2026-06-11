@@ -21,7 +21,12 @@
     </header>
 
     <section class="content-shell">
-      <PlatingInputBoardPanel mode="instruction" class="board-panel" />
+      <PlatingInputBoardPanel
+        mode="instruction"
+        class="board-panel"
+        :can-export="canExport"
+        :can-edit="canEdit"
+      />
     </section>
   </div>
 </template>
@@ -29,8 +34,11 @@
 <script setup lang="ts">
 import { Grid } from '@element-plus/icons-vue'
 import PlatingInputBoardPanel from '@/views/aps/productionPlanCreation/plating/PlatingInputBoardPanel.vue'
+import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 
 defineOptions({ name: 'PlatingInstruction' })
+
+const { canEdit, canExport } = useMesOperationPermission()
 </script>
 
 <style scoped>

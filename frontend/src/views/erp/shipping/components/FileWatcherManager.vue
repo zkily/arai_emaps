@@ -614,6 +614,11 @@ import {
   Connection,
 } from '@element-plus/icons-vue'
 import {
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
   getFileWatcherStatus,
   startFileWatcher,
   stopFileWatcher,
@@ -844,18 +849,24 @@ async function loadLogs() {
 
 // 搜索处理
 function handleSearch() {
+  if (!guardSalesOperation(canEdit)) return
+
   currentPage.value = 1
   loadLogs()
 }
 
 // 分页处理
 function handleSizeChange(size: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   pageSize.value = size
   currentPage.value = 1
   loadLogs()
 }
 
 function handleCurrentChange(page: number) {
+  if (!guardSalesOperation(canEdit)) return
+
   currentPage.value = page
   loadLogs()
 }
@@ -948,12 +959,16 @@ function formatNumber(num: number) {
 
 // 计算重复率
 function calculateDuplicateRate(stats: DisplayDuplicateStats) {
+  if (!guardSalesOperation(canEdit)) return
+
   if (stats.totalRecords === 0) return '0'
   return ((stats.totalDuplicateRecords / stats.totalRecords) * 100).toFixed(1)
 }
 
 // 加载同步状态
 async function loadSyncStatus() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = (await getSyncStatusAPI()) as unknown as Record<string, unknown>
     const data = (response.data ?? response) as Record<string, unknown>
@@ -973,6 +988,8 @@ async function loadSyncStatus() {
 
 // 执行数据同步
 async function syncToPickingTasks() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     await ElMessageBox.confirm(
       'shipping_log と shipping_items を突合せ、picking_log_matched を再計算しますか？',
@@ -1029,6 +1046,8 @@ async function syncToPickingTasks() {
 
 // 获取同步进度颜色
 function getSyncProgressColor(percentage: number) {
+  if (!guardSalesOperation(canCreate)) return
+
   if (percentage < 30) return '#f56c6c'
   if (percentage < 70) return '#e6a23c'
   return '#67c23a'
@@ -1036,6 +1055,8 @@ function getSyncProgressColor(percentage: number) {
 
 // 显示同步调试信息
 async function showSyncDebugInfo() {
+  if (!guardSalesOperation(canCreate)) return
+
   try {
     const response = (await getSyncDebugInfoAPI()) as unknown as Record<string, unknown>
     const data = (response.data ?? response) as Record<string, { count?: number; latest?: unknown[]; error?: string }>

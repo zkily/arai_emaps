@@ -14,7 +14,7 @@
             </p>
           </div>
         </div>
-        <el-button type="primary" size="small" :icon="Plus" @click="openCreateDialog">
+        <el-button v-if="canCreate" type="primary" size="small" :icon="Plus" @click="openCreateDialog">
           新規BOM
         </el-button>
       </div>
@@ -339,7 +339,7 @@
                 </span>
               </el-radio-button>
             </el-radio-group>
-            <el-tooltip content="編集" placement="bottom">
+            <el-tooltip v-if="canEdit" content="編集" placement="bottom">
               <el-button
                 type="primary"
                 link
@@ -610,10 +610,10 @@
         </el-table-column>
         <el-table-column prop="effective_from" label="有効開始" width="110" />
         <el-table-column prop="effective_to" label="有効終了" width="110" />
-        <el-table-column label="操作" width="96" align="center" fixed="right">
+        <el-table-column v-if="canEdit || canDelete" label="操作" width="96" align="center" fixed="right">
           <template #default="{ row }">
             <div class="pbe-op-cell">
-              <el-tooltip content="編集" placement="top">
+              <el-tooltip v-if="canEdit" content="編集" placement="top">
                 <el-button
                   link
                   type="primary"
@@ -622,7 +622,7 @@
                   @click="openEditDialog(row)"
                 />
               </el-tooltip>
-              <el-tooltip content="削除" placement="top">
+              <el-tooltip v-if="canDelete" content="削除" placement="top">
                 <span class="pbe-op-icon-wrap">
                   <el-popconfirm title="削除しますか？" @confirm="handleDelete(row.id)">
                     <template #reference>
@@ -1150,6 +1150,10 @@ import { getPartList, type PartMasterRow } from '@/api/master/partMaster'
 import request from '@/shared/api/request'
 import type { Product } from '@/types/master'
 import type { Material } from '@/types/master'
+import { useMasterOperationPermission } from '@/composables/useMasterOperationPermission'
+import { guardMasterOperation } from '@/utils/masterOperationGuard'
+
+const { canCreate, canEdit, canDelete } = useMasterOperationPermission()
 
 /** 製品別工程ルートAPIのステップ行 */
 interface ProductRouteStepLite {
@@ -1849,6 +1853,7 @@ function lineTemplateForStep(step: ProductRouteStepLite, kind: 'material' | 'par
 }
 
 function addStepLine(step: ProductRouteStepLite, kind: 'material' | 'part') {
+  if (!guardMasterOperation(canEdit)) return
   if (!processLinesByStep.value[step.step_no]) {
     processLinesByStep.value[step.step_no] = []
   }
@@ -1856,6 +1861,7 @@ function addStepLine(step: ProductRouteStepLite, kind: 'material' | 'part') {
 }
 
 function removeStepLine(stepNo: number, idx: number) {
+  if (!guardMasterOperation(canEdit)) return
   processLinesByStep.value[stepNo]?.splice(idx, 1)
 }
 
@@ -1887,6 +1893,7 @@ function onLineProductPicked(row: DialogLineRow) {
 }
 
 function addOrphanLine(kind: 'material' | 'part') {
+  if (!guardMasterOperation(canEdit)) return
   const line = defaultLine()
   line.consume_step_no = null
   line.__uiKind = kind
@@ -1903,6 +1910,7 @@ function addOrphanLine(kind: 'material' | 'part') {
 }
 
 function removeOrphanLine(idx: number) {
+  if (!guardMasterOperation(canEdit)) return
   orphanLines.value.splice(idx, 1)
 }
 
@@ -1952,6 +1960,7 @@ function resetSearch() {
 }
 
 function openCreateDialog() {
+  if (!guardMasterOperation(canCreate)) return
   isEditing.value = false
   editingId.value = null
   resetBomDialogProcessState()
@@ -1982,6 +1991,7 @@ function openCreateDialog() {
 }
 
 async function openEditDialog(row: BomHeader) {
+  if (!guardMasterOperation(canEdit)) return
   isEditing.value = true
   editingId.value = row.id
   resetBomDialogProcessState()
@@ -2021,6 +2031,7 @@ async function openEditDialog(row: BomHeader) {
 }
 
 async function handleSave() {
+  if (isEditing.value ? !guardMasterOperation(canEdit) : !guardMasterOperation(canCreate)) return
   if (!formData.parent_product_cd) {
     ElMessage.warning('親製品CDを入力してください')
     return
@@ -2049,6 +2060,7 @@ async function handleSave() {
 }
 
 async function handleDelete(id: number) {
+  if (!guardMasterOperation(canDelete)) return
   try {
     await deleteBomHeader(id)
     ElMessage.success('削除しました')

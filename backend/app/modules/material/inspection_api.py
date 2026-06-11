@@ -13,6 +13,7 @@ from typing import Optional, List
 
 from app.core.database import get_db
 from app.modules.auth.api import verify_token_and_get_user
+from app.modules.auth.operation_deps import require_purchase_operation
 from app.modules.auth.models import User
 from app.modules.material.models import MaterialInspectionMaster
 from app.modules.material.schemas import (
@@ -63,7 +64,7 @@ async def list_inspection_masters(
 async def create_inspection_master(
     body: InspectionMasterCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("create")),
 ):
     """検品基準新規登録"""
     existing = await db.execute(
@@ -86,7 +87,7 @@ async def update_inspection_master(
     item_id: int,
     body: InspectionMasterUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("edit")),
 ):
     """検品基準更新"""
     result = await db.execute(
@@ -108,7 +109,7 @@ async def update_inspection_master(
 async def batch_delete_inspection_masters(
     ids: List[int],
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """一括削除"""
     result = await db.execute(
@@ -125,7 +126,7 @@ async def batch_delete_inspection_masters(
 async def delete_inspection_master(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_purchase_operation("delete")),
 ):
     """検品基準削除"""
     result = await db.execute(

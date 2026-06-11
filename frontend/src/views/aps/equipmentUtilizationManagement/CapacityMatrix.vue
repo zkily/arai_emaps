@@ -183,6 +183,10 @@ import {
   fetchSchedulingGrid,
   type ProductionLine,
 } from '@/api/aps'
+import { useApsOperationPermission } from '@/composables/useApsOperationPermission'
+import { guardApsOperation } from '@/utils/apsOperationGuard'
+
+const { canExport } = useApsOperationPermission()
 
 type MatrixRow = {
   lineId: number
@@ -390,6 +394,7 @@ function escHtml(v: unknown): string {
 }
 
 async function handlePrint() {
+  if (!guardApsOperation(canExport)) return
   await loadMatrix()
   await nextTick()
   const [startDate, endDate] = dateRange.value || []

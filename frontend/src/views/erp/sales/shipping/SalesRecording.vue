@@ -152,6 +152,11 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Coin, Money, Van, CircleCheck, DataAnalysis, Refresh } from '@element-plus/icons-vue'
 import { getSalesRecordings, calculateSalesRecordings, getSalesRecordingSummary } from '@/api/erp/sales'
+import { useSalesOperationPermission } from '@/composables/useSalesOperationPermission'
+import { guardSalesOperation } from '@/utils/salesOperationGuard'
+
+const { canCreate, canEdit, canDelete, canExport, canApprove } = useSalesOperationPermission()
+
 
 const loading = ref(false)
 const calculating = ref(false)
@@ -193,6 +198,8 @@ function formatCurrency(n: number): string {
 }
 
 function recordingStatusType(status: string) {
+  if (!guardSalesOperation(canEdit)) return
+
   const map: Record<string, string> = {
     pending: 'info',
     recorded: 'success',
@@ -202,6 +209,8 @@ function recordingStatusType(status: string) {
 }
 
 function recordingStatusLabel(status: string) {
+  if (!guardSalesOperation(canEdit)) return
+
   const map: Record<string, string> = {
     pending: '未計上',
     recorded: '計上済',
@@ -245,6 +254,8 @@ async function fetchSummary() {
 }
 
 async function fetchRecordings() {
+  if (!guardSalesOperation(canEdit)) return
+
   loading.value = true
   try {
     const [year, month] = selectedMonth.value.split('-')
@@ -271,12 +282,16 @@ async function fetchRecordings() {
 }
 
 function handleMonthChange() {
+  if (!guardSalesOperation(canEdit)) return
+
   pagination.page = 1
   fetchSummary()
   fetchRecordings()
 }
 
 async function handleCalculate() {
+  if (!guardSalesOperation(canEdit)) return
+
   try {
     await ElMessageBox.confirm(
       `${selectedMonth.value} の月次売上計上を実行しますか？`,
