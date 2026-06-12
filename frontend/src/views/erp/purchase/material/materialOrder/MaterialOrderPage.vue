@@ -921,9 +921,20 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" align="center" fixed="right">
+            <el-table-column label="操作" width="160" align="center" fixed="right">
               <template #default="{ row }">
                 <el-button
+                  v-if="canEdit"
+                  type="primary"
+                  size="small"
+                  :icon="EditPen"
+                  @click="openSubEditDialog(row)"
+                  class="sub-edit-btn"
+                >
+                  編集
+                </el-button>
+                <el-button
+                  v-if="canDelete"
                   type="danger"
                   size="small"
                   :icon="Delete"
@@ -1594,6 +1605,148 @@
       </template>
     </el-dialog>
 
+    <!-- 半端材料編集ダイアログ -->
+    <el-dialog
+      v-model="subEditDialogVisible"
+      title="半端材料編集"
+      width="480px"
+      destroy-on-close
+      :close-on-click-modal="false"
+      class="sub-edit-dialog sub-edit-dialog--compact"
+      @close="resetSubEditForm"
+    >
+      <div class="sub-edit-content">
+        <div class="sub-edit-header-compact">
+          <div class="sub-edit-header-compact__icon">
+            <el-icon><EditPen /></el-icon>
+          </div>
+          <div class="sub-edit-header-compact__text">
+            <h3>{{ subEditForm.material_name || '半端材料' }}</h3>
+            <p>
+              <span>{{ subEditForm.material_cd || '—' }}</span>
+              <span class="sub-edit-header-compact__dot">·</span>
+              <span>{{ subEditForm.supplier_name || '—' }}</span>
+            </p>
+          </div>
+          <el-tag
+            :type="subEditFormIsUsed ? 'success' : 'warning'"
+            size="small"
+            effect="light"
+            class="sub-edit-header-compact__status"
+          >
+            {{ subEditFormIsUsed ? '使用済' : '未使用' }}
+          </el-tag>
+        </div>
+
+        <div class="sub-edit-meta">
+          <div class="sub-edit-meta__item">
+            <span class="sub-edit-meta__label">規格</span>
+            <span class="sub-edit-meta__value">{{ subEditForm.standard_spec || '—' }}</span>
+          </div>
+          <div
+            class="sub-edit-meta__item sub-edit-meta__item--highlight"
+            v-if="subEditCalculatedWeight > 0 || subEditCalculatedAmount > 0"
+          >
+            <span class="sub-edit-meta__label">重量 / 金額</span>
+            <span class="sub-edit-meta__value sub-edit-meta__value--accent">
+              {{ Math.round(subEditCalculatedWeight) }}kg · {{ formatCurrency(subEditCalculatedAmount) }}
+            </span>
+          </div>
+        </div>
+
+        <el-form
+          ref="subEditFormRef"
+          :model="subEditForm"
+          label-position="top"
+          class="sub-edit-form sub-edit-form--compact"
+        >
+          <div class="sub-edit-grid">
+            <el-form-item label="注文束数" class="sub-edit-field">
+              <el-input-number
+                v-model="subEditForm.order_quantity"
+                :min="0"
+                :max="999999"
+                :precision="0"
+                size="default"
+                controls-position="right"
+                class="sub-edit-input"
+              />
+            </el-form-item>
+            <el-form-item label="注文本数" class="sub-edit-field">
+              <el-input-number
+                v-model="subEditForm.order_bundle_quantity"
+                :min="0"
+                :max="999999"
+                :precision="0"
+                size="default"
+                :controls="false"
+                class="sub-edit-input"
+              />
+            </el-form-item>
+            <el-form-item label="使用数" class="sub-edit-field">
+              <el-input-number
+                v-model="subEditForm.usage_quantity"
+                :min="0"
+                :max="999999"
+                :precision="0"
+                size="default"
+                controls-position="right"
+                class="sub-edit-input"
+              />
+            </el-form-item>
+            <el-form-item label="ラベル色" class="sub-edit-field">
+              <el-select
+                v-model="subEditForm.label_color"
+                placeholder="選択"
+                clearable
+                size="default"
+                class="sub-edit-input"
+              >
+                <el-option label="白" value="白">
+                  <span class="sub-edit-color-option">
+                    <span class="sub-edit-color-swatch sub-edit-color-swatch--white" />
+                    白
+                  </span>
+                </el-option>
+                <el-option label="緑" value="緑">
+                  <span class="sub-edit-color-option">
+                    <span class="sub-edit-color-swatch sub-edit-color-swatch--green" />
+                    緑
+                  </span>
+                </el-option>
+              </el-select>
+            </el-form-item>
+            <el-form-item label="備考" class="sub-edit-field sub-edit-field--full">
+              <el-input
+                v-model="subEditForm.remarks"
+                placeholder="備考を入力"
+                size="default"
+                class="sub-edit-input"
+              />
+            </el-form-item>
+          </div>
+        </el-form>
+      </div>
+      <template #footer>
+        <div class="sub-edit-footer">
+          <el-button size="default" class="sub-edit-btn-cancel" @click="subEditDialogVisible = false">
+            <el-icon><Close /></el-icon>
+            キャンセル
+          </el-button>
+          <el-button
+            type="primary"
+            size="default"
+            class="sub-edit-btn-save"
+            :loading="subEditLoading"
+            @click="confirmSubEdit"
+          >
+            <el-icon><Check /></el-icon>
+            保存
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
     <!-- 半端へ転送ダイアログ -->
     <el-dialog
       v-model="transferDialogVisible"
@@ -1823,6 +1976,23 @@ const materialDetailDialogVisible = ref(false)
 const transferDialogVisible = ref(false)
 const transferRow = ref<MaterialOrderItem | null>(null)
 const transferQuantity = ref(1)
+const subEditDialogVisible = ref(false)
+const subEditLoading = ref(false)
+const subEditFormRef = ref()
+const subEditForm = reactive({
+  id: 0,
+  material_cd: '',
+  material_name: '',
+  supplier_name: '',
+  standard_spec: '',
+  order_quantity: 0,
+  order_bundle_quantity: 0,
+  usage_quantity: 0,
+  label_color: '' as string | null,
+  remarks: '',
+  unit_price: 0,
+  long_weight: 0,
+})
 const transferLoading = ref(false)
 const materialLogsDetailLoading = ref(false)
 const materialLogsDetailList = ref<any[]>([])
@@ -2018,6 +2188,20 @@ const calculatedWeight = computed(() => {
 const calculatedAmount = computed(() => {
   if (!selectedMaterial.value || !calculatedWeight.value) return 0
   return calculatedWeight.value * (selectedMaterial.value.unit_price || 0)
+})
+
+const subEditCalculatedWeight = computed(() => {
+  if (!subEditForm.order_bundle_quantity) return 0
+  return subEditForm.order_bundle_quantity * (subEditForm.long_weight || 0)
+})
+
+const subEditCalculatedAmount = computed(() => {
+  if (!subEditCalculatedWeight.value) return 0
+  return subEditCalculatedWeight.value * (subEditForm.unit_price || 0)
+})
+
+const subEditFormIsUsed = computed(() => {
+  return (subEditForm.usage_quantity || 0) === (subEditForm.order_quantity || 0)
 })
 
 /** 受入ログ行の材料CD（API が materials と材料名で突合済み） */
@@ -2711,6 +2895,76 @@ const handleAdjustmentQuantityChange = async (row: InitialStockItem) => {
   } catch (error: any) {
     console.error(`更新材料 ${row.material_cd} 的調整数时发生错误:`, error)
     ElMessage.error(`保存中にエラーが発生しました: ${error.message || '不明なエラー'}`)
+  }
+}
+
+const resetSubEditForm = () => {
+  Object.assign(subEditForm, {
+    id: 0,
+    material_cd: '',
+    material_name: '',
+    supplier_name: '',
+    standard_spec: '',
+    order_quantity: 0,
+    order_bundle_quantity: 0,
+    usage_quantity: 0,
+    label_color: null,
+    remarks: '',
+    unit_price: 0,
+    long_weight: 0,
+  })
+}
+
+const openSubEditDialog = (row: any) => {
+  if (!guardPurchaseOperation(canEdit)) return
+
+  Object.assign(subEditForm, {
+    id: row.id,
+    material_cd: row.material_cd || '',
+    material_name: row.material_name || '',
+    supplier_name: row.supplier_name || '',
+    standard_spec: row.standard_spec || '',
+    order_quantity: row.order_quantity || 0,
+    order_bundle_quantity: row.order_bundle_quantity || 0,
+    usage_quantity: row.usage_quantity ?? row.planned_usage ?? 0,
+    label_color: row.label_color || null,
+    remarks: row.remarks || '',
+    unit_price: row.unit_price || 0,
+    long_weight: row.long_weight || 0,
+  })
+  subEditDialogVisible.value = true
+}
+
+const confirmSubEdit = async () => {
+  if (!guardPurchaseOperation(canEdit)) return
+  if (!subEditForm.id) return
+
+  try {
+    subEditLoading.value = true
+    const body = {
+      order_quantity: subEditForm.order_quantity ?? 0,
+      order_bundle_quantity: subEditForm.order_bundle_quantity ?? 0,
+      planned_usage: subEditForm.usage_quantity ?? 0,
+      label_color: subEditForm.label_color ?? null,
+      remarks: subEditForm.remarks ?? '',
+      bundle_weight: subEditCalculatedWeight.value ?? 0,
+      order_amount: subEditCalculatedAmount.value ?? 0,
+    }
+    const response = await updateMaterialStockSub(subEditForm.id, body)
+
+    if ((response as any)?.success) {
+      ElMessage.success('半端材料を更新しました')
+      subEditDialogVisible.value = false
+      resetSubEditForm()
+      await fetchSubData()
+    } else {
+      ElMessage.error(`更新に失敗しました: ${(response as any)?.message || '不明なエラー'}`)
+    }
+  } catch (error: any) {
+    console.error('半端材料更新失敗:', error)
+    ElMessage.error(`更新に失敗しました: ${error?.message || 'ネットワークエラー'}`)
+  } finally {
+    subEditLoading.value = false
   }
 }
 
@@ -6167,6 +6421,272 @@ ${groupBlocks}
   background-color: #e0f2fe !important;
   border-color: #0ea5e9 !important;
   font-weight: 600;
+}
+
+/* 半端材料編集ダイアログ - コンパクトUI */
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog) {
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__header) {
+  padding: 10px 14px;
+  margin: 0;
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  border: none;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__title) {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__headerbtn) {
+  top: 10px;
+  width: 28px;
+  height: 28px;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__body) {
+  padding: 0;
+}
+
+.sub-edit-dialog.sub-edit-dialog--compact :deep(.el-dialog__footer) {
+  padding: 8px 14px 10px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.sub-edit-content {
+  padding: 12px 14px 10px;
+}
+
+.sub-edit-header-compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sub-edit-header-compact__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(13, 148, 136, 0.28);
+}
+
+.sub-edit-header-compact__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-edit-header-compact__text h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-edit-header-compact__text p {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-edit-header-compact__dot {
+  margin: 0 4px;
+  color: #cbd5e1;
+}
+
+.sub-edit-header-compact__status {
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  padding: 0 8px;
+  height: 22px;
+}
+
+.sub-edit-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.sub-edit-meta__item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sub-edit-meta__item--highlight {
+  grid-column: 1 / -1;
+  padding-top: 4px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.sub-edit-meta__label {
+  font-size: 10px;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.sub-edit-meta__value {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sub-edit-meta__value--accent {
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.sub-edit-form--compact {
+  margin-top: 0;
+}
+
+.sub-edit-form--compact :deep(.el-form-item) {
+  margin-bottom: 8px;
+}
+
+.sub-edit-form--compact :deep(.el-form-item__label) {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+  padding-bottom: 2px;
+  line-height: 1.2;
+}
+
+.sub-edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 10px;
+}
+
+.sub-edit-field--full {
+  grid-column: 1 / -1;
+}
+
+.sub-edit-field :deep(.el-input-number),
+.sub-edit-field :deep(.el-select) {
+  width: 100%;
+}
+
+.sub-edit-input :deep(.el-input__wrapper),
+.sub-edit-input :deep(.el-input__inner) {
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sub-edit-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+}
+
+.sub-edit-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.22);
+}
+
+.sub-edit-color-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sub-edit-color-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #cbd5e1;
+  flex-shrink: 0;
+}
+
+.sub-edit-color-swatch--white {
+  background: #fff;
+}
+
+.sub-edit-color-swatch--green {
+  background: #22c55e;
+  border-color: #16a34a;
+}
+
+.sub-edit-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.sub-edit-btn-cancel,
+.sub-edit-btn-save {
+  min-width: 96px;
+}
+
+.sub-edit-btn-cancel :deep(.el-icon),
+.sub-edit-btn-save :deep(.el-icon) {
+  margin-right: 4px;
+  font-size: 14px;
+}
+
+.sub-edit-btn-save {
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  border: none;
+}
+
+.sub-edit-btn-save:hover,
+.sub-edit-btn-save:focus {
+  background: linear-gradient(135deg, #0f766e 0%, #0e7490 100%);
+  border: none;
+}
+
+/* 半端材料編集ボタン（テーブル内） */
+.sub-edit-btn {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  border-radius: 6px !important;
+  transition: all 0.3s ease !important;
+  height: 24px !important;
+  min-height: 24px !important;
+  margin-right: 4px;
+}
+
+.sub-edit-btn:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.35) !important;
 }
 
 /* 删除按钮样式 */

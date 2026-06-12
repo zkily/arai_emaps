@@ -83,6 +83,8 @@ export interface PatchChamferingManagementBody {
   actual_production_quantity?: number
   production_completed_check?: boolean
   defect_qty?: number
+  production_lot_size?: number | null
+  lot_number?: string | null
   remarks?: string | null
   mes_production_started_at?: string
   mes_production_ended_at?: string

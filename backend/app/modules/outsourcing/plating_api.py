@@ -830,7 +830,7 @@ async def delete_plating_receiving(
 @router.get("/receivings/products")
 async def get_plating_receiving_products(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_purchase_operation("delete")),
+    current_user: User = Depends(require_purchase_operation("export")),
 ):
     """メッキ注文・受入で使用されている品名一覧（重複排除）"""
     q = select(distinct(PlatingOrder.product_name)).where(

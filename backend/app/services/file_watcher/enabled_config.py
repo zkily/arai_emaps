@@ -65,3 +65,9 @@ def is_excel_watcher_enabled() -> bool:
     """Excel 計画監視が有効か（未設定は True）。環境変数 DISABLE_EXCEL_WATCHER は run 側で別途参照。"""
     raw = _read_raw()
     return raw.get("excel_watcher_enabled", True)
+
+
+def is_inspection_excel_watcher_enabled() -> bool:
+    """検査管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
+    raw = _read_raw()
+    return raw.get("inspection_excel_watcher_enabled", True)

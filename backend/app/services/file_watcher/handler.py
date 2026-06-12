@@ -18,6 +18,19 @@ from app.services.file_watcher.enabled_config import is_file_enabled
 logger = logging.getLogger(__name__)
 
 
+def is_inspection_watch_task(filepath: str, filename: str, configured_path: str = "") -> bool:
+    """設定パスと一致する検査管理指標 Excel か（同一フォルダ内の他年度ファイルを除外）"""
+    if not is_inspection_excel_file(filename):
+        return False
+    cfg = (configured_path or "").strip()
+    if not cfg:
+        return True
+    try:
+        return _normalize_path(filepath) == _normalize_path(cfg)
+    except Exception:
+        return False
+
+
 def _normalize_path(path):
     """パスを正規化し、同一ファイルの重複処理を防ぐ"""
     if not path:
@@ -41,8 +54,8 @@ def is_csv_watch_task(filename: str, filepath: str) -> bool:
     return _is_configured_material_cutting_csv(filepath)
 
 
-def is_excel_watch_task(filename: str) -> bool:
-    return is_excel_target_file(filename) or is_inspection_excel_file(filename)
+def is_excel_plan_watch_task(filename: str) -> bool:
+    return is_excel_target_file(filename)
 
 
 class UnifiedHandler(FileSystemEventHandler):
@@ -53,6 +66,8 @@ class UnifiedHandler(FileSystemEventHandler):
         csv_task_queue=None,
         excel_task_queue=None,
         excel_watcher_enabled=True,
+        inspection_watcher_enabled=True,
+        inspection_excel_path: str = "",
         in_queue_excel_filenames=None,
         in_queue_csv_paths=None,
         # 後方互換（単一キュー）。指定時は CSV/Excel ともにこのキューへ（非推奨）
@@ -64,6 +79,8 @@ class UnifiedHandler(FileSystemEventHandler):
         self.csv_task_queue = csv_task_queue
         self.excel_task_queue = excel_task_queue
         self.excel_watcher_enabled = excel_watcher_enabled
+        self.inspection_watcher_enabled = inspection_watcher_enabled
+        self.inspection_excel_path = (inspection_excel_path or "").strip()
         self.in_queue_excel_filenames = (
             in_queue_excel_filenames if in_queue_excel_filenames is not None else set()
         )
@@ -92,14 +109,21 @@ class UnifiedHandler(FileSystemEventHandler):
         if now - self.last_processed.get(path_key, 0) < self.debounce_sec:
             logger.debug("デバウンスのためスキップ: %s (%.1fs 以内に発生)", filename, self.debounce_sec)
             return
-        is_excel = is_excel_watch_task(filename)
+        is_inspection = is_inspection_watch_task(
+            filepath, filename, self.inspection_excel_path
+        )
+        is_excel_plan = is_excel_plan_watch_task(filename)
         is_csv = is_csv_watch_task(filename, filepath)
-        if not is_excel and not is_csv:
+        if not is_inspection and not is_excel_plan and not is_csv:
             logger.debug("監視対象外のため無視: %s", filename)
             return
-        if is_excel:
-            if not self.excel_watcher_enabled:
-                logger.debug("Excel 監視は無効のためスキップ: %s", filename)
+        if is_inspection or is_excel_plan:
+            if is_inspection:
+                if not self.inspection_watcher_enabled:
+                    logger.debug("検査管理指標 Excel 監視は無効のためスキップ: %s", filename)
+                    return
+            elif not self.excel_watcher_enabled:
+                logger.debug("Excel 計画監視は無効のためスキップ: %s", filename)
                 return
             if filename in self.in_queue_excel_filenames:
                 logger.debug("Excel キューに同名が既にあるためスキップ: %s", filename)
@@ -123,8 +147,8 @@ class UnifiedHandler(FileSystemEventHandler):
             if target_queue is None:
                 return
         self.last_processed[path_key] = now
-        queue_label = "Excel" if is_excel else "CSV"
-        if is_excel:
+        queue_label = "検査Excel" if is_inspection else ("Excel" if is_excel_plan else "CSV")
+        if is_inspection or is_excel_plan:
             self.in_queue_excel_filenames.add(filename)
         else:
             self.in_queue_csv_paths.add(path_key)
@@ -132,7 +156,7 @@ class UnifiedHandler(FileSystemEventHandler):
         try:
             target_queue.put((filepath, filename))
         except Exception as e:
-            if is_excel:
+            if is_inspection or is_excel_plan:
                 self.in_queue_excel_filenames.discard(filename)
             else:
                 self.in_queue_csv_paths.discard(path_key)

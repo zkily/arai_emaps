@@ -4926,6 +4926,8 @@ class UpdateChamferingManagementBody(BaseModel):
     actual_production_quantity: Optional[int] = None
     defect_qty: Optional[int] = None
     production_sequence: Optional[int] = None
+    production_lot_size: Optional[int] = None
+    lot_number: Optional[str] = None
     remarks: Optional[str] = None
     production_day: Optional[str] = None  # YYYY-MM-DD
     mes_production_started_at: Optional[str] = None  # ISO8601（空文字でクリア）
@@ -4958,8 +4960,6 @@ async def update_chamfering_management(
             params["production_day"] = d
     if body.chamfering_machine is not None:
         new_cm = (body.chamfering_machine or "").strip()
-        if not new_cm:
-            raise HTTPException(status_code=400, detail="面取機を指定してください")
         cur = await db.execute(
             text("""
                 SELECT chamfering_machine, production_completed_check,
@@ -4974,7 +4974,10 @@ async def update_chamfering_management(
         if not cur_row:
             raise HTTPException(status_code=404, detail="面取指示が見つかりません")
         old_cm = (str(cur_row[0]).strip() if cur_row[0] else "")
-        if old_cm != new_cm:
+        if not new_cm:
+            if old_cm:
+                raise HTTPException(status_code=400, detail="面取機を指定してください")
+        elif old_cm != new_cm:
             if int(cur_row[1] or 0) == 1:
                 raise HTTPException(status_code=400, detail="実績確定済のため面取機を変更できません")
             if "mes_production_ended_at" in cm_cols:
@@ -4987,8 +4990,8 @@ async def update_chamfering_management(
                 if started_at is not None and str(started_at).strip():
                     if ended_at is None or not str(ended_at).strip():
                         raise HTTPException(status_code=400, detail="生産中のため面取機を変更できません")
-        updates.append("chamfering_machine = :chamfering_machine")
-        params["chamfering_machine"] = new_cm
+            updates.append("chamfering_machine = :chamfering_machine")
+            params["chamfering_machine"] = new_cm
     if body.production_completed_check is not None:
         updates.append("production_completed_check = :production_completed_check")
         params["production_completed_check"] = 1 if body.production_completed_check else 0
@@ -5001,6 +5004,12 @@ async def update_chamfering_management(
     if body.production_sequence is not None:
         updates.append("production_sequence = :production_sequence")
         params["production_sequence"] = body.production_sequence
+    if body.production_lot_size is not None:
+        updates.append("production_lot_size = :production_lot_size")
+        params["production_lot_size"] = body.production_lot_size
+    if body.lot_number is not None:
+        updates.append("lot_number = :lot_number")
+        params["lot_number"] = (body.lot_number or "").strip() or None
     if body.remarks is not None:
         updates.append("remarks = :remarks")
         params["remarks"] = (body.remarks or "").strip() or None

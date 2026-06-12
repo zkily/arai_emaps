@@ -1704,7 +1704,7 @@
       width="504px"
       :close-on-click-modal="false"
       class="cutting-edit-dialog chamfering-edit-dialog"
-      @close="editingChamferingId = null"
+      @close="editingChamferingId = null; chamferingEditOriginalMachine = ''; chamferingEditMachineLocked = false"
     >
       <template #header>
         <div class="cutting-edit-dialog__header">
@@ -1719,7 +1719,8 @@
                 v-model="chamferingEditForm.chamfering_machine"
                 placeholder="面取機を選択"
                 filterable
-                clearable
+                :clearable="!chamferingEditMachineLocked"
+                :disabled="chamferingEditMachineLocked"
                 size="small"
                 style="width: 100%"
               >
@@ -4284,6 +4285,8 @@ const chamferingEditDialogVisible = ref(false)
 const editingChamferingId = ref<number | null>(null)
 /** 面取指示編集：打开时的生産数基准，修改生産数时 不良数 = 基准 - 生産数 */
 const chamferingEditBaselineQuantity = ref(0)
+const chamferingEditOriginalMachine = ref('')
+const chamferingEditMachineLocked = ref(false)
 const chamferingEditForm = reactive({
   chamfering_machine: '',
   actual_production_quantity: '' as string,
@@ -5333,6 +5336,8 @@ interface ChamferingManagementRow {
   production_completed_check?: number | null
   no_count?: number | null
   remarks?: string | null
+  mes_production_started_at?: string | null
+  mes_production_ended_at?: string | null
   cd?: string | null
   created_at?: string | null
 }
@@ -7206,12 +7211,21 @@ async function saveCuttingEdit() {
   }
 }
 
+function isChamferingMachineLocked(row: ChamferingManagementRow): boolean {
+  if (row.production_completed_check === 1) return true
+  const started = String(row.mes_production_started_at ?? '').trim()
+  const ended = String(row.mes_production_ended_at ?? '').trim()
+  return !!started || !!ended
+}
+
 function openChamferingEditDialog(row: ChamferingManagementRow) {
   if (row.id == null) return
   editingChamferingId.value = row.id
   const baseQty = row.actual_production_quantity != null ? Number(row.actual_production_quantity) : 0
   chamferingEditBaselineQuantity.value = Number.isNaN(baseQty) ? 0 : baseQty
-  chamferingEditForm.chamfering_machine = (row.chamfering_machine ?? '') || ''
+  chamferingEditOriginalMachine.value = (row.chamfering_machine ?? '').trim()
+  chamferingEditMachineLocked.value = isChamferingMachineLocked(row)
+  chamferingEditForm.chamfering_machine = chamferingEditOriginalMachine.value
   chamferingEditForm.actual_production_quantity = row.actual_production_quantity != null ? String(row.actual_production_quantity) : ''
   chamferingEditForm.defect_qty = row.defect_qty != null ? String(row.defect_qty) : ''
   chamferingEditForm.production_lot_size = row.production_lot_size ?? null
@@ -7234,21 +7248,42 @@ async function saveChamferingEdit() {
   if (!guardMesOperation(canEdit)) return
   const id = editingChamferingId.value
   if (id == null) return
+
+  const machine = (chamferingEditForm.chamfering_machine ?? '').trim()
+  const originalMachine = chamferingEditOriginalMachine.value
+  const machineChanged = machine !== originalMachine
+
+  if (!machine && !originalMachine) {
+    ElMessage.warning('面取機を選択してください')
+    return
+  }
+  if (!machine && originalMachine) {
+    ElMessage.warning('面取機を空にすることはできません')
+    return
+  }
+  if (machineChanged && chamferingEditMachineLocked.value) {
+    ElMessage.warning('生産開始済みまたは完了済のため面取機を変更できません')
+    return
+  }
+
   chamferingEditSubmitting.value = true
   try {
     const qty = chamferingEditForm.actual_production_quantity
     const qtyNum = qty === '' || qty === null || qty === undefined ? 0 : parseInt(String(qty).trim(), 10)
     const defectStr = chamferingEditForm.defect_qty
     const defectNum = defectStr === '' || defectStr === null || defectStr === undefined ? 0 : parseInt(String(defectStr).trim(), 10)
-    await request.patch(`/api/plan/chamfering-management/${id}`, {
-      chamfering_machine: chamferingEditForm.chamfering_machine?.trim() || null,
+    const body: Record<string, unknown> = {
       actual_production_quantity: Number.isNaN(qtyNum) ? 0 : qtyNum,
       defect_qty: Number.isNaN(defectNum) ? 0 : Math.max(0, defectNum),
       production_lot_size: chamferingEditForm.production_lot_size,
       lot_number: chamferingEditForm.lot_number?.trim() || null,
       production_sequence: chamferingEditForm.production_sequence,
       remarks: (chamferingEditForm.remarks ?? '').trim(),
-    })
+    }
+    if (machineChanged) {
+      body.chamfering_machine = machine
+    }
+    await request.patch(`/api/plan/chamfering-management/${id}`, body)
     ElMessage.success('保存しました')
     chamferingEditDialogVisible.value = false
     loadChamferingManagement()

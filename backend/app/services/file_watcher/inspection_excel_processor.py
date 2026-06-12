@@ -19,7 +19,35 @@ logger = logging.getLogger(__name__)
 
 INSPECTION_EXCEL_FILENAME_PATTERN = re.compile(r"^生産管理指標\(\d{4}年度-検査\)\.xlsx$")
 SOURCE_FILE_LABEL = "検査管理指標"
-DATE_CUTOFF = date(2026, 3, 1)
+DATE_CUTOFF = date(2026, 3, 1)  # ファイル名から年度が取れない場合のフォールバック
+
+
+def _date_cutoff_from_filename(filename: str) -> date:
+    """ファイル名の年度から取込開始日（その年度の 3/1 より後）を決定"""
+    normalized = (filename or "").replace("\uFF08", "(").replace("\uFF09", ")")
+    m = re.search(r"(\d{4})年度", normalized)
+    if m:
+        try:
+            return date(int(m.group(1)), 3, 1)
+        except ValueError:
+            pass
+    return DATE_CUTOFF
+
+
+def _pick_inspection_sheet(wb):
+    """データ行があるシートを選択（active が空の場合に備える）"""
+    active = wb.active
+    if active is not None and active.max_row and active.max_row > 1:
+        return active
+    best = active
+    best_rows = active.max_row if active is not None else 0
+    for name in wb.sheetnames:
+        ws = wb[name]
+        rows = ws.max_row or 0
+        if rows > best_rows:
+            best = ws
+            best_rows = rows
+    return best
 
 COL_A = 0    # target_cd
 COL_C = 2    # machine_cd
@@ -28,8 +56,9 @@ COL_E = 4    # quantity（実績）
 COL_AE = 30  # quantity（不良）
 COL_AG = 32  # transaction_time
 
-BATCH_SIZE = 500
 INCREMENTAL_DAYS = 7
+
+BATCH_SIZE = 500
 
 
 def is_inspection_excel_file(filename):
@@ -90,7 +119,8 @@ class InspectionExcelProcessor:
             raise
 
         filename = os.path.basename(filepath)
-        logger.info("検査管理指標 Excel 処理開始: %s", filename)
+        date_cutoff = _date_cutoff_from_filename(filename)
+        logger.info("検査管理指標 Excel 処理開始: %s（取込対象: %s より後）", filename, date_cutoff)
 
         wb = None
         conn = None
@@ -99,12 +129,12 @@ class InspectionExcelProcessor:
                 warnings.filterwarnings("ignore", message="Print area cannot be set to Defined name")
                 wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
 
-            sheet = wb.active
+            sheet = _pick_inspection_sheet(wb)
             if sheet is None:
                 logger.warning("Excel にシートがありません: %s", filename)
                 return
 
-            non_sd_rows, sd_rows = self._read_and_classify_rows(sheet)
+            non_sd_rows, sd_rows = self._read_and_classify_rows(sheet, date_cutoff)
             logger.info("検査管理指標: 非SD %s 行, SD %s 行 (フィルタ後)", len(non_sd_rows), len(sd_rows))
 
             all_records = self._build_insert_records(non_sd_rows, sd_rows)
@@ -138,7 +168,7 @@ class InspectionExcelProcessor:
                 except Exception:
                     pass
 
-    def _read_and_classify_rows(self, sheet):
+    def _read_and_classify_rows(self, sheet, date_cutoff: date):
         """Excel シートを読み取り、SD/非SD に分類"""
         non_sd_rows = []
         sd_rows = []
@@ -152,7 +182,7 @@ class InspectionExcelProcessor:
                 continue
 
             ag_date = _parse_date(row[COL_AG])
-            if ag_date is None or ag_date <= DATE_CUTOFF:
+            if ag_date is None or ag_date <= date_cutoff:
                 continue
 
             target_cd = str(row[COL_A]).strip() if row[COL_A] is not None else ""
