@@ -26,6 +26,10 @@ import { formatDateTimeJST, formatDateToYmdJST, localeForIntl } from '@/utils/da
 import { formatDurationMs, parseDefectsFromRow } from './inspectionActualPersist'
 import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useInspectionMesCollection, type InspectionMgmtRow } from './useInspectionMesCollection'
+import {
+  inspectionDataSourceTagType,
+  resolveInspectionDataSource,
+} from './inspectionDataSource'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
 defineOptions({ name: 'InspectionActualDataCollection' })
@@ -191,6 +195,17 @@ function inspectorNameForUserId(userId: number | null | undefined): string {
   return inspectorNameById(userId) || '-'
 }
 
+function dataSourceLabel(row: InspectionMgmtRow): string {
+  const src = resolveInspectionDataSource(row)
+  if (src === 'excel') return t('mesInspectionActual.dataSourceExcel')
+  if (src === 'csv') return t('mesInspectionActual.dataSourceCsv')
+  return t('mesInspectionActual.dataSourceMes')
+}
+
+function dataSourceTagType(row: InspectionMgmtRow) {
+  return inspectionDataSourceTagType(resolveInspectionDataSource(row))
+}
+
 function formatDurationSec(sec: number | null | undefined): string {
   return formatDurationMs(Math.max(0, (sec ?? 0) * 1000))
 }
@@ -266,6 +281,7 @@ function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
   const headers = [
     t('mesInspectionActual.productionDay'),
     t('mesInspectionActual.inspector'),
+    t('mesInspectionActual.dataSource'),
     t('mesInspectionActual.productName'),
     t('mesInspectionActual.productionQty'),
     t('mesInspectionActual.defectQty'),
@@ -278,12 +294,13 @@ function buildCompletedHistoryPrintHtml(rows: InspectionMgmtRow[]): string {
   ]
 
   const th = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')
-  const numericColIndexes = new Set([3, 4, 5, 6, 9, 10])
+  const numericColIndexes = new Set([4, 5, 6, 7, 10, 11])
   const body = rows
     .map((row) => {
       const cells = [
         formatHistoryProductionDay(row),
         inspectorNameForUserId(row.mes_inspector_user_id),
+        dataSourceLabel(row),
         row.product_name || '—',
         String(row.actual_production_quantity ?? 0),
         historyDefectCellForPrint(row),
@@ -883,6 +900,22 @@ onUnmounted(() => {
                   <span class="hist-cell-inspector">
                     {{ inspectorNameForUserId(row.mes_inspector_user_id) }}
                   </span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesInspectionActual.dataSource')"
+                width="72"
+                align="center"
+              >
+                <template #default="{ row }">
+                  <el-tag
+                    :type="dataSourceTagType(row)"
+                    size="small"
+                    effect="light"
+                    class="hist-cell-source-tag"
+                  >
+                    {{ dataSourceLabel(row) }}
+                  </el-tag>
                 </template>
               </el-table-column>
               <el-table-column
@@ -4203,6 +4236,10 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.hist-cell-source-tag {
+  font-size: 0.68rem;
 }
 
 .hist-cell-qty {

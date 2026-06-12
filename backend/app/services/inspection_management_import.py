@@ -21,6 +21,38 @@ EXTERNAL_SYNC_KEY_PREFIX = "insp_excel:"
 REMARKS_PREFIX_EXCEL = "EXCEL_SYNC"
 REMARKS_PREFIX_CSV = "CSV_IMPORT"
 
+DATA_SOURCE_MES = "mes"
+DATA_SOURCE_EXCEL = "excel"
+DATA_SOURCE_CSV = "csv"
+VALID_DATA_SOURCES = frozenset({DATA_SOURCE_MES, DATA_SOURCE_EXCEL, DATA_SOURCE_CSV})
+
+
+def data_source_from_remarks_prefix(remarks_prefix: str) -> str:
+    if remarks_prefix == REMARKS_PREFIX_CSV:
+        return DATA_SOURCE_CSV
+    if remarks_prefix == REMARKS_PREFIX_EXCEL:
+        return DATA_SOURCE_EXCEL
+    return DATA_SOURCE_MES
+
+
+def resolve_data_source(
+    data_source: Optional[str],
+    remarks: Optional[str] = None,
+    external_sync_key: Optional[str] = None,
+) -> str:
+    """DB 列未設定の旧行向けに remarks / external_sync_key から推定。"""
+    ds = (data_source or "").strip().lower()
+    if ds in VALID_DATA_SOURCES:
+        return ds
+    remarks_s = (remarks or "").strip()
+    if remarks_s.startswith(f"{REMARKS_PREFIX_EXCEL}:"):
+        return DATA_SOURCE_EXCEL
+    if remarks_s.startswith(f"{REMARKS_PREFIX_CSV}:"):
+        return DATA_SOURCE_CSV
+    if external_sync_key:
+        return DATA_SOURCE_EXCEL
+    return DATA_SOURCE_MES
+
 COL_PRODUCT_CD = "社内品番"
 COL_DAY_SHORT = "日付"
 COL_INSPECTOR = "作業者"
@@ -192,6 +224,7 @@ class ParsedInspectionRow:
     mes_production_started_at: datetime | None
     mes_production_ended_at: datetime | None
     external_sync_key: str
+    data_source: str
     remarks: str
     production_sequence: int = 0
     warnings: list[str] = field(default_factory=list)
@@ -402,6 +435,7 @@ def parse_logical_row(
         mes_production_started_at=started,
         mes_production_ended_at=ended,
         external_sync_key=sync_key,
+        data_source=data_source_from_remarks_prefix(remarks_prefix),
         remarks=f"{remarks_prefix}:{source_label}:L{source_line}",
         warnings=row_warnings,
     )
@@ -641,43 +675,38 @@ def sync_parsed_rows_to_db(
         return result
 
     assign_production_sequences(new_rows, cursor)
+    has_data_source_col = _table_has_column(cursor, "inspection_management", "data_source")
     has_sync_col = _table_has_column(cursor, "inspection_management", "external_sync_key")
 
+    insert_cols = [
+        "production_month",
+        "production_day",
+        "production_sequence",
+        "product_cd",
+        "product_name",
+        "actual_production_quantity",
+        "defect_qty",
+        "mes_defect_by_item",
+        "production_completed_check",
+        "mes_production_started_at",
+        "mes_production_ended_at",
+        "mes_net_production_sec",
+        "mes_paused_accum_sec",
+        "mes_production_is_paused",
+        "mes_inspector_user_id",
+        "remarks",
+    ]
     if has_sync_col:
-        sql = """
-            INSERT INTO inspection_management (
-                production_month, production_day, production_sequence,
-                product_cd, product_name,
-                actual_production_quantity, defect_qty, mes_defect_by_item,
-                production_completed_check,
-                mes_production_started_at, mes_production_ended_at,
-                mes_net_production_sec, mes_paused_accum_sec, mes_production_is_paused,
-                mes_inspector_user_id, remarks, external_sync_key
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                1, %s, %s, %s, %s, 0, %s, %s, %s
-            )
-        """
-    else:
-        sql = """
-            INSERT INTO inspection_management (
-                production_month, production_day, production_sequence,
-                product_cd, product_name,
-                actual_production_quantity, defect_qty, mes_defect_by_item,
-                production_completed_check,
-                mes_production_started_at, mes_production_ended_at,
-                mes_net_production_sec, mes_paused_accum_sec, mes_production_is_paused,
-                mes_inspector_user_id, remarks
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s,
-                1, %s, %s, %s, %s, 0, %s, %s
-            )
-        """
+        insert_cols.append("external_sync_key")
+    if has_data_source_col:
+        insert_cols.append("data_source")
+    placeholders = ", ".join(["%s"] * len(insert_cols))
+    sql = f"INSERT INTO inspection_management ({', '.join(insert_cols)}) VALUES ({placeholders})"
 
     batch_params = []
     for row in new_rows:
         defect_json = json.dumps(row.mes_defect_by_item, ensure_ascii=False) if row.mes_defect_by_item else None
-        base = (
+        values: list[Any] = [
             row.production_month,
             row.production_day,
             row.production_sequence,
@@ -686,17 +715,20 @@ def sync_parsed_rows_to_db(
             row.actual_qty,
             row.defect_qty,
             defect_json,
+            1,
             row.mes_production_started_at,
             row.mes_production_ended_at,
             row.mes_net_production_sec,
             row.mes_paused_accum_sec,
+            0,
             row.inspector_user_id,
             row.remarks,
-        )
+        ]
         if has_sync_col:
-            batch_params.append(base + (row.external_sync_key,))
-        else:
-            batch_params.append(base)
+            values.append(row.external_sync_key)
+        if has_data_source_col:
+            values.append(row.data_source)
+        batch_params.append(tuple(values))
 
     cursor.executemany(sql, batch_params)
     result.inserted = len(new_rows)

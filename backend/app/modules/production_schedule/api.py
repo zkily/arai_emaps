@@ -32,6 +32,8 @@ from app.modules.auth.api import verify_token_and_get_user
 from app.modules.auth.operation_deps import require_aps_operation, require_mes_operation
 from app.modules.auth.models import User
 from app.modules.master.models import ProcessDefectItem
+from app.services.inspection_management_import import DATA_SOURCE_MES, resolve_data_source
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -167,6 +169,11 @@ _INSPECTION_MGMT_MES_COLUMNS = (
     "mes_inspector_user_id",
     "mes_client_instance_id",
     "mes_defect_by_item",
+)
+
+_INSPECTION_MGMT_META_COLUMNS = (
+    "data_source",
+    "external_sync_key",
 )
 
 _WELDING_MGMT_MES_COLUMNS = (
@@ -326,6 +333,35 @@ async def _get_inspection_mgmt_columns(db: AsyncSession) -> set[str]:
 def _inspection_mgmt_mes_select_fragment(existing: set[str]) -> str:
     parts = [f"`inspection_management`.`{c}`" for c in _INSPECTION_MGMT_MES_COLUMNS if c in existing]
     return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _inspection_mgmt_meta_select_fragment(existing: set[str]) -> str:
+    parts = [f"inspection_management.{c}" for c in _INSPECTION_MGMT_META_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _normalize_inspection_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
+    out = dict(item)
+    raw_def = out.get("mes_defect_by_item")
+    if raw_def is not None and not isinstance(raw_def, dict):
+        try:
+            out["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+        except json.JSONDecodeError:
+            out["mes_defect_by_item"] = None
+    for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+        v = out.get(k)
+        if isinstance(v, datetime):
+            out[k] = v.isoformat()
+    for k in ("production_month", "production_day"):
+        v = out.get(k)
+        if isinstance(v, date):
+            out[k] = v.isoformat()
+    out["data_source"] = resolve_data_source(
+        out.get("data_source"),
+        out.get("remarks"),
+        out.get("external_sync_key"),
+    )
+    return out
 
 
 def _inspection_mes_column_migration_hint(column: str) -> str:
@@ -6640,6 +6676,9 @@ async def delete_welding_instruction_note(
 async def get_inspection_management_list(
     production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
     hide_completed: bool = Query(False, description="実績確定済を除外"),
+    data_source: Optional[str] = Query(
+        None, description="取得元フィルタ: mes / excel / csv"
+    ),
     limit: int = Query(2000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
@@ -6652,6 +6691,7 @@ async def get_inspection_management_list(
             detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
         )
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
+    meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     where_parts: list[str] = ["1=1"]
     params: dict[str, Any] = {"lim": limit}
     if production_day:
@@ -6662,6 +6702,17 @@ async def get_inspection_management_list(
         params["production_day"] = d
     if hide_completed:
         where_parts.append("inspection_management.production_completed_check = 0")
+    ds_norm = (data_source or "").strip().lower()
+    if ds_norm:
+        if ds_norm not in ("mes", "excel", "csv"):
+            raise HTTPException(status_code=400, detail="data_source は mes / excel / csv のいずれかです")
+        if "data_source" not in im_cols:
+            raise HTTPException(
+                status_code=503,
+                detail="data_source 列がありません。backend/database/migrations/43_inspection_management_data_source.sql を実行してください。",
+            )
+        where_parts.append("inspection_management.data_source = :data_source")
+        params["data_source"] = ds_norm
     where_sql = " AND ".join(where_parts)
     sql = f"""
         SELECT inspection_management.id,
@@ -6675,6 +6726,7 @@ async def get_inspection_management_list(
                inspection_management.mes_defect_by_item,
                inspection_management.production_completed_check,
                {mes_frag}
+               {meta_frag}
                inspection_management.remarks,
                inspection_management.created_at,
                inspection_management.updated_at
@@ -6700,24 +6752,81 @@ async def get_inspection_management_list(
                 raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    out: list[dict] = []
+    out = [_normalize_inspection_mgmt_row(dict(row)) for row in rows]
+    return {"success": True, "data": out}
+
+
+@router.get("/plan/inspection-management/inspectors")
+async def get_inspection_management_inspectors(
+    start_date: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（任意）"),
+    end_date: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（任意）"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """inspection_management に実績がある検査員一覧（users 結合）。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+        )
+    if "mes_inspector_user_id" not in im_cols:
+        return {"success": True, "data": []}
+
+    where_parts = [
+        "inspection_management.mes_inspector_user_id IS NOT NULL",
+        "inspection_management.mes_inspector_user_id > 0",
+    ]
+    params: dict[str, Any] = {}
+    if start_date or end_date:
+        if not start_date or not end_date:
+            raise HTTPException(status_code=400, detail="start_date / end_date は両方指定してください")
+        start_d = _parse_date_ymd(start_date)
+        end_d = _parse_date_ymd(end_date)
+        if start_d is None or end_d is None:
+            raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+        if start_d > end_d:
+            raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+        where_parts.append("inspection_management.production_day >= :start_date")
+        where_parts.append("inspection_management.production_day <= :end_date")
+        params["start_date"] = start_d
+        params["end_date"] = end_d
+
+    where_sql = " AND ".join(where_parts)
+    sql = f"""
+        SELECT DISTINCT
+               inspection_management.mes_inspector_user_id AS id,
+               users.full_name AS full_name,
+               users.username AS username
+        FROM inspection_management
+        INNER JOIN users ON users.id = inspection_management.mes_inspector_user_id
+        WHERE {where_sql}
+        ORDER BY users.full_name ASC, users.username ASC, inspection_management.mes_inspector_user_id ASC
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        msg = str(e).lower()
+        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            ) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    out: list[dict[str, Any]] = []
     for row in rows:
-        item = dict(row)
-        raw_def = item.get("mes_defect_by_item")
-        if raw_def is not None and not isinstance(raw_def, dict):
-            try:
-                item["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
-            except json.JSONDecodeError:
-                item["mes_defect_by_item"] = None
-        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
-            v = item.get(k)
-            if isinstance(v, datetime):
-                item[k] = v.isoformat()
-        for k in ("production_month", "production_day"):
-            v = item.get(k)
-            if isinstance(v, date):
-                item[k] = v.isoformat()
-        out.append(item)
+        uid = row.get("id")
+        if uid is None:
+            continue
+        out.append(
+            {
+                "id": int(uid),
+                "full_name": row.get("full_name"),
+                "username": row.get("username"),
+            }
+        )
     return {"success": True, "data": out}
 
 
@@ -6747,6 +6856,7 @@ async def get_inspection_productivity_analysis(
         raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
 
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
+    meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     join_inspector = "mes_inspector_user_id" in im_cols
     inspector_select = (
         "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
@@ -6784,6 +6894,7 @@ async def get_inspection_productivity_analysis(
                inspection_management.production_completed_check,
                {mes_frag}
                {inspector_select}
+               {meta_frag}
                inspection_management.remarks,
                inspection_management.created_at,
                inspection_management.updated_at
@@ -6826,26 +6937,8 @@ async def get_inspection_productivity_analysis(
     defect_item_map: dict[str, int] = {}
 
     for row in rows:
-        item = dict(row)
-        raw_def = item.get("mes_defect_by_item")
-        defect_by_item: Optional[dict[str, int]] = None
-        if raw_def is not None and not isinstance(raw_def, dict):
-            try:
-                defect_by_item = json.loads(raw_def) if str(raw_def).strip() else None
-            except json.JSONDecodeError:
-                defect_by_item = None
-        elif isinstance(raw_def, dict):
-            defect_by_item = raw_def
-        item["mes_defect_by_item"] = defect_by_item
-
-        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
-            v = item.get(k)
-            if isinstance(v, datetime):
-                item[k] = v.isoformat()
-        for k in ("production_month", "production_day"):
-            v = item.get(k)
-            if isinstance(v, date):
-                item[k] = v.isoformat()
+        item = _normalize_inspection_mgmt_row(dict(row))
+        defect_by_item = item.get("mes_defect_by_item") if isinstance(item.get("mes_defect_by_item"), dict) else None
 
         actual_qty = int(item.get("actual_production_quantity") or 0)
         defect_qty = int(item.get("defect_qty") or 0)
@@ -7379,6 +7472,7 @@ async def get_inspection_quality_analysis(
         raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
 
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
+    meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     join_inspector = "mes_inspector_user_id" in im_cols
     inspector_select = (
         "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
@@ -7416,6 +7510,7 @@ async def get_inspection_quality_analysis(
                inspection_management.production_completed_check,
                {mes_frag}
                {inspector_select}
+               {meta_frag}
                inspection_management.remarks,
                inspection_management.created_at,
                inspection_management.updated_at
@@ -7458,26 +7553,8 @@ async def get_inspection_quality_analysis(
     sessions: list[dict[str, Any]] = []
 
     for row in rows:
-        item = dict(row)
-        raw_def = item.get("mes_defect_by_item")
-        defect_by_item: Optional[dict[str, int]] = None
-        if raw_def is not None and not isinstance(raw_def, dict):
-            try:
-                defect_by_item = json.loads(raw_def) if str(raw_def).strip() else None
-            except json.JSONDecodeError:
-                defect_by_item = None
-        elif isinstance(raw_def, dict):
-            defect_by_item = raw_def
-        item["mes_defect_by_item"] = defect_by_item
-
-        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
-            v = item.get(k)
-            if isinstance(v, datetime):
-                item[k] = v.isoformat()
-        for k in ("production_month", "production_day"):
-            v = item.get(k)
-            if isinstance(v, date):
-                item[k] = v.isoformat()
+        item = _normalize_inspection_mgmt_row(dict(row))
+        defect_by_item = item.get("mes_defect_by_item") if isinstance(item.get("mes_defect_by_item"), dict) else None
 
         actual_qty = int(item.get("actual_production_quantity") or 0)
         defect_qty = int(item.get("defect_qty") or 0)
@@ -7729,6 +7806,10 @@ async def create_inspection_management(
         cols.append("mes_inspector_user_id")
         vals.append(":mes_inspector_user_id")
         params["mes_inspector_user_id"] = int(inspector_id)
+    if "data_source" in im_cols:
+        cols.append("data_source")
+        vals.append(":data_source")
+        params["data_source"] = DATA_SOURCE_MES
     try:
         res = await db.execute(
             text(

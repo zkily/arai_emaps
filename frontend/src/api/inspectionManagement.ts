@@ -5,6 +5,12 @@ import request from '@/shared/api/request'
 
 const LIST = '/api/plan/inspection-management/list'
 
+/** クエリ mes_inspector_user_id：空文字・null は送らない（FastAPI int パースエラー防止） */
+function optionalInspectorUserId(value?: number | null | ''): number | undefined {
+  if (value === '' || value == null) return undefined
+  return value
+}
+
 export interface InspectionManagementListRow {
   id?: number
   production_month?: string | null
@@ -23,6 +29,9 @@ export interface InspectionManagementListRow {
   mes_production_is_paused?: number | null
   mes_inspector_user_id?: number | null
   mes_client_instance_id?: string | null
+  /** mes=検査実績収集, excel=管理指標Excel同期, csv=一括取込 */
+  data_source?: 'mes' | 'excel' | 'csv' | string | null
+  external_sync_key?: string | null
   remarks?: string | null
   created_at?: string | null
   updated_at?: string | null
@@ -37,12 +46,14 @@ export interface InspectionManagementListResponse {
 export function fetchInspectionManagementList(params: {
   production_day?: string | null
   hide_completed?: boolean
+  data_source?: 'mes' | 'excel' | 'csv' | null
   limit?: number
 }): Promise<InspectionManagementListResponse> {
   return request.get(LIST, {
     params: {
       production_day: params.production_day,
       hide_completed: params.hide_completed ? true : undefined,
+      data_source: params.data_source ?? undefined,
       limit: params.limit,
     },
   }) as Promise<InspectionManagementListResponse>
@@ -175,10 +186,35 @@ export interface InspectionProductivityAnalysisResponse {
   message?: string
 }
 
+export interface InspectionManagementInspectorOption {
+  id: number
+  full_name?: string | null
+  username?: string | null
+}
+
+export interface InspectionManagementInspectorsResponse {
+  success?: boolean
+  data?: InspectionManagementInspectorOption[]
+  message?: string
+}
+
+/** inspection_management に登場する検査員（任意で集計期間で絞り込み） */
+export function fetchInspectionManagementInspectors(params?: {
+  start_date?: string
+  end_date?: string
+}): Promise<InspectionManagementInspectorsResponse> {
+  return request.get('/api/plan/inspection-management/inspectors', {
+    params: {
+      start_date: params?.start_date,
+      end_date: params?.end_date,
+    },
+  }) as Promise<InspectionManagementInspectorsResponse>
+}
+
 export function fetchInspectionProductivityAnalysis(params: {
   start_date: string
   end_date: string
-  mes_inspector_user_id?: number | null
+  mes_inspector_user_id?: number | null | ''
   product_cd?: string | null
   include_incomplete?: boolean
   limit?: number
@@ -187,7 +223,7 @@ export function fetchInspectionProductivityAnalysis(params: {
     params: {
       start_date: params.start_date,
       end_date: params.end_date,
-      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      mes_inspector_user_id: optionalInspectorUserId(params.mes_inspector_user_id),
       product_cd: params.product_cd || undefined,
       include_incomplete: params.include_incomplete ? true : undefined,
       limit: params.limit,
@@ -296,7 +332,7 @@ export interface InspectionUtilizationAnalysisResponse {
 export function fetchInspectionUtilizationAnalysis(params: {
   start_date: string
   end_date: string
-  mes_inspector_user_id?: number | null
+  mes_inspector_user_id?: number | null | ''
   include_incomplete?: boolean
   extra_workdays?: string
   extra_holidays?: string
@@ -307,7 +343,7 @@ export function fetchInspectionUtilizationAnalysis(params: {
     params: {
       start_date: params.start_date,
       end_date: params.end_date,
-      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      mes_inspector_user_id: optionalInspectorUserId(params.mes_inspector_user_id),
       include_incomplete: params.include_incomplete ? true : undefined,
       extra_workdays: params.extra_workdays || undefined,
       extra_holidays: params.extra_holidays || undefined,
@@ -398,7 +434,7 @@ export interface InspectionQualityAnalysisResponse {
 export function fetchInspectionQualityAnalysis(params: {
   start_date: string
   end_date: string
-  mes_inspector_user_id?: number | null
+  mes_inspector_user_id?: number | null | ''
   product_cd?: string | null
   include_incomplete?: boolean
   limit?: number
@@ -407,7 +443,7 @@ export function fetchInspectionQualityAnalysis(params: {
     params: {
       start_date: params.start_date,
       end_date: params.end_date,
-      mes_inspector_user_id: params.mes_inspector_user_id ?? undefined,
+      mes_inspector_user_id: optionalInspectorUserId(params.mes_inspector_user_id),
       product_cd: params.product_cd || undefined,
       include_incomplete: params.include_incomplete ? true : undefined,
       limit: params.limit,

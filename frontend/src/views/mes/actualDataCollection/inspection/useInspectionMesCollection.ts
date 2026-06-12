@@ -633,6 +633,8 @@ export function useInspectionMesCollection() {
     target.mes_production_is_paused = fresh.mes_production_is_paused
     target.mes_inspector_user_id = fresh.mes_inspector_user_id
     target.mes_client_instance_id = fresh.mes_client_instance_id
+    target.data_source = fresh.data_source
+    target.external_sync_key = fresh.external_sync_key
   }
 
   /** 他端末行は一覧のみ更新；本端末で計測中はローカル session を正としサーバー hydrate で上書きしない */
