@@ -16,6 +16,7 @@ export interface UserListItem {
   full_name: string | null
   email: string
   department: string | null
+  section: string | null
   role: string
   status: UserStatus
   two_factor: boolean
@@ -25,6 +26,7 @@ export interface UserListItem {
 export interface UserSearchParams {
   keyword?: string
   department_id?: number
+  section_id?: number
   status?: UserStatus
   page?: number
   page_size?: number
@@ -43,6 +45,7 @@ export interface UserCreateParams {
   email: string
   full_name?: string
   department_id?: number
+  section_id?: number
   role_id?: number
   two_factor_enabled?: boolean
   password: string
@@ -52,6 +55,7 @@ export interface UserUpdateParams {
   email?: string
   full_name?: string
   department_id?: number
+  section_id?: number
   role_id?: number
   two_factor_enabled?: boolean
   status?: UserStatus

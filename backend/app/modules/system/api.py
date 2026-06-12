@@ -49,6 +49,7 @@ ROLE_NAME_TO_CODE = {
 async def get_users(
     keyword: Optional[str] = Query(None, description="キーワード（ユーザー名・氏名・メールアドレスで曖昧検索）"),
     department_id: Optional[int] = Query(None, description="部門IDで絞り込み"),
+    section_id: Optional[int] = Query(None, description="課IDで絞り込み"),
     status: Optional[str] = Query(None, description="ステータスで絞り込み"),
     page: int = Query(1, ge=1, description="ページ番号"),
     page_size: int = Query(10, ge=1, le=500, description="1ページあたりの件数（最大500・MESドロップダウン等）"),
@@ -76,6 +77,8 @@ async def get_users(
         )
     if department_id is not None:
         query = query.where(User.department_id == department_id)
+    if section_id is not None:
+        query = query.where(User.section_id == section_id)
     if status:
         query = query.where(User.is_active == (status == "active"))
     
@@ -91,11 +94,16 @@ async def get_users(
     result = await db.execute(query)
     users = result.scalars().all()
     
-    # 部門名取得
-    dept_ids = [u.department_id for u in users if getattr(u, "department_id", None)]
+    # 部門・課名取得
+    org_ids = set()
+    for u in users:
+        if getattr(u, "department_id", None):
+            org_ids.add(u.department_id)
+        if getattr(u, "section_id", None):
+            org_ids.add(u.section_id)
     org_map = {}
-    if dept_ids:
-        org_result = await db.execute(select(Organization).where(Organization.id.in_(dept_ids)))
+    if org_ids:
+        org_result = await db.execute(select(Organization).where(Organization.id.in_(org_ids)))
         for org in org_result.scalars().all():
             org_map[org.id] = org.name
     
@@ -103,6 +111,7 @@ async def get_users(
     for user in users:
         user_status = "locked" if not user.is_active else "active"
         dept_id = getattr(user, "department_id", None)
+        sect_id = getattr(user, "section_id", None)
         two_fa = getattr(user, "two_factor_enabled", False)
         last_ln = getattr(user, "last_login_at", None)
         items.append(UserListResponse(
@@ -111,6 +120,7 @@ async def get_users(
             full_name=user.full_name,
             email=user.email,
             department=org_map.get(dept_id) if dept_id else None,
+            section=org_map.get(sect_id) if sect_id else None,
             role=user.role or "user",
             status=UserStatus(user_status),
             two_factor=two_fa,
@@ -179,6 +189,7 @@ async def create_user(
         role=role_code,
         is_active=True,
         department_id=user_data.department_id,
+        section_id=user_data.section_id,
         two_factor_enabled=user_data.two_factor_enabled or False,
     )
     
@@ -192,11 +203,15 @@ async def create_user(
     logger.info(f"User created: {new_user.username} by {current_user.username}")
     
     dept_name = None
-    if new_user.department_id:
-        o = await db.execute(select(Organization).where(Organization.id == new_user.department_id))
-        ob = o.scalar_one_or_none()
-        if ob:
-            dept_name = ob.name
+    sect_name = None
+    org_ids = [oid for oid in (new_user.department_id, new_user.section_id) if oid]
+    if org_ids:
+        o = await db.execute(select(Organization).where(Organization.id.in_(org_ids)))
+        for ob in o.scalars().all():
+            if ob.id == new_user.department_id:
+                dept_name = ob.name
+            if ob.id == new_user.section_id:
+                sect_name = ob.name
     
     return UserResponse(
         id=new_user.id,
@@ -204,11 +219,13 @@ async def create_user(
         email=new_user.email,
         full_name=new_user.full_name,
         department_id=getattr(new_user, "department_id", None),
+        section_id=getattr(new_user, "section_id", None),
         role_id=user_data.role_id,
         two_factor_enabled=getattr(new_user, "two_factor_enabled", False),
         status=UserStatus.active,
         last_login=None,
         department_name=dept_name,
+        section_name=sect_name,
         role_name=new_user.role,
         created_at=new_user.created_at,
         updated_at=new_user.updated_at,
@@ -265,11 +282,15 @@ async def update_user(
     logger.info(f"User updated: {user.username} by {current_user.username}")
     
     dept_name = None
-    if getattr(user, "department_id", None):
-        o = await db.execute(select(Organization).where(Organization.id == user.department_id))
-        ob = o.scalar_one_or_none()
-        if ob:
-            dept_name = ob.name
+    sect_name = None
+    org_ids = [oid for oid in (getattr(user, "department_id", None), getattr(user, "section_id", None)) if oid]
+    if org_ids:
+        o = await db.execute(select(Organization).where(Organization.id.in_(org_ids)))
+        for ob in o.scalars().all():
+            if ob.id == getattr(user, "department_id", None):
+                dept_name = ob.name
+            if ob.id == getattr(user, "section_id", None):
+                sect_name = ob.name
     
     return UserResponse(
         id=user.id,
@@ -277,11 +298,13 @@ async def update_user(
         email=user.email,
         full_name=user.full_name,
         department_id=getattr(user, "department_id", None),
+        section_id=getattr(user, "section_id", None),
         role_id=None,
         two_factor_enabled=getattr(user, "two_factor_enabled", False),
         status=UserStatus.active if user.is_active else UserStatus.locked,
         last_login=user.last_login_at.strftime("%Y-%m-%d %H:%M:%S") if getattr(user, "last_login_at", None) else None,
         department_name=dept_name,
+        section_name=sect_name,
         role_name=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,

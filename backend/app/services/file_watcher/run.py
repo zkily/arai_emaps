@@ -27,11 +27,13 @@ from app.services.file_watcher.inspection_excel_processor import (
     InspectionExcelProcessor,
     is_inspection_excel_file,
 )
+from app.services.file_watcher.inspection_management_sync import sync_inspection_excel_to_management
 from app.services.file_watcher.utils import wait_for_file_stable
 from app.services.file_watcher.enabled_config import (
     is_file_enabled,
     is_excel_watcher_enabled,
     is_inspection_excel_watcher_enabled,
+    is_inspection_management_sync_enabled,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,15 @@ CSV_WORKER_COUNT = max(1, getattr(settings, "FILE_WATCH_CSV_WORKERS", 2))
 POLL_INTERVAL = getattr(settings, "FILE_WATCH_POLL_INTERVAL", 1.0)  # ネットワークパスは 1 秒ポーリング推奨
 STABILITY_POLL_INTERVAL = 0.5  # ファイル安定検知の間隔（秒）
 STABILITY_COUNT = 3  # 連続 N 回サイズ不変で安定とみなす
+
+
+def _inspection_mgmt_sync_enabled() -> bool:
+    env = os.environ.get("FILE_WATCH_INSPECTION_MGMT_SYNC_ENABLED", "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
+        return True
+    return bool(getattr(settings, "FILE_WATCH_INSPECTION_MGMT_SYNC_ENABLED", True)) and is_inspection_management_sync_enabled()
 
 
 def _norm_path(value):
@@ -332,6 +343,26 @@ def _excel_worker(excel_task_queue, in_queue_excel_filenames, processing_excel, 
             logger.info("[Excel] 処理開始: %s", filename)
             if is_inspection_excel_file(filename):
                 inspection_processor.process_file(filepath)
+                if _inspection_mgmt_sync_enabled():
+                    mgmt_result = sync_inspection_excel_to_management(filepath)
+                    logger.info(
+                        "[Excel] inspection_management 同期: inserted=%s dup_skip=%s parsed=%s (%s)",
+                        mgmt_result.inserted,
+                        mgmt_result.skipped_duplicate,
+                        mgmt_result.parsed,
+                        filename,
+                    )
+                    if mgmt_result.unmapped_inspectors:
+                        logger.warning(
+                            "[Excel] 作業者未匹配 users.full_name: %s",
+                            ", ".join(
+                                f"{n}({c})"
+                                for n, c in sorted(
+                                    mgmt_result.unmapped_inspectors.items(),
+                                    key=lambda x: -x[1],
+                                )[:10]
+                            ),
+                        )
             elif is_excel_target_file(filename):
                 excel_processor.process_file(filepath)
             else:
@@ -387,6 +418,10 @@ def run_watcher():
         logger.info("📂 Excel 計画与 CSV 共用路径")
     if inspection_excel_path:
         logger.info("📂 検査管理指標 Excel パス: %s", inspection_excel_path)
+        if _inspection_mgmt_sync_enabled():
+            logger.info("📋 検査管理指標 → inspection_management 增量同期: 有効")
+        else:
+            logger.info("📋 検査管理指標 → inspection_management 增量同期: 無効")
     logger.info(
         "📊 ポーリング間隔: %.1f 秒、CSV ワーカー: %s、Excel ワーカー: %s",
         POLL_INTERVAL,

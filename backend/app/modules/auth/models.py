@@ -19,6 +19,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False, comment="アカウント有効フラグ（TRUE:有効、FALSE:無効）")
     last_login_token = Column(String(500), nullable=True, comment="最後にログインしたデバイスのトークン（単一デバイスログイン用）")
     department_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, comment="所属部門ID")
+    section_id = Column(Integer, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, comment="所属課ID")
     two_factor_enabled = Column(Boolean, default=False, nullable=False, comment="二要素認証有効フラグ")
     last_login_at = Column(DateTime, nullable=True, comment="最終ログイン日時")
     created_at = Column(DateTime, server_default=func.now(), comment="作成日時")

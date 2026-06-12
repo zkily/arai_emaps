@@ -71,3 +71,9 @@ def is_inspection_excel_watcher_enabled() -> bool:
     """検査管理指標 Excel 監視が有効か（未設定は True）。Excel 計画監視とは独立。"""
     raw = _read_raw()
     return raw.get("inspection_excel_watcher_enabled", True)
+
+
+def is_inspection_management_sync_enabled() -> bool:
+    """検査管理指標 Excel → inspection_management 同期が有効か（未設定は True）。"""
+    raw = _read_raw()
+    return raw.get("inspection_management_sync_enabled", True)

@@ -145,6 +145,7 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., description="メールアドレス")
     full_name: Optional[str] = Field(None, max_length=100, description="氏名")
     department_id: Optional[int] = Field(None, description="所属部門ID")
+    section_id: Optional[int] = Field(None, description="所属課ID")
     role_id: Optional[int] = Field(None, description="ロールID")
     two_factor_enabled: bool = Field(False, description="二要素認証有効")
 
@@ -158,6 +159,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = Field(None, max_length=100)
     department_id: Optional[int] = None
+    section_id: Optional[int] = None
     role_id: Optional[int] = None
     two_factor_enabled: Optional[bool] = None
     status: Optional[UserStatus] = None
@@ -168,6 +170,7 @@ class UserResponse(UserBase):
     status: UserStatus = UserStatus.active
     last_login: Optional[datetime] = None
     department_name: Optional[str] = None
+    section_name: Optional[str] = None
     role_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -182,6 +185,7 @@ class UserListResponse(BaseModel):
     full_name: Optional[str]
     email: str
     department: Optional[str]
+    section: Optional[str]
     role: str
     status: UserStatus
     two_factor: bool

@@ -55,6 +55,18 @@
           </el-select>
         </div>
         <div class="filter-item">
+          <label>{{ t('systemUser.user.section') }}</label>
+          <el-select
+            v-model="searchForm.section_id"
+            :placeholder="t('systemUser.user.all')"
+            clearable
+            size="default"
+            style="width: 100%"
+          >
+            <el-option v-for="s in filterSectionOptions" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
+        </div>
+        <div class="filter-item">
           <label>{{ t('systemUser.user.status') }}</label>
           <el-select
             v-model="searchForm.status"
@@ -130,11 +142,22 @@
         <el-table-column
           prop="department"
           :label="t('systemUser.user.department')"
-          width="250"
+          width="180"
           align="center"
         >
           <template #default="{ row }">
             <span class="dept-badge" v-if="row.department">{{ row.department }}</span>
+            <span class="text-muted" v-else>—</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          prop="section"
+          :label="t('systemUser.user.section')"
+          width="150"
+          align="center"
+        >
+          <template #default="{ row }">
+            <span class="dept-badge section-badge" v-if="row.section">{{ row.section }}</span>
             <span class="text-muted" v-else>—</span>
           </template>
         </el-table-column>
@@ -353,6 +376,25 @@
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item :label="t('systemUser.user.formSection')" prop="section_id">
+                  <el-select
+                    v-model="userForm.section_id"
+                    :placeholder="t('systemUser.user.formSectionPlaceholder')"
+                    clearable
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="org in formSectionOptions"
+                      :key="org.id"
+                      :label="org.name"
+                      :value="org.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="10">
+              <el-col :span="12">
                 <el-form-item :label="t('systemUser.user.formRole')" prop="role_id">
                   <el-select
                     v-model="userForm.role_id"
@@ -557,6 +599,7 @@ const resetPwdRules = computed<FormRules>(() => ({
 const searchForm = reactive({
   keyword: '',
   department_id: null as number | null,
+  section_id: null as number | null,
   status: '',
 })
 
@@ -572,13 +615,36 @@ const userForm = reactive({
   full_name: '',
   email: '',
   department_id: null as number | null,
+  section_id: null as number | null,
   role_id: null as number | null,
   two_factor_enabled: false,
   password: '',
 })
 
+type OrgOption = { id: number; name: string; type: string; parent_id: number | null }
+
 const roleOptions = ref<{ id: number; name: string }[]>([])
-const departmentOptions = ref<{ id: number; name: string }[]>([])
+const allOrgs = ref<OrgOption[]>([])
+
+const departmentOptions = computed(() =>
+  allOrgs.value.filter((o) => ['company', 'site', 'department'].includes(o.type)),
+)
+
+const filterSectionOptions = computed(() => {
+  const sections = allOrgs.value.filter((o) => o.type === 'section')
+  if (searchForm.department_id) {
+    return sections.filter((s) => s.parent_id === searchForm.department_id)
+  }
+  return sections
+})
+
+const formSectionOptions = computed(() => {
+  const sections = allOrgs.value.filter((o) => o.type === 'section')
+  if (userForm.department_id) {
+    return sections.filter((s) => s.parent_id === userForm.department_id)
+  }
+  return sections
+})
 
 const formRules = computed<FormRules>(() => ({
   username: [{ required: true, message: t('systemUser.user.validationUsername'), trigger: 'blur' }],
@@ -632,6 +698,7 @@ async function fetchUsers() {
     const res = (await systemApi.getUsers({
       keyword: searchForm.keyword?.trim() || undefined,
       department_id: searchForm.department_id ?? undefined,
+      section_id: searchForm.section_id ?? undefined,
       status: (searchForm.status || undefined) as systemApi.UserStatus | undefined,
       page: pagination.page,
       page_size: pagination.pageSize,
@@ -655,15 +722,17 @@ async function loadOptions() {
     const roles = Array.isArray(rolesRes) ? rolesRes : ((rolesRes as any)?.data ?? [])
     const orgs = Array.isArray(orgsRes) ? orgsRes : ((orgsRes as any)?.data ?? [])
     roleOptions.value = roles.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name }))
-    departmentOptions.value = orgs
-      .filter(
-        (o: { type: string }) =>
-          o.type === 'department' || o.type === 'site' || o.type === 'company',
-      )
-      .map((o: { id: number; name: string }) => ({ id: o.id, name: o.name }))
+    allOrgs.value = orgs.map(
+      (o: { id: number; name: string; type: string; parent_id: number | null }) => ({
+        id: o.id,
+        name: o.name,
+        type: o.type,
+        parent_id: o.parent_id,
+      }),
+    )
   } catch (_) {
     roleOptions.value = []
-    departmentOptions.value = []
+    allOrgs.value = []
   }
 }
 
@@ -675,6 +744,7 @@ const handleAdd = () => {
     full_name: '',
     email: '',
     department_id: null,
+    section_id: null,
     role_id: null,
     two_factor_enabled: false,
     password: '',
@@ -709,12 +779,15 @@ const handleEdit = async (row: UserListItem) => {
     full_name: row.full_name || '',
     email: row.email,
     department_id: null,
+    section_id: null,
     role_id: matchedRole?.id ?? null,
     two_factor_enabled: row.two_factor,
     password: '',
   })
   const org = departmentOptions.value.find((d) => d.name === row.department)
   if (org) userForm.department_id = org.id
+  const sectionOrg = allOrgs.value.find((o) => o.type === 'section' && o.name === row.section)
+  if (sectionOrg) userForm.section_id = sectionOrg.id
   dialogVisible.value = true
 }
 
@@ -790,6 +863,7 @@ const handlePrint = () => {
     t('systemUser.user.fullName'),
     t('systemUser.user.email'),
     t('systemUser.user.department'),
+    t('systemUser.user.section'),
     t('systemUser.user.role'),
     t('systemUser.user.statusCol'),
     t('systemUser.user.twoFA'),
@@ -801,6 +875,7 @@ const handlePrint = () => {
     r.full_name || '—',
     r.email,
     r.department || '—',
+    r.section || '—',
     roleLabels[r.role] || r.role,
     statusLabels[r.status] || r.status,
     r.two_factor ? t('systemUser.user.form2FAOn') : '—',
@@ -880,6 +955,7 @@ const handleSubmit = async () => {
         email: userForm.email,
         full_name: userForm.full_name,
         department_id: userForm.department_id ?? undefined,
+        section_id: userForm.section_id ?? undefined,
         role_id: roleId,
         two_factor_enabled: userForm.two_factor_enabled,
       })
@@ -890,6 +966,7 @@ const handleSubmit = async () => {
         email: userForm.email,
         full_name: userForm.full_name,
         department_id: userForm.department_id ?? undefined,
+        section_id: userForm.section_id ?? undefined,
         role_id: userForm.role_id ?? undefined,
         two_factor_enabled: userForm.two_factor_enabled,
         password: userForm.password,
@@ -910,7 +987,28 @@ const handlePageChange = () => fetchUsers()
 
 let keywordDebounceTimer: ReturnType<typeof setTimeout> | null = null
 watch(
-  () => [searchForm.keyword, searchForm.department_id, searchForm.status],
+  () => searchForm.department_id,
+  () => {
+    if (
+      searchForm.section_id &&
+      !filterSectionOptions.value.some((s) => s.id === searchForm.section_id)
+    ) {
+      searchForm.section_id = null
+    }
+  },
+)
+
+watch(
+  () => userForm.department_id,
+  () => {
+    if (userForm.section_id && !formSectionOptions.value.some((s) => s.id === userForm.section_id)) {
+      userForm.section_id = null
+    }
+  },
+)
+
+watch(
+  () => [searchForm.keyword, searchForm.department_id, searchForm.section_id, searchForm.status],
   () => {
     pagination.page = 1
     if (keywordDebounceTimer) clearTimeout(keywordDebounceTimer)
@@ -1198,6 +1296,11 @@ onMounted(() => {
   color: #0369a1;
   border-radius: 4px;
   font-size: 12px;
+}
+
+.section-badge {
+  background: #cffafe;
+  color: #0891b2;
 }
 
 .text-muted {
