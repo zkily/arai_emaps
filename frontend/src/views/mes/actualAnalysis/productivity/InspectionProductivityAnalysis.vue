@@ -782,6 +782,7 @@ import {
 import {
   exportInspectionSessionsCsv,
   printInspectionProductivityDailyBatch,
+  printInspectionProductivityInspectorMetrics,
   printInspectionProductivityInspectorProductBatch,
   printInspectionProductivityReport,
   printInspectionProductivitySection,
@@ -832,6 +833,13 @@ const reportMenuItems: Array<{
     hint: '検査員別サマリー',
     icon: markRaw(User),
     tone: 'violet',
+  },
+  {
+    command: 'print-inspector-metrics',
+    label: '検査員別指標表（印刷）',
+    hint: '不良内訳 · 時間 · 能率',
+    icon: markRaw(Document),
+    tone: 'emerald',
   },
   {
     command: 'print-inspector-product-batch',
@@ -1574,6 +1582,17 @@ async function handleReportCommand(command: string | number | object) {
 
     if (cmd === 'print-inspector-product-batch') {
       await handleBatchInspectorProductPrint()
+      return
+    }
+
+    if (cmd === 'print-inspector-metrics') {
+      const filters = buildReportFilters()
+      const metrics = analysisData.value?.by_inspector_metrics
+      if (!filters || !metrics?.rows?.length) {
+        ElMessage.warning('印刷できる検査員別指標データがありません')
+        return
+      }
+      printInspectionProductivityInspectorMetrics(filters, metrics)
       return
     }
 

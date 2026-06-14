@@ -84,6 +84,24 @@ DEFECT_HEADERS = [
     "W検査　廃棄",
 ]
 
+# 生産性分析 · 検査員別指標表（印刷）に出す不良列
+INSPECTOR_METRICS_DEFECT_HEADERS = [
+    "加工キズ",
+    "油タレ",
+    "曲げ不良",
+    "カ他",
+    "メッキ後キズ",
+    "モヤ/カブリ",
+    "ニッケル",
+    "接触",
+    "メ他",
+    "溶接不良",
+    "W検査　廃棄",
+]
+
+# 旧名互換（api 等で誤って参照されても起動できるように）
+INSPECTION_METRICS_DEFECT_HEADERS = INSPECTOR_METRICS_DEFECT_HEADERS
+
 LOGICAL_COLUMNS = [
     COL_PRODUCT_CD,
     COL_DAY_SHORT,
@@ -221,6 +239,9 @@ class ParsedInspectionRow:
     mes_defect_by_item: dict[str, int]
     mes_net_production_sec: int | None
     mes_paused_accum_sec: int | None
+    mes_shift_sec: int | None
+    mes_break_sec: int | None
+    mes_stop_sec: int | None
     mes_production_started_at: datetime | None
     mes_production_ended_at: datetime | None
     external_sync_key: str
@@ -338,13 +359,13 @@ def map_defects(row: dict[str, str], defect_name_map: dict[str, str]) -> tuple[d
 
 def compute_time_fields(
     row: dict[str, str], production_day: date
-) -> tuple[int | None, int | None, datetime | None, datetime | None]:
+) -> tuple[int | None, int | None, int | None, int | None, int | None, datetime | None, datetime | None]:
     shift_h = _parse_float(row.get(COL_SHIFT))
     break_h = _parse_float(row.get(COL_BREAK)) or 0.0
     stop_h = _parse_float(row.get(COL_STOP)) or 0.0
     work_h = _parse_float(row.get(COL_WORK))
     if work_h is None or work_h <= 0:
-        return None, None, None, None
+        return None, None, None, None, None, None, None
     if shift_h is None or shift_h <= 0:
         shift_h = work_h + break_h + stop_h
     pause_h = max(0.0, shift_h - work_h)
@@ -352,9 +373,12 @@ def compute_time_fields(
         pause_h = break_h + stop_h
     net_sec = max(0, round(work_h * 3600))
     pause_sec = max(0, round(pause_h * 3600))
+    shift_sec = max(0, round(shift_h * 3600))
+    break_sec = max(0, round(break_h * 3600))
+    stop_sec = max(0, round(stop_h * 3600))
     started = datetime.combine(production_day, time(8, 0, 0))
-    ended = started + timedelta(seconds=max(0, round(shift_h * 3600)))
-    return net_sec, pause_sec, started, ended
+    ended = started + timedelta(seconds=shift_sec)
+    return net_sec, pause_sec, shift_sec, break_sec, stop_sec, started, ended
 
 
 def make_external_sync_key(
@@ -409,7 +433,7 @@ def parse_logical_row(
     defect_qty_csv = _parse_int(logical.get(COL_DEFECT_TOTAL))
     defects, defect_warnings = map_defects(logical, defect_name_map)
     defect_qty = defect_qty_csv if defect_qty_csv > 0 else sum(defects.values())
-    net_sec, pause_sec, started, ended = compute_time_fields(logical, prod_day)
+    net_sec, pause_sec, shift_sec, break_sec, stop_sec, started, ended = compute_time_fields(logical, prod_day)
     product_name = (logical.get(COL_PRODUCT_NAME) or "").strip() or logical.get(COL_PRODUCT_CD, "").strip()
 
     row_warnings: list[str] = list(defect_warnings)
@@ -432,6 +456,9 @@ def parse_logical_row(
         mes_defect_by_item=defects,
         mes_net_production_sec=net_sec,
         mes_paused_accum_sec=pause_sec,
+        mes_shift_sec=shift_sec,
+        mes_break_sec=break_sec,
+        mes_stop_sec=stop_sec,
         mes_production_started_at=started,
         mes_production_ended_at=ended,
         external_sync_key=sync_key,
@@ -692,10 +719,16 @@ def sync_parsed_rows_to_db(
         "mes_production_ended_at",
         "mes_net_production_sec",
         "mes_paused_accum_sec",
+    ]
+    if _table_has_column(cursor, "inspection_management", "mes_shift_sec"):
+        insert_cols.extend(["mes_shift_sec", "mes_break_sec", "mes_stop_sec"])
+    insert_cols.extend(
+        [
         "mes_production_is_paused",
         "mes_inspector_user_id",
         "remarks",
-    ]
+        ]
+    )
     if has_sync_col:
         insert_cols.append("external_sync_key")
     if has_data_source_col:
@@ -720,10 +753,16 @@ def sync_parsed_rows_to_db(
             row.mes_production_ended_at,
             row.mes_net_production_sec,
             row.mes_paused_accum_sec,
+        ]
+        if _table_has_column(cursor, "inspection_management", "mes_shift_sec"):
+            values.extend([row.mes_shift_sec, row.mes_break_sec, row.mes_stop_sec])
+        values.extend(
+            [
             0,
             row.inspector_user_id,
             row.remarks,
-        ]
+            ]
+        )
         if has_sync_col:
             values.append(row.external_sync_key)
         if has_data_source_col:

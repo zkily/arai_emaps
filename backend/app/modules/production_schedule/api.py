@@ -26,6 +26,7 @@ from app.core.inspection_inspector_work_schedule import (
     InspectorWorkScheduleIndex,
     load_inspector_work_schedule_index,
 )
+from app.services.inspection_management_import import INSPECTOR_METRICS_DEFECT_HEADERS
 from app.core.company_work_calendar import (
     count_scheduled_workdays,
     is_scheduled_workday,
@@ -171,6 +172,9 @@ _INSPECTION_MGMT_MES_COLUMNS = (
     "mes_production_ended_at",
     "mes_net_production_sec",
     "mes_paused_accum_sec",
+    "mes_shift_sec",
+    "mes_break_sec",
+    "mes_stop_sec",
     "mes_production_is_paused",
     "mes_inspector_user_id",
     "mes_client_instance_id",
@@ -525,6 +529,152 @@ def _finalize_inspection_productivity_bucket(bucket: dict[str, Any]) -> dict[str
 INSPECTION_STANDARD_WORKDAY_HOURS = DEFAULT_INSPECTION_STANDARD_HOURS
 INSPECTION_STANDARD_WORKDAY_SEC = DEFAULT_INSPECTION_STANDARD_SEC
 INSPECTION_DEFECT_DETECTION_PROCESS_CD = "KT09"
+
+
+def _norm_inspection_defect_name(value: Any) -> str:
+    return str(value or "").strip().replace("\u3000", " ").replace(" ", "").lower()
+
+
+def _build_inspector_metrics_defect_header_index() -> dict[str, str]:
+    return {_norm_inspection_defect_name(header): header for header in INSPECTOR_METRICS_DEFECT_HEADERS}
+
+
+async def _load_inspection_defect_cd_name_map(db: AsyncSession) -> dict[str, str]:
+    try:
+        result = await db.execute(
+            text(
+                """
+                SELECT defect_cd, defect_name
+                FROM process_defect_items
+                WHERE detection_process_cd = :process_cd AND status = 'active'
+                """
+            ),
+            {"process_cd": INSPECTION_DEFECT_DETECTION_PROCESS_CD},
+        )
+        return {str(row[0]).strip(): str(row[1] or "").strip() for row in result.fetchall()}
+    except Exception:
+        return {}
+
+
+def _resolve_inspector_metrics_defect_header(
+    defect_cd: str,
+    *,
+    cd_name_map: dict[str, str],
+    header_index: dict[str, str],
+) -> Optional[str]:
+    cd = str(defect_cd or "").strip()
+    if not cd:
+        return None
+    if cd.startswith("csv:"):
+        raw = cd[4:].strip()
+        nk = _norm_inspection_defect_name(raw)
+        if nk in header_index:
+            return header_index[nk]
+        for nk_h, header in header_index.items():
+            if nk_h in nk or nk in nk_h:
+                return header
+        return None
+    name = cd_name_map.get(cd, cd)
+    nk = _norm_inspection_defect_name(name)
+    if nk in header_index:
+        return header_index[nk]
+    for nk_h, header in header_index.items():
+        if nk_h in nk or nk in nk_h:
+            return header
+    return None
+
+
+def _resolve_inspection_row_csv_time_secs(item: dict[str, Any], im_cols: set[str]) -> tuple[int, int, int, int]:
+    work_sec = _inspection_row_net_production_sec(item)
+    if "mes_shift_sec" in im_cols and item.get("mes_shift_sec") is not None:
+        return (
+            int(item.get("mes_shift_sec") or 0),
+            int(item.get("mes_break_sec") or 0),
+            int(item.get("mes_stop_sec") or 0),
+            work_sec,
+        )
+    pause_sec = int(item.get("mes_paused_accum_sec") or 0)
+    started = _parse_inspection_datetime(item.get("mes_production_started_at"))
+    ended = _parse_inspection_datetime(item.get("mes_production_ended_at"))
+    if started and ended:
+        shift_sec = max(0, int((ended - started).total_seconds()))
+    else:
+        shift_sec = work_sec + pause_sec
+    return shift_sec, 0, pause_sec, work_sec
+
+
+def _new_inspector_metrics_bucket(
+    *,
+    inspector_user_id: Optional[int],
+    inspector_name: str,
+) -> dict[str, Any]:
+    return {
+        "inspector_user_id": inspector_user_id,
+        "inspector_name": inspector_name,
+        "defects": {header: 0 for header in INSPECTOR_METRICS_DEFECT_HEADERS},
+        "sum_shift_sec": 0,
+        "sum_break_sec": 0,
+        "sum_stop_sec": 0,
+        "sum_work_sec": 0,
+        "sum_inspection_qty": 0,
+    }
+
+
+def _round_hours_from_sec(sec: int) -> float:
+    return round(int(sec or 0) / 3600.0, 2)
+
+
+def _round_efficiency_decimal(qty: int, work_sec: int) -> Optional[float]:
+    work_h = int(work_sec or 0) / 3600.0
+    if qty <= 0 or work_h <= 0:
+        return None
+    return round(qty / work_h * 10) / 10
+
+
+def _finalize_inspector_metrics_row(row: dict[str, Any]) -> dict[str, Any]:
+    shift_sec = int(row.get("sum_shift_sec") or 0)
+    break_sec = int(row.get("sum_break_sec") or 0)
+    stop_sec = int(row.get("sum_stop_sec") or 0)
+    work_sec = int(row.get("sum_work_sec") or 0)
+    qty = int(row.get("sum_inspection_qty") or 0)
+    shift_h = shift_sec / 3600.0
+    break_h = break_sec / 3600.0
+    stop_h = stop_sec / 3600.0
+    work_h = work_sec / 3600.0
+    target_h = shift_h - break_h - stop_h
+    row["shift_hours"] = _round_hours_from_sec(shift_sec)
+    row["break_hours"] = _round_hours_from_sec(break_sec)
+    row["stop_hours"] = _round_hours_from_sec(stop_sec)
+    row["target_work_hours"] = round(target_h, 2) if target_h > 0 else 0.0
+    row["work_hours"] = _round_hours_from_sec(work_sec)
+    row["work_rate_percent"] = round(work_h / target_h * 1000) / 10 if target_h > 0 else None
+    row["sum_inspection_qty"] = qty
+    row["efficiency_per_hour"] = _round_efficiency_decimal(qty, work_sec)
+    row["operating_rate_percent"] = round(work_h / shift_h * 1000) / 10 if shift_h > 0 else None
+    return row
+
+
+def _build_inspector_metrics_total_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    total: dict[str, Any] = {
+        "inspector_name": "合計",
+        "defects": {header: 0 for header in INSPECTOR_METRICS_DEFECT_HEADERS},
+        "sum_shift_sec": 0,
+        "sum_break_sec": 0,
+        "sum_stop_sec": 0,
+        "sum_work_sec": 0,
+        "sum_inspection_qty": 0,
+    }
+    for row in rows:
+        for header in INSPECTOR_METRICS_DEFECT_HEADERS:
+            total["defects"][header] += int(row.get("defects", {}).get(header) or 0)
+        total["sum_shift_sec"] += int(row.get("sum_shift_sec") or 0)
+        total["sum_break_sec"] += int(row.get("sum_break_sec") or 0)
+        total["sum_stop_sec"] += int(row.get("sum_stop_sec") or 0)
+        total["sum_work_sec"] += int(row.get("sum_work_sec") or 0)
+        total["sum_inspection_qty"] += int(row.get("sum_inspection_qty") or 0)
+    finalized = _finalize_inspector_metrics_row(total)
+    finalized["inspector_name"] = "合計"
+    return finalized
 
 
 def _apply_inspector_standard_to_daily_row(
@@ -7034,6 +7184,10 @@ async def get_inspection_productivity_analysis(
     product_map: dict[str, dict[str, Any]] = {}
     product_inspector_map: dict[str, dict[str, Any]] = {}
     defect_item_map: dict[str, int] = {}
+    inspector_metrics_map: dict[str, dict[str, Any]] = {}
+    defect_cd_name_map = await _load_inspection_defect_cd_name_map(db)
+    metrics_defect_header_index = _build_inspector_metrics_defect_header_index()
+    im_col_set = set(im_cols)
 
     for row in rows:
         item = _normalize_inspection_mgmt_row(dict(row))
@@ -7160,6 +7314,32 @@ async def get_inspection_productivity_analysis(
                     continue
                 defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty
 
+        if inspector_key not in inspector_metrics_map:
+            inspector_metrics_map[inspector_key] = _new_inspector_metrics_bucket(
+                inspector_user_id=int(inspector_id) if inspector_id is not None else None,
+                inspector_name=inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+            )
+        metrics_bucket = inspector_metrics_map[inspector_key]
+        shift_sec, break_sec, stop_sec, work_sec = _resolve_inspection_row_csv_time_secs(item, im_col_set)
+        metrics_bucket["sum_shift_sec"] += shift_sec
+        metrics_bucket["sum_break_sec"] += break_sec
+        metrics_bucket["sum_stop_sec"] += stop_sec
+        metrics_bucket["sum_work_sec"] += work_sec
+        metrics_bucket["sum_inspection_qty"] += actual_qty
+        if defect_by_item:
+            for defect_cd, qty_raw in defect_by_item.items():
+                header = _resolve_inspector_metrics_defect_header(
+                    str(defect_cd or ""),
+                    cd_name_map=defect_cd_name_map,
+                    header_index=metrics_defect_header_index,
+                )
+                if not header:
+                    continue
+                qty = int(qty_raw or 0)
+                if qty <= 0:
+                    continue
+                metrics_bucket["defects"][header] = int(metrics_bucket["defects"].get(header) or 0) + qty
+
     summary = _finalize_inspection_productivity_bucket(summary_bucket)
     summary["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0)
     summary["sum_paused_min"] = round(summary["sum_paused_sec"] / 60) if summary["sum_paused_sec"] > 0 else 0
@@ -7216,6 +7396,15 @@ async def get_inspection_productivity_analysis(
         key=lambda x: (-int(x.get("sum_actual_qty") or 0), str(x.get("product_cd") or ""))
     )
 
+    inspector_metrics_rows = sorted(
+        [_finalize_inspector_metrics_row(dict(v)) for v in inspector_metrics_map.values()],
+        key=lambda x: str(x.get("inspector_name") or ""),
+    )
+    support_row = _finalize_inspector_metrics_row(
+        _new_inspector_metrics_bucket(inspector_user_id=None, inspector_name="応援")
+    )
+    total_metrics_row = _build_inspector_metrics_total_row(inspector_metrics_rows)
+
     return {
         "success": True,
         "data": {
@@ -7228,6 +7417,12 @@ async def get_inspection_productivity_analysis(
             "by_product": by_product,
             "by_product_inspector_ranking": by_product_inspector_ranking,
             "defect_by_item": defect_by_item,
+            "by_inspector_metrics": {
+                "rows": inspector_metrics_rows,
+                "support_row": support_row,
+                "total_row": total_metrics_row,
+                "defect_headers": list(INSPECTOR_METRICS_DEFECT_HEADERS),
+            },
             "sessions": sessions,
         },
     }

@@ -154,6 +154,28 @@ export interface InspectionProductivityDefectRow {
   qty: number
 }
 
+export interface InspectionProductivityInspectorMetricsRow {
+  inspector_user_id?: number | null
+  inspector_name?: string
+  defects?: Record<string, number>
+  shift_hours?: number
+  break_hours?: number
+  stop_hours?: number
+  target_work_hours?: number
+  work_hours?: number
+  work_rate_percent?: number | null
+  sum_inspection_qty?: number
+  efficiency_per_hour?: number | null
+  operating_rate_percent?: number | null
+}
+
+export interface InspectionProductivityInspectorMetricsData {
+  rows: InspectionProductivityInspectorMetricsRow[]
+  support_row: InspectionProductivityInspectorMetricsRow
+  total_row: InspectionProductivityInspectorMetricsRow
+  defect_headers: string[]
+}
+
 export interface InspectionProductivitySessionRow extends InspectionManagementListRow {
   net_production_sec?: number
   paused_sec?: number
@@ -177,6 +199,7 @@ export interface InspectionProductivityAnalysisData {
   by_product: InspectionProductivityProductRow[]
   by_product_inspector_ranking: InspectionProductivityProductInspectorRanking[]
   defect_by_item: InspectionProductivityDefectRow[]
+  by_inspector_metrics?: InspectionProductivityInspectorMetricsData
   sessions: InspectionProductivitySessionRow[]
 }
 

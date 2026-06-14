@@ -1,5 +1,7 @@
 import type {
   InspectionProductivityAnalysisData,
+  InspectionProductivityInspectorMetricsData,
+  InspectionProductivityInspectorMetricsRow,
   InspectionProductivityInspectorRow,
   InspectionProductivityProductInspectorRanking,
   InspectionProductivityProductRow,
@@ -1165,6 +1167,225 @@ export function exportInspectionSummaryCsv(
 ) {
   const content = buildSummaryCsv(data, filters, extras)
   downloadCsvFile(`${reportFileBase(filters)}_集計.csv`, content)
+}
+
+function fmtPct2(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return ''
+  return `${value.toFixed(2)}%`
+}
+
+function fmtHours(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return ''
+  return value.toFixed(2)
+}
+
+function fmtEfficiencyDecimal(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return ''
+  return value.toFixed(1)
+}
+
+function metricsDefectHeaderLabel(header: string): string {
+  if (header === 'W検査　廃棄') return 'W検査'
+  if (header === 'モヤ/カブリ') return 'モヤ / カブリ'
+  return header
+}
+
+function getInspectorMetricsPrintStyles(): string {
+  return `
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    @page { size: A4 landscape; margin: 8mm 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #000;
+      font: 9px/1.25 "Yu Gothic UI", "Hiragino Sans", Meiryo, "Segoe UI", sans-serif;
+      background: #fff;
+    }
+    .hd {
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #666;
+    }
+    .hd__title { font-size: 14px; font-weight: 700; }
+    .hd__section { margin-top: 2px; font-size: 11px; font-weight: 700; }
+    .meta-line {
+      margin-top: 4px;
+      font-size: 8.5px;
+      color: #333;
+    }
+    .meta-line__label { font-weight: 700; }
+    .meta-line__sep { margin: 0 6px; color: #999; }
+    table.metrics {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    table.metrics th,
+    table.metrics td {
+      border: 1px solid #000;
+      padding: 2px 3px;
+      vertical-align: middle;
+      word-break: break-word;
+    }
+    table.metrics th {
+      background: #d9ead3;
+      font-size: 8px;
+      font-weight: 700;
+      text-align: center;
+    }
+    table.metrics td {
+      font-size: 8px;
+      font-variant-numeric: tabular-nums;
+    }
+    table.metrics td.name {
+      text-align: left;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    table.metrics td.num {
+      text-align: right;
+    }
+    table.metrics tbody tr:nth-child(even) td {
+      background: #eef6ea;
+    }
+    table.metrics tbody tr:nth-child(odd) td {
+      background: #fff;
+    }
+    table.metrics tbody tr.row-support td {
+      background: #fff;
+      min-height: 18px;
+    }
+    table.metrics tbody tr.row-total td {
+      background: #fff;
+      font-weight: 700;
+      border-top: 2px dashed #4a86e8;
+    }
+    table.metrics .col-name { width: 52px; }
+    table.metrics .col-defect { width: 34px; }
+    table.metrics .col-time { width: 42px; }
+    table.metrics .col-qty { width: 52px; }
+    table.metrics .col-eff { width: 38px; }
+    table.metrics .col-op { width: 42px; }
+    .ft {
+      margin-top: 8px;
+      font-size: 7.5px;
+      color: #666;
+      text-align: right;
+    }
+    @media print {
+      body { margin: 0; }
+      table.metrics thead { display: table-header-group; }
+      table.metrics tr { break-inside: avoid; page-break-inside: avoid; }
+    }
+  `
+}
+
+function buildInspectorMetricsRowHtml(
+  row: InspectionProductivityInspectorMetricsRow,
+  defectHeaders: string[],
+  options?: { total?: boolean; support?: boolean },
+): string {
+  const cls = options?.total ? 'row-total' : options?.support ? 'row-support' : ''
+  const defectCells = defectHeaders
+    .map((header) => {
+      const qty = row.defects?.[header] ?? 0
+      return `<td class="num">${qty > 0 ? escHtml(fmtInt(qty)) : ''}</td>`
+    })
+    .join('')
+  const operating =
+    options?.total && row.operating_rate_percent != null
+      ? fmtPct2(row.operating_rate_percent)
+      : ''
+
+  return `<tr class="${cls}">
+    <td class="name">${escHtml(row.inspector_name ?? '')}</td>
+    ${defectCells}
+    <td class="num">${escHtml(fmtHours(row.shift_hours))}</td>
+    <td class="num">${escHtml(fmtHours(row.break_hours))}</td>
+    <td class="num">${escHtml(fmtHours(row.stop_hours))}</td>
+    <td class="num">${escHtml(fmtHours(row.target_work_hours))}</td>
+    <td class="num">${escHtml(fmtHours(row.work_hours))}</td>
+    <td class="num">${escHtml(fmtPct2(row.work_rate_percent))}</td>
+    <td class="num">${escHtml(fmtInt(row.sum_inspection_qty))}</td>
+    <td class="num">${escHtml(fmtEfficiencyDecimal(row.efficiency_per_hour))}</td>
+    <td class="num">${escHtml(operating)}</td>
+  </tr>`
+}
+
+function buildInspectorMetricsTableHtml(metrics: InspectionProductivityInspectorMetricsData): string {
+  const defectHeaders = metrics.defect_headers?.length
+    ? metrics.defect_headers
+    : [
+        '加工キズ',
+        '油タレ',
+        '曲げ不良',
+        'カ他',
+        'メッキ後キズ',
+        'モヤ/カブリ',
+        'ニッケル',
+        '接触',
+        'メ他',
+        '溶接不良',
+        'W検査　廃棄',
+      ]
+  const defectHead = defectHeaders
+    .map((header) => `<th class="col-defect">${escHtml(metricsDefectHeaderLabel(header))}</th>`)
+    .join('')
+  const body = [
+    ...metrics.rows.map((row) => buildInspectorMetricsRowHtml(row, defectHeaders)),
+    buildInspectorMetricsRowHtml(metrics.support_row, defectHeaders, { support: true }),
+    buildInspectorMetricsRowHtml(metrics.total_row, defectHeaders, { total: true }),
+  ].join('')
+
+  return `<table class="metrics">
+    <thead>
+      <tr>
+        <th class="col-name">名前</th>
+        ${defectHead}
+        <th class="col-time">シフト</th>
+        <th class="col-time">休憩</th>
+        <th class="col-time">ロス時間</th>
+        <th class="col-time">作業すべき時間</th>
+        <th class="col-time">作業時間</th>
+        <th class="col-time">作業率</th>
+        <th class="col-qty">検査総数</th>
+        <th class="col-eff">能率</th>
+        <th class="col-op">稼働率</th>
+      </tr>
+    </thead>
+    <tbody>${body}</tbody>
+  </table>`
+}
+
+export function buildInspectionProductivityInspectorMetricsPrintHtml(
+  filters: InspectionProductivityReportFilters,
+  metrics: InspectionProductivityInspectorMetricsData,
+): string {
+  const printedAt = printedAtJa()
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>検査工程 — 検査員別指標表</title>
+  <style>${getInspectorMetricsPrintStyles()}</style>
+</head>
+<body>
+  <header class="hd">
+    <div class="hd__title">検査工程 — 生産性分析</div>
+    <div class="hd__section">検査員別指標表</div>
+    ${buildMetaLineHtml(filters, printedAt, { compact: true })}
+  </header>
+  ${buildInspectorMetricsTableHtml(metrics)}
+  <footer class="ft">Smart-EMAPs · 検査生産性分析 · ${escHtml(printedAt)}</footer>
+</body>
+</html>`
+}
+
+export function printInspectionProductivityInspectorMetrics(
+  filters: InspectionProductivityReportFilters,
+  metrics: InspectionProductivityInspectorMetricsData,
+) {
+  openPrintDocument(buildInspectionProductivityInspectorMetricsPrintHtml(filters, metrics))
 }
 
 export function printInspectionProductivityReport(payload: InspectionProductivityPrintPayload) {
