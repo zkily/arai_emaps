@@ -376,6 +376,43 @@ def _inspection_mes_column_migration_hint(column: str) -> str:
     )
 
 
+def _inspection_mgmt_inspector_select_fragment(join_inspector: bool, *, trailing_comma: bool = True) -> str:
+    suffix = "," if trailing_comma else ""
+    if join_inspector:
+        return (
+            "users.full_name AS mes_inspector_name,\n"
+            f"               users.username AS mes_inspector_username{suffix}"
+        )
+    return (
+        "NULL AS mes_inspector_name,\n"
+        f"               NULL AS mes_inspector_username{suffix}"
+    )
+
+
+def _is_unknown_mysql_column_error(msg: str, column: str) -> bool:
+    low = msg.lower()
+    col = column.lower()
+    if col not in low:
+        return False
+    return "unknown column" in low or "1054" in low
+
+
+def _raise_inspection_mgmt_query_error(exc: Exception) -> None:
+    msg = str(exc).lower()
+    if "inspection_management" in msg and (
+        "doesn't exist" in msg or "does not exist" in msg or "not exist" in msg or "unknown table" in msg
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+        ) from exc
+    raw = str(exc)
+    for col in _INSPECTION_MGMT_MES_COLUMNS:
+        if _is_unknown_mysql_column_error(raw, col):
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from exc
+    raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 def _parse_inspection_datetime(value: Any) -> Optional[datetime]:
     if value is None:
         return None
@@ -6741,16 +6778,7 @@ async def get_inspection_management_list(
         result = await db.execute(text(sql), params)
         rows = result.mappings().all()
     except Exception as e:
-        msg = str(e).lower()
-        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(
-                status_code=503,
-                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
-            ) from e
-        for col in _INSPECTION_MGMT_MES_COLUMNS:
-            if col in msg:
-                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _raise_inspection_mgmt_query_error(e)
 
     out = [_normalize_inspection_mgmt_row(dict(row)) for row in rows]
     return {"success": True, "data": out}
@@ -6858,11 +6886,7 @@ async def get_inspection_productivity_analysis(
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     join_inspector = "mes_inspector_user_id" in im_cols
-    inspector_select = (
-        "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
-        if join_inspector
-        else "NULL AS mes_inspector_name,\n               NULL AS mes_inspector_username,"
-    )
+    inspector_select = _inspection_mgmt_inspector_select_fragment(join_inspector)
     inspector_join = "LEFT JOIN users ON users.id = inspection_management.mes_inspector_user_id" if join_inspector else ""
 
     where_parts: list[str] = [
@@ -6910,16 +6934,7 @@ async def get_inspection_productivity_analysis(
         result = await db.execute(text(sql), params)
         rows = result.mappings().all()
     except Exception as e:
-        msg = str(e).lower()
-        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(
-                status_code=503,
-                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
-            ) from e
-        for col in _INSPECTION_MGMT_MES_COLUMNS:
-            if col in msg:
-                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _raise_inspection_mgmt_query_error(e)
 
     sessions: list[dict[str, Any]] = []
     summary_bucket: dict[str, Any] = {
@@ -7194,11 +7209,7 @@ async def get_inspection_utilization_analysis(
 
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     join_inspector = "mes_inspector_user_id" in im_cols
-    inspector_select = (
-        "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
-        if join_inspector
-        else "NULL AS mes_inspector_name,\n               NULL AS mes_inspector_username,"
-    )
+    inspector_select = _inspection_mgmt_inspector_select_fragment(join_inspector, trailing_comma=False)
     inspector_join = "LEFT JOIN users ON users.id = inspection_management.mes_inspector_user_id" if join_inspector else ""
 
     where_parts: list[str] = [
@@ -7230,16 +7241,7 @@ async def get_inspection_utilization_analysis(
         result = await db.execute(text(sql), params)
         rows = result.mappings().all()
     except Exception as e:
-        msg = str(e).lower()
-        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(
-                status_code=503,
-                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
-            ) from e
-        for col in _INSPECTION_MGMT_MES_COLUMNS:
-            if col in msg:
-                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _raise_inspection_mgmt_query_error(e)
 
     daily_inspector_map: dict[tuple[str, str], dict[str, Any]] = {}
     daily_inspector_set: dict[str, set[str]] = {}
@@ -7474,11 +7476,7 @@ async def get_inspection_quality_analysis(
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     join_inspector = "mes_inspector_user_id" in im_cols
-    inspector_select = (
-        "users.full_name AS mes_inspector_name,\n               users.username AS mes_inspector_username,"
-        if join_inspector
-        else "NULL AS mes_inspector_name,\n               NULL AS mes_inspector_username,"
-    )
+    inspector_select = _inspection_mgmt_inspector_select_fragment(join_inspector)
     inspector_join = "LEFT JOIN users ON users.id = inspection_management.mes_inspector_user_id" if join_inspector else ""
 
     where_parts: list[str] = [
@@ -7526,16 +7524,7 @@ async def get_inspection_quality_analysis(
         result = await db.execute(text(sql), params)
         rows = result.mappings().all()
     except Exception as e:
-        msg = str(e).lower()
-        if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(
-                status_code=503,
-                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
-            ) from e
-        for col in _INSPECTION_MGMT_MES_COLUMNS:
-            if col in msg:
-                raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint(col)) from e
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        _raise_inspection_mgmt_query_error(e)
 
     summary_bucket: dict[str, Any] = {
         "session_count": 0,

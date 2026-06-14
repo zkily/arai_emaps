@@ -22,25 +22,45 @@
         <span v-if="analysisData" class="ipa-hero__range">
           {{ analysisData.start_date }} ～ {{ analysisData.end_date }}
         </span>
-        <el-dropdown trigger="click" :disabled="!analysisData || exportBusy" @command="handleReportCommand">
-          <el-button class="ipa-btn ipa-btn--ghost" :icon="Document" :loading="exportBusy" round>
-            レポート
-            <el-icon class="ipa-btn__caret"><ArrowDown /></el-icon>
+        <el-dropdown
+          trigger="click"
+          :disabled="!analysisData || exportBusy"
+          popper-class="ipa-report-dropdown"
+          @command="handleReportCommand"
+        >
+          <el-button class="ipa-btn ipa-btn--report" :loading="exportBusy" round>
+            <span class="ipa-btn__inner">
+              <el-icon v-if="!exportBusy" class="ipa-btn__icon"><Document /></el-icon>
+              <span>レポート</span>
+              <el-icon class="ipa-btn__caret"><ArrowDown /></el-icon>
+            </span>
           </el-button>
           <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="print-full">印刷（全体）</el-dropdown-item>
-              <el-dropdown-item divided command="print-daily">日別推移（印刷）</el-dropdown-item>
-              <el-dropdown-item command="print-daily-batch">日別推移（検査員別・一括印刷）</el-dropdown-item>
-              <el-dropdown-item command="print-inspector">検査員別（印刷）</el-dropdown-item>
-              <el-dropdown-item command="print-product">製品別（印刷）</el-dropdown-item>
-              <el-dropdown-item command="print-weld-rank">検査員平均能率ランキング（印刷）</el-dropdown-item>
-              <el-dropdown-item command="print-product-rank">製品別 · 検査員能率ランキング（印刷）</el-dropdown-item>
+            <el-dropdown-menu class="ipa-report-menu">
+              <el-dropdown-item
+                v-for="item in reportMenuItems"
+                :key="item.command"
+                :command="item.command"
+                :divided="item.divided"
+                class="ipa-report-item"
+                :class="`ipa-report-item--${item.tone}`"
+              >
+                <span class="ipa-report-item__icon-wrap">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                </span>
+                <span class="ipa-report-item__text">
+                  <span class="ipa-report-item__label">{{ item.label }}</span>
+                  <span v-if="item.hint" class="ipa-report-item__hint">{{ item.hint }}</span>
+                </span>
+              </el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button class="ipa-btn ipa-btn--ghost" :icon="Refresh" :loading="loading" round @click="() => loadAnalysis()">
-          更新
+        <el-button class="ipa-btn ipa-btn--refresh" :loading="loading" round @click="() => loadAnalysis()">
+          <span class="ipa-btn__inner">
+            <el-icon v-if="!loading" class="ipa-btn__icon"><Refresh /></el-icon>
+            <span>更新</span>
+          </span>
         </el-button>
       </div>
     </header>
@@ -485,9 +505,6 @@
                       <span class="ipa-eff-pill ipa-eff-pill--warn">{{ fmtPct(row.defect_rate_percent) }}</span>
                     </template>
                   </el-table-column>
-                  <el-table-column label="稼働" width="64" align="right">
-                    <template #default="{ row }">{{ fmtDurationMin(row.sum_net_production_min) }}</template>
-                  </el-table-column>
                 </el-table>
 
                 <div v-if="!selectedProductRanking.inspectors.length" class="ipa-rank-empty">
@@ -568,7 +585,18 @@
                 <el-icon class="ipa-panel__ico"><List /></el-icon>
                 <span class="ipa-panel__title">セッション明細</span>
               </div>
-              <span class="ipa-panel__badge">{{ analysisData.sessions.length }} 件</span>
+              <div class="ipa-panel__badges">
+                <span class="ipa-panel__badge">{{ analysisData.sessions.length }} 件</span>
+                <button
+                  type="button"
+                  class="ipa-session-csv-btn"
+                  :disabled="sessionExportBusy"
+                  @click="handleExportSessionsCsv"
+                >
+                  <el-icon><Download /></el-icon>
+                  CSV
+                </button>
+              </div>
             </div>
             <el-table :data="analysisData.sessions" size="small" class="ipa-table ipa-table--detail" max-height="380">
               <el-table-column prop="production_day" label="生産日" width="102" fixed />
@@ -719,6 +747,7 @@ import {
   DataAnalysis,
   Document,
   DocumentChecked,
+  Download,
   Goods,
   List,
   Refresh,
@@ -751,10 +780,13 @@ import {
   resolveMesDefectItemLabel,
 } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 import {
+  exportInspectionSessionsCsv,
   printInspectionProductivityDailyBatch,
+  printInspectionProductivityInspectorProductBatch,
   printInspectionProductivityReport,
   printInspectionProductivitySection,
   type InspectionProductivityDailyBatchItem,
+  type InspectionProductivityInspectorProductBatchItem,
   type InspectionProductivityPrintSection,
   type InspectionProductivityReportContext,
   type InspectionProductivityReportFilters,
@@ -762,10 +794,80 @@ import {
 
 defineOptions({ name: 'MesInspectionProductivityAnalysis' })
 
+type ReportMenuTone = 'indigo' | 'sky' | 'teal' | 'violet' | 'emerald' | 'amber' | 'rose'
+
+const reportMenuItems: Array<{
+  command: string
+  label: string
+  hint?: string
+  icon: typeof Document
+  tone: ReportMenuTone
+  divided?: boolean
+}> = [
+  {
+    command: 'print-full',
+    label: '印刷（全体）',
+    hint: '全セクション一括出力',
+    icon: markRaw(Document),
+    tone: 'indigo',
+  },
+  {
+    command: 'print-daily',
+    label: '日別推移（印刷）',
+    hint: '生産数 · 能率の推移',
+    icon: markRaw(TrendCharts),
+    tone: 'sky',
+    divided: true,
+  },
+  {
+    command: 'print-daily-batch',
+    label: '日別推移（検査員別・一括印刷）',
+    hint: '検査員ごとに分割出力',
+    icon: markRaw(DataAnalysis),
+    tone: 'teal',
+  },
+  {
+    command: 'print-inspector',
+    label: '検査員別（印刷）',
+    hint: '検査員別サマリー',
+    icon: markRaw(User),
+    tone: 'violet',
+  },
+  {
+    command: 'print-inspector-product-batch',
+    label: '検査員別製品別（検査員別・一括印刷）',
+    hint: '検査員ごとに製品一覧を出力',
+    icon: markRaw(Goods),
+    tone: 'violet',
+  },
+  {
+    command: 'print-product',
+    label: '製品別（印刷）',
+    hint: '製品別サマリー',
+    icon: markRaw(Goods),
+    tone: 'emerald',
+  },
+  {
+    command: 'print-weld-rank',
+    label: '検査員平均能率ランキング（印刷）',
+    hint: '溶接あり / なし比較',
+    icon: markRaw(Trophy),
+    tone: 'amber',
+  },
+  {
+    command: 'print-product-rank',
+    label: '製品別 · 検査員能率ランキング（印刷）',
+    hint: '製品単位の順位表',
+    icon: markRaw(List),
+    tone: 'rose',
+  },
+]
+
 const { t, te } = useI18n()
 
 const loading = ref(false)
 const exportBusy = ref(false)
+const sessionExportBusy = ref(false)
 const contentVisible = ref(false)
 const analysisData = ref<InspectionProductivityAnalysisData | null>(null)
 const inspectorOptions = ref<InspectionManagementInspectorOption[]>([])
@@ -1470,6 +1572,11 @@ async function handleReportCommand(command: string | number | object) {
       return
     }
 
+    if (cmd === 'print-inspector-product-batch') {
+      await handleBatchInspectorProductPrint()
+      return
+    }
+
     await prepareChartsForReport(cmd)
     const ctx = buildReportContext()
     if (!ctx) {
@@ -1592,6 +1699,84 @@ async function handleBatchDailyByInspectorPrint() {
   }
 
   printInspectionProductivityDailyBatch(filters, items)
+}
+
+async function handleBatchInspectorProductPrint() {
+  const filters = buildReportFilters()
+  const [start, end] = dateRange.value ?? []
+  if (!filters || !start || !end) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  const inspectors = inspectorOptions.value
+  if (!inspectors.length) {
+    ElMessage.warning('検査員が登録されていません')
+    return
+  }
+
+  const res = await fetchInspectionProductivityAnalysis({
+    start_date: start,
+    end_date: end,
+    product_cd: filterProductCd.value || null,
+    include_incomplete: includeIncomplete.value,
+  })
+  if (!res.success || !res.data) {
+    ElMessage.warning('分析データの取得に失敗しました')
+    return
+  }
+
+  const sessions = res.data.sessions ?? []
+  const items: InspectionProductivityInspectorProductBatchItem[] = []
+
+  for (const insp of inspectors) {
+    const rows = buildInspectorProductRows(sessions, String(insp.id), () => true)
+    if (!rows.length) continue
+
+    const sessionCount = rows.reduce((sum, row) => sum + Number(row.session_count ?? 0), 0)
+    const sumActualQty = rows.reduce((sum, row) => sum + Number(row.sum_actual_qty ?? 0), 0)
+    const totalSec = rows.reduce((sum, row) => sum + Number(row.sum_net_production_sec ?? 0), 0)
+    const avgEfficiencyPerHour =
+      sumActualQty > 0 && totalSec > 0 ? Math.round(sumActualQty / (totalSec / 3600)) : null
+
+    items.push({
+      inspectorLabel: inspectorLabel(insp),
+      productCount: rows.length,
+      sessionCount,
+      sumActualQty,
+      avgEfficiencyPerHour,
+      productRows: rows,
+    })
+  }
+
+  if (!items.length) {
+    ElMessage.warning('印刷できる検査員別製品データがありません')
+    return
+  }
+
+  items.sort((a, b) => (b.avgEfficiencyPerHour ?? -1) - (a.avgEfficiencyPerHour ?? -1))
+  printInspectionProductivityInspectorProductBatch(filters, items)
+}
+
+function handleExportSessionsCsv() {
+  if (!analysisData.value) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+  const filters = buildReportFilters()
+  if (!filters) {
+    ElMessage.warning('集計期間を指定してください')
+    return
+  }
+
+  sessionExportBusy.value = true
+  try {
+    exportInspectionSessionsCsv(analysisData.value, filters)
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'CSV出力に失敗しました')
+  } finally {
+    sessionExportBusy.value = false
+  }
 }
 
 async function loadInspectors() {
@@ -1841,7 +2026,7 @@ function buildDailyTrendChartOption(
       icon: 'roundRect',
       textStyle: { color: '#475569', fontSize: 11, fontWeight: 600 },
     },
-    grid: { left: 52, right: 52, top: 62, bottom: 28, containLabel: false },
+    grid: { left: 52, right: 52, top: 72, bottom: 28, containLabel: false },
     xAxis: {
       type: 'category',
       data: days,
@@ -1891,12 +2076,16 @@ function buildDailyTrendChartOption(
           position: 'inside',
           verticalAlign: 'middle',
           align: 'center',
-          color: '#ef4444',
-          fontSize: 10,
+          color: '#ffffff',
+          fontSize: 9,
           fontWeight: 700,
-          textShadowColor: 'rgba(255, 255, 255, 0.9)',
-          textShadowBlur: 3,
-          formatter: (params: { value?: number | null }) => fmtInt(params.value),
+          textShadowColor: 'rgba(67, 56, 202, 0.55)',
+          textShadowBlur: 4,
+          formatter: (params: { value?: number | null }) => {
+            const v = Number(params.value ?? 0)
+            if (!Number.isFinite(v) || v <= 0) return ''
+            return fmtInt(v)
+          },
         },
         itemStyle: {
           borderRadius: [6, 6, 0, 0],
@@ -1941,14 +2130,14 @@ function buildDailyTrendChartOption(
         label: {
           show: true,
           position: 'top',
-          distance: 10,
-          color: '#065f46',
-          fontSize: 10,
+          distance: 12,
+          color: '#047857',
+          fontSize: 9,
           fontWeight: 700,
-          backgroundColor: 'rgba(255, 255, 255, 0.92)',
+          backgroundColor: 'rgba(255, 255, 255, 0.94)',
           padding: [3, 6],
           borderRadius: 6,
-          borderColor: 'rgba(16, 185, 129, 0.28)',
+          borderColor: 'rgba(16, 185, 129, 0.32)',
           borderWidth: 1,
           shadowColor: 'rgba(16, 185, 129, 0.12)',
           shadowBlur: 6,
@@ -2466,9 +2655,80 @@ onBeforeUnmount(() => {
   flex-shrink: 0;
 }
 
+.ipa-btn {
+  height: 34px !important;
+  padding: 0 16px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em;
+  border: none !important;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.ipa-btn__inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ipa-btn__icon {
+  font-size: 14px;
+}
+
 .ipa-btn__caret {
-  margin-left: 2px;
-  font-size: 12px;
+  margin-left: 0;
+  font-size: 11px;
+  opacity: 0.88;
+}
+
+.ipa-btn--report {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 52%, #4f46e5 100%) !important;
+  color: #fff !important;
+  box-shadow:
+    0 4px 14px rgba(99, 102, 241, 0.42),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
+}
+
+.ipa-btn--report:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 8px 22px rgba(99, 102, 241, 0.52),
+    0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+
+.ipa-btn--report:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ipa-btn--refresh {
+  background: linear-gradient(135deg, #047857 0%, #10b981 52%, #14b8a6 100%) !important;
+  color: #fff !important;
+  box-shadow:
+    0 4px 14px rgba(16, 185, 129, 0.38),
+    0 1px 0 rgba(255, 255, 255, 0.22) inset;
+}
+
+.ipa-btn--refresh:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    0 8px 22px rgba(16, 185, 129, 0.48),
+    0 1px 0 rgba(255, 255, 255, 0.25) inset;
+}
+
+.ipa-btn--refresh:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.ipa-btn--report.is-disabled,
+.ipa-btn--refresh.is-disabled {
+  opacity: 0.55;
+  filter: grayscale(0.15);
+  box-shadow: none !important;
 }
 
 .ipa-hero__range {
@@ -2706,26 +2966,6 @@ onBeforeUnmount(() => {
   color: #94a3b8;
 }
 
-.ipa-btn--primary {
-  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
-  font-weight: 600;
-  padding: 0 18px;
-  height: 32px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.ipa-btn--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
-}
-
-.ipa-btn--ghost {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  color: #475569 !important;
-}
 
 .ipa-body {
   display: flex;
@@ -2996,6 +3236,33 @@ onBeforeUnmount(() => {
   color: #0369a1;
   background: rgba(14, 165, 233, 0.12);
   border: 1px solid rgba(14, 165, 233, 0.2);
+}
+
+.ipa-session-csv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 10px;
+  font-weight: 700;
+  color: #4338ca;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ipa-session-csv-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: rgba(99, 102, 241, 0.45);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.12);
+}
+
+.ipa-session-csv-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .ipa-panel--inspector {
@@ -4258,5 +4525,179 @@ onBeforeUnmount(() => {
     margin-top: 0;
     border-radius: 10px;
   }
+}
+</style>
+
+<style>
+.ipa-report-dropdown.el-popper {
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 14px !important;
+  padding: 6px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 20px 50px rgba(15, 23, 42, 0.14),
+    0 4px 14px rgba(99, 102, 241, 0.08) !important;
+}
+
+.ipa-report-dropdown .el-popper__arrow::before {
+  border-color: rgba(226, 232, 240, 0.9) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+}
+
+.ipa-report-dropdown .ipa-report-menu {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item {
+  padding: 0;
+  line-height: normal;
+  border-radius: 10px;
+  margin: 0 0 3px;
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item:last-child {
+  margin-bottom: 0;
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item--divided {
+  margin-top: 6px;
+  border-top: 1px solid rgba(226, 232, 240, 0.85);
+  padding-top: 6px;
+}
+
+.ipa-report-dropdown .ipa-report-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  min-width: 300px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.ipa-report-dropdown .ipa-report-item__icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 15px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.ipa-report-dropdown .ipa-report-item__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ipa-report-dropdown .ipa-report-item__label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.35;
+}
+
+.ipa-report-dropdown .ipa-report-item__hint {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.ipa-report-dropdown .ipa-report-item--indigo .ipa-report-item__icon-wrap {
+  color: #4f46e5;
+  background: linear-gradient(145deg, #eef2ff, #e0e7ff);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--sky .ipa-report-item__icon-wrap {
+  color: #0284c7;
+  background: linear-gradient(145deg, #e0f2fe, #bae6fd);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--teal .ipa-report-item__icon-wrap {
+  color: #0d9488;
+  background: linear-gradient(145deg, #ccfbf1, #99f6e4);
+  box-shadow: 0 2px 6px rgba(20, 184, 166, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--violet .ipa-report-item__icon-wrap {
+  color: #7c3aed;
+  background: linear-gradient(145deg, #f3e8ff, #e9d5ff);
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--emerald .ipa-report-item__icon-wrap {
+  color: #059669;
+  background: linear-gradient(145deg, #d1fae5, #a7f3d0);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--amber .ipa-report-item__icon-wrap {
+  color: #d97706;
+  background: linear-gradient(145deg, #fef3c7, #fde68a);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
+}
+
+.ipa-report-dropdown .ipa-report-item--rose .ipa-report-item__icon-wrap {
+  color: #e11d48;
+  background: linear-gradient(145deg, #ffe4e6, #fecdd3);
+  box-shadow: 0 2px 6px rgba(244, 63, 94, 0.18);
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item {
+  background: rgba(248, 250, 252, 0.95);
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item__icon-wrap {
+  transform: scale(1.06);
+}
+
+.ipa-report-dropdown .ipa-report-item--indigo:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--indigo {
+  background: rgba(238, 242, 255, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--sky:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--sky {
+  background: rgba(224, 242, 254, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--teal:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--teal {
+  background: rgba(204, 251, 241, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--violet:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--violet {
+  background: rgba(243, 232, 255, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--emerald:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--emerald {
+  background: rgba(209, 250, 229, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--amber:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--amber {
+  background: rgba(254, 243, 199, 0.75);
+}
+
+.ipa-report-dropdown .ipa-report-item--rose:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--rose {
+  background: rgba(255, 228, 230, 0.75);
+}
+
+.ipa-report-dropdown .el-dropdown-menu__item:focus {
+  background: transparent;
+  color: inherit;
 }
 </style>

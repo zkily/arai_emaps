@@ -108,7 +108,11 @@
             <!-- 終息 -->
             <el-table-column label="終息" width="60" align="center" fixed="left">
               <template #default="{ row }">
-                <el-checkbox v-model="row.is_discontinued" @change="handleCellChange(row)" />
+                <el-checkbox
+                  v-model="row.is_discontinued"
+                  class="ppb-dot ppb-dot--rose"
+                  @change="handleCellChange(row)"
+                />
               </template>
             </el-table-column>
             <el-table-column
@@ -160,7 +164,7 @@
             <!-- 材料工程 -->
             <el-table-column label="材料工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.material_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.material_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="材料工程LT" width="100" align="center">
@@ -182,7 +186,7 @@
             <!-- 切断工程 -->
             <el-table-column label="切断工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.cuting_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.cuting_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="切断工程LT" width="100" align="center">
@@ -204,7 +208,7 @@
             <!-- 面取工程 -->
             <el-table-column label="面取工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.chamfering_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.chamfering_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="面取工程LT" width="100" align="center">
@@ -226,7 +230,7 @@
             <!-- SW工程 -->
             <el-table-column label="SW工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.swaging_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.swaging_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="SW工程LT" width="100" align="center">
@@ -248,7 +252,7 @@
             <!-- 成型工程 -->
             <el-table-column label="成型工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.forming_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.forming_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="成型工程LT" width="100" align="center">
@@ -270,7 +274,7 @@
             <!-- メッキ工程 -->
             <el-table-column label="メッキ工程" width="90" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.plating_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.plating_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="メッキ工程LT" width="110" align="center">
@@ -293,6 +297,7 @@
             <el-table-column label="外注メッキ工程" width="120" align="center">
               <template #default="{ row }">
                 <el-checkbox
+                  class="ppb-dot"
                   v-model="row.outsourced_plating_process"
                   @change="handleCellChange(row)"
                 />
@@ -317,7 +322,7 @@
             <!-- 溶接工程 -->
             <el-table-column label="溶接工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.welding_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.welding_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="溶接工程LT" width="100" align="center">
@@ -340,6 +345,7 @@
             <el-table-column label="外注溶接工程" width="120" align="center">
               <template #default="{ row }">
                 <el-checkbox
+                  class="ppb-dot"
                   v-model="row.outsourced_welding_process"
                   @change="handleCellChange(row)"
                 />
@@ -364,7 +370,7 @@
             <!-- 検査工程 -->
             <el-table-column label="検査工程" width="80" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.inspection_process" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.inspection_process" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
             <el-table-column label="検査工程LT" width="100" align="center">
@@ -387,6 +393,7 @@
             <el-table-column label="外注倉庫工程" width="120" align="center">
               <template #default="{ row }">
                 <el-checkbox
+                  class="ppb-dot"
                   v-model="row.outsourced_warehouse_process"
                   @change="handleCellChange(row)"
                 />
@@ -411,7 +418,7 @@
             <!-- メッキ前溶接 -->
             <el-table-column label="メッキ前溶接" width="110" align="center">
               <template #default="{ row }">
-                <el-checkbox v-model="row.pre_plating_welding" @change="handleCellChange(row)" />
+                <el-checkbox class="ppb-dot" v-model="row.pre_plating_welding" @change="handleCellChange(row)" />
               </template>
             </el-table-column>
 
@@ -419,6 +426,7 @@
             <el-table-column label="検査後溶接" width="100" align="center">
               <template #default="{ row }">
                 <el-checkbox
+                  class="ppb-dot"
                   v-model="row.post_inspection_welding"
                   @change="handleCellChange(row)"
                 />
@@ -1703,13 +1711,71 @@ onMounted(async () => {
   font-variant-numeric: tabular-nums;
 }
 
-.ppb-table-card :deep(.el-checkbox) {
+.ppb-table-card :deep(.el-checkbox.ppb-dot) {
   display: flex;
   justify-content: center;
+  align-items: center;
+  height: 100%;
 }
 
-.ppb-table-card :deep(.el-checkbox__inner) {
-  border-radius: 6px;
+.ppb-table-card :deep(.el-checkbox.ppb-dot .el-checkbox__input) {
+  line-height: 1;
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot .el-checkbox__inner) {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #cbd5e1;
+  background: #ffffff;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot .el-checkbox__inner::after) {
+  width: 8px;
+  height: 8px;
+  border: none;
+  border-radius: 50%;
+  background: #6366f1;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked .el-checkbox__inner) {
+  border-color: #6366f1;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked .el-checkbox__inner::after) {
+  transform: translate(-50%, -50%) scale(1);
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.ppb-dot--rose.is-checked .el-checkbox__inner) {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.ppb-dot--rose.is-checked .el-checkbox__inner::after) {
+  background: linear-gradient(135deg, #dc2626, #f87171);
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot:hover .el-checkbox__inner) {
+  border-color: #94a3b8;
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.is-checked:hover .el-checkbox__inner) {
+  border-color: #4f46e5;
+}
+
+.ppb-table-card :deep(.el-checkbox.ppb-dot.ppb-dot--rose.is-checked:hover .el-checkbox__inner) {
+  border-color: #b91c1c;
 }
 
 /* ページネーション */

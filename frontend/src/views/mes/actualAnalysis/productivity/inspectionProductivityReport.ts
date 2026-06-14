@@ -391,14 +391,18 @@ function panelSection(
     tableHtml: string
     pageBreak?: boolean
     chartTall?: boolean
+    /** グラフ領域を非表示（表のみのパネル向け） */
+    hideChart?: boolean
     /** 単独印刷など、第1ページから自然に改ページしたい場合 */
     flowBreak?: boolean
   },
 ): string {
   const chartClass = options.chartTall ? 'chart-wrap chart-wrap--tall' : 'chart-wrap'
-  const chartHtml = options.chartSrc
-    ? `<div class="${chartClass}"><img class="chart-img" src="${options.chartSrc}" alt="${escHtml(options.chartAlt ?? title)}" /></div>`
-    : '<p class="chart-empty">グラフを表示できません</p>'
+  const chartHtml = options.hideChart
+    ? ''
+    : options.chartSrc
+      ? `<div class="${chartClass}"><img class="chart-img" src="${options.chartSrc}" alt="${escHtml(options.chartAlt ?? title)}" /></div>`
+      : '<p class="chart-empty">グラフを表示できません</p>'
 
   const titleHtml = options.titleInline
     ? `<div class="panel__title-row">
@@ -517,12 +521,11 @@ function buildProductRankInspectorTable(rows: InspectionProductivityInspectorRow
         <td class="num">${escHtml(fmtInt(row.sum_actual_qty))}</td>
         <td class="num"><span class="pill pill--rank">${escHtml(fmtEfficiency(row.efficiency_per_hour))}</span></td>
         <td class="num warn">${escHtml(fmtPct(row.defect_rate_percent))}</td>
-        <td class="num">${escHtml(fmtDurationMin(row.sum_net_production_min))}</td>
       </tr>`,
     )
     .join('')
   return `<table class="data data--rank">
-    <thead>${tableHead(['順位', '検査員', '件', '生産', '能率', '不良率', '稼働'])}</thead>
+    <thead>${tableHead(['順位', '検査員', '件', '生産', '能率', '不良率'])}</thead>
     <tbody>${body}</tbody>
   </table>`
 }
@@ -1027,6 +1030,77 @@ export function printInspectionProductivityDailyBatch(
   items: InspectionProductivityDailyBatchItem[],
 ) {
   openPrintDocument(buildInspectionProductivityDailyBatchPrintHtml(filters, items))
+}
+
+export interface InspectionProductivityInspectorProductBatchItem {
+  inspectorLabel: string
+  productCount: number
+  sessionCount: number
+  sumActualQty: number
+  avgEfficiencyPerHour: number | null
+  productRows: Array<InspectionProductivityProductRow & { avg_efficiency_per_hour?: number | null }>
+}
+
+function buildInspectorProductBatchPageHeader(
+  filters: InspectionProductivityReportFilters,
+  printedAt: string,
+): string {
+  return `<header class="hd">
+    <div class="hd__title">検査工程 — 生産性分析</div>
+    <div class="hd__section">検査員別製品別</div>
+    ${buildMetaLineHtml(filters, printedAt, { compact: true })}
+  </header>`
+}
+
+export function buildInspectionProductivityInspectorProductBatchPrintHtml(
+  filters: InspectionProductivityReportFilters,
+  items: InspectionProductivityInspectorProductBatchItem[],
+): string {
+  const printedAt = printedAtJa()
+  const body = items
+    .map((item, idx) => {
+      const badges = [
+        panelBadge(`${item.productCount} 品目`, 'product'),
+        panelBadge(`セッション ${fmtInt(item.sessionCount)}`, 'soft'),
+        item.sumActualQty > 0 ? panelBadge(`生産合計 ${fmtInt(item.sumActualQty)}`, 'product') : '',
+        item.avgEfficiencyPerHour != null
+          ? panelBadge(`平均能率 ${fmtEfficiency(item.avgEfficiencyPerHour)} 本/時`, 'inspector')
+          : '',
+      ].join('')
+      const panel = panelSection('生産製品一覧', {
+        titleInline: item.inspectorLabel,
+        theme: 'inspector',
+        badges,
+        hideChart: true,
+        tableHtml: buildProductPrintTable(item.productRows),
+        flowBreak: true,
+      })
+      return `<div class="print-page${idx > 0 ? ' print-page--break' : ''}">
+        ${buildInspectorProductBatchPageHeader(filters, printedAt)}
+        ${panel}
+      </div>`
+    })
+    .join('')
+
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>検査工程 — 生産性分析 — 検査員別製品別</title>
+  <style>${getPrintStyles('section', 'portrait')}</style>
+</head>
+<body>
+  ${body}
+  <footer class="ft">Smart-EMAPs · 検査生産性分析 · ${escHtml(printedAt)}</footer>
+</body>
+</html>`
+}
+
+export function printInspectionProductivityInspectorProductBatch(
+  filters: InspectionProductivityReportFilters,
+  items: InspectionProductivityInspectorProductBatchItem[],
+) {
+  openPrintDocument(buildInspectionProductivityInspectorProductBatchPrintHtml(filters, items))
 }
 
 export function printInspectionProductivitySection(
