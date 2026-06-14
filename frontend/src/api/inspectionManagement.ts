@@ -267,6 +267,7 @@ export interface InspectionUtilizationDailyInspectorRow {
   sum_regular_sec?: number
   sum_overtime_sec?: number
   standard_sec?: number
+  scheduled_hours?: number
   sum_net_production_min?: number
   sum_gross_min?: number
   regular_min?: number
@@ -284,6 +285,7 @@ export interface InspectionUtilizationDailyRow {
   sum_regular_sec?: number
   sum_overtime_sec?: number
   sum_net_production_min?: number
+  overtime_min?: number
   utilization_percent?: number | null
 }
 
@@ -304,12 +306,26 @@ export interface InspectionUtilizationSummary {
   sessions_without_time_count?: number
 }
 
+export interface InspectionUtilizationSessionGap {
+  id: number
+  production_day: string
+  inspector_user_id?: number | null
+  inspector_name?: string | null
+  product_cd?: string | null
+  product_name?: string | null
+  production_completed_check?: boolean
+  mes_production_started_at?: string | null
+  mes_production_ended_at?: string | null
+}
+
 export interface InspectionUtilizationAnalysisData {
   start_date: string
   end_date: string
   include_incomplete: boolean
   standard_workday_hours: number
   standard_workday_sec: number
+  inspector_schedule_applied?: boolean
+  default_standard_workday_hours?: number
   extra_workdays: string[]
   extra_holidays: string[]
   company_calendar_applied?: boolean
@@ -321,6 +337,7 @@ export interface InspectionUtilizationAnalysisData {
   daily_by_inspector: InspectionUtilizationDailyInspectorRow[]
   daily: InspectionUtilizationDailyRow[]
   data_gaps: string[]
+  sessions_without_time?: InspectionUtilizationSessionGap[]
 }
 
 export interface InspectionUtilizationAnalysisResponse {

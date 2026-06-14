@@ -104,6 +104,31 @@ async def get_product_process_bom_list(
     }
 
 
+@router.get("/welding-products")
+async def get_product_process_bom_welding_products(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """溶接工程フラグが ON の product_cd 一覧（検査生産性分析の溶接ランキング用）"""
+    welding_on = or_(
+        ProductProcessBOM.welding_process == 1,
+        ProductProcessBOM.outsourced_welding_process == 1,
+        ProductProcessBOM.post_inspection_welding == 1,
+        ProductProcessBOM.pre_plating_welding == 1,
+    )
+    result = await db.execute(
+        select(ProductProcessBOM.product_cd).where(welding_on).order_by(ProductProcessBOM.product_cd.asc())
+    )
+    product_cds = [int(cd) for cd in result.scalars().all() if cd is not None]
+    return {
+        "success": True,
+        "data": {
+            "product_cds": product_cds,
+            "count": len(product_cds),
+        },
+    }
+
+
 @router.get("/stats")
 async def get_product_process_bom_stats(
     db: AsyncSession = Depends(get_db),

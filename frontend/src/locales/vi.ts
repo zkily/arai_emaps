@@ -361,6 +361,7 @@ export default {
     MASTER_DESTINATION: 'Điểm giao hàng',
     MASTER_DESTINATION_HOLIDAY: 'Ngày nghỉ điểm giao hàng',
     MASTER_COMPANY_WORK_CALENDAR: 'Lịch làm việc công ty',
+    MASTER_INSPECTION_INSPECTOR_WORK_SCHEDULE: 'Quản lý giờ chuẩn kiểm tra viên',
     MASTER_BOM: 'BOM',
     MASTER_BOM_HOME: 'Trang chủ BOM',
     MASTER_PRODUCT_PROCESS_BOM: 'BOM quy trình sản phẩm',

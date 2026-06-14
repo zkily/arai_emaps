@@ -20,6 +20,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, Any
 
 from sqlalchemy import select
+from app.core.inspection_inspector_work_schedule import (
+    DEFAULT_INSPECTION_STANDARD_HOURS,
+    DEFAULT_INSPECTION_STANDARD_SEC,
+    InspectorWorkScheduleIndex,
+    load_inspector_work_schedule_index,
+)
 from app.core.company_work_calendar import (
     count_scheduled_workdays,
     is_scheduled_workday,
@@ -364,6 +370,41 @@ def _normalize_inspection_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _build_inspection_productivity_session_row(
+    item: dict[str, Any],
+    *,
+    net_sec: int,
+    paused_sec: int,
+    actual_qty: int,
+    defect_qty: int,
+    is_completed: bool,
+) -> dict[str, Any]:
+    """分析 API 用の軽量セッション行（`**item` 全列展開による巨大 JSON / モバイル解析失敗を避ける）。"""
+    inspector_id = item.get("mes_inspector_user_id")
+    inspector_name = (item.get("mes_inspector_name") or item.get("mes_inspector_username") or "").strip()
+    day_key = str(item.get("production_day") or "")[:10]
+    row_id = item.get("id")
+    return {
+        "id": int(row_id) if row_id is not None else None,
+        "production_day": day_key or None,
+        "product_cd": (item.get("product_cd") or "").strip() or None,
+        "product_name": (item.get("product_name") or "").strip() or None,
+        "actual_production_quantity": actual_qty,
+        "defect_qty": defect_qty,
+        "mes_inspector_user_id": int(inspector_id) if inspector_id is not None else None,
+        "mes_inspector_name": inspector_name or None,
+        "mes_inspector_username": (item.get("mes_inspector_username") or "").strip() or None,
+        "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+        "net_production_sec": int(net_sec),
+        "paused_sec": int(paused_sec),
+        "net_production_min": int(round(net_sec / 60)) if net_sec > 0 else 0,
+        "paused_min": int(round(paused_sec / 60)) if paused_sec > 0 else 0,
+        "efficiency_per_hour": _inspection_efficiency_per_hour(actual_qty, net_sec),
+        "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
+        "is_completed": is_completed,
+    }
+
+
 def _inspection_mes_column_migration_hint(column: str) -> str:
     if column == "mes_client_instance_id":
         return (
@@ -481,9 +522,33 @@ def _finalize_inspection_productivity_bucket(bucket: dict[str, Any]) -> dict[str
     return bucket
 
 
-INSPECTION_STANDARD_WORKDAY_HOURS = 7.6
-INSPECTION_STANDARD_WORKDAY_SEC = int(INSPECTION_STANDARD_WORKDAY_HOURS * 3600)
+INSPECTION_STANDARD_WORKDAY_HOURS = DEFAULT_INSPECTION_STANDARD_HOURS
+INSPECTION_STANDARD_WORKDAY_SEC = DEFAULT_INSPECTION_STANDARD_SEC
 INSPECTION_DEFECT_DETECTION_PROCESS_CD = "KT09"
+
+
+def _apply_inspector_standard_to_daily_row(
+    row: dict[str, Any],
+    *,
+    schedule_index: InspectorWorkScheduleIndex,
+) -> None:
+    day_key = str(row.get("day") or "")[:10]
+    if not day_key:
+        row["scheduled_hours"] = 0.0
+        row["standard_sec"] = 0
+        return
+    day_d = date.fromisoformat(day_key)
+    inspector_id = row.get("inspector_user_id")
+    uid = int(inspector_id) if inspector_id is not None else None
+    hours = schedule_index.resolve_hours(uid, day_d)
+    is_scheduled = bool(row.get("is_scheduled_workday"))
+    net = int(row.get("sum_net_production_sec") or 0)
+    if is_scheduled or net > 0:
+        row["scheduled_hours"] = hours
+        row["standard_sec"] = int(round(hours * 3600))
+    else:
+        row["scheduled_hours"] = 0.0
+        row["standard_sec"] = 0
 
 
 def _split_utilization_sec(net_sec: int, standard_sec: int) -> tuple[int, int]:
@@ -505,9 +570,7 @@ def _utilization_percent(regular_sec: int, standard_sec: int) -> Optional[float]
 
 def _finalize_inspection_utilization_daily_row(row: dict[str, Any]) -> dict[str, Any]:
     net = int(row.get("sum_net_production_sec") or 0)
-    is_scheduled = bool(row.get("is_scheduled_workday"))
-    standard_sec = INSPECTION_STANDARD_WORKDAY_SEC if (is_scheduled or net > 0) else 0
-    row["standard_sec"] = standard_sec
+    standard_sec = int(row.get("standard_sec") or 0)
     regular, overtime = _split_utilization_sec(net, standard_sec)
     row["sum_regular_sec"] = regular
     row["sum_overtime_sec"] = overtime
@@ -522,7 +585,14 @@ def _finalize_inspection_utilization_daily_row(row: dict[str, Any]) -> dict[str,
 def _finalize_inspection_utilization_inspector_row(
     row: dict[str, Any],
     *,
-    calendar_workdays: int,
+    schedule_index: InspectorWorkScheduleIndex,
+    start_d: date,
+    end_d: date,
+    company_scheduled: set[str],
+    company_off: set[str],
+    extra_workdays: set[str],
+    extra_holidays: set[str],
+    daily_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     net = int(row.get("sum_net_production_sec") or 0)
     regular = int(row.get("sum_regular_sec") or 0)
@@ -530,11 +600,25 @@ def _finalize_inspection_utilization_inspector_row(
     row["sum_net_production_min"] = round(net / 60) if net > 0 else 0
     row["regular_min"] = round(regular / 60) if regular > 0 else 0
     row["overtime_min"] = round(overtime / 60) if overtime > 0 else 0
-    std_worked = int(row.get("scheduled_work_day_count") or 0) * INSPECTION_STANDARD_WORKDAY_SEC
+    uid = row.get("inspector_user_id")
+    uid_int = int(uid) if uid is not None else None
+    std_worked = sum(
+        int(r.get("standard_sec") or 0) for r in daily_rows if r.get("is_scheduled_workday")
+    )
+    std_calendar = 0
+    for d in iter_dates_inclusive(start_d, end_d):
+        if is_scheduled_workday(
+            d,
+            company_scheduled=company_scheduled,
+            company_off=company_off,
+            extra_workdays=extra_workdays,
+            extra_holidays=extra_holidays,
+        ):
+            std_calendar += schedule_index.resolve_sec(uid_int, d)
     row["standard_sec_on_worked_days"] = std_worked
-    row["standard_sec_calendar"] = calendar_workdays * INSPECTION_STANDARD_WORKDAY_SEC
+    row["standard_sec_calendar"] = std_calendar
     row["utilization_percent"] = _utilization_percent(regular, std_worked)
-    row["calendar_utilization_percent"] = _utilization_percent(regular, row["standard_sec_calendar"])
+    row["calendar_utilization_percent"] = _utilization_percent(regular, std_calendar)
     ot_ratio = round(overtime / net * 1000) / 10.0 if net > 0 and overtime > 0 else None
     row["overtime_ratio_percent"] = ot_ratio
     return row
@@ -6967,17 +7051,14 @@ async def get_inspection_productivity_analysis(
         product_key = (item.get("product_cd") or "").strip() or "unknown"
         product_name = (item.get("product_name") or "").strip()
 
-        session_row = {
-            **item,
-            "net_production_sec": net_sec,
-            "paused_sec": paused_sec,
-            "net_production_min": round(net_sec / 60) if net_sec > 0 else 0,
-            "paused_min": round(paused_sec / 60) if paused_sec > 0 else 0,
-            "efficiency_per_hour": _inspection_efficiency_per_hour(actual_qty, net_sec),
-            "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
-            "is_completed": is_completed,
-            "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
-        }
+        session_row = _build_inspection_productivity_session_row(
+            item,
+            net_sec=net_sec,
+            paused_sec=paused_sec,
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            is_completed=is_completed,
+        )
         sessions.append(session_row)
 
         completed_inc = 1 if is_completed else 0
@@ -7228,6 +7309,8 @@ async def get_inspection_utilization_analysis(
         SELECT inspection_management.id,
                inspection_management.production_day,
                inspection_management.production_completed_check,
+               inspection_management.product_cd,
+               inspection_management.product_name,
                {mes_frag}
                {inspector_select}
         FROM inspection_management
@@ -7247,6 +7330,7 @@ async def get_inspection_utilization_analysis(
     daily_inspector_set: dict[str, set[str]] = {}
     unassigned_session_count = 0
     sessions_without_time_count = 0
+    sessions_without_time: list[dict[str, Any]] = []
     total_session_count = 0
     completed_session_count = 0
 
@@ -7284,6 +7368,19 @@ async def get_inspection_utilization_analysis(
         net_sec = _inspection_row_net_production_sec(item)
         if net_sec <= 0:
             sessions_without_time_count += 1
+            sessions_without_time.append(
+                {
+                    "id": item.get("id"),
+                    "production_day": day_key,
+                    "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
+                    "inspector_name": inspector_name if inspector_id is not None else None,
+                    "product_cd": (item.get("product_cd") or "").strip() or None,
+                    "product_name": (item.get("product_name") or "").strip() or None,
+                    "production_completed_check": is_completed,
+                    "mes_production_started_at": item.get("mes_production_started_at"),
+                    "mes_production_ended_at": item.get("mes_production_ended_at"),
+                }
+            )
 
         map_key = (day_key, inspector_key)
         if map_key not in daily_inspector_map:
@@ -7315,13 +7412,38 @@ async def get_inspection_utilization_analysis(
         bucket["sum_net_production_sec"] = int(bucket.get("sum_net_production_sec") or 0) + net_sec
         daily_inspector_set.setdefault(day_key, set()).add(inspector_key)
 
+    inspector_user_ids: set[int] = set()
+    for raw in rows:
+        iid = dict(raw).get("mes_inspector_user_id")
+        if iid is not None:
+            inspector_user_ids.add(int(iid))
+
+    schedule_index = await load_inspector_work_schedule_index(
+        db,
+        start_d=start_d,
+        end_d=end_d,
+        inspector_user_ids=inspector_user_ids,
+    )
+
+    raw_daily_values = sorted(
+        daily_inspector_map.values(),
+        key=lambda x: (str(x.get("day") or ""), str(x.get("inspector_name") or "")),
+    )
+    for bucket in raw_daily_values:
+        _apply_inspector_standard_to_daily_row(bucket, schedule_index=schedule_index)
+
     daily_by_inspector = [
-        _finalize_inspection_utilization_daily_row(dict(v))
-        for v in sorted(
-            daily_inspector_map.values(),
-            key=lambda x: (str(x.get("day") or ""), str(x.get("inspector_name") or "")),
-        )
+        _finalize_inspection_utilization_daily_row(dict(v)) for v in raw_daily_values
     ]
+
+    daily_rows_by_inspector: dict[str, list[dict[str, Any]]] = {}
+    for row in daily_by_inspector:
+        insp_key = (
+            str(row.get("inspector_user_id"))
+            if row.get("inspector_user_id") is not None
+            else "none"
+        )
+        daily_rows_by_inspector.setdefault(insp_key, []).append(row)
 
     inspector_map: dict[str, dict[str, Any]] = {}
     for row in daily_by_inspector:
@@ -7354,7 +7476,22 @@ async def get_inspection_utilization_analysis(
 
     by_inspector = sorted(
         [
-            _finalize_inspection_utilization_inspector_row(v, calendar_workdays=calendar_workdays)
+            _finalize_inspection_utilization_inspector_row(
+                v,
+                schedule_index=schedule_index,
+                start_d=start_d,
+                end_d=end_d,
+                company_scheduled=company_scheduled,
+                company_off=company_off,
+                extra_workdays=extra_workday_set,
+                extra_holidays=extra_holiday_set,
+                daily_rows=daily_rows_by_inspector.get(
+                    str(v.get("inspector_user_id"))
+                    if v.get("inspector_user_id") is not None
+                    else "none",
+                    [],
+                ),
+            )
             for v in inspector_map.values()
         ],
         key=lambda x: (-int(x.get("sum_net_production_sec") or 0), str(x.get("inspector_name") or "")),
@@ -7373,6 +7510,7 @@ async def get_inspection_utilization_analysis(
                 "sum_net_production_sec": 0,
                 "sum_regular_sec": 0,
                 "sum_overtime_sec": 0,
+                "sum_standard_sec": 0,
             }
         day_row = daily_map[day_key]
         day_row["session_count"] = int(day_row.get("session_count") or 0) + int(row.get("session_count") or 0)
@@ -7381,6 +7519,7 @@ async def get_inspection_utilization_analysis(
         )
         day_row["sum_regular_sec"] = int(day_row.get("sum_regular_sec") or 0) + int(row.get("sum_regular_sec") or 0)
         day_row["sum_overtime_sec"] = int(day_row.get("sum_overtime_sec") or 0) + int(row.get("sum_overtime_sec") or 0)
+        day_row["sum_standard_sec"] = int(day_row.get("sum_standard_sec") or 0) + int(row.get("standard_sec") or 0)
 
     daily: list[dict[str, Any]] = []
     for day_key in sorted(daily_map.keys()):
@@ -7388,8 +7527,7 @@ async def get_inspection_utilization_analysis(
         net = int(row.get("sum_net_production_sec") or 0)
         regular = int(row.get("sum_regular_sec") or 0)
         overtime = int(row.get("sum_overtime_sec") or 0)
-        insp_count = max(1, int(row.get("inspector_count") or 0))
-        std_total = insp_count * INSPECTION_STANDARD_WORKDAY_SEC
+        std_total = int(row.get("sum_standard_sec") or 0)
         row["sum_net_production_min"] = round(net / 60) if net > 0 else 0
         row["utilization_percent"] = _utilization_percent(regular, std_total)
         daily.append(row)
@@ -7433,6 +7571,8 @@ async def get_inspection_utilization_analysis(
             "include_incomplete": include_incomplete,
             "standard_workday_hours": INSPECTION_STANDARD_WORKDAY_HOURS,
             "standard_workday_sec": INSPECTION_STANDARD_WORKDAY_SEC,
+            "inspector_schedule_applied": True,
+            "default_standard_workday_hours": DEFAULT_INSPECTION_STANDARD_HOURS,
             "extra_workdays": sorted(extra_workday_set),
             "extra_holidays": sorted(extra_holiday_set),
             "company_calendar_applied": company_calendar_applied,
@@ -7444,6 +7584,7 @@ async def get_inspection_utilization_analysis(
             "daily_by_inspector": daily_by_inspector,
             "daily": daily,
             "data_gaps": data_gaps,
+            "sessions_without_time": sessions_without_time[:100],
         },
     }
 
@@ -8641,15 +8782,23 @@ async def get_welding_productivity_analysis(
         product_name = (item.get("product_name") or "").strip()
 
         session_row = {
-            **item,
-            "net_production_sec": net_sec,
-            "paused_sec": paused_sec,
-            "net_production_min": round(net_sec / 60) if net_sec > 0 else 0,
-            "paused_min": round(paused_sec / 60) if paused_sec > 0 else 0,
+            "id": int(item["id"]) if item.get("id") is not None else None,
+            "production_day": day_key or None,
+            "product_cd": (item.get("product_cd") or "").strip() or None,
+            "product_name": (item.get("product_name") or "").strip() or None,
+            "actual_production_quantity": actual_qty,
+            "defect_qty": defect_qty,
+            "mes_operator_user_id": int(operator_id) if operator_id is not None else None,
+            "mes_operator_name": operator_name or None,
+            "mes_operator_username": (item.get("mes_operator_username") or "").strip() or None,
+            "operator_display_name": operator_name or (f"ID:{operator_id}" if operator_id else "—"),
+            "net_production_sec": int(net_sec),
+            "paused_sec": int(paused_sec),
+            "net_production_min": int(round(net_sec / 60)) if net_sec > 0 else 0,
+            "paused_min": int(round(paused_sec / 60)) if paused_sec > 0 else 0,
             "efficiency_per_hour": _inspection_efficiency_per_hour(actual_qty, net_sec),
             "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
             "is_completed": is_completed,
-            "operator_display_name": operator_name or (f"ID:{operator_id}" if operator_id else "—"),
         }
         sessions.append(session_row)
 

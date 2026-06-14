@@ -6,6 +6,9 @@ from fastapi import APIRouter
 from app.modules.master.routers.api import router as product_router
 from app.modules.master.routers.api_carrier import router as carrier_router
 from app.modules.master.routers.api_company_work_calendar import router as company_work_calendar_router
+from app.modules.master.routers.api_inspection_inspector_work_schedule import (
+    router as inspection_inspector_work_schedule_router,
+)
 from app.modules.master.routers.api_customer import router as customer_router
 from app.modules.master.routers.api_destination import router as destination_router
 from app.modules.master.routers.api_equipment_efficiency import router as equipment_efficiency_router
@@ -42,6 +45,11 @@ router.include_router(process_router, prefix="/processes", tags=["工程マス�
 router.include_router(process_route_router, prefix="/process-routes", tags=["工程ルートマスタ"])
 router.include_router(destination_router, prefix="/destinations", tags=["納入先マスタ"])
 router.include_router(company_work_calendar_router, prefix="/company-work-calendar", tags=["会社稼働カレンダー"])
+router.include_router(
+    inspection_inspector_work_schedule_router,
+    prefix="/inspection-inspector-work-schedule",
+    tags=["検査員所定工時"],
+)
 router.include_router(customer_router, prefix="/customers", tags=["顧客マスタ"])
 router.include_router(carrier_router, prefix="/carriers", tags=["運送便マスタ"])
 router.include_router(machine_router, prefix="/machines", tags=["設備マスタ"])

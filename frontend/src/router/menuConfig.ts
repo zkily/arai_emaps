@@ -205,6 +205,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'MASTER_DESTINATION', name: '納入先マスタ', icon: 'Location', path: '/master/destination', parentCode: 'MASTER_LIST', sortOrder: 10 },
   { code: 'MASTER_DESTINATION_HOLIDAY', name: '納入先休日設定', icon: 'Calendar', path: '/master/destination/holiday', parentCode: 'MASTER_LIST', sortOrder: 11 },
   { code: 'MASTER_COMPANY_WORK_CALENDAR', name: '会社稼働カレンダー', icon: 'Calendar', path: '/master/company-work-calendar', parentCode: 'MASTER_LIST', sortOrder: 12 },
+  { code: 'MASTER_INSPECTION_INSPECTOR_WORK_SCHEDULE', name: '検査員所定工時管理', icon: 'Clock', path: '/master/inspection-inspector-work-schedule', parentCode: 'MASTER_LIST', sortOrder: 13 },
   { code: 'MASTER_BOM', name: 'BOM', icon: 'Share', parentCode: 'MASTER', sortOrder: 2 },
   { code: 'MASTER_BOM_HOME', name: 'BOMホーム', icon: 'HomeFilled', path: '/master/bom', parentCode: 'MASTER_BOM', sortOrder: 0 },
   { code: 'MASTER_PRODUCT_PROCESS_BOM', name: '製品工程BOM', icon: 'Share', path: '/master/bom/product-process', parentCode: 'MASTER_BOM', sortOrder: 1 },

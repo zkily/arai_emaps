@@ -362,6 +362,7 @@ export default {
     MASTER_DESTINATION: 'Destination Master',
     MASTER_DESTINATION_HOLIDAY: 'Destination Holidays',
     MASTER_COMPANY_WORK_CALENDAR: 'Company Work Calendar',
+    MASTER_INSPECTION_INSPECTOR_WORK_SCHEDULE: 'Inspector Standard Hours Management',
     MASTER_BOM: 'BOM',
     MASTER_BOM_HOME: 'BOM Home',
     MASTER_PRODUCT_PROCESS_BOM: 'Product Process BOM',

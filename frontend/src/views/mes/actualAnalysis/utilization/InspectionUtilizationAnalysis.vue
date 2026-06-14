@@ -14,9 +14,58 @@
         </div>
         <div class="iua-hero__text">
           <div class="iua-hero__eyebrow">MES · 実績分析 · 稼働率</div>
-          <h1 class="iua-hero__title">検査工程 — 稼働率分析</h1>
+          <div class="iua-hero__title-row">
+            <h1 class="iua-hero__title">検査工程 — 稼働率分析</h1>
+            <el-popover
+              v-if="hasDataGaps"
+              trigger="click"
+              placement="bottom-start"
+              :width="560"
+              popper-class="iua-gaps-popper"
+            >
+              <template #reference>
+                <button type="button" class="iua-gaps-trigger" aria-label="データ上の留意点" @click.stop>
+                  <el-icon :size="16"><WarningFilled /></el-icon>
+                  <span v-if="dataGapsCount > 0" class="iua-gaps-trigger__badge">{{ dataGapsCount }}</span>
+                </button>
+              </template>
+              <div class="iua-gaps-panel">
+                <div class="iua-gaps-panel__head">
+                  <el-icon class="iua-gaps-panel__ico"><WarningFilled /></el-icon>
+                  <span class="iua-gaps-panel__title">データ上の留意点</span>
+                </div>
+                <ul class="iua-gaps__list">
+                  <li v-for="(g, i) in analysisData?.data_gaps" :key="i">
+                    <span>{{ g }}</span>
+                    <ul
+                      v-if="g.includes('正味稼働時間が算出できない') && sessionsWithoutTimeDetails.length"
+                      class="iua-gaps__sublist"
+                    >
+                      <li v-for="s in sessionsWithoutTimeDetails" :key="s.id" class="iua-gaps__detail">
+                        <span class="iua-gaps__detail-id">ID {{ s.id }}</span>
+                        <span>{{ s.production_day }}</span>
+                        <span>{{ s.inspector_name || '検査員未割当' }}</span>
+                        <span>{{ sessionProductLabel(s) }}</span>
+                        <span class="iua-gaps__detail-reason">{{ sessionTimeGapReason(s) }}</span>
+                        <el-tag
+                          size="small"
+                          :type="s.production_completed_check ? 'success' : 'info'"
+                          effect="light"
+                        >
+                          {{ s.production_completed_check ? '確定' : '未確定' }}
+                        </el-tag>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            </el-popover>
+          </div>
           <p class="iua-hero__meta">
-            inspection_management · 検査員別 · 所定 {{ standardHours }}h/日 · 会社稼働カレンダー自動反映
+            inspection_management · 検査員別 · 所定
+            <template v-if="analysisData?.inspector_schedule_applied">検査員マスタ優先</template>
+            <template v-else>デフォルト {{ defaultStandardHours }}h/日</template>
+            · 会社稼働カレンダー自動反映
           </p>
         </div>
       </div>
@@ -24,6 +73,40 @@
         <span v-if="analysisData" class="iua-hero__range">
           {{ analysisData.start_date }} ～ {{ analysisData.end_date }}
         </span>
+        <el-dropdown
+          trigger="click"
+          :disabled="!analysisData || exportBusy"
+          popper-class="iua-report-dropdown"
+          @command="handleReportCommand"
+        >
+          <el-button class="iua-btn iua-btn--report" :loading="exportBusy" round>
+            <span class="iua-btn__inner">
+              <el-icon v-if="!exportBusy" class="iua-btn__icon"><Document /></el-icon>
+              <span>レポート</span>
+              <el-icon class="iua-btn__caret"><ArrowDown /></el-icon>
+            </span>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu class="iua-report-menu">
+              <el-dropdown-item
+                v-for="item in reportMenuItems"
+                :key="item.command"
+                :command="item.command"
+                :divided="item.divided"
+                class="iua-report-item"
+                :class="`iua-report-item--${item.tone}`"
+              >
+                <span class="iua-report-item__icon-wrap">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                </span>
+                <span class="iua-report-item__text">
+                  <span class="iua-report-item__label">{{ item.label }}</span>
+                  <span v-if="item.hint" class="iua-report-item__hint">{{ item.hint }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button class="iua-btn iua-btn--refresh" :loading="loading" round @click="loadAnalysis">
           <span class="iua-btn__inner">
             <el-icon v-if="!loading" class="iua-btn__icon"><Refresh /></el-icon>
@@ -59,7 +142,7 @@
             class="iua-field__control iua-field__select"
           >
             <el-option label="（すべて）" value="" />
-            <el-option v-for="u in inspectorOptions" :key="u.id" :label="inspectorLabel(u)" :value="u.id" />
+            <el-option v-for="u in inspectorOptions" :key="u.id" :label="u.name" :value="u.id" />
           </el-select>
         </div>
         <label class="iua-field iua-field--check">
@@ -67,12 +150,6 @@
           <el-checkbox v-model="includeIncomplete" size="small">未確定を含む</el-checkbox>
         </label>
       </div>
-      <el-button class="iua-btn iua-btn--analyze" type="primary" :loading="loading" round @click="loadAnalysis">
-        <span class="iua-btn__inner">
-          <el-icon v-if="!loading" class="iua-btn__icon"><DataAnalysis /></el-icon>
-          <span>分析実行</span>
-        </span>
-      </el-button>
     </div>
 
     <div v-if="analysisData" class="iua-cal-banner iua-panel iua-fade-in iua-fade-in--d2">
@@ -90,53 +167,8 @@
         </template>
       </span>
       <router-link to="/master/company-work-calendar" class="iua-cal-banner__link">カレンダー管理</router-link>
+      <router-link to="/master/inspection-inspector-work-schedule" class="iua-cal-banner__link">所定工時管理</router-link>
     </div>
-
-    <el-collapse v-model="overridePanel" class="iua-override iua-fade-in iua-fade-in--d2">
-      <el-collapse-item name="override">
-        <template #title>
-          <span class="iua-override__title">分析上書き（任意）</span>
-          <span class="iua-override__hint">会社カレンダーに追加指定 · 未設定時はマスタのみ</span>
-        </template>
-        <div class="iua-override__body">
-          <div class="iua-field iua-field--wide iua-field--override">
-            <span class="iua-field__pill"><el-icon><Sunny /></el-icon>臨時出勤</span>
-            <el-date-picker
-              v-model="extraWorkdays"
-              type="dates"
-              placeholder="分析期間内の追加出勤日"
-              value-format="YYYY-MM-DD"
-              size="small"
-              class="iua-field__control iua-field__dates"
-            />
-          </div>
-          <div class="iua-field iua-field--wide iua-field--override">
-            <span class="iua-field__pill iua-field__pill--holiday"><el-icon><Moon /></el-icon>臨時休日</span>
-            <el-date-picker
-              v-model="extraHolidays"
-              type="dates"
-              placeholder="分析期間内の追加休日"
-              value-format="YYYY-MM-DD"
-              size="small"
-              class="iua-field__control iua-field__dates"
-            />
-          </div>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
-
-    <el-alert
-      v-if="analysisData?.data_gaps?.length"
-      type="info"
-      :closable="false"
-      show-icon
-      class="iua-gaps iua-fade-in iua-fade-in--d2"
-      title="データ上の留意点"
-    >
-      <ul class="iua-gaps__list">
-        <li v-for="(g, i) in analysisData.data_gaps" :key="i">{{ g }}</li>
-      </ul>
-    </el-alert>
 
     <div v-loading="loading" class="iua-body">
       <div class="iua-kpi">
@@ -160,17 +192,30 @@
       </div>
 
       <Transition name="iua-reveal">
-        <div v-if="analysisData && contentVisible" key="content" class="iua-content">
-          <section class="iua-panel iua-panel--chart iua-fade-in iua-fade-in--d3">
-            <div class="iua-panel__head">
-              <div class="iua-panel__title-wrap">
-                <el-icon class="iua-panel__ico"><TrendCharts /></el-icon>
-                <span class="iua-panel__title">日別稼働率推移</span>
+        <div v-if="analysisData" key="content" class="iua-content">
+          <div class="iua-charts">
+            <section class="iua-panel iua-panel--chart iua-fade-in iua-fade-in--d3">
+              <div class="iua-panel__head">
+                <div class="iua-panel__title-wrap">
+                  <el-icon class="iua-panel__ico"><TrendCharts /></el-icon>
+                  <span class="iua-panel__title">日別稼働率推移</span>
+                </div>
+                <span class="iua-panel__badge">{{ chartBadgeLabel }}</span>
               </div>
-              <span class="iua-panel__badge">検査員合算</span>
-            </div>
-            <div ref="dailyChartRef" class="iua-chart iua-chart--main" />
-          </section>
+              <div ref="dailyChartRef" class="iua-chart iua-chart--main" />
+            </section>
+
+            <section class="iua-panel iua-panel--chart iua-panel--overtime iua-fade-in iua-fade-in--d3b">
+              <div class="iua-panel__head">
+                <div class="iua-panel__title-wrap">
+                  <el-icon class="iua-panel__ico iua-panel__ico--overtime"><Sunny /></el-icon>
+                  <span class="iua-panel__title">日別残業推移</span>
+                </div>
+                <span class="iua-panel__badge iua-panel__badge--overtime">合計 {{ overtimeChartTotalLabel }}</span>
+              </div>
+              <div ref="overtimeChartRef" class="iua-chart iua-chart--main iua-chart--overtime" />
+            </section>
+          </div>
 
           <div class="iua-split">
             <section class="iua-panel iua-panel--inspector iua-fade-in iua-fade-in--d4">
@@ -179,9 +224,9 @@
                   <el-icon class="iua-panel__ico iua-panel__ico--inspector"><User /></el-icon>
                   <span class="iua-panel__title">検査員別サマリ</span>
                 </div>
-                <span class="iua-panel__badge iua-panel__badge--soft">{{ analysisData.by_inspector.length }} 名</span>
+                <span class="iua-panel__badge iua-panel__badge--soft">{{ filteredByInspector.length }} 名</span>
               </div>
-              <el-table :data="analysisData.by_inspector" size="small" class="iua-table iua-table--inspector" stripe>
+              <el-table :data="filteredByInspector" size="small" class="iua-table iua-table--inspector" stripe>
                 <el-table-column label="#" width="36" align="center">
                   <template #default="{ $index }">
                     <span class="iua-row-rank" :class="inspectorRankClass($index)">{{ $index + 1 }}</span>
@@ -247,6 +292,9 @@
                 <el-table-column label="件" width="44" align="right">
                   <template #default="{ row }">{{ row.session_count }}</template>
                 </el-table-column>
+                <el-table-column label="所定(h)" width="68" align="right">
+                  <template #default="{ row }">{{ fmtScheduledHours(row.scheduled_hours) }}</template>
+                </el-table-column>
                 <el-table-column label="正味" width="64" align="right">
                   <template #default="{ row }">{{ fmtMin(row.sum_net_production_min) }}</template>
                 </el-table-column>
@@ -278,7 +326,7 @@
 
       <div v-if="!analysisData && !loading" class="iua-empty iua-panel iua-fade-in">
         <el-icon class="iua-empty__icon" :size="40"><Odometer /></el-icon>
-        <p class="iua-empty__text">期間を選択して「分析実行」をクリック</p>
+        <p class="iua-empty__text">期間を選択すると自動で分析されます</p>
       </div>
     </div>
   </div>
@@ -289,38 +337,89 @@ import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } f
 import * as echarts from 'echarts'
 import type { ECharts } from 'echarts'
 import {
+  ArrowDown,
   Calendar,
   DataAnalysis,
+  Document,
   List,
-  Moon,
   Odometer,
   Refresh,
   Sunny,
   Timer,
   TrendCharts,
   User,
+  WarningFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
   fetchInspectionUtilizationAnalysis,
   type InspectionUtilizationAnalysisData,
+  type InspectionUtilizationInspectorRow,
+  type InspectionUtilizationSessionGap,
 } from '@/api/inspectionManagement'
-import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
 import { getJSTToday, parseDateAsJST } from '@/utils/dateFormat'
+import {
+  avgUtilizationPercent,
+  buildUtilizationDailyChartOption,
+  buildUtilizationOvertimeChartOption,
+  captureUtilizationChartDataUrl,
+  captureUtilizationDailyChartDataUrl,
+  overtimeMinFromUtilizationRow,
+  printInspectionUtilizationDailyBatch,
+  printInspectionUtilizationDailySection,
+  printInspectionUtilizationReport,
+  sumOvertimeMinFromDaily,
+  type InspectionUtilizationReportContext,
+  type InspectionUtilizationReportFilters,
+  type UtilizationDailyBatchItem,
+} from './inspectionUtilizationReport'
 
 defineOptions({ name: 'MesInspectionUtilizationAnalysis' })
 
+type ReportMenuTone = 'green' | 'sky' | 'teal'
+
+const reportMenuItems: Array<{
+  command: string
+  label: string
+  hint?: string
+  icon: typeof Document
+  tone: ReportMenuTone
+  divided?: boolean
+}> = [
+  {
+    command: 'print-full',
+    label: '印刷（全体）',
+    hint: 'KPI · グラフ · 集計表',
+    icon: markRaw(Document),
+    tone: 'green',
+  },
+  {
+    command: 'print-daily',
+    label: '日別稼働率推移（印刷）',
+    hint: '現在の検査員フィルタ反映',
+    icon: markRaw(TrendCharts),
+    tone: 'sky',
+    divided: true,
+  },
+  {
+    command: 'print-daily-batch',
+    label: '日別稼働率推移（検査員別・一括印刷）',
+    hint: '合算 + 検査員ごとに分割',
+    icon: markRaw(DataAnalysis),
+    tone: 'teal',
+  },
+]
+
 const loading = ref(false)
-const contentVisible = ref(false)
+const exportBusy = ref(false)
 const analysisData = ref<InspectionUtilizationAnalysisData | null>(null)
-const inspectorOptions = ref<UserListItem[]>([])
+const inspectorOptions = ref<Array<{ id: number; name: string }>>([])
 const filterInspectorId = ref<number | ''>('')
 const includeIncomplete = ref(false)
-const extraWorkdays = ref<string[]>([])
-const extraHolidays = ref<string[]>([])
-const overridePanel = ref<string[]>([])
 const dailyChartRef = ref<HTMLElement | null>(null)
+const overtimeChartRef = ref<HTMLElement | null>(null)
 let dailyChart: ECharts | null = null
+let overtimeChart: ECharts | null = null
 
 function shiftJstDate(isoDay: string, deltaDays: number): string {
   const base = parseDateAsJST(isoDay)
@@ -330,6 +429,9 @@ function shiftJstDate(isoDay: string, deltaDays: number): string {
 }
 
 const dateRange = ref<[string, string]>([shiftJstDate(getJSTToday(), -29), getJSTToday()])
+const defaultStandardHours = computed(
+  () => analysisData.value?.default_standard_workday_hours ?? analysisData.value?.standard_workday_hours ?? 7.6,
+)
 const standardHours = computed(() => analysisData.value?.standard_workday_hours ?? 7.6)
 
 const summary = computed(() => analysisData.value?.summary)
@@ -340,6 +442,43 @@ const filteredDailyRows = computed(() => {
   return rows.filter((r) => r.inspector_user_id === filterInspectorId.value)
 })
 
+const filteredByInspector = computed(() => {
+  const rows = analysisData.value?.by_inspector ?? []
+  if (filterInspectorId.value === '') return rows
+  return rows.filter((r) => r.inspector_user_id === filterInspectorId.value)
+})
+
+const chartDailyRows = computed(() => {
+  const data = analysisData.value
+  if (!data) return []
+  if (filterInspectorId.value === '') {
+    return data.daily ?? []
+  }
+  return (data.daily_by_inspector ?? [])
+    .filter((r) => r.inspector_user_id === filterInspectorId.value)
+    .slice()
+    .sort((a, b) => a.day.localeCompare(b.day))
+})
+
+const chartBadgeLabel = computed(() => {
+  if (filterInspectorId.value === '') return '検査員合算'
+  const found = inspectorOptions.value.find((o) => o.id === filterInspectorId.value)
+  return found?.name ?? '検査員別'
+})
+
+const overtimeChartTotalLabel = computed(() => {
+  const totalMin = chartDailyRows.value.reduce((sum, d) => sum + overtimeMinFromRow(d), 0)
+  return fmtDuration(totalMin)
+})
+
+const sessionsWithoutTimeDetails = computed(
+  () => analysisData.value?.sessions_without_time ?? [],
+)
+
+const hasDataGaps = computed(() => (analysisData.value?.data_gaps?.length ?? 0) > 0)
+
+const dataGapsCount = computed(() => analysisData.value?.data_gaps?.length ?? 0)
+
 const kpiCards = computed(() => {
   const s = summary.value
   return [
@@ -347,7 +486,7 @@ const kpiCards = computed(() => {
       key: 'util',
       label: '平均稼働率',
       value: fmtPct(s?.utilization_percent),
-      hint: '所定7.6h内 / 出勤日基準',
+      hint: '出勤日基準7.6h',
       icon: markRaw(TrendCharts),
       tone: 'green',
     },
@@ -386,8 +525,33 @@ const kpiCards = computed(() => {
   ]
 })
 
-function inspectorLabel(u: UserListItem): string {
-  return (u.full_name || u.username || `ID:${u.id}`).trim()
+function buildInspectorOptions(rows: InspectionUtilizationInspectorRow[]): Array<{ id: number; name: string }> {
+  const seen = new Set<number>()
+  const options: Array<{ id: number; name: string }> = []
+  for (const row of rows) {
+    const id = row.inspector_user_id
+    const name = row.inspector_name?.trim()
+    if (id == null || !name || seen.has(id)) continue
+    seen.add(id)
+    options.push({ id, name })
+  }
+  return options.sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+}
+
+function sessionProductLabel(s: InspectionUtilizationSessionGap): string {
+  const cd = s.product_cd?.trim()
+  const name = s.product_name?.trim()
+  if (cd && name) return `${cd}（${name}）`
+  return cd || name || '製品情報なし'
+}
+
+function sessionTimeGapReason(s: InspectionUtilizationSessionGap): string {
+  const started = s.mes_production_started_at
+  const ended = s.mes_production_ended_at
+  if (!started && !ended) return '開始・終了時刻なし'
+  if (!started) return '開始時刻なし'
+  if (!ended) return '終了時刻なし'
+  return '正味秒未設定'
 }
 
 function inspectorRankClass(index: number): string {
@@ -403,6 +567,11 @@ function utilPillClass(pct?: number | null): string {
   if (v >= 60) return 'iua-util-pill--mid'
   if (v > 0) return 'iua-util-pill--low'
   return 'iua-util-pill--none'
+}
+
+function fmtScheduledHours(hours?: number | null): string {
+  if (hours == null || hours <= 0) return '—'
+  return hours.toFixed(1)
 }
 
 function fmtInt(v?: number | null): string {
@@ -433,98 +602,210 @@ function fmtHours(sec?: number | null): string {
   return (sec / 3600).toFixed(1)
 }
 
-function disposeChart() {
+function overtimeMinFromRow(d: { overtime_min?: number | null; sum_overtime_sec?: number | null }): number {
+  return overtimeMinFromUtilizationRow(d)
+}
+
+function buildReportFilters(): InspectionUtilizationReportFilters | null {
+  const [start, end] = dateRange.value ?? []
+  if (!start || !end) return null
+
+  let inspectorFilterLabel = '（すべて）'
+  if (filterInspectorId.value !== '') {
+    const found = inspectorOptions.value.find((o) => o.id === filterInspectorId.value)
+    inspectorFilterLabel = found?.name ?? `#${filterInspectorId.value}`
+  }
+
+  return {
+    startDate: start,
+    endDate: end,
+    inspectorLabel: inspectorFilterLabel,
+    includeIncomplete: includeIncomplete.value,
+  }
+}
+
+function captureChartDataUrl(chart: ECharts | null): string | null {
+  if (!chart || chart.isDisposed()) return null
+  try {
+    return chart.getDataURL({
+      type: 'png',
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+    })
+  } catch {
+    return null
+  }
+}
+
+function waitForChartPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+}
+
+async function buildReportContext(): Promise<InspectionUtilizationReportContext | null> {
+  const filters = buildReportFilters()
+  if (!analysisData.value || !filters) return null
+
+  const dailyRows = chartDailyRows.value
+  dailyChart?.resize()
+  overtimeChart?.resize()
+  await nextTick()
+  await waitForChartPaint()
+
+  const dailySrc =
+    captureChartDataUrl(dailyChart) ?? (await captureUtilizationDailyChartDataUrl(dailyRows))
+  const overtimeSrc =
+    captureChartDataUrl(overtimeChart) ??
+    (await captureUtilizationChartDataUrl(buildUtilizationOvertimeChartOption(dailyRows)))
+
+  return {
+    filters,
+    kpiCards: kpiCards.value.map((card) => ({
+      label: card.label,
+      value: card.value,
+      hint: card.hint,
+      tone: card.tone as 'green' | 'blue' | 'indigo' | 'amber' | 'violet',
+    })),
+    charts: {
+      daily: dailySrc,
+      overtime: overtimeSrc,
+    },
+    inspectorRows: filteredByInspector.value,
+    dailyDetailRows: filteredDailyRows.value,
+  }
+}
+
+async function handleBatchDailyPrint() {
+  const filters = buildReportFilters()
+  const data = analysisData.value
+  if (!filters || !data) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  const items: UtilizationDailyBatchItem[] = []
+  const aggDaily = data.daily ?? []
+  if (aggDaily.length) {
+    items.push({
+      inspectorUserId: null,
+      inspectorLabel: '検査員合算',
+      chartSrc: await captureUtilizationDailyChartDataUrl(aggDaily),
+      dayCount: aggDaily.length,
+      avgUtilizationPercent: avgUtilizationPercent(aggDaily),
+      sumOvertimeMin: sumOvertimeMinFromDaily(aggDaily),
+    })
+  }
+
+  for (const insp of inspectorOptions.value) {
+    const daily = (data.daily_by_inspector ?? [])
+      .filter((r) => r.inspector_user_id === insp.id)
+      .slice()
+      .sort((a, b) => a.day.localeCompare(b.day))
+    if (!daily.length) continue
+    items.push({
+      inspectorUserId: insp.id,
+      inspectorLabel: insp.name,
+      chartSrc: await captureUtilizationDailyChartDataUrl(daily),
+      dayCount: daily.length,
+      avgUtilizationPercent: avgUtilizationPercent(daily),
+      sumOvertimeMin: sumOvertimeMinFromDaily(daily),
+    })
+  }
+
+  if (!items.length) {
+    ElMessage.warning('印刷できる日別データがありません')
+    return
+  }
+
+  printInspectionUtilizationDailyBatch(filters, items)
+}
+
+async function handleReportCommand(command: string | number | object) {
+  const cmd = String(command)
+  if (!analysisData.value) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  exportBusy.value = true
+  try {
+    if (cmd === 'print-daily-batch') {
+      await handleBatchDailyPrint()
+      return
+    }
+
+    const ctx = await buildReportContext()
+    if (!ctx) {
+      ElMessage.warning('出力する分析データがありません')
+      return
+    }
+
+    if (cmd === 'print-full') {
+      printInspectionUtilizationReport(ctx)
+      return
+    }
+
+    if (cmd === 'print-daily') {
+      if (!chartDailyRows.value.length) {
+        ElMessage.warning('印刷できる日別データがありません')
+        return
+      }
+      printInspectionUtilizationDailySection(ctx)
+      return
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'レポート出力に失敗しました')
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+function disposeCharts() {
   dailyChart?.dispose()
+  overtimeChart?.dispose()
   dailyChart = null
+  overtimeChart = null
 }
 
 function renderDailyChart() {
   const el = dailyChartRef.value
-  const daily = analysisData.value?.daily ?? []
+  const daily = chartDailyRows.value
   if (!el || !daily.length) {
-    disposeChart()
+    dailyChart?.dispose()
+    dailyChart = null
     return
   }
-  if (!dailyChart) dailyChart = echarts.init(el)
-  dailyChart.setOption({
-    grid: { left: 52, right: 48, top: 40, bottom: 36 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: 'rgba(255,255,255,0.96)',
-      borderColor: 'rgba(226,232,240,0.9)',
-      borderWidth: 1,
-      textStyle: { color: '#334155', fontSize: 12 },
-    },
-    legend: {
-      data: ['稼働率', '正味(分)'],
-      top: 4,
-      textStyle: { color: '#64748b', fontSize: 11 },
-    },
-    xAxis: {
-      type: 'category',
-      data: daily.map((d) => d.day.slice(5)),
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
-      axisLabel: { color: '#64748b', fontSize: 10 },
-    },
-    yAxis: [
-      {
-        type: 'value',
-        name: '%',
-        max: 120,
-        nameTextStyle: { color: '#94a3b8', fontSize: 10 },
-        axisLabel: { color: '#64748b', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
-      },
-      {
-        type: 'value',
-        name: '分',
-        splitLine: { show: false },
-        nameTextStyle: { color: '#94a3b8', fontSize: 10 },
-        axisLabel: { color: '#64748b', fontSize: 10 },
-      },
-    ],
-    series: [
-      {
-        name: '稼働率',
-        type: 'line',
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        data: daily.map((d) => d.utilization_percent ?? 0),
-        itemStyle: { color: '#10b981' },
-        lineStyle: { width: 2.5 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(16,185,129,0.28)' },
-            { offset: 1, color: 'rgba(16,185,129,0.02)' },
-          ]),
-        },
-      },
-      {
-        name: '正味(分)',
-        type: 'bar',
-        yAxisIndex: 1,
-        barMaxWidth: 18,
-        data: daily.map((d) => d.sum_net_production_min ?? 0),
-        itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: '#818cf8' },
-            { offset: 1, color: '#6366f1' },
-          ]),
-          borderRadius: [4, 4, 0, 0],
-        },
-      },
-    ],
-  })
+  if (!dailyChart) {
+    dailyChart = echarts.init(el)
+  }
+  dailyChart.setOption(buildUtilizationDailyChartOption(daily), true)
 }
 
-async function loadInspectors() {
-  try {
-    const res = (await getUsers({ page: 1, page_size: 500, status: 'active' })) as unknown as PaginatedUserResponse
-    inspectorOptions.value = res.items ?? []
-  } catch {
-    inspectorOptions.value = []
+function renderOvertimeChart() {
+  const el = overtimeChartRef.value
+  const daily = chartDailyRows.value
+  if (!el || !daily.length) {
+    overtimeChart?.dispose()
+    overtimeChart = null
+    return
   }
+  if (!overtimeChart) {
+    overtimeChart = echarts.init(el)
+  }
+  overtimeChart.setOption(buildUtilizationOvertimeChartOption(daily), true)
+}
+
+function renderCharts() {
+  renderDailyChart()
+  renderOvertimeChart()
+}
+
+function handleChartResize() {
+  dailyChart?.resize()
+  overtimeChart?.resize()
 }
 
 async function loadAnalysis() {
@@ -534,28 +815,28 @@ async function loadAnalysis() {
     return
   }
   loading.value = true
-  contentVisible.value = false
   try {
     const res = await fetchInspectionUtilizationAnalysis({
       start_date: start,
       end_date: end,
-      mes_inspector_user_id: filterInspectorId.value === '' ? undefined : filterInspectorId.value,
       include_incomplete: includeIncomplete.value,
       use_company_calendar: true,
-      extra_workdays: extraWorkdays.value.length ? extraWorkdays.value.join(',') : undefined,
-      extra_holidays: extraHolidays.value.length ? extraHolidays.value.join(',') : undefined,
     })
     if (!res?.success || !res.data) {
       ElMessage.error(res?.message || '分析データの取得に失敗しました')
       analysisData.value = null
+      inspectorOptions.value = []
+      disposeCharts()
       return
     }
     analysisData.value = res.data
-    contentVisible.value = true
+    inspectorOptions.value = buildInspectorOptions(res.data.by_inspector ?? [])
     await nextTick()
-    renderDailyChart()
+    renderCharts()
   } catch (e: unknown) {
     analysisData.value = null
+    inspectorOptions.value = []
+    disposeCharts()
     ElMessage.error(e instanceof Error ? e.message : '分析データの取得に失敗しました')
   } finally {
     loading.value = false
@@ -563,19 +844,26 @@ async function loadAnalysis() {
 }
 
 watch(
-  () => analysisData.value?.daily,
-  () => nextTick(() => renderDailyChart()),
+  chartDailyRows,
+  () => nextTick(() => renderCharts()),
+)
+
+watch(
+  [dateRange, includeIncomplete],
+  () => {
+    filterInspectorId.value = ''
+    loadAnalysis()
+  },
+  { deep: true, immediate: true },
 )
 
 onMounted(() => {
-  loadInspectors()
-  loadAnalysis()
-  window.addEventListener('resize', renderDailyChart)
+  window.addEventListener('resize', handleChartResize)
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', renderDailyChart)
-  disposeChart()
+  window.removeEventListener('resize', handleChartResize)
+  disposeCharts()
 })
 </script>
 
@@ -638,8 +926,6 @@ onBeforeUnmount(() => {
 .iua-hero,
 .iua-toolbar,
 .iua-cal-banner,
-.iua-override,
-.iua-gaps,
 .iua-body {
   position: relative;
   z-index: 1;
@@ -706,6 +992,13 @@ onBeforeUnmount(() => {
   color: #059669;
 }
 
+.iua-hero__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .iua-hero__title {
   margin: 2px 0 0;
   font-size: 18px;
@@ -713,6 +1006,48 @@ onBeforeUnmount(() => {
   letter-spacing: -0.02em;
   color: #0f172a;
   line-height: 1.25;
+}
+
+.iua-gaps-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 999px;
+  color: #d97706;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.18);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.iua-gaps-trigger:hover {
+  transform: translateY(-1px);
+  border-color: rgba(245, 158, 11, 0.65);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.24);
+}
+
+.iua-gaps-trigger__badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: #fff;
+  background: #f59e0b;
+  box-shadow: 0 1px 4px rgba(245, 158, 11, 0.35);
 }
 
 .iua-hero__meta {
@@ -772,17 +1107,22 @@ onBeforeUnmount(() => {
   filter: brightness(1.06);
 }
 
-.iua-btn--analyze {
-  background: linear-gradient(135deg, #059669 0%, #10b981 55%, #34d399 100%) !important;
-  color: #fff !important;
-  box-shadow:
-    0 4px 14px rgba(16, 185, 129, 0.4),
-    0 1px 0 rgba(255, 255, 255, 0.22) inset;
+.iua-btn--report {
+  background: linear-gradient(135deg, #fff 0%, #f0fdf4 100%) !important;
+  color: #047857 !important;
+  border: 1px solid rgba(16, 185, 129, 0.28) !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.12);
 }
 
-.iua-btn--analyze:hover:not(:disabled) {
+.iua-btn--report:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(1.05);
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.18);
+}
+
+.iua-btn__caret {
+  font-size: 12px;
+  margin-left: 2px;
 }
 
 .iua-panel {
@@ -895,16 +1235,6 @@ onBeforeUnmount(() => {
   min-width: 220px;
 }
 
-.iua-field--override .iua-field__pill {
-  color: #047857;
-  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
-}
-
-.iua-field__pill--holiday {
-  color: #64748b !important;
-  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%) !important;
-}
-
 .iua-field__control {
   flex: 1;
   min-width: 0;
@@ -916,10 +1246,6 @@ onBeforeUnmount(() => {
 
 .iua-field__select {
   width: 168px;
-}
-
-.iua-field__dates {
-  width: 220px !important;
 }
 
 .iua-field :deep(.el-input__wrapper),
@@ -990,61 +1316,6 @@ onBeforeUnmount(() => {
 
 .iua-cal-banner__link:hover {
   text-decoration: underline;
-}
-
-.iua-override {
-  border: none;
-  background: transparent;
-}
-
-.iua-override :deep(.el-collapse-item__header) {
-  height: 36px;
-  line-height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  font-size: 11px;
-}
-
-.iua-override :deep(.el-collapse-item__wrap) {
-  border: none;
-}
-
-.iua-override :deep(.el-collapse-item__content) {
-  padding: 8px 0 0;
-}
-
-.iua-override__title {
-  font-weight: 700;
-  color: #334155;
-}
-
-.iua-override__hint {
-  margin-left: 8px;
-  font-size: 10px;
-  font-weight: 400;
-  color: #94a3b8;
-}
-
-.iua-override__body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(226, 232, 240, 0.95);
-}
-
-.iua-gaps {
-  margin: 0;
-}
-
-.iua-gaps__list {
-  margin: 4px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
 }
 
 .iua-body {
@@ -1187,6 +1458,36 @@ onBeforeUnmount(() => {
 
 .iua-panel--chart {
   padding: 12px 14px;
+}
+
+.iua-charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.iua-panel--overtime {
+  background: linear-gradient(165deg, #fff 0%, #fffbeb 100%);
+  border-color: rgba(245, 158, 11, 0.16);
+}
+
+.iua-panel__ico--overtime {
+  color: #f59e0b;
+}
+
+.iua-panel__badge--overtime {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+.iua-chart--overtime {
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 100%);
+  border-color: rgba(253, 230, 138, 0.65);
+}
+
+.iua-fade-in--d3b {
+  animation-delay: 0.14s;
 }
 
 .iua-panel--inspector {
@@ -1447,9 +1748,184 @@ onBeforeUnmount(() => {
   }
 
   .iua-field__date,
-  .iua-field__select,
-  .iua-field__dates {
+  .iua-field__select {
     width: 100% !important;
   }
+}
+</style>
+
+<style>
+.iua-gaps-popper {
+  padding: 0 !important;
+  border: 1px solid rgba(251, 191, 36, 0.35) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+}
+
+.iua-gaps-panel {
+  padding: 12px 14px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.iua-gaps-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.iua-gaps-panel__ico {
+  color: #d97706;
+  font-size: 16px;
+}
+
+.iua-gaps-panel__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.iua-gaps-popper .iua-gaps__list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.iua-gaps-popper .iua-gaps__sublist {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  list-style: none;
+  border-radius: 8px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.iua-gaps-popper .iua-gaps__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 4px 0;
+  font-size: 11px;
+  color: #475569;
+}
+
+.iua-gaps-popper .iua-gaps__detail + .iua-gaps__detail {
+  border-top: 1px dashed rgba(226, 232, 240, 0.95);
+}
+
+.iua-gaps-popper .iua-gaps__detail-id {
+  font-weight: 700;
+  color: #334155;
+}
+
+.iua-gaps-popper .iua-gaps__detail-reason {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.iua-report-dropdown.el-popper {
+  padding: 6px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(16, 185, 129, 0.2) !important;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12) !important;
+}
+
+.iua-report-dropdown .el-popper__arrow::before {
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+.iua-report-dropdown .iua-report-menu {
+  padding: 4px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.iua-report-dropdown .el-dropdown-menu__item {
+  padding: 0 !important;
+  line-height: 1.3 !important;
+  border-radius: 8px !important;
+  margin-bottom: 2px !important;
+}
+
+.iua-report-dropdown .el-dropdown-menu__item:last-child {
+  margin-bottom: 0 !important;
+}
+
+.iua-report-dropdown .el-dropdown-menu__item--divided {
+  margin-top: 6px !important;
+  padding-top: 6px !important;
+  border-top: 1px solid rgba(226, 232, 240, 0.9) !important;
+}
+
+.iua-report-dropdown .iua-report-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px !important;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+}
+
+.iua-report-dropdown .iua-report-item__icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.iua-report-dropdown .iua-report-item__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.iua-report-dropdown .iua-report-item__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.iua-report-dropdown .iua-report-item__hint {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+
+.iua-report-dropdown .iua-report-item--green .iua-report-item__icon-wrap {
+  color: #047857;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.iua-report-dropdown .iua-report-item--sky .iua-report-item__icon-wrap {
+  color: #0369a1;
+  background: rgba(14, 165, 233, 0.12);
+}
+
+.iua-report-dropdown .iua-report-item--teal .iua-report-item__icon-wrap {
+  color: #0f766e;
+  background: rgba(20, 184, 166, 0.12);
+}
+
+.iua-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .iua-report-item--green {
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.iua-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .iua-report-item--sky {
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.iua-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .iua-report-item--teal {
+  background: rgba(20, 184, 166, 0.08);
 }
 </style>

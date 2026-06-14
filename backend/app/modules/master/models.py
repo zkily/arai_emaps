@@ -211,6 +211,22 @@ class CompanyWorkCalendar(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
+class InspectionInspectorWorkSchedule(Base):
+    """検査員別所定稼働時間（inspection_inspector_work_schedule）"""
+    __tablename__ = "inspection_inspector_work_schedule"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    inspector_user_id = Column(Integer, nullable=False, index=True)
+    schedule_date = Column(Date, nullable=True, index=True)
+    weekday = Column(SmallInteger, nullable=True)
+    scheduled_hours = Column(Numeric(4, 2), nullable=False, default=7.60)
+    work_start_time = Column(Time, nullable=True)
+    work_end_time = Column(Time, nullable=True)
+    note = Column(String(255))
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
 class Customer(Base):
     """顧客マスタ（customers）"""
     __tablename__ = "customers"
