@@ -307,7 +307,32 @@ flowchart TD
 
 不良パネルは生産カード下部の **「不良（項目別）」** です。
 
-![不良入力](./images/InspectionActualDataCollection/10_defect_stepper.png)
+<div class="insp-help-defect" role="img" aria-label="不良（項目別）入力例">
+  <div class="insp-help-defect__panel">
+    <div class="insp-help-defect__head">
+      <strong>不良（項目別）</strong>
+      <span>生産開始後に + / − で入力</span>
+    </div>
+    <section class="insp-help-defect__group">
+      <header class="insp-help-defect__group-head">
+        <span class="insp-help-defect__group-label">帰属工程</span>
+        <span class="insp-help-defect__group-name">検査</span>
+      </header>
+      <div class="insp-help-defect__grid" style="--defect-cols: 8">
+        <div class="insp-help-defect__cell"><span>ガリ</span><em>0</em></div>
+        <div class="insp-help-defect__cell"><span>ヤケ</span><em>0</em></div>
+        <div class="insp-help-defect__cell"><span>キズ</span><em>1</em></div>
+        <div class="insp-help-defect__cell"><span>打痕</span><em>0</em></div>
+        <div class="insp-help-defect__cell"><span>バリ</span><em>0</em></div>
+        <div class="insp-help-defect__cell"><span>寸法</span><em>0</em></div>
+        <div class="insp-help-defect__cell"><span>色ムラ</span><em>0</em></div>
+        <div class="insp-help-defect__cell insp-help-defect__cell--on"><span>検査保留</span><em>2</em></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+> 帰属工程ごとに不良項目がグループ化されます。**検査** 工程の項目（検査保留を含む）は **1 行** で表示され、画面幅が狭い場合は横スクロールで確認できます。
 
 | 操作 | 説明 |
 |------|------|

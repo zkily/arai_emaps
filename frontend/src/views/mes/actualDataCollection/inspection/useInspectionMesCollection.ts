@@ -8,7 +8,7 @@ import {
   type InspectionManagementListRow,
   type PatchInspectionManagementBody,
 } from '@/api/inspectionManagement'
-import { getProducts, type ProductItem } from '@/api/erp/optionsData'
+import { getProductList } from '@/api/master/productMaster'
 import { getUsers, type PaginatedUserResponse } from '@/api/system'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { formatDateTimeJST, formatDateToYmdJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
@@ -22,13 +22,16 @@ import { INSPECTION_DEFECT_DETECTION_PROCESS_CD } from './inspectionActualConfig
 import {
   applyPersistedSessionsForScope,
   emptySession,
+  flushBreakSlice,
   flushPauseSlice,
   flushRunningSlice,
   formatDurationMs,
+  freezeBreakAccumMs,
   freezePausedAccumMs,
   correctNetProductionFromWallClock,
   readNetProductionMs,
   readExplicitPausedAccumMs,
+  readExplicitBreakAccumMs,
   readPausedAccumMs,
   hydratePlanSessionFromRow,
   loadInspectionActualPersist,
@@ -53,6 +56,7 @@ import {
   isNetworkOrServerDownError,
 } from './inspectionActualOfflineSync'
 import { getMesClientInstanceId } from './mesClientInstance'
+import { resolveInspectionDataSource } from './inspectionDataSource'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
 
@@ -64,8 +68,47 @@ interface PlanSession extends PlanSessionLike {}
 
 const INSPECTION_PRODUCT_NAME_EXCLUDES = ['加工', 'アーチ'] as const
 
+export interface InspectionProductOption {
+  product_code: string
+  product_name: string
+  is_active?: boolean
+  unit_per_box: number
+}
+
+function pieceQtyFromBoxes(boxes: number, unitPerBox: number): number {
+  return Math.round(boxes * unitPerBox)
+}
+
+function boxQtyFromPieces(pieces: number, unitPerBox: number): number {
+  if (unitPerBox <= 0) return 0
+  return Math.round(pieces / unitPerBox)
+}
+
+function hasPieceBoxQtyMismatch(pieceQty: number, unitPerBox: number): boolean {
+  if (unitPerBox <= 0) return false
+  return pieceQty % unitPerBox !== 0
+}
+
+function parseEndDialogQtyInput(raw: string): number | null {
+  const digits = String(raw ?? '').replace(/\D/g, '')
+  if (!digits) return null
+  const n = Number.parseInt(digits, 10)
+  return Number.isFinite(n) ? Math.max(0, n) : null
+}
+
+function formatEndDialogQtyInput(val: number | null): string {
+  return val == null ? '' : String(val)
+}
+
+function resolveUnitPerBox(code: string | null | undefined, list: InspectionProductOption[]): number {
+  const c = (code ?? '').trim()
+  if (!c) return 0
+  const hit = list.find((p) => p.product_code === c)
+  return Math.max(0, Number(hit?.unit_per_box) || 0)
+}
+
 /** 検査 MES：製品 CD 末尾が 1、製品名に除外語なし、製品名昇順 */
-function filterInspectionProductOptions(list: ProductItem[]): ProductItem[] {
+function filterInspectionProductOptions(list: InspectionProductOption[]): InspectionProductOption[] {
   return list
     .filter((p) => {
       if (p.is_active === false) return false
@@ -106,7 +149,7 @@ export function useInspectionMesCollection() {
   const inspectorUserId = ref<number | null>(null)
   const selectedProductCode = ref<string | null>(null)
   const activePlanId = ref<number | null>(null)
-  const products = ref<ProductItem[]>([])
+  const products = ref<InspectionProductOption[]>([])
   const inspectors = ref<InspectorOption[]>([])
   const inspectorDisplayNames = ref<Map<number, string>>(new Map())
   const managementRows = ref<InspectionMgmtRow[]>([])
@@ -146,7 +189,10 @@ export function useInspectionMesCollection() {
   let resumePulseOffTimer: ReturnType<typeof setTimeout> | null = null
 
   const endDialogVisible = ref(false)
-  const endDialogQty = ref('')
+  const endDialogBoxes = ref('')
+  const endDialogPieceQty = ref('')
+  const endDialogQtyInputSource = ref<'box' | 'piece' | null>(null)
+  let syncingEndDialogQty = false
   const endDialogSubmitting = ref(false)
 
   const isBrowserOffline = ref(typeof navigator !== 'undefined' ? !navigator.onLine : false)
@@ -189,6 +235,12 @@ export function useInspectionMesCollection() {
 
   /** サーバー在産行への PATCH（計測同期・不良等）可否 */
   function canServerPatchPlan(planId: number): boolean {
+    const sess = sessions[planId]
+    if (sess && isProductionInProgress(sess) && isPlanLocallyOperated(planId)) {
+      const row = managementRows.value.find((r) => r.id === planId)
+      if (!row || !isRowMesProductionActive(row)) return true
+      return rowMesLockOwner(row) !== 'other'
+    }
     const row = managementRows.value.find((r) => r.id === planId)
     if (!row || !isRowMesProductionActive(row)) return false
     const owner = rowMesLockOwner(row)
@@ -404,6 +456,10 @@ export function useInspectionMesCollection() {
     return sess.wallStart != null && sess.wallEnd == null && sess.pauseSliceStart != null
   }
 
+  function isTimerOnBreak(sess: PlanSession): boolean {
+    return sess.wallStart != null && sess.wallEnd == null && sess.breakSliceStart != null
+  }
+
   function isProductionInProgress(sess: PlanSession): boolean {
     return sess.wallStart != null && sess.wallEnd == null
   }
@@ -414,6 +470,10 @@ export function useInspectionMesCollection() {
 
   function pausedAccumSeconds(sess: PlanSession, at = Date.now()): number {
     return Math.max(0, Math.round(readExplicitPausedAccumMs(sess, at) / 1000))
+  }
+
+  function breakAccumSeconds(sess: PlanSession, at = Date.now()): number {
+    return Math.max(0, Math.round(readExplicitBreakAccumMs(sess, at) / 1000))
   }
 
   function markLocalMesEcho(planId: number): void {
@@ -429,13 +489,21 @@ export function useInspectionMesCollection() {
 
   function mesTimerCheckpointBody(planId: number): Pick<
     PatchInspectionManagementBody,
-    'mes_net_production_sec' | 'mes_paused_accum_sec' | 'mes_production_is_paused'
+    | 'mes_net_production_sec'
+    | 'mes_paused_accum_sec'
+    | 'mes_break_sec'
+    | 'mes_stop_sec'
+    | 'mes_production_is_paused'
   > {
     const s = ensureSession(planId)
+    const breakSec = breakAccumSeconds(s)
+    const stopSec = pausedAccumSeconds(s)
     return {
       mes_net_production_sec: netProductionSeconds(s),
-      mes_paused_accum_sec: pausedAccumSeconds(s),
-      mes_production_is_paused: isTimerPaused(s) ? 1 : 0,
+      mes_break_sec: breakSec,
+      mes_stop_sec: stopSec,
+      mes_paused_accum_sec: breakSec + stopSec,
+      mes_production_is_paused: isTimerPaused(s) || isTimerOnBreak(s) ? 1 : 0,
     }
   }
 
@@ -445,10 +513,15 @@ export function useInspectionMesCollection() {
     const now = Date.now()
     if (s.runningSliceStart != null) {
       flushRunningSlice(s, now)
-      if (s.wallEnd == null && s.pauseSliceStart == null) s.runningSliceStart = now
+      if (s.wallEnd == null && s.pauseSliceStart == null && s.breakSliceStart == null) {
+        s.runningSliceStart = now
+      }
     } else if (s.pauseSliceStart != null) {
       flushPauseSlice(s, now)
       if (s.wallEnd == null) s.pauseSliceStart = now
+    } else if (s.breakSliceStart != null) {
+      flushBreakSlice(s, now)
+      if (s.wallEnd == null) s.breakSliceStart = now
     }
     await patchWithOfflineSync(planId, mesTimerCheckpointBody(planId), { silentQueue: true })
   }
@@ -466,15 +539,34 @@ export function useInspectionMesCollection() {
     }, 400)
   }
 
-  function isRowMesProductionActive(row: InspectionMgmtRow): boolean {
-    if (row.id != null && sessions[row.id]) {
-      const sess = sessions[row.id]
-      if (sess.wallStart != null && sess.wallEnd == null) return true
-    }
+  /** サーバー上で MES 生産中（data_source=mes・未確定・開始あり終了なし） */
+  function rowServerMesInProgress(row: InspectionMgmtRow): boolean {
+    if (resolveInspectionDataSource(row) !== 'mes') return false
+    if (isRowProductionCompleted(row)) return false
     const started = row.mes_production_started_at
     if (started == null || !String(started).trim()) return false
     const ended = row.mes_production_ended_at
     return ended == null || !String(ended).trim()
+  }
+
+  function isRowMesProductionActive(row: InspectionMgmtRow): boolean {
+    const planId = row.id
+    if (planId != null && isPlanLocallyOperated(planId)) {
+      const sess = sessions[planId]
+      if (sess?.wallStart != null && sess.wallEnd == null) return true
+    }
+    return rowServerMesInProgress(row)
+  }
+
+  function pruneStaleLocalSessions(rows: InspectionMgmtRow[]): void {
+    for (const r of rows) {
+      if (r.id == null) continue
+      if (isPlanLocallyOperated(r.id)) continue
+      if (rowServerMesInProgress(r)) continue
+      const sess = sessions[r.id]
+      if (!sess || sess.wallStart == null || sess.wallEnd != null) continue
+      hydratePlanSessionFromRow(sess, r)
+    }
   }
 
   function rowInspectorId(row: InspectionMgmtRow): number | null {
@@ -630,6 +722,8 @@ export function useInspectionMesCollection() {
     target.mes_production_ended_at = fresh.mes_production_ended_at
     target.mes_net_production_sec = fresh.mes_net_production_sec
     target.mes_paused_accum_sec = fresh.mes_paused_accum_sec
+    target.mes_break_sec = fresh.mes_break_sec
+    target.mes_stop_sec = fresh.mes_stop_sec
     target.mes_production_is_paused = fresh.mes_production_is_paused
     target.mes_inspector_user_id = fresh.mes_inspector_user_id
     target.mes_client_instance_id = fresh.mes_client_instance_id
@@ -730,7 +824,9 @@ export function useInspectionMesCollection() {
         dayStr,
         rows.map((r) => r.id),
         ensureSession,
+        locallyOperatedPlanIds.value,
       )
+      pruneStaleLocalSessions(rows)
       for (const r of rows) normalizeSessionDefects(ensureSession(r.id))
       if (restored) ElMessage.info(t('mesInspectionActual.stateRestored'))
       flushPersistToStorage()
@@ -818,7 +914,14 @@ export function useInspectionMesCollection() {
       ElMessage.warning(t('mesInspectionActual.inspectorMustMatchLogin'))
       return
     }
-    if (row.id == null || !isRowMesProductionActive(row)) return
+    if (row.id == null || !rowServerMesInProgress(row)) {
+      if (row.id != null) {
+        pruneStaleLocalSessions([row])
+        schedulePersist()
+      }
+      ElMessage.warning(t('mesInspectionActual.sessionNotActiveOnServer'))
+      return
+    }
     if (rowMesLockOwner(row) === 'other') {
       ElMessage.warning(t('mesInspectionActual.sessionLockedByOtherTerminal'))
       return
@@ -916,6 +1019,12 @@ export function useInspectionMesCollection() {
     return formatElapsed(readExplicitPausedAccumMs(sess, tickNow.value))
   })
 
+  const breakDisplay = computed(() => {
+    const sess = session.value
+    if (!sess) return '0:00:00'
+    return formatElapsed(readExplicitBreakAccumMs(sess, tickNow.value))
+  })
+
   const defectTotal = computed(() => {
     const sess = session.value
     if (!sess) return 0
@@ -930,9 +1039,12 @@ export function useInspectionMesCollection() {
     if (!canEdit.value) return false
     const planId = activePlanId.value
     if (planId == null) return false
-    const row = managementRows.value.find((r) => r.id === planId)
-    if (!row || !isRowMesProductionActive(row)) return isPlanLocallyOperated(planId)
-    return rowMesLockOwner(row) === 'mine'
+    const sess = sessions[planId]
+    // Android と同様：本端末で開始済みの在産セッションはロック未反映でも操作可
+    if (sess && isProductionInProgress(sess) && isPlanLocallyOperated(planId)) {
+      return true
+    }
+    return canServerPatchPlan(planId)
   })
 
   const canStart = computed(() => {
@@ -956,6 +1068,14 @@ export function useInspectionMesCollection() {
     const sess = session.value
     return canOperateActivePlan.value && sess != null && isTimerPaused(sess)
   })
+  const canBreak = computed(() => {
+    const sess = session.value
+    return canOperateActivePlan.value && sess != null && isTimerRunning(sess)
+  })
+  const canResumeBreak = computed(() => {
+    const sess = session.value
+    return canOperateActivePlan.value && sess != null && isTimerOnBreak(sess)
+  })
   const productSelectionLocked = computed(
     () => canOperateActivePlan.value && activePlanSessionInProgress(),
   )
@@ -963,8 +1083,15 @@ export function useInspectionMesCollection() {
   const canEnd = computed(() => {
     if (!productSelectionLocked.value) return false
     const sess = session.value
-    if (sess != null && isTimerPaused(sess)) return false
+    if (sess != null && (isTimerPaused(sess) || isTimerOnBreak(sess))) return false
     return true
+  })
+
+  const endBlockedTitle = computed(() => {
+    const sess = session.value
+    if (sess != null && isTimerPaused(sess)) return t('mesInspectionActual.endBlockedWhilePaused')
+    if (sess != null && isTimerOnBreak(sess)) return t('mesInspectionActual.endBlockedWhileBreak')
+    return undefined
   })
 
   const timerStatusKey = computed(() => {
@@ -972,13 +1099,20 @@ export function useInspectionMesCollection() {
     if (!sess) return 'idle'
     if (sess.wallEnd != null) return 'ended'
     if (isTimerPaused(sess)) return 'paused'
+    if (isTimerOnBreak(sess)) return 'break'
     if (isTimerRunning(sess)) return 'running'
     if (sess.wallStart != null) return 'running'
     return 'idle'
   })
 
   const timerStatusLabel = computed(() => {
-    const map = { idle: 'timerIdle', running: 'timerRunning', paused: 'timerPaused', ended: 'timerEnded' } as const
+    const map = {
+      idle: 'timerIdle',
+      running: 'timerRunning',
+      paused: 'timerPaused',
+      break: 'timerBreak',
+      ended: 'timerEnded',
+    } as const
     return t(`mesInspectionActual.${map[timerStatusKey.value]}`)
   })
 
@@ -991,7 +1125,7 @@ export function useInspectionMesCollection() {
   const showSessionRecoveryAlert = computed(() => {
     const id = activePlanId.value
     const row = activeRow.value
-    if (id == null || !row || !isRowMesProductionActive(row)) return false
+    if (id == null || !row || !rowServerMesInProgress(row)) return false
     const owner = rowMesLockOwner(row)
     if (owner === 'other') return false
     return owner === 'unclaimed' || !isPlanLocallyOperated(id)
@@ -1115,17 +1249,24 @@ export function useInspectionMesCollection() {
     return Math.max(0, Math.floor((we - ws) / 1000))
   }
 
-  function timerPhase(sess: PlanSession): 'idle' | 'running' | 'paused' | 'ended' {
+  function timerPhase(sess: PlanSession): 'idle' | 'running' | 'paused' | 'break' | 'ended' {
     if (sess.wallEnd != null) return 'ended'
     if (sess.wallStart == null) return 'idle'
     if (sess.pauseSliceStart != null) return 'paused'
+    if (sess.breakSliceStart != null) return 'break'
     if (sess.runningSliceStart != null) return 'running'
     return 'idle'
   }
 
   function timerPhaseLabel(sess: PlanSession): string {
     const ph = timerPhase(sess)
-    const map = { idle: 'timerIdle', running: 'timerRunning', paused: 'timerPaused', ended: 'timerEnded' } as const
+    const map = {
+      idle: 'timerIdle',
+      running: 'timerRunning',
+      paused: 'timerPaused',
+      break: 'timerBreak',
+      ended: 'timerEnded',
+    } as const
     return t(`mesInspectionActual.${map[ph]}`)
   }
 
@@ -1139,6 +1280,18 @@ export function useInspectionMesCollection() {
       minute: '2-digit',
       hour12: false,
     })
+  }
+
+  /** 稼働カード内メトリクス用（時分秒のみ） */
+  function formatWallClock(ts: number | null | undefined): string {
+    if (ts == null) return '—'
+    return new Intl.DateTimeFormat('ja-JP', {
+      timeZone: 'Asia/Tokyo',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(new Date(ts))
   }
 
   function sessionWallStartTs(sess: PlanSession | null): number | null {
@@ -1229,7 +1382,16 @@ export function useInspectionMesCollection() {
     s.activeAccumMs = 0
     s.pausedAccumMs = 0
     s.pauseSliceStart = null
+    s.breakAccumMs = 0
+    s.breakSliceStart = null
     s.runningSliceStart = now
+    const row = managementRows.value.find((r) => r.id === planId)
+    if (row) {
+      row.mes_production_started_at = new Date(now).toISOString()
+      row.mes_production_ended_at = null
+      row.mes_client_instance_id = getMesClientInstanceId()
+      row.mes_production_is_paused = 0
+    }
     void syncScreenWakeLock(true)
     schedulePersist()
     ElMessage.success(t('mesInspectionActual.started'))
@@ -1271,19 +1433,125 @@ export function useInspectionMesCollection() {
     schedulePersist()
   }
 
+  function onBreakProduction(): void {
+    if (!guardMesOperation(canEdit)) return
+    const id = activePlanId.value
+    if (id == null || !isPlanLocallyOperated(id)) return
+    const s = session.value
+    if (id == null || !s || !isTimerRunning(s)) return
+    const now = Date.now()
+    flushRunningSlice(s, now)
+    s.breakSliceStart = now
+    markLocalMesEcho(id)
+    void persistMesTimerCheckpoints(id)
+    schedulePersist()
+  }
+
+  function onResumeBreakProduction(): void {
+    if (!guardMesOperation(canEdit)) return
+    const id = activePlanId.value
+    if (id == null || !isPlanLocallyOperated(id)) return
+    const s = session.value
+    if (id == null || !s || !isTimerOnBreak(s)) return
+    const now = Date.now()
+    const ws = resolveSessionWallStartMs(s, activeRow.value)
+    flushBreakSlice(s, now)
+    if (ws != null) {
+      correctNetProductionFromWallClock(s, ws, now)
+    } else {
+      s.runningSliceStart = now
+      s.breakSliceStart = null
+    }
+    markLocalMesEcho(id)
+    void persistMesTimerCheckpoints(id)
+    schedulePersist()
+  }
+
   function openEndDialog(): void {
     const s = session.value
     if (!s || !canEnd.value) return
-    const now = Date.now()
-    if (isTimerRunning(s)) flushRunningSlice(s, now)
-    if (isTimerPaused(s)) flushPauseSlice(s, now)
-    endDialogQty.value = ''
+    endDialogBoxes.value = ''
+    endDialogPieceQty.value = ''
+    endDialogQtyInputSource.value = null
     endDialogVisible.value = true
+  }
+
+  function resumeProductionAfterEndDialogCancel(): void {
+    const id = activePlanId.value
+    const s = session.value
+    if (id == null || !s || !isProductionInProgress(s)) return
+    if (isTimerPaused(s) || isTimerOnBreak(s) || isTimerRunning(s)) return
+    const now = Date.now()
+    s.runningSliceStart = now
+    markLocalMesEcho(id)
+    void persistMesTimerCheckpoints(id)
+    schedulePersist()
   }
 
   function closeEndDialog(): void {
     endDialogVisible.value = false
+    resumeProductionAfterEndDialogCancel()
   }
+
+  function syncEndDialogQtyFromBoxes(raw: string): void {
+    if (syncingEndDialogQty) return
+    syncingEndDialogQty = true
+    endDialogQtyInputSource.value = 'box'
+    endDialogBoxes.value = String(raw ?? '').replace(/\D/g, '')
+    const box = parseEndDialogQtyInput(endDialogBoxes.value)
+    const upb = activeUnitPerBox.value
+    if (box != null && upb > 0) {
+      endDialogPieceQty.value = formatEndDialogQtyInput(pieceQtyFromBoxes(box, upb))
+    } else if (!endDialogBoxes.value) {
+      endDialogPieceQty.value = ''
+    }
+    syncingEndDialogQty = false
+  }
+
+  function syncEndDialogQtyFromPieces(raw: string): void {
+    if (syncingEndDialogQty) return
+    syncingEndDialogQty = true
+    endDialogQtyInputSource.value = 'piece'
+    endDialogPieceQty.value = String(raw ?? '').replace(/\D/g, '')
+    const piece = parseEndDialogQtyInput(endDialogPieceQty.value)
+    const upb = activeUnitPerBox.value
+    if (piece != null && upb > 0) {
+      endDialogBoxes.value = formatEndDialogQtyInput(boxQtyFromPieces(piece, upb))
+    } else if (!endDialogPieceQty.value) {
+      endDialogBoxes.value = ''
+    }
+    syncingEndDialogQty = false
+  }
+
+  function onEndDialogBoxesInput(raw: string): void {
+    syncEndDialogQtyFromBoxes(raw)
+  }
+
+  function onEndDialogPieceQtyInput(raw: string): void {
+    syncEndDialogQtyFromPieces(raw)
+  }
+
+  const activeUnitPerBox = computed(() =>
+    resolveUnitPerBox(selectedProductCode.value, products.value),
+  )
+
+  const endDialogQtyMismatch = computed(() => {
+    const upb = activeUnitPerBox.value
+    if (upb <= 0) return null
+    const piece = parseEndDialogQtyInput(endDialogPieceQty.value)
+    if (piece == null) return null
+    if (!hasPieceBoxQtyMismatch(piece, upb)) return null
+    return { piece, upb }
+  })
+
+  const endDialogCanSubmit = computed(() => {
+    const piece = parseEndDialogQtyInput(endDialogPieceQty.value)
+    if (piece == null) return false
+    if (activeUnitPerBox.value > 0) {
+      return String(endDialogBoxes.value).trim() !== '' || String(endDialogPieceQty.value).trim() !== ''
+    }
+    return String(endDialogPieceQty.value).trim() !== ''
+  })
 
   const endDialogPreview = computed(() => {
     const row = activeRow.value
@@ -1311,10 +1579,36 @@ export function useInspectionMesCollection() {
     const s = session.value
     const preview = endDialogPreview.value
     if (id == null || !s || !preview) return
-    const qty = Math.round(Number(String(endDialogQty.value).trim()))
-    if (!Number.isFinite(qty) || qty < 0) {
-      ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
-      return
+    const upb = activeUnitPerBox.value
+    let qty: number
+    if (upb > 0) {
+      const piece = parseEndDialogQtyInput(endDialogPieceQty.value)
+      if (piece == null || piece < 0) {
+        ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
+        return
+      }
+      qty = piece
+      if (hasPieceBoxQtyMismatch(qty, upb)) {
+        try {
+          await ElMessageBox.confirm(
+            t('mesInspectionActual.qtyMismatchConfirm', { piece: qty, upb }),
+            t('mesInspectionActual.qtyMismatchTitle'),
+            {
+              confirmButtonText: t('mesInspectionActual.qtyMismatchConfirmBtn'),
+              cancelButtonText: t('common.cancel'),
+              type: 'warning',
+            },
+          )
+        } catch {
+          return
+        }
+      }
+    } else {
+      qty = parseEndDialogQtyInput(endDialogPieceQty.value) ?? -1
+      if (!Number.isFinite(qty) || qty < 0) {
+        ElMessage.warning(t('mesInspectionActual.qtyInvalid'))
+        return
+      }
     }
     if (!navigator.onLine) {
       ElMessage.warning(t('mesInspectionActual.needOnlineForEnd'))
@@ -1323,17 +1617,23 @@ export function useInspectionMesCollection() {
     const now = Date.now()
     if (isTimerRunning(s)) flushRunningSlice(s, now)
     if (isTimerPaused(s)) flushPauseSlice(s, now)
+    if (isTimerOnBreak(s)) flushBreakSlice(s, now)
     s.wallEnd = now
+    freezeBreakAccumMs(s, now)
     freezePausedAccumMs(s, now)
     endDialogSubmitting.value = true
     const productionDayFromStart =
       productionDayFromWallStart(s.wallStart) ?? productionDayFromWallStart(now) ?? getJSTToday()
+    const breakSec = Math.max(0, Math.round((s.breakAccumMs ?? 0) / 1000))
+    const stopSec = Math.max(0, Math.round((s.pausedAccumMs ?? 0) / 1000))
     try {
       const ok = await patchWithOfflineSync(id, {
         production_day: productionDayFromStart,
         mes_production_ended_at: new Date(now).toISOString(),
         mes_net_production_sec: netProductionSeconds(s),
-        mes_paused_accum_sec: Math.max(0, Math.round((s.pausedAccumMs ?? 0) / 1000)),
+        mes_break_sec: breakSec,
+        mes_stop_sec: stopSec,
+        mes_paused_accum_sec: breakSec + stopSec,
         mes_production_is_paused: 0,
         mes_inspector_user_id: inspectorUserId.value ?? undefined,
         mes_defect_by_item: { ...s.defects },
@@ -1489,7 +1789,15 @@ export function useInspectionMesCollection() {
   async function loadProducts(): Promise<void> {
     loadingProducts.value = true
     try {
-      products.value = filterInspectionProductOptions((await getProducts()) ?? [])
+      const res = await getProductList({ pageSize: 9999, status: 'active' })
+      const list = res?.data?.list ?? res?.list ?? []
+      const mapped: InspectionProductOption[] = list.map((p) => ({
+        product_code: (p.product_cd ?? '').trim(),
+        product_name: (p.product_name ?? '').trim(),
+        is_active: (p.status || '').toLowerCase() === 'active',
+        unit_per_box: Math.max(0, Number(p.unit_per_box) || 0),
+      }))
+      products.value = filterInspectionProductOptions(mapped)
       const code = selectedProductCode.value
       if (code && !products.value.some((p) => p.product_code === code)) {
         const inProgress =
@@ -1935,15 +2243,26 @@ export function useInspectionMesCollection() {
     loadingInspectors,
     loadingPlans,
     endDialogVisible,
-    endDialogQty,
+    endDialogBoxes,
+    endDialogPieceQty,
+    endDialogQtyInputSource,
     endDialogSubmitting,
+    activeUnitPerBox,
+    endDialogQtyMismatch,
+    endDialogCanSubmit,
+    onEndDialogBoxesInput,
+    onEndDialogPieceQtyInput,
     elapsedDisplay,
     pausedDisplay,
+    breakDisplay,
     defectTotal,
     canStart,
     canPause,
     canResume,
+    canBreak,
+    canResumeBreak,
     canEnd,
+    endBlockedTitle,
     resumePulseActive,
     productSelectionLocked,
     canEditDefects,
@@ -1958,6 +2277,8 @@ export function useInspectionMesCollection() {
     onStartProduction,
     onPauseProduction,
     onResumeProduction,
+    onBreakProduction,
+    onResumeBreakProduction,
     openEndDialog,
     closeEndDialog,
     submitProductionEnd,
@@ -1974,6 +2295,7 @@ export function useInspectionMesCollection() {
     timerPhase,
     timerPhaseLabel,
     formatWall,
+    formatWallClock,
     sessionWallStartTs,
     isProductionInProgress,
     confirmedEditDialogVisible,

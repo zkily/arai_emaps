@@ -8,6 +8,7 @@ import {
   Calendar,
   CircleCheck,
   Clock,
+  Coffee,
   Camera,
   DataLine,
   Edit,
@@ -19,6 +20,7 @@ import {
   User,
   VideoPause,
   VideoPlay,
+  Warning,
   QuestionFilled,
 } from '@element-plus/icons-vue'
 import { setLocale, type LocaleType } from '@/i18n'
@@ -31,8 +33,20 @@ import {
   resolveInspectionDataSource,
 } from './inspectionDataSource'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
 defineOptions({ name: 'InspectionActualDataCollection' })
+
+const DEFECT_GRID_COL_W = 118
+const DEFECT_GRID_GAP = 4
+
+function defectGridStyle(group: MesDefectItemGroup): Record<string, string> {
+  const n = Math.max(1, group.items.length)
+  return {
+    gridTemplateColumns: `repeat(${n}, var(--defect-col-w, ${DEFECT_GRID_COL_W}px))`,
+    minWidth: `min(100%, calc(${n} * var(--defect-col-w, ${DEFECT_GRID_COL_W}px) + ${(n - 1) * DEFECT_GRID_GAP}px))`,
+  }
+}
 
 const { t, locale } = useI18n()
 const mes = useInspectionMesCollection()
@@ -61,13 +75,23 @@ const {
   loadingProducts,
   loadingPlans,
   endDialogVisible,
-  endDialogQty,
+  endDialogBoxes,
+  endDialogPieceQty,
+  endDialogQtyInputSource,
   endDialogSubmitting,
+  activeUnitPerBox,
+  endDialogQtyMismatch,
+  endDialogCanSubmit,
+  onEndDialogBoxesInput,
+  onEndDialogPieceQtyInput,
   defectTotal,
   canStart,
   canPause,
   canResume,
+  canBreak,
+  canResumeBreak,
   canEnd,
+  endBlockedTitle,
   resumePulseActive,
   productSelectionLocked,
   canEditDefects,
@@ -83,6 +107,8 @@ const {
   onStartProduction,
   onPauseProduction,
   onResumeProduction,
+  onBreakProduction,
+  onResumeBreakProduction,
   openEndDialog,
   closeEndDialog,
   submitProductionEnd,
@@ -100,9 +126,11 @@ const {
   rowWallElapsedSec,
   rowPausedAccumSec,
   pausedDisplay,
+  breakDisplay,
   timerPhase,
   timerPhaseLabel,
   formatWall,
+  formatWallClock,
   sessionWallStartTs,
   init,
   teardownLifecycle,
@@ -671,7 +699,7 @@ onUnmounted(() => {
               :type="
                 timerPhase(currentSession) === 'running'
                   ? 'success'
-                  : timerPhase(currentSession) === 'paused'
+                  : timerPhase(currentSession) === 'paused' || timerPhase(currentSession) === 'break'
                     ? 'warning'
                     : 'info'
               "
@@ -721,23 +749,46 @@ onUnmounted(() => {
                     currentSession ? timerPhaseLabel(currentSession) : t('mesInspectionActual.timerIdle')
                   }}</span>
                 </div>
-                <div class="timer-compact__readout-row">
-                  <div
-                    class="timer-compact__readout"
-                  >
+                <div class="timer-compact__hero">
+                  <div class="timer-compact__readout">
                     {{ formatElapsed(currentSession ? operationDisplayMs(currentSession) : 0) }}
                   </div>
-                  <div v-if="currentSession && sessionWallStartTs(currentSession) != null" class="timer-compact__pause-side">
-                    <span class="timer-compact__pause-label">{{ t('mesInspectionActual.pausedAccum') }}</span>
-                    <span class="timer-compact__pause-value">{{ pausedDisplay }}</span>
+                </div>
+                <div
+                  v-if="currentSession && sessionWallStartTs(currentSession) != null"
+                  class="timer-compact__metrics"
+                >
+                  <div class="timer-compact__metric timer-compact__metric--start">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesInspectionActual.productionStart')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{
+                      formatWallClock(sessionWallStartTs(currentSession))
+                    }}</span>
+                  </div>
+                  <div class="timer-compact__metric timer-compact__metric--pause">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesInspectionActual.pausedAccum')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{ pausedDisplay }}</span>
+                  </div>
+                  <div class="timer-compact__metric timer-compact__metric--break">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesInspectionActual.breakAccum')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{ breakDisplay }}</span>
                   </div>
                 </div>
-                <div class="timer-compact__walls">
-                  <span>{{
-                    formatWall(currentSession ? sessionWallStartTs(currentSession) : null)
+                <div
+                  v-if="currentSession?.wallEnd != null"
+                  class="timer-compact__footer"
+                >
+                  <span class="timer-compact__footer-label">{{
+                    t('mesInspectionActual.productionEnd')
                   }}</span>
-                  <span class="timer-compact__sep">→</span>
-                  <span>{{ formatWall(currentSession?.wallEnd ?? null) }}</span>
+                  <span class="timer-compact__footer-value">{{
+                    formatWall(currentSession.wallEnd)
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -779,11 +830,31 @@ onUnmounted(() => {
               <el-button
                 class="plan-act-btn plan-act-btn--end"
                 :disabled="!canEnd"
-                :title="canResume ? t('mesInspectionActual.endBlockedWhilePaused') : undefined"
+                :title="endBlockedTitle"
                 @click="openEndDialog"
               >
                 <el-icon><CircleCheck /></el-icon>
                 {{ t('mesInspectionActual.btnEnd') }}
+              </el-button>
+              <el-button
+                v-if="canBreak"
+                class="plan-act-btn plan-act-btn--break"
+                @click="onBreakProduction"
+              >
+                <el-icon><Coffee /></el-icon>
+                {{ t('mesInspectionActual.btnBreak') }}
+              </el-button>
+              <el-button
+                v-else-if="canResumeBreak"
+                class="plan-act-btn plan-act-btn--break-resume"
+                @click="onResumeBreakProduction"
+              >
+                <el-icon><VideoPlay /></el-icon>
+                {{ t('mesInspectionActual.btnResumeBreak') }}
+              </el-button>
+              <el-button v-else class="plan-act-btn plan-act-btn--break" disabled>
+                <el-icon><Coffee /></el-icon>
+                {{ t('mesInspectionActual.btnBreak') }}
               </el-button>
             </div>
           </div>
@@ -810,7 +881,7 @@ onUnmounted(() => {
                     group.processName || group.processCd || '—'
                   }}</span>
                 </header>
-                <div class="defect-grid">
+                <div class="defect-grid" :style="defectGridStyle(group)">
                   <div
                     v-for="item in group.items"
                     :key="item.id"
@@ -1123,19 +1194,81 @@ onUnmounted(() => {
         </section>
 
         <section class="end-dialog-qty">
-          <label class="end-dialog-qty__label" for="inspection-end-qty-input">
-            {{ t('mesInspectionActual.productionQty') }}
-          </label>
-          <el-input
-            id="inspection-end-qty-input"
-            v-model="endDialogQty"
-            class="end-dialog-qty__input"
-            size="large"
-            inputmode="numeric"
-            :placeholder="t('mesInspectionActual.productionQtyPlaceholder')"
-            clearable
-            @keyup.enter="submitProductionEnd"
-          />
+          <div class="end-dialog-qty__head">
+            <span class="end-dialog-qty__title">{{ t('mesInspectionActual.productionQty') }}</span>
+            <span v-if="activeUnitPerBox > 0" class="end-dialog-qty__hint">
+              {{ t('mesInspectionActual.unitPerBoxHint', { n: activeUnitPerBox }) }}
+            </span>
+            <span v-else class="end-dialog-qty__hint end-dialog-qty__hint--warn">
+              {{ t('mesInspectionActual.unitPerBoxUnset') }}
+            </span>
+          </div>
+          <div v-if="activeUnitPerBox > 0" class="end-dialog-qty__panel">
+            <div
+              class="end-dialog-qty__cell"
+              :class="{ 'end-dialog-qty__cell--derived': endDialogQtyInputSource === 'piece' }"
+            >
+              <span class="end-dialog-qty__cell-label">{{ t('mesInspectionActual.boxQty') }}</span>
+              <el-input
+                id="inspection-end-box-input"
+                :model-value="endDialogBoxes"
+                class="end-dialog-qty__input"
+                size="large"
+                inputmode="numeric"
+                :placeholder="t('mesInspectionActual.boxQtyPlaceholder')"
+                clearable
+                @update:model-value="onEndDialogBoxesInput"
+                @keyup.enter="submitProductionEnd"
+              />
+            </div>
+            <div class="end-dialog-qty__bridge" aria-hidden="true">
+              <span class="end-dialog-qty__op">×</span>
+              <span class="end-dialog-qty__upb">{{ activeUnitPerBox }}</span>
+              <span class="end-dialog-qty__op">=</span>
+            </div>
+            <div
+              class="end-dialog-qty__cell"
+              :class="{ 'end-dialog-qty__cell--derived': endDialogQtyInputSource === 'box' }"
+            >
+              <span class="end-dialog-qty__cell-label">{{ t('mesInspectionActual.productionQty') }}</span>
+              <el-input
+                id="inspection-end-qty-input"
+                :model-value="endDialogPieceQty"
+                class="end-dialog-qty__input"
+                size="large"
+                inputmode="numeric"
+                :placeholder="t('mesInspectionActual.productionQtyPlaceholder')"
+                clearable
+                @update:model-value="onEndDialogPieceQtyInput"
+                @keyup.enter="submitProductionEnd"
+              />
+            </div>
+          </div>
+          <p v-if="endDialogQtyMismatch" class="end-dialog-qty__warn">
+            <el-icon><Warning /></el-icon>
+            {{
+              t('mesInspectionActual.qtyMismatchWarn', {
+                piece: endDialogQtyMismatch.piece,
+                upb: endDialogQtyMismatch.upb,
+              })
+            }}
+          </p>
+          <div v-else class="end-dialog-qty__panel end-dialog-qty__panel--piece">
+            <label class="end-dialog-qty__label" for="inspection-end-qty-input">
+              {{ t('mesInspectionActual.productionQty') }}
+            </label>
+            <el-input
+              id="inspection-end-qty-input"
+              :model-value="endDialogPieceQty"
+              class="end-dialog-qty__input"
+              size="large"
+              inputmode="numeric"
+              :placeholder="t('mesInspectionActual.productionQtyPlaceholder')"
+              clearable
+              @update:model-value="onEndDialogPieceQtyInput"
+              @keyup.enter="submitProductionEnd"
+            />
+          </div>
         </section>
       </div>
 
@@ -1152,6 +1285,7 @@ onUnmounted(() => {
             class="end-dialog-footer__btn end-dialog-footer__btn--confirm"
             type="primary"
             :loading="endDialogSubmitting"
+            :disabled="!endDialogCanSubmit"
             @click="submitProductionEnd"
           >
             <el-icon class="end-dialog-footer__btn-icon"><CircleCheck /></el-icon>
@@ -1254,7 +1388,7 @@ onUnmounted(() => {
                     group.processName || group.processCd || '—'
                   }}</span>
                 </header>
-                <div class="confirmed-edit-defect-grid">
+                <div class="confirmed-edit-defect-grid" :style="defectGridStyle(group)">
                   <div
                     v-for="item in group.items"
                     :key="item.id"
@@ -2501,10 +2635,10 @@ onUnmounted(() => {
 
 .timer-compact {
   box-sizing: border-box;
-  width: 15.5rem;
-  min-width: 15.5rem;
-  max-width: 15.5rem;
-  padding: 8px 10px;
+  width: 18.5rem;
+  min-width: 18.5rem;
+  max-width: 18.5rem;
+  padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid var(--el-border-color-lighter);
   box-shadow:
@@ -2516,29 +2650,25 @@ onUnmounted(() => {
 .plan-row__ops .timer-compact {
   height: 100%;
   max-height: var(--plan-run-block-height);
-  padding: 6px 8px;
+  padding: 8px 8px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 4px;
   overflow: hidden;
 }
 
-.plan-row__ops .timer-compact__readout-row {
-  margin: 1px 0;
+.plan-row__ops .timer-compact__hero {
+  margin: 0;
 }
 
 .plan-row__ops .timer-compact__readout {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   line-height: 1.05;
 }
 
-.plan-row__ops .timer-compact__pause-value {
-  font-size: 0.88rem;
-  line-height: 1.05;
-}
-
-.plan-row__ops .timer-compact__walls {
-  font-size: 0.68rem;
+.plan-row__ops .timer-compact__metric-value {
+  font-size: 0.7rem;
   line-height: 1.1;
 }
 
@@ -2556,12 +2686,21 @@ onUnmounted(() => {
     0 2px 8px rgba(16, 185, 129, 0.12);
 }
 
-.timer-compact--paused {
+.timer-compact--paused,
+.timer-compact--break {
   background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 55%, #fff7ed 100%);
   border-color: #fbbf24;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
     0 0 0 1px rgba(245, 158, 11, 0.15);
+}
+
+.timer-compact--break {
+  background: linear-gradient(165deg, #f5f3ff 0%, #ede9fe 55%, #faf5ff 100%);
+  border-color: #a78bfa;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 1px rgba(139, 92, 246, 0.15);
 }
 
 .timer-compact--ended {
@@ -2637,10 +2776,24 @@ onUnmounted(() => {
   border-color: #fcd34d;
 }
 
+.timer-compact--break .timer-compact__label {
+  color: #6d28d9;
+}
+
+.timer-compact--break .timer-compact__phase {
+  color: #5b21b6;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: #c4b5fd;
+}
+
 .timer-compact--ended .timer-compact__phase {
   color: #1e40af;
   background: rgba(255, 255, 255, 0.82);
   border-color: #93c5fd;
+}
+
+.timer-compact__hero {
+  padding: 2px 0 1px;
 }
 
 .timer-compact__readout-row {
@@ -2657,13 +2810,118 @@ onUnmounted(() => {
   font-weight: 800;
   margin: 0;
   line-height: 1.1;
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.04em;
   color: #0f172a;
+}
+
+.timer-compact__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.timer-compact__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 3px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.timer-compact__metric-label {
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.2;
+}
+
+.timer-compact__metric-value {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.68rem, 1.8vw, 0.78rem);
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timer-compact__metric--start {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 255, 0.75));
+}
+
+.timer-compact__metric--start .timer-compact__metric-value {
+  color: #1d4ed8;
+}
+
+.timer-compact__metric--pause {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 251, 235, 0.78));
+}
+
+.timer-compact__metric--pause .timer-compact__metric-value {
+  color: #b45309;
+}
+
+.timer-compact__metric--break {
+  border-color: rgba(139, 92, 246, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(245, 243, 255, 0.78));
+}
+
+.timer-compact__metric--break .timer-compact__metric-value {
+  color: #6d28d9;
+}
+
+.timer-compact__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+.timer-compact__footer-label {
+  font-weight: 700;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.timer-compact__footer-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #334155;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timer-compact--running .timer-compact__readout {
   color: #047857;
+}
+
+.timer-compact--break .timer-compact__readout {
+  color: #6d28d9;
 }
 
 .timer-compact--ended .timer-compact__readout {
@@ -2870,6 +3128,26 @@ onUnmounted(() => {
   --el-button-text-color: #fff;
   background: linear-gradient(180deg, #f89898 0%, var(--el-color-danger) 100%);
   color: #fff;
+}
+
+.plan-act-btn--break:not(.is-disabled) {
+  --el-button-bg-color: #8b5cf6;
+  --el-button-border-color: #7c3aed;
+  --el-button-text-color: #fff;
+  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
+  color: #fff;
+}
+
+.plan-act-btn--break-resume:not(.is-disabled) {
+  --el-button-bg-color: #7c3aed;
+  --el-button-border-color: #6d28d9;
+  --el-button-text-color: #fff;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  color: #fff;
+}
+
+.timer-compact__pause-value--break {
+  color: #6d28d9;
 }
 
 .plan-act-btn--machine:not(.is-disabled) {
@@ -3409,11 +3687,115 @@ onUnmounted(() => {
 .end-dialog-qty {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--el-fill-color-blank);
   border: 1px solid var(--el-border-color-lighter);
+}
+
+.end-dialog-qty__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+
+.end-dialog-qty__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--el-color-danger);
+}
+
+.end-dialog-qty__hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__hint--warn {
+  color: var(--el-color-warning);
+}
+
+.end-dialog-qty__panel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  align-items: end;
+}
+
+.end-dialog-qty__panel--piece {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.end-dialog-qty__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(245, 108, 108, 0.22);
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.end-dialog-qty__cell--derived {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(248, 250, 252, 0.9);
+  opacity: 0.92;
+}
+
+.end-dialog-qty__cell--derived .end-dialog-qty__cell-label {
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--el-color-warning);
+}
+
+.end-dialog-qty__cell-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__bridge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-bottom: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.end-dialog-qty__upb {
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-primary);
+}
+
+.end-dialog-qty__derived-value {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: rgba(245, 108, 108, 0.08);
+  box-shadow: 0 0 0 1px var(--el-color-danger-light-5);
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-danger);
 }
 
 .end-dialog-qty__label {
@@ -3701,8 +4083,9 @@ onUnmounted(() => {
 
 .confirmed-edit-defect-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
+  width: max-content;
+  max-width: 100%;
 }
 
 .defect-cell--compact {
@@ -3859,17 +4242,21 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: min(100%, calc(7 * 118px + 6 * 4px));
+  min-width: 0;
 }
 .confirmed-edit-defect-groups {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
 }
 .defect-process-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .defect-process-group__head {
   display: flex;
@@ -3896,10 +4283,9 @@ onUnmounted(() => {
 }
 .defect-grid {
   display: grid;
-  grid-template-columns: repeat(7, 118px);
   gap: 4px;
   width: max-content;
-  min-width: min(100%, calc(7 * 118px + 6 * 4px));
+  max-width: 100%;
 }
 .defect-cell {
   display: flex;
@@ -4330,6 +4716,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .defect-panel,
+  .confirmed-edit-section--defects {
+    --defect-col-w: 100px;
+  }
+
   .inspection-history-table-card__head {
     padding: 5px 8px;
   }

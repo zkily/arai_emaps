@@ -564,6 +564,83 @@
             </div>
           </section>
 
+          <section v-if="inspectorMetricsTimeRows.length" class="ipa-panel ipa-panel--inspector ipa-fade-in ipa-fade-in--d5">
+            <div class="ipa-panel__head">
+              <div class="ipa-panel__title-wrap">
+                <el-icon class="ipa-panel__ico ipa-panel__ico--inspector"><Timer /></el-icon>
+                <span class="ipa-panel__title">検査員別指標 · 時間 / 生産</span>
+              </div>
+              <span class="ipa-panel__badge ipa-panel__badge--inspector">{{ inspectorMetricsPrepared?.rows.length ?? 0 }} 名</span>
+            </div>
+            <el-table
+              :data="inspectorMetricsTimeRows"
+              size="small"
+              class="ipa-table ipa-table--inspector ipa-table--metrics ipa-table--metrics-time"
+              :row-class-name="inspectorMetricsRowClass"
+            >
+              <el-table-column prop="inspector_name" label="検査員" min-width="88" fixed show-overflow-tooltip />
+              <el-table-column label="シフト" width="68" align="right">
+                <template #default="{ row }">{{ fmtHoursMetric(row.shift_hours) }}</template>
+              </el-table-column>
+              <el-table-column label="休憩" width="68" align="right">
+                <template #default="{ row }">{{ fmtHoursMetric(row.break_hours) }}</template>
+              </el-table-column>
+              <el-table-column label="ロス時間" width="72" align="right">
+                <template #default="{ row }">{{ fmtHoursMetric(row.stop_hours) }}</template>
+              </el-table-column>
+              <el-table-column label="作業すべき時間" width="96" align="right">
+                <template #default="{ row }">{{ fmtHoursMetric(row.target_work_hours) }}</template>
+              </el-table-column>
+              <el-table-column label="作業時間" width="72" align="right">
+                <template #default="{ row }">{{ fmtHoursMetric(row.work_hours) }}</template>
+              </el-table-column>
+              <el-table-column label="作業率" width="68" align="right">
+                <template #default="{ row }">{{ fmtPct(row.work_rate_percent) }}</template>
+              </el-table-column>
+              <el-table-column label="検査総数" width="80" align="right">
+                <template #default="{ row }"><span class="ipa-num ipa-num--good">{{ fmtMetricQtyDisplay(row.sum_inspection_qty) }}</span></template>
+              </el-table-column>
+              <el-table-column label="能率" width="72" align="right">
+                <template #default="{ row }">
+                  <span class="ipa-eff-pill ipa-eff-pill--inspector">{{ fmtEfficiencyMetric(row.efficiency_per_hour) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="稼働率" width="68" align="right">
+                <template #default="{ row }">{{ fmtPct(row.operating_rate_percent) }}</template>
+              </el-table-column>
+            </el-table>
+          </section>
+
+          <section v-if="inspectorMetricsDefectRows.length" class="ipa-panel ipa-panel--inspector ipa-fade-in ipa-fade-in--d55">
+            <div class="ipa-panel__head">
+              <div class="ipa-panel__title-wrap">
+                <el-icon class="ipa-panel__ico ipa-panel__ico--inspector"><WarningFilled /></el-icon>
+                <span class="ipa-panel__title">検査員別指標 · 不良内訳</span>
+              </div>
+              <span class="ipa-panel__badge ipa-panel__badge--soft">KT09</span>
+            </div>
+            <el-table
+              :data="inspectorMetricsDefectRows"
+              size="small"
+              class="ipa-table ipa-table--inspector ipa-table--metrics"
+              :row-class-name="inspectorMetricsRowClass"
+            >
+              <el-table-column prop="inspector_name" label="検査員" min-width="88" fixed show-overflow-tooltip />
+              <el-table-column
+                v-for="header in inspectorMetricsDefectHeaders"
+                :key="header"
+                :label="metricsDefectHeaderLabel(header)"
+                width="64"
+                align="right"
+              >
+                <template #default="{ row }">{{ fmtMetricQtyDisplay(inspectorMetricsDefectQty(row, header)) }}</template>
+              </el-table-column>
+              <el-table-column label="不良合計" width="72" align="right" fixed="right">
+                <template #default="{ row }">{{ fmtMetricQtyDisplay(inspectorMetricsDefectTotal(row)) }}</template>
+              </el-table-column>
+            </el-table>
+          </section>
+
           <section v-if="defectRows.length" class="ipa-panel ipa-fade-in ipa-fade-in--d6">
             <div class="ipa-panel__head">
               <div class="ipa-panel__title-wrap">
@@ -766,6 +843,7 @@ import {
   type InspectionProductivityBucket,
   type InspectionProductivityDailyRow,
   type InspectionProductivityInspectorRow,
+  type InspectionProductivityInspectorMetricsRow,
   type InspectionProductivityProductInspectorRanking,
   type InspectionProductivityProductRow,
   type InspectionProductivitySessionRow,
@@ -786,6 +864,12 @@ import {
   printInspectionProductivityInspectorProductBatch,
   printInspectionProductivityReport,
   printInspectionProductivitySection,
+  formatInspectorOptionLabel,
+  inspectorMetricsRowHasActivity,
+  metricsDefectHeaderLabel,
+  prepareInspectorMetricsForDisplay,
+  resolveInspectorMetricsDefectHeaders,
+  sumInspectorMetricsDefectQty,
   type InspectionProductivityDailyBatchItem,
   type InspectionProductivityInspectorProductBatchItem,
   type InspectionProductivityPrintSection,
@@ -920,6 +1004,35 @@ const emptySummary = (): InspectionProductivityBucket => ({
 
 const summary = computed(() => analysisData.value?.summary ?? emptySummary())
 const defectRows = computed(() => analysisData.value?.defect_by_item ?? [])
+
+const inspectorMetrics = computed(() => analysisData.value?.by_inspector_metrics ?? null)
+
+const inspectorMetricsPrepared = computed(() => {
+  const raw = inspectorMetrics.value
+  if (!raw) return null
+  return prepareInspectorMetricsForDisplay(raw, inspectorOptions.value)
+})
+
+const inspectorMetricsDefectHeaders = computed(() =>
+  inspectorMetricsPrepared.value
+    ? resolveInspectorMetricsDefectHeaders(inspectorMetricsPrepared.value)
+    : [],
+)
+
+const inspectorMetricsTimeRows = computed((): InspectionProductivityInspectorMetricsRow[] => {
+  const metrics = inspectorMetricsPrepared.value
+  if (!metrics?.rows?.length) return []
+  const tail: InspectionProductivityInspectorMetricsRow[] = []
+  if (inspectorMetricsRowHasActivity(metrics.support_row, inspectorMetricsDefectHeaders.value)) {
+    tail.push(metrics.support_row)
+  }
+  tail.push(metrics.total_row)
+  return [...metrics.rows, ...tail]
+})
+
+const inspectorMetricsDefectRows = computed((): InspectionProductivityInspectorMetricsRow[] =>
+  inspectorMetricsTimeRows.value,
+)
 
 const productRankList = computed((): InspectionProductivityProductInspectorRanking[] => {
   const fromApi = analysisData.value?.by_product_inspector_ranking
@@ -1465,11 +1578,41 @@ function fmtDurationMin(min: number | null | undefined): string {
   return `${m}m`
 }
 
+function fmtHoursMetric(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return value.toFixed(2)
+}
+
+function fmtEfficiencyMetric(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return value.toFixed(1)
+}
+
+function fmtMetricQtyDisplay(value: number | null | undefined): string {
+  const n = Number(value ?? 0)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  return fmtInt(n)
+}
+
+function inspectorMetricsDefectQty(
+  row: InspectionProductivityInspectorMetricsRow,
+  header: string,
+): number {
+  return Number(row.defects?.[header] ?? 0)
+}
+
+function inspectorMetricsDefectTotal(row: InspectionProductivityInspectorMetricsRow): number {
+  return sumInspectorMetricsDefectQty(row, inspectorMetricsDefectHeaders.value)
+}
+
+function inspectorMetricsRowClass({ row }: { row: InspectionProductivityInspectorMetricsRow }): string {
+  if (row.inspector_name === '合計') return 'ipa-metrics-row--total'
+  if (row.inspector_name === '応援') return 'ipa-metrics-row--support'
+  return ''
+}
+
 function inspectorLabel(u: InspectionManagementInspectorOption): string {
-  const name = (u.full_name ?? '').trim()
-  const username = (u.username ?? '').trim()
-  if (name && username) return `${name}（${username}）`
-  return name || username || `#${u.id}`
+  return formatInspectorOptionLabel(u)
 }
 
 function productOptionLabel(p: Product): string {
@@ -1587,12 +1730,21 @@ async function handleReportCommand(command: string | number | object) {
 
     if (cmd === 'print-inspector-metrics') {
       const filters = buildReportFilters()
-      const metrics = analysisData.value?.by_inspector_metrics
+      const metrics = inspectorMetricsPrepared.value
       if (!filters || !metrics?.rows?.length) {
         ElMessage.warning('印刷できる検査員別指標データがありません')
         return
       }
-      printInspectionProductivityInspectorMetrics(filters, metrics)
+      printInspectionProductivityInspectorMetrics(
+        filters,
+        metrics,
+        kpiCards.value.map((card) => ({
+          label: card.label,
+          value: card.value,
+          hint: card.hint,
+          tone: card.tone as 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet',
+        })),
+      )
       return
     }
 
@@ -4257,6 +4409,32 @@ onBeforeUnmount(() => {
 
 .ipa-table--inspector :deep(.el-table__body tr:hover > td) {
   background: rgba(99, 102, 241, 0.07) !important;
+}
+
+.ipa-table--metrics :deep(.ipa-metrics-row--total > td) {
+  font-weight: 800;
+  border-top: 2px dashed rgba(99, 102, 241, 0.45) !important;
+  background: rgba(238, 242, 255, 0.55) !important;
+}
+
+.ipa-table--metrics :deep(.ipa-metrics-row--support > td) {
+  background: #fff !important;
+}
+
+.ipa-table--metrics-time :deep(.el-table__header th) {
+  padding: 5.4px 0;
+  line-height: 1.26;
+}
+
+.ipa-table--metrics-time :deep(.el-table__body td) {
+  padding: 4.5px 0;
+  line-height: 1.26;
+}
+
+.ipa-table--metrics-time :deep(.ipa-eff-pill) {
+  padding: 0.9px 5.4px;
+  font-size: 9px;
+  border-radius: 5.4px;
 }
 
 .ipa-table--product :deep(.el-table__header th) {

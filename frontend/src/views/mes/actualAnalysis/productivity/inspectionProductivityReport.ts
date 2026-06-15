@@ -1,4 +1,5 @@
 import type {
+  InspectionManagementInspectorOption,
   InspectionProductivityAnalysisData,
   InspectionProductivityInspectorMetricsData,
   InspectionProductivityInspectorMetricsRow,
@@ -624,6 +625,15 @@ function getPrintStyles(mode: 'full' | 'section', orientation: PrintOrientation 
     }
     .hd__title { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; }
     .hd__section { margin-top: 4px; font-size: 12px; font-weight: 700; color: #4338ca; }
+    .hd__section-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      margin-top: 4px;
+    }
+    .hd__section-row .hd__section { margin-top: 0; flex-shrink: 0; }
+    .hd__section-row .meta-line { margin-top: 0; flex: 1; min-width: 0; justify-content: flex-end; }
     .meta-line {
       display: flex;
       flex-wrap: wrap;
@@ -734,6 +744,7 @@ function getPrintStyles(mode: 'full' | 'section', orientation: PrintOrientation 
     table.data--weld-on th { background: linear-gradient(180deg, #ffedd5, #fed7aa); color: #c2410c; }
     table.data tbody tr:nth-child(even) { background: rgba(248,250,252,.85); }
     .data--compact th, .data--compact td { font-size: 6.5px; padding: 2px 3px; }
+    .data--metrics-time th, .data--metrics-time td { padding: 1.8px 2.7px; line-height: 1.26; }
     .num { text-align: right; font-variant-numeric: tabular-nums; }
     .center { text-align: center; }
     .warn { color: #c2410c; font-weight: 700; }
@@ -763,6 +774,17 @@ function getPrintStyles(mode: 'full' | 'section', orientation: PrintOrientation 
     .rank-hero__stat-val small { font-size: 7px; font-weight: 600; color: #64748b; margin-left: 2px; }
     .sub-panel__title { margin: 8px 0 4px; font-size: 9px; font-weight: 700; color: #78350f; }
     .empty { margin: 0; color: #94a3b8; font-size: 8px; }
+    table.data--metrics th { font-size: 7px; }
+    table.data--metrics td { font-size: 7.5px; }
+    table.data--metrics td.name { font-weight: 700; color: #334155; }
+    table.data--metrics tr.row-total td {
+      font-weight: 800;
+      border-top: 2px dashed rgba(99, 102, 241, 0.45);
+      background: rgba(238, 242, 255, 0.55) !important;
+    }
+    table.data--metrics tr.row-support td { background: #fff !important; }
+    .pill--metric-eff { color: #4338ca; background: rgba(99,102,241,.1); border: 1px solid rgba(99,102,241,.15); }
+    .num--good { color: #047857; font-weight: 700; }
     .ft { margin-top: 10px; padding-top: 6px; border-top: 1px solid #e2e8f0; font-size: 7.5px; color: #94a3b8; text-align: right; }
     @media print {
       body { margin: 0; }
@@ -777,6 +799,7 @@ function buildPrintDocumentShell(
   filters: InspectionProductivityReportFilters,
   options: {
     sectionTitle?: string
+    sectionMetaInline?: boolean
     mode?: 'full' | 'section'
     orientation?: PrintOrientation
     body: string
@@ -791,6 +814,15 @@ function buildPrintDocumentShell(
     options.includeKpi && options.kpiCards?.length
       ? `<div class="kpi-row">${options.kpiCards.map(kpiCardHtml).join('')}</div>`
       : ''
+  const metaHtml = buildMetaLineHtml(filters, printedAt)
+  const sectionHtml = options.sectionTitle
+    ? options.sectionMetaInline
+      ? `<div class="hd__section-row">
+    <div class="hd__section">${escHtml(options.sectionTitle)}</div>
+    ${metaHtml}
+  </div>`
+      : `<div class="hd__section">${escHtml(options.sectionTitle)}</div>`
+    : ''
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -802,8 +834,8 @@ function buildPrintDocumentShell(
 <body>
   <header class="hd">
     <div class="hd__title">検査工程 — 生産性分析</div>
-    ${options.sectionTitle ? `<div class="hd__section">${escHtml(options.sectionTitle)}</div>` : ''}
-    ${buildMetaLineHtml(filters, printedAt)}
+    ${sectionHtml}
+    ${options.sectionMetaInline ? '' : metaHtml}
   </header>
   ${kpiHtml}
   ${options.body}
@@ -1169,151 +1201,37 @@ export function exportInspectionSummaryCsv(
   downloadCsvFile(`${reportFileBase(filters)}_集計.csv`, content)
 }
 
-function fmtPct2(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return ''
-  return `${value.toFixed(2)}%`
-}
-
-function fmtHours(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return ''
+function fmtMetricHours(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
   return value.toFixed(2)
 }
 
-function fmtEfficiencyDecimal(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return ''
+function fmtMetricPct(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  return `${value.toFixed(1)}%`
+}
+
+function fmtMetricEfficiency(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—'
   return value.toFixed(1)
 }
 
-function metricsDefectHeaderLabel(header: string): string {
+function fmtMetricQty(value: number | null | undefined): string {
+  const n = Number(value ?? 0)
+  if (!Number.isFinite(n) || n <= 0) return '—'
+  return fmtInt(n)
+}
+
+export function metricsDefectHeaderLabel(header: string): string {
   if (header === 'W検査　廃棄') return 'W検査'
-  if (header === 'モヤ/カブリ') return 'モヤ / カブリ'
+  if (header === 'モヤ/カブリ') return 'モヤ・カブリ'
   return header
 }
 
-function getInspectorMetricsPrintStyles(): string {
-  return `
-    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    @page { size: A4 landscape; margin: 8mm 10mm; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      color: #000;
-      font: 9px/1.25 "Yu Gothic UI", "Hiragino Sans", Meiryo, "Segoe UI", sans-serif;
-      background: #fff;
-    }
-    .hd {
-      margin-bottom: 8px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid #666;
-    }
-    .hd__title { font-size: 14px; font-weight: 700; }
-    .hd__section { margin-top: 2px; font-size: 11px; font-weight: 700; }
-    .meta-line {
-      margin-top: 4px;
-      font-size: 8.5px;
-      color: #333;
-    }
-    .meta-line__label { font-weight: 700; }
-    .meta-line__sep { margin: 0 6px; color: #999; }
-    table.metrics {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-    }
-    table.metrics th,
-    table.metrics td {
-      border: 1px solid #000;
-      padding: 2px 3px;
-      vertical-align: middle;
-      word-break: break-word;
-    }
-    table.metrics th {
-      background: #d9ead3;
-      font-size: 8px;
-      font-weight: 700;
-      text-align: center;
-    }
-    table.metrics td {
-      font-size: 8px;
-      font-variant-numeric: tabular-nums;
-    }
-    table.metrics td.name {
-      text-align: left;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-    table.metrics td.num {
-      text-align: right;
-    }
-    table.metrics tbody tr:nth-child(even) td {
-      background: #eef6ea;
-    }
-    table.metrics tbody tr:nth-child(odd) td {
-      background: #fff;
-    }
-    table.metrics tbody tr.row-support td {
-      background: #fff;
-      min-height: 18px;
-    }
-    table.metrics tbody tr.row-total td {
-      background: #fff;
-      font-weight: 700;
-      border-top: 2px dashed #4a86e8;
-    }
-    table.metrics .col-name { width: 52px; }
-    table.metrics .col-defect { width: 34px; }
-    table.metrics .col-time { width: 42px; }
-    table.metrics .col-qty { width: 52px; }
-    table.metrics .col-eff { width: 38px; }
-    table.metrics .col-op { width: 42px; }
-    .ft {
-      margin-top: 8px;
-      font-size: 7.5px;
-      color: #666;
-      text-align: right;
-    }
-    @media print {
-      body { margin: 0; }
-      table.metrics thead { display: table-header-group; }
-      table.metrics tr { break-inside: avoid; page-break-inside: avoid; }
-    }
-  `
-}
-
-function buildInspectorMetricsRowHtml(
-  row: InspectionProductivityInspectorMetricsRow,
-  defectHeaders: string[],
-  options?: { total?: boolean; support?: boolean },
-): string {
-  const cls = options?.total ? 'row-total' : options?.support ? 'row-support' : ''
-  const defectCells = defectHeaders
-    .map((header) => {
-      const qty = row.defects?.[header] ?? 0
-      return `<td class="num">${qty > 0 ? escHtml(fmtInt(qty)) : ''}</td>`
-    })
-    .join('')
-  const operating =
-    options?.total && row.operating_rate_percent != null
-      ? fmtPct2(row.operating_rate_percent)
-      : ''
-
-  return `<tr class="${cls}">
-    <td class="name">${escHtml(row.inspector_name ?? '')}</td>
-    ${defectCells}
-    <td class="num">${escHtml(fmtHours(row.shift_hours))}</td>
-    <td class="num">${escHtml(fmtHours(row.break_hours))}</td>
-    <td class="num">${escHtml(fmtHours(row.stop_hours))}</td>
-    <td class="num">${escHtml(fmtHours(row.target_work_hours))}</td>
-    <td class="num">${escHtml(fmtHours(row.work_hours))}</td>
-    <td class="num">${escHtml(fmtPct2(row.work_rate_percent))}</td>
-    <td class="num">${escHtml(fmtInt(row.sum_inspection_qty))}</td>
-    <td class="num">${escHtml(fmtEfficiencyDecimal(row.efficiency_per_hour))}</td>
-    <td class="num">${escHtml(operating)}</td>
-  </tr>`
-}
-
-function buildInspectorMetricsTableHtml(metrics: InspectionProductivityInspectorMetricsData): string {
-  const defectHeaders = metrics.defect_headers?.length
+export function resolveInspectorMetricsDefectHeaders(
+  metrics: InspectionProductivityInspectorMetricsData,
+): string[] {
+  return metrics.defect_headers?.length
     ? metrics.defect_headers
     : [
         '加工キズ',
@@ -1326,66 +1244,239 @@ function buildInspectorMetricsTableHtml(metrics: InspectionProductivityInspector
         '接触',
         'メ他',
         '溶接不良',
+        'サビ',
+        '生地不良',
+        '外注メッキ不良',
+        '外注溶接不良',
         'W検査　廃棄',
       ]
-  const defectHead = defectHeaders
-    .map((header) => `<th class="col-defect">${escHtml(metricsDefectHeaderLabel(header))}</th>`)
+}
+
+export function sumInspectorMetricsDefectQty(
+  row: InspectionProductivityInspectorMetricsRow,
+  defectHeaders: string[],
+): number {
+  return defectHeaders.reduce((sum, header) => sum + Number(row.defects?.[header] ?? 0), 0)
+}
+
+export function formatInspectorOptionLabel(
+  option: Pick<InspectionManagementInspectorOption, 'id' | 'full_name' | 'username'>,
+): string {
+  return (option.full_name ?? '').trim()
+}
+
+function roundMetricHours(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+export function inspectorMetricsRowHasActivity(
+  row: InspectionProductivityInspectorMetricsRow,
+  defectHeaders: string[],
+): boolean {
+  if (Number(row.sum_inspection_qty ?? 0) > 0) return true
+  if (Number(row.shift_hours ?? 0) > 0 || Number(row.work_hours ?? 0) > 0) return true
+  return sumInspectorMetricsDefectQty(row, defectHeaders) > 0
+}
+
+function finalizeInspectorMetricsTotals(
+  rows: InspectionProductivityInspectorMetricsRow[],
+  defectHeaders: string[],
+): InspectionProductivityInspectorMetricsRow {
+  const defects: Record<string, number> = {}
+  for (const header of defectHeaders) {
+    defects[header] = rows.reduce((sum, row) => sum + Number(row.defects?.[header] ?? 0), 0)
+  }
+
+  const shift_hours = roundMetricHours(rows.reduce((sum, row) => sum + Number(row.shift_hours ?? 0), 0))
+  const break_hours = roundMetricHours(rows.reduce((sum, row) => sum + Number(row.break_hours ?? 0), 0))
+  const stop_hours = roundMetricHours(rows.reduce((sum, row) => sum + Number(row.stop_hours ?? 0), 0))
+  const target_work_hours = roundMetricHours(shift_hours - break_hours)
+  const work_hours = roundMetricHours(rows.reduce((sum, row) => sum + Number(row.work_hours ?? 0), 0))
+  const sum_inspection_qty = rows.reduce((sum, row) => sum + Number(row.sum_inspection_qty ?? 0), 0)
+
+  const work_rate_percent =
+    target_work_hours > 0 ? Math.round((work_hours / target_work_hours) * 1000) / 10 : null
+  const efficiency_per_hour =
+    work_hours > 0 && sum_inspection_qty > 0
+      ? Math.round((sum_inspection_qty / work_hours) * 10) / 10
+      : null
+  const operating_rate_percent =
+    shift_hours > 0 ? Math.round((work_hours / shift_hours) * 1000) / 10 : null
+
+  return {
+    inspector_name: '合計',
+    defects,
+    shift_hours,
+    break_hours,
+    stop_hours,
+    target_work_hours,
+    work_hours,
+    work_rate_percent,
+    sum_inspection_qty,
+    efficiency_per_hour,
+    operating_rate_percent,
+  }
+}
+
+/** 页面検査員下拉と同じ表示名で行を揃え、未登録検査員は非表示にする */
+export function prepareInspectorMetricsForDisplay(
+  metrics: InspectionProductivityInspectorMetricsData,
+  inspectorOptions: InspectionManagementInspectorOption[],
+): InspectionProductivityInspectorMetricsData {
+  const defectHeaders = resolveInspectorMetricsDefectHeaders(metrics)
+  const labelById = new Map(inspectorOptions.map((opt) => [opt.id, formatInspectorOptionLabel(opt)]))
+
+  const rows = metrics.rows
+    .map((row) => {
+      const userId = row.inspector_user_id
+      if (userId == null) return null
+      const label = labelById.get(userId)
+      if (!label) return null
+      return {
+        ...row,
+        inspector_name: label,
+      }
+    })
+    .filter((row): row is InspectionProductivityInspectorMetricsRow => row != null)
+    .sort((a, b) => String(a.inspector_name ?? '').localeCompare(String(b.inspector_name ?? ''), 'ja'))
+
+  const supportRow = metrics.support_row
+  const supportVisible = inspectorMetricsRowHasActivity(supportRow, defectHeaders)
+
+  return {
+    defect_headers: defectHeaders,
+    rows,
+    support_row: supportVisible ? supportRow : { inspector_name: '応援', defects: {} },
+    total_row: finalizeInspectorMetricsTotals(rows, defectHeaders),
+  }
+}
+
+function defaultInspectorMetricsDefectHeaders(metrics: InspectionProductivityInspectorMetricsData): string[] {
+  return resolveInspectorMetricsDefectHeaders(metrics)
+}
+
+function metricsRowClass(options?: { total?: boolean; support?: boolean }): string {
+  if (options?.total) return 'row-total'
+  if (options?.support) return 'row-support'
+  return ''
+}
+
+function buildInspectorMetricsTimeRowHtml(
+  row: InspectionProductivityInspectorMetricsRow,
+  options?: { total?: boolean; support?: boolean },
+): string {
+  const cls = metricsRowClass(options)
+  const eff = fmtMetricEfficiency(row.efficiency_per_hour)
+  const effHtml =
+    eff === '—'
+      ? escHtml(eff)
+      : `<span class="pill pill--metric-eff">${escHtml(eff)}</span>`
+  return `<tr class="${cls}">
+    <td class="name">${escHtml(row.inspector_name ?? '')}</td>
+    <td class="num">${escHtml(fmtMetricHours(row.shift_hours))}</td>
+    <td class="num">${escHtml(fmtMetricHours(row.break_hours))}</td>
+    <td class="num">${escHtml(fmtMetricHours(row.stop_hours))}</td>
+    <td class="num">${escHtml(fmtMetricHours(row.target_work_hours))}</td>
+    <td class="num">${escHtml(fmtMetricHours(row.work_hours))}</td>
+    <td class="num">${escHtml(fmtMetricPct(row.work_rate_percent))}</td>
+    <td class="num num--good">${escHtml(fmtMetricQty(row.sum_inspection_qty))}</td>
+    <td class="num">${effHtml}</td>
+    <td class="num">${escHtml(fmtMetricPct(row.operating_rate_percent))}</td>
+  </tr>`
+}
+
+function buildInspectorMetricsDefectRowHtml(
+  row: InspectionProductivityInspectorMetricsRow,
+  defectHeaders: string[],
+  options?: { total?: boolean; support?: boolean },
+): string {
+  const cls = metricsRowClass(options)
+  const defectCells = defectHeaders
+    .map((header) => {
+      const qty = row.defects?.[header] ?? 0
+      return `<td class="num">${escHtml(fmtMetricQty(qty))}</td>`
+    })
     .join('')
+  const defectTotal = sumInspectorMetricsDefectQty(row, defectHeaders)
+  return `<tr class="${cls}">
+    <td class="name">${escHtml(row.inspector_name ?? '')}</td>
+    ${defectCells}
+    <td class="num">${escHtml(fmtMetricQty(defectTotal))}</td>
+  </tr>`
+}
+
+function buildInspectorMetricsTimeTableInner(metrics: InspectionProductivityInspectorMetricsData): string {
+  const defectHeaders = defaultInspectorMetricsDefectHeaders(metrics)
   const body = [
-    ...metrics.rows.map((row) => buildInspectorMetricsRowHtml(row, defectHeaders)),
-    buildInspectorMetricsRowHtml(metrics.support_row, defectHeaders, { support: true }),
-    buildInspectorMetricsRowHtml(metrics.total_row, defectHeaders, { total: true }),
+    ...metrics.rows.map((row) => buildInspectorMetricsTimeRowHtml(row)),
+    ...(inspectorMetricsRowHasActivity(metrics.support_row, defectHeaders)
+      ? [buildInspectorMetricsTimeRowHtml(metrics.support_row, { support: true })]
+      : []),
+    buildInspectorMetricsTimeRowHtml(metrics.total_row, { total: true }),
   ].join('')
 
-  return `<table class="metrics">
-    <thead>
-      <tr>
-        <th class="col-name">名前</th>
-        ${defectHead}
-        <th class="col-time">シフト</th>
-        <th class="col-time">休憩</th>
-        <th class="col-time">ロス時間</th>
-        <th class="col-time">作業すべき時間</th>
-        <th class="col-time">作業時間</th>
-        <th class="col-time">作業率</th>
-        <th class="col-qty">検査総数</th>
-        <th class="col-eff">能率</th>
-        <th class="col-op">稼働率</th>
-      </tr>
-    </thead>
+  return `<table class="data data--inspector data--metrics data--metrics-time data--compact">
+    <thead>${tableHead(['検査員', 'シフト', '休憩', 'ロス時間', '作業すべき時間', '作業時間', '作業率', '検査総数', '能率', '稼働率'])}</thead>
     <tbody>${body}</tbody>
   </table>`
+}
+
+function buildInspectorMetricsDefectTableInner(metrics: InspectionProductivityInspectorMetricsData): string {
+  const defectHeaders = defaultInspectorMetricsDefectHeaders(metrics)
+  const defectHead = defectHeaders.map((header) => metricsDefectHeaderLabel(header))
+  const body = [
+    ...metrics.rows.map((row) => buildInspectorMetricsDefectRowHtml(row, defectHeaders)),
+    ...(inspectorMetricsRowHasActivity(metrics.support_row, defectHeaders)
+      ? [buildInspectorMetricsDefectRowHtml(metrics.support_row, defectHeaders, { support: true })]
+      : []),
+    buildInspectorMetricsDefectRowHtml(metrics.total_row, defectHeaders, { total: true }),
+  ].join('')
+
+  return `<table class="data data--inspector data--metrics data--compact">
+    <thead>${tableHead(['検査員', ...defectHead, '不良合計'])}</thead>
+    <tbody>${body}</tbody>
+  </table>`
+}
+
+function buildInspectorMetricsTableHtml(metrics: InspectionProductivityInspectorMetricsData): string {
+  const badges = panelBadge(`${metrics.rows.length} 名`, 'inspector')
+  return `${panelSection('検査員別指標 · 時間 / 生産', {
+    theme: 'inspector',
+    badges,
+    hideChart: true,
+    tableHtml: buildInspectorMetricsTimeTableInner(metrics),
+    flowBreak: true,
+  })}${panelSection('検査員別指標 · 不良内訳', {
+    theme: 'inspector',
+    badges: panelBadge('KT09', 'soft'),
+    hideChart: true,
+    tableHtml: buildInspectorMetricsDefectTableInner(metrics),
+    flowBreak: true,
+  })}`
 }
 
 export function buildInspectionProductivityInspectorMetricsPrintHtml(
   filters: InspectionProductivityReportFilters,
   metrics: InspectionProductivityInspectorMetricsData,
+  kpiCards?: InspectionProductivityKpiCardPrint[],
 ): string {
-  const printedAt = printedAtJa()
-  return `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="utf-8" />
-  <title>検査工程 — 検査員別指標表</title>
-  <style>${getInspectorMetricsPrintStyles()}</style>
-</head>
-<body>
-  <header class="hd">
-    <div class="hd__title">検査工程 — 生産性分析</div>
-    <div class="hd__section">検査員別指標表</div>
-    ${buildMetaLineHtml(filters, printedAt, { compact: true })}
-  </header>
-  ${buildInspectorMetricsTableHtml(metrics)}
-  <footer class="ft">Smart-EMAPs · 検査生産性分析 · ${escHtml(printedAt)}</footer>
-</body>
-</html>`
+  return buildPrintDocumentShell(filters, {
+    sectionTitle: '検査員別指標表',
+    sectionMetaInline: true,
+    mode: 'section',
+    orientation: 'landscape',
+    includeKpi: Boolean(kpiCards?.length),
+    kpiCards,
+    body: buildInspectorMetricsTableHtml(metrics),
+  })
 }
 
 export function printInspectionProductivityInspectorMetrics(
   filters: InspectionProductivityReportFilters,
   metrics: InspectionProductivityInspectorMetricsData,
+  kpiCards?: InspectionProductivityKpiCardPrint[],
 ) {
-  openPrintDocument(buildInspectionProductivityInspectorMetricsPrintHtml(filters, metrics))
+  openPrintDocument(buildInspectionProductivityInspectorMetricsPrintHtml(filters, metrics, kpiCards))
 }
 
 export function printInspectionProductivityReport(payload: InspectionProductivityPrintPayload) {

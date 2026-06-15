@@ -84,20 +84,8 @@ DEFECT_HEADERS = [
     "W検査　廃棄",
 ]
 
-# 生産性分析 · 検査員別指標表（印刷）に出す不良列
-INSPECTOR_METRICS_DEFECT_HEADERS = [
-    "加工キズ",
-    "油タレ",
-    "曲げ不良",
-    "カ他",
-    "メッキ後キズ",
-    "モヤ/カブリ",
-    "ニッケル",
-    "接触",
-    "メ他",
-    "溶接不良",
-    "W検査　廃棄",
-]
+# 生産性分析 · 検査員別指標表に出す不良列（CSV 全不良項目）
+INSPECTOR_METRICS_DEFECT_HEADERS = list(DEFECT_HEADERS)
 
 # 旧名互換（api 等で誤って参照されても起動できるように）
 INSPECTION_METRICS_DEFECT_HEADERS = INSPECTOR_METRICS_DEFECT_HEADERS

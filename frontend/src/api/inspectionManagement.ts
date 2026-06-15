@@ -26,6 +26,9 @@ export interface InspectionManagementListRow {
   mes_production_ended_at?: string | null
   mes_net_production_sec?: number | null
   mes_paused_accum_sec?: number | null
+  mes_shift_sec?: number | null
+  mes_break_sec?: number | null
+  mes_stop_sec?: number | null
   mes_production_is_paused?: number | null
   mes_inspector_user_id?: number | null
   mes_client_instance_id?: string | null
@@ -33,6 +36,8 @@ export interface InspectionManagementListRow {
   data_source?: 'mes' | 'excel' | 'csv' | string | null
   external_sync_key?: string | null
   remarks?: string | null
+  /** 実績収集登録（手動登録）備考 */
+  manual_registration_note?: string | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -65,6 +70,9 @@ export interface CreateInspectionManagementBody {
   product_name: string
   mes_inspector_user_id?: number
   remarks?: string | null
+  manual_registration_note?: string | null
+  /** 実績収集登録（手動一括登録） */
+  manual_registration?: boolean
 }
 
 export function createInspectionManagement(
@@ -84,10 +92,13 @@ export interface PatchInspectionManagementBody {
   production_completed_check?: boolean
   defect_qty?: number
   remarks?: string | null
+  manual_registration_note?: string | null
   mes_production_started_at?: string
   mes_production_ended_at?: string
   mes_net_production_sec?: number
   mes_paused_accum_sec?: number
+  mes_break_sec?: number
+  mes_stop_sec?: number
   mes_production_is_paused?: number
   mes_inspector_user_id?: number
   mes_defect_by_item?: Record<string, number> | string | null
@@ -97,6 +108,8 @@ export interface PatchInspectionManagementBody {
   mes_claim_client_lock?: boolean
   /** 他端末ロックを無視して終了（強制終了） */
   mes_force_release?: boolean
+  /** 実績収集登録（手動一括登録） */
+  manual_registration?: boolean
 }
 
 export function patchInspectionManagement(
@@ -104,6 +117,15 @@ export function patchInspectionManagement(
   body: PatchInspectionManagementBody,
 ): Promise<{ success?: boolean; message?: string }> {
   return request.patch(`/api/plan/inspection-management/${inspectionId}`, body) as Promise<{
+    success?: boolean
+    message?: string
+  }>
+}
+
+export function deleteInspectionManagement(
+  inspectionId: number,
+): Promise<{ success?: boolean; message?: string }> {
+  return request.delete(`/api/plan/inspection-management/${inspectionId}`) as Promise<{
     success?: boolean
     message?: string
   }>

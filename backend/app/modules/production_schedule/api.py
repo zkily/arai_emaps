@@ -184,6 +184,7 @@ _INSPECTION_MGMT_MES_COLUMNS = (
 _INSPECTION_MGMT_META_COLUMNS = (
     "data_source",
     "external_sync_key",
+    "manual_registration_note",
 )
 
 _WELDING_MGMT_MES_COLUMNS = (
@@ -603,6 +604,10 @@ def _resolve_inspection_row_csv_time_secs(item: dict[str, Any], im_cols: set[str
     return shift_sec, 0, pause_sec, work_sec
 
 
+def _format_inspector_display_name(full_name: str, username: str) -> str:
+    return (full_name or "").strip()
+
+
 def _new_inspector_metrics_bucket(
     *,
     inspector_user_id: Optional[int],
@@ -641,7 +646,7 @@ def _finalize_inspector_metrics_row(row: dict[str, Any]) -> dict[str, Any]:
     break_h = break_sec / 3600.0
     stop_h = stop_sec / 3600.0
     work_h = work_sec / 3600.0
-    target_h = shift_h - break_h - stop_h
+    target_h = shift_h - break_h
     row["shift_hours"] = _round_hours_from_sec(shift_sec)
     row["break_hours"] = _round_hours_from_sec(break_sec)
     row["stop_hours"] = _round_hours_from_sec(stop_sec)
@@ -985,6 +990,8 @@ def _inspection_mes_row_mutation_requested(body: "UpdateInspectionManagementBody
         or body.mes_production_ended_at is not None
         or body.mes_net_production_sec is not None
         or body.mes_paused_accum_sec is not None
+        or body.mes_break_sec is not None
+        or body.mes_stop_sec is not None
         or body.mes_production_is_paused is not None
         or body.mes_defect_by_item is not None
         or body.mes_inspector_user_id is not None
@@ -7314,31 +7321,35 @@ async def get_inspection_productivity_analysis(
                     continue
                 defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty
 
-        if inspector_key not in inspector_metrics_map:
-            inspector_metrics_map[inspector_key] = _new_inspector_metrics_bucket(
-                inspector_user_id=int(inspector_id) if inspector_id is not None else None,
-                inspector_name=inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
-            )
-        metrics_bucket = inspector_metrics_map[inspector_key]
-        shift_sec, break_sec, stop_sec, work_sec = _resolve_inspection_row_csv_time_secs(item, im_col_set)
-        metrics_bucket["sum_shift_sec"] += shift_sec
-        metrics_bucket["sum_break_sec"] += break_sec
-        metrics_bucket["sum_stop_sec"] += stop_sec
-        metrics_bucket["sum_work_sec"] += work_sec
-        metrics_bucket["sum_inspection_qty"] += actual_qty
-        if defect_by_item:
-            for defect_cd, qty_raw in defect_by_item.items():
-                header = _resolve_inspector_metrics_defect_header(
-                    str(defect_cd or ""),
-                    cd_name_map=defect_cd_name_map,
-                    header_index=metrics_defect_header_index,
+        if inspector_id is not None:
+            metrics_inspector_key = str(inspector_id)
+            inspector_username = (item.get("mes_inspector_username") or "").strip()
+            display_name = _format_inspector_display_name(inspector_name, inspector_username)
+            if metrics_inspector_key not in inspector_metrics_map:
+                inspector_metrics_map[metrics_inspector_key] = _new_inspector_metrics_bucket(
+                    inspector_user_id=int(inspector_id),
+                    inspector_name=display_name,
                 )
-                if not header:
-                    continue
-                qty = int(qty_raw or 0)
-                if qty <= 0:
-                    continue
-                metrics_bucket["defects"][header] = int(metrics_bucket["defects"].get(header) or 0) + qty
+            metrics_bucket = inspector_metrics_map[metrics_inspector_key]
+            shift_sec, break_sec, stop_sec, work_sec = _resolve_inspection_row_csv_time_secs(item, im_col_set)
+            metrics_bucket["sum_shift_sec"] += shift_sec
+            metrics_bucket["sum_break_sec"] += break_sec
+            metrics_bucket["sum_stop_sec"] += stop_sec
+            metrics_bucket["sum_work_sec"] += work_sec
+            metrics_bucket["sum_inspection_qty"] += actual_qty
+            if defect_by_item:
+                for defect_cd, qty_raw in defect_by_item.items():
+                    header = _resolve_inspector_metrics_defect_header(
+                        str(defect_cd or ""),
+                        cd_name_map=defect_cd_name_map,
+                        header_index=metrics_defect_header_index,
+                    )
+                    if not header:
+                        continue
+                    qty = int(qty_raw or 0)
+                    if qty <= 0:
+                        continue
+                    metrics_bucket["defects"][header] = int(metrics_bucket["defects"].get(header) or 0) + qty
 
     summary = _finalize_inspection_productivity_bucket(summary_bucket)
     summary["sum_paused_sec"] = int(summary_bucket.get("sum_paused_sec") or 0)
@@ -8067,6 +8078,8 @@ class CreateInspectionManagementBody(BaseModel):
     product_name: str
     mes_inspector_user_id: Optional[int] = None
     remarks: Optional[str] = None
+    manual_registration_note: Optional[str] = None
+    manual_registration: bool = False
 
 
 @router.post("/plan/inspection-management")
@@ -8100,7 +8113,8 @@ async def create_inspection_management(
     login_uid = _inspection_mes_inspector_user_id_from_user(current_user)
     inspector_id = body.mes_inspector_user_id
     if inspector_id is not None and int(inspector_id) > 0:
-        _reject_inspection_mes_inspector_not_current_user(current_user, inspector_id)
+        if not body.manual_registration:
+            _reject_inspection_mes_inspector_not_current_user(current_user, inspector_id)
     else:
         inspector_id = login_uid
     params: dict[str, Any] = {
@@ -8109,7 +8123,6 @@ async def create_inspection_management(
         "production_sequence": seq,
         "product_cd": product_cd,
         "product_name": product_name,
-        "remarks": (body.remarks or "").strip() or None,
     }
     cols = [
         "production_month",
@@ -8117,7 +8130,6 @@ async def create_inspection_management(
         "production_sequence",
         "product_cd",
         "product_name",
-        "remarks",
     ]
     vals = [
         ":production_month",
@@ -8125,8 +8137,16 @@ async def create_inspection_management(
         ":production_sequence",
         ":product_cd",
         ":product_name",
-        ":remarks",
     ]
+    if body.manual_registration:
+        if "manual_registration_note" in im_cols:
+            cols.append("manual_registration_note")
+            vals.append(":manual_registration_note")
+            params["manual_registration_note"] = (body.manual_registration_note or "").strip() or None
+    else:
+        cols.append("remarks")
+        vals.append(":remarks")
+        params["remarks"] = (body.remarks or "").strip() or None
     if inspector_id is not None and int(inspector_id) > 0 and "mes_inspector_user_id" in im_cols:
         cols.append("mes_inspector_user_id")
         vals.append(":mes_inspector_user_id")
@@ -8158,16 +8178,21 @@ class UpdateInspectionManagementBody(BaseModel):
     defect_qty: Optional[int] = None
     production_completed_check: Optional[bool] = None
     remarks: Optional[str] = None
+    manual_registration_note: Optional[str] = None
     mes_production_started_at: Optional[str] = None
     mes_production_ended_at: Optional[str] = None
     mes_net_production_sec: Optional[int] = None
     mes_paused_accum_sec: Optional[int] = None
+    mes_break_sec: Optional[int] = None
+    mes_stop_sec: Optional[int] = None
+    mes_shift_sec: Optional[int] = None
     mes_production_is_paused: Optional[int] = None
     mes_inspector_user_id: Optional[int] = None
     mes_defect_by_item: Optional[Any] = None
     mes_client_instance_id: Optional[str] = None
     mes_claim_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
+    manual_registration: bool = False
 
 
 @router.patch("/plan/inspection-management/{inspection_id}")
@@ -8181,7 +8206,7 @@ async def update_inspection_management(
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
-    if _inspection_mes_row_mutation_requested(body):
+    if _inspection_mes_row_mutation_requested(body) and not body.manual_registration:
         row_insp = await _fetch_inspection_row_mes_inspector(db, inspection_id, im_cols)
         if body.mes_inspector_user_id is not None:
             _reject_inspection_mes_inspector_not_current_user(current_user, body.mes_inspector_user_id)
@@ -8249,9 +8274,17 @@ async def update_inspection_management(
     if body.production_sequence is not None:
         updates.append("production_sequence = :production_sequence")
         params["production_sequence"] = int(body.production_sequence)
-    if body.remarks is not None:
+    if body.remarks is not None and not body.manual_registration:
         updates.append("remarks = :remarks")
         params["remarks"] = (body.remarks or "").strip() or None
+    if body.manual_registration_note is not None:
+        if "manual_registration_note" not in im_cols:
+            raise HTTPException(
+                status_code=503,
+                detail="manual_registration_note 列がありません。backend/database/migrations/47_inspection_management_manual_registration_note.sql を実行してください。",
+            )
+        updates.append("manual_registration_note = :manual_registration_note")
+        params["manual_registration_note"] = (body.manual_registration_note or "").strip() or None
     if body.defect_qty is not None:
         updates.append("defect_qty = :defect_qty")
         params["defect_qty"] = max(0, int(body.defect_qty))
@@ -8264,7 +8297,7 @@ async def update_inspection_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
-                if not row_already_completed:
+                if not row_already_completed and not body.manual_registration:
                     start_inspector: Optional[int] = None
                     if body.mes_inspector_user_id is not None:
                         try:
@@ -8300,7 +8333,7 @@ async def update_inspection_management(
         else:
             edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
             if edt:
-                if in_progress:
+                if in_progress and not body.manual_registration:
                     _reject_inspection_mes_client_lock_conflict(
                         existing_lock,
                         client_id,
@@ -8308,7 +8341,7 @@ async def update_inspection_management(
                     )
                 params["mes_production_ended_at"] = edt
                 updates.append("mes_production_ended_at = :mes_production_ended_at")
-                if has_client_col:
+                if has_client_col and not body.manual_registration:
                     updates.append("mes_client_instance_id = NULL")
     if body.mes_net_production_sec is not None:
         if "mes_net_production_sec" not in im_cols:
@@ -8328,6 +8361,33 @@ async def update_inspection_management(
         else:
             updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
             params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_break_sec is not None:
+        if "mes_break_sec" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_break_sec"))
+        break_sec = int(body.mes_break_sec)
+        if break_sec < 0:
+            updates.append("mes_break_sec = NULL")
+        else:
+            updates.append("mes_break_sec = :mes_break_sec")
+            params["mes_break_sec"] = max(0, break_sec)
+    if body.mes_stop_sec is not None:
+        if "mes_stop_sec" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_stop_sec"))
+        stop_sec = int(body.mes_stop_sec)
+        if stop_sec < 0:
+            updates.append("mes_stop_sec = NULL")
+        else:
+            updates.append("mes_stop_sec = :mes_stop_sec")
+            params["mes_stop_sec"] = max(0, stop_sec)
+    if body.mes_shift_sec is not None:
+        if "mes_shift_sec" not in im_cols:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_shift_sec"))
+        shift_sec = int(body.mes_shift_sec)
+        if shift_sec < 0:
+            updates.append("mes_shift_sec = NULL")
+        else:
+            updates.append("mes_shift_sec = :mes_shift_sec")
+            params["mes_shift_sec"] = max(0, shift_sec)
     if body.mes_production_is_paused is not None:
         if "mes_production_is_paused" not in im_cols:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_production_is_paused"))
@@ -8369,11 +8429,13 @@ async def update_inspection_management(
     mes_control_touched = (
         body.mes_net_production_sec is not None
         or body.mes_paused_accum_sec is not None
+        or body.mes_break_sec is not None
+        or body.mes_stop_sec is not None
         or body.mes_production_is_paused is not None
         or body.mes_defect_by_item is not None
         or (body.mes_inspector_user_id is not None and in_progress)
     )
-    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock:
+    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock and not body.manual_registration:
         _reject_inspection_mes_client_lock_conflict(
             existing_lock,
             client_id,
@@ -8396,6 +8458,35 @@ async def update_inspection_management(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"success": True, "message": "更新しました"}
+
+
+@router.delete("/plan/inspection-management/{inspection_id}")
+async def delete_inspection_management(
+    inspection_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("delete")),
+):
+    """検査指示1件を削除する。"""
+    im_cols = await _get_inspection_mgmt_columns(db)
+    if not im_cols:
+        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    result = await db.execute(
+        text("SELECT id FROM inspection_management WHERE id = :iid LIMIT 1"),
+        {"iid": inspection_id},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="指定の検査指示が見つかりません")
+    try:
+        await db.execute(
+            text("DELETE FROM inspection_management WHERE id = :iid"),
+            {"iid": inspection_id},
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "削除しました"}
 
 
 # ---------- 溶接指示（welding_management）・MES溶接実績収集 ----------
