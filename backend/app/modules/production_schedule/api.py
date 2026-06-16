@@ -3064,7 +3064,36 @@ async def confirm_cutting_actual(
         "message": f"実績を {inserted} 件登録しました",
         "inserted": inserted,
         "total_quantity": total_quantity,
+        "production_day": prod_day.isoformat(),
     }
+
+
+@router.get("/plan/cutting-management/confirm-actual/email-preview")
+async def preview_cutting_confirm_actual_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """切断実績確定結果メールの送信先プレビュー"""
+    from app.services.confirm_actual_email import get_confirm_actual_email_preview
+
+    return await get_confirm_actual_email_preview(
+        db, process_type="cutting", production_day=production_day
+    )
+
+
+@router.post("/plan/cutting-management/confirm-actual/send-email")
+async def send_cutting_confirm_actual_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """切断実績確定結果を指定受信者へメール送信"""
+    from app.services.confirm_actual_email import send_confirm_actual_email
+
+    return await send_confirm_actual_email(
+        db, process_type="cutting", production_day=production_day, current_user=current_user
+    )
 
 
 class MoveBatchToCuttingBody(BaseModel):
@@ -5128,7 +5157,36 @@ async def confirm_chamfering_actual(
         "message": f"実績を {inserted} 件登録しました",
         "inserted": inserted,
         "total_quantity": total_quantity,
+        "production_day": prod_day.isoformat(),
     }
+
+
+@router.get("/plan/chamfering-management/confirm-actual/email-preview")
+async def preview_chamfering_confirm_actual_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """面取実績確定結果メールの送信先プレビュー"""
+    from app.services.confirm_actual_email import get_confirm_actual_email_preview
+
+    return await get_confirm_actual_email_preview(
+        db, process_type="chamfering", production_day=production_day
+    )
+
+
+@router.post("/plan/chamfering-management/confirm-actual/send-email")
+async def send_chamfering_confirm_actual_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """面取実績確定結果を指定受信者へメール送信"""
+    from app.services.confirm_actual_email import send_confirm_actual_email
+
+    return await send_confirm_actual_email(
+        db, process_type="chamfering", production_day=production_day, current_user=current_user
+    )
 
 
 @router.delete("/plan/chamfering-management/{chamfering_id}")

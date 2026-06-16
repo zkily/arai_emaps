@@ -32,6 +32,7 @@ from app.modules.system.settings_models import (
     NumberingRule,
     ApprovalRoute, ApprovalRouteStep, Delegation, WorkflowDefinition,
     NotificationSetting, EmailTemplate, IntegrationConfig,
+    NotificationRecipient, EmailSendLog,
     ImportExportHistory, BackupSetting, BackupHistory
 )
 from app.modules.system.settings_schemas import (
@@ -45,6 +46,7 @@ from app.modules.system.settings_schemas import (
     WorkflowDefinitionCreate, WorkflowDefinitionUpdate, WorkflowDefinitionResponse,
     NotificationSettingCreate, NotificationSettingUpdate, NotificationSettingResponse,
     EmailTemplateCreate, EmailTemplateUpdate, EmailTemplateResponse,
+    NotificationRecipientCreate, NotificationRecipientUpdate, NotificationRecipientResponse,
     IntegrationConfigCreate, IntegrationConfigUpdate, IntegrationConfigResponse, IntegrationTestResult,
     ImportExportHistoryResponse, ImportRequest, ExportRequest,
     BackupSettingUpdate, BackupSettingResponse,
@@ -945,7 +947,140 @@ async def delete_email_template(
     return {"message": "削除しました"}
 
 
+@router.get(
+    "/notification-recipients",
+    response_model=List[NotificationRecipientResponse],
+    summary="通知受信者一覧",
+)
+async def get_notification_recipients(
+    event_code: Optional[str] = Query(None, description="イベントコードでフィルタ"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """通知受信者一覧を取得（方案 B：独立表 notification_recipients）"""
+    stmt = select(NotificationRecipient).order_by(
+        NotificationRecipient.event_code, NotificationRecipient.id
+    )
+    if event_code:
+        stmt = stmt.where(NotificationRecipient.event_code == event_code)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post(
+    "/notification-recipients",
+    response_model=NotificationRecipientResponse,
+    status_code=201,
+    summary="通知受信者追加",
+)
+async def create_notification_recipient(
+    data: NotificationRecipientCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """通知受信者を追加"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    if data.recipient_type not in ("user", "email", "role", "line"):
+        raise HTTPException(status_code=400, detail="recipient_type が不正です")
+    if data.recipient_type == "user" and not data.user_id:
+        raise HTTPException(status_code=400, detail="user_id が必要です")
+    if data.recipient_type == "email" and not (data.email or "").strip():
+        raise HTTPException(status_code=400, detail="email が必要です")
+    if data.recipient_type == "role" and not (data.role or "").strip():
+        raise HTTPException(status_code=400, detail="role が必要です")
+    if data.recipient_type == "line" and not (data.line_user_id or "").strip():
+        raise HTTPException(status_code=400, detail="line_user_id が必要です")
+    if data.recipient_type == "line":
+        from app.services.line_service import normalize_line_user_id
+
+        try:
+            data.line_user_id = normalize_line_user_id(data.line_user_id or "")
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    row = NotificationRecipient(**data.model_dump())
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.put(
+    "/notification-recipients/{recipient_id}",
+    response_model=NotificationRecipientResponse,
+    summary="通知受信者更新",
+)
+async def update_notification_recipient(
+    recipient_id: int,
+    data: NotificationRecipientUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """通知受信者を更新"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    result = await db.execute(
+        select(NotificationRecipient).where(NotificationRecipient.id == recipient_id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="受信者が見つかりません")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(row, key, value)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+@router.delete("/notification-recipients/{recipient_id}", summary="通知受信者削除")
+async def delete_notification_recipient(
+    recipient_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """通知受信者を削除"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="管理者権限が必要です")
+    result = await db.execute(
+        select(NotificationRecipient).where(NotificationRecipient.id == recipient_id)
+    )
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="受信者が見つかりません")
+    await db.delete(row)
+    await db.commit()
+    return {"message": "削除しました"}
+
+
 # 外部連携設定 API
+_INTEGRATION_SECRET_KEYS: dict[str, tuple[str, ...]] = {
+    "smtp": ("password",),
+    "slack": ("webhook_url",),
+    "line": ("channel_token", "channel_secret"),
+}
+
+
+def _merge_integration_config(
+    service_type: str,
+    existing: dict | None,
+    incoming: dict | None,
+) -> dict:
+    """空の秘密項目は既存値を維持（トグル保存でトークンが消えるのを防ぐ）。"""
+    merged = dict(existing or {})
+    if not incoming:
+        return merged
+    secret_keys = _INTEGRATION_SECRET_KEYS.get(service_type, ())
+    for key, value in incoming.items():
+        if key in secret_keys:
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+        merged[key] = value
+    return merged
+
+
 @router.get("/integrations", response_model=List[IntegrationConfigResponse], summary="外部連携設定一覧")
 async def get_integration_configs(
     db: AsyncSession = Depends(get_db),
@@ -996,16 +1131,25 @@ async def update_integration_config(
     )
     config = result.scalar_one_or_none()
     
+    payload = data.model_dump(exclude_unset=True)
+    if "config" in payload and payload["config"] is not None:
+        existing_cfg = config.config if config else {}
+        payload["config"] = _merge_integration_config(
+            service_type,
+            existing_cfg,
+            payload["config"],
+        )
+
     if not config:
         # 新規作成
         config = IntegrationConfig(
             service_type=service_type,
-            config=data.config or {},
-            is_enabled=data.is_enabled or False,
+            config=payload.get("config") or {},
+            is_enabled=payload.get("is_enabled") or False,
         )
         db.add(config)
     else:
-        for key, value in data.model_dump(exclude_unset=True).items():
+        for key, value in payload.items():
             setattr(config, key, value)
     
     await db.commit()
@@ -1027,13 +1171,83 @@ async def test_integration(
     )
     config = result.scalar_one_or_none()
     
-    if not config or not config.config:
-        raise HTTPException(status_code=400, detail="連携設定が見つかりません")
-    
-    # TODO: 実際のテスト送信を実装
-    # Slack: webhook_urlにPOST
-    # LINE: Messaging APIでメッセージ送信
-    
+    if not config:
+        raise HTTPException(
+            status_code=400,
+            detail="連携設定が未保存です。先に「保存」を押してください",
+        )
+    if not config.config:
+        raise HTTPException(status_code=400, detail="連携設定が空です。入力後「保存」してください")
+
+    if service_type == "smtp":
+        from app.services.email_service import load_smtp_config, send_html_email
+
+        smtp = await load_smtp_config(db)
+        if not smtp:
+            raise HTTPException(status_code=400, detail="SMTP 設定が不完全です")
+        test_to = (config.config.get("test_email") or current_user.email or "").strip()
+        if not test_to:
+            raise HTTPException(status_code=400, detail="テスト送信先メールが未設定です")
+        result = await send_html_email(
+            smtp,
+            test_to,
+            "【Smart-EMAP】SMTP テスト",
+            "<p>Smart-EMAP 通知センターからの SMTP 接続テストです。</p>",
+        )
+        config.last_test_at = datetime.now()
+        if result.success:
+            config.last_test_result = "success"
+            await db.commit()
+            return IntegrationTestResult(success=True, message=f"テストメールを {test_to} に送信しました")
+        config.last_test_result = "failed"
+        await db.commit()
+        raise HTTPException(status_code=500, detail=result.error or "SMTP テスト送信に失敗しました")
+
+    if service_type == "line":
+        from app.services.line_service import (
+            LineConfig,
+            normalize_line_user_id,
+            push_line_text_message,
+        )
+
+        cfg = config.config or {}
+        token = (cfg.get("channel_token") or "").strip()
+        if not token:
+            raise HTTPException(
+                status_code=400,
+                detail="Channel Token が未設定です。入力後「保存」を押してからテストしてください",
+            )
+        test_uid = (cfg.get("test_line_user_id") or "").strip()
+        if not test_uid:
+            raise HTTPException(
+                status_code=400,
+                detail="テスト送信先 LINE User ID が未設定です（U で始まる33文字）。保存後にテストしてください",
+            )
+        try:
+            test_uid = normalize_line_user_id(test_uid)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        line_cfg = LineConfig(
+            channel_token=token,
+            channel_secret=(cfg.get("channel_secret") or "").strip() or None,
+            test_line_user_id=test_uid,
+        )
+        result = await push_line_text_message(
+            line_cfg,
+            test_uid,
+            "Smart-EMAP 通知センターからの LINE 接続テストです。",
+        )
+        config.last_test_at = datetime.now()
+        if result.success:
+            config.last_test_result = "success"
+            await db.commit()
+            return IntegrationTestResult(success=True, message=f"LINE テストメッセージを送信しました（{test_uid[:8]}…）")
+        config.last_test_result = "failed"
+        await db.commit()
+        raise HTTPException(status_code=500, detail=result.error or "LINE テスト送信に失敗しました")
+
+    # TODO: Slack webhook
     config.last_test_at = datetime.now()
     config.last_test_result = "success"
     await db.commit()

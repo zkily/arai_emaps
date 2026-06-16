@@ -1380,6 +1380,10 @@
         </div>
       </template>
       <div class="confirm-actual-result-body">
+        <div v-if="confirmActualResultDay" class="confirm-actual-result-meta">
+          <span>生産日: {{ confirmActualResultDay }}</span>
+          <span>工程: {{ confirmActualResultType === 'chamfering' ? '面取' : '切断' }}</span>
+        </div>
         <div class="confirm-actual-result-cards">
           <div class="confirm-actual-result-card">
             <span class="confirm-actual-result-card-label">登録件数</span>
@@ -1390,9 +1394,37 @@
             <span class="confirm-actual-result-card-value">{{ confirmActualResultTotalQty.toLocaleString() }} 本</span>
           </div>
         </div>
+        <div v-if="confirmActualEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
+          送信先を読み込み中…
+        </div>
+        <template v-else>
+          <div v-if="confirmActualRecipients.length" class="confirm-actual-result-recipients">
+            <span class="confirm-actual-result-recipients-label">メール送信先（{{ confirmActualRecipients.length }}名）</span>
+            <span class="confirm-actual-result-recipients-names">{{ confirmActualRecipientNames }}</span>
+          </div>
+          <div v-if="confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
+            <span class="confirm-actual-result-recipients-label">LINE送信先（{{ confirmActualLineRecipients.length }}名）</span>
+            <span class="confirm-actual-result-recipients-names">{{ confirmActualLineRecipientNames }}</span>
+          </div>
+          <div v-if="!confirmActualRecipients.length && !confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
+            送信先が未設定です（通知センターでメール/LINE 受信者を登録してください）
+          </div>
+        </template>
+        <div v-if="confirmActualAlreadySent" class="confirm-actual-result-sent-hint">
+          この生産日の実績確定通知は送信済みです
+        </div>
       </div>
       <template #footer>
         <div class="confirm-actual-result-footer">
+          <el-button
+            type="success"
+            size="default"
+            :loading="confirmActualEmailLoading"
+            :disabled="!confirmActualCanSend || confirmActualResultCount <= 0"
+            @click="sendConfirmActualEmail"
+          >
+            メール・LINE送信
+          </el-button>
           <el-button type="primary" size="default" @click="confirmActualResultVisible = false">閉じる</el-button>
         </div>
       </template>
@@ -8499,6 +8531,108 @@ const confirmCuttingActualLoading = ref(false)
 const confirmActualResultVisible = ref(false)
 const confirmActualResultCount = ref(0)
 const confirmActualResultTotalQty = ref(0)
+const confirmActualResultType = ref<'cutting' | 'chamfering'>('cutting')
+const confirmActualResultDay = ref('')
+const confirmActualEmailLoading = ref(false)
+const confirmActualEmailPreviewLoading = ref(false)
+const confirmActualRecipients = ref<{ email: string; name: string }[]>([])
+const confirmActualLineRecipients = ref<{ line_user_id: string; name: string }[]>([])
+const confirmActualCanSend = ref(false)
+const confirmActualAlreadySent = ref(false)
+
+const confirmActualRecipientNames = computed(() =>
+  confirmActualRecipients.value.map((r) => r.name || r.email).join('、')
+)
+const confirmActualLineRecipientNames = computed(() =>
+  confirmActualLineRecipients.value.map((r) => r.name || r.line_user_id).join('、')
+)
+
+async function loadConfirmActualEmailPreview() {
+  const day = confirmActualResultDay.value
+  if (!day) return
+  confirmActualEmailPreviewLoading.value = true
+  confirmActualRecipients.value = []
+  confirmActualLineRecipients.value = []
+  confirmActualCanSend.value = false
+  confirmActualAlreadySent.value = false
+  try {
+    const base =
+      confirmActualResultType.value === 'chamfering'
+        ? '/api/plan/chamfering-management/confirm-actual/email-preview'
+        : '/api/plan/cutting-management/confirm-actual/email-preview'
+    const res = await request.get<{
+      recipients?: { email: string; name: string }[]
+      line_recipients?: { line_user_id: string; name: string }[]
+      can_send?: boolean
+      already_sent?: boolean
+    }>(base, { params: { production_day: day } })
+    confirmActualRecipients.value = (res as any)?.recipients ?? []
+    confirmActualLineRecipients.value = (res as any)?.line_recipients ?? []
+    confirmActualCanSend.value = Boolean((res as any)?.can_send)
+    confirmActualAlreadySent.value = Boolean((res as any)?.already_sent)
+  } catch {
+    confirmActualRecipients.value = []
+    confirmActualLineRecipients.value = []
+    confirmActualCanSend.value = false
+  } finally {
+    confirmActualEmailPreviewLoading.value = false
+  }
+}
+
+watch(confirmActualResultVisible, (visible) => {
+  if (visible) loadConfirmActualEmailPreview()
+})
+
+async function sendConfirmActualEmail() {
+  const day = confirmActualResultDay.value
+  if (!day) return
+  const mailNames = confirmActualRecipientNames.value
+  const lineNames = confirmActualLineRecipientNames.value
+  const destParts = []
+  if (mailNames) destParts.push(`メール: ${mailNames}`)
+  if (lineNames) destParts.push(`LINE: ${lineNames}`)
+  const confirmMsg = confirmActualAlreadySent.value
+    ? `この生産日の通知は送信済みです。再度送信しますか？\n\n${destParts.join('\n')}`
+    : `以下の宛先に実績確定結果を送信します。\n\n${destParts.join('\n')}`
+  try {
+    await ElMessageBox.confirm(confirmMsg, 'メール送信確認', { type: 'info' })
+  } catch {
+    return
+  }
+  confirmActualEmailLoading.value = true
+  try {
+    const base =
+      confirmActualResultType.value === 'chamfering'
+        ? '/api/plan/chamfering-management/confirm-actual/send-email'
+        : '/api/plan/cutting-management/confirm-actual/send-email'
+    const res = await request.post<{ message?: string; sent_count?: number; email_sent_count?: number; line_sent_count?: number; failed?: { email: string; error: string }[]; line_failed?: { line_user_id: string; error: string }[] }>(
+      base,
+      null,
+      { params: { production_day: day } }
+    )
+    const failed = (res as any)?.failed as { email: string; error: string }[] | undefined
+    const lineFailed = (res as any)?.line_failed as { line_user_id: string; error: string }[] | undefined
+    if (failed?.length || lineFailed?.length) {
+      const parts = []
+      if (failed?.length) parts.push(`メール失敗${failed.length}`)
+      if (lineFailed?.length) parts.push(`LINE失敗${lineFailed.length}`)
+      ElMessage.warning(`${(res as any)?.message ?? '送信完了'}（${parts.join('・')}）`)
+    } else {
+      ElMessage.success((res as any)?.message ?? '通知を送信しました')
+    }
+    confirmActualAlreadySent.value = true
+    await loadConfirmActualEmailPreview()
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ??
+      (err as { message?: string })?.message ??
+      'メール送信に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    confirmActualEmailLoading.value = false
+  }
+}
+
 async function confirmCuttingActual() {
   const day = selectedDateToday.value ? String(selectedDateToday.value).slice(0, 10) : ''
   if (!day) {
@@ -8516,6 +8650,8 @@ async function confirmCuttingActual() {
     )
     confirmActualResultCount.value = (res as any)?.inserted ?? 0
     confirmActualResultTotalQty.value = (res as any)?.total_quantity ?? 0
+    confirmActualResultType.value = 'cutting'
+    confirmActualResultDay.value = day
     confirmActualResultVisible.value = true
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '実績確定に失敗しました'
@@ -8543,6 +8679,8 @@ async function confirmChamferingActual() {
     )
     confirmActualResultCount.value = (res as any)?.inserted ?? 0
     confirmActualResultTotalQty.value = (res as any)?.total_quantity ?? 0
+    confirmActualResultType.value = 'chamfering'
+    confirmActualResultDay.value = day
     confirmActualResultVisible.value = true
   } catch (err: unknown) {
     const msg = (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ?? (err as { message?: string })?.message ?? '実績確定に失敗しました'
@@ -12901,6 +13039,48 @@ onUnmounted(() => {
 .confirm-actual-result-body {
   font-size: 14px;
 }
+.confirm-actual-result-meta {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #475569;
+}
+.confirm-actual-result-recipients {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+  color: #334155;
+}
+.confirm-actual-result-recipients--loading {
+  color: #64748b;
+}
+.confirm-actual-result-recipients--empty {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.confirm-actual-result-recipients-label {
+  display: block;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.confirm-actual-result-recipients-names {
+  line-height: 1.5;
+}
+.confirm-actual-result-recipients--line {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.confirm-actual-result-sent-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #0369a1;
+}
 .confirm-actual-result-cards {
   display: flex;
   flex-direction: column;
@@ -12947,6 +13127,7 @@ onUnmounted(() => {
 .confirm-actual-result-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
   padding: 4px 0 0;
 }
 .confirm-actual-result-footer .el-button {

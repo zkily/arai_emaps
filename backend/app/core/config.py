@@ -134,6 +134,14 @@ class Settings(BaseSettings):
     ACCESS_PRODUCTION_PLAN_DB_PATH: str = r"\\192.168.1.200\社内共有\02_生産管理部\Data\subdata.accdb"
     ACCESS_PRODUCTION_PLAN_TABLE: str = "A生産予定"
 
+    # SMTP（integration_configs 未設定時のフォールバック）
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_USE_TLS: bool = True
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

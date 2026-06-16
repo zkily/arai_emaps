@@ -250,6 +250,63 @@ class IntegrationConfig(Base):
         return f"<IntegrationConfig(id={self.id}, service='{self.service_type}')>"
 
 
+class NotificationRecipient(Base):
+    """通知受信者テーブルモデル（イベント別・独立管理）"""
+    __tablename__ = "notification_recipients"
+
+    id = Column(Integer, primary_key=True, index=True, comment="ID")
+    event_code = Column(String(50), nullable=False, index=True, comment="イベントコード")
+    recipient_type = Column(String(20), nullable=False, default="user", comment="user|email|role")
+    user_id = Column(Integer, nullable=True, comment="users.id")
+    email = Column(String(200), nullable=True, comment="直接メール")
+    line_user_id = Column(String(64), nullable=True, comment="LINE User ID")
+    role = Column(String(50), nullable=True, comment="ロール")
+    machine_cd = Column(String(50), nullable=True, comment="設備コード")
+    display_name = Column(String(100), nullable=True, comment="表示名")
+    is_active = Column(Boolean, default=True, nullable=False, comment="有効フラグ")
+    created_at = Column(DateTime, server_default=func.now(), comment="作成日時")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新日時")
+
+    def __repr__(self):
+        return f"<NotificationRecipient(id={self.id}, event='{self.event_code}', type='{self.recipient_type}')>"
+
+
+class EmailSendLog(Base):
+    """メール送信ログテーブルモデル"""
+    __tablename__ = "email_send_logs"
+
+    id = Column(Integer, primary_key=True, index=True, comment="ID")
+    event_code = Column(String(50), nullable=False, index=True, comment="イベントコード")
+    reference_key = Column(String(100), nullable=False, index=True, comment="参照キー")
+    recipient_email = Column(String(200), nullable=False, comment="送信先メール")
+    subject = Column(String(200), nullable=True, comment="件名")
+    status = Column(String(20), nullable=False, comment="success|failed")
+    error_message = Column(Text, nullable=True, comment="エラー内容")
+    sent_by_user_id = Column(Integer, nullable=True, comment="送信者ユーザーID")
+    sent_at = Column(DateTime, server_default=func.now(), comment="送信日時")
+
+    def __repr__(self):
+        return f"<EmailSendLog(id={self.id}, event='{self.event_code}', status='{self.status}')>"
+
+
+class LineSendLog(Base):
+    """LINE送信ログテーブルモデル"""
+    __tablename__ = "line_send_logs"
+
+    id = Column(Integer, primary_key=True, index=True, comment="ID")
+    event_code = Column(String(50), nullable=False, index=True, comment="イベントコード")
+    reference_key = Column(String(100), nullable=False, index=True, comment="参照キー")
+    line_user_id = Column(String(64), nullable=False, comment="LINE User ID")
+    message_preview = Column(String(500), nullable=True, comment="メッセージ先頭")
+    status = Column(String(20), nullable=False, comment="success|failed")
+    error_message = Column(Text, nullable=True, comment="エラー内容")
+    sent_by_user_id = Column(Integer, nullable=True, comment="送信者ユーザーID")
+    sent_at = Column(DateTime, server_default=func.now(), comment="送信日時")
+
+    def __repr__(self):
+        return f"<LineSendLog(id={self.id}, event='{self.event_code}', status='{self.status}')>"
+
+
 # ========== データ管理 ==========
 
 class ImportExportHistory(Base):

@@ -478,6 +478,48 @@ class EmailTemplateResponse(EmailTemplateBase):
         from_attributes = True
 
 
+class NotificationRecipientBase(BaseModel):
+    event_code: str = Field(..., max_length=50)
+    recipient_type: str = Field("user", max_length=20, description="user|email|role|line")
+    user_id: Optional[int] = None
+    email: Optional[str] = Field(None, max_length=200)
+    line_user_id: Optional[str] = Field(None, max_length=64)
+    role: Optional[str] = Field(None, max_length=50)
+    machine_cd: Optional[str] = Field(None, max_length=50)
+    display_name: Optional[str] = Field(None, max_length=100)
+    is_active: bool = True
+
+
+class NotificationRecipientCreate(NotificationRecipientBase):
+    pass
+
+
+class NotificationRecipientUpdate(BaseModel):
+    recipient_type: Optional[str] = Field(None, max_length=20)
+    user_id: Optional[int] = None
+    email: Optional[str] = Field(None, max_length=200)
+    line_user_id: Optional[str] = Field(None, max_length=64)
+    role: Optional[str] = Field(None, max_length=50)
+    machine_cd: Optional[str] = Field(None, max_length=50)
+    display_name: Optional[str] = Field(None, max_length=100)
+    is_active: Optional[bool] = None
+
+
+class NotificationRecipientResponse(NotificationRecipientBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ResolvedEmailRecipient(BaseModel):
+    email: str
+    name: str
+    source: str
+
+
 class IntegrationConfigBase(BaseModel):
     service_type: str = Field(..., max_length=50)
     config: dict

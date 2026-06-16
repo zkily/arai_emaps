@@ -575,3 +575,161 @@ export function getDataImportTemplate(masterType: string) {
     responseType: 'blob',
   }) as unknown as Promise<Blob>
 }
+
+// ========== 通知センター ==========
+
+export interface NotificationSettingItem {
+  id: number
+  event_code: string
+  event_name: string
+  description: string | null
+  in_app_enabled: boolean
+  email_enabled: boolean
+  slack_enabled: boolean
+  line_enabled: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NotificationSettingUpdateParams {
+  event_name?: string
+  description?: string
+  in_app_enabled?: boolean
+  email_enabled?: boolean
+  slack_enabled?: boolean
+  line_enabled?: boolean
+  is_active?: boolean
+}
+
+export interface EmailTemplateItem {
+  id: number
+  code: string
+  name: string
+  subject: string
+  body: string
+  event_code: string | null
+  language: string
+  variables: string[] | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface EmailTemplateCreateParams {
+  code: string
+  name: string
+  subject: string
+  body: string
+  event_code?: string | null
+  language?: string
+  variables?: string[] | null
+}
+
+export interface EmailTemplateUpdateParams {
+  name?: string
+  subject?: string
+  body?: string
+  event_code?: string | null
+  language?: string
+  variables?: string[] | null
+  is_active?: boolean
+}
+
+export interface NotificationRecipientItem {
+  id: number
+  event_code: string
+  recipient_type: 'user' | 'email' | 'role' | 'line'
+  user_id: number | null
+  email: string | null
+  line_user_id: string | null
+  role: string | null
+  machine_cd: string | null
+  display_name: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NotificationRecipientCreateParams {
+  event_code: string
+  recipient_type: 'user' | 'email' | 'role' | 'line'
+  user_id?: number | null
+  email?: string | null
+  line_user_id?: string | null
+  role?: string | null
+  machine_cd?: string | null
+  display_name?: string | null
+  is_active?: boolean
+}
+
+export interface IntegrationConfigItem {
+  id: number
+  service_type: string
+  config: Record<string, unknown>
+  is_enabled: boolean
+  last_test_at: string | null
+  last_test_result: string | null
+  created_at: string
+  updated_at: string
+}
+
+export function getNotificationSettings() {
+  return request.get(`${SETTINGS_BASE}/notifications`) as unknown as Promise<NotificationSettingItem[]>
+}
+
+export function updateNotificationSetting(id: number, data: NotificationSettingUpdateParams) {
+  return request.put(`${SETTINGS_BASE}/notifications/${id}`, data) as unknown as Promise<NotificationSettingItem>
+}
+
+export function getEmailTemplates() {
+  return request.get(`${SETTINGS_BASE}/email-templates`) as unknown as Promise<EmailTemplateItem[]>
+}
+
+export function createEmailTemplate(data: EmailTemplateCreateParams) {
+  return request.post(`${SETTINGS_BASE}/email-templates`, data) as unknown as Promise<EmailTemplateItem>
+}
+
+export function updateEmailTemplate(id: number, data: EmailTemplateUpdateParams) {
+  return request.put(`${SETTINGS_BASE}/email-templates/${id}`, data) as unknown as Promise<EmailTemplateItem>
+}
+
+export function deleteEmailTemplate(id: number) {
+  return request.delete(`${SETTINGS_BASE}/email-templates/${id}`)
+}
+
+export function getNotificationRecipients(eventCode?: string) {
+  return request.get(`${SETTINGS_BASE}/notification-recipients`, {
+    params: eventCode ? { event_code: eventCode } : undefined,
+  }) as unknown as Promise<NotificationRecipientItem[]>
+}
+
+export function createNotificationRecipient(data: NotificationRecipientCreateParams) {
+  return request.post(`${SETTINGS_BASE}/notification-recipients`, data) as unknown as Promise<NotificationRecipientItem>
+}
+
+export function updateNotificationRecipient(id: number, data: Partial<NotificationRecipientCreateParams>) {
+  return request.put(`${SETTINGS_BASE}/notification-recipients/${id}`, data) as unknown as Promise<NotificationRecipientItem>
+}
+
+export function deleteNotificationRecipient(id: number) {
+  return request.delete(`${SETTINGS_BASE}/notification-recipients/${id}`)
+}
+
+export function getIntegrationConfig(serviceType: string) {
+  return request.get(`${SETTINGS_BASE}/integrations/${serviceType}`) as unknown as Promise<IntegrationConfigItem>
+}
+
+export function updateIntegrationConfig(
+  serviceType: string,
+  data: { config?: Record<string, unknown>; is_enabled?: boolean }
+) {
+  return request.put(`${SETTINGS_BASE}/integrations/${serviceType}`, data) as unknown as Promise<IntegrationConfigItem>
+}
+
+export function testIntegration(serviceType: string) {
+  return request.post(`${SETTINGS_BASE}/integrations/${serviceType}/test`) as unknown as Promise<{
+    success: boolean
+    message: string
+  }>
+}

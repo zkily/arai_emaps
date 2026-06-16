@@ -284,7 +284,10 @@ async def api_config_js():
 
 
 # APIルーターの登録
+from app.modules.system.line_webhook_api import router as line_webhook_router  # noqa: E402
+
 app.include_router(auth.router, prefix="/api/auth", tags=["認証"])
+app.include_router(line_webhook_router, prefix="/api", tags=["LINE Webhook"])
 app.include_router(erp.router, prefix="/api/erp", tags=["ERP"])
 app.include_router(aps.router, prefix="/api/aps", tags=["APS"])
 app.include_router(cutting_planning.router, prefix="/api/cutting-planning", tags=["切断計画作成"])
