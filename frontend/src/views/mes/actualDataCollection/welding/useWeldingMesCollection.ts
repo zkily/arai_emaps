@@ -18,7 +18,9 @@ import {
 import { formatDateTimeJST, getJSTToday, shiftDateYmdJST } from '@/utils/dateFormat'
 import { WELDING_DEFECT_DETECTION_PROCESS_CD } from './weldingActualConfig'
 import {
+  alignSessionElapsedFromWallClock,
   applyPersistedSessionsForScope,
+  correctNetProductionFromWallClock,
   emptySession,
   flushPauseSlice,
   flushRunningSlice,
@@ -768,6 +770,9 @@ export function useWeldingMesCollection() {
       if (row.product_cd) selectedProductCode.value = row.product_cd
       activePlanId.value = row.id
       syncActivePlanSessionFromRow(row.id)
+      const resumedSess = sessions[row.id]
+      const freshRow = managementRows.value.find((r) => r.id === row.id) ?? row
+      if (resumedSess) alignSessionElapsedFromWallClock(resumedSess, freshRow)
       operatorUserId.value = ri
       schedulePersist()
       ElMessage.success(t('mesWeldingActual.sessionResumed'))
@@ -1168,7 +1173,13 @@ export function useWeldingMesCollection() {
     if (id == null || !s || !isTimerPaused(s)) return
     const now = Date.now()
     flushPauseSlice(s, now)
-    s.runningSliceStart = now
+    const ws = resolveSessionWallStartMs(s, activeRow.value)
+    if (ws != null) {
+      correctNetProductionFromWallClock(s, ws, now)
+    } else {
+      s.runningSliceStart = now
+      s.pauseSliceStart = null
+    }
     markLocalMesEcho(id)
     void persistMesTimerCheckpoints(id)
     schedulePersist()

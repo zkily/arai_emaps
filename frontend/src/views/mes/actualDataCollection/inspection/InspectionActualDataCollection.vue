@@ -13,6 +13,7 @@ import {
   DataLine,
   Edit,
   InfoFilled,
+  List,
   Minus,
   Plus,
   Printer,
@@ -40,6 +41,8 @@ defineOptions({ name: 'InspectionActualDataCollection' })
 const DEFECT_GRID_COL_W = 118
 const DEFECT_GRID_GAP = 4
 
+const inProgressPanelVisible = ref(false)
+
 function defectGridStyle(group: MesDefectItemGroup): Record<string, string> {
   const n = Math.max(1, group.items.length)
   return {
@@ -62,6 +65,9 @@ const {
   activePlanId,
   activeRow,
   inProgressRows,
+  myNextAssignment,
+  canApplyNextAssignmentProduct,
+  applyNextAssignmentProductSelection,
   focusInProgressRow,
   resumeInProgressSession,
   canResumeSession,
@@ -129,6 +135,7 @@ const {
   breakDisplay,
   timerPhase,
   timerPhaseLabel,
+  inProgressRowStatusLabel,
   formatWall,
   formatWallClock,
   sessionWallStartTs,
@@ -148,6 +155,20 @@ const {
   confirmedEditDefectCount,
   bumpConfirmedEditDefect,
 } = mes
+
+function openInProgressPanel(): void {
+  inProgressPanelVisible.value = true
+}
+
+function onInProgressPanelRowClick(row: InspectionMgmtRow): void {
+  focusInProgressRow(row)
+  inProgressPanelVisible.value = false
+}
+
+async function onInProgressPanelResume(row: InspectionMgmtRow): Promise<void> {
+  await resumeInProgressSession(row)
+  inProgressPanelVisible.value = false
+}
 
 /** タブレット/スマホでは filterable オフ（タップでソフトキーボードを出さない） */
 const touchSelectFilterable = ref(true)
@@ -175,6 +196,30 @@ watch(
   },
 )
 const intlLocale = computed(() => localeForIntl(localeUi.value))
+
+const showNextAssignmentStrip = computed(() => {
+  const a = myNextAssignment.value
+  const name = (a?.next_product_name ?? '').trim()
+  if (name) return true
+  return Boolean((a?.next_product_cd ?? '').trim())
+})
+
+const nextAssignmentProductLabel = computed(() => {
+  const a = myNextAssignment.value
+  if (!a) return ''
+  const name = (a.next_product_name ?? '').trim()
+  if (name) return name
+  return (a.next_product_cd ?? '').trim()
+})
+
+const nextAssignmentProductTitle = computed(() => {
+  const a = myNextAssignment.value
+  if (!a) return ''
+  const cd = (a.next_product_cd ?? '').trim()
+  const name = (a.next_product_name ?? '').trim()
+  if (cd && name) return `${cd} · ${name}`
+  return name || cd
+})
 
 const selectedProduct = computed(() => {
   const code = selectedProductCode.value
@@ -477,6 +522,22 @@ onUnmounted(() => {
               <el-icon><DataLine /></el-icon>
             </span>
             <span class="page-title__text">{{ t('mesInspectionActual.title') }}</span>
+            <el-tooltip
+              v-if="inProgressRows.length > 0"
+              :content="t('mesInspectionActual.inProgressStripTitle')"
+              placement="bottom"
+            >
+              <button
+                type="button"
+                class="page-title__in-progress"
+                :aria-label="t('mesInspectionActual.inProgressPanelOpen')"
+                @click="openInProgressPanel"
+              >
+                <el-badge :value="inProgressRows.length" :max="99" type="success">
+                  <el-icon :size="18"><List /></el-icon>
+                </el-badge>
+              </button>
+            </el-tooltip>
             <el-tooltip :content="t('mesInspectionActual.helpOpen')" placement="bottom">
               <button
                 type="button"
@@ -618,46 +679,67 @@ onUnmounted(() => {
       </div>
     </el-card>
 
-    <div
-      v-if="inProgressRows.length > 0"
-      class="in-progress-strip"
-      role="region"
-      :aria-label="t('mesInspectionActual.inProgressStripTitle')"
+    <el-drawer
+      v-model="inProgressPanelVisible"
+      :title="t('mesInspectionActual.inProgressStripTitle')"
+      direction="rtl"
+      size="min(480px, 92vw)"
+      class="in-progress-panel-drawer"
+      :append-to-body="true"
     >
-      <span class="in-progress-strip__title">{{ t('mesInspectionActual.inProgressStripTitle') }}</span>
-      <div class="in-progress-strip__chips">
+      <div class="in-progress-panel__chips" role="list">
         <div
           v-for="row in inProgressRows"
           :key="row.id"
           class="in-progress-chip-wrap"
           :class="{ 'in-progress-chip-wrap--active': row.id === activePlanId }"
+          role="listitem"
         >
-          <div class="in-progress-chip" role="button" tabindex="0" @click="focusInProgressRow(row)" @keyup.enter="focusInProgressRow(row)">
-            <div class="in-progress-chip__top">
-              <span class="in-progress-chip__product">{{
-                row.product_name || row.product_cd || '—'
-              }}</span>
+          <div
+            class="in-progress-chip"
+            role="button"
+            tabindex="0"
+            @click="onInProgressPanelRowClick(row)"
+            @keyup.enter="onInProgressPanelRowClick(row)"
+          >
+            <div class="in-progress-chip__row">
+              <span class="in-progress-chip__product" :title="row.product_name || row.product_cd || ''">
+                {{ row.product_name || row.product_cd || '—' }}
+              </span>
+              <span class="in-progress-chip__inspector" :title="inspectorNameById(row.mes_inspector_user_id)">
+                {{
+                  inspectorNameById(row.mes_inspector_user_id) || t('mesInspectionActual.inspectorMissing')
+                }}
+              </span>
+              <span
+                class="in-progress-chip__status"
+                :class="{
+                  'in-progress-chip__status--warn': rowMesLockOwner(row) === 'other',
+                  'in-progress-chip__status--pause':
+                    rowMesLockOwner(row) !== 'other' &&
+                    Number(row.mes_production_is_paused ?? 0) === 1,
+                  'in-progress-chip__status--break':
+                    rowMesLockOwner(row) !== 'other' &&
+                    Number(row.mes_production_is_paused ?? 0) === 2,
+                }"
+              >
+                {{ inProgressRowStatusLabel(row) }}
+              </span>
               <el-button
                 v-if="canResumeSession(row)"
                 size="small"
                 type="primary"
                 plain
                 class="in-progress-chip__resume-btn"
-                @click.stop="resumeInProgressSession(row)"
+                @click.stop="onInProgressPanelResume(row)"
               >
                 {{ t('mesInspectionActual.btnResume') }}
               </el-button>
             </div>
-            <span class="in-progress-chip__inspector">{{
-              inspectorNameById(row.mes_inspector_user_id) || t('mesInspectionActual.inspectorMissing')
-            }}</span>
-            <span v-if="rowMesLockOwner(row) === 'other'" class="in-progress-chip__lock-hint">
-              {{ t('mesInspectionActual.sessionLockedByOtherTerminalShort') }}
-            </span>
           </div>
         </div>
       </div>
-    </div>
+    </el-drawer>
 
     <div v-if="showOfflineAlert" class="offline-strip" role="status">
       <span class="offline-strip__dot" aria-hidden="true" />
@@ -666,6 +748,39 @@ onUnmounted(() => {
 
     <div v-loading="loadingPlans" class="plan-board">
       <template v-if="!selectedProductCode">
+        <div
+          v-if="showNextAssignmentStrip"
+          class="next-assignment-empty-banner plan-meta-field plan-meta-field--next-assignment"
+          role="status"
+          :aria-label="t('mesInspectionActual.nextAssignmentStripTitle')"
+        >
+          <span class="plan-meta-field__label">
+            {{ t('mesInspectionActual.nextAssignmentStripTitle') }}
+          </span>
+          <div class="plan-meta-next-assignment__value">
+            <span
+              class="plan-meta-next-assignment__product"
+              :title="nextAssignmentProductTitle"
+            >
+              {{ nextAssignmentProductLabel }}
+            </span>
+            <el-tooltip
+              :content="t('mesInspectionActual.nextAssignmentApplySelect')"
+              placement="top"
+            >
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                class="plan-meta-next-assignment__apply"
+                :disabled="!canApplyNextAssignmentProduct"
+                @click.stop="applyNextAssignmentProductSelection"
+              >
+                {{ t('mesInspectionActual.nextAssignmentApplySelectShort') }}
+              </el-button>
+            </el-tooltip>
+          </div>
+        </div>
         <el-empty :description="t('mesInspectionActual.emptySelectProduct')" />
       </template>
       <template v-else-if="showPlanProductionCard">
@@ -730,6 +845,39 @@ onUnmounted(() => {
                 class="plan-field__control plan-field__control--operator"
                 :placeholder="t('mesInspectionActual.inspectorPlaceholder')"
               />
+              </div>
+              <div
+                v-if="showNextAssignmentStrip"
+                class="plan-meta-field plan-meta-field--next-assignment"
+                role="status"
+                :aria-label="t('mesInspectionActual.nextAssignmentStripTitle')"
+              >
+                <span class="plan-meta-field__label">
+                  {{ t('mesInspectionActual.nextAssignmentStripTitle') }}
+                </span>
+                <div class="plan-meta-next-assignment__value">
+                  <span
+                    class="plan-meta-next-assignment__product"
+                    :title="nextAssignmentProductTitle"
+                  >
+                    {{ nextAssignmentProductLabel }}
+                  </span>
+                  <el-tooltip
+                    :content="t('mesInspectionActual.nextAssignmentApplySelect')"
+                    placement="top"
+                  >
+                    <el-button
+                      type="primary"
+                      plain
+                      size="small"
+                      class="plan-meta-next-assignment__apply"
+                      :disabled="!canApplyNextAssignmentProduct"
+                      @click.stop="applyNextAssignmentProductSelection"
+                    >
+                      {{ t('mesInspectionActual.nextAssignmentApplySelectShort') }}
+                    </el-button>
+                  </el-tooltip>
+                </div>
               </div>
             </div>
           </div>
@@ -1630,6 +1778,56 @@ onUnmounted(() => {
   background: var(--el-color-primary-light-9);
 }
 
+.page-title__in-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-color-success);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.page-title__in-progress:hover {
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+}
+
+.page-title__in-progress :deep(.el-badge__content) {
+  font-size: 0.65rem;
+  height: 16px;
+  padding: 0 5px;
+}
+
+.in-progress-panel__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.in-progress-panel__chips .in-progress-chip-wrap {
+  width: 100%;
+}
+
+.in-progress-panel-drawer :deep(.el-drawer__header) {
+  margin-bottom: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.in-progress-panel-drawer :deep(.el-drawer__body) {
+  padding-top: 4px;
+}
+
 .page-title__icon {
   display: inline-flex;
   align-items: center;
@@ -1668,31 +1866,56 @@ onUnmounted(() => {
   color: var(--el-text-color-primary);
 }
 
-.in-progress-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--el-color-success-light-9);
-  border: 1px solid var(--el-color-success-light-5);
+.plan-meta-field--next-assignment {
+  --plan-meta-control-w: auto;
+  grid-template-columns: auto minmax(6rem, 1fr);
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(100%, 24rem);
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  border-color: rgba(14, 116, 144, 0.35);
 }
 
-.in-progress-strip__title {
-  flex: 0 0 auto;
-  font-size: 0.75rem;
+.plan-meta-field--next-assignment .plan-meta-field__label {
+  color: #0e7490;
+}
+
+.plan-meta-field--next-assignment .plan-meta-next-assignment__product {
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--el-color-success-dark-2);
+  line-height: 1.25;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.in-progress-strip__chips {
-  display: flex;
-  flex-wrap: wrap;
+.plan-meta-next-assignment__value {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 auto;
+  justify-self: stretch;
+}
+
+.plan-meta-next-assignment__apply {
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 0 7px !important;
+  height: 22px !important;
+  font-size: 0.68rem !important;
+  line-height: 1 !important;
+}
+
+.next-assignment-empty-banner {
+  width: fit-content;
+  max-width: min(100%, 28rem);
+  margin: 0 auto 12px;
+}
+
+.plan-board :deep(.el-empty) {
+  padding-top: 8px;
 }
 
 .in-progress-chip-wrap {
@@ -1710,11 +1933,7 @@ onUnmounted(() => {
 }
 
 .in-progress-chip {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2px;
-  padding: 2px 4px;
+  display: block;
   min-width: 0;
   cursor: pointer;
   font: inherit;
@@ -1727,13 +1946,14 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px var(--el-color-primary-light-5);
 }
 
-.in-progress-chip__top {
-  display: flex;
+.in-progress-chip__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   width: 100%;
   min-width: 0;
+  padding: 4px 2px;
 }
 
 .in-progress-chip__resume-btn {
@@ -1742,10 +1962,10 @@ onUnmounted(() => {
   padding: 2px 8px !important;
   height: 24px !important;
   font-size: 0.72rem;
+  justify-self: end;
 }
 
 .in-progress-chip__product {
-  flex: 1 1 auto;
   min-width: 0;
   font-size: 0.78rem;
   font-weight: 600;
@@ -1754,6 +1974,43 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.in-progress-chip__inspector {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--el-text-color-secondary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-progress-chip__status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+}
+
+.in-progress-chip__status--pause {
+  color: var(--el-color-warning-dark-2);
+  background: var(--el-color-warning-light-9);
+}
+
+.in-progress-chip__status--break {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.in-progress-chip__status--warn {
+  color: var(--el-color-danger-dark-2);
+  background: var(--el-color-danger-light-9);
 }
 
 .session-recovery-alert {
@@ -1768,22 +2025,6 @@ onUnmounted(() => {
 
 .session-recovery-alert__btn {
   margin-top: 2px;
-}
-
-.in-progress-chip__inspector {
-  font-size: 0.68rem;
-  color: var(--el-text-color-secondary);
-  line-height: 1.2;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.in-progress-chip__lock-hint {
-  font-size: 0.62rem;
-  color: var(--el-color-warning-dark-2);
-  line-height: 1.2;
 }
 
 .product-locked-alert {

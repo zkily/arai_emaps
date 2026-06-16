@@ -7,6 +7,7 @@ import { finCostingRoutes } from './finCostingRoutes'
 import { mesInstructionRoutes } from './mesInstructionRoutes'
 import { mesActualAnalysisRoutes } from './mesActualAnalysisRoutes'
 import { mesActualCollectionRegistrationRoutes } from './mesActualCollectionRegistrationRoutes'
+import { mesMonitoringRoutes } from './mesMonitoringRoutes'
 
 const routes: RouteRecordRaw[] = [
   // ベースページ（layouts/pages で管理）
@@ -266,6 +267,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'mes/actualDataCollection/welding', name: 'MesActualDataCollectionWelding', component: () => import('@/views/mes/actualDataCollection/welding/WeldingActualDataCollection.vue'), meta: { title: '溶接実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       { path: 'mes/actualDataCollection/inspection', name: 'MesActualDataCollectionInspection', component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollection.vue'), meta: { title: '検査実績収集', group: 'MES > 実績収集', requiresAuth: true } },
       ...mesActualCollectionRegistrationRoutes,
+      ...mesMonitoringRoutes,
       ...mesActualAnalysisRoutes,
       // ========== マスタ管理 ==========
       { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },

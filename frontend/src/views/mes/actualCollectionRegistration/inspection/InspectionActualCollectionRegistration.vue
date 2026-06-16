@@ -20,7 +20,7 @@ import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared
 
 defineOptions({ name: 'InspectionActualCollectionRegistration' })
 
-const DEFECT_GRID_COL_W = 100
+const DEFECT_GRID_COL_W = 78
 const DEFECT_GRID_GAP = 4
 
 const reg = useInspectionManualRegistration()
@@ -316,12 +316,7 @@ onMounted(() => {
                 :key="p.product_code"
                 :label="p.product_name"
                 :value="p.product_code ?? ''"
-              >
-                <div class="iar-product-opt">
-                  <span>{{ p.product_name }}</span>
-                  <small>{{ p.product_code }}</small>
-                </div>
-              </el-option>
+              />
             </el-select>
             <el-input v-else :model-value="form.productName" disabled class="iar-field__control" />
           </div>
@@ -429,9 +424,10 @@ onMounted(() => {
                   ref="breakMinInputRef"
                   v-model="form.breakMin"
                   :min="0"
+                  :max="999"
                   :step="1"
                   :disabled="!productSelected"
-                  controls-position="right"
+                  :controls="false"
                   @keydown="onBreakMinEnter"
                 />
                 <em>分</em>
@@ -444,9 +440,10 @@ onMounted(() => {
                   ref="stopMinInputRef"
                   v-model="form.stopMin"
                   :min="0"
+                  :max="999"
                   :step="1"
                   :disabled="!productSelected"
-                  controls-position="right"
+                  :controls="false"
                   @keydown="onStopMinEnter"
                 />
                 <em>分</em>
@@ -1423,18 +1420,6 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15), 0 2px 8px rgba(245, 158, 11, 0.1);
 }
 
-.iar-product-opt {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-}
-
-.iar-product-opt small {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
 /* Time block */
 .iar-time {
   position: relative;
@@ -1551,7 +1536,14 @@ onMounted(() => {
 }
 
 .iar-time__num :deep(.el-input-number) {
-  width: 100%;
+  width: 56px;
+  min-width: 56px;
+}
+
+.iar-time__num :deep(.el-input-number .el-input__inner) {
+  text-align: center;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 .iar-time__num em {
@@ -1670,41 +1662,34 @@ onMounted(() => {
   display: grid;
   gap: 4px;
   width: max-content;
-  padding-top: 6px;
+  padding-top: 4px;
 }
 
 .iar-defect {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
-  padding: 5px 6px;
+  padding: 4px 5px;
   border-radius: 8px;
   border: 1px solid rgba(203, 213, 225, 0.85);
-  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 2px 6px rgba(15, 23, 42, 0.05);
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
   cursor: pointer;
   transition:
     border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.18s cubic-bezier(0.34, 1.2, 0.64, 1);
+    box-shadow 0.18s ease;
 }
 
 .iar-defect:hover {
   border-color: #93c5fd;
-  transform: translateY(-2px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    0 6px 14px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 4px 10px rgba(59, 130, 246, 0.1);
 }
 
 .iar-defect--active {
   border-color: #f59e0b;
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+  background: #fffbeb;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 0 0 2px rgba(245, 158, 11, 0.2),
     0 4px 12px rgba(245, 158, 11, 0.18);
   animation: iar-defect-pop 0.32s ease;
@@ -1713,8 +1698,7 @@ onMounted(() => {
 .iar-defect__name {
   font-size: 11px;
   font-weight: 700;
-  line-height: 1.25;
-  min-height: 1.5em;
+  line-height: 1.2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -1798,8 +1782,9 @@ onMounted(() => {
   line-height: 24px;
 }
 
-.iar-defect--active .iar-defect__qty-input :deep(.el-input__inner) {
-  color: #111827;
+.iar-defect__qty-input :deep(.el-input__inner::placeholder) {
+  color: #9ca3af;
+  opacity: 1;
 }
 
 /* Remarks */

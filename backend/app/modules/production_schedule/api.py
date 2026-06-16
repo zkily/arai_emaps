@@ -35,8 +35,9 @@ from app.core.company_work_calendar import (
     parse_date_csv,
 )
 from app.core.database import get_db
+from app.core.datetime_utils import now_jst
 from app.modules.auth.api import verify_token_and_get_user
-from app.modules.auth.operation_deps import require_aps_operation, require_mes_operation
+from app.modules.auth.operation_deps import require_aps_operation, require_mes_operation, require_menu_code
 from app.modules.auth.models import User
 from app.modules.master.models import ProcessDefectItem
 from app.services.inspection_management_import import DATA_SOURCE_MES, resolve_data_source
@@ -1220,21 +1221,36 @@ async def _reject_concurrent_mes_production_on_welding_start(
             )
 
 
+def _parse_mes_defect_entry(val: Any) -> tuple[int, Optional[str]]:
+    """不良内訳 1 項目：数量と発生時刻（任意）。"""
+    if isinstance(val, dict):
+        qty_raw = val.get("qty", val.get("quantity", val.get("count", 0)))
+        try:
+            qty = max(0, int(qty_raw))
+        except (TypeError, ValueError):
+            qty = 0
+        at_raw = val.get("at") or val.get("occurred_at") or val.get("occurredAt")
+        at = str(at_raw).strip() if at_raw is not None and str(at_raw).strip() else None
+        return qty, at
+    try:
+        return max(0, int(val)), None
+    except (TypeError, ValueError):
+        return 0, None
+
+
 def _parse_mes_defect_by_item_for_db(val: Any) -> Optional[str]:
     """dict / JSON 文字列を MySQL JSON 列用の文字列に正規化。"""
     if val is None:
         return None
     if isinstance(val, dict):
-        cleaned: dict[str, int] = {}
+        cleaned: dict[str, Any] = {}
         for k, v in val.items():
             if not k:
                 continue
-            try:
-                n = int(v)
-            except (TypeError, ValueError):
+            qty, at = _parse_mes_defect_entry(v)
+            if qty <= 0:
                 continue
-            if n > 0:
-                cleaned[str(k)] = n
+            cleaned[str(k)] = {"qty": qty, "at": at} if at else qty
         return json.dumps(cleaned, ensure_ascii=False) if cleaned else None
     if isinstance(val, str):
         raw = val.strip()
@@ -1259,7 +1275,11 @@ def _sum_defect_qty_from_item_json(raw: Any) -> int:
             return 0
         if not isinstance(data, dict):
             return 0
-        return sum(max(0, int(v)) for v in data.values() if v is not None)
+        total = 0
+        for v in data.values():
+            qty, _ = _parse_mes_defect_entry(v)
+            total += qty
+        return total
     except (TypeError, ValueError, json.JSONDecodeError):
         return 0
 
@@ -6950,18 +6970,15 @@ async def delete_welding_instruction_note(
 # ---------- 検査指示（inspection_management）・MES検査実績収集 ----------
 
 
-@router.get("/plan/inspection-management/list")
-async def get_inspection_management_list(
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    hide_completed: bool = Query(False, description="実績確定済を除外"),
-    data_source: Optional[str] = Query(
-        None, description="取得元フィルタ: mes / excel / csv"
-    ),
-    limit: int = Query(2000, ge=1, le=5000),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
-):
-    """検査指示一覧（MES検査実績収集）。"""
+async def _query_inspection_management_list(
+    db: AsyncSession,
+    *,
+    production_day: Optional[str],
+    hide_completed: bool,
+    data_source: Optional[str],
+    limit: int,
+    join_inspector_names: bool = False,
+) -> list[dict[str, Any]]:
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(
@@ -6970,6 +6987,13 @@ async def get_inspection_management_list(
         )
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
+    join_inspector = join_inspector_names and "mes_inspector_user_id" in im_cols
+    inspector_select = _inspection_mgmt_inspector_select_fragment(join_inspector)
+    inspector_join = (
+        "LEFT JOIN users ON users.id = inspection_management.mes_inspector_user_id"
+        if join_inspector
+        else ""
+    )
     where_parts: list[str] = ["1=1"]
     params: dict[str, Any] = {"lim": limit}
     if production_day:
@@ -7004,11 +7028,13 @@ async def get_inspection_management_list(
                inspection_management.mes_defect_by_item,
                inspection_management.production_completed_check,
                {mes_frag}
+               {inspector_select}
                {meta_frag}
                inspection_management.remarks,
                inspection_management.created_at,
                inspection_management.updated_at
         FROM inspection_management
+        {inspector_join}
         WHERE {where_sql}
         ORDER BY inspection_management.production_day ASC,
                  inspection_management.production_sequence ASC,
@@ -7021,8 +7047,54 @@ async def get_inspection_management_list(
     except Exception as e:
         _raise_inspection_mgmt_query_error(e)
 
-    out = [_normalize_inspection_mgmt_row(dict(row)) for row in rows]
+    return [_normalize_inspection_mgmt_row(dict(row)) for row in rows]
+
+
+@router.get("/plan/inspection-management/list")
+async def get_inspection_management_list(
+    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
+    hide_completed: bool = Query(False, description="実績確定済を除外"),
+    data_source: Optional[str] = Query(
+        None, description="取得元フィルタ: mes / excel / csv"
+    ),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """検査指示一覧（MES検査実績収集）。"""
+    out = await _query_inspection_management_list(
+        db,
+        production_day=production_day,
+        hide_completed=hide_completed,
+        data_source=data_source,
+        limit=limit,
+    )
     return {"success": True, "data": out}
+
+
+@router.get("/plan/inspection-management/monitor-summary")
+async def get_inspection_monitor_summary(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
+):
+    """検査モニタ用：MES データのみ・メニュー権限必須。"""
+    if _parse_date_ymd(production_day) is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    out = await _query_inspection_management_list(
+        db,
+        production_day=production_day,
+        hide_completed=False,
+        data_source="mes",
+        limit=limit,
+        join_inspector_names=True,
+    )
+    return {
+        "success": True,
+        "data": out,
+        "fetched_at": now_jst().isoformat(),
+    }
 
 
 @router.get("/plan/inspection-management/inspectors")
@@ -7097,6 +7169,294 @@ async def get_inspection_management_inspectors(
             }
         )
     return {"success": True, "data": out}
+
+
+_INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("加工", "アーチ")
+_INSPECTION_SHIAGE_SECTION_NAME = "仕上課"
+
+
+def _normalize_inspection_next_assignment_row(row: dict[str, Any]) -> dict[str, Any]:
+    pd = row.get("production_day")
+    aa = row.get("assigned_at")
+    return {
+        "id": row.get("id"),
+        "production_day": pd.isoformat() if hasattr(pd, "isoformat") else (str(pd)[:10] if pd else None),
+        "inspector_user_id": row.get("inspector_user_id"),
+        "next_product_cd": row.get("next_product_cd"),
+        "next_product_name": row.get("next_product_name"),
+        "assigned_by_user_id": row.get("assigned_by_user_id"),
+        "assigned_at": aa.isoformat() if hasattr(aa, "isoformat") else aa,
+        "note": row.get("note"),
+        "inspector_name": row.get("inspector_name"),
+        "inspector_username": row.get("inspector_username"),
+        "assigned_by_name": row.get("assigned_by_name"),
+    }
+
+
+def _validate_inspection_mes_product_cd_name(product_cd: str, product_name: str | None) -> tuple[str, str]:
+    cd = (product_cd or "").strip()
+    if not cd:
+        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+    if not cd.endswith("1"):
+        raise HTTPException(status_code=400, detail="検査製品CDは末尾が1である必要があります")
+    name = (product_name or "").strip() or cd
+    if any(kw in name for kw in _INSPECTION_MES_PRODUCT_NAME_EXCLUDES):
+        raise HTTPException(status_code=400, detail="検査対象外の製品名です")
+    return cd, name
+
+
+async def _inspection_next_assignment_table_ready(db: AsyncSession) -> bool:
+    return await _table_has_column(db, "inspection_inspector_next_assignment", "id")
+
+
+async def _assert_inspection_next_assignment_table(db: AsyncSession) -> None:
+    if not await _inspection_next_assignment_table_ready(db):
+        raise HTTPException(
+            status_code=503,
+            detail="inspection_inspector_next_assignment テーブルが存在しません。backend/database/migrations/48_inspection_inspector_next_assignment.sql を実行してください。",
+        )
+
+
+async def _assert_active_inspection_inspector_user(db: AsyncSession, inspector_user_id: int) -> None:
+    if inspector_user_id <= 0:
+        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+    sql = """
+        SELECT u.id, o.name AS section_name
+        FROM users u
+        LEFT JOIN organizations o ON o.id = u.section_id
+        WHERE u.id = :uid AND u.status = 'active'
+        LIMIT 1
+    """
+    try:
+        r = await db.execute(text(sql), {"uid": inspector_user_id})
+        row = r.mappings().first()
+        if not row:
+            raise HTTPException(status_code=400, detail="検査員ユーザーが見つかりません")
+        section = (row.get("section_name") or "").strip()
+        if section and section != _INSPECTION_SHIAGE_SECTION_NAME:
+            raise HTTPException(status_code=400, detail="仕上課所属の検査員のみ指定できます")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+async def _resolve_inspection_product_name(
+    db: AsyncSession, product_cd: str, product_name: str | None
+) -> tuple[str, str]:
+    cd, name = _validate_inspection_mes_product_cd_name(product_cd, product_name)
+    if (product_name or "").strip():
+        return cd, name
+    try:
+        r = await db.execute(
+            text(
+                "SELECT product_name FROM products WHERE product_cd = :cd AND status = 'active' LIMIT 1"
+            ),
+            {"cd": cd},
+        )
+        row = r.first()
+        if row and row[0]:
+            resolved = str(row[0]).strip()
+            return _validate_inspection_mes_product_cd_name(cd, resolved)
+    except Exception:
+        pass
+    return cd, name
+
+
+async def _query_inspection_next_assignments(
+    db: AsyncSession, production_day: date
+) -> list[dict[str, Any]]:
+    await _assert_inspection_next_assignment_table(db)
+    sql = """
+        SELECT a.id,
+               a.production_day,
+               a.inspector_user_id,
+               a.next_product_cd,
+               a.next_product_name,
+               a.assigned_by_user_id,
+               a.assigned_at,
+               a.note,
+               insp.full_name AS inspector_name,
+               insp.username AS inspector_username,
+               assigner.full_name AS assigned_by_name
+        FROM inspection_inspector_next_assignment a
+        LEFT JOIN users insp ON insp.id = a.inspector_user_id
+        LEFT JOIN users assigner ON assigner.id = a.assigned_by_user_id
+        WHERE a.production_day = :production_day
+        ORDER BY a.assigned_at DESC, a.id ASC
+    """
+    result = await db.execute(text(sql), {"production_day": production_day})
+    return [_normalize_inspection_next_assignment_row(dict(row)) for row in result.mappings().all()]
+
+
+class UpsertInspectionNextAssignmentBody(BaseModel):
+    production_day: str
+    inspector_user_id: int
+    product_cd: str
+    product_name: Optional[str] = None
+    note: Optional[str] = None
+
+
+class DeleteInspectionNextAssignmentBody(BaseModel):
+    production_day: str
+    inspector_user_id: int
+
+
+@router.get("/plan/inspection-management/next-assignments")
+async def get_inspection_next_assignments(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_menu_code("MES_MONITOR_INSPECTION", "MES_ACTUAL_INSPECTION")
+    ),
+):
+    """検査員別次製品指定一覧（当日）。"""
+    d = _parse_date_ymd(production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    if not await _inspection_next_assignment_table_ready(db):
+        return {"success": True, "data": []}
+    data = await _query_inspection_next_assignments(db, d)
+    return {"success": True, "data": data}
+
+
+@router.get("/plan/inspection-management/next-assignment/me")
+async def get_my_inspection_next_assignment(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_menu_code("MES_ACTUAL_INSPECTION")),
+):
+    """ログイン検査員の次製品指定（検査実績収集表示用）。"""
+    d = _parse_date_ymd(production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    uid = _inspection_mes_inspector_user_id_from_user(current_user)
+    if uid is None or uid <= 0:
+        return {"success": True, "data": None}
+    if not await _inspection_next_assignment_table_ready(db):
+        return {"success": True, "data": None}
+    sql = """
+        SELECT a.id,
+               a.production_day,
+               a.inspector_user_id,
+               a.next_product_cd,
+               a.next_product_name,
+               a.assigned_by_user_id,
+               a.assigned_at,
+               a.note,
+               insp.full_name AS inspector_name,
+               insp.username AS inspector_username,
+               assigner.full_name AS assigned_by_name
+        FROM inspection_inspector_next_assignment a
+        LEFT JOIN users insp ON insp.id = a.inspector_user_id
+        LEFT JOIN users assigner ON assigner.id = a.assigned_by_user_id
+        WHERE a.production_day = :production_day
+          AND a.inspector_user_id = :inspector_user_id
+        LIMIT 1
+    """
+    result = await db.execute(
+        text(sql),
+        {"production_day": d, "inspector_user_id": uid},
+    )
+    row = result.mappings().first()
+    if not row:
+        return {"success": True, "data": None}
+    return {"success": True, "data": _normalize_inspection_next_assignment_row(dict(row))}
+
+
+@router.put("/plan/inspection-management/next-assignment")
+async def upsert_inspection_next_assignment(
+    body: UpsertInspectionNextAssignmentBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+    _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
+):
+    """検査員の次製品を指定（検査モニタ）。"""
+    d = _parse_date_ymd(body.production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    try:
+        inspector_id = int(body.inspector_user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+    await _assert_inspection_next_assignment_table(db)
+    await _assert_active_inspection_inspector_user(db, inspector_id)
+    product_cd, product_name = await _resolve_inspection_product_name(
+        db, body.product_cd, body.product_name
+    )
+    note = (body.note or "").strip() or None
+    if note and len(note) > 500:
+        raise HTTPException(status_code=400, detail="note は500文字以内です")
+    assigner_id = _inspection_mes_inspector_user_id_from_user(current_user)
+    sql = """
+        INSERT INTO inspection_inspector_next_assignment (
+            production_day,
+            inspector_user_id,
+            next_product_cd,
+            next_product_name,
+            assigned_by_user_id,
+            assigned_at,
+            note
+        ) VALUES (
+            :production_day,
+            :inspector_user_id,
+            :next_product_cd,
+            :next_product_name,
+            :assigned_by_user_id,
+            :assigned_at,
+            :note
+        )
+        ON DUPLICATE KEY UPDATE
+            next_product_cd = VALUES(next_product_cd),
+            next_product_name = VALUES(next_product_name),
+            assigned_by_user_id = VALUES(assigned_by_user_id),
+            assigned_at = VALUES(assigned_at),
+            note = VALUES(note)
+    """
+    now = now_jst().replace(tzinfo=None)
+    await db.execute(
+        text(sql),
+        {
+            "production_day": d,
+            "inspector_user_id": inspector_id,
+            "next_product_cd": product_cd,
+            "next_product_name": product_name,
+            "assigned_by_user_id": assigner_id if assigner_id and assigner_id > 0 else None,
+            "assigned_at": now,
+            "note": note,
+        },
+    )
+    await db.commit()
+    rows = await _query_inspection_next_assignments(db, d)
+    saved = next((r for r in rows if r.get("inspector_user_id") == inspector_id), None)
+    return {"success": True, "data": saved, "message": "次製品を指定しました"}
+
+
+@router.delete("/plan/inspection-management/next-assignment")
+async def delete_inspection_next_assignment(
+    body: DeleteInspectionNextAssignmentBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+    _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
+):
+    """検査員の次製品指定を解除。"""
+    d = _parse_date_ymd(body.production_day)
+    if d is None:
+        raise HTTPException(status_code=400, detail="production_day が不正です")
+    try:
+        inspector_id = int(body.inspector_user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+    await _assert_inspection_next_assignment_table(db)
+    await db.execute(
+        text(
+            "DELETE FROM inspection_inspector_next_assignment "
+            "WHERE production_day = :production_day AND inspector_user_id = :inspector_user_id"
+        ),
+        {"production_day": d, "inspector_user_id": inspector_id},
+    )
+    await db.commit()
+    return {"success": True, "message": "次製品指定を解除しました"}
 
 
 @router.get("/plan/inspection-management/productivity-analysis")
@@ -8395,7 +8755,7 @@ async def update_inspection_management(
         if flag < 0:
             updates.append("mes_production_is_paused = NULL")
         else:
-            params["mes_production_is_paused"] = 1 if flag else 0
+            params["mes_production_is_paused"] = max(0, min(2, flag))
             updates.append("mes_production_is_paused = :mes_production_is_paused")
     if body.mes_inspector_user_id is not None:
         if "mes_inspector_user_id" not in im_cols:

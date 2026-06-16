@@ -20,7 +20,7 @@ export interface InspectionManagementListRow {
   product_name?: string | null
   actual_production_quantity?: number | null
   defect_qty?: number | null
-  mes_defect_by_item?: Record<string, number> | null
+  mes_defect_by_item?: Record<string, number | { qty?: number; at?: string }> | null
   production_completed_check?: number | null
   mes_production_started_at?: string | null
   mes_production_ended_at?: string | null
@@ -31,6 +31,8 @@ export interface InspectionManagementListRow {
   mes_stop_sec?: number | null
   mes_production_is_paused?: number | null
   mes_inspector_user_id?: number | null
+  mes_inspector_name?: string | null
+  mes_inspector_username?: string | null
   mes_client_instance_id?: string | null
   /** mes=検査実績収集, excel=管理指標Excel同期, csv=一括取込 */
   data_source?: 'mes' | 'excel' | 'csv' | string | null
@@ -62,6 +64,90 @@ export function fetchInspectionManagementList(params: {
       limit: params.limit,
     },
   }) as Promise<InspectionManagementListResponse>
+}
+
+export interface InspectionMonitorSummaryResponse {
+  success?: boolean
+  data?: InspectionManagementListRow[]
+  /** サーバー取得時刻（ISO 8601） */
+  fetched_at?: string
+  message?: string
+}
+
+/** 検査モニタ専用：MES データ + メニュー権限（MES_MONITOR_INSPECTION） */
+export function fetchInspectionMonitorSummary(params: {
+  production_day: string
+  limit?: number
+}): Promise<InspectionMonitorSummaryResponse> {
+  return request.get('/api/plan/inspection-management/monitor-summary', {
+    params: {
+      production_day: params.production_day,
+      limit: params.limit,
+    },
+  }) as Promise<InspectionMonitorSummaryResponse>
+}
+
+export interface InspectionNextAssignment {
+  id?: number
+  production_day?: string | null
+  inspector_user_id?: number | null
+  next_product_cd?: string | null
+  next_product_name?: string | null
+  assigned_by_user_id?: number | null
+  assigned_at?: string | null
+  note?: string | null
+  inspector_name?: string | null
+  inspector_username?: string | null
+  assigned_by_name?: string | null
+}
+
+export interface InspectionNextAssignmentsResponse {
+  success?: boolean
+  data?: InspectionNextAssignment[]
+  message?: string
+}
+
+export interface InspectionNextAssignmentResponse {
+  success?: boolean
+  data?: InspectionNextAssignment | null
+  message?: string
+}
+
+export function fetchInspectionNextAssignments(params: {
+  production_day: string
+}): Promise<InspectionNextAssignmentsResponse> {
+  return request.get('/api/plan/inspection-management/next-assignments', {
+    params: { production_day: params.production_day },
+  }) as Promise<InspectionNextAssignmentsResponse>
+}
+
+export function fetchMyInspectionNextAssignment(params: {
+  production_day: string
+}): Promise<InspectionNextAssignmentResponse> {
+  return request.get('/api/plan/inspection-management/next-assignment/me', {
+    params: { production_day: params.production_day },
+  }) as Promise<InspectionNextAssignmentResponse>
+}
+
+export function upsertInspectionNextAssignment(body: {
+  production_day: string
+  inspector_user_id: number
+  product_cd: string
+  product_name?: string
+  note?: string | null
+}): Promise<InspectionNextAssignmentResponse> {
+  return request.put('/api/plan/inspection-management/next-assignment', body) as Promise<
+    InspectionNextAssignmentResponse
+  >
+}
+
+export function deleteInspectionNextAssignment(body: {
+  production_day: string
+  inspector_user_id: number
+}): Promise<{ success?: boolean; message?: string }> {
+  return request.delete('/api/plan/inspection-management/next-assignment', {
+    data: body,
+  }) as Promise<{ success?: boolean; message?: string }>
 }
 
 export interface CreateInspectionManagementBody {
@@ -101,7 +187,7 @@ export interface PatchInspectionManagementBody {
   mes_stop_sec?: number
   mes_production_is_paused?: number
   mes_inspector_user_id?: number
-  mes_defect_by_item?: Record<string, number> | string | null
+  mes_defect_by_item?: Record<string, number | { qty?: number; at?: string }> | string | null
   /** 端末 UUID（localStorage） */
   mes_client_instance_id?: string
   /** 在産行の操作権を取得 */

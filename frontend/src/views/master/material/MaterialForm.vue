@@ -108,8 +108,8 @@
               <el-input-number
                 v-model="form.long_weight"
                 :min="0"
-                :step="0.001"
-                :precision="5"
+                :step="0.01"
+                :precision="2"
                 placeholder="長尺単重"
               />
             </el-form-item>

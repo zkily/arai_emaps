@@ -1,5 +1,13 @@
 /** MES 検査実績収集：ローカル復元（多端末・オフライン計測） */
 
+import {
+  buildMesDefectByItemPayload,
+  parseDefectAtFromRow,
+  parseDefectsFromRow,
+} from '../shared/mesDefectByItem'
+
+export { parseDefectsFromRow, parseDefectAtFromRow, buildMesDefectByItemPayload }
+
 export const INSPECTION_ACTUAL_PERSIST_KEY = 'smart_emap_mes_inspection_actual_v2'
 
 const PERSIST_TTL_MS = 48 * 60 * 60 * 1000
@@ -14,6 +22,7 @@ export interface PersistedPlanSession {
   wallStart: number | null
   wallEnd: number | null
   defects: Record<string, number>
+  defectAtByItem?: Record<string, string>
 }
 
 export interface PlanSessionLike {
@@ -26,6 +35,7 @@ export interface PlanSessionLike {
   wallStart: number | null
   wallEnd: number | null
   defects: Record<string, number>
+  defectAtByItem?: Record<string, string>
 }
 
 interface PersistScopeData {
@@ -174,17 +184,6 @@ export function saveInspectionActualPersist(payload: InspectionActualPagePersist
   }
 }
 
-export function parseDefectsFromRow(raw: unknown): Record<string, number> {
-  const out: Record<string, number> = {}
-  if (!raw || typeof raw !== 'object') return out
-  const obj = raw as Record<string, unknown>
-  for (const [k, v] of Object.entries(obj)) {
-    const n = Math.round(Number(v))
-    if (Number.isFinite(n) && n > 0) out[k] = n
-  }
-  return out
-}
-
 function mesProductionIsPausedFromRow(row: {
   mes_production_is_paused?: number | null
 }): boolean | null {
@@ -205,10 +204,11 @@ export function hydratePlanSessionFromRow(
     mes_break_sec?: number | null
     mes_stop_sec?: number | null
     mes_production_is_paused?: number | null
-    mes_defect_by_item?: Record<string, number> | null
+    mes_defect_by_item?: unknown
   },
 ): void {
   sess.defects = parseDefectsFromRow(row.mes_defect_by_item)
+  sess.defectAtByItem = parseDefectAtFromRow(row.mes_defect_by_item)
 
   const ws = row.mes_production_started_at ? Date.parse(String(row.mes_production_started_at)) : NaN
   const we = row.mes_production_ended_at ? Date.parse(String(row.mes_production_ended_at)) : NaN
@@ -332,23 +332,6 @@ export function readNetProductionMs(sess: PlanSessionLike, at = Date.now()): num
   return Math.max(0, ms)
 }
 
-/**
- * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止累計」で補正し、净稼働と running スライスを整合。
- */
-export function correctNetProductionFromWallClock(
-  sess: PlanSessionLike,
-  wallStartMs: number,
-  now = Date.now(),
-): void {
-  const wallMs = Math.max(0, now - wallStartMs)
-  const pauseMs = sess.pausedAccumMs ?? 0
-  const breakMs = sess.breakAccumMs ?? 0
-  sess.activeAccumMs = Math.max(0, wallMs - pauseMs - breakMs)
-  sess.runningSliceStart = now
-  sess.pauseSliceStart = null
-  sess.breakSliceStart = null
-}
-
 /** 明示的一時停止のみ（ボタン操作分。セッションを変更しない） */
 export function readExplicitPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) return 0
@@ -367,6 +350,55 @@ export function readExplicitBreakAccumMs(sess: PlanSessionLike, at = Date.now())
     ms += Math.max(0, at - sess.breakSliceStart)
   }
   return Math.max(0, ms)
+}
+
+/**
+ * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止 − 休憩」で補正し、净稼働と running スライスを整合。
+ */
+export function correctNetProductionFromWallClock(
+  sess: PlanSessionLike,
+  wallStartMs: number,
+  now = Date.now(),
+): void {
+  const wallMs = Math.max(0, now - wallStartMs)
+  const pauseMs = readExplicitPausedAccumMs(sess, now)
+  const breakMs = readExplicitBreakAccumMs(sess, now)
+  sess.activeAccumMs = Math.max(0, wallMs - pauseMs - breakMs)
+  sess.runningSliceStart = now
+  sess.pauseSliceStart = null
+  sess.breakSliceStart = null
+}
+
+/** 作業再開・サーバー同期後：稼働時間を生産開始時刻基準で補正 */
+export function alignSessionElapsedFromWallClock(
+  sess: PlanSessionLike,
+  row?: {
+    mes_production_started_at?: string | null
+    mes_net_production_sec?: number | null
+  } | null,
+  now = Date.now(),
+): void {
+  if (sess.wallEnd != null || sess.wallStart == null) return
+  const ws =
+    sess.wallStart ??
+    (row?.mes_production_started_at
+      ? Date.parse(String(row.mes_production_started_at))
+      : Number.NaN)
+  if (!Number.isFinite(ws)) return
+
+  const isPaused = sess.pauseSliceStart != null
+  const isOnBreak = sess.breakSliceStart != null
+  const serverNet = row?.mes_net_production_sec
+
+  if (isPaused || isOnBreak) {
+    if ((serverNet ?? 0) === 0 && (sess.activeAccumMs ?? 0) === 0) {
+      const pauseMs = readExplicitPausedAccumMs(sess, now)
+      const breakMs = readExplicitBreakAccumMs(sess, now)
+      sess.activeAccumMs = Math.max(0, now - ws - pauseMs - breakMs)
+    }
+    return
+  }
+  correctNetProductionFromWallClock(sess, ws, now)
 }
 
 /**
@@ -475,6 +507,7 @@ export function emptySession(defects: Record<string, number> = {}): PlanSessionL
     wallStart: null,
     wallEnd: null,
     defects: { ...defects },
+    defectAtByItem: {},
   }
 }
 
@@ -493,6 +526,7 @@ export function serializePlanSessions(
       wallStart: s.wallStart,
       wallEnd: s.wallEnd,
       defects: { ...s.defects },
+      defectAtByItem: { ...(s.defectAtByItem ?? {}) },
     }
   }
   return out
@@ -528,6 +562,7 @@ export function applyPersistedSessionsForScope(
     sess.breakAccumMs = p.breakAccumMs ?? 0
     sess.breakSliceStart = p.breakSliceStart ?? null
     sess.defects = { ...p.defects }
+    sess.defectAtByItem = { ...(p.defectAtByItem ?? {}) }
     reconcileInProgressTimer(sess)
     any = true
   }

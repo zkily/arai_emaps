@@ -351,6 +351,49 @@ export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): numbe
   return Math.max(0, ms)
 }
 
+/**
+ * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止累計」で補正し、净稼働と running スライスを整合。
+ */
+export function correctNetProductionFromWallClock(
+  sess: PlanSessionLike,
+  wallStartMs: number,
+  now = Date.now(),
+): void {
+  const wallMs = Math.max(0, now - wallStartMs)
+  const pauseMs = readPausedAccumMs(sess, now)
+  sess.activeAccumMs = Math.max(0, wallMs - pauseMs)
+  sess.runningSliceStart = now
+  sess.pauseSliceStart = null
+}
+
+/** 作業再開・サーバー同期後：稼働時間を生産開始時刻基準で補正 */
+export function alignSessionElapsedFromWallClock(
+  sess: PlanSessionLike,
+  row?: {
+    mes_production_started_at?: string | null
+    mes_net_production_sec?: number | null
+  } | null,
+  now = Date.now(),
+): void {
+  if (sess.wallEnd != null || sess.wallStart == null) return
+  const ws =
+    sess.wallStart ??
+    (row?.mes_production_started_at
+      ? Date.parse(String(row.mes_production_started_at))
+      : Number.NaN)
+  if (!Number.isFinite(ws)) return
+
+  if (sess.pauseSliceStart != null) {
+    const serverNet = row?.mes_net_production_sec
+    if ((serverNet ?? 0) === 0 && (sess.activeAccumMs ?? 0) === 0) {
+      const pauseMs = readPausedAccumMs(sess, now)
+      sess.activeAccumMs = Math.max(0, now - ws - pauseMs)
+    }
+    return
+  }
+  correctNetProductionFromWallClock(sess, ws, now)
+}
+
 /** 生産終了時に一時停止累計を確定（一時停止ボタンで積み上げた分のみ）。戻り値はミリ秒。 */
 export function freezePausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) {

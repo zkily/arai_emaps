@@ -3,9 +3,12 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createInspectionManagement,
+  deleteInspectionNextAssignment,
   fetchInspectionManagementList,
+  fetchMyInspectionNextAssignment,
   patchInspectionManagement,
   type InspectionManagementListRow,
+  type InspectionNextAssignment,
   type PatchInspectionManagementBody,
 } from '@/api/inspectionManagement'
 import { getProductList } from '@/api/master/productMaster'
@@ -28,12 +31,14 @@ import {
   formatDurationMs,
   freezeBreakAccumMs,
   freezePausedAccumMs,
+  alignSessionElapsedFromWallClock,
   correctNetProductionFromWallClock,
   readNetProductionMs,
   readExplicitPausedAccumMs,
   readExplicitBreakAccumMs,
   readPausedAccumMs,
   hydratePlanSessionFromRow,
+  buildMesDefectByItemPayload,
   loadInspectionActualPersist,
   makePersistScopeKey,
   reconcileInProgressTimer,
@@ -66,7 +71,7 @@ export type InspectionMgmtRow = InspectionManagementListRow & { id: number }
 
 interface PlanSession extends PlanSessionLike {}
 
-const INSPECTION_PRODUCT_NAME_EXCLUDES = ['加工', 'アーチ'] as const
+import { filterInspectionProductOptions } from './inspectionProductFilter'
 
 export interface InspectionProductOption {
   product_code: string
@@ -106,23 +111,6 @@ function resolveUnitPerBox(code: string | null | undefined, list: InspectionProd
   const hit = list.find((p) => p.product_code === c)
   return Math.max(0, Number(hit?.unit_per_box) || 0)
 }
-
-/** 検査 MES：製品 CD 末尾が 1、製品名に除外語なし、製品名昇順 */
-function filterInspectionProductOptions(list: InspectionProductOption[]): InspectionProductOption[] {
-  return list
-    .filter((p) => {
-      if (p.is_active === false) return false
-      const code = (p.product_code ?? '').trim()
-      if (code.length === 0 || !code.endsWith('1')) return false
-      const name = p.product_name ?? ''
-      if (INSPECTION_PRODUCT_NAME_EXCLUDES.some((kw) => name.includes(kw))) return false
-      return true
-    })
-    .sort((a, b) =>
-      (a.product_name ?? '').localeCompare(b.product_name ?? '', 'ja', { sensitivity: 'base' }),
-    )
-}
-
 export function useInspectionMesCollection() {
   const { t, te } = useI18n()
   const userStore = useUserStore()
@@ -153,6 +141,7 @@ export function useInspectionMesCollection() {
   const inspectors = ref<InspectorOption[]>([])
   const inspectorDisplayNames = ref<Map<number, string>>(new Map())
   const managementRows = ref<InspectionMgmtRow[]>([])
+  const myNextAssignment = ref<InspectionNextAssignment | null>(null)
   const sessions = reactive<Record<number, PlanSession>>({})
 
   const loadingProducts = ref(false)
@@ -487,6 +476,12 @@ export function useInspectionMesCollection() {
     return false
   }
 
+  function mesProductionPausedFlag(sess: PlanSession): number {
+    if (isTimerOnBreak(sess)) return 2
+    if (isTimerPaused(sess)) return 1
+    return 0
+  }
+
   function mesTimerCheckpointBody(planId: number): Pick<
     PatchInspectionManagementBody,
     | 'mes_net_production_sec'
@@ -503,7 +498,7 @@ export function useInspectionMesCollection() {
       mes_break_sec: breakSec,
       mes_stop_sec: stopSec,
       mes_paused_accum_sec: breakSec + stopSec,
-      mes_production_is_paused: isTimerPaused(s) || isTimerOnBreak(s) ? 1 : 0,
+      mes_production_is_paused: mesProductionPausedFlag(s),
     }
   }
 
@@ -533,7 +528,7 @@ export function useInspectionMesCollection() {
       if (!s || !canServerPatchPlan(planId)) return
       void patchWithOfflineSync(
         planId,
-        { mes_defect_by_item: { ...s.defects } },
+        { mes_defect_by_item: buildMesDefectByItemPayload(s.defects, s.defectAtByItem) },
         { silentQueue: true },
       )
     }, 400)
@@ -760,13 +755,116 @@ export function useInspectionMesCollection() {
     return byId
   }
 
+  async function syncMyNextAssignment(): Promise<void> {
+    const day = (productionDay.value ?? '').trim()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      myNextAssignment.value = null
+      return
+    }
+    if (!navigator.onLine) return
+    try {
+      const res = await fetchMyInspectionNextAssignment({ production_day: day })
+      myNextAssignment.value = res.data ?? null
+    } catch {
+      /* サイレント：表示用の補助情報 */
+    }
+  }
+
+  function resolveSelectedProductName(code: string): string {
+    const trimmed = code.trim()
+    if (!trimmed) return ''
+    const fromMaster = products.value.find((p) => p.product_code === trimmed)?.product_name?.trim()
+    if (fromMaster) return fromMaster
+    return (
+      managementRows.value.find((r) => (r.product_cd ?? '').trim() === trimmed)?.product_name?.trim() ??
+      ''
+    )
+  }
+
+  let nextAssignmentAutoClearInFlight = false
+
+  /** 選択製品名が次製品指定と一致したら指定を解除（検査員が指定どおり着手した扱い） */
+  async function clearMyNextAssignmentIfSelectedProductMatches(code: string): Promise<void> {
+    const assignment = myNextAssignment.value
+    if (!assignment || nextAssignmentAutoClearInFlight) return
+    const nextName = (assignment.next_product_name ?? '').trim()
+    if (!nextName) return
+    const selectedName = resolveSelectedProductName(code)
+    if (!selectedName || selectedName !== nextName) return
+
+    const inspId = inspectorUserId.value ?? loggedInUserId.value
+    const day = (productionDay.value ?? '').trim()
+    if (inspId == null || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return
+    if (!navigator.onLine) return
+
+    nextAssignmentAutoClearInFlight = true
+    try {
+      const res = await deleteInspectionNextAssignment({
+        production_day: day,
+        inspector_user_id: inspId,
+      })
+      if (res.success !== false) {
+        myNextAssignment.value = null
+      }
+    } catch {
+      /* サイレント */
+    } finally {
+      nextAssignmentAutoClearInFlight = false
+    }
+  }
+
+  function resolveProductCodeFromNextAssignment(): string | null {
+    const a = myNextAssignment.value
+    if (!a) return null
+    const cd = (a.next_product_cd ?? '').trim()
+    const name = (a.next_product_name ?? '').trim()
+
+    if (cd) {
+      const exact = products.value.find((p) => (p.product_code ?? '').trim() === cd)
+      if (exact?.product_code?.trim()) return exact.product_code.trim()
+    }
+    if (name) {
+      const byName = products.value.filter((p) => (p.product_name ?? '').trim() === name)
+      if (byName.length === 1 && byName[0].product_code?.trim()) {
+        return byName[0].product_code.trim()
+      }
+      if (byName.length > 1 && cd) {
+        const withCd = byName.find((p) => (p.product_code ?? '').trim() === cd)
+        if (withCd?.product_code?.trim()) return withCd.product_code.trim()
+      }
+    }
+    return null
+  }
+
+  const canApplyNextAssignmentProduct = computed(() => {
+    if (productSelectionLocked.value) return false
+    return resolveProductCodeFromNextAssignment() != null
+  })
+
+  function applyNextAssignmentProductSelection(): void {
+    if (!guardMesOperation(canEdit)) return
+    if (productSelectionLocked.value) {
+      ElMessage.warning(t('mesInspectionActual.switchProductBlocked'))
+      return
+    }
+    const code = resolveProductCodeFromNextAssignment()
+    if (!code) {
+      ElMessage.warning(t('mesInspectionActual.nextAssignmentProductNotFound'))
+      return
+    }
+    selectedProductCode.value = code
+  }
+
   async function syncMesStateFromServer(): Promise<void> {
     if (mesSyncInFlight || !navigator.onLine) return
     const day = (productionDay.value ?? '').trim()
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return
     mesSyncInFlight = true
     try {
-      const res = await fetchInspectionManagementList({ production_day: day, limit: 2000 })
+      const [res] = await Promise.all([
+        fetchInspectionManagementList({ production_day: day, limit: 2000 }),
+        syncMyNextAssignment(),
+      ])
       if (!res.success || !res.data) return
       const freshRows = (res.data ?? []).filter((r): r is InspectionMgmtRow => r.id != null)
       const byId = mergeManagementRowsFromServer(freshRows)
@@ -834,6 +932,7 @@ export function useInspectionMesCollection() {
       tryReclaimOperatedPlansOnLoad()
       detachFromRemoteInProgressContext()
       bindContextFromInspector()
+      await syncMyNextAssignment()
     } catch (e) {
       console.error(e)
       ElMessage.error(t('mesInspectionActual.loadPlansFailed'))
@@ -945,6 +1044,9 @@ export function useInspectionMesCollection() {
       if (row.product_cd) selectedProductCode.value = row.product_cd
       activePlanId.value = row.id
       syncActivePlanSessionFromRow(row.id)
+      const resumedSess = sessions[row.id]
+      const freshRow = managementRows.value.find((r) => r.id === row.id) ?? row
+      if (resumedSess) alignSessionElapsedFromWallClock(resumedSess, freshRow)
       inspectorUserId.value = ri
       schedulePersist()
       ElMessage.success(t('mesInspectionActual.sessionResumed'))
@@ -1270,6 +1372,23 @@ export function useInspectionMesCollection() {
     return t(`mesInspectionActual.${map[ph]}`)
   }
 
+  function inProgressRowStatusLabel(row: InspectionMgmtRow): string {
+    if (rowMesLockOwner(row) === 'other') {
+      return t('mesInspectionActual.sessionLockedByOtherTerminalShort')
+    }
+    const id = row.id
+    if (id != null) {
+      const sess = sessions[id]
+      if (sess && sess.wallStart != null && sess.wallEnd == null && isPlanLocallyOperated(id)) {
+        return timerPhaseLabel(sess)
+      }
+    }
+    const paused = Number(row.mes_production_is_paused ?? 0)
+    if (paused === 1) return t('mesInspectionActual.timerPaused')
+    if (paused === 2) return t('mesInspectionActual.timerBreak')
+    return t('mesInspectionActual.timerRunning')
+  }
+
   function formatWall(ts: number | null | undefined): string {
     if (ts == null) return '—'
     return formatDateTimeJST(new Date(ts), 'ja-JP', {
@@ -1320,7 +1439,15 @@ export function useInspectionMesCollection() {
     const id = activePlanId.value
     const sess = session.value
     if (id == null || !sess || !isPlanLocallyOperated(id)) return
-    sess.defects[itemId] = Math.max(0, defectCount(itemId) + delta)
+    const prev = defectCount(itemId)
+    const next = Math.max(0, prev + delta)
+    sess.defects[itemId] = next
+    if (!sess.defectAtByItem) sess.defectAtByItem = {}
+    if (next > 0 && prev === 0) {
+      sess.defectAtByItem[itemId] = new Date().toISOString()
+    } else if (next === 0) {
+      delete sess.defectAtByItem[itemId]
+    }
     schedulePersist()
     scheduleDefectPatch(id)
   }
@@ -1636,7 +1763,7 @@ export function useInspectionMesCollection() {
         mes_paused_accum_sec: breakSec + stopSec,
         mes_production_is_paused: 0,
         mes_inspector_user_id: inspectorUserId.value ?? undefined,
-        mes_defect_by_item: { ...s.defects },
+        mes_defect_by_item: buildMesDefectByItemPayload(s.defects, s.defectAtByItem),
         actual_production_quantity: qty,
         production_completed_check: true,
         defect_qty: preview.defectTotal,
@@ -1648,6 +1775,10 @@ export function useInspectionMesCollection() {
       Object.assign(sessions[id], emptySession(makeEmptyDefectCounts()))
       ElMessage.success(t('mesInspectionActual.completeSaved'))
       await loadPlans()
+      selectedProductCode.value = null
+      activePlanId.value = null
+      await syncMyNextAssignment()
+      flushPersistToStorage()
     } finally {
       endDialogSubmitting.value = false
     }
@@ -1721,6 +1852,7 @@ export function useInspectionMesCollection() {
     }
     bindActivePlanFromSelection()
     schedulePersist()
+    void clearMyNextAssignmentIfSelectedProductMatches(code)
   })
 
   watch(inspectorUserId, (newId, oldId) => {
@@ -1828,6 +1960,7 @@ export function useInspectionMesCollection() {
 
   watch(loggedInUserId, () => {
     syncInspectorToLoggedInUser()
+    void syncMyNextAssignment()
   })
 
   async function loadInspectors(): Promise<void> {
@@ -2225,6 +2358,9 @@ export function useInspectionMesCollection() {
     activePlanId,
     activeRow,
     inProgressRows,
+    myNextAssignment,
+    canApplyNextAssignmentProduct,
+    applyNextAssignmentProductSelection,
     focusInProgressRow,
     resumeInProgressSession,
     canResumeSession,
@@ -2294,6 +2430,7 @@ export function useInspectionMesCollection() {
     readPausedAccumMs,
     timerPhase,
     timerPhaseLabel,
+    inProgressRowStatusLabel,
     formatWall,
     formatWallClock,
     sessionWallStartTs,

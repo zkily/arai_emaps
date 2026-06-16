@@ -439,7 +439,7 @@
           align="center"
         >
           <template #default="{ row }">
-            <span v-if="row.long_weight">{{ formatNumber(row.long_weight, 3) }} kg/本</span>
+            <span v-if="row.long_weight">{{ formatNumber(row.long_weight, 2) }} kg/本</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -1424,7 +1424,7 @@ async function toggleStatus(row: Material) {
   }
 }
 
-/** 単価計算: long_weight = ((diameter-thickness)*thickness*length*0.02466)/1000, single_price = long_weight*unit_price */
+/** 単価計算: long_weight = ((diameter-thickness)*thickness*length*0.02466)/1000（小数2位）, single_price = unit_price * long_weight */
 async function calcSinglePrice() {
   const list = materialList.value
   const d = (v: unknown) => (typeof v === 'number' && !Number.isNaN(v) ? v : Number(v) || 0)
@@ -1432,7 +1432,8 @@ async function calcSinglePrice() {
     const dia = d(row.diameter)
     const thick = d(row.thickness)
     const len = d(row.length)
-    return row.id != null && dia > 0 && thick >= 0 && len > 0
+    const unitPrice = d(row.unit_price)
+    return row.id != null && dia > 0 && thick >= 0 && len > 0 && unitPrice > 0
   }
   const toUpdate = list.filter(canCalc)
   if (toUpdate.length === 0) {
@@ -1449,8 +1450,8 @@ async function calcSinglePrice() {
       const length = d(row.length)
       const unit_price = d(row.unit_price)
       const long_weight = ((diameter - thickness) * thickness * length * 0.02466) / 1000
-      const single_price = long_weight * unit_price
-      const roundedLongWeight = Math.round(long_weight * 1000) / 1000
+      const roundedLongWeight = Math.round(long_weight * 100) / 100
+      const single_price = roundedLongWeight * unit_price
       const roundedSinglePrice = Math.round(single_price * 100) / 100
       try {
         await updateMaterial({

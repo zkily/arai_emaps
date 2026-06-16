@@ -67,7 +67,7 @@ const route = useRoute()
 const router = useRouter()
 const tabsStore = useTabsStore()
 
-const isCollapsed = ref(false)
+const isCollapsed = ref(true)
 const isMobile = ref(false)
 const isTablet = ref(false)
 const layoutMainRef = ref<HTMLElement | null>(null)

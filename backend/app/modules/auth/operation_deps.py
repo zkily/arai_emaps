@@ -94,3 +94,25 @@ def require_cost_operation(action: OperationAction):
 
 def require_quality_operation(action: OperationAction):
     return require_operation(OPERATION_MODULE_QUALITY, action)
+
+
+def require_menu_code(*menu_codes: str):
+    """指定メニューコード（role_menu_permissions）を持つユーザーのみ許可。"""
+    from app.modules.auth.api import get_user_menu_codes, verify_token_and_get_user
+
+    async def dependency(
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(verify_token_and_get_user),
+    ) -> User:
+        role = current_user.role if current_user.role else "user"
+        if role == "admin":
+            return current_user
+        allowed = await get_user_menu_codes(db, current_user)
+        if not any(code in allowed for code in menu_codes):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="このメニューへのアクセス権がありません",
+            )
+        return current_user
+
+    return dependency
