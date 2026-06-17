@@ -1368,7 +1368,7 @@
     <!-- 実績確定：结果汇总弹窗 -->
     <el-dialog
       v-model="confirmActualResultVisible"
-      width="420px"
+      width="480px"
       :show-close="true"
       class="confirm-actual-result-dialog"
       align-center
@@ -1413,6 +1413,49 @@
         <div v-if="confirmActualAlreadySent" class="confirm-actual-result-sent-hint">
           この生産日の実績確定通知は送信済みです
         </div>
+        <template v-if="confirmActualResultType === 'cutting'">
+          <div class="confirm-actual-result-divider" />
+          <div class="confirm-actual-result-trial-head">
+            <span class="confirm-actual-result-trial-title">試作完了通知</span>
+            <span class="confirm-actual-result-trial-sub">備考に「試作」を含み完了済みの行</span>
+          </div>
+          <div v-if="confirmTrialEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
+            試作対象を読み込み中…
+          </div>
+          <template v-else>
+            <div v-if="confirmTrialItems.length" class="confirm-actual-result-trial-items">
+              <div
+                v-for="(item, idx) in confirmTrialItems"
+                :key="`trial-${idx}`"
+                class="confirm-actual-result-trial-item"
+              >
+                <span>{{ item.production_day }}</span>
+                <span class="confirm-actual-result-trial-item-name">{{ item.product_name || '—' }}</span>
+                <span>{{ (item.production_quantity ?? 0).toLocaleString() }} 本</span>
+              </div>
+            </div>
+            <div v-else class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
+              試作完了対象がありません
+            </div>
+            <div v-if="confirmTrialRecipients.length" class="confirm-actual-result-recipients">
+              <span class="confirm-actual-result-recipients-label">試作メール送信先（{{ confirmTrialRecipients.length }}名）</span>
+              <span class="confirm-actual-result-recipients-names">{{ confirmTrialRecipientNames }}</span>
+            </div>
+            <div v-if="confirmTrialLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
+              <span class="confirm-actual-result-recipients-label">試作LINE送信先（{{ confirmTrialLineRecipients.length }}名）</span>
+              <span class="confirm-actual-result-recipients-names">{{ confirmTrialLineRecipientNames }}</span>
+            </div>
+            <div
+              v-if="confirmTrialItems.length && !confirmTrialRecipients.length && !confirmTrialLineRecipients.length"
+              class="confirm-actual-result-recipients confirm-actual-result-recipients--empty"
+            >
+              試作通知の送信先が未設定です（通知センターで「切断試作完了」を設定してください）
+            </div>
+            <div v-if="confirmTrialAlreadySent" class="confirm-actual-result-sent-hint">
+              この生産日の試作完了通知は送信済みです
+            </div>
+          </template>
+        </template>
       </div>
       <template #footer>
         <div class="confirm-actual-result-footer">
@@ -1425,7 +1468,280 @@
           >
             メール・LINE送信
           </el-button>
+          <el-button
+            v-if="confirmActualResultType === 'cutting'"
+            type="warning"
+            size="default"
+            :loading="confirmTrialEmailLoading"
+            :disabled="!confirmTrialCanSend || confirmTrialItems.length <= 0"
+            @click="sendConfirmTrialEmail"
+          >
+            試作メール・LINE送信
+          </el-button>
           <el-button type="primary" size="default" @click="confirmActualResultVisible = false">閉じる</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 試作通知送信確認 -->
+    <el-dialog
+      v-model="confirmTrialSendDialogVisible"
+      width="520px"
+      :close-on-click-modal="false"
+      class="trial-send-confirm-dialog"
+      align-center
+      destroy-on-close
+    >
+      <template #header>
+        <div class="tsc-header">
+          <div class="tsc-header-icon">
+            <el-icon size="18"><Promotion /></el-icon>
+          </div>
+          <div class="tsc-header-text">
+            <span class="tsc-title">試作通知送信確認</span>
+            <span class="tsc-subtitle">備考に「試作」を含む完了済みデータを通知します</span>
+          </div>
+        </div>
+      </template>
+
+      <div class="tsc-body">
+        <div
+          class="tsc-alert"
+          :class="confirmTrialAlreadySent ? 'tsc-alert--warn' : 'tsc-alert--info'"
+        >
+          <el-icon class="tsc-alert-icon" :size="16">
+            <Warning v-if="confirmTrialAlreadySent" />
+            <CircleCheck v-else />
+          </el-icon>
+          <span>
+            {{
+              confirmTrialAlreadySent
+                ? 'この生産日の試作完了通知は送信済みです。再度送信しますか？'
+                : '以下の内容で試作完了通知を送信します。'
+            }}
+          </span>
+        </div>
+
+        <div class="tsc-summary">
+          <div class="tsc-summary-card">
+            <span class="tsc-summary-label">生産日</span>
+            <span class="tsc-summary-value">{{ confirmActualResultDay || '—' }}</span>
+          </div>
+          <div class="tsc-summary-card">
+            <span class="tsc-summary-label">対象件数</span>
+            <span class="tsc-summary-value">{{ confirmTrialItems.length }} 件</span>
+          </div>
+          <div class="tsc-summary-card tsc-summary-card--highlight">
+            <span class="tsc-summary-label">生産数合計</span>
+            <span class="tsc-summary-value">{{ confirmTrialTotalQty.toLocaleString() }} 本</span>
+          </div>
+        </div>
+
+        <div class="tsc-section">
+          <div class="tsc-section-label">送信対象明細</div>
+          <div class="tsc-table-wrap">
+            <div class="tsc-table-head">
+              <span>生産日</span>
+              <span>製品名</span>
+              <span>生産数</span>
+            </div>
+            <div class="tsc-table-body">
+              <div
+                v-for="(item, idx) in confirmTrialItems"
+                :key="`tsc-item-${idx}`"
+                class="tsc-table-row"
+              >
+                <span class="tsc-col-day">{{ item.production_day }}</span>
+                <span class="tsc-col-name" :title="item.product_name || '—'">{{ item.product_name || '—' }}</span>
+                <span class="tsc-col-qty">{{ (item.production_quantity ?? 0).toLocaleString() }} 本</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tsc-section">
+          <div class="tsc-section-label">送信先</div>
+          <div v-if="confirmTrialRecipients.length" class="tsc-recipient-block">
+            <span class="tsc-recipient-type">
+              <span class="tsc-recipient-dot tsc-recipient-dot--mail" />
+              メール（{{ confirmTrialRecipients.length }}名）
+            </span>
+            <div class="tsc-recipient-tags">
+              <el-tag
+                v-for="(r, idx) in confirmTrialRecipients"
+                :key="`tsc-mail-${idx}`"
+                size="small"
+                type="info"
+                effect="plain"
+                class="tsc-tag"
+              >
+                {{ r.name || r.email }}
+              </el-tag>
+            </div>
+          </div>
+          <div v-if="confirmTrialLineRecipients.length" class="tsc-recipient-block">
+            <span class="tsc-recipient-type">
+              <span class="tsc-recipient-dot tsc-recipient-dot--line" />
+              LINE（{{ confirmTrialLineRecipients.length }}名）
+            </span>
+            <div class="tsc-recipient-tags">
+              <el-tag
+                v-for="(r, idx) in confirmTrialLineRecipients"
+                :key="`tsc-line-${idx}`"
+                size="small"
+                type="success"
+                effect="plain"
+                class="tsc-tag"
+              >
+                {{ r.name || r.line_user_id }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="tsc-footer">
+          <el-button size="default" @click="confirmTrialSendDialogVisible = false">キャンセル</el-button>
+          <el-button
+            type="warning"
+            size="default"
+            :loading="confirmTrialEmailLoading"
+            @click="executeConfirmTrialSend"
+          >
+            <el-icon style="margin-right: 4px"><Promotion /></el-icon>
+            送信する
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- 実績確定 メール・LINE送信確認 -->
+    <el-dialog
+      v-model="confirmActualSendDialogVisible"
+      width="520px"
+      :close-on-click-modal="false"
+      class="actual-send-confirm-dialog"
+      align-center
+      destroy-on-close
+    >
+      <template #header>
+        <div class="asc-header">
+          <div class="asc-header-icon">
+            <el-icon size="18"><Promotion /></el-icon>
+          </div>
+          <div class="asc-header-text">
+            <span class="asc-title">メール送信確認</span>
+            <span class="asc-subtitle">実績確定結果をメール・LINEで通知します</span>
+          </div>
+        </div>
+      </template>
+
+      <div class="asc-body">
+        <div
+          class="asc-alert"
+          :class="confirmActualAlreadySent ? 'asc-alert--warn' : 'asc-alert--info'"
+        >
+          <el-icon class="asc-alert-icon" :size="16">
+            <Warning v-if="confirmActualAlreadySent" />
+            <CircleCheck v-else />
+          </el-icon>
+          <span>
+            {{
+              confirmActualAlreadySent
+                ? 'この生産日の実績確定通知は送信済みです。再度送信しますか？'
+                : '以下の内容で実績確定通知を送信します。'
+            }}
+          </span>
+        </div>
+
+        <div class="asc-summary">
+          <div class="asc-summary-card">
+            <span class="asc-summary-label">生産日</span>
+            <span class="asc-summary-value">{{ confirmActualResultDay || '—' }}</span>
+          </div>
+          <div class="asc-summary-card">
+            <span class="asc-summary-label">工程</span>
+            <span class="asc-summary-value">{{ confirmActualProcessLabel }}</span>
+          </div>
+          <div class="asc-summary-card">
+            <span class="asc-summary-label">登録件数</span>
+            <span class="asc-summary-value">{{ confirmActualResultCount }} 件</span>
+          </div>
+          <div class="asc-summary-card asc-summary-card--highlight">
+            <span class="asc-summary-label">生産数合計</span>
+            <span class="asc-summary-value">{{ confirmActualResultTotalQty.toLocaleString() }} 本</span>
+          </div>
+        </div>
+
+        <div class="asc-info-card">
+          <div class="asc-info-row">
+            <span class="asc-info-label">送信内容</span>
+            <span class="asc-info-value">
+              {{ confirmActualProcessLabel }}の完了済み実績（{{ confirmActualResultCount }}件・{{ confirmActualResultTotalQty.toLocaleString() }}本）を通知します
+            </span>
+          </div>
+        </div>
+
+        <div class="asc-section">
+          <div class="asc-section-label">送信先</div>
+          <div v-if="confirmActualRecipients.length" class="asc-recipient-block">
+            <span class="asc-recipient-type">
+              <span class="asc-recipient-dot asc-recipient-dot--mail" />
+              メール（{{ confirmActualRecipients.length }}名）
+            </span>
+            <div class="asc-recipient-tags">
+              <el-tag
+                v-for="(r, idx) in confirmActualRecipients"
+                :key="`asc-mail-${idx}`"
+                size="small"
+                type="info"
+                effect="plain"
+                class="asc-tag"
+              >
+                {{ r.name || r.email }}
+              </el-tag>
+            </div>
+          </div>
+          <div v-if="confirmActualLineRecipients.length" class="asc-recipient-block">
+            <span class="asc-recipient-type">
+              <span class="asc-recipient-dot asc-recipient-dot--line" />
+              LINE（{{ confirmActualLineRecipients.length }}名）
+            </span>
+            <div class="asc-recipient-tags">
+              <el-tag
+                v-for="(r, idx) in confirmActualLineRecipients"
+                :key="`asc-line-${idx}`"
+                size="small"
+                type="success"
+                effect="plain"
+                class="asc-tag"
+              >
+                {{ r.name || r.line_user_id }}
+              </el-tag>
+            </div>
+          </div>
+          <div
+            v-if="!confirmActualRecipients.length && !confirmActualLineRecipients.length"
+            class="asc-recipient-empty"
+          >
+            送信先が未設定です（通知センターで受信者を登録してください）
+          </div>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="asc-footer">
+          <el-button size="default" @click="confirmActualSendDialogVisible = false">キャンセル</el-button>
+          <el-button
+            type="success"
+            size="default"
+            :loading="confirmActualEmailLoading"
+            @click="executeConfirmActualSend"
+          >
+            <el-icon style="margin-right: 4px"><Promotion /></el-icon>
+            送信する
+          </el-button>
         </div>
       </template>
     </el-dialog>
@@ -3516,7 +3832,7 @@ defineOptions({ name: 'CuttingInstruction' })
 
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer } from '@element-plus/icons-vue'
+import { Calendar, Check, CircleCheck, DocumentCopy, Delete, ArrowLeft, ArrowRight, DArrowRight, Warning, Refresh, Memo, TrendCharts, Search, RefreshRight, Printer, Promotion } from '@element-plus/icons-vue'
 import request from '@/utils/request'
 import {
   escapeHtml,
@@ -8539,6 +8855,24 @@ const confirmActualRecipients = ref<{ email: string; name: string }[]>([])
 const confirmActualLineRecipients = ref<{ line_user_id: string; name: string }[]>([])
 const confirmActualCanSend = ref(false)
 const confirmActualAlreadySent = ref(false)
+const confirmActualSendDialogVisible = ref(false)
+
+const confirmActualProcessLabel = computed(() =>
+  confirmActualResultType.value === 'chamfering' ? '面取' : '切断'
+)
+
+const confirmTrialEmailLoading = ref(false)
+const confirmTrialEmailPreviewLoading = ref(false)
+const confirmTrialItems = ref<{ production_day: string; product_name: string; production_quantity: number }[]>([])
+const confirmTrialRecipients = ref<{ email: string; name: string }[]>([])
+const confirmTrialLineRecipients = ref<{ line_user_id: string; name: string }[]>([])
+const confirmTrialCanSend = ref(false)
+const confirmTrialAlreadySent = ref(false)
+const confirmTrialSendDialogVisible = ref(false)
+
+const confirmTrialTotalQty = computed(() =>
+  confirmTrialItems.value.reduce((sum, item) => sum + (item.production_quantity ?? 0), 0)
+)
 
 const confirmActualRecipientNames = computed(() =>
   confirmActualRecipients.value.map((r) => r.name || r.email).join('、')
@@ -8546,6 +8880,51 @@ const confirmActualRecipientNames = computed(() =>
 const confirmActualLineRecipientNames = computed(() =>
   confirmActualLineRecipients.value.map((r) => r.name || r.line_user_id).join('、')
 )
+const confirmTrialRecipientNames = computed(() =>
+  confirmTrialRecipients.value.map((r) => r.name || r.email).join('、')
+)
+const confirmTrialLineRecipientNames = computed(() =>
+  confirmTrialLineRecipients.value.map((r) => r.name || r.line_user_id).join('、')
+)
+
+async function loadConfirmTrialEmailPreview() {
+  const day = confirmActualResultDay.value
+  if (!day || confirmActualResultType.value !== 'cutting') {
+    confirmTrialItems.value = []
+    confirmTrialRecipients.value = []
+    confirmTrialLineRecipients.value = []
+    confirmTrialCanSend.value = false
+    confirmTrialAlreadySent.value = false
+    return
+  }
+  confirmTrialEmailPreviewLoading.value = true
+  confirmTrialItems.value = []
+  confirmTrialRecipients.value = []
+  confirmTrialLineRecipients.value = []
+  confirmTrialCanSend.value = false
+  confirmTrialAlreadySent.value = false
+  try {
+    const res = await request.get<{
+      items?: { production_day: string; product_name: string; production_quantity: number }[]
+      recipients?: { email: string; name: string }[]
+      line_recipients?: { line_user_id: string; name: string }[]
+      can_send?: boolean
+      already_sent?: boolean
+    }>('/api/plan/cutting-management/trial-completed/email-preview', { params: { production_day: day } })
+    confirmTrialItems.value = (res as any)?.items ?? []
+    confirmTrialRecipients.value = (res as any)?.recipients ?? []
+    confirmTrialLineRecipients.value = (res as any)?.line_recipients ?? []
+    confirmTrialCanSend.value = Boolean((res as any)?.can_send)
+    confirmTrialAlreadySent.value = Boolean((res as any)?.already_sent)
+  } catch {
+    confirmTrialItems.value = []
+    confirmTrialRecipients.value = []
+    confirmTrialLineRecipients.value = []
+    confirmTrialCanSend.value = false
+  } finally {
+    confirmTrialEmailPreviewLoading.value = false
+  }
+}
 
 async function loadConfirmActualEmailPreview() {
   const day = confirmActualResultDay.value
@@ -8580,25 +8959,61 @@ async function loadConfirmActualEmailPreview() {
 }
 
 watch(confirmActualResultVisible, (visible) => {
-  if (visible) loadConfirmActualEmailPreview()
+  if (visible) {
+    loadConfirmActualEmailPreview()
+    loadConfirmTrialEmailPreview()
+  }
 })
+
+async function sendConfirmTrialEmail() {
+  const day = confirmActualResultDay.value
+  if (!day || confirmTrialItems.value.length <= 0) return
+  confirmTrialSendDialogVisible.value = true
+}
+
+async function executeConfirmTrialSend() {
+  const day = confirmActualResultDay.value
+  if (!day) return
+  confirmTrialEmailLoading.value = true
+  try {
+    const res = await request.post<{
+      message?: string
+      failed?: { email: string; error: string }[]
+      line_failed?: { line_user_id: string; error: string }[]
+    }>('/api/plan/cutting-management/trial-completed/send-email', null, { params: { production_day: day } })
+    const failed = (res as any)?.failed as { email: string; error: string }[] | undefined
+    const lineFailed = (res as any)?.line_failed as { line_user_id: string; error: string }[] | undefined
+    if (failed?.length || lineFailed?.length) {
+      const parts = []
+      if (failed?.length) parts.push(`メール失敗${failed.length}`)
+      if (lineFailed?.length) parts.push(`LINE失敗${lineFailed.length}`)
+      ElMessage.warning(`${(res as any)?.message ?? '送信完了'}（${parts.join('・')}）`)
+    } else {
+      ElMessage.success((res as any)?.message ?? '試作完了通知を送信しました')
+    }
+    confirmTrialAlreadySent.value = true
+    confirmTrialSendDialogVisible.value = false
+    await loadConfirmTrialEmailPreview()
+  } catch (err: unknown) {
+    const msg =
+      (err as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ??
+      (err as { message?: string })?.message ??
+      '試作通知の送信に失敗しました'
+    ElMessage.error(String(msg))
+  } finally {
+    confirmTrialEmailLoading.value = false
+  }
+}
 
 async function sendConfirmActualEmail() {
   const day = confirmActualResultDay.value
+  if (!day || confirmActualResultCount.value <= 0) return
+  confirmActualSendDialogVisible.value = true
+}
+
+async function executeConfirmActualSend() {
+  const day = confirmActualResultDay.value
   if (!day) return
-  const mailNames = confirmActualRecipientNames.value
-  const lineNames = confirmActualLineRecipientNames.value
-  const destParts = []
-  if (mailNames) destParts.push(`メール: ${mailNames}`)
-  if (lineNames) destParts.push(`LINE: ${lineNames}`)
-  const confirmMsg = confirmActualAlreadySent.value
-    ? `この生産日の通知は送信済みです。再度送信しますか？\n\n${destParts.join('\n')}`
-    : `以下の宛先に実績確定結果を送信します。\n\n${destParts.join('\n')}`
-  try {
-    await ElMessageBox.confirm(confirmMsg, 'メール送信確認', { type: 'info' })
-  } catch {
-    return
-  }
   confirmActualEmailLoading.value = true
   try {
     const base =
@@ -8621,6 +9036,7 @@ async function sendConfirmActualEmail() {
       ElMessage.success((res as any)?.message ?? '通知を送信しました')
     }
     confirmActualAlreadySent.value = true
+    confirmActualSendDialogVisible.value = false
     await loadConfirmActualEmailPreview()
   } catch (err: unknown) {
     const msg =
@@ -13081,6 +13497,48 @@ onUnmounted(() => {
   font-size: 12px;
   color: #0369a1;
 }
+.confirm-actual-result-divider {
+  margin: 16px 0 12px;
+  border-top: 1px dashed #cbd5e1;
+}
+.confirm-actual-result-trial-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+.confirm-actual-result-trial-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #b45309;
+}
+.confirm-actual-result-trial-sub {
+  font-size: 12px;
+  color: #64748b;
+}
+.confirm-actual-result-trial-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.confirm-actual-result-trial-item {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #334155;
+}
+.confirm-actual-result-trial-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .confirm-actual-result-cards {
   display: flex;
   flex-direction: column;
@@ -13126,6 +13584,7 @@ onUnmounted(() => {
 }
 .confirm-actual-result-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
   padding: 4px 0 0;
@@ -13275,6 +13734,445 @@ onUnmounted(() => {
 }
 .nr-save-btn {
   border-radius: 6px !important; font-weight: 600 !important; min-width: 76px !important;
+}
+/* ==================================================
+   試作通知送信確認ダイアログ（global）
+   ================================================== */
+.trial-send-confirm-dialog .el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(120, 53, 15, 0.16), 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.trial-send-confirm-dialog .el-dialog__header {
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+.trial-send-confirm-dialog .el-dialog__headerbtn {
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.trial-send-confirm-dialog .el-dialog__headerbtn:hover {
+  color: #fff;
+}
+.trial-send-confirm-dialog .el-dialog__body {
+  padding: 14px 16px 12px;
+  background: #fff;
+}
+.trial-send-confirm-dialog .el-dialog__footer {
+  padding: 0;
+  border-top: 1px solid #e2e8f0;
+}
+.tsc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #92400e 0%, #d97706 55%, #fbbf24 100%);
+  color: #fff;
+}
+.tsc-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tsc-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tsc-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+.tsc-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.35;
+}
+.tsc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tsc-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.tsc-alert--info {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+.tsc-alert--warn {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #c2410c;
+}
+.tsc-alert-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.tsc-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.tsc-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.tsc-summary-card--highlight {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border-color: #fcd34d;
+}
+.tsc-summary-label {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.03em;
+}
+.tsc-summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.tsc-summary-card--highlight .tsc-summary-value {
+  color: #b45309;
+}
+.tsc-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #d97706;
+  border-left: 3px solid #f59e0b;
+  padding-left: 8px;
+  margin-bottom: 8px;
+}
+.tsc-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+.tsc-table-head,
+.tsc-table-row {
+  display: grid;
+  grid-template-columns: 96px 1fr 88px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.tsc-table-head {
+  background: #f1f5f9;
+  color: #64748b;
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+}
+.tsc-table-body {
+  max-height: 180px;
+  overflow-y: auto;
+}
+.tsc-table-row:nth-child(even) {
+  background: #fafbfc;
+}
+.tsc-table-row + .tsc-table-row {
+  border-top: 1px solid #f1f5f9;
+}
+.tsc-col-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+  font-weight: 500;
+}
+.tsc-col-day {
+  color: #475569;
+}
+.tsc-col-qty {
+  text-align: right;
+  font-weight: 700;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.tsc-recipient-block + .tsc-recipient-block {
+  margin-top: 10px;
+}
+.tsc-recipient-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+.tsc-recipient-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.tsc-recipient-dot--mail {
+  background: #3b82f6;
+}
+.tsc-recipient-dot--line {
+  background: #22c55e;
+}
+.tsc-recipient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tsc-tag {
+  border-radius: 6px;
+}
+.tsc-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  background: #fafbfc;
+}
+.tsc-footer .el-button--warning {
+  min-width: 108px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+/* ==================================================
+   実績確定 メール送信確認ダイアログ（global）
+   ================================================== */
+.actual-send-confirm-dialog .el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(5, 150, 105, 0.14), 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.actual-send-confirm-dialog .el-dialog__header {
+  padding: 0;
+  margin: 0;
+  border: none;
+}
+.actual-send-confirm-dialog .el-dialog__headerbtn {
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.88);
+}
+.actual-send-confirm-dialog .el-dialog__headerbtn:hover {
+  color: #fff;
+}
+.actual-send-confirm-dialog .el-dialog__body {
+  padding: 14px 16px 12px;
+  background: #fff;
+}
+.actual-send-confirm-dialog .el-dialog__footer {
+  padding: 0;
+  border-top: 1px solid #e2e8f0;
+}
+.asc-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #065f46 0%, #059669 55%, #34d399 100%);
+  color: #fff;
+}
+.asc-header-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.asc-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.asc-title {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+.asc-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.35;
+}
+.asc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.asc-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.asc-alert--info {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+.asc-alert--warn {
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #c2410c;
+}
+.asc-alert-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.asc-summary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.asc-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+.asc-summary-card--highlight {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: #6ee7b7;
+}
+.asc-summary-label {
+  font-size: 11px;
+  color: #64748b;
+  letter-spacing: 0.03em;
+}
+.asc-summary-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.asc-summary-card--highlight .asc-summary-value {
+  color: #047857;
+}
+.asc-info-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.asc-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.asc-info-label {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+.asc-info-value {
+  color: #334155;
+  line-height: 1.5;
+}
+.asc-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #059669;
+  border-left: 3px solid #10b981;
+  padding-left: 8px;
+  margin-bottom: 8px;
+}
+.asc-recipient-block + .asc-recipient-block {
+  margin-top: 10px;
+}
+.asc-recipient-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+.asc-recipient-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.asc-recipient-dot--mail {
+  background: #3b82f6;
+}
+.asc-recipient-dot--line {
+  background: #22c55e;
+}
+.asc-recipient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.asc-tag {
+  border-radius: 6px;
+}
+.asc-recipient-empty {
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b45309;
+}
+.asc-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  background: #fafbfc;
+}
+.asc-footer .el-button--success {
+  min-width: 108px;
+  border-radius: 8px;
+  font-weight: 600;
 }
 /* ==================================================
    未完了順延ダイアログ シェル（global スタイル）

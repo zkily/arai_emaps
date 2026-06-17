@@ -3096,6 +3096,32 @@ async def send_cutting_confirm_actual_email(
     )
 
 
+@router.get("/plan/cutting-management/trial-completed/email-preview")
+async def preview_cutting_trial_completed_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """切断試作完了（備考に試作・完了済み）の送信先・明細プレビュー"""
+    from app.services.cutting_trial_notification import get_cutting_trial_notification_preview
+
+    return await get_cutting_trial_notification_preview(db, production_day=production_day)
+
+
+@router.post("/plan/cutting-management/trial-completed/send-email")
+async def send_cutting_trial_completed_email(
+    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("edit")),
+):
+    """切断試作完了通知を指定受信者へメール・LINE 送信"""
+    from app.services.cutting_trial_notification import send_cutting_trial_notification
+
+    return await send_cutting_trial_notification(
+        db, production_day=production_day, current_user=current_user
+    )
+
+
 class MoveBatchToCuttingBody(BaseModel):
     """生産ロット1件を切断指示へ移行するリクエスト"""
     plan_id: int
