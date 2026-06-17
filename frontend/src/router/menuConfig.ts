@@ -236,6 +236,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'OP_MANUAL_INSPECTION', name: '検査実績収集', icon: 'DocumentChecked', path: '/operation-manuals/inspection-actual', parentCode: 'OPERATION_MANUALS', sortOrder: 7 },
   { code: 'OP_MANUAL_INSPECTION_REGISTRATION', name: '検査実績収集登録', icon: 'EditPen', path: '/operation-manuals/inspection-actual-registration', parentCode: 'OPERATION_MANUALS', sortOrder: 8 },
   { code: 'OP_MANUAL_INSPECTION_MONITOR', name: '検査モニタ', icon: 'Monitor', path: '/operation-manuals/inspection-monitor', parentCode: 'OPERATION_MANUALS', sortOrder: 9 },
+  { code: 'OP_MANUAL_INSPECTION_PRODUCTIVITY', name: '検査工程 — 生産性分析', icon: 'TrendCharts', path: '/operation-manuals/inspection-productivity', parentCode: 'OPERATION_MANUALS', sortOrder: 10 },
   { code: 'SYSTEM', name: 'システム管理', icon: 'Setting', sortOrder: 5 },
   { code: 'SYSTEM_USER', name: 'ユーザー・組織', icon: 'User', parentCode: 'SYSTEM', sortOrder: 1 },
   { code: 'SYSTEM_HOME', name: 'システムホーム', icon: 'HomeFilled', path: '/system', parentCode: 'SYSTEM_USER', sortOrder: 0 },

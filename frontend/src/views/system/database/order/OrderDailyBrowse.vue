@@ -300,6 +300,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { getDestinationOptions } from '@/api/master/destinationMaster'
 import { getProductList } from '@/api/master/productMaster'
+import type { Product } from '@/types/master'
 import {
   fetchOrderDailyList,
   updateOrderDaily,
@@ -454,8 +455,8 @@ async function loadOptions() {
       getProductList({ pageSize: 9999 }),
     ])
     destinationOptions.value = destList
-    const rawList = productRes?.data?.list ?? productRes?.list ?? []
-    allProductOptions.value = rawList.map((p: Record<string, unknown>) => ({
+    const rawList: Product[] = productRes?.data?.list ?? productRes?.list ?? []
+    allProductOptions.value = rawList.map((p) => ({
       cd: String(p.product_cd ?? ''),
       name: String(p.product_name || p.product_cd || ''),
       destination_cd: p.destination_cd ? String(p.destination_cd) : undefined,
@@ -550,7 +551,7 @@ async function submitEdit() {
       unit_per_box: form.unit_per_box,
       status: form.status,
       remarks: form.remarks || undefined,
-      shipping_no: form.shipping_no || undefined,
+      shipping_no: form.shipping_no?.trim() || null,
       delivery_date: form.delivery_date || undefined,
       batch_id: form.batch_id ?? undefined,
       batch_no: form.batch_no || undefined,

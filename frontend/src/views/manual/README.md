@@ -15,11 +15,13 @@ manual/
 │   ├── inspection-actual_ja.md
 │   ├── inspection-actual-registration_ja.md
 │   └── inspection-monitor_ja.md
+│   └── inspection-productivity_ja.md
 └── images/               … スクリーンショット
     ├── FormingInstructionManual/  … forming-instruction_ja.md 用
     ├── InspectionActualDataCollection/
     ├── InspectionActualRegistration/
     ├── InspectionMonitor/
+    ├── InspectionProductivity/
     └── ProductionPlanBaselineManagement/
 ```
 

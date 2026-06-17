@@ -15,6 +15,7 @@
 | `inspection-actual_ja.md` | 検査実績収集 | `../images/InspectionActualDataCollection/` |
 | `inspection-actual-registration_ja.md` | 検査実績収集登録 | `../images/InspectionActualRegistration/` |
 | `inspection-monitor_ja.md` | 検査モニタ | `../images/InspectionMonitor/` |
+| `inspection-productivity_ja.md` | 検査工程 — 生産性分析 | `../images/InspectionProductivity/` |
 
 ## 新規マニュアル追加
 

@@ -1295,24 +1295,39 @@ function getDeliveryWeekdayIconHtml(dateStr: string | null): string {
   const svgWrap = (inner: string) =>
     `<svg class="weekday-icon-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`
 
+  const hollow = (shape: string, fill: string, stroke: string) =>
+    svgWrap(shape.replace('fill="none" stroke="#000"', `fill="${fill}" stroke="${stroke}"`))
+
   const icons: Record<number, string> = {
-    // 月: 星
-    1: svgWrap(
+    // 月: 星（赤）
+    1: hollow(
       '<polygon points="24,4 29,18 44,18 32,27 36,42 24,33 12,42 16,27 4,18 19,18" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+      '#FFB3BA',
+      '#C62828',
     ),
-    // 火: 三角形
-    2: svgWrap(
+    // 火: 三角形（青）
+    2: hollow(
       '<polygon points="24,6 42,40 6,40" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+      '#90CAF9',
+      '#1565C0',
     ),
-    // 水: 円
-    3: svgWrap('<circle cx="24" cy="24" r="15" fill="none" stroke="#000" stroke-width="4"/>'),
-    // 木: 四角
-    4: svgWrap(
+    // 水: 円（緑）
+    3: hollow(
+      '<circle cx="24" cy="24" r="15" fill="none" stroke="#000" stroke-width="4"/>',
+      '#A5D6A7',
+      '#2E7D32',
+    ),
+    // 木: 四角（橙）
+    4: hollow(
       '<rect x="11" y="11" width="26" height="26" fill="none" stroke="#000" stroke-width="4" rx="1"/>',
+      '#FFCC80',
+      '#EF6C00',
     ),
-    // 金: 菱形
-    5: svgWrap(
+    // 金: 菱形（紫）
+    5: hollow(
       '<polygon points="24,6 42,24 24,42 6,24" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+      '#CE93D8',
+      '#6A1B9A',
     ),
     // 土: 塗りつぶし三角
     6: svgWrap('<polygon points="24,8 42,40 6,40" fill="#000" stroke="#000" stroke-width="2"/>'),
@@ -1983,6 +1998,8 @@ function generatePrintHTML(items: ShippingItem[]): string {
           height: 40px;
           flex-shrink: 0;
           font-weight: bold;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
         .weekday-icon-svg {
           width: 100%;

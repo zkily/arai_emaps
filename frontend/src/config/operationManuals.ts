@@ -114,6 +114,14 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     sortOrder: 9,
     category: 'mes',
   },
+  {
+    slug: 'inspection-productivity',
+    menuCode: 'OP_MANUAL_INSPECTION_PRODUCTIVITY',
+    pageTitle: '検査工程 — 生産性分析',
+    docFile: 'inspection-productivity_ja.md',
+    sortOrder: 10,
+    category: 'mes',
+  },
 ]
 
 export interface OperationManualNavGroup {

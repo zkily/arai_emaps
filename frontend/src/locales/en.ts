@@ -393,6 +393,7 @@ export default {
     OP_MANUAL_INSPECTION: 'Inspection actual collection',
     OP_MANUAL_INSPECTION_REGISTRATION: 'Inspection actual registration',
     OP_MANUAL_INSPECTION_MONITOR: 'Inspection monitor',
+    OP_MANUAL_INSPECTION_PRODUCTIVITY: 'Inspection productivity analysis',
     SYSTEM: 'System',
     SYSTEM_USER: 'User & Org',
     SYSTEM_HOME: 'System Home',

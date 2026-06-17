@@ -392,6 +392,7 @@ export default {
     OP_MANUAL_INSPECTION: '检查实绩收集',
     OP_MANUAL_INSPECTION_REGISTRATION: '检查实绩登记',
     OP_MANUAL_INSPECTION_MONITOR: '检查监控',
+    OP_MANUAL_INSPECTION_PRODUCTIVITY: '检查工程 — 生产率分析',
     SYSTEM: '系统管理',
     SYSTEM_USER: '用户与组织',
     SYSTEM_HOME: '系统首页',
