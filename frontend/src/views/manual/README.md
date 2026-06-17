@@ -12,10 +12,14 @@ manual/
 │   ├── forming-instruction_ja.md
 │   ├── cutting-instruction_ja.md
 │   ├── plan-baseline_ja.md
-│   └── inspection-actual_ja.md
+│   ├── inspection-actual_ja.md
+│   ├── inspection-actual-registration_ja.md
+│   └── inspection-monitor_ja.md
 └── images/               … スクリーンショット
     ├── FormingInstructionManual/  … forming-instruction_ja.md 用
     ├── InspectionActualDataCollection/
+    ├── InspectionActualRegistration/
+    ├── InspectionMonitor/
     └── ProductionPlanBaselineManagement/
 ```
 

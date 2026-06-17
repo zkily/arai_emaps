@@ -3,7 +3,6 @@ const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/manuals',
   '/erp/production/plan-baseline/help',
-  '/mes/actualDataCollection/inspection/help',
 ] as const
 
 export function isPublicPagePath(path: string = window.location.pathname): boolean {

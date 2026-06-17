@@ -194,6 +194,8 @@ export interface PatchInspectionManagementBody {
   mes_claim_client_lock?: boolean
   /** 他端末ロックを無視して終了（強制終了） */
   mes_force_release?: boolean
+  /** 在産行の端末ロックのみ解除（mes_force_release 必須） */
+  mes_release_client_lock?: boolean
   /** 実績収集登録（手動一括登録） */
   manual_registration?: boolean
 }

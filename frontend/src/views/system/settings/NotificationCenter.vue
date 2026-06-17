@@ -1,53 +1,54 @@
 <template>
   <div class="nc-page" v-loading="pageLoading">
-    <!-- Hero -->
-    <header class="nc-hero">
-      <div class="nc-hero__left">
-        <div class="nc-hero__icon" aria-hidden="true">
-          <el-icon :size="26"><Bell /></el-icon>
+    <!-- 顶部：标题 + 统计 + Tab 一体化 -->
+    <header class="nc-top">
+      <div class="nc-top__bar">
+        <div class="nc-top__brand">
+          <div class="nc-top__icon" aria-hidden="true">
+            <el-icon :size="18"><Bell /></el-icon>
+          </div>
+          <div class="nc-top__titles">
+            <h1 class="nc-top__title">通知センター</h1>
+            <span class="nc-top__desc">イベント通知・受信者・テンプレート・外部連携</span>
+          </div>
         </div>
-        <div>
-          <h1 class="nc-hero__title">通知センター</h1>
-          <p class="nc-hero__desc">イベント通知・メール受信者・テンプレート・外部連携を一元管理</p>
+        <div class="nc-top__stats">
+          <div
+            v-for="s in statCards"
+            :key="s.key"
+            class="nc-chip"
+            :style="{ '--chip-accent': s.color }"
+          >
+            <el-icon :size="13"><component :is="s.icon" /></el-icon>
+            <span class="nc-chip__value">{{ s.value }}</span>
+            <span class="nc-chip__label">{{ s.label }}</span>
+          </div>
         </div>
+        <el-button :icon="Refresh" circle size="small" class="nc-top__refresh" :loading="pageLoading" @click="loadAll" />
       </div>
-      <el-button :icon="Refresh" circle class="nc-hero__refresh" :loading="pageLoading" @click="loadAll" />
+      <nav class="nc-top__tabs" aria-label="通知センタータブ">
+        <button
+          v-for="tab in tabs"
+          :key="tab.name"
+          type="button"
+          class="nc-tab"
+          :class="{ 'nc-tab--active': activeTab === tab.name }"
+          @click="activeTab = tab.name"
+        >
+          <el-icon :size="14"><component :is="tab.icon" /></el-icon>
+          {{ tab.label }}
+          <span v-if="tab.badge" class="nc-tab__badge">{{ tab.badge }}</span>
+        </button>
+      </nav>
     </header>
-
-    <!-- Stats -->
-    <div class="nc-stats">
-      <div v-for="s in statCards" :key="s.key" class="nc-stat" :style="{ '--stat-accent': s.color }">
-        <div class="nc-stat__icon"><el-icon :size="20"><component :is="s.icon" /></el-icon></div>
-        <div class="nc-stat__body">
-          <span class="nc-stat__value">{{ s.value }}</span>
-          <span class="nc-stat__label">{{ s.label }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tabs -->
-    <div class="nc-tabs">
-      <button
-        v-for="tab in tabs"
-        :key="tab.name"
-        type="button"
-        class="nc-tab"
-        :class="{ 'nc-tab--active': activeTab === tab.name }"
-        @click="activeTab = tab.name"
-      >
-        <el-icon :size="16"><component :is="tab.icon" /></el-icon>
-        {{ tab.label }}
-        <span v-if="tab.badge" class="nc-tab__badge">{{ tab.badge }}</span>
-      </button>
-    </div>
 
     <!-- イベント通知 -->
     <section v-show="activeTab === 'events'" class="nc-panel">
       <div class="nc-panel__head">
-        <div>
-          <h2 class="nc-panel__title">イベント通知設定</h2>
-          <p class="nc-panel__sub">各イベントの通知チャネルと有効状態を切り替え</p>
-        </div>
+        <h2 class="nc-panel__title">
+          イベント通知設定
+          <span class="nc-panel__sub">各イベントの通知チャネルと有効状態</span>
+        </h2>
       </div>
       <div class="nc-event-grid">
         <article v-for="row in notifications" :key="row.id" class="nc-event-card" :class="{ 'nc-event-card--off': !row.is_active }">
@@ -68,41 +69,19 @@
           </div>
           <p class="nc-event-card__desc">{{ row.description || '—' }}</p>
           <div class="nc-event-card__channels">
-            <label class="nc-channel" :class="{ 'nc-channel--on': row.in_app_enabled }">
+            <label
+              v-for="ch in channelDefs"
+              :key="ch.key"
+              class="nc-channel"
+              :class="[`nc-channel--${ch.key}`, { 'nc-channel--on': row[ch.field] }]"
+            >
               <el-switch
-                v-model="row.in_app_enabled"
+                v-model="row[ch.field]"
                 :disabled="!isAdmin"
                 size="small"
-                @change="(v) => patchNotification(row, { in_app_enabled: v })"
+                @change="(v) => patchNotification(row, { [ch.field]: v })"
               />
-              <span>アプリ内</span>
-            </label>
-            <label class="nc-channel nc-channel--email" :class="{ 'nc-channel--on': row.email_enabled }">
-              <el-switch
-                v-model="row.email_enabled"
-                :disabled="!isAdmin"
-                size="small"
-                @change="(v) => patchNotification(row, { email_enabled: v })"
-              />
-              <span>メール</span>
-            </label>
-            <label class="nc-channel nc-channel--slack" :class="{ 'nc-channel--on': row.slack_enabled }">
-              <el-switch
-                v-model="row.slack_enabled"
-                :disabled="!isAdmin"
-                size="small"
-                @change="(v) => patchNotification(row, { slack_enabled: v })"
-              />
-              <span>Slack</span>
-            </label>
-            <label class="nc-channel nc-channel--line" :class="{ 'nc-channel--on': row.line_enabled }">
-              <el-switch
-                v-model="row.line_enabled"
-                :disabled="!isAdmin"
-                size="small"
-                @change="(v) => patchNotification(row, { line_enabled: v })"
-              />
-              <span>LINE</span>
+              <span>{{ ch.label }}</span>
             </label>
           </div>
           <div class="nc-event-card__footer">
@@ -120,19 +99,19 @@
     <!-- メール受信者 -->
     <section v-show="activeTab === 'recipients'" class="nc-panel">
       <div class="nc-panel__head">
-        <div>
-          <h2 class="nc-panel__title">メール受信者</h2>
-          <p class="nc-panel__sub">イベントごとに送信先ユーザ・ロール・メールアドレスを登録</p>
-        </div>
+        <h2 class="nc-panel__title">
+          メール受信者
+          <span class="nc-panel__sub">ユーザ・ロール・メール・LINE 送信先</span>
+        </h2>
         <div class="nc-panel__actions">
-          <el-select v-model="recipientEventFilter" clearable placeholder="イベントで絞込" style="width: 220px" size="default">
+          <el-select v-model="recipientEventFilter" clearable placeholder="イベント絞込" style="width: 180px" size="small">
             <el-option v-for="ev in notifications" :key="ev.event_code" :label="ev.event_name" :value="ev.event_code" />
           </el-select>
-          <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openRecipientDialog()">受信者追加</el-button>
+          <el-button v-if="isAdmin" type="primary" size="small" :icon="Plus" @click="openRecipientDialog()">追加</el-button>
         </div>
       </div>
       <div class="nc-table-wrap">
-        <el-table :data="filteredRecipients" stripe class="nc-table" empty-text="受信者が登録されていません">
+        <el-table :data="filteredRecipients" stripe size="small" class="nc-table" empty-text="受信者が登録されていません">
           <el-table-column label="イベント" min-width="160">
             <template #default="{ row }">
               <div class="nc-cell-event">
@@ -175,11 +154,11 @@
     <!-- メールテンプレート -->
     <section v-show="activeTab === 'templates'" class="nc-panel">
       <div class="nc-panel__head">
-        <div>
-          <h2 class="nc-panel__title">メールテンプレート</h2>
-          <p class="nc-panel__sub">件名・本文のプレースホルダ <code>{変数名}</code> で動的差し込み</p>
-        </div>
-        <el-button v-if="isAdmin" type="primary" :icon="Plus" @click="openTemplateDialog()">テンプレート追加</el-button>
+        <h2 class="nc-panel__title">
+          メールテンプレート
+          <span class="nc-panel__sub">プレースホルダ <code>{変数名}</code> で差し込み</span>
+        </h2>
+        <el-button v-if="isAdmin" type="primary" size="small" :icon="Plus" @click="openTemplateDialog()">追加</el-button>
       </div>
       <div class="nc-template-grid">
         <article v-for="tpl in emailTemplates" :key="tpl.id" class="nc-template-card">
@@ -211,10 +190,10 @@
     <!-- 外部連携 -->
     <section v-show="activeTab === 'integration'" class="nc-panel">
       <div class="nc-panel__head">
-        <div>
-          <h2 class="nc-panel__title">外部連携</h2>
-          <p class="nc-panel__sub">SMTP・Slack・LINE の接続設定とテスト送信</p>
-        </div>
+        <h2 class="nc-panel__title">
+          外部連携
+          <span class="nc-panel__sub">SMTP・Slack・LINE 接続とテスト送信</span>
+        </h2>
       </div>
       <div class="nc-integration-grid">
         <!-- SMTP -->
@@ -231,8 +210,8 @@
             </div>
             <el-switch v-model="smtpConfig.is_enabled" :disabled="!isAdmin" @change="saveSmtp" />
           </div>
-          <el-form label-position="top" size="default" class="nc-int-form" :disabled="!isAdmin">
-            <el-row :gutter="12">
+          <el-form label-position="top" size="small" class="nc-int-form" :disabled="!isAdmin">
+            <el-row :gutter="8">
               <el-col :span="14"><el-form-item label="ホスト"><el-input v-model="smtpForm.host" placeholder="smtp.example.com" /></el-form-item></el-col>
               <el-col :span="10"><el-form-item label="ポート"><el-input-number v-model="smtpForm.port" :min="1" :max="65535" controls-position="right" style="width:100%" /></el-form-item></el-col>
             </el-row>
@@ -250,8 +229,8 @@
               <el-tag size="small" :type="smtpConfig.last_test_result === 'success' ? 'success' : 'danger'">{{ smtpConfig.last_test_result || '—' }}</el-tag>
             </span>
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" :loading="savingSmtp" @click="saveSmtp">保存</el-button>
-              <el-button :loading="testingSmtp" :disabled="!smtpConfig.is_enabled" @click="testSmtp">テスト送信</el-button>
+              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingSmtp" @click="saveSmtp">保存</el-button>
+              <el-button size="small" :loading="testingSmtp" :disabled="!smtpConfig.is_enabled" @click="testSmtp">テスト</el-button>
             </div>
           </div>
         </article>
@@ -270,14 +249,14 @@
             </div>
             <el-switch v-model="slackConfig.is_enabled" :disabled="!isAdmin" @change="saveSlack" />
           </div>
-          <el-form label-position="top" size="default" class="nc-int-form" :disabled="!isAdmin">
+          <el-form label-position="top" size="small" class="nc-int-form" :disabled="!isAdmin">
             <el-form-item label="Webhook URL"><el-input v-model="slackForm.webhook_url" placeholder="https://hooks.slack.com/..." show-password /></el-form-item>
             <el-form-item label="チャンネル"><el-input v-model="slackForm.channel" placeholder="#notifications" /></el-form-item>
           </el-form>
           <div class="nc-int-card__footer">
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" :loading="savingSlack" @click="saveSlack">保存</el-button>
-              <el-button :loading="testingSlack" @click="testSlack">テスト送信</el-button>
+              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingSlack" @click="saveSlack">保存</el-button>
+              <el-button size="small" :loading="testingSlack" @click="testSlack">テスト</el-button>
             </div>
           </div>
         </article>
@@ -296,7 +275,7 @@
             </div>
             <el-switch v-model="lineConfig.is_enabled" :disabled="!isAdmin" @change="saveLine" />
           </div>
-          <el-form label-position="top" size="default" class="nc-int-form" :disabled="!isAdmin">
+          <el-form label-position="top" size="small" class="nc-int-form" :disabled="!isAdmin">
             <el-form-item label="Channel Token"><el-input v-model="lineForm.channel_token" show-password /></el-form-item>
             <el-form-item label="Channel Secret"><el-input v-model="lineForm.channel_secret" show-password /></el-form-item>
             <el-form-item label="テスト送信先 User ID">
@@ -307,8 +286,8 @@
           </el-form>
           <div class="nc-int-card__footer">
             <div class="nc-int-card__btns">
-              <el-button v-if="isAdmin" type="primary" :loading="savingLine" @click="saveLine">保存</el-button>
-              <el-button :loading="testingLine" @click="testLine">テスト送信</el-button>
+              <el-button v-if="isAdmin" type="primary" size="small" :loading="savingLine" @click="saveLine">保存</el-button>
+              <el-button size="small" :loading="testingLine" @click="testLine">テスト</el-button>
             </div>
           </div>
         </article>
@@ -511,9 +490,17 @@ const PREVIEW_SAMPLE: Record<string, string> = {
 const statCards = computed(() => [
   { key: 'events', label: '有効イベント', value: notifications.value.filter((n) => n.is_active).length, icon: Bell, color: '#6366f1' },
   { key: 'email', label: 'メール有効', value: notifications.value.filter((n) => n.email_enabled).length, icon: Message, color: '#10b981' },
-  { key: 'recipients', label: '受信者登録', value: recipients.value.filter((r) => r.is_active).length, icon: User, color: '#f59e0b' },
+  { key: 'recipients', label: '受信者', value: recipients.value.filter((r) => r.is_active).length, icon: User, color: '#f59e0b' },
   { key: 'smtp', label: 'SMTP', value: smtpConfig.value.is_enabled ? 'ON' : 'OFF', icon: Setting, color: '#8b5cf6' },
 ])
+
+type ChannelField = 'in_app_enabled' | 'email_enabled' | 'slack_enabled' | 'line_enabled'
+const channelDefs: { key: string; field: ChannelField; label: string }[] = [
+  { key: 'app', field: 'in_app_enabled', label: 'アプリ内' },
+  { key: 'email', field: 'email_enabled', label: 'メール' },
+  { key: 'slack', field: 'slack_enabled', label: 'Slack' },
+  { key: 'line', field: 'line_enabled', label: 'LINE' },
+]
 
 const filteredRecipients = computed(() => {
   if (!recipientEventFilter.value) return recipients.value
@@ -935,348 +922,374 @@ onMounted(loadAll)
 .nc-page {
   --nc-accent: #6366f1;
   --nc-accent-2: #8b5cf6;
-  padding: 12px 16px 24px;
-  max-width: 1280px;
+  --nc-border: #e2e8f0;
+  --nc-surface: #fff;
+  --nc-muted: #64748b;
+  padding: 8px 12px 16px;
+  max-width: 1360px;
   margin: 0 auto;
 }
 
-.nc-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  padding: 20px 24px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 48%, #fdf4ff 100%);
-  border: 1px solid color-mix(in srgb, var(--nc-accent) 12%, transparent);
-  box-shadow: 0 4px 24px color-mix(in srgb, var(--nc-accent) 8%, transparent);
+/* ---- 顶部一体化 ---- */
+.nc-top {
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: var(--nc-surface);
+  border: 1px solid var(--nc-border);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(99, 102, 241, 0.06);
+  overflow: hidden;
 }
 
-.nc-hero__left {
+.nc-top__bar {
   display: flex;
-  gap: 16px;
   align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #f8faff 0%, #faf5ff 50%, #fdf4ff 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--nc-accent) 10%, transparent);
 }
 
-.nc-hero__icon {
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+.nc-top__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.nc-top__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
   background: linear-gradient(135deg, var(--nc-accent), var(--nc-accent-2));
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--nc-accent) 35%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--nc-accent) 30%, transparent);
 }
 
-.nc-hero__title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #1e1b4b;
-}
-
-.nc-hero__desc {
-  margin: 4px 0 0;
-  font-size: 0.875rem;
-  color: #64748b;
-}
-
-.nc-hero__refresh {
-  flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.nc-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-@media (max-width: 900px) {
-  .nc-stats { grid-template-columns: repeat(2, 1fr); }
-}
-
-.nc-stat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  transition: box-shadow 0.2s, transform 0.2s;
-}
-
-.nc-stat:hover {
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
-  transform: translateY(-1px);
-}
-
-.nc-stat__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--stat-accent) 12%, transparent);
-  color: var(--stat-accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nc-stat__body {
+.nc-top__titles {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 
-.nc-stat__value {
-  font-size: 1.25rem;
+.nc-top__title {
+  margin: 0;
+  font-size: 1.05rem;
   font-weight: 700;
-  color: #0f172a;
+  letter-spacing: -0.02em;
+  color: #1e1b4b;
   line-height: 1.2;
 }
 
-.nc-stat__label {
-  font-size: 0.75rem;
-  color: #64748b;
+.nc-top__desc {
+  font-size: 0.7rem;
+  color: var(--nc-muted);
+  line-height: 1.3;
 }
 
-.nc-tabs {
+.nc-top__stats {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 16px;
-  padding: 4px;
-  background: #f1f5f9;
-  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.nc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid color-mix(in srgb, var(--chip-accent) 18%, transparent);
+  color: var(--chip-accent);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
+}
+
+.nc-chip__value {
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #0f172a;
+}
+
+.nc-chip__label {
+  color: var(--nc-muted);
+}
+
+.nc-top__refresh {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.nc-top__tabs {
+  display: flex;
+  gap: 2px;
+  padding: 4px 8px;
+  background: #f8fafc;
   overflow-x: auto;
 }
 
 .nc-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 16px;
+  gap: 5px;
+  padding: 6px 12px;
   border: none;
-  border-radius: 9px;
+  border-radius: 7px;
   background: transparent;
-  color: #64748b;
-  font-size: 0.875rem;
+  color: var(--nc-muted);
+  font-size: 0.78rem;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
 }
 
 .nc-tab:hover {
   color: #334155;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .nc-tab--active {
   background: #fff;
   color: var(--nc-accent);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  font-weight: 600;
 }
 
 .nc-tab__badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--nc-accent) 15%, transparent);
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--nc-accent) 14%, transparent);
   color: var(--nc-accent);
-  font-size: 0.7rem;
-  font-weight: 600;
-  line-height: 18px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 16px;
   text-align: center;
 }
 
+/* ---- 面板 ---- */
 .nc-panel {
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  padding: 20px 24px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  background: var(--nc-surface);
+  border-radius: 12px;
+  border: 1px solid var(--nc-border);
+  padding: 12px 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
 }
 
 .nc-panel__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 10px;
   flex-wrap: wrap;
 }
 
 .nc-panel__title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: #0f172a;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .nc-panel__sub {
-  margin: 4px 0 0;
-  font-size: 0.8125rem;
-  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--nc-muted);
 }
 
 .nc-panel__sub code {
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
   background: #f1f5f9;
-  font-size: 0.75rem;
+  font-size: 0.68rem;
 }
 
 .nc-panel__actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
 
+/* ---- イベント卡片 ---- */
 .nc-event-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
 }
 
 .nc-event-card {
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--nc-border);
+  background: #fff;
+  border-left: 3px solid var(--nc-accent);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .nc-event-card:hover {
   border-color: #c7d2fe;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
 .nc-event-card--off {
-  opacity: 0.65;
+  opacity: 0.6;
+  border-left-color: #cbd5e1;
 }
 
 .nc-event-card__top {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 4px;
 }
 
 .nc-event-card__code {
-  font-size: 0.65rem;
+  font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: #94a3b8;
   text-transform: uppercase;
 }
 
 .nc-event-card__name {
-  margin: 2px 0 0;
-  font-size: 1rem;
+  margin: 1px 0 0;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #1e293b;
+  line-height: 1.25;
 }
 
 .nc-event-card__desc {
-  margin: 0 0 12px;
-  font-size: 0.8125rem;
-  color: #64748b;
-  line-height: 1.45;
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  color: var(--nc-muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .nc-event-card__channels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .nc-channel {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  border-radius: 6px;
   background: #f8fafc;
-  font-size: 0.75rem;
+  border: 1px solid #f1f5f9;
+  font-size: 0.68rem;
   color: #94a3b8;
   cursor: default;
+  transition: all 0.15s;
 }
 
 .nc-channel--on {
   background: #f0fdf4;
+  border-color: #bbf7d0;
   color: #166534;
 }
 
-.nc-channel--email.nc-channel--on { background: #ecfdf5; color: #047857; }
-.nc-channel--slack.nc-channel--on { background: #fff7ed; color: #c2410c; }
-.nc-channel--line.nc-channel--on { background: #fef2f2; color: #b91c1c; }
+.nc-channel--email.nc-channel--on { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
+.nc-channel--slack.nc-channel--on { background: #fff7ed; border-color: #fed7aa; color: #c2410c; }
+.nc-channel--line.nc-channel--on { background: #fef2f2; border-color: #fecaca; color: #b91c1c; }
+
+.nc-channel :deep(.el-switch) {
+  transform: scale(0.85);
+  transform-origin: left center;
+}
 
 .nc-event-card__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 10px;
+  padding-top: 6px;
   border-top: 1px dashed #e2e8f0;
 }
 
 .nc-recipient-count {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
-  color: #64748b;
+  gap: 3px;
+  font-size: 0.68rem;
+  color: var(--nc-muted);
 }
 
+/* ---- 表格 ---- */
 .nc-table-wrap {
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--nc-border);
 }
 
 .nc-table :deep(.el-table__header th) {
   background: #f8fafc !important;
   font-weight: 600;
+  font-size: 0.75rem;
   color: #475569;
+  padding: 6px 0;
+}
+
+.nc-table :deep(.el-table__body td) {
+  font-size: 0.78rem;
+  padding: 4px 0;
 }
 
 .nc-cell-event__name {
   display: block;
   font-weight: 500;
   color: #1e293b;
+  font-size: 0.78rem;
 }
 
 .nc-cell-event__code {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: #94a3b8;
 }
 
+/* ---- テンプレート ---- */
 .nc-template-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
 }
 
 .nc-template-card {
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--nc-border);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  transition: box-shadow 0.2s;
+  gap: 5px;
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
 
 .nc-template-card:hover {
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+  border-color: #c7d2fe;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
 }
 
 .nc-template-card__head {
@@ -1287,16 +1300,16 @@ onMounted(loadAll)
 
 .nc-template-card__name {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #1e293b;
 }
 
 .nc-template-card__subject {
   margin: 0;
-  font-size: 0.8125rem;
-  color: #64748b;
-  line-height: 1.4;
+  font-size: 0.72rem;
+  color: var(--nc-muted);
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1306,29 +1319,40 @@ onMounted(loadAll)
 .nc-template-card__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
+  gap: 6px;
+  font-size: 0.68rem;
   color: #94a3b8;
 }
 
 .nc-template-card__actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   margin-top: auto;
-  padding-top: 8px;
+  padding-top: 4px;
 }
 
+/* ---- 外部連携 ---- */
 .nc-integration-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 1100px) {
+  .nc-integration-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 720px) {
+  .nc-integration-grid { grid-template-columns: 1fr; }
+  .nc-top__bar { flex-wrap: wrap; }
+  .nc-top__stats { justify-content: flex-start; }
 }
 
 .nc-int-card {
-  border-radius: 14px;
-  border: 1px solid #e2e8f0;
-  padding: 18px;
+  border-radius: 10px;
+  border: 1px solid var(--nc-border);
+  padding: 10px 12px;
   background: #fff;
 }
 
@@ -1341,34 +1365,35 @@ onMounted(loadAll)
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .nc-int-card__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .nc-int-card__brand h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
 .nc-int-card__logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 11px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: #f1f5f9;
+  flex-shrink: 0;
 }
 
 .nc-int-card__logo img {
-  width: 26px;
-  height: 26px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
 }
 
@@ -1378,7 +1403,7 @@ onMounted(loadAll)
 }
 
 .nc-int-card__status {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 600;
 }
 
@@ -1386,76 +1411,79 @@ onMounted(loadAll)
 .nc-int-card__status.is-off { color: #94a3b8; }
 
 .nc-int-form :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 6px;
 }
 
 .nc-int-form :deep(.el-form-item__label) {
-  font-size: 0.75rem;
-  color: #64748b;
-  padding-bottom: 2px;
+  font-size: 0.68rem;
+  color: var(--nc-muted);
+  padding-bottom: 0;
+  line-height: 1.4;
 }
 
 .nc-int-card__footer {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 12px;
+  gap: 6px;
+  margin-top: 4px;
+  padding-top: 8px;
   border-top: 1px solid #f1f5f9;
 }
 
 .nc-int-card__test {
-  font-size: 0.75rem;
-  color: #64748b;
+  font-size: 0.68rem;
+  color: var(--nc-muted);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .nc-int-card__btns {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
+/* ---- 预览 / 提示 ---- */
 .nc-preview__field {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .nc-preview__field label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  color: #64748b;
-  margin-bottom: 6px;
+  color: var(--nc-muted);
+  margin-bottom: 4px;
 }
 
 .nc-preview__field p {
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: 0.875rem;
   color: #1e293b;
 }
 
 .nc-preview__body {
-  padding: 14px;
-  border-radius: 8px;
+  padding: 10px;
+  border-radius: 6px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  font-size: 0.875rem;
-  line-height: 1.6;
+  border: 1px solid var(--nc-border);
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 .nc-preview__var-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .nc-line-hint {
-  margin: 0 0 8px;
-  font-size: 0.75rem;
-  color: #64748b;
-  line-height: 1.45;
+  margin: 0 0 6px;
+  font-size: 0.68rem;
+  color: var(--nc-muted);
+  line-height: 1.4;
 }
 </style>

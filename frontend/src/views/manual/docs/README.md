@@ -13,6 +13,8 @@
 | `cutting-instruction_ja.md` | 切断面取 生産指示・実績収集 | `../images/CuttingInstructionManual/` |
 | `plan-baseline_ja.md` | 生産計画ベースライン管理 | `../images/ProductionPlanBaselineManagement/` |
 | `inspection-actual_ja.md` | 検査実績収集 | `../images/InspectionActualDataCollection/` |
+| `inspection-actual-registration_ja.md` | 検査実績収集登録 | `../images/InspectionActualRegistration/` |
+| `inspection-monitor_ja.md` | 検査モニタ | `../images/InspectionMonitor/` |
 
 ## 新規マニュアル追加
 

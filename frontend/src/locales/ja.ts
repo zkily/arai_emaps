@@ -391,6 +391,8 @@ export default {
     OP_MANUAL_CUTTING: '切断面取 生産指示・実績収集',
     OP_MANUAL_PLAN_BASELINE: '生産計画ベースライン管理',
     OP_MANUAL_INSPECTION: '検査実績収集',
+    OP_MANUAL_INSPECTION_REGISTRATION: '検査実績収集登録',
+    OP_MANUAL_INSPECTION_MONITOR: '検査モニタ',
     SYSTEM: 'システム管理',
     SYSTEM_USER: 'ユーザー・組織',
     SYSTEM_HOME: 'システムホーム',
@@ -1875,7 +1877,7 @@ export default {
     nextAssignmentCurrent: '現在',
     nextAssignmentProduct: '次製品',
     nextAssignmentNote: '備考',
-    nextAssignmentNotePlaceholder: '任意（班長メモ）',
+    nextAssignmentNotePlaceholder: '任意（担当者メモ）',
     nextAssignmentClear: '指定解除',
     nextAssignmentSave: '保存',
     inspectorAlreadyProducing:
@@ -1895,6 +1897,18 @@ export default {
     sessionLockedByOtherTerminal:
       'この検査生産は他の端末で生産中です。本端末では再開できません。当該端末で生産終了してください。',
     sessionLockedByOtherTerminalShort: '他端末生産中',
+    reclaimSessionConfirmTitle: '作業の引き継ぎ',
+    reclaimSessionConfirm:
+      '本端末で操作を引き継ぎますか？他端末（または以前のブラウザ）の操作接続は切断されます。',
+    btnReclaimSession: '本端末で引き継ぐ',
+    forceReleaseLockConfirmTitle: '端末ロックの解除',
+    forceReleaseLockConfirm:
+      '他端末のロックを解除しますか？検査員が本端末から再開できるようになります。',
+    btnForceReleaseLock: 'ロック解除',
+    forceReleaseLockSuccess: '端末ロックを解除しました。',
+    otherTerminalLockBanner: 'この検査生産は他の端末で操作中です。',
+    otherTerminalLockBannerReclaimable:
+      'この検査生産は別端末（または以前のブラウザ）でロックされています。ログイン中の検査員であれば引き継ぎ可能です。',
     offlineBanner: 'オフラインです。計測は継続でき、変更は端末に保存されます。接続復帰後に自動同期します。',
     offlineQueued: 'サーバーに未送信のため端末に保存しました。接続復帰後に自動同期します。',
     offlinePendingSync: '未同期 {n} 件。接続中に自動送信します…',

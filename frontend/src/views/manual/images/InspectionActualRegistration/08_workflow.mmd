@@ -1,0 +1,66 @@
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'fontFamily': 'Segoe UI, Hiragino Sans, Yu Gothic UI, Meiryo, sans-serif',
+    'fontSize': '15px',
+    'primaryTextColor': '#0f172a',
+    'lineColor': '#94a3b8',
+    'clusterBkg': '#f8fafc',
+    'clusterBorder': '#cbd5e1',
+    'titleColor': '#334155'
+  },
+  'flowchart': {
+    'htmlLabels': true,
+    'curve': 'basis',
+    'padding': 24,
+    'nodeSpacing': 40,
+    'rankSpacing': 52,
+    'diagramPadding': 16
+  }
+}}%%
+
+flowchart TB
+  START(["新規登録フロー"]):::start
+
+  subgraph PHASE1["基本情報"]
+    direction TB
+    A["① 生産日を設定<br/><span style='font-size:12px;color:#64748b'>日付ピッカー · 前日 / 今日 / 翌日</span>"]:::c1
+    B["② 検査員を選択<br/><span style='font-size:12px;color:#64748b'>仕上課所属ユーザー</span>"]:::c2
+    C["③ 製品名を選択<br/><span style='font-size:12px;color:#64748b'>検査用製品 CD（末尾 1）</span>"]:::c3
+  end
+
+  subgraph PHASE2["実績データ"]
+    direction TB
+    D["④ 生産数を入力<br/><span style='font-size:12px;color:#64748b'>箱数 × 入数 ＝ 本数</span>"]:::c4
+    E["⑤ 生産時間を入力<br/><span style='font-size:12px;color:#64748b'>開始 · 終了 · 休憩 · 停止</span>"]:::c5
+  end
+
+  subgraph PHASE3["付帯情報"]
+    direction TB
+    F["⑥ 不良を入力<br/><span style='font-size:12px;color:#64748b'>帰属工程別 · 項目ごとに数量</span>"]:::c6
+    G["⑦ 備考（任意）<br/><span style='font-size:12px;color:#64748b'>最大 500 文字</span>"]:::c7
+  end
+
+  SAVE["保存<br/><span style='font-size:12px;color:#047857'>サーバーへ登録 · 確定済み実績</span>"]:::save
+  DONE(["登録一覧に反映"]):::finish
+
+  START --> A
+  A --> B
+  B --> C
+  C --> D
+  D --> E
+  E --> F
+  F --> G
+  G --> SAVE
+  SAVE --> DONE
+
+  classDef start fill:#0f172a,stroke:#0f172a,color:#ffffff,stroke-width:2px,rx:24,ry:24
+  classDef finish fill:#ecfdf5,stroke:#10b981,color:#047857,stroke-width:2px,rx:24,ry:24
+  classDef save fill:#6366f1,stroke:#4f46e5,color:#ffffff,stroke-width:2px
+  classDef c1 fill:#eff6ff,stroke:#3b82f6,color:#1e40af,stroke-width:2px
+  classDef c2 fill:#f5f3ff,stroke:#8b5cf6,color:#5b21b6,stroke-width:2px
+  classDef c3 fill:#f0fdfa,stroke:#14b8a6,color:#0f766e,stroke-width:2px
+  classDef c4 fill:#fffbeb,stroke:#f59e0b,color:#b45309,stroke-width:2px
+  classDef c5 fill:#eef2ff,stroke:#6366f1,color:#4338ca,stroke-width:2px
+  classDef c6 fill:#fff1f2,stroke:#f43f5e,color:#be123c,stroke-width:2px
+  classDef c7 fill:#f8fafc,stroke:#64748b,color:#334155,stroke-width:2px

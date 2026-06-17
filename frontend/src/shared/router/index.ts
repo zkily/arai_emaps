@@ -36,12 +36,10 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagementHelp.vue'),
     meta: { title: '生産計画ベースライン管理 操作説明', requiresAuth: false },
   },
-  // 検査実績収集 操作説明（公開ページ：ログイン不要）
+  // 検査実績収集 操作説明（旧 URL → マニュアルホームへ）
   {
     path: '/mes/actualDataCollection/inspection/help',
-    name: 'InspectionActualDataCollectionHelp',
-    component: () => import('@/views/mes/actualDataCollection/inspection/InspectionActualDataCollectionHelp.vue'),
-    meta: { title: '検査実績収集 操作説明', requiresAuth: false },
+    redirect: { name: 'ManualHome', params: { slug: 'inspection-actual' } },
   },
   // マニュアルホーム（公開・ログイン不要。新規タブでも sessionStorage 非共有の影響を受けない）
   {

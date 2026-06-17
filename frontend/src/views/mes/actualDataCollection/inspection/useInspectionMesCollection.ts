@@ -60,7 +60,8 @@ import {
   getOfflineQueueCount,
   isNetworkOrServerDownError,
 } from './inspectionActualOfflineSync'
-import { getMesClientInstanceId } from './mesClientInstance'
+import { getMesClientInstanceId, restoreMesClientInstanceFromUserBackup } from './mesClientInstance'
+import { subscribeWebSocketMessage } from '@/modules/websocket/utils'
 import { resolveInspectionDataSource } from './inspectionDataSource'
 import { useMesOperationPermission } from '@/composables/useMesOperationPermission'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
@@ -160,6 +161,7 @@ export function useInspectionMesCollection() {
   let mesSyncVisibilityHandler: (() => void) | null = null
   let stopScreenWakeLockWatch: (() => void) | null = null
   let runningPersistTimer: ReturnType<typeof setInterval> | null = null
+  let unsubscribeMesInspectionWs: (() => void) | null = null
 
   const localMesEchoUntil = new Map<number, number>()
   /** 本端末で生産開始した plan（他端末 hydrate の在産と区別） */
@@ -211,7 +213,7 @@ export function useInspectionMesCollection() {
   function mesPatchBody(body: PatchInspectionManagementBody): PatchInspectionManagementBody {
     return {
       ...body,
-      mes_client_instance_id: getMesClientInstanceId(),
+      mes_client_instance_id: getMesClientInstanceId(loggedInUserId.value),
     }
   }
 
@@ -219,7 +221,15 @@ export function useInspectionMesCollection() {
     if (!row) return 'unclaimed'
     const lock = (row.mes_client_instance_id ?? '').trim()
     if (!lock) return 'unclaimed'
-    return lock === getMesClientInstanceId() ? 'mine' : 'other'
+    return lock === getMesClientInstanceId(loggedInUserId.value) ? 'mine' : 'other'
+  }
+
+  /** ログイン検査員がサーバー在産行の担当者と一致するか */
+  function canInspectorReclaimRow(row: InspectionMgmtRow | null | undefined): boolean {
+    if (!row?.id || !rowServerMesInProgress(row)) return false
+    const ri = rowInspectorId(row)
+    const uid = loggedInUserId.value
+    return ri != null && uid != null && ri === uid
   }
 
   /** サーバー在産行への PATCH（計測同期・不良等）可否 */
@@ -250,7 +260,15 @@ export function useInspectionMesCollection() {
 
   function canResumeSession(row: InspectionMgmtRow): boolean {
     if (row.id == null || !isRowMesProductionActive(row)) return false
-    return rowMesLockOwner(row) !== 'other'
+    const owner = rowMesLockOwner(row)
+    if (owner === 'other') return canInspectorReclaimRow(row)
+    return true
+  }
+
+  function canForceReleaseSession(row: InspectionMgmtRow): boolean {
+    if (!canEdit.value) return false
+    if (row.id == null || !rowServerMesInProgress(row)) return false
+    return rowMesLockOwner(row) === 'other'
   }
 
   async function patchWithOfflineSync(
@@ -1021,13 +1039,29 @@ export function useInspectionMesCollection() {
       ElMessage.warning(t('mesInspectionActual.sessionNotActiveOnServer'))
       return
     }
-    if (rowMesLockOwner(row) === 'other') {
+    const owner = rowMesLockOwner(row)
+    if (owner === 'other' && !canInspectorReclaimRow(row)) {
       ElMessage.warning(t('mesInspectionActual.sessionLockedByOtherTerminal'))
       return
     }
+    if (owner === 'other' && canInspectorReclaimRow(row)) {
+      try {
+        await ElMessageBox.confirm(
+          t('mesInspectionActual.reclaimSessionConfirm'),
+          t('mesInspectionActual.reclaimSessionConfirmTitle'),
+          {
+            type: 'warning',
+            confirmButtonText: t('mesInspectionActual.btnReclaimSession'),
+            cancelButtonText: t('common.cancel'),
+          },
+        )
+      } catch {
+        return
+      }
+    }
     suppressInspectorUserWatch = true
     try {
-      if (rowMesLockOwner(row) !== 'mine') {
+      if (owner !== 'mine') {
         const ok = await patchWithOfflineSync(row.id, {
           mes_claim_client_lock: true,
           mes_inspector_user_id: ri,
@@ -1055,6 +1089,31 @@ export function useInspectionMesCollection() {
         suppressInspectorUserWatch = false
       })
     }
+  }
+
+  async function forceReleaseMesClientLock(row: InspectionMgmtRow): Promise<void> {
+    if (!guardMesOperation(canEdit)) return
+    if (!canForceReleaseSession(row) || row.id == null) return
+    try {
+      await ElMessageBox.confirm(
+        t('mesInspectionActual.forceReleaseLockConfirm'),
+        t('mesInspectionActual.forceReleaseLockConfirmTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('mesInspectionActual.btnForceReleaseLock'),
+          cancelButtonText: t('common.cancel'),
+        },
+      )
+    } catch {
+      return
+    }
+    const ok = await patchWithOfflineSync(row.id, {
+      mes_force_release: true,
+      mes_release_client_lock: true,
+    })
+    if (!ok && navigator.onLine) return
+    await loadPlans()
+    ElMessage.success(t('mesInspectionActual.forceReleaseLockSuccess'))
   }
 
   function focusInProgressRow(row: InspectionMgmtRow): void {
@@ -1231,6 +1290,17 @@ export function useInspectionMesCollection() {
     const owner = rowMesLockOwner(row)
     if (owner === 'other') return false
     return owner === 'unclaimed' || !isPlanLocallyOperated(id)
+  })
+
+  const showOtherTerminalLockBanner = computed(() => {
+    const row = activeRow.value
+    if (!row || !rowServerMesInProgress(row)) return false
+    return rowMesLockOwner(row) === 'other'
+  })
+
+  const canReclaimFromOtherTerminal = computed(() => {
+    const row = activeRow.value
+    return row != null && rowMesLockOwner(row) === 'other' && canInspectorReclaimRow(row)
   })
 
   /** 読取は5桁数字のみ。製品CDは末尾が「{5桁}1」または「{5桁}」の検査製品と照合 */
@@ -1516,7 +1586,7 @@ export function useInspectionMesCollection() {
     if (row) {
       row.mes_production_started_at = new Date(now).toISOString()
       row.mes_production_ended_at = null
-      row.mes_client_instance_id = getMesClientInstanceId()
+      row.mes_client_instance_id = getMesClientInstanceId(loggedInUserId.value)
       row.mes_production_is_paused = 0
     }
     void syncScreenWakeLock(true)
@@ -2006,6 +2076,13 @@ export function useInspectionMesCollection() {
 
   function setupLifecycle(): void {
     restorePageFilters()
+    restoreMesClientInstanceFromUserBackup(loggedInUserId.value)
+    unsubscribeMesInspectionWs = subscribeWebSocketMessage('mes_inspection_state', (payload) => {
+      const day = typeof payload.production_day === 'string' ? payload.production_day.trim() : ''
+      if (day && day === currentScopeKey()) {
+        void syncMesStateFromServer()
+      }
+    })
     tickTimer = setInterval(() => {
       tickNow.value = Date.now()
     }, 250)
@@ -2314,6 +2391,10 @@ export function useInspectionMesCollection() {
   }
 
   function teardownLifecycle(): void {
+    if (unsubscribeMesInspectionWs) {
+      unsubscribeMesInspectionWs()
+      unsubscribeMesInspectionWs = null
+    }
     clearResumePulseTimers()
     if (tickTimer) clearInterval(tickTimer)
     if (persistTimer) clearTimeout(persistTimer)
@@ -2364,9 +2445,13 @@ export function useInspectionMesCollection() {
     focusInProgressRow,
     resumeInProgressSession,
     canResumeSession,
+    canForceReleaseSession,
+    forceReleaseMesClientLock,
     rowMesLockOwner,
     isPlanLocallyOperated,
     showSessionRecoveryAlert,
+    showOtherTerminalLockBanner,
+    canReclaimFromOtherTerminal,
     inspectorNameById,
     isInspectorOptionDisabled,
     inspectorOptionLabel,

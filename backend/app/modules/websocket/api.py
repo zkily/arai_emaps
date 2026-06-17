@@ -119,6 +119,37 @@ async def notify_user_logged_in_elsewhere(username: str, new_token: str):
             await unregister_connection(username, websocket)
 
 
+async def broadcast_to_all_connections(message: dict) -> None:
+    """全接続クライアントへメッセージをブロードキャスト"""
+    disconnected: list[tuple[str, WebSocket]] = []
+    for username, sockets in list(active_connections.items()):
+        for websocket in list(sockets):
+            try:
+                await websocket.send_json(message)
+            except Exception as e:
+                logger.error(f"[WebSocket] Error broadcasting to {username}: {e}")
+                disconnected.append((username, websocket))
+    for username, websocket in disconnected:
+        await unregister_connection(username, websocket)
+
+
+async def notify_mes_inspection_state_change(
+    production_day: str,
+    inspection_id: int,
+    *,
+    event: str = "updated",
+) -> None:
+    """検査 MES 実績の状態変更を全クライアントへ通知"""
+    await broadcast_to_all_connections(
+        {
+            "type": "mes_inspection_state",
+            "production_day": str(production_day).strip()[:10],
+            "inspection_id": int(inspection_id),
+            "event": event,
+        }
+    )
+
+
 async def websocket_endpoint(websocket: WebSocket, db: AsyncSession):
     """WebSocket接続エンドポイント"""
     await websocket.accept()

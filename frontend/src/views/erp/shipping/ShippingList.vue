@@ -1279,6 +1279,52 @@ function formatDateWithWeekday(dateStr: string | null): string {
   return formatDateWithWeekdayJST(dateStr, intlLocale.value).replace(/\//g, '-').replace(/\s/g, ' ')
 }
 
+/** 納入日から曜日（0=日 … 6=土）を取得 */
+function getWeekdayIndexFromDate(dateStr: string | null): number {
+  if (!dateStr || dateStr.length < 10) return -1
+  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00+09:00`)
+  if (Number.isNaN(d.getTime())) return -1
+  return d.getDay()
+}
+
+/** 印刷用：納入日の曜日を区別するアイコン（SVG） */
+function getDeliveryWeekdayIconHtml(dateStr: string | null): string {
+  const day = getWeekdayIndexFromDate(dateStr)
+  if (day < 0) return ''
+
+  const svgWrap = (inner: string) =>
+    `<svg class="weekday-icon-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`
+
+  const icons: Record<number, string> = {
+    // 月: 星
+    1: svgWrap(
+      '<polygon points="24,4 29,18 44,18 32,27 36,42 24,33 12,42 16,27 4,18 19,18" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+    ),
+    // 火: 三角形
+    2: svgWrap(
+      '<polygon points="24,6 42,40 6,40" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+    ),
+    // 水: 円
+    3: svgWrap('<circle cx="24" cy="24" r="15" fill="none" stroke="#000" stroke-width="4"/>'),
+    // 木: 四角
+    4: svgWrap(
+      '<rect x="11" y="11" width="26" height="26" fill="none" stroke="#000" stroke-width="4" rx="1"/>',
+    ),
+    // 金: 菱形
+    5: svgWrap(
+      '<polygon points="24,6 42,24 24,42 6,24" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
+    ),
+    // 土: 塗りつぶし三角
+    6: svgWrap('<polygon points="24,8 42,40 6,40" fill="#000" stroke="#000" stroke-width="2"/>'),
+    // 日: 塗りつぶし円
+    0: svgWrap('<circle cx="24" cy="24" r="15" fill="#000"/>'),
+  }
+
+  const icon = icons[day]
+  if (!icon) return ''
+  return `<div class="weekday-icon" title="納入日曜日">${icon}</div>`
+}
+
 // 行クリック - 避免与选择列冲突，只在非选择列区域触发
 function handleRowClick(row: ShippingItem, column: any): void {
   if (column && column.property === 'singleSelection') {
@@ -1890,7 +1936,8 @@ function generatePrintHTML(items: ShippingItem[]): string {
         @page {
           size: A4;
           margin: 10mm;
-          margin-top: 2cm;
+          margin-top: 1.7cm;
+          margin-bottom: 4mm;
         }
         body {
           font-family: '游ゴシック','Arial', 'Hiragino Sans', 'Meiryo', sans-serif;
@@ -1929,7 +1976,24 @@ function generatePrintHTML(items: ShippingItem[]): string {
           display: flex;
           flex-direction: column;
           align-items: flex-start;
-          gap: 10px;
+          gap: 6px;
+        }
+        .weekday-icon {
+          width: 40px;
+          height: 40px;
+          flex-shrink: 0;
+          font-weight: bold;
+        }
+        .weekday-icon-svg {
+          width: 100%;
+          height: 100%;
+          display: block;
+        }
+        .weekday-icon-svg polygon,
+        .weekday-icon-svg circle,
+        .weekday-icon-svg rect {
+          stroke-linejoin: round;
+          stroke-linecap: round;
         }
 
         .shipping-date-right {
@@ -2071,10 +2135,20 @@ function generatePrintHTML(items: ShippingItem[]): string {
         .page-footer {
           display: flex;
           justify-content: space-between;
+          align-items: center;
+          flex-wrap: nowrap;
+          gap: 12px;
           border-top: 1px solid #000;
           padding-top: 10px;
           margin-top: 20px;
           font-size: 12px;
+        }
+        .shipping-management-no {
+          font-size: 13px;
+          white-space: nowrap;
+        }
+        .print-datetime {
+          white-space: nowrap;
         }
         .shipping-no-suffix {
           font-weight: bold;
@@ -2123,7 +2197,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
             page-break-before: auto;
             page-break-inside: avoid;
             margin-top: 0 !important;
-            padding-top: 20px !important;
+            padding-top: 8px !important;
           }
           .page:first-child {
             page-break-before: avoid;
@@ -2169,7 +2243,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
         <!-- 上部 -->
         <div class="page-header">
           <div class="shipping-no-left">
-            <div>管理番号: ${shippingNo}</div>
+            ${getDeliveryWeekdayIconHtml(firstItem.delivery_date)}
           </div>
           <div class="shipping-date-right">出荷日: ${formatDateWithWeekday(firstItem.shipping_date)}</div>
         </div>
@@ -2248,6 +2322,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
 
         <!-- 下部 -->
         <div class="page-footer">
+          <div class="shipping-management-no">管理番号: ${shippingNo}</div>
           <div class="print-datetime">発行日時: ${currentDateTime}</div>
           <div class="shipping-no-suffix">パレット番号${shippingNoLast3}</div>
         </div>

@@ -390,6 +390,8 @@ export default {
     OP_MANUAL_CUTTING: 'Chỉ thị & thực tế cắt & vát mép',
     OP_MANUAL_PLAN_BASELINE: 'Quản lý baseline kế hoạch SX',
     OP_MANUAL_INSPECTION: 'Thu thập thực tế kiểm tra',
+    OP_MANUAL_INSPECTION_REGISTRATION: 'Đăng ký thực tế kiểm tra',
+    OP_MANUAL_INSPECTION_MONITOR: 'Giám sát kiểm tra',
     SYSTEM: 'Hệ thống',
     SYSTEM_USER: 'Người dùng & Tổ chức',
     SYSTEM_HOME: 'Trang hệ thống',
@@ -1897,6 +1899,18 @@ export default {
     sessionLockedByOtherTerminal:
       'Phiên kiểm tra này đang sản xuất trên thiết bị khác. Hãy kết thúc sản xuất trên thiết bị đó.',
     sessionLockedByOtherTerminalShort: 'Thiết bị khác đang SX',
+    reclaimSessionConfirmTitle: 'Tiếp quản phiên',
+    reclaimSessionConfirm:
+      'Tiếp quản trên thiết bị này? Thiết bị khác (hoặc trình duyệt trước) sẽ bị ngắt kết nối.',
+    btnReclaimSession: 'Tiếp quản trên thiết bị này',
+    forceReleaseLockConfirmTitle: 'Gỡ khóa thiết bị',
+    forceReleaseLockConfirm:
+      'Gỡ khóa của thiết bị khác? Kiểm tra viên có thể tiếp tục trên thiết bị này.',
+    btnForceReleaseLock: 'Gỡ khóa',
+    forceReleaseLockSuccess: 'Đã gỡ khóa thiết bị.',
+    otherTerminalLockBanner: 'Phiên kiểm tra này đang được thao tác trên thiết bị khác.',
+    otherTerminalLockBannerReclaimable:
+      'Bị khóa bởi thiết bị khác hoặc trình duyệt trước. Bạn có thể tiếp quản nếu là kiểm tra viên đang đăng nhập.',
     offlineBanner: 'Ngoại tuyến. Thay đổi được lưu cục bộ và đồng bộ khi có mạng.',
     offlineQueued: 'Đã lưu cục bộ; sẽ đồng bộ khi có mạng.',
     offlinePendingSync: 'Chưa đồng bộ {n}…',

@@ -391,6 +391,8 @@ export default {
     OP_MANUAL_CUTTING: 'Cutting & chamfering instruction & actuals',
     OP_MANUAL_PLAN_BASELINE: 'Production plan baseline',
     OP_MANUAL_INSPECTION: 'Inspection actual collection',
+    OP_MANUAL_INSPECTION_REGISTRATION: 'Inspection actual registration',
+    OP_MANUAL_INSPECTION_MONITOR: 'Inspection monitor',
     SYSTEM: 'System',
     SYSTEM_USER: 'User & Org',
     SYSTEM_HOME: 'System Home',
@@ -1896,6 +1898,18 @@ export default {
     sessionLockedByOtherTerminal:
       'This inspection is in production on another device. End production on that device to continue here.',
     sessionLockedByOtherTerminalShort: 'Other device producing',
+    reclaimSessionConfirmTitle: 'Take over session',
+    reclaimSessionConfirm:
+      'Take over control on this device? The other device (or previous browser) will be disconnected.',
+    btnReclaimSession: 'Take over on this device',
+    forceReleaseLockConfirmTitle: 'Release device lock',
+    forceReleaseLockConfirm:
+      'Release the lock held by another device? The inspector can resume on this device.',
+    btnForceReleaseLock: 'Release lock',
+    forceReleaseLockSuccess: 'Device lock released.',
+    otherTerminalLockBanner: 'This inspection is being operated on another device.',
+    otherTerminalLockBannerReclaimable:
+      'Locked by another device or previous browser. You can take over if you are the logged-in inspector.',
     offlineBanner: 'Offline. Changes are queued and will sync when online.',
     offlineQueued: 'Saved on device; will sync when online.',
     offlinePendingSync: '{n} pending sync…',

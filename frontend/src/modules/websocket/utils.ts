@@ -1,6 +1,6 @@
 /**
  * WebSocket 工具类
- * 用于实时通信，包括单设备登录检测
+ * 用于实时通信，包括单设备登录检测、MES 検査実績状態推送
  */
 import { useUserStore } from '@/modules/auth/stores/user'
 import { ElMessage } from 'element-plus'
@@ -10,6 +10,39 @@ let reconnectTimer: number | null = null
 let reconnectAttempts = 0
 const maxReconnectAttempts = 5
 const reconnectDelay = 3000 // 3秒
+
+type WebSocketMessageHandler = (data: Record<string, unknown>) => void
+const messageHandlers = new Map<string, Set<WebSocketMessageHandler>>()
+
+/**
+ * 特定 type の WebSocket メッセージを購読
+ */
+export function subscribeWebSocketMessage(
+  type: string,
+  handler: WebSocketMessageHandler,
+): () => void {
+  if (!messageHandlers.has(type)) {
+    messageHandlers.set(type, new Set())
+  }
+  messageHandlers.get(type)!.add(handler)
+  return () => {
+    messageHandlers.get(type)?.delete(handler)
+  }
+}
+
+function dispatchWebSocketMessage(data: Record<string, unknown>): void {
+  const type = typeof data.type === 'string' ? data.type : ''
+  if (!type) return
+  const handlers = messageHandlers.get(type)
+  if (!handlers) return
+  for (const handler of handlers) {
+    try {
+      handler(data)
+    } catch (e) {
+      console.error('[WebSocket] Handler error:', e)
+    }
+  }
+}
 
 /**
  * WebSocket接続を確立
@@ -76,9 +109,11 @@ export function connectWebSocket() {
 /**
  * WebSocketメッセージを処理
  */
-function handleWebSocketMessage(data: any) {
+function handleWebSocketMessage(data: Record<string, unknown>) {
   console.log('[WebSocket] Received message:', data)
-  
+
+  dispatchWebSocketMessage(data)
+
   switch (data.type) {
     case 'connected':
       console.log('[WebSocket]', data.message)
@@ -105,7 +140,10 @@ function handleWebSocketMessage(data: any) {
     case 'pong':
       // 接続維持の応答
       break
-      
+
+    case 'mes_inspection_state':
+      break
+
     default:
       console.log('[WebSocket] Unknown message type:', data.type)
   }

@@ -501,3 +501,117 @@
     page-break-after: avoid;
   }
 }
+
+/* 検査実績収集マニュアル：不良（項目別）デモ */
+.help-content :deep(.insp-help-defect) {
+  margin: 10px 0 14px;
+  --insp-help-defect-col-w: 104px;
+}
+
+.help-content :deep(.insp-help-defect__panel) {
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.help-content :deep(.insp-help-defect__head) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.help-content :deep(.insp-help-defect__head strong) {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.help-content :deep(.insp-help-defect__head span) {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.help-content :deep(.insp-help-defect__group) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.help-content :deep(.insp-help-defect__group-head) {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.help-content :deep(.insp-help-defect__group-label) {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.help-content :deep(.insp-help-defect__group-name) {
+  font-size: 12px;
+  font-weight: 800;
+  color: #0f766e;
+}
+
+.help-content :deep(.insp-help-defect__grid) {
+  display: grid;
+  grid-template-columns: repeat(var(--defect-cols, 7), var(--insp-help-defect-col-w));
+  gap: 4px;
+  width: max-content;
+  min-width: min(100%, calc(var(--defect-cols, 7) * var(--insp-help-defect-col-w) + (var(--defect-cols, 7) - 1) * 4px));
+  max-width: 100%;
+}
+
+.help-content :deep(.insp-help-defect__cell) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #ffffff;
+  text-align: center;
+}
+
+.help-content :deep(.insp-help-defect__cell span) {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #334155;
+}
+
+.help-content :deep(.insp-help-defect__cell em) {
+  font-style: normal;
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.help-content :deep(.insp-help-defect__cell--on) {
+  border-color: #fbbf24;
+  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.help-content :deep(.insp-help-defect__cell--on em) {
+  color: #b45309;
+}
+
+@media (max-width: 640px) {
+  .help-content :deep(.insp-help-defect) {
+    --insp-help-defect-col-w: 92px;
+  }
+}

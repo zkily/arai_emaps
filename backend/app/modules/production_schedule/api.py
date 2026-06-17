@@ -179,8 +179,12 @@ _INSPECTION_MGMT_MES_COLUMNS = (
     "mes_production_is_paused",
     "mes_inspector_user_id",
     "mes_client_instance_id",
+    "mes_client_lock_activity_at",
     "mes_defect_by_item",
 )
+
+# 端末ロック：最終 checkpoint からこの時間を超えると自動解放（時間）
+INSPECTION_MES_CLIENT_LOCK_TTL_HOURS = 4
 
 _INSPECTION_MGMT_META_COLUMNS = (
     "data_source",
@@ -416,6 +420,11 @@ def _inspection_mes_column_migration_hint(column: str) -> str:
         return (
             f"列 `{column}` がありません。"
             "backend/database/migrations/12_inspection_management_mes_client_instance.sql を実行してください。"
+        )
+    if column == "mes_client_lock_activity_at":
+        return (
+            f"列 `{column}` がありません。"
+            "backend/database/migrations/52_inspection_mes_client_lock_activity.sql を実行してください。"
         )
     return (
         f"列 `{column}` がありません。"
@@ -891,6 +900,70 @@ def _normalize_mes_client_instance_id(raw: Optional[str]) -> Optional[str]:
     if not s:
         return None
     return s[:64]
+
+
+def _inspection_mes_lock_activity_column(im_cols: set[str]) -> Optional[str]:
+    if "mes_client_lock_activity_at" in im_cols:
+        return "mes_client_lock_activity_at"
+    return None
+
+
+def _append_inspection_client_lock_activity_touch(
+    updates: list[str],
+    params: dict[str, Any],
+    im_cols: set[str],
+    *,
+    at: Optional[datetime] = None,
+) -> None:
+    col = _inspection_mes_lock_activity_column(im_cols)
+    if not col:
+        return
+    ts = at if at is not None else now_jst().replace(tzinfo=None)
+    updates.append(f"{col} = :mes_client_lock_activity_at")
+    params["mes_client_lock_activity_at"] = ts
+
+
+async def _expire_stale_inspection_client_locks(
+    db: AsyncSession,
+    im_cols: set[str],
+    *,
+    production_day: Optional[Any] = None,
+    inspection_id: Optional[int] = None,
+) -> int:
+    """checkpoint 等が一定時間無い在産行の mes_client_instance_id を解放する。"""
+    if "mes_client_instance_id" not in im_cols:
+        return 0
+    activity_col = _inspection_mes_lock_activity_column(im_cols) or "mes_production_started_at"
+    threshold = now_jst().replace(tzinfo=None) - timedelta(hours=INSPECTION_MES_CLIENT_LOCK_TTL_HOURS)
+    where_parts = [
+        "mes_production_started_at IS NOT NULL",
+        "(mes_production_ended_at IS NULL OR TRIM(COALESCE(CAST(mes_production_ended_at AS CHAR), '')) = '')",
+        "mes_client_instance_id IS NOT NULL",
+        "TRIM(mes_client_instance_id) <> ''",
+        f"({activity_col} IS NULL OR {activity_col} < :lock_ttl_threshold)",
+    ]
+    params: dict[str, Any] = {"lock_ttl_threshold": threshold}
+    if production_day is not None:
+        where_parts.append("production_day = :production_day")
+        params["production_day"] = production_day
+    if inspection_id is not None:
+        where_parts.append("id = :inspection_id")
+        params["inspection_id"] = inspection_id
+    clear_activity = ""
+    if _inspection_mes_lock_activity_column(im_cols):
+        clear_activity = ", mes_client_lock_activity_at = NULL"
+    sql = (
+        "UPDATE inspection_management "
+        f"SET mes_client_instance_id = NULL{clear_activity} "
+        f"WHERE {' AND '.join(where_parts)}"
+    )
+    try:
+        result = await db.execute(text(sql), params)
+        await db.commit()
+        return int(result.rowcount or 0)
+    except Exception:
+        await db.rollback()
+        return 0
 
 
 def _inspection_row_mes_in_progress(started: Any, ended: Any) -> bool:
@@ -7069,6 +7142,10 @@ async def _query_inspection_management_list(
             status_code=503,
             detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
         )
+    expire_day = None
+    if production_day:
+        expire_day = _parse_date_ymd(production_day)
+    await _expire_stale_inspection_client_locks(db, im_cols, production_day=expire_day)
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
     join_inspector = join_inspector_names and "mes_inspector_user_id" in im_cols
@@ -8636,6 +8713,7 @@ class UpdateInspectionManagementBody(BaseModel):
     mes_client_instance_id: Optional[str] = None
     mes_claim_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
+    mes_release_client_lock: Optional[bool] = None
     manual_registration: bool = False
 
 
@@ -8650,6 +8728,7 @@ async def update_inspection_management(
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+    await _expire_stale_inspection_client_locks(db, im_cols, inspection_id=inspection_id)
     if _inspection_mes_row_mutation_requested(body) and not body.manual_registration:
         row_insp = await _fetch_inspection_row_mes_inspector(db, inspection_id, im_cols)
         if body.mes_inspector_user_id is not None:
@@ -8674,6 +8753,19 @@ async def update_inspection_management(
 
     updates: list[str] = []
     params: dict[str, Any] = {"iid": inspection_id}
+    mes_state_broadcast = False
+
+    if body.mes_release_client_lock:
+        if not has_client_col:
+            raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_client_instance_id"))
+        if not force_release:
+            raise HTTPException(status_code=400, detail="mes_force_release が必要です")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="検査生産中ではないためロック解除できません")
+        updates.append("mes_client_instance_id = NULL")
+        if _inspection_mes_lock_activity_column(im_cols):
+            updates.append("mes_client_lock_activity_at = NULL")
+        mes_state_broadcast = True
 
     if body.mes_claim_client_lock:
         if not has_client_col:
@@ -8702,6 +8794,8 @@ async def update_inspection_management(
             _reject_inspection_mes_client_lock_conflict(existing_lock, client_id, force_release=force_release)
         params["mes_client_instance_id"] = client_id
         updates.append("mes_client_instance_id = :mes_client_instance_id")
+        _append_inspection_client_lock_activity_touch(updates, params, im_cols)
+        mes_state_broadcast = True
     if body.production_day is not None:
         d = _parse_date_ymd(body.production_day)
         if d is not None:
@@ -8766,8 +8860,10 @@ async def update_inspection_management(
                         )
                         params["mes_client_instance_id"] = client_id
                         updates.append("mes_client_instance_id = :mes_client_instance_id")
+                        _append_inspection_client_lock_activity_touch(updates, params, im_cols)
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
+                mes_state_broadcast = True
     if body.mes_production_ended_at is not None:
         if "mes_production_ended_at" not in im_cols:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_production_ended_at"))
@@ -8787,6 +8883,9 @@ async def update_inspection_management(
                 updates.append("mes_production_ended_at = :mes_production_ended_at")
                 if has_client_col and not body.manual_registration:
                     updates.append("mes_client_instance_id = NULL")
+                    if _inspection_mes_lock_activity_column(im_cols):
+                        updates.append("mes_client_lock_activity_at = NULL")
+                mes_state_broadcast = True
     if body.mes_net_production_sec is not None:
         if "mes_net_production_sec" not in im_cols:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_net_production_sec"))
@@ -8889,6 +8988,8 @@ async def update_inspection_management(
             params["mes_client_instance_id"] = client_id
             if "mes_client_instance_id = :mes_client_instance_id" not in updates:
                 updates.append("mes_client_instance_id = :mes_client_instance_id")
+        _append_inspection_client_lock_activity_touch(updates, params, im_cols)
+        mes_state_broadcast = True
 
     if not updates:
         return {"success": True, "message": "変更なし"}
@@ -8901,6 +9002,19 @@ async def update_inspection_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
+    if mes_state_broadcast or mes_control_touched or body.mes_production_started_at is not None:
+        try:
+            pd_row = await db.execute(
+                text("SELECT production_day FROM inspection_management WHERE id = :iid LIMIT 1"),
+                {"iid": inspection_id},
+            )
+            pd_val = pd_row.scalar()
+            if pd_val is not None:
+                from app.modules.websocket.api import notify_mes_inspection_state_change
+
+                await notify_mes_inspection_state_change(str(pd_val), inspection_id)
+        except Exception as ws_exc:
+            logger.warning("[WebSocket] mes_inspection_state broadcast failed: %s", ws_exc)
     return {"success": True, "message": "更新しました"}
 
 

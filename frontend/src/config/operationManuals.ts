@@ -98,6 +98,22 @@ export const OPERATION_MANUALS: OperationManualEntry[] = [
     sortOrder: 7,
     category: 'mes',
   },
+  {
+    slug: 'inspection-actual-registration',
+    menuCode: 'OP_MANUAL_INSPECTION_REGISTRATION',
+    pageTitle: '検査実績収集登録',
+    docFile: 'inspection-actual-registration_ja.md',
+    sortOrder: 8,
+    category: 'mes',
+  },
+  {
+    slug: 'inspection-monitor',
+    menuCode: 'OP_MANUAL_INSPECTION_MONITOR',
+    pageTitle: '検査モニタ',
+    docFile: 'inspection-monitor_ja.md',
+    sortOrder: 9,
+    category: 'mes',
+  },
 ]
 
 export interface OperationManualNavGroup {

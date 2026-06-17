@@ -1368,7 +1368,7 @@
     <!-- 実績確定：结果汇总弹窗 -->
     <el-dialog
       v-model="confirmActualResultVisible"
-      width="480px"
+      width="720px"
       :show-close="true"
       class="confirm-actual-result-dialog"
       align-center
@@ -1384,100 +1384,118 @@
           <span>生産日: {{ confirmActualResultDay }}</span>
           <span>工程: {{ confirmActualResultType === 'chamfering' ? '面取' : '切断' }}</span>
         </div>
-        <div class="confirm-actual-result-cards">
-          <div class="confirm-actual-result-card">
-            <span class="confirm-actual-result-card-label">登録件数</span>
-            <span class="confirm-actual-result-card-value">{{ confirmActualResultCount }} 件</span>
-          </div>
-          <div class="confirm-actual-result-card confirm-actual-result-card--highlight">
-            <span class="confirm-actual-result-card-label">数量合計（生産数）</span>
-            <span class="confirm-actual-result-card-value">{{ confirmActualResultTotalQty.toLocaleString() }} 本</span>
-          </div>
-        </div>
-        <div v-if="confirmActualEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
-          送信先を読み込み中…
-        </div>
-        <template v-else>
-          <div v-if="confirmActualRecipients.length" class="confirm-actual-result-recipients">
-            <span class="confirm-actual-result-recipients-label">メール送信先（{{ confirmActualRecipients.length }}名）</span>
-            <span class="confirm-actual-result-recipients-names">{{ confirmActualRecipientNames }}</span>
-          </div>
-          <div v-if="confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
-            <span class="confirm-actual-result-recipients-label">LINE送信先（{{ confirmActualLineRecipients.length }}名）</span>
-            <span class="confirm-actual-result-recipients-names">{{ confirmActualLineRecipientNames }}</span>
-          </div>
-          <div v-if="!confirmActualRecipients.length && !confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
-            送信先が未設定です（通知センターでメール/LINE 受信者を登録してください）
-          </div>
-        </template>
-        <div v-if="confirmActualAlreadySent" class="confirm-actual-result-sent-hint">
-          この生産日の実績確定通知は送信済みです
-        </div>
-        <template v-if="confirmActualResultType === 'cutting'">
-          <div class="confirm-actual-result-divider" />
-          <div class="confirm-actual-result-trial-head">
-            <span class="confirm-actual-result-trial-title">試作完了通知</span>
-            <span class="confirm-actual-result-trial-sub">備考に「試作」を含み完了済みの行</span>
-          </div>
-          <div v-if="confirmTrialEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
-            試作対象を読み込み中…
-          </div>
-          <template v-else>
-            <div v-if="confirmTrialItems.length" class="confirm-actual-result-trial-items">
-              <div
-                v-for="(item, idx) in confirmTrialItems"
-                :key="`trial-${idx}`"
-                class="confirm-actual-result-trial-item"
-              >
-                <span>{{ item.production_day }}</span>
-                <span class="confirm-actual-result-trial-item-name">{{ item.product_name || '—' }}</span>
-                <span>{{ (item.production_quantity ?? 0).toLocaleString() }} 本</span>
+
+        <div class="confirm-actual-result-layout">
+          <!-- 左：実績サマリー -->
+          <div class="confirm-actual-result-left">
+            <div class="confirm-actual-result-left-title">確定実績</div>
+            <div class="confirm-actual-result-cards">
+              <div class="confirm-actual-result-card">
+                <span class="confirm-actual-result-card-label">登録件数</span>
+                <span class="confirm-actual-result-card-value">{{ confirmActualResultCount }} 件</span>
+              </div>
+              <div class="confirm-actual-result-card confirm-actual-result-card--highlight">
+                <span class="confirm-actual-result-card-label">数量合計（生産数）</span>
+                <span class="confirm-actual-result-card-value">{{ confirmActualResultTotalQty.toLocaleString() }} 本</span>
               </div>
             </div>
-            <div v-else class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
-              試作完了対象がありません
+          </div>
+
+          <!-- 右：メール・LINE送信 -->
+          <div class="confirm-actual-result-right">
+            <div class="confirm-actual-result-right-title">メール・LINE送信</div>
+
+            <div v-if="confirmActualEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
+              送信先を読み込み中…
             </div>
-            <div v-if="confirmTrialRecipients.length" class="confirm-actual-result-recipients">
-              <span class="confirm-actual-result-recipients-label">試作メール送信先（{{ confirmTrialRecipients.length }}名）</span>
-              <span class="confirm-actual-result-recipients-names">{{ confirmTrialRecipientNames }}</span>
+            <template v-else>
+              <div v-if="confirmActualRecipients.length" class="confirm-actual-result-recipients">
+                <span class="confirm-actual-result-recipients-label">メール送信先（{{ confirmActualRecipients.length }}名）</span>
+                <span class="confirm-actual-result-recipients-names">{{ confirmActualRecipientNames }}</span>
+              </div>
+              <div v-if="confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
+                <span class="confirm-actual-result-recipients-label">LINE送信先（{{ confirmActualLineRecipients.length }}名）</span>
+                <span class="confirm-actual-result-recipients-names">{{ confirmActualLineRecipientNames }}</span>
+              </div>
+              <div v-if="!confirmActualRecipients.length && !confirmActualLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
+                送信先が未設定です（通知センターでメール/LINE 受信者を登録してください）
+              </div>
+            </template>
+            <div v-if="confirmActualAlreadySent" class="confirm-actual-result-sent-hint">
+              この生産日の実績確定通知は送信済みです
             </div>
-            <div v-if="confirmTrialLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
-              <span class="confirm-actual-result-recipients-label">試作LINE送信先（{{ confirmTrialLineRecipients.length }}名）</span>
-              <span class="confirm-actual-result-recipients-names">{{ confirmTrialLineRecipientNames }}</span>
+
+            <div class="confirm-actual-result-send-actions">
+              <el-button
+                type="success"
+                size="default"
+                :loading="confirmActualEmailLoading"
+                :disabled="!confirmActualCanSend || confirmActualResultCount <= 0"
+                @click="sendConfirmActualEmail"
+              >
+                メール・LINE送信
+              </el-button>
             </div>
-            <div
-              v-if="confirmTrialItems.length && !confirmTrialRecipients.length && !confirmTrialLineRecipients.length"
-              class="confirm-actual-result-recipients confirm-actual-result-recipients--empty"
-            >
-              試作通知の送信先が未設定です（通知センターで「切断試作完了」を設定してください）
-            </div>
-            <div v-if="confirmTrialAlreadySent" class="confirm-actual-result-sent-hint">
-              この生産日の試作完了通知は送信済みです
-            </div>
-          </template>
-        </template>
+
+            <template v-if="confirmActualResultType === 'cutting'">
+              <div class="confirm-actual-result-divider" />
+              <div class="confirm-actual-result-trial-head">
+                <span class="confirm-actual-result-trial-title">試作完了通知</span>
+                <span class="confirm-actual-result-trial-sub">備考に「試作」を含み完了済みの行</span>
+              </div>
+              <div v-if="confirmTrialEmailPreviewLoading" class="confirm-actual-result-recipients confirm-actual-result-recipients--loading">
+                試作対象を読み込み中…
+              </div>
+              <template v-else>
+                <div v-if="confirmTrialItems.length" class="confirm-actual-result-trial-items">
+                  <div
+                    v-for="(item, idx) in confirmTrialItems"
+                    :key="`trial-${idx}`"
+                    class="confirm-actual-result-trial-item"
+                  >
+                    <span>{{ item.production_day }}</span>
+                    <span class="confirm-actual-result-trial-item-name">{{ item.product_name || '—' }}</span>
+                    <span>{{ (item.production_quantity ?? 0).toLocaleString() }} 本</span>
+                  </div>
+                </div>
+                <div v-else class="confirm-actual-result-recipients confirm-actual-result-recipients--empty">
+                  試作完了対象がありません
+                </div>
+                <div v-if="confirmTrialRecipients.length" class="confirm-actual-result-recipients">
+                  <span class="confirm-actual-result-recipients-label">試作メール送信先（{{ confirmTrialRecipients.length }}名）</span>
+                  <span class="confirm-actual-result-recipients-names">{{ confirmTrialRecipientNames }}</span>
+                </div>
+                <div v-if="confirmTrialLineRecipients.length" class="confirm-actual-result-recipients confirm-actual-result-recipients--line">
+                  <span class="confirm-actual-result-recipients-label">試作LINE送信先（{{ confirmTrialLineRecipients.length }}名）</span>
+                  <span class="confirm-actual-result-recipients-names">{{ confirmTrialLineRecipientNames }}</span>
+                </div>
+                <div
+                  v-if="confirmTrialItems.length && !confirmTrialRecipients.length && !confirmTrialLineRecipients.length"
+                  class="confirm-actual-result-recipients confirm-actual-result-recipients--empty"
+                >
+                  試作通知の送信先が未設定です（通知センターで「切断試作完了」を設定してください）
+                </div>
+                <div v-if="confirmTrialAlreadySent" class="confirm-actual-result-sent-hint">
+                  この生産日の試作完了通知は送信済みです
+                </div>
+                <div class="confirm-actual-result-send-actions">
+                  <el-button
+                    type="warning"
+                    size="default"
+                    :loading="confirmTrialEmailLoading"
+                    :disabled="!confirmTrialCanSend || confirmTrialItems.length <= 0"
+                    @click="sendConfirmTrialEmail"
+                  >
+                    試作メール・LINE送信
+                  </el-button>
+                </div>
+              </template>
+            </template>
+          </div>
+        </div>
       </div>
       <template #footer>
         <div class="confirm-actual-result-footer">
-          <el-button
-            type="success"
-            size="default"
-            :loading="confirmActualEmailLoading"
-            :disabled="!confirmActualCanSend || confirmActualResultCount <= 0"
-            @click="sendConfirmActualEmail"
-          >
-            メール・LINE送信
-          </el-button>
-          <el-button
-            v-if="confirmActualResultType === 'cutting'"
-            type="warning"
-            size="default"
-            :loading="confirmTrialEmailLoading"
-            :disabled="!confirmTrialCanSend || confirmTrialItems.length <= 0"
-            @click="sendConfirmTrialEmail"
-          >
-            試作メール・LINE送信
-          </el-button>
           <el-button type="primary" size="default" @click="confirmActualResultVisible = false">閉じる</el-button>
         </div>
       </template>
@@ -13458,9 +13476,75 @@ onUnmounted(() => {
 .confirm-actual-result-meta {
   display: flex;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   font-size: 13px;
   color: #475569;
+}
+.confirm-actual-result-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  min-height: 280px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.confirm-actual-result-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+  border-right: 1px solid #e2e8f0;
+}
+.confirm-actual-result-left-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  border-left: 3px solid #94a3b8;
+  padding-left: 8px;
+}
+.confirm-actual-result-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 16px;
+  background: #fff;
+  min-width: 0;
+}
+.confirm-actual-result-right-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #059669;
+  border-left: 3px solid #10b981;
+  padding-left: 8px;
+  margin-bottom: 12px;
+}
+.confirm-actual-result-send-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.confirm-actual-result-right .confirm-actual-result-recipients {
+  margin-top: 0;
+}
+.confirm-actual-result-right .confirm-actual-result-recipients + .confirm-actual-result-recipients,
+.confirm-actual-result-right .confirm-actual-result-recipients + .confirm-actual-result-sent-hint,
+.confirm-actual-result-right .confirm-actual-result-sent-hint + .confirm-actual-result-send-actions {
+  margin-top: 8px;
+}
+.confirm-actual-result-right .confirm-actual-result-divider {
+  margin: 14px 0 10px;
+}
+.confirm-actual-result-right .confirm-actual-result-trial-head + .confirm-actual-result-recipients,
+.confirm-actual-result-right .confirm-actual-result-trial-head + .confirm-actual-result-trial-items,
+.confirm-actual-result-right .confirm-actual-result-trial-items + .confirm-actual-result-recipients {
+  margin-top: 8px;
 }
 .confirm-actual-result-recipients {
   margin-top: 14px;
@@ -13543,13 +13627,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
+  justify-content: center;
 }
 .confirm-actual-result-card {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 14px 16px;
-  background: #f8fafc;
+  background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   transition: border-color 0.2s, box-shadow 0.2s;

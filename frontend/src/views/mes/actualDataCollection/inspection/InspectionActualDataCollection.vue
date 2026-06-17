@@ -22,7 +22,6 @@ import {
   VideoPause,
   VideoPlay,
   Warning,
-  QuestionFilled,
 } from '@element-plus/icons-vue'
 import { setLocale, type LocaleType } from '@/i18n'
 import { formatDateTimeJST, formatDateToYmdJST, localeForIntl } from '@/utils/dateFormat'
@@ -71,9 +70,13 @@ const {
   focusInProgressRow,
   resumeInProgressSession,
   canResumeSession,
+  canForceReleaseSession,
+  forceReleaseMesClientLock,
   rowMesLockOwner,
   isPlanLocallyOperated,
   showSessionRecoveryAlert,
+  showOtherTerminalLockBanner,
+  canReclaimFromOtherTerminal,
   inspectorNameById,
   products,
   completedRows,
@@ -287,10 +290,6 @@ function formatDurationSec(sec: number | null | undefined): string {
 function formatSecondsAsMinutes(sec: number | null | undefined): string {
   const s = Math.max(0, sec ?? 0)
   return String(Math.round(s / 60))
-}
-
-function goHelpPage(): void {
-  window.open('/mes/actualDataCollection/inspection/help', '_blank', 'noopener')
 }
 
 function historyDefectQty(row: InspectionMgmtRow): number {
@@ -538,16 +537,6 @@ onUnmounted(() => {
                 </el-badge>
               </button>
             </el-tooltip>
-            <el-tooltip :content="t('mesInspectionActual.helpOpen')" placement="bottom">
-              <button
-                type="button"
-                class="page-title__help"
-                :aria-label="t('mesInspectionActual.helpOpen')"
-                @click="goHelpPage"
-              >
-                <el-icon :size="18"><QuestionFilled /></el-icon>
-              </button>
-            </el-tooltip>
           </h1>
         </div>
         <div
@@ -733,7 +722,21 @@ onUnmounted(() => {
                 class="in-progress-chip__resume-btn"
                 @click.stop="onInProgressPanelResume(row)"
               >
-                {{ t('mesInspectionActual.btnResume') }}
+                {{
+                  rowMesLockOwner(row) === 'other'
+                    ? t('mesInspectionActual.btnReclaimSession')
+                    : t('mesInspectionActual.btnResume')
+                }}
+              </el-button>
+              <el-button
+                v-if="canForceReleaseSession(row)"
+                size="small"
+                type="warning"
+                plain
+                class="in-progress-chip__force-release-btn"
+                @click.stop="forceReleaseMesClientLock(row)"
+              >
+                {{ t('mesInspectionActual.btnForceReleaseLock') }}
               </el-button>
             </div>
           </div>
@@ -784,6 +787,43 @@ onUnmounted(() => {
         <el-empty :description="t('mesInspectionActual.emptySelectProduct')" />
       </template>
       <template v-else-if="showPlanProductionCard">
+      <el-alert
+        v-if="showOtherTerminalLockBanner"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="other-terminal-lock-alert"
+      >
+        <template #title>
+          {{
+            canReclaimFromOtherTerminal
+              ? t('mesInspectionActual.otherTerminalLockBannerReclaimable')
+              : t('mesInspectionActual.otherTerminalLockBanner')
+          }}
+        </template>
+        <div v-if="canReclaimFromOtherTerminal && activeRow" class="other-terminal-lock-alert__actions">
+          <el-button
+            type="primary"
+            size="small"
+            @click="resumeInProgressSession(activeRow)"
+          >
+            {{ t('mesInspectionActual.btnReclaimSession') }}
+          </el-button>
+        </div>
+        <div
+          v-else-if="activeRow && canForceReleaseSession(activeRow)"
+          class="other-terminal-lock-alert__actions"
+        >
+          <el-button
+            type="warning"
+            size="small"
+            plain
+            @click="forceReleaseMesClientLock(activeRow)"
+          >
+            {{ t('mesInspectionActual.btnForceReleaseLock') }}
+          </el-button>
+        </div>
+      </el-alert>
       <el-alert
         v-if="showSessionRecoveryAlert"
         type="info"
@@ -1754,30 +1794,6 @@ onUnmounted(() => {
   line-height: 1.25;
 }
 
-.page-title__help {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  margin-left: 2px;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--el-text-color-secondary);
-  cursor: pointer;
-  transition:
-    color 0.15s ease,
-    background 0.15s ease;
-}
-
-.page-title__help:hover {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
 .page-title__in-progress {
   display: inline-flex;
   align-items: center;
@@ -2015,6 +2031,14 @@ onUnmounted(() => {
 
 .session-recovery-alert {
   margin-bottom: 8px;
+}
+
+.other-terminal-lock-alert {
+  margin-bottom: 8px;
+}
+
+.other-terminal-lock-alert__actions {
+  margin-top: 6px;
 }
 
 .session-recovery-alert__text {
