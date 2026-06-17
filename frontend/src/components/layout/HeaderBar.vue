@@ -155,16 +155,13 @@
 
         <el-dropdown @command="handleCommand" trigger="click" popper-class="header-dropdown-popper">
           <div class="user-dropdown">
-            <div class="user-avatar">
-              <el-icon v-if="!userStore.user?.username" :size="14"><User /></el-icon>
-              <span v-else>{{ userStore.user?.username?.charAt(0).toUpperCase() }}</span>
+            <div class="user-avatar" :style="{ background: userAvatarGradient }">
+              <el-icon v-if="!userDisplayName" :size="14"><User /></el-icon>
+              <span v-else>{{ userAvatarLetter }}</span>
             </div>
             <div class="user-details">
-              <span class="username">{{ userStore.user?.username || t('common.guest') }}</span>
-              <span class="user-role">
-                <el-icon :size="9"><Star /></el-icon>
-                {{ t('common.admin') }}
-              </span>
+              <span class="username">{{ userDisplayName || t('common.guest') }}</span>
+              <span class="user-role">{{ userRoleDisplay }}</span>
             </div>
             <el-icon class="dropdown-icon"><ArrowDown /></el-icon>
           </div>
@@ -206,6 +203,8 @@ import { parseTodayOverviewFromPickingProgressResponse } from '@/utils/shippingP
 import type { ShippingPickingTodayOverview } from '@/utils/shippingPickingNewProgressParse'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
+import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
+import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
 import { ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 import 'dayjs/locale/ja'
@@ -213,7 +212,7 @@ import { useI18n } from 'vue-i18n'
 import { setLocale, type LocaleType } from '@/i18n'
 import {
   FullScreen, Aim, User, SwitchButton, ArrowDown, Clock,
-  Menu, Close, Promotion, Star, Bell, Warning, Reading, MagicStick
+  Menu, Close, Promotion, Bell, Warning, Reading, MagicStick
 } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
@@ -243,6 +242,17 @@ defineEmits<{
 
 const router = useRouter()
 const userStore = useUserStore()
+
+const userDisplayName = computed(() => {
+  const user = userStore.user
+  const full = user?.full_name?.trim()
+  if (full) return full
+  return user?.username?.trim() || ''
+})
+
+const userAvatarLetter = computed(() => avatarLetterFor(userDisplayName.value))
+const userAvatarGradient = computed(() => avatarGradientFor(userDisplayName.value))
+const userRoleDisplay = computed(() => builtinRoleDisplayName(userStore.user?.role, t))
 
 function openManualHome() {
   const resolved = router.resolve({ name: 'ManualHome' })
@@ -1009,46 +1019,39 @@ const handleCommand = async (command: string) => {
 .user-dropdown {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 172px;
-  padding: 5px 14px 5px 6px;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 10px 5px 5px;
   border-radius: var(--hdr-radius-pill);
   cursor: pointer;
-  background: var(--hdr-glass-strong);
-  backdrop-filter: var(--hdr-blur);
-  -webkit-backdrop-filter: var(--hdr-blur);
-  transition:
-    background 0.22s var(--hdr-ease),
-    border-color 0.22s var(--hdr-ease),
-    transform 0.22s var(--hdr-ease),
-    box-shadow 0.22s ease;
-  border: 1px solid var(--hdr-border);
-  box-shadow: var(--hdr-inset), 0 2px 12px rgba(15, 23, 42, 0.12);
+  background: transparent;
+  transition: transform 0.14s ease;
+  border: none;
+  box-shadow: none;
 }
 
 .user-dropdown:hover {
-  background: var(--hdr-glass-hover);
-  border-color: var(--hdr-border-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--hdr-inset), var(--hdr-shadow-raised);
+  background: transparent;
+  border: none;
+  transform: scale(0.98);
+  box-shadow: none;
 }
 
 .user-avatar {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
-  border-radius: 50%;
-  background: linear-gradient(150deg, #ffffff 0%, #e0e7ff 48%, #a5b4fc 100%);
-  color: #3730a3;
+  border-radius: 9px;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 12px;
   font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.35);
   box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.45),
     0 3px 10px rgba(15, 23, 42, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .user-details {
@@ -1071,17 +1074,14 @@ const handleCommand = async (command: string) => {
 }
 
 .user-role {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  color: rgba(248, 250, 252, 0.78);
+  display: block;
+  font-size: 9px;
+  color: #c7d2fe;
   line-height: 1.2;
-}
-
-.user-role .el-icon {
-  color: #fde68a;
-  flex-shrink: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dropdown-icon {

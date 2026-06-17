@@ -14,25 +14,33 @@
     <div class="welcome-banner">
       <div class="welcome-banner__mesh" aria-hidden="true" />
       <div class="welcome-banner__shine" aria-hidden="true" />
-      <div class="welcome-content">
-        <div class="welcome-avatar-shell">
-          <div class="welcome-avatar">
-            <el-icon :size="26"><UserFilled /></el-icon>
+      <div class="welcome-banner__row">
+        <div class="welcome-content">
+          <div class="welcome-avatar-wrap">
+            <div
+              class="welcome-avatar"
+              :style="{ background: avatarGradient }"
+              aria-hidden="true"
+            >
+              {{ avatarLetter }}
+            </div>
+          </div>
+          <div class="welcome-copy">
+            <p class="welcome-greeting">{{ t('dashboard.welcomeGreeting') }}</p>
+            <h1 class="welcome-title">
+              <span class="welcome-name">{{ displayName }}</span>
+              <span v-if="welcomeSuffix" class="welcome-suffix">{{ welcomeSuffix }}</span>
+            </h1>
+            <div class="welcome-chips">
+              <span class="welcome-chip welcome-chip--role">{{ roleDisplay }}</span>
+              <span v-if="departmentName" class="welcome-chip welcome-chip--dept">{{ departmentName }}</span>
+            </div>
           </div>
         </div>
-        <div class="welcome-copy">
-          <h1 class="welcome-title">
-            {{ t('dashboard.welcomeBack', { name: userStore.user?.username || t('common.guest') }) }}
-          </h1>
-          <p class="welcome-tagline">
-            <span class="welcome-tagline__dot" aria-hidden="true" />
-            <span class="welcome-tagline__text">{{ t('dashboard.welcomeSub') }}</span>
-          </p>
-        </div>
-      </div>
-      <div class="welcome-datetime">
-        <el-icon class="welcome-datetime__icon"><Clock /></el-icon>
-        <span class="welcome-datetime__text">{{ currentDateTime }}</span>
+        <p class="welcome-tagline welcome-tagline--right">
+          <span class="welcome-tagline__dot" aria-hidden="true" />
+          <span class="welcome-tagline__text">{{ t('dashboard.welcomeSub') }}</span>
+        </p>
       </div>
     </div>
 
@@ -44,7 +52,7 @@
         class="stat-card"
       >
         <div class="stat-icon" :style="{ background: stat.gradient }">
-          <el-icon :size="20"><component :is="stat.icon" /></el-icon>
+          <el-icon :size="16"><component :is="stat.icon" /></el-icon>
         </div>
         <div class="stat-info">
           <span class="stat-value">{{ stat.value }}</span>
@@ -55,14 +63,34 @@
 
     <!-- 日別受注数量（過去2週・今後1週） -->
     <div class="section chart-block">
-      <div class="section-header chart-section-header">
-        <el-icon><TrendCharts /></el-icon>
-        <div class="chart-title-wrap">
-          <span class="chart-main-title">{{ t('dashboard.dailyOrderChart.title') }}</span>
-          <span class="chart-sub-title">{{ t('dashboard.dailyOrderChart.subtitle') }}</span>
+      <div class="glass-card chart-card--daily">
+        <div class="glass-card__accent glass-card__accent--chart" aria-hidden="true" />
+        <div class="chart-card-header">
+          <div class="chart-card-header__left">
+            <div class="chart-card-header__icon">
+              <el-icon><TrendCharts /></el-icon>
+            </div>
+            <div class="chart-title-wrap">
+              <span class="chart-main-title">{{ t('dashboard.dailyOrderChart.title') }}</span>
+              <span class="chart-sub-title">{{ t('dashboard.dailyOrderChart.subtitle') }}</span>
+            </div>
+          </div>
+          <span class="chart-unit">{{ t('dashboard.dailyOrderChart.unitLabel') }}</span>
         </div>
-      </div>
-      <div class="chart-card chart-card--daily">
+        <div v-if="dailyOrderChartHasData" class="chart-legend">
+          <span class="chart-legend-chip">
+            <span class="chart-legend-chip__bar chart-legend-chip__bar--past" />
+            {{ t('dashboard.dailyOrderChart.legendPast') }}
+          </span>
+          <span class="chart-legend-chip">
+            <span class="chart-legend-chip__bar chart-legend-chip__bar--today" />
+            {{ t('dashboard.dailyOrderChart.legendToday') }}
+          </span>
+          <span class="chart-legend-chip">
+            <span class="chart-legend-chip__bar chart-legend-chip__bar--future" />
+            {{ t('dashboard.dailyOrderChart.legendFuture') }}
+          </span>
+        </div>
         <el-empty
           v-if="!dailyOrderChartHasData"
           :description="t('dashboard.dailyOrderChart.empty')"
@@ -74,19 +102,24 @@
 
     <!-- Quick Access Grid -->
     <div class="section">
-      <div class="section-header">
-        <el-icon><Grid /></el-icon>
-        <span>{{ t('dashboard.quickAccess') }}</span>
-      </div>
-      <div class="quick-grid">
+      <div class="glass-card quick-access-card">
+        <div class="glass-card__accent glass-card__accent--quick" aria-hidden="true" />
+        <div class="section-header section-header--in-card">
+          <div class="section-header__icon">
+            <el-icon><Grid /></el-icon>
+          </div>
+          <span>{{ t('dashboard.quickAccess') }}</span>
+        </div>
+        <div class="quick-grid">
         <router-link
           v-for="item in visibleQuickAccessItems"
           :key="item.path"
           :to="item.path"
           class="quick-card"
+          :style="{ '--quick-accent': item.bg }"
         >
           <div class="quick-icon" :style="{ background: item.bg }">
-            <el-icon :size="22"><component :is="item.icon" /></el-icon>
+            <el-icon :size="16"><component :is="item.icon" /></el-icon>
           </div>
           <div class="quick-content">
             <span class="quick-title">{{ t('dashboard.quick.' + item.titleKey) }}</span>
@@ -94,6 +127,7 @@
           </div>
           <el-icon class="quick-arrow"><ArrowRight /></el-icon>
         </router-link>
+        </div>
       </div>
     </div>
   </div>
@@ -116,26 +150,33 @@ import { getActiveProductCount } from '@/api/master/productMaster'
 import type { LocaleType } from '@/i18n'
 import { formatInteger } from '@/utils/formatInteger'
 import { canAccessPath, isAdminUser } from '@/utils/menuPermissions'
+import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
+import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'
 import type { InventoryStats } from '@/types/erp/inventory'
 import {
-  UserFilled, Sell, Box, Document, Clock, List, Grid,
+  Sell, Box, Document, List, Grid,
   TrendCharts, Tickets, ArrowRight, Calendar, Van, DataAnalysis, Operation, Tools,
 } from '@element-plus/icons-vue'
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
 
+const displayName = computed(() => {
+  const user = userStore.user
+  const full = user?.full_name?.trim()
+  if (full) return full
+  return user?.username || t('common.guest')
+})
+
+const avatarLetter = computed(() => avatarLetterFor(displayName.value))
+const avatarGradient = computed(() => avatarGradientFor(displayName.value))
+const roleDisplay = computed(() => builtinRoleDisplayName(userStore.user?.role, t))
+const departmentName = computed(() => userStore.user?.department_name?.trim() || '')
+const welcomeSuffix = computed(() => t('dashboard.welcomeSuffix'))
+
 const showMenuAccessWarning = computed(() => {
   const user = userStore.user
   return !!user && !isAdminUser(user) && (user.menu_codes?.length ?? 0) === 0
-})
-
-const currentDateTime = ref(dayjs().format('YYYY/MM/DD HH:mm'))
-let timer: number | null = null
-
-onUnmounted(() => {
-  if (timer) clearInterval(timer)
-  disposeDailyOrderChart()
 })
 
 interface StatsCard {
@@ -177,6 +218,10 @@ let dailyOrderChart: echarts.ECharts | null = null
 const dailyOrderChartHasData = computed(
   () => (dailyOrderRaw.value?.items?.length ?? 0) > 0,
 )
+
+onUnmounted(() => {
+  disposeDailyOrderChart()
+})
 
 function onDailyOrderChartResize() {
   dailyOrderChart?.resize()
@@ -275,7 +320,7 @@ function updateDailyOrderChart() {
         axisLine: { lineStyle: { color: '#e2e8f0', width: 1 } },
         axisTick: { show: false },
         axisLabel: {
-          fontSize: 10,
+          fontSize: 11,
           rotate: 38,
           color: '#64748b',
           margin: 10,
@@ -284,10 +329,10 @@ function updateDailyOrderChart() {
       },
       yAxis: {
         type: 'value',
-        name: t('dashboard.dailyOrderChart.axis'),
+        name: '',
         nameGap: 8,
         nameTextStyle: { fontSize: 11, color: '#94a3b8', fontWeight: 500 },
-        axisLabel: { fontSize: 10, color: '#94a3b8' },
+        axisLabel: { fontSize: 11, color: '#94a3b8' },
         splitLine: {
           lineStyle: { type: 'dashed', color: '#e8ecf1', width: 1 },
         },
@@ -303,7 +348,7 @@ function updateDailyOrderChart() {
             show: true,
             position: 'top',
             distance: 5,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 500,
             color: '#64748b',
             formatter: (p: { data?: { value?: number }; value?: number }) => {
@@ -323,7 +368,7 @@ function updateDailyOrderChart() {
               shadowBlur: 18,
               shadowColor: 'rgba(99, 102, 241, 0.45)',
             },
-            label: { fontSize: 10, fontWeight: 600, color: '#475569' },
+            label: { fontSize: 11, fontWeight: 600, color: '#475569' },
           },
           markLine:
             todayIdx >= 0
@@ -410,9 +455,6 @@ const loadDashboardData = async () => {
 }
 
 onMounted(() => {
-  timer = window.setInterval(() => {
-    currentDateTime.value = dayjs().format('YYYY/MM/DD HH:mm')
-  }, 60000)
   loadDashboardData()
 })
 </script>
@@ -423,22 +465,50 @@ onMounted(() => {
 }
 
 .dashboard-home {
+  position: relative;
   padding: 16px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
   min-height: 100vh;
+  background: linear-gradient(180deg, #eef2ff 0%, #f5f3ff 48%, #ecfeff 100%);
+  overflow: hidden;
 }
 
-/* Welcome Banner — modern glass + mesh */
+.dashboard-home::before,
+.dashboard-home::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(0.5px);
+}
+
+.dashboard-home::before {
+  width: 280px;
+  height: 280px;
+  top: -40px;
+  left: -60px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.18) 0%, transparent 70%);
+}
+
+.dashboard-home::after {
+  width: 220px;
+  height: 220px;
+  top: 120px;
+  right: -40px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.14) 0%, transparent 70%);
+}
+
+.dashboard-home > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Welcome Banner */
 .welcome-banner {
   position: relative;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
   overflow: hidden;
   border-radius: 18px;
-  padding: 22px 26px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(
     125deg,
@@ -480,72 +550,170 @@ onMounted(() => {
     transparent 100%
   );
   transform: rotate(-12deg);
+  animation: welcome-shine-sweep 3.6s ease-in-out infinite;
 }
 
-.welcome-content {
+@keyframes welcome-shine-sweep {
+  0% { transform: rotate(-12deg) translateX(-30%); }
+  100% { transform: rotate(-12deg) translateX(30%); }
+}
+
+.welcome-banner__row {
   position: relative;
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 18px;
-  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.welcome-avatar-shell {
+.welcome-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.welcome-avatar-wrap {
   flex-shrink: 0;
-  padding: 3px;
-  border-radius: 16px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.08));
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.2);
+  animation: welcome-avatar-float 2.8s ease-in-out infinite;
+}
+
+@keyframes welcome-avatar-float {
+  0%, 100% { transform: translateY(-3px); }
+  50% { transform: translateY(3px); }
 }
 
 .welcome-avatar {
-  width: 54px;
-  height: 54px;
+  width: 50px;
+  height: 50px;
   border-radius: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #eef2ff;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.06) 100%);
-  backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 6px 16px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  text-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
 }
 
 .welcome-copy {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
   min-width: 0;
+}
+
+.welcome-greeting {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .welcome-title {
   margin: 0;
-  font-size: clamp(1.15rem, 2.5vw, 1.45rem);
-  font-weight: 700;
-  line-height: 1.25;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.welcome-name {
+  font-size: clamp(1.05rem, 2.2vw, 1.25rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  background: linear-gradient(
+    90deg,
+    #f8fafc 0%,
+    #e0e7ff 25%,
+    #ffffff 50%,
+    #c7d2fe 75%,
+    #f8fafc 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: welcome-name-shimmer 2.8s linear infinite;
+  text-shadow: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  filter: drop-shadow(0 2px 10px rgba(15, 23, 42, 0.25));
+}
+
+@keyframes welcome-name-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.welcome-suffix {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.welcome-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.welcome-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 600;
   letter-spacing: 0.03em;
-  color: #ffffff;
-  text-shadow: 0 2px 16px rgba(15, 23, 42, 0.25);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-chip--role {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.welcome-chip--dept {
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .welcome-tagline {
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  max-width: 100%;
-  width: fit-content;
-  padding: 8px 16px 8px 12px;
+  gap: 7px;
+  flex-shrink: 0;
+  max-width: min(42%, 280px);
+  padding: 5px 10px;
   border-radius: 999px;
-  font-size: 12.5px;
+  font-size: 10.5px;
   font-weight: 500;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(15, 23, 42, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(14px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.94);
+  background: rgba(31, 41, 55, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.welcome-tagline--right {
+  align-self: center;
 }
 
 .welcome-tagline__dot {
@@ -553,77 +721,93 @@ onMounted(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #a5f3fc, #34d399);
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.25);
+  background: radial-gradient(circle, #6ee7b7 0%, #34d399 100%);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.28);
+  animation: welcome-dot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes welcome-dot-pulse {
+  0%, 100% { transform: scale(0.88); opacity: 0.85; }
+  50% { transform: scale(1); opacity: 1; }
 }
 
 .welcome-tagline__text {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.35;
 }
 
-.welcome-datetime {
+/* Glass card shared */
+.glass-card {
   position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: #f8fafc;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(14px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.58) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 6px 20px rgba(99, 102, 241, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
-.welcome-datetime__icon {
-  font-size: 16px;
-  opacity: 0.95;
+.glass-card__accent {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
 }
 
-.welcome-datetime__text {
-  font-variant-numeric: tabular-nums;
+.glass-card__accent--chart {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6 40%, #10b981 100%);
+}
+
+.glass-card__accent--quick {
+  background: linear-gradient(90deg, #6366f1, #8b5cf6 40%, #06b6d4 100%);
 }
 
 /* Stats Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: white;
-  border-radius: 10px;
-  padding: 14px 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.58) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 5px 16px rgba(99, 102, 241, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 8px 22px rgba(99, 102, 241, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.12);
 }
 
 .stat-info {
@@ -631,90 +815,142 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .stat-value {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
   color: #1e293b;
-  line-height: 1;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 9.5px;
   color: #64748b;
+  line-height: 1.25;
 }
 
 .chart-block {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
-.chart-section-header {
+.chart-card--daily {
+  padding: 0 0 10px;
+}
+
+.chart-card-header {
+  display: flex;
   align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 6px;
+}
+
+.chart-card-header__left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chart-card-header__icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6366f1;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(139, 92, 246, 0.1));
+  border: 1px solid #e2e8f0;
 }
 
 .chart-title-wrap {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .chart-main-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000;
   letter-spacing: 0.02em;
 }
 
 .chart-sub-title {
-  font-size: 11px;
+  font-size: 10px;
   color: #64748b;
   font-weight: 400;
+  line-height: 1.2;
 }
 
-.chart-card {
-  background: white;
-  border-radius: 10px;
-  padding: 12px 8px 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  min-height: 300px;
-  position: relative;
+.chart-unit {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
+  padding-top: 2px;
 }
 
-.chart-card--daily {
-  border-radius: 14px;
-  padding: 18px 16px 14px;
-  background: linear-gradient(145deg, #ffffff 0%, #f8fafc 48%, #f1f5f9 100%);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 12px 32px -8px rgba(15, 23, 42, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
-  overflow: hidden;
+.chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 4px 14px 8px;
 }
 
-.chart-card--daily::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 3px;
-  border-radius: 14px 14px 0 0;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6 40%, #10b981 100%);
-  opacity: 0.85;
-  pointer-events: none;
+.chart-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
 }
 
-.chart-section-header .el-icon {
-  margin-top: 2px;
-  padding: 8px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(139, 92, 246, 0.1));
-  color: #6366f1;
+.chart-legend-chip__bar {
+  width: 14px;
+  height: 8px;
+  border-radius: 4px;
+}
+
+.chart-legend-chip__bar--past {
+  background: linear-gradient(90deg, #818cf8, #4338ca);
+  color: #4338ca;
+}
+
+.chart-legend-chip:nth-child(1) {
+  color: #4338ca;
+}
+
+.chart-legend-chip__bar--today {
+  background: linear-gradient(90deg, #34d399, #047857);
+}
+
+.chart-legend-chip:nth-child(2) {
+  color: #047857;
+}
+
+.chart-legend-chip__bar--future {
+  background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+}
+
+.chart-legend-chip:nth-child(3) {
+  color: #64748b;
 }
 
 .daily-order-chart {
   width: 100%;
-  height: 292px;
+  height: 236px;
+  padding: 0 8px;
 }
 
 .chart-empty {
@@ -723,66 +959,98 @@ onMounted(() => {
 
 /* Section */
 .section {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
-.section-header {
+.quick-access-card {
+  padding: 0 0 12px;
+}
+
+.section-header--in-card {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 10px;
-  padding-left: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 8px;
+  padding: 12px 14px 0;
 }
 
-.section-header .el-icon {
-  color: #667eea;
+.section-header__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6366f1;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(6, 182, 212, 0.1));
+  border: 1px solid #e2e8f0;
 }
 
 /* Quick Access Grid */
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 10px;
+  gap: 6px;
+  padding: 0 10px;
 }
 
 .quick-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  background: white;
-  border-radius: 10px;
-  padding: 12px 14px;
+  justify-content: center;
+  gap: 4px;
+  min-height: 78px;
+  border-radius: 12px;
+  padding: 8px 6px;
   text-decoration: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: all 0.2s ease;
+  text-align: center;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 255, 255, 0.65) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  overflow: hidden;
+}
+
+.quick-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--quick-accent, linear-gradient(90deg, #6366f1, #8b5cf6));
+  opacity: 0.9;
 }
 
 .quick-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px) scale(0.99);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.14);
 }
 
 .quick-card:hover .quick-arrow {
-  transform: translateX(3px);
-  color: #667eea;
+  transform: translateX(2px);
+  opacity: 1;
 }
 
 .quick-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.12);
 }
 
 .quick-content {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -790,13 +1058,18 @@ onMounted(() => {
 }
 
 .quick-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 10px;
+  font-weight: 700;
   color: #1e293b;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .quick-desc {
-  font-size: 10px;
+  font-size: 8px;
   color: #64748b;
   white-space: nowrap;
   overflow: hidden;
@@ -804,9 +1077,14 @@ onMounted(() => {
 }
 
 .quick-arrow {
-  color: #cbd5e1;
-  transition: all 0.2s ease;
+  position: absolute;
+  right: 5px;
+  bottom: 4px;
+  color: rgba(99, 102, 241, 0.55);
+  opacity: 0.8;
+  transition: all 0.15s ease;
   flex-shrink: 0;
+  font-size: 10px;
 }
 
 /* Responsive */
@@ -824,40 +1102,26 @@ onMounted(() => {
   .dashboard-home {
     padding: 12px;
   }
-  
-  .welcome-banner {
+
+  .welcome-banner__row {
     flex-direction: column;
     align-items: stretch;
-    gap: 16px;
-    padding: 20px 18px;
-    text-align: center;
+    gap: 10px;
   }
 
   .welcome-content {
-    flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
   }
 
-  .welcome-tagline {
-    justify-content: center;
-    width: 100%;
+  .welcome-tagline--right {
+    align-self: flex-end;
     max-width: 100%;
   }
 
-  .welcome-tagline__text {
-    white-space: normal;
-    text-align: center;
-    line-height: 1.45;
-  }
-
-  .welcome-datetime {
-    justify-content: center;
-  }
-  
   .stats-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .quick-grid {
     grid-template-columns: repeat(2, 1fr);
   }

@@ -468,11 +468,17 @@ export default {
   },
   dashboard: {
     welcomeBack: 'おかえりなさい、{name}さん',
+    welcomeGreeting: 'おかえりなさい',
+    welcomeSuffix: 'さん',
     welcomeSub: 'Smart-EMAP システムへようこそ',
     dailyOrderChart: {
       title: '日別受注数量（確定本数）',
       subtitle: '過去2週間・今後1週間（JST）',
       axis: '本',
+      unitLabel: '単位：本',
+      legendPast: '過去',
+      legendToday: '今日',
+      legendFuture: '予定',
       today: '今日',
       empty: 'データを取得できませんでした',
       tooltip: '確定本数: {n}',
@@ -486,7 +492,7 @@ export default {
     medium: '中',
     low: '低',
     stats: {
-      sales: '今月売上',
+      sales: '今月売上(確定本数より)',
       orders: '今月受注（確定本数）',
       inventory: '在庫数量',
       products: 'アクティブ製品',

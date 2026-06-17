@@ -467,11 +467,17 @@ export default {
   },
   dashboard: {
     welcomeBack: 'Chào {name}',
+    welcomeGreeting: 'Chào mừng trở lại',
+    welcomeSuffix: '',
     welcomeSub: 'Chào mừng đến Smart-EMAP',
     dailyOrderChart: {
       title: 'Số lượng đơn hàng/ngày (đã xác nhận)',
       subtitle: '2 tuần trước + 1 tuần tới (JST)',
       axis: 'Cái',
+      unitLabel: 'Đơn vị: cái',
+      legendPast: 'Quá khứ',
+      legendToday: 'Hôm nay',
+      legendFuture: 'Dự kiến',
       today: 'Hôm nay',
       empty: 'Không có dữ liệu hoặc tải thất bại',
       tooltip: 'Số lượng xác nhận: {n}',

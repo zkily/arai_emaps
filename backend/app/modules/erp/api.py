@@ -395,7 +395,7 @@ async def list_order_daily(
     destination_cd: Optional[str] = Query(None, description="納入先CD"),
     keyword: Optional[str] = Query(None, description="製品CD・製品名検索"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_sales_operation("delete")),
+    current_user: User = Depends(require_sales_operation("edit")),
 ):
     """日別受注一覧"""
     try:

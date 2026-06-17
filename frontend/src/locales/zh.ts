@@ -467,11 +467,17 @@ export default {
   },
   dashboard: {
     welcomeBack: '欢迎回来，{name}',
+    welcomeGreeting: '欢迎回来',
+    welcomeSuffix: '',
     welcomeSub: '欢迎使用 Smart-EMAP',
     dailyOrderChart: {
       title: '每日受注数量（确定本数）',
       subtitle: '过去2周与未来1周（JST）',
       axis: '本',
+      unitLabel: '单位：本',
+      legendPast: '过去',
+      legendToday: '今日',
+      legendFuture: '预定',
       today: '今日',
       empty: '暂无数据或加载失败',
       tooltip: '确定本数：{n}',

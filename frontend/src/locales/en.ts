@@ -468,11 +468,17 @@ export default {
   },
   dashboard: {
     welcomeBack: 'Welcome back, {name}',
+    welcomeGreeting: 'Welcome back',
+    welcomeSuffix: '',
     welcomeSub: 'Welcome to Smart-EMAP',
     dailyOrderChart: {
       title: 'Daily order qty (confirmed units)',
       subtitle: 'Past 2 weeks + next 1 week (JST)',
       axis: 'Units',
+      unitLabel: 'Unit: units',
+      legendPast: 'Past',
+      legendToday: 'Today',
+      legendFuture: 'Planned',
       today: 'Today',
       empty: 'No data or failed to load',
       tooltip: 'Confirmed units: {n}',
