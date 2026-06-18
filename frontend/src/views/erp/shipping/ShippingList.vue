@@ -818,7 +818,13 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import request from '@/utils/request'
-import { getJSTToday as getJSTTodayUtil, formatDateJST, formatDateWithWeekdayJST, localeForIntl } from '@/utils/dateFormat'
+import {
+  getJSTToday as getJSTTodayUtil,
+  formatDateJST,
+  formatDateWithWeekdayJST,
+  getWeekdayIndexJST,
+  localeForIntl,
+} from '@/utils/dateFormat'
 import ShippingDetailDialog from './ShippingDetailDialog.vue'
 import ShippingCreateDialog from './ShippingCreateDialog.vue'
 import ShippingQuickEditDialog from './components/ShippingQuickEditDialog.vue'
@@ -1279,26 +1285,15 @@ function formatDateWithWeekday(dateStr: string | null): string {
   return formatDateWithWeekdayJST(dateStr, intlLocale.value).replace(/\//g, '-').replace(/\s/g, ' ')
 }
 
-/** 納入日から曜日（0=日 … 6=土）を取得 */
-function getWeekdayIndexFromDate(dateStr: string | null): number {
-  if (!dateStr || dateStr.length < 10) return -1
-  const d = new Date(`${dateStr.slice(0, 10)}T00:00:00+09:00`)
-  if (Number.isNaN(d.getTime())) return -1
-  return d.getDay()
-}
-
-/** 印刷用：納入日の曜日を区別するアイコン（SVG） */
-function getDeliveryWeekdayIconHtml(dateStr: string | null): string {
-  const day = getWeekdayIndexFromDate(dateStr)
-  if (day < 0) return ''
-
+/** 印刷用：曜日ごとに固定の記号（0=日 … 6=土） */
+const PRINT_WEEKDAY_ICON_HTML: Record<number, string> = (() => {
   const svgWrap = (inner: string) =>
     `<svg class="weekday-icon-svg" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${inner}</svg>`
 
   const hollow = (shape: string, fill: string, stroke: string) =>
     svgWrap(shape.replace('fill="none" stroke="#000"', `fill="${fill}" stroke="${stroke}"`))
 
-  const icons: Record<number, string> = {
+  return {
     // 月: 星（赤）
     1: hollow(
       '<polygon points="24,4 29,18 44,18 32,27 36,42 24,33 12,42 16,27 4,18 19,18" fill="none" stroke="#000" stroke-width="4" stroke-linejoin="round"/>',
@@ -1334,10 +1329,14 @@ function getDeliveryWeekdayIconHtml(dateStr: string | null): string {
     // 日: 塗りつぶし円
     0: svgWrap('<circle cx="24" cy="24" r="15" fill="#000"/>'),
   }
+})()
 
-  const icon = icons[day]
+/** 印刷用：出荷日の曜日を区別するアイコン（SVG、JST 固定） */
+function getShippingWeekdayIconHtml(dateStr: string | null): string {
+  const day = getWeekdayIndexJST(dateStr)
+  const icon = PRINT_WEEKDAY_ICON_HTML[day]
   if (!icon) return ''
-  return `<div class="weekday-icon" title="納入日曜日">${icon}</div>`
+  return `<div class="weekday-icon" title="出荷日曜日">${icon}</div>`
 }
 
 // 行クリック - 避免与选择列冲突，只在非选择列区域触发
@@ -2260,7 +2259,7 @@ function generatePrintHTML(items: ShippingItem[]): string {
         <!-- 上部 -->
         <div class="page-header">
           <div class="shipping-no-left">
-            ${getDeliveryWeekdayIconHtml(firstItem.delivery_date)}
+            ${getShippingWeekdayIconHtml(firstItem.shipping_date)}
           </div>
           <div class="shipping-date-right">出荷日: ${formatDateWithWeekday(firstItem.shipping_date)}</div>
         </div>

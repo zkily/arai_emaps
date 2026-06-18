@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { disconnectWebSocket } from '@/modules/websocket/utils'
 import * as authApi from '@/modules/auth/api'
+import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
 
 export interface OperationPermission {
   module: string
@@ -69,6 +70,9 @@ export const useUserStore = defineStore(
       if (savedUser) {
         try {
           user.value = JSON.parse(savedUser)
+          if (savedToken) {
+            void useSidebarShortcutsStore().load()
+          }
         } catch (e) {
           console.error('ユーザー情報の復元に失敗しました:', e)
           user.value = null
@@ -94,6 +98,8 @@ export const useUserStore = defineStore(
           localStorage.removeItem(REMEMBER_ME_KEY)
         }
       }
+
+      void useSidebarShortcutsStore().load()
     }
 
     const setToken = (tokenValue: string, rememberMe: boolean = false) => {
@@ -106,6 +112,7 @@ export const useUserStore = defineStore(
     const clearLocalSession = () => {
       user.value = null
       token.value = ''
+      useSidebarShortcutsStore().reset()
       try {
         disconnectWebSocket()
       } catch {

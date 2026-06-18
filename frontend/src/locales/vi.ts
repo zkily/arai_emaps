@@ -164,6 +164,14 @@ export default {
     componentUseDailyMatrixTitle: 'Sử dụng linh kiện theo ngày',
     rowTotalUse: 'Tổng sử dụng kỳ',
   },
+  sidebar: {
+    SHORTCUTS: 'Thường dùng',
+    PINNED: 'Đã ghim',
+    FREQUENT: 'Gợi ý',
+    PIN: 'Thêm vào thường dùng',
+    UNPIN: 'Bỏ ghim',
+    PIN_LIMIT: 'Chỉ có thể ghim tối đa {max} trang',
+  },
   menu: {
     DASHBOARD: 'Bảng điều khiển',
     ERP: 'ERP',

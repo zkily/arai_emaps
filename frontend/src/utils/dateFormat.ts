@@ -68,6 +68,30 @@ export function formatDateWithWeekdayJST(
   })
 }
 
+const JST_WEEKDAY_SHORT_TO_INDEX: Record<string, number> = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+}
+
+/** JST で曜日インデックス（0=日 … 6=土）を取得（ブラウザのローカル TZ に依存しない） */
+export function getWeekdayIndexJST(dateStr: string | null | undefined): number {
+  const date = parseDateAsJST(dateStr)
+  if (!date) return -1
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: JST_TIMEZONE,
+    weekday: 'short',
+  })
+    .formatToParts(date)
+    .find((part) => part.type === 'weekday')?.value
+  if (!weekday) return -1
+  return JST_WEEKDAY_SHORT_TO_INDEX[weekday] ?? -1
+}
+
 /**
  * 日時をフォーマット（JST、ロケール対応）
  */

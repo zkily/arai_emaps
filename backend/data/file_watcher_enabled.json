@@ -19,5 +19,7 @@
   "materialCutting.csv": true,
   "excel_watcher_enabled": false,
   "inspection_excel_watcher_enabled": true,
-  "inspection_management_sync_enabled": true
+  "inspection_management_sync_enabled": true,
+  "welding_excel_watcher_enabled": true,
+  "welding_management_sync_enabled": true
 }

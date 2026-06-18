@@ -463,3 +463,8 @@ async def get_current_user(
             detail="ユーザー情報の取得に失敗しました",
         ) from e
 
+
+from app.modules.auth.shortcuts_api import router as shortcuts_router  # noqa: E402
+
+router.include_router(shortcuts_router, prefix="/shortcuts", tags=["常用ページ"])
+

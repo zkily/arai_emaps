@@ -164,6 +164,14 @@ export default {
     componentUseDailyMatrixTitle: '按日·部品使用量',
     rowTotalUse: '期间合计使用量',
   },
+  sidebar: {
+    SHORTCUTS: '常用',
+    PINNED: '收藏',
+    FREQUENT: '推荐',
+    PIN: '加入常用',
+    UNPIN: '取消常用',
+    PIN_LIMIT: '最多只能收藏 {max} 个页面',
+  },
   menu: {
     DASHBOARD: '仪表板',
     ERP: 'ERP',

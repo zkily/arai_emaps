@@ -164,6 +164,14 @@ export default {
     componentUseDailyMatrixTitle: 'Daily component usage',
     rowTotalUse: 'Period total usage',
   },
+  sidebar: {
+    SHORTCUTS: 'Shortcuts',
+    PINNED: 'Pinned',
+    FREQUENT: 'Suggested',
+    PIN: 'Add to shortcuts',
+    UNPIN: 'Remove from shortcuts',
+    PIN_LIMIT: 'You can pin up to {max} pages',
+  },
   menu: {
     DASHBOARD: 'Dashboard',
     ERP: 'ERP',

@@ -36,6 +36,8 @@
           </SidebarCollapsedEntry>
         </el-menu-item>
 
+        <SidebarShortcutsSection :is-collapsed="isCollapsed" />
+
         <MenuTreeItem
           v-for="section in visibleRootMenus"
           :key="section.code"
@@ -65,6 +67,7 @@ import { buildTree, type MenuTreeNode } from '@/composables/useMenuTree'
 import { useMenuPermissions } from '@/composables/useMenuPermissions'
 import { SIDEBAR_ROOT_MENU_CODES } from '@/config/sidebarMenu'
 import MenuTreeItem from '@/components/layout/MenuTreeItem.vue'
+import SidebarShortcutsSection from '@/components/layout/SidebarShortcutsSection.vue'
 import SidebarCollapsedEntry from '@/components/layout/SidebarCollapsedEntry.vue'
 import { HomeFilled, Expand, Fold } from '@element-plus/icons-vue'
 

@@ -102,6 +102,14 @@
             <el-icon><Close /></el-icon>
             <span>{{ t('common.tabsClose') }}</span>
           </div>
+          <div
+            v-if="contextMenu.tab && isTrackableMenuPath(contextMenu.tab.path)"
+            class="context-menu-item"
+            @click="handleContextMenuAction('togglePin')"
+          >
+            <el-icon><component :is="contextMenuPinned ? 'StarFilled' : 'Star'" /></el-icon>
+            <span>{{ contextMenuPinned ? t('sidebar.UNPIN') : t('sidebar.PIN') }}</span>
+          </div>
           <div class="context-menu-divider"></div>
           <div class="context-menu-item" @click="handleContextMenuAction('closeOthers')">
             <el-icon><Close /></el-icon>
@@ -131,30 +139,28 @@ import { reactive, ref, onMounted, onUnmounted, computed, watch, nextTick, type 
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useTabsStore, type TabItem } from '@/stores/tabs'
-import { menuConfig } from '@/router/menuConfig'
-import { Close, ArrowDown, Refresh, FolderRemove, DArrowLeft, DArrowRight, HomeFilled, Document, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { useSidebarShortcutsStore } from '@/stores/sidebarShortcuts'
+import { useMenuLabel, isTrackableMenuPath } from '@/composables/useMenuLabel'
+import { Close, ArrowDown, Refresh, FolderRemove, DArrowLeft, DArrowRight, HomeFilled, Document, ArrowLeft, ArrowRight, Star, StarFilled } from '@element-plus/icons-vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const tabsStore = useTabsStore()
+const shortcutsStore = useSidebarShortcutsStore()
+const { pathToMenuCode, labelForPath } = useMenuLabel()
 
-// Path to menu code for tab title translation
-const pathToMenuCode = computed(() => {
-  const map: Record<string, string> = { '/dashboard': 'DASHBOARD' }
-  menuConfig.forEach((m) => {
-    if (m.path) map[m.path] = m.code
-  })
-  return map
-})
 const tabTitle = (tab: TabItem) => {
   const code = pathToMenuCode.value[tab.path]
   if (code) {
-    const key = 'menu.' + code
-    const translated = t(key)
-    if (translated !== key) return translated
+    return labelForPath(tab.path, code)
   }
   return tab.title || tab.path
 }
+
+const contextMenuPinned = computed(() => {
+  const path = contextMenu.tab?.path
+  return path ? shortcutsStore.isPinned(path) : false
+})
 
 const contextMenu = reactive({
   visible: false,
@@ -225,6 +231,9 @@ const handleContextMenuAction = (action: string) => {
       if (nextPath) {
         router.push(nextPath)
       }
+      break
+    case 'togglePin':
+      void shortcutsStore.togglePin(tabPath)
       break
     case 'closeOthers':
       tabsStore.closeOtherTabs(tabPath)

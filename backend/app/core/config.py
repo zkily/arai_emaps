@@ -128,6 +128,10 @@ class Settings(BaseSettings):
     # 例: \\192.168.1.200\製造部\11各工程生産管理指標\4.検査工程\2026年度\生産管理指標(2026年度-検査).xlsx
     # 変更検知時: stock_transaction_logs（既存）+ inspection_management（增量・重複排除）
     FILE_WATCH_INSPECTION_MGMT_SYNC_ENABLED: bool = True
+    FILE_WATCH_WELDING_EXCEL_PATH: str = ""
+    # 例: \\192.168.1.200\製造部\11各工程生産管理指標\5.溶接工程\2026年度\生産管理指標(2026年度-溶接).xlsx
+    # 変更検知時: welding_management（入力表・增量・重複排除）
+    FILE_WATCH_WELDING_MGMT_SYNC_ENABLED: bool = True
     # 材料切断ログ CSV（material_cutting_logs 取込・監視）。空なら FILE_WATCH_BASE_PATH/materialCutting.csv
     MATERIAL_CUTTING_CSV_PATH: str = ""
     # 材料受入ログ：フルパスをカンマ区切りで指定（最優先。位置変更時はここだけ直せばよい）

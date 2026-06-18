@@ -3,6 +3,8 @@ export function collapsedSidebarLabel(code: string, label: string): string {
   switch (code) {
     case 'DASHBOARD':
       return 'ホーム'
+    case 'SHORTCUTS':
+      return '常用'
     case 'ERP':
       return 'ERP'
     case 'APS':

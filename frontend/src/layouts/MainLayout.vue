@@ -53,6 +53,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTabsStore } from '@/stores/tabs'
+import { usePageVisitTracker } from '@/composables/usePageVisitTracker'
 import SidebarMenu from '@/components/layout/SidebarMenu.vue'
 import HeaderBar from '@/components/layout/HeaderBar.vue'
 import TabsNav from '@/components/layout/TabsNav.vue'
@@ -66,6 +67,8 @@ const TABLET_TOUCH_MAX_WIDTH = 1280
 const route = useRoute()
 const router = useRouter()
 const tabsStore = useTabsStore()
+
+usePageVisitTracker()
 
 const isCollapsed = ref(true)
 const isMobile = ref(false)

@@ -164,6 +164,14 @@ export default {
     componentUseDailyMatrixTitle: '日別・部品別使用量',
     rowTotalUse: '期間合計使用量',
   },
+  sidebar: {
+    SHORTCUTS: 'よく使う',
+    PINNED: 'ピン留め',
+    FREQUENT: 'おすすめ',
+    PIN: 'よく使うに追加',
+    UNPIN: 'ピン留めを解除',
+    PIN_LIMIT: 'ピン留めは最大{max}件までです',
+  },
   menu: {
     DASHBOARD: 'ダッシュボード',
     ERP: 'ERP管理メニュー',
