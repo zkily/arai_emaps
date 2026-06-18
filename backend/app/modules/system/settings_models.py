@@ -206,6 +206,9 @@ class NotificationSetting(Base):
     slack_enabled = Column(Boolean, default=False, comment="Slack通知有効")
     line_enabled = Column(Boolean, default=False, comment="LINE通知有効")
     is_active = Column(Boolean, default=True, nullable=False, comment="有効フラグ")
+    auto_schedule_enabled = Column(Boolean, default=False, comment="自動スケジュール有効")
+    auto_schedule_time = Column(Time, nullable=True, comment="自動実行時刻（JST）")
+    schedule_config = Column(JSON, nullable=True, comment="自動実行パラメータ")
     created_at = Column(DateTime, server_default=func.now(), comment="作成日時")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新日時")
     
@@ -262,6 +265,7 @@ class NotificationRecipient(Base):
     line_user_id = Column(String(64), nullable=True, comment="LINE User ID")
     role = Column(String(50), nullable=True, comment="ロール")
     machine_cd = Column(String(50), nullable=True, comment="設備コード")
+    inventory_column = Column(String(80), nullable=True, comment="在庫列スコープ（INVENTORY_STAGNATION 用）")
     display_name = Column(String(100), nullable=True, comment="表示名")
     is_active = Column(Boolean, default=True, nullable=False, comment="有効フラグ")
     created_at = Column(DateTime, server_default=func.now(), comment="作成日時")

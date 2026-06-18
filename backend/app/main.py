@@ -181,6 +181,57 @@ async def _db_auto_backup_loop():
             await asyncio.sleep(300)
 
 
+async def _inventory_stagnation_auto_patrol_loop():
+    from app.services.full_database_backup import parse_schedule_hh_mm, seconds_until_next_schedule
+    from app.services.inventory_stagnation_auto_patrol import (
+        load_auto_patrol_config,
+        maybe_catchup_auto_patrol,
+        run_inventory_stagnation_auto_patrol_once,
+    )
+    from app.services.full_database_backup import local_now_for_schedule
+
+    logger.info("📋 在庫停滞自動巡検タスク開始（設定は通知センター / .env）")
+    await asyncio.sleep(8)
+    try:
+        async with AsyncSessionLocal() as db:
+            await maybe_catchup_auto_patrol(db)
+    except Exception as e:
+        logger.warning("在庫停滞自動巡検キャッチアップ失敗: {}", e)
+
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                cfg = await load_auto_patrol_config(db)
+            if not cfg.enabled:
+                await asyncio.sleep(300)
+                continue
+            try:
+                hour, minute = parse_schedule_hh_mm(cfg.schedule_time)
+            except ValueError as e:
+                logger.error("在庫停滞自動巡検: 時刻設定が無効: {}", e)
+                await asyncio.sleep(3600)
+                continue
+            now_local = local_now_for_schedule()
+            wait_seconds = seconds_until_next_schedule(now_local, hour, minute)
+            logger.debug("在庫停滞自動巡検: sleep {:.0f}s until {}", wait_seconds, cfg.schedule_time)
+            await asyncio.sleep(wait_seconds)
+            run_at = local_now_for_schedule().strftime("%Y-%m-%d %H:%M:%S")
+            async with AsyncSessionLocal() as db:
+                result = await run_inventory_stagnation_auto_patrol_once(db)
+            logger.info(
+                "📋 在庫停滞自動巡検完了: 実行時刻={} status={} sent={}",
+                run_at,
+                result.get("status"),
+                result.get("total_sent", 0),
+            )
+        except asyncio.CancelledError:
+            logger.info("🛑 在庫停滞自動巡検タスク停止")
+            raise
+        except Exception as e:
+            logger.warning("在庫停滞自動巡検でエラー: {}", e)
+            await asyncio.sleep(300)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションライフサイクル管理"""
@@ -200,6 +251,7 @@ async def lifespan(app: FastAPI):
     cleanup_tasks = [
         asyncio.create_task(_api_logs_cleanup_loop()),
         asyncio.create_task(_db_auto_backup_loop()),
+        asyncio.create_task(_inventory_stagnation_auto_patrol_loop()),
     ]
     yield
     for t in cleanup_tasks:

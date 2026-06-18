@@ -4,7 +4,7 @@
 """
 import logging
 import os
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, time, timedelta
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, FileResponse
@@ -845,8 +845,22 @@ async def update_notification_setting(
     setting = result.scalar_one_or_none()
     if not setting:
         raise HTTPException(status_code=404, detail="通知設定が見つかりません")
-    
-    for key, value in data.model_dump(exclude_unset=True).items():
+
+    payload = data.model_dump(exclude_unset=True)
+    schedule_time_str = payload.pop("auto_schedule_time", None)
+    if schedule_time_str is not None:
+        from app.services.full_database_backup import parse_schedule_hh_mm
+
+        if schedule_time_str == "":
+            setting.auto_schedule_time = None
+        else:
+            try:
+                h, m = parse_schedule_hh_mm(schedule_time_str)
+                setting.auto_schedule_time = time(h, m)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    for key, value in payload.items():
         setattr(setting, key, value)
     
     await db.commit()

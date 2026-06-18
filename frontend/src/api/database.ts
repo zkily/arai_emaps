@@ -16,6 +16,8 @@ export interface ProductionSummaryListParams {
   sortOrder?: 'ASC' | 'DESC'
   /** true のとき products.status が inactive の行を除く */
   excludeInactiveProducts?: boolean
+  /** true のとき warehouse_inventory < 0 の行のみ */
+  warehouseInventoryNegative?: boolean
 }
 
 export interface ProductionSummaryProduct {
@@ -229,6 +231,85 @@ export function getInventoryStagnation(params?: InventoryStagnationParams) {
   return request.get<InventoryStagnationResponse>(`${BASE}/inventory-stagnation`, { params })
 }
 
+export interface InventoryStagnationNotifyGroup {
+  inventory_column: string
+  process_label: string
+  item_count: number
+  reference_key: string
+  recipients: Array<{ email: string; name: string; source: string }>
+  line_recipients: Array<{ line_user_id: string; name: string; source: string }>
+  recipient_count: number
+  line_recipient_count: number
+  already_sent: boolean
+  already_sent_email: boolean
+  already_sent_line: boolean
+  can_send_email: boolean
+  can_send_line: boolean
+  can_send: boolean
+  no_recipients: boolean
+}
+
+export interface InventoryStagnationNotifyPreview {
+  success: boolean
+  as_of: string
+  period_start: string
+  period_end: string
+  min_quantity: number
+  stable_calendar_days: number
+  total_count: number
+  email_enabled: boolean
+  line_enabled: boolean
+  smtp_configured: boolean
+  line_configured: boolean
+  template_subject: string | null
+  groups: InventoryStagnationNotifyGroup[]
+  sendable_group_count: number
+  can_send: boolean
+}
+
+export interface InventoryStagnationNotifySendParams {
+  as_of?: string
+  min_quantity?: number
+  stable_calendar_days?: number
+  inventory_columns?: string[]
+}
+
+export interface InventoryStagnationNotifySendResult {
+  success: boolean
+  status?: string
+  message?: string
+  email_sent_count: number
+  line_sent_count: number
+  total_sent: number
+  groups_sent: string[]
+  groups_skipped: Array<{ inventory_column: string; process_label: string; reason: string }>
+  email_failed: Array<{ email: string; error: string }>
+  line_failed: Array<{ line_user_id: string; error: string }>
+}
+
+export function previewInventoryStagnationNotification(params?: InventoryStagnationParams) {
+  return request.get<InventoryStagnationNotifyPreview>(`${BASE}/inventory-stagnation/notify-preview`, { params })
+}
+
+export function sendInventoryStagnationNotification(data: InventoryStagnationNotifySendParams) {
+  return request.post<InventoryStagnationNotifySendResult>(`${BASE}/inventory-stagnation/notify-send`, data)
+}
+
+export interface InventoryStagnationAutoPatrolResult {
+  success: boolean
+  status: string
+  message?: string
+  total_sent?: number
+  as_of?: string
+  groups_sent?: string[]
+  groups_skipped?: Array<{ inventory_column: string; process_label: string; reason: string }>
+}
+
+/** 在庫停滞自動巡検を手動で 1 回実行 */
+export function runInventoryStagnationAutoPatrol() {
+  return request.post<InventoryStagnationAutoPatrolResult>(`${BASE}/inventory-stagnation/run-auto-patrol`)
+}
+
 export interface InventoryShortagePrintParams {
   startDate: string
   endDate: string
@@ -251,6 +332,24 @@ export interface InventoryShortagePrintRow {
 /** 在庫不足一覧印刷用（products・destinations ジョイン済み） */
 export function getInventoryShortagePrint(params: InventoryShortagePrintParams) {
   return request.get<{ data: InventoryShortagePrintRow[] }>(`${BASE}/inventory-shortage-print`, { params })
+}
+
+export interface WarehouseNegativeTodayRow {
+  product_cd: string
+  product_name: string
+  route_cd: string
+  warehouse_inventory: number
+}
+
+export interface WarehouseNegativeTodayResponse {
+  as_of: string
+  count: number
+  list: WarehouseNegativeTodayRow[]
+}
+
+/** 当日 warehouse_inventory < 0（通知・ヒント用） */
+export function getWarehouseNegativeToday(params?: { as_of?: string; preview_limit?: number }) {
+  return request.get<{ data: WarehouseNegativeTodayResponse }>(`${BASE}/warehouse-negative-today`, { params })
 }
 
 export interface GenerateProductionSummarysParams {

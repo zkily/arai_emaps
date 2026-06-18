@@ -17,11 +17,31 @@ class ResolvedRecipient:
     source: str
 
 
+def _scope_recipient_rows(
+    rows: list,
+    *,
+    machine_cd: str | None = None,
+    inventory_column: str | None = None,
+) -> list:
+    if inventory_column:
+        scoped = [
+            r for r in rows if not r.inventory_column or r.inventory_column == inventory_column
+        ]
+        if scoped:
+            return scoped
+    if machine_cd:
+        scoped = [r for r in rows if not r.machine_cd or r.machine_cd == machine_cd]
+        if scoped:
+            return scoped
+    return rows
+
+
 async def resolve_notification_recipients(
     db: AsyncSession,
     event_code: str,
     *,
     machine_cd: str | None = None,
+    inventory_column: str | None = None,
 ) -> list[ResolvedRecipient]:
     """イベントコードに紐づく有効な受信者をメールアドレス単位で重複排除して返す。"""
     result = await db.execute(
@@ -30,11 +50,11 @@ async def resolve_notification_recipients(
             NotificationRecipient.is_active.is_(True),
         )
     )
-    rows = result.scalars().all()
-    if machine_cd:
-        scoped = [r for r in rows if not r.machine_cd or r.machine_cd == machine_cd]
-        if scoped:
-            rows = scoped
+    rows = _scope_recipient_rows(
+        result.scalars().all(),
+        machine_cd=machine_cd,
+        inventory_column=inventory_column,
+    )
 
     resolved: dict[str, ResolvedRecipient] = {}
 
@@ -92,6 +112,7 @@ async def resolve_line_recipients(
     event_code: str,
     *,
     machine_cd: str | None = None,
+    inventory_column: str | None = None,
 ) -> list[ResolvedLineRecipient]:
     """イベントに紐づく LINE 受信者（recipient_type=line）を返す。"""
     result = await db.execute(
@@ -101,11 +122,11 @@ async def resolve_line_recipients(
             NotificationRecipient.recipient_type == "line",
         )
     )
-    rows = result.scalars().all()
-    if machine_cd:
-        scoped = [r for r in rows if not r.machine_cd or r.machine_cd == machine_cd]
-        if scoped:
-            rows = scoped
+    rows = _scope_recipient_rows(
+        result.scalars().all(),
+        machine_cd=machine_cd,
+        inventory_column=inventory_column,
+    )
 
     resolved: dict[str, ResolvedLineRecipient] = {}
     for row in rows:

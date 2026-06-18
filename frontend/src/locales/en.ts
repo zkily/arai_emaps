@@ -28,6 +28,15 @@ export default {
     headerNotifPickingIncompleteBody:
       'Today picking completion is {rate}% ({completed}/{total} done, {pending} in progress or pending). Check the Progress tab.',
     headerNotifOpenPicking: 'Open shipping picking',
+    headerNotifStagnationLabel: 'Inventory stagnation',
+    headerNotifStagnationBody:
+      'As of {asOf}: {count} stagnant inventory item(s) across {processCount} process(es). Threshold > {minQuantity}, {stableDays} consecutive days.',
+    headerNotifStagnationProcesses: 'Top processes: {processes}',
+    headerNotifOpenStagnation: 'Open stagnation monitor',
+    headerNotifWarehouseNegativeLabel: 'Negative warehouse stock',
+    headerNotifWarehouseNegativeBody: 'Today ({asOf}): {count} row(s) with warehouse inventory below zero.',
+    headerNotifWarehouseNegativeSamples: 'Examples: {samples}',
+    headerNotifOpenWarehouseNegative: 'Open production data',
     headerNotifEmpty: 'Nothing to highlight right now.',
   },
   aiAssistant: {

@@ -317,6 +317,10 @@ async def get_production_summarys_list(
         False,
         description="true のとき products.status が inactive の製品を除く（マスタ無しは残す）",
     ),
+    warehouseInventoryNegative: bool = Query(
+        False,
+        description="true のとき warehouse_inventory < 0 の行のみ",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
@@ -338,6 +342,8 @@ async def get_production_summarys_list(
                 ProductionSummary.product_cd.ilike(k),
             )
         )
+    if warehouseInventoryNegative:
+        conds.append(ProductionSummary.warehouse_inventory < 0)
     if excludeInactiveProducts:
         # MySQL: production_summarys / products の product_cd で collation が混在すると 1267 となるため統一
         _collation = "utf8mb4_unicode_ci"
@@ -1269,120 +1275,86 @@ async def get_inventory_stagnation(
     """
     if as_of and as_of.strip():
         try:
-            as_of_d = date.fromisoformat(as_of.strip()[:10])
+            date.fromisoformat(as_of.strip()[:10])
         except ValueError:
             raise HTTPException(status_code=422, detail="as_of は YYYY-MM-DD 形式で指定してください")
-    else:
-        as_of_d = now_jst().date()
 
-    window_days = int(stable_calendar_days)
-    start_d = as_of_d - timedelta(days=window_days - 1)
-    required_dates = [start_d + timedelta(days=i) for i in range(window_days)]
+    from app.services.inventory_stagnation_service import fetch_inventory_stagnation_hits
 
-    inventory_attrs = [getattr(ProductionSummary, c) for c in INVENTORY_COLUMNS]
-    q = select(
-        ProductionSummary.product_cd,
-        ProductionSummary.product_name,
-        ProductionSummary.route_cd,
-        ProductionSummary.date,
-        *inventory_attrs,
-    ).where(
-        and_(
-            ProductionSummary.date >= start_d,
-            ProductionSummary.date <= as_of_d,
-            ProductionSummary.product_cd.isnot(None),
-            ProductionSummary.product_cd != "",
+    try:
+        data = await fetch_inventory_stagnation_hits(
+            db,
+            as_of=as_of,
+            min_quantity=min_quantity,
+            stable_calendar_days=stable_calendar_days,
+            product_cd=productCd,
+            keyword=keyword,
         )
+    except ValueError:
+        raise HTTPException(status_code=422, detail="as_of は YYYY-MM-DD 形式で指定してください")
+
+    return {"data": data}
+
+
+class InventoryStagnationNotifySendBody(BaseModel):
+    as_of: Optional[str] = None
+    min_quantity: int = 50
+    stable_calendar_days: int = 7
+    inventory_columns: Optional[list[str]] = None
+
+
+@router.get("/inventory-stagnation/notify-preview")
+async def preview_inventory_stagnation_notification(
+    as_of: Optional[str] = Query(None, description="基準日 YYYY-MM-DD"),
+    min_quantity: int = Query(50, ge=0),
+    stable_calendar_days: int = Query(7, ge=2, le=60),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_aps_operation("export")),
+):
+    """在庫停滞アラートの工程別送信プレビュー"""
+    from app.services.inventory_stagnation_notification import (
+        get_inventory_stagnation_notification_preview,
     )
-    if productCd and productCd.strip():
-        q = q.where(ProductionSummary.product_cd == productCd.strip())
-    if keyword and keyword.strip():
-        k = f"%{keyword.strip()}%"
-        q = q.where(
-            or_(
-                ProductionSummary.product_name.ilike(k),
-                ProductionSummary.product_cd.ilike(k),
-            )
-        )
-    q = q.order_by(
-        ProductionSummary.product_cd,
-        ProductionSummary.route_cd,
-        ProductionSummary.date,
+
+    return await get_inventory_stagnation_notification_preview(
+        db,
+        as_of=as_of,
+        min_quantity=min_quantity,
+        stable_calendar_days=stable_calendar_days,
     )
-    rows = (await db.execute(q)).all()
 
-    buckets: dict[tuple, dict] = {}
-    for r in rows:
-        pcd = (r.product_cd or "").strip()
-        rcd = (r.route_cd or "").strip()
-        if not pcd:
-            continue
-        key = (pcd, rcd)
-        entry = buckets.get(key)
-        if entry is None:
-            entry = {
-                "product_cd": pcd,
-                "product_name": r.product_name or "",
-                "route_cd": rcd,
-                "rows_by_date": {},
-            }
-            buckets[key] = entry
-        d = r.date
-        if isinstance(d, str):
-            try:
-                d = date.fromisoformat(d[:10])
-            except ValueError:
-                continue
-        entry["rows_by_date"][d] = r
-        if not entry["product_name"] and r.product_name:
-            entry["product_name"] = r.product_name
 
-    hits: list[dict] = []
-    for entry in buckets.values():
-        rows_by_date = entry["rows_by_date"]
-        if not all(d in rows_by_date for d in required_dates):
-            continue
-        ordered = [rows_by_date[d] for d in required_dates]
-        for col in INVENTORY_COLUMNS:
-            values = [getattr(row, col) for row in ordered]
-            if all(v is None for v in values):
-                continue
-            normalized = [0 if v is None else int(v) for v in values]
-            v0 = normalized[0]
-            if any(v != v0 for v in normalized):
-                continue
-            if v0 <= min_quantity:
-                continue
-            hits.append({
-                "product_cd": entry["product_cd"],
-                "product_name": entry["product_name"],
-                "route_cd": entry["route_cd"],
-                "inventory_column": col,
-                "stable_quantity": v0,
-                "period_start": required_dates[0].isoformat(),
-                "period_end": required_dates[-1].isoformat(),
-                "days": window_days,
-            })
+@router.post("/inventory-stagnation/notify-send")
+async def send_inventory_stagnation_notification_api(
+    body: InventoryStagnationNotifySendBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_aps_operation("export")),
+):
+    """在庫停滞アラートを工程別にメール・LINE 送信"""
+    from app.services.inventory_stagnation_notification import (
+        send_inventory_stagnation_notification,
+    )
 
-    hits.sort(key=lambda x: (
-        -x["stable_quantity"],
-        x["product_name"] or "",
-        x["product_cd"],
-        x["route_cd"],
-        x["inventory_column"],
-    ))
+    return await send_inventory_stagnation_notification(
+        db,
+        as_of=body.as_of,
+        min_quantity=body.min_quantity,
+        stable_calendar_days=body.stable_calendar_days,
+        inventory_columns=body.inventory_columns,
+        current_user=current_user,
+        trigger="manual",
+    )
 
-    return {
-        "data": {
-            "list": hits,
-            "total": len(hits),
-            "as_of": as_of_d.isoformat(),
-            "period_start": start_d.isoformat(),
-            "period_end": as_of_d.isoformat(),
-            "min_quantity": int(min_quantity),
-            "stable_calendar_days": window_days,
-        }
-    }
+
+@router.post("/inventory-stagnation/run-auto-patrol")
+async def run_inventory_stagnation_auto_patrol_api(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_aps_operation("export")),
+):
+    """在庫停滞自動巡検を手動で 1 回実行（テスト・即時実行用）"""
+    from app.services.inventory_stagnation_auto_patrol import run_inventory_stagnation_auto_patrol_once
+
+    return await run_inventory_stagnation_auto_patrol_once(db)
 
 
 @router.get("/products")
@@ -1774,6 +1746,51 @@ async def get_inventory_shortage_print(
     except Exception as e:
         logger.exception("inventory-shortage-print error: %s", e)
         raise HTTPException(status_code=500, detail=f"印刷データ取得エラー: {str(e)}")
+
+
+@router.get("/warehouse-negative-today")
+async def get_warehouse_negative_today(
+    as_of: Optional[str] = Query(None, description="基準日 YYYY-MM-DD（省略時: JST 当日）"),
+    preview_limit: int = Query(8, ge=1, le=50, description="プレビュー件数上限"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """当日 production_summarys の warehouse_inventory < 0 を件数・プレビュー一覧で返す（通知・ヒント用）。"""
+    _ = current_user
+    if as_of and as_of.strip():
+        try:
+            target = date.fromisoformat(as_of.strip()[:10])
+        except ValueError:
+            raise HTTPException(status_code=422, detail="as_of は YYYY-MM-DD 形式で指定してください")
+    else:
+        target = now_jst().date()
+
+    base_where = and_(
+        ProductionSummary.date == target,
+        ProductionSummary.warehouse_inventory < 0,
+    )
+    count_q = select(func.count()).select_from(ProductionSummary).where(base_where)
+    total = int((await db.execute(count_q)).scalar() or 0)
+    if total <= 0:
+        return {"data": {"as_of": target.isoformat(), "count": 0, "list": []}}
+
+    list_q = (
+        select(ProductionSummary)
+        .where(base_where)
+        .order_by(ProductionSummary.warehouse_inventory.asc(), ProductionSummary.product_name)
+        .limit(preview_limit)
+    )
+    rows = (await db.execute(list_q)).scalars().all()
+    items = [
+        {
+            "product_cd": r.product_cd or "",
+            "product_name": r.product_name or "",
+            "route_cd": r.route_cd or "",
+            "warehouse_inventory": int(r.warehouse_inventory) if r.warehouse_inventory is not None else 0,
+        }
+        for r in rows
+    ]
+    return {"data": {"as_of": target.isoformat(), "count": total, "list": items}}
 
 
 class GenerateBody(BaseModel):

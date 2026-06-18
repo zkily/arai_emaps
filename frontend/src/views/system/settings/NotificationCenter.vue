@@ -91,6 +91,59 @@
             </span>
             <el-button size="small" text type="primary" @click="goRecipients(row.event_code)">受信者を編集</el-button>
           </div>
+          <div v-if="row.event_code === 'INVENTORY_STAGNATION'" class="nc-event-card__schedule">
+            <div class="nc-schedule-title">自動巡検（JST 毎日）</div>
+            <div class="nc-schedule-row">
+              <span class="nc-schedule-label">有効</span>
+              <el-switch
+                v-model="row.auto_schedule_enabled"
+                :disabled="!isAdmin"
+                size="small"
+                @change="(v) => patchNotification(row, { auto_schedule_enabled: v })"
+              />
+            </div>
+            <div class="nc-schedule-row">
+              <span class="nc-schedule-label">実行時刻</span>
+              <el-time-select
+                :model-value="formatScheduleTime(row.auto_schedule_time)"
+                :disabled="!isAdmin"
+                start="06:00"
+                step="00:30"
+                end="20:00"
+                size="small"
+                style="width: 100px"
+                @update:model-value="(v) => patchNotification(row, { auto_schedule_time: v || '08:00' })"
+              />
+            </div>
+            <div class="nc-schedule-row nc-schedule-row--params">
+              <span class="nc-schedule-label">閾値(&gt;)</span>
+              <el-input-number
+                :model-value="stagnationScheduleMinQty(row)"
+                :min="0"
+                :step="1"
+                :disabled="!isAdmin"
+                size="small"
+                controls-position="right"
+                @change="(v) => patchStagnationScheduleConfig(row, { min_quantity: Number(v ?? 50) })"
+              />
+              <span class="nc-schedule-label">連続日</span>
+              <el-input-number
+                :model-value="stagnationScheduleStableDays(row)"
+                :min="2"
+                :max="60"
+                :step="1"
+                :disabled="!isAdmin"
+                size="small"
+                controls-position="right"
+                @change="(v) => patchStagnationScheduleConfig(row, { stable_calendar_days: Number(v ?? 7) })"
+              />
+            </div>
+            <div v-if="isAdmin" class="nc-schedule-actions">
+              <el-button size="small" type="warning" plain :loading="autoPatrolRunning" @click="runAutoPatrolNow">
+                今すぐ巡検実行
+              </el-button>
+            </div>
+          </div>
         </article>
       </div>
       <el-empty v-if="!notifications.length && !pageLoading" description="通知設定がありません" />
@@ -128,8 +181,13 @@
           <el-table-column label="送信先" min-width="200">
             <template #default="{ row }">{{ recipientDisplay(row) }}</template>
           </el-table-column>
-          <el-table-column prop="machine_cd" label="設備" width="100">
-            <template #default="{ row }">{{ row.machine_cd || '—' }}</template>
+          <el-table-column label="スコープ" width="110">
+            <template #default="{ row }">
+              <span v-if="row.event_code === 'INVENTORY_STAGNATION'">
+                {{ inventoryColumnLabel(row.inventory_column) }}
+              </span>
+              <span v-else>{{ row.machine_cd || '—' }}</span>
+            </template>
           </el-table-column>
           <el-table-column label="有効" width="80" align="center">
             <template #default="{ row }">
@@ -337,7 +395,22 @@
           <el-input v-model="recipientForm.display_name" placeholder="任意（例：生産管理部 田中）" />
         </el-form-item>
       </template>
-      <el-form-item label="設備コード">
+      <el-form-item v-if="recipientForm.event_code === 'INVENTORY_STAGNATION'" label="対象工程">
+        <el-select
+          v-model="recipientForm.inventory_column"
+          clearable
+          placeholder="全工程（空欄）"
+          style="width:100%"
+        >
+          <el-option
+            v-for="opt in INVENTORY_COLUMN_OPTIONS"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item v-else label="設備コード">
         <el-input v-model="recipientForm.machine_cd" placeholder="任意（将来拡張）" />
       </el-form-item>
       <el-form-item label="有効">
@@ -420,6 +493,7 @@ import {
   type IntegrationConfigItem,
   type UserListItem,
 } from '@/api/system'
+import { runInventoryStagnationAutoPatrol } from '@/api/database'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.user?.role === 'admin')
@@ -469,6 +543,27 @@ const ROLE_OPTIONS = [
   { value: 'viewer', label: '閲覧者' },
   { value: 'guest', label: 'ゲスト' },
 ]
+
+const INVENTORY_COLUMN_OPTIONS = [
+  { value: 'cutting_inventory', label: '切断' },
+  { value: 'chamfering_inventory', label: '面取' },
+  { value: 'molding_inventory', label: '成型' },
+  { value: 'plating_inventory', label: 'メッキ' },
+  { value: 'welding_inventory', label: '溶接' },
+  { value: 'inspection_inventory', label: '検査' },
+  { value: 'warehouse_inventory', label: '倉庫' },
+  { value: 'outsourced_warehouse_inventory', label: '外注倉庫' },
+  { value: 'outsourced_plating_inventory', label: '外注メッキ' },
+  { value: 'outsourced_welding_inventory', label: '外注溶接' },
+  { value: 'pre_welding_inspection_inventory', label: '溶接前検査' },
+  { value: 'pre_inspection_inventory', label: '外注支給前' },
+  { value: 'pre_outsourcing_inventory', label: '外注検査前' },
+]
+
+function inventoryColumnLabel(col: string | null | undefined) {
+  if (!col) return '全工程'
+  return INVENTORY_COLUMN_OPTIONS.find((o) => o.value === col)?.label || col
+}
 
 const PREVIEW_SAMPLE: Record<string, string> = {
   production_day: '2026-06-16',
@@ -604,11 +699,63 @@ function applyIntegrationConfig(
 async function patchNotification(row: NotificationSettingItem, patch: NotificationSettingUpdateParams) {
   if (!isAdmin.value) return
   try {
-    await updateNotificationSetting(row.id, patch)
+    const updated = await updateNotificationSetting(row.id, patch)
+    Object.assign(row, updated)
     ElMessage.success('保存しました')
   } catch {
     ElMessage.error('保存に失敗しました')
     await loadAll()
+  }
+}
+
+const autoPatrolRunning = ref(false)
+
+function formatScheduleTime(t: string | null | undefined) {
+  if (!t) return '08:00'
+  return String(t).slice(0, 5)
+}
+
+function stagnationScheduleMinQty(row: NotificationSettingItem) {
+  return Number(row.schedule_config?.min_quantity ?? 50)
+}
+
+function stagnationScheduleStableDays(row: NotificationSettingItem) {
+  return Number(row.schedule_config?.stable_calendar_days ?? 7)
+}
+
+async function patchStagnationScheduleConfig(
+  row: NotificationSettingItem,
+  partial: { min_quantity?: number; stable_calendar_days?: number },
+) {
+  const next = {
+    min_quantity: stagnationScheduleMinQty(row),
+    stable_calendar_days: stagnationScheduleStableDays(row),
+    ...partial,
+  }
+  row.schedule_config = next
+  await patchNotification(row, { schedule_config: next })
+}
+
+async function runAutoPatrolNow() {
+  autoPatrolRunning.value = true
+  try {
+    const res = await runInventoryStagnationAutoPatrol()
+    const data = (res as any)?.data ?? res
+    const status = data?.status || 'unknown'
+    const sent = data?.total_sent ?? 0
+    if (status === 'sent') {
+      ElMessage.success(`自動巡検完了（送信 ${sent} 件）`)
+    } else if (status === 'no_hits') {
+      ElMessage.info('停滞在庫は検出されませんでした')
+    } else if (status === 'no_sendable') {
+      ElMessage.warning('送信可能な工程がありません（受信者未設定または送信済み）')
+    } else {
+      ElMessage.info(data?.message || `状態: ${status}`)
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.detail || e?.message || '自動巡検に失敗しました')
+  } finally {
+    autoPatrolRunning.value = false
   }
 }
 
@@ -625,6 +772,7 @@ const recipientForm = reactive({
   line_user_id: '',
   role: '',
   machine_cd: '',
+  inventory_column: '',
   display_name: '',
   is_active: true,
 })
@@ -651,6 +799,7 @@ function openRecipientDialog(row?: NotificationRecipientItem) {
   recipientForm.line_user_id = row?.line_user_id || ''
   recipientForm.role = row?.role || ''
   recipientForm.machine_cd = row?.machine_cd || ''
+  recipientForm.inventory_column = row?.inventory_column || ''
   recipientForm.display_name = row?.display_name || ''
   recipientForm.is_active = row?.is_active ?? true
   recipientDialogVisible.value = true
@@ -668,7 +817,11 @@ async function submitRecipient() {
       email: recipientForm.recipient_type === 'email' ? recipientForm.email : null,
       line_user_id: recipientForm.recipient_type === 'line' ? recipientForm.line_user_id : null,
       role: recipientForm.recipient_type === 'role' ? recipientForm.role : null,
-      machine_cd: recipientForm.machine_cd || null,
+      machine_cd: recipientForm.event_code === 'INVENTORY_STAGNATION' ? null : (recipientForm.machine_cd || null),
+      inventory_column:
+        recipientForm.event_code === 'INVENTORY_STAGNATION'
+          ? (recipientForm.inventory_column || null)
+          : null,
       display_name: recipientForm.display_name || null,
       is_active: recipientForm.is_active,
     }
@@ -1236,6 +1389,42 @@ onMounted(loadAll)
   gap: 3px;
   font-size: 0.68rem;
   color: var(--nc-muted);
+}
+
+.nc-event-card__schedule {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.nc-schedule-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.nc-schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nc-schedule-row--params {
+  gap: 6px;
+}
+
+.nc-schedule-label {
+  font-size: 0.68rem;
+  color: var(--nc-muted);
+  min-width: 52px;
+}
+
+.nc-schedule-actions {
+  padding-top: 2px;
 }
 
 /* ---- 表格 ---- */

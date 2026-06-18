@@ -588,6 +588,12 @@ export interface NotificationSettingItem {
   slack_enabled: boolean
   line_enabled: boolean
   is_active: boolean
+  auto_schedule_enabled?: boolean
+  auto_schedule_time?: string | null
+  schedule_config?: {
+    min_quantity?: number
+    stable_calendar_days?: number
+  } | null
   created_at: string
   updated_at: string
 }
@@ -600,6 +606,12 @@ export interface NotificationSettingUpdateParams {
   slack_enabled?: boolean
   line_enabled?: boolean
   is_active?: boolean
+  auto_schedule_enabled?: boolean
+  auto_schedule_time?: string | null
+  schedule_config?: {
+    min_quantity?: number
+    stable_calendar_days?: number
+  } | null
 }
 
 export interface EmailTemplateItem {
@@ -645,6 +657,7 @@ export interface NotificationRecipientItem {
   line_user_id: string | null
   role: string | null
   machine_cd: string | null
+  inventory_column: string | null
   display_name: string | null
   is_active: boolean
   created_at: string
@@ -659,6 +672,7 @@ export interface NotificationRecipientCreateParams {
   line_user_id?: string | null
   role?: string | null
   machine_cd?: string | null
+  inventory_column?: string | null
   display_name?: string | null
   is_active?: boolean
 }

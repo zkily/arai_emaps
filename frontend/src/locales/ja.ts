@@ -28,6 +28,15 @@ export default {
     headerNotifPickingIncompleteBody:
       '本日のピッキング完了率は {rate}% です（完了 {completed} / 全 {total}、未完了・進行中 {pending}）。進捗管理タブでご確認ください。',
     headerNotifOpenPicking: '出荷ピッキング管理を開く',
+    headerNotifStagnationLabel: '在庫停滞監視',
+    headerNotifStagnationBody:
+      '基準日 {asOf}：{count} 件の停滞在庫を検出（{processCount} 工程）。閾値 > {minQuantity}、連続 {stableDays} 日。',
+    headerNotifStagnationProcesses: '主な工程：{processes}',
+    headerNotifOpenStagnation: '在庫停滞監視を開く',
+    headerNotifWarehouseNegativeLabel: '倉庫在庫マイナス',
+    headerNotifWarehouseNegativeBody: '本日（{asOf}）{count} 件の倉庫在庫が 0 未満です。',
+    headerNotifWarehouseNegativeSamples: '例：{samples}',
+    headerNotifOpenWarehouseNegative: '生産データ管理を開く',
     headerNotifEmpty: '現在表示するヒントはありません。',
   },
   aiAssistant: {

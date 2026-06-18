@@ -464,6 +464,11 @@
               @clear="handleKeywordClear"
             />
           </div>
+          <div v-if="filterWarehouseNegativeOnly" class="filter-item filter-item--tag">
+            <el-tag type="danger" effect="plain" closable @close="clearWarehouseNegativeFilter">
+              倉庫在庫マイナスのみ
+            </el-tag>
+          </div>
         </div>
       </template>
 
@@ -2046,6 +2051,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Search,
@@ -2179,6 +2185,7 @@ const lastRefreshTime = ref<string>('')
 const dateRange = ref<[string, string] | null>(createDefaultDateRange())
 const filterProductCd = ref('')
 const filterKeyword = ref('')
+const filterWarehouseNegativeOnly = ref(false)
 let keywordFilterTimer: ReturnType<typeof setTimeout> | null = null
 const sortBy = ref<string>('product_name')
 const sortOrder = ref<'ASC' | 'DESC'>('ASC')
@@ -2186,6 +2193,35 @@ const productList = ref<Array<{ product_cd: string; product_name?: string }>>([]
 const showColumnSettings = ref(false)
 const activeTableTab = ref<string>('custom')
 const showInventoryStagnation = ref(false)
+
+const route = useRoute()
+const router = useRouter()
+
+function openInventoryStagnationFromQuery() {
+  if (route.query.openInventoryStagnation !== '1') return
+  showInventoryStagnation.value = true
+  const nextQuery = { ...route.query }
+  delete nextQuery.openInventoryStagnation
+  router.replace({ query: nextQuery })
+}
+
+function openWarehouseNegativeFromQuery() {
+  if (route.query.openWarehouseNegative !== '1') return
+  const { year, month, date } = getCurrentJSTInfo()
+  const todayStr = getJSTDateString(year, month, date)
+  dateRange.value = [todayStr, todayStr]
+  activeTableTab.value = 'inventory'
+  filterWarehouseNegativeOnly.value = true
+  const nextQuery = { ...route.query }
+  delete nextQuery.openWarehouseNegative
+  router.replace({ query: nextQuery })
+  handleFilterChange()
+}
+
+function clearWarehouseNegativeFilter() {
+  filterWarehouseNegativeOnly.value = false
+  handleFilterChange()
+}
 
 // 初期在庫一括登録
 const showBatchInitialStockDialog = ref(false)
@@ -3826,6 +3862,7 @@ const buildListParams = () => {
   }
   if (filterProductCd.value) params.productCd = filterProductCd.value
   if (filterKeyword.value.trim()) params.keyword = filterKeyword.value.trim()
+  if (filterWarehouseNegativeOnly.value) params.warehouseInventoryNegative = true
   return params
 }
 const fetchAllRowsForSummary = async (baseParams: any, totalCount: number) => {
@@ -3893,8 +3930,6 @@ const fetchProductList = async () => {
 
 // ---------- 実績一括登録 ----------
 function getEmptyBatchActualRow() {
-  if (!guardApsOperation(canCreate)) return
-
   return {
     product_cd: '',
     product_name: '',
@@ -3908,8 +3943,8 @@ function handleResetBatchActual() {
   if (!guardApsOperation(canCreate)) return
 
   batchActualTableData.value = [
-    { ...getEmptyBatchActualRow() },
-    { ...getEmptyBatchActualRow() },
+    getEmptyBatchActualRow(),
+    getEmptyBatchActualRow(),
   ]
   if (batchActualDate.value) {
     batchActualTableData.value.forEach((r) => { r.date = batchActualDate.value })
@@ -6564,8 +6599,6 @@ async function handleBatchInitialStockSearch() {
 }
 
 function batchInitialStockSummaryMethod({ data }: { data: Array<{ editQuantity?: number | null }> }) {
-  if (!guardApsOperation(canCreate)) return
-
   const total = data.reduce((s, row) => s + (Number(row.editQuantity) || 0), 0)
   return ['', '', `合計: ${total.toLocaleString()}`]
 }
@@ -6643,6 +6676,8 @@ onMounted(() => {
       /**/
     }
   }
+  openInventoryStagnationFromQuery()
+  openWarehouseNegativeFromQuery()
   fetchProductList()
   fetchData()
   // スマホ・タブレットで「その他」を Drawer 表示にする

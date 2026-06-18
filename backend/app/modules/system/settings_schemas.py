@@ -418,6 +418,9 @@ class NotificationSettingBase(BaseModel):
     email_enabled: bool = False
     slack_enabled: bool = False
     line_enabled: bool = False
+    auto_schedule_enabled: bool = False
+    auto_schedule_time: Optional[time] = None
+    schedule_config: Optional[dict[str, Any]] = None
 
 
 class NotificationSettingCreate(NotificationSettingBase):
@@ -432,6 +435,9 @@ class NotificationSettingUpdate(BaseModel):
     slack_enabled: Optional[bool] = None
     line_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
+    auto_schedule_enabled: Optional[bool] = None
+    auto_schedule_time: Optional[str] = Field(None, description="HH:MM（JST）")
+    schedule_config: Optional[dict[str, Any]] = None
 
 
 class NotificationSettingResponse(NotificationSettingBase):
@@ -486,6 +492,7 @@ class NotificationRecipientBase(BaseModel):
     line_user_id: Optional[str] = Field(None, max_length=64)
     role: Optional[str] = Field(None, max_length=50)
     machine_cd: Optional[str] = Field(None, max_length=50)
+    inventory_column: Optional[str] = Field(None, max_length=80)
     display_name: Optional[str] = Field(None, max_length=100)
     is_active: bool = True
 
@@ -501,6 +508,7 @@ class NotificationRecipientUpdate(BaseModel):
     line_user_id: Optional[str] = Field(None, max_length=64)
     role: Optional[str] = Field(None, max_length=50)
     machine_cd: Optional[str] = Field(None, max_length=50)
+    inventory_column: Optional[str] = Field(None, max_length=80)
     display_name: Optional[str] = Field(None, max_length=100)
     is_active: Optional[bool] = None
 

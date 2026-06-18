@@ -28,6 +28,15 @@ export default {
     headerNotifPickingIncompleteBody:
       'Tỷ lệ hoàn thành picking hôm nay: {rate}% (xong {completed}/{total}, đang làm/chưa {pending}). Xem tab Tiến độ.',
     headerNotifOpenPicking: 'Mở quản lý picking xuất hàng',
+    headerNotifStagnationLabel: 'Giám sát tồn kho trì trệ',
+    headerNotifStagnationBody:
+      'Ngày {asOf}: phát hiện {count} mục tồn kho trì trệ ({processCount} công đoạn). Ngưỡng > {minQuantity}, liên tiếp {stableDays} ngày.',
+    headerNotifStagnationProcesses: 'Công đoạn chính: {processes}',
+    headerNotifOpenStagnation: 'Mở giám sát trì trệ',
+    headerNotifWarehouseNegativeLabel: 'Tồn kho kho âm',
+    headerNotifWarehouseNegativeBody: 'Hôm nay ({asOf}): {count} dòng có tồn kho kho dưới 0.',
+    headerNotifWarehouseNegativeSamples: 'Ví dụ: {samples}',
+    headerNotifOpenWarehouseNegative: 'Mở quản lý dữ liệu sản xuất',
     headerNotifEmpty: 'Hiện không có gợi ý nào.',
   },
   aiAssistant: {

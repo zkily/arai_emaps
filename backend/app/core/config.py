@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     DB_AUTO_BACKUP_CATCHUP_ON_START: bool = True
     DB_AUTO_BACKUP_RETENTION: int = 7
     DB_AUTO_BACKUP_COMPRESS: bool = True
+
+    # 在庫停滞アラート自動巡検（FastAPI プロセス内 asyncio・JST）
+    INVENTORY_STAGNATION_AUTO_ENABLED: bool = False
+    INVENTORY_STAGNATION_AUTO_TIME: str = "08:00"
+    INVENTORY_STAGNATION_AUTO_MIN_QUANTITY: int = 50
+    INVENTORY_STAGNATION_AUTO_STABLE_DAYS: int = 7
+    INVENTORY_STAGNATION_AUTO_CATCHUP_ON_START: bool = True
     
     # JWT設定
     JWT_SECRET: Optional[str] = None  # JWT_SECRET_KEYのエイリアス
@@ -160,6 +167,21 @@ class Settings(BaseSettings):
             raise ValueError("DB_AUTO_BACKUP_TIME の時・分が数値ではありません") from e
         if not (0 <= h <= 23 and 0 <= m <= 59):
             raise ValueError("DB_AUTO_BACKUP_TIME の時刻が範囲外です")
+        return f"{h:02d}:{m:02d}"
+
+    @field_validator("INVENTORY_STAGNATION_AUTO_TIME")
+    @classmethod
+    def validate_inventory_stagnation_auto_time(cls, v: str) -> str:
+        s = (v or "").strip()
+        parts = s.split(":")
+        if len(parts) != 2:
+            raise ValueError("INVENTORY_STAGNATION_AUTO_TIME は HH:MM（24 時間制）で指定してください")
+        try:
+            h, m = int(parts[0]), int(parts[1])
+        except ValueError as e:
+            raise ValueError("INVENTORY_STAGNATION_AUTO_TIME の時・分が数値ではありません") from e
+        if not (0 <= h <= 23 and 0 <= m <= 59):
+            raise ValueError("INVENTORY_STAGNATION_AUTO_TIME の時刻が範囲外です")
         return f"{h:02d}:{m:02d}"
     
     def get_database_url(self) -> str:

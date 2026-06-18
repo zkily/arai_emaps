@@ -28,6 +28,15 @@ export default {
     headerNotifPickingIncompleteBody:
       '今日拣货完成率为 {rate}%（已完成 {completed} / 共 {total}，未完成或进行中 {pending}）。请在「进度管理」页签查看。',
     headerNotifOpenPicking: '打开出荷拣货管理',
+    headerNotifStagnationLabel: '库存停滞监视',
+    headerNotifStagnationBody:
+      '基准日 {asOf}：检测到 {count} 条停滞库存（{processCount} 个工程）。阈值 > {minQuantity}，连续 {stableDays} 天。',
+    headerNotifStagnationProcesses: '主要工程：{processes}',
+    headerNotifOpenStagnation: '打开库存停滞监视',
+    headerNotifWarehouseNegativeLabel: '仓库库存为负',
+    headerNotifWarehouseNegativeBody: '今日（{asOf}）有 {count} 条仓库库存小于 0。',
+    headerNotifWarehouseNegativeSamples: '示例：{samples}',
+    headerNotifOpenWarehouseNegative: '打开生产数据管理',
     headerNotifEmpty: '当前没有需要留意的提示。',
   },
   aiAssistant: {
