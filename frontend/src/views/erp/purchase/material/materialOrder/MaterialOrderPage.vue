@@ -1170,22 +1170,25 @@
     <!-- 手入力材料注文ダイアログ -->
     <el-dialog
       v-model="manualOrderDialogVisible"
-      title="材料注文追加"
-      width="640px"
+      width="660px"
       :close-on-click-modal="false"
-      class="manual-order-dialog manual-order-dialog--compact"
+      align-center
+      destroy-on-close
+      class="manual-order-dialog manual-order-dialog--compact manual-order-dialog--modern"
     >
-      <div class="manual-order-content manual-order-content--compact">
-        <div class="manual-order-header-compact">
-          <div class="manual-order-header-compact__icon">
-            <el-icon><Plus /></el-icon>
+      <template #header>
+        <div class="manual-order-dialog__header">
+          <div class="manual-order-dialog__header-icon">
+            <el-icon><ShoppingCart /></el-icon>
           </div>
-          <div class="manual-order-header-compact__text">
+          <div class="manual-order-dialog__header-text">
             <h3>材料注文追加</h3>
             <p>新しい材料注文を手動で入力</p>
           </div>
         </div>
+      </template>
 
+      <div class="manual-order-content manual-order-content--compact manual-order-content--modern">
         <el-form
           :model="manualOrderForm"
           :rules="manualOrderRules"
@@ -1194,6 +1197,11 @@
           label-width="auto"
           class="manual-order-form manual-order-form--compact"
         >
+          <div class="manual-order-section">
+            <div class="manual-order-section__title">
+              <el-icon><Calendar /></el-icon>
+              <span>基本情報</span>
+            </div>
           <div class="manual-order-grid manual-order-grid--main">
             <el-form-item label="日付" prop="date" class="manual-order-field">
               <el-date-picker
@@ -1226,7 +1234,13 @@
               </el-select>
             </el-form-item>
           </div>
+          </div>
 
+          <div class="manual-order-section">
+            <div class="manual-order-section__title">
+              <el-icon><EditPen /></el-icon>
+              <span>注文数量</span>
+            </div>
           <div class="manual-order-grid manual-order-grid--order">
             <el-form-item label="注文束数" prop="order_quantity" class="manual-order-field">
               <el-input-number
@@ -1266,8 +1280,10 @@
               />
             </el-form-item>
           </div>
+          </div>
 
-          <div class="manual-order-detail" v-if="selectedMaterial">
+          <Transition name="manual-order-detail-fade">
+          <div class="manual-order-detail manual-order-detail--modern" v-if="selectedMaterial" key="material-detail">
             <div class="manual-order-detail__title">
               <el-icon><InfoFilled /></el-icon>
               <span>材料詳細</span>
@@ -1305,19 +1321,20 @@
                 <span class="manual-order-detail__value">{{ selectedMaterial.long_weight ?? '—' }}<template v-if="selectedMaterial.long_weight">kg</template></span>
               </div>
               <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">安全/最大在庫</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.safety_stock ?? '—' }} / {{ selectedMaterial.max_stock ?? '—' }}</span>
-              </div>
-              <div class="manual-order-detail__item">
-                <span class="manual-order-detail__label">単位</span>
-                <span class="manual-order-detail__value">{{ selectedMaterial.unit || '—' }}</span>
+                <span class="manual-order-detail__label">安全在庫</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.safety_stock ?? '—' }}</span>
               </div>
               <div class="manual-order-detail__item">
                 <span class="manual-order-detail__label">リードタイム</span>
                 <span class="manual-order-detail__value">{{ selectedMaterial.lead_time ?? '—' }}<template v-if="selectedMaterial.lead_time != null">日</template></span>
               </div>
+              <div class="manual-order-detail__item">
+                <span class="manual-order-detail__label">単位</span>
+                <span class="manual-order-detail__value">{{ selectedMaterial.unit || '—' }}</span>
+              </div>
             </div>
           </div>
+          </Transition>
         </el-form>
       </div>
 
@@ -5459,51 +5476,360 @@ ${groupBlocks}
   font-size: 12px;
 }
 
-/* 手入力材料注文ダイアログ - コンパクトUI */
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog) {
+/* 手入力材料注文ダイアログ - モダンUI（翠绿主题，与 App 对齐） */
+.manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog) {
+  border-radius: 20px;
+  box-shadow: 0 24px 48px rgba(5, 150, 105, 0.18), 0 8px 24px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  animation: manual-order-dialog-enter 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes manual-order-dialog-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__header) {
+  padding: 0;
+  margin: 0;
+  background: linear-gradient(135deg, #047857 0%, #059669 35%, #10b981 70%, #34d399 100%);
+  color: #fff;
+  border: none;
+}
+
+.manual-order-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 22px;
+}
+
+.manual-order-dialog__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.manual-order-dialog__header-text h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+
+.manual-order-dialog__header-text p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn) {
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn:hover) {
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(1.05);
+}
+
+.manual-order-dialog.manual-order-dialog--modern :deep(.el-dialog__headerbtn .el-dialog__close) {
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 16px;
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__body) {
+  padding: 0;
+  max-height: 68vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #fafdfb 0%, #f8fafc 100%);
+}
+
+.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__footer) {
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.manual-order-content--modern {
+  padding: 16px 20px 18px;
+}
+
+.manual-order-section {
+  margin-bottom: 16px;
+}
+
+.manual-order-section__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #047857;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.manual-order-section__title .el-icon {
+  font-size: 14px;
+  color: #10b981;
+}
+
+/* 表单紧凑 */
+.manual-order-form--compact {
+  margin-top: 0;
+}
+
+.manual-order-form--compact :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.manual-order-form--compact :deep(.el-form-item__label) {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 600;
+  padding-bottom: 5px;
+  line-height: 1.3;
+}
+
+.manual-order-grid {
+  display: grid;
+  gap: 0 14px;
+}
+
+.manual-order-grid--main {
+  grid-template-columns: 130px 1fr;
+}
+
+.manual-order-grid--main .manual-order-field--span2 {
+  grid-column: span 1;
+}
+
+.manual-order-grid--order {
+  grid-template-columns: 1fr 1fr;
+}
+
+.manual-order-grid--order .manual-order-field--full {
+  grid-column: 1 / -1;
+}
+
+.manual-order-field :deep(.el-input-number),
+.manual-order-field :deep(.el-date-editor),
+.manual-order-field :deep(.el-select) {
+  width: 100%;
+}
+
+.manual-order-input :deep(.el-input__wrapper),
+.manual-order-input :deep(.el-input__inner),
+.manual-order-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  font-size: 13px;
+  background: #f8fafc;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.manual-order-input :deep(.el-input__wrapper:hover),
+.manual-order-input :deep(.el-textarea__inner:hover) {
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.1);
+}
+
+.manual-order-input :deep(.el-input__wrapper.is-focus),
+.manual-order-input :deep(.el-textarea__inner:focus) {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.28);
+  background: #fff;
+}
+
+/* 材料詳細ブロック */
+.manual-order-detail--modern {
+  margin-top: 4px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+}
+
+.manual-order-detail-fade-enter-active {
+  transition: opacity 0.32s ease, transform 0.32s cubic-bezier(0.34, 1.2, 0.64, 1), max-height 0.35s ease;
+  overflow: hidden;
+}
+
+.manual-order-detail-fade-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease, max-height 0.25s ease;
+  overflow: hidden;
+}
+
+.manual-order-detail-fade-enter-from,
+.manual-order-detail-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+  max-height: 0;
+}
+
+.manual-order-detail-fade-enter-to,
+.manual-order-detail-fade-leave-from {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 400px;
+}
+
+.manual-order-detail__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #047857;
+  margin-bottom: 10px;
+}
+
+.manual-order-detail__title .el-icon {
+  font-size: 15px;
+  color: #10b981;
+}
+
+.manual-order-detail__summary {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+  background: rgba(16, 185, 129, 0.12);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.manual-order-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 14px;
+}
+
+.manual-order-detail__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 8px;
+}
+
+.manual-order-detail__label {
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.manual-order-detail__value {
+  font-size: 12px;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+/* フッターボタン */
+.manual-order-footer--compact {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.manual-order-btn {
+  min-width: 96px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.manual-order-btn:hover {
+  transform: translateY(-1px);
+}
+
+.manual-order-btn :deep(.el-icon) {
+  margin-right: 5px;
+  font-size: 14px;
+}
+
+.manual-order-btn--cancel {
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.manual-order-btn--cancel:hover {
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.manual-order-btn--confirm {
+  background: linear-gradient(135deg, #047857 0%, #059669 50%, #10b981 100%);
+  border: none;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.manual-order-btn--confirm:hover {
+  background: linear-gradient(135deg, #065f46 0%, #047857 50%, #059669 100%);
+  border: none;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.45);
+}
+
+/* 手入力材料注文ダイアログ - コンパクトUI（旧紫色，非 modern 时保留） */
+.manual-order-dialog.manual-order-dialog--compact:not(.manual-order-dialog--modern) :deep(.el-dialog) {
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 0 1px rgba(0, 0, 0, 0.08);
   overflow: hidden;
 }
 
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__header) {
+.manual-order-dialog.manual-order-dialog--compact:not(.manual-order-dialog--modern) :deep(.el-dialog__header) {
   padding: 12px 16px;
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   color: #fff;
   border: none;
 }
 
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__title) {
+.manual-order-dialog.manual-order-dialog--compact:not(.manual-order-dialog--modern) :deep(.el-dialog__title) {
   color: #fff;
   font-size: 15px;
   font-weight: 600;
 }
 
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn) {
+.manual-order-dialog.manual-order-dialog--compact:not(.manual-order-dialog--modern) :deep(.el-dialog__headerbtn) {
   top: 12px;
   width: 28px;
   height: 28px;
 }
 
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__headerbtn .el-dialog__close) {
+.manual-order-dialog.manual-order-dialog--compact:not(.manual-order-dialog--modern) :deep(.el-dialog__headerbtn .el-dialog__close) {
   color: rgba(255, 255, 255, 0.9);
   font-size: 16px;
 }
 
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__body) {
-  padding: 0;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.manual-order-dialog.manual-order-dialog--compact :deep(.el-dialog__footer) {
-  padding: 10px 16px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-}
-
-/* 紧凑头部 */
-.manual-order-content--compact {
+/* 紧凑头部（旧版内嵌，modern 已改用 slot header） */
+.manual-order-content--compact:not(.manual-order-content--modern) {
   padding: 12px 16px 16px;
 }
 
@@ -5542,71 +5868,7 @@ ${groupBlocks}
   color: #64748b;
 }
 
-/* 表单紧凑 */
-.manual-order-form--compact {
-  margin-top: 0;
-}
-
-.manual-order-form--compact :deep(.el-form-item) {
-  margin-bottom: 10px;
-}
-
-.manual-order-form--compact :deep(.el-form-item__label) {
-  font-size: 12px;
-  color: #64748b;
-  font-weight: 500;
-  padding-bottom: 4px;
-  line-height: 1.3;
-}
-
-.manual-order-grid {
-  display: grid;
-  gap: 0 12px;
-  margin-bottom: 12px;
-}
-
-.manual-order-grid--main {
-  grid-template-columns: 120px 1fr;
-}
-
-.manual-order-grid--main .manual-order-field--span2 {
-  grid-column: span 1;
-}
-
-.manual-order-grid--order {
-  grid-template-columns: 1fr 1fr;
-}
-
-.manual-order-grid--order .manual-order-field--full {
-  grid-column: 1 / -1;
-}
-
-.manual-order-field :deep(.el-input-number),
-.manual-order-field :deep(.el-date-editor),
-.manual-order-field :deep(.el-select) {
-  width: 100%;
-}
-
-.manual-order-input :deep(.el-input__wrapper),
-.manual-order-input :deep(.el-input__inner),
-.manual-order-input :deep(.el-textarea__inner) {
-  border-radius: 8px;
-  font-size: 13px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.manual-order-input :deep(.el-input__wrapper:hover),
-.manual-order-input :deep(.el-textarea__inner:hover) {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.manual-order-input :deep(.el-input__wrapper.is-focus),
-.manual-order-input :deep(.el-textarea__inner:focus) {
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.25);
-}
-
-/* 材料詳細ブロック */
-.manual-order-detail {
+.manual-order-detail:not(.manual-order-detail--modern) {
   margin-top: 12px;
   padding: 10px 12px;
   background: #f8fafc;
@@ -5614,75 +5876,20 @@ ${groupBlocks}
   border: 1px solid #e2e8f0;
 }
 
-.manual-order-detail__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  margin-bottom: 8px;
-}
-
-.manual-order-detail__title .el-icon {
-  font-size: 14px;
+.manual-order-detail:not(.manual-order-detail--modern) .manual-order-detail__title .el-icon {
   color: #6366f1;
 }
 
-.manual-order-detail__summary {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 500;
+.manual-order-detail:not(.manual-order-detail--modern) .manual-order-detail__summary {
   color: #4f46e5;
 }
 
-.manual-order-detail__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px 12px;
-}
-
-.manual-order-detail__item {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.manual-order-detail__label {
-  font-size: 10px;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-}
-
-.manual-order-detail__value {
-  font-size: 12px;
-  color: #334155;
-  font-weight: 500;
-}
-
-/* フッターボタン */
-.manual-order-footer--compact {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.manual-order-btn {
-  min-width: 88px;
-}
-
-.manual-order-btn :deep(.el-icon) {
-  margin-right: 4px;
-  font-size: 14px;
-}
-
-.manual-order-btn--confirm {
+.manual-order-btn--confirm:not(.manual-order-dialog--modern *) {
   background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
   border: none;
 }
 
-.manual-order-btn--confirm:hover {
+.manual-order-btn--confirm:hover:not(.manual-order-dialog--modern *) {
   background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
   border: none;
 }
