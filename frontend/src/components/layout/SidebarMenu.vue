@@ -252,7 +252,7 @@ const toggleCollapse = () => {
   color: #f8f66b !important;
   font-weight: 700 !important;
 }
-/* 購買・外注管理下二级子菜单内的ホーム（材料管理ホーム、外注ホーム） */
+/* 購買・外注管理下二级子菜单内的ホーム（外注ホーム） */
 :deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home),
 :deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home .el-menu-tooltip__trigger),
 :deep(.sidebar-el-menu .el-sub-menu .el-sub-menu .el-sub-menu .el-menu-item.menu-item-home.is-active),

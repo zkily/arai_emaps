@@ -122,8 +122,8 @@ const routes: RouteRecordRaw[] = [
         name: 'MaterialManagement',
         component: () => import('@/views/erp/purchase/material/MaterialLayoutWrapper.vue'),
         meta: { title: '材料管理', group: '購買管理 > 材料管理', requiresAuth: true },
+        redirect: { name: 'MaterialOrder' },
         children: [
-          { path: '', name: 'MaterialHome', component: () => import('@/views/erp/purchase/material/MaterialHome.vue'), meta: { title: '材料管理ホーム', group: '材料管理', requiresAuth: true } },
           { path: 'master', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', group: '材料マスタ管理', requiresAuth: true } },
           { path: 'receiving', redirect: { name: 'MaterialReceivingHistory' } },
           { path: 'receiving-history', name: 'MaterialReceivingHistory', component: () => import('@/views/erp/purchase/material/materialReceiving/MaterialReceivingHistory.vue'), meta: { title: '受入履歴', group: '受入管理', requiresAuth: true } },

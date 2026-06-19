@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def sync_welding_excel_to_management(filepath: str) -> ImportSyncResult:
     """
-    生産管理指標(YYYY年度-溶接).xlsx の「入力表」を welding_management に同期。
+    生産管理指標(YYYY年度-溶接).xlsx の「入力」を welding_management に同期。
     - 内容ハッシュ (external_sync_key) で重複 INSERT を防止
     - 作業者名は users.full_name 完全一致を最優先で mes_operator_user_id に紐付け
     """

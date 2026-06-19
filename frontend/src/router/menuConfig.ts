@@ -42,7 +42,6 @@ export const menuConfig: MenuConfigItem[] = [
   // ===== 2. 購買・外注管理 (Procurement & Subcontracting) =====
   { code: 'ERP_PURCHASE', name: '購買・外注管理', path: '/erp/purchase', icon: 'ShoppingCart', parentCode: 'ERP', sortOrder: 3 },
   { code: 'ERP_PURCHASE_MATERIAL', name: '材料管理', icon: 'Collection', parentCode: 'ERP_PURCHASE', sortOrder: 1 },
-  { code: 'ERP_PURCHASE_MATERIAL_HOME', name: '材料管理ホーム', icon: 'HomeFilled', path: '/erp/purchase/material', parentCode: 'ERP_PURCHASE_MATERIAL', sortOrder: 0 },
   { code: 'ERP_PURCHASE_MATERIAL_ORDER', name: '材料在庫管理', icon: 'Box', path: '/erp/purchase/material/order', parentCode: 'ERP_PURCHASE_MATERIAL', sortOrder: 1 },
   { code: 'ERP_PURCHASE_MATERIAL_RECEIVING', name: '受入履歴', icon: 'Download', path: '/erp/purchase/material/receiving-history', parentCode: 'ERP_PURCHASE_MATERIAL', sortOrder: 2 },
   { code: 'ERP_PURCHASE_MATERIAL_INSPECTION', name: '受入検品', icon: 'CircleCheck', path: '/erp/purchase/material/receiving-inspection', parentCode: 'ERP_PURCHASE_MATERIAL', sortOrder: 3 },

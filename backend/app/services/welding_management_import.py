@@ -1,5 +1,5 @@
 # coding: utf-8
-"""生産管理指標(YYYY年度-溶接) CSV/Excel「入力表」→ welding_management 取込（CLI・ファイル監視共用）"""
+"""生産管理指標(YYYY年度-溶接) CSV/Excel「入力」→ welding_management 取込（CLI・ファイル監視共用）"""
 from __future__ import annotations
 
 import csv
@@ -15,7 +15,7 @@ from typing import Any, Iterable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
-WELDING_INPUT_SHEET = "入力表"
+WELDING_INPUT_SHEET = "入力"
 EXTERNAL_SYNC_KEY_PREFIX = "weld_excel:"
 REMARKS_PREFIX_EXCEL = "EXCEL_SYNC"
 REMARKS_PREFIX_CSV = "CSV_IMPORT"
@@ -63,6 +63,9 @@ LOGICAL_COLUMNS = [
     COL_AVAILABLE,
     COL_WORK,
 ]
+
+# 入力表シート自動判定用（社内品番・日付・作業者が揃っていること）
+WELDING_SHEET_HEADER_MARKERS = (COL_PRODUCT_CD, COL_DAY_SHORT, COL_OPERATOR)
 
 FISCAL_YEAR_RE = re.compile(r"(\d{4})年度")
 PRODUCT_CD_RE = re.compile(r"^\d{4,6}$")
@@ -424,9 +427,9 @@ def iter_welding_excel_logical_rows(filepath: str, sheet_name: str = WELDING_INP
         warnings.filterwarnings("ignore", message="Print area cannot be set to Defined name")
         wb = openpyxl.load_workbook(filepath, data_only=True, read_only=True)
     try:
-        if sheet_name not in wb.sheetnames:
-            raise ValueError(f"シート「{sheet_name}」がありません（{filepath}）")
-        sheet = wb[sheet_name]
+        resolved_name, sheet = resolve_welding_input_sheet(wb, preferred_name=sheet_name, filepath=filepath)
+        if resolved_name != sheet_name:
+            logger.info("溶接入力表: シート「%s」を使用（指定/既定「%s」なし）", resolved_name, sheet_name)
         if sheet is None or (sheet.max_row or 0) <= 1:
             return
         rows_iter = sheet.iter_rows(min_row=1, values_only=True)
@@ -443,6 +446,49 @@ def iter_welding_excel_logical_rows(filepath: str, sheet_name: str = WELDING_INP
             wb.close()
         except Exception:
             pass
+
+
+def _sheet_header_row(sheet) -> tuple[Any, ...] | None:
+    rows_iter = sheet.iter_rows(min_row=1, max_row=1, values_only=True)
+    return next(rows_iter, None)
+
+
+def _sheet_has_welding_input_headers(sheet) -> bool:
+    header_row = _sheet_header_row(sheet)
+    if not header_row:
+        return False
+    header_index = build_header_index(header_row)
+    return all(_norm_header(col) in header_index for col in WELDING_SHEET_HEADER_MARKERS)
+
+
+def resolve_welding_input_sheet(wb, *, preferred_name: str = WELDING_INPUT_SHEET, filepath: str = ""):
+    """入力表シートを解決。優先名 → ヘッダ一致シート → active の順。"""
+    if preferred_name in wb.sheetnames:
+        sheet = wb[preferred_name]
+        if _sheet_has_welding_input_headers(sheet):
+            return preferred_name, sheet
+        logger.warning(
+            "シート「%s」は存在しますが入力表ヘッダがありません。他シートを探索します",
+            preferred_name,
+        )
+
+    for name in wb.sheetnames:
+        if name == preferred_name:
+            continue
+        sheet = wb[name]
+        if _sheet_has_welding_input_headers(sheet):
+            return name, sheet
+
+    active = wb.active
+    if active is not None and _sheet_has_welding_input_headers(active):
+        return active.title, active
+
+    available = ", ".join(wb.sheetnames)
+    location = f"（{filepath}）" if filepath else ""
+    raise ValueError(
+        f"シート「{preferred_name}」がなく、入力表ヘッダ（社内品番/日付/作業者）を持つシートも見つかりません"
+        f"{location}。利用可能: {available}"
+    )
 
 
 def parse_rows_from_source(
