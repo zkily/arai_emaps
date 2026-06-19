@@ -1,38 +1,59 @@
-/** 検査員候補：仕上課所属のみ（検査実績収集・登録等で共用） */
+/** 検査員候補：製造部・仕上課所属のみ（検査実績収集・登録等で共用） */
 import { getOrganizations, getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
 
+export const INSPECTION_DEPARTMENT_NAME = '製造部'
 export const INSPECTION_SHIAGE_SECTION_NAME = '仕上課'
 
 export interface InspectionInspectorOption {
   id: number
   username: string
   full_name?: string
+  department?: string | null
   section?: string | null
 }
 
-export function isInspectionShiageSectionUser(u: { section?: string | null }): boolean {
-  return (u.section || '').trim() === INSPECTION_SHIAGE_SECTION_NAME
+export function isInspectionShiageSectionUser(u: {
+  department?: string | null
+  section?: string | null
+}): boolean {
+  return (
+    (u.department || '').trim() === INSPECTION_DEPARTMENT_NAME &&
+    (u.section || '').trim() === INSPECTION_SHIAGE_SECTION_NAME
+  )
 }
 
-export async function resolveInspectionShiageSectionId(): Promise<number | undefined> {
+export async function resolveInspectionShiageSectionOrgIds(): Promise<{
+  departmentId?: number
+  sectionId?: number
+}> {
   try {
     const orgs = await getOrganizations()
+    const department = (orgs ?? []).find(
+      (o) => o.type === 'department' && o.name === INSPECTION_DEPARTMENT_NAME,
+    )
     const section = (orgs ?? []).find(
       (o) => o.type === 'section' && o.name === INSPECTION_SHIAGE_SECTION_NAME,
     )
-    return section?.id
+    return { departmentId: department?.id, sectionId: section?.id }
   } catch {
-    return undefined
+    return {}
   }
 }
 
-/** 仕上課所属の有効ユーザーを取得 */
+/** @deprecated use resolveInspectionShiageSectionOrgIds */
+export async function resolveInspectionShiageSectionId(): Promise<number | undefined> {
+  const { sectionId } = await resolveInspectionShiageSectionOrgIds()
+  return sectionId
+}
+
+/** 製造部・仕上課所属の有効ユーザーを取得 */
 export async function fetchInspectionShiageSectionInspectors(): Promise<InspectionInspectorOption[]> {
-  const sectionId = await resolveInspectionShiageSectionId()
+  const { departmentId, sectionId } = await resolveInspectionShiageSectionOrgIds()
   const res = (await getUsers({
     page: 1,
     page_size: 500,
     status: 'active',
+    department_id: departmentId,
     section_id: sectionId,
   })) as unknown as PaginatedUserResponse
   return (res?.items ?? [])
@@ -41,6 +62,7 @@ export async function fetchInspectionShiageSectionInspectors(): Promise<Inspecti
       id: Number(u.id),
       username: u.username ?? '',
       full_name: u.full_name,
+      department: u.department,
       section: u.section,
     }))
     .sort((a, b) =>

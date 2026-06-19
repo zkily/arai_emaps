@@ -13,11 +13,12 @@ import {
 } from '@/api/inspectionManagement'
 import { getProductList } from '@/api/master/productMaster'
 import {
-  fetchWeldingManagementList,
+  fetchWeldingMonitorSummary,
   type WeldingManagementListRow,
 } from '@/api/weldingManagement'
 import { fetchWeldingMesMachines, type WeldingMesMachine } from '@/api/weldingMesEquipment'
 import { INSPECTION_DEFECT_DETECTION_PROCESS_CD } from '@/views/mes/actualDataCollection/inspection/inspectionActualConfig'
+import { WELDING_DEFECT_DETECTION_PROCESS_CD } from '@/views/mes/actualDataCollection/welding/weldingActualConfig'
 import {
   loadMesDefectItemsForProcess,
   resolveMesDefectItemLabel,
@@ -32,12 +33,13 @@ import { formatDateTimeJST, getJSTToday, localeForIntl } from '@/utils/dateForma
 import {
   buildHistoryRows,
   buildInspectionDefectListRows,
+  buildMonitorDefectListRows,
   buildInspectionInspectorEfficiencyRows,
   isInspectionClientCommStale,
   computeCompletedInspectorAvgEfficiency,
+  breakSecondsForInspectionRow,
   buildMachineStatus,
   classifyInspectionRow,
-  classifyRow,
   operatorNameById,
   operatorNameForRow,
   pausedSecondsForRow,
@@ -57,8 +59,7 @@ interface MonitorProductOption {
   product_name: string
 }
 
-const WELDING_AUTO_REFRESH_MS = 8000
-const INSPECTION_AUTO_REFRESH_MS = 15000
+const MODERN_MONITOR_AUTO_REFRESH_MS = 15000
 const TICK_MS = 1000
 const FETCH_ERROR_TOAST_COOLDOWN_MS = 30000
 
@@ -113,13 +114,17 @@ function mergeOperatorLists(base: UserListItem[], extra: UserListItem[]): UserLi
   return [...map.values()]
 }
 
-function extractFetchErrorMessage(e: unknown): string {
+function isModernMonitorProcess(key: MonitorProcessKey): boolean {
+  return key === 'inspection' || key === 'welding'
+}
+
+function extractFetchErrorMessage(e: unknown, pageTitle: string): string {
   const err = e as {
     response?: { data?: { detail?: string; message?: string }; status?: number }
     message?: string
   }
   if (err?.response?.status === 403) {
-    return err.response.data?.detail ?? '検査モニタへのアクセス権がありません'
+    return err.response.data?.detail ?? `${pageTitle}へのアクセス権がありません`
   }
   return (
     err?.response?.data?.detail ??
@@ -127,35 +132,6 @@ function extractFetchErrorMessage(e: unknown): string {
     err?.message ??
     'データの取得に失敗しました'
   )
-}
-
-async function fetchWeldingRowsForDay(
-  day: string,
-  machines: WeldingMesMachine[],
-): Promise<WeldingManagementListRow[]> {
-  const base = await fetchWeldingManagementList({ production_day: day, limit: 2000 })
-  const merged = new Map<number, WeldingManagementListRow>()
-  for (const r of base.data ?? []) {
-    if (r.id != null) merged.set(r.id, r)
-  }
-  if (machines.length === 0) return [...merged.values()]
-
-  const perMachine = await Promise.allSettled(
-    machines.map((m) =>
-      fetchWeldingManagementList({
-        production_day: day,
-        welding_machine: m.machine_name,
-        limit: 2000,
-      }),
-    ),
-  )
-  for (const res of perMachine) {
-    if (res.status !== 'fulfilled') continue
-    for (const r of res.value.data ?? []) {
-      if (r.id != null) merged.set(r.id, r)
-    }
-  }
-  return [...merged.values()]
 }
 
 export function useProcessMonitor(processKey: MonitorProcessKey) {
@@ -202,8 +178,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
   const operators = ref<UserListItem[]>([])
   const defectItems = ref<MesDefectItemOption[]>([])
 
-  const refreshIntervalMs =
-    processKey === 'inspection' ? INSPECTION_AUTO_REFRESH_MS : WELDING_AUTO_REFRESH_MS
+  const refreshIntervalMs = MODERN_MONITOR_AUTO_REFRESH_MS
 
   function defectItemLabel(cd: string, fallback?: string): string {
     const master = defectItems.value.find((d) => d.id === cd)
@@ -224,6 +199,18 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     return map
   }
 
+  function weldingPersistBreakByPlanId(day: string): Map<number, InspectionPersistSession> {
+    const { sessionsByPlanId } = collectWeldingPersistForMonitorDay(day)
+    const map = new Map<number, InspectionPersistSession>()
+    for (const [id, sess] of sessionsByPlanId) {
+      map.set(id, {
+        breakAccumMs: sess.breakAccumMs,
+        breakSliceStart: sess.breakSliceStart ?? null,
+      })
+    }
+    return map
+  }
+
   function notifyFetchError(message: string): void {
     lastFetchError.value = message
     const now = Date.now()
@@ -234,9 +221,11 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
   }
 
   function refreshKpiEfficiencyCache(): void {
-    if (processKey !== 'inspection') return
+    if (!isModernMonitorProcess(processKey)) return
+    const rows =
+      processKey === 'inspection' ? inspectionRows.value : weldingRows.value
     cachedKpiAvgEfficiency.value = computeCompletedInspectorAvgEfficiency(
-      inspectionRows.value,
+      rows,
       operators.value,
     )
   }
@@ -320,19 +309,39 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     }
   }
 
+  function applyWeldingMachineCommStale(
+    card: MachineStatus,
+    mRows: WeldingManagementListRow[],
+    classifyWeldingRow: (row: WeldingManagementListRow) => ReturnType<typeof classifyInspectionRow>,
+  ): void {
+    const active = mRows.find((r) => {
+      const s = classifyWeldingRow(r)
+      return s === 'running' || s === 'paused' || s === 'break'
+    })
+    if (!active) return
+    const st = classifyWeldingRow(active)
+    if (st !== 'running' && st !== 'paused' && st !== 'break') return
+    const stale = isInspectionClientCommStale(active, tickNow.value, st)
+    card.commStale = stale
+    card.lastCommAt = stale ? (active.updated_at ?? null) : null
+  }
+
   function buildWeldingSummary(): ProcessSummary {
     const rows = weldingRows.value
     const day = (productionDay.value ?? '').trim()
     const { sessionsByPlanId, machineActivities } = collectWeldingPersistForMonitorDay(day)
+    const weldBreakPersist = weldingPersistBreakByPlanId(day)
 
     function classifyWeldingRow(row: WeldingManagementListRow) {
       if (row.id != null) {
         const sess = sessionsByPlanId.get(row.id)
         if (sess?.wallStart != null && sess.wallEnd == null) {
-          return sess.pauseSliceStart != null ? 'paused' : 'running'
+          if (sess.breakSliceStart != null) return 'break' as const
+          if (sess.pauseSliceStart != null) return 'paused' as const
+          return 'running' as const
         }
       }
-      return classifyRow(row)
+      return classifyInspectionRow(row)
     }
 
     const knownNames = new Set<string>()
@@ -344,45 +353,49 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     const machines = []
     for (const name of [...knownNames].sort((a, b) => a.localeCompare(b, 'ja'))) {
       const mRows = rows.filter((r) => weldingMachineLabel(r) === name)
-      machines.push(
-        buildMachineStatus(
-          name,
-          mRows,
-          operators.value,
-          tickNow.value,
-          classifyWeldingRow,
-          sessionsByPlanId,
-        ),
+      const card = buildMachineStatus(
+        name,
+        mRows,
+        operators.value,
+        tickNow.value,
+        classifyWeldingRow,
+        sessionsByPlanId,
+        weldBreakPersist,
       )
+      applyWeldingMachineCommStale(card, mRows, classifyWeldingRow)
+      machines.push(card)
     }
 
     const unassigned = rows.filter((r) => !weldingMachineLabel(r))
     if (unassigned.length > 0) {
-      machines.push(
-        buildMachineStatus(
-          '未割当',
-          unassigned,
-          operators.value,
-          tickNow.value,
-          classifyWeldingRow,
-          sessionsByPlanId,
-        ),
+      const card = buildMachineStatus(
+        '未割当',
+        unassigned,
+        operators.value,
+        tickNow.value,
+        classifyWeldingRow,
+        sessionsByPlanId,
+        weldBreakPersist,
       )
+      applyWeldingMachineCommStale(card, unassigned, classifyWeldingRow)
+      machines.push(card)
     }
 
     for (const r of rows) {
       const label = weldingMachineLabel(r)
       if (!label || knownNames.has(label)) continue
-      machines.push(
-        buildMachineStatus(
-          label,
-          rows.filter((x) => weldingMachineLabel(x) === label),
-          operators.value,
-          tickNow.value,
-          classifyWeldingRow,
-          sessionsByPlanId,
-        ),
+      const mRows = rows.filter((x) => weldingMachineLabel(x) === label)
+      const card = buildMachineStatus(
+        label,
+        mRows,
+        operators.value,
+        tickNow.value,
+        classifyWeldingRow,
+        sessionsByPlanId,
+        weldBreakPersist,
       )
+      applyWeldingMachineCommStale(card, mRows, classifyWeldingRow)
+      machines.push(card)
       knownNames.add(label)
     }
 
@@ -401,26 +414,35 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
           tickNow.value,
           classifyWeldingRow,
           sessionsByPlanId,
+          weldBreakPersist,
         )
         machines.push(card)
       }
-      const nextStatus = act.paused ? 'paused' : 'running'
-      if (card.status !== 'running' && card.status !== 'paused') {
+      const sess = sessionsByPlanId.get(act.planId)
+      const nextStatus: MachineStatus['status'] = sess?.breakSliceStart != null
+        ? 'break'
+        : act.paused || sess?.pauseSliceStart != null
+          ? 'paused'
+          : 'running'
+      if (card.status !== 'running' && card.status !== 'paused' && card.status !== 'break') {
         card.status = nextStatus
       }
       if (row) {
         card.currentProduct = row.product_name || ''
         card.currentProductCd = row.product_cd || ''
         card.operatorName = operatorNameForRow(row, operators.value)
+        applyWeldingMachineCommStale(card, [row], classifyWeldingRow)
       } else {
         const uid = getWeldingPersistOperatorUserId(day, act.machineId)
         card.operatorName = operatorNameById(uid, operators.value)
       }
-      const sess = sessionsByPlanId.get(act.planId)
       if (sess) {
         card.elapsedSec = weldingElapsedFromPersist(sess, tickNow.value)
-        if (act.paused) {
-          card.pausedSec = pausedSecondsForRow(row ?? {}, tickNow.value, sess)
+        if (nextStatus === 'paused' && row) {
+          card.pausedSec = pausedSecondsForRow(row, tickNow.value, sess)
+        }
+        if (nextStatus === 'break' && row) {
+          card.breakSec = breakSecondsForInspectionRow(row, tickNow.value, weldBreakPersist.get(act.planId))
         }
       }
     }
@@ -429,6 +451,16 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     const completed = rows.filter((r) => classifyWeldingRow(r) === 'completed').length
     const inProgress = rows.filter((r) => classifyWeldingRow(r) === 'running').length
     const paused = rows.filter((r) => classifyWeldingRow(r) === 'paused').length
+    const onBreak = rows.filter((r) => classifyWeldingRow(r) === 'break').length
+    const waiting = rows.filter((r) => classifyWeldingRow(r) === 'waiting').length
+
+    const inspectorEfficiencyRows = buildInspectionInspectorEfficiencyRows(
+      rows,
+      operators.value,
+      tickNow.value,
+    )
+
+    const sortedMachines = machines.sort((a, b) => a.name.localeCompare(b.name, 'ja'))
 
     return {
       key: 'welding',
@@ -440,18 +472,29 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       completedPlans: completed,
       inProgressPlans: inProgress,
       pausedPlans: paused,
-      breakPlans: 0,
-      waitingPlans: total - completed - inProgress - paused,
+      breakPlans: onBreak,
+      waitingPlans: waiting,
       totalQty: 0,
       actualQty: rows.reduce((s, r) => s + (r.actual_production_quantity ?? 0), 0),
       defectQty: rows.reduce((s, r) => s + (r.defect_qty ?? 0), 0),
-      machines: machines.sort((a, b) => a.name.localeCompare(b.name, 'ja')),
+      machines: sortedMachines,
       historyRows: buildHistoryRows(
         rows,
         operators.value,
         tickNow.value,
         (r) => weldingMachineLabel(r as WeldingManagementListRow) || '—',
       ),
+      defectListRows: buildMonitorDefectListRows(
+        rows,
+        operators.value,
+        defectItems.value,
+        defectItemLabel,
+        classifyWeldingRow,
+        (r) => weldingMachineLabel(r as WeldingManagementListRow) || '—',
+      ),
+      inspectorEfficiencyRows,
+      inspectorAvgEfficiency: cachedKpiAvgEfficiency.value,
+      commStalePlans: sortedMachines.filter((m) => m.commStale).length,
     }
   }
 
@@ -464,9 +507,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     const proc = processSummary.value
     const runningMachines = proc.machines.filter((m) => m.status === 'running').length
     const avgEfficiency =
-      processKey === 'inspection'
-        ? cachedKpiAvgEfficiency.value
-        : (proc.inspectorAvgEfficiency ?? null)
+      isModernMonitorProcess(processKey) ? cachedKpiAvgEfficiency.value : null
     return {
       totalRunning: proc.inProgressPlans,
       totalPaused: proc.pausedPlans,
@@ -481,8 +522,9 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       totalMachines: proc.machines.length,
       defectRatePercent:
         proc.actualQty > 0 ? Math.round((proc.defectQty / proc.actualQty) * 1000) / 10 : null,
-      totalCommStale:
-        processKey === 'inspection' ? proc.machines.filter((m) => m.commStale).length : 0,
+      totalCommStale: isModernMonitorProcess(processKey)
+        ? proc.machines.filter((m) => m.commStale).length
+        : 0,
       completionRate:
         proc.totalPlans > 0 ? Math.round((proc.completedPlans / proc.totalPlans) * 100) : 0,
     }
@@ -537,7 +579,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
   }
 
   async function fetchAll() {
-    if (processKey === 'inspection' && !pageVisible.value) return
+    if (isModernMonitorProcess(processKey) && !pageVisible.value) return
 
     const seq = ++fetchSeq
     loading.value = true
@@ -587,15 +629,27 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       }
       if (seq !== fetchSeq) return
 
-      weldingRows.value = await fetchWeldingRowsForDay(day, weldingMachines.value)
+      if (defectItems.value.length === 0) {
+        try {
+          defectItems.value = await loadMesDefectItemsForProcess(WELDING_DEFECT_DETECTION_PROCESS_CD)
+        } catch {
+          defectItems.value = []
+        }
+      }
       if (seq !== fetchSeq) return
 
+      const weldRes = await fetchWeldingMonitorSummary({ production_day: day, limit: 2000 })
+      if (seq !== fetchSeq) return
+
+      weldingRows.value = weldRes.data ?? []
       lastFetchError.value = null
-      lastUpdatedAt.value = Date.now()
+      const fetchedAt = weldRes.fetched_at ? Date.parse(weldRes.fetched_at) : NaN
+      lastUpdatedAt.value = Number.isFinite(fetchedAt) ? fetchedAt : Date.now()
+      refreshKpiEfficiencyCache()
     } catch (e: unknown) {
       if (seq !== fetchSeq) return
       console.error(e)
-      notifyFetchError(extractFetchErrorMessage(e))
+      notifyFetchError(extractFetchErrorMessage(e, config.pageTitle))
     } finally {
       if (seq === fetchSeq) loading.value = false
     }
@@ -606,9 +660,9 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       clearInterval(refreshTimer)
       refreshTimer = null
     }
-    if (!autoRefresh.value || (processKey === 'inspection' && !pageVisible.value)) return
+    if (!autoRefresh.value || (isModernMonitorProcess(processKey) && !pageVisible.value)) return
     refreshTimer = setInterval(() => {
-      if (autoRefresh.value && (processKey !== 'inspection' || pageVisible.value)) {
+      if (autoRefresh.value && (!isModernMonitorProcess(processKey) || pageVisible.value)) {
         void fetchAll()
       }
     }, refreshIntervalMs)
@@ -624,7 +678,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
 
   function onVisibilityChange() {
     pageVisible.value = !document.hidden
-    if (processKey !== 'inspection') return
+    if (!isModernMonitorProcess(processKey)) return
     if (pageVisible.value) {
       void fetchAll()
       scheduleRefreshTick()
@@ -673,7 +727,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
   })
 
   function onDateChange() {
-    if (processKey === 'inspection') {
+    if (isModernMonitorProcess(processKey)) {
       cachedKpiAvgEfficiency.value = null
     }
     void fetchAll()
@@ -707,6 +761,21 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       name: 'MesInspectionActualCollectionRegistration',
       query: { production_day: productionDay.value },
     })
+  }
+
+  function goToWeldingRegistration() {
+    void router.push({
+      name: 'MesWeldingActualCollectionRegistration',
+      query: { production_day: productionDay.value },
+    })
+  }
+
+  function goToActualRegistration() {
+    if (processKey === 'inspection') {
+      goToInspectionRegistration()
+      return
+    }
+    goToWeldingRegistration()
   }
 
   async function loadMonitorProducts(): Promise<void> {
@@ -931,7 +1000,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       closeNextAssignDialog()
       await fetchAll()
     } catch (e: unknown) {
-      ElMessage.error(extractFetchErrorMessage(e))
+      ElMessage.error(extractFetchErrorMessage(e, config.pageTitle))
     } finally {
       nextAssignSubmitting.value = false
     }
@@ -954,7 +1023,7 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
       closeNextAssignDialog()
       await fetchAll()
     } catch (e: unknown) {
-      ElMessage.error(extractFetchErrorMessage(e))
+      ElMessage.error(extractFetchErrorMessage(e, config.pageTitle))
     } finally {
       nextAssignSubmitting.value = false
     }
@@ -993,6 +1062,8 @@ export function useProcessMonitor(processKey: MonitorProcessKey) {
     onAutoRefreshChange,
     toggleFullscreen,
     goToInspectionRegistration,
+    goToWeldingRegistration,
+    goToActualRegistration,
     hasInitialData,
     nextAssignDialogVisible,
     nextAssignSubmitting,

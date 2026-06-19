@@ -14,16 +14,53 @@
         </div>
         <div class="ipa-hero__text">
           <div class="ipa-hero__eyebrow">MES · 実績分析</div>
-          <h1 class="ipa-hero__title">溶接生産性</h1>
-          <p class="ipa-hero__meta">welding_management 実績 · 能率 · 不良率 · 稼働</p>
+          <h1 class="ipa-hero__title">溶接工程 — 生産性分析</h1>
+          <p class="ipa-hero__meta">実績 · 能率 · 不良率 · 稼働</p>
         </div>
       </div>
       <div class="ipa-hero__actions">
         <span v-if="analysisData" class="ipa-hero__range">
           {{ analysisData.start_date }} ～ {{ analysisData.end_date }}
         </span>
-        <el-button class="ipa-btn ipa-btn--ghost" :icon="Refresh" :loading="loading" round @click="loadAnalysis">
-          更新
+        <el-dropdown
+          trigger="click"
+          :disabled="!analysisData || exportBusy"
+          popper-class="ipa-report-dropdown"
+          @command="handleReportCommand"
+        >
+          <el-button class="ipa-btn ipa-btn--report" :loading="exportBusy" round>
+            <span class="ipa-btn__inner">
+              <el-icon v-if="!exportBusy" class="ipa-btn__icon"><Document /></el-icon>
+              <span>レポート</span>
+              <el-icon class="ipa-btn__caret"><ArrowDown /></el-icon>
+            </span>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu class="ipa-report-menu">
+              <el-dropdown-item
+                v-for="item in reportMenuItems"
+                :key="item.command"
+                :command="item.command"
+                :divided="item.divided"
+                class="ipa-report-item"
+                :class="`ipa-report-item--${item.tone}`"
+              >
+                <span class="ipa-report-item__icon-wrap">
+                  <el-icon><component :is="item.icon" /></el-icon>
+                </span>
+                <span class="ipa-report-item__text">
+                  <span class="ipa-report-item__label">{{ item.label }}</span>
+                  <span v-if="item.hint" class="ipa-report-item__hint">{{ item.hint }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button class="ipa-btn ipa-btn--refresh" :loading="loading" round @click="() => loadAnalysis()">
+          <span class="ipa-btn__inner">
+            <el-icon v-if="!loading" class="ipa-btn__icon"><Refresh /></el-icon>
+            <span>更新</span>
+          </span>
         </el-button>
       </div>
     </header>
@@ -43,7 +80,7 @@
             class="ipa-field__control ipa-field__date"
           />
         </div>
-        <div class="ipa-field ipa-field--operator">
+        <div class="ipa-field ipa-field--inspector">
           <span class="ipa-field__pill"><el-icon><User /></el-icon>溶接作業者</span>
           <el-select
             v-model="filterOperatorId"
@@ -51,9 +88,9 @@
             clearable
             filterable
             size="small"
-            class="ipa-field__control ipa-field__operator-select"
+            class="ipa-field__control ipa-field__inspector-select"
           >
-            <el-option label="（すべて）" :value="null" />
+            <el-option label="（すべて）" value="" />
             <el-option v-for="u in operatorOptions" :key="u.id" :label="operatorLabel(u)" :value="u.id" />
           </el-select>
         </div>
@@ -87,9 +124,6 @@
           <el-checkbox v-model="includeIncomplete" size="small">未確定を含む</el-checkbox>
         </label>
       </div>
-      <el-button type="primary" class="ipa-btn ipa-btn--primary" :loading="loading" round @click="loadAnalysis">
-        分析実行
-      </el-button>
     </div>
 
     <div v-loading="loading" class="ipa-body">
@@ -126,66 +160,132 @@
           </section>
 
           <div class="ipa-split">
-            <section class="ipa-panel ipa-fade-in ipa-fade-in--d4">
+            <section class="ipa-panel ipa-panel--inspector ipa-fade-in ipa-fade-in--d4">
               <div class="ipa-panel__head">
                 <div class="ipa-panel__title-wrap">
-                  <el-icon class="ipa-panel__ico"><User /></el-icon>
+                  <el-icon class="ipa-panel__ico ipa-panel__ico--inspector"><User /></el-icon>
                   <span class="ipa-panel__title">溶接作業者別</span>
                 </div>
+                <div class="ipa-panel__badges">
+                  <span class="ipa-panel__badge ipa-panel__badge--soft">{{ operatorDisplayRows.length }} 名</span>
+                  <span v-if="operatorSectionAvgEfficiency != null" class="ipa-panel__badge ipa-panel__badge--inspector">
+                    平均能率 {{ fmtEfficiency(operatorSectionAvgEfficiency) }} 個/時
+                  </span>
+                </div>
               </div>
-              <div ref="operatorChartRef" class="ipa-chart ipa-chart--side" />
-              <el-table :data="analysisData.by_operator" size="small" class="ipa-table" max-height="240">
-                <el-table-column prop="operator_name" label="溶接作業者" min-width="100" show-overflow-tooltip />
-                <el-table-column label="件" width="48" align="right">
+              <div ref="operatorChartRef" class="ipa-chart ipa-chart--side ipa-chart--inspector" />
+              <el-table
+                :data="operatorDisplayRows"
+                size="small"
+                stripe
+                class="ipa-table ipa-table--inspector"
+                max-height="240"
+              >
+                <el-table-column label="#" width="36" align="center">
+                  <template #default="{ $index }">
+                    <span class="ipa-row-rank" :class="operatorRankClass($index)">{{ $index + 1 }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="operator_name" label="溶接作業者" min-width="96" show-overflow-tooltip />
+                <el-table-column label="件" width="44" align="right">
                   <template #default="{ row }">{{ row.session_count }}</template>
                 </el-table-column>
-                <el-table-column label="生産" width="72" align="right">
+                <el-table-column label="生産" width="68" align="right">
                   <template #default="{ row }">{{ fmtInt(row.sum_actual_qty) }}</template>
                 </el-table-column>
-                <el-table-column label="不良率" width="68" align="right">
+                <el-table-column label="不良率" width="64" align="right">
                   <template #default="{ row }"><span class="ipa-num ipa-num--warn">{{ fmtPct(row.defect_rate_percent) }}</span></template>
                 </el-table-column>
-                <el-table-column label="能率" width="56" align="right">
-                  <template #default="{ row }"><span class="ipa-num ipa-num--good">{{ fmtEfficiency(row.efficiency_per_hour) }}</span></template>
+                <el-table-column label="平均能率" width="68" align="right">
+                  <template #default="{ row }">
+                    <span class="ipa-eff-pill ipa-eff-pill--inspector">{{ fmtEfficiency(row.avg_efficiency_per_hour) }}</span>
+                  </template>
                 </el-table-column>
               </el-table>
             </section>
 
-            <section class="ipa-panel ipa-fade-in ipa-fade-in--d5">
+            <section class="ipa-panel ipa-panel--product ipa-fade-in ipa-fade-in--d5">
               <div class="ipa-panel__head">
                 <div class="ipa-panel__title-wrap">
-                  <el-icon class="ipa-panel__ico"><Goods /></el-icon>
+                  <el-icon class="ipa-panel__ico ipa-panel__ico--product"><Goods /></el-icon>
                   <span class="ipa-panel__title">製品別</span>
                 </div>
-                <span class="ipa-panel__badge">{{ analysisData.by_product.length }} 品目</span>
+                <div class="ipa-panel__badges">
+                  <span class="ipa-panel__badge ipa-panel__badge--soft">{{ productDisplayRows.length }} 品目</span>
+                  <span v-if="productSectionTotalQty > 0" class="ipa-panel__badge ipa-panel__badge--product">
+                    生産合計 {{ fmtInt(productSectionTotalQty) }}
+                  </span>
+                </div>
               </div>
-              <el-table :data="analysisData.by_product" size="small" class="ipa-table" max-height="340">
-                <el-table-column prop="product_cd" label="CD" width="88" />
-                <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
-                <el-table-column label="件" width="44" align="right">
+              <div ref="productChartRef" class="ipa-chart ipa-chart--side ipa-chart--product" />
+              <el-table
+                :data="productDisplayRows"
+                size="small"
+                stripe
+                class="ipa-table ipa-table--product"
+                max-height="280"
+              >
+                <el-table-column prop="product_cd" label="CD" width="84">
+                  <template #default="{ row }">
+                    <span class="ipa-product-cd">{{ row.product_cd }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="product_name" label="製品名" min-width="108" show-overflow-tooltip />
+                <el-table-column label="件" width="40" align="right">
                   <template #default="{ row }">{{ row.session_count }}</template>
                 </el-table-column>
-                <el-table-column label="生産" width="72" align="right">
-                  <template #default="{ row }">{{ fmtInt(row.sum_actual_qty) }}</template>
+                <el-table-column label="生産" width="68" align="right">
+                  <template #default="{ row }">
+                    <span class="ipa-num ipa-num--product">{{ fmtInt(row.sum_actual_qty) }}</span>
+                  </template>
                 </el-table-column>
-                <el-table-column label="不良率" width="68" align="right">
+                <el-table-column
+                  label="不良率"
+                  width="75"
+                  align="right"
+                  sortable
+                  :sort-method="sortByProductDefectRate"
+                >
                   <template #default="{ row }"><span class="ipa-num ipa-num--warn">{{ fmtPct(row.defect_rate_percent) }}</span></template>
                 </el-table-column>
-                <el-table-column label="能率" width="56" align="right">
-                  <template #default="{ row }"><span class="ipa-num ipa-num--good">{{ fmtEfficiency(row.efficiency_per_hour) }}</span></template>
+                <el-table-column
+                  label="能率"
+                  width="70"
+                  align="right"
+                  sortable
+                  :sort-method="sortByProductEfficiency"
+                >
+                  <template #default="{ row }">
+                    <span class="ipa-eff-pill ipa-eff-pill--product">{{ fmtEfficiency(row.avg_efficiency_per_hour) }}</span>
+                  </template>
                 </el-table-column>
               </el-table>
             </section>
           </div>
 
           <section v-if="productRankList.length" class="ipa-panel ipa-panel--rank ipa-fade-in ipa-fade-in--d5b">
-            <div class="ipa-panel__head">
+            <div class="ipa-panel__head ipa-rank-panel__head">
               <div class="ipa-panel__title-wrap">
-                <el-icon class="ipa-panel__ico"><Trophy /></el-icon>
-                <span class="ipa-panel__title">製品別 · 溶接作業者能率ランキング</span>
+                <div class="ipa-rank-title-ico" aria-hidden="true">
+                  <el-icon :size="16"><Trophy /></el-icon>
+                </div>
+                <div>
+                  <span class="ipa-panel__title">製品別 · 溶接作業者能率ランキング</span>
+                  <div class="ipa-rank-panel__desc">製品ごとの溶接作業者能率を順位付けして比較</div>
+                </div>
               </div>
+              <div class="ipa-panel__badges">
+                <span class="ipa-panel__badge ipa-panel__badge--soft">{{ productRankList.length }} 品目</span>
+                <span class="ipa-panel__badge ipa-panel__badge--rank">{{ productRankTopOverview.length }} TOP記録</span>
+              </div>
+            </div>
+
+            <div class="ipa-rank-toolbar">
               <div class="ipa-rank-picker">
-                <span class="ipa-rank-picker__label">製品</span>
+                <span class="ipa-rank-picker__label">
+                  <el-icon :size="12"><Goods /></el-icon>
+                  対象製品
+                </span>
                 <el-select
                   v-model="rankViewProductCd"
                   filterable
@@ -203,90 +303,150 @@
               </div>
             </div>
 
-            <div v-if="selectedProductRanking" class="ipa-rank-body">
-              <div class="ipa-rank-product">
-                <span class="ipa-rank-product__cd">{{ selectedProductRanking.product_cd }}</span>
-                <span class="ipa-rank-product__name">{{ selectedProductRanking.product_name }}</span>
-                <span class="ipa-rank-product__meta">
-                  生産 {{ fmtInt(selectedProductRanking.sum_actual_qty) }} ·
-                  溶接作業者 {{ selectedProductRanking.ranked_operator_count ?? 0 }} 名
-                </span>
-              </div>
+            <Transition name="ipa-rank-swap" mode="out-in">
+              <div v-if="selectedProductRanking" :key="rankViewProductCd" class="ipa-rank-body">
+                <div class="ipa-rank-hero">
+                  <div class="ipa-rank-hero__glow" aria-hidden="true" />
+                  <div class="ipa-rank-hero__main">
+                    <span class="ipa-rank-hero__cd">{{ selectedProductRanking.product_cd }}</span>
+                    <h3 class="ipa-rank-hero__name">{{ selectedProductRanking.product_name || '—' }}</h3>
+                  </div>
+                  <div v-if="selectedProductRankStats" class="ipa-rank-hero__stats">
+                    <div class="ipa-rank-hero__stat">
+                      <span class="ipa-rank-hero__stat-label">生産合計</span>
+                      <span class="ipa-rank-hero__stat-val">{{ fmtInt(selectedProductRanking.sum_actual_qty) }}</span>
+                    </div>
+                    <div class="ipa-rank-hero__stat">
+                      <span class="ipa-rank-hero__stat-label">溶接作業者</span>
+                      <span class="ipa-rank-hero__stat-val">{{ selectedProductRankStats.operatorCount }}<small>名</small></span>
+                    </div>
+                    <div class="ipa-rank-hero__stat ipa-rank-hero__stat--accent">
+                      <span class="ipa-rank-hero__stat-label">TOP能率</span>
+                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.topEfficiency) }}<small>個/時</small></span>
+                    </div>
+                    <div class="ipa-rank-hero__stat">
+                      <span class="ipa-rank-hero__stat-label">平均能率</span>
+                      <span class="ipa-rank-hero__stat-val">{{ fmtEfficiency(selectedProductRankStats.avgEfficiency) }}<small>個/時</small></span>
+                    </div>
+                  </div>
+                </div>
 
-              <div v-if="podiumOperators.length" class="ipa-podium">
-                <div
-                  v-for="item in podiumOperators"
-                  :key="item.operator_user_id ?? item.operator_name"
-                  class="ipa-podium__item"
-                  :class="`ipa-podium__item--${item.rank}`"
+                <div v-if="podiumOperators.length" class="ipa-podium ipa-podium--hd">
+                  <div
+                    v-for="(item, idx) in podiumOperators"
+                    :key="item.operator_user_id ?? item.operator_name"
+                    class="ipa-podium__col"
+                    :class="`ipa-podium__col--${item.rank}`"
+                    :style="{ '--podium-delay': `${idx * 0.1}s` }"
+                  >
+                    <div class="ipa-podium__item" :class="`ipa-podium__item--${item.rank}`">
+                      <div v-if="item.rank === 1" class="ipa-podium__crown" aria-hidden="true">👑</div>
+                      <div class="ipa-podium__medal-wrap">
+                        <span class="ipa-podium__medal">{{ rankMedal(item.rank) }}</span>
+                      </div>
+                      <div class="ipa-podium__name" :title="item.operator_name">{{ item.operator_name }}</div>
+                      <div class="ipa-podium__eff">{{ fmtEfficiency(item.efficiency_per_hour) }}</div>
+                      <div class="ipa-podium__sub">個/時</div>
+                    </div>
+                    <div class="ipa-podium__pedestal" :style="{ height: podiumPedestalHeight(item.rank) }">
+                      <span class="ipa-podium__pedestal-rank">{{ item.rank }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ipa-rank-chart-block">
+                  <div class="ipa-rank-chart-block__head">
+                    <span class="ipa-rank-chart-block__title">溶接作業者別能率</span>
+                    <span class="ipa-rank-chart-block__badge">{{ selectedProductRanking.operators.length }} 名</span>
+                  </div>
+                  <div ref="productRankChartRef" class="ipa-chart ipa-chart--rank" />
+                </div>
+
+                <el-table
+                  :data="selectedProductRanking.operators"
+                  size="small"
+                  stripe
+                  class="ipa-table ipa-table--rank"
+                  max-height="280"
+                  highlight-current-row
                 >
-                  <div class="ipa-podium__medal">{{ rankMedal(item.rank) }}</div>
-                  <div class="ipa-podium__name">{{ item.operator_name }}</div>
-                  <div class="ipa-podium__eff">{{ fmtEfficiency(item.efficiency_per_hour) }}</div>
-                  <div class="ipa-podium__sub">個/時</div>
+                  <el-table-column label="順位" width="64" align="center" fixed>
+                    <template #default="{ row }">
+                      <span class="ipa-rank-badge" :class="rankBadgeClass(row.rank)">{{ row.rank }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="operator_name" label="溶接作業者" min-width="120" show-overflow-tooltip />
+                  <el-table-column label="件" width="48" align="right">
+                    <template #default="{ row }">{{ row.session_count }}</template>
+                  </el-table-column>
+                  <el-table-column label="生産" width="72" align="right">
+                    <template #default="{ row }">
+                      <span class="ipa-num ipa-num--rank-qty">{{ fmtInt(row.sum_actual_qty) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="能率" width="76" align="right" sortable :sort-method="sortByEfficiency">
+                    <template #default="{ row }">
+                      <span class="ipa-eff-pill ipa-eff-pill--rank">{{ fmtEfficiency(row.efficiency_per_hour) }}</span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="不良率" width="76" align="right" sortable :sort-method="sortByOperatorDefectRate">
+                    <template #default="{ row }">
+                      <span class="ipa-eff-pill ipa-eff-pill--warn">{{ fmtPct(row.defect_rate_percent) }}</span>
+                    </template>
+                  </el-table-column>
+                </el-table>
+
+                <div v-if="!selectedProductRanking.operators.length" class="ipa-rank-empty">
+                  <el-icon :size="28" class="ipa-rank-empty__ico"><WarningFilled /></el-icon>
+                  <p>能率を算出できる溶接作業者データがありません</p>
+                  <span class="ipa-rank-empty__hint">正味稼働時間が必要です</span>
                 </div>
               </div>
-
-              <div ref="productRankChartRef" class="ipa-chart ipa-chart--rank" />
-
-              <el-table
-                :data="selectedProductRanking.operators"
-                size="small"
-                class="ipa-table ipa-table--rank"
-                max-height="280"
-                highlight-current-row
-              >
-                <el-table-column label="順位" width="64" align="center" fixed>
-                  <template #default="{ row }">
-                    <span class="ipa-rank-badge" :class="rankBadgeClass(row.rank)">{{ row.rank }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="operator_name" label="溶接作業者" min-width="120" show-overflow-tooltip />
-                <el-table-column label="件" width="48" align="right">
-                  <template #default="{ row }">{{ row.session_count }}</template>
-                </el-table-column>
-                <el-table-column label="生産" width="72" align="right">
-                  <template #default="{ row }">{{ fmtInt(row.sum_actual_qty) }}</template>
-                </el-table-column>
-                <el-table-column label="能率" width="72" align="right" sortable :sort-method="sortByEfficiency">
-                  <template #default="{ row }">
-                    <span class="ipa-num ipa-num--good ipa-num--lg">{{ fmtEfficiency(row.efficiency_per_hour) }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="不良率" width="72" align="right">
-                  <template #default="{ row }">{{ fmtPct(row.defect_rate_percent) }}</template>
-                </el-table-column>
-                <el-table-column label="稼働" width="64" align="right">
-                  <template #default="{ row }">{{ fmtDurationMin(row.sum_net_production_min) }}</template>
-                </el-table-column>
-              </el-table>
-
-              <div v-if="!selectedProductRanking.operators.length" class="ipa-rank-empty">
-                能率を算出できる溶接作業者データがありません（正味稼働時間が必要です）
-              </div>
-            </div>
+            </Transition>
 
             <div class="ipa-rank-overview">
-              <div class="ipa-rank-overview__head">全製品 · 能率 TOP1 一覧</div>
-              <el-table :data="productRankTopOverview" size="small" class="ipa-table" max-height="220">
-                <el-table-column prop="product_cd" label="CD" width="88" />
+              <div class="ipa-rank-overview__head">
+                <el-icon class="ipa-rank-overview__ico"><List /></el-icon>
+                <span class="ipa-rank-overview__title">全製品 · 能率 TOP1 一覧</span>
+                <span class="ipa-rank-overview__count">{{ productRankTopOverview.length }}</span>
+              </div>
+              <el-table
+                :data="productRankTopOverview"
+                size="small"
+                stripe
+                class="ipa-table ipa-table--rank-overview"
+                max-height="240"
+                :row-class-name="rankOverviewRowClass"
+              >
+                <el-table-column prop="product_cd" label="CD" width="88">
+                  <template #default="{ row }">
+                    <span class="ipa-product-cd ipa-product-cd--rank">{{ row.product_cd }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="product_name" label="製品名" min-width="120" show-overflow-tooltip />
                 <el-table-column label="TOP溶接作業者" min-width="110" show-overflow-tooltip>
-                  <template #default="{ row }">{{ row.top_operator_name ?? '—' }}</template>
-                </el-table-column>
-                <el-table-column label="能率" width="72" align="right">
                   <template #default="{ row }">
-                    <span class="ipa-num ipa-num--good">{{ fmtEfficiency(row.top_efficiency_per_hour) }}</span>
+                    <span class="ipa-rank-top-inspector">{{ row.top_operator_name ?? '—' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="能率" width="76" align="right">
+                  <template #default="{ row }">
+                    <span class="ipa-eff-pill ipa-eff-pill--rank">{{ fmtEfficiency(row.top_efficiency_per_hour) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="対象人数" width="72" align="center">
                   <template #default="{ row }">{{ row.ranked_operator_count ?? 0 }}</template>
                 </el-table-column>
-                <el-table-column label="" width="72" align="center">
+                <el-table-column label="" width="80" align="center">
                   <template #default="{ row }">
-                    <el-button link type="primary" size="small" @click="rankViewProductCd = row.product_cd">
+                    <button
+                      type="button"
+                      class="ipa-rank-detail-btn"
+                      :class="{ 'ipa-rank-detail-btn--active': rankViewProductCd === row.product_cd }"
+                      @click="rankViewProductCd = row.product_cd"
+                    >
                       詳細
-                    </el-button>
+                    </button>
                   </template>
                 </el-table-column>
               </el-table>
@@ -314,7 +474,9 @@
                 <el-icon class="ipa-panel__ico"><List /></el-icon>
                 <span class="ipa-panel__title">セッション明細</span>
               </div>
-              <span class="ipa-panel__badge">{{ analysisData.sessions.length }} 件</span>
+              <div class="ipa-panel__badges">
+                <span class="ipa-panel__badge">{{ analysisData.sessions.length }} 件</span>
+              </div>
             </div>
             <el-table :data="analysisData.sessions" size="small" class="ipa-table ipa-table--detail" max-height="380">
               <el-table-column prop="production_day" label="生産日" width="102" fixed />
@@ -354,7 +516,7 @@
 
       <div v-if="!loading && !analysisData" class="ipa-empty ipa-fade-in">
         <div class="ipa-empty__icon"><el-icon :size="40"><DataAnalysis /></el-icon></div>
-        <p>期間を選択して「分析実行」をクリック</p>
+        <p>集計期間を選択してください</p>
       </div>
     </div>
   </div>
@@ -366,10 +528,12 @@ import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import type { ECharts } from 'echarts'
 import {
+  ArrowDown,
   Calendar,
   CircleCheck,
   DataAnalysis,
   Connection,
+  Document,
   Goods,
   List,
   Refresh,
@@ -384,28 +548,115 @@ import {
   fetchWeldingProductivityAnalysis,
   type WeldingProductivityAnalysisData,
   type WeldingProductivityBucket,
+  type WeldingProductivityDailyRow,
   type WeldingProductivityOperatorRow,
   type WeldingProductivityProductOperatorRanking,
+  type WeldingProductivityProductRow,
+  type WeldingProductivitySessionRow,
 } from '@/api/weldingManagement'
-import { getUsers, type PaginatedUserResponse, type UserListItem } from '@/api/system'
+import type { UserListItem } from '@/api/system'
 import { getProductList } from '@/api/master/productMaster'
 import type { Product } from '@/types/master'
 import { getJSTToday, parseDateAsJST } from '@/utils/dateFormat'
+import { fetchWeldingSectionOperators } from '@/views/mes/shared/weldingOperatorFilter'
 import { filterWeldingSelectableProducts } from '@/views/mes/shared/weldingProductFilter'
 import {
   loadMesDefectItemsForProcess,
   resolveMesDefectItemLabel,
 } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
+import {
+  CHART_INIT_OPTS,
+  chartTheme,
+  createDailyTrendChartOption,
+  createPersonBarChartOption,
+  createProductBarChartOption,
+  createProductRankChartOption,
+  type IpaChartFormatters,
+} from './ipaProductivityChartHelpers'
+import {
+  printWeldingProductivityDailyBatch,
+  printWeldingProductivityOperatorProductBatch,
+  printWeldingProductivityReport,
+  printWeldingProductivitySection,
+  type WeldingProductivityDailyBatchItem,
+  type WeldingProductivityOperatorProductBatchItem,
+  type WeldingProductivityPrintSection,
+  type WeldingProductivityReportContext,
+  type WeldingProductivityReportFilters,
+} from './weldingProductivityReport'
 
 defineOptions({ name: 'MesWeldingProductivityAnalysis' })
+
+type ReportMenuTone = 'indigo' | 'sky' | 'teal' | 'violet' | 'emerald' | 'amber' | 'rose'
+
+const reportMenuItems: Array<{
+  command: string
+  label: string
+  hint?: string
+  icon: typeof Document
+  tone: ReportMenuTone
+  divided?: boolean
+}> = [
+  {
+    command: 'print-full',
+    label: '印刷（全体）',
+    hint: '全セクション一括出力',
+    icon: markRaw(Document),
+    tone: 'indigo',
+  },
+  {
+    command: 'print-daily',
+    label: '日別推移（印刷）',
+    hint: '生産数 · 能率の推移',
+    icon: markRaw(TrendCharts),
+    tone: 'sky',
+    divided: true,
+  },
+  {
+    command: 'print-daily-batch',
+    label: '日別推移（溶接作業者別・一括印刷）',
+    hint: '溶接作業者ごとに分割出力',
+    icon: markRaw(DataAnalysis),
+    tone: 'teal',
+  },
+  {
+    command: 'print-operator',
+    label: '溶接作業者別（印刷）',
+    hint: '溶接作業者別サマリー',
+    icon: markRaw(User),
+    tone: 'violet',
+  },
+  {
+    command: 'print-operator-product-batch',
+    label: '溶接作業者別製品別（一括印刷）',
+    hint: '溶接作業者ごとに製品一覧を出力',
+    icon: markRaw(Goods),
+    tone: 'violet',
+  },
+  {
+    command: 'print-product',
+    label: '製品別（印刷）',
+    hint: '製品別サマリー',
+    icon: markRaw(Goods),
+    tone: 'emerald',
+  },
+  {
+    command: 'print-product-rank',
+    label: '製品別 · 溶接作業者能率ランキング（印刷）',
+    hint: '製品単位の順位表',
+    icon: markRaw(List),
+    tone: 'rose',
+  },
+]
 
 const { t, te } = useI18n()
 
 const loading = ref(false)
+const exportBusy = ref(false)
 const contentVisible = ref(false)
 const analysisData = ref<WeldingProductivityAnalysisData | null>(null)
 const operatorOptions = ref<UserListItem[]>([])
-const filterOperatorId = ref<number | null>(null)
+const filterOperatorId = ref<number | ''>('')
 const filterProductCd = ref('')
 const includeIncomplete = ref(false)
 const productOptions = ref<Product[]>([])
@@ -414,10 +665,14 @@ const defectLabelMap = ref<Map<string, string>>(new Map())
 const rankViewProductCd = ref('')
 const dailyChartRef = ref<HTMLElement | null>(null)
 const operatorChartRef = ref<HTMLElement | null>(null)
+const productChartRef = ref<HTMLElement | null>(null)
 const productRankChartRef = ref<HTMLElement | null>(null)
 let dailyChart: ECharts | null = null
 let operatorChart: ECharts | null = null
+let productChart: ECharts | null = null
 let productRankChart: ECharts | null = null
+
+const EFFICIENCY_UNIT = '個/時'
 
 function shiftJstDate(isoDay: string, deltaDays: number): string {
   const base = parseDateAsJST(isoDay)
@@ -656,11 +911,436 @@ function fmtDurationMin(min: number | null | undefined): string {
   return `${m}m`
 }
 
+const chartFormatters: IpaChartFormatters = {
+  fmtInt,
+  fmtPct,
+  fmtEfficiency,
+}
+
+type OperatorDisplayRow = WeldingProductivityOperatorRow & {
+  avg_efficiency_per_hour: number | null
+}
+
+type ProductDisplayRow = WeldingProductivityProductRow & {
+  avg_efficiency_per_hour: number | null
+}
+
+/** 期間内：生産合計 ÷ 正味稼働時間（個/時） */
+function periodAvgEfficiencyFromBucket(row: WeldingProductivityBucket): number | null {
+  if (row.efficiency_per_hour != null && Number.isFinite(row.efficiency_per_hour)) {
+    return row.efficiency_per_hour
+  }
+  const qty = Number(row.sum_actual_qty ?? 0)
+  const sec = Number(row.sum_net_production_sec ?? 0)
+  if (qty <= 0 || sec <= 0) return null
+  return Math.round(qty / (sec / 3600))
+}
+
+const operatorDisplayRows = computed((): OperatorDisplayRow[] =>
+  (analysisData.value?.by_operator ?? [])
+    .map((row) => ({
+      ...row,
+      avg_efficiency_per_hour: periodAvgEfficiencyFromBucket(row),
+    }))
+    .sort((a, b) => (b.avg_efficiency_per_hour ?? -1) - (a.avg_efficiency_per_hour ?? -1)),
+)
+
+const operatorSectionAvgEfficiency = computed((): number | null => {
+  const rows = analysisData.value?.by_operator ?? []
+  let totalQty = 0
+  let totalSec = 0
+  for (const row of rows) {
+    totalQty += Number(row.sum_actual_qty ?? 0)
+    totalSec += Number(row.sum_net_production_sec ?? 0)
+  }
+  if (totalQty <= 0 || totalSec <= 0) return null
+  return Math.round(totalQty / (totalSec / 3600))
+})
+
+const productDisplayRows = computed((): ProductDisplayRow[] =>
+  (analysisData.value?.by_product ?? [])
+    .map((row) => ({
+      ...row,
+      avg_efficiency_per_hour: periodAvgEfficiencyFromBucket(row),
+    }))
+    .sort((a, b) => (b.sum_actual_qty ?? 0) - (a.sum_actual_qty ?? 0)),
+)
+
+const productSectionTotalQty = computed(() =>
+  productDisplayRows.value.reduce((sum, row) => sum + Number(row.sum_actual_qty ?? 0), 0),
+)
+
+function operatorRankClass(index: number): string {
+  if (index === 0) return 'ipa-row-rank--gold'
+  if (index === 1) return 'ipa-row-rank--silver'
+  if (index === 2) return 'ipa-row-rank--bronze'
+  return ''
+}
+
+function sortByOperatorDefectRate(a: WeldingProductivityOperatorRow, b: WeldingProductivityOperatorRow): number {
+  return (b.defect_rate_percent ?? -1) - (a.defect_rate_percent ?? -1)
+}
+
+function sortByProductDefectRate(a: ProductDisplayRow, b: ProductDisplayRow): number {
+  return (b.defect_rate_percent ?? -1) - (a.defect_rate_percent ?? -1)
+}
+
+function sortByProductEfficiency(a: ProductDisplayRow, b: ProductDisplayRow): number {
+  return (b.avg_efficiency_per_hour ?? -1) - (a.avg_efficiency_per_hour ?? -1)
+}
+
+function podiumPedestalHeight(rank?: number): string {
+  if (rank === 1) return '72px'
+  if (rank === 2) return '56px'
+  if (rank === 3) return '44px'
+  return '36px'
+}
+
+function rankOverviewRowClass({ row }: { row: WeldingProductivityProductOperatorRanking }): string {
+  return rankViewProductCd.value === row.product_cd ? 'ipa-rank-overview-row--active' : ''
+}
+
+const selectedProductRankStats = computed(() => {
+  const ranking = selectedProductRanking.value
+  if (!ranking) return null
+  const operators = ranking.operators ?? []
+  const top = operators[0]
+  let totalEff = 0
+  let effCount = 0
+  for (const row of operators) {
+    if (row.efficiency_per_hour != null) {
+      totalEff += row.efficiency_per_hour
+      effCount += 1
+    }
+  }
+  return {
+    topEfficiency: top?.efficiency_per_hour ?? null,
+    topOperator: top?.operator_name ?? null,
+    avgEfficiency: effCount > 0 ? totalEff / effCount : null,
+    operatorCount: ranking.ranked_operator_count ?? operators.length,
+  }
+})
+
 function operatorLabel(u: UserListItem): string {
   const name = (u.full_name ?? '').trim()
   const username = (u.username ?? '').trim()
   if (name && username) return `${name}（${username}）`
   return name || username || `#${u.id}`
+}
+
+function buildOperatorProductRows(
+  sessions: WeldingProductivitySessionRow[],
+  operatorKey: string,
+  includeProduct: (productCd: string) => boolean,
+): ProductDisplayRow[] {
+  const map = new Map<string, WeldingProductivityProductRow & { sum_net_production_sec: number }>()
+  for (const s of sessions) {
+    const productCd = (s.product_cd ?? '').trim()
+    if (!productCd || !includeProduct(productCd)) continue
+
+    const opKey = s.mes_operator_user_id != null ? String(s.mes_operator_user_id) : 'none'
+    if (opKey !== operatorKey) continue
+
+    if (!map.has(productCd)) {
+      map.set(productCd, {
+        product_cd: productCd,
+        product_name: (s.product_name ?? '').trim() || productCd,
+        session_count: 0,
+        sum_actual_qty: 0,
+        sum_defect_qty: 0,
+        sum_net_production_sec: 0,
+      })
+    }
+    const prod = map.get(productCd)!
+    prod.session_count = (prod.session_count ?? 0) + 1
+    prod.sum_actual_qty = (prod.sum_actual_qty ?? 0) + Number(s.actual_production_quantity ?? 0)
+    prod.sum_defect_qty = (prod.sum_defect_qty ?? 0) + Number(s.defect_qty ?? 0)
+    prod.sum_net_production_sec =
+      (prod.sum_net_production_sec ?? 0) + Number(s.net_production_sec ?? s.mes_net_production_sec ?? 0)
+  }
+
+  return [...map.values()]
+    .map((row) => {
+      const actual = row.sum_actual_qty ?? 0
+      const defect = row.sum_defect_qty ?? 0
+      return {
+        ...row,
+        defect_rate_percent: actual > 0 ? Math.round((defect / actual) * 1000) / 10 : null,
+        avg_efficiency_per_hour: periodAvgEfficiencyFromBucket(row),
+      }
+    })
+    .sort((a, b) => (b.sum_actual_qty ?? 0) - (a.sum_actual_qty ?? 0))
+}
+
+function buildReportFilters(): WeldingProductivityReportFilters | null {
+  const [start, end] = dateRange.value ?? []
+  if (!start || !end) return null
+
+  let operatorFilterLabel = '（すべて）'
+  if (filterOperatorId.value !== '') {
+    const found = operatorOptions.value.find((u) => u.id === filterOperatorId.value)
+    operatorFilterLabel = found ? operatorLabel(found) : `#${filterOperatorId.value}`
+  }
+
+  let productFilterLabel = '（すべて）'
+  if (filterProductCd.value) {
+    const found = productOptions.value.find((p) => p.product_cd === filterProductCd.value)
+    productFilterLabel = found
+      ? `${found.product_cd} · ${(found.product_name ?? '').trim() || found.product_cd}`
+      : filterProductCd.value
+  }
+
+  return {
+    startDate: start,
+    endDate: end,
+    operatorLabel: operatorFilterLabel,
+    productLabel: productFilterLabel,
+    includeIncomplete: includeIncomplete.value,
+  }
+}
+
+function buildReportContext(): WeldingProductivityReportContext | null {
+  const filters = buildReportFilters()
+  if (!analysisData.value || !filters) return null
+
+  return {
+    filters,
+    kpiCards: kpiCards.value.map((card) => ({
+      label: card.label,
+      value: card.value,
+      hint: card.hint,
+      tone: card.tone as 'indigo' | 'sky' | 'amber' | 'emerald' | 'violet',
+    })),
+    charts: {
+      daily: captureChartDataUrl(dailyChart),
+      operator: captureChartDataUrl(operatorChart),
+      product: captureChartDataUrl(productChart),
+      productRank: captureChartDataUrl(productRankChart),
+    },
+    operatorRows: operatorDisplayRows.value,
+    productRows: productDisplayRows.value,
+    operatorSectionAvgEfficiency: operatorSectionAvgEfficiency.value,
+    productSectionTotalQty: productSectionTotalQty.value,
+    productRank: {
+      selected: selectedProductRanking.value,
+      topOverview: productRankTopOverview.value,
+      stats: selectedProductRankStats.value,
+    },
+  }
+}
+
+async function prepareChartsForReport(command: string) {
+  if (command === 'print-full' || command === 'print-daily') dailyChart?.resize()
+  if (command === 'print-full' || command === 'print-operator') operatorChart?.resize()
+  if (command === 'print-full' || command === 'print-product') productChart?.resize()
+  if (command === 'print-product-rank' || command === 'print-full') {
+    await nextTick()
+    await renderProductRankChart()
+    productRankChart?.resize()
+  }
+}
+
+async function handleReportCommand(command: string | number | object) {
+  const cmd = String(command)
+
+  if (!analysisData.value) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  exportBusy.value = true
+  try {
+    if (cmd === 'print-daily-batch') {
+      await handleBatchDailyByOperatorPrint()
+      return
+    }
+
+    if (cmd === 'print-operator-product-batch') {
+      await handleBatchOperatorProductPrint()
+      return
+    }
+
+    await prepareChartsForReport(cmd)
+    const ctx = buildReportContext()
+    if (!ctx) {
+      ElMessage.warning('出力する分析データがありません')
+      return
+    }
+
+    if (cmd === 'print-full') {
+      printWeldingProductivityReport(ctx)
+      return
+    }
+
+    const sectionMap: Record<string, WeldingProductivityPrintSection> = {
+      'print-daily': 'daily',
+      'print-operator': 'operator',
+      'print-product': 'product',
+      'print-product-rank': 'product-rank',
+    }
+    const section = sectionMap[cmd]
+    if (section) {
+      printWeldingProductivitySection(section, ctx)
+      return
+    }
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : 'レポート出力に失敗しました')
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+function captureChartDataUrl(chart: ECharts | null): string | null {
+  if (!chart || chart.isDisposed()) return null
+  try {
+    return chart.getDataURL({
+      type: 'png',
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+    })
+  } catch {
+    return null
+  }
+}
+
+function waitForChartPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+}
+
+async function captureDailyChartDataUrl(daily: WeldingProductivityDailyRow[]): Promise<string | null> {
+  if (!daily.length) return null
+  const el = document.createElement('div')
+  el.style.cssText =
+    'position:fixed;left:0;top:0;width:960px;height:380px;opacity:0;pointer-events:none;z-index:-1;overflow:hidden;'
+  document.body.appendChild(el)
+  let chart: ECharts | null = null
+  try {
+    chart = echarts.init(el, undefined, CHART_INIT_OPTS)
+    chart.setOption(
+      createDailyTrendChartOption(daily, chartTheme(), chartFormatters, EFFICIENCY_UNIT, { forExport: true }),
+      { notMerge: true },
+    )
+    chart.resize()
+    await waitForChartPaint()
+    const url = chart.getDataURL({
+      type: 'png',
+      pixelRatio: 2,
+      backgroundColor: '#ffffff',
+    })
+    return url.startsWith('data:image') ? url : null
+  } catch {
+    return null
+  } finally {
+    chart?.dispose()
+    el.remove()
+  }
+}
+
+async function handleBatchDailyByOperatorPrint() {
+  const filters = buildReportFilters()
+  const [start, end] = dateRange.value ?? []
+  if (!filters || !start || !end) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  const operators = operatorOptions.value
+  if (!operators.length) {
+    ElMessage.warning('溶接作業者が登録されていません')
+    return
+  }
+
+  const items: WeldingProductivityDailyBatchItem[] = []
+  for (const op of operators) {
+    const res = await fetchWeldingProductivityAnalysis({
+      start_date: start,
+      end_date: end,
+      mes_operator_user_id: op.id,
+      product_cd: filterProductCd.value || null,
+      include_incomplete: includeIncomplete.value,
+    })
+    if (!res.success || !res.data) continue
+    const daily = res.data.daily ?? []
+    if (!daily.length) continue
+    const chartSrc = await captureDailyChartDataUrl(daily)
+    if (!chartSrc) continue
+    const summary = res.data.summary
+    items.push({
+      operatorUserId: op.id,
+      operatorLabel: operatorLabel(op),
+      chartSrc,
+      dayCount: daily.length,
+      sumActualQty: summary?.sum_actual_qty ?? 0,
+      avgEfficiencyPerHour: summary?.efficiency_per_hour ?? null,
+    })
+  }
+  if (!items.length) {
+    ElMessage.warning('印刷できる日別データがありません')
+    return
+  }
+
+  printWeldingProductivityDailyBatch(filters, items)
+}
+
+async function handleBatchOperatorProductPrint() {
+  const filters = buildReportFilters()
+  const [start, end] = dateRange.value ?? []
+  if (!filters || !start || !end) {
+    ElMessage.warning('出力する分析データがありません')
+    return
+  }
+
+  const operators = operatorOptions.value
+  if (!operators.length) {
+    ElMessage.warning('溶接作業者が登録されていません')
+    return
+  }
+
+  const res = await fetchWeldingProductivityAnalysis({
+    start_date: start,
+    end_date: end,
+    product_cd: filterProductCd.value || null,
+    include_incomplete: includeIncomplete.value,
+  })
+  if (!res.success || !res.data) {
+    ElMessage.warning('分析データの取得に失敗しました')
+    return
+  }
+
+  const sessions = res.data.sessions ?? []
+  const items: WeldingProductivityOperatorProductBatchItem[] = []
+
+  for (const op of operators) {
+    const rows = buildOperatorProductRows(sessions, String(op.id), () => true)
+    if (!rows.length) continue
+
+    const sessionCount = rows.reduce((sum, row) => sum + Number(row.session_count ?? 0), 0)
+    const sumActualQty = rows.reduce((sum, row) => sum + Number(row.sum_actual_qty ?? 0), 0)
+    const totalSec = rows.reduce((sum, row) => sum + Number(row.sum_net_production_sec ?? 0), 0)
+    const avgEfficiencyPerHour =
+      sumActualQty > 0 && totalSec > 0 ? Math.round(sumActualQty / (totalSec / 3600)) : null
+
+    items.push({
+      operatorLabel: operatorLabel(op),
+      productCount: rows.length,
+      sessionCount,
+      sumActualQty,
+      avgEfficiencyPerHour,
+      productRows: rows,
+    })
+  }
+
+  if (!items.length) {
+    ElMessage.warning('印刷できる溶接作業者別製品データがありません')
+    return
+  }
+
+  items.sort((a, b) => (b.avgEfficiencyPerHour ?? -1) - (a.avgEfficiencyPerHour ?? -1))
+  printWeldingProductivityOperatorProductBatch(filters, items)
 }
 
 function productOptionLabel(p: Product): string {
@@ -688,8 +1368,11 @@ function defectLabel(defectCd: string): string {
 
 async function loadOperators() {
   try {
-    const res = (await getUsers({ page: 1, page_size: 500, status: 'active' })) as unknown as PaginatedUserResponse
-    operatorOptions.value = res.items ?? []
+    operatorOptions.value = await fetchWeldingSectionOperators()
+    const allowed = new Set(operatorOptions.value.map((u) => u.id))
+    if (filterOperatorId.value !== '' && !allowed.has(filterOperatorId.value)) {
+      filterOperatorId.value = ''
+    }
   } catch {
     operatorOptions.value = []
   }
@@ -706,12 +1389,16 @@ async function loadDefectLabels() {
   }
 }
 
-async function loadAnalysis() {
+let analysisRequestSeq = 0
+let analysisDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+async function loadAnalysis(options?: { silent?: boolean }) {
   const [start, end] = dateRange.value ?? []
   if (!start || !end) {
-    ElMessage.warning('集計期間を指定してください')
+    if (!options?.silent) ElMessage.warning('集計期間を指定してください')
     return
   }
+  const seq = ++analysisRequestSeq
   contentVisible.value = false
   loading.value = true
   try {
@@ -722,6 +1409,7 @@ async function loadAnalysis() {
       product_cd: filterProductCd.value || null,
       include_incomplete: includeIncomplete.value,
     })
+    if (seq !== analysisRequestSeq) return
     if (!res.success || !res.data) throw new Error(res.message || '分析データの取得に失敗しました')
     analysisData.value = res.data
     syncRankProductSelection()
@@ -729,29 +1417,33 @@ async function loadAnalysis() {
     contentVisible.value = true
     await nextTick()
     renderCharts()
+    await renderProductRankChart()
   } catch (err) {
+    if (seq !== analysisRequestSeq) return
     analysisData.value = null
     ElMessage.error(err instanceof Error ? err.message : '分析データの取得に失敗しました')
   } finally {
-    loading.value = false
+    if (seq === analysisRequestSeq) loading.value = false
   }
+}
+
+function scheduleLoadAnalysis() {
+  if (analysisDebounceTimer) clearTimeout(analysisDebounceTimer)
+  analysisDebounceTimer = setTimeout(() => {
+    analysisDebounceTimer = null
+    void loadAnalysis({ silent: true })
+  }, 350)
 }
 
 function disposeCharts() {
   dailyChart?.dispose()
   operatorChart?.dispose()
+  productChart?.dispose()
   productRankChart?.dispose()
   dailyChart = null
   operatorChart = null
+  productChart = null
   productRankChart = null
-}
-
-function chartTheme() {
-  return {
-    text: '#64748b',
-    axis: '#cbd5e1',
-    split: 'rgba(148, 163, 184, 0.15)',
-  }
 }
 
 function renderCharts() {
@@ -762,1279 +1454,295 @@ function renderCharts() {
 
   const dailyEl = dailyChartRef.value
   if (dailyEl && data.daily.length > 0) {
-    dailyChart = echarts.init(dailyEl)
-    dailyChart.setOption({
-      animationDuration: 900,
-      animationEasing: 'cubicOut',
-      tooltip: {
-        trigger: 'axis',
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
-        borderColor: 'rgba(255,255,255,0.08)',
-        textStyle: { color: '#e2e8f0', fontSize: 12 },
-      },
-      legend: { data: ['生産数', '能率'], top: 0, textStyle: { color: theme.text, fontSize: 11 } },
-      grid: { left: 44, right: 44, top: 36, bottom: 24 },
-      xAxis: {
-        type: 'category',
-        data: data.daily.map((d) => d.day.slice(5)),
-        axisLine: { lineStyle: { color: theme.axis } },
-        axisLabel: { color: theme.text, fontSize: 11 },
-        axisTick: { show: false },
-      },
-      yAxis: [
-        {
-          type: 'value',
-          name: '生産数',
-          nameTextStyle: { color: theme.text, fontSize: 10 },
-          axisLabel: { color: theme.text, fontSize: 10 },
-          splitLine: { lineStyle: { color: theme.split, type: 'dashed' } },
-        },
-        {
-          type: 'value',
-          name: '能率',
-          nameTextStyle: { color: theme.text, fontSize: 10 },
-          axisLabel: { color: theme.text, fontSize: 10 },
-          splitLine: { show: false },
-        },
-      ],
-      series: [
-        {
-          name: '生産数',
-          type: 'bar',
-          barMaxWidth: 28,
-          data: data.daily.map((d) => d.sum_actual_qty ?? 0),
-          itemStyle: {
-            borderRadius: [6, 6, 0, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: '#38bdf8' },
-              { offset: 1, color: '#6366f1' },
-            ]),
-            shadowColor: 'rgba(99, 102, 241, 0.35)',
-            shadowBlur: 10,
-            shadowOffsetY: 4,
-          },
-        },
-        {
-          name: '能率',
-          type: 'line',
-          yAxisIndex: 1,
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 7,
-          lineStyle: { width: 3, color: '#10b981', shadowColor: 'rgba(16,185,129,0.4)', shadowBlur: 8 },
-          itemStyle: { color: '#10b981', borderWidth: 2, borderColor: '#fff' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(16, 185, 129, 0.28)' },
-              { offset: 1, color: 'rgba(16, 185, 129, 0.02)' },
-            ]),
-          },
-          data: data.daily.map((d) => d.efficiency_per_hour ?? null),
-        },
-      ],
-    })
+    dailyChart = echarts.init(dailyEl, undefined, CHART_INIT_OPTS)
+    dailyChart.setOption(createDailyTrendChartOption(data.daily, theme, chartFormatters, EFFICIENCY_UNIT))
   }
 
-  const inspectorEl = operatorChartRef.value
-  const topOperators = data.by_operator.slice(0, 8)
-  if (inspectorEl && topOperators.length > 0) {
-    operatorChart = echarts.init(inspectorEl)
-    const colors = ['#8b5cf6', '#6366f1', '#0ea5e9', '#10b981', '#14b8a6', '#f59e0b', '#f97316', '#ec4899']
-    operatorChart.setOption({
-      animationDuration: 800,
-      animationEasing: 'elasticOut',
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'shadow' },
-        backgroundColor: 'rgba(15, 23, 42, 0.92)',
-        borderColor: 'rgba(255,255,255,0.08)',
-        textStyle: { color: '#e2e8f0', fontSize: 12 },
-      },
-      grid: { left: 96, right: 36, top: 8, bottom: 16 },
-      xAxis: {
-        type: 'value',
-        axisLabel: { color: theme.text, fontSize: 10 },
-        splitLine: { lineStyle: { color: theme.split, type: 'dashed' } },
-      },
-      yAxis: {
-        type: 'category',
-        data: topOperators.map((r) => r.operator_name ?? '—'),
-        inverse: true,
-        axisLabel: { color: '#334155', fontSize: 11, width: 80, overflow: 'truncate' },
-        axisLine: { show: false },
-        axisTick: { show: false },
-      },
-      series: [
-        {
-          type: 'bar',
-          data: topOperators.map((r, i) => ({
-            value: r.efficiency_per_hour ?? 0,
-            itemStyle: {
-              borderRadius: [0, 6, 6, 0],
-              color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                { offset: 0, color: colors[i % colors.length] },
-                { offset: 1, color: `${colors[i % colors.length]}99` },
-              ]),
-              shadowColor: 'rgba(99, 102, 241, 0.25)',
-              shadowBlur: 8,
-              shadowOffsetX: 2,
-            },
-          })),
-          label: { show: true, position: 'right', color: '#475569', fontSize: 11, fontWeight: 600 },
-        },
-      ],
-    })
+  const operatorEl = operatorChartRef.value
+  const operatorRows = operatorDisplayRows.value
+  if (operatorEl && operatorRows.length > 0) {
+    operatorChart = echarts.init(operatorEl, undefined, CHART_INIT_OPTS)
+    operatorChart.setOption(
+      createPersonBarChartOption(
+        operatorRows.map((row) => ({
+          person_name: row.operator_name,
+          avg_efficiency_per_hour: row.avg_efficiency_per_hour,
+          sum_actual_qty: row.sum_actual_qty,
+          defect_rate_percent: row.defect_rate_percent,
+        })),
+        theme,
+        chartFormatters,
+        EFFICIENCY_UNIT,
+      ),
+    )
   }
 
-  renderProductRankChart(theme)
+  const productEl = productChartRef.value
+  const productRows = productDisplayRows.value
+  if (productEl && productRows.length > 0) {
+    productChart = echarts.init(productEl, undefined, CHART_INIT_OPTS)
+    productChart.setOption(createProductBarChartOption(productRows, theme, chartFormatters, EFFICIENCY_UNIT))
+  }
 }
 
-function renderProductRankChart(theme = chartTheme()) {
+async function waitForProductRankChartEl(): Promise<HTMLElement | null> {
+  for (let i = 0; i < 6; i += 1) {
+    await nextTick()
+    const el = productRankChartRef.value
+    if (el) return el
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve())
+    })
+  }
+  return productRankChartRef.value
+}
+
+async function renderProductRankChart(theme = chartTheme()) {
+  const ranking = selectedProductRanking.value
+  const rows = (ranking?.operators ?? []).filter((r) => r.efficiency_per_hour != null)
+  if (!rows.length) {
+    productRankChart?.dispose()
+    productRankChart = null
+    return
+  }
+
+  const el = await waitForProductRankChartEl()
+  if (!el) return
+
   productRankChart?.dispose()
   productRankChart = null
-  const ranking = selectedProductRanking.value
-  const el = productRankChartRef.value
-  const rows = ranking?.operators ?? []
-  if (!el || rows.length === 0) return
-
-  productRankChart = echarts.init(el)
-  const palette = ['#f59e0b', '#94a3b8', '#b45309', '#6366f1', '#0ea5e9', '#10b981', '#8b5cf6', '#ec4899']
-  productRankChart.setOption({
-    animationDuration: 700,
-    animationEasing: 'cubicOut',
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'shadow' },
-      backgroundColor: 'rgba(15, 23, 42, 0.92)',
-      borderColor: 'rgba(255,255,255,0.08)',
-      textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter(params: unknown) {
-        const list = Array.isArray(params) ? params : [params]
-        const p = list[0] as { dataIndex?: number }
-        const row = rows[p.dataIndex ?? 0]
-        if (!row) return ''
-        return [
-          `<b>${row.operator_name ?? '—'}</b>`,
-          `順位: ${row.rank ?? '—'}`,
-          `能率: ${row.efficiency_per_hour ?? '—'} 個/時`,
-          `生産: ${row.sum_actual_qty ?? 0}`,
-          `不良率: ${row.defect_rate_percent != null ? `${row.defect_rate_percent}%` : '—'}`,
-        ].join('<br/>')
-      },
-    },
-    grid: { left: 100, right: 40, top: 12, bottom: 20 },
-    xAxis: {
-      type: 'value',
-      name: '能率（個/時）',
-      nameTextStyle: { color: theme.text, fontSize: 10 },
-      axisLabel: { color: theme.text, fontSize: 10 },
-      splitLine: { lineStyle: { color: theme.split, type: 'dashed' } },
-    },
-    yAxis: {
-      type: 'category',
-      data: rows.map((r) => `#${r.rank} ${r.operator_name ?? '—'}`),
-      inverse: true,
-      axisLabel: { color: '#334155', fontSize: 11, width: 92, overflow: 'truncate' },
-      axisLine: { show: false },
-      axisTick: { show: false },
-    },
-    series: [
-      {
-        type: 'bar',
-        data: rows.map((r, i) => ({
-          value: r.efficiency_per_hour ?? 0,
-          itemStyle: {
-            borderRadius: [0, 8, 8, 0],
-            color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-              { offset: 0, color: i === 0 ? '#f59e0b' : palette[i % palette.length] },
-              { offset: 1, color: i === 0 ? '#fbbf24' : `${palette[i % palette.length]}aa` },
-            ]),
-            shadowColor: i === 0 ? 'rgba(245, 158, 11, 0.35)' : 'rgba(99, 102, 241, 0.2)',
-            shadowBlur: 8,
-            shadowOffsetX: 2,
-          },
-        })),
-        label: {
-          show: true,
-          position: 'right',
-          color: '#475569',
-          fontSize: 11,
-          fontWeight: 700,
-          formatter: '{c}',
-        },
-      },
-    ],
-  })
+  productRankChart = echarts.init(el, undefined, CHART_INIT_OPTS)
+  productRankChart.setOption(
+    createProductRankChartOption(
+      rows.map((row) => ({
+        person_name: row.operator_name,
+        rank: row.rank,
+        efficiency_per_hour: row.efficiency_per_hour,
+        sum_actual_qty: row.sum_actual_qty,
+        defect_rate_percent: row.defect_rate_percent,
+      })),
+      theme,
+      chartFormatters,
+      EFFICIENCY_UNIT,
+    ),
+  )
+  await nextTick()
+  productRankChart.resize()
 }
 
 function handleResize() {
   dailyChart?.resize()
   operatorChart?.resize()
+  productChart?.resize()
   productRankChart?.resize()
 }
 
 watch(rankViewProductCd, async () => {
-  await nextTick()
-  renderProductRankChart()
+  await renderProductRankChart()
 })
+
+watch(
+  () => selectedProductRanking.value?.product_cd,
+  async () => {
+    if (!contentVisible.value) return
+    await renderProductRankChart()
+  },
+)
+
+watch(dateRange, () => {
+  scheduleLoadAnalysis()
+}, { deep: true })
+watch(filterOperatorId, scheduleLoadAnalysis)
+watch(filterProductCd, scheduleLoadAnalysis)
+watch(includeIncomplete, scheduleLoadAnalysis)
 
 onMounted(async () => {
   window.addEventListener('resize', handleResize)
   await Promise.all([loadOperators(), loadDefectLabels(), loadProductOptions()])
-  await loadAnalysis()
+  await loadAnalysis({ silent: true })
 })
 
 onBeforeUnmount(() => {
+  if (analysisDebounceTimer) clearTimeout(analysisDebounceTimer)
   window.removeEventListener('resize', handleResize)
   disposeCharts()
 })
 </script>
 
-<style scoped>
-.ipa {
-  position: relative;
-  min-height: 100%;
-  padding: 10px 12px 16px;
-  overflow: hidden;
-}
+<style scoped lang="scss">
+@import './ipaProductivityAnalysis.shared.scss';
+</style>
 
-.ipa__bg {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(99, 102, 241, 0.12), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 20%, rgba(16, 185, 129, 0.08), transparent 50%),
-    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-}
-
-.ipa__orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.45;
-  animation: ipa-float 12s ease-in-out infinite;
-}
-
-.ipa__orb--1 {
-  width: 280px;
-  height: 280px;
-  top: -80px;
-  left: -60px;
-  background: rgba(99, 102, 241, 0.35);
-}
-
-.ipa__orb--2 {
-  width: 220px;
-  height: 220px;
-  top: 40%;
-  right: -40px;
-  background: rgba(16, 185, 129, 0.28);
-  animation-delay: -4s;
-}
-
-.ipa__orb--3 {
-  width: 180px;
-  height: 180px;
-  bottom: 10%;
-  left: 35%;
-  background: rgba(14, 165, 233, 0.22);
-  animation-delay: -8s;
-}
-
-@keyframes ipa-float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(12px, -16px) scale(1.05); }
-}
-
-.ipa-hero,
-.ipa-toolbar,
-.ipa-body {
-  position: relative;
-  z-index: 1;
-}
-
-.ipa-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.72) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.85);
+<style>
+.ipa-report-dropdown.el-popper {
+  border: 1px solid rgba(226, 232, 240, 0.9) !important;
+  border-radius: 14px !important;
+  padding: 6px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(14px);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.9) inset,
-    0 8px 32px rgba(15, 23, 42, 0.08),
-    0 2px 8px rgba(99, 102, 241, 0.06);
-  backdrop-filter: blur(12px);
+    0 20px 50px rgba(15, 23, 42, 0.14),
+    0 4px 14px rgba(99, 102, 241, 0.08) !important;
 }
 
-.ipa-hero__main {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+.ipa-report-dropdown .el-popper__arrow::before {
+  border-color: rgba(226, 232, 240, 0.9) !important;
+  background: rgba(255, 255, 255, 0.98) !important;
 }
 
-.ipa-hero__icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  color: #fff;
-  background: linear-gradient(145deg, #10b981 0%, #059669 50%, #047857 100%);
-  box-shadow:
-    0 4px 14px rgba(16, 185, 129, 0.45),
-    0 1px 0 rgba(255, 255, 255, 0.35) inset;
-  flex-shrink: 0;
+.ipa-report-dropdown .ipa-report-menu {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
-.ipa-hero__icon-glow {
-  position: absolute;
-  inset: -4px;
-  border-radius: 18px;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.35), transparent 70%);
-  z-index: -1;
-  animation: ipa-pulse 3s ease-in-out infinite;
+.ipa-report-dropdown .el-dropdown-menu__item {
+  padding: 0;
+  line-height: normal;
+  border-radius: 10px;
+  margin: 0 0 3px;
 }
 
-@keyframes ipa-pulse {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.08); }
+.ipa-report-dropdown .el-dropdown-menu__item:last-child {
+  margin-bottom: 0;
 }
 
-.ipa-hero__eyebrow {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #6366f1;
+.ipa-report-dropdown .el-dropdown-menu__item--divided {
+  margin-top: 6px;
+  border-top: 1px solid rgba(226, 232, 240, 0.85);
+  padding-top: 6px;
 }
 
-.ipa-hero__title {
-  margin: 2px 0 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #0f172a;
-  line-height: 1.25;
-}
-
-.ipa-hero__meta {
-  margin: 2px 0 0;
-  font-size: 11px;
-  color: #64748b;
-}
-
-.ipa-hero__actions {
+.ipa-report-dropdown .ipa-report-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  padding: 10px 12px;
+  min-width: 300px;
+  transition: background 0.18s ease, transform 0.18s ease;
 }
 
-.ipa-hero__range {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-}
-
-.ipa-panel {
-  border-radius: 14px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.88) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 4px 24px rgba(15, 23, 42, 0.06),
-    0 1px 3px rgba(15, 23, 42, 0.04);
-  backdrop-filter: blur(10px);
-  transition: box-shadow 0.25s ease, transform 0.25s ease;
-}
-
-.ipa-panel:hover {
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 12px 40px rgba(15, 23, 42, 0.09),
-    0 4px 12px rgba(99, 102, 241, 0.06);
-}
-
-.ipa-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  margin-bottom: 10px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.92) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 6px 20px rgba(15, 23, 42, 0.07),
-    0 2px 6px rgba(99, 102, 241, 0.05);
-}
-
-.ipa-toolbar__fields {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.ipa-field {
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  min-height: 32px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 2px 6px rgba(15, 23, 42, 0.06),
-    0 1px 2px rgba(15, 23, 42, 0.04);
-  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
-}
-
-.ipa-field:hover {
-  transform: translateY(-1px);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 4px 12px rgba(15, 23, 42, 0.09);
-}
-
-.ipa-field:focus-within {
-  border-color: rgba(99, 102, 241, 0.45);
-  box-shadow:
-    0 0 0 3px rgba(99, 102, 241, 0.12),
-    0 2px 8px rgba(99, 102, 241, 0.15);
-}
-
-.ipa-field__pill {
+.ipa-report-dropdown .ipa-report-item__icon-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
   flex-shrink: 0;
-  padding: 0 11px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  border-right: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.04);
-}
-
-.ipa-field__pill .el-icon {
-  font-size: 13px;
-}
-
-.ipa-field--period .ipa-field__pill {
-  color: #3730a3;
-  background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%);
-}
-
-.ipa-field--operator .ipa-field__pill {
-  color: #6b21a8;
-  background: linear-gradient(180deg, #faf5ff 0%, #f3e8ff 100%);
-}
-
-.ipa-field--product .ipa-field__pill {
-  color: #047857;
-  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
-}
-
-.ipa-field--check .ipa-field__pill {
-  color: #92400e;
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 100%);
-}
-
-.ipa-field--check {
-  cursor: default;
-}
-
-.ipa-field--check .ipa-field__pill--check {
-  padding: 0 9px;
-  font-size: 10px;
-}
-
-.ipa-field__control {
-  flex: 1;
-  min-width: 0;
-}
-
-.ipa-field__date {
-  width: 228px !important;
-}
-
-.ipa-field__operator-select {
-  width: 168px;
-}
-
-.ipa-field--product {
-  flex: 1;
-  min-width: 200px;
-  max-width: 300px;
-}
-
-.ipa-field__product-select {
-  width: 100%;
-  min-width: 140px;
-}
-
-/* 入力枠をフラット化してラベルと一体化 */
-.ipa-field :deep(.el-input__wrapper),
-.ipa-field :deep(.el-select__wrapper) {
-  background: transparent !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  min-height: 30px !important;
-  padding-left: 8px !important;
-  padding-right: 8px !important;
-}
-
-.ipa-field :deep(.el-input__wrapper:hover),
-.ipa-field :deep(.el-select__wrapper:hover),
-.ipa-field :deep(.el-input__wrapper.is-focus),
-.ipa-field :deep(.el-select__wrapper.is-focused) {
-  box-shadow: none !important;
-}
-
-.ipa-field :deep(.el-range-editor.el-input__wrapper) {
-  padding: 0 8px !important;
-}
-
-.ipa-field :deep(.el-range-input) {
-  font-size: 12px;
-  color: #334155;
-}
-
-.ipa-field :deep(.el-select .el-input__inner),
-.ipa-field :deep(.el-input__inner) {
-  font-size: 12px;
-  color: #334155;
-}
-
-.ipa-field--check {
-  padding-right: 10px;
-  gap: 0;
-}
-
-.ipa-field--check :deep(.el-checkbox) {
-  height: 30px;
-  padding: 0 4px 0 8px;
-  display: inline-flex;
-  align-items: center;
-}
-
-.ipa-field--check :deep(.el-checkbox__label) {
-  font-size: 11px;
-  font-weight: 600;
-  color: #475569;
-  padding-left: 6px;
-}
-
-.ipa-check {
-  display: flex;
-  align-items: stretch;
-}
-
-.ipa-product-opt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-
-.ipa-product-opt__name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  color: #334155;
-}
-
-.ipa-product-opt__cd {
-  flex-shrink: 0;
-  font-family: ui-monospace, monospace;
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.ipa-btn--primary {
-  background: linear-gradient(135deg, #6366f1, #4f46e5) !important;
-  border: none !important;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
-  font-weight: 600;
-  padding: 0 18px;
+  width: 32px;
   height: 32px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.ipa-btn--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.5);
-}
-
-.ipa-btn--ghost {
-  background: rgba(255, 255, 255, 0.7) !important;
-  border: 1px solid rgba(148, 163, 184, 0.35) !important;
-  color: #475569 !important;
-}
-
-.ipa-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ipa-kpi {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.ipa-kpi__card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 11px 12px 11px 10px;
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid transparent;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 3px 0 rgba(15, 23, 42, 0.04),
-    0 6px 16px rgba(15, 23, 42, 0.08);
-}
-
-.ipa-kpi__accent {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: 12px 12px 0 0;
-}
-
-.ipa-kpi__card--indigo {
-  background: linear-gradient(160deg, #ffffff 0%, #f5f7ff 45%, #eef2ff 100%);
-  border-color: rgba(99, 102, 241, 0.2);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 3px 0 rgba(99, 102, 241, 0.1),
-    0 8px 20px rgba(99, 102, 241, 0.12);
-}
-
-.ipa-kpi__card--indigo .ipa-kpi__accent {
-  background: linear-gradient(90deg, #6366f1, #818cf8);
-}
-
-.ipa-kpi__card--indigo .ipa-kpi__label { color: #6366f1; }
-.ipa-kpi__card--indigo .ipa-kpi__value { color: #4338ca; }
-.ipa-kpi__card--indigo .ipa-kpi__hint { color: #818cf8; }
-
-.ipa-kpi__card--sky {
-  background: linear-gradient(160deg, #ffffff 0%, #f0f9ff 45%, #e0f2fe 100%);
-  border-color: rgba(14, 165, 233, 0.22);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 3px 0 rgba(14, 165, 233, 0.1),
-    0 8px 20px rgba(14, 165, 233, 0.12);
-}
-
-.ipa-kpi__card--sky .ipa-kpi__accent {
-  background: linear-gradient(90deg, #0ea5e9, #38bdf8);
-}
-
-.ipa-kpi__card--sky .ipa-kpi__label { color: #0284c7; }
-.ipa-kpi__card--sky .ipa-kpi__value { color: #0369a1; }
-.ipa-kpi__card--sky .ipa-kpi__hint { color: #38bdf8; }
-
-.ipa-kpi__card--amber {
-  background: linear-gradient(160deg, #ffffff 0%, #fff7ed 45%, #ffedd5 100%);
-  border-color: rgba(249, 115, 22, 0.22);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 3px 0 rgba(249, 115, 22, 0.1),
-    0 8px 20px rgba(249, 115, 22, 0.12);
-}
-
-.ipa-kpi__card--amber .ipa-kpi__accent {
-  background: linear-gradient(90deg, #f97316, #fb923c);
-}
-
-.ipa-kpi__card--amber .ipa-kpi__label { color: #ea580c; }
-.ipa-kpi__card--amber .ipa-kpi__value { color: #c2410c; }
-.ipa-kpi__card--amber .ipa-kpi__hint { color: #fb923c; }
-
-.ipa-kpi__card--emerald {
-  background: linear-gradient(160deg, #ffffff 0%, #ecfdf5 40%, #d1fae5 100%);
-  border-color: rgba(16, 185, 129, 0.28);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 4px 0 rgba(16, 185, 129, 0.12),
-    0 10px 24px rgba(16, 185, 129, 0.16);
-}
-
-.ipa-kpi__card--emerald .ipa-kpi__accent {
-  background: linear-gradient(90deg, #10b981, #34d399);
-}
-
-.ipa-kpi__card--emerald .ipa-kpi__label { color: #059669; }
-.ipa-kpi__card--emerald .ipa-kpi__value { color: #047857; font-size: 22px; }
-.ipa-kpi__card--emerald .ipa-kpi__hint { color: #34d399; }
-
-.ipa-kpi__card--violet {
-  background: linear-gradient(160deg, #ffffff 0%, #f5f3ff 45%, #ede9fe 100%);
-  border-color: rgba(139, 92, 246, 0.22);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 1) inset,
-    0 3px 0 rgba(139, 92, 246, 0.1),
-    0 8px 20px rgba(139, 92, 246, 0.12);
-}
-
-.ipa-kpi__card--violet .ipa-kpi__accent {
-  background: linear-gradient(90deg, #8b5cf6, #a78bfa);
-}
-
-.ipa-kpi__card--violet .ipa-kpi__label { color: #7c3aed; }
-.ipa-kpi__card--violet .ipa-kpi__value { color: #6d28d9; }
-.ipa-kpi__card--violet .ipa-kpi__hint { color: #a78bfa; }
-
-.ipa-kpi__icon-wrap {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
-  color: #fff;
-  flex-shrink: 0;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.35) inset,
-    0 4px 10px rgba(15, 23, 42, 0.18);
-}
-
-.ipa-kpi__icon-wrap--indigo {
-  background: linear-gradient(145deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
-}
-
-.ipa-kpi__icon-wrap--sky {
-  background: linear-gradient(145deg, #38bdf8 0%, #0ea5e9 50%, #0284c7 100%);
-}
-
-.ipa-kpi__icon-wrap--amber {
-  background: linear-gradient(145deg, #fb923c 0%, #f97316 50%, #ea580c 100%);
-}
-
-.ipa-kpi__icon-wrap--emerald {
-  background: linear-gradient(145deg, #34d399 0%, #10b981 50%, #059669 100%);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.4) inset,
-    0 5px 14px rgba(16, 185, 129, 0.35);
-}
-
-.ipa-kpi__icon-wrap--violet {
-  background: linear-gradient(145deg, #a78bfa 0%, #8b5cf6 50%, #7c3aed 100%);
-}
-
-.ipa-kpi__content {
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-  flex: 1;
-}
-
-.ipa-kpi__label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.ipa-kpi__value {
-  margin-top: 3px;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-
-.ipa-kpi__hint {
-  margin-top: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ipa-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ipa-panel--chart,
-.ipa-split > .ipa-panel,
-.ipa-content > .ipa-panel {
-  padding: 12px 14px 10px;
-}
-
-.ipa-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.ipa-panel__title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ipa-panel__ico {
+  border-radius: 9px;
   font-size: 15px;
-  color: #6366f1;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
-.ipa-panel__title {
-  font-size: 13px;
-  font-weight: 700;
+.ipa-report-dropdown .ipa-report-item__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ipa-report-dropdown .ipa-report-item__label {
+  font-size: 12px;
+  font-weight: 600;
   color: #1e293b;
-  letter-spacing: -0.01em;
+  line-height: 1.35;
 }
 
-.ipa-panel__badge {
+.ipa-report-dropdown .ipa-report-item__hint {
   font-size: 10px;
-  font-weight: 600;
-  color: #6366f1;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(99, 102, 241, 0.1);
+  font-weight: 500;
+  color: #94a3b8;
+  line-height: 1.3;
 }
 
-.ipa-chart {
-  width: 100%;
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.6) 0%, rgba(255, 255, 255, 0.3) 100%);
-  border: 1px solid rgba(226, 232, 240, 0.8);
+.ipa-report-dropdown .ipa-report-item--indigo .ipa-report-item__icon-wrap {
+  color: #4f46e5;
+  background: linear-gradient(145deg, #eef2ff, #e0e7ff);
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.18);
 }
 
-.ipa-chart--main {
-  height: 260px;
+.ipa-report-dropdown .ipa-report-item--sky .ipa-report-item__icon-wrap {
+  color: #0284c7;
+  background: linear-gradient(145deg, #e0f2fe, #bae6fd);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.18);
 }
 
-.ipa-chart--side {
-  height: 180px;
-  margin-bottom: 8px;
+.ipa-report-dropdown .ipa-report-item--teal .ipa-report-item__icon-wrap {
+  color: #0d9488;
+  background: linear-gradient(145deg, #ccfbf1, #99f6e4);
+  box-shadow: 0 2px 6px rgba(20, 184, 166, 0.18);
 }
 
-.ipa-chart--rank {
-  height: 200px;
-  margin-bottom: 10px;
+.ipa-report-dropdown .ipa-report-item--violet .ipa-report-item__icon-wrap {
+  color: #7c3aed;
+  background: linear-gradient(145deg, #f3e8ff, #e9d5ff);
+  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.18);
 }
 
-.ipa-panel--rank {
-  padding: 12px 14px 10px;
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.97) 0%, rgba(254, 243, 199, 0.15) 100%);
-  border-color: rgba(245, 158, 11, 0.18);
-}
-
-.ipa-rank-picker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ipa-rank-picker__label {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-}
-
-.ipa-rank-picker__select {
-  width: 280px;
-}
-
-.ipa-rank-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.ipa-rank-product {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(14, 165, 233, 0.06));
-  border: 1px solid rgba(99, 102, 241, 0.12);
-}
-
-.ipa-rank-product__cd {
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  font-weight: 700;
-  color: #4338ca;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.8);
-}
-
-.ipa-rank-product__name {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.ipa-rank-product__meta {
-  font-size: 11px;
-  color: #64748b;
-  margin-left: auto;
-}
-
-.ipa-podium {
-  display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
-  gap: 8px;
-  align-items: end;
-  padding: 4px 0 2px;
-}
-
-.ipa-podium__item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 8px 12px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
-  transition: transform 0.25s ease;
-  animation: ipa-kpi-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.ipa-podium__item:hover {
-  transform: translateY(-4px);
-}
-
-.ipa-podium__item--1 {
-  min-height: 108px;
-  background: linear-gradient(180deg, #fffbeb 0%, #fef3c7 40%, #fff 100%);
-  border-color: rgba(245, 158, 11, 0.35);
-  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.2);
-  animation-delay: 0.08s;
-}
-
-.ipa-podium__item--2 {
-  min-height: 92px;
-  animation-delay: 0s;
-}
-
-.ipa-podium__item--3 {
-  min-height: 84px;
-  animation-delay: 0.16s;
-}
-
-.ipa-podium__medal {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.ipa-podium__name {
-  margin-top: 4px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #334155;
-  text-align: center;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ipa-podium__eff {
-  margin-top: 4px;
-  font-size: 20px;
-  font-weight: 800;
+.ipa-report-dropdown .ipa-report-item--emerald .ipa-report-item__icon-wrap {
   color: #059669;
-  letter-spacing: -0.03em;
+  background: linear-gradient(145deg, #d1fae5, #a7f3d0);
+  box-shadow: 0 2px 6px rgba(16, 185, 129, 0.18);
 }
 
-.ipa-podium__sub {
-  font-size: 10px;
-  color: #94a3b8;
+.ipa-report-dropdown .ipa-report-item--amber .ipa-report-item__icon-wrap {
+  color: #d97706;
+  background: linear-gradient(145deg, #fef3c7, #fde68a);
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.18);
 }
 
-.ipa-rank-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 26px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #475569;
-  background: #f1f5f9;
+.ipa-report-dropdown .ipa-report-item--rose .ipa-report-item__icon-wrap {
+  color: #e11d48;
+  background: linear-gradient(145deg, #ffe4e6, #fecdd3);
+  box-shadow: 0 2px 6px rgba(244, 63, 94, 0.18);
 }
 
-.ipa-rank-badge--gold {
-  color: #92400e;
-  background: linear-gradient(135deg, #fef3c7, #fde68a);
-  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item {
+  background: rgba(248, 250, 252, 0.95);
 }
 
-.ipa-rank-badge--silver {
-  color: #475569;
-  background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item__icon-wrap {
+  transform: scale(1.06);
 }
 
-.ipa-rank-badge--bronze {
-  color: #9a3412;
-  background: linear-gradient(135deg, #ffedd5, #fed7aa);
+.ipa-report-dropdown .ipa-report-item--indigo:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--indigo {
+  background: rgba(238, 242, 255, 0.75);
 }
 
-.ipa-num--lg {
-  font-size: 13px;
+.ipa-report-dropdown .ipa-report-item--sky:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--sky {
+  background: rgba(224, 242, 254, 0.75);
 }
 
-.ipa-rank-empty {
-  padding: 20px;
-  text-align: center;
-  font-size: 12px;
-  color: #94a3b8;
-  border: 1px dashed rgba(148, 163, 184, 0.4);
-  border-radius: 10px;
+.ipa-report-dropdown .ipa-report-item--teal:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--teal {
+  background: rgba(204, 251, 241, 0.75);
 }
 
-.ipa-rank-overview {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(226, 232, 240, 0.9);
+.ipa-report-dropdown .ipa-report-item--violet:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--violet {
+  background: rgba(243, 232, 255, 0.75);
 }
 
-.ipa-rank-overview__head {
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
+.ipa-report-dropdown .ipa-report-item--emerald:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--emerald {
+  background: rgba(209, 250, 229, 0.75);
 }
 
-.ipa-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.ipa-report-dropdown .ipa-report-item--amber:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--amber {
+  background: rgba(254, 243, 199, 0.75);
 }
 
-.ipa-defect-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.ipa-report-dropdown .ipa-report-item--rose:hover,
+.ipa-report-dropdown .el-dropdown-menu__item:not(.is-disabled):hover .ipa-report-item--rose {
+  background: rgba(255, 228, 230, 0.75);
 }
 
-.ipa-defect-chip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #fff7ed, #ffedd5);
-  border: 1px solid rgba(251, 146, 60, 0.25);
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.1);
-  animation: ipa-kpi-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: transform 0.2s ease;
-}
-
-.ipa-defect-chip:hover {
-  transform: translateY(-2px);
-}
-
-.ipa-defect-chip__name {
-  font-size: 11px;
-  font-weight: 600;
-  color: #9a3412;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ipa-defect-chip__qty {
-  font-size: 13px;
-  font-weight: 800;
-  color: #c2410c;
-}
-
-.ipa-table :deep(.el-table__header th) {
-  background: linear-gradient(180deg, #f1f5f9, #e2e8f0) !important;
-  font-size: 11px;
-  font-weight: 700;
-  color: #475569;
-  padding: 6px 0;
-}
-
-.ipa-table :deep(.el-table__body td) {
-  font-size: 11px;
-  padding: 5px 0;
-}
-
-.ipa-table :deep(.el-table__row) {
-  transition: background 0.15s ease;
-}
-
-.ipa-table :deep(.el-table__body tr:hover > td) {
-  background: rgba(99, 102, 241, 0.06) !important;
-}
-
-.ipa-num {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.ipa-num--good {
-  color: #059669;
-}
-
-.ipa-num--warn {
-  color: #ea580c;
-}
-
-.ipa-status {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 999px;
-}
-
-.ipa-status--ok {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.15);
-  box-shadow: 0 1px 4px rgba(16, 185, 129, 0.2);
-}
-
-.ipa-status--pending {
-  color: #64748b;
-  background: rgba(148, 163, 184, 0.2);
-}
-
-.ipa-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 48px 20px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px dashed rgba(148, 163, 184, 0.4);
-  color: #64748b;
-  font-size: 13px;
-}
-
-.ipa-empty__icon {
-  color: #94a3b8;
-  opacity: 0.7;
-}
-
-/* Animations */
-.ipa-fade-in {
-  animation: ipa-fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.ipa-fade-in--d1 { animation-delay: 0.05s; }
-.ipa-fade-in--d2 { animation-delay: 0.1s; }
-.ipa-fade-in--d3 { animation-delay: 0.15s; }
-.ipa-fade-in--d4 { animation-delay: 0.2s; }
-.ipa-fade-in--d5 { animation-delay: 0.25s; }
-.ipa-fade-in--d5b { animation-delay: 0.28s; }
-.ipa-fade-in--d6 { animation-delay: 0.3s; }
-.ipa-fade-in--d7 { animation-delay: 0.35s; }
-
-@keyframes ipa-fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes ipa-kpi-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.ipa-reveal-enter-active {
-  transition: opacity 0.4s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.ipa-reveal-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
-
-.ipa-reveal-enter-from,
-.ipa-reveal-leave-to {
-  opacity: 0;
-  transform: translateY(12px);
-}
-
-@media (max-width: 1200px) {
-  .ipa-kpi {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .ipa-split {
-    grid-template-columns: 1fr;
-  }
-
-  .ipa-hero {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .ipa-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .ipa-btn--primary {
-    width: 100%;
-  }
-}
-
-@media (max-width: 640px) {
-  .ipa-kpi {
-    grid-template-columns: 1fr;
-  }
-
-  .ipa-field__date {
-    width: 100% !important;
-  }
-
-  .ipa-field__control {
-    width: 100%;
-  }
+.ipa-report-dropdown .el-dropdown-menu__item:focus {
+  background: transparent;
+  color: inherit;
 }
 </style>

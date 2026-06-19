@@ -361,6 +361,70 @@ export function buildDefectDetailRows(
   return rows
 }
 
+export function buildMonitorDefectListRows(
+  rows: Array<
+    {
+      id?: number
+      product_cd?: string | null
+      product_name?: string | null
+      mes_defect_by_item?: Record<string, number> | null
+      mes_production_ended_at?: string | null
+      updated_at?: string | null
+      welding_machine?: string | null
+    } & MesRowWithOperator
+  >,
+  operators: UserListItem[],
+  defectItems: MesDefectItemOption[],
+  labelOf: (cd: string, fallback?: string) => string,
+  classify: RowClassifier = classifyInspectionRow,
+  machineLabel?: (row: MesRowWithOperator & { welding_machine?: string | null }) => string,
+): InspectionDefectListRow[] {
+  const list: InspectionDefectListRow[] = []
+  for (const row of rows) {
+    const status = classify(row)
+    const planId = row.id ?? 0
+    const inspectorName = operatorNameForRow(row, operators) || '—'
+    const productName = (row.product_name ?? '').trim() || '—'
+    const fallbackAt =
+      status === 'completed'
+        ? row.mes_production_ended_at ?? row.updated_at ?? null
+        : row.updated_at ?? null
+    const defectItemsRows = buildDefectDetailRows(
+      row.mes_defect_by_item,
+      defectItems,
+      labelOf,
+      fallbackAt,
+    )
+    if (defectItemsRows.length === 0) continue
+    const machineName = machineLabel ? machineLabel(row) || '—' : undefined
+    for (const item of defectItemsRows) {
+      list.push({
+        rowKey: `${planId}-${item.cd}`,
+        planId,
+        inspectorName,
+        machineName,
+        status,
+        productName,
+        defectItemLabel: item.label,
+        defectQty: item.qty,
+        defectOccurredAt: item.occurredAt,
+      })
+    }
+  }
+  return list.sort((a, b) => {
+    const tb = parseDateAsJST(b.defectOccurredAt)?.getTime() ?? 0
+    const ta = parseDateAsJST(a.defectOccurredAt)?.getTime() ?? 0
+    if (tb !== ta) return tb - ta
+    const machineCmp = (a.machineName ?? '').localeCompare(b.machineName ?? '', 'ja')
+    if (machineCmp !== 0) return machineCmp
+    const productCmp = a.productName.localeCompare(b.productName, 'ja')
+    if (productCmp !== 0) return productCmp
+    const defectCmp = a.defectItemLabel.localeCompare(b.defectItemLabel, 'ja')
+    if (defectCmp !== 0) return defectCmp
+    return a.planId - b.planId
+  })
+}
+
 export function buildInspectionDefectListRows(
   rows: Array<
     {
@@ -376,46 +440,7 @@ export function buildInspectionDefectListRows(
   defectItems: MesDefectItemOption[],
   labelOf: (cd: string, fallback?: string) => string,
 ): InspectionDefectListRow[] {
-  const list: InspectionDefectListRow[] = []
-  for (const row of rows) {
-    const status = classifyInspectionRow(row)
-    const planId = row.id ?? 0
-    const inspectorName = operatorNameForRow(row, operators) || '—'
-    const productName = (row.product_name ?? '').trim() || '—'
-    const fallbackAt =
-      status === 'completed'
-        ? row.mes_production_ended_at ?? row.updated_at ?? null
-        : row.updated_at ?? null
-    const defectItemsRows = buildDefectDetailRows(
-      row.mes_defect_by_item,
-      defectItems,
-      labelOf,
-      fallbackAt,
-    )
-    if (defectItemsRows.length === 0) continue
-    for (const item of defectItemsRows) {
-      list.push({
-        rowKey: `${planId}-${item.cd}`,
-        planId,
-        inspectorName,
-        status,
-        productName,
-        defectItemLabel: item.label,
-        defectQty: item.qty,
-        defectOccurredAt: item.occurredAt,
-      })
-    }
-  }
-  return list.sort((a, b) => {
-    const tb = parseDateAsJST(b.defectOccurredAt)?.getTime() ?? 0
-    const ta = parseDateAsJST(a.defectOccurredAt)?.getTime() ?? 0
-    if (tb !== ta) return tb - ta
-    const productCmp = a.productName.localeCompare(b.productName, 'ja')
-    if (productCmp !== 0) return productCmp
-    const defectCmp = a.defectItemLabel.localeCompare(b.defectItemLabel, 'ja')
-    if (defectCmp !== 0) return defectCmp
-    return a.planId - b.planId
-  })
+  return buildMonitorDefectListRows(rows, operators, defectItems, labelOf, classifyInspectionRow)
 }
 
 /** 検査実績収集端の checkpoint 間隔（5s）+ モニタ刷新（15s）を考慮した通信断判定 */
@@ -496,7 +521,7 @@ export function buildInspectionInspectorEfficiencyRows(
     const netSec = rowNetSecForEfficiency(row, tickNow)
     if (actual <= 0 && netSec <= 0) continue
 
-    const inspId = row.mes_inspector_user_id ?? null
+    const inspId = operatorUserIdFromRow(row)
     const inspectorName = operatorNameForRow(row, operators) || '—'
     const key = inspId != null ? String(inspId) : `name:${inspectorName}`
 

@@ -8,10 +8,12 @@ import {
   Calendar,
   CircleCheck,
   Clock,
+  Coffee,
   Camera,
   DataLine,
   Edit,
   InfoFilled,
+  List,
   Minus,
   Plus,
   Printer,
@@ -20,54 +22,90 @@ import {
   User,
   VideoPause,
   VideoPlay,
+  Warning,
 } from '@element-plus/icons-vue'
 import { setLocale, type LocaleType } from '@/i18n'
-import { formatDateTimeJST, localeForIntl } from '@/utils/dateFormat'
+import { formatDateTimeJST, formatDateToYmdJST, localeForIntl } from '@/utils/dateFormat'
 import { formatDurationMs, parseDefectsFromRow } from './weldingActualPersist'
 import MesBarcodeScanDialog from '../shared/MesBarcodeScanDialog.vue'
 import { useWeldingMesCollection, type WeldingMgmtRow } from './useWeldingMesCollection'
+import {
+  weldingDataSourceTagType,
+  resolveWeldingDataSource,
+} from './weldingDataSource'
 import { guardMesOperation } from '@/utils/mesOperationGuard'
+import type { MesDefectItemGroup } from '@/views/mes/actualDataCollection/shared/loadProcessDefectItems'
 
 defineOptions({ name: 'WeldingActualDataCollection' })
+
+const DEFECT_GRID_COLS = 7
+
+const inProgressPanelVisible = ref(false)
+
+function defectGridStyle(group: MesDefectItemGroup): Record<string, string> {
+  const cols = Math.min(DEFECT_GRID_COLS, Math.max(1, group.items.length))
+  return {
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+  }
+}
 
 const { t, locale } = useI18n()
 const mes = useWeldingMesCollection()
 const {
   defectItems,
+  defectItemGroups,
   loadingDefectItems,
   productionDay,
   selectedWeldingMachineId,
   machines,
   loadingMachines,
   operatorUserId,
+  loggedInOperatorLabel,
+  operatorLabel,
+  canEditConfirmedHistoryRow,
   selectedProductCode,
   activePlanId,
   activeRow,
   inProgressRows,
+  myNextAssignment,
+  canApplyNextAssignmentProduct,
+  applyNextAssignmentProductSelection,
   focusInProgressRow,
   resumeInProgressSession,
   canResumeSession,
+  canForceReleaseSession,
+  forceReleaseMesClientLock,
   rowMesLockOwner,
   isPlanLocallyOperated,
   showSessionRecoveryAlert,
+  showOtherTerminalLockBanner,
+  canReclaimFromOtherTerminal,
   operatorNameById,
-  isOperatorOptionDisabled,
-  operatorOptionLabel,
   products,
-  operators,
   completedRows,
   showPlanProductionCard,
   loadingProducts,
-  loadingOperators,
   loadingPlans,
   endDialogVisible,
-  endDialogQty,
+  endDialogBoxes,
+  endDialogPieceQty,
+  endDialogQtyInputSource,
   endDialogSubmitting,
+  activeUnitPerBox,
+  endDialogQtyMismatch,
+  endDialogCanSubmit,
+  onEndDialogBoxesInput,
+  onEndDialogPieceQtyInput,
   defectTotal,
   canStart,
   canPause,
   canResume,
+  canBreak,
+  canResumeBreak,
   canEnd,
+  endBlockedTitle,
+  resumePulseActive,
+  productSelectionLocked,
   canEditDefects,
   canCreate,
   canEdit,
@@ -81,6 +119,8 @@ const {
   onStartProduction,
   onPauseProduction,
   onResumeProduction,
+  onBreakProduction,
+  onResumeBreakProduction,
   openEndDialog,
   closeEndDialog,
   submitProductionEnd,
@@ -98,9 +138,12 @@ const {
   rowWallElapsedSec,
   rowPausedAccumSec,
   pausedDisplay,
+  breakDisplay,
   timerPhase,
   timerPhaseLabel,
+  inProgressRowStatusLabel,
   formatWall,
+  formatWallClock,
   sessionWallStartTs,
   init,
   teardownLifecycle,
@@ -110,6 +153,7 @@ const {
   confirmedEditSaving,
   confirmedEditClearing,
   confirmedEditElapsedPreview,
+  confirmedEditProductionDay,
   openConfirmedHistoryEdit,
   closeConfirmedHistoryEdit,
   submitConfirmedHistoryEdit,
@@ -117,6 +161,20 @@ const {
   confirmedEditDefectCount,
   bumpConfirmedEditDefect,
 } = mes
+
+function openInProgressPanel(): void {
+  inProgressPanelVisible.value = true
+}
+
+function onInProgressPanelRowClick(row: WeldingMgmtRow): void {
+  focusInProgressRow(row)
+  inProgressPanelVisible.value = false
+}
+
+async function onInProgressPanelResume(row: WeldingMgmtRow): Promise<void> {
+  await resumeInProgressSession(row)
+  inProgressPanelVisible.value = false
+}
 
 /** タブレット/スマホでは filterable オフ（タップでソフトキーボードを出さない） */
 const touchSelectFilterable = ref(true)
@@ -145,6 +203,30 @@ watch(
 )
 const intlLocale = computed(() => localeForIntl(localeUi.value))
 
+const showNextAssignmentStrip = computed(() => {
+  const a = myNextAssignment.value
+  const name = (a?.next_product_name ?? '').trim()
+  if (name) return true
+  return Boolean((a?.next_product_cd ?? '').trim())
+})
+
+const nextAssignmentProductLabel = computed(() => {
+  const a = myNextAssignment.value
+  if (!a) return ''
+  const name = (a.next_product_name ?? '').trim()
+  if (name) return name
+  return (a.next_product_cd ?? '').trim()
+})
+
+const nextAssignmentProductTitle = computed(() => {
+  const a = myNextAssignment.value
+  if (!a) return ''
+  const cd = (a.next_product_cd ?? '').trim()
+  const name = (a.next_product_name ?? '').trim()
+  if (cd && name) return `${cd} · ${name}`
+  return name || cd
+})
+
 const selectedProduct = computed(() => {
   const code = selectedProductCode.value
   if (!code) return null
@@ -160,6 +242,13 @@ const displayProductName = computed(
 
 const currentSession = computed(() => workSession())
 
+const completedHistoryProductionQtyTotal = computed(() =>
+  completedRows.value.reduce((sum, row) => {
+    const qty = Number(row.actual_production_quantity ?? 0)
+    return sum + (Number.isFinite(qty) ? Math.max(0, Math.round(qty)) : 0)
+  }, 0),
+)
+
 function formatRecordTime(val: string | number | null | undefined): string {
   if (val == null) return '-'
   return formatDateTimeJST(typeof val === 'number' ? new Date(val) : val, intlLocale.value, {
@@ -170,10 +259,30 @@ function formatRecordTime(val: string | number | null | undefined): string {
   })
 }
 
-function operatorNameForUserId(userId: number | null | undefined): string {
+function formatHistoryProductionDay(row: WeldingMgmtRow): string {
+  const d = String(row.production_day ?? '').trim().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d
+  if (row.mes_production_started_at) {
+    const fromStart = formatDateToYmdJST(new Date(row.mes_production_started_at))
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fromStart)) return fromStart
+  }
+  return '—'
+}
+
+function inspectorNameForUserId(userId: number | null | undefined): string {
   if (userId == null) return '-'
-  const u = operators.value.find((x) => x.id === userId)
-  return (u?.full_name || u?.username || '').trim() || '-'
+  return operatorNameById(userId) || '-'
+}
+
+function dataSourceLabel(row: WeldingMgmtRow): string {
+  const src = resolveWeldingDataSource(row)
+  if (src === 'excel') return t('mesWeldingActual.dataSourceExcel')
+  if (src === 'csv') return t('mesWeldingActual.dataSourceCsv')
+  return t('mesWeldingActual.dataSourceMes')
+}
+
+function dataSourceTagType(row: WeldingMgmtRow) {
+  return weldingDataSourceTagType(resolveWeldingDataSource(row))
 }
 
 function formatDurationSec(sec: number | null | undefined): string {
@@ -245,7 +354,9 @@ function buildCompletedHistoryPrintHtml(rows: WeldingMgmtRow[]): string {
   const rowCountLabel = t('mesWeldingActual.printRowCount', { n: rows.length })
 
   const headers = [
+    t('mesWeldingActual.productionDay'),
     t('mesWeldingActual.inspector'),
+    t('mesWeldingActual.dataSource'),
     t('mesWeldingActual.productName'),
     t('mesWeldingActual.productionQty'),
     t('mesWeldingActual.defectQty'),
@@ -258,11 +369,13 @@ function buildCompletedHistoryPrintHtml(rows: WeldingMgmtRow[]): string {
   ]
 
   const th = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')
-  const numericColIndexes = new Set([2, 3, 4, 5, 8, 9])
+  const numericColIndexes = new Set([4, 5, 6, 7, 10, 11])
   const body = rows
     .map((row) => {
       const cells = [
-        operatorNameForUserId(row.mes_operator_user_id),
+        formatHistoryProductionDay(row),
+        inspectorNameForUserId(row.mes_operator_user_id),
+        dataSourceLabel(row),
         row.product_name || '—',
         String(row.actual_production_quantity ?? 0),
         historyDefectCellForPrint(row),
@@ -301,7 +414,7 @@ function buildCompletedHistoryPrintHtml(rows: WeldingMgmtRow[]): string {
     h1 { margin: 0 0 4px; font-size: 16px; }
     .meta { margin: 0 0 12px; color: #444; font-size: 11px; }
     table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 5px 6px; text-align: left; vertical-align: top; }
+    th, td { border: 1px solid #333; padding: 3px 4px; text-align: left; vertical-align: top; font-size: 10px; }
     th { background: #e8f5f3; font-weight: 700; }
     td.num { text-align: right; }
     @media print { body { margin: 8mm; } }
@@ -411,6 +524,22 @@ onUnmounted(() => {
               <el-icon><DataLine /></el-icon>
             </span>
             <span class="page-title__text">{{ t('mesWeldingActual.title') }}</span>
+            <el-tooltip
+              v-if="inProgressRows.length > 0"
+              :content="t('mesWeldingActual.inProgressStripTitle')"
+              placement="bottom"
+            >
+              <button
+                type="button"
+                class="page-title__in-progress"
+                :aria-label="t('mesWeldingActual.inProgressPanelOpen')"
+                @click="openInProgressPanel"
+              >
+                <el-badge :value="inProgressRows.length" :max="99" type="success">
+                  <el-icon :size="18"><List /></el-icon>
+                </el-badge>
+              </button>
+            </el-tooltip>
           </h1>
         </div>
         <div
@@ -491,7 +620,7 @@ onUnmounted(() => {
         </div>
 
         <div class="toolbar-field-row toolbar-field-row--machine">
-          <span class="toolbar-field-row__icon toolbar-field-row__icon--machine" aria-hidden="true">
+          <span class="toolbar-field-row__icon" aria-hidden="true">
             <el-icon><SetUp /></el-icon>
           </span>
           <span class="toolbar-field-row__label">{{ t('mesWeldingActual.weldingMachine') }}</span>
@@ -517,6 +646,19 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <div class="toolbar-field-row toolbar-field-row--inspector">
+          <span class="toolbar-field-row__icon" aria-hidden="true">
+            <el-icon><User /></el-icon>
+          </span>
+          <span class="toolbar-field-row__label">{{ t('mesWeldingActual.inspector') }}</span>
+          <el-input
+            :model-value="loggedInOperatorLabel"
+            disabled
+            class="toolbar-control toolbar-inspector-select"
+            :placeholder="t('mesWeldingActual.inspectorPlaceholder')"
+          />
+        </div>
+
         <div class="toolbar-field-row toolbar-field-row--product">
           <span class="toolbar-field-row__icon toolbar-field-row__icon--machine" aria-hidden="true">
             <el-icon><DataLine /></el-icon>
@@ -531,7 +673,7 @@ onUnmounted(() => {
               class="toolbar-control product-select-toolbar"
               :placeholder="t('mesWeldingActual.productPlaceholder')"
               :loading="loadingProducts"
-              :disabled="canEnd || selectedWeldingMachineId == null"
+              :disabled="productSelectionLocked || selectedWeldingMachineId == null"
               @visible-change="onMesSelectVisibleChange"
             >
               <el-option
@@ -556,45 +698,81 @@ onUnmounted(() => {
       </div>
     </el-card>
 
-    <div
-      v-if="inProgressRows.length > 0"
-      class="in-progress-strip"
-      role="region"
-      :aria-label="t('mesWeldingActual.inProgressStripTitle')"
+    <el-drawer
+      v-model="inProgressPanelVisible"
+      :title="t('mesWeldingActual.inProgressStripTitle')"
+      direction="rtl"
+      size="min(480px, 92vw)"
+      class="in-progress-panel-drawer"
+      :append-to-body="true"
     >
-      <span class="in-progress-strip__title">{{ t('mesWeldingActual.inProgressStripTitle') }}</span>
-      <div class="in-progress-strip__chips">
+      <div class="in-progress-panel__chips" role="list">
         <div
           v-for="row in inProgressRows"
           :key="row.id"
           class="in-progress-chip-wrap"
           :class="{ 'in-progress-chip-wrap--active': row.id === activePlanId }"
+          role="listitem"
         >
-          <button type="button" class="in-progress-chip" @click="focusInProgressRow(row)">
-            <span class="in-progress-chip__product">{{
-              row.product_name || row.product_cd || '—'
-            }}</span>
-            <span class="in-progress-chip__inspector">{{
-              operatorNameById(row.mes_operator_user_id) || t('mesWeldingActual.inspectorMissing')
-            }}</span>
-            <span v-if="rowMesLockOwner(row) === 'other'" class="in-progress-chip__lock-hint">
-              {{ t('mesWeldingActual.sessionLockedByOtherTerminalShort') }}
-            </span>
-          </button>
-          <div class="in-progress-chip__actions">
-            <el-button
-              v-if="canResumeSession(row)"
-              size="small"
-              type="primary"
-              plain
-              @click.stop="resumeInProgressSession(row)"
-            >
-              {{ t('mesWeldingActual.btnResumeSession') }}
-            </el-button>
+          <div
+            class="in-progress-chip"
+            role="button"
+            tabindex="0"
+            @click="onInProgressPanelRowClick(row)"
+            @keyup.enter="onInProgressPanelRowClick(row)"
+          >
+            <div class="in-progress-chip__row">
+              <span class="in-progress-chip__product" :title="row.product_name || row.product_cd || ''">
+                {{ row.product_name || row.product_cd || '—' }}
+              </span>
+              <span class="in-progress-chip__inspector" :title="operatorNameById(row.mes_operator_user_id)">
+                {{
+                  operatorNameById(row.mes_operator_user_id) || t('mesWeldingActual.inspectorMissing')
+                }}
+              </span>
+              <span
+                class="in-progress-chip__status"
+                :class="{
+                  'in-progress-chip__status--warn': rowMesLockOwner(row) === 'other',
+                  'in-progress-chip__status--pause':
+                    rowMesLockOwner(row) !== 'other' &&
+                    Number(row.mes_production_is_paused ?? 0) === 1,
+                  'in-progress-chip__status--break':
+                    rowMesLockOwner(row) !== 'other' &&
+                    Number(row.mes_production_is_paused ?? 0) === 2,
+                }"
+              >
+                {{ inProgressRowStatusLabel(row) }}
+              </span>
+              <el-button
+                v-if="canResumeSession(row)"
+                size="small"
+                type="primary"
+                plain
+                class="in-progress-chip__resume-btn"
+                @click.stop="onInProgressPanelResume(row)"
+              >
+                {{
+                  rowMesLockOwner(row) === 'other'
+                    ? t('mesWeldingActual.btnReclaimSession')
+                    : t('mesWeldingActual.btnResume')
+                }}
+              </el-button>
+              <el-button
+                v-if="canForceReleaseSession(row)"
+                size="small"
+                type="warning"
+                plain
+                class="in-progress-chip__force-release-btn"
+                @click.stop="forceReleaseMesClientLock(row)"
+              >
+                {{ t('mesWeldingActual.btnForceReleaseLock') }}
+              </el-button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </el-drawer>
 
     <div v-if="showOfflineAlert" class="offline-strip" role="status">
       <span class="offline-strip__dot" aria-hidden="true" />
@@ -606,9 +784,79 @@ onUnmounted(() => {
         <el-empty :description="t('mesWeldingActual.emptySelectMachine')" />
       </template>
       <template v-else-if="!selectedProductCode">
+        <div
+          v-if="showNextAssignmentStrip"
+          class="next-assignment-empty-banner plan-meta-field plan-meta-field--next-assignment"
+          role="status"
+          :aria-label="t('mesWeldingActual.nextAssignmentStripTitle')"
+        >
+          <span class="plan-meta-field__label">
+            {{ t('mesWeldingActual.nextAssignmentStripTitle') }}
+          </span>
+          <div class="plan-meta-next-assignment__value">
+            <span
+              class="plan-meta-next-assignment__product"
+              :title="nextAssignmentProductTitle"
+            >
+              {{ nextAssignmentProductLabel }}
+            </span>
+            <el-tooltip
+              :content="t('mesWeldingActual.nextAssignmentApplySelect')"
+              placement="top"
+            >
+              <el-button
+                type="primary"
+                plain
+                size="small"
+                class="plan-meta-next-assignment__apply"
+                :disabled="!canApplyNextAssignmentProduct"
+                @click.stop="applyNextAssignmentProductSelection"
+              >
+                {{ t('mesWeldingActual.nextAssignmentApplySelectShort') }}
+              </el-button>
+            </el-tooltip>
+          </div>
+        </div>
         <el-empty :description="t('mesWeldingActual.emptySelectProduct')" />
       </template>
       <template v-else-if="showPlanProductionCard">
+      <el-alert
+        v-if="showOtherTerminalLockBanner"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="other-terminal-lock-alert"
+      >
+        <template #title>
+          {{
+            canReclaimFromOtherTerminal
+              ? t('mesWeldingActual.otherTerminalLockBannerReclaimable')
+              : t('mesWeldingActual.otherTerminalLockBanner')
+          }}
+        </template>
+        <div v-if="canReclaimFromOtherTerminal && activeRow" class="other-terminal-lock-alert__actions">
+          <el-button
+            type="primary"
+            size="small"
+            @click="resumeInProgressSession(activeRow)"
+          >
+            {{ t('mesWeldingActual.btnReclaimSession') }}
+          </el-button>
+        </div>
+        <div
+          v-else-if="activeRow && canForceReleaseSession(activeRow)"
+          class="other-terminal-lock-alert__actions"
+        >
+          <el-button
+            type="warning"
+            size="small"
+            plain
+            @click="forceReleaseMesClientLock(activeRow)"
+          >
+            {{ t('mesWeldingActual.btnForceReleaseLock') }}
+          </el-button>
+        </div>
+      </el-alert>
       <el-alert
         v-if="showSessionRecoveryAlert"
         type="info"
@@ -639,7 +887,7 @@ onUnmounted(() => {
               :type="
                 timerPhase(currentSession) === 'running'
                   ? 'success'
-                  : timerPhase(currentSession) === 'paused'
+                  : timerPhase(currentSession) === 'paused' || timerPhase(currentSession) === 'break'
                     ? 'warning'
                     : 'info'
               "
@@ -664,25 +912,45 @@ onUnmounted(() => {
                 <el-icon class="plan-meta-field__icon" aria-hidden="true"><User /></el-icon>
                 {{ t('mesWeldingActual.inspector') }}
               </span>
-              <el-select
-                v-model="operatorUserId"
-                :filterable="touchSelectFilterable"
-                clearable
-                teleported
-                :disabled="canEnd"
-                :placeholder="t('mesWeldingActual.inspectorPlaceholder')"
-                :loading="loadingOperators"
+              <el-input
+                :model-value="loggedInOperatorLabel"
+                disabled
                 class="plan-field__control plan-field__control--operator"
-                @visible-change="onMesSelectVisibleChange"
+                :placeholder="t('mesWeldingActual.inspectorPlaceholder')"
+              />
+              </div>
+              <div
+                v-if="showNextAssignmentStrip"
+                class="plan-meta-field plan-meta-field--next-assignment"
+                role="status"
+                :aria-label="t('mesWeldingActual.nextAssignmentStripTitle')"
               >
-                <el-option
-                  v-for="u in operators"
-                  :key="u.id"
-                  :label="operatorOptionLabel(u)"
-                  :value="u.id"
-                  :disabled="isOperatorOptionDisabled(u.id)"
-                />
-              </el-select>
+                <span class="plan-meta-field__label">
+                  {{ t('mesWeldingActual.nextAssignmentStripTitle') }}
+                </span>
+                <div class="plan-meta-next-assignment__value">
+                  <span
+                    class="plan-meta-next-assignment__product"
+                    :title="nextAssignmentProductTitle"
+                  >
+                    {{ nextAssignmentProductLabel }}
+                  </span>
+                  <el-tooltip
+                    :content="t('mesWeldingActual.nextAssignmentApplySelect')"
+                    placement="top"
+                  >
+                    <el-button
+                      type="primary"
+                      plain
+                      size="small"
+                      class="plan-meta-next-assignment__apply"
+                      :disabled="!canApplyNextAssignmentProduct"
+                      @click.stop="applyNextAssignmentProductSelection"
+                    >
+                      {{ t('mesWeldingActual.nextAssignmentApplySelectShort') }}
+                    </el-button>
+                  </el-tooltip>
+                </div>
               </div>
             </div>
           </div>
@@ -702,23 +970,46 @@ onUnmounted(() => {
                     currentSession ? timerPhaseLabel(currentSession) : t('mesWeldingActual.timerIdle')
                   }}</span>
                 </div>
-                <div class="timer-compact__readout-row">
-                  <div
-                    class="timer-compact__readout"
-                  >
+                <div class="timer-compact__hero">
+                  <div class="timer-compact__readout">
                     {{ formatElapsed(currentSession ? operationDisplayMs(currentSession) : 0) }}
                   </div>
-                  <div v-if="currentSession && sessionWallStartTs(currentSession) != null" class="timer-compact__pause-side">
-                    <span class="timer-compact__pause-label">{{ t('mesWeldingActual.pausedAccum') }}</span>
-                    <span class="timer-compact__pause-value">{{ pausedDisplay }}</span>
+                </div>
+                <div
+                  v-if="currentSession && sessionWallStartTs(currentSession) != null"
+                  class="timer-compact__metrics"
+                >
+                  <div class="timer-compact__metric timer-compact__metric--start">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesWeldingActual.productionStart')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{
+                      formatWallClock(sessionWallStartTs(currentSession))
+                    }}</span>
+                  </div>
+                  <div class="timer-compact__metric timer-compact__metric--pause">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesWeldingActual.pausedAccum')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{ pausedDisplay }}</span>
+                  </div>
+                  <div class="timer-compact__metric timer-compact__metric--break">
+                    <span class="timer-compact__metric-label">{{
+                      t('mesWeldingActual.breakAccum')
+                    }}</span>
+                    <span class="timer-compact__metric-value">{{ breakDisplay }}</span>
                   </div>
                 </div>
-                <div class="timer-compact__walls">
-                  <span>{{
-                    formatWall(currentSession ? sessionWallStartTs(currentSession) : null)
+                <div
+                  v-if="currentSession?.wallEnd != null"
+                  class="timer-compact__footer"
+                >
+                  <span class="timer-compact__footer-label">{{
+                    t('mesWeldingActual.productionEnd')
                   }}</span>
-                  <span class="timer-compact__sep">→</span>
-                  <span>{{ formatWall(currentSession?.wallEnd ?? null) }}</span>
+                  <span class="timer-compact__footer-value">{{
+                    formatWall(currentSession.wallEnd)
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -742,6 +1033,12 @@ onUnmounted(() => {
               <el-button
                 v-else-if="canResume"
                 class="plan-act-btn plan-act-btn--resume"
+                :class="{ 'plan-act-btn--resume-pulse': resumePulseActive }"
+                :aria-label="
+                  resumePulseActive
+                    ? t('mesWeldingActual.btnResumePulseAria')
+                    : t('mesWeldingActual.btnResume')
+                "
                 @click="onResumeProduction"
               >
                 <el-icon><VideoPlay /></el-icon>
@@ -754,10 +1051,31 @@ onUnmounted(() => {
               <el-button
                 class="plan-act-btn plan-act-btn--end"
                 :disabled="!canEnd"
+                :title="endBlockedTitle"
                 @click="openEndDialog"
               >
                 <el-icon><CircleCheck /></el-icon>
                 {{ t('mesWeldingActual.btnEnd') }}
+              </el-button>
+              <el-button
+                v-if="canBreak"
+                class="plan-act-btn plan-act-btn--break"
+                @click="onBreakProduction"
+              >
+                <el-icon><Coffee /></el-icon>
+                {{ t('mesWeldingActual.btnBreak') }}
+              </el-button>
+              <el-button
+                v-else-if="canResumeBreak"
+                class="plan-act-btn plan-act-btn--break-resume"
+                @click="onResumeBreakProduction"
+              >
+                <el-icon><VideoPlay /></el-icon>
+                {{ t('mesWeldingActual.btnResumeBreak') }}
+              </el-button>
+              <el-button v-else class="plan-act-btn plan-act-btn--break" disabled>
+                <el-icon><Coffee /></el-icon>
+                {{ t('mesWeldingActual.btnBreak') }}
               </el-button>
             </div>
           </div>
@@ -767,36 +1085,52 @@ onUnmounted(() => {
               <h3 class="defect-panel__title">{{ t('mesWeldingActual.defectByItem') }}</h3>
               <p class="defect-panel__hint">{{ t('mesWeldingActual.defectHint') }}</p>
             </div>
-            <div v-loading="loadingDefectItems" class="defect-grid">
+            <div v-loading="loadingDefectItems" class="defect-grid-by-process">
               <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
                 {{ t('mesWeldingActual.defectItemsEmpty') }}
               </p>
-              <div
-                v-for="item in defectItems"
-                :key="item.id"
-                class="defect-cell"
-                :class="{ 'defect-cell--active': defectCount(item.id) > 0 }"
+              <section
+                v-for="group in defectItemGroups"
+                :key="group.processCd"
+                class="defect-process-group"
               >
-                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
-                <div class="defect-stepper">
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    :icon="Minus"
-                    :disabled="defectCount(item.id) <= 0 || !canEditDefects"
-                    @click="bumpDefect(item.id, -1)"
-                  />
-                  <span class="defect-stepper__val">{{ defectCount(item.id) }}</span>
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    type="primary"
-                    :icon="Plus"
-                    :disabled="!canEditDefects"
-                    @click="bumpDefect(item.id, 1)"
-                  />
+                <header class="defect-process-group__head">
+                  <span class="defect-process-group__label">{{
+                    t('mesWeldingActual.attributableProcess')
+                  }}</span>
+                  <span class="defect-process-group__name">{{
+                    group.processName || group.processCd || '—'
+                  }}</span>
+                </header>
+                <div class="defect-grid" :style="defectGridStyle(group)">
+                  <div
+                    v-for="item in group.items"
+                    :key="item.id"
+                    class="defect-cell"
+                    :class="{ 'defect-cell--active': defectCount(item.id) > 0 }"
+                  >
+                    <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
+                    <div class="defect-stepper">
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        :icon="Minus"
+                        :disabled="defectCount(item.id) <= 0 || !canEditDefects"
+                        @click="bumpDefect(item.id, -1)"
+                      />
+                      <span class="defect-stepper__val">{{ defectCount(item.id) }}</span>
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        type="primary"
+                        :icon="Plus"
+                        :disabled="!canEditDefects"
+                        @click="bumpDefect(item.id, 1)"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </div>
@@ -809,11 +1143,19 @@ onUnmounted(() => {
           <header class="inspection-history-table-card__head">
             <div class="inspection-history-table-card__title-row">
               <span class="inspection-history-table-card__icon" aria-hidden="true">
-                <el-icon :size="18"><CircleCheck /></el-icon>
+                <el-icon :size="16"><CircleCheck /></el-icon>
               </span>
               <h2 class="inspection-history-table-card__title">
                 {{ t('mesWeldingActual.historyTitle') }}
               </h2>
+              <span class="inspection-history-table-card__qty-total">
+                <span class="inspection-history-table-card__qty-total-label">{{
+                  t('mesWeldingActual.historyProductionQtyTotal')
+                }}</span>
+                <span class="inspection-history-table-card__qty-total-value">{{
+                  completedHistoryProductionQtyTotal.toLocaleString()
+                }}</span>
+              </span>
             </div>
             <div class="inspection-history-table-card__actions">
               <span class="inspection-history-table-card__count">{{ completedRows.length }}</span>
@@ -827,25 +1169,50 @@ onUnmounted(() => {
               :data="completedRows"
               stripe
               size="small"
-              class="inspection-history-table"
+              class="inspection-history-table inspection-history-table--compact"
               row-key="id"
+              table-layout="fixed"
             >
               <el-table-column
-                :label="t('mesWeldingActual.inspector')"
-                width="120"
+                :label="t('mesWeldingActual.productionDay')"
+                width="92"
                 fixed="left"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
+                  <span class="hist-cell-day">{{ formatHistoryProductionDay(row) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column
+                :label="t('mesWeldingActual.inspector')"
+                width="88"
+                show-overflow-tooltip
+              >
+                <template #default="{ row }">
                   <span class="hist-cell-inspector">
-                    <el-icon class="hist-cell-inspector__icon" aria-hidden="true"><User /></el-icon>
-                    {{ operatorNameForUserId(row.mes_operator_user_id) }}
+                    {{ inspectorNameForUserId(row.mes_operator_user_id) }}
                   </span>
                 </template>
               </el-table-column>
               <el-table-column
+                :label="t('mesWeldingActual.dataSource')"
+                width="72"
+                align="center"
+              >
+                <template #default="{ row }">
+                  <el-tag
+                    :type="dataSourceTagType(row)"
+                    size="small"
+                    effect="light"
+                    class="hist-cell-source-tag"
+                  >
+                    {{ dataSourceLabel(row) }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column
                 :label="t('mesWeldingActual.productName')"
-                width="120"
+                min-width="96"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -854,7 +1221,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.productionQty')"
-                width="92"
+                width="68"
                 align="right"
               >
                 <template #default="{ row }">
@@ -865,7 +1232,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.defectQty')"
-                width="80"
+                width="56"
                 align="right"
               >
                 <template #default="{ row }">
@@ -882,7 +1249,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.defectRate')"
-                width="88"
+                width="68"
                 align="right"
               >
                 <template #default="{ row }">
@@ -891,7 +1258,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.efficiencyRate')"
-                width="80"
+                width="56"
                 align="right"
               >
                 <template #default="{ row }">
@@ -900,7 +1267,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.productionStart')"
-                width="150"
+                width="112"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_started_at) }}</span>
@@ -908,7 +1275,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.productionEnd')"
-                width="150"
+                width="112"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_ended_at) }}</span>
@@ -916,7 +1283,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.elapsedMinutes')"
-                width="110"
+                width="72"
                 align="right"
               >
                 <template #default="{ row }">
@@ -927,7 +1294,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.pausedAccumMinutes')"
-                width="110"
+                width="72"
                 align="right"
               >
                 <template #default="{ row }">
@@ -941,22 +1308,29 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesWeldingActual.historyActions')"
-                width="88"
+                width="52"
                 fixed="right"
                 align="center"
               >
                 <template #default="{ row }">
-                  <el-button
-                    v-if="canEdit"
-                    link
-                    type="primary"
-                    size="small"
-                    class="hist-cell-action-btn"
-                    @click="openConfirmedHistoryEdit(row)"
+                  <el-tooltip
+                    v-if="canEditConfirmedHistoryRow(row)"
+                    :content="t('mesWeldingActual.btnEditConfirmed')"
+                    placement="top"
+                    :show-after="300"
                   >
-                    <el-icon><Edit /></el-icon>
-                    {{ t('mesWeldingActual.btnEditConfirmed') }}
-                  </el-button>
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      class="hist-cell-action-btn"
+                      :aria-label="t('mesWeldingActual.btnEditConfirmed')"
+                      @click="openConfirmedHistoryEdit(row)"
+                    >
+                      <el-icon><Edit /></el-icon>
+                    </el-button>
+                  </el-tooltip>
+                  <span v-else class="hist-cell-empty">—</span>
                 </template>
               </el-table-column>
             </el-table>
@@ -1001,7 +1375,7 @@ onUnmounted(() => {
         <div class="end-dialog-stats">
           <div class="end-dialog-stat">
             <span class="end-dialog-stat__label">{{ t('mesWeldingActual.inspector') }}</span>
-            <span class="end-dialog-stat__value">{{ endDialogPreview.operatorName }}</span>
+            <span class="end-dialog-stat__value">{{ endDialogPreview.inspectorName }}</span>
           </div>
           <div class="end-dialog-stat">
             <span class="end-dialog-stat__label">{{ t('mesWeldingActual.productionStart') }}</span>
@@ -1041,19 +1415,81 @@ onUnmounted(() => {
         </section>
 
         <section class="end-dialog-qty">
-          <label class="end-dialog-qty__label" for="inspection-end-qty-input">
-            {{ t('mesWeldingActual.productionQty') }}
-          </label>
-          <el-input
-            id="inspection-end-qty-input"
-            v-model="endDialogQty"
-            class="end-dialog-qty__input"
-            size="large"
-            inputmode="numeric"
-            :placeholder="t('mesWeldingActual.productionQtyPlaceholder')"
-            clearable
-            @keyup.enter="submitProductionEnd"
-          />
+          <div class="end-dialog-qty__head">
+            <span class="end-dialog-qty__title">{{ t('mesWeldingActual.productionQty') }}</span>
+            <span v-if="activeUnitPerBox > 0" class="end-dialog-qty__hint">
+              {{ t('mesWeldingActual.unitPerBoxHint', { n: activeUnitPerBox }) }}
+            </span>
+            <span v-else class="end-dialog-qty__hint end-dialog-qty__hint--warn">
+              {{ t('mesWeldingActual.unitPerBoxUnset') }}
+            </span>
+          </div>
+          <div v-if="activeUnitPerBox > 0" class="end-dialog-qty__panel">
+            <div
+              class="end-dialog-qty__cell"
+              :class="{ 'end-dialog-qty__cell--derived': endDialogQtyInputSource === 'piece' }"
+            >
+              <span class="end-dialog-qty__cell-label">{{ t('mesWeldingActual.boxQty') }}</span>
+              <el-input
+                id="inspection-end-box-input"
+                :model-value="endDialogBoxes"
+                class="end-dialog-qty__input"
+                size="large"
+                inputmode="numeric"
+                :placeholder="t('mesWeldingActual.boxQtyPlaceholder')"
+                clearable
+                @update:model-value="onEndDialogBoxesInput"
+                @keyup.enter="submitProductionEnd"
+              />
+            </div>
+            <div class="end-dialog-qty__bridge" aria-hidden="true">
+              <span class="end-dialog-qty__op">×</span>
+              <span class="end-dialog-qty__upb">{{ activeUnitPerBox }}</span>
+              <span class="end-dialog-qty__op">=</span>
+            </div>
+            <div
+              class="end-dialog-qty__cell"
+              :class="{ 'end-dialog-qty__cell--derived': endDialogQtyInputSource === 'box' }"
+            >
+              <span class="end-dialog-qty__cell-label">{{ t('mesWeldingActual.productionQty') }}</span>
+              <el-input
+                id="inspection-end-qty-input"
+                :model-value="endDialogPieceQty"
+                class="end-dialog-qty__input"
+                size="large"
+                inputmode="numeric"
+                :placeholder="t('mesWeldingActual.productionQtyPlaceholder')"
+                clearable
+                @update:model-value="onEndDialogPieceQtyInput"
+                @keyup.enter="submitProductionEnd"
+              />
+            </div>
+          </div>
+          <p v-if="endDialogQtyMismatch" class="end-dialog-qty__warn">
+            <el-icon><Warning /></el-icon>
+            {{
+              t('mesWeldingActual.qtyMismatchWarn', {
+                piece: endDialogQtyMismatch.piece,
+                upb: endDialogQtyMismatch.upb,
+              })
+            }}
+          </p>
+          <div v-else class="end-dialog-qty__panel end-dialog-qty__panel--piece">
+            <label class="end-dialog-qty__label" for="inspection-end-qty-input">
+              {{ t('mesWeldingActual.productionQty') }}
+            </label>
+            <el-input
+              id="inspection-end-qty-input"
+              :model-value="endDialogPieceQty"
+              class="end-dialog-qty__input"
+              size="large"
+              inputmode="numeric"
+              :placeholder="t('mesWeldingActual.productionQtyPlaceholder')"
+              clearable
+              @update:model-value="onEndDialogPieceQtyInput"
+              @keyup.enter="submitProductionEnd"
+            />
+          </div>
         </section>
       </div>
 
@@ -1070,6 +1506,7 @@ onUnmounted(() => {
             class="end-dialog-footer__btn end-dialog-footer__btn--confirm"
             type="primary"
             :loading="endDialogSubmitting"
+            :disabled="!endDialogCanSubmit"
             @click="submitProductionEnd"
           >
             <el-icon class="end-dialog-footer__btn-icon"><CircleCheck /></el-icon>
@@ -1129,69 +1566,77 @@ onUnmounted(() => {
               <el-icon :size="14"><User /></el-icon>
               {{ t('mesWeldingActual.inspector') }} / {{ t('mesWeldingActual.productionQty') }}
             </h4>
-            <el-form-item :label="t('mesWeldingActual.inspector')" class="confirmed-edit-form-item">
-              <el-select
-                v-model="confirmedEditForm.operatorUserId"
-                filterable
-                size="small"
-                :placeholder="t('mesWeldingActual.inspectorPlaceholder')"
-                :loading="loadingOperators"
-                class="confirmed-edit-full"
-              >
-                <el-option
-                  v-for="u in operators"
-                  :key="u.id"
-                  :label="operatorOptionLabel(u)"
-                  :value="u.id"
-                  :disabled="isOperatorOptionDisabled(u.id)"
+            <div class="confirmed-edit-form-row">
+              <el-form-item :label="t('mesWeldingActual.inspector')" class="confirmed-edit-form-item">
+                <el-input
+                  :model-value="operatorLabel"
+                  disabled
+                  size="small"
+                  class="confirmed-edit-full"
                 />
-              </el-select>
-            </el-form-item>
-            <el-form-item :label="t('mesWeldingActual.productionQty')" class="confirmed-edit-form-item">
-              <el-input-number
-                v-model="confirmedEditForm.actualQty"
-                size="small"
-                :min="0"
-                :step="1"
-                :precision="0"
-                controls-position="right"
-                class="confirmed-edit-full"
-              />
-            </el-form-item>
+              </el-form-item>
+              <el-form-item :label="t('mesWeldingActual.productionQty')" class="confirmed-edit-form-item">
+                <el-input-number
+                  v-model="confirmedEditForm.actualQty"
+                  size="small"
+                  :min="0"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                  class="confirmed-edit-full"
+                />
+              </el-form-item>
+            </div>
           </section>
           <section class="confirmed-edit-section confirmed-edit-section--defects">
             <h4 class="confirmed-edit-section__title">
               {{ t('mesWeldingActual.defectByItem') }}
             </h4>
-            <div v-loading="loadingDefectItems" class="confirmed-edit-defect-grid">
+            <div v-loading="loadingDefectItems" class="confirmed-edit-defect-groups">
               <p v-if="!loadingDefectItems && defectItems.length === 0" class="defect-panel__empty">
                 {{ t('mesWeldingActual.defectItemsEmpty') }}
               </p>
-              <div
-                v-for="item in defectItems"
-                :key="item.id"
-                class="defect-cell defect-cell--compact"
-                :class="{ 'defect-cell--active': confirmedEditDefectCount(item.id) > 0 }"
+              <section
+                v-for="group in defectItemGroups"
+                :key="group.processCd"
+                class="defect-process-group defect-process-group--edit"
               >
-                <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
-                <div class="defect-stepper">
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    :icon="Minus"
-                    :disabled="confirmedEditDefectCount(item.id) <= 0"
-                    @click="bumpConfirmedEditDefect(item.id, -1)"
-                  />
-                  <span class="defect-stepper__val">{{ confirmedEditDefectCount(item.id) }}</span>
-                  <el-button
-                    class="defect-stepper__btn"
-                    circle
-                    type="primary"
-                    :icon="Plus"
-                    @click="bumpConfirmedEditDefect(item.id, 1)"
-                  />
+                <header class="defect-process-group__head">
+                  <span class="defect-process-group__label">{{
+                    t('mesWeldingActual.attributableProcess')
+                  }}</span>
+                  <span class="defect-process-group__name">{{
+                    group.processName || group.processCd || '—'
+                  }}</span>
+                </header>
+                <div class="confirmed-edit-defect-grid" :style="defectGridStyle(group)">
+                  <div
+                    v-for="item in group.items"
+                    :key="item.id"
+                    class="defect-cell defect-cell--compact"
+                    :class="{ 'defect-cell--active': confirmedEditDefectCount(item.id) > 0 }"
+                  >
+                    <span class="defect-cell__label">{{ defectItemLabel(item) }}</span>
+                    <div class="defect-stepper">
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        :icon="Minus"
+                        :disabled="confirmedEditDefectCount(item.id) <= 0"
+                        @click="bumpConfirmedEditDefect(item.id, -1)"
+                      />
+                      <span class="defect-stepper__val">{{ confirmedEditDefectCount(item.id) }}</span>
+                      <el-button
+                        class="defect-stepper__btn"
+                        circle
+                        type="primary"
+                        :icon="Plus"
+                        @click="bumpConfirmedEditDefect(item.id, 1)"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              </section>
             </div>
           </section>
           <section class="confirmed-edit-section confirmed-edit-section--time">
@@ -1211,6 +1656,16 @@ onUnmounted(() => {
                   class="confirmed-edit-full"
                 />
               </el-form-item>
+              <el-form-item :label="t('mesWeldingActual.productionDay')" class="confirmed-edit-form-item">
+                <el-input
+                  :model-value="confirmedEditProductionDay"
+                  disabled
+                  size="small"
+                  class="confirmed-edit-full confirmed-edit-production-day"
+                />
+              </el-form-item>
+            </div>
+            <div class="confirmed-edit-form-row">
               <el-form-item :label="t('mesWeldingActual.productionEnd')" class="confirmed-edit-form-item">
                 <el-date-picker
                   v-model="confirmedEditForm.wallEnd"
@@ -1278,7 +1733,7 @@ onUnmounted(() => {
     <MesBarcodeScanDialog
       v-model="productScanDialogVisible"
       locale-ns="mesWeldingActual"
-      scanner-region-id="mes-weld-barcode-scanner-region"
+      scanner-region-id="mes-insp-barcode-scanner-region"
       @scanned="onProductBarcodeScanned"
     />
   </div>
@@ -1372,6 +1827,56 @@ onUnmounted(() => {
   line-height: 1.25;
 }
 
+.page-title__in-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin-left: 2px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--el-color-success);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.page-title__in-progress:hover {
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+}
+
+.page-title__in-progress :deep(.el-badge__content) {
+  font-size: 0.65rem;
+  height: 16px;
+  padding: 0 5px;
+}
+
+.in-progress-panel__chips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.in-progress-panel__chips .in-progress-chip-wrap {
+  width: 100%;
+}
+
+.in-progress-panel-drawer :deep(.el-drawer__header) {
+  margin-bottom: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.in-progress-panel-drawer :deep(.el-drawer__body) {
+  padding-top: 4px;
+}
+
 .page-title__icon {
   display: inline-flex;
   align-items: center;
@@ -1410,37 +1915,61 @@ onUnmounted(() => {
   color: var(--el-text-color-primary);
 }
 
-.in-progress-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 10px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--el-color-success-light-9);
-  border: 1px solid var(--el-color-success-light-5);
+.plan-meta-field--next-assignment {
+  --plan-meta-control-w: auto;
+  grid-template-columns: auto minmax(6rem, 1fr);
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: min(100%, 24rem);
+  background: linear-gradient(180deg, #ecfeff 0%, #cffafe 100%);
+  border-color: rgba(14, 116, 144, 0.35);
 }
 
-.in-progress-strip__title {
-  flex: 0 0 auto;
-  font-size: 0.75rem;
+.plan-meta-field--next-assignment .plan-meta-field__label {
+  color: #0e7490;
+}
+
+.plan-meta-field--next-assignment .plan-meta-next-assignment__product {
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: var(--el-color-success-dark-2);
+  line-height: 1.25;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.in-progress-strip__chips {
-  display: flex;
-  flex-wrap: wrap;
+.plan-meta-next-assignment__value {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 1 1 auto;
+  justify-self: stretch;
+}
+
+.plan-meta-next-assignment__apply {
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 0 7px !important;
+  height: 22px !important;
+  font-size: 0.68rem !important;
+  line-height: 1 !important;
+}
+
+.next-assignment-empty-banner {
+  width: fit-content;
+  max-width: min(100%, 28rem);
+  margin: 0 auto 12px;
+}
+
+.plan-board :deep(.el-empty) {
+  padding-top: 8px;
 }
 
 .in-progress-chip-wrap {
   display: inline-flex;
   flex-direction: column;
-  gap: 4px;
   padding: 4px;
   border-radius: 8px;
   border: 1px solid var(--el-color-success-light-3);
@@ -1453,33 +1982,96 @@ onUnmounted(() => {
 }
 
 .in-progress-chip {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 2px 6px;
-  border: none;
-  background: transparent;
+  display: block;
+  min-width: 0;
   cursor: pointer;
   font: inherit;
   text-align: left;
+  outline: none;
 }
 
-.in-progress-chip__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 0 2px 2px;
+.in-progress-chip:focus-visible {
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--el-color-primary-light-5);
 }
 
-.in-progress-chip__actions .el-button {
-  margin: 0;
-  padding: 4px 8px;
-  height: 26px;
+.in-progress-chip__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 2px;
+}
+
+.in-progress-chip__resume-btn {
+  flex-shrink: 0;
+  margin: 0 !important;
+  padding: 2px 8px !important;
+  height: 24px !important;
+  font-size: 0.72rem;
+  justify-self: end;
+}
+
+.in-progress-chip__product {
+  min-width: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-progress-chip__inspector {
+  min-width: 0;
+  font-size: 0.72rem;
+  color: var(--el-text-color-secondary);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-progress-chip__status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 2px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--el-color-success-dark-2);
+  background: var(--el-color-success-light-9);
+}
+
+.in-progress-chip__status--pause {
+  color: var(--el-color-warning-dark-2);
+  background: var(--el-color-warning-light-9);
+}
+
+.in-progress-chip__status--break {
+  color: #0369a1;
+  background: #e0f2fe;
+}
+
+.in-progress-chip__status--warn {
+  color: var(--el-color-danger-dark-2);
+  background: var(--el-color-danger-light-9);
 }
 
 .session-recovery-alert {
   margin-bottom: 8px;
+}
+
+.other-terminal-lock-alert {
+  margin-bottom: 8px;
+}
+
+.other-terminal-lock-alert__actions {
+  margin-top: 6px;
 }
 
 .session-recovery-alert__text {
@@ -1490,29 +2082,6 @@ onUnmounted(() => {
 
 .session-recovery-alert__btn {
   margin-top: 2px;
-}
-
-.in-progress-chip__product {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  line-height: 1.2;
-}
-
-.in-progress-chip__inspector {
-  font-size: 0.68rem;
-  color: var(--el-text-color-secondary);
-  line-height: 1.2;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.in-progress-chip__lock-hint {
-  font-size: 0.62rem;
-  color: var(--el-color-warning-dark-2);
-  line-height: 1.2;
 }
 
 .product-locked-alert {
@@ -2364,10 +2933,10 @@ onUnmounted(() => {
 
 .timer-compact {
   box-sizing: border-box;
-  width: 15.5rem;
-  min-width: 15.5rem;
-  max-width: 15.5rem;
-  padding: 8px 10px;
+  width: 18.5rem;
+  min-width: 18.5rem;
+  max-width: 18.5rem;
+  padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid var(--el-border-color-lighter);
   box-shadow:
@@ -2379,29 +2948,25 @@ onUnmounted(() => {
 .plan-row__ops .timer-compact {
   height: 100%;
   max-height: var(--plan-run-block-height);
-  padding: 6px 8px;
+  padding: 8px 8px;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  gap: 4px;
   overflow: hidden;
 }
 
-.plan-row__ops .timer-compact__readout-row {
-  margin: 1px 0;
+.plan-row__ops .timer-compact__hero {
+  margin: 0;
 }
 
 .plan-row__ops .timer-compact__readout {
-  font-size: 1.1rem;
+  font-size: 1.15rem;
   line-height: 1.05;
 }
 
-.plan-row__ops .timer-compact__pause-value {
-  font-size: 0.88rem;
-  line-height: 1.05;
-}
-
-.plan-row__ops .timer-compact__walls {
-  font-size: 0.68rem;
+.plan-row__ops .timer-compact__metric-value {
+  font-size: 0.7rem;
   line-height: 1.1;
 }
 
@@ -2419,12 +2984,21 @@ onUnmounted(() => {
     0 2px 8px rgba(16, 185, 129, 0.12);
 }
 
-.timer-compact--paused {
+.timer-compact--paused,
+.timer-compact--break {
   background: linear-gradient(165deg, #fffbeb 0%, #fef3c7 55%, #fff7ed 100%);
   border-color: #fbbf24;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
     0 0 0 1px rgba(245, 158, 11, 0.15);
+}
+
+.timer-compact--break {
+  background: linear-gradient(165deg, #f5f3ff 0%, #ede9fe 55%, #faf5ff 100%);
+  border-color: #a78bfa;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 0 0 1px rgba(139, 92, 246, 0.15);
 }
 
 .timer-compact--ended {
@@ -2500,10 +3074,24 @@ onUnmounted(() => {
   border-color: #fcd34d;
 }
 
+.timer-compact--break .timer-compact__label {
+  color: #6d28d9;
+}
+
+.timer-compact--break .timer-compact__phase {
+  color: #5b21b6;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: #c4b5fd;
+}
+
 .timer-compact--ended .timer-compact__phase {
   color: #1e40af;
   background: rgba(255, 255, 255, 0.82);
   border-color: #93c5fd;
+}
+
+.timer-compact__hero {
+  padding: 2px 0 1px;
 }
 
 .timer-compact__readout-row {
@@ -2520,13 +3108,118 @@ onUnmounted(() => {
   font-weight: 800;
   margin: 0;
   line-height: 1.1;
-  flex: 1 1 auto;
-  min-width: 0;
+  width: 100%;
+  text-align: center;
+  letter-spacing: 0.04em;
   color: #0f172a;
+}
+
+.timer-compact__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.timer-compact__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: 4px 3px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.timer-compact__metric-label {
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  line-height: 1.2;
+}
+
+.timer-compact__metric-value {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(0.68rem, 1.8vw, 0.78rem);
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timer-compact__metric--start {
+  border-color: rgba(59, 130, 246, 0.28);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(239, 246, 255, 0.75));
+}
+
+.timer-compact__metric--start .timer-compact__metric-value {
+  color: #1d4ed8;
+}
+
+.timer-compact__metric--pause {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 251, 235, 0.78));
+}
+
+.timer-compact__metric--pause .timer-compact__metric-value {
+  color: #b45309;
+}
+
+.timer-compact__metric--break {
+  border-color: rgba(139, 92, 246, 0.32);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(245, 243, 255, 0.78));
+}
+
+.timer-compact__metric--break .timer-compact__metric-value {
+  color: #6d28d9;
+}
+
+.timer-compact__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+.timer-compact__footer-label {
+  font-weight: 700;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.timer-compact__footer-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #334155;
+  text-align: right;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timer-compact--running .timer-compact__readout {
   color: #047857;
+}
+
+.timer-compact--break .timer-compact__readout {
+  color: #6d28d9;
 }
 
 .timer-compact--ended .timer-compact__readout {
@@ -2691,12 +3384,68 @@ onUnmounted(() => {
   color: #fff;
 }
 
+.plan-act-btn--resume.plan-act-btn--resume-pulse:not(.is-disabled) {
+  animation: mes-inspection-resume-pulse 0.85s ease-in-out infinite;
+  transform-origin: center;
+  z-index: 2;
+  position: relative;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  --el-button-border-color: var(--el-color-danger);
+  border: 2px solid var(--el-color-danger) !important;
+}
+
+@keyframes mes-inspection-resume-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(245, 108, 108, 0.55);
+    border-color: var(--el-color-danger);
+  }
+  50% {
+    transform: scale(1.14);
+    box-shadow:
+      0 0 0 10px rgba(245, 108, 108, 0),
+      0 0 0 3px rgba(245, 108, 108, 0.9);
+    border-color: #ff4d4f;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plan-act-btn--resume.plan-act-btn--resume-pulse:not(.is-disabled) {
+    animation: none;
+    transform: scale(1.08);
+    border: 2px solid var(--el-color-danger) !important;
+    box-shadow: 0 0 0 3px rgba(245, 108, 108, 0.55);
+  }
+}
+
 .plan-act-btn--end:not(.is-disabled) {
   --el-button-bg-color: var(--el-color-danger);
   --el-button-border-color: var(--el-color-danger);
   --el-button-text-color: #fff;
   background: linear-gradient(180deg, #f89898 0%, var(--el-color-danger) 100%);
   color: #fff;
+}
+
+.plan-act-btn--break:not(.is-disabled) {
+  --el-button-bg-color: #8b5cf6;
+  --el-button-border-color: #7c3aed;
+  --el-button-text-color: #fff;
+  background: linear-gradient(180deg, #c4b5fd 0%, #8b5cf6 100%);
+  color: #fff;
+}
+
+.plan-act-btn--break-resume:not(.is-disabled) {
+  --el-button-bg-color: #7c3aed;
+  --el-button-border-color: #6d28d9;
+  --el-button-text-color: #fff;
+  background: linear-gradient(180deg, #a78bfa 0%, #7c3aed 100%);
+  color: #fff;
+}
+
+.timer-compact__pause-value--break {
+  color: #6d28d9;
 }
 
 .plan-act-btn--machine:not(.is-disabled) {
@@ -3236,17 +3985,121 @@ onUnmounted(() => {
 .end-dialog-qty {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: 8px;
   background: var(--el-fill-color-blank);
   border: 1px solid var(--el-border-color-lighter);
 }
 
+.end-dialog-qty__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 8px;
+}
+
+.end-dialog-qty__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--el-color-danger);
+}
+
+.end-dialog-qty__hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__hint--warn {
+  color: var(--el-color-warning);
+}
+
+.end-dialog-qty__panel {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  align-items: end;
+}
+
+.end-dialog-qty__panel--piece {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.end-dialog-qty__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(245, 108, 108, 0.22);
+  transition: border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.end-dialog-qty__cell--derived {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(248, 250, 252, 0.9);
+  opacity: 0.92;
+}
+
+.end-dialog-qty__cell--derived .end-dialog-qty__cell-label {
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__warn {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--el-color-warning);
+}
+
+.end-dialog-qty__cell-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+}
+
+.end-dialog-qty__bridge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-bottom: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.end-dialog-qty__upb {
+  font-variant-numeric: tabular-nums;
+  color: var(--el-text-color-primary);
+}
+
+.end-dialog-qty__derived-value {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: rgba(245, 108, 108, 0.08);
+  box-shadow: 0 0 0 1px var(--el-color-danger-light-5);
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-danger);
+}
+
 .end-dialog-qty__label {
   font-size: 0.75rem;
   font-weight: 700;
-  color: var(--el-text-color-regular);
+  color: var(--el-color-danger);
 }
 
 .end-dialog-qty__input {
@@ -3257,19 +4110,27 @@ onUnmounted(() => {
   min-height: 38px;
   padding: 0 10px;
   border-radius: 7px;
-  box-shadow: 0 0 0 1px var(--el-border-color-lighter);
+  background: rgba(245, 108, 108, 0.06);
+  box-shadow: 0 0 0 1px var(--el-color-danger-light-5);
 }
 
 .end-dialog-qty__input :deep(.el-input__wrapper.is-focus) {
   box-shadow:
-    0 0 0 1px var(--el-color-success-light-5),
-    0 0 0 3px var(--el-color-success-light-9);
+    0 0 0 1px var(--el-color-danger),
+    0 0 0 3px var(--el-color-danger-light-8);
 }
 
 .end-dialog-qty__input :deep(.el-input__inner) {
   font-size: 1.05rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  color: var(--el-color-danger);
+  -webkit-text-fill-color: var(--el-color-danger);
+}
+
+.end-dialog-qty__input :deep(.el-input__inner::placeholder) {
+  color: var(--el-color-danger-light-3);
+  -webkit-text-fill-color: var(--el-color-danger-light-3);
 }
 
 .end-dialog-footer {
@@ -3520,8 +4381,9 @@ onUnmounted(() => {
 
 .confirmed-edit-defect-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
 }
 
 .defect-cell--compact {
@@ -3531,10 +4393,6 @@ onUnmounted(() => {
 .defect-cell--compact .defect-cell__label {
   font-size: 11px;
   margin-bottom: 6px;
-}
-
-.hist-cell-action-btn {
-  padding: 0 4px;
 }
 
 .confirmed-edit-form :deep(.confirmed-edit-form-item) {
@@ -3641,7 +4499,7 @@ onUnmounted(() => {
 }
 
 
-/* 検査：不良項目パネル（1行7項目・コンパクト） */
+/* 溶接：不良項目パネル（1行7項目・コンパクト） */
 .defect-panel {
   margin-top: 6px;
   padding: 6px 6px 2px;
@@ -3678,12 +4536,54 @@ onUnmounted(() => {
   text-align: center;
   padding: 6px 0;
 }
+.defect-grid-by-process {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.confirmed-edit-defect-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.defect-process-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.defect-process-group__head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 2px 0 1px;
+  border-bottom: 1px solid var(--el-border-color-extra-light);
+}
+.defect-process-group__label {
+  flex-shrink: 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+}
+.defect-process-group__name {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #0f766e;
+  line-height: 1.2;
+}
+.defect-process-group--edit .defect-process-group__head {
+  margin-bottom: 2px;
+}
 .defect-grid {
   display: grid;
-  grid-template-columns: repeat(7, 118px);
   gap: 4px;
-  width: max-content;
-  min-width: min(100%, calc(7 * 118px + 6 * 4px));
+  width: 100%;
+  max-width: 100%;
 }
 .defect-cell {
   display: flex;
@@ -3796,7 +4696,7 @@ onUnmounted(() => {
 .inspection-history-section {
   --hist-accent: #0d9488;
   --hist-accent-soft: #ccfbf1;
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 .inspection-history-print-frame {
@@ -3830,8 +4730,8 @@ onUnmounted(() => {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 12px;
-  padding: 10px 14px;
+  gap: 6px 10px;
+  padding: 6px 10px;
   border-bottom: 1px solid var(--el-color-success-light-7);
   background: linear-gradient(
     135deg,
@@ -3844,7 +4744,7 @@ onUnmounted(() => {
 .inspection-history-table-card__title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -3852,10 +4752,10 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: 7px;
   color: var(--hist-accent);
   background: var(--hist-accent-soft);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
@@ -3863,49 +4763,80 @@ onUnmounted(() => {
 
 .inspection-history-table-card__title {
   margin: 0;
-  font-size: clamp(0.92rem, 2.2vw, 1.02rem);
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--el-text-color-primary);
-  line-height: 1.35;
+  line-height: 1.25;
+}
+
+.inspection-history-table-card__qty-total {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  background: var(--el-color-success-light-9);
+  border: 1px solid var(--el-color-success-light-5);
+}
+
+.inspection-history-table-card__qty-total-label {
+  color: var(--el-text-color-secondary);
+  font-weight: 600;
+}
+
+.inspection-history-table-card__qty-total-value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--el-color-success-dark-2);
 }
 
 .inspection-history-table-card__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .inspection-history-table-card__count {
   flex-shrink: 0;
-  min-width: 1.85rem;
-  padding: 3px 10px;
+  min-width: 1.5rem;
+  padding: 1px 7px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   text-align: center;
   color: var(--el-color-success-dark-2);
   background: var(--el-color-success-light-9);
   border: 1px solid var(--el-color-success-light-5);
-  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.12);
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.1);
 }
 
 .inspection-history-table-wrap {
   width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0 2px;
+  padding: 0;
 }
 
 .inspection-history-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 860px;
   --el-table-border-color: var(--el-border-color-extra-light);
   --el-table-header-bg-color: transparent;
   --el-table-row-hover-bg-color: #f0fdfa;
   --el-table-tr-bg-color: var(--el-fill-color-blank);
   --el-table-striped-bg-color: #f8fafc;
+}
+
+.inspection-history-table--compact :deep(.el-table__cell .cell) {
+  padding-left: 4px;
+  padding-right: 4px;
+  line-height: 1.25;
 }
 
 .inspection-history-table :deep(.el-table__inner-wrapper::before) {
@@ -3919,18 +4850,19 @@ onUnmounted(() => {
 }
 
 .inspection-history-table :deep(.el-table__header th.el-table__cell) {
-  padding: 10px 8px;
-  font-size: 0.72rem;
+  padding: 4px 2px;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
+  line-height: 1.2;
   color: #115e59;
   background: linear-gradient(180deg, #ecfdf5 0%, #f0fdfa 100%) !important;
-  border-bottom: 2px solid var(--el-color-success-light-5) !important;
+  border-bottom: 1px solid var(--el-color-success-light-5) !important;
 }
 
 .inspection-history-table :deep(.el-table__body td.el-table__cell) {
-  padding: 11px 8px;
-  font-size: 0.8rem;
+  padding: 4px 2px;
+  font-size: 0.74rem;
   border-bottom: 1px solid var(--el-border-color-extra-light);
   vertical-align: middle;
 }
@@ -3960,32 +4892,46 @@ onUnmounted(() => {
   border: 1px solid #99f6e4;
 }
 
+.hist-cell-day {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f766e;
+  background: #ecfdf5;
+  border: 1px solid #99f6e4;
+  white-space: nowrap;
+}
+
 .hist-cell-name {
   font-weight: 600;
+  font-size: 0.74rem;
   color: var(--el-text-color-primary);
-  line-height: 1.35;
+  line-height: 1.2;
 }
 
 .hist-cell-inspector {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-block;
   max-width: 100%;
+  font-size: 0.72rem;
   color: var(--el-text-color-regular);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hist-cell-inspector__icon {
-  flex-shrink: 0;
-  font-size: 14px;
-  color: #7c3aed;
+.hist-cell-source-tag {
+  font-size: 0.68rem;
 }
 
 .hist-cell-qty {
   display: inline-block;
-  min-width: 2.5em;
-  padding: 2px 8px;
-  border-radius: 6px;
-  font-size: 0.88rem;
+  min-width: 1.8em;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-size: 0.76rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--el-color-success-dark-2);
@@ -3994,21 +4940,21 @@ onUnmounted(() => {
 
 .hist-cell-rate {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #b45309;
 }
 
 .hist-cell-efficiency {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #0369a1;
 }
 
 .hist-cell-defect-qty {
   font-variant-numeric: tabular-nums;
-  font-size: 0.88rem;
+  font-size: 0.74rem;
   font-weight: 700;
   color: #b45309;
   cursor: default;
@@ -4016,14 +4962,14 @@ onUnmounted(() => {
 
 .hist-cell-time {
   font-variant-numeric: tabular-nums;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--el-text-color-secondary);
   white-space: nowrap;
 }
 
 .hist-cell-duration {
   font-variant-numeric: tabular-nums;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
   color: var(--el-text-color-regular);
 }
@@ -4058,17 +5004,28 @@ onUnmounted(() => {
 
 .hist-cell-empty {
   color: var(--el-text-color-placeholder);
-  font-size: 0.85rem;
+  font-size: 0.72rem;
+}
+
+.hist-cell-action-btn {
+  padding: 0;
+  min-height: 22px;
+  height: 22px;
 }
 
 @media (max-width: 640px) {
+  .defect-panel,
+  .confirmed-edit-section--defects {
+    --defect-col-w: 100px;
+  }
+
   .inspection-history-table-card__head {
-    padding: 8px 10px;
+    padding: 5px 8px;
   }
 
   .inspection-history-table :deep(.el-table__header th.el-table__cell),
   .inspection-history-table :deep(.el-table__body td.el-table__cell) {
-    padding: 9px 6px;
+    padding: 3px 1px;
   }
 }
 </style>

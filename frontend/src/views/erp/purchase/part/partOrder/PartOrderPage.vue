@@ -2173,6 +2173,7 @@ const generatePrintHtml = (filteredOrderItems: PartOrderItem[]) => {
 
   return `
     <div class="order-sheet">
+      <div class="order-sheet-main">
       <div class="issued-info">発行日: ${issuedDateTime}</div>
 
       <div class="title">注 文 書</div>
@@ -2226,11 +2227,12 @@ const generatePrintHtml = (filteredOrderItems: PartOrderItem[]) => {
       <div class="summary-row">
         <div class="summary-item">注文本数計  ${totalChumonHonsu}</div>
       </div>
+      </div>
 
-        <div class="notes">
-          <p>${printForm.note1}</p>
-          <p>${printForm.note2}</p>
-        </div>
+      <div class="notes">
+        <p>${printForm.note1}</p>
+        <p>${printForm.note2}</p>
+      </div>
     </div>
   `
 }
@@ -2246,13 +2248,20 @@ html.sheet-capture-doc body.order-pdf-capture {
   padding: 0 !important;
 }
 html.sheet-capture-doc .order-sheet {
+  min-height: 277mm !important;
+  padding-bottom: 36mm !important;
+  position: relative !important;
   /* 捕获时给左右留白，避免 PDF 内容贴到页面左右边缘 */
   padding-left: 6mm !important;
   padding-right: 6mm !important;
   box-sizing: border-box !important;
 }
 html.sheet-capture-doc .order-sheet .notes {
-  margin-top: 5mm !important;
+  position: absolute !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  margin-top: 0 !important;
 }
 `
 

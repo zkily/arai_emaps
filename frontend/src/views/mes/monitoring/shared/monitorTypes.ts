@@ -52,6 +52,8 @@ export interface InspectionDefectListRow {
   rowKey: string
   planId: number
   inspectorName: string
+  /** 溶接モニタ：設備名 */
+  machineName?: string
   status: 'running' | 'paused' | 'break' | 'completed' | 'waiting'
   productName: string
   defectItemLabel: string

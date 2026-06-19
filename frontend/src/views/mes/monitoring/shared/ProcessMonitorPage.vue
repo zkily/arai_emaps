@@ -8,8 +8,6 @@ import {
   VideoPause,
   CircleCheck,
   WarningFilled,
-  Timer,
-  DataLine,
   User,
   Coffee,
   Calendar,
@@ -40,6 +38,11 @@ const props = defineProps<{
 
 defineOptions({ name: 'ProcessMonitorPage' })
 
+const isModernMonitor = computed(
+  () => props.processKey === 'inspection' || props.processKey === 'welding',
+)
+const isInspection = computed(() => props.processKey === 'inspection')
+
 const { t } = useI18n()
 const {
   config,
@@ -57,6 +60,7 @@ const {
   onAutoRefreshChange,
   toggleFullscreen,
   goToInspectionRegistration,
+  goToActualRegistration,
   hasInitialData,
   nextAssignDialogVisible,
   nextAssignSubmitting,
@@ -95,14 +99,15 @@ const nextAssignDialogInspectorUserId = computed(() => {
   <div
     class="monitor-page"
     :class="{
-      'monitor-page--inspection': processKey === 'inspection',
-      'monitor-page--fullscreen': fullscreen && processKey === 'inspection',
+      'monitor-page--inspection': isModernMonitor,
+      'monitor-page--welding': processKey === 'welding',
+      'monitor-page--fullscreen': fullscreen && isModernMonitor,
     }"
     v-loading="loading && !hasInitialData"
   >
     <div class="monitor-header">
       <div class="monitor-header__left">
-        <span v-if="processKey === 'inspection'" class="monitor-header__brand" aria-hidden="true">
+        <span v-if="isModernMonitor" class="monitor-header__brand" aria-hidden="true">
           <el-icon :size="22"><Monitor /></el-icon>
         </span>
         <el-icon v-else :size="26" :color="config.headerIconColor"><Monitor /></el-icon>
@@ -111,7 +116,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
         </div>
         <span class="monitor-header__clock">{{ currentTime }}</span>
         <span
-          v-if="processKey === 'inspection' && lastFetchError"
+          v-if="isModernMonitor && lastFetchError"
           class="monitor-header__sync monitor-header__sync--error"
           :title="lastFetchError"
         >
@@ -120,7 +125,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
       </div>
       <div class="monitor-header__right">
         <div
-          v-if="processKey === 'inspection'"
+          v-if="isModernMonitor"
           class="monitor-header__date-filter"
         >
           <label class="monitor-header__date-label" for="monitor-production-day">
@@ -148,16 +153,16 @@ const nextAssignDialogInspectorUserId = computed(() => {
           style="width: 150px"
           @change="onDateChange"
         />
-        <div v-if="processKey === 'inspection'" class="monitor-header__toolbar-divider" aria-hidden="true" />
+        <div v-if="isModernMonitor" class="monitor-header__toolbar-divider" aria-hidden="true" />
         <el-switch
           v-model="autoRefresh"
           active-text="自動更新"
           size="small"
-          :class="{ 'monitor-header__auto-switch': processKey === 'inspection' }"
+          :class="{ 'monitor-header__auto-switch': isModernMonitor }"
           @change="onAutoRefreshChange"
         />
         <el-button
-          v-if="processKey === 'inspection'"
+          v-if="isModernMonitor"
           size="small"
           :icon="FullScreen"
           circle
@@ -175,7 +180,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
       </div>
     </div>
 
-    <div class="kpi-row" :class="{ 'kpi-row--inspection': processKey === 'inspection' }">
+    <div class="kpi-row" :class="{ 'kpi-row--inspection': isModernMonitor }">
       <div class="kpi-card kpi-card--running">
         <div class="kpi-card__icon-wrap kpi-card__icon-wrap--running">
           <el-icon :size="22"><VideoPlay /></el-icon>
@@ -194,7 +199,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
           <div class="kpi-card__label">一時停止</div>
         </div>
       </div>
-      <template v-if="processKey === 'inspection'">
+      <template v-if="isModernMonitor">
         <div class="kpi-card kpi-card--break">
           <div class="kpi-card__icon-wrap kpi-card__icon-wrap--break">
             <el-icon :size="22"><Coffee /></el-icon>
@@ -263,77 +268,23 @@ const nextAssignDialogInspectorUserId = computed(() => {
           </div>
         </div>
       </template>
-      <template v-else>
-        <div class="kpi-card kpi-card--completed">
-          <div class="kpi-card__icon-wrap kpi-card__icon-wrap--completed">
-            <el-icon :size="22"><CircleCheck /></el-icon>
-          </div>
-          <div class="kpi-card__body">
-            <div class="kpi-card__value">{{ overallStats.totalCompleted }}</div>
-            <div class="kpi-card__label">完了</div>
-          </div>
-        </div>
-        <div class="kpi-card kpi-card--waiting">
-          <div class="kpi-card__icon-wrap kpi-card__icon-wrap--waiting">
-            <el-icon :size="22"><Timer /></el-icon>
-          </div>
-          <div class="kpi-card__body">
-            <div class="kpi-card__value">{{ overallStats.totalWaiting }}</div>
-            <div class="kpi-card__label">待機中</div>
-          </div>
-        </div>
-        <div class="kpi-card kpi-card--machines">
-          <div class="kpi-card__icon-wrap kpi-card__icon-wrap--machines">
-            <el-icon :size="22"><DataLine /></el-icon>
-          </div>
-          <div class="kpi-card__body">
-            <div class="kpi-card__value">
-              {{ overallStats.runningMachines
-              }}<span class="kpi-card__sub">/{{ overallStats.totalMachines }}</span>
-            </div>
-            <div class="kpi-card__label">設備稼働</div>
-          </div>
-        </div>
-        <div class="kpi-card kpi-card--rate">
-          <div class="kpi-card__icon-wrap kpi-card__icon-wrap--rate">
-            <el-icon :size="22"><DataLine /></el-icon>
-          </div>
-          <div class="kpi-card__body">
-            <div class="kpi-card__value">
-              {{ overallStats.completionRate }}<span class="kpi-card__sub">%</span>
-            </div>
-            <div class="kpi-card__label">完了率</div>
-          </div>
-        </div>
-      </template>
-      <div
-        v-if="processKey !== 'inspection' && overallStats.totalDefect > 0"
-        class="kpi-card kpi-card--defect"
-      >
-        <div class="kpi-card__icon-wrap kpi-card__icon-wrap--defect">
-          <el-icon :size="22"><WarningFilled /></el-icon>
-        </div>
-        <div class="kpi-card__body">
-          <div class="kpi-card__value">{{ overallStats.totalDefect }}</div>
-          <div class="kpi-card__label">不良数</div>
-        </div>
-      </div>
     </div>
 
     <div
       class="process-layout"
-      :class="processKey === 'inspection' ? 'process-layout--inspection' : 'process-layout--single'"
+      :class="isModernMonitor ? 'process-layout--inspection' : 'process-layout--single'"
     >
       <section
         class="process-section process-section--runtime"
-        :class="{ 'inspection-runtime-panel': processKey === 'inspection' }"
+        :class="{ 'inspection-runtime-panel': isModernMonitor }"
       >
-        <header v-if="processKey === 'inspection'" class="inspection-runtime-panel__head">
+        <header v-if="isModernMonitor" class="inspection-runtime-panel__head">
           <span class="inspection-runtime-panel__icon" aria-hidden="true">
             <el-icon :size="16"><Monitor /></el-icon>
           </span>
           <h3 class="inspection-runtime-panel__title">{{ proc.label }}</h3>
           <el-tooltip
+            v-if="isInspection"
             :content="t('mesInspectionActual.nextAssignmentAssign')"
             placement="top"
           >
@@ -378,7 +329,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
             :class="[
               'machine-card--' + machine.status,
               {
-                'machine-card--comm-stale': processKey === 'inspection' && machine.commStale,
+                'machine-card--comm-stale': isModernMonitor && machine.commStale,
               },
             ]"
           >
@@ -423,7 +374,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
                     </span>
                   </span>
                   <span
-                    v-if="processKey === 'inspection' && machine.commStale && machine.lastCommAt"
+                    v-if="isModernMonitor && machine.commStale && machine.lastCommAt"
                     class="machine-card__title-metric machine-card__title-metric--comm-stale"
                   >
                     <span class="machine-card__title-metric-label">最終通信</span>
@@ -448,7 +399,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
                   <span class="machine-card__operator-inline-name">{{ machine.operatorName }}</span>
                 </span>
                 <el-tag
-                  v-if="processKey === 'inspection' && machine.commStale"
+                  v-if="isModernMonitor && machine.commStale"
                   size="small"
                   type="danger"
                   effect="plain"
@@ -468,13 +419,15 @@ const nextAssignDialogInspectorUserId = computed(() => {
         <div
           v-else
           :class="
-            processKey === 'inspection' ? 'inspection-runtime-panel__empty' : 'process-section__empty'
+            isModernMonitor ? 'inspection-runtime-panel__empty' : 'process-section__empty'
           "
         >
           <el-empty
             :description="
-              processKey === 'inspection' && proc.totalPlans > 0
-                ? '稼働中の検査はありません'
+              isModernMonitor && proc.totalPlans > 0
+                ? processKey === 'welding'
+                  ? '稼働中の溶接設備はありません'
+                  : '稼働中の検査はありません'
                 : '本日の計画はありません'
             "
             :image-size="48"
@@ -483,14 +436,20 @@ const nextAssignDialogInspectorUserId = computed(() => {
       </section>
 
       <section
-        v-if="processKey === 'inspection'"
+        v-if="isModernMonitor"
         class="inspection-defect-panel"
       >
         <header class="inspection-defect-panel__head">
           <span class="inspection-defect-panel__icon" aria-hidden="true">
             <el-icon :size="16"><WarningFilled /></el-icon>
           </span>
-          <h3 class="inspection-defect-panel__title">{{ t('mesInspectionActual.defectByItem') }}</h3>
+          <h3 class="inspection-defect-panel__title">
+            {{
+              processKey === 'welding'
+                ? t('mesWeldingActual.defectByItem')
+                : t('mesInspectionActual.defectByItem')
+            }}
+          </h3>
           <span class="inspection-defect-panel__hint">本日</span>
           <span class="inspection-defect-panel__count">{{ proc.defectListRows?.length ?? 0 }}</span>
         </header>
@@ -506,7 +465,15 @@ const nextAssignDialogInspectorUserId = computed(() => {
             :empty-text="'不良なし'"
           >
             <el-table-column
-              label="検査員"
+              v-if="processKey === 'welding'"
+              label="溶接設備"
+              prop="machineName"
+              class-name="inspection-defect-col--char7"
+              label-class-name="inspection-defect-col--char7"
+              show-overflow-tooltip
+            />
+            <el-table-column
+              :label="processKey === 'welding' ? '作業者' : '検査員'"
               prop="inspectorName"
               class-name="inspection-defect-col--char7"
               label-class-name="inspection-defect-col--char7"
@@ -555,14 +522,16 @@ const nextAssignDialogInspectorUserId = computed(() => {
       </section>
 
       <section
-        v-if="processKey === 'inspection'"
+        v-if="isModernMonitor"
         class="inspection-efficiency-panel"
       >
         <header class="inspection-efficiency-panel__head">
           <span class="inspection-efficiency-panel__icon" aria-hidden="true">
             <el-icon :size="16"><User /></el-icon>
           </span>
-          <h3 class="inspection-efficiency-panel__title">検査員能率</h3>
+          <h3 class="inspection-efficiency-panel__title">
+            {{ processKey === 'welding' ? '溶接作業者能率' : '検査員能率' }}
+          </h3>
           <span class="inspection-efficiency-panel__hint">本日</span>
           <span
             v-if="proc.inspectorAvgEfficiency != null"
@@ -598,7 +567,12 @@ const nextAssignDialogInspectorUserId = computed(() => {
                 >{{ row.rank }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="検査員" prop="inspectorName" min-width="96" show-overflow-tooltip />
+            <el-table-column
+              :label="processKey === 'welding' ? '作業者' : '検査員'"
+              prop="inspectorName"
+              min-width="96"
+              show-overflow-tooltip
+            />
             <el-table-column label="件数" prop="sessionCount" width="52" align="right" />
             <el-table-column label="生産数" min-width="72" align="right">
               <template #default="{ row }">
@@ -636,12 +610,12 @@ const nextAssignDialogInspectorUserId = computed(() => {
           </span>
           <h3 class="process-history-panel__title">{{ processHistoryTitle(processKey, t) }}</h3>
           <el-button
-            v-if="processKey === 'inspection'"
+            v-if="isModernMonitor"
             type="primary"
             link
             size="small"
             class="process-history-panel__link"
-            @click="goToInspectionRegistration"
+            @click="goToActualRegistration"
           >
             実績登録
           </el-button>
@@ -660,11 +634,11 @@ const nextAssignDialogInspectorUserId = computed(() => {
             v-for="row in proc.historyRows"
             :key="`${proc.key}-hist-${row.id}`"
             class="history-card"
-            :class="{ 'history-card--clickable': processKey === 'inspection' }"
-            :role="processKey === 'inspection' ? 'button' : undefined"
-            :tabindex="processKey === 'inspection' ? 0 : undefined"
-            @click="processKey === 'inspection' ? goToInspectionRegistration() : undefined"
-            @keydown.enter="processKey === 'inspection' ? goToInspectionRegistration() : undefined"
+            :class="{ 'history-card--clickable': isModernMonitor }"
+            :role="isModernMonitor ? 'button' : undefined"
+            :tabindex="isModernMonitor ? 0 : undefined"
+            @click="isModernMonitor ? goToActualRegistration() : undefined"
+            @keydown.enter="isModernMonitor ? goToActualRegistration() : undefined"
           >
             <div class="history-card__top">
               <div class="history-card__top-left">
@@ -725,7 +699,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
     </div>
 
     <el-drawer
-      v-if="processKey === 'inspection'"
+      v-if="isInspection"
       v-model="nextAssignPanelVisible"
       class="next-assign-panel"
       direction="rtl"
@@ -926,7 +900,7 @@ const nextAssignDialogInspectorUserId = computed(() => {
     </el-drawer>
 
     <el-dialog
-      v-if="processKey === 'inspection'"
+      v-if="isInspection"
       v-model="nextAssignDialogVisible"
       class="next-assign-dialog"
       width="min(420px, 92vw)"

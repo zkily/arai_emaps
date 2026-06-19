@@ -1,16 +1,29 @@
 /** 丸一注文書：印刷・html2canvas 用の共通スタイル */
 export const MARUICHI_ORDER_SHEET_STYLES = `
+            html {
+              height: 100%;
+            }
             body {
               font-family: 'Meiryo', 'Yu Gothic', sans-serif;
-              margin: 0.5cm;
+              margin: 1cm 0.5cm 0.5cm 0.5cm;
+              padding-top: 0.3cm;
+              min-height: 100%;
               font-size: 10pt;
               line-height: 1.4;
               background-color: #ffffff;
               color: #000000;
+              box-sizing: border-box;
             }
             .order-sheet {
               width: 100%;
               margin: 0 auto;
+              box-sizing: border-box;
+              position: relative;
+              min-height: 275mm;
+              padding-bottom: 36mm;
+            }
+            .order-sheet-main {
+              width: 100%;
             }
             .header {
               margin-bottom: 1mm;
@@ -23,9 +36,9 @@ export const MARUICHI_ORDER_SHEET_STYLES = `
             }
             .title {
               text-align: center;
-              font-size: 20pt;
+              font-size: 24pt;
               font-weight: bold;
-              margin: 1mm 0;
+              margin: 2mm 0 3mm;
               color: #000000;
               text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
               letter-spacing: 2px;
@@ -144,18 +157,18 @@ export const MARUICHI_ORDER_SHEET_STYLES = `
               border: 1px solid #dee2e6;
             }
             .notes {
-              margin-top: 12mm;
+              position: absolute;
+              bottom: 0;
+              left: 0;
+              right: 0;
               font-size: 9pt;
               line-height: 1.6;
-              position: absolute;
-              bottom: 0.5cm;
-              left: 0.5cm;
-              right: 0.5cm;
               background-color: #f8f9fa;
               padding: 4mm 6mm;
               border-radius: 6px;
               border-left: 4px solid #6c757d;
               box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              box-sizing: border-box;
             }
             .notes p {
               margin: 2mm 0;
@@ -168,15 +181,46 @@ export const MARUICHI_ORDER_SHEET_STYLES = `
             .notes p:last-child {
               margin-bottom: 0;
             }
-            body.order-pdf-capture .notes {
+            body.order-pdf-capture {
+              margin: 3mm !important;
+              padding-top: 0 !important;
+            }
+            body.order-pdf-capture .order-sheet {
+              min-height: 277mm !important;
+              padding-bottom: 36mm !important;
               position: relative !important;
-              bottom: auto !important;
-              left: auto !important;
-              right: auto !important;
-              margin-top: 8mm !important;
+            }
+            body.order-pdf-capture .notes {
+              position: absolute !important;
+              bottom: 0 !important;
+              left: 0 !important;
+              right: 0 !important;
+              margin-top: 0 !important;
             }
             @page {
-              size: A4;
-              margin: 0.5cm;
+              size: A4 portrait;
+              margin: 1cm 0.5cm 0.5cm 0.5cm;
+            }
+            @media print {
+              html, body {
+                height: auto;
+                min-height: 0;
+              }
+              body {
+                margin: 0;
+                padding-top: 0.3cm;
+              }
+              .order-sheet {
+                position: relative;
+                min-height: 275mm;
+                padding-bottom: 36mm;
+                page-break-inside: avoid;
+              }
+              .notes {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+              }
             }
 `

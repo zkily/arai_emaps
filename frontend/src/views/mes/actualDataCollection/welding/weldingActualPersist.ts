@@ -1,4 +1,12 @@
-/** MES 検査実績収集：ローカル復元（多端末・オフライン計測） */
+/** MES 溶接実績収集：ローカル復元（多端末・オフライン計測） */
+
+import {
+  buildMesDefectByItemPayload,
+  parseDefectAtFromRow,
+  parseDefectsFromRow,
+} from '../shared/mesDefectByItem'
+
+export { parseDefectsFromRow, parseDefectAtFromRow, buildMesDefectByItemPayload }
 
 export const WELDING_ACTUAL_PERSIST_KEY = 'smart_emap_mes_welding_actual_v2'
 
@@ -9,9 +17,12 @@ export interface PersistedPlanSession {
   runningSliceStart: number | null
   pausedAccumMs?: number
   pauseSliceStart?: number | null
+  breakAccumMs?: number
+  breakSliceStart?: number | null
   wallStart: number | null
   wallEnd: number | null
   defects: Record<string, number>
+  defectAtByItem?: Record<string, string>
 }
 
 export interface PlanSessionLike {
@@ -19,9 +30,12 @@ export interface PlanSessionLike {
   runningSliceStart: number | null
   pausedAccumMs?: number
   pauseSliceStart?: number | null
+  breakAccumMs?: number
+  breakSliceStart?: number | null
   wallStart: number | null
   wallEnd: number | null
   defects: Record<string, number>
+  defectAtByItem?: Record<string, string>
 }
 
 interface PersistScopeData {
@@ -148,7 +162,6 @@ export interface WeldingPersistMachineActivity {
   paused: boolean
 }
 
-/** 生産モニター：指定生産日の全設備スコープから在産セッションを収集 */
 export function collectWeldingPersistForMonitorDay(productionDay: string): {
   sessionsByPlanId: Map<number, PersistedPlanSession>
   machineActivities: WeldingPersistMachineActivity[]
@@ -157,10 +170,8 @@ export function collectWeldingPersistForMonitorDay(productionDay: string): {
   const machineActivities: WeldingPersistMachineActivity[] = []
   const store = loadStore()
   if (!store) return { sessionsByPlanId, machineActivities }
-
   const day = (productionDay ?? '').trim()
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return { sessionsByPlanId, machineActivities }
-
   const prefix = `${day}::`
   const now = Date.now()
   for (const [scopeKey, scope] of Object.entries(store.scopes)) {
@@ -170,21 +181,22 @@ export function collectWeldingPersistForMonitorDay(productionDay: string): {
     if (machinePart === 'none') continue
     const machineId = Number(machinePart)
     if (!Number.isFinite(machineId)) continue
-
     for (const [planIdStr, sess] of Object.entries(scope.sessions ?? {})) {
       const planId = Number(planIdStr)
       if (!Number.isFinite(planId)) continue
       sessionsByPlanId.set(planId, sess)
       if (sess.wallStart != null && sess.wallEnd == null) {
-        const paused = sess.pauseSliceStart != null
-        machineActivities.push({ machineId, planId, paused })
+        machineActivities.push({
+          machineId,
+          planId,
+          paused: sess.pauseSliceStart != null || sess.breakSliceStart != null,
+        })
       }
     }
   }
   return { sessionsByPlanId, machineActivities }
 }
 
-/** 生産モニター：当該設備スコープの溶接作業者（localStorage、同一端末のみ） */
 export function getWeldingPersistOperatorUserId(
   productionDay: string,
   machineId: number,
@@ -240,17 +252,6 @@ export function saveWeldingActualPersist(payload: WeldingActualPagePersistSnapsh
   }
 }
 
-export function parseDefectsFromRow(raw: unknown): Record<string, number> {
-  const out: Record<string, number> = {}
-  if (!raw || typeof raw !== 'object') return out
-  const obj = raw as Record<string, unknown>
-  for (const [k, v] of Object.entries(obj)) {
-    const n = Math.round(Number(v))
-    if (Number.isFinite(n) && n > 0) out[k] = n
-  }
-  return out
-}
-
 function mesProductionIsPausedFromRow(row: {
   mes_production_is_paused?: number | null
 }): boolean | null {
@@ -268,16 +269,34 @@ export function hydratePlanSessionFromRow(
     mes_production_ended_at?: string | null
     mes_net_production_sec?: number | null
     mes_paused_accum_sec?: number | null
+    mes_break_sec?: number | null
+    mes_stop_sec?: number | null
     mes_production_is_paused?: number | null
-    mes_defect_by_item?: Record<string, number> | null
+    mes_defect_by_item?: unknown
   },
 ): void {
   sess.defects = parseDefectsFromRow(row.mes_defect_by_item)
+  sess.defectAtByItem = parseDefectAtFromRow(row.mes_defect_by_item)
 
   const ws = row.mes_production_started_at ? Date.parse(String(row.mes_production_started_at)) : NaN
   const we = row.mes_production_ended_at ? Date.parse(String(row.mes_production_ended_at)) : NaN
+
+  if (Number.isNaN(ws) && Number.isNaN(we)) {
+    sess.wallStart = null
+    sess.wallEnd = null
+    sess.activeAccumMs = 0
+    sess.runningSliceStart = null
+    sess.pausedAccumMs = 0
+    sess.pauseSliceStart = null
+    sess.breakAccumMs = 0
+    sess.breakSliceStart = null
+    return
+  }
+
   const netSec = row.mes_net_production_sec
   const pausedSec = row.mes_paused_accum_sec
+  const breakSec = row.mes_break_sec
+  const stopSec = row.mes_stop_sec
 
   if (!Number.isNaN(ws)) sess.wallStart = ws
 
@@ -285,15 +304,25 @@ export function hydratePlanSessionFromRow(
     sess.wallEnd = we
     sess.runningSliceStart = null
     sess.pauseSliceStart = null
+    sess.breakSliceStart = null
     if (netSec != null && Number.isFinite(Number(netSec))) {
       sess.activeAccumMs = Math.max(0, Math.round(Number(netSec))) * 1000
     } else if (!Number.isNaN(ws)) {
       sess.activeAccumMs = Math.max(0, we - ws)
     }
-    if (pausedSec != null && Number.isFinite(Number(pausedSec))) {
-      sess.pausedAccumMs = Math.max(0, Math.round(Number(pausedSec))) * 1000
+    if (breakSec != null && Number.isFinite(Number(breakSec))) {
+      sess.breakAccumMs = Math.max(0, Math.round(Number(breakSec))) * 1000
     } else {
-      sess.pausedAccumMs = 0
+      sess.breakAccumMs = 0
+    }
+    if (stopSec != null && Number.isFinite(Number(stopSec))) {
+      sess.pausedAccumMs = Math.max(0, Math.round(Number(stopSec))) * 1000
+    } else if (pausedSec != null && Number.isFinite(Number(pausedSec))) {
+      sess.pausedAccumMs = Math.max(0, Math.round(Number(pausedSec))) * 1000
+    } else if (!Number.isNaN(ws)) {
+      const wallSpan = Math.max(0, we - ws)
+      const breakMs = sess.breakAccumMs ?? 0
+      sess.pausedAccumMs = Math.max(0, wallSpan - (sess.activeAccumMs ?? 0) - breakMs)
     }
     return
   }
@@ -309,13 +338,27 @@ export function hydratePlanSessionFromRow(
       : 0
   const pausedFlag = mesProductionIsPausedFromRow(row)
 
+  const bsec =
+    breakSec != null && Number.isFinite(Number(breakSec))
+      ? Math.max(0, Math.round(Number(breakSec)))
+      : 0
+  const stopFromRow =
+    stopSec != null && Number.isFinite(Number(stopSec))
+      ? Math.max(0, Math.round(Number(stopSec)))
+      : null
+
   sess.activeAccumMs = (nsec ?? 0) * 1000
-  sess.pausedAccumMs = psec * 1000
+  sess.breakAccumMs = bsec * 1000
+  sess.breakSliceStart = null
+  sess.pausedAccumMs = (stopFromRow ?? psec) * 1000
   sess.pauseSliceStart = null
 
   if (pausedFlag === true) {
     sess.runningSliceStart = null
     sess.pauseSliceStart = now
+    if (nsec == null) {
+      sess.pausedAccumMs = Math.max(0, now - ws)
+    }
     return
   }
 
@@ -333,6 +376,13 @@ export function flushPauseSlice(sess: PlanSessionLike, now = Date.now()): void {
   }
 }
 
+export function flushBreakSlice(sess: PlanSessionLike, now = Date.now()): void {
+  if (sess.breakSliceStart != null) {
+    sess.breakAccumMs = (sess.breakAccumMs ?? 0) + Math.max(0, now - sess.breakSliceStart)
+    sess.breakSliceStart = null
+  }
+}
+
 export function flushRunningSlice(sess: PlanSessionLike, now = Date.now()): void {
   if (sess.runningSliceStart != null) {
     sess.activeAccumMs += Math.max(0, now - sess.runningSliceStart)
@@ -340,10 +390,19 @@ export function flushRunningSlice(sess: PlanSessionLike, now = Date.now()): void
   }
 }
 
-/** 一時停止累計の表示用（一時停止ボタン操作分のみ。セッションを変更しない） */
-export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+/** 净稼働時間（表示用・セッションを変更しない）。一時停止中は activeAccumMs のみで表示が止まる */
+export function readNetProductionMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) return 0
+  let ms = sess.activeAccumMs ?? 0
+  if (sess.runningSliceStart != null && sess.wallEnd == null) {
+    ms += Math.max(0, at - sess.runningSliceStart)
+  }
+  return Math.max(0, ms)
+}
 
+/** 明示的一時停止のみ（ボタン操作分。セッションを変更しない） */
+export function readExplicitPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  if (sess.wallStart == null) return 0
   let ms = sess.pausedAccumMs ?? 0
   if (sess.pauseSliceStart != null) {
     ms += Math.max(0, at - sess.pauseSliceStart)
@@ -351,8 +410,18 @@ export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): numbe
   return Math.max(0, ms)
 }
 
+/** 明示的休憩のみ（ボタン操作分。セッションを変更しない） */
+export function readExplicitBreakAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  if (sess.wallStart == null) return 0
+  let ms = sess.breakAccumMs ?? 0
+  if (sess.breakSliceStart != null) {
+    ms += Math.max(0, at - sess.breakSliceStart)
+  }
+  return Math.max(0, ms)
+}
+
 /**
- * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止累計」で補正し、净稼働と running スライスを整合。
+ * 再開時：稼働時間表示を「生産開始〜現在の壁時計 − 一時停止 − 休憩」で補正し、净稼働と running スライスを整合。
  */
 export function correctNetProductionFromWallClock(
   sess: PlanSessionLike,
@@ -360,10 +429,12 @@ export function correctNetProductionFromWallClock(
   now = Date.now(),
 ): void {
   const wallMs = Math.max(0, now - wallStartMs)
-  const pauseMs = readPausedAccumMs(sess, now)
-  sess.activeAccumMs = Math.max(0, wallMs - pauseMs)
+  const pauseMs = readExplicitPausedAccumMs(sess, now)
+  const breakMs = readExplicitBreakAccumMs(sess, now)
+  sess.activeAccumMs = Math.max(0, wallMs - pauseMs - breakMs)
   sess.runningSliceStart = now
   sess.pauseSliceStart = null
+  sess.breakSliceStart = null
 }
 
 /** 作業再開・サーバー同期後：稼働時間を生産開始時刻基準で補正 */
@@ -383,18 +454,57 @@ export function alignSessionElapsedFromWallClock(
       : Number.NaN)
   if (!Number.isFinite(ws)) return
 
-  if (sess.pauseSliceStart != null) {
-    const serverNet = row?.mes_net_production_sec
+  const isPaused = sess.pauseSliceStart != null
+  const isOnBreak = sess.breakSliceStart != null
+  const serverNet = row?.mes_net_production_sec
+
+  if (isPaused || isOnBreak) {
     if ((serverNet ?? 0) === 0 && (sess.activeAccumMs ?? 0) === 0) {
-      const pauseMs = readPausedAccumMs(sess, now)
-      sess.activeAccumMs = Math.max(0, now - ws - pauseMs)
+      const pauseMs = readExplicitPausedAccumMs(sess, now)
+      const breakMs = readExplicitBreakAccumMs(sess, now)
+      sess.activeAccumMs = Math.max(0, now - ws - pauseMs - breakMs)
     }
     return
   }
   correctNetProductionFromWallClock(sess, ws, now)
 }
 
-/** 生産終了時に一時停止累計を確定（一時停止ボタンで積み上げた分のみ）。戻り値はミリ秒。 */
+/**
+ * 一時停止累計の表示用（セッションを変更しない）。
+ * 稼働中は明示停止分のみ。生産終了後（wallEnd あり）は壁時計−净稼働の補正も参照。
+ */
+export function readPausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  const explicit = readExplicitPausedAccumMs(sess, at)
+  if (sess.wallStart == null || sess.wallEnd == null) {
+    return explicit
+  }
+
+  const wallSpan = Math.max(0, sess.wallEnd - sess.wallStart)
+  let netMs = sess.activeAccumMs ?? 0
+  const derived = Math.max(0, wallSpan - Math.min(Math.max(0, netMs), wallSpan))
+  return Math.max(explicit, derived)
+}
+
+/**
+ * 生産終了時に一時停止累計を確定（明示累計と壁時計−净稼働の大きい方）。
+ * 戻り値はミリ秒。
+ */
+export function freezeBreakAccumMs(sess: PlanSessionLike, at = Date.now()): number {
+  if (sess.wallStart == null) {
+    sess.breakAccumMs = 0
+    sess.breakSliceStart = null
+    return 0
+  }
+
+  let ms = sess.breakAccumMs ?? 0
+  if (sess.breakSliceStart != null) {
+    ms += Math.max(0, at - sess.breakSliceStart)
+    sess.breakSliceStart = null
+  }
+  sess.breakAccumMs = ms
+  return ms
+}
+
 export function freezePausedAccumMs(sess: PlanSessionLike, at = Date.now()): number {
   if (sess.wallStart == null) {
     sess.pausedAccumMs = 0
@@ -408,7 +518,15 @@ export function freezePausedAccumMs(sess: PlanSessionLike, at = Date.now()): num
     sess.pauseSliceStart = null
   }
 
-  const total = Math.max(0, ms)
+  const wallEnd = sess.wallEnd ?? at
+  const wallSpan = Math.max(0, wallEnd - sess.wallStart)
+  let netMs = sess.activeAccumMs ?? 0
+  if (sess.runningSliceStart != null && sess.wallEnd == null) {
+    netMs += Math.max(0, at - sess.runningSliceStart)
+  }
+  const breakMs = sess.breakAccumMs ?? 0
+  const derived = Math.max(0, wallSpan - Math.min(Math.max(0, netMs), wallSpan) - breakMs)
+  const total = Math.max(ms, derived)
   sess.pausedAccumMs = total
   return total
 }
@@ -421,11 +539,18 @@ export function reconcileInProgressTimer(sess: PlanSessionLike, now = Date.now()
     return
   }
 
+  if (sess.breakSliceStart != null) {
+    if (sess.breakSliceStart < sess.wallStart) sess.breakSliceStart = sess.wallStart
+    return
+  }
+
   if (sess.runningSliceStart != null) {
     if (sess.runningSliceStart < sess.wallStart) sess.runningSliceStart = sess.wallStart
     return
   }
 
+  // 在産中だが running/pause スライスが無い → 稼働中とみなし復帰（暗黙の一時停止累計を防ぐ）
+  sess.runningSliceStart = now
   const maxNet = Math.max(0, now - sess.wallStart)
   if (sess.activeAccumMs > maxNet) sess.activeAccumMs = maxNet
 }
@@ -445,9 +570,12 @@ export function emptySession(defects: Record<string, number> = {}): PlanSessionL
     runningSliceStart: null,
     pausedAccumMs: 0,
     pauseSliceStart: null,
+    breakAccumMs: 0,
+    breakSliceStart: null,
     wallStart: null,
     wallEnd: null,
     defects: { ...defects },
+    defectAtByItem: {},
   }
 }
 
@@ -461,9 +589,12 @@ export function serializePlanSessions(
       runningSliceStart: s.runningSliceStart,
       pausedAccumMs: s.pausedAccumMs ?? 0,
       pauseSliceStart: s.pauseSliceStart ?? null,
+      breakAccumMs: s.breakAccumMs ?? 0,
+      breakSliceStart: s.breakSliceStart ?? null,
       wallStart: s.wallStart,
       wallEnd: s.wallEnd,
       defects: { ...s.defects },
+      defectAtByItem: { ...(s.defectAtByItem ?? {}) },
     }
   }
   return out
@@ -474,22 +605,33 @@ export function applyPersistedSessionsForScope(
   machineId: number | null,
   rowIds: number[],
   ensureSession: (planId: number) => PlanSessionLike,
+  operatedPlanIds?: ReadonlySet<number> | readonly number[],
 ): boolean {
   const scopeSessions = getScopeSessions(scopeDay, machineId)
   if (!scopeSessions) return false
+  const operated =
+    operatedPlanIds instanceof Set
+      ? operatedPlanIds
+      : operatedPlanIds
+        ? new Set(operatedPlanIds)
+        : null
   let any = false
   for (const id of rowIds) {
+    if (operated && !operated.has(id)) continue
     const sess = ensureSession(id)
     const p = scopeSessions[String(id)]
     if (!p || p.wallStart == null || p.wallEnd != null) continue
-    // サーバー同期済みの在産でも、本端末の未終了タイマーを優先復元
+    // 本端末で操作開始済み（operatedPlanIds）の未終了タイマーのみ復元
     sess.wallStart = p.wallStart
     sess.wallEnd = null
     sess.activeAccumMs = p.activeAccumMs ?? 0
     sess.runningSliceStart = p.runningSliceStart ?? p.wallStart
     sess.pausedAccumMs = p.pausedAccumMs ?? 0
     sess.pauseSliceStart = p.pauseSliceStart ?? null
+    sess.breakAccumMs = p.breakAccumMs ?? 0
+    sess.breakSliceStart = p.breakSliceStart ?? null
     sess.defects = { ...p.defects }
+    sess.defectAtByItem = { ...(p.defectAtByItem ?? {}) }
     reconcileInProgressTimer(sess)
     any = true
   }

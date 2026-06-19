@@ -1,10 +1,10 @@
 """
-生産状況・スケジュール API
-- GET /processing-status: production_plan_schedules を file_name でフィルタして返す
-- GET /schedule: 設備運行時間スロット（現状スタブ、必要に応じて production_plan_schedules 等から導出可能）
-- GET /plan/batch/schedule-months: 生産月一覧
-- GET /plan/batch/material-requirements-summary: instruction_plans を期間（start_date 優先）で集計し材料所要本数を返す
-- POST /plan/batch/generate-from-schedule: 生産月で production_plan_schedules から切断指示計画(instruction_plans)を生成
+??????????? API
+- GET /processing-status: production_plan_schedules ? file_name ?????????
+- GET /schedule: ??????????????????????? production_plan_schedules ????????
+- GET /plan/batch/schedule-months: ?????
+- GET /plan/batch/material-requirements-summary: instruction_plans ????start_date ????????????????
+- POST /plan/batch/generate-from-schedule: ???? production_plan_schedules ????????(instruction_plans)???
 """
 import json
 import logging
@@ -45,7 +45,7 @@ from app.services.inspection_management_import import DATA_SOURCE_MES, resolve_d
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# MES 切断実績（マイグレーション 03〜07、未適用 DB では一覧 SQL から除外）
+# MES ????????????? 03?07???? DB ???? SQL ?????
 _CUTTING_MGMT_MES_COLUMNS = (
     "mes_production_started_at",
     "mes_production_ended_at",
@@ -63,7 +63,7 @@ _TOKYO_TZINFO_CACHE: Any = None
 
 
 def _tokyo_tzinfo():
-    """Asia/Tokyo。Windows 等で tzdata 未導入のときは UTC+9 固定で代替（日本は DST なし）。"""
+    """Asia/Tokyo?Windows ?? tzdata ??????? UTC+9 ????????? DST ????"""
     global _TOKYO_TZINFO_CACHE
     if _TOKYO_TZINFO_CACHE is not None:
         return _TOKYO_TZINFO_CACHE
@@ -77,7 +77,7 @@ def _tokyo_tzinfo():
 
 
 async def _get_cutting_mgmt_columns(db: AsyncSession) -> set[str]:
-    """cutting_management の既存列名（マイグレーション未適用列を SQL から除外するため）。"""
+    """cutting_management ??????????????????? SQL ??????????"""
     try:
         result = await db.execute(
             text("""
@@ -110,8 +110,8 @@ def _mes_column_migration_hint(column: str) -> str:
         "mes_production_is_paused": "07_cutting_management_mes_production_is_paused.sql",
         "mes_scanned_code": "06_cutting_management_mes_scanned_code.sql",
     }
-    mig = hints.get(column, "03〜07_cutting_management_mes_*.sql")
-    return f"列 `{column}` がありません。backend/database/migrations/{mig} を実行してください。"
+    mig = hints.get(column, "03?07_cutting_management_mes_*.sql")
+    return f"? `{column}` ???????backend/database/migrations/{mig} ??????????"
 
 
 async def _reject_concurrent_mes_production_on_machine(
@@ -119,7 +119,7 @@ async def _reject_concurrent_mes_production_on_machine(
     cutting_id: int,
     cm_cols: set[str],
 ) -> None:
-    """同一切断機・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    """?????????????? MES ???????????????????????"""
     if "mes_production_started_at" not in cm_cols or "mes_production_ended_at" not in cm_cols:
         return
     scope = await db.execute(
@@ -155,14 +155,14 @@ async def _reject_concurrent_mes_production_on_machine(
     oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
     label_parts: list[str] = []
     if pseq is not None:
-        label_parts.append(f"順{pseq}")
+        label_parts.append(f"?{pseq}")
     name = (pname or pcd or "").strip() if (pname or pcd) else ""
     if name:
         label_parts.append(str(name)[:80])
     label = " ".join(label_parts) if label_parts else f"ID {oid}"
     raise HTTPException(
         status_code=409,
-        detail=f"この切断機では他の製品が生産中です（{label}）。先に生産終了してください。",
+        detail=f"??????????????????{label}???????????????",
     )
 
 
@@ -183,7 +183,7 @@ _INSPECTION_MGMT_MES_COLUMNS = (
     "mes_defect_by_item",
 )
 
-# 端末ロック：最終 checkpoint からこの時間を超えると自動解放（時間）
+# ???????? checkpoint ???????????????????
 INSPECTION_MES_CLIENT_LOCK_TTL_HOURS = 4
 
 _INSPECTION_MGMT_META_COLUMNS = (
@@ -197,6 +197,9 @@ _WELDING_MGMT_MES_COLUMNS = (
     "mes_production_ended_at",
     "mes_net_production_sec",
     "mes_paused_accum_sec",
+    "mes_shift_sec",
+    "mes_break_sec",
+    "mes_stop_sec",
     "mes_production_is_paused",
     "mes_operator_user_id",
     "mes_client_instance_id",
@@ -205,7 +208,7 @@ _WELDING_MGMT_MES_COLUMNS = (
 
 
 async def _get_chamfering_mgmt_columns(db: AsyncSession) -> set[str]:
-    """chamfering_management の既存列名（マイグレーション未適用列を SQL から除外するため）。"""
+    """chamfering_management ??????????????????? SQL ??????????"""
     try:
         result = await db.execute(
             text("""
@@ -227,8 +230,8 @@ def _chamfering_mgmt_mes_select_fragment(existing: set[str]) -> str:
 
 def _chamfering_mes_column_migration_hint(column: str) -> str:
     return (
-        f"列 `{column}` がありません。"
-        "backend/database/migrations/08_chamfering_management_mes_fields.sql を実行してください。"
+        f"? `{column}` ???????"
+        "backend/database/migrations/08_chamfering_management_mes_fields.sql ??????????"
     )
 
 
@@ -237,7 +240,7 @@ async def _reject_concurrent_mes_production_on_chamfering_machine(
     chamfering_id: int,
     cm_cols: set[str],
 ) -> None:
-    """同一面取機・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    """?????????????? MES ???????????????????????"""
     if "mes_production_started_at" not in cm_cols or "mes_production_ended_at" not in cm_cols:
         return
     scope = await db.execute(
@@ -273,14 +276,14 @@ async def _reject_concurrent_mes_production_on_chamfering_machine(
     oid, pseq, pname, pcd = other[0], other[1], other[2], other[3]
     label_parts: list[str] = []
     if pseq is not None:
-        label_parts.append(f"順{pseq}")
+        label_parts.append(f"?{pseq}")
     name = (pname or pcd or "").strip() if (pname or pcd) else ""
     if name:
         label_parts.append(str(name)[:80])
     label = " ".join(label_parts) if label_parts else f"ID {oid}"
     raise HTTPException(
         status_code=409,
-        detail=f"この面取機では他の製品が生産中です（{label}）。先に生産終了してください。",
+        detail=f"??????????????????{label}???????????????",
     )
 
 
@@ -289,7 +292,7 @@ async def _reject_concurrent_mes_production_on_welding_machine(
     welding_id: int,
     wm_cols: set[str],
 ) -> None:
-    """同一溶接設備・生産日で、他行が MES 生産中（開始済・未終了）のとき新規開始を拒否。"""
+    """??????????????? MES ???????????????????????"""
     if "welding_machine" not in wm_cols:
         return
     if "mes_production_started_at" not in wm_cols or "mes_production_ended_at" not in wm_cols:
@@ -327,7 +330,7 @@ async def _reject_concurrent_mes_production_on_welding_machine(
     label = _welding_mes_conflict_label(other[0], other[1], other[2], other[3])
     raise HTTPException(
         status_code=409,
-        detail=f"この溶接設備では他の製品が生産中です（{label}）。先に生産終了してください。",
+        detail=f"???????????????????{label}???????????????",
     )
 
 
@@ -380,6 +383,25 @@ def _normalize_inspection_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _normalize_welding_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
+    out = dict(item)
+    raw_def = out.get("mes_defect_by_item")
+    if raw_def is not None and not isinstance(raw_def, dict):
+        try:
+            out["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+        except json.JSONDecodeError:
+            out["mes_defect_by_item"] = None
+    for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+        v = out.get(k)
+        if isinstance(v, datetime):
+            out[k] = v.isoformat()
+    for k in ("production_month", "production_day"):
+        v = out.get(k)
+        if isinstance(v, date):
+            out[k] = v.isoformat()
+    return out
+
+
 def _build_inspection_productivity_session_row(
     item: dict[str, Any],
     *,
@@ -389,7 +411,7 @@ def _build_inspection_productivity_session_row(
     defect_qty: int,
     is_completed: bool,
 ) -> dict[str, Any]:
-    """分析 API 用の軽量セッション行（`**item` 全列展開による巨大 JSON / モバイル解析失敗を避ける）。"""
+    """?? API ???????????`**item` ????????? JSON / ??????????????"""
     inspector_id = item.get("mes_inspector_user_id")
     inspector_name = (item.get("mes_inspector_name") or item.get("mes_inspector_username") or "").strip()
     day_key = str(item.get("production_day") or "")[:10]
@@ -404,7 +426,7 @@ def _build_inspection_productivity_session_row(
         "mes_inspector_user_id": int(inspector_id) if inspector_id is not None else None,
         "mes_inspector_name": inspector_name or None,
         "mes_inspector_username": (item.get("mes_inspector_username") or "").strip() or None,
-        "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+        "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "?"),
         "net_production_sec": int(net_sec),
         "paused_sec": int(paused_sec),
         "net_production_min": int(round(net_sec / 60)) if net_sec > 0 else 0,
@@ -418,17 +440,17 @@ def _build_inspection_productivity_session_row(
 def _inspection_mes_column_migration_hint(column: str) -> str:
     if column == "mes_client_instance_id":
         return (
-            f"列 `{column}` がありません。"
-            "backend/database/migrations/12_inspection_management_mes_client_instance.sql を実行してください。"
+            f"? `{column}` ???????"
+            "backend/database/migrations/12_inspection_management_mes_client_instance.sql ??????????"
         )
     if column == "mes_client_lock_activity_at":
         return (
-            f"列 `{column}` がありません。"
-            "backend/database/migrations/52_inspection_mes_client_lock_activity.sql を実行してください。"
+            f"? `{column}` ???????"
+            "backend/database/migrations/52_inspection_mes_client_lock_activity.sql ??????????"
         )
     return (
-        f"列 `{column}` がありません。"
-        "backend/database/migrations/09_inspection_management.sql を実行してください。"
+        f"? `{column}` ???????"
+        "backend/database/migrations/09_inspection_management.sql ??????????"
     )
 
 
@@ -460,7 +482,7 @@ def _raise_inspection_mgmt_query_error(exc: Exception) -> None:
     ):
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         ) from exc
     raw = str(exc)
     for col in _INSPECTION_MGMT_MES_COLUMNS:
@@ -540,6 +562,7 @@ def _finalize_inspection_productivity_bucket(bucket: dict[str, Any]) -> dict[str
 INSPECTION_STANDARD_WORKDAY_HOURS = DEFAULT_INSPECTION_STANDARD_HOURS
 INSPECTION_STANDARD_WORKDAY_SEC = DEFAULT_INSPECTION_STANDARD_SEC
 INSPECTION_DEFECT_DETECTION_PROCESS_CD = "KT09"
+WELDING_DEFECT_DETECTION_PROCESS_CD = "KT07"
 
 
 def _norm_inspection_defect_name(value: Any) -> str:
@@ -671,7 +694,7 @@ def _finalize_inspector_metrics_row(row: dict[str, Any]) -> dict[str, Any]:
 
 def _build_inspector_metrics_total_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total: dict[str, Any] = {
-        "inspector_name": "合計",
+        "inspector_name": "??",
         "defects": {header: 0 for header in INSPECTOR_METRICS_DEFECT_HEADERS},
         "sum_shift_sec": 0,
         "sum_break_sec": 0,
@@ -688,7 +711,7 @@ def _build_inspector_metrics_total_row(rows: list[dict[str, Any]]) -> dict[str, 
         total["sum_work_sec"] += int(row.get("sum_work_sec") or 0)
         total["sum_inspection_qty"] += int(row.get("sum_inspection_qty") or 0)
     finalized = _finalize_inspector_metrics_row(total)
-    finalized["inspector_name"] = "合計"
+    finalized["inspector_name"] = "??"
     return finalized
 
 
@@ -789,6 +812,72 @@ def _finalize_inspection_utilization_inspector_row(
     return row
 
 
+def _apply_operator_standard_to_daily_row(
+    row: dict[str, Any],
+    *,
+    schedule_index: InspectorWorkScheduleIndex,
+) -> None:
+    day_key = str(row.get("day") or "")[:10]
+    if not day_key:
+        row["scheduled_hours"] = 0.0
+        row["standard_sec"] = 0
+        return
+    day_d = date.fromisoformat(day_key)
+    operator_id = row.get("operator_user_id")
+    uid = int(operator_id) if operator_id is not None else None
+    hours = schedule_index.resolve_hours(uid, day_d)
+    is_scheduled = bool(row.get("is_scheduled_workday"))
+    net = int(row.get("sum_net_production_sec") or 0)
+    if is_scheduled or net > 0:
+        row["scheduled_hours"] = hours
+        row["standard_sec"] = int(round(hours * 3600))
+    else:
+        row["scheduled_hours"] = 0.0
+        row["standard_sec"] = 0
+
+
+def _finalize_welding_utilization_operator_row(
+    row: dict[str, Any],
+    *,
+    schedule_index: InspectorWorkScheduleIndex,
+    start_d: date,
+    end_d: date,
+    company_scheduled: set[str],
+    company_off: set[str],
+    extra_workdays: set[str],
+    extra_holidays: set[str],
+    daily_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    net = int(row.get("sum_net_production_sec") or 0)
+    regular = int(row.get("sum_regular_sec") or 0)
+    overtime = int(row.get("sum_overtime_sec") or 0)
+    row["sum_net_production_min"] = round(net / 60) if net > 0 else 0
+    row["regular_min"] = round(regular / 60) if regular > 0 else 0
+    row["overtime_min"] = round(overtime / 60) if overtime > 0 else 0
+    uid = row.get("operator_user_id")
+    uid_int = int(uid) if uid is not None else None
+    std_worked = sum(
+        int(r.get("standard_sec") or 0) for r in daily_rows if r.get("is_scheduled_workday")
+    )
+    std_calendar = 0
+    for d in iter_dates_inclusive(start_d, end_d):
+        if is_scheduled_workday(
+            d,
+            company_scheduled=company_scheduled,
+            company_off=company_off,
+            extra_workdays=extra_workdays,
+            extra_holidays=extra_holidays,
+        ):
+            std_calendar += schedule_index.resolve_sec(uid_int, d)
+    row["standard_sec_on_worked_days"] = std_worked
+    row["standard_sec_calendar"] = std_calendar
+    row["utilization_percent"] = _utilization_percent(regular, std_worked)
+    row["calendar_utilization_percent"] = _utilization_percent(regular, std_calendar)
+    ot_ratio = round(overtime / net * 1000) / 10.0 if net > 0 and overtime > 0 else None
+    row["overtime_ratio_percent"] = ot_ratio
+    return row
+
+
 def _merge_inspection_quality_bucket(
     bucket: dict[str, Any],
     *,
@@ -817,7 +906,7 @@ async def _load_process_defect_name_map(
     db: AsyncSession,
     detection_process_cd: str,
 ) -> dict[str, str]:
-    """process_defect_items から defect_cd → defect_name を取得。"""
+    """process_defect_items ?? defect_cd ? defect_name ????"""
     cd_norm = (detection_process_cd or "").strip()
     if not cd_norm:
         return {}
@@ -844,7 +933,7 @@ async def _load_process_defect_name_map(
 def _defect_name_for_cd(defect_name_map: dict[str, str], defect_cd: str) -> str:
     cd = str(defect_cd or "").strip()
     if not cd:
-        return "—"
+        return "?"
     return defect_name_map.get(cd) or cd
 
 
@@ -930,7 +1019,7 @@ async def _expire_stale_inspection_client_locks(
     production_day: Optional[Any] = None,
     inspection_id: Optional[int] = None,
 ) -> int:
-    """checkpoint 等が一定時間無い在産行の mes_client_instance_id を解放する。"""
+    """checkpoint ???????????? mes_client_instance_id ??????"""
     if "mes_client_instance_id" not in im_cols:
         return 0
     activity_col = _inspection_mes_lock_activity_column(im_cols) or "mes_production_started_at"
@@ -1008,14 +1097,14 @@ def _reject_inspection_mes_client_lock_conflict(
         return
     raise HTTPException(
         status_code=409,
-        detail="この検査生産は他の端末で生産中です。当該端末で生産終了してください。",
+        detail="??????????????????????????????????",
     )
 
 
 def _inspection_mes_inspector_user_id_from_user(current_user: User) -> int:
     uid = getattr(current_user, "id", None)
     if uid is None:
-        raise HTTPException(status_code=401, detail="認証が必要です")
+        raise HTTPException(status_code=401, detail="???????")
     return int(uid)
 
 
@@ -1028,13 +1117,13 @@ def _reject_inspection_mes_inspector_not_current_user(
     try:
         iid = int(inspector_user_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="mes_inspector_user_id が不正です")
+        raise HTTPException(status_code=400, detail="mes_inspector_user_id ?????")
     if iid <= 0:
         return
     if iid != _inspection_mes_inspector_user_id_from_user(current_user):
         raise HTTPException(
             status_code=403,
-            detail="検査員はログイン中のユーザーと一致する必要があります。",
+            detail="???????????????????????????",
         )
 
 
@@ -1084,7 +1173,7 @@ def _inspection_mes_conflict_label(
 ) -> str:
     label_parts: list[str] = []
     if pseq is not None:
-        label_parts.append(f"順{pseq}")
+        label_parts.append(f"?{pseq}")
     name = (pname or pcd or "").strip() if (pname or pcd) else ""
     if name:
         label_parts.append(str(name)[:80])
@@ -1098,7 +1187,7 @@ async def _reject_concurrent_mes_production_on_inspection_start(
     *,
     inspector_user_id: Optional[int] = None,
 ) -> None:
-    """検査 MES 生産開始時：同一検査員の他製品在産を拒否（同一製品の並行生産は可）。"""
+    """?? MES ??????????????????????????????????"""
     if "mes_production_started_at" not in im_cols or "mes_production_ended_at" not in im_cols:
         return
     need_inspector_col = inspector_user_id is not None and inspector_user_id > 0
@@ -1144,7 +1233,7 @@ async def _reject_concurrent_mes_production_on_inspection_start(
             label = _inspection_mes_conflict_label(other[0], other[1], other[2], other[3])
             raise HTTPException(
                 status_code=409,
-                detail=f"この検査員は既に他の製品を検査生産中です（{label}）。先に生産終了してください。",
+                detail=f"?????????????????????{label}???????????????",
             )
 
 
@@ -1168,10 +1257,39 @@ def _welding_mgmt_mes_select_fragment(existing: set[str]) -> str:
     return (",\n               ".join(parts) + ",") if parts else ""
 
 
+def _welding_mgmt_operator_select_fragment(join_operator: bool, *, trailing_comma: bool = True) -> str:
+    suffix = "," if trailing_comma else ""
+    if join_operator:
+        return (
+            "users.full_name AS mes_operator_name,\n"
+            f"               users.username AS mes_operator_username{suffix}"
+        )
+    return (
+        "NULL AS mes_operator_name,\n"
+        f"               NULL AS mes_operator_username{suffix}"
+    )
+
+
+def _raise_welding_mgmt_query_error(exc: Exception) -> None:
+    msg = str(exc).lower()
+    if "welding_management" in msg and (
+        "doesn't exist" in msg or "does not exist" in msg or "not exist" in msg or "unknown table" in msg
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
+        ) from exc
+    raw = str(exc)
+    for col in _WELDING_MGMT_MES_COLUMNS:
+        if _is_unknown_mysql_column_error(raw, col):
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint(col)) from exc
+    raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 def _welding_mes_column_migration_hint(column: str) -> str:
     return (
-        f"列 `{column}` がありません。"
-        "backend/database/migrations/13_welding_management.sql を実行してください。"
+        f"? `{column}` ???????"
+        "backend/database/migrations/13_welding_management.sql ??????????"
     )
 
 
@@ -1218,7 +1336,7 @@ def _reject_welding_mes_client_lock_conflict(
         return
     raise HTTPException(
         status_code=409,
-        detail="この溶接生産は他の端末で生産中です。当該端末で生産終了してください。",
+        detail="??????????????????????????????????",
     )
 
 
@@ -1230,7 +1348,7 @@ def _welding_mes_conflict_label(
 ) -> str:
     label_parts: list[str] = []
     if pseq is not None:
-        label_parts.append(f"順{pseq}")
+        label_parts.append(f"?{pseq}")
     name = (pname or pcd or "").strip() if (pname or pcd) else ""
     if name:
         label_parts.append(str(name)[:80])
@@ -1244,7 +1362,7 @@ async def _reject_concurrent_mes_production_on_welding_start(
     *,
     operator_user_id: Optional[int] = None,
 ) -> None:
-    """溶接 MES 生産開始時：同一溶接作業者の他製品在産を拒否（同一製品の並行生産は可）。"""
+    """?? MES ????????????????????????????????????"""
     if "mes_production_started_at" not in im_cols or "mes_production_ended_at" not in im_cols:
         return
     need_operator_col = operator_user_id is not None and operator_user_id > 0
@@ -1290,12 +1408,12 @@ async def _reject_concurrent_mes_production_on_welding_start(
             label = _welding_mes_conflict_label(other[0], other[1], other[2], other[3])
             raise HTTPException(
                 status_code=409,
-                detail=f"この溶接作業者は既に他の製品を溶接生産中です（{label}）。先に生産終了してください。",
+                detail=f"???????????????????????{label}???????????????",
             )
 
 
 def _parse_mes_defect_entry(val: Any) -> tuple[int, Optional[str]]:
-    """不良内訳 1 項目：数量と発生時刻（任意）。"""
+    """???? 1 ???????????????"""
     if isinstance(val, dict):
         qty_raw = val.get("qty", val.get("quantity", val.get("count", 0)))
         try:
@@ -1312,7 +1430,7 @@ def _parse_mes_defect_entry(val: Any) -> tuple[int, Optional[str]]:
 
 
 def _parse_mes_defect_by_item_for_db(val: Any) -> Optional[str]:
-    """dict / JSON 文字列を MySQL JSON 列用の文字列に正規化。"""
+    """dict / JSON ???? MySQL JSON ???????????"""
     if val is None:
         return None
     if isinstance(val, dict):
@@ -1358,7 +1476,7 @@ def _sum_defect_qty_from_item_json(raw: Any) -> int:
 
 
 def _parse_mes_datetime_to_naive_tokyo(val: Optional[str]) -> Optional[datetime]:
-    """ISO 8601 文字列を Asia/Tokyo の壁時計時刻（タイムゾーン無し）に正規化して MySQL DATETIME に保存する。"""
+    """ISO 8601 ???? Asia/Tokyo ?????????????????????? MySQL DATETIME ??????"""
     if val is None:
         return None
     s = (val or "").strip()
@@ -1382,17 +1500,17 @@ def _plan_column_sql_expr(plan_column: str) -> tuple[str, str]:
     col = (plan_column or "molding_actual_plan").strip()
     if col not in _COMPONENT_REQUIREMENTS_PLAN_COLUMNS:
         allowed = ", ".join(sorted(_COMPONENT_REQUIREMENTS_PLAN_COLUMNS))
-        raise HTTPException(status_code=400, detail=f"plan_column は次のいずれかです: {allowed}")
+        raise HTTPException(status_code=400, detail=f"plan_column ?????????: {allowed}")
     expr = f"COALESCE(ps.{col}, 0)"
     labels = {
-        "molding_actual_plan": "molding_actual_plan（成型実績計画）",
-        "molding_plan": "molding_plan（成型計画）",
+        "molding_actual_plan": "molding_actual_plan????????",
+        "molding_plan": "molding_plan??????",
     }
     return expr, labels[col]
 
 
 def _mysql_lpad(value: Any, length: int, pad: str = "0") -> str:
-    """MySQL LPAD と同等（長い場合は左から切り詰める）。"""
+    """MySQL LPAD ???????????????????"""
     s = "" if value is None else str(value)
     if length <= 0:
         return ""
@@ -1409,7 +1527,7 @@ def _build_management_code(
     production_lot_size: Optional[int],
     lot_number: Optional[str],
 ) -> str:
-    """management_code のサーバ側兜底計算（DB trigger 未適用環境向け）。"""
+    """management_code ??????????DB trigger ?????????"""
     pm = production_month or date.today()
     yy = f"{pm.year % 100:02d}"
     mm = f"{pm.month:02d}"
@@ -1422,7 +1540,7 @@ def _build_management_code(
 
 
 def _instruction_production_month_first_day(value: Any, body_month: str) -> date:
-    """instruction_plans.production_month は月初日。DB 値・YYYY-MM 文字列から正規化する。"""
+    """instruction_plans.production_month ?????DB ??YYYY-MM ???????????"""
     if value is not None:
         if isinstance(value, datetime):
             d = value.date()
@@ -1457,7 +1575,7 @@ async def _aggregate_component_requirements_from_production_summarys(
     production_month_filter: Optional[str],
 ) -> dict[str, Any]:
     """
-    production_summarys × 明細 BOM で部品所要を集計。driver_sql_expr はサーバ側定数のみ（ユーザー入力不可）。
+    production_summarys ? ?? BOM ?????????driver_sql_expr ????????????????????
     """
     conditions = [
         "ps.date >= :d_start",
@@ -1467,9 +1585,9 @@ async def _aggregate_component_requirements_from_production_summarys(
 
     sql = text(f"""
         SELECT
-            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(???)') AS component_cd,
             COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
-            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '?')) AS component_uom,
             COUNT(DISTINCT ps.id) AS source_lot_count,
             SUM(
                 ({driver_sql_expr})
@@ -1498,9 +1616,9 @@ async def _aggregate_component_requirements_from_production_summarys(
           ON p.part_cd = l.component_product_cd
         WHERE {" AND ".join(conditions)}
         GROUP BY
-            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+            COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(???)'),
             COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
-            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+            COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '?'))
         ORDER BY component_cd ASC
     """)
 
@@ -1512,15 +1630,15 @@ async def _aggregate_component_requirements_from_production_summarys(
         if "production_summarys" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="production_summarys テーブルが存在しません。",
+                detail="production_summarys ????????????",
             ) from e
         if "product_bom_headers" in msg or "product_bom_lines" in msg:
             raise HTTPException(
                 status_code=503,
-                detail="product_bom_headers / product_bom_lines テーブルが存在しないため集計できません。",
+                detail="product_bom_headers / product_bom_lines ????????????????????",
             ) from e
         logger.exception("component-requirements aggregate failed")
-        raise HTTPException(status_code=500, detail="部品需要量の集計に失敗しました。") from e
+        raise HTTPException(status_code=500, detail="????????????????") from e
 
     def _fnum(v) -> float:
         if v is None:
@@ -1561,9 +1679,9 @@ async def _aggregate_component_requirements_from_production_summarys(
         dsql = text(f"""
             SELECT
                 ps.date AS eff_date,
-                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)') AS component_cd,
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(???)') AS component_cd,
                 COALESCE(NULLIF(TRIM(p.part_name), ''), '') AS component_name,
-                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個')) AS component_uom,
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '?')) AS component_uom,
                 SUM(
                     ({driver_sql_expr})
                     * COALESCE(l.qty_per, 0)
@@ -1592,9 +1710,9 @@ async def _aggregate_component_requirements_from_production_summarys(
             WHERE {" AND ".join(conditions)}
             GROUP BY
                 ps.date,
-                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(未設定)'),
+                COALESCE(NULLIF(TRIM(l.component_product_cd), ''), '(???)'),
                 COALESCE(NULLIF(TRIM(p.part_name), ''), ''),
-                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '個'))
+                COALESCE(NULLIF(TRIM(p.uom), ''), COALESCE(NULLIF(TRIM(l.uom), ''), '?'))
             ORDER BY
                 ps.date ASC,
                 component_cd ASC
@@ -1666,7 +1784,7 @@ async def _aggregate_component_requirements_from_production_summarys(
 
 
 async def _table_has_column(db: AsyncSession, table_name: str, column_name: str) -> bool:
-    """現在の DB でテーブルが指定列を持つか（MySQL information_schema）。照会不可時は False（安全側の SQL にフォールバック）。"""
+    """??? DB ??????????????MySQL information_schema???????? False????? SQL ??????????"""
     try:
         r = await db.execute(
             text(
@@ -1683,7 +1801,7 @@ async def _table_has_column(db: AsyncSession, table_name: str, column_name: str)
         return r.first() is not None
     except Exception as e:
         logger.warning(
-            "information_schema 照会失敗 (%s.%s): %s",
+            "information_schema ???? (%s.%s): %s",
             table_name,
             column_name,
             e,
@@ -1696,7 +1814,7 @@ class GenerateFromScheduleBody(BaseModel):
 
 
 def _schedule_row_to_dict(row) -> dict:
-    """production_plan_schedules 1行を辞書に（frontend の machine_name, product_name, production_order, planned_quantity 等）"""
+    """production_plan_schedules 1??????frontend ? machine_name, product_name, production_order, planned_quantity ??"""
     def _v(key, default=None):
         val = row.get(key) if hasattr(row, "get") else getattr(row, key, None)
         if val is None:
@@ -1728,14 +1846,14 @@ def _schedule_row_to_dict(row) -> dict:
 
 @router.get("/processing-status")
 async def get_processing_status(
-    fileName: Optional[str] = Query(None, description="file_name に含まれる文字（例: 1月 → 加工計画(1月).xlsm）"),
+    fileName: Optional[str] = Query(None, description="file_name ?????????: 1? ? ????(1?).xlsm?"),
     limit: int = Query(100000, ge=1, le=100000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    production_plan_schedules を取得。段取予定発行で利用。
-    fileName で file_name を LIKE 検索（例: "1月" で 1月 を含むファイルのレコードのみ）。
+    production_plan_schedules ??????????????
+    fileName ? file_name ? LIKE ????: "1?" ? 1? ????????????????
     """
     if not fileName or not fileName.strip():
         return {"success": True, "data": [], "message": "OK"}
@@ -1759,14 +1877,14 @@ async def get_processing_status(
 
 @router.get("/operation-rate")
 async def get_operation_rate(
-    fileName: Optional[str] = Query(None, description="file_name に含まれる文字（例: 1月）。操業度は machine_name で紐づく"),
+    fileName: Optional[str] = Query(None, description="file_name ?????????: 1??????? machine_name ????"),
     limit: int = Query(10000, ge=1, le=100000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    production_plan_rate を取得。段取予定発行の操業度列用。
-    fileName で file_name を LIKE 検索。同一 machine_name が複数ある場合は先頭を採用（必要なら集約可）。
+    production_plan_rate ?????????????????
+    fileName ? file_name ? LIKE ????? machine_name ???????????????????????
     """
     if not fileName or not fileName.strip():
         return {"success": True, "data": [], "message": "OK"}
@@ -1813,16 +1931,16 @@ async def get_schedule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    設備運行時間スロット取得。frontend は start_time / end_time を期待。
-    production_plan_schedules には開始/終了時刻がないため、現状は空リストを返す。
-    必要に応じて他テーブルや計算で導出可能。
+    ?????????????frontend ? start_time / end_time ????
+    production_plan_schedules ????/?????????????????????
+    ????????????????????
     """
-    # スタブ: 空リストで 404 を避ける
+    # ???: ????? 404 ????
     return {"success": True, "data": {"list": []}, "message": "OK"}
 
 
 def _mes_schedule_plan_row_to_record(row: Any) -> dict:
-    """schedule_details × production_schedules × machines → excel-monitor plan-data 互換1件"""
+    """schedule_details ? production_schedules ? machines ? excel-monitor plan-data ??1?"""
     def _val(key: str, default=None):
         v = row.get(key) if hasattr(row, "get") else getattr(row, key, None)
         if v is None:
@@ -1859,7 +1977,7 @@ def _mes_schedule_plan_row_to_record(row: Any) -> dict:
         "planned_output_qty": _val("planned_output_qty", qty),
         "machine_name": _val("machine_name"),
         "machine_cd": _val("machine_cd"),
-        "process_name": _val("process_name") or "成型",
+        "process_name": _val("process_name") or "??",
         "operator": op,
         "production_order": op,
         "product_name": _val("product_name") or "",
@@ -1883,7 +2001,7 @@ async def get_mes_forming_plan_data_from_schedule(
     keyword: Optional[str] = Query(None),
     productNameExact: Optional[str] = Query(
         None,
-        description="品名または product_cd と完全一致",
+        description="????? product_cd ?????",
     ),
     page: int = Query(1, ge=1),
     limit: int = Query(10000, ge=1, le=10000),
@@ -1891,9 +2009,9 @@ async def get_mes_forming_plan_data_from_schedule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    MES 指示用: production_schedules と schedule_details を結合し、
-    /api/excel-monitor/plan-data と同形の records を返す（設備は processName に応じた machine_type）。
-    能率(efficiency_rate)は equipment_efficiency（machine_cd + product_cd）を優先。
+    MES ???: production_schedules ? schedule_details ?????
+    /api/excel-monitor/plan-data ???? records ??????? processName ???? machine_type??
+    ??(efficiency_rate)? equipment_efficiency?machine_cd + product_cd?????
     """
     if not startDate or not endDate:
         return {
@@ -1902,7 +2020,7 @@ async def get_mes_forming_plan_data_from_schedule(
             "message": "OK",
         }
     pn = (processName or "").strip()
-    process_label = pn if pn in ("成型", "溶接") else "成型"
+    process_label = pn if pn in ("??", "??") else "??"
     kw = keyword.strip() if keyword else ""
     pne = (productNameExact or "").strip() or None
     offset = (page - 1) * limit
@@ -1993,18 +2111,18 @@ async def get_mes_forming_plan_data_from_schedule(
 
 
 def _parse_month(month: str) -> tuple[date, str]:
-    """Parse 'YYYY-MM' -> (production_month date, file_name month label e.g. '1月')."""
+    """Parse 'YYYY-MM' -> (production_month date, file_name month label e.g. '1?')."""
     parts = month.strip().split("-")
     if len(parts) != 2:
-        raise HTTPException(status_code=400, detail="month は YYYY-MM 形式で指定してください")
+        raise HTTPException(status_code=400, detail="month ? YYYY-MM ???????????")
     try:
         y, m = int(parts[0]), int(parts[1])
         if not (1 <= m <= 12):
             raise ValueError("month must be 1-12")
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail=f"無効な月: {month}") from e
+        raise HTTPException(status_code=400, detail=f"????: {month}") from e
     production_month = date(y, m, 1)
-    month_label = f"{m}月"
+    month_label = f"{m}?"
     return production_month, month_label
 
 
@@ -2038,8 +2156,8 @@ async def get_schedule_months(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    生産月一覧: production_plan_schedules の file_name から月を抽出して返す。
-    例: "加工計画(1月).xlsm" → 当年の 1月。該当なしの場合は当年 1月～12月を返す。
+    ?????: production_plan_schedules ? file_name ???????????
+    ?: "????(1?).xlsm" ? ??? 1???????????? 1??12?????
     """
     sql = text("""
         SELECT DISTINCT file_name FROM production_plan_schedules
@@ -2056,31 +2174,31 @@ async def get_schedule_months(
         fn = dict(r).get("file_name") if hasattr(r, "keys") else None
         if not fn:
             continue
-        # "1月" or "01月" or "（1月）" 等を抽出
-        m = re.search(r"(\d{1,2})月", str(fn))
+        # "1?" or "01?" or "?1??" ????
+        m = re.search(r"(\d{1,2})?", str(fn))
         if m:
             month_num = int(m.group(1))
             if 1 <= month_num <= 12 and month_num not in seen:
                 seen.add(month_num)
                 value = f"{current_year}-{month_num:02d}"
-                out.append({"value": value, "label": f"{month_num}月"})
+                out.append({"value": value, "label": f"{month_num}?"})
     if not out:
-        out = [{"value": f"{current_year}-{m:02d}", "label": f"{m}月"} for m in range(1, 13)]
+        out = [{"value": f"{current_year}-{m:02d}", "label": f"{m}?"} for m in range(1, 13)]
     return {"success": True, "data": out, "message": "OK"}
 
 
 @router.get("/plan/batch/list")
 async def get_instruction_plans_list(
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
-    product_name: Optional[str] = Query(None, description="製品名（部分一致）"),
-    equipment: Optional[str] = Query(None, description="設備/ライン（production_line 部分一致）"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM"),
+    product_name: Optional[str] = Query(None, description="?????????"),
+    equipment: Optional[str] = Query(None, description="??/????production_line ?????"),
     limit: int = Query(5000, ge=1, le=50000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    生産ロット一覧: instruction_plans を取得する。
-    既定ソート: start_date 昇順（未設定は末尾）、同一日内は production_line・順位・ロットNo。
+    ???????: instruction_plans ??????
+    ?????: start_date ???????????????? production_line???????No?
     """
     conditions = ["1=1"]
     params = {"limit": limit}
@@ -2171,17 +2289,17 @@ async def get_instruction_plans_list(
 
 @router.get("/plan/batch/material-requirements-summary")
 async def get_material_requirements_summary_from_instruction_plans(
-    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（DATE(start_date) で判定、start_date 未設定行は対象外）"),
-    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
+    date_start: Optional[str] = Query(None, description="????? YYYY-MM-DD?DATE(start_date) ????start_date ?????????"),
+    date_end: Optional[str] = Query(None, description="????? YYYY-MM-DD????"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM?date_start/date_end ????????????????????"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    instruction_plans を期間で絞り、材料ごとに件数（行数）を集計する。
-    - start_date が NULL の行は集計対象外
-    - 期間キー: DATE(start_date)
-    - 指標: COUNT(*)（planned_quantity / actual_production_quantity / usage_count は使わない）
+    instruction_plans ????????????????????????
+    - start_date ? NULL ????????
+    - ????: DATE(start_date)
+    - ??: COUNT(*)?planned_quantity / actual_production_quantity / usage_count ??????
     """
     d_start = _parse_date_ymd(date_start) if date_start else None
     d_end = _parse_date_ymd(date_end) if date_end else None
@@ -2205,10 +2323,10 @@ async def get_material_requirements_summary_from_instruction_plans(
     if d_start is None or d_end is None:
         raise HTTPException(
             status_code=400,
-            detail="date_start と date_end を指定するか、production_month（YYYY-MM）を指定してください。",
+            detail="date_start ? date_end ???????production_month?YYYY-MM???????????",
         )
     if d_start > d_end:
-        raise HTTPException(status_code=400, detail="date_start は date_end 以下にしてください。")
+        raise HTTPException(status_code=400, detail="date_start ? date_end ??????????")
 
     conditions = [
         "start_date IS NOT NULL",
@@ -2219,14 +2337,14 @@ async def get_material_requirements_summary_from_instruction_plans(
 
     sql = text(f"""
         SELECT
-            COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)') AS material_name,
+            COALESCE(NULLIF(TRIM(material_name), ''), '(???)') AS material_name,
             COALESCE(NULLIF(TRIM(material_manufacturer), ''), '') AS material_manufacturer,
             COALESCE(NULLIF(TRIM(standard_specification), ''), '') AS standard_specification,
             COUNT(*) AS piece_count
         FROM instruction_plans
         WHERE {" AND ".join(conditions)}
         GROUP BY
-            COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)'),
+            COALESCE(NULLIF(TRIM(material_name), ''), '(???)'),
             COALESCE(NULLIF(TRIM(material_manufacturer), ''), ''),
             COALESCE(NULLIF(TRIM(standard_specification), ''), '')
         ORDER BY material_manufacturer ASC, material_name ASC, standard_specification ASC
@@ -2240,10 +2358,10 @@ async def get_material_requirements_summary_from_instruction_plans(
         if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="instruction_plans テーブルが存在しません。",
+                detail="instruction_plans ????????????",
             ) from e
-        logger.exception("material-requirements-summary 集計失敗")
-        raise HTTPException(status_code=500, detail="材料需要量の集計に失敗しました。") from e
+        logger.exception("material-requirements-summary ????")
+        raise HTTPException(status_code=500, detail="????????????????") from e
 
     def _icount(v) -> int:
         if v is None:
@@ -2267,7 +2385,7 @@ async def get_material_requirements_summary_from_instruction_plans(
             }
         )
 
-    # 日別×材料の二次元表用（期間が長すぎると列数過多のため上限）
+    # ??????????????????????????????
     _DAY_MATRIX_MAX_DAYS = 186
     span_days = (d_end - d_start).days + 1
     daily_matrix: Optional[dict] = None
@@ -2277,7 +2395,7 @@ async def get_material_requirements_summary_from_instruction_plans(
         daily_sql = text(f"""
             SELECT
                 DATE(start_date) AS eff_date,
-                COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)') AS material_name,
+                COALESCE(NULLIF(TRIM(material_name), ''), '(???)') AS material_name,
                 COALESCE(NULLIF(TRIM(material_manufacturer), ''), '') AS material_manufacturer,
                 COALESCE(NULLIF(TRIM(standard_specification), ''), '') AS standard_specification,
                 COUNT(*) AS cnt
@@ -2285,7 +2403,7 @@ async def get_material_requirements_summary_from_instruction_plans(
             WHERE {" AND ".join(conditions)}
             GROUP BY
                 DATE(start_date),
-                COALESCE(NULLIF(TRIM(material_name), ''), '(未設定)'),
+                COALESCE(NULLIF(TRIM(material_name), ''), '(???)'),
                 COALESCE(NULLIF(TRIM(material_manufacturer), ''), ''),
                 COALESCE(NULLIF(TRIM(standard_specification), ''), '')
             ORDER BY eff_date, material_manufacturer ASC, material_name ASC, standard_specification ASC
@@ -2298,10 +2416,10 @@ async def get_material_requirements_summary_from_instruction_plans(
             if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
                 raise HTTPException(
                     status_code=503,
-                    detail="instruction_plans テーブルが存在しません。",
+                    detail="instruction_plans ????????????",
                 ) from e
-            logger.exception("material-requirements daily 集計失敗")
-            raise HTTPException(status_code=500, detail="日別材料需要量の集計に失敗しました。") from e
+            logger.exception("material-requirements daily ????")
+            raise HTTPException(status_code=500, detail="??????????????????") from e
 
         date_list: list[str] = []
         cur = d_start
@@ -2330,14 +2448,14 @@ async def get_material_requirements_summary_from_instruction_plans(
             if ds in pivot[key]:
                 pivot[key][ds] += qv
 
-        # 合計表にのみ存在する材料も日別表に行として出す（該当日が無ければ 0）
+        # ???????????????????????????????? 0?
         for it in items:
             k = (it.get("material_name"), it.get("material_manufacturer"), it.get("standard_specification"))
             if k not in pivot:
                 pivot[k] = {d: 0 for d in date_list}
 
         matrix_rows = []
-        # pivot key (material_name, material_manufacturer, standard_specification) → 表示順: メーカー・材料名・規格 昇順
+        # pivot key (material_name, material_manufacturer, standard_specification) ? ???: ??????????? ??
         for key in sorted(pivot.keys(), key=lambda k: (k[1] or "", k[0] or "", k[2] or "")):
             mn, mf, sp = key
             by_date = pivot[key]
@@ -2369,7 +2487,7 @@ async def get_material_requirements_summary_from_instruction_plans(
                 "production_month_filter": production_month.strip() if production_month and production_month.strip() else None,
                 "total_material_kinds": len(items),
                 "total_piece_count": total_pieces,
-                "effective_date_note": "start_date が設定されている行のみ対象。日別は DATE(start_date) ごとの材料別ロット件数（COUNT(*)）です。",
+                "effective_date_note": "start_date ????????????????? DATE(start_date) ????????????COUNT(*)????",
                 "daily_matrix_omitted": daily_matrix_omitted,
                 "daily_matrix_max_days": _DAY_MATRIX_MAX_DAYS,
             },
@@ -2407,31 +2525,31 @@ def _component_requirements_date_range(
         d_end = d_end or today
 
     if d_start > d_end:
-        raise HTTPException(status_code=400, detail="date_start は date_end 以下で指定してください。")
+        raise HTTPException(status_code=400, detail="date_start ? date_end ????????????")
     return d_start, d_end
 
 
 @router.get("/plan/batch/component-requirements-summary")
 async def get_component_requirements_summary_from_production_summarys(
-    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（production_summarys.date で判定）"),
-    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM（date_start/date_end 未指定時にその月の全日を期間として使用）"),
+    date_start: Optional[str] = Query(None, description="????? YYYY-MM-DD?production_summarys.date ????"),
+    date_end: Optional[str] = Query(None, description="????? YYYY-MM-DD????"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM?date_start/date_end ????????????????????"),
     plan_column: str = Query(
         "molding_actual_plan",
-        description="需求量の駆動列: molding_actual_plan | molding_plan",
+        description="???????: molding_actual_plan | molding_plan",
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    production_summarys の指定列 × 明細 BOM から部品所要を集計。
-    既定は molding_actual_plan（成型実績計画）。molding_plan で成型計画に切替可能。
+    production_summarys ???? ? ?? BOM ??????????
+    ??? molding_actual_plan?????????molding_plan ???????????
     """
     d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
     driver_expr, label = _plan_column_sql_expr(plan_column)
     note = (
-        f"production_summarys を日付・製品で対象に、{label} × BOM構成比（qty_per/base_quantity）"
-        "× 歩留補正（1+scrap_rate）で集計しています。source_lot_count は当該部品に寄与したサマリー行（id）の件数です。"
+        f"production_summarys ???????????{label} ? BOM????qty_per/base_quantity?"
+        "? ?????1+scrap_rate??????????source_lot_count ????????????????id???????"
     )
     pmf = production_month.strip() if production_month and production_month.strip() else None
     inner = await _aggregate_component_requirements_from_production_summarys(
@@ -2443,19 +2561,19 @@ async def get_component_requirements_summary_from_production_summarys(
 
 @router.get("/plan/batch/component-requirements-use-summary")
 async def get_component_requirements_use_summary_from_production_summarys(
-    date_start: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（production_summarys.date）"),
-    date_end: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（含む）"),
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
+    date_start: Optional[str] = Query(None, description="????? YYYY-MM-DD?production_summarys.date?"),
+    date_end: Optional[str] = Query(None, description="????? YYYY-MM-DD????"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    (welding_actual + welding_defect) × 明細 BOM で部品の日別使用量を集計。
+    (welding_actual + welding_defect) ? ?? BOM ?????????????
     """
     d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
     note = (
-        "production_summarys を日付・製品で対象に、(welding_actual + welding_defect) × BOM構成比"
-        "（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。"
+        "production_summarys ???????????(welding_actual + welding_defect) ? BOM???"
+        "?qty_per/base_quantity?? ?????1+scrap_rate??????????"
     )
     pmf = production_month.strip() if production_month and production_month.strip() else None
     inner = await _aggregate_component_requirements_from_production_summarys(
@@ -2469,21 +2587,21 @@ async def get_component_requirements_bundle(
     date_start: Optional[str] = Query(None),
     date_end: Optional[str] = Query(None),
     production_month: Optional[str] = Query(None),
-    plan_column: str = Query("molding_actual_plan", description="需求量の駆動列"),
+    plan_column: str = Query("molding_actual_plan", description="???????"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """需求量サマリーと溶接ベース使用量サマリーを1回で返す。"""
+    """?????????????????????1?????"""
     d_start, d_end = _component_requirements_date_range(date_start, date_end, production_month)
     pmf = production_month.strip() if production_month and production_month.strip() else None
     driver_expr, label = _plan_column_sql_expr(plan_column)
     note_d = (
-        f"production_summarys を日付・製品で対象に、{label} × BOM構成比（qty_per/base_quantity）"
-        "× 歩留補正（1+scrap_rate）で集計しています。source_lot_count は当該部品に寄与したサマリー行（id）の件数です。"
+        f"production_summarys ???????????{label} ? BOM????qty_per/base_quantity?"
+        "? ?????1+scrap_rate??????????source_lot_count ????????????????id???????"
     )
     note_u = (
-        "production_summarys を日付・製品で対象に、(welding_actual + welding_defect) × BOM構成比"
-        "（qty_per/base_quantity）× 歩留補正（1+scrap_rate）で集計しています。"
+        "production_summarys ???????????(welding_actual + welding_defect) ? BOM???"
+        "?qty_per/base_quantity?? ?????1+scrap_rate??????????"
     )
     demand = await _aggregate_component_requirements_from_production_summarys(
         db, d_start, d_end, driver_expr, note_d, pmf
@@ -2506,7 +2624,7 @@ async def get_component_requirements_bundle(
 
 
 class UpdatePlanBody(BaseModel):
-    """生産ロット（instruction_plans）1件の更新（テーブル全項目対応）"""
+    """??????instruction_plans?1???????????????"""
     production_month: Optional[str] = None  # YYYY-MM-DD
     production_line: Optional[str] = None
     priority_order: Optional[int] = None
@@ -2533,11 +2651,11 @@ class UpdatePlanBody(BaseModel):
     developed_length: Optional[float] = None
     scrap_length: Optional[float] = None
     use_material_stock_sub: Optional[int] = None  # 0/1
-    usage_count: Optional[float] = None  # 1=1本, <1=按分
+    usage_count: Optional[float] = None  # 1=1?, <1=??
 
 
 class CreatePlanBody(BaseModel):
-    """新規ロット追加（instruction_plans 1件 INSERT）"""
+    """????????instruction_plans 1? INSERT?"""
     production_month: Optional[str] = None  # YYYY-MM
     production_line: Optional[str] = None
     priority_order: Optional[int] = None
@@ -2560,7 +2678,7 @@ class CreatePlanBody(BaseModel):
     has_chamfering_process: Optional[int] = None  # 0/1
     has_sw_process: Optional[int] = None  # 0/1
     use_material_stock_sub: Optional[int] = None  # 0/1
-    usage_count: Optional[float] = None  # 1=1本, <1=按分
+    usage_count: Optional[float] = None  # 1=1?, <1=??
 
 
 def _parse_date_ymd(s: Optional[str]):
@@ -2598,14 +2716,14 @@ async def create_instruction_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """instruction_plans に1件新規追加。management_code はトリガーで自動設定。"""
+    """instruction_plans ?1??????management_code ???????????"""
     production_month = _parse_date_ymd(body.production_month)
     if not production_month:
-        raise HTTPException(status_code=400, detail="production_month (YYYY-MM) を指定してください")
+        raise HTTPException(status_code=400, detail="production_month (YYYY-MM) ?????????")
     product_cd = (body.product_cd or "").strip() or None
     product_name = (body.product_name or "").strip() or None
     if not product_cd or not product_name:
-        raise HTTPException(status_code=400, detail="product_cd と product_name は必須です")
+        raise HTTPException(status_code=400, detail="product_cd ? product_name ?????")
     production_line = (body.production_line or "").strip() or ""
     priority_order = body.priority_order if body.priority_order is not None else 0
     planned_quantity = body.planned_quantity if body.planned_quantity is not None else 0
@@ -2681,7 +2799,7 @@ async def create_instruction_plan(
     }
     await db.execute(sql, params)
     await db.commit()
-    return {"success": True, "message": "レコードを追加しました"}
+    return {"success": True, "message": "???????????"}
 
 
 @router.patch("/plan/batch/{plan_id}")
@@ -2691,7 +2809,7 @@ async def update_instruction_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """生産ロット1件を更新。management_code は未送信時のみ再計算。"""
+    """?????1?????management_code ???????????"""
     updates = []
     params = {"plan_id": plan_id}
 
@@ -2811,11 +2929,11 @@ async def update_instruction_plan(
             pass
 
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
 
     set_clause = ", ".join(updates)
     await db.execute(text(f"UPDATE instruction_plans SET {set_clause} WHERE id = :plan_id"), params)
-    # management_code を送っていない場合のみ再計算
+    # management_code ??????????????
     if body.management_code is None:
         await db.execute(
             text("""
@@ -2830,7 +2948,7 @@ async def update_instruction_plan(
             {"plan_id": plan_id},
         )
     await db.commit()
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.delete("/plan/batch/{plan_id}")
@@ -2839,27 +2957,27 @@ async def delete_instruction_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """生産ロット1件を削除（instruction_plans のみ。切断指示へ移行済みの場合は一覧に無いため対象外）。"""
+    """?????1?????instruction_plans ????????????????????????????"""
     result = await db.execute(text("DELETE FROM instruction_plans WHERE id = :plan_id"), {"plan_id": plan_id})
     await db.commit()
     if result.rowcount == 0:
-        raise HTTPException(status_code=404, detail="該当するロットがありません")
-    return {"success": True, "message": "削除しました"}
+        raise HTTPException(status_code=404, detail="?????????????")
+    return {"success": True, "message": "??????"}
 
 
 @router.get("/plan/cutting-management/list")
 async def get_cutting_management_list(
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    production_line: Optional[str] = Query(None, description="ライン（部分一致）"),
-    cutting_machine: Optional[str] = Query(None, description="切断機（完全一致でフィルタ）"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM"),
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    production_line: Optional[str] = Query(None, description="?????????"),
+    cutting_machine: Optional[str] = Query(None, description="??????????????"),
     limit: int = Query(2000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    切断指示一覧: cutting_management を取得。
-    並び: 生産日 → 切断機 → 生産順（同一天同一设备内で 1,2,3... の順）。
+    ??????: cutting_management ????
+    ??: ??? ? ??? ? ????????????? 1,2,3... ????
     """
     conditions = ["1=1"]
     params = {"limit": limit}
@@ -2889,11 +3007,11 @@ async def get_cutting_management_list(
         conditions.append("cutting_machine = :cutting_machine")
         params["cutting_machine"] = cutting_machine.strip()
 
-    # WHERE は修飾なし（cutting_management のみ該当列を持つため曖昧でない）。:param の誤置換を防ぐ
+    # WHERE ??????cutting_management ?????????????????:param ???????
     where_clause = " AND ".join(conditions)
     cm_cols = await _get_cutting_mgmt_columns(db)
     mes_select = _cutting_mgmt_mes_select_fragment(cm_cols)
-    # 生産時間を実時計算: product_cd + 切断機(cutting_machine)=machines_name で equipment_efficiency を結合し efficiency_rate を取得、生産数/能率
+    # ?????????: product_cd + ???(cutting_machine)=machines_name ? equipment_efficiency ???? efficiency_rate ???????/??
     sql = text(f"""
         SELECT `cutting_management`.id, `cutting_management`.production_month, `cutting_management`.production_day,
                `cutting_management`.production_line, `cutting_management`.cutting_machine, `cutting_management`.production_sequence,
@@ -2927,7 +3045,7 @@ async def get_cutting_management_list(
         if "cutting_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="cutting_management テーブルが存在しません。マイグレーション 053_cutting_management.sql を実行してください。",
+                detail="cutting_management ???????????????????? 053_cutting_management.sql ??????????",
             ) from e
         if "unknown column" in msg:
             for col in _CUTTING_MGMT_MES_COLUMNS:
@@ -2935,11 +3053,11 @@ async def get_cutting_management_list(
                     raise HTTPException(status_code=503, detail=_mes_column_migration_hint(col)) from e
             raise HTTPException(
                 status_code=503,
-                detail="cutting_management に未適用の列があります。backend/database/migrations/03〜06_cutting_management_mes_*.sql を実行してください。",
+                detail="cutting_management ????????????backend/database/migrations/03?06_cutting_management_mes_*.sql ??????????",
             ) from e
         return JSONResponse(
             status_code=500,
-            content={"success": False, "detail": str(e), "message": "切断指示一覧の取得に失敗しました"},
+            content={"success": False, "detail": str(e), "message": "????????????????"},
         )
 
     def _v(row, k, default=None):
@@ -2962,7 +3080,7 @@ async def get_cutting_management_list(
 
     def _cm_row(r):
         row = dict(r)
-        # 生産時間 = 生産数 / efficiency_rate（equipment_efficiency を product_cd・切断機=machines_name で結合）
+        # ???? = ??? / efficiency_rate?equipment_efficiency ? product_cd????=machines_name ????
         qty = row.get("actual_production_quantity")
         rate = row.get("efficiency_rate")
         if qty is not None and rate is not None:
@@ -3006,7 +3124,7 @@ async def get_cutting_management_list(
             "material_manufacturer": row.get("material_manufacturer"),
             "standard_specification": row.get("standard_specification"),
             "production_completed_check": row.get("production_completed_check"),
-            "material_usage_reflected": row.get("material_usage_reflected") or "未反映",
+            "material_usage_reflected": row.get("material_usage_reflected") or "???",
             "use_material_stock_sub": row.get("use_material_stock_sub"),
             "usage_count": _v(row, "usage_count", 1),
             "mes_production_started_at": _v(row, "mes_production_started_at"),
@@ -3032,32 +3150,32 @@ async def get_cutting_management_list(
     except Exception as e:
         return JSONResponse(
             status_code=500,
-            content={"success": False, "detail": str(e), "message": "切断指示一覧の取得に失敗しました"},
+            content={"success": False, "detail": str(e), "message": "????????????????"},
         )
 
 
 @router.post("/plan/cutting-management/confirm-actual")
 async def confirm_cutting_actual(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
-    cutting_machine: Optional[str] = Query(None, description="切断機（省略時は全機）"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD??????"),
+    cutting_machine: Optional[str] = Query(None, description="???????????"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
-    切断指示-今日の「実績確定」: production_completed_check=1 の cutting_management を
-    stock_transaction_logs に保存する。去重复：同一生産日（および同一切断機フィルタ）の
-    既存 cutting_management 実績を先に削除してから挿入する（先删除再插入）。
+    ????-?????????: production_completed_check=1 ? cutting_management ?
+    stock_transaction_logs ??????????????????????????????
+    ?? cutting_management ????????????????????????
     """
     try:
         parts = production_day.strip().split("-")
         if len(parts) != 3:
-            raise HTTPException(status_code=400, detail="production_day は YYYY-MM-DD で指定してください")
+            raise HTTPException(status_code=400, detail="production_day ? YYYY-MM-DD ?????????")
         y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
         prod_day = date(y, m, d)
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail="production_day の形式が不正です") from e
+        raise HTTPException(status_code=400, detail="production_day ????????") from e
 
-    # 去重复：同一範囲の既存実績を削除（source_file=cutting_management & 同日 & 同一切断機なら削除）
+    # ?????????????????source_file=cutting_management & ?? & ??????????
     del_params: dict = {"production_day": prod_day}
     del_conditions = [
         "source_file = 'cutting_management'",
@@ -3082,15 +3200,15 @@ async def confirm_cutting_actual(
     rows = res.mappings().fetchall()
     if not rows:
         await db.commit()
-        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
-    # transaction_time: date → datetime (00:00:00)
+        return {"success": True, "message": "?????????????????????", "inserted": 0, "total_quantity": 0, "deleted": True}
+    # transaction_time: date ? datetime (00:00:00)
     ins = text("""
         INSERT INTO stock_transaction_logs (
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT01', :machine_cd,
-            :quantity, '本', :transaction_time, 'cutting_management'
+            '???', :transaction_type, :target_cd, '??????', :lot_no, 'KT01', :machine_cd,
+            :quantity, '?', :transaction_time, 'cutting_management'
         )
     """)
     inserted = 0
@@ -3108,18 +3226,18 @@ async def confirm_cutting_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
-        # 良品：transaction_type='実績'
+        # ???transaction_type='??'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("cutting_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
-            "transaction_type": "実績",
+            "transaction_type": "??",
         })
         inserted += 1
         total_quantity += int(qty)
-        # 不良数：transaction_type='不良'
+        # ????transaction_type='??'
         defect_qty = r.get("defect_qty")
         if defect_qty is not None and int(defect_qty) > 0:
             await db.execute(ins, {
@@ -3128,13 +3246,13 @@ async def confirm_cutting_actual(
                 "machine_cd": r.get("cutting_machine"),
                 "quantity": int(defect_qty),
                 "transaction_time": tx_time,
-                "transaction_type": "不良",
+                "transaction_type": "??",
             })
             inserted += 1
     await db.commit()
     return {
         "success": True,
-        "message": f"実績を {inserted} 件登録しました",
+        "message": f"??? {inserted} ???????",
         "inserted": inserted,
         "total_quantity": total_quantity,
         "production_day": prod_day.isoformat(),
@@ -3143,11 +3261,11 @@ async def confirm_cutting_actual(
 
 @router.get("/plan/cutting-management/confirm-actual/email-preview")
 async def preview_cutting_confirm_actual_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """切断実績確定結果メールの送信先プレビュー"""
+    """????????????????????"""
     from app.services.confirm_actual_email import get_confirm_actual_email_preview
 
     return await get_confirm_actual_email_preview(
@@ -3157,11 +3275,11 @@ async def preview_cutting_confirm_actual_email(
 
 @router.post("/plan/cutting-management/confirm-actual/send-email")
 async def send_cutting_confirm_actual_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """切断実績確定結果を指定受信者へメール送信"""
+    """????????????????????"""
     from app.services.confirm_actual_email import send_confirm_actual_email
 
     return await send_confirm_actual_email(
@@ -3171,11 +3289,11 @@ async def send_cutting_confirm_actual_email(
 
 @router.get("/plan/cutting-management/trial-completed/email-preview")
 async def preview_cutting_trial_completed_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """切断試作完了（備考に試作・完了済み）の送信先・明細プレビュー"""
+    """??????????????????????????????"""
     from app.services.cutting_trial_notification import get_cutting_trial_notification_preview
 
     return await get_cutting_trial_notification_preview(db, production_day=production_day)
@@ -3183,11 +3301,11 @@ async def preview_cutting_trial_completed_email(
 
 @router.post("/plan/cutting-management/trial-completed/send-email")
 async def send_cutting_trial_completed_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """切断試作完了通知を指定受信者へメール・LINE 送信"""
+    """???????????????????LINE ??"""
     from app.services.cutting_trial_notification import send_cutting_trial_notification
 
     return await send_cutting_trial_notification(
@@ -3196,7 +3314,7 @@ async def send_cutting_trial_completed_email(
 
 
 class MoveBatchToCuttingBody(BaseModel):
-    """生産ロット1件を切断指示へ移行するリクエスト"""
+    """?????1????????????????"""
     plan_id: int
     production_month: str  # YYYY-MM
     production_line: str
@@ -3205,11 +3323,11 @@ class MoveBatchToCuttingBody(BaseModel):
     actual_production_quantity: Optional[int] = 0
     material_name: Optional[str] = None
     management_code: Optional[str] = None
-    production_day: Optional[str] = None  # 生成日（手動指定）YYYY-MM-DD、未指定時は今日
-    start_date: Optional[str] = None  # 旧パラメータ・production_day の別名
-    priority_order: Optional[int] = None  # → production_order（ロット側順位）
-    cutting_machine: str = ""  # 切断機（手動指定）
-    has_chamfering_process: Optional[bool] = False  # 面取工程ありなら面取指示へ自動登録
+    production_day: Optional[str] = None  # ?????????YYYY-MM-DD????????
+    start_date: Optional[str] = None  # ???????production_day ???
+    priority_order: Optional[int] = None  # ? production_order????????
+    cutting_machine: str = ""  # ?????????
+    has_chamfering_process: Optional[bool] = False  # ?????????????????
 
 
 @router.post("/plan/cutting-management/move-from-batch")
@@ -3219,24 +3337,24 @@ async def move_batch_to_cutting_management(
     current_user: User = Depends(require_mes_operation("create")),
 ):
     """
-    生産ロット（instruction_plans）1件を切断指示（cutting_management）へ移行する。
-    - cutting_management に INSERT
-    - has_chamfering_process が True なら chamfering_plans（面取ロット一覧）に自動 INSERT
-    - 第一工程のため kanban_issuance に status=pending で1件 INSERT（後で手動発行）
-    - instruction_plans から該当 id を DELETE
+    ??????instruction_plans?1???????cutting_management???????
+    - cutting_management ? INSERT
+    - has_chamfering_process ? True ?? chamfering_plans???????????? INSERT
+    - ??????? kanban_issuance ? status=pending ?1? INSERT????????
+    - instruction_plans ???? id ? DELETE
     """
     try:
         parts = body.production_month.strip().split("-")
         if len(parts) != 2:
-            raise HTTPException(status_code=400, detail="production_month は YYYY-MM 形式で指定してください")
+            raise HTTPException(status_code=400, detail="production_month ? YYYY-MM ???????????")
         y, m = int(parts[0]), int(parts[1])
         if not (1 <= m <= 12):
             raise ValueError("month")
         production_month_date = date(y, m, 1)
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail="production_month の形式が不正です") from e
+        raise HTTPException(status_code=400, detail="production_month ????????") from e
 
-    # 生成日（手動指定）: production_day または start_date、未指定時は今日
+    # ?????????: production_day ??? start_date????????
     day_str = (body.production_day or body.start_date or "").strip()[:10]
     if day_str and len(day_str) == 10:
         try:
@@ -3252,11 +3370,11 @@ async def move_batch_to_cutting_management(
 
     cutting_machine = (body.cutting_machine or "").strip()
     if not cutting_machine:
-        raise HTTPException(status_code=400, detail="切断機を指定してください")
+        raise HTTPException(status_code=400, detail="????????????")
 
     has_chamfering = bool(body.has_chamfering_process)
 
-    # ロット（instruction_plans）1件を取得し、cutting_management に全項目コピー
+    # ????instruction_plans?1??????cutting_management ???????
     plan_res = await db.execute(
         text("""
             SELECT production_month, production_line, priority_order, product_cd, product_name,
@@ -3271,18 +3389,18 @@ async def move_batch_to_cutting_management(
     )
     plan_row = plan_res.mappings().fetchone()
     if not plan_row:
-        raise HTTPException(status_code=404, detail="指定のロットが見つかりません")
+        raise HTTPException(status_code=404, detail="??????????????")
 
     plan = dict(plan_row)
     production_line = (plan.get("production_line") or body.production_line or "").strip() or ""
     product_cd = (plan.get("product_cd") or body.product_cd or "").strip() or ""
     product_name = (plan.get("product_name") or body.product_name or "").strip() or ""
     if not product_cd or not product_name:
-        raise HTTPException(status_code=400, detail="product_cd と product_name は必須です")
+        raise HTTPException(status_code=400, detail="product_cd ? product_name ?????")
     if not production_line:
-        raise HTTPException(status_code=400, detail="production_line は必須です")
+        raise HTTPException(status_code=400, detail="production_line ?????")
 
-    # 同一切断機内の次 生産順（自動採番）
+    # ???????? ?????????
     order_res = await db.execute(
         text("SELECT COALESCE(MAX(production_sequence), 0) + 1 AS next_order FROM cutting_management WHERE cutting_machine = :cm"),
         {"cm": cutting_machine},
@@ -3363,13 +3481,13 @@ async def move_batch_to_cutting_management(
 
     try:
         await db.execute(insert_cutting_sql, cutting_params)
-        # 新規 cutting_management.id 取得
+        # ?? cutting_management.id ??
         rid = await db.execute(text("SELECT LAST_INSERT_ID() AS id"))
         row = rid.mappings().fetchone()
         cutting_id = row.get("id") if row else None
         if not cutting_id:
             await db.rollback()
-            raise HTTPException(status_code=500, detail="切断指示の登録に失敗しました")
+            raise HTTPException(status_code=500, detail="??????????????")
         cutting_id = int(cutting_id)
 
         if has_chamfering:
@@ -3403,7 +3521,7 @@ async def move_batch_to_cutting_management(
                 "has_sw_process": 1 if cutting_params.get("has_sw_process") else 0,
             })
 
-        # 第一工程のカンバン：待発行で1件登録（手動発行用）。切断現品票に必要な全フィールドを保存する
+        # ??????????????1???????????????????????????????
         ins_kanban = text("""
             INSERT INTO kanban_issuance (
                 process_type, source_id, kanban_no, issue_date, status,
@@ -3457,21 +3575,21 @@ async def move_batch_to_cutting_management(
         if "cutting_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="cutting_management テーブルが存在しません。マイグレーション 053_cutting_management.sql を実行してください。",
+                detail="cutting_management ???????????????????? 053_cutting_management.sql ??????????",
             ) from e
         if "chamfering_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="chamfering_management テーブルが存在しません。") from e
+            raise HTTPException(status_code=503, detail="chamfering_management ????????????") from e
         if "chamfering_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="chamfering_plans テーブルが存在しません。マイグレーション 063_chamfering_batch.sql を実行してください。") from e
+            raise HTTPException(status_code=503, detail="chamfering_plans ???????????????????? 063_chamfering_batch.sql ??????????") from e
         if "kanban_issuance" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="kanban_issuance テーブルが存在しません。") from e
+            raise HTTPException(status_code=503, detail="kanban_issuance ????????????") from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return {"success": True, "message": "切断指示に登録し、ロットから削除しました"}
+    return {"success": True, "message": "????????????????????"}
 
 
 class MoveCuttingToBatchBody(BaseModel):
-    """切断指示1件を生産ロットへ戻すリクエスト"""
+    """????1???????????????"""
     cutting_id: int
     production_month: str  # YYYY-MM
     production_line: str
@@ -3480,8 +3598,8 @@ class MoveCuttingToBatchBody(BaseModel):
     actual_production_quantity: Optional[int] = 0
     material_name: Optional[str] = None
     management_code: Optional[str] = None
-    production_day: Optional[str] = None  # YYYY-MM-DD → start_date/end_date
-    production_order: Optional[int] = None  # → priority_order
+    production_day: Optional[str] = None  # YYYY-MM-DD ? start_date/end_date
+    production_order: Optional[int] = None  # ? priority_order
 
 
 @router.post("/plan/batch/move-from-cutting")
@@ -3491,11 +3609,11 @@ async def move_cutting_to_batch(
     current_user: User = Depends(require_mes_operation("create")),
 ):
     """
-    切断指示1件を生産ロットへ戻す。
-    処理順: ①切断指示を読取 ②面取指示ID取得 ③カンバン削除 ④chamfering_plans 削除 ⑤chamfering_management 削除
-    ⑥cutting_management 削除 ⑦instruction_plans に INSERT。
+    ????1???????????
+    ???: ???????? ?????ID?? ??????? ?chamfering_plans ?? ?chamfering_management ??
+    ?cutting_management ?? ?instruction_plans ? INSERT?
     """
-    # ① 切断指示1件を取得（削除前に全項目コピー用。cutting_machine/production_day は削除後の生産順リナンバ用）
+    # ? ????1?????????????????cutting_machine/production_day ??????????????
     cut_sel = text("""
         SELECT production_month, production_line, priority_order, product_cd, product_name,
                planned_quantity, start_date, end_date, production_lot_size, lot_number,
@@ -3509,7 +3627,7 @@ async def move_cutting_to_batch(
     cut_res = await db.execute(cut_sel, {"cid": body.cutting_id})
     cut_row = cut_res.mappings().fetchone()
     if not cut_row:
-        raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     cut = dict(cut_row)
 
     product_cd = (cut.get("product_cd") or body.product_cd or "").strip()
@@ -3518,7 +3636,7 @@ async def move_cutting_to_batch(
     if not product_cd or not product_name or not production_line:
         raise HTTPException(
             status_code=400,
-            detail="切断指示に品番・品名・ラインが不足しています。画面データを更新してから再度お試しください。",
+            detail="?????????????????????????????????????????????",
         )
 
     def _to_dt(v):
@@ -3626,7 +3744,7 @@ async def move_cutting_to_batch(
         "use_material_stock_sub": 1 if cut.get("use_material_stock_sub") == 1 else 0,
         "usage_count": _to_float(cut.get("usage_count")) if cut.get("usage_count") is not None else 1.0,
     }
-    # INSERT 時 BEFORE INSERT トリガーが management_code を上書きするため、重複判定はトリガー結果と同じ式で行う
+    # INSERT ? BEFORE INSERT ????? management_code ???????????????????????????
     expected_management_code = _build_management_code(
         production_month=production_month_date,
         product_cd=product_cd,
@@ -3671,14 +3789,14 @@ async def move_cutting_to_batch(
     """)
 
     try:
-        # ② この切断に紐づく面取指示IDを取得（カンバン削除用）
+        # ? ????????????ID????????????
         chamfering_res = await db.execute(
             text("SELECT id FROM chamfering_management WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
         )
         chamfering_ids = [r[0] for r in chamfering_res.fetchall() if r[0] is not None]
 
-        # ③ カンバン発行を削除（切断由来 + 面取由来）
+        # ? ?????????????? + ?????
         await db.execute(
             text("DELETE FROM kanban_issuance WHERE process_type = 'cutting' AND source_id = :cid"),
             {"cid": body.cutting_id},
@@ -3689,22 +3807,22 @@ async def move_cutting_to_batch(
                 {"sid": chamfering_id},
             )
 
-        # ④ 面取ロット一覧を先に削除（FK 構成差で面取指示より先に消す必要がある環境向け）
+        # ? ?????????????FK ????????????????????????
         await db.execute(
             text("DELETE FROM chamfering_plans WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
         )
 
-        # ⑤ 面取指示を削除
+        # ? ???????
         await db.execute(
             text("DELETE FROM chamfering_management WHERE cutting_management_id = :cid"),
             {"cid": body.cutting_id},
         )
 
-        # ⑥ 切断指示を削除
+        # ? ???????
         await db.execute(text("DELETE FROM cutting_management WHERE id = :cid"), {"cid": body.cutting_id})
 
-        # ⑥' 同一切断機・同一生産日の残り行の生産順を 1,2,3... にリナンバ
+        # ?' ???????????????????? 1,2,3... ?????
         cm = (cut.get("cutting_machine") or "").strip()
         pd = cut.get("production_day")
         if cm and pd is not None:
@@ -3725,9 +3843,9 @@ async def move_cutting_to_batch(
                         {"seq": seq, "id": rid},
                     )
 
-        # ⑦ 生産ロットへ反映（新規 INSERT または既存行 UPDATE）
-        # 合算・APS 同期の重複で同一 management_code の行が残っていると UNIQUE で INSERT が 409 になるため、
-        # トリガーと同じ management_code で既存を検出したら UPDATE のみ行う。
+        # ? ??????????? INSERT ?????? UPDATE?
+        # ???APS ???????? management_code ????????? UNIQUE ? INSERT ? 409 ??????
+        # ??????? management_code ????????? UPDATE ?????
         bid0 = insert_params.get("aps_batch_plan_id")
         if bid0 is not None:
             chk_bp = await db.execute(
@@ -3738,8 +3856,8 @@ async def move_cutting_to_batch(
                 insert_params["aps_batch_plan_id"] = None
 
         existing_ip_id: Optional[int] = None
-        # 最優先: aps_batch_plan_id（唯一キー）で既存行を特定する
-        # management_code 先行だと「別行に紐づく aps_batch_plan_id」を上書きして 409 を再発し得る。
+        # ???: aps_batch_plan_id???????????????
+        # management_code ??????????? aps_batch_plan_id??????? 409 ???????
         if insert_params.get("aps_batch_plan_id") is not None:
             ex_bid = await db.execute(
                 text(
@@ -3776,12 +3894,12 @@ async def move_cutting_to_batch(
             if ins_id is None:
                 raise HTTPException(
                     status_code=500,
-                    detail="instruction_plans の登録に失敗しました（INSERT 後の ID が取得できません）",
+                    detail="instruction_plans ???????????INSERT ?? ID ?????????",
                 )
 
-        # ⑦' 追加情報を補完
-        # - APS ロットとの紐付けを復元（aps_batch_plan_id）
-        # - 「切断→ロット戻し」を撤回イベントとして記録（release_cancelled_*）
+        # ?' ???????
+        # - APS ????????????aps_batch_plan_id?
+        # - ???????????????????????release_cancelled_*?
         if ins_id is not None:
             lot_no = (insert_params.get("lot_number") or "").strip() if insert_params.get("lot_number") else ""
             pcd = (insert_params.get("product_cd") or "").strip()
@@ -3823,13 +3941,13 @@ async def move_cutting_to_batch(
                     ),
                     {
                         "ts": datetime.now(),
-                        "reason": "cutting_management から instruction_plans へ戻し",
+                        "reason": "cutting_management ?? instruction_plans ???",
                         "rb": str(rollback_by)[:64],
                         "iid": ins_id,
                     },
                 )
             except Exception:
-                # 旧スキーマ（103 未適用）では列が存在しないためスキップ
+                # ??????103 ???????????????????
                 pass
 
         await db.commit()
@@ -3842,25 +3960,25 @@ async def move_cutting_to_batch(
         detail = str(orig) if orig is not None else str(e)
         raise HTTPException(
             status_code=409,
-            detail=f"instruction_plans への登録で整合性エラーが発生しました: {detail}",
+            detail=f"instruction_plans ??????????????????: {detail}",
         ) from e
     except Exception as e:
         await db.rollback()
         msg = str(e).lower()
         if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="instruction_plans テーブルが存在しません。") from e
+            raise HTTPException(status_code=503, detail="instruction_plans ????????????") from e
         if "cutting_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
-            raise HTTPException(status_code=503, detail="cutting_management テーブルが存在しません。") from e
+            raise HTTPException(status_code=503, detail="cutting_management ????????????") from e
         logger.exception("move_cutting_to_batch failed")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return {"success": True, "message": "生産ロットに戻しました（切断・面取・カンバンを削除済み）"}
+    return {"success": True, "message": "????????????????????????????"}
 
 
 class ReorderCuttingBody(BaseModel):
-    """切断指示の生成順を変更するリクエスト（同一切断機内）"""
+    """??????????????????????????"""
     cutting_machine: str
-    ordered_ids: list[int]  # この順に production_sequence を 1,2,3,... で更新（最小1）
+    ordered_ids: list[int]  # ???? production_sequence ? 1,2,3,... ??????1?
 
 
 @router.post("/plan/cutting-management/reorder")
@@ -3870,13 +3988,13 @@ async def reorder_cutting_management(
     current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
-    切断指示の生産順（production_sequence）を、同一切断機内で指定した ID 順に更新する。
+    ?????????production_sequence?????????????? ID ???????
     """
     cutting_machine = (body.cutting_machine or "").strip()
     if not cutting_machine:
-        raise HTTPException(status_code=400, detail="切断機を指定してください")
+        raise HTTPException(status_code=400, detail="????????????")
     if not body.ordered_ids:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
 
     try:
         for idx, row_id in enumerate(body.ordered_ids):
@@ -3892,11 +4010,11 @@ async def reorder_cutting_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "生成順を更新しました"}
+    return {"success": True, "message": "??????????"}
 
 
 class UpdateCuttingManagementBody(BaseModel):
-    """切断指示1件の部分更新（完了切替・編集用）"""
+    """????1????????????????"""
     production_day: Optional[str] = None  # YYYY-MM-DD
     cutting_machine: Optional[str] = None
     actual_production_quantity: Optional[int] = None
@@ -3905,19 +4023,19 @@ class UpdateCuttingManagementBody(BaseModel):
     remarks: Optional[str] = None
     defect_qty: Optional[int] = None
     use_material_stock_sub: Optional[int] = None  # 0/1
-    usage_count: Optional[float] = None  # 1=1本, <1=按分
-    start_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
-    end_date: Optional[str] = None  # YYYY-MM-DD（空文字でクリア）
-    mes_production_started_at: Optional[str] = None  # ISO8601（空文字でクリア）
-    mes_production_ended_at: Optional[str] = None  # ISO8601（空文字でクリア）
-    mes_net_production_sec: Optional[int] = None  # 净生産秒（一時停止除く）
-    mes_paused_accum_sec: Optional[int] = None  # 一時停止累計秒
-    mes_production_is_paused: Optional[int] = None  # 0=稼働中, 1=一時停止（未開始/終了は NULL）
-    mes_setup_time_min: Optional[int] = None  # 段取（分）
-    mes_saw_blade_exchange_min: Optional[int] = None  # 鋸刃交換（分）
-    mes_repair_min: Optional[int] = None  # 修理（分）
-    mes_operator_user_id: Optional[int] = None  # users.id（0以下でクリア）
-    mes_scanned_code: Optional[str] = None  # バーコード/QR 読取（空文字でクリア）
+    usage_count: Optional[float] = None  # 1=1?, <1=??
+    start_date: Optional[str] = None  # YYYY-MM-DD?????????
+    end_date: Optional[str] = None  # YYYY-MM-DD?????????
+    mes_production_started_at: Optional[str] = None  # ISO8601?????????
+    mes_production_ended_at: Optional[str] = None  # ISO8601?????????
+    mes_net_production_sec: Optional[int] = None  # ????????????
+    mes_paused_accum_sec: Optional[int] = None  # ???????
+    mes_production_is_paused: Optional[int] = None  # 0=???, 1=????????/??? NULL?
+    mes_setup_time_min: Optional[int] = None  # ?????
+    mes_saw_blade_exchange_min: Optional[int] = None  # ???????
+    mes_repair_min: Optional[int] = None  # ?????
+    mes_operator_user_id: Optional[int] = None  # users.id?0???????
+    mes_scanned_code: Optional[str] = None  # ?????/QR ???????????
 
 
 @router.patch("/plan/cutting-management/{cutting_id}")
@@ -3927,7 +4045,7 @@ async def update_cutting_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """切断指示1件を更新（切断機・生産数・生産順・完了・備考）。"""
+    """????1????????????????????????"""
     cm_cols = await _get_cutting_mgmt_columns(db)
     updates: list[str] = []
     params: dict = {"cid": cutting_id}
@@ -3944,7 +4062,7 @@ async def update_cutting_management(
     if body.cutting_machine is not None:
         new_cm = (body.cutting_machine or "").strip()
         if not new_cm:
-            raise HTTPException(status_code=400, detail="切断機を指定してください")
+            raise HTTPException(status_code=400, detail="????????????")
         cur = await db.execute(
             text("""
                 SELECT cutting_machine, production_completed_check,
@@ -3957,21 +4075,21 @@ async def update_cutting_management(
         )
         cur_row = cur.fetchone()
         if not cur_row:
-            raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+            raise HTTPException(status_code=404, detail="????????????")
         old_cm = (str(cur_row[0]).strip() if cur_row[0] else "")
         if old_cm != new_cm:
             if int(cur_row[1] or 0) == 1:
-                raise HTTPException(status_code=400, detail="実績確定済のため切断機を変更できません")
+                raise HTTPException(status_code=400, detail="???????????????????")
             if "mes_production_ended_at" in cm_cols:
                 ended_at = cur_row[3]
                 if ended_at is not None and str(ended_at).strip():
-                    raise HTTPException(status_code=400, detail="生産終了済のため切断機を変更できません")
+                    raise HTTPException(status_code=400, detail="???????????????????")
             if "mes_production_started_at" in cm_cols and "mes_production_ended_at" in cm_cols:
                 started_at = cur_row[2]
                 ended_at = cur_row[3]
                 if started_at is not None and str(started_at).strip():
                     if ended_at is None or not str(ended_at).strip():
-                        raise HTTPException(status_code=400, detail="生産中のため切断機を変更できません")
+                        raise HTTPException(status_code=400, detail="?????????????????")
         updates.append("cutting_machine = :cutting_machine")
         params["cutting_machine"] = new_cm
     if body.actual_production_quantity is not None:
@@ -4124,7 +4242,7 @@ async def update_cutting_management(
             params["mes_scanned_code"] = raw_mc[:512]
             updates.append("mes_scanned_code = :mes_scanned_code")
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     try:
         await db.execute(
             text(f"""
@@ -4134,7 +4252,7 @@ async def update_cutting_management(
             """),
             params,
         )
-        # 面取ロット一覧（chamfering_plans）の同期: production_day / actual_production_quantity を更新
+        # ????????chamfering_plans????: production_day / actual_production_quantity ???
         chamfering_updates: list[str] = []
         chamfering_params: dict = {"cid": cutting_id}
         if "production_day" in params:
@@ -4156,13 +4274,13 @@ async def update_cutting_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 class SplitToNextDayBody(BaseModel):
-    """生産数未完了分を翌日へ順延する時のリクエスト"""
-    today_quantity: int  # 当日完成数（この数だけ当日に残し、残りを翌日へ）
-    next_day: Optional[str] = None  # 翌日とする日付 YYYY-MM-DD（省略時は production_day + 1 日）
+    """??????????????????????"""
+    today_quantity: int  # ????????????????????????
+    next_day: Optional[str] = None  # ??????? YYYY-MM-DD????? production_day + 1 ??
 
 
 @router.post("/plan/cutting-management/{cutting_id}/split-to-next-day")
@@ -4173,12 +4291,12 @@ async def split_cutting_to_next_day(
     current_user: User = Depends(require_mes_operation("create")),
 ):
     """
-    切断指示1件の生産数を「当日分」と「翌日分」に分割する。
-    - 当日行: actual_production_quantity = today_quantity に更新
-    - 翌日行: 新規INSERT（同一製品・同一切断機、production_day=翌日、actual_production_quantity=残り）
+    ????1???????????????????????
+    - ???: actual_production_quantity = today_quantity ???
+    - ???: ??INSERT????????????production_day=???actual_production_quantity=???
     """
     if body.today_quantity < 0:
-        raise HTTPException(status_code=400, detail="当日完成数は0以上を指定してください")
+        raise HTTPException(status_code=400, detail="??????0???????????")
     sel = text("""
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
@@ -4191,17 +4309,17 @@ async def split_cutting_to_next_day(
     res = await db.execute(sel, {"cid": cutting_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     r = dict(row)
     total = int(r.get("actual_production_quantity") or 0)
     if body.today_quantity >= total:
         raise HTTPException(
             status_code=400,
-            detail=f"当日完成数は、現在の生産数（{total}）より少ない値を指定してください（未完了分が翌日へコピーされます）",
+            detail=f"??????????????{total}?????????????????????????????????",
         )
     remainder = total - body.today_quantity
 
-    # 翌日日付
+    # ????
     try:
         pd = r.get("production_day")
         if hasattr(pd, "isoformat"):
@@ -4219,25 +4337,25 @@ async def split_cutting_to_next_day(
                     if len(parts) == 3:
                         next_d = date(int(parts[0]), int(parts[1]), int(parts[2])) + timedelta(days=1)
                     else:
-                        raise HTTPException(status_code=400, detail="生産日が不正です")
+                        raise HTTPException(status_code=400, detail="????????")
                 next_day_str = next_d.isoformat()[:10]
             else:
-                raise HTTPException(status_code=400, detail="生産日が空のため翌日を算出できません")
+                raise HTTPException(status_code=400, detail="??????????????????")
         parts = next_day_str.split("-")
         if len(parts) != 3:
-            raise HTTPException(status_code=400, detail="翌日日付の形式は YYYY-MM-DD です")
+            raise HTTPException(status_code=400, detail="???????? YYYY-MM-DD ??")
         next_day_date = date(int(parts[0]), int(parts[1]), int(parts[2]))
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail=f"日付が不正です: {e}") from e
+        raise HTTPException(status_code=400, detail=f"???????: {e}") from e
 
-    # 翌日の production_month（その月の1日）
+    # ??? production_month?????1??
     next_month_date = date(next_day_date.year, next_day_date.month, 1)
     cm = (r.get("cutting_machine") or "").strip()
     if not cm:
-        raise HTTPException(status_code=400, detail="切断機が空のため順延できません")
+        raise HTTPException(status_code=400, detail="???????????????")
 
     try:
-        # 1) 当日行を「当日完成数」に更新
+        # 1) ??????????????
         await db.execute(
             text("""
                 UPDATE cutting_management
@@ -4246,12 +4364,12 @@ async def split_cutting_to_next_day(
             """),
             {"cid": cutting_id, "qty": body.today_quantity},
         )
-        # 1') 面取ロット一覧（chamfering_plans）の生産数も同期
+        # 1') ????????chamfering_plans????????
         await db.execute(
             text("UPDATE chamfering_plans SET actual_production_quantity = :qty WHERE cutting_management_id = :cid"),
             {"cid": cutting_id, "qty": body.today_quantity},
         )
-        # 2) 翌日・同一切断機の既存行の production_sequence を +1 して、順延行を先頭（1）に挿入
+        # 2) ????????????? production_sequence ? +1 ??????????1????
         await db.execute(
             text("""
                 UPDATE cutting_management
@@ -4260,8 +4378,8 @@ async def split_cutting_to_next_day(
             """),
             {"cm": cm, "nd": next_day_date},
         )
-        next_seq = 1  # 順延データを翌日の先頭に
-        # 3) 翌日行を INSERT（残り数量、生産順=1）
+        next_seq = 1  # ????????????
+        # 3) ???? INSERT?????????=1?
         params = {k: r.get(k) for k in (
             "production_line", "cutting_machine", "priority_order",
             "product_cd", "product_name", "planned_quantity", "start_date", "end_date", "production_lot_size", "lot_number",
@@ -4301,7 +4419,7 @@ async def split_cutting_to_next_day(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "順延しました（当日分を更新し、残りを翌日へ追加しました）"}
+    return {"success": True, "message": "????????????????????????????"}
 
 
 @router.post("/plan/cutting-management/{cutting_id}/duplicate")
@@ -4310,7 +4428,7 @@ async def duplicate_cutting_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """切断指示1件を複製し、同一切断機内で直下に挿入する。"""
+    """????1?????????????????????"""
     sel = text("""
         SELECT production_month, production_day, production_line, cutting_machine, production_sequence, priority_order,
                product_cd, product_name, planned_quantity, start_date, end_date, production_lot_size, lot_number,
@@ -4323,11 +4441,11 @@ async def duplicate_cutting_management(
     res = await db.execute(sel, {"cid": cutting_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     r = dict(row)
     cm = (r.get("cutting_machine") or "").strip()
     if not cm:
-        raise HTTPException(status_code=400, detail="切断機が空のため複製できません")
+        raise HTTPException(status_code=400, detail="???????????????")
     current_seq = int(r.get("production_sequence") or 0)
 
     try:
@@ -4373,7 +4491,7 @@ async def duplicate_cutting_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "複製しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.delete("/plan/cutting-management/{cutting_id}")
@@ -4382,7 +4500,7 @@ async def delete_cutting_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("delete")),
 ):
-    """切断指示1件を削除する（紐づく面取・面取ロット・カンバン発行も削除）。"""
+    """????1??????????????????????????????"""
     try:
         chamfering_res = await db.execute(
             text("SELECT id FROM chamfering_management WHERE cutting_management_id = :cid"),
@@ -4405,20 +4523,20 @@ async def delete_cutting_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "削除しました"}
+    return {"success": True, "message": "??????"}
 
 
-# ---------- 面取ロット一覧（chamfering_plans）----------
+# ---------- ????????chamfering_plans?----------
 @router.get("/plan/chamfering-plans/list")
 async def get_chamfering_plans_list(
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    production_line: Optional[str] = Query(None, description="ライン（部分一致）"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM"),
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    production_line: Optional[str] = Query(None, description="?????????"),
     limit: int = Query(5000, ge=1, le=50000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取ロット一覧: chamfering_plans を取得（切断指示登録時・面取工程ありで自動登録された待機データ）。"""
+    """???????: chamfering_plans ?????????????????????????????????"""
     conditions = ["1=1"]
     params = {"limit": limit}
     if production_month and production_month.strip():
@@ -4460,7 +4578,7 @@ async def get_chamfering_plans_list(
         if "chamfering_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="chamfering_plans テーブルが存在しません。マイグレーション 063_chamfering_batch.sql を実行してください。",
+                detail="chamfering_plans ???????????????????? 063_chamfering_batch.sql ??????????",
             ) from e
         raise
     rows = result.mappings().fetchall()
@@ -4505,10 +4623,10 @@ async def get_chamfering_plans_list(
 
 
 class CreateChamferingPlanBody(BaseModel):
-    """面取ロット一覧：新規追加（chamfering_plans に1件INSERT、cutting_management_id は NULL）"""
+    """?????????????chamfering_plans ?1?INSERT?cutting_management_id ? NULL?"""
     production_month: str  # YYYY-MM
     production_day: str  # YYYY-MM-DD
-    production_line: str  # ライン（面取機）
+    production_line: str  # ????????
     production_order: Optional[int] = None
     product_cd: str
     product_name: str
@@ -4528,20 +4646,20 @@ async def create_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取ロット一覧に新規1件追加（cutting_management_id は NULL）。management_code / cd はトリガーで自動設定。"""
+    """??????????1????cutting_management_id ? NULL??management_code / cd ???????????"""
     production_month_date = _parse_date_ymd(body.production_month)
     production_day_date = _parse_date_ymd(body.production_day)
     if production_month_date is None:
-        raise HTTPException(status_code=400, detail="生産月（production_month）を YYYY-MM 形式で指定してください")
+        raise HTTPException(status_code=400, detail="????production_month?? YYYY-MM ???????????")
     if production_day_date is None:
-        raise HTTPException(status_code=400, detail="生産日（production_day）を YYYY-MM-DD 形式で指定してください")
+        raise HTTPException(status_code=400, detail="????production_day?? YYYY-MM-DD ???????????")
     line = (body.production_line or "").strip()
     if not line:
-        raise HTTPException(status_code=400, detail="ラインを指定してください")
+        raise HTTPException(status_code=400, detail="????????????")
     product_cd = (body.product_cd or "").strip()
     product_name = (body.product_name or "").strip()
     if not product_cd or not product_name:
-        raise HTTPException(status_code=400, detail="製品CD・製品名を指定してください")
+        raise HTTPException(status_code=400, detail="??CD?????????????")
 
     ins = text("""
         INSERT INTO chamfering_plans (
@@ -4576,15 +4694,15 @@ async def create_chamfering_plan(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "登録しました"}
+    return {"success": True, "message": "??????"}
 
 
 class MoveChamferingPlanToChamferingBody(BaseModel):
-    """面取ロット1件を面取指示へ移行（オプションで生産日・ライン指定。SW時は production_line_2 で2件登録）"""
+    """?????1??????????????????????????SW?? production_line_2 ?2????"""
     chamfering_plan_id: int
-    production_day: Optional[str] = None  # YYYY-MM-DD、指定時はこれを使用
-    production_line: Optional[str] = None  # ライン/面取機、指定時はこれを使用
-    production_line_2: Optional[str] = None  # SW時用の2台目面取機、指定時は2件INSERT
+    production_day: Optional[str] = None  # YYYY-MM-DD??????????
+    production_line: Optional[str] = None  # ???/?????????????
+    production_line_2: Optional[str] = None  # SW???2??????????2?INSERT
 
 
 @router.post("/plan/chamfering-plans/move-to-chamfering")
@@ -4593,7 +4711,7 @@ async def move_chamfering_plan_to_chamfering(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取ロット1件を面取指示（chamfering_management）へ移行し、chamfering_plans から削除。production_line_2 指定時は2件登録。"""
+    """?????1???????chamfering_management??????chamfering_plans ?????production_line_2 ????2????"""
     res = await db.execute(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
@@ -4605,7 +4723,7 @@ async def move_chamfering_plan_to_chamfering(
     )
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????????")
     row = dict(row)
 
     def _to_date(v):
@@ -4638,7 +4756,7 @@ async def move_chamfering_plan_to_chamfering(
             "cutting_management_id": row.get("cutting_management_id"),
             "production_month": production_month_date,
             "production_day": production_day_date,
-            "production_line": (row.get("production_line") or "").strip() or "",  # ライン：面取ロットのラインをそのまま使用（面取機ではない）
+            "production_line": (row.get("production_line") or "").strip() or "",  # ?????????????????????????????
             "chamfering_machine": chamfering_machine_val or pl,
             "production_order": row.get("production_order"),
             "production_sequence": production_sequence_val,
@@ -4696,16 +4814,16 @@ async def move_chamfering_plan_to_chamfering(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "面取指示に登録しました"}
+    return {"success": True, "message": "???????????"}
 
 
 class UpdateChamferingPlanSwBody(BaseModel):
-    """面取ロットのSW工程フラグ更新"""
+    """??????SW???????"""
     has_sw_process: bool
 
 
 class UpdateChamferingPlanContentBody(BaseModel):
-    """面取ロット内容編集（ロット内容編集窗体と同様の項目のうち chamfering_plans に存在するもの）"""
+    """???????????????????????????? chamfering_plans ????????"""
     production_month: Optional[str] = None
     production_day: Optional[str] = None
     production_line: Optional[str] = None
@@ -4729,7 +4847,7 @@ async def update_chamfering_plan_sw(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取ロット1件のhas_sw_processを更新。"""
+    """?????1??has_sw_process????"""
     try:
         await db.execute(
             text("UPDATE chamfering_plans SET has_sw_process = :v WHERE id = :pid"),
@@ -4739,7 +4857,7 @@ async def update_chamfering_plan_sw(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.delete("/plan/chamfering-plans/{plan_id}")
@@ -4748,20 +4866,20 @@ async def delete_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("delete")),
 ):
-    """面取ロット1件を削除。"""
+    """?????1?????"""
     res = await db.execute(
         text("SELECT id FROM chamfering_plans WHERE id = :pid"),
         {"pid": plan_id},
     )
     if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????????")
     try:
         await db.execute(text("DELETE FROM chamfering_plans WHERE id = :pid"), {"pid": plan_id})
         await db.commit()
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "削除しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.put("/plan/chamfering-plans/{plan_id}/content")
@@ -4771,13 +4889,13 @@ async def update_chamfering_plan_content(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取ロット1件の内容を更新（ロット内容編集と同様の項目）。"""
+    """?????1???????????????????????"""
     res = await db.execute(
         text("SELECT id FROM chamfering_plans WHERE id = :pid"),
         {"pid": plan_id},
     )
     if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????????")
     updates = []
     params = {"pid": plan_id}
     if body.production_month is not None:
@@ -4827,7 +4945,7 @@ async def update_chamfering_plan_content(
         updates.append("has_sw_process = :has_sw_process")
         params["has_sw_process"] = 1 if body.has_sw_process else 0
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     set_clause = ", ".join(updates)
     try:
         await db.execute(
@@ -4838,7 +4956,7 @@ async def update_chamfering_plan_content(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "保存しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.post("/plan/chamfering-plans/{plan_id}/copy")
@@ -4847,7 +4965,7 @@ async def copy_chamfering_plan(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取ロット1件を複製（同内容で新規1件追加）。"""
+    """?????1???????????1?????"""
     res = await db.execute(
         text("""
             SELECT cutting_management_id, production_month, production_day, production_line, production_order,
@@ -4859,7 +4977,7 @@ async def copy_chamfering_plan(
     )
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の面取ロットが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????????")
     row = dict(row)
 
     def _to_date(v):
@@ -4913,11 +5031,11 @@ async def copy_chamfering_plan(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "複製しました"}
+    return {"success": True, "message": "??????"}
 
 
 class MoveChamferingManagementToBatchBody(BaseModel):
-    """面取指示1件を面取ロット一覧へ戻す"""
+    """????1????????????"""
     chamfering_management_id: int
 
 
@@ -4927,7 +5045,7 @@ async def move_chamfering_management_to_batch(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取指示1件を面取ロット一覧（chamfering_plans）へ戻し、chamfering_management から削除。"""
+    """????1??????????chamfering_plans?????chamfering_management ?????"""
     res = await db.execute(
         text("""
             SELECT id, cutting_management_id, production_month, production_day, production_line, production_order,
@@ -4939,7 +5057,7 @@ async def move_chamfering_management_to_batch(
     )
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
+        raise HTTPException(status_code=404, detail="???????????????")
     row = dict(row)
 
     def _to_date(v):
@@ -4998,22 +5116,22 @@ async def move_chamfering_management_to_batch(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "面取ロット一覧に戻しました"}
+    return {"success": True, "message": "?????????????"}
 
 
-# ---------- 面取指示（chamfering_management）----------
+# ---------- ?????chamfering_management?----------
 @router.get("/plan/chamfering-management/list")
 async def get_chamfering_management_list(
-    production_month: Optional[str] = Query(None, description="生産月 YYYY-MM"),
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    production_line: Optional[str] = Query(None, description="ライン（部分一致）"),
-    chamfering_machine: Optional[str] = Query(None, description="面取機（完全一致）"),
+    production_month: Optional[str] = Query(None, description="??? YYYY-MM"),
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    production_line: Optional[str] = Query(None, description="?????????"),
+    chamfering_machine: Optional[str] = Query(None, description="?????????"),
     limit: int = Query(2000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """面取指示一覧: chamfering_management を取得する。
-    生産時間は切断指示一覧と同様、product_cd + 面取機=equipment_efficiency.machines_name で能率を結合し 生産数/能率 で算出する。
+    """??????: chamfering_management ??????
+    ???????????????product_cd + ???=equipment_efficiency.machines_name ??????? ???/?? ??????
     """
     conditions = ["1=1"]
     params = {"limit": limit}
@@ -5074,7 +5192,7 @@ async def get_chamfering_management_list(
         if "chamfering_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="chamfering_management テーブルが存在しません。マイグレーション 054_chamfering_management.sql を実行してください。",
+                detail="chamfering_management ???????????????????? 054_chamfering_management.sql ??????????",
             ) from e
         if "unknown column" in msg:
             for col in _CHAMFERING_MGMT_MES_COLUMNS:
@@ -5082,7 +5200,7 @@ async def get_chamfering_management_list(
                     raise HTTPException(status_code=503, detail=_chamfering_mes_column_migration_hint(col)) from e
             raise HTTPException(
                 status_code=503,
-                detail="chamfering_management に未適用の列があります。backend/database/migrations/08_chamfering_management_mes_fields.sql を実行してください。",
+                detail="chamfering_management ????????????backend/database/migrations/08_chamfering_management_mes_fields.sql ??????????",
             ) from e
         raise
     rows = result.mappings().fetchall()
@@ -5101,7 +5219,7 @@ async def get_chamfering_management_list(
         row = dict(r)
         pm = _v(row, "production_month")
         pd = _v(row, "production_day")
-        # 生産時間 = 生産数 / efficiency_rate（切断指示一覧の cutting_management と同じ）
+        # ???? = ??? / efficiency_rate???????? cutting_management ????
         qty = row.get("actual_production_quantity")
         rate = row.get("efficiency_rate")
         if qty is not None and rate is not None:
@@ -5155,25 +5273,25 @@ async def get_chamfering_management_list(
 
 @router.post("/plan/chamfering-management/confirm-actual")
 async def confirm_chamfering_actual(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD（筛选日期）"),
-    chamfering_machine: Optional[str] = Query(None, description="面取機（省略時は全機）"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD??????"),
+    chamfering_machine: Optional[str] = Query(None, description="???????????"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
     """
-    面取指示-今日の「実績確定」: production_completed_check=1 かつ no_count=0 の chamfering_management を
-    stock_transaction_logs に保存する。去重复：同一範囲の既存 chamfering_management 実績を先に削除してから挿入。
+    ????-?????????: production_completed_check=1 ?? no_count=0 ? chamfering_management ?
+    stock_transaction_logs ????????????????? chamfering_management ??????????????
     """
     try:
         parts = production_day.strip().split("-")
         if len(parts) != 3:
-            raise HTTPException(status_code=400, detail="production_day は YYYY-MM-DD で指定してください")
+            raise HTTPException(status_code=400, detail="production_day ? YYYY-MM-DD ?????????")
         y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
         prod_day = date(y, m, d)
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail="production_day の形式が不正です") from e
+        raise HTTPException(status_code=400, detail="production_day ????????") from e
 
-    # 去重复：同一範囲の既存実績を削除
+    # ????????????????
     del_params: dict = {"production_day": prod_day}
     del_conditions = [
         "source_file = 'chamfering_management'",
@@ -5202,14 +5320,14 @@ async def confirm_chamfering_actual(
     rows = res.mappings().fetchall()
     if not rows:
         await db.commit()
-        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
+        return {"success": True, "message": "?????????????????????", "inserted": 0, "total_quantity": 0, "deleted": True}
     ins = text("""
         INSERT INTO stock_transaction_logs (
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT02', :machine_cd,
-            :quantity, '本', :transaction_time, 'chamfering_management'
+            '???', :transaction_type, :target_cd, '??????', :lot_no, 'KT02', :machine_cd,
+            :quantity, '?', :transaction_time, 'chamfering_management'
         )
     """)
     inserted = 0
@@ -5227,18 +5345,18 @@ async def confirm_chamfering_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
-        # 良品：transaction_type='実績'
+        # ???transaction_type='??'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("chamfering_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
-            "transaction_type": "実績",
+            "transaction_type": "??",
         })
         inserted += 1
         total_quantity += int(qty)
-        # 不良数：transaction_type='不良'
+        # ????transaction_type='??'
         defect_qty = r.get("defect_qty")
         if defect_qty is not None and int(defect_qty) > 0:
             await db.execute(ins, {
@@ -5247,13 +5365,13 @@ async def confirm_chamfering_actual(
                 "machine_cd": r.get("chamfering_machine"),
                 "quantity": int(defect_qty),
                 "transaction_time": tx_time,
-                "transaction_type": "不良",
+                "transaction_type": "??",
             })
             inserted += 1
     await db.commit()
     return {
         "success": True,
-        "message": f"実績を {inserted} 件登録しました",
+        "message": f"??? {inserted} ???????",
         "inserted": inserted,
         "total_quantity": total_quantity,
         "production_day": prod_day.isoformat(),
@@ -5262,11 +5380,11 @@ async def confirm_chamfering_actual(
 
 @router.get("/plan/chamfering-management/confirm-actual/email-preview")
 async def preview_chamfering_confirm_actual_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取実績確定結果メールの送信先プレビュー"""
+    """????????????????????"""
     from app.services.confirm_actual_email import get_confirm_actual_email_preview
 
     return await get_confirm_actual_email_preview(
@@ -5276,11 +5394,11 @@ async def preview_chamfering_confirm_actual_email(
 
 @router.post("/plan/chamfering-management/confirm-actual/send-email")
 async def send_chamfering_confirm_actual_email(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取実績確定結果を指定受信者へメール送信"""
+    """????????????????????"""
     from app.services.confirm_actual_email import send_confirm_actual_email
 
     return await send_confirm_actual_email(
@@ -5294,13 +5412,13 @@ async def delete_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("delete")),
 ):
-    """面取指示1件を削除。関連するカンバン発行も削除。"""
+    """????1???????????????????"""
     res = await db.execute(
         text("SELECT id FROM chamfering_management WHERE id = :mid"),
         {"mid": chamfering_id},
     )
     if not res.scalar():
-        raise HTTPException(status_code=404, detail="指定の面取指示が見つかりません")
+        raise HTTPException(status_code=404, detail="???????????????")
     try:
         await db.execute(
             text("DELETE FROM kanban_issuance WHERE process_type = 'chamfering' AND source_id = :sid"),
@@ -5311,18 +5429,18 @@ async def delete_chamfering_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "削除しました"}
+    return {"success": True, "message": "??????"}
 
 
 class CreateChamferingManagementBody(BaseModel):
-    """面取指示の新規追加（chamfering_management 1件挿入）"""
+    """??????????chamfering_management 1????"""
     production_day: str  # YYYY-MM-DD
     production_line: str = ""
     chamfering_machine: str = ""
     product_cd: str = ""
     product_name: str = ""
     actual_production_quantity: Optional[int] = 0
-    production_sequence: Optional[int] = None  # 省略時は同一面取機・同一生産日の最大+1
+    production_sequence: Optional[int] = None  # ??????????????????+1
     material_name: Optional[str] = None
     management_code: Optional[str] = None
     remarks: Optional[str] = None
@@ -5334,23 +5452,23 @@ async def create_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取指示を1件新規追加。production_month は production_day の年月の初日に設定。"""
+    """?????1??????production_month ? production_day ??????????"""
     production_day_s = (body.production_day or "").strip()[:10]
     if len(production_day_s) != 10:
-        raise HTTPException(status_code=400, detail="生産日は YYYY-MM-DD で指定してください")
+        raise HTTPException(status_code=400, detail="???? YYYY-MM-DD ?????????")
     try:
         y, m, d = int(production_day_s[:4]), int(production_day_s[5:7]), int(production_day_s[8:10])
         prod_day = date(y, m, d)
         production_month = date(y, m, 1)
     except (ValueError, IndexError) as e:
-        raise HTTPException(status_code=400, detail="生産日の形式が不正です") from e
+        raise HTTPException(status_code=400, detail="???????????") from e
     chamfering_machine = (body.chamfering_machine or "").strip() or None
     if not chamfering_machine:
-        raise HTTPException(status_code=400, detail="面取機を指定してください")
+        raise HTTPException(status_code=400, detail="????????????")
     product_cd = (body.product_cd or "").strip() or ""
     product_name = (body.product_name or "").strip() or ""
     if not product_cd or not product_name:
-        raise HTTPException(status_code=400, detail="製品CD・製品名は必須です")
+        raise HTTPException(status_code=400, detail="??CD?????????")
     production_line = (body.production_line or "").strip() or ""
     production_sequence = body.production_sequence
     if production_sequence is None:
@@ -5362,7 +5480,7 @@ async def create_chamfering_management(
             {"cm": chamfering_machine, "pd": prod_day},
         )
         production_sequence = next_seq.scalar() or 1
-    # 管理コード未指定時は自動生成（YYMM + product_cd + ライン下2桁 + 生産順2桁、不足は0埋め）
+    # ???????????????YYMM + product_cd + ????2? + ???2?????0???
     management_code_val = (body.management_code or "").strip() or None
     if not management_code_val:
         yy = str(prod_day.year)[-2:]
@@ -5406,11 +5524,11 @@ async def create_chamfering_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "登録しました", "id": new_id}
+    return {"success": True, "message": "??????", "id": new_id}
 
 
 class UpdateChamferingManagementBody(BaseModel):
-    """面取指示1件の部分更新（完了・カウント無・面取機・生産数・不良数・生産順・備考・生産日・MES）"""
+    """????1???????????????????????????????????????MES?"""
     production_completed_check: Optional[bool] = None
     no_count: Optional[bool] = None
     chamfering_machine: Optional[str] = None
@@ -5421,11 +5539,11 @@ class UpdateChamferingManagementBody(BaseModel):
     lot_number: Optional[str] = None
     remarks: Optional[str] = None
     production_day: Optional[str] = None  # YYYY-MM-DD
-    mes_production_started_at: Optional[str] = None  # ISO8601（空文字でクリア）
-    mes_production_ended_at: Optional[str] = None  # ISO8601（空文字でクリア）
+    mes_production_started_at: Optional[str] = None  # ISO8601?????????
+    mes_production_ended_at: Optional[str] = None  # ISO8601?????????
     mes_net_production_sec: Optional[int] = None
     mes_paused_accum_sec: Optional[int] = None
-    mes_production_is_paused: Optional[int] = None  # 0=稼働中, 1=一時停止
+    mes_production_is_paused: Optional[int] = None  # 0=???, 1=????
     mes_setup_time_min: Optional[int] = None
     mes_operator_user_id: Optional[int] = None
     mes_scanned_code: Optional[str] = None
@@ -5438,7 +5556,7 @@ async def update_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取指示1件を更新（面取機・生産数・生産順・完了・備考・MES 実績等）。"""
+    """????1???????????????????????MES ?????"""
     cm_cols = await _get_chamfering_mgmt_columns(db)
     updates: list[str] = []
     params: dict = {"mid": chamfering_id}
@@ -5463,24 +5581,24 @@ async def update_chamfering_management(
         )
         cur_row = cur.fetchone()
         if not cur_row:
-            raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+            raise HTTPException(status_code=404, detail="????????????")
         old_cm = (str(cur_row[0]).strip() if cur_row[0] else "")
         if not new_cm:
             if old_cm:
-                raise HTTPException(status_code=400, detail="面取機を指定してください")
+                raise HTTPException(status_code=400, detail="????????????")
         elif old_cm != new_cm:
             if int(cur_row[1] or 0) == 1:
-                raise HTTPException(status_code=400, detail="実績確定済のため面取機を変更できません")
+                raise HTTPException(status_code=400, detail="???????????????????")
             if "mes_production_ended_at" in cm_cols:
                 ended_at = cur_row[3]
                 if ended_at is not None and str(ended_at).strip():
-                    raise HTTPException(status_code=400, detail="生産終了済のため面取機を変更できません")
+                    raise HTTPException(status_code=400, detail="???????????????????")
             if "mes_production_started_at" in cm_cols and "mes_production_ended_at" in cm_cols:
                 started_at = cur_row[2]
                 ended_at = cur_row[3]
                 if started_at is not None and str(started_at).strip():
                     if ended_at is None or not str(ended_at).strip():
-                        raise HTTPException(status_code=400, detail="生産中のため面取機を変更できません")
+                        raise HTTPException(status_code=400, detail="?????????????????")
             updates.append("chamfering_machine = :chamfering_machine")
             params["chamfering_machine"] = new_cm
     if body.production_completed_check is not None:
@@ -5585,7 +5703,7 @@ async def update_chamfering_management(
             params["mes_scanned_code"] = raw_mc[:512]
             updates.append("mes_scanned_code = :mes_scanned_code")
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     try:
         await db.execute(
             text(f"UPDATE chamfering_management SET {', '.join(updates)} WHERE id = :mid"),
@@ -5595,13 +5713,13 @@ async def update_chamfering_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 class SplitToNextDayChamferingBody(BaseModel):
-    """面取指示の未完了分を翌日へ順延するリクエスト"""
-    today_quantity: int  # 当日完成数
-    next_day: Optional[str] = None  # 翌日 YYYY-MM-DD（省略時は production_day + 1 日）
+    """??????????????????????"""
+    today_quantity: int  # ?????
+    next_day: Optional[str] = None  # ?? YYYY-MM-DD????? production_day + 1 ??
 
 
 @router.post("/plan/chamfering-management/{chamfering_id}/split-to-next-day")
@@ -5611,9 +5729,9 @@ async def split_chamfering_to_next_day(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取指示1件の生産数を当日分と翌日分に分割。当日行は完了にし、翌日行を新規追加。"""
+    """????1???????????????????????????????????"""
     if body.today_quantity < 0:
-        raise HTTPException(status_code=400, detail="当日完成数は0以上を指定してください")
+        raise HTTPException(status_code=400, detail="??????0???????????")
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
@@ -5624,13 +5742,13 @@ async def split_chamfering_to_next_day(
     res = await db.execute(sel, {"mid": chamfering_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     r = dict(row)
     total = int(r.get("actual_production_quantity") or 0)
     if body.today_quantity >= total:
         raise HTTPException(
             status_code=400,
-            detail=f"当日完成数は、現在の生産数（{total}）より少ない値を指定してください",
+            detail=f"??????????????{total}????????????????",
         )
     remainder = total - body.today_quantity
 
@@ -5652,17 +5770,17 @@ async def split_chamfering_to_next_day(
                     next_d = date(int(parts[0]), int(parts[1]), int(parts[2])) + timedelta(days=1)
                     next_day_str = next_d.isoformat()[:10]
                 else:
-                    raise HTTPException(status_code=400, detail="生産日が不正です")
+                    raise HTTPException(status_code=400, detail="????????")
         else:
-            raise HTTPException(status_code=400, detail="生産日が空のため翌日を算出できません")
+            raise HTTPException(status_code=400, detail="??????????????????")
     parts = next_day_str.split("-")
     if len(parts) != 3:
-        raise HTTPException(status_code=400, detail="翌日の形式は YYYY-MM-DD です")
+        raise HTTPException(status_code=400, detail="?????? YYYY-MM-DD ??")
     next_day_date = date(int(parts[0]), int(parts[1]), int(parts[2]))
     next_month_date = date(next_day_date.year, next_day_date.month, 1)
     cm = (r.get("chamfering_machine") or "").strip()
     if not cm:
-        raise HTTPException(status_code=400, detail="面取機が空のため順延できません")
+        raise HTTPException(status_code=400, detail="???????????????")
 
     try:
         await db.execute(
@@ -5673,7 +5791,7 @@ async def split_chamfering_to_next_day(
             """),
             {"mid": chamfering_id, "qty": body.today_quantity},
         )
-        # 翌日行は順位1で挿入し、既存の翌日行の production_sequence を +1 して自動ソート
+        # ??????1???????????? production_sequence ? +1 ???????
         params = {
             "cutting_management_id": r.get("cutting_management_id"),
             "production_month": next_month_date,
@@ -5728,7 +5846,7 @@ async def split_chamfering_to_next_day(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "順延しました（当日分を完了にし、残りを翌日へ追加しました）"}
+    return {"success": True, "message": "?????????????????????????????"}
 
 
 @router.post("/plan/chamfering-management/{chamfering_id}/duplicate")
@@ -5737,7 +5855,7 @@ async def duplicate_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """面取指示1件を複製し、同一面取機・同一生産日内で直下に挿入。"""
+    """????1?????????????????????????"""
     sel = text("""
         SELECT id, cutting_management_id, production_month, production_day, production_line, chamfering_machine,
                production_order, production_sequence, product_cd, product_name, actual_production_quantity, defect_qty,
@@ -5748,18 +5866,18 @@ async def duplicate_chamfering_management(
     res = await db.execute(sel, {"mid": chamfering_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="面取指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     r = dict(row)
     cm = (r.get("chamfering_machine") or "").strip()
     pd = r.get("production_day")
     if not cm:
-        raise HTTPException(status_code=400, detail="面取機が空のため複製できません")
+        raise HTTPException(status_code=400, detail="???????????????")
     if hasattr(pd, "isoformat"):
         pd_date = pd
     else:
         s = str(pd)[:10] if pd else ""
         if len(s) != 10:
-            raise HTTPException(status_code=400, detail="生産日が不正です")
+            raise HTTPException(status_code=400, detail="????????")
         pd_date = date(int(s[:4]), int(s[5:7]), int(s[8:10]))
     current_seq = int(r.get("production_sequence") or 0)
 
@@ -5813,11 +5931,11 @@ async def duplicate_chamfering_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "複製しました"}
+    return {"success": True, "message": "??????"}
 
 
 class ReorderChamferingBody(BaseModel):
-    """面取指示の生産順を変更するリクエスト（同一面取機・同一生産日内）"""
+    """????????????????????????????????"""
     chamfering_machine: str
     production_day: str  # YYYY-MM-DD
     ordered_ids: list[int]
@@ -5829,21 +5947,21 @@ async def reorder_chamfering_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """面取指示の生産順（production_sequence）を、同一面取機・同一生産日内で指定した ID 順に更新する。"""
+    """?????????production_sequence???????????????????? ID ???????"""
     chamfering_machine = (body.chamfering_machine or "").strip()
     if not chamfering_machine:
-        raise HTTPException(status_code=400, detail="面取機を指定してください")
+        raise HTTPException(status_code=400, detail="????????????")
     production_day_s = (body.production_day or "").strip()[:10]
     if len(production_day_s) != 10:
-        raise HTTPException(status_code=400, detail="生産日を指定してください（YYYY-MM-DD）")
+        raise HTTPException(status_code=400, detail="?????????????YYYY-MM-DD?")
     try:
         production_day_date = date(
             int(production_day_s[:4]), int(production_day_s[5:7]), int(production_day_s[8:10])
         )
     except (ValueError, IndexError):
-        raise HTTPException(status_code=400, detail="生産日の形式が不正です")
+        raise HTTPException(status_code=400, detail="???????????")
     if not body.ordered_ids:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
 
     try:
         for idx, row_id in enumerate(body.ordered_ids):
@@ -5864,11 +5982,11 @@ async def reorder_chamfering_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "生産順を更新しました"}
+    return {"success": True, "message": "??????????"}
 
 
 class GenerateChamferingFromCuttingBody(BaseModel):
-    """切断指示から面取指示を1件生成"""
+    """???????????1???"""
     cutting_management_id: int
 
 
@@ -5878,7 +5996,7 @@ async def generate_chamfering_from_cutting(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """切断指示1件から面取指示を1件生成する。cutting_management を読んで chamfering_management に挿入。"""
+    """????1????????1??????cutting_management ???? chamfering_management ????"""
     sel = text("""
         SELECT id, production_month, production_day, production_line, priority_order,
                product_cd, product_name, actual_production_quantity, material_name, management_code
@@ -5888,7 +6006,7 @@ async def generate_chamfering_from_cutting(
     res = await db.execute(sel, {"cid": body.cutting_management_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="切断指示が見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     row = dict(row)
     production_month_val = row.get("production_month")
     production_day_val = row.get("production_day")
@@ -5929,22 +6047,22 @@ async def generate_chamfering_from_cutting(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "面取指示を生成しました"}
+    return {"success": True, "message": "???????????"}
 
 
-# ---------- カンバン発行（kanban_issuance）----------
+# ---------- ???????kanban_issuance?----------
 @router.get("/plan/kanban-issuance/list")
 async def get_kanban_issuance_list(
-    process_type: Optional[str] = Query(None, description="工程 cutting / chamfering"),
-    issue_date: Optional[str] = Query(None, description="発行日 YYYY-MM-DD"),
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    status: Optional[str] = Query(None, description="状態 pending / issued / completed"),
-    product_name: Optional[str] = Query(None, description="製品名（部分一致）"),
+    process_type: Optional[str] = Query(None, description="?? cutting / chamfering"),
+    issue_date: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    status: Optional[str] = Query(None, description="?? pending / issued / completed"),
+    product_name: Optional[str] = Query(None, description="?????????"),
     limit: int = Query(1000, ge=1, le=10000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """カンバン発行一覧（instruction_plans と同様の項目を cutting/chamfering から結合）"""
+    """?????????instruction_plans ??????? cutting/chamfering ?????"""
     conditions = ["1=1"]
     params = {"limit": limit}
     if process_type and process_type.strip():
@@ -5993,7 +6111,7 @@ async def get_kanban_issuance_list(
         if "kanban_issuance" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="kanban_issuance テーブルが存在しません。マイグレーション 055_kanban_issuance.sql を実行してください。",
+                detail="kanban_issuance ???????????????????? 055_kanban_issuance.sql ??????????",
             ) from e
         raise
     rows = result.mappings().fetchall()
@@ -6046,7 +6164,7 @@ async def get_kanban_issuance_product_names(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """カンバン発行一覧で使用されている製品名の一覧（製品名下拉用）"""
+    """??????????????????????????????"""
     sql = text("""
         SELECT DISTINCT product_name
         FROM kanban_issuance
@@ -6076,7 +6194,7 @@ class BatchIssueKanbanBody(BaseModel):
 
 
 class UpdateKanbanIssuanceBody(BaseModel):
-    """カンバン発行1件の更新（全項目任意）"""
+    """??????1???????????"""
     product_cd: Optional[str] = None
     product_name: Optional[str] = None
     production_line: Optional[str] = None
@@ -6105,13 +6223,13 @@ async def update_kanban_issuance(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """カンバン発行1件のデータを更新する。"""
+    """??????1???????????"""
     res = await db.execute(text("SELECT id FROM kanban_issuance WHERE id = :kid"), {"kid": kanban_id})
     if not res.mappings().fetchone():
-        raise HTTPException(status_code=404, detail="カンバンが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     body_dict = body.model_dump(exclude_unset=True)
     if not body_dict:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     set_parts = []
     params = {"kid": kanban_id}
     date_fields = ("start_date", "end_date", "production_day")
@@ -6125,13 +6243,13 @@ async def update_kanban_issuance(
             params[k] = v
         set_parts.append(f"`{k}` = :{k}")
     if not set_parts:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     if "has_chamfering_process" in params and isinstance(params["has_chamfering_process"], bool):
         params["has_chamfering_process"] = 1 if params["has_chamfering_process"] else 0
     sql = text(f"UPDATE kanban_issuance SET {', '.join(set_parts)} WHERE id = :kid")
     await db.execute(sql, params)
     await db.commit()
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.post("/plan/kanban-issuance/issue")
@@ -6140,10 +6258,10 @@ async def issue_kanban(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("export")),
 ):
-    """カンバン発行を1件登録。kanban_no は自動採番（process_type + source_id + 日時等）でよいが、ここでは簡易で source_id ベース。"""
+    """???????1????kanban_no ??????process_type + source_id + ???????????????? source_id ????"""
     pt = (body.process_type or "").strip()
     if pt not in ("cutting", "chamfering"):
-        raise HTTPException(status_code=400, detail="process_type は cutting または chamfering を指定してください")
+        raise HTTPException(status_code=400, detail="process_type ? cutting ??? chamfering ?????????")
     today = date.today()
     kanban_no = f"{pt.upper()}-{body.source_id}-{today.isoformat().replace('-', '')}"
     ins = text("""
@@ -6162,9 +6280,9 @@ async def issue_kanban(
         await db.rollback()
         msg = str(e).lower()
         if "kanban_issuance" in msg:
-            raise HTTPException(status_code=503, detail="kanban_issuance テーブルが存在しません。") from e
+            raise HTTPException(status_code=503, detail="kanban_issuance ????????????") from e
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "カンバンを発行しました", "kanban_no": kanban_no}
+    return {"success": True, "message": "???????????", "kanban_no": kanban_no}
 
 
 @router.post("/plan/kanban-issuance/{kanban_id:int}/issue")
@@ -6173,15 +6291,15 @@ async def issue_pending_kanban(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("export")),
 ):
-    """待発行（pending）のカンバンを発行する。kanban_no と issue_date を設定し status を issued に更新。"""
+    """????pending????????????kanban_no ? issue_date ???? status ? issued ????"""
     sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
     res = await db.execute(sel, {"kid": kanban_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="カンバンが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     row = dict(row)
     if (row.get("status") or "").strip().lower() != "pending":
-        raise HTTPException(status_code=400, detail="待発行のカンバンのみ発行できます")
+        raise HTTPException(status_code=400, detail="????????????????")
     today = date.today()
     pt = (row.get("process_type") or "cutting").strip()
     src_id = row.get("source_id") or 0
@@ -6192,7 +6310,7 @@ async def issue_pending_kanban(
     """)
     await db.execute(upd, {"kanban_no": kanban_no, "issue_date": today, "kid": kanban_id})
     await db.commit()
-    return {"success": True, "message": "カンバンを発行しました", "kanban_no": kanban_no}
+    return {"success": True, "message": "???????????", "kanban_no": kanban_no}
 
 
 @router.post("/plan/kanban-issuance/{kanban_id:int}/reissue")
@@ -6201,18 +6319,18 @@ async def reissue_kanban(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("export")),
 ):
-    """発行済のカンバンを再発行する（現場で紛失した場合など）。新しい kanban_no と issue_date で更新。"""
+    """??????????????????????????????? kanban_no ? issue_date ????"""
     sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
     res = await db.execute(sel, {"kid": kanban_id})
     row = res.mappings().fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="カンバンが見つかりません")
+        raise HTTPException(status_code=404, detail="????????????")
     row = dict(row)
     status = (row.get("status") or "").strip().lower()
     if status not in ("pending", "issued"):
         raise HTTPException(
             status_code=400,
-            detail="待発行または発行済のカンバンのみ再発行できます（完了済は再発行不可）",
+            detail="??????????????????????????????????",
         )
     today = date.today()
     pt = (row.get("process_type") or "cutting").strip()
@@ -6224,7 +6342,7 @@ async def reissue_kanban(
     """)
     await db.execute(upd, {"kanban_no": kanban_no, "issue_date": today, "kid": kanban_id})
     await db.commit()
-    return {"success": True, "message": "カンバンを再発行しました", "kanban_no": kanban_no}
+    return {"success": True, "message": "????????????", "kanban_no": kanban_no}
 
 
 @router.post("/plan/kanban-issuance/sync-production-day")
@@ -6232,14 +6350,14 @@ async def sync_kanban_production_day(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """kanban_issuance の production_day を source_id で cutting_management / chamfering_management から取得して更新する。"""
-    # process_type='cutting' → source_id = cutting_management.id
+    """kanban_issuance ? production_day ? source_id ? cutting_management / chamfering_management ???????????"""
+    # process_type='cutting' ? source_id = cutting_management.id
     upd_cutting = text("""
         UPDATE kanban_issuance k
         INNER JOIN cutting_management c ON k.source_id = c.id AND k.process_type = 'cutting'
         SET k.production_day = c.production_day
     """)
-    # process_type='chamfering' → source_id = chamfering_management.id, production_day は chamfering_management から
+    # process_type='chamfering' ? source_id = chamfering_management.id, production_day ? chamfering_management ??
     upd_chamfering = text("""
         UPDATE kanban_issuance k
         INNER JOIN chamfering_management ch ON k.source_id = ch.id AND k.process_type = 'chamfering'
@@ -6249,10 +6367,10 @@ async def sync_kanban_production_day(
         r1 = await db.execute(upd_cutting)
         r2 = await db.execute(upd_chamfering)
         await db.commit()
-        # rowcount は DB によっては UPDATE 件数が返らない場合がある
+        # rowcount ? DB ????? UPDATE ????????????
         updated = getattr(r1, "rowcount", None) or 0
         updated += getattr(r2, "rowcount", None) or 0
-        return {"success": True, "message": "生産日を更新しました", "updated": updated}
+        return {"success": True, "message": "??????????", "updated": updated}
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -6264,9 +6382,9 @@ async def batch_issue_pending_kanban(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("export")),
 ):
-    """待発行（pending）・発行済（issued）のカンバンを一括発行する。発行済は再発行扱いで新 kanban_no を付与。"""
+    """????pending??????issued????????????????????????? kanban_no ????"""
     if not body.kanban_ids:
-        return {"success": True, "message": "発行対象がありません", "issued": 0, "skipped": 0, "errors": [], "issued_items": []}
+        return {"success": True, "message": "??????????", "issued": 0, "skipped": 0, "errors": [], "issued_items": []}
     today = date.today()
     sel = text("SELECT id, process_type, source_id, status FROM kanban_issuance WHERE id = :kid")
     upd = text("""
@@ -6281,7 +6399,7 @@ async def batch_issue_pending_kanban(
         res = await db.execute(sel, {"kid": kid})
         row = res.mappings().fetchone()
         if not row:
-            errors.append(f"id={kid}: カンバンが見つかりません")
+            errors.append(f"id={kid}: ????????????")
             continue
         row = dict(row)
         status = (row.get("status") or "").strip().lower()
@@ -6300,7 +6418,7 @@ async def batch_issue_pending_kanban(
     await db.commit()
     return {
         "success": True,
-        "message": f"一括発行完了（発行: {issued} 件、スキップ: {skipped} 件）",
+        "message": f"?????????: {issued} ??????: {skipped} ??",
         "issued": issued,
         "skipped": skipped,
         "errors": errors,
@@ -6314,19 +6432,19 @@ async def sync_batch_lengths_from_products(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    products の cut_length / chamfer_length / developed_length を、同一 product_cd の
-    instruction_plans・cutting_management・chamfering_plans・chamfering_management・
-    kanban_issuance（product_cd がある行）へ反映する。
-    instruction_plans については製品の工程ルート（product_route_steps × processes）から
-    has_chamfering_process / has_sw_process も更新する（batch-detail / APS 同期と同じ判定）。
-    chamfering_plans / chamfering_management に cutting_length・developed_length が無い環境
-    （マイグレーション 208 未実行）では、chamfering_length のみ同期する。
+    products ? cut_length / chamfer_length / developed_length ???? product_cd ?
+    instruction_plans?cutting_management?chamfering_plans?chamfering_management?
+    kanban_issuance?product_cd ???????????
+    instruction_plans ??????????????product_route_steps ? processes???
+    has_chamfering_process / has_sw_process ??????batch-detail / APS ?????????
+    chamfering_plans / chamfering_management ? cutting_length?developed_length ?????
+    ????????? 208 ???????chamfering_length ???????
     """
     cp_has_cut = await _table_has_column(db, "chamfering_plans", "cutting_length")
     cm_has_cut = await _table_has_column(db, "chamfering_management", "cutting_length")
     kanban_has_lengths = await _table_has_column(db, "kanban_issuance", "cutting_length")
 
-    # products 列が utf8mb4_0900_ai_ci、他テーブルが utf8mb4_unicode_ci の環境で JOIN 時に 1267 を避ける
+    # products ?? utf8mb4_0900_ai_ci??????? utf8mb4_unicode_ci ???? JOIN ?? 1267 ????
     _pc = "p.product_cd COLLATE utf8mb4_unicode_ci = {alias}.product_cd COLLATE utf8mb4_unicode_ci"
 
     stmts: list[tuple[str, object]] = [
@@ -6339,7 +6457,7 @@ async def sync_batch_lengths_from_products(
                     SELECT
                         prs.product_cd AS prs_product_cd,
                         prs.route_cd AS prs_route_cd,
-                        MAX(CASE WHEN pr.process_name LIKE '%面取%' THEN 1 ELSE 0 END) AS has_ch,
+                        MAX(CASE WHEN pr.process_name LIKE '%??%' THEN 1 ELSE 0 END) AS has_ch,
                         MAX(CASE
                             WHEN pr.process_name LIKE '%SW%'
                                  OR LOWER(pr.process_name) LIKE '%swaging%' THEN 1 ELSE 0
@@ -6439,12 +6557,12 @@ async def sync_batch_lengths_from_products(
     notes: list[str] = []
     if not cp_has_cut or not cm_has_cut:
         notes.append(
-            "chamfering_plans / chamfering_management はマイグレーション 208 未適用のため、"
-            "面取長（chamfering_length）のみ同期しました。切断長・展開長も反映する場合は 208_chamfering_plans_management_length_fields.sql を実行してください。"
+            "chamfering_plans / chamfering_management ????????? 208 ???????"
+            "????chamfering_length????????????????????????? 208_chamfering_plans_management_length_fields.sql ??????????"
         )
     if not kanban_has_lengths:
         notes.append(
-            "kanban_issuance に寸法列が無いためスキップしました（マイグレーション 067 等を確認してください）。"
+            "kanban_issuance ?????????????????????????? 067 ????????????"
         )
 
     try:
@@ -6457,10 +6575,10 @@ async def sync_batch_lengths_from_products(
         logger.exception("sync-lengths-from-products failed: %s", e)
         raise HTTPException(
             status_code=500,
-            detail=f"同期に失敗しました: {e!s}",
+            detail=f"?????????: {e!s}",
         ) from e
     total = sum(counts.values())
-    msg = f"製品マスタの寸法を反映しました（更新行数合計: {total}）"
+    msg = f"??????????????????????: {total}?"
     if notes:
         msg += " " + " ".join(notes)
     return {
@@ -6477,11 +6595,11 @@ async def generate_cutting_plans_from_schedule(
     current_user: User = Depends(verify_token_and_get_user),
 ):
     """
-    指定月でロット生成: production_plan_schedules の file_name に生産月を含み、
-    '溶接' を含まない行を取得し、material_lot_count 回分ループして
-    instruction_plans に挿入する。
-    products / materials を product_name / material_name で結合して
-    product_cd, lot_size, cut_length 等を取得する。
+    ?????????: production_plan_schedules ? file_name ????????
+    '??' ???????????material_lot_count ???????
+    instruction_plans ??????
+    products / materials ? product_name / material_name ?????
+    product_cd, lot_size, cut_length ???????
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -6489,13 +6607,13 @@ async def generate_cutting_plans_from_schedule(
         production_month, month_label = _parse_month(body.month)
         pattern = f"%{month_label}%"
 
-        # 1) production_plan_schedules から取得（file_name に生産月を含む、'溶接' を除く）
+        # 1) production_plan_schedules ?????file_name ????????'??' ????
         sql_schedules = text("""
             SELECT machine_name, product_name, production_order, planned_quantity,
                    production_start_date, production_end_date, material_lot_count, material_name
             FROM production_plan_schedules
             WHERE file_name LIKE :pattern
-              AND file_name NOT LIKE '%溶接%'
+              AND file_name NOT LIKE '%??%'
             ORDER BY machine_name, product_name, production_order
         """)
         result = await db.execute(sql_schedules, {"pattern": pattern})
@@ -6505,10 +6623,10 @@ async def generate_cutting_plans_from_schedule(
             return {
                 "success": True,
                 "data": {"inserted": 0},
-                "message": f"該当する計画データがありません（file_name に「{month_label}」を含み「溶接」を含まないもの）",
+                "message": f"????????????????file_name ??{month_label}????????????????",
             }
 
-        # 2) products を product_name で取得（同一製品名で複数ある場合は product_cd 末尾が '1' のものを優先）
+        # 2) products ? product_name ????????????????? product_cd ??? '1' ???????
         product_names = list({str(r.get("product_name") or "").strip() for r in rows if r.get("product_name")})
         product_map = {}
         if product_names:
@@ -6530,7 +6648,7 @@ async def generate_cutting_plans_from_schedule(
                     if cd and str(cd)[-1:] == "1":
                         product_map[pname] = dict(r)
 
-        # 3) product_route_steps で KT01/KT02/KT03 を取得（has_cutting / has_chamfering / has_sw）
+        # 3) product_route_steps ? KT01/KT02/KT03 ????has_cutting / has_chamfering / has_sw?
         product_cds = list({(v.get("product_cd") or "").strip() for v in product_map.values() if (v.get("product_cd") or "").strip()})
         route_step_map = {}
         if product_cds:
@@ -6548,7 +6666,7 @@ async def generate_cutting_plans_from_schedule(
                     route_step_map[cd] = set()
                 route_step_map[cd].add(proc)
 
-        # 4) materials を material_name で取得（standard_spec -> standard_specification, supplier_cd -> material_manufacturer）
+        # 4) materials ? material_name ????standard_spec -> standard_specification, supplier_cd -> material_manufacturer?
         material_names = list({str(r.get("material_name") or "").strip() for r in rows if r.get("material_name")})
         material_map = {}
         if material_names:
@@ -6563,13 +6681,13 @@ async def generate_cutting_plans_from_schedule(
             for r in res_m.mappings().fetchall():
                 material_map[(r.get("material_name") or "").strip()] = dict(r)
 
-        # 5) 同一生産月の既存データを削除
+        # 5) ??????????????
         await db.execute(
             text("DELETE FROM instruction_plans WHERE production_month = :pm"),
             {"pm": production_month},
         )
 
-        # 6) 行ごとに material_lot_count 回ループして挿入（lot_number は 1, 2, ... material_lot_count）
+        # 6) ???? material_lot_count ?????????lot_number ? 1, 2, ... material_lot_count?
         inserted = 0
         for r in rows:
             row_dict = dict(r) if hasattr(r, "keys") else r
@@ -6663,7 +6781,7 @@ async def generate_cutting_plans_from_schedule(
         return {
             "success": True,
             "data": {"inserted": inserted},
-            "message": f"切断指示計画を {inserted} 件生成しました（生産月: {body.month}）",
+            "message": f"??????? {inserted} ???????????: {body.month}?",
         }
     except HTTPException:
         raise
@@ -6671,19 +6789,19 @@ async def generate_cutting_plans_from_schedule(
         logger.exception("generate-from-schedule failed")
         msg = str(e)
         if "instruction_plans" in msg and ("doesn't exist" in msg or "not exist" in msg or "Unknown table" in msg):
-            msg = "instruction_plans テーブルが存在しません。マイグレーション 052_cutting_instruction_plans.sql を実行してください。"
+            msg = "instruction_plans ???????????????????? 052_cutting_instruction_plans.sql ??????????"
         raise HTTPException(status_code=500, detail=msg)
 
 
 # ============================
-# メモ（TODO）: instruction notes（cutting_instruction_notes.scope）
+# ???TODO?: instruction notes?cutting_instruction_notes.scope?
 #   cutting:
 #     GET/POST/PATCH/DELETE /api/plan/cutting-instruction-notes
 #   forming:
 #     GET/POST/PATCH/DELETE /api/plan/forming-instruction-notes
-#   forming planning (APS 成型計画作成):
+#   forming planning (APS ??????):
 #     GET/POST/PATCH/DELETE /api/plan/forming-planning-notes
-#   welding planning (APS 溶接計画作成):
+#   welding planning (APS ??????):
 #     GET/POST/PATCH/DELETE /api/plan/welding-planning-notes
 #   welding:
 #     GET/POST/PATCH/DELETE /api/plan/welding-instruction-notes
@@ -6718,7 +6836,7 @@ def _reraise_instruction_notes_db_error(e: Exception) -> None:
     if "cutting_instruction_notes" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
         raise HTTPException(
             status_code=503,
-            detail="cutting_instruction_notes テーブルが存在しません。マイグレーション 237_cutting_instruction_notes.sql を確認してください。",
+            detail="cutting_instruction_notes ???????????????????? 237_cutting_instruction_notes.sql ??????????",
         ) from e
 
 
@@ -6818,9 +6936,9 @@ async def _update_instruction_note(
     if body.content is not None:
         content = body.content.strip()
         if not content:
-            raise HTTPException(status_code=400, detail="content が空です")
+            raise HTTPException(status_code=400, detail="content ????")
         if len(content) > 200:
-            raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+            raise HTTPException(status_code=400, detail="content ?200?????????????")
         updates.append("content = :content")
         params["content"] = content
 
@@ -6829,7 +6947,7 @@ async def _update_instruction_note(
         params["is_done"] = 1 if int(body.is_done) == 1 else 0
 
     if not updates:
-        return {"success": True, "data": {}, "message": "OK（更新なし）"}
+        return {"success": True, "data": {}, "message": "OK??????"}
 
     try:
         set_clause = ", ".join(updates)
@@ -6882,7 +7000,7 @@ async def _delete_instruction_note(db: AsyncSession, scope: str, note_id: int) -
     except Exception as e:
         _reraise_instruction_notes_db_error(e)
         raise
-    return {"success": True, "message": "削除しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.get("/plan/cutting-instruction-notes")
@@ -6902,9 +7020,9 @@ async def create_cutting_instruction_note(
 ):
     content = (body.content or "").strip()
     if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="content ?????????")
     if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        raise HTTPException(status_code=400, detail="content ?200?????????????")
     return await _create_instruction_note(
         db,
         INSTRUCTION_NOTE_SCOPE_CUTTING,
@@ -6949,9 +7067,9 @@ async def create_forming_instruction_note(
 ):
     content = (body.content or "").strip()
     if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="content ?????????")
     if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        raise HTTPException(status_code=400, detail="content ?200?????????????")
     return await _create_instruction_note(
         db,
         INSTRUCTION_NOTE_SCOPE_FORMING,
@@ -6996,9 +7114,9 @@ async def create_forming_planning_note(
 ):
     content = (body.content or "").strip()
     if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="content ?????????")
     if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        raise HTTPException(status_code=400, detail="content ?200?????????????")
     return await _create_instruction_note(
         db,
         INSTRUCTION_NOTE_SCOPE_FORMING_PLANNING,
@@ -7045,9 +7163,9 @@ async def create_welding_planning_note(
 ):
     content = (body.content or "").strip()
     if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="content ?????????")
     if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        raise HTTPException(status_code=400, detail="content ?200?????????????")
     return await _create_instruction_note(
         db,
         INSTRUCTION_NOTE_SCOPE_WELDING_PLANNING,
@@ -7094,9 +7212,9 @@ async def create_welding_instruction_note(
 ):
     content = (body.content or "").strip()
     if not content:
-        raise HTTPException(status_code=400, detail="content を指定してください")
+        raise HTTPException(status_code=400, detail="content ?????????")
     if len(content) > 200:
-        raise HTTPException(status_code=400, detail="content は200文字以内で指定してください")
+        raise HTTPException(status_code=400, detail="content ?200?????????????")
     return await _create_instruction_note(
         db,
         INSTRUCTION_NOTE_SCOPE_WELDING,
@@ -7124,7 +7242,7 @@ async def delete_welding_instruction_note(
     return await _delete_instruction_note(db, INSTRUCTION_NOTE_SCOPE_WELDING, note_id)
 
 
-# ---------- 検査指示（inspection_management）・MES検査実績収集 ----------
+# ---------- ?????inspection_management??MES?????? ----------
 
 
 async def _query_inspection_management_list(
@@ -7140,7 +7258,7 @@ async def _query_inspection_management_list(
     if not im_cols:
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         )
     expire_day = None
     if production_day:
@@ -7160,7 +7278,7 @@ async def _query_inspection_management_list(
     if production_day:
         d = _parse_date_ymd(production_day)
         if d is None:
-            raise HTTPException(status_code=400, detail="production_day が不正です")
+            raise HTTPException(status_code=400, detail="production_day ?????")
         where_parts.append("inspection_management.production_day = :production_day")
         params["production_day"] = d
     if hide_completed:
@@ -7168,11 +7286,11 @@ async def _query_inspection_management_list(
     ds_norm = (data_source or "").strip().lower()
     if ds_norm:
         if ds_norm not in ("mes", "excel", "csv"):
-            raise HTTPException(status_code=400, detail="data_source は mes / excel / csv のいずれかです")
+            raise HTTPException(status_code=400, detail="data_source ? mes / excel / csv ???????")
         if "data_source" not in im_cols:
             raise HTTPException(
                 status_code=503,
-                detail="data_source 列がありません。backend/database/migrations/43_inspection_management_data_source.sql を実行してください。",
+                detail="data_source ????????backend/database/migrations/43_inspection_management_data_source.sql ??????????",
             )
         where_parts.append("inspection_management.data_source = :data_source")
         params["data_source"] = ds_norm
@@ -7213,16 +7331,16 @@ async def _query_inspection_management_list(
 
 @router.get("/plan/inspection-management/list")
 async def get_inspection_management_list(
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    hide_completed: bool = Query(False, description="実績確定済を除外"),
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    hide_completed: bool = Query(False, description="????????"),
     data_source: Optional[str] = Query(
-        None, description="取得元フィルタ: mes / excel / csv"
+        None, description="???????: mes / excel / csv"
     ),
     limit: int = Query(2000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """検査指示一覧（MES検査実績収集）。"""
+    """???????MES????????"""
     out = await _query_inspection_management_list(
         db,
         production_day=production_day,
@@ -7235,14 +7353,14 @@ async def get_inspection_management_list(
 
 @router.get("/plan/inspection-management/monitor-summary")
 async def get_inspection_monitor_summary(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     limit: int = Query(2000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
 ):
-    """検査モニタ用：MES データのみ・メニュー権限必須。"""
+    """???????MES ???????????????"""
     if _parse_date_ymd(production_day) is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     out = await _query_inspection_management_list(
         db,
         production_day=production_day,
@@ -7260,17 +7378,17 @@ async def get_inspection_monitor_summary(
 
 @router.get("/plan/inspection-management/inspectors")
 async def get_inspection_management_inspectors(
-    start_date: Optional[str] = Query(None, description="集計開始日 YYYY-MM-DD（任意）"),
-    end_date: Optional[str] = Query(None, description="集計終了日 YYYY-MM-DD（任意）"),
+    start_date: Optional[str] = Query(None, description="????? YYYY-MM-DD????"),
+    end_date: Optional[str] = Query(None, description="????? YYYY-MM-DD????"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """inspection_management に実績がある検査員一覧（users 結合）。"""
+    """inspection_management ????????????users ????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         )
     if "mes_inspector_user_id" not in im_cols:
         return {"success": True, "data": []}
@@ -7282,13 +7400,13 @@ async def get_inspection_management_inspectors(
     params: dict[str, Any] = {}
     if start_date or end_date:
         if not start_date or not end_date:
-            raise HTTPException(status_code=400, detail="start_date / end_date は両方指定してください")
+            raise HTTPException(status_code=400, detail="start_date / end_date ???????????")
         start_d = _parse_date_ymd(start_date)
         end_d = _parse_date_ymd(end_date)
         if start_d is None or end_d is None:
-            raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+            raise HTTPException(status_code=400, detail="start_date / end_date ?????")
         if start_d > end_d:
-            raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+            raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
         where_parts.append("inspection_management.production_day >= :start_date")
         where_parts.append("inspection_management.production_day <= :end_date")
         params["start_date"] = start_d
@@ -7313,7 +7431,7 @@ async def get_inspection_management_inspectors(
         if "inspection_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+                detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
             ) from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -7332,8 +7450,8 @@ async def get_inspection_management_inspectors(
     return {"success": True, "data": out}
 
 
-_INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("加工", "アーチ")
-_INSPECTION_SHIAGE_SECTION_NAME = "仕上課"
+_INSPECTION_MES_PRODUCT_NAME_EXCLUDES = ("??", "???")
+_INSPECTION_SHIAGE_SECTION_NAME = "???"
 
 
 def _normalize_inspection_next_assignment_row(row: dict[str, Any]) -> dict[str, Any]:
@@ -7357,12 +7475,12 @@ def _normalize_inspection_next_assignment_row(row: dict[str, Any]) -> dict[str, 
 def _validate_inspection_mes_product_cd_name(product_cd: str, product_name: str | None) -> tuple[str, str]:
     cd = (product_cd or "").strip()
     if not cd:
-        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+        raise HTTPException(status_code=400, detail="product_cd ?????????")
     if not cd.endswith("1"):
-        raise HTTPException(status_code=400, detail="検査製品CDは末尾が1である必要があります")
+        raise HTTPException(status_code=400, detail="????CD????1??????????")
     name = (product_name or "").strip() or cd
     if any(kw in name for kw in _INSPECTION_MES_PRODUCT_NAME_EXCLUDES):
-        raise HTTPException(status_code=400, detail="検査対象外の製品名です")
+        raise HTTPException(status_code=400, detail="???????????")
     return cd, name
 
 
@@ -7374,13 +7492,13 @@ async def _assert_inspection_next_assignment_table(db: AsyncSession) -> None:
     if not await _inspection_next_assignment_table_ready(db):
         raise HTTPException(
             status_code=503,
-            detail="inspection_inspector_next_assignment テーブルが存在しません。backend/database/migrations/48_inspection_inspector_next_assignment.sql を実行してください。",
+            detail="inspection_inspector_next_assignment ????????????backend/database/migrations/48_inspection_inspector_next_assignment.sql ??????????",
         )
 
 
 async def _assert_active_inspection_inspector_user(db: AsyncSession, inspector_user_id: int) -> None:
     if inspector_user_id <= 0:
-        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+        raise HTTPException(status_code=400, detail="inspector_user_id ?????")
     sql = """
         SELECT u.id, o.name AS section_name
         FROM users u
@@ -7392,10 +7510,10 @@ async def _assert_active_inspection_inspector_user(db: AsyncSession, inspector_u
         r = await db.execute(text(sql), {"uid": inspector_user_id})
         row = r.mappings().first()
         if not row:
-            raise HTTPException(status_code=400, detail="検査員ユーザーが見つかりません")
+            raise HTTPException(status_code=400, detail="???????????????")
         section = (row.get("section_name") or "").strip()
         if section and section != _INSPECTION_SHIAGE_SECTION_NAME:
-            raise HTTPException(status_code=400, detail="仕上課所属の検査員のみ指定できます")
+            raise HTTPException(status_code=400, detail="?????????????????")
     except HTTPException:
         raise
     except Exception as e:
@@ -7465,16 +7583,16 @@ class DeleteInspectionNextAssignmentBody(BaseModel):
 
 @router.get("/plan/inspection-management/next-assignments")
 async def get_inspection_next_assignments(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_menu_code("MES_MONITOR_INSPECTION", "MES_ACTUAL_INSPECTION")
     ),
 ):
-    """検査員別次製品指定一覧（当日）。"""
+    """????????????????"""
     d = _parse_date_ymd(production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     if not await _inspection_next_assignment_table_ready(db):
         return {"success": True, "data": []}
     data = await _query_inspection_next_assignments(db, d)
@@ -7483,14 +7601,14 @@ async def get_inspection_next_assignments(
 
 @router.get("/plan/inspection-management/next-assignment/me")
 async def get_my_inspection_next_assignment(
-    production_day: str = Query(..., description="生産日 YYYY-MM-DD"),
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_menu_code("MES_ACTUAL_INSPECTION")),
 ):
-    """ログイン検査員の次製品指定（検査実績収集表示用）。"""
+    """?????????????????????????"""
     d = _parse_date_ymd(production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     uid = _inspection_mes_inspector_user_id_from_user(current_user)
     if uid is None or uid <= 0:
         return {"success": True, "data": None}
@@ -7532,14 +7650,14 @@ async def upsert_inspection_next_assignment(
     current_user: User = Depends(require_mes_operation("edit")),
     _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
 ):
-    """検査員の次製品を指定（検査モニタ）。"""
+    """??????????????????"""
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     try:
         inspector_id = int(body.inspector_user_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+        raise HTTPException(status_code=400, detail="inspector_user_id ?????")
     await _assert_inspection_next_assignment_table(db)
     await _assert_active_inspection_inspector_user(db, inspector_id)
     product_cd, product_name = await _resolve_inspection_product_name(
@@ -7547,7 +7665,7 @@ async def upsert_inspection_next_assignment(
     )
     note = (body.note or "").strip() or None
     if note and len(note) > 500:
-        raise HTTPException(status_code=400, detail="note は500文字以内です")
+        raise HTTPException(status_code=400, detail="note ?500??????")
     assigner_id = _inspection_mes_inspector_user_id_from_user(current_user)
     sql = """
         INSERT INTO inspection_inspector_next_assignment (
@@ -7590,7 +7708,7 @@ async def upsert_inspection_next_assignment(
     await db.commit()
     rows = await _query_inspection_next_assignments(db, d)
     saved = next((r for r in rows if r.get("inspector_user_id") == inspector_id), None)
-    return {"success": True, "data": saved, "message": "次製品を指定しました"}
+    return {"success": True, "data": saved, "message": "??????????"}
 
 
 @router.delete("/plan/inspection-management/next-assignment")
@@ -7600,14 +7718,14 @@ async def delete_inspection_next_assignment(
     current_user: User = Depends(require_mes_operation("edit")),
     _menu: User = Depends(require_menu_code("MES_MONITOR_INSPECTION")),
 ):
-    """検査員の次製品指定を解除。"""
+    """?????????????"""
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     try:
         inspector_id = int(body.inspector_user_id)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="inspector_user_id が不正です")
+        raise HTTPException(status_code=400, detail="inspector_user_id ?????")
     await _assert_inspection_next_assignment_table(db)
     await db.execute(
         text(
@@ -7617,33 +7735,33 @@ async def delete_inspection_next_assignment(
         {"production_day": d, "inspector_user_id": inspector_id},
     )
     await db.commit()
-    return {"success": True, "message": "次製品指定を解除しました"}
+    return {"success": True, "message": "????????????"}
 
 
 @router.get("/plan/inspection-management/productivity-analysis")
 async def get_inspection_productivity_analysis(
-    start_date: str = Query(..., description="集計開始日 YYYY-MM-DD"),
-    end_date: str = Query(..., description="集計終了日 YYYY-MM-DD"),
-    mes_inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
-    product_cd: Optional[str] = Query(None, description="製品 CD"),
-    include_incomplete: bool = Query(False, description="未確定セッションを含める"),
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_inspector_user_id: Optional[int] = Query(None, description="??? users.id"),
+    product_cd: Optional[str] = Query(None, description="?? CD"),
+    include_incomplete: bool = Query(False, description="????????????"),
     limit: int = Query(5000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """検査工程生産性分析（inspection_management 集計）。"""
+    """??????????inspection_management ????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         )
     start_d = _parse_date_ymd(start_date)
     end_d = _parse_date_ymd(end_date)
     if start_d is None or end_d is None:
-        raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
     if start_d > end_d:
-        raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
 
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
@@ -7774,7 +7892,7 @@ async def get_inspection_productivity_analysis(
         if inspector_key not in inspector_map:
             inspector_map[inspector_key] = {
                 "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
-                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "?"),
                 "session_count": 0,
                 "completed_session_count": 0,
                 "sum_actual_qty": 0,
@@ -7817,7 +7935,7 @@ async def get_inspection_productivity_analysis(
         if inspector_key not in pi_bucket:
             pi_bucket[inspector_key] = {
                 "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
-                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "?"),
                 "session_count": 0,
                 "completed_session_count": 0,
                 "sum_actual_qty": 0,
@@ -7933,7 +8051,7 @@ async def get_inspection_productivity_analysis(
         key=lambda x: str(x.get("inspector_name") or ""),
     )
     support_row = _finalize_inspector_metrics_row(
-        _new_inspector_metrics_bucket(inspector_user_id=None, inspector_name="応援")
+        _new_inspector_metrics_bucket(inspector_user_id=None, inspector_name="??")
     )
     total_metrics_row = _build_inspector_metrics_total_row(inspector_metrics_rows)
 
@@ -7962,30 +8080,30 @@ async def get_inspection_productivity_analysis(
 
 @router.get("/plan/inspection-management/utilization-analysis")
 async def get_inspection_utilization_analysis(
-    start_date: str = Query(..., description="集計開始日 YYYY-MM-DD"),
-    end_date: str = Query(..., description="集計終了日 YYYY-MM-DD"),
-    mes_inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
-    include_incomplete: bool = Query(False, description="未確定セッションを含める"),
-    extra_workdays: Optional[str] = Query(None, description="臨時出勤日 CSV YYYY-MM-DD"),
-    extra_holidays: Optional[str] = Query(None, description="臨時休日 CSV YYYY-MM-DD"),
-    use_company_calendar: bool = Query(True, description="会社稼働カレンダーを反映"),
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_inspector_user_id: Optional[int] = Query(None, description="??? users.id"),
+    include_incomplete: bool = Query(False, description="????????????"),
+    extra_workdays: Optional[str] = Query(None, description="????? CSV YYYY-MM-DD"),
+    extra_holidays: Optional[str] = Query(None, description="???? CSV YYYY-MM-DD"),
+    use_company_calendar: bool = Query(True, description="????????????"),
     limit: int = Query(5000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """検査工程稼働率分析（inspection_management · 所定7.6h/日 · 会社カレンダー対応）。"""
+    """??????????inspection_management ? ??7.6h/? ? ???????????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         )
     start_d = _parse_date_ymd(start_date)
     end_d = _parse_date_ymd(end_date)
     if start_d is None or end_d is None:
-        raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
     if start_d > end_d:
-        raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
 
     extra_workday_set = parse_date_csv(extra_workdays)
     extra_holiday_set = parse_date_csv(extra_holidays)
@@ -8084,7 +8202,7 @@ async def get_inspection_utilization_analysis(
         if inspector_id is None:
             unassigned_session_count += 1
             inspector_key = "none"
-            inspector_name = "—"
+            inspector_name = "?"
         else:
             inspector_key = str(inspector_id)
             inspector_name = (
@@ -8182,7 +8300,7 @@ async def get_inspection_utilization_analysis(
         if insp_key not in inspector_map:
             inspector_map[insp_key] = {
                 "inspector_user_id": row.get("inspector_user_id"),
-                "inspector_name": row.get("inspector_name") or "—",
+                "inspector_name": row.get("inspector_name") or "?",
                 "session_count": 0,
                 "work_day_count": 0,
                 "scheduled_work_day_count": 0,
@@ -8284,11 +8402,11 @@ async def get_inspection_utilization_analysis(
 
     data_gaps: list[str] = []
     if unassigned_session_count > 0:
-        data_gaps.append(f"検査員未割当のセッションが {unassigned_session_count} 件あります")
+        data_gaps.append(f"????????????? {unassigned_session_count} ?????")
     if sessions_without_time_count > 0:
-        data_gaps.append(f"正味稼働時間が算出できないセッションが {sessions_without_time_count} 件あります")
+        data_gaps.append(f"??????????????????? {sessions_without_time_count} ?????")
     if not company_calendar_applied and use_company_calendar:
-        data_gaps.append("会社稼働カレンダーを読み込めなかったため、月〜金のデフォルト判定を使用しています")
+        data_gaps.append("????????????????????????????????????????")
 
     return {
         "success": True,
@@ -8318,28 +8436,28 @@ async def get_inspection_utilization_analysis(
 
 @router.get("/plan/inspection-management/quality-analysis")
 async def get_inspection_quality_analysis(
-    start_date: str = Query(..., description="集計開始日 YYYY-MM-DD"),
-    end_date: str = Query(..., description="集計終了日 YYYY-MM-DD"),
-    mes_inspector_user_id: Optional[int] = Query(None, description="検査員 users.id"),
-    product_cd: Optional[str] = Query(None, description="製品 CD"),
-    include_incomplete: bool = Query(False, description="未確定セッションを含める"),
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_inspector_user_id: Optional[int] = Query(None, description="??? users.id"),
+    product_cd: Optional[str] = Query(None, description="?? CD"),
+    include_incomplete: bool = Query(False, description="????????????"),
     limit: int = Query(5000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """検査工程品質分析（inspection_management · 不良数 · 不良率 · 不良項目）。"""
+    """?????????inspection_management ? ??? ? ??? ? ??????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
         raise HTTPException(
             status_code=503,
-            detail="inspection_management テーブルが存在しません。backend/database/migrations/09_inspection_management.sql を実行してください。",
+            detail="inspection_management ????????????backend/database/migrations/09_inspection_management.sql ??????????",
         )
     start_d = _parse_date_ymd(start_date)
     end_d = _parse_date_ymd(end_date)
     if start_d is None or end_d is None:
-        raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
     if start_d > end_d:
-        raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
 
     mes_frag = _inspection_mgmt_mes_select_fragment(im_cols)
     meta_frag = _inspection_mgmt_meta_select_fragment(im_cols)
@@ -8436,7 +8554,7 @@ async def get_inspection_quality_analysis(
             "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
             "is_completed": is_completed,
             "has_defect": has_defect,
-            "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+            "inspector_display_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "?"),
         }
         sessions.append(session_row)
 
@@ -8470,7 +8588,7 @@ async def get_inspection_quality_analysis(
         if inspector_key not in inspector_map:
             inspector_map[inspector_key] = {
                 "inspector_user_id": int(inspector_id) if inspector_id is not None else None,
-                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "—"),
+                "inspector_name": inspector_name or (f"ID:{inspector_id}" if inspector_id else "?"),
                 "session_count": 0,
                 "completed_session_count": 0,
                 "sum_actual_qty": 0,
@@ -8593,6 +8711,286 @@ async def get_inspection_quality_analysis(
     }
 
 
+@router.get("/plan/welding-management/quality-analysis")
+async def get_welding_quality_analysis(
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_operator_user_id: Optional[int] = Query(None, description="????? users.id"),
+    product_cd: Optional[str] = Query(None, description="?? CD"),
+    include_incomplete: bool = Query(False, description="????????????"),
+    limit: int = Query(5000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """Welding quality analysis (welding_management, defects, defect rate)."""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
+        )
+    start_d = _parse_date_ymd(start_date)
+    end_d = _parse_date_ymd(end_date)
+    if start_d is None or end_d is None:
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
+    if start_d > end_d:
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
+
+    mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
+    wm_machine_col = (
+        "welding_management.welding_machine,\n               "
+        if "welding_machine" in wm_cols
+        else ""
+    )
+    join_operator = "mes_operator_user_id" in wm_cols
+    operator_select = _welding_mgmt_operator_select_fragment(join_operator)
+    operator_join = "LEFT JOIN users ON users.id = welding_management.mes_operator_user_id" if join_operator else ""
+
+    where_parts: list[str] = [
+        "welding_management.production_day >= :start_date",
+        "welding_management.production_day <= :end_date",
+    ]
+    params: dict[str, Any] = {"start_date": start_d, "end_date": end_d, "lim": limit}
+    if mes_operator_user_id is not None and join_operator:
+        where_parts.append("welding_management.mes_operator_user_id = :mes_operator_user_id")
+        params["mes_operator_user_id"] = int(mes_operator_user_id)
+    product_cd_norm = (product_cd or "").strip()
+    if product_cd_norm:
+        where_parts.append("welding_management.product_cd = :product_cd")
+        params["product_cd"] = product_cd_norm
+    if not include_incomplete:
+        where_parts.append("welding_management.production_completed_check = 1")
+
+    where_sql = " AND ".join(where_parts)
+    sql = f"""
+        SELECT welding_management.id,
+               welding_management.production_month,
+               welding_management.production_day,
+               welding_management.production_sequence,
+               welding_management.product_cd,
+               welding_management.product_name,
+               {wm_machine_col}welding_management.actual_production_quantity,
+               welding_management.defect_qty,
+               welding_management.mes_defect_by_item,
+               welding_management.production_completed_check,
+               {mes_frag}
+               {operator_select}
+               welding_management.remarks,
+               welding_management.created_at,
+               welding_management.updated_at
+        FROM welding_management
+        {operator_join}
+        WHERE {where_sql}
+        ORDER BY welding_management.production_day ASC,
+                 welding_management.production_sequence ASC,
+                 welding_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        _raise_welding_mgmt_query_error(e)
+
+    summary_bucket: dict[str, Any] = {
+        "session_count": 0,
+        "completed_session_count": 0,
+        "sum_actual_qty": 0,
+        "sum_defect_qty": 0,
+        "sessions_with_defect_count": 0,
+    }
+    daily_map: dict[str, dict[str, Any]] = {}
+    operator_map: dict[str, dict[str, Any]] = {}
+    product_map: dict[str, dict[str, Any]] = {}
+    product_defect_map: dict[tuple[str, str], dict[str, Any]] = {}
+    defect_item_map: dict[str, int] = {}
+    defect_item_kinds: set[str] = set()
+    sessions: list[dict[str, Any]] = []
+
+    for row in rows:
+        item = _normalize_welding_mgmt_row(dict(row))
+        defect_by_item = item.get("mes_defect_by_item") if isinstance(item.get("mes_defect_by_item"), dict) else None
+
+        actual_qty = int(item.get("actual_production_quantity") or 0)
+        defect_qty = int(item.get("defect_qty") or 0)
+        item_defect_qty = 0
+        if defect_by_item:
+            for qty_raw in defect_by_item.values():
+                item_defect_qty += int(qty_raw or 0)
+        if item_defect_qty > defect_qty:
+            defect_qty = item_defect_qty
+        is_completed = int(item.get("production_completed_check") or 0) == 1
+        has_defect = defect_qty > 0 or bool(defect_by_item)
+        day_key = str(item.get("production_day") or "")[:10]
+        operator_id = item.get("mes_operator_user_id")
+        operator_key = str(operator_id) if operator_id is not None else "none"
+        operator_name = (item.get("mes_operator_name") or item.get("mes_operator_username") or "").strip()
+        product_key = (item.get("product_cd") or "").strip() or "unknown"
+        product_name = (item.get("product_name") or "").strip()
+
+        session_row = {
+            **item,
+            "defect_qty": defect_qty,
+            "defect_rate_percent": _inspection_defect_rate_percent(actual_qty, defect_qty),
+            "is_completed": is_completed,
+            "has_defect": has_defect,
+            "operator_display_name": operator_name or (f"ID:{operator_id}" if operator_id else "?"),
+        }
+        sessions.append(session_row)
+
+        completed_inc = 1 if is_completed else 0
+        _merge_inspection_quality_bucket(
+            summary_bucket,
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            completed_count=completed_inc,
+            has_defect=has_defect,
+        )
+
+        if day_key:
+            if day_key not in daily_map:
+                daily_map[day_key] = {
+                    "day": day_key,
+                    "session_count": 0,
+                    "completed_session_count": 0,
+                    "sum_actual_qty": 0,
+                    "sum_defect_qty": 0,
+                    "sessions_with_defect_count": 0,
+                }
+            _merge_inspection_quality_bucket(
+                daily_map[day_key],
+                actual_qty=actual_qty,
+                defect_qty=defect_qty,
+                completed_count=completed_inc,
+                has_defect=has_defect,
+            )
+
+        if operator_key not in operator_map:
+            operator_map[operator_key] = {
+                "operator_user_id": int(operator_id) if operator_id is not None else None,
+                "operator_name": operator_name or (f"ID:{operator_id}" if operator_id else "?"),
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_actual_qty": 0,
+                "sum_defect_qty": 0,
+                "sessions_with_defect_count": 0,
+            }
+        _merge_inspection_quality_bucket(
+            operator_map[operator_key],
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            completed_count=completed_inc,
+            has_defect=has_defect,
+        )
+
+        prod_bucket = product_map.get(product_key)
+        if prod_bucket is None:
+            prod_bucket = {
+                "product_cd": product_key,
+                "product_name": product_name or product_key,
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_actual_qty": 0,
+                "sum_defect_qty": 0,
+                "sessions_with_defect_count": 0,
+                "defect_items": {},
+            }
+            product_map[product_key] = prod_bucket
+        _merge_inspection_quality_bucket(
+            prod_bucket,
+            actual_qty=actual_qty,
+            defect_qty=defect_qty,
+            completed_count=completed_inc,
+            has_defect=has_defect,
+        )
+
+        if defect_by_item:
+            for defect_cd, qty_raw in defect_by_item.items():
+                cd = str(defect_cd or "").strip()
+                if not cd:
+                    continue
+                qty = int(qty_raw or 0)
+                if qty <= 0:
+                    continue
+                defect_item_kinds.add(cd)
+                defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty
+                prod_items: dict[str, int] = prod_bucket["defect_items"]
+                prod_items[cd] = int(prod_items.get(cd) or 0) + qty
+                pd_key = (product_key, cd)
+                if pd_key not in product_defect_map:
+                    product_defect_map[pd_key] = {
+                        "product_cd": product_key,
+                        "product_name": product_name or product_key,
+                        "defect_cd": cd,
+                        "qty": 0,
+                    }
+                product_defect_map[pd_key]["qty"] = int(product_defect_map[pd_key]["qty"] or 0) + qty
+
+    summary = _finalize_inspection_quality_bucket(summary_bucket)
+    summary["defect_item_kinds_count"] = len(defect_item_kinds)
+
+    daily = [_finalize_inspection_quality_bucket(v) for v in sorted(daily_map.values(), key=lambda x: x["day"])]
+    by_operator = sorted(
+        [_finalize_inspection_quality_bucket(v) for v in operator_map.values()],
+        key=lambda x: (-float(x.get("defect_rate_percent") or 0), -(x.get("sum_defect_qty") or 0)),
+    )
+
+    by_product: list[dict[str, Any]] = []
+    for prod in product_map.values():
+        fin = _finalize_inspection_quality_bucket(dict(prod))
+        items: dict[str, int] = prod.get("defect_items") or {}
+        if items:
+            top_cd = max(items.keys(), key=lambda k: items[k])
+            fin["top_defect_cd"] = top_cd
+            fin["top_defect_qty"] = items[top_cd]
+        fin.pop("defect_items", None)
+        by_product.append(fin)
+    by_product.sort(key=lambda x: (-float(x.get("defect_rate_percent") or 0), -(x.get("sum_defect_qty") or 0)))
+
+    defect_name_map = await _load_process_defect_name_map(db, WELDING_DEFECT_DETECTION_PROCESS_CD)
+    total_actual = int(summary.get("sum_actual_qty") or 0)
+    defect_by_item = _finalize_inspection_quality_defect_rows(
+        defect_item_map,
+        total_actual=total_actual,
+        defect_name_map=defect_name_map,
+    )
+    by_product_defect = sorted(
+        product_defect_map.values(),
+        key=lambda x: (
+            str(x.get("product_cd") or ""),
+            -int(x.get("qty") or 0),
+            str(x.get("defect_cd") or ""),
+        ),
+    )
+    for row in by_product_defect:
+        row["defect_name"] = _defect_name_for_cd(defect_name_map, str(row.get("defect_cd") or ""))
+    for fin in by_product:
+        top_cd = fin.get("top_defect_cd")
+        if top_cd:
+            fin["top_defect_name"] = _defect_name_for_cd(defect_name_map, str(top_cd))
+    for session in sessions:
+        session["defect_breakdown"] = _build_defect_breakdown_rows(
+            session.get("mes_defect_by_item"),
+            defect_name_map,
+        )
+
+    return {
+        "success": True,
+        "data": {
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+            "include_incomplete": include_incomplete,
+            "summary": summary,
+            "daily": daily,
+            "by_operator": by_operator,
+            "by_product": by_product,
+            "defect_by_item": defect_by_item,
+            "by_product_defect": by_product_defect,
+            "sessions": sessions,
+        },
+    }
+
+
 class CreateInspectionManagementBody(BaseModel):
     production_day: str
     product_cd: str
@@ -8609,17 +9007,17 @@ async def create_inspection_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """検査指示1件を新規作成（MESで製品選択後・生産開始前）。"""
+    """????1???????MES??????????????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
-        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+        raise HTTPException(status_code=503, detail="inspection_management ????????????")
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     product_cd = (body.product_cd or "").strip()
     product_name = (body.product_name or "").strip()
     if not product_cd:
-        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+        raise HTTPException(status_code=400, detail="product_cd ?????????")
     if not product_name:
         product_name = product_cd
     prod_month = d.replace(day=1)
@@ -8689,7 +9087,7 @@ async def create_inspection_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "data": {"id": new_id}, "message": "作成しました"}
+    return {"success": True, "data": {"id": new_id}, "message": "??????"}
 
 
 class UpdateInspectionManagementBody(BaseModel):
@@ -8724,10 +9122,10 @@ async def update_inspection_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """検査指示1件を更新（MES 実績・不良内訳・検査員等）。"""
+    """????1?????MES ??????????????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
-        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+        raise HTTPException(status_code=503, detail="inspection_management ????????????")
     await _expire_stale_inspection_client_locks(db, im_cols, inspection_id=inspection_id)
     if _inspection_mes_row_mutation_requested(body) and not body.manual_registration:
         row_insp = await _fetch_inspection_row_mes_inspector(db, inspection_id, im_cols)
@@ -8759,9 +9157,9 @@ async def update_inspection_management(
         if not has_client_col:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_client_instance_id"))
         if not force_release:
-            raise HTTPException(status_code=400, detail="mes_force_release が必要です")
+            raise HTTPException(status_code=400, detail="mes_force_release ?????")
         if not in_progress:
-            raise HTTPException(status_code=409, detail="検査生産中ではないためロック解除できません")
+            raise HTTPException(status_code=409, detail="?????????????????????")
         updates.append("mes_client_instance_id = NULL")
         if _inspection_mes_lock_activity_column(im_cols):
             updates.append("mes_client_lock_activity_at = NULL")
@@ -8771,9 +9169,9 @@ async def update_inspection_management(
         if not has_client_col:
             raise HTTPException(status_code=503, detail=_inspection_mes_column_migration_hint("mes_client_instance_id"))
         if not client_id:
-            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+            raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
         if not in_progress:
-            raise HTTPException(status_code=409, detail="検査生産中ではないため接続できません")
+            raise HTTPException(status_code=409, detail="??????????????????")
         allow_inspector_reclaim = False
         if body.mes_inspector_user_id is not None and "mes_inspector_user_id" in im_cols:
             try:
@@ -8819,7 +9217,7 @@ async def update_inspection_management(
         if "manual_registration_note" not in im_cols:
             raise HTTPException(
                 status_code=503,
-                detail="manual_registration_note 列がありません。backend/database/migrations/47_inspection_management_manual_registration_note.sql を実行してください。",
+                detail="manual_registration_note ????????backend/database/migrations/47_inspection_management_manual_registration_note.sql ??????????",
             )
         updates.append("manual_registration_note = :manual_registration_note")
         params["manual_registration_note"] = (body.manual_registration_note or "").strip() or None
@@ -8852,7 +9250,7 @@ async def update_inspection_management(
                     )
                     if has_client_col:
                         if not client_id:
-                            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+                            raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
                         _reject_inspection_mes_client_lock_conflict(
                             existing_lock,
                             client_id,
@@ -8967,7 +9365,7 @@ async def update_inspection_management(
                     params["defect_qty"] = _sum_defect_qty_from_item_json(json_str)
                     updates.append("defect_qty = :defect_qty")
         except (ValueError, json.JSONDecodeError) as e:
-            raise HTTPException(status_code=400, detail=f"mes_defect_by_item が不正です: {e}") from e
+            raise HTTPException(status_code=400, detail=f"mes_defect_by_item ?????: {e}") from e
 
     mes_control_touched = (
         body.mes_net_production_sec is not None
@@ -8992,7 +9390,7 @@ async def update_inspection_management(
         mes_state_broadcast = True
 
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     try:
         await db.execute(
             text(f"UPDATE inspection_management SET {', '.join(updates)} WHERE id = :iid"),
@@ -9015,7 +9413,7 @@ async def update_inspection_management(
                 await notify_mes_inspection_state_change(str(pd_val), inspection_id)
         except Exception as ws_exc:
             logger.warning("[WebSocket] mes_inspection_state broadcast failed: %s", ws_exc)
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 
 @router.delete("/plan/inspection-management/{inspection_id}")
@@ -9024,17 +9422,17 @@ async def delete_inspection_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("delete")),
 ):
-    """検査指示1件を削除する。"""
+    """????1???????"""
     im_cols = await _get_inspection_mgmt_columns(db)
     if not im_cols:
-        raise HTTPException(status_code=503, detail="inspection_management テーブルが存在しません。")
+        raise HTTPException(status_code=503, detail="inspection_management ????????????")
     result = await db.execute(
         text("SELECT id FROM inspection_management WHERE id = :iid LIMIT 1"),
         {"iid": inspection_id},
     )
     row = result.mappings().first()
     if not row:
-        raise HTTPException(status_code=404, detail="指定の検査指示が見つかりません")
+        raise HTTPException(status_code=404, detail="???????????????")
     try:
         await db.execute(
             text("DELETE FROM inspection_management WHERE id = :iid"),
@@ -9044,27 +9442,120 @@ async def delete_inspection_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "削除しました"}
+    return {"success": True, "message": "??????"}
 
 
-# ---------- 溶接指示（welding_management）・MES溶接実績収集 ----------
+# ---------- ?????welding_management??MES?????? ----------
 
 
-@router.get("/plan/welding-management/list")
-async def get_welding_management_list(
-    production_day: Optional[str] = Query(None, description="生産日 YYYY-MM-DD"),
-    welding_machine: Optional[str] = Query(None, description="溶接設備名（完全一致）"),
-    hide_completed: bool = Query(False, description="実績確定済を除外"),
+@router.get("/plan/welding-management/monitor-summary")
+async def get_welding_monitor_summary(
+    production_day: str = Query(..., description="??? YYYY-MM-DD"),
     limit: int = Query(2000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(verify_token_and_get_user),
+    current_user: User = Depends(require_menu_code("MES_MONITOR_WELDING")),
 ):
-    """溶接指示一覧（MES溶接実績収集）。"""
+    """???????MES ???????????????"""
+    if _parse_date_ymd(production_day) is None:
+        raise HTTPException(status_code=400, detail="production_day ?????")
     wm_cols = await _get_welding_mgmt_columns(db)
     if not wm_cols:
         raise HTTPException(
             status_code=503,
-            detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
+        )
+    mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
+    where_parts: list[str] = ["1=1"]
+    params: dict[str, Any] = {"lim": limit}
+    d = _parse_date_ymd(production_day)
+    where_parts.append("welding_management.production_day = :production_day")
+    params["production_day"] = d
+    if "data_source" in wm_cols:
+        where_parts.append("welding_management.data_source = :data_source")
+        params["data_source"] = "mes"
+    where_sql = " AND ".join(where_parts)
+    wm_machine_col = (
+        "welding_management.welding_machine,\n               "
+        if "welding_machine" in wm_cols
+        else ""
+    )
+    sql = f"""
+        SELECT welding_management.id,
+               welding_management.production_month,
+               welding_management.production_day,
+               welding_management.production_sequence,
+               welding_management.product_cd,
+               welding_management.product_name,
+               {wm_machine_col}welding_management.actual_production_quantity,
+               welding_management.defect_qty,
+               welding_management.mes_defect_by_item,
+               welding_management.production_completed_check,
+               {mes_frag}
+               welding_management.remarks,
+               welding_management.created_at,
+               welding_management.updated_at
+        FROM welding_management
+        WHERE {where_sql}
+        ORDER BY welding_management.production_day ASC,
+                 welding_management.production_sequence ASC,
+                 welding_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        msg = str(e).lower()
+        if "welding_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
+            raise HTTPException(
+                status_code=503,
+                detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
+            ) from e
+        for col in _WELDING_MGMT_MES_COLUMNS:
+            if col in msg:
+                raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint(col)) from e
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    out: list[dict] = []
+    for row in rows:
+        item = dict(row)
+        raw_def = item.get("mes_defect_by_item")
+        if raw_def is not None and not isinstance(raw_def, dict):
+            try:
+                item["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+            except json.JSONDecodeError:
+                item["mes_defect_by_item"] = None
+        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
+            v = item.get(k)
+            if isinstance(v, datetime):
+                item[k] = v.isoformat()
+        for k in ("production_month", "production_day"):
+            v = item.get(k)
+            if isinstance(v, date):
+                item[k] = v.isoformat()
+        out.append(item)
+    return {
+        "success": True,
+        "data": out,
+        "fetched_at": now_jst().isoformat(),
+    }
+
+
+@router.get("/plan/welding-management/list")
+async def get_welding_management_list(
+    production_day: Optional[str] = Query(None, description="??? YYYY-MM-DD"),
+    welding_machine: Optional[str] = Query(None, description="???????????"),
+    hide_completed: bool = Query(False, description="????????"),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """???????MES????????"""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
         )
     mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
     where_parts: list[str] = ["1=1"]
@@ -9072,7 +9563,7 @@ async def get_welding_management_list(
     if production_day:
         d = _parse_date_ymd(production_day)
         if d is None:
-            raise HTTPException(status_code=400, detail="production_day が不正です")
+            raise HTTPException(status_code=400, detail="production_day ?????")
         where_parts.append("welding_management.production_day = :production_day")
         params["production_day"] = d
     if hide_completed:
@@ -9081,7 +9572,7 @@ async def get_welding_management_list(
         if "welding_machine" not in wm_cols:
             raise HTTPException(
                 status_code=503,
-                detail="列 `welding_machine` がありません。backend/database/migrations/14_welding_management_welding_machine.sql を実行してください。",
+                detail="? `welding_machine` ???????backend/database/migrations/14_welding_management_welding_machine.sql ??????????",
             )
         where_parts.append("welding_management.welding_machine = :welding_machine")
         params["welding_machine"] = welding_machine.strip()
@@ -9121,7 +9612,7 @@ async def get_welding_management_list(
         if "welding_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+                detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
             ) from e
         for col in _WELDING_MGMT_MES_COLUMNS:
             if col in msg:
@@ -9164,17 +9655,17 @@ async def create_welding_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("create")),
 ):
-    """溶接指示1件を新規作成（MESで製品選択後・生産開始前）。"""
+    """????1???????MES??????????????"""
     wm_cols = await _get_welding_mgmt_columns(db)
     if not wm_cols:
-        raise HTTPException(status_code=503, detail="welding_management テーブルが存在しません。")
+        raise HTTPException(status_code=503, detail="welding_management ????????????")
     d = _parse_date_ymd(body.production_day)
     if d is None:
-        raise HTTPException(status_code=400, detail="production_day が不正です")
+        raise HTTPException(status_code=400, detail="production_day ?????")
     product_cd = (body.product_cd or "").strip()
     product_name = (body.product_name or "").strip()
     if not product_cd:
-        raise HTTPException(status_code=400, detail="product_cd を指定してください")
+        raise HTTPException(status_code=400, detail="product_cd ?????????")
     if not product_name:
         product_name = product_cd
     prod_month = d.replace(day=1)
@@ -9233,7 +9724,7 @@ async def create_welding_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "data": {"id": new_id}, "message": "作成しました"}
+    return {"success": True, "data": {"id": new_id}, "message": "??????"}
 
 
 class UpdateWeldingManagementBody(BaseModel):
@@ -9248,11 +9739,15 @@ class UpdateWeldingManagementBody(BaseModel):
     mes_production_ended_at: Optional[str] = None
     mes_net_production_sec: Optional[int] = None
     mes_paused_accum_sec: Optional[int] = None
+    mes_shift_sec: Optional[int] = None
+    mes_break_sec: Optional[int] = None
+    mes_stop_sec: Optional[int] = None
     mes_production_is_paused: Optional[int] = None
     mes_operator_user_id: Optional[int] = None
     mes_defect_by_item: Optional[Any] = None
     mes_client_instance_id: Optional[str] = None
     mes_claim_client_lock: Optional[bool] = None
+    mes_release_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
 
 
@@ -9263,10 +9758,10 @@ async def update_welding_management(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_mes_operation("edit")),
 ):
-    """溶接指示1件を更新（MES 実績・不良内訳・溶接員等）。"""
+    """????1?????MES ??????????????"""
     wm_cols = await _get_welding_mgmt_columns(db)
     if not wm_cols:
-        raise HTTPException(status_code=503, detail="welding_management テーブルが存在しません。")
+        raise HTTPException(status_code=503, detail="welding_management ????????????")
     row_mes = await _fetch_welding_row_mes_state(db, welding_id, wm_cols)
     in_progress = _welding_row_mes_in_progress(
         row_mes.get("mes_production_started_at"),
@@ -9280,13 +9775,22 @@ async def update_welding_management(
     updates: list[str] = []
     params: dict[str, Any] = {"wid": welding_id}
 
+    if body.mes_release_client_lock:
+        if not has_client_col:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_client_instance_id"))
+        if not force_release:
+            raise HTTPException(status_code=400, detail="mes_force_release required")
+        if not in_progress:
+            raise HTTPException(status_code=409, detail="not in progress")
+        updates.append("mes_client_instance_id = NULL")
+
     if body.mes_claim_client_lock:
         if not has_client_col:
             raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_client_instance_id"))
         if not client_id:
-            raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+            raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
         if not in_progress:
-            raise HTTPException(status_code=409, detail="溶接生産中ではないため接続できません")
+            raise HTTPException(status_code=409, detail="??????????????????")
         allow_inspector_reclaim = False
         if body.mes_operator_user_id is not None and "mes_operator_user_id" in wm_cols:
             try:
@@ -9366,7 +9870,7 @@ async def update_welding_management(
                     )
                 if has_client_col:
                     if not client_id:
-                        raise HTTPException(status_code=400, detail="mes_client_instance_id が必要です")
+                        raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
                     _reject_welding_mes_client_lock_conflict(
                         existing_lock,
                         client_id,
@@ -9413,6 +9917,33 @@ async def update_welding_management(
         else:
             updates.append("mes_paused_accum_sec = :mes_paused_accum_sec")
             params["mes_paused_accum_sec"] = max(0, pause_sec)
+    if body.mes_shift_sec is not None:
+        if "mes_shift_sec" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_shift_sec"))
+        shift_sec = int(body.mes_shift_sec)
+        if shift_sec < 0:
+            updates.append("mes_shift_sec = NULL")
+        else:
+            updates.append("mes_shift_sec = :mes_shift_sec")
+            params["mes_shift_sec"] = max(0, shift_sec)
+    if body.mes_break_sec is not None:
+        if "mes_break_sec" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_break_sec"))
+        break_sec = int(body.mes_break_sec)
+        if break_sec < 0:
+            updates.append("mes_break_sec = NULL")
+        else:
+            updates.append("mes_break_sec = :mes_break_sec")
+            params["mes_break_sec"] = max(0, break_sec)
+    if body.mes_stop_sec is not None:
+        if "mes_stop_sec" not in wm_cols:
+            raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_stop_sec"))
+        stop_sec = int(body.mes_stop_sec)
+        if stop_sec < 0:
+            updates.append("mes_stop_sec = NULL")
+        else:
+            updates.append("mes_stop_sec = :mes_stop_sec")
+            params["mes_stop_sec"] = max(0, stop_sec)
     if body.mes_production_is_paused is not None:
         if "mes_production_is_paused" not in wm_cols:
             raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint("mes_production_is_paused"))
@@ -9420,7 +9951,7 @@ async def update_welding_management(
         if flag < 0:
             updates.append("mes_production_is_paused = NULL")
         else:
-            params["mes_production_is_paused"] = 1 if flag else 0
+            params["mes_production_is_paused"] = max(0, min(2, flag))
             updates.append("mes_production_is_paused = :mes_production_is_paused")
     if body.mes_operator_user_id is not None:
         if "mes_operator_user_id" not in wm_cols:
@@ -9449,11 +9980,14 @@ async def update_welding_management(
                     params["defect_qty"] = _sum_defect_qty_from_item_json(json_str)
                     updates.append("defect_qty = :defect_qty")
         except (ValueError, json.JSONDecodeError) as e:
-            raise HTTPException(status_code=400, detail=f"mes_defect_by_item が不正です: {e}") from e
+            raise HTTPException(status_code=400, detail=f"mes_defect_by_item ?????: {e}") from e
 
     mes_control_touched = (
         body.mes_net_production_sec is not None
         or body.mes_paused_accum_sec is not None
+        or body.mes_shift_sec is not None
+        or body.mes_break_sec is not None
+        or body.mes_stop_sec is not None
         or body.mes_production_is_paused is not None
         or body.mes_defect_by_item is not None
         or (body.mes_operator_user_id is not None and in_progress)
@@ -9470,7 +10004,7 @@ async def update_welding_management(
                 updates.append("mes_client_instance_id = :mes_client_instance_id")
 
     if not updates:
-        return {"success": True, "message": "変更なし"}
+        return {"success": True, "message": "????"}
     try:
         await db.execute(
             text(f"UPDATE welding_management SET {', '.join(updates)} WHERE id = :wid"),
@@ -9480,32 +10014,32 @@ async def update_welding_management(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
-    return {"success": True, "message": "更新しました"}
+    return {"success": True, "message": "??????"}
 
 @router.get("/plan/welding-management/productivity-analysis")
 async def get_welding_productivity_analysis(
-    start_date: str = Query(..., description="集計開始日 YYYY-MM-DD"),
-    end_date: str = Query(..., description="集計終了日 YYYY-MM-DD"),
-    mes_operator_user_id: Optional[int] = Query(None, description="溶接作業者 users.id"),
-    product_cd: Optional[str] = Query(None, description="製品 CD"),
-    include_incomplete: bool = Query(False, description="未確定セッションを含める"),
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_operator_user_id: Optional[int] = Query(None, description="????? users.id"),
+    product_cd: Optional[str] = Query(None, description="?? CD"),
+    include_incomplete: bool = Query(False, description="????????????"),
     limit: int = Query(5000, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(verify_token_and_get_user),
 ):
-    """溶接工程生産性分析（welding_management 集計）。"""
+    """??????????welding_management ????"""
     wm_cols = await _get_welding_mgmt_columns(db)
     if not wm_cols:
         raise HTTPException(
             status_code=503,
-            detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
         )
     start_d = _parse_date_ymd(start_date)
     end_d = _parse_date_ymd(end_date)
     if start_d is None or end_d is None:
-        raise HTTPException(status_code=400, detail="start_date / end_date が不正です")
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
     if start_d > end_d:
-        raise HTTPException(status_code=400, detail="start_date は end_date 以前である必要があります")
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
 
     mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
     wm_machine_col = (
@@ -9569,7 +10103,7 @@ async def get_welding_productivity_analysis(
         if "welding_management" in msg and ("doesn't exist" in msg or "not exist" in msg or "unknown table" in msg):
             raise HTTPException(
                 status_code=503,
-                detail="welding_management テーブルが存在しません。backend/database/migrations/13_welding_management.sql を実行してください。",
+                detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
             ) from e
         for col in _WELDING_MGMT_MES_COLUMNS:
             if col in msg:
@@ -9635,7 +10169,7 @@ async def get_welding_productivity_analysis(
             "mes_operator_user_id": int(operator_id) if operator_id is not None else None,
             "mes_operator_name": operator_name or None,
             "mes_operator_username": (item.get("mes_operator_username") or "").strip() or None,
-            "operator_display_name": operator_name or (f"ID:{operator_id}" if operator_id else "—"),
+            "operator_display_name": operator_name or (f"ID:{operator_id}" if operator_id else "?"),
             "net_production_sec": int(net_sec),
             "paused_sec": int(paused_sec),
             "net_production_min": int(round(net_sec / 60)) if net_sec > 0 else 0,
@@ -9677,7 +10211,7 @@ async def get_welding_productivity_analysis(
         if operator_key not in operator_map:
             operator_map[operator_key] = {
                 "operator_user_id": int(operator_id) if operator_id is not None else None,
-                "operator_name": operator_name or (f"ID:{operator_id}" if operator_id else "—"),
+                "operator_name": operator_name or (f"ID:{operator_id}" if operator_id else "?"),
                 "session_count": 0,
                 "completed_session_count": 0,
                 "sum_actual_qty": 0,
@@ -9720,7 +10254,7 @@ async def get_welding_productivity_analysis(
         if operator_key not in pi_bucket:
             pi_bucket[operator_key] = {
                 "operator_user_id": int(operator_id) if operator_id is not None else None,
-                "operator_name": operator_name or (f"ID:{operator_id}" if operator_id else "—"),
+                "operator_name": operator_name or (f"ID:{operator_id}" if operator_id else "?"),
                 "session_count": 0,
                 "completed_session_count": 0,
                 "sum_actual_qty": 0,
@@ -9814,5 +10348,342 @@ async def get_welding_productivity_analysis(
             "by_product_operator_ranking": by_product_operator_ranking,
             "defect_by_item": defect_by_item,
             "sessions": sessions,
+        },
+    }
+
+@router.get("/plan/welding-management/utilization-analysis")
+async def get_welding_utilization_analysis(
+    start_date: str = Query(..., description="????? YYYY-MM-DD"),
+    end_date: str = Query(..., description="????? YYYY-MM-DD"),
+    mes_operator_user_id: Optional[int] = Query(None, description="????? users.id"),
+    include_incomplete: bool = Query(False, description="????????????"),
+    extra_workdays: Optional[str] = Query(None, description="????? CSV YYYY-MM-DD"),
+    extra_holidays: Optional[str] = Query(None, description="???? CSV YYYY-MM-DD"),
+    use_company_calendar: bool = Query(True, description="????????????"),
+    limit: int = Query(5000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(verify_token_and_get_user),
+):
+    """Welding utilization analysis (welding_management, 7.6h/day standard)."""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(
+            status_code=503,
+            detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
+        )
+    start_d = _parse_date_ymd(start_date)
+    end_d = _parse_date_ymd(end_date)
+    if start_d is None or end_d is None:
+        raise HTTPException(status_code=400, detail="start_date / end_date ?????")
+    if start_d > end_d:
+        raise HTTPException(status_code=400, detail="start_date ? end_date ????????????")
+
+    extra_workday_set = parse_date_csv(extra_workdays)
+    extra_holiday_set = parse_date_csv(extra_holidays)
+    company_scheduled: set[str] = set()
+    company_off: set[str] = set()
+    company_calendar_applied = False
+    if use_company_calendar:
+        try:
+            company_scheduled, company_off = await load_company_calendar_sets(db, start_d, end_d)
+            company_calendar_applied = True
+        except Exception as e:
+            logger.warning("company_work_calendar load failed: %s", e)
+
+    company_calendar_extra_workdays = sorted(
+        iso for iso in company_scheduled if date.fromisoformat(iso).weekday() >= 5
+    )
+    company_calendar_holidays = sorted(company_off)
+
+    calendar_workdays = count_scheduled_workdays(
+        start_d,
+        end_d,
+        company_scheduled=company_scheduled,
+        company_off=company_off,
+        extra_workdays=extra_workday_set,
+        extra_holidays=extra_holiday_set,
+    )
+
+    mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
+    join_operator = "mes_operator_user_id" in wm_cols
+    operator_select = _welding_mgmt_operator_select_fragment(join_operator, trailing_comma=False)
+    operator_join = "LEFT JOIN users ON users.id = welding_management.mes_operator_user_id" if join_operator else ""
+
+    where_parts: list[str] = [
+        "welding_management.production_day >= :start_date",
+        "welding_management.production_day <= :end_date",
+    ]
+    params: dict[str, Any] = {"start_date": start_d, "end_date": end_d, "lim": limit}
+    if mes_operator_user_id is not None and join_operator:
+        where_parts.append("welding_management.mes_operator_user_id = :mes_operator_user_id")
+        params["mes_operator_user_id"] = int(mes_operator_user_id)
+    if not include_incomplete:
+        where_parts.append("welding_management.production_completed_check = 1")
+
+    where_sql = " AND ".join(where_parts)
+    sql = f"""
+        SELECT welding_management.id,
+               welding_management.production_day,
+               welding_management.production_completed_check,
+               welding_management.product_cd,
+               welding_management.product_name,
+               {mes_frag}
+               {operator_select}
+        FROM welding_management
+        {operator_join}
+        WHERE {where_sql}
+        ORDER BY welding_management.production_day ASC,
+                 welding_management.id ASC
+        LIMIT :lim
+    """
+    try:
+        result = await db.execute(text(sql), params)
+        rows = result.mappings().all()
+    except Exception as e:
+        _raise_welding_mgmt_query_error(e)
+
+    daily_operator_map: dict[tuple[str, str], dict[str, Any]] = {}
+    daily_operator_set: dict[str, set[str]] = {}
+    unassigned_session_count = 0
+    sessions_without_time_count = 0
+    sessions_without_time: list[dict[str, Any]] = []
+    total_session_count = 0
+    completed_session_count = 0
+
+    for row in rows:
+        item = dict(row)
+        for k in ("mes_production_started_at", "mes_production_ended_at"):
+            v = item.get(k)
+            if isinstance(v, datetime):
+                item[k] = v.isoformat()
+        vday = item.get("production_day")
+        if isinstance(vday, date):
+            item["production_day"] = vday.isoformat()
+
+        total_session_count += 1
+        is_completed = int(item.get("production_completed_check") or 0) == 1
+        if is_completed:
+            completed_session_count += 1
+
+        day_key = str(item.get("production_day") or "")[:10]
+        if not day_key:
+            continue
+
+        operator_id = item.get("mes_operator_user_id")
+        if operator_id is None:
+            unassigned_session_count += 1
+            operator_key = "none"
+            operator_name = "?"
+        else:
+            operator_key = str(operator_id)
+            operator_name = (
+                (item.get("mes_operator_name") or item.get("mes_operator_username") or "").strip()
+                or f"ID:{operator_id}"
+            )
+
+        net_sec = _inspection_row_net_production_sec(item)
+        if net_sec <= 0:
+            sessions_without_time_count += 1
+            sessions_without_time.append(
+                {
+                    "id": item.get("id"),
+                    "production_day": day_key,
+                    "operator_user_id": int(operator_id) if operator_id is not None else None,
+                    "operator_name": operator_name if operator_id is not None else None,
+                    "product_cd": (item.get("product_cd") or "").strip() or None,
+                    "product_name": (item.get("product_name") or "").strip() or None,
+                    "production_completed_check": is_completed,
+                    "mes_production_started_at": item.get("mes_production_started_at"),
+                    "mes_production_ended_at": item.get("mes_production_ended_at"),
+                }
+            )
+
+        map_key = (day_key, operator_key)
+        if map_key not in daily_operator_map:
+            day_d = date.fromisoformat(day_key)
+            scheduled = is_scheduled_workday(
+                day_d,
+                company_scheduled=company_scheduled,
+                company_off=company_off,
+                extra_workdays=extra_workday_set,
+                extra_holidays=extra_holiday_set,
+            )
+            is_weekend = day_d.weekday() >= 5
+            daily_operator_map[map_key] = {
+                "day": day_key,
+                "operator_user_id": int(operator_id) if operator_id is not None else None,
+                "operator_name": operator_name,
+                "is_scheduled_workday": scheduled,
+                "is_weekend": is_weekend,
+                "is_extra_workday": scheduled and (is_weekend or day_key in extra_workday_set),
+                "session_count": 0,
+                "completed_session_count": 0,
+                "sum_net_production_sec": 0,
+            }
+        bucket = daily_operator_map[map_key]
+        bucket["session_count"] = int(bucket.get("session_count") or 0) + 1
+        bucket["completed_session_count"] = int(bucket.get("completed_session_count") or 0) + (
+            1 if is_completed else 0
+        )
+        bucket["sum_net_production_sec"] = int(bucket.get("sum_net_production_sec") or 0) + net_sec
+        daily_operator_set.setdefault(day_key, set()).add(operator_key)
+
+    schedule_index = InspectorWorkScheduleIndex()
+
+    raw_daily_values = sorted(
+        daily_operator_map.values(),
+        key=lambda x: (str(x.get("day") or ""), str(x.get("operator_name") or "")),
+    )
+    for bucket in raw_daily_values:
+        _apply_operator_standard_to_daily_row(bucket, schedule_index=schedule_index)
+
+    daily_by_operator = [
+        _finalize_inspection_utilization_daily_row(dict(v)) for v in raw_daily_values
+    ]
+
+    daily_rows_by_operator: dict[str, list[dict[str, Any]]] = {}
+    for row in daily_by_operator:
+        op_key = (
+            str(row.get("operator_user_id")) if row.get("operator_user_id") is not None else "none"
+        )
+        daily_rows_by_operator.setdefault(op_key, []).append(row)
+
+    operator_map: dict[str, dict[str, Any]] = {}
+    for row in daily_by_operator:
+        op_key = (
+            str(row.get("operator_user_id")) if row.get("operator_user_id") is not None else "none"
+        )
+        if op_key not in operator_map:
+            operator_map[op_key] = {
+                "operator_user_id": row.get("operator_user_id"),
+                "operator_name": row.get("operator_name") or "?",
+                "session_count": 0,
+                "work_day_count": 0,
+                "scheduled_work_day_count": 0,
+                "sum_net_production_sec": 0,
+                "sum_regular_sec": 0,
+                "sum_overtime_sec": 0,
+            }
+        inv = operator_map[op_key]
+        inv["session_count"] = int(inv.get("session_count") or 0) + int(row.get("session_count") or 0)
+        inv["work_day_count"] = int(inv.get("work_day_count") or 0) + 1
+        if row.get("is_scheduled_workday"):
+            inv["scheduled_work_day_count"] = int(inv.get("scheduled_work_day_count") or 0) + 1
+        inv["sum_net_production_sec"] = int(inv.get("sum_net_production_sec") or 0) + int(
+            row.get("sum_net_production_sec") or 0
+        )
+        inv["sum_regular_sec"] = int(inv.get("sum_regular_sec") or 0) + int(row.get("sum_regular_sec") or 0)
+        inv["sum_overtime_sec"] = int(inv.get("sum_overtime_sec") or 0) + int(row.get("sum_overtime_sec") or 0)
+
+    by_operator = sorted(
+        [
+            _finalize_welding_utilization_operator_row(
+                v,
+                schedule_index=schedule_index,
+                start_d=start_d,
+                end_d=end_d,
+                company_scheduled=company_scheduled,
+                company_off=company_off,
+                extra_workdays=extra_workday_set,
+                extra_holidays=extra_holiday_set,
+                daily_rows=daily_rows_by_operator.get(
+                    str(v.get("operator_user_id"))
+                    if v.get("operator_user_id") is not None
+                    else "none",
+                    [],
+                ),
+            )
+            for v in operator_map.values()
+        ],
+        key=lambda x: (-int(x.get("sum_net_production_sec") or 0), str(x.get("operator_name") or "")),
+    )
+
+    daily_map: dict[str, dict[str, Any]] = {}
+    for row in daily_by_operator:
+        day_key = str(row.get("day") or "")
+        if day_key not in daily_map:
+            daily_map[day_key] = {
+                "day": day_key,
+                "is_scheduled_workday": row.get("is_scheduled_workday"),
+                "session_count": 0,
+                "operator_count": len(daily_operator_set.get(day_key, set())),
+                "sum_net_production_sec": 0,
+                "sum_regular_sec": 0,
+                "sum_overtime_sec": 0,
+                "sum_standard_sec": 0,
+            }
+        day_row = daily_map[day_key]
+        day_row["session_count"] = int(day_row.get("session_count") or 0) + int(row.get("session_count") or 0)
+        day_row["sum_net_production_sec"] = int(day_row.get("sum_net_production_sec") or 0) + int(
+            row.get("sum_net_production_sec") or 0
+        )
+        day_row["sum_regular_sec"] = int(day_row.get("sum_regular_sec") or 0) + int(row.get("sum_regular_sec") or 0)
+        day_row["sum_overtime_sec"] = int(day_row.get("sum_overtime_sec") or 0) + int(row.get("sum_overtime_sec") or 0)
+        day_row["sum_standard_sec"] = int(day_row.get("sum_standard_sec") or 0) + int(row.get("standard_sec") or 0)
+
+    daily: list[dict[str, Any]] = []
+    for day_key in sorted(daily_map.keys()):
+        row = daily_map[day_key]
+        net = int(row.get("sum_net_production_sec") or 0)
+        regular = int(row.get("sum_regular_sec") or 0)
+        overtime = int(row.get("sum_overtime_sec") or 0)
+        std_total = int(row.get("sum_standard_sec") or 0)
+        row["sum_net_production_min"] = round(net / 60) if net > 0 else 0
+        row["utilization_percent"] = _utilization_percent(regular, std_total)
+        daily.append(row)
+
+    sum_net = sum(int(v.get("sum_net_production_sec") or 0) for v in by_operator)
+    sum_regular = sum(int(v.get("sum_regular_sec") or 0) for v in by_operator)
+    sum_overtime = sum(int(v.get("sum_overtime_sec") or 0) for v in by_operator)
+    std_worked_total = sum(int(v.get("standard_sec_on_worked_days") or 0) for v in by_operator)
+    std_calendar_total = sum(int(v.get("standard_sec_calendar") or 0) for v in by_operator)
+
+    summary = {
+        "operator_count": len(by_operator),
+        "session_count": total_session_count,
+        "completed_session_count": completed_session_count,
+        "calendar_workdays_in_range": calendar_workdays,
+        "sum_net_production_sec": sum_net,
+        "sum_regular_sec": sum_regular,
+        "sum_overtime_sec": sum_overtime,
+        "sum_net_production_min": round(sum_net / 60) if sum_net > 0 else 0,
+        "regular_min": round(sum_regular / 60) if sum_regular > 0 else 0,
+        "overtime_min": round(sum_overtime / 60) if sum_overtime > 0 else 0,
+        "utilization_percent": _utilization_percent(sum_regular, std_worked_total),
+        "calendar_utilization_percent": _utilization_percent(sum_regular, std_calendar_total),
+        "unassigned_session_count": unassigned_session_count,
+        "sessions_without_time_count": sessions_without_time_count,
+    }
+
+    data_gaps: list[str] = []
+    if unassigned_session_count > 0:
+        data_gaps.append(f"??????????????? {unassigned_session_count} ?????")
+    if sessions_without_time_count > 0:
+        data_gaps.append(f"??????????????????? {sessions_without_time_count} ?????")
+    if not company_calendar_applied and use_company_calendar:
+        data_gaps.append("????????????????????????????????????????")
+
+    return {
+        "success": True,
+        "data": {
+            "start_date": start_d.isoformat(),
+            "end_date": end_d.isoformat(),
+            "include_incomplete": include_incomplete,
+            "standard_workday_hours": INSPECTION_STANDARD_WORKDAY_HOURS,
+            "standard_workday_sec": INSPECTION_STANDARD_WORKDAY_SEC,
+            "operator_schedule_applied": False,
+            "default_standard_workday_hours": DEFAULT_INSPECTION_STANDARD_HOURS,
+            "extra_workdays": sorted(extra_workday_set),
+            "extra_holidays": sorted(extra_holiday_set),
+            "company_calendar_applied": company_calendar_applied,
+            "company_calendar_extra_workdays": company_calendar_extra_workdays,
+            "company_calendar_holidays": company_calendar_holidays,
+            "calendar_workdays_in_range": calendar_workdays,
+            "summary": summary,
+            "by_operator": by_operator,
+            "daily_by_operator": daily_by_operator,
+            "daily": daily,
+            "data_gaps": data_gaps,
+            "sessions_without_time": sessions_without_time[:100],
         },
     }

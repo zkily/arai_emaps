@@ -11,6 +11,7 @@ export interface WeldingMesMachine {
 export interface WeldingMesProductOption {
   product_code: string
   product_name: string
+  unit_per_box?: number
 }
 
 export async function fetchWeldingMesProducts(machineId: number): Promise<WeldingMesProductOption[]> {
