@@ -258,6 +258,49 @@ class Settings(BaseSettings):
         """監視・有効フラグ用のファイル名一覧（ベース名）。"""
         return [b for _, b in self.get_material_receiving_csv_entries()]
 
+    # 部品受入ログ：フルパスをカンマ区切りで指定（最優先）
+    PART_RECEIVING_CSV_PATHS: str = ""
+    PART_RECEIVING_WATCH_BASE_PATH: str = ""
+    PART_RECEIVING_WATCH_FILES: str = ""
+
+    def get_part_receiving_watch_base(self) -> str:
+        p = (self.PART_RECEIVING_WATCH_BASE_PATH or "").strip()
+        if p:
+            return os.path.normpath(os.path.expandvars(p))
+        fb = (self.FILE_WATCH_BASE_PATH or "").strip()
+        return os.path.normpath(os.path.expandvars(fb)) if fb else ""
+
+    def get_part_receiving_csv_entries(self) -> List[Tuple[str, str]]:
+        paths_raw = (self.PART_RECEIVING_CSV_PATHS or "").strip()
+        if paths_raw:
+            out: List[Tuple[str, str]] = []
+            for part in paths_raw.split(","):
+                p = part.strip().strip('"').strip("'")
+                if not p:
+                    continue
+                full = os.path.normpath(os.path.expandvars(p))
+                out.append((full, os.path.basename(full)))
+            return out
+
+        base = self.get_part_receiving_watch_base()
+        raw_names = (self.PART_RECEIVING_WATCH_FILES or "").strip()
+        if raw_names:
+            name_list = [x.strip() for x in raw_names.split(",") if x.strip()]
+        else:
+            name_list = [
+                "Part_Maruiti.csv",
+                "Part_Nagoya.csv",
+                "Part_JFE.csv",
+                "Part_Okajima.csv",
+            ]
+        if not base:
+            return []
+        nb = os.path.normpath(os.path.expandvars(base))
+        return [(os.path.normpath(os.path.join(nb, n)), n) for n in name_list]
+
+    def get_part_receiving_watch_filenames(self) -> List[str]:
+        return [b for _, b in self.get_part_receiving_csv_entries()]
+
 
 # 設定インスタンスの作成
 settings = Settings()

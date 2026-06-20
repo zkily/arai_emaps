@@ -206,6 +206,12 @@ _WELDING_MGMT_MES_COLUMNS = (
     "mes_defect_by_item",
 )
 
+_WELDING_MGMT_META_COLUMNS = (
+    "data_source",
+    "external_sync_key",
+    "manual_registration_note",
+)
+
 
 async def _get_chamfering_mgmt_columns(db: AsyncSession) -> set[str]:
     """chamfering_management ??????????????????? SQL ??????????"""
@@ -399,6 +405,11 @@ def _normalize_welding_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
         v = out.get(k)
         if isinstance(v, date):
             out[k] = v.isoformat()
+    out["data_source"] = resolve_data_source(
+        out.get("data_source"),
+        out.get("remarks"),
+        out.get("external_sync_key"),
+    )
     return out
 
 
@@ -948,7 +959,7 @@ def _build_defect_breakdown_rows(
         cd = str(defect_cd or "").strip()
         if not cd:
             continue
-        qty = int(qty_raw or 0)
+        qty = _mes_defect_item_qty(qty_raw)
         if qty <= 0:
             continue
         rows.append(
@@ -1257,6 +1268,29 @@ def _welding_mgmt_mes_select_fragment(existing: set[str]) -> str:
     return (",\n               ".join(parts) + ",") if parts else ""
 
 
+def _welding_mgmt_meta_select_fragment(existing: set[str]) -> str:
+    parts = [f"welding_management.{c}" for c in _WELDING_MGMT_META_COLUMNS if c in existing]
+    return (",\n               ".join(parts) + ",") if parts else ""
+
+
+def _welding_mes_row_mutation_requested(body: "UpdateWeldingManagementBody") -> bool:
+    return (
+        body.mes_production_started_at is not None
+        or body.mes_production_ended_at is not None
+        or body.mes_net_production_sec is not None
+        or body.mes_paused_accum_sec is not None
+        or body.mes_break_sec is not None
+        or body.mes_stop_sec is not None
+        or body.mes_production_is_paused is not None
+        or body.mes_defect_by_item is not None
+        or body.mes_operator_user_id is not None
+        or body.mes_claim_client_lock
+        or body.production_completed_check is not None
+        or body.actual_production_quantity is not None
+        or body.defect_qty is not None
+    )
+
+
 def _welding_mgmt_operator_select_fragment(join_operator: bool, *, trailing_comma: bool = True) -> str:
     suffix = "," if trailing_comma else ""
     if join_operator:
@@ -1427,6 +1461,12 @@ def _parse_mes_defect_entry(val: Any) -> tuple[int, Optional[str]]:
         return max(0, int(val)), None
     except (TypeError, ValueError):
         return 0, None
+
+
+def _mes_defect_item_qty(val: Any) -> int:
+    """mes_defect_by_item の各項目値（数値または {qty, at}）から数量を取得"""
+    qty, _ = _parse_mes_defect_entry(val)
+    return qty
 
 
 def _parse_mes_defect_by_item_for_db(val: Any) -> Optional[str]:
@@ -7955,7 +7995,7 @@ async def get_inspection_productivity_analysis(
                 cd = str(defect_cd or "").strip()
                 if not cd:
                     continue
-                qty = int(qty_raw or 0)
+                qty = _mes_defect_item_qty(qty_raw)
                 if qty <= 0:
                     continue
                 defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty
@@ -7985,7 +8025,7 @@ async def get_inspection_productivity_analysis(
                     )
                     if not header:
                         continue
-                    qty = int(qty_raw or 0)
+                    qty = _mes_defect_item_qty(qty_raw)
                     if qty <= 0:
                         continue
                     metrics_bucket["defects"][header] = int(metrics_bucket["defects"].get(header) or 0) + qty
@@ -8536,7 +8576,7 @@ async def get_inspection_quality_analysis(
         item_defect_qty = 0
         if defect_by_item:
             for qty_raw in defect_by_item.values():
-                item_defect_qty += int(qty_raw or 0)
+                item_defect_qty += _mes_defect_item_qty(qty_raw)
         if item_defect_qty > defect_qty:
             defect_qty = item_defect_qty
         is_completed = int(item.get("production_completed_check") or 0) == 1
@@ -8629,7 +8669,7 @@ async def get_inspection_quality_analysis(
                 cd = str(defect_cd or "").strip()
                 if not cd:
                     continue
-                qty = int(qty_raw or 0)
+                qty = _mes_defect_item_qty(qty_raw)
                 if qty <= 0:
                     continue
                 defect_item_kinds.add(cd)
@@ -8816,7 +8856,7 @@ async def get_welding_quality_analysis(
         item_defect_qty = 0
         if defect_by_item:
             for qty_raw in defect_by_item.values():
-                item_defect_qty += int(qty_raw or 0)
+                item_defect_qty += _mes_defect_item_qty(qty_raw)
         if item_defect_qty > defect_qty:
             defect_qty = item_defect_qty
         is_completed = int(item.get("production_completed_check") or 0) == 1
@@ -8909,7 +8949,7 @@ async def get_welding_quality_analysis(
                 cd = str(defect_cd or "").strip()
                 if not cd:
                     continue
-                qty = int(qty_raw or 0)
+                qty = _mes_defect_item_qty(qty_raw)
                 if qty <= 0:
                     continue
                 defect_item_kinds.add(cd)
@@ -9558,6 +9598,7 @@ async def get_welding_management_list(
             detail="welding_management ????????????backend/database/migrations/13_welding_management.sql ??????????",
         )
     mes_frag = _welding_mgmt_mes_select_fragment(wm_cols)
+    meta_frag = _welding_mgmt_meta_select_fragment(wm_cols)
     where_parts: list[str] = ["1=1"]
     params: dict[str, Any] = {"lim": limit}
     if production_day:
@@ -9594,6 +9635,7 @@ async def get_welding_management_list(
                welding_management.mes_defect_by_item,
                welding_management.production_completed_check,
                {mes_frag}
+               {meta_frag}
                welding_management.remarks,
                welding_management.created_at,
                welding_management.updated_at
@@ -9619,25 +9661,7 @@ async def get_welding_management_list(
                 raise HTTPException(status_code=503, detail=_welding_mes_column_migration_hint(col)) from e
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    out: list[dict] = []
-    for row in rows:
-        item = dict(row)
-        raw_def = item.get("mes_defect_by_item")
-        if raw_def is not None and not isinstance(raw_def, dict):
-            try:
-                item["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
-            except json.JSONDecodeError:
-                item["mes_defect_by_item"] = None
-        for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
-            v = item.get(k)
-            if isinstance(v, datetime):
-                item[k] = v.isoformat()
-        for k in ("production_month", "production_day"):
-            v = item.get(k)
-            if isinstance(v, date):
-                item[k] = v.isoformat()
-        out.append(item)
-    return {"success": True, "data": out}
+    return {"success": True, "data": [_normalize_welding_mgmt_row(dict(row)) for row in rows]}
 
 
 class CreateWeldingManagementBody(BaseModel):
@@ -9647,6 +9671,8 @@ class CreateWeldingManagementBody(BaseModel):
     welding_machine: Optional[str] = None
     mes_operator_user_id: Optional[int] = None
     remarks: Optional[str] = None
+    manual_registration_note: Optional[str] = None
+    manual_registration: bool = False
 
 
 @router.post("/plan/welding-management")
@@ -9684,7 +9710,6 @@ async def create_welding_management(
         "production_sequence": seq,
         "product_cd": product_cd,
         "product_name": product_name,
-        "remarks": (body.remarks or "").strip() or None,
     }
     cols = [
         "production_month",
@@ -9692,7 +9717,6 @@ async def create_welding_management(
         "production_sequence",
         "product_cd",
         "product_name",
-        "remarks",
     ]
     vals = [
         ":production_month",
@@ -9700,8 +9724,16 @@ async def create_welding_management(
         ":production_sequence",
         ":product_cd",
         ":product_name",
-        ":remarks",
     ]
+    if body.manual_registration:
+        if "manual_registration_note" in wm_cols:
+            cols.append("manual_registration_note")
+            vals.append(":manual_registration_note")
+            params["manual_registration_note"] = (body.manual_registration_note or "").strip() or None
+    else:
+        cols.append("remarks")
+        vals.append(":remarks")
+        params["remarks"] = (body.remarks or "").strip() or None
     if inspector_id is not None and int(inspector_id) > 0 and "mes_operator_user_id" in wm_cols:
         cols.append("mes_operator_user_id")
         vals.append(":mes_operator_user_id")
@@ -9711,6 +9743,10 @@ async def create_welding_management(
         cols.append("welding_machine")
         vals.append(":welding_machine")
         params["welding_machine"] = wm_name
+    if "data_source" in wm_cols:
+        cols.append("data_source")
+        vals.append(":data_source")
+        params["data_source"] = DATA_SOURCE_MES
     try:
         res = await db.execute(
             text(
@@ -9749,6 +9785,8 @@ class UpdateWeldingManagementBody(BaseModel):
     mes_claim_client_lock: Optional[bool] = None
     mes_release_client_lock: Optional[bool] = None
     mes_force_release: Optional[bool] = None
+    manual_registration_note: Optional[str] = None
+    manual_registration: bool = False
 
 
 @router.patch("/plan/welding-management/{welding_id}")
@@ -9827,9 +9865,17 @@ async def update_welding_management(
     if body.production_sequence is not None:
         updates.append("production_sequence = :production_sequence")
         params["production_sequence"] = int(body.production_sequence)
-    if body.remarks is not None:
+    if body.remarks is not None and not body.manual_registration:
         updates.append("remarks = :remarks")
         params["remarks"] = (body.remarks or "").strip() or None
+    if body.manual_registration_note is not None:
+        if "manual_registration_note" not in wm_cols:
+            raise HTTPException(
+                status_code=503,
+                detail="manual_registration_note ????????backend/database/migrations/57_welding_management_manual_registration_note.sql ??????????",
+            )
+        updates.append("manual_registration_note = :manual_registration_note")
+        params["manual_registration_note"] = (body.manual_registration_note or "").strip() or None
     if body.welding_machine is not None and "welding_machine" in wm_cols:
         wm_val = (body.welding_machine or "").strip()
         if wm_val:
@@ -9849,35 +9895,36 @@ async def update_welding_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
-                start_inspector: Optional[int] = None
-                if body.mes_operator_user_id is not None:
-                    try:
-                        parsed_inspector = int(body.mes_operator_user_id)
-                        if parsed_inspector > 0:
-                            start_inspector = parsed_inspector
-                    except (TypeError, ValueError):
-                        start_inspector = None
-                if "welding_machine" in wm_cols:
-                    await _reject_concurrent_mes_production_on_welding_machine(
-                        db, welding_id, wm_cols
-                    )
-                else:
-                    await _reject_concurrent_mes_production_on_welding_start(
-                        db,
-                        welding_id,
-                        wm_cols,
-                        inspector_user_id=start_inspector,
-                    )
-                if has_client_col:
-                    if not client_id:
-                        raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
-                    _reject_welding_mes_client_lock_conflict(
-                        existing_lock,
-                        client_id,
-                        force_release=force_release,
-                    )
-                    params["mes_client_instance_id"] = client_id
-                    updates.append("mes_client_instance_id = :mes_client_instance_id")
+                if not body.manual_registration:
+                    start_inspector: Optional[int] = None
+                    if body.mes_operator_user_id is not None:
+                        try:
+                            parsed_inspector = int(body.mes_operator_user_id)
+                            if parsed_inspector > 0:
+                                start_inspector = parsed_inspector
+                        except (TypeError, ValueError):
+                            start_inspector = None
+                    if "welding_machine" in wm_cols:
+                        await _reject_concurrent_mes_production_on_welding_machine(
+                            db, welding_id, wm_cols
+                        )
+                    else:
+                        await _reject_concurrent_mes_production_on_welding_start(
+                            db,
+                            welding_id,
+                            wm_cols,
+                            inspector_user_id=start_inspector,
+                        )
+                    if has_client_col:
+                        if not client_id:
+                            raise HTTPException(status_code=400, detail="mes_client_instance_id ?????")
+                        _reject_welding_mes_client_lock_conflict(
+                            existing_lock,
+                            client_id,
+                            force_release=force_release,
+                        )
+                        params["mes_client_instance_id"] = client_id
+                        updates.append("mes_client_instance_id = :mes_client_instance_id")
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
     if body.mes_production_ended_at is not None:
@@ -9889,7 +9936,7 @@ async def update_welding_management(
         else:
             edt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_ended_at)
             if edt:
-                if in_progress:
+                if in_progress and not body.manual_registration:
                     _reject_welding_mes_client_lock_conflict(
                         existing_lock,
                         client_id,
@@ -9897,7 +9944,7 @@ async def update_welding_management(
                     )
                 params["mes_production_ended_at"] = edt
                 updates.append("mes_production_ended_at = :mes_production_ended_at")
-                if has_client_col:
+                if has_client_col and not body.manual_registration:
                     updates.append("mes_client_instance_id = NULL")
     if body.mes_net_production_sec is not None:
         if "mes_net_production_sec" not in wm_cols:
@@ -9992,7 +10039,7 @@ async def update_welding_management(
         or body.mes_defect_by_item is not None
         or (body.mes_operator_user_id is not None and in_progress)
     )
-    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock:
+    if mes_control_touched and in_progress and has_client_col and not body.mes_claim_client_lock and not body.manual_registration:
         _reject_welding_mes_client_lock_conflict(
             existing_lock,
             client_id,
@@ -10015,6 +10062,36 @@ async def update_welding_management(
         await db.rollback()
         raise HTTPException(status_code=500, detail=str(e)) from e
     return {"success": True, "message": "??????"}
+
+
+@router.delete("/plan/welding-management/{welding_id}")
+async def delete_welding_management(
+    welding_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_mes_operation("delete")),
+):
+    """????1???????"""
+    wm_cols = await _get_welding_mgmt_columns(db)
+    if not wm_cols:
+        raise HTTPException(status_code=503, detail="welding_management ????????????")
+    result = await db.execute(
+        text("SELECT id FROM welding_management WHERE id = :wid LIMIT 1"),
+        {"wid": welding_id},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="???????????????")
+    try:
+        await db.execute(
+            text("DELETE FROM welding_management WHERE id = :wid"),
+            {"wid": welding_id},
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "message": "??????"}
+
 
 @router.get("/plan/welding-management/productivity-analysis")
 async def get_welding_productivity_analysis(
@@ -10274,7 +10351,7 @@ async def get_welding_productivity_analysis(
                 cd = str(defect_cd or "").strip()
                 if not cd:
                     continue
-                qty = int(qty_raw or 0)
+                qty = _mes_defect_item_qty(qty_raw)
                 if qty <= 0:
                     continue
                 defect_item_map[cd] = int(defect_item_map.get(cd) or 0) + qty

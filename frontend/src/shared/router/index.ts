@@ -138,9 +138,10 @@ const routes: RouteRecordRaw[] = [
         name: 'PartPurchaseManagement',
         component: () => import('@/views/erp/purchase/part/PartLayoutWrapper.vue'),
         meta: { title: '部品管理', group: '購買管理 > 部品管理', requiresAuth: true },
+        redirect: { name: 'PartOrder' },
         children: [
-          { path: '', name: 'PartPurchaseHome', component: () => import('@/views/erp/purchase/part/PartHome.vue'), meta: { title: '部品管理ホーム', group: '部品管理', requiresAuth: true } },
           { path: 'master', redirect: '/master/part' },
+          { path: 'receiving-history', name: 'PartReceivingHistory', component: () => import('@/views/erp/purchase/part/partReceiving/PartReceivingHistory.vue'), meta: { title: '受入履歴', group: '受入管理', requiresAuth: true } },
           { path: 'order', name: 'PartOrder', component: () => import('@/views/erp/purchase/part/partOrder/PartOrderPage.vue'), meta: { title: '部品在庫管理', group: '発注管理', requiresAuth: true } },
         ],
       },

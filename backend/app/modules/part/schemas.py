@@ -1,7 +1,7 @@
 """部品購買 Pydantic スキーマ"""
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, date
+from datetime import datetime, date, time
 from decimal import Decimal
 
 
@@ -69,3 +69,67 @@ class PartStockCalculateRequest(BaseModel):
 
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+
+# ─────────────────────────────────────────────
+# 受入ログ (part_logs)
+# ─────────────────────────────────────────────
+class PartLogBase(BaseModel):
+    item: str
+    part_cd: str
+    part_name: Optional[str] = None
+    process_cd: str
+    log_date: date
+    log_time: time
+    hd_no: Optional[str] = None
+    pieces_per_bundle: Optional[int] = None
+    quantity: Optional[int] = None
+    bundle_quantity: Optional[int] = None
+    manufacture_no: Optional[str] = None
+    manufacture_date: Optional[date] = None
+    length: Optional[int] = None
+    outer_diameter1: Optional[Decimal] = None
+    outer_diameter2: Optional[Decimal] = None
+    magnetic: Optional[str] = None
+    appearance: Optional[str] = None
+    supplier: Optional[str] = None
+    part_quality: Optional[str] = None
+    remarks: Optional[str] = None
+    note: Optional[str] = None
+
+
+class PartLogCreate(PartLogBase):
+    pass
+
+
+class PartLogUpdate(BaseModel):
+    item: Optional[str] = None
+    part_cd: Optional[str] = None
+    part_name: Optional[str] = None
+    process_cd: Optional[str] = None
+    log_date: Optional[date] = None
+    log_time: Optional[time] = None
+    hd_no: Optional[str] = None
+    pieces_per_bundle: Optional[int] = None
+    quantity: Optional[int] = None
+    bundle_quantity: Optional[int] = None
+    manufacture_no: Optional[str] = None
+    manufacture_date: Optional[date] = None
+    length: Optional[int] = None
+    outer_diameter1: Optional[Decimal] = None
+    outer_diameter2: Optional[Decimal] = None
+    magnetic: Optional[str] = None
+    appearance: Optional[str] = None
+    supplier: Optional[str] = None
+    part_quality: Optional[str] = None
+    remarks: Optional[str] = None
+    note: Optional[str] = None
+
+
+class PartLogResponse(PartLogBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

@@ -38,6 +38,9 @@ STOCK_FILES = [
 # 材料ログ → material_logs（実パスは .env: MATERIAL_RECEIVING_CSV_PATHS / MATERIAL_RECEIVING_WATCH_BASE_PATH 等）
 MATERIAL_FILES = list(settings.get_material_receiving_watch_filenames())
 
+# 部品ログ → part_logs（実パスは .env: PART_RECEIVING_CSV_PATHS 等）
+PART_FILES = list(settings.get_part_receiving_watch_filenames())
+
 # ピッキングログファイル → shipping_log（fileWatcherService.js と同等）
 # Partslog.csv も同一フォーマットで配置された場合に監視し、取込後は picking_log_matched を API と同様に全件再計算
 PICKING_FILES = [
@@ -842,6 +845,154 @@ class MaterialService:
                 d["outer_diameter2"] = 0
 
 
+def _material_parsed_row_to_part(row: dict) -> dict:
+    """MaterialService の解析結果を part_logs 向け dict に変換"""
+    return {
+        "item": row.get("item"),
+        "log_date": row.get("log_date"),
+        "log_time": row.get("log_time"),
+        "hd_no": row.get("hd_no"),
+        "remarks": row.get("remarks"),
+        "part_cd": row.get("material_cd") or "",
+        "part_name": row.get("material_name") or "",
+        "process_cd": row.get("process_cd") or "",
+        "manufacture_no": row.get("manufacture_no"),
+        "manufacture_date": row.get("manufacture_date"),
+        "pieces_per_bundle": row.get("pieces_per_bundle"),
+        "length": row.get("length"),
+        "quantity": row.get("quantity"),
+        "bundle_quantity": row.get("bundle_quantity"),
+        "magnetic": row.get("magnetic"),
+        "appearance": row.get("appearance"),
+        "outer_diameter1": row.get("outer_diameter1"),
+        "outer_diameter2": row.get("outer_diameter2"),
+        "supplier": row.get("supplier"),
+        "part_quality": row.get("material_quality"),
+        "note": row.get("note") or "",
+    }
+
+
+class PartService:
+    """部品 CSV → part_logs（MaterialService と同一 CSV 形式・部品マスタで補完）"""
+
+    def sync(self, filepath, filename):
+        rows = read_csv_content(filepath, encoding_list=["shift_jis", "cp932"])
+        if not rows or len(rows) < 2:
+            return {"success": True, "processedCount": 0, "error": None}
+        data_rows = rows[1:]
+        mat_svc = MaterialService()
+        conn = get_db_connection()
+        conn.autocommit = False
+        cursor = conn.cursor(dictionary=True)
+        try:
+            parsed_data = []
+            for row in data_rows:
+                if len(row) < 6:
+                    continue
+                item = mat_svc._parse_single_row(filename, row)
+                if item:
+                    parsed_data.append(_material_parsed_row_to_part(item))
+            if not parsed_data:
+                logger.warning("⚠️ [Part] %s 解析後に有効データなし", filename)
+                return {"success": True, "processedCount": 0, "error": None}
+            self._enrich_data(cursor, parsed_data, filename)
+            deleted_count = 0
+            if "Maruiti" in filename:
+                keys = [
+                    (d["log_date"], d["log_time"], d["manufacture_no"])
+                    for d in parsed_data
+                ]
+                batch_size = 500
+                for i in range(0, len(keys), batch_size):
+                    batch = keys[i : i + batch_size]
+                    if not batch:
+                        continue
+                    placeholders = ",".join(["(%s, %s, %s)"] * len(batch))
+                    flat = [x for t in batch for x in t]
+                    cursor.execute(
+                        "DELETE FROM part_logs WHERE (log_date, log_time, manufacture_no) IN ("
+                        + placeholders
+                        + ")",
+                        flat,
+                    )
+                    deleted_count += cursor.rowcount
+            else:
+                target_item = parsed_data[0]["item"]
+                cursor.execute("DELETE FROM part_logs WHERE item = %s", (target_item,))
+                deleted_count = cursor.rowcount
+            unique_map = {}
+            for d in parsed_data:
+                key = f"{d['log_date']}_{d['log_time']}_{d['manufacture_no']}"
+                if key not in unique_map:
+                    d["note"] = key
+                    unique_map[key] = d
+            final_list = list(unique_map.values())
+            for d in final_list:
+                if d.get("log_date") == "":
+                    d["log_date"] = "1970-01-01"
+                if d.get("manufacture_date") == "":
+                    d["manufacture_date"] = None
+                d["log_time"] = normalize_time_str(d.get("log_time"))
+            insert_sql = """
+                INSERT INTO part_logs (
+                    item, log_date, log_time, hd_no, remarks,
+                    part_cd, part_name, process_cd,
+                    manufacture_no, manufacture_date, pieces_per_bundle,
+                    length, quantity, bundle_quantity, magnetic, appearance,
+                    outer_diameter1, outer_diameter2, supplier, part_quality, note
+                ) VALUES (
+                    %(item)s, %(log_date)s, %(log_time)s, %(hd_no)s, %(remarks)s,
+                    %(part_cd)s, %(part_name)s, %(process_cd)s,
+                    %(manufacture_no)s, %(manufacture_date)s, %(pieces_per_bundle)s,
+                    %(length)s, %(quantity)s, %(bundle_quantity)s, %(magnetic)s, %(appearance)s,
+                    %(outer_diameter1)s, %(outer_diameter2)s, %(supplier)s, %(part_quality)s, %(note)s
+                )
+            """
+            inserted_count = 0
+            if final_list:
+                cursor.executemany(insert_sql, final_list)
+                inserted_count = cursor.rowcount
+            conn.commit()
+            skipped = len(data_rows) - inserted_count
+            logger.info("%s 処理完了: %s件処理, %s件スキップ", filename, inserted_count, skipped)
+            return {"success": True, "processedCount": int(inserted_count), "error": None}
+        except Exception as e:
+            conn.rollback()
+            logger.error("❌ [Part] エラー %s: %s", filename, e, exc_info=True)
+            return {"success": False, "processedCount": 0, "error": str(e)}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def _enrich_data(self, cursor, data_list, filename):
+        p_names = set(d["part_name"] for d in data_list if d.get("part_name"))
+        p_cds = set(d["part_cd"] for d in data_list if d.get("part_cd"))
+        part_info_map = {}
+        if p_names:
+            fmt = ",".join(["%s"] * len(p_names))
+            cursor.execute(
+                """
+                SELECT p.part_name, p.part_cd, p.category, s.supplier_name, p.supplier_cd
+                FROM parts p
+                LEFT JOIN suppliers s ON p.supplier_cd = s.supplier_cd
+                WHERE p.part_name IN ("""
+                + fmt
+                + ")",
+                list(p_names),
+            )
+            for row in cursor.fetchall():
+                part_info_map[row["part_name"]] = row
+        for d in data_list:
+            info = part_info_map.get(d["part_name"], {})
+            if "Okajima" in filename:
+                d["part_cd"] = info.get("part_cd", d.get("part_cd") or "")
+                d["supplier"] = info.get("supplier_name", d.get("supplier") or "")
+                d["part_quality"] = info.get("category", d.get("part_quality") or "")
+            if "Maruiti" in filename:
+                d["supplier"] = info.get("supplier_name", d.get("supplier") or "")
+                d["part_quality"] = info.get("category", d.get("part_quality") or "")
+
+
 # ---------- PickingLogService: PickingLog.csv → shipping_log（fileWatcherService.js と同等）----------
 
 
@@ -1198,5 +1349,86 @@ def sync_material_csv_files_from_watch_folder() -> dict:
     return {
         "success": not any_fail,
         "message": "材料ログ CSV の取込が完了しました" if not any_fail else "一部ファイルの取込に失敗しました",
+        "data": {"fileResults": file_results, "totalProcessed": total_processed},
+    }
+
+
+def sync_part_csv_files_from_watch_folder() -> dict:
+    """部品受入 CSV を part_logs に取り込む（手動「データ読取」API 用）。"""
+    import os
+
+    from app.services.file_watcher.enabled_config import is_file_enabled
+
+    entries = list(settings.get_part_receiving_csv_entries())
+    if not entries:
+        return {
+            "success": False,
+            "message": (
+                "部品受入 CSV のパスが解決できません。.env に PART_RECEIVING_CSV_PATHS（フルパス・カンマ区切り）、"
+                "または PART_RECEIVING_WATCH_BASE_PATH / FILE_WATCH_BASE_PATH とファイル名を設定してください。"
+            ),
+            "data": {"fileResults": [], "totalProcessed": 0},
+        }
+
+    svc = PartService()
+    file_results: list = []
+    total_processed = 0
+
+    for fp, fn in entries:
+        if not is_file_enabled(fn):
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": True,
+                    "processedCount": 0,
+                    "error": None,
+                    "skipped": True,
+                }
+            )
+            continue
+        if not os.path.isfile(fp):
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": False,
+                    "processedCount": 0,
+                    "error": "ファイルが見つかりません",
+                }
+            )
+            continue
+        try:
+            r = svc.sync(fp, fn) or {}
+            ok = r.get("success", False)
+            n = int(r.get("processedCount") or 0)
+            err = r.get("error")
+            if ok:
+                total_processed += n
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": bool(ok),
+                    "processedCount": n,
+                    "error": err,
+                }
+            )
+        except Exception as e:
+            logger.exception("部品 CSV 同期エラー %s", fn)
+            file_results.append(
+                {
+                    "fileName": fn,
+                    "path": fp,
+                    "success": False,
+                    "processedCount": 0,
+                    "error": str(e),
+                }
+            )
+
+    any_fail = any(not fr.get("success") for fr in file_results if not fr.get("skipped"))
+    return {
+        "success": not any_fail,
+        "message": "部品ログ CSV の取込が完了しました" if not any_fail else "一部ファイルの取込に失敗しました",
         "data": {"fileResults": file_results, "totalProcessed": total_processed},
     }

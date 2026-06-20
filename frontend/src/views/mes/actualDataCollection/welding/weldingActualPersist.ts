@@ -606,6 +606,8 @@ export function applyPersistedSessionsForScope(
   rowIds: number[],
   ensureSession: (planId: number) => PlanSessionLike,
   operatedPlanIds?: ReadonlySet<number> | readonly number[],
+  /** サーバー行がまだ MES 生産中のときのみ端末キャッシュを復元する */
+  shouldRestorePersistedSession?: (planId: number) => boolean,
 ): boolean {
   const scopeSessions = getScopeSessions(scopeDay, machineId)
   if (!scopeSessions) return false
@@ -618,6 +620,7 @@ export function applyPersistedSessionsForScope(
   let any = false
   for (const id of rowIds) {
     if (operated && !operated.has(id)) continue
+    if (shouldRestorePersistedSession && !shouldRestorePersistedSession(id)) continue
     const sess = ensureSession(id)
     const p = scopeSessions[String(id)]
     if (!p || p.wallStart == null || p.wallEnd != null) continue

@@ -36,6 +36,8 @@ export interface WeldingManagementListRow {
   data_source?: string | null
   external_sync_key?: string | null
   remarks?: string | null
+  /** 実績収集登録（手動登録）備考 */
+  manual_registration_note?: string | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -90,6 +92,9 @@ export interface CreateWeldingManagementBody {
   welding_machine?: string
   mes_operator_user_id?: number
   remarks?: string | null
+  manual_registration_note?: string | null
+  /** 実績収集登録（手動一括登録） */
+  manual_registration?: boolean
 }
 
 export function createWeldingManagement(
@@ -110,6 +115,7 @@ export interface PatchWeldingManagementBody {
   production_completed_check?: boolean
   defect_qty?: number
   remarks?: string | null
+  manual_registration_note?: string | null
   mes_production_started_at?: string
   mes_production_ended_at?: string
   mes_net_production_sec?: number
@@ -124,6 +130,8 @@ export interface PatchWeldingManagementBody {
   mes_claim_client_lock?: boolean
   mes_release_client_lock?: boolean
   mes_force_release?: boolean
+  /** 実績収集登録（手動一括登録） */
+  manual_registration?: boolean
 }
 
 export function patchWeldingManagement(
@@ -131,6 +139,15 @@ export function patchWeldingManagement(
   body: PatchWeldingManagementBody,
 ): Promise<{ success?: boolean; message?: string }> {
   return request.patch(`/api/plan/welding-management/${weldingId}`, body) as Promise<{
+    success?: boolean
+    message?: string
+  }>
+}
+
+export function deleteWeldingManagement(
+  weldingId: number,
+): Promise<{ success?: boolean; message?: string }> {
+  return request.delete(`/api/plan/welding-management/${weldingId}`) as Promise<{
     success?: boolean
     message?: string
   }>

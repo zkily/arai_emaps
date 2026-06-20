@@ -11,9 +11,11 @@ from app.services.file_watcher.handler import UnifiedHandler
 from app.services.file_watcher.sync_services import (
     StockService,
     MaterialService,
+    PartService,
     MaterialCuttingCsvService,
     STOCK_FILES,
     MATERIAL_FILES,
+    PART_FILES,
     PICKING_FILES,
     MATERIAL_CUTTING_CSV_BASENAME,
     run_picking_sync_and_refresh_matched,
@@ -337,6 +339,7 @@ def _csv_worker(csv_task_queue, in_queue_csv_paths):
     """在庫/材料/ピッキング CSV 専用ワーカー（Excel キューと独立）"""
     stock_svc = StockService()
     material_svc = MaterialService()
+    part_svc = PartService()
     cutting_csv_svc = MaterialCuttingCsvService()
     while True:
         try:
@@ -381,6 +384,11 @@ def _csv_worker(csv_task_queue, in_queue_csv_paths):
                     material_svc.sync(filepath, filename)
                 else:
                     logger.debug("材料ファイル監視は無効のためスキップ: %s", filename)
+            elif filename in PART_FILES:
+                if is_file_enabled(filename):
+                    part_svc.sync(filepath, filename)
+                else:
+                    logger.debug("部品ファイル監視は無効のためスキップ: %s", filename)
             else:
                 logger.warning("[CSV] 未対応ファイルのためスキップ: %s", filename)
         except Exception as e:

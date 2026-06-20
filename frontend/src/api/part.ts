@@ -56,3 +56,40 @@ export function saveMaruichiPartOrderPdf(
   form.append('file', blob, filename)
   return request.post(`${PREFIX}/stock/maruichi-order-pdf`, form, { timeout: 120000 })
 }
+
+// ─────────────────────────────────────────────
+// 受入ログ (receiving)
+// ─────────────────────────────────────────────
+
+export interface PartReceivingListParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  partNameExact?: string
+  part_cd?: string
+  supplier?: string
+  startDate?: string
+  endDate?: string
+}
+
+export function getPartLogs(params?: PartReceivingListParams): Promise<{
+  success?: boolean
+  data?: { list: import('@/types/part').PartLogItem[]; total: number }
+}> {
+  return request.get(`${PREFIX}/receiving`, { params })
+}
+
+export function getPartReceivingSuppliers(): Promise<{ success?: boolean; data?: string[] }> {
+  return request.get(`${PREFIX}/receiving/suppliers`)
+}
+
+export function importPartLogsFromCSV(
+  rows: Partial<import('@/types/part').PartLogItem>[] = [],
+): Promise<{ success?: boolean; created?: number; message?: string; data?: unknown }> {
+  return request.post(`${PREFIX}/receiving/import-csv`, rows)
+}
+
+/** 仕入先一覧（part_logs.supplier 去重） */
+export function getPartSupplierList(): Promise<{ success?: boolean; data?: string[] }> {
+  return getPartReceivingSuppliers()
+}

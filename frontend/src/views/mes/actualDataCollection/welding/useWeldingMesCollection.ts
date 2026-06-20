@@ -389,7 +389,7 @@ export function useWeldingMesCollection() {
     const next = new Set(locallyOperatedPlanIds.value)
     next.delete(planId)
     locallyOperatedPlanIds.value = next
-    schedulePersist()
+    flushPersistToStorage()
   }
 
   function isPlanLocallyOperated(planId: number | null | undefined): boolean {
@@ -862,6 +862,7 @@ export function useWeldingMesCollection() {
         return
       }
       const rows = (res.data ?? []).filter((r): r is WeldingMgmtRow => r.id != null)
+      const rowById = new Map(rows.map((r) => [r.id, r]))
       managementRows.value = rows
       for (const r of rows) {
         const sess = ensureSession(r.id)
@@ -875,6 +876,13 @@ export function useWeldingMesCollection() {
         rows.map((r) => r.id),
         ensureSession,
         locallyOperatedPlanIds.value,
+        (planId) => {
+          const row = rowById.get(planId)
+          if (!row) return false
+          if (isRowProductionCompleted(row)) return false
+          const ended = row.mes_production_ended_at
+          return ended == null || !String(ended).trim()
+        },
       )
       pruneStaleLocalSessions(rows)
       for (const r of rows) normalizeSessionDefects(ensureSession(r.id))
@@ -1789,10 +1797,10 @@ export function useWeldingMesCollection() {
         defect_qty: preview.defectTotal,
       })
       if (!ok) return
-      unmarkPlanLocallyOperated(id)
       endDialogVisible.value = false
       activePlanId.value = null
       Object.assign(sessions[id], emptySession(makeEmptyDefectCounts()))
+      unmarkPlanLocallyOperated(id)
       ElMessage.success(t('mesWeldingActual.completeSaved'))
       await loadPlans()
       selectedProductCode.value = null
