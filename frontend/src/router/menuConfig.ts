@@ -79,8 +79,7 @@ export const menuConfig: MenuConfigItem[] = [
   { code: 'ERP_INVENTORY_STOCKTAKE_CARRYOVER', name: '棚卸繰越管理', path: '/erp/inventory/stocktake/carryover', icon: 'DArrowRight', parentCode: 'ERP_INVENTORY_STOCKTAKE', sortOrder: 5 },
 
   // ===== 4. 生産管理 (Production Control / PP) =====
-  { code: 'ERP_PRODUCTION', name: '生産管理', path: '/erp/production', icon: 'Cpu', parentCode: 'ERP', sortOrder: 6 },
-  { code: 'ERP_PRODUCTION_HOME', name: '生産ホーム', icon: 'HomeFilled', path: '/erp/production', parentCode: 'ERP_PRODUCTION', sortOrder: 0 },
+  { code: 'ERP_PRODUCTION', name: '生産管理', path: '/erp/production/data-management', icon: 'Cpu', parentCode: 'ERP', sortOrder: 6 },
   { code: 'ERP_PRODUCTION_PLANNING', name: '生産計画', icon: 'Calendar', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION', sortOrder: 5 },
   { code: 'ERP_PRODUCTION_DATA', name: '生産データ管理', icon: 'DataBoard', path: '/erp/production/data-management', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 1 },
   { code: 'ERP_PRODUCTION_BASELINE', name: '計画ベースライン', icon: 'Histogram', path: '/erp/production/plan-baseline', parentCode: 'ERP_PRODUCTION_PLANNING', sortOrder: 2 },

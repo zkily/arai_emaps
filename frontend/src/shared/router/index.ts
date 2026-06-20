@@ -199,7 +199,7 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       // ========== ERP - 生産管理 (Production Control / PP) ==========
-      { path: 'erp/production', name: 'Production', component: () => import('@/views/erp/Production.vue'), meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
+      { path: 'erp/production', name: 'Production', redirect: '/erp/production/data-management', meta: { title: '生産管理', group: '生産管理', requiresAuth: true } },
       { path: 'erp/production/data-management', name: 'ProductionDataManagement', component: () => import('@/views/erp/production/planning/ProductionDataManagement.vue'), meta: { title: '生産データ管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-baseline', name: 'ProductionPlanBaselineManagement', component: () => import('@/views/erp/production/planning/ProductionPlanBaselineManagement.vue'), meta: { title: '生産計画ベースライン管理', group: '生産管理 > 生産計画', requiresAuth: true } },
       { path: 'erp/production/plan-schedules', name: 'ProductionPlanScheduleView', component: () => import('@/views/erp/production/planning/ProductionPlanScheduleView.vue'), meta: { title: '生産スケジュール', group: '生産管理 > 生産計画', requiresAuth: true } },

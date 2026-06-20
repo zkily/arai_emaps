@@ -229,7 +229,6 @@ export default {
     ERP_INVENTORY_STOCK_ENTRY: '在庫登録管理',
     ERP_INVENTORY_STOCK_TX_LOG: '在庫取引記録',
     ERP_PRODUCTION: '生産管理',
-    ERP_PRODUCTION_HOME: '生産ホーム',
     ERP_PRODUCTION_PLANNING: '生産計画',
     ERP_PRODUCTION_DATA: '生産データ管理',
     ERP_PRODUCTION_BASELINE: '計画ベースライン',

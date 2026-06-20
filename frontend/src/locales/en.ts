@@ -229,7 +229,6 @@ export default {
     ERP_INVENTORY_STOCK_ENTRY: 'Stock Entry Management',
     ERP_INVENTORY_STOCK_TX_LOG: 'Stock Transaction Log',
     ERP_PRODUCTION: 'Production Control',
-    ERP_PRODUCTION_HOME: 'Production Home',
     ERP_PRODUCTION_PLANNING: 'Production Planning',
     ERP_PRODUCTION_DATA: 'Production Data Management',
     ERP_PRODUCTION_BASELINE: 'Plan Baseline',

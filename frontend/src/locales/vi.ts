@@ -228,7 +228,6 @@ export default {
     ERP_INVENTORY_STOCK_ENTRY: 'Quản lý đăng ký tồn kho',
     ERP_INVENTORY_STOCK_TX_LOG: 'Nhật ký giao dịch tồn kho',
     ERP_PRODUCTION: 'Sản xuất',
-    ERP_PRODUCTION_HOME: 'Trang sản xuất',
     ERP_PRODUCTION_PLANNING: 'Kế hoạch sản xuất',
     ERP_PRODUCTION_DATA: 'Quản lý dữ liệu sản xuất',
     ERP_PRODUCTION_BASELINE: 'Baseline kế hoạch',
