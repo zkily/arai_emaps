@@ -297,8 +297,10 @@ async def _reject_concurrent_mes_production_on_welding_machine(
     db: AsyncSession,
     welding_id: int,
     wm_cols: set[str],
+    *,
+    machine_hint: Optional[str] = None,
 ) -> None:
-    """??????????????? MES ???????????????????????"""
+    """同一溶接設備で別行が MES 生産中なら 409"""
     if "welding_machine" not in wm_cols:
         return
     if "mes_production_started_at" not in wm_cols or "mes_production_ended_at" not in wm_cols:
@@ -313,9 +315,13 @@ async def _reject_concurrent_mes_production_on_welding_machine(
         {"wid": welding_id},
     )
     scope_row = scope.fetchone()
-    if not scope_row or not scope_row[0] or scope_row[1] is None:
+    if not scope_row or scope_row[1] is None:
         return
-    machine = str(scope_row[0]).strip()
+    machine = str(scope_row[0] or "").strip()
+    if not machine and machine_hint:
+        machine = str(machine_hint).strip()
+    if not machine:
+        return
     prod_day = scope_row[1]
     conflict = await db.execute(
         text("""
@@ -370,9 +376,38 @@ def _normalize_inspection_mgmt_row(item: dict[str, Any]) -> dict[str, Any]:
     raw_def = out.get("mes_defect_by_item")
     if raw_def is not None and not isinstance(raw_def, dict):
         try:
-            out["mes_defect_by_item"] = json.loads(raw_def) if str(raw_def).strip() else None
+            raw_def = json.loads(raw_def) if str(raw_def).strip() else None
         except json.JSONDecodeError:
-            out["mes_defect_by_item"] = None
+            raw_def = None
+    if isinstance(raw_def, dict):
+        cleaned: dict[str, int] = {}
+        for k, v in raw_def.items():
+            if k is None:
+                continue
+            key = str(k).strip()
+            if not key:
+                continue
+            qty: int | None = None
+            if isinstance(v, dict):
+                for qk in ("qty", "quantity", "count"):
+                    qv = v.get(qk)
+                    if qv is None:
+                        continue
+                    try:
+                        qty = max(0, int(qv))
+                        break
+                    except (TypeError, ValueError):
+                        continue
+            elif v is not None:
+                try:
+                    qty = max(0, int(v))
+                except (TypeError, ValueError):
+                    qty = None
+            if qty is not None and qty > 0:
+                cleaned[key] = qty
+        out["mes_defect_by_item"] = cleaned or None
+    else:
+        out["mes_defect_by_item"] = None
     for k in ("mes_production_started_at", "mes_production_ended_at", "created_at", "updated_at"):
         v = out.get(k)
         if isinstance(v, datetime):
@@ -9843,7 +9878,7 @@ async def update_welding_management(
                     {"wid": welding_id},
                 )
                 row_insp = insp_row.scalar()
-                if row_insp is not None and int(row_insp) == claim_inspector:
+                if row_insp is None or int(row_insp) == claim_inspector:
                     allow_inspector_reclaim = True
         if not allow_inspector_reclaim:
             _reject_welding_mes_client_lock_conflict(existing_lock, client_id, force_release=force_release)
@@ -9895,7 +9930,7 @@ async def update_welding_management(
         else:
             sdt = _parse_mes_datetime_to_naive_tokyo(body.mes_production_started_at)
             if sdt:
-                if not body.manual_registration:
+                if not body.manual_registration and not in_progress:
                     start_inspector: Optional[int] = None
                     if body.mes_operator_user_id is not None:
                         try:
@@ -9905,15 +9940,22 @@ async def update_welding_management(
                         except (TypeError, ValueError):
                             start_inspector = None
                     if "welding_machine" in wm_cols:
+                        wm_hint = (body.welding_machine or "").strip() or None
                         await _reject_concurrent_mes_production_on_welding_machine(
-                            db, welding_id, wm_cols
+                            db, welding_id, wm_cols, machine_hint=wm_hint
+                        )
+                        await _reject_concurrent_mes_production_on_welding_start(
+                            db,
+                            welding_id,
+                            wm_cols,
+                            operator_user_id=start_inspector,
                         )
                     else:
                         await _reject_concurrent_mes_production_on_welding_start(
                             db,
                             welding_id,
                             wm_cols,
-                            inspector_user_id=start_inspector,
+                            operator_user_id=start_inspector,
                         )
                     if has_client_col:
                         if not client_id:
@@ -9925,6 +9967,18 @@ async def update_welding_management(
                         )
                         params["mes_client_instance_id"] = client_id
                         updates.append("mes_client_instance_id = :mes_client_instance_id")
+                elif (
+                    not body.manual_registration
+                    and in_progress
+                    and has_client_col
+                    and client_id
+                    and not body.mes_claim_client_lock
+                ):
+                    _reject_welding_mes_client_lock_conflict(
+                        existing_lock,
+                        client_id,
+                        force_release=force_release,
+                    )
                 params["mes_production_started_at"] = sdt
                 updates.append("mes_production_started_at = :mes_production_started_at")
     if body.mes_production_ended_at is not None:

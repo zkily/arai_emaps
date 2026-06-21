@@ -1138,12 +1138,10 @@ onUnmounted(() => {
               size="small"
               class="inspection-history-table inspection-history-table--compact"
               row-key="id"
-              table-layout="fixed"
             >
               <el-table-column
                 :label="t('mesInspectionActual.productionDay')"
-                width="92"
-                fixed="left"
+                min-width="84"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -1152,7 +1150,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.inspector')"
-                width="88"
+                min-width="72"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -1163,7 +1161,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.dataSource')"
-                width="72"
+                min-width="56"
+                width="60"
                 align="center"
               >
                 <template #default="{ row }">
@@ -1179,7 +1178,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productName')"
-                min-width="96"
+                min-width="108"
                 show-overflow-tooltip
               >
                 <template #default="{ row }">
@@ -1188,7 +1187,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionQty')"
-                width="68"
+                min-width="52"
+                width="56"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1199,7 +1199,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.defectQty')"
-                width="56"
+                min-width="44"
+                width="48"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1216,7 +1217,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.defectRate')"
-                width="68"
+                min-width="56"
+                width="60"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1225,7 +1227,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.efficiencyRate')"
-                width="56"
+                min-width="48"
+                width="52"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1234,7 +1237,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionStart')"
-                width="112"
+                min-width="100"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_started_at) }}</span>
@@ -1242,7 +1245,7 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.productionEnd')"
-                width="112"
+                min-width="100"
               >
                 <template #default="{ row }">
                   <span class="hist-cell-time">{{ formatRecordTime(row.mes_production_ended_at) }}</span>
@@ -1250,7 +1253,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.elapsedMinutes')"
-                width="72"
+                min-width="56"
+                width="60"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1261,7 +1265,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.pausedAccumMinutes')"
-                width="72"
+                min-width="56"
+                width="60"
                 align="right"
               >
                 <template #default="{ row }">
@@ -1275,8 +1280,8 @@ onUnmounted(() => {
               </el-table-column>
               <el-table-column
                 :label="t('mesInspectionActual.historyActions')"
-                width="52"
-                fixed="right"
+                min-width="44"
+                width="48"
                 align="center"
               >
                 <template #default="{ row }">
@@ -4792,12 +4797,18 @@ onUnmounted(() => {
 
 .inspection-history-table {
   width: 100%;
-  min-width: 860px;
+  min-width: 680px;
   --el-table-border-color: var(--el-border-color-extra-light);
   --el-table-header-bg-color: transparent;
   --el-table-row-hover-bg-color: #f0fdfa;
   --el-table-tr-bg-color: var(--el-fill-color-blank);
   --el-table-striped-bg-color: #f8fafc;
+}
+
+@media (min-width: 960px) {
+  .inspection-history-table {
+    min-width: 0;
+  }
 }
 
 .inspection-history-table--compact :deep(.el-table__cell .cell) {

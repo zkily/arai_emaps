@@ -269,7 +269,7 @@ const routes: RouteRecordRaw[] = [
       ...mesMonitoringRoutes,
       ...mesActualAnalysisRoutes,
       // ========== マスタ管理 ==========
-      { path: 'master', name: 'MasterHome', component: () => import('@/views/master/MasterList.vue'), meta: { title: 'マスタホーム', requiresAuth: true } },
+      { path: 'master', redirect: '/master/product' },
       { path: 'master/product', name: 'ProductList', component: () => import('@/views/master/product/ProductList.vue'), meta: { title: '製品マスタ', requiresAuth: true } },
       { path: 'master/material', name: 'MaterialList', component: () => import('@/views/master/material/MaterialList.vue'), meta: { title: '材料マスタ', requiresAuth: true } },
       { path: 'master/material-inspection', name: 'MaterialInspectionMaster', component: () => import('@/views/master/materialInspection/MaterialInspectionMaster.vue'), meta: { title: '材料検品マスタ', requiresAuth: true } },
@@ -286,7 +286,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'master/destination/holiday', name: 'DestinationHoliday', component: () => import('@/views/master/destination/DestinationHoliday.vue'), meta: { title: '納入先休日設定', requiresAuth: true } },
       { path: 'master/company-work-calendar', name: 'CompanyWorkCalendar', component: () => import('@/views/master/calendar/CompanyWorkCalendar.vue'), meta: { title: '会社稼働カレンダー', requiresAuth: true } },
       { path: 'master/inspection-inspector-work-schedule', name: 'InspectionInspectorWorkSchedule', component: () => import('@/views/master/inspection/InspectionInspectorWorkSchedule.vue'), meta: { title: '検査員所定工時管理', requiresAuth: true } },
-      { path: 'master/bom', name: 'BomHome', component: () => import('@/views/master/BomList.vue'), meta: { title: 'BOMホーム', requiresAuth: true } },
+      { path: 'master/bom', redirect: '/master/bom/product-process' },
       { path: 'master/bom/product-process', name: 'ProductProcessBOM', component: () => import('@/views/master/bom/ProductProcessBOM.vue'), meta: { title: '製品工程BOM', requiresAuth: true } },
       { path: 'master/bom/product-machine-config', name: 'ProductMachineConfig', component: () => import('@/views/master/bom/ProductMachineConfig.vue'), meta: { title: '製品機器設定', requiresAuth: true } },
       { path: 'master/bom/equipment-efficiency', name: 'EquipmentEfficiencyManagement', component: () => import('@/views/master/bom/EquipmentEfficiencyManagement.vue'), meta: { title: '設備能率管理', requiresAuth: true } },

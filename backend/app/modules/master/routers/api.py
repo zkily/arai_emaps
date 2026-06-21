@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, not_
 from sqlalchemy.exc import SQLAlchemyError
-from typing import Optional
+from typing import Any, Optional
 from decimal import Decimal, InvalidOperation
 import io
 import csv
@@ -25,6 +25,24 @@ PRODUCT_CSV_OUTPUT_DIR = os.environ.get("PRODUCT_CSV_OUTPUT_DIR", _DEFAULT_PRODU
 PRODUCT_CSV_FILENAME = "ProductMaster.csv"
 
 
+def _json_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _json_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _row_to_dict(row: Product) -> dict:
     return {
         "id": row.id,
@@ -37,31 +55,31 @@ def _row_to_dict(row: Product) -> dict:
         "kind": row.kind,
         "department_id": row.department_id,
         "destination_cd": row.destination_cd,
-        "process_count": row.process_count,
-        "lead_time": row.lead_time,
-        "lot_size": row.lot_size,
+        "process_count": _json_int(row.process_count),
+        "lead_time": _json_int(row.lead_time),
+        "lot_size": _json_int(row.lot_size),
         "is_multistage": bool(row.is_multistage),
-        "priority": row.priority,
+        "priority": _json_int(row.priority),
         "status": row.status,
         "part_number": row.part_number,
         "vehicle_model": row.vehicle_model,
         "box_type": row.box_type,
-        "unit_per_box": row.unit_per_box,
+        "unit_per_box": _json_int(row.unit_per_box),
         "dimensions": row.dimensions,
-        "weight": float(row.weight) if row.weight is not None else None,
+        "weight": _json_float(row.weight),
         "material_cd": row.material_cd,
-        "cut_length": float(row.cut_length) if row.cut_length is not None else None,
-        "chamfer_length": float(row.chamfer_length) if row.chamfer_length is not None else None,
-        "developed_length": float(row.developed_length) if row.developed_length is not None else None,
-        "take_count": row.take_count,
-        "scrap_length": float(row.scrap_length) if row.scrap_length is not None else None,
-        "bom_id": row.bom_id,
+        "cut_length": _json_float(row.cut_length),
+        "chamfer_length": _json_float(row.chamfer_length),
+        "developed_length": _json_float(row.developed_length),
+        "take_count": _json_int(row.take_count),
+        "scrap_length": _json_float(row.scrap_length),
+        "bom_id": _json_int(row.bom_id),
         "route_cd": row.route_cd,
         "note": row.note,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
-        "safety_days": row.safety_days,
-        "unit_price": float(row.unit_price) if row.unit_price is not None else None,
+        "safety_days": _json_int(row.safety_days),
+        "unit_price": _json_float(row.unit_price),
         "product_alias": row.product_alias,
     }
 
@@ -186,7 +204,7 @@ async def get_product_list(
         d = _row_to_dict(p)
         if p.material_cd and p.material_cd in material_info:
             d["material_name"] = material_info[p.material_cd].get("material_name")
-            d["pieces_per_bundle"] = material_info[p.material_cd].get("pieces_per_bundle")
+            d["pieces_per_bundle"] = _json_int(material_info[p.material_cd].get("pieces_per_bundle"))
         else:
             d["material_name"] = None
             d["pieces_per_bundle"] = None
