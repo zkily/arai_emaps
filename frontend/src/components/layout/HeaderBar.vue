@@ -27,6 +27,7 @@
             <span class="weather-emoji" aria-hidden="true">{{ weatherEmoji }}</span>
             <span class="weather-temp">{{ weatherTemp }}</span>
           </span>
+          <HeaderTodoTrigger />
         </div>
       </div>
 
@@ -252,6 +253,7 @@ import {
 } from '@/utils/warehouseNegativeOverview'
 import { canAccessPath } from '@/utils/menuPermissions'
 import UserProfilePanel from '@/components/account/UserProfilePanel.vue'
+import HeaderTodoTrigger from '@/components/layout/HeaderTodoTrigger.vue'
 import { useUserStore } from '@/modules/auth/stores/user'
 import { avatarGradientFor, avatarLetterFor } from '@/utils/avatarGradient'
 import { builtinRoleDisplayName } from '@/utils/builtinRoleDisplayName'

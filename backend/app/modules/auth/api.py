@@ -465,6 +465,8 @@ async def get_current_user(
 
 
 from app.modules.auth.shortcuts_api import router as shortcuts_router  # noqa: E402
+from app.modules.auth.todos_api import router as todos_router  # noqa: E402
 
 router.include_router(shortcuts_router, prefix="/shortcuts", tags=["常用ページ"])
+router.include_router(todos_router, prefix="/todos", tags=["連絡事項"])
 

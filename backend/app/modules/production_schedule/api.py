@@ -2052,7 +2052,7 @@ def _mes_schedule_plan_row_to_record(row: Any) -> dict:
         "planned_output_qty": _val("planned_output_qty", qty),
         "machine_name": _val("machine_name"),
         "machine_cd": _val("machine_cd"),
-        "process_name": _val("process_name") or "??",
+        "process_name": _val("process_name") or "成型",
         "operator": op,
         "production_order": op,
         "product_name": _val("product_name") or "",
@@ -2095,7 +2095,7 @@ async def get_mes_forming_plan_data_from_schedule(
             "message": "OK",
         }
     pn = (processName or "").strip()
-    process_label = pn if pn in ("??", "??") else "??"
+    process_label = pn if pn in ("成型", "溶接") else "成型"
     kw = keyword.strip() if keyword else ""
     pne = (productNameExact or "").strip() or None
     offset = (page - 1) * limit

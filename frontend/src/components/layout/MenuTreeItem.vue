@@ -64,14 +64,13 @@ const props = withDefaults(
   { isCollapsed: false, depth: 0 },
 )
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const shortcutsStore = useSidebarShortcutsStore()
 
 const label = computed(() => {
   const key = `menu.${props.node.code}`
-  const translated = t(key)
-  // 翻訳キーが無い場合は menuConfig の name にフォールバック
-  return translated === key ? props.node.name : translated
+  if (te(key)) return t(key)
+  return props.node.name
 })
 
 const isPinned = computed(() => {
