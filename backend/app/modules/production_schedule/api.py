@@ -3275,15 +3275,15 @@ async def confirm_cutting_actual(
     rows = res.mappings().fetchall()
     if not rows:
         await db.commit()
-        return {"success": True, "message": "?????????????????????", "inserted": 0, "total_quantity": 0, "deleted": True}
-    # transaction_time: date ? datetime (00:00:00)
+        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
+    # transaction_time: date → datetime (00:00:00)
     ins = text("""
         INSERT INTO stock_transaction_logs (
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '???', :transaction_type, :target_cd, '??????', :lot_no, 'KT01', :machine_cd,
-            :quantity, '?', :transaction_time, 'cutting_management'
+            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT01', :machine_cd,
+            :quantity, '本', :transaction_time, 'cutting_management'
         )
     """)
     inserted = 0
@@ -3301,18 +3301,18 @@ async def confirm_cutting_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
-        # ???transaction_type='??'
+        # 良品：transaction_type='実績'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("cutting_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
-            "transaction_type": "??",
+            "transaction_type": "実績",
         })
         inserted += 1
         total_quantity += int(qty)
-        # ????transaction_type='??'
+        # 不良：transaction_type='不良'
         defect_qty = r.get("defect_qty")
         if defect_qty is not None and int(defect_qty) > 0:
             await db.execute(ins, {
@@ -3321,13 +3321,13 @@ async def confirm_cutting_actual(
                 "machine_cd": r.get("cutting_machine"),
                 "quantity": int(defect_qty),
                 "transaction_time": tx_time,
-                "transaction_type": "??",
+                "transaction_type": "不良",
             })
             inserted += 1
     await db.commit()
     return {
         "success": True,
-        "message": f"??? {inserted} ???????",
+        "message": f"実績 {inserted} 件を登録しました",
         "inserted": inserted,
         "total_quantity": total_quantity,
         "production_day": prod_day.isoformat(),
@@ -5395,14 +5395,14 @@ async def confirm_chamfering_actual(
     rows = res.mappings().fetchall()
     if not rows:
         await db.commit()
-        return {"success": True, "message": "?????????????????????", "inserted": 0, "total_quantity": 0, "deleted": True}
+        return {"success": True, "message": "対象データがありません（既存分は削除済み）", "inserted": 0, "total_quantity": 0, "deleted": True}
     ins = text("""
         INSERT INTO stock_transaction_logs (
             stock_type, transaction_type, target_cd, location_cd, lot_no, process_cd, machine_cd,
             quantity, unit, transaction_time, source_file
         ) VALUES (
-            '???', :transaction_type, :target_cd, '??????', :lot_no, 'KT02', :machine_cd,
-            :quantity, '?', :transaction_time, 'chamfering_management'
+            '仕掛品', :transaction_type, :target_cd, '工程中間在庫', :lot_no, 'KT02', :machine_cd,
+            :quantity, '本', :transaction_time, 'chamfering_management'
         )
     """)
     inserted = 0
@@ -5420,18 +5420,18 @@ async def confirm_chamfering_actual(
         qty = r.get("actual_production_quantity")
         if qty is None:
             qty = 0
-        # ???transaction_type='??'
+        # 良品：transaction_type='実績'
         await db.execute(ins, {
             "target_cd": product_cd,
             "lot_no": r.get("management_code"),
             "machine_cd": r.get("chamfering_machine"),
             "quantity": qty,
             "transaction_time": tx_time,
-            "transaction_type": "??",
+            "transaction_type": "実績",
         })
         inserted += 1
         total_quantity += int(qty)
-        # ????transaction_type='??'
+        # 不良：transaction_type='不良'
         defect_qty = r.get("defect_qty")
         if defect_qty is not None and int(defect_qty) > 0:
             await db.execute(ins, {
@@ -5440,13 +5440,13 @@ async def confirm_chamfering_actual(
                 "machine_cd": r.get("chamfering_machine"),
                 "quantity": int(defect_qty),
                 "transaction_time": tx_time,
-                "transaction_type": "??",
+                "transaction_type": "不良",
             })
             inserted += 1
     await db.commit()
     return {
         "success": True,
-        "message": f"??? {inserted} ???????",
+        "message": f"実績 {inserted} 件を登録しました",
         "inserted": inserted,
         "total_quantity": total_quantity,
         "production_day": prod_day.isoformat(),
